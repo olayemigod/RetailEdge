@@ -3,7 +3,7 @@ app_title = "RetailEdge"
 app_publisher = "ProcessEdge Solutions"
 app_description = "Retail operations, POS control, sales audit, payment verification, branch workflows, and retail intelligence for ERPNext/POSNext."
 app_email = "support@processedge.com.ng"
-app_license = "mit"
+app_license = "MIT"
 
 # Apps
 # ------------------
@@ -26,7 +26,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/retailedge/css/retailedge.css"
-# app_include_js = "/assets/retailedge/js/retailedge.js"
+app_include_js = "/assets/retailedge/js/retailedge.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/retailedge/css/retailedge.css"
@@ -40,11 +40,43 @@ app_license = "mit"
 # webform_include_css = {"doctype": "public/css/doctype.css"}
 
 # include js in page
-# page_js = {"page" : "public/js/file.js"}
+page_js = {"query-report": "public/js/query_report.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+doctype_js = {
+	"Item": "public/js/inventory_documents.js",
+	"Material Request": "public/js/material_request.js",
+	"Purchase Invoice": "public/js/purchase_documents.js",
+	"Purchase Order": "public/js/purchase_order.js",
+	"Purchase Receipt": "public/js/purchase_documents.js",
+	"Quotation": "public/js/sales_documents.js",
+	"Sales Invoice": "public/js/sales_documents.js",
+	"Sales Order": "public/js/sales_documents.js",
+	"Delivery Note": "public/js/sales_documents.js",
+	"Stock Reconciliation": "public/js/inventory_documents.js",
+	"Stock Ledger Entry": "public/js/inventory_documents.js",
+	"Bin": "public/js/inventory_documents.js",
+	"Serial No": "public/js/inventory_documents.js",
+	"Item Price": "public/js/cost_visibility_doctype.js",
+	"Supplier Quotation": "public/js/cost_visibility_doctype.js",
+	"Stock Entry": "public/js/stock_entry.js",
+	"Material Request Item": "public/js/material_request.js",
+	"Purchase Invoice Item": "public/js/purchase_documents.js",
+	"Purchase Order Item": "public/js/purchase_order.js",
+	"Purchase Receipt Item": "public/js/purchase_documents.js",
+	"Quotation Item": "public/js/sales_documents.js",
+	"Sales Invoice Item": "public/js/sales_documents.js",
+	"Sales Order Item": "public/js/sales_documents.js",
+	"Delivery Note Item": "public/js/sales_documents.js",
+	"Stock Reconciliation Item": "public/js/inventory_documents.js",
+	"Packed Item": "public/js/cost_visibility_child_table.js",
+	"Item Default": "public/js/inventory_documents.js",
+}
+doctype_list_js = {
+	"Purchase Receipt": "public/js/purchase_documents_list.js",
+	"Purchase Invoice": "public/js/purchase_documents_list.js",
+	"Purchase Order": "public/js/purchase_documents_list.js",
+}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -116,18 +148,6 @@ app_license = "mit"
 
 # notification_config = "retailedge.notifications.get_notification_config"
 
-# Permissions
-# -----------
-# Permissions evaluated in scripted ways
-
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
-
 # Document Events
 # ---------------
 # Hook on document methods and events
@@ -139,6 +159,15 @@ app_license = "mit"
 # 		"on_trash": "method"
 # 	}
 # }
+doc_events = {
+	"Sales Invoice": {
+		"validate": "retailedge.events.sales_invoice.validate_sales_invoice",
+	},
+	"POS Closing Shift": {
+		"on_submit": "retailedge.events.pos_closing_shift.on_pos_closing_shift_submit",
+		"after_insert": "retailedge.events.pos_closing_shift.on_pos_closing_shift_save",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
@@ -165,6 +194,8 @@ app_license = "mit"
 # -------
 
 # before_tests = "retailedge.install.before_tests"
+after_migrate = ["retailedge.setup_roles.ensure_retailedge_roles"]
+boot_session = "retailedge.boot.boot_session"
 
 # Extend DocType Class
 # ------------------------------
@@ -249,4 +280,3 @@ app_license = "mit"
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
-

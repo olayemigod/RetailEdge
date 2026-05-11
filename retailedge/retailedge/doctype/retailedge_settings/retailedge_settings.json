@@ -1,0 +1,230 @@
+{
+ "actions": [],
+ "creation": "2026-05-07 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "pos_control_section",
+  "enable_posting_date_control",
+  "allow_pos_posting_date_override",
+  "posting_date_allowed_roles",
+  "cost_visibility_section",
+  "hide_cost_price_for_selected_roles",
+  "cost_price_hidden_roles",
+  "audit_foundation_section",
+  "enable_sales_payment_audit",
+  "cashier_expense_section",
+  "enable_cashier_expense_workflow",
+  "require_cashier_expense_attachment",
+  "enable_cashier_expense_accounting_posting",
+  "include_cashier_expenses_in_variance_report",
+  "require_open_shift_for_cashier_expense",
+  "allow_cashier_expense_date_edit",
+  "include_draft_cashier_expenses_in_cash_check",
+  "include_rejected_cashier_expenses_in_cash_check",
+  "allow_cashier_expense_without_cash_account",
+  "coreedge_integration_section",
+  "enable_coreedge_integration",
+  "coreedge_required_for_portal",
+  "enable_coreedge_payment_requests",
+  "enable_coreedge_notifications",
+  "enable_coreedge_branch_context"
+ ],
+ "fields": [
+  {
+   "fieldname": "pos_control_section",
+   "fieldtype": "Section Break",
+   "label": "POS Control"
+  },
+  {
+   "default": "0",
+   "description": "Allow RetailEdge to control whether POS/Sales Invoice posting date behavior is extended.",
+   "fieldname": "enable_posting_date_control",
+   "fieldtype": "Check",
+   "label": "Enable Posting Date Control"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_posting_date_control",
+   "description": "Allows permitted users to set or preserve posting date on POS/Sales Invoice transactions when supported by ERPNext/POSNext.",
+   "fieldname": "allow_pos_posting_date_override",
+   "fieldtype": "Check",
+   "label": "Allow POS Posting Date Override"
+  },
+  {
+   "depends_on": "eval:doc.enable_posting_date_control && doc.allow_pos_posting_date_override",
+   "description": "Roles allowed to override posting date when RetailEdge posting date control is enabled.",
+   "fieldname": "posting_date_allowed_roles",
+   "fieldtype": "Table",
+   "label": "Roles Allowed to Override Posting Date",
+   "options": "RetailEdge Posting Date Role"
+  },
+  {
+   "fieldname": "cost_visibility_section",
+   "fieldtype": "Section Break",
+   "label": "Cost Visibility Controls"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, selected roles will be restricted from seeing cost price, valuation, incoming rate, purchase rate, stock value, gross profit, and other cost-related values controlled by RetailEdge.",
+   "fieldname": "hide_cost_price_for_selected_roles",
+   "fieldtype": "Check",
+   "label": "Hide Cost Price for Selected Roles"
+  },
+  {
+   "depends_on": "eval:doc.hide_cost_price_for_selected_roles",
+   "fieldname": "cost_price_hidden_roles",
+   "fieldtype": "Table",
+   "label": "Roles Restricted from Cost Price",
+   "options": "RetailEdge Hidden Cost Price Role"
+  },
+  {
+   "fieldname": "audit_foundation_section",
+   "fieldtype": "Section Break",
+   "label": "Audit Foundation"
+  },
+  {
+   "default": "0",
+   "description": "Enables RetailEdge audit intelligence for Sales Invoices and payments. V0.1A only creates the setting; audit functionality will be added in later phases.",
+   "fieldname": "enable_sales_payment_audit",
+   "fieldtype": "Check",
+   "label": "Enable Sales & Payment Audit"
+  },
+  {
+   "fieldname": "cashier_expense_section",
+   "fieldtype": "Section Break",
+   "label": "Cashier Expense Controls"
+  },
+  {
+   "default": "0",
+   "description": "Enables RetailEdge cashier expense capture and review workflow.",
+   "fieldname": "enable_cashier_expense_workflow",
+   "fieldtype": "Check",
+   "label": "Enable Cashier Expense Workflow"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "Require receipt/evidence attachment before a cashier expense can be submitted.",
+   "fieldname": "require_cashier_expense_attachment",
+   "fieldtype": "Check",
+   "label": "Require Attachment for Cashier Expense"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "Reserved for a later phase. Keep disabled by default. V1.4A must not create accounting entries automatically.",
+   "fieldname": "enable_cashier_expense_accounting_posting",
+   "fieldtype": "Check",
+   "label": "Enable Accounting Posting for Cashier Expenses"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "Allows non-cancelled cashier expenses to be considered by RetailEdge variance reporting, even before ledger posting is implemented.",
+   "fieldname": "include_cashier_expenses_in_variance_report",
+   "fieldtype": "Check",
+   "label": "Include Cashier Expenses in Variance Report"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "When enabled, cashiers must have an open POS Opening Shift before recording expenses.",
+   "fieldname": "require_open_shift_for_cashier_expense",
+   "fieldtype": "Check",
+   "label": "Require Open POS Shift for Cashier Expense"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "Allows permitted users to edit Expense Date. If disabled, Expense Date defaults to today and remains read-only.",
+   "fieldname": "allow_cashier_expense_date_edit",
+   "fieldtype": "Check",
+   "label": "Allow Cashier Expense Date Editing"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "When enabled, draft cashier expenses reduce available shift cash to prevent overspending before submission.",
+   "fieldname": "include_draft_cashier_expenses_in_cash_check",
+   "fieldtype": "Check",
+   "label": "Include Draft Cashier Expenses in Cash Check"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "When enabled, rejected expenses still reduce shift cash because they may represent actual cash spent but rejected for review/accounting reasons.",
+   "fieldname": "include_rejected_cashier_expenses_in_cash_check",
+   "fieldtype": "Check",
+   "label": "Include Rejected Cashier Expenses in Cash Check"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "If disabled, a cash payment account must be resolved before saving a cashier expense.",
+   "fieldname": "allow_cashier_expense_without_cash_account",
+   "fieldtype": "Check",
+   "label": "Allow Cashier Expense Without Cash Account"
+  },
+  {
+   "fieldname": "coreedge_integration_section",
+   "fieldtype": "Section Break",
+   "label": "CoreEdge Integration"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, RetailEdge will attempt to consume CoreEdge shared services where available.",
+   "fieldname": "enable_coreedge_integration",
+   "fieldtype": "Check",
+   "label": "Enable CoreEdge Integration"
+  },
+  {
+   "default": "0",
+   "description": "If enabled, RetailEdge customer portal features should require CoreEdge entitlement/access checks.",
+   "fieldname": "coreedge_required_for_portal",
+   "fieldtype": "Check",
+   "label": "Require CoreEdge for Portal Access"
+  },
+  {
+   "default": "0",
+   "description": "Use CoreEdge payment/payment gateway services for invoice payment requests when CoreEdge is installed and available.",
+   "fieldname": "enable_coreedge_payment_requests",
+   "fieldtype": "Check",
+   "label": "Use CoreEdge Payment Requests"
+  },
+  {
+   "default": "0",
+   "description": "Use CoreEdge notification services for RetailEdge alerts when available.",
+   "fieldname": "enable_coreedge_notifications",
+   "fieldtype": "Check",
+   "label": "Use CoreEdge Notifications"
+  },
+  {
+   "default": "0",
+   "description": "Use CoreEdge active branch/session context when available.",
+   "fieldname": "enable_coreedge_branch_context",
+   "fieldtype": "Check",
+   "label": "Use CoreEdge Branch Context"
+  }
+ ],
+ "issingle": 1,
+ "module": "RetailEdge",
+ "name": "RetailEdge Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

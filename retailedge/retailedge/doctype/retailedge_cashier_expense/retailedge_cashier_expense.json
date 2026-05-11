@@ -1,0 +1,504 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-05-10 00:00:00.000000",
+ "custom": 0,
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "quick_expense_entry_section",
+  "naming_series",
+  "expense_category",
+  "amount",
+  "description",
+  "attachment",
+  "quick_expense_entry_column_break",
+  "company",
+  "cashier",
+  "expense_date",
+  "pos_profile",
+  "branch",
+  "accounting_context_section",
+  "expense_account",
+  "cost_center",
+  "payment_account",
+  "shift_cash_control_section",
+  "shift_opening_cash_amount",
+  "shift_cash_sales_amount",
+  "prior_shift_expense_amount",
+  "available_shift_cash_before_expense",
+  "available_shift_cash_after_expense",
+  "cash_balance_source",
+  "cash_control_message",
+  "status_section",
+  "expense_status",
+  "ledger_status",
+  "pos_audit_links_section",
+  "linked_pos_opening_shift",
+  "linked_pos_closing_shift",
+  "linked_daily_sales_audit",
+  "review_section",
+  "approved_by",
+  "approved_on",
+  "rejected_by",
+  "rejected_on",
+  "review_remarks",
+  "future_posting_reference_section",
+  "posting_reference_type",
+  "posting_reference"
+ ],
+ "fields": [
+  {
+   "fieldname": "quick_expense_entry_section",
+   "fieldtype": "Section Break",
+   "label": "Quick Expense Entry"
+  },
+  {
+   "default": "RE-CE-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "options": "RE-CE-.YYYY.-.####",
+   "reqd": 1
+  },
+  {
+   "description": "Select the type/category of expense.",
+   "fieldname": "expense_category",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Expense Category",
+   "options": "RetailEdge Expense Category",
+   "reqd": 1
+  },
+  {
+   "description": "Amount spent by the cashier.",
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "reqd": 1
+  },
+  {
+   "description": "Short explanation of the expense.",
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "description": "Upload receipt or supporting evidence.",
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Receipt / Evidence"
+  },
+  {
+   "fieldname": "quick_expense_entry_column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Auto-filled from cashier/user/POS context.",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "read_only": 1
+  },
+  {
+   "description": "Auto-filled from the current user.",
+   "fieldname": "cashier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Cashier",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "description": "Auto-filled, normally today.",
+   "fieldname": "expense_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Expense Date",
+   "read_only": 1
+  },
+  {
+   "description": "Auto-filled from the cashier’s current/open POS profile where possible.",
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "POS Profile",
+   "options": "POS Profile",
+   "read_only": 1
+  },
+  {
+   "description": "Auto-filled from branch context, POS profile, or future CoreEdge branch switcher.",
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "accounting_context_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting Context"
+  },
+  {
+   "description": "Auto-filled from Expense Category. Cashier should not select this manually.",
+   "fieldname": "expense_account",
+   "fieldtype": "Link",
+   "label": "Expense Account",
+   "options": "Account",
+   "read_only": 1
+  },
+  {
+   "description": "Auto-filled from Expense Category, POS Profile, branch, or defaults.",
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center",
+   "read_only": 1
+  },
+  {
+   "description": "Auto-filled later from cashier cash/current open shift/POS profile cash account.",
+   "fieldname": "payment_account",
+   "fieldtype": "Link",
+   "label": "Payment Account",
+   "options": "Account",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "shift_cash_control_section",
+   "fieldtype": "Section Break",
+   "label": "Shift Cash Control"
+  },
+  {
+   "description": "Cash amount detected from the linked POS Opening Shift.",
+   "fieldname": "shift_opening_cash_amount",
+   "fieldtype": "Currency",
+   "label": "Shift Opening Cash Amount",
+   "read_only": 1
+  },
+  {
+   "description": "Cash sales/payments detected for the current shift where resolvable.",
+   "fieldname": "shift_cash_sales_amount",
+   "fieldtype": "Currency",
+   "label": "Shift Cash Sales Amount",
+   "read_only": 1
+  },
+  {
+   "description": "Existing non-cancelled RetailEdge cashier expenses already recorded for this opening shift, excluding this document.",
+   "fieldname": "prior_shift_expense_amount",
+   "fieldtype": "Currency",
+   "label": "Prior Shift Expense Amount",
+   "read_only": 1
+  },
+  {
+   "description": "Available cash before this expense.",
+   "fieldname": "available_shift_cash_before_expense",
+   "fieldtype": "Currency",
+   "label": "Available Shift Cash Before Expense",
+   "read_only": 1
+  },
+  {
+   "description": "Expected available cash after this expense.",
+   "fieldname": "available_shift_cash_after_expense",
+   "fieldtype": "Currency",
+   "label": "Available Shift Cash After Expense",
+   "read_only": 1
+  },
+  {
+   "description": "Shows how RetailEdge resolved the cash balance.",
+   "fieldname": "cash_balance_source",
+   "fieldtype": "Data",
+   "label": "Cash Balance Source",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cash_control_message",
+   "fieldtype": "Small Text",
+   "label": "Cash Control Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Processing Status"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Draft",
+   "description": "Current processing status of this expense.",
+   "fieldname": "expense_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Expense Status",
+   "options": "Draft\nSubmitted\nPending Ledger\nRejected\nPosted\nCancelled",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Not Applicable",
+   "description": "Reserved for later ledger/accounting posting.",
+   "fieldname": "ledger_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Ledger Status",
+   "options": "Not Applicable\nPending Ledger\nPosted\nFailed",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "pos_audit_links_section",
+   "fieldtype": "Section Break",
+   "label": "POS / Audit Links"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Auto-filled later from the cashier’s current open POS shift.",
+   "fieldname": "linked_pos_opening_shift",
+   "fieldtype": "Link",
+   "label": "Linked POS Opening Shift",
+   "options": "POS Opening Shift",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Auto-filled later after the related opening shift is closed.",
+   "fieldname": "linked_pos_closing_shift",
+   "fieldtype": "Link",
+   "label": "Linked POS Closing Shift",
+   "options": "POS Closing Shift",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Reserved for later Daily Sales Audit integration.",
+   "fieldname": "linked_daily_sales_audit",
+   "fieldtype": "Data",
+   "label": "Linked Daily Sales Audit",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "review_section",
+   "fieldtype": "Section Break",
+   "label": "Review"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "rejected_by",
+   "fieldtype": "Link",
+   "label": "Rejected By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "rejected_on",
+   "fieldtype": "Datetime",
+   "label": "Rejected On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "review_remarks",
+   "fieldtype": "Small Text",
+   "label": "Review Remarks"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "future_posting_reference_section",
+   "fieldtype": "Section Break",
+   "label": "Future Posting Reference"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Reserved for later accounting posting phase.",
+   "fieldname": "posting_reference_type",
+   "fieldtype": "Data",
+   "label": "Posting Reference Type",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Reserved for later accounting posting phase.",
+   "fieldname": "posting_reference",
+   "fieldtype": "Dynamic Link",
+   "label": "Posting Reference",
+   "options": "posting_reference_type",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-05-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge Cashier Expense",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeManager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Branch Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeBranchManager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Auditor",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeAuditor",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Cashier",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeCashier",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1
+  }
+ ],
+ "search_fields": "expense_category,cashier,pos_profile,expense_status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "expense_category",
+ "track_changes": 1
+}
