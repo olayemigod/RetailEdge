@@ -5,6 +5,10 @@ from frappe.model.document import Document
 from frappe.utils import flt, today
 
 from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.cashier_expense_posting import (
+	build_cashier_expense_posting_preview,
+	refresh_cashier_expense_posting_readiness,
+)
 from retailedge.utils.settings import get_retailedge_settings
 
 
@@ -19,15 +23,21 @@ class RetailEdgeCashierExpense(Document):
 		self.validate_cash_account_requirement()
 		self.validate_required_values()
 		self.validate_cash_availability()
+		self.set_posting_readiness_preview()
+
+	def after_insert(self):
+		refresh_cashier_expense_posting_readiness(self.name)
 
 	def on_submit(self):
 		if not self.expense_status or self.expense_status == "Draft":
 			self.expense_status = "Submitted"
 		if not self.ledger_status:
 			self.ledger_status = "Not Applicable"
+		self.set_posting_readiness_preview()
 
 	def on_cancel(self):
 		self.expense_status = "Cancelled"
+		self.set_posting_readiness_preview()
 
 	def set_cashier_defaults(self):
 		settings = get_retailedge_settings()
@@ -152,6 +162,15 @@ class RetailEdgeCashierExpense(Document):
 			frappe.throw(
 				f"Insufficient shift cash. Available cash for this shift is {available}. Expense amount is {amount}."
 			)
+
+	def set_posting_readiness_preview(self):
+		preview = build_cashier_expense_posting_preview(self)
+		self.posting_ready = 1 if preview.get("posting_ready") else 0
+		self.posting_block_reason = preview.get("posting_block_reason")
+		self.resolved_debit_account = preview.get("debit_account")
+		self.resolved_credit_account = preview.get("credit_account")
+		self.resolved_posting_cost_center = preview.get("cost_center")
+		self.posting_preview = preview.get("posting_preview") or None
 
 	def _should_use_category_cost_center(self, category_cost_center):
 		if not category_cost_center:

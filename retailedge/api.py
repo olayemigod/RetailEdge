@@ -9,6 +9,12 @@ from retailedge.cashier_expense import (
 	reopen_cashier_expense as _reopen_cashier_expense,
 	submit_cashier_expense as _submit_cashier_expense,
 )
+from retailedge.cashier_expense_posting import (
+	assert_can_refresh_posting_readiness as _assert_can_refresh_posting_readiness,
+	get_cashier_expense_posting_preview as _get_cashier_expense_posting_preview,
+	refresh_cashier_expense_posting_readiness as _refresh_cashier_expense_posting_readiness,
+	refresh_pending_cashier_expense_posting_readiness as _refresh_pending_cashier_expense_posting_readiness,
+)
 from retailedge.cashier_context import (
 	get_cashier_expense_entry_context as _get_cashier_expense_entry_context,
 	get_current_cashier_context as _get_current_cashier_context,
@@ -118,6 +124,29 @@ def get_cashier_expenses_for_variance(filters=None):
 @frappe.whitelist()
 def get_cashier_expense_totals_for_variance(filters=None):
 	return _get_cashier_expense_totals_for_variance(filters=filters)
+
+
+@frappe.whitelist()
+def get_cashier_expense_posting_preview(expense_name):
+	doc = frappe.get_doc("RetailEdge Cashier Expense", expense_name)
+	if not doc.has_permission("read"):
+		frappe.throw("You do not have permission to view this cashier expense posting preview.", frappe.PermissionError)
+	return _get_cashier_expense_posting_preview(expense_name)
+
+
+@frappe.whitelist()
+def refresh_cashier_expense_posting_readiness(expense_name):
+	doc = frappe.get_doc("RetailEdge Cashier Expense", expense_name)
+	if not doc.has_permission("read"):
+		frappe.throw("You do not have permission to refresh this cashier expense posting readiness.", frappe.PermissionError)
+	_assert_can_refresh_posting_readiness()
+	return _refresh_cashier_expense_posting_readiness(expense_name)
+
+
+@frappe.whitelist()
+def refresh_pending_cashier_expense_posting_readiness(filters=None):
+	_assert_can_refresh_posting_readiness()
+	return _refresh_pending_cashier_expense_posting_readiness(filters=filters)
 
 
 @frappe.whitelist()

@@ -46,7 +46,14 @@
   "review_remarks",
   "future_posting_reference_section",
   "posting_reference_type",
-  "posting_reference"
+  "posting_reference",
+  "ledger_posting_readiness_section",
+  "posting_ready",
+  "posting_block_reason",
+  "resolved_debit_account",
+  "resolved_credit_account",
+  "resolved_posting_cost_center",
+  "posting_preview"
  ],
  "fields": [
   {
@@ -353,6 +360,62 @@
    "fieldtype": "Dynamic Link",
    "label": "Posting Reference",
    "options": "posting_reference_type",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "ledger_posting_readiness_section",
+   "fieldtype": "Section Break",
+   "label": "Ledger Posting Readiness"
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Indicates whether this expense has enough information for future ledger posting.",
+   "fieldname": "posting_ready",
+   "fieldtype": "Check",
+   "label": "Posting Ready",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Explains why this expense is not ready for ledger posting.",
+   "fieldname": "posting_block_reason",
+   "fieldtype": "Small Text",
+   "label": "Posting Block Reason",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Future posting debit account, normally the expense account from Expense Category.",
+   "fieldname": "resolved_debit_account",
+   "fieldtype": "Link",
+   "label": "Resolved Debit Account",
+   "options": "Account",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Future posting credit account, normally the cash/payment account.",
+   "fieldname": "resolved_credit_account",
+   "fieldtype": "Link",
+   "label": "Resolved Credit Account",
+   "options": "Account",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "resolved_posting_cost_center",
+   "fieldtype": "Link",
+   "label": "Resolved Posting Cost Center",
+   "options": "Cost Center",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Human-readable preview of the future accounting entry.",
+   "fieldname": "posting_preview",
+   "fieldtype": "Long Text",
+   "label": "Posting Preview",
    "read_only": 1
   }
  ],

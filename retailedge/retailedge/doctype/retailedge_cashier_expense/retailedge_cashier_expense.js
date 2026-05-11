@@ -40,6 +40,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			frm.events.load_cashier_context(frm);
 		}
 		frm.events.add_review_actions(frm);
+		frm.events.add_posting_preview_actions(frm);
 	},
 
 	amount(frm) {
@@ -178,6 +179,12 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			"available_shift_cash_after_expense",
 			"cash_balance_source",
 			"cash_control_message",
+			"posting_ready",
+			"posting_block_reason",
+			"resolved_debit_account",
+			"resolved_credit_account",
+			"resolved_posting_cost_center",
+			"posting_preview",
 		].forEach((fieldname) => {
 			frm.set_df_property(fieldname, "read_only", 1);
 		});
@@ -214,6 +221,60 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 					label: __("Remarks"),
 					required: 0,
 					method: "retailedge.api.reopen_cashier_expense",
+				});
+			});
+		}
+	},
+
+	add_posting_preview_actions(frm) {
+		if (frm.is_new()) {
+			return;
+		}
+
+		frm.add_custom_button(__("Preview Ledger Posting"), () => {
+			frappe.call({
+				method: "retailedge.api.get_cashier_expense_posting_preview",
+				args: { expense_name: frm.doc.name },
+				callback: (response) => {
+					const preview = response.message || {};
+					const lines = (preview.preview_lines || [])
+						.map(
+							(line) =>
+								`<li><strong>${frappe.utils.escape_html(line.account || "")}</strong>: debit ${format_currency(
+									line.debit || 0
+								)}, credit ${format_currency(line.credit || 0)}, cost center ${frappe.utils.escape_html(
+									line.cost_center || ""
+								)}</li>`
+						)
+						.join("");
+					const blockReason = preview.posting_block_reason
+						? `<p><strong>${__("Block Reason")}:</strong> ${frappe.utils.escape_html(preview.posting_block_reason)}</p>`
+						: "";
+					frappe.msgprint({
+						title: __("Ledger Posting Preview"),
+						message: `
+							<p><strong>${__("Posting Ready")}:</strong> ${preview.posting_ready ? __("Yes") : __("No")}</p>
+							${blockReason}
+							<p><strong>${__("Document Type")}:</strong> ${frappe.utils.escape_html(preview.posting_document_type || "")}</p>
+							<p><strong>${__("Amount")}:</strong> ${format_currency(preview.amount || 0)}</p>
+							<p><strong>${__("Posting Date")}:</strong> ${frappe.utils.escape_html(preview.posting_date || "")}</p>
+							<p><strong>${__("Debit Account")}:</strong> ${frappe.utils.escape_html(preview.debit_account || "")}</p>
+							<p><strong>${__("Credit Account")}:</strong> ${frappe.utils.escape_html(preview.credit_account || "")}</p>
+							<p><strong>${__("Cost Center")}:</strong> ${frappe.utils.escape_html(preview.cost_center || "")}</p>
+							<p><strong>${__("Remarks")}:</strong> ${frappe.utils.escape_html(preview.remarks || "")}</p>
+							<ul>${lines}</ul>
+						`,
+					});
+				},
+			});
+		});
+
+		if (frm.events.user_can_refresh_posting_readiness()) {
+			frm.add_custom_button(__("Refresh Posting Readiness"), () => {
+				frappe.call({
+					method: "retailedge.api.refresh_cashier_expense_posting_readiness",
+					args: { expense_name: frm.doc.name },
+					callback: () => frm.reload_doc(),
 				});
 			});
 		}
@@ -256,5 +317,17 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			"RetailEdgeAuditor",
 		]);
 		return (frappe.user_roles || []).some((role) => reviewerRoles.has(role));
+	},
+
+	user_can_refresh_posting_readiness() {
+		const refreshRoles = new Set([
+			"System Manager",
+			"Accounts Manager",
+			"RetailEdge Manager",
+			"RetailEdgeManager",
+			"RetailEdge Auditor",
+			"RetailEdgeAuditor",
+		]);
+		return (frappe.user_roles || []).some((role) => refreshRoles.has(role));
 	},
 });

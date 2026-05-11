@@ -23,6 +23,12 @@
   "include_draft_cashier_expenses_in_cash_check",
   "include_rejected_cashier_expenses_in_cash_check",
   "allow_cashier_expense_without_cash_account",
+  "cashier_expense_ledger_controls_section",
+  "cashier_expense_posting_document_type",
+  "default_cashier_expense_payable_account",
+  "require_cashier_expense_approval_before_posting",
+  "allow_rejected_cashier_expense_posting",
+  "cashier_expense_posting_remark_template",
   "coreedge_integration_section",
   "enable_coreedge_integration",
   "coreedge_required_for_portal",
@@ -165,6 +171,49 @@
    "fieldname": "allow_cashier_expense_without_cash_account",
    "fieldtype": "Check",
    "label": "Allow Cashier Expense Without Cash Account"
+  },
+  {
+   "fieldname": "cashier_expense_ledger_controls_section",
+   "fieldtype": "Section Break",
+   "label": "Cashier Expense Ledger Controls"
+  },
+  {
+   "default": "Journal Entry",
+   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
+   "description": "Preferred accounting document type for future cashier expense posting.",
+   "fieldname": "cashier_expense_posting_document_type",
+   "fieldtype": "Select",
+   "label": "Cashier Expense Posting Document Type",
+   "options": "Journal Entry\nPayment Entry"
+  },
+  {
+   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
+   "description": "Reserved for future posting mode if payable clearing is required.",
+   "fieldname": "default_cashier_expense_payable_account",
+   "fieldtype": "Link",
+   "label": "Default Cashier Expense Payable Account",
+   "options": "Account"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
+   "fieldname": "require_cashier_expense_approval_before_posting",
+   "fieldtype": "Check",
+   "label": "Require Approval Before Posting"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
+   "fieldname": "allow_rejected_cashier_expense_posting",
+   "fieldtype": "Check",
+   "label": "Allow Rejected Cashier Expense Posting"
+  },
+  {
+   "default": "RetailEdge Cashier Expense {expense_name} - {expense_category}",
+   "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
+   "fieldname": "cashier_expense_posting_remark_template",
+   "fieldtype": "Small Text",
+   "label": "Posting Remark Template"
   },
   {
    "fieldname": "coreedge_integration_section",

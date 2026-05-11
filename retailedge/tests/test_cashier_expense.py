@@ -29,6 +29,10 @@ from retailedge.cashier_expense import (
 	user_has_any_role,
 	user_is_reviewer,
 )
+from retailedge.cashier_expense_posting import (
+	get_cashier_expense_posting_preview,
+	refresh_cashier_expense_posting_readiness,
+)
 from retailedge.events.pos_closing_shift import update_cashier_expenses_with_closing_shift
 from retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses import (
 	get_retailedge_cashier_expense_context,
@@ -44,6 +48,12 @@ class _Settings(SimpleNamespace):
 	include_draft_cashier_expenses_in_cash_check = 1
 	include_rejected_cashier_expenses_in_cash_check = 1
 	allow_cashier_expense_without_cash_account = 0
+	enable_cashier_expense_accounting_posting = 0
+	cashier_expense_posting_document_type = "Journal Entry"
+	default_cashier_expense_payable_account = None
+	require_cashier_expense_approval_before_posting = 1
+	allow_rejected_cashier_expense_posting = 0
+	cashier_expense_posting_remark_template = "RetailEdge Cashier Expense {expense_name} - {expense_category}"
 
 
 class _Row(SimpleNamespace):
@@ -63,6 +73,7 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		doc = _Doc(
 			doctype="RetailEdge Cashier Expense",
 			name=kwargs.pop("name", None),
+			docstatus=kwargs.pop("docstatus", 0),
 			expense_status=kwargs.pop("expense_status", None),
 			ledger_status=kwargs.pop("ledger_status", None),
 			cashier=kwargs.pop("cashier", None),
@@ -83,6 +94,13 @@ class CashierExpenseControllerTests(unittest.TestCase):
 			available_shift_cash_after_expense=0,
 			cash_balance_source=None,
 			cash_control_message=None,
+			posting_ready=0,
+			posting_block_reason=None,
+			resolved_debit_account=None,
+			resolved_credit_account=None,
+			resolved_posting_cost_center=None,
+			posting_preview=None,
+			posting_reference=kwargs.pop("posting_reference", None),
 			_is_new=kwargs.pop("_is_new", True),
 		)
 		doc.set_cashier_defaults = RetailEdgeCashierExpense.set_cashier_defaults.__get__(doc, _Doc)
@@ -92,6 +110,7 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		doc.validate_cash_account_requirement = RetailEdgeCashierExpense.validate_cash_account_requirement.__get__(doc, _Doc)
 		doc.validate_required_values = RetailEdgeCashierExpense.validate_required_values.__get__(doc, _Doc)
 		doc.validate_cash_availability = RetailEdgeCashierExpense.validate_cash_availability.__get__(doc, _Doc)
+		doc.set_posting_readiness_preview = RetailEdgeCashierExpense.set_posting_readiness_preview.__get__(doc, _Doc)
 		doc.on_submit = RetailEdgeCashierExpense.on_submit.__get__(doc, _Doc)
 		doc.on_cancel = RetailEdgeCashierExpense.on_cancel.__get__(doc, _Doc)
 		return doc
@@ -190,6 +209,22 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		doc = self._make_doc(expense_status="Submitted")
 		doc.on_cancel()
 		self.assertEqual(doc.expense_status, "Cancelled")
+
+	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.build_cashier_expense_posting_preview")
+	def test_set_posting_readiness_preview_sets_fields_in_memory(self, mock_preview):
+		mock_preview.return_value = {
+			"posting_ready": True,
+			"posting_block_reason": None,
+			"debit_account": "Travel Expenses - DEMO",
+			"credit_account": "Cash - DEMO",
+			"cost_center": "Main - DEMO",
+			"posting_preview": "preview text",
+		}
+		doc = self._make_doc()
+		doc.set_posting_readiness_preview()
+		self.assertEqual(doc.posting_ready, 1)
+		self.assertEqual(doc.resolved_debit_account, "Travel Expenses - DEMO")
+		self.assertEqual(doc.posting_preview, "preview text")
 
 
 class CashierContextTests(unittest.TestCase):
@@ -576,3 +611,86 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		context = get_retailedge_cashier_expense_context(entry)
 		self.assertEqual(context["snapshot"]["cash_sales"], 1800)
 		self.assertEqual(mock_snapshot.call_args.kwargs["opening_shift"], "OPEN-1")
+
+
+class CashierExpensePostingTests(unittest.TestCase):
+	def _expense_doc(self, **kwargs):
+		return SimpleNamespace(
+			doctype="RetailEdge Cashier Expense",
+			name=kwargs.pop("name", "RE-CE-0001"),
+			docstatus=kwargs.pop("docstatus", 1),
+			expense_status=kwargs.pop("expense_status", "Pending Ledger"),
+			ledger_status=kwargs.pop("ledger_status", "Not Applicable"),
+			company=kwargs.pop("company", "Demo Company"),
+			expense_date=kwargs.pop("expense_date", "2026-05-11"),
+			amount=kwargs.pop("amount", 100),
+			expense_account=kwargs.pop("expense_account", "Travel Expenses - DEMO"),
+			payment_account=kwargs.pop("payment_account", "Cash - DEMO"),
+			cost_center=kwargs.pop("cost_center", "Main - DEMO"),
+			expense_category=kwargs.pop("expense_category", "Transport"),
+			posting_reference=kwargs.pop("posting_reference", None),
+		)
+
+	@patch("retailedge.cashier_expense_posting.get_retailedge_settings", return_value=_Settings())
+	@patch("retailedge.cashier_expense_posting.frappe.get_cached_doc")
+	@patch("retailedge.cashier_expense_posting.frappe.db.exists", return_value=True)
+	@patch("retailedge.cashier_expense_posting.frappe.get_doc")
+	def test_posting_preview_produces_debit_credit_lines(
+		self, mock_get_doc, _mock_exists, mock_get_cached_doc, _mock_settings
+	):
+		mock_get_doc.return_value = self._expense_doc()
+		mock_get_cached_doc.side_effect = [
+			SimpleNamespace(company="Demo Company", root_type="Expense", is_group=0),
+			SimpleNamespace(company="Demo Company", root_type="Asset", is_group=0),
+		]
+		preview = get_cashier_expense_posting_preview("RE-CE-0001")
+		self.assertTrue(preview["posting_ready"])
+		self.assertEqual(len(preview["preview_lines"]), 2)
+		self.assertEqual(preview["preview_lines"][0]["debit"], 100)
+		self.assertEqual(preview["preview_lines"][1]["credit"], 100)
+
+	@patch(
+		"retailedge.cashier_expense_posting.get_retailedge_settings",
+		return_value=_Settings(require_cashier_expense_approval_before_posting=1),
+	)
+	@patch("retailedge.cashier_expense_posting.frappe.get_cached_doc")
+	@patch("retailedge.cashier_expense_posting.frappe.db.exists", return_value=True)
+	@patch("retailedge.cashier_expense_posting.frappe.get_doc")
+	def test_posting_preview_blocks_rejected_when_not_allowed(
+		self, mock_get_doc, _mock_exists, mock_get_cached_doc, _mock_settings
+	):
+		mock_get_doc.return_value = self._expense_doc(expense_status="Rejected")
+		mock_get_cached_doc.side_effect = [
+			SimpleNamespace(company="Demo Company", root_type="Expense", is_group=0),
+			SimpleNamespace(company="Demo Company", root_type="Asset", is_group=0),
+		]
+		preview = get_cashier_expense_posting_preview("RE-CE-0001")
+		self.assertFalse(preview["posting_ready"])
+		self.assertIn("Rejected cashier expenses are blocked", preview["posting_block_reason"])
+
+	@patch("retailedge.cashier_expense_posting.get_retailedge_settings", return_value=_Settings())
+	@patch("retailedge.cashier_expense_posting.frappe.db.set_value")
+	@patch("retailedge.cashier_expense_posting.frappe.get_cached_doc")
+	@patch("retailedge.cashier_expense_posting.frappe.db.exists", return_value=True)
+	@patch("retailedge.cashier_expense_posting.frappe.get_doc")
+	def test_refresh_readiness_updates_posting_fields(
+		self, mock_get_doc, _mock_exists, mock_get_cached_doc, mock_set_value, _mock_settings
+	):
+		mock_get_doc.return_value = self._expense_doc()
+		mock_get_cached_doc.side_effect = [
+			SimpleNamespace(company="Demo Company", root_type="Expense", is_group=0),
+			SimpleNamespace(company="Demo Company", root_type="Asset", is_group=0),
+		]
+		preview = refresh_cashier_expense_posting_readiness("RE-CE-0001")
+		values = mock_set_value.call_args.args[2]
+		self.assertIn("posting_ready", values)
+		self.assertIn("posting_preview", values)
+		self.assertTrue(preview["posting_ready"])
+
+	@patch("retailedge.cashier_expense_posting.get_retailedge_settings", return_value=_Settings())
+	@patch("retailedge.cashier_expense_posting.frappe.get_doc")
+	def test_posting_preview_blocks_cancelled_expense(self, mock_get_doc, _mock_settings):
+		mock_get_doc.return_value = self._expense_doc(docstatus=2, expense_status="Cancelled")
+		preview = get_cashier_expense_posting_preview("RE-CE-0001")
+		self.assertFalse(preview["posting_ready"])
+		self.assertIn("Cancelled expenses", preview["posting_block_reason"])

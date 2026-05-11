@@ -126,6 +126,14 @@ Draft, Submitted, Pending Ledger, Rejected, and Posted expenses can all be inclu
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## Cashier Expense V1.4F - Ledger Posting Preparation
+
+RetailEdge can now preview future ledger posting for cashier expenses without creating any accounting documents. The posting preview resolves the expected debit account, credit account, amount, posting date, and cost center, and stores posting readiness directly on the cashier expense for later posting phases.
+
+This phase does not create Journal Entries or Payment Entries, and it does not modify GL balances, Sales Invoices, POS shifts, or Daily Sales Audit data. Actual accounting posting remains a later phase after readiness validation is complete.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash
