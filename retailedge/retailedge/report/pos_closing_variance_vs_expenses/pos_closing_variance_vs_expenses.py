@@ -2,7 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_datetime, getdate
 
-from retailedge.cashier_context import get_shift_cash_snapshot
+from retailedge.cashier_context import get_shift_cash_snapshot, resolve_branch
 from retailedge.cashier_expense import (
 	get_cashier_expense_totals_for_variance,
 	get_cashier_expenses_for_variance,
@@ -40,6 +40,7 @@ def get_columns():
 		{"label": _("Shift End"), "fieldname": "shift_end", "fieldtype": "Datetime", "width": 160},
 		{"label": _("POS Closing Shift"), "fieldname": "pos_closing_shift", "fieldtype": "Link", "options": "POS Closing Shift", "width": 190},
 		{"label": _("POS Profile"), "fieldname": "pos_profile", "fieldtype": "Link", "options": "POS Profile", "width": 170},
+		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 150},
 		{"label": _("Business Location"), "fieldname": "business_location", "fieldtype": "Data", "width": 170},
 		{"label": _("Company"), "fieldname": "company", "fieldtype": "Link", "options": "Company", "width": 170},
 		{"label": _("Closed By"), "fieldname": "closed_by", "fieldtype": "Link", "options": "User", "width": 160},
@@ -73,6 +74,9 @@ def get_data(filters):
 	rows = []
 
 	for entry in entries:
+		entry.branch = get_entry_branch(entry)
+		if filters.get("branch") and entry.branch != filters.branch:
+			continue
 		totals = get_closing_totals(entry.name)
 		variance = flt(totals.get("variance"))
 		shortage = abs(variance) if variance < 0 else 0
@@ -98,6 +102,7 @@ def get_data(filters):
 			"shift_end": entry.get("shift_end"),
 			"pos_closing_shift": entry.name,
 			"pos_profile": entry.pos_profile,
+			"branch": entry.branch,
 			"business_location": get_business_location(entry.pos_profile, cost_center),
 			"company": entry.company,
 			"closed_by": entry.user,
@@ -149,6 +154,7 @@ def get_payment_detail_rows(entry, parent_row):
 				"shift_end": entry.get("shift_end"),
 				"pos_closing_shift": entry.name,
 				"pos_profile": entry.pos_profile,
+				"branch": entry.branch,
 				"company": entry.company,
 				"closed_by": entry.user,
 				"expected_amount": payment.get("expected_amount"),
@@ -178,6 +184,7 @@ def get_expense_detail_rows(entry, parent_row, cost_center, expense_details):
 				"shift_end": entry.get("shift_end"),
 				"pos_closing_shift": entry.name,
 				"pos_profile": entry.pos_profile,
+				"branch": entry.branch,
 				"company": entry.company,
 				"expenses": expense.get("amount"),
 				"expense_cost_center": expense.get("cost_center") or cost_center,
@@ -207,6 +214,7 @@ def get_retailedge_expense_detail_rows(entry, parent_row, expense_details):
 				"shift_end": entry.get("shift_end"),
 				"pos_closing_shift": expense.get("linked_pos_closing_shift") or entry.name,
 				"pos_profile": expense.get("pos_profile") or entry.pos_profile,
+				"branch": expense.get("branch") or entry.branch,
 				"company": expense.get("company") or entry.company,
 				"closed_by": expense.get("cashier"),
 				"expenses": expense.get("amount"),
@@ -283,6 +291,9 @@ def get_closing_entries(filters):
 			query = query.where(closing.pos_profile == filters.pos_profile)
 		else:
 			query = query.where(opening.pos_profile == filters.pos_profile)
+
+	if filters.get("cashier"):
+		query = query.where(closing[user_field] == filters.cashier)
 
 	return query.run(as_dict=True)
 
@@ -454,6 +465,16 @@ def get_business_location(pos_profile, cost_center):
 	return values.get("warehouse") or values.get("cost_center") or values.get("pos_profile")
 
 
+def get_entry_branch(entry):
+	branch_context = resolve_branch(
+		company=getattr(entry, "company", None),
+		pos_profile=getattr(entry, "pos_profile", None),
+		opening_shift=getattr(entry, "pos_opening_shift", None),
+		user=getattr(entry, "user", None),
+	)
+	return branch_context.get("branch")
+
+
 def get_expenses(posting_date, company=None, cost_center=None, include_cogs=False):
 	conditions = get_expense_conditions(include_cogs=include_cogs)
 	values = {"posting_date": posting_date}
@@ -557,6 +578,8 @@ def get_retailedge_cashier_expense_context(entry):
 	filters = {}
 	if _value("company"):
 		filters["company"] = _value("company")
+	if _value("branch"):
+		filters["branch"] = _value("branch")
 	if _value("pos_profile"):
 		filters["pos_profile"] = _value("pos_profile")
 	if _value("name"):
@@ -567,6 +590,8 @@ def get_retailedge_cashier_expense_context(entry):
 		filters = {"linked_pos_opening_shift": _value("pos_opening_shift")}
 		if _value("company"):
 			filters["company"] = _value("company")
+		if _value("branch"):
+			filters["branch"] = _value("branch")
 		expenses = get_cashier_expenses_for_variance(filters=filters)
 	if not expenses:
 		filters = {
@@ -575,6 +600,8 @@ def get_retailedge_cashier_expense_context(entry):
 		}
 		if _value("company"):
 			filters["company"] = _value("company")
+		if _value("branch"):
+			filters["branch"] = _value("branch")
 		if _value("pos_profile"):
 			filters["pos_profile"] = _value("pos_profile")
 		if _value("user"):

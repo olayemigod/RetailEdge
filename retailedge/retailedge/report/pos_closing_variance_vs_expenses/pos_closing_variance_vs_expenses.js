@@ -31,6 +31,20 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 			options: "POS Profile",
 		},
 		{
+			fieldname: "branch",
+			label: __("Branch"),
+			fieldtype: "Link",
+			options: "Branch",
+			description: __("Filters report rows using RetailEdge branch resolution from the shift/profile context."),
+		},
+		{
+			fieldname: "cashier",
+			label: __("Cashier"),
+			fieldtype: "Link",
+			options: "User",
+			description: __("Filters POS closing rows by the shift user / cashier."),
+		},
+		{
 			fieldname: "cost_center",
 			label: __("Expense Cost Center"),
 			fieldtype: "Link",
