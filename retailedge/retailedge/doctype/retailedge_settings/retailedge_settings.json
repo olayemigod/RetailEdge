@@ -119,7 +119,7 @@
   {
    "default": "0",
    "depends_on": "eval:doc.enable_cashier_expense_workflow",
-   "description": "Reserved for a later phase. Keep disabled by default. V1.4A must not create accounting entries automatically.",
+   "description": "Reserved for a later phase. Keep disabled by default. Current cashier expense phases only provide posting readiness and preview; they do not create Journal Entries or Payment Entries.",
    "fieldname": "enable_cashier_expense_accounting_posting",
    "fieldtype": "Check",
    "label": "Enable Accounting Posting for Cashier Expenses"
@@ -180,7 +180,7 @@
   {
    "default": "Journal Entry",
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
-   "description": "Preferred accounting document type for future cashier expense posting.",
+   "description": "Preferred accounting document type for a future cashier expense posting phase. Current behavior remains preview and readiness only.",
    "fieldname": "cashier_expense_posting_document_type",
    "fieldtype": "Select",
    "label": "Cashier Expense Posting Document Type",
@@ -188,7 +188,7 @@
   },
   {
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
-   "description": "Reserved for future posting mode if payable clearing is required.",
+   "description": "Reserved for a future posting mode if payable clearing is required. No accounting document is created in the current phase.",
    "fieldname": "default_cashier_expense_payable_account",
    "fieldtype": "Link",
    "label": "Default Cashier Expense Payable Account",
@@ -211,6 +211,7 @@
   {
    "default": "RetailEdge Cashier Expense {expense_name} - {expense_category}",
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
+   "description": "Template used by posting readiness preview to show how a future accounting remark may look. No Journal Entry or Payment Entry is created in the current phase.",
    "fieldname": "cashier_expense_posting_remark_template",
    "fieldtype": "Small Text",
    "label": "Posting Remark Template"

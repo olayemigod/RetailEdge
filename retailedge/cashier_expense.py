@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import frappe
 from frappe.utils import flt, now_datetime
 
@@ -36,6 +38,47 @@ def user_is_reviewer(user: str | None = None) -> bool:
 	return user_has_any_role(user=user, roles=get_reviewer_roles())
 
 
+def append_cashier_expense_action_log(
+	doc_or_name,
+	action,
+	previous_status=None,
+	new_status=None,
+	remarks=None,
+	context=None,
+):
+	doc = doc_or_name
+	if getattr(doc_or_name, "doctype", None) != "RetailEdge Cashier Expense":
+		doc = frappe.get_doc("RetailEdge Cashier Expense", doc_or_name)
+
+	context_text = _serialise_log_context(context)
+	next_idx = frappe.db.count(
+		"RetailEdge Cashier Expense Action Log",
+		{
+			"parent": doc.name,
+			"parenttype": "RetailEdge Cashier Expense",
+			"parentfield": "action_logs",
+		},
+	) + 1
+	log_row = frappe.get_doc(
+		{
+			"doctype": "RetailEdge Cashier Expense Action Log",
+			"parent": doc.name,
+			"parenttype": "RetailEdge Cashier Expense",
+			"parentfield": "action_logs",
+			"idx": next_idx,
+			"action": action,
+			"action_by": frappe.session.user,
+			"action_on": now_datetime(),
+			"previous_status": previous_status,
+			"new_status": new_status,
+			"remarks": remarks,
+			"context": context_text,
+		}
+	)
+	log_row.db_insert()
+	return log_row
+
+
 def submit_cashier_expense(expense_name):
 	doc = frappe.get_doc("RetailEdge Cashier Expense", expense_name)
 	if doc.docstatus == 0:
@@ -46,7 +89,7 @@ def submit_cashier_expense(expense_name):
 
 
 def approve_cashier_expense(expense_name, remarks=None):
-	doc = _get_reviewable_expense(expense_name)
+	doc = _get_reviewable_expense(expense_name, action="approve")
 	user = frappe.session.user
 	user_roles = set(frappe.get_roles(user))
 	if user == doc.cashier and "System Manager" not in user_roles:
@@ -54,6 +97,7 @@ def approve_cashier_expense(expense_name, remarks=None):
 	if not doc.has_permission("write"):
 		frappe.throw("You do not have permission to review this cashier expense.", frappe.PermissionError)
 
+	previous_status = doc.expense_status
 	doc.expense_status = "Pending Ledger"
 	doc.ledger_status = "Pending Ledger"
 	doc.approved_by = user
@@ -63,14 +107,23 @@ def approve_cashier_expense(expense_name, remarks=None):
 	if remarks is not None:
 		doc.review_remarks = remarks
 	doc.save(ignore_permissions=True)
+	append_cashier_expense_action_log(
+		doc,
+		action="Approved",
+		previous_status=previous_status,
+		new_status=doc.expense_status,
+		remarks=remarks,
+		context={"ledger_status": doc.ledger_status},
+	)
 	return _status_payload(doc)
 
 
 def reject_cashier_expense(expense_name, remarks=None):
-	doc = _get_reviewable_expense(expense_name)
+	doc = _get_reviewable_expense(expense_name, action="reject")
 	if not doc.has_permission("write"):
 		frappe.throw("You do not have permission to review this cashier expense.", frappe.PermissionError)
 
+	previous_status = doc.expense_status
 	doc.expense_status = "Rejected"
 	doc.ledger_status = "Not Applicable"
 	doc.rejected_by = frappe.session.user
@@ -80,19 +133,29 @@ def reject_cashier_expense(expense_name, remarks=None):
 	if remarks is not None:
 		doc.review_remarks = remarks
 	doc.save(ignore_permissions=True)
+	append_cashier_expense_action_log(
+		doc,
+		action="Rejected",
+		previous_status=previous_status,
+		new_status=doc.expense_status,
+		remarks=remarks,
+		context={"ledger_status": doc.ledger_status},
+	)
 	return _status_payload(doc)
 
 
 def reopen_cashier_expense(expense_name, remarks=None):
 	doc = frappe.get_doc("RetailEdge Cashier Expense", expense_name)
 	_assert_reviewer()
+	_assert_mutable_review_status(doc, action="reopen")
 	if doc.docstatus != 1:
-		frappe.throw("Only submitted cashier expenses can be reopened for review.")
+		frappe.throw("Only submitted cashier expenses can be reopened.")
 	if doc.expense_status not in {"Rejected", "Pending Ledger"}:
-		frappe.throw("Only Rejected or Pending Ledger expenses can be reopened.")
+		frappe.throw("Only rejected or pending ledger expenses can be reopened.")
 	if not doc.has_permission("write"):
 		frappe.throw("You do not have permission to reopen this cashier expense.", frappe.PermissionError)
 
+	previous_status = doc.expense_status
 	doc.expense_status = "Submitted"
 	doc.ledger_status = "Not Applicable"
 	doc.approved_by = None
@@ -102,6 +165,14 @@ def reopen_cashier_expense(expense_name, remarks=None):
 	if remarks is not None:
 		doc.review_remarks = remarks
 	doc.save(ignore_permissions=True)
+	append_cashier_expense_action_log(
+		doc,
+		action="Reopened",
+		previous_status=previous_status,
+		new_status=doc.expense_status,
+		remarks=remarks,
+		context={"ledger_status": doc.ledger_status},
+	)
 	return _status_payload(doc)
 
 
@@ -123,9 +194,10 @@ def get_cashier_expense_summary(filters=None):
 	return summary
 
 
-def get_cashier_expenses_for_variance(filters=None):
+def get_cashier_expenses_for_variance(filters=None, include_rejected=True):
 	filters = frappe.parse_json(filters) if filters else {}
-	query_filters = _build_variance_filters(filters)
+	include_rejected = filters.get("include_rejected", include_rejected)
+	query_filters = _build_variance_filters(filters, include_rejected=include_rejected)
 	return frappe.get_all(
 		"RetailEdge Cashier Expense",
 		filters=query_filters,
@@ -180,12 +252,21 @@ def get_cashier_expense_totals_for_variance(filters=None):
 	return result
 
 
-def _get_reviewable_expense(expense_name):
+def _get_reviewable_expense(expense_name, action="review"):
 	doc = frappe.get_doc("RetailEdge Cashier Expense", expense_name)
 	_assert_reviewer()
+	_assert_mutable_review_status(doc, action=action)
 	if doc.docstatus != 1:
+		if action == "approve":
+			frappe.throw("Only submitted cashier expenses can be approved.")
+		if action == "reject":
+			frappe.throw("Only submitted cashier expenses can be rejected.")
 		frappe.throw("Only submitted cashier expenses can be reviewed.")
 	if doc.expense_status != "Submitted":
+		if action == "approve":
+			frappe.throw("Only submitted cashier expenses can be approved.")
+		if action == "reject":
+			frappe.throw("Only submitted cashier expenses can be rejected.")
 		frappe.throw("Only cashier expenses in Submitted status can be reviewed.")
 	return doc
 
@@ -193,6 +274,13 @@ def _get_reviewable_expense(expense_name):
 def _assert_reviewer():
 	if not user_is_reviewer():
 		frappe.throw("You do not have reviewer access for cashier expenses.", frappe.PermissionError)
+
+
+def _assert_mutable_review_status(doc, action="review"):
+	if doc.docstatus == 2 or doc.expense_status == "Cancelled":
+		frappe.throw("Cancelled cashier expenses cannot be changed.")
+	if doc.expense_status == "Posted":
+		frappe.throw("Posted cashier expenses are reserved for a future ledger phase.")
 
 
 def _status_payload(doc):
@@ -220,7 +308,7 @@ def _build_summary_filters(filters):
 	return query_filters
 
 
-def _build_variance_filters(filters):
+def _build_variance_filters(filters, include_rejected=True):
 	query_filters = {"docstatus": ["!=", 2], "expense_status": ["!=", "Cancelled"]}
 	for fieldname in (
 		"company",
@@ -239,6 +327,8 @@ def _build_variance_filters(filters):
 			query_filters["expense_status"] = ["in", list(filters["expense_status"])]
 		else:
 			query_filters["expense_status"] = filters["expense_status"]
+	elif not include_rejected:
+		query_filters["expense_status"] = ["not in", ["Cancelled", "Rejected"]]
 	if filters.get("from_date") and filters.get("to_date"):
 		query_filters["expense_date"] = ["between", [filters["from_date"], filters["to_date"]]]
 	elif filters.get("from_date"):
@@ -246,3 +336,14 @@ def _build_variance_filters(filters):
 	elif filters.get("to_date"):
 		query_filters["expense_date"] = ["<=", filters["to_date"]]
 	return query_filters
+
+
+def _serialise_log_context(context):
+	if context is None:
+		return None
+	if isinstance(context, str):
+		return context
+	try:
+		return json.dumps(context, default=str, sort_keys=True)
+	except Exception:
+		return str(context)

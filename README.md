@@ -134,6 +134,14 @@ This phase does not create Journal Entries or Payment Entries, and it does not m
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## Cashier Expense V1.4G - Hardening, Audit Trail, and UX Cleanup
+
+RetailEdge Cashier Expense now keeps an action history so important transitions such as submit, approve, reject, reopen, cancel, and posting-readiness refresh are traceable on the expense itself. Reviewer role checks support both spaced and compact RetailEdge role names, and Desk buttons are restricted by both document status and user role.
+
+Posting preview and posting readiness remain available, but actual ledger posting is still not implemented in this phase. No Journal Entry or Payment Entry is created, variance helpers remain read-only, cancelled expenses stay excluded from variance visibility, and rejected expenses remain visible for management review by default.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash

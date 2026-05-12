@@ -53,7 +53,13 @@
   "resolved_debit_account",
   "resolved_credit_account",
   "resolved_posting_cost_center",
-  "posting_preview"
+  "posting_preview",
+  "review_required",
+  "user_message",
+  "last_readiness_refresh_on",
+  "last_readiness_refresh_by",
+  "action_history_section",
+  "action_logs"
  ],
  "fields": [
   {
@@ -416,6 +422,49 @@
    "fieldname": "posting_preview",
    "fieldtype": "Long Text",
    "label": "Posting Preview",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "review_required",
+   "fieldtype": "Check",
+   "label": "Review Required",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "user_message",
+   "fieldtype": "Small Text",
+   "label": "User Message",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "last_readiness_refresh_on",
+   "fieldtype": "Datetime",
+   "label": "Last Readiness Refresh On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "last_readiness_refresh_by",
+   "fieldtype": "Link",
+   "label": "Last Readiness Refresh By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "action_history_section",
+   "fieldtype": "Section Break",
+   "label": "Action History"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "action_logs",
+   "fieldtype": "Table",
+   "label": "Action History",
+   "options": "RetailEdge Cashier Expense Action Log",
    "read_only": 1
   }
  ],

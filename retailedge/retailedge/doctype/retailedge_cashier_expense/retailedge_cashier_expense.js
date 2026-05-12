@@ -41,6 +41,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 		}
 		frm.events.add_review_actions(frm);
 		frm.events.add_posting_preview_actions(frm);
+		frm.events.update_status_message(frm);
 	},
 
 	amount(frm) {
@@ -149,7 +150,10 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 		if (amount > availableBefore && availableBefore > 0) {
 			frappe.show_alert(
 				{
-					message: __("Expense amount exceeds available shift cash."),
+					message: __(
+						"Insufficient shift cash. Available: {0}. Requested: {1}.",
+						[format_currency(availableBefore), format_currency(amount)]
+					),
 					indicator: "orange",
 				},
 				5
@@ -185,6 +189,10 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			"resolved_credit_account",
 			"resolved_posting_cost_center",
 			"posting_preview",
+			"review_required",
+			"user_message",
+			"last_readiness_refresh_on",
+			"last_readiness_refresh_by",
 		].forEach((fieldname) => {
 			frm.set_df_property(fieldname, "read_only", 1);
 		});
@@ -269,7 +277,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			});
 		});
 
-		if (frm.events.user_can_refresh_posting_readiness()) {
+		if (frm.doc.docstatus === 1 && frm.events.user_can_refresh_posting_readiness()) {
 			frm.add_custom_button(__("Refresh Posting Readiness"), () => {
 				frappe.call({
 					method: "retailedge.api.refresh_cashier_expense_posting_readiness",
@@ -278,6 +286,33 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 				});
 			});
 		}
+	},
+
+	update_status_message(frm) {
+		if (frm.doc.expense_status === "Pending Ledger") {
+			frm.set_intro(
+				__(
+					"This expense is approved for future ledger posting, but actual posting is not enabled in this phase."
+				),
+				"orange"
+			);
+			return;
+		}
+		if (frm.doc.posting_block_reason) {
+			frm.set_intro(
+				__("Posting readiness is blocked: {0}", [frm.doc.posting_block_reason]),
+				"orange"
+			);
+			return;
+		}
+		if (!frm.doc.linked_pos_opening_shift && frm.doc.__islocal) {
+			frm.set_intro(
+				__("An open POS Opening Shift is required before recording cashier expenses."),
+				"orange"
+			);
+			return;
+		}
+		frm.set_intro("");
 	},
 
 	prompt_review_action(frm, options) {

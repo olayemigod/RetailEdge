@@ -5,6 +5,7 @@ from frappe.model.document import Document
 from frappe.utils import flt, today
 
 from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.cashier_expense import append_cashier_expense_action_log
 from retailedge.cashier_expense_posting import (
 	build_cashier_expense_posting_preview,
 	refresh_cashier_expense_posting_readiness,
@@ -28,16 +29,40 @@ class RetailEdgeCashierExpense(Document):
 	def after_insert(self):
 		refresh_cashier_expense_posting_readiness(self.name)
 
-	def on_submit(self):
+	def before_submit(self):
+		self._status_before_submit = self.expense_status or "Draft"
 		if not self.expense_status or self.expense_status == "Draft":
 			self.expense_status = "Submitted"
 		if not self.ledger_status:
 			self.ledger_status = "Not Applicable"
 		self.set_posting_readiness_preview()
 
-	def on_cancel(self):
+	def on_submit(self):
+		previous_status = getattr(self, "_status_before_submit", None) or "Draft"
+		self.set_posting_readiness_preview()
+		append_cashier_expense_action_log(
+			self,
+			action="Submitted",
+			previous_status=previous_status,
+			new_status=self.expense_status,
+			context={"ledger_status": self.ledger_status},
+		)
+
+	def before_cancel(self):
+		self._status_before_cancel = self.expense_status
 		self.expense_status = "Cancelled"
 		self.set_posting_readiness_preview()
+
+	def on_cancel(self):
+		previous_status = getattr(self, "_status_before_cancel", None) or self.expense_status
+		self.set_posting_readiness_preview()
+		append_cashier_expense_action_log(
+			self,
+			action="Cancelled",
+			previous_status=previous_status,
+			new_status=self.expense_status,
+			context={"ledger_status": self.ledger_status},
+		)
 
 	def set_cashier_defaults(self):
 		settings = get_retailedge_settings()
@@ -171,6 +196,15 @@ class RetailEdgeCashierExpense(Document):
 		self.resolved_credit_account = preview.get("credit_account")
 		self.resolved_posting_cost_center = preview.get("cost_center")
 		self.posting_preview = preview.get("posting_preview") or None
+		self.review_required = 1 if self.docstatus == 1 and self.expense_status in {"Submitted", "Rejected", "Pending Ledger"} else 0
+		if self.expense_status == "Pending Ledger":
+			self.user_message = (
+				"This expense is approved for future ledger posting, but actual posting is not enabled in this phase."
+			)
+		elif self.posting_block_reason:
+			self.user_message = self.posting_block_reason
+		else:
+			self.user_message = None
 
 	def _should_use_category_cost_center(self, category_cost_center):
 		if not category_cost_center:

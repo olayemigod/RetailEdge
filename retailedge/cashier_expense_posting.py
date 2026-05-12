@@ -3,9 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import frappe
-from frappe.utils import flt
+from frappe.utils import flt, now_datetime
 
-from retailedge.cashier_expense import user_has_any_role
+from retailedge.cashier_expense import append_cashier_expense_action_log, user_has_any_role
 from retailedge.utils.settings import get_retailedge_settings
 
 
@@ -139,8 +139,21 @@ def refresh_cashier_expense_posting_readiness(expense_name):
 			"resolved_credit_account": preview.get("credit_account"),
 			"resolved_posting_cost_center": preview.get("cost_center"),
 			"posting_preview": preview.get("posting_preview"),
+			"last_readiness_refresh_on": now_datetime(),
+			"last_readiness_refresh_by": frappe.session.user,
 		},
 		update_modified=False,
+	)
+	append_cashier_expense_action_log(
+		expense_name,
+		action="Posting Readiness Refreshed",
+		previous_status=None,
+		new_status=None,
+		remarks=preview.get("posting_block_reason"),
+		context={
+			"posting_ready": preview.get("posting_ready"),
+			"posting_document_type": preview.get("posting_document_type"),
+		},
 	)
 	return preview
 

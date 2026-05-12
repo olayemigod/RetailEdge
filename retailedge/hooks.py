@@ -76,6 +76,7 @@ doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
 	"Purchase Order": "public/js/purchase_documents_list.js",
+	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 }
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}

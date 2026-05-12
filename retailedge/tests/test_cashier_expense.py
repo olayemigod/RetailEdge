@@ -18,6 +18,7 @@ from retailedge.cashier_context import (
 )
 from retailedge.cashier_expense import (
 	approve_cashier_expense,
+	append_cashier_expense_action_log,
 	get_cashier_roles,
 	get_cashier_expenses_for_variance,
 	get_cashier_expense_totals_for_variance,
@@ -100,6 +101,10 @@ class CashierExpenseControllerTests(unittest.TestCase):
 			resolved_credit_account=None,
 			resolved_posting_cost_center=None,
 			posting_preview=None,
+			review_required=0,
+			user_message=None,
+			last_readiness_refresh_on=None,
+			last_readiness_refresh_by=None,
 			posting_reference=kwargs.pop("posting_reference", None),
 			_is_new=kwargs.pop("_is_new", True),
 		)
@@ -199,16 +204,20 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		self.assertEqual(mock_snapshot.call_args.kwargs["expense_name"], "RE-CE-0001")
 		self.assertEqual(doc.available_shift_cash_after_expense, 750)
 
-	def test_on_submit_sets_submitted_status(self):
+	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log")
+	def test_on_submit_sets_submitted_status(self, mock_log):
 		doc = self._make_doc(expense_status="Draft", ledger_status=None)
 		doc.on_submit()
 		self.assertEqual(doc.expense_status, "Submitted")
 		self.assertEqual(doc.ledger_status, "Not Applicable")
+		mock_log.assert_called_once()
 
-	def test_on_cancel_sets_cancelled_status(self):
+	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log")
+	def test_on_cancel_sets_cancelled_status(self, mock_log):
 		doc = self._make_doc(expense_status="Submitted")
 		doc.on_cancel()
 		self.assertEqual(doc.expense_status, "Cancelled")
+		mock_log.assert_called_once()
 
 	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.build_cashier_expense_posting_preview")
 	def test_set_posting_readiness_preview_sets_fields_in_memory(self, mock_preview):
@@ -225,6 +234,7 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		self.assertEqual(doc.posting_ready, 1)
 		self.assertEqual(doc.resolved_debit_account, "Travel Expenses - DEMO")
 		self.assertEqual(doc.posting_preview, "preview text")
+		self.assertEqual(doc.user_message, None)
 
 
 class CashierContextTests(unittest.TestCase):
@@ -488,10 +498,11 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["docstatus"], 1)
 		self.assertEqual(result["expense_status"], "Submitted")
 
+	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
 	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
-	def test_approve_moves_submitted_to_pending_ledger(self, mock_get_doc, _mock_roles):
+	def test_approve_moves_submitted_to_pending_ledger(self, mock_get_doc, _mock_roles, mock_log):
 		doc = SimpleNamespace(
 			name="RE-CE-0002",
 			docstatus=1,
@@ -505,11 +516,13 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		result = approve_cashier_expense("RE-CE-0002", remarks="approved")
 		self.assertEqual(result["expense_status"], "Pending Ledger")
 		self.assertEqual(result["ledger_status"], "Pending Ledger")
+		mock_log.assert_called_once()
 
+	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
 	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
-	def test_reject_moves_submitted_to_rejected(self, mock_get_doc, _mock_roles):
+	def test_reject_moves_submitted_to_rejected(self, mock_get_doc, _mock_roles, mock_log):
 		doc = SimpleNamespace(
 			name="RE-CE-0003",
 			docstatus=1,
@@ -523,11 +536,13 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		result = reject_cashier_expense("RE-CE-0003", remarks="reject")
 		self.assertEqual(result["expense_status"], "Rejected")
 		self.assertEqual(result["ledger_status"], "Not Applicable")
+		mock_log.assert_called_once()
 
+	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
 	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
-	def test_reopen_moves_rejected_back_to_submitted(self, mock_get_doc, _mock_roles):
+	def test_reopen_moves_rejected_back_to_submitted(self, mock_get_doc, _mock_roles, mock_log):
 		doc = SimpleNamespace(
 			name="RE-CE-0004",
 			docstatus=1,
@@ -538,6 +553,47 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		)
 		mock_get_doc.return_value = doc
 		result = reopen_cashier_expense("RE-CE-0004", remarks="retry")
+		self.assertEqual(result["expense_status"], "Submitted")
+		self.assertEqual(result["ledger_status"], "Not Applicable")
+		mock_log.assert_called_once()
+
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdgeCashier"])
+	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="cashier@example.com"))
+	@patch("retailedge.cashier_expense.frappe.get_doc")
+	def test_cashier_only_user_cannot_approve(self, mock_get_doc, _mock_roles):
+		doc = SimpleNamespace(name="RE-CE-0100", docstatus=1, expense_status="Submitted", cashier="other@example.com")
+		mock_get_doc.return_value = doc
+		with self.assertRaises(frappe.PermissionError):
+			approve_cashier_expense("RE-CE-0100")
+
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	@patch("retailedge.cashier_expense.frappe.get_doc")
+	def test_cancelled_expense_cannot_be_approved_rejected_or_reopened(self, mock_get_doc, _mock_roles):
+		doc = SimpleNamespace(name="RE-CE-0101", docstatus=2, expense_status="Cancelled", cashier="cashier@example.com")
+		mock_get_doc.return_value = doc
+		with self.assertRaises(frappe.ValidationError):
+			approve_cashier_expense("RE-CE-0101")
+		with self.assertRaises(frappe.ValidationError):
+			reject_cashier_expense("RE-CE-0101")
+		with self.assertRaises(frappe.ValidationError):
+			reopen_cashier_expense("RE-CE-0101")
+
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	@patch("retailedge.cashier_expense.frappe.get_doc")
+	def test_reopen_moves_pending_ledger_back_to_submitted(self, mock_get_doc, _mock_roles):
+		doc = SimpleNamespace(
+			name="RE-CE-0005",
+			docstatus=1,
+			expense_status="Pending Ledger",
+			ledger_status="Pending Ledger",
+			has_permission=lambda perm: perm == "write",
+			save=lambda ignore_permissions=True: None,
+		)
+		mock_get_doc.return_value = doc
+		with patch("retailedge.cashier_expense.append_cashier_expense_action_log"):
+			result = reopen_cashier_expense("RE-CE-0005", remarks="return to submitted")
 		self.assertEqual(result["expense_status"], "Submitted")
 		self.assertEqual(result["ledger_status"], "Not Applicable")
 
@@ -562,6 +618,20 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(filters["docstatus"], ["!=", 2])
 
 	@patch("retailedge.cashier_expense.frappe.get_all")
+	def test_get_cashier_expenses_for_variance_includes_rejected_by_default(self, mock_get_all):
+		mock_get_all.return_value = []
+		get_cashier_expenses_for_variance()
+		filters = mock_get_all.call_args.kwargs["filters"]
+		self.assertEqual(filters["expense_status"], ["!=", "Cancelled"])
+
+	@patch("retailedge.cashier_expense.frappe.get_all")
+	def test_get_cashier_expenses_for_variance_can_exclude_rejected(self, mock_get_all):
+		mock_get_all.return_value = []
+		get_cashier_expenses_for_variance(include_rejected=False)
+		filters = mock_get_all.call_args.kwargs["filters"]
+		self.assertEqual(filters["expense_status"], ["not in", ["Cancelled", "Rejected"]])
+
+	@patch("retailedge.cashier_expense.frappe.get_all")
 	def test_get_cashier_expenses_for_variance_supports_shift_filters(self, mock_get_all):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance(
@@ -575,6 +645,26 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(filters["pos_profile"], "Testing")
 		self.assertEqual(filters["linked_pos_opening_shift"], "OPEN-1")
 		self.assertEqual(filters["linked_pos_closing_shift"], "CLOSE-1")
+
+	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	@patch("retailedge.cashier_expense.frappe.get_doc")
+	@patch("retailedge.cashier_expense.frappe.db.count", return_value=0)
+	def test_append_cashier_expense_action_log_serialises_context(self, mock_count, mock_get_doc):
+		parent = SimpleNamespace(name="RE-CE-0200", doctype="RetailEdge Cashier Expense")
+		mock_get_doc.return_value = parent
+		with patch("retailedge.cashier_expense.frappe.get_doc") as mock_child_get_doc:
+			child = SimpleNamespace(db_insert=lambda ignore_permissions=True: None)
+			mock_child_get_doc.side_effect = [parent, child]
+			append_cashier_expense_action_log(
+				"RE-CE-0200",
+				action="Approved",
+				previous_status="Submitted",
+				new_status="Pending Ledger",
+				context={"ledger_status": "Pending Ledger"},
+			)
+		payload = mock_child_get_doc.call_args_list[1].args[0]
+		self.assertEqual(payload["parent"], "RE-CE-0200")
+		self.assertIn("ledger_status", payload["context"])
 
 	@patch("retailedge.cashier_expense.get_cashier_expenses_for_variance")
 	def test_get_cashier_expense_totals_for_variance_groups_by_status_and_category(self, mock_get_rows):
@@ -668,13 +758,14 @@ class CashierExpensePostingTests(unittest.TestCase):
 		self.assertFalse(preview["posting_ready"])
 		self.assertIn("Rejected cashier expenses are blocked", preview["posting_block_reason"])
 
+	@patch("retailedge.cashier_expense_posting.append_cashier_expense_action_log")
 	@patch("retailedge.cashier_expense_posting.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.cashier_expense_posting.frappe.db.set_value")
 	@patch("retailedge.cashier_expense_posting.frappe.get_cached_doc")
 	@patch("retailedge.cashier_expense_posting.frappe.db.exists", return_value=True)
 	@patch("retailedge.cashier_expense_posting.frappe.get_doc")
 	def test_refresh_readiness_updates_posting_fields(
-		self, mock_get_doc, _mock_exists, mock_get_cached_doc, mock_set_value, _mock_settings
+		self, mock_get_doc, _mock_exists, mock_get_cached_doc, mock_set_value, _mock_settings, mock_log
 	):
 		mock_get_doc.return_value = self._expense_doc()
 		mock_get_cached_doc.side_effect = [
@@ -685,7 +776,9 @@ class CashierExpensePostingTests(unittest.TestCase):
 		values = mock_set_value.call_args.args[2]
 		self.assertIn("posting_ready", values)
 		self.assertIn("posting_preview", values)
+		self.assertIn("last_readiness_refresh_on", values)
 		self.assertTrue(preview["posting_ready"])
+		mock_log.assert_called_once()
 
 	@patch("retailedge.cashier_expense_posting.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.cashier_expense_posting.frappe.get_doc")
