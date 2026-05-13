@@ -36,6 +36,8 @@ from retailedge.cashier_expense_posting import (
 )
 from retailedge.events.pos_closing_shift import update_cashier_expenses_with_closing_shift
 from retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses import (
+	_build_retailedge_expense_totals,
+	_deduplicate_retailedge_expenses,
 	get_retailedge_cashier_expense_context,
 )
 from retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense import (
@@ -116,7 +118,9 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		doc.validate_required_values = RetailEdgeCashierExpense.validate_required_values.__get__(doc, _Doc)
 		doc.validate_cash_availability = RetailEdgeCashierExpense.validate_cash_availability.__get__(doc, _Doc)
 		doc.set_posting_readiness_preview = RetailEdgeCashierExpense.set_posting_readiness_preview.__get__(doc, _Doc)
+		doc.before_submit = RetailEdgeCashierExpense.before_submit.__get__(doc, _Doc)
 		doc.on_submit = RetailEdgeCashierExpense.on_submit.__get__(doc, _Doc)
+		doc.before_cancel = RetailEdgeCashierExpense.before_cancel.__get__(doc, _Doc)
 		doc.on_cancel = RetailEdgeCashierExpense.on_cancel.__get__(doc, _Doc)
 		return doc
 
@@ -205,16 +209,18 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		self.assertEqual(doc.available_shift_cash_after_expense, 750)
 
 	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log")
-	def test_on_submit_sets_submitted_status(self, mock_log):
+	def test_before_submit_sets_submitted_status(self, mock_log):
 		doc = self._make_doc(expense_status="Draft", ledger_status=None)
+		doc.before_submit()
 		doc.on_submit()
 		self.assertEqual(doc.expense_status, "Submitted")
 		self.assertEqual(doc.ledger_status, "Not Applicable")
 		mock_log.assert_called_once()
 
 	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log")
-	def test_on_cancel_sets_cancelled_status(self, mock_log):
+	def test_before_cancel_sets_cancelled_status(self, mock_log):
 		doc = self._make_doc(expense_status="Submitted")
+		doc.before_cancel()
 		doc.on_cancel()
 		self.assertEqual(doc.expense_status, "Cancelled")
 		mock_log.assert_called_once()
@@ -296,6 +302,18 @@ class CashierContextTests(unittest.TestCase):
 		result = resolve_cash_payment_account(company="Demo Company", opening_shift=opening_shift)
 		self.assertEqual(result["payment_account"], "Cash - DEMO")
 		self.assertEqual(result["source"], "opening_shift.payments")
+
+	@patch("retailedge.cashier_context._get_pos_profile_cash_mode", return_value="Profile Cash")
+	@patch("retailedge.cashier_context._coerce_doc")
+	@patch("retailedge.cashier_context.frappe.db.get_value", return_value="Cash - DEMO")
+	def test_resolve_cash_payment_account_uses_pos_profile_cash_mode_setting(
+		self, mock_get_value, mock_coerce_doc, _mock_cash_mode
+	):
+		mock_coerce_doc.return_value = SimpleNamespace(doctype="POS Profile")
+		result = resolve_cash_payment_account(company="Demo Company", pos_profile="PROFILE-1")
+		self.assertEqual(result["payment_account"], "Cash - DEMO")
+		self.assertEqual(result["mode_of_payment"], "Profile Cash")
+		self.assertEqual(result["source"], "pos_profile.posa_cash_mode_of_payment")
 
 	@patch("retailedge.cashier_context._coerce_doc")
 	def test_resolve_branch_uses_user_default_when_profile_and_shift_lack_branch(self, mock_coerce_doc):
@@ -609,30 +627,34 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["Submitted"]["total_amount"], 150)
 		self.assertEqual(result["Rejected"]["count"], 1)
 
+	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.cashier_expense.frappe.get_all")
-	def test_get_cashier_expenses_for_variance_excludes_cancelled_by_default(self, mock_get_all):
+	def test_get_cashier_expenses_for_variance_excludes_cancelled_by_default(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance()
 		filters = mock_get_all.call_args.kwargs["filters"]
 		self.assertEqual(filters["expense_status"], ["!=", "Cancelled"])
 		self.assertEqual(filters["docstatus"], ["!=", 2])
 
+	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.cashier_expense.frappe.get_all")
-	def test_get_cashier_expenses_for_variance_includes_rejected_by_default(self, mock_get_all):
+	def test_get_cashier_expenses_for_variance_includes_rejected_by_default(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance()
 		filters = mock_get_all.call_args.kwargs["filters"]
 		self.assertEqual(filters["expense_status"], ["!=", "Cancelled"])
 
+	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.cashier_expense.frappe.get_all")
-	def test_get_cashier_expenses_for_variance_can_exclude_rejected(self, mock_get_all):
+	def test_get_cashier_expenses_for_variance_can_exclude_rejected(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance(include_rejected=False)
 		filters = mock_get_all.call_args.kwargs["filters"]
 		self.assertEqual(filters["expense_status"], ["not in", ["Cancelled", "Rejected"]])
 
+	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.cashier_expense.frappe.get_all")
-	def test_get_cashier_expenses_for_variance_supports_shift_filters(self, mock_get_all):
+	def test_get_cashier_expenses_for_variance_supports_shift_filters(self, mock_get_all, _mock_settings):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance(
 			{
@@ -645,6 +667,27 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(filters["pos_profile"], "Testing")
 		self.assertEqual(filters["linked_pos_opening_shift"], "OPEN-1")
 		self.assertEqual(filters["linked_pos_closing_shift"], "CLOSE-1")
+
+	@patch(
+		"retailedge.cashier_expense.get_retailedge_settings",
+		return_value=_Settings(include_draft_cashier_expenses_in_cash_check=0),
+	)
+	@patch("retailedge.cashier_expense.frappe.get_all")
+	def test_get_cashier_expenses_for_variance_respects_draft_setting(self, mock_get_all, _mock_settings):
+		mock_get_all.return_value = []
+		get_cashier_expenses_for_variance()
+		filters = mock_get_all.call_args.kwargs["filters"]
+		self.assertEqual(filters["expense_status"], ["not in", ["Cancelled", "Draft"]])
+
+	@patch(
+		"retailedge.cashier_expense.get_retailedge_settings",
+		return_value=_Settings(include_cashier_expenses_in_variance_report=0),
+	)
+	@patch("retailedge.cashier_expense.frappe.get_all")
+	def test_get_cashier_expenses_for_variance_respects_variance_toggle(self, mock_get_all, _mock_settings):
+		result = get_cashier_expenses_for_variance()
+		self.assertEqual(result, [])
+		mock_get_all.assert_not_called()
 
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
@@ -701,6 +744,29 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		context = get_retailedge_cashier_expense_context(entry)
 		self.assertEqual(context["snapshot"]["cash_sales"], 1800)
 		self.assertEqual(mock_snapshot.call_args.kwargs["opening_shift"], "OPEN-1")
+
+	def test_retailedge_expense_deduplication_filters_already_used_names(self):
+		rows = _deduplicate_retailedge_expenses(
+			[
+				{"name": "RE-CE-1", "amount": 100},
+				{"name": "RE-CE-1", "amount": 100},
+				{"name": "RE-CE-2", "amount": 50},
+			],
+			exclude_expense_names={"RE-CE-2"},
+		)
+		self.assertEqual([row["name"] for row in rows], ["RE-CE-1"])
+
+	def test_retailedge_expense_totals_are_built_from_deduplicated_rows(self):
+		totals = _build_retailedge_expense_totals(
+			[
+				{"name": "RE-CE-1", "expense_status": "Draft", "expense_category": "Transport", "amount": 100},
+				{"name": "RE-CE-2", "expense_status": "Rejected", "expense_category": "Fuel", "amount": 50},
+			]
+		)
+		self.assertEqual(totals["count"], 2)
+		self.assertEqual(totals["total_expense_amount"], 150)
+		self.assertEqual(totals["by_status"]["Draft"]["amount"], 100)
+		self.assertEqual(totals["by_category"]["Fuel"]["amount"], 50)
 
 
 class CashierExpensePostingTests(unittest.TestCase):

@@ -100,6 +100,32 @@ def _find_cash_row(rows) -> dict | None:
 	return None
 
 
+def _find_cash_row_by_mode(rows, preferred_modes: list[str] | None = None) -> dict | None:
+	preferred_modes = [str(mode).strip() for mode in (preferred_modes or []) if mode]
+	if not preferred_modes:
+		return None
+	for row in rows or []:
+		row_dict = row.as_dict() if hasattr(row, "as_dict") else dict(row)
+		row_mode = (
+			row_dict.get("mode_of_payment")
+			or row_dict.get("payment_method")
+			or row_dict.get("payment_mode")
+		)
+		if row_mode and str(row_mode).strip() in preferred_modes:
+			return row_dict
+	return None
+
+
+def _get_pos_profile_cash_mode(pos_profile: str | None) -> str | None:
+	profile_doc = _coerce_doc("POS Profile", pos_profile)
+	if not profile_doc:
+		return None
+	return _get_doc_value(
+		profile_doc,
+		["posa_cash_mode_of_payment", "cash_mode_of_payment", "default_cash_mode_of_payment"],
+	)
+
+
 def _extract_amount_from_row(row_dict: dict) -> float:
 	for fieldname in ("opening_amount", "amount", "balance", "opening_balance", "base_amount"):
 		if row_dict.get(fieldname) is not None:
@@ -382,12 +408,15 @@ def find_open_pos_opening_shift(user: str | None = None, company: str | None = N
 
 
 def resolve_cash_payment_account(company: str | None = None, pos_profile: str | None = None, opening_shift=None) -> dict[str, object]:
+	preferred_cash_mode = _get_pos_profile_cash_mode(pos_profile)
+	candidate_cash_modes = [preferred_cash_mode, _get_cash_mode_name()]
 	opening_shift_doc = _coerce_doc("POS Opening Shift", opening_shift)
 	if opening_shift_doc:
 		for table_field in ("balance_details", "payments", "opening_balance_details", "payment_reconciliation"):
 			if not hasattr(opening_shift_doc, table_field):
 				continue
-			row_dict = _find_cash_row(getattr(opening_shift_doc, table_field))
+			rows = getattr(opening_shift_doc, table_field)
+			row_dict = _find_cash_row_by_mode(rows, candidate_cash_modes) or _find_cash_row(rows)
 			if not row_dict:
 				continue
 			for account_field in ("account", "default_account", "payment_account", "account_head"):
@@ -402,10 +431,27 @@ def resolve_cash_payment_account(company: str | None = None, pos_profile: str | 
 	if pos_profile:
 		profile_doc = _coerce_doc("POS Profile", pos_profile)
 		if profile_doc:
+			if preferred_cash_mode and company and _has_doctype("Mode of Payment Account"):
+				try:
+					account = frappe.db.get_value(
+						"Mode of Payment Account",
+						{"parent": preferred_cash_mode, "company": company},
+						"default_account",
+					)
+				except Exception:
+					account = None
+				if account:
+					return {
+						"payment_account": account,
+						"mode_of_payment": preferred_cash_mode,
+						"source": "pos_profile.posa_cash_mode_of_payment",
+						"message": None,
+					}
 			for table_field in ("payments", "payment_methods"):
 				if not hasattr(profile_doc, table_field):
 					continue
-				row_dict = _find_cash_row(getattr(profile_doc, table_field))
+				rows = getattr(profile_doc, table_field)
+				row_dict = _find_cash_row_by_mode(rows, candidate_cash_modes) or _find_cash_row(rows)
 				if not row_dict:
 					continue
 				for account_field in ("default_account", "account", "payment_account", "account_head"):
@@ -418,8 +464,9 @@ def resolve_cash_payment_account(company: str | None = None, pos_profile: str | 
 						}
 
 	if _has_doctype("Mode of Payment Account") and company:
-		cash_mode = _get_cash_mode_name()
-		if cash_mode:
+		for cash_mode in candidate_cash_modes:
+			if not cash_mode:
+				continue
 			try:
 				account = frappe.db.get_value(
 					"Mode of Payment Account",

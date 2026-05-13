@@ -71,6 +71,7 @@ def get_columns():
 def get_data(filters):
 	entries = get_closing_entries(filters)
 	expense_details_by_entry = get_assigned_expense_details(entries, filters)
+	used_retailedge_expense_names = set()
 	rows = []
 
 	for entry in entries:
@@ -83,7 +84,10 @@ def get_data(filters):
 		cost_center = filters.get("cost_center") or get_pos_profile_cost_center(entry.pos_profile)
 		entry_expenses = expense_details_by_entry.get(entry.name, [])
 		expenses = sum(flt(expense.get("amount")) for expense in entry_expenses)
-		retailedge_context = get_retailedge_cashier_expense_context(entry)
+		retailedge_context = get_retailedge_cashier_expense_context(entry, exclude_expense_names=used_retailedge_expense_names)
+		used_retailedge_expense_names.update(
+			expense.get("name") for expense in retailedge_context["expenses"] if expense.get("name")
+		)
 		retailedge_total = flt(retailedge_context["totals"].get("total_expense_amount"))
 		snapshot = retailedge_context["snapshot"]
 		opening_cash_amount = flt(snapshot.get("opening_cash"))
@@ -569,13 +573,15 @@ def get_existing_column(doctype, candidates):
 	return None
 
 
-def get_retailedge_cashier_expense_context(entry):
+def get_retailedge_cashier_expense_context(entry, exclude_expense_names=None):
+	exclude_expense_names = set(exclude_expense_names or [])
 	def _value(fieldname):
 		if isinstance(entry, dict):
 			return entry.get(fieldname)
 		return getattr(entry, fieldname, None)
 
 	filters = {}
+	expenses = []
 	if _value("company"):
 		filters["company"] = _value("company")
 	if _value("branch"):
@@ -585,14 +591,20 @@ def get_retailedge_cashier_expense_context(entry):
 	if _value("name"):
 		filters["linked_pos_closing_shift"] = _value("name")
 
-	expenses = get_cashier_expenses_for_variance(filters=filters)
+	expenses = _deduplicate_retailedge_expenses(
+		get_cashier_expenses_for_variance(filters=filters),
+		exclude_expense_names=exclude_expense_names,
+	)
 	if not expenses and _value("pos_opening_shift"):
 		filters = {"linked_pos_opening_shift": _value("pos_opening_shift")}
 		if _value("company"):
 			filters["company"] = _value("company")
 		if _value("branch"):
 			filters["branch"] = _value("branch")
-		expenses = get_cashier_expenses_for_variance(filters=filters)
+		expenses = _deduplicate_retailedge_expenses(
+			get_cashier_expenses_for_variance(filters=filters),
+			exclude_expense_names=exclude_expense_names,
+		)
 	if not expenses:
 		filters = {
 			"from_date": str(_value("posting_date")),
@@ -606,9 +618,12 @@ def get_retailedge_cashier_expense_context(entry):
 			filters["pos_profile"] = _value("pos_profile")
 		if _value("user"):
 			filters["cashier"] = _value("user")
-		expenses = get_cashier_expenses_for_variance(filters=filters)
+		expenses = _deduplicate_retailedge_expenses(
+			get_cashier_expenses_for_variance(filters=filters),
+			exclude_expense_names=exclude_expense_names,
+		)
 
-	totals = get_cashier_expense_totals_for_variance(filters=filters) if expenses else {
+	totals = _build_retailedge_expense_totals(expenses) if expenses else {
 		"total_expense_amount": 0.0,
 		"count": 0,
 		"by_status": {},
@@ -621,6 +636,41 @@ def get_retailedge_cashier_expense_context(entry):
 		user=_value("user"),
 	)
 	return {"expenses": expenses, "totals": totals, "snapshot": snapshot}
+
+
+def _deduplicate_retailedge_expenses(expenses, exclude_expense_names=None):
+	exclude_expense_names = set(exclude_expense_names or [])
+	seen = set()
+	rows = []
+	for expense in expenses or []:
+		name = expense.get("name")
+		if not name or name in exclude_expense_names or name in seen:
+			continue
+		seen.add(name)
+		rows.append(expense)
+	return rows
+
+
+def _build_retailedge_expense_totals(expenses):
+	totals = {
+		"total_expense_amount": 0.0,
+		"count": 0,
+		"by_status": {},
+		"by_category": {},
+	}
+	for expense in expenses or []:
+		amount = flt(expense.get("amount"))
+		status = expense.get("expense_status") or "Draft"
+		category = expense.get("expense_category") or "Uncategorised"
+		totals["total_expense_amount"] = flt(totals["total_expense_amount"]) + amount
+		totals["count"] += 1
+		status_bucket = totals["by_status"].setdefault(status, {"count": 0, "amount": 0.0})
+		status_bucket["count"] += 1
+		status_bucket["amount"] = flt(status_bucket["amount"]) + amount
+		category_bucket = totals["by_category"].setdefault(category, {"count": 0, "amount": 0.0})
+		category_bucket["count"] += 1
+		category_bucket["amount"] = flt(category_bucket["amount"]) + amount
+	return totals
 
 
 def format_status_summary(by_status):

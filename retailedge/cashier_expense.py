@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import frappe
 from frappe.utils import flt, now_datetime
+
+from retailedge.utils.settings import get_retailedge_settings
 
 
 def get_reviewer_roles() -> set[str]:
@@ -196,8 +199,23 @@ def get_cashier_expense_summary(filters=None):
 
 def get_cashier_expenses_for_variance(filters=None, include_rejected=True):
 	filters = frappe.parse_json(filters) if filters else {}
+	settings = _safe_variance_settings()
+	if not getattr(settings, "include_cashier_expenses_in_variance_report", 1):
+		return []
+
+	include_draft = filters.get("include_draft")
+	if include_draft is None:
+		include_draft = bool(getattr(settings, "include_draft_cashier_expenses_in_cash_check", 1))
+
 	include_rejected = filters.get("include_rejected", include_rejected)
-	query_filters = _build_variance_filters(filters, include_rejected=include_rejected)
+	if "include_rejected" not in filters and include_rejected is True:
+		include_rejected = bool(getattr(settings, "include_rejected_cashier_expenses_in_cash_check", include_rejected))
+
+	query_filters = _build_variance_filters(
+		filters,
+		include_rejected=include_rejected,
+		include_draft=include_draft,
+	)
 	return frappe.get_all(
 		"RetailEdge Cashier Expense",
 		filters=query_filters,
@@ -308,7 +326,7 @@ def _build_summary_filters(filters):
 	return query_filters
 
 
-def _build_variance_filters(filters, include_rejected=True):
+def _build_variance_filters(filters, include_rejected=True, include_draft=True):
 	query_filters = {"docstatus": ["!=", 2], "expense_status": ["!=", "Cancelled"]}
 	for fieldname in (
 		"company",
@@ -327,8 +345,16 @@ def _build_variance_filters(filters, include_rejected=True):
 			query_filters["expense_status"] = ["in", list(filters["expense_status"])]
 		else:
 			query_filters["expense_status"] = filters["expense_status"]
-	elif not include_rejected:
-		query_filters["expense_status"] = ["not in", ["Cancelled", "Rejected"]]
+	else:
+		excluded_statuses = ["Cancelled"]
+		if not include_draft:
+			excluded_statuses.append("Draft")
+		if not include_rejected:
+			excluded_statuses.append("Rejected")
+		if len(excluded_statuses) == 1:
+			query_filters["expense_status"] = ["!=", "Cancelled"]
+		else:
+			query_filters["expense_status"] = ["not in", excluded_statuses]
 	if filters.get("from_date") and filters.get("to_date"):
 		query_filters["expense_date"] = ["between", [filters["from_date"], filters["to_date"]]]
 	elif filters.get("from_date"):
@@ -336,6 +362,17 @@ def _build_variance_filters(filters, include_rejected=True):
 	elif filters.get("to_date"):
 		query_filters["expense_date"] = ["<=", filters["to_date"]]
 	return query_filters
+
+
+def _safe_variance_settings():
+	try:
+		return get_retailedge_settings()
+	except Exception:
+		return SimpleNamespace(
+			include_cashier_expenses_in_variance_report=1,
+			include_draft_cashier_expenses_in_cash_check=1,
+			include_rejected_cashier_expenses_in_cash_check=1,
+		)
 
 
 def _serialise_log_context(context):
