@@ -1,7 +1,7 @@
 {
  "app": "retailedge",
  "charts": [],
- "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"retailedge_settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Settings\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Expense Category\",\"col\":3}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Cashier Expense\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Closing Variance vs Expenses\",\"col\":3}}]",
+ "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"retailedge_settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Settings\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Expense Category\",\"col\":3}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Cashier Expense\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Closing Variance vs Expenses\",\"col\":3}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Cashier Expense Review\",\"col\":3}}]",
  "creation": "2026-05-07 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -18,7 +18,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Configuration",
-   "link_count": 1,
+   "link_count": 3,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -57,7 +57,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Reports",
-   "link_count": 1,
+   "link_count": 2,
    "link_type": "Report",
    "onboard": 0,
    "type": "Card Break"
@@ -68,6 +68,16 @@
    "label": "POS Closing Variance vs Expenses",
    "link_count": 0,
    "link_to": "POS Closing Variance vs Expenses",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "RetailEdge Cashier Expense Review",
+   "link_count": 0,
+   "link_to": "RetailEdge Cashier Expense Review",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
@@ -86,7 +96,7 @@
  "shortcuts": [
   {
    "color": "Blue",
-   "doc_view": "Form",
+   "doc_view": "",
    "label": "RetailEdge Settings",
    "link_to": "RetailEdge Settings",
    "stats_filter": "[]",
@@ -113,6 +123,14 @@
    "doc_view": "Report",
    "label": "POS Closing Variance vs Expenses",
    "link_to": "POS Closing Variance vs Expenses",
+   "stats_filter": "[]",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "Report",
+   "label": "RetailEdge Cashier Expense Review",
+   "link_to": "RetailEdge Cashier Expense Review",
    "stats_filter": "[]",
    "type": "Report"
   }

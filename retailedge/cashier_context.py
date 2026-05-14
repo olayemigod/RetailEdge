@@ -951,5 +951,10 @@ def get_cashier_expense_entry_context(user: str | None = None, company: str | No
 			"include_draft_cashier_expenses_in_cash_check": int(bool(getattr(settings, "include_draft_cashier_expenses_in_cash_check", 1))),
 			"include_rejected_cashier_expenses_in_cash_check": int(bool(getattr(settings, "include_rejected_cashier_expenses_in_cash_check", 1))),
 			"allow_cashier_expense_without_cash_account": int(bool(getattr(settings, "allow_cashier_expense_without_cash_account", 0))),
+			"include_draft_cashier_expenses_in_daily_audit": int(bool(getattr(settings, "include_draft_cashier_expenses_in_daily_audit", 1))),
+			"include_submitted_cashier_expenses_in_daily_audit": int(bool(getattr(settings, "include_submitted_cashier_expenses_in_daily_audit", 1))),
+			"include_pending_ledger_cashier_expenses_in_daily_audit": int(bool(getattr(settings, "include_pending_ledger_cashier_expenses_in_daily_audit", 1))),
+			"include_rejected_cashier_expenses_in_daily_audit": int(bool(getattr(settings, "include_rejected_cashier_expenses_in_daily_audit", 1))),
+			"exclude_cancelled_cashier_expenses_from_daily_audit": int(bool(getattr(settings, "exclude_cancelled_cashier_expenses_from_daily_audit", 1))),
 		},
 	}

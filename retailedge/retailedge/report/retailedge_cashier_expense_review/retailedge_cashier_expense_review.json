@@ -1,0 +1,49 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-05-14 00:00:00.000000",
+ "disable_prepared_report": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letterhead": null,
+ "modified": "2026-05-14 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge Cashier Expense Review",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "RetailEdge Cashier Expense",
+ "report_name": "RetailEdge Cashier Expense Review",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "RetailEdge Manager"
+  },
+  {
+   "role": "RetailEdgeManager"
+  },
+  {
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "role": "RetailEdgeBranchManager"
+  },
+  {
+   "role": "RetailEdge Auditor"
+  },
+  {
+   "role": "RetailEdgeAuditor"
+  }
+ ]
+}

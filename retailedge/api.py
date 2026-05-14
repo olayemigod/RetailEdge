@@ -5,11 +5,13 @@ from retailedge.cashier_expense import (
 	get_cashier_expenses_for_variance as _get_cashier_expenses_for_variance,
 	get_cashier_expense_totals_for_variance as _get_cashier_expense_totals_for_variance,
 	get_cashier_expense_summary as _get_cashier_expense_summary,
+	get_cashier_expense_totals as _get_cashier_expense_totals,
 	reject_cashier_expense as _reject_cashier_expense,
 	reopen_cashier_expense as _reopen_cashier_expense,
 	submit_cashier_expense as _submit_cashier_expense,
 )
 from retailedge.cashier_expense_audit import (
+	get_cashier_expense_review_summary as _get_cashier_expense_review_summary,
 	get_cashier_expense_daily_audit_totals as _get_cashier_expense_daily_audit_totals,
 	get_cashier_expenses_for_daily_audit as _get_cashier_expenses_for_daily_audit,
 	mark_cashier_expense_excluded_from_daily_audit as _mark_cashier_expense_excluded_from_daily_audit,
@@ -124,6 +126,11 @@ def get_cashier_expense_summary(filters=None):
 
 
 @frappe.whitelist()
+def get_cashier_expense_totals(filters=None):
+	return _get_cashier_expense_totals(filters=filters)
+
+
+@frappe.whitelist()
 def get_cashier_expenses_for_variance(filters=None):
 	return _get_cashier_expenses_for_variance(filters=filters)
 
@@ -141,6 +148,11 @@ def get_cashier_expenses_for_daily_audit(filters=None):
 @frappe.whitelist()
 def get_cashier_expense_daily_audit_totals(filters=None):
 	return _get_cashier_expense_daily_audit_totals(filters=filters)
+
+
+@frappe.whitelist()
+def get_cashier_expense_review_summary(filters=None):
+	return _get_cashier_expense_review_summary(filters=filters)
 
 
 @frappe.whitelist()

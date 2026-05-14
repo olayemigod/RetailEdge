@@ -150,6 +150,14 @@ Rejected expenses remain visible for Daily Audit readiness by default because th
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## Cashier Expense V1.4I - Manager Review Report
+
+Managers and auditors now have a read-only `RetailEdge Cashier Expense Review` report that consolidates cashier expense status, posting readiness, Daily Audit readiness, branch/POS/cashier context, and exception visibility in one place. The report is intended as an operational review layer and does not perform approvals, posting, or audit mutation by itself.
+
+This phase does not post accounting entries, does not modify Daily Sales Audit, and does not change POS shifts, Sales Invoices, or payment records. It only surfaces existing cashier expense review data in a safer manager-facing report.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash

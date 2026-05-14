@@ -41,6 +41,20 @@ def user_is_reviewer(user: str | None = None) -> bool:
 	return user_has_any_role(user=user, roles=get_reviewer_roles())
 
 
+def get_effective_expense_status(doc) -> str:
+	if isinstance(doc, dict):
+		docstatus = doc.get("docstatus", 0)
+		expense_status = doc.get("expense_status")
+	else:
+		docstatus = getattr(doc, "docstatus", 0)
+		expense_status = getattr(doc, "expense_status", None)
+	if docstatus == 2 or expense_status == "Cancelled":
+		return "Cancelled"
+	if docstatus == 1 and (not expense_status or expense_status == "Draft"):
+		return "Submitted"
+	return expense_status or "Draft"
+
+
 def append_cashier_expense_action_log(
 	doc_or_name,
 	action,
@@ -100,7 +114,7 @@ def approve_cashier_expense(expense_name, remarks=None):
 	if not doc.has_permission("write"):
 		frappe.throw("You do not have permission to review this cashier expense.", frappe.PermissionError)
 
-	previous_status = doc.expense_status
+	previous_status = get_effective_expense_status(doc)
 	doc.expense_status = "Pending Ledger"
 	doc.ledger_status = "Pending Ledger"
 	doc.approved_by = user
@@ -126,7 +140,7 @@ def reject_cashier_expense(expense_name, remarks=None):
 	if not doc.has_permission("write"):
 		frappe.throw("You do not have permission to review this cashier expense.", frappe.PermissionError)
 
-	previous_status = doc.expense_status
+	previous_status = get_effective_expense_status(doc)
 	doc.expense_status = "Rejected"
 	doc.ledger_status = "Not Applicable"
 	doc.rejected_by = frappe.session.user
@@ -153,12 +167,13 @@ def reopen_cashier_expense(expense_name, remarks=None):
 	_assert_mutable_review_status(doc, action="reopen")
 	if doc.docstatus != 1:
 		frappe.throw("Only submitted cashier expenses can be reopened.")
-	if doc.expense_status not in {"Rejected", "Pending Ledger"}:
+	current_status = get_effective_expense_status(doc)
+	if current_status not in {"Rejected", "Pending Ledger"}:
 		frappe.throw("Only rejected or pending ledger expenses can be reopened.")
 	if not doc.has_permission("write"):
 		frappe.throw("You do not have permission to reopen this cashier expense.", frappe.PermissionError)
 
-	previous_status = doc.expense_status
+	previous_status = current_status
 	doc.expense_status = "Submitted"
 	doc.ledger_status = "Not Applicable"
 	doc.approved_by = None
@@ -195,6 +210,42 @@ def get_cashier_expense_summary(filters=None):
 		bucket["count"] += 1
 		bucket["total_amount"] = flt(bucket["total_amount"]) + flt(row.amount)
 	return summary
+
+
+def get_cashier_expense_totals(filters=None):
+	query_filters = _coerce_cashier_expense_filters(filters)
+	rows = frappe.get_list(
+		"RetailEdge Cashier Expense",
+		filters=query_filters,
+		fields=["name", "amount", "expense_status", "ledger_status", "posting_ready", "docstatus"],
+		limit_page_length=0,
+		order_by="creation desc",
+	)
+	result = {
+		"count": 0,
+		"total_amount": 0.0,
+		"by_status": {},
+		"by_ledger_status": {},
+		"posting_ready_count": 0,
+		"posting_blocked_count": 0,
+	}
+	for row in rows:
+		amount = flt(row.get("amount"))
+		status = get_effective_expense_status(row)
+		ledger_status = row.get("ledger_status") or "Not Applicable"
+		result["count"] += 1
+		result["total_amount"] += amount
+		status_bucket = result["by_status"].setdefault(status, {"count": 0, "amount": 0.0})
+		status_bucket["count"] += 1
+		status_bucket["amount"] = flt(status_bucket["amount"]) + amount
+		ledger_bucket = result["by_ledger_status"].setdefault(ledger_status, {"count": 0, "amount": 0.0})
+		ledger_bucket["count"] += 1
+		ledger_bucket["amount"] = flt(ledger_bucket["amount"]) + amount
+		if row.get("posting_ready"):
+			result["posting_ready_count"] += 1
+		else:
+			result["posting_blocked_count"] += 1
+	return result
 
 
 def get_cashier_expenses_for_variance(filters=None, include_rejected=True):
@@ -272,6 +323,7 @@ def get_cashier_expense_totals_for_variance(filters=None):
 
 def _get_reviewable_expense(expense_name, action="review"):
 	doc = frappe.get_doc("RetailEdge Cashier Expense", expense_name)
+	_normalise_expense_status_for_submitted_doc(doc)
 	_assert_reviewer()
 	_assert_mutable_review_status(doc, action=action)
 	if doc.docstatus != 1:
@@ -280,7 +332,7 @@ def _get_reviewable_expense(expense_name, action="review"):
 		if action == "reject":
 			frappe.throw("Only submitted cashier expenses can be rejected.")
 		frappe.throw("Only submitted cashier expenses can be reviewed.")
-	if doc.expense_status != "Submitted":
+	if get_effective_expense_status(doc) != "Submitted":
 		if action == "approve":
 			frappe.throw("Only submitted cashier expenses can be approved.")
 		if action == "reject":
@@ -297,8 +349,26 @@ def _assert_reviewer():
 def _assert_mutable_review_status(doc, action="review"):
 	if doc.docstatus == 2 or doc.expense_status == "Cancelled":
 		frappe.throw("Cancelled cashier expenses cannot be changed.")
-	if doc.expense_status == "Posted":
+	if get_effective_expense_status(doc) == "Posted":
 		frappe.throw("Posted cashier expenses are reserved for a future ledger phase.")
+
+
+def _normalise_expense_status_for_submitted_doc(doc):
+	effective_status = get_effective_expense_status(doc)
+	if getattr(doc, "expense_status", None) == effective_status:
+		return
+	doc.expense_status = effective_status
+	if getattr(doc, "name", None) and getattr(doc, "doctype", None) == "RetailEdge Cashier Expense":
+		try:
+			frappe.db.set_value(
+				"RetailEdge Cashier Expense",
+				doc.name,
+				"expense_status",
+				effective_status,
+				update_modified=False,
+			)
+		except Exception:
+			pass
 
 
 def _status_payload(doc):
@@ -324,6 +394,19 @@ def _build_summary_filters(filters):
 		else:
 			query_filters["expense_date"] = ["<=", filters["to_date"]]
 	return query_filters
+
+
+def _coerce_cashier_expense_filters(filters):
+	if not filters:
+		return {}
+	parsed = frappe.parse_json(filters) if isinstance(filters, str) else filters
+	if isinstance(parsed, list):
+		return parsed
+	if isinstance(parsed, frappe._dict):
+		parsed = dict(parsed)
+	if isinstance(parsed, dict):
+		return _build_summary_filters(parsed)
+	return {}
 
 
 def _build_variance_filters(filters, include_rejected=True, include_draft=True):

@@ -5,7 +5,11 @@ from types import SimpleNamespace
 import frappe
 from frappe.utils import flt, now_datetime
 
-from retailedge.cashier_expense import append_cashier_expense_action_log, user_is_reviewer
+from retailedge.cashier_expense import (
+	append_cashier_expense_action_log,
+	get_effective_expense_status,
+	user_is_reviewer,
+)
 from retailedge.utils.settings import get_retailedge_settings
 
 
@@ -27,7 +31,7 @@ def get_cashier_expense_daily_audit_settings():
 def should_include_cashier_expense_in_daily_audit(expense, settings=None):
 	settings = settings or get_cashier_expense_daily_audit_settings()
 	doc = _coerce_expense(expense)
-	status = getattr(doc, "expense_status", None) or ("Cancelled" if getattr(doc, "docstatus", 0) == 2 else "Draft")
+	status = get_effective_expense_status(doc)
 
 	if getattr(doc, "docstatus", 0) == 2 or status == "Cancelled":
 		if settings["exclude_cancelled"]:
@@ -70,17 +74,24 @@ def get_cashier_expenses_for_daily_audit(filters=None):
 			"amount",
 			"expense_status",
 			"ledger_status",
+			"posting_ready",
+			"posting_block_reason",
 			"include_in_daily_audit",
 			"daily_audit_inclusion_status",
 			"daily_audit_classification",
 			"daily_audit_note",
 			"daily_audit_exclusion_reason",
+			"payment_account",
+			"expense_account",
+			"cost_center",
+			"description",
 			"docstatus",
 		],
 		limit_page_length=0,
 		order_by="expense_date asc, creation asc",
 	)
 	for row in rows:
+		row["expense_status"] = get_effective_expense_status(row)
 		decision = should_include_cashier_expense_in_daily_audit(row, settings=settings)
 		row["daily_audit_should_include"] = 1 if decision["include"] else 0
 		row["daily_audit_rule_reason"] = decision["reason"]
@@ -118,6 +129,46 @@ def get_cashier_expense_daily_audit_totals(filters=None):
 		_accumulate_bucket(result["by_inclusion_status"], inclusion_status, amount)
 
 	return result
+
+
+def get_cashier_expense_review_summary(filters=None):
+	rows = get_cashier_expenses_for_daily_audit(filters=filters)
+	summary = {
+		"total_amount": 0.0,
+		"count": 0,
+		"pending_review_count": 0,
+		"included_amount": 0.0,
+		"excluded_amount": 0.0,
+		"needs_clarification_count": 0,
+		"pending_ledger_amount": 0.0,
+		"rejected_amount": 0.0,
+		"posting_ready_count": 0,
+		"posting_blocked_count": 0,
+	}
+	for row in rows:
+		amount = flt(row.get("amount"))
+		status = row.get("expense_status") or "Draft"
+		inclusion_status = row.get("daily_audit_inclusion_status") or "Pending Review"
+		posting_ready = cint_bool(row.get("posting_ready"))
+		summary["total_amount"] += amount
+		summary["count"] += 1
+		if inclusion_status == "Pending Review":
+			summary["pending_review_count"] += 1
+		elif inclusion_status == "Included":
+			summary["included_amount"] += amount
+		elif inclusion_status == "Excluded":
+			summary["excluded_amount"] += amount
+		elif inclusion_status == "Needs Clarification":
+			summary["needs_clarification_count"] += 1
+		if status == "Pending Ledger":
+			summary["pending_ledger_amount"] += amount
+		if status == "Rejected":
+			summary["rejected_amount"] += amount
+		if posting_ready:
+			summary["posting_ready_count"] += 1
+		else:
+			summary["posting_blocked_count"] += 1
+	return summary
 
 
 def mark_cashier_expense_included_for_daily_audit(expense_name, note=None):
@@ -201,7 +252,9 @@ def _build_daily_audit_filters(filters, settings):
 		"linked_pos_closing_shift",
 		"expense_category",
 		"expense_status",
+		"ledger_status",
 		"daily_audit_inclusion_status",
+		"daily_audit_classification",
 	):
 		value = filters.get(fieldname)
 		if value:

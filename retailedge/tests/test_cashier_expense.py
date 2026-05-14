@@ -19,8 +19,10 @@ from retailedge.cashier_context import (
 from retailedge.cashier_expense import (
 	approve_cashier_expense,
 	append_cashier_expense_action_log,
+	get_effective_expense_status,
 	get_cashier_roles,
 	get_cashier_expenses_for_variance,
+	get_cashier_expense_totals,
 	get_cashier_expense_totals_for_variance,
 	get_cashier_expense_summary,
 	get_reviewer_roles,
@@ -48,6 +50,9 @@ from retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_v
 	_build_retailedge_expense_totals,
 	_deduplicate_retailedge_expenses,
 	get_retailedge_cashier_expense_context,
+)
+from retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review import (
+	execute as execute_cashier_expense_review_report,
 )
 from retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense import (
 	RetailEdgeCashierExpense,
@@ -246,6 +251,10 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		doc.on_cancel()
 		self.assertEqual(doc.expense_status, "Cancelled")
 		mock_log.assert_called_once()
+
+	def test_effective_expense_status_uses_submitted_docstatus(self):
+		doc = SimpleNamespace(docstatus=1, expense_status="Draft")
+		self.assertEqual(get_effective_expense_status(doc), "Submitted")
 
 	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.build_cashier_expense_posting_preview")
 	def test_set_posting_readiness_preview_sets_fields_in_memory(self, mock_preview):
@@ -559,6 +568,34 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		mock_log.assert_called_once()
 
 	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
+	@patch("retailedge.cashier_expense.frappe.db.set_value")
+	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
+	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	@patch("retailedge.cashier_expense.frappe.get_doc")
+	def test_approve_normalises_stale_submitted_docstatus(self, mock_get_doc, _mock_roles, mock_set_value, mock_log):
+		doc = SimpleNamespace(
+			doctype="RetailEdge Cashier Expense",
+			name="RE-CE-0002B",
+			docstatus=1,
+			expense_status="Draft",
+			ledger_status="Not Applicable",
+			cashier="cashier@example.com",
+			has_permission=lambda perm: perm == "write",
+			save=lambda ignore_permissions=True: None,
+		)
+		mock_get_doc.return_value = doc
+		result = approve_cashier_expense("RE-CE-0002B", remarks="ok")
+		self.assertEqual(result["expense_status"], "Pending Ledger")
+		mock_set_value.assert_called_once_with(
+			"RetailEdge Cashier Expense",
+			"RE-CE-0002B",
+			"expense_status",
+			"Submitted",
+			update_modified=False,
+		)
+		mock_log.assert_called_once()
+
+	@patch("retailedge.cashier_expense.append_cashier_expense_action_log")
 	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
@@ -746,6 +783,21 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["by_category"]["Transport"]["count"], 2)
 		self.assertEqual(result["by_category"]["Fuel"]["amount"], 25)
 
+	@patch("retailedge.cashier_expense.frappe.get_list")
+	def test_get_cashier_expense_totals_groups_visible_rows(self, mock_get_list):
+		mock_get_list.return_value = [
+			{"name": "RE-CE-1", "amount": 100, "expense_status": "Draft", "ledger_status": "Not Applicable", "posting_ready": 1, "docstatus": 0},
+			{"name": "RE-CE-2", "amount": 250, "expense_status": "Submitted", "ledger_status": "Pending Ledger", "posting_ready": 0, "docstatus": 1},
+		]
+		result = get_cashier_expense_totals([["RetailEdge Cashier Expense", "company", "=", "Demo Company"]])
+		self.assertEqual(result["count"], 2)
+		self.assertEqual(result["total_amount"], 350)
+		self.assertEqual(result["by_status"]["Draft"]["count"], 1)
+		self.assertEqual(result["by_status"]["Submitted"]["amount"], 250)
+		self.assertEqual(result["by_ledger_status"]["Pending Ledger"]["count"], 1)
+		self.assertEqual(result["posting_ready_count"], 1)
+		self.assertEqual(result["posting_blocked_count"], 1)
+
 	@patch("retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_shift_cash_snapshot")
 	@patch("retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_cashier_expense_totals_for_variance")
 	@patch("retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_cashier_expenses_for_variance")
@@ -816,6 +868,18 @@ class CashierExpenseServiceTests(unittest.TestCase):
 			settings=get_cashier_expense_daily_audit_settings(),
 		)
 		self.assertFalse(decision["include"])
+
+	@patch(
+		"retailedge.cashier_expense_audit.get_retailedge_settings",
+		return_value=_Settings(include_draft_cashier_expenses_in_daily_audit=0),
+	)
+	def test_draft_expenses_can_be_excluded_from_daily_audit_by_setting(self, _mock_settings):
+		decision = should_include_cashier_expense_in_daily_audit(
+			SimpleNamespace(docstatus=0, expense_status="Draft", include_in_daily_audit=1),
+			settings=get_cashier_expense_daily_audit_settings(),
+		)
+		self.assertFalse(decision["include"])
+		self.assertEqual(decision["status"], "Draft")
 
 	@patch("retailedge.cashier_expense_audit.append_cashier_expense_action_log")
 	@patch("retailedge.cashier_expense_audit.frappe.db.set_value")
@@ -929,6 +993,82 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		totals = get_cashier_expense_daily_audit_totals()
 		self.assertEqual(totals["count"], 1)
 		self.assertEqual(totals["included_count"], 1)
+
+	@patch("retailedge.cashier_expense_audit.get_retailedge_settings", return_value=_Settings())
+	@patch("retailedge.cashier_expense_audit.frappe.get_all")
+	def test_get_cashier_expenses_for_daily_audit_supports_filters(self, mock_get_all, _mock_settings):
+		mock_get_all.return_value = []
+		get_cashier_expenses_for_daily_audit(
+			{
+				"company": "Demo Company",
+				"pos_profile": "Testing",
+				"cashier": "cashier@example.com",
+				"daily_audit_inclusion_status": "Included",
+				"ledger_status": "Pending Ledger",
+				"daily_audit_classification": "Cash Expense",
+			}
+		)
+		filters = mock_get_all.call_args.kwargs["filters"]
+		self.assertEqual(filters["company"], "Demo Company")
+		self.assertEqual(filters["pos_profile"], "Testing")
+		self.assertEqual(filters["cashier"], "cashier@example.com")
+		self.assertEqual(filters["daily_audit_inclusion_status"], "Included")
+		self.assertEqual(filters["ledger_status"], "Pending Ledger")
+		self.assertEqual(filters["daily_audit_classification"], "Cash Expense")
+
+	@patch(
+		"retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review.get_cashier_expenses_for_daily_audit"
+	)
+	def test_cashier_expense_review_report_executes_without_error(self, mock_get_rows):
+		mock_get_rows.return_value = [
+			{
+				"name": "RE-CE-0501",
+				"expense_date": "2026-05-14",
+				"company": "Demo Company",
+				"branch": "Main Branch",
+				"pos_profile": "Testing",
+				"cashier": "cashier@example.com",
+				"linked_pos_opening_shift": "OPEN-1",
+				"linked_pos_closing_shift": "CLOSE-1",
+				"expense_category": "Transport",
+				"amount": 100,
+				"expense_status": "Submitted",
+				"ledger_status": "Not Applicable",
+				"posting_ready": 1,
+				"posting_block_reason": None,
+				"include_in_daily_audit": 1,
+				"daily_audit_inclusion_status": "Pending Review",
+				"daily_audit_classification": "Cash Expense",
+				"daily_audit_note": None,
+				"daily_audit_exclusion_reason": None,
+				"payment_account": "Cash - DEMO",
+				"expense_account": "Travel Expenses - DEMO",
+				"cost_center": "Main - DEMO",
+				"description": "test",
+			}
+		]
+		columns, data, _message, chart, summary = execute_cashier_expense_review_report(
+			{"company": "Demo Company", "cashier": "cashier@example.com"}
+		)
+		self.assertTrue(columns)
+		self.assertEqual(len(data), 2)
+		self.assertEqual(data[0]["name"], "RE-CE-0501")
+		self.assertEqual(data[1]["name"], "Totals")
+		self.assertEqual(chart["data"]["labels"], ["Submitted"])
+		self.assertEqual(summary[0]["value"], 100)
+		mock_get_rows.assert_called_once()
+
+	@patch(
+		"retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review.get_cashier_expenses_for_daily_audit"
+	)
+	def test_cashier_expense_review_report_respects_posting_ready_filter(self, mock_get_rows):
+		mock_get_rows.return_value = [
+			{"name": "RE-CE-1", "expense_status": "Submitted", "posting_ready": 1},
+			{"name": "RE-CE-2", "expense_status": "Rejected", "posting_ready": 0},
+		]
+		_columns, data, _message, _chart, summary = execute_cashier_expense_review_report({"posting_ready": 1})
+		self.assertEqual([row["name"] for row in data], ["RE-CE-1", "Totals"])
+		self.assertEqual(summary[1]["value"], 1)
 
 
 class CashierExpensePostingTests(unittest.TestCase):

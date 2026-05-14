@@ -13,21 +13,71 @@ frappe.listview_settings["RetailEdge Cashier Expense"] = {
 		"docstatus",
 	],
 	get_indicator(doc) {
-		if (doc.expense_status === "Pending Ledger") {
-			return [__("Pending Ledger"), "orange", "expense_status,=,Pending Ledger"];
+		const effectiveStatus = get_effective_review_status(doc);
+		if (effectiveStatus === "Pending Ledger") {
+			return [__("Review: Pending Ledger"), "orange", "expense_status,=,Pending Ledger"];
 		}
-		if (doc.expense_status === "Submitted") {
-			return [__("Submitted"), "blue", "expense_status,=,Submitted"];
+		if (effectiveStatus === "Submitted") {
+			return [__("Review: Submitted"), "blue", "expense_status,=,Submitted"];
 		}
-		if (doc.expense_status === "Rejected") {
-			return [__("Rejected"), "red", "expense_status,=,Rejected"];
+		if (effectiveStatus === "Rejected") {
+			return [__("Review: Rejected"), "red", "expense_status,=,Rejected"];
 		}
-		if (doc.expense_status === "Posted") {
-			return [__("Posted"), "green", "expense_status,=,Posted"];
+		if (effectiveStatus === "Posted") {
+			return [__("Review: Posted"), "green", "expense_status,=,Posted"];
 		}
-		if (doc.expense_status === "Cancelled") {
-			return [__("Cancelled"), "gray", "expense_status,=,Cancelled"];
+		if (effectiveStatus === "Cancelled") {
+			return [__("Review: Cancelled"), "gray", "expense_status,=,Cancelled"];
 		}
-		return [__("Draft"), "gray", "expense_status,=,Draft"];
+		return [__("Review: Draft"), "gray", "expense_status,=,Draft"];
+	},
+	onload(listview) {
+		setup_cashier_expense_totals(listview);
+	},
+	refresh(listview) {
+		setup_cashier_expense_totals(listview);
 	},
 };
+
+function get_effective_review_status(doc) {
+	if (doc.docstatus === 2 || doc.expense_status === "Cancelled") {
+		return "Cancelled";
+	}
+	if (doc.docstatus === 1 && (!doc.expense_status || doc.expense_status === "Draft")) {
+		return "Submitted";
+	}
+	return doc.expense_status || "Draft";
+}
+
+function setup_cashier_expense_totals(listview) {
+	if (!listview || !listview.page) {
+		return;
+	}
+	const update = frappe.utils.debounce(() => update_cashier_expense_totals(listview), 300);
+	update();
+}
+
+function update_cashier_expense_totals(listview) {
+	const route = frappe.get_route() || [];
+	if (route[0] !== "List" || route[1] !== "RetailEdge Cashier Expense") {
+		return;
+	}
+	frappe.call({
+		method: "retailedge.api.get_cashier_expense_totals",
+		args: {
+			filters: listview.filter_area ? listview.filter_area.get() : [],
+		},
+		callback: (response) => {
+			const totals = response.message || {};
+			const count = cint(totals.count || 0);
+			const totalAmount = flt(totals.total_amount || 0);
+			listview.page.set_indicator(
+				__("Total Amount: {0} across {1} expenses", [
+					format_currency(totalAmount),
+					count,
+				]),
+				count ? "blue" : "gray"
+			);
+		},
+	});
+}

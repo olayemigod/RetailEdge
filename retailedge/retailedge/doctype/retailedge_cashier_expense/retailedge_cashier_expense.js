@@ -35,6 +35,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 	},
 
 	refresh(frm) {
+		frm.events.ensure_settings_context(frm);
 		frm.events.apply_read_only_context(frm);
 		if (frm.is_new() && !frm.__cashier_context_loaded) {
 			frm.events.load_cashier_context(frm);
@@ -163,9 +164,11 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 	},
 
 	apply_read_only_context(frm) {
-		const settings = frm.__cashier_expense_settings || {};
+		const settings = frm.events.get_cashier_expense_settings(frm);
 		const allowDateEdit = cint(settings.allow_cashier_expense_date_edit || 0);
 		frm.set_df_property("expense_date", "read_only", allowDateEdit ? 0 : 1);
+		frm.set_df_property("expense_status", "label", __("Review Status"));
+		frm.set_df_property("ledger_status", "label", __("Ledger Status"));
 
 		[
 			"company",
@@ -203,12 +206,13 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 	},
 
 	add_review_actions(frm) {
+		const effectiveStatus = frm.events.get_effective_review_status(frm);
 		if (frm.is_new() || frm.doc.docstatus !== 1 || !frm.events.user_is_reviewer()) {
 			return;
 		}
 		const group = __("Review");
 
-		if (frm.doc.expense_status === "Submitted") {
+		if (effectiveStatus === "Submitted") {
 			frm.add_custom_button(__("Approve"), () => {
 				frm.events.prompt_review_action(frm, {
 					title: __("Approve Cashier Expense"),
@@ -227,7 +231,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			}, group);
 		}
 
-		if (["Rejected", "Pending Ledger"].includes(frm.doc.expense_status)) {
+		if (["Rejected", "Pending Ledger"].includes(effectiveStatus)) {
 			frm.add_custom_button(__("Reopen"), () => {
 				frm.events.prompt_review_action(frm, {
 					title: __("Reopen Cashier Expense"),
@@ -298,7 +302,11 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 		if (frm.is_new() || !frm.events.user_is_reviewer()) {
 			return;
 		}
-		if (frm.doc.docstatus === 2 || frm.doc.expense_status === "Cancelled") {
+		const effectiveStatus = frm.events.get_effective_review_status(frm);
+		if (frm.doc.docstatus === 2 || effectiveStatus === "Cancelled") {
+			return;
+		}
+		if (!frm.events.is_daily_audit_status_enabled(frm, effectiveStatus)) {
 			return;
 		}
 		const group = __("Daily Audit");
@@ -341,10 +349,18 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 	},
 
 	update_status_message(frm) {
-		if (frm.doc.expense_status === "Pending Ledger") {
+		const effectiveStatus = frm.events.get_effective_review_status(frm);
+		const documentStatus = frm.events.get_document_status_label(frm);
+		const reviewMessage = __(
+			"Document Status: {0}. Review Status: {1}. Ledger Status: {2}.",
+			[documentStatus, effectiveStatus, frm.doc.ledger_status || __("Not Applicable")]
+		);
+
+		if (effectiveStatus === "Pending Ledger") {
 			frm.set_intro(
 				__(
-					"This expense is approved for future ledger posting, but actual posting is not enabled in this phase."
+					"{0} This expense is approved for future ledger posting, but actual posting is not enabled in this phase.",
+					[reviewMessage]
 				),
 				"orange"
 			);
@@ -352,23 +368,109 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 		}
 		if (frm.doc.posting_block_reason) {
 			frm.set_intro(
-				__("Posting readiness is blocked: {0}", [frm.doc.posting_block_reason]),
+				__("{0} Posting readiness is blocked: {1}", [reviewMessage, frm.doc.posting_block_reason]),
 				"orange"
 			);
 			return;
 		}
 		if (frm.doc.daily_audit_inclusion_status === "Needs Clarification") {
-			frm.set_intro(__("This expense needs clarification before future Daily Audit review."), "orange");
-			return;
-		}
-		if (!frm.doc.linked_pos_opening_shift && frm.doc.__islocal) {
 			frm.set_intro(
-				__("An open POS Opening Shift is required before recording cashier expenses."),
+				__("{0} This expense needs clarification before future Daily Audit review.", [reviewMessage]),
 				"orange"
 			);
 			return;
 		}
-		frm.set_intro("");
+		if (!frm.doc.linked_pos_opening_shift && frm.doc.__islocal) {
+			frm.set_intro(
+				__("{0} An open POS Opening Shift is required before recording cashier expenses.", [reviewMessage]),
+				"orange"
+			);
+			return;
+		}
+		frm.set_intro(reviewMessage, "blue");
+	},
+
+	get_cashier_expense_settings(frm) {
+		return frm.__cashier_expense_settings || frappe.boot?.retailedge?.cashier_expense_settings || {};
+	},
+
+	ensure_settings_context(frm) {
+		if (frm.__cashier_expense_settings_loaded || frm.__cashier_expense_settings_loading) {
+			return;
+		}
+		const bootSettings = frappe.boot?.retailedge?.cashier_expense_settings || null;
+		if (bootSettings) {
+			frm.__cashier_expense_settings = bootSettings;
+			frm.__cashier_expense_settings_loaded = true;
+			return;
+		}
+		frm.__cashier_expense_settings_loading = true;
+		frappe.call({
+			method: "retailedge.api.get_cashier_expense_entry_context",
+			args: {
+				company: frm.doc.company || undefined,
+			},
+			callback: (response) => {
+				const context = response.message || {};
+				frm.__cashier_expense_settings = context.settings || {};
+				frm.__cashier_expense_settings_loaded = true;
+				frm.events.apply_read_only_context(frm);
+				frm.events.clear_custom_buttons(frm);
+			},
+			always: () => {
+				frm.__cashier_expense_settings_loading = false;
+			},
+		});
+	},
+
+	clear_custom_buttons(frm) {
+		[
+			[__("Approve"), __("Review")],
+			[__("Reject"), __("Review")],
+			[__("Reopen"), __("Review")],
+			[__("Mark Included for Daily Audit"), __("Daily Audit")],
+			[__("Exclude from Daily Audit"), __("Daily Audit")],
+			[__("Needs Clarification"), __("Daily Audit")],
+			[__("Preview Ledger Posting"), __("Readiness")],
+			[__("Refresh Posting Readiness"), __("Readiness")],
+		].forEach(([label, group]) => frm.remove_custom_button(label, group));
+		frm.events.add_review_actions(frm);
+		frm.events.add_daily_audit_actions(frm);
+		frm.events.add_posting_preview_actions(frm);
+		frm.events.update_status_message(frm);
+	},
+
+	get_effective_review_status(frm) {
+		if (frm.doc.docstatus === 2 || frm.doc.expense_status === "Cancelled") {
+			return "Cancelled";
+		}
+		if (frm.doc.docstatus === 1 && (!frm.doc.expense_status || frm.doc.expense_status === "Draft")) {
+			return "Submitted";
+		}
+		return frm.doc.expense_status || "Draft";
+	},
+
+	get_document_status_label(frm) {
+		if (frm.doc.docstatus === 2) {
+			return __("Cancelled");
+		}
+		if (frm.doc.docstatus === 1) {
+			return __("Submitted");
+		}
+		return __("Draft");
+	},
+
+	is_daily_audit_status_enabled(frm, effectiveStatus) {
+		const settings = frm.events.get_cashier_expense_settings(frm);
+		const statusSettings = {
+			Draft: cint(settings.include_draft_cashier_expenses_in_daily_audit ?? 1),
+			Submitted: cint(settings.include_submitted_cashier_expenses_in_daily_audit ?? 1),
+			"Pending Ledger": cint(settings.include_pending_ledger_cashier_expenses_in_daily_audit ?? 1),
+			Rejected: cint(settings.include_rejected_cashier_expenses_in_daily_audit ?? 1),
+			Posted: 1,
+			Cancelled: cint(settings.exclude_cancelled_cashier_expenses_from_daily_audit ?? 1) ? 0 : 1,
+		};
+		return Boolean(statusSettings[effectiveStatus] ?? 1);
 	},
 
 	prompt_review_action(frm, options) {
