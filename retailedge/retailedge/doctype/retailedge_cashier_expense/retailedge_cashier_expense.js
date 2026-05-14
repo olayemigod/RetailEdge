@@ -40,6 +40,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			frm.events.load_cashier_context(frm);
 		}
 		frm.events.add_review_actions(frm);
+		frm.events.add_daily_audit_actions(frm);
 		frm.events.add_posting_preview_actions(frm);
 		frm.events.update_status_message(frm);
 	},
@@ -189,6 +190,9 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			"resolved_credit_account",
 			"resolved_posting_cost_center",
 			"posting_preview",
+			"daily_audit_inclusion_status",
+			"daily_audit_reviewed_by",
+			"daily_audit_reviewed_on",
 			"review_required",
 			"user_message",
 			"last_readiness_refresh_on",
@@ -202,6 +206,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 		if (frm.is_new() || frm.doc.docstatus !== 1 || !frm.events.user_is_reviewer()) {
 			return;
 		}
+		const group = __("Review");
 
 		if (frm.doc.expense_status === "Submitted") {
 			frm.add_custom_button(__("Approve"), () => {
@@ -211,7 +216,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 					required: 0,
 					method: "retailedge.api.approve_cashier_expense",
 				});
-			});
+			}, group);
 			frm.add_custom_button(__("Reject"), () => {
 				frm.events.prompt_review_action(frm, {
 					title: __("Reject Cashier Expense"),
@@ -219,7 +224,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 					required: 1,
 					method: "retailedge.api.reject_cashier_expense",
 				});
-			});
+			}, group);
 		}
 
 		if (["Rejected", "Pending Ledger"].includes(frm.doc.expense_status)) {
@@ -230,7 +235,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 					required: 0,
 					method: "retailedge.api.reopen_cashier_expense",
 				});
-			});
+			}, group);
 		}
 	},
 
@@ -238,6 +243,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 		if (frm.is_new()) {
 			return;
 		}
+		const group = __("Readiness");
 
 		frm.add_custom_button(__("Preview Ledger Posting"), () => {
 			frappe.call({
@@ -275,7 +281,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 					});
 				},
 			});
-		});
+		}, group);
 
 		if (frm.doc.docstatus === 1 && frm.events.user_can_refresh_posting_readiness()) {
 			frm.add_custom_button(__("Refresh Posting Readiness"), () => {
@@ -284,7 +290,53 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 					args: { expense_name: frm.doc.name },
 					callback: () => frm.reload_doc(),
 				});
-			});
+			}, group);
+		}
+	},
+
+	add_daily_audit_actions(frm) {
+		if (frm.is_new() || !frm.events.user_is_reviewer()) {
+			return;
+		}
+		if (frm.doc.docstatus === 2 || frm.doc.expense_status === "Cancelled") {
+			return;
+		}
+		const group = __("Daily Audit");
+
+		if (frm.doc.daily_audit_inclusion_status !== "Included") {
+			frm.add_custom_button(__("Mark Included for Daily Audit"), () => {
+				frm.events.prompt_daily_audit_action(frm, {
+					title: __("Mark Included for Daily Audit"),
+					label: __("Note"),
+					required: 0,
+					argname: "note",
+					method: "retailedge.api.mark_cashier_expense_included_for_daily_audit",
+				});
+			}, group);
+		}
+
+		if (frm.doc.daily_audit_inclusion_status !== "Excluded") {
+			frm.add_custom_button(__("Exclude from Daily Audit"), () => {
+				frm.events.prompt_daily_audit_action(frm, {
+					title: __("Exclude from Daily Audit"),
+					label: __("Reason"),
+					required: 1,
+					argname: "reason",
+					method: "retailedge.api.mark_cashier_expense_excluded_from_daily_audit",
+				});
+			}, group);
+		}
+
+		if (frm.doc.daily_audit_inclusion_status !== "Needs Clarification") {
+			frm.add_custom_button(__("Needs Clarification"), () => {
+				frm.events.prompt_daily_audit_action(frm, {
+					title: __("Mark Daily Audit Needs Clarification"),
+					label: __("Note"),
+					required: 0,
+					argname: "note",
+					method: "retailedge.api.mark_cashier_expense_needs_clarification",
+				});
+			}, group);
 		}
 	},
 
@@ -303,6 +355,10 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 				__("Posting readiness is blocked: {0}", [frm.doc.posting_block_reason]),
 				"orange"
 			);
+			return;
+		}
+		if (frm.doc.daily_audit_inclusion_status === "Needs Clarification") {
+			frm.set_intro(__("This expense needs clarification before future Daily Audit review."), "orange");
 			return;
 		}
 		if (!frm.doc.linked_pos_opening_shift && frm.doc.__islocal) {
@@ -331,6 +387,31 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 					args: {
 						expense_name: frm.doc.name,
 						remarks: values.remarks,
+					},
+					callback: () => frm.reload_doc(),
+				});
+			},
+			options.title,
+			__("Submit")
+		);
+	},
+
+	prompt_daily_audit_action(frm, options) {
+		frappe.prompt(
+			[
+				{
+					fieldname: "message",
+					fieldtype: "Small Text",
+					label: options.label,
+					reqd: options.required ? 1 : 0,
+				},
+			],
+			(values) => {
+				frappe.call({
+					method: options.method,
+					args: {
+						expense_name: frm.doc.name,
+						[options.argname]: values.message,
 					},
 					callback: () => frm.reload_doc(),
 				});

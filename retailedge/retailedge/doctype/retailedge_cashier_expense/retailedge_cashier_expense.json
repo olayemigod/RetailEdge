@@ -58,6 +58,14 @@
   "user_message",
   "last_readiness_refresh_on",
   "last_readiness_refresh_by",
+  "daily_audit_readiness_section",
+  "include_in_daily_audit",
+  "daily_audit_inclusion_status",
+  "daily_audit_classification",
+  "daily_audit_note",
+  "daily_audit_reviewed_by",
+  "daily_audit_reviewed_on",
+  "daily_audit_exclusion_reason",
   "action_history_section",
   "action_logs"
  ],
@@ -452,6 +460,64 @@
    "label": "Last Readiness Refresh By",
    "options": "User",
    "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "daily_audit_readiness_section",
+   "fieldtype": "Section Break",
+   "label": "Daily Audit Readiness"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "1",
+   "description": "Indicates whether this expense should be visible for future Daily Audit review.",
+   "fieldname": "include_in_daily_audit",
+   "fieldtype": "Check",
+   "label": "Include in Daily Audit"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Pending Review",
+   "fieldname": "daily_audit_inclusion_status",
+   "fieldtype": "Select",
+   "label": "Daily Audit Inclusion Status",
+   "options": "Pending Review\nIncluded\nExcluded\nNeeds Clarification",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Cash Expense",
+   "fieldname": "daily_audit_classification",
+   "fieldtype": "Select",
+   "label": "Daily Audit Classification",
+   "options": "Cash Expense\nCash Shortage Explanation\nCash Overage Explanation\nReimbursement Pending\nInvalid / Duplicate\nOther"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "daily_audit_note",
+   "fieldtype": "Small Text",
+   "label": "Daily Audit Note"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "daily_audit_reviewed_by",
+   "fieldtype": "Link",
+   "label": "Daily Audit Reviewed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "daily_audit_reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Daily Audit Reviewed On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "daily_audit_exclusion_reason",
+   "fieldtype": "Small Text",
+   "label": "Daily Audit Exclusion Reason"
   },
   {
    "collapsible": 1,

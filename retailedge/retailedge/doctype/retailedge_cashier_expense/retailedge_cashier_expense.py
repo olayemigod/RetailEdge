@@ -70,6 +70,12 @@ class RetailEdgeCashierExpense(Document):
 			self.expense_status = "Draft"
 		if not self.ledger_status:
 			self.ledger_status = "Not Applicable"
+		if self.include_in_daily_audit in (None, ""):
+			self.include_in_daily_audit = 1
+		if not self.daily_audit_inclusion_status:
+			self.daily_audit_inclusion_status = "Pending Review"
+		if not self.daily_audit_classification:
+			self.daily_audit_classification = "Cash Expense"
 		if not self.cashier:
 			self.cashier = frappe.session.user
 

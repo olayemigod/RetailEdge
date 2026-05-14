@@ -4,6 +4,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "general_controls_tab",
   "pos_control_section",
   "enable_posting_date_control",
   "allow_pos_posting_date_override",
@@ -13,6 +14,7 @@
   "cost_price_hidden_roles",
   "audit_foundation_section",
   "enable_sales_payment_audit",
+  "cashier_expense_tab",
   "cashier_expense_section",
   "enable_cashier_expense_workflow",
   "require_cashier_expense_attachment",
@@ -23,12 +25,21 @@
   "include_draft_cashier_expenses_in_cash_check",
   "include_rejected_cashier_expenses_in_cash_check",
   "allow_cashier_expense_without_cash_account",
+  "cashier_expense_posting_tab",
   "cashier_expense_ledger_controls_section",
   "cashier_expense_posting_document_type",
   "default_cashier_expense_payable_account",
   "require_cashier_expense_approval_before_posting",
   "allow_rejected_cashier_expense_posting",
   "cashier_expense_posting_remark_template",
+  "daily_audit_readiness_tab",
+  "daily_audit_readiness_controls_section",
+  "include_draft_cashier_expenses_in_daily_audit",
+  "include_submitted_cashier_expenses_in_daily_audit",
+  "include_pending_ledger_cashier_expenses_in_daily_audit",
+  "include_rejected_cashier_expenses_in_daily_audit",
+  "exclude_cancelled_cashier_expenses_from_daily_audit",
+  "coreedge_integration_tab",
   "coreedge_integration_section",
   "enable_coreedge_integration",
   "coreedge_required_for_portal",
@@ -37,6 +48,11 @@
   "enable_coreedge_branch_context"
  ],
  "fields": [
+  {
+   "fieldname": "general_controls_tab",
+   "fieldtype": "Tab Break",
+   "label": "General Controls"
+  },
   {
    "fieldname": "pos_control_section",
    "fieldtype": "Section Break",
@@ -95,6 +111,11 @@
    "fieldname": "enable_sales_payment_audit",
    "fieldtype": "Check",
    "label": "Enable Sales & Payment Audit"
+  },
+  {
+   "fieldname": "cashier_expense_tab",
+   "fieldtype": "Tab Break",
+   "label": "Cashier Expense"
   },
   {
    "fieldname": "cashier_expense_section",
@@ -173,6 +194,11 @@
    "label": "Allow Cashier Expense Without Cash Account"
   },
   {
+   "fieldname": "cashier_expense_posting_tab",
+   "fieldtype": "Tab Break",
+   "label": "Posting Readiness"
+  },
+  {
    "fieldname": "cashier_expense_ledger_controls_section",
    "fieldtype": "Section Break",
    "label": "Cashier Expense Ledger Controls"
@@ -215,6 +241,52 @@
    "fieldname": "cashier_expense_posting_remark_template",
    "fieldtype": "Small Text",
    "label": "Posting Remark Template"
+  },
+  {
+   "fieldname": "daily_audit_readiness_tab",
+   "fieldtype": "Tab Break",
+   "label": "Daily Audit Readiness"
+  },
+  {
+   "fieldname": "daily_audit_readiness_controls_section",
+   "fieldtype": "Section Break",
+   "label": "Daily Audit Readiness Controls"
+  },
+  {
+   "default": "1",
+   "fieldname": "include_draft_cashier_expenses_in_daily_audit",
+   "fieldtype": "Check",
+   "label": "Include Draft Cashier Expenses in Daily Audit Readiness"
+  },
+  {
+   "default": "1",
+   "fieldname": "include_submitted_cashier_expenses_in_daily_audit",
+   "fieldtype": "Check",
+   "label": "Include Submitted Cashier Expenses in Daily Audit Readiness"
+  },
+  {
+   "default": "1",
+   "fieldname": "include_pending_ledger_cashier_expenses_in_daily_audit",
+   "fieldtype": "Check",
+   "label": "Include Pending Ledger Cashier Expenses in Daily Audit Readiness"
+  },
+  {
+   "default": "1",
+   "description": "Rejected expenses may still represent physical cash movement and should remain visible unless explicitly excluded.",
+   "fieldname": "include_rejected_cashier_expenses_in_daily_audit",
+   "fieldtype": "Check",
+   "label": "Include Rejected Cashier Expenses in Daily Audit Readiness"
+  },
+  {
+   "default": "1",
+   "fieldname": "exclude_cancelled_cashier_expenses_from_daily_audit",
+   "fieldtype": "Check",
+   "label": "Exclude Cancelled Cashier Expenses from Daily Audit"
+  },
+  {
+   "fieldname": "coreedge_integration_tab",
+   "fieldtype": "Tab Break",
+   "label": "CoreEdge Integration"
   },
   {
    "fieldname": "coreedge_integration_section",

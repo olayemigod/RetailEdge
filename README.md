@@ -142,6 +142,14 @@ Posting preview and posting readiness remain available, but actual ledger postin
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## Cashier Expense V1.4H - Daily Audit Readiness and Controlled Inclusion Rules
+
+RetailEdge Cashier Expense can now be classified for future Daily Audit review without mutating Daily Sales Audit itself. Managers and reviewers can mark a cashier expense as Included, Excluded, or Needs Clarification, and those actions are stored on the expense together with review metadata and action history.
+
+Rejected expenses remain visible for Daily Audit readiness by default because they may still represent physical cash movement, while cancelled expenses are excluded by default. This phase does not mutate Daily Sales Audit, does not deduct expenses from audit totals, and does not create Journal Entries or Payment Entries.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash

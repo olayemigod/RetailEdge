@@ -30,6 +30,15 @@ from retailedge.cashier_expense import (
 	user_has_any_role,
 	user_is_reviewer,
 )
+from retailedge.cashier_expense_audit import (
+	get_cashier_expense_daily_audit_settings,
+	get_cashier_expense_daily_audit_totals,
+	get_cashier_expenses_for_daily_audit,
+	mark_cashier_expense_excluded_from_daily_audit,
+	mark_cashier_expense_included_for_daily_audit,
+	mark_cashier_expense_needs_clarification,
+	should_include_cashier_expense_in_daily_audit,
+)
 from retailedge.cashier_expense_posting import (
 	get_cashier_expense_posting_preview,
 	refresh_cashier_expense_posting_readiness,
@@ -50,6 +59,7 @@ class _Settings(SimpleNamespace):
 	allow_cashier_expense_date_edit = 0
 	include_draft_cashier_expenses_in_cash_check = 1
 	include_rejected_cashier_expenses_in_cash_check = 1
+	include_cashier_expenses_in_variance_report = 1
 	allow_cashier_expense_without_cash_account = 0
 	enable_cashier_expense_accounting_posting = 0
 	cashier_expense_posting_document_type = "Journal Entry"
@@ -57,6 +67,11 @@ class _Settings(SimpleNamespace):
 	require_cashier_expense_approval_before_posting = 1
 	allow_rejected_cashier_expense_posting = 0
 	cashier_expense_posting_remark_template = "RetailEdge Cashier Expense {expense_name} - {expense_category}"
+	include_draft_cashier_expenses_in_daily_audit = 1
+	include_submitted_cashier_expenses_in_daily_audit = 1
+	include_pending_ledger_cashier_expenses_in_daily_audit = 1
+	include_rejected_cashier_expenses_in_daily_audit = 1
+	exclude_cancelled_cashier_expenses_from_daily_audit = 1
 
 
 class _Row(SimpleNamespace):
@@ -103,6 +118,13 @@ class CashierExpenseControllerTests(unittest.TestCase):
 			resolved_credit_account=None,
 			resolved_posting_cost_center=None,
 			posting_preview=None,
+			include_in_daily_audit=kwargs.pop("include_in_daily_audit", 1),
+			daily_audit_inclusion_status=kwargs.pop("daily_audit_inclusion_status", "Pending Review"),
+			daily_audit_classification=kwargs.pop("daily_audit_classification", "Cash Expense"),
+			daily_audit_note=kwargs.pop("daily_audit_note", None),
+			daily_audit_reviewed_by=kwargs.pop("daily_audit_reviewed_by", None),
+			daily_audit_reviewed_on=kwargs.pop("daily_audit_reviewed_on", None),
+			daily_audit_exclusion_reason=kwargs.pop("daily_audit_exclusion_reason", None),
 			review_required=0,
 			user_message=None,
 			last_readiness_refresh_on=None,
@@ -767,6 +789,146 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(totals["total_expense_amount"], 150)
 		self.assertEqual(totals["by_status"]["Draft"]["amount"], 100)
 		self.assertEqual(totals["by_category"]["Fuel"]["amount"], 50)
+
+	@patch(
+		"retailedge.cashier_expense_audit.get_retailedge_settings",
+		return_value=_Settings(exclude_cancelled_cashier_expenses_from_daily_audit=1),
+	)
+	def test_cancelled_expenses_excluded_from_daily_audit_by_default(self, _mock_settings):
+		decision = should_include_cashier_expense_in_daily_audit(
+			SimpleNamespace(docstatus=2, expense_status="Cancelled", include_in_daily_audit=1)
+		)
+		self.assertFalse(decision["include"])
+
+	@patch(
+		"retailedge.cashier_expense_audit.get_retailedge_settings",
+		return_value=_Settings(include_rejected_cashier_expenses_in_daily_audit=1),
+	)
+	def test_rejected_expenses_included_in_daily_audit_by_default(self, _mock_settings):
+		decision = should_include_cashier_expense_in_daily_audit(
+			SimpleNamespace(docstatus=1, expense_status="Rejected", include_in_daily_audit=1)
+		)
+		self.assertTrue(decision["include"])
+
+	def test_include_in_daily_audit_zero_excludes_expense(self):
+		decision = should_include_cashier_expense_in_daily_audit(
+			SimpleNamespace(docstatus=1, expense_status="Submitted", include_in_daily_audit=0),
+			settings=get_cashier_expense_daily_audit_settings(),
+		)
+		self.assertFalse(decision["include"])
+
+	@patch("retailedge.cashier_expense_audit.append_cashier_expense_action_log")
+	@patch("retailedge.cashier_expense_audit.frappe.db.set_value")
+	@patch("retailedge.cashier_expense_audit.frappe.get_doc")
+	@patch("retailedge.cashier_expense_audit.user_is_reviewer", return_value=True)
+	@patch("retailedge.cashier_expense_audit.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	def test_mark_included_sets_status_and_review_fields(
+		self, _mock_reviewer, mock_get_doc, mock_set_value, mock_log
+	):
+		doc = SimpleNamespace(
+			doctype="RetailEdge Cashier Expense",
+			name="RE-CE-0301",
+			docstatus=1,
+			expense_status="Submitted",
+			has_permission=lambda perm: perm == "write",
+			include_in_daily_audit=1,
+			daily_audit_inclusion_status="Included",
+			daily_audit_reviewed_by="auditor@example.com",
+			daily_audit_reviewed_on="2026-05-14 10:00:00",
+		)
+		mock_get_doc.side_effect = [doc, doc]
+		result = mark_cashier_expense_included_for_daily_audit("RE-CE-0301", note="reviewed")
+		values = mock_set_value.call_args.args[2]
+		self.assertEqual(values["daily_audit_inclusion_status"], "Included")
+		self.assertEqual(values["include_in_daily_audit"], 1)
+		self.assertEqual(result["daily_audit_inclusion_status"], "Included")
+		mock_log.assert_called_once()
+
+	@patch("retailedge.cashier_expense_audit.append_cashier_expense_action_log")
+	@patch("retailedge.cashier_expense_audit.frappe.db.set_value")
+	@patch("retailedge.cashier_expense_audit.frappe.get_doc")
+	@patch("retailedge.cashier_expense_audit.user_is_reviewer", return_value=True)
+	@patch("retailedge.cashier_expense_audit.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	def test_mark_excluded_sets_include_zero(
+		self, _mock_reviewer, mock_get_doc, mock_set_value, mock_log
+	):
+		doc = SimpleNamespace(
+			doctype="RetailEdge Cashier Expense",
+			name="RE-CE-0302",
+			docstatus=1,
+			expense_status="Submitted",
+			has_permission=lambda perm: perm == "write",
+			include_in_daily_audit=0,
+			daily_audit_inclusion_status="Excluded",
+			daily_audit_reviewed_by="auditor@example.com",
+			daily_audit_reviewed_on="2026-05-14 10:00:00",
+		)
+		mock_get_doc.side_effect = [doc, doc]
+		result = mark_cashier_expense_excluded_from_daily_audit("RE-CE-0302", reason="duplicate")
+		values = mock_set_value.call_args.args[2]
+		self.assertEqual(values["include_in_daily_audit"], 0)
+		self.assertEqual(values["daily_audit_inclusion_status"], "Excluded")
+		self.assertEqual(result["include_in_daily_audit"], 0)
+		mock_log.assert_called_once()
+
+	def test_mark_excluded_requires_reason(self):
+		with self.assertRaises(frappe.ValidationError):
+			mark_cashier_expense_excluded_from_daily_audit("RE-CE-0303", reason=None)
+
+	@patch("retailedge.cashier_expense_audit.append_cashier_expense_action_log")
+	@patch("retailedge.cashier_expense_audit.frappe.db.set_value")
+	@patch("retailedge.cashier_expense_audit.frappe.get_doc")
+	@patch("retailedge.cashier_expense_audit.user_is_reviewer", return_value=True)
+	@patch("retailedge.cashier_expense_audit.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	def test_needs_clarification_sets_correct_status(
+		self, _mock_reviewer, mock_get_doc, mock_set_value, mock_log
+	):
+		doc = SimpleNamespace(
+			doctype="RetailEdge Cashier Expense",
+			name="RE-CE-0304",
+			docstatus=1,
+			expense_status="Submitted",
+			has_permission=lambda perm: perm == "write",
+			include_in_daily_audit=1,
+			daily_audit_inclusion_status="Needs Clarification",
+			daily_audit_reviewed_by="auditor@example.com",
+			daily_audit_reviewed_on="2026-05-14 10:00:00",
+		)
+		mock_get_doc.side_effect = [doc, doc]
+		result = mark_cashier_expense_needs_clarification("RE-CE-0304", note="check receipt")
+		values = mock_set_value.call_args.args[2]
+		self.assertEqual(values["daily_audit_inclusion_status"], "Needs Clarification")
+		self.assertEqual(result["daily_audit_inclusion_status"], "Needs Clarification")
+		mock_log.assert_called_once()
+
+	@patch("retailedge.cashier_expense_audit.user_is_reviewer", return_value=False)
+	def test_reviewer_role_required_for_daily_audit_actions(self, _mock_reviewer):
+		with self.assertRaises(frappe.PermissionError):
+			mark_cashier_expense_included_for_daily_audit("RE-CE-0305", note="x")
+
+	@patch("retailedge.cashier_expense_audit.user_is_reviewer", return_value=False)
+	def test_cashier_only_user_cannot_perform_daily_audit_actions(self, _mock_reviewer):
+		with self.assertRaises(frappe.PermissionError):
+			mark_cashier_expense_needs_clarification("RE-CE-0306", note="x")
+
+	@patch("retailedge.cashier_expense_audit.get_retailedge_settings", return_value=_Settings())
+	@patch("retailedge.cashier_expense_audit.frappe.get_all")
+	def test_daily_audit_helpers_do_not_mutate_other_docs(self, mock_get_all, _mock_settings):
+		mock_get_all.return_value = [
+			{
+				"name": "RE-CE-0401",
+				"expense_status": "Submitted",
+				"ledger_status": "Not Applicable",
+				"include_in_daily_audit": 1,
+				"daily_audit_inclusion_status": "Pending Review",
+				"daily_audit_classification": "Cash Expense",
+				"amount": 100,
+				"docstatus": 1,
+			}
+		]
+		totals = get_cashier_expense_daily_audit_totals()
+		self.assertEqual(totals["count"], 1)
+		self.assertEqual(totals["included_count"], 1)
 
 
 class CashierExpensePostingTests(unittest.TestCase):
