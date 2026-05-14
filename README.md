@@ -158,6 +158,14 @@ This phase does not post accounting entries, does not modify Daily Sales Audit, 
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## Cashier Expense V1.4J - Workspace UX and Dashboard Cards
+
+The RetailEdge workspace now surfaces cashier expense review tools more clearly, including direct access to cashier expenses, expense categories, the manager review report, the variance report, and RetailEdge Settings. Managers and auditors can also use a read-only dashboard summary helper to view cashier expense totals, review-state counts, posting readiness counts, Daily Audit readiness counts, top cashiers, top categories, and recent expenses.
+
+This phase remains read-only. It does not create accounting entries, does not mutate Daily Sales Audit, and does not modify POS shifts, Sales Invoices, payment verification, or other ERPNext transaction records.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash

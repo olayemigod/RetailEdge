@@ -36,6 +36,7 @@ def execute():
 	workspace.set("shortcuts", _normalise_shortcuts(data.get("shortcuts", [])))
 	workspace.set("links", _normalise_links(data.get("links", [])))
 	workspace.save(ignore_permissions=True)
+	_sync_workspace_sidebar(workspace)
 
 
 def _get_or_create_workspace(data: dict):
@@ -82,3 +83,53 @@ def _normalise_links(links: list[dict]) -> list[dict]:
 		normalised.append(row)
 
 	return normalised
+
+
+def _sync_workspace_sidebar(workspace):
+	sidebar = _get_or_create_workspace_sidebar(workspace)
+	items = []
+
+	home_item = frappe.new_doc("Workspace Sidebar Item")
+	home_item.update(
+		{
+			"label": "Home",
+			"link_to": workspace.name,
+			"link_type": "Workspace",
+			"type": "Link",
+			"idx": 0,
+		}
+	)
+	items.append(home_item)
+
+	for idx, shortcut in enumerate(workspace.shortcuts or [], start=1):
+		item = frappe.new_doc("Workspace Sidebar Item")
+		item.update(
+			{
+				"label": shortcut.label,
+				"link_to": shortcut.link_to,
+				"link_type": shortcut.type,
+				"type": "Link",
+				"idx": idx,
+			}
+		)
+		items.append(item)
+
+	sidebar.items = items
+	sidebar.save(ignore_permissions=True)
+
+
+def _get_or_create_workspace_sidebar(workspace):
+	if frappe.db.exists("Workspace Sidebar", WORKSPACE_NAME):
+		sidebar = frappe.get_doc("Workspace Sidebar", WORKSPACE_NAME)
+	else:
+		sidebar = frappe.new_doc("Workspace Sidebar")
+		sidebar.title = WORKSPACE_NAME
+
+	sidebar.title = WORKSPACE_NAME
+	sidebar.app = "retailedge"
+	sidebar.standard = 1
+	if hasattr(sidebar, "module") and not sidebar.module:
+		sidebar.module = workspace.module or "RetailEdge"
+	if hasattr(sidebar, "header_icon"):
+		sidebar.header_icon = workspace.icon
+	return sidebar

@@ -41,6 +41,10 @@ from retailedge.cashier_expense_audit import (
 	mark_cashier_expense_needs_clarification,
 	should_include_cashier_expense_in_daily_audit,
 )
+from retailedge.cashier_expense_dashboard import (
+	assert_can_access_cashier_expense_dashboard,
+	get_cashier_expense_dashboard_summary,
+)
 from retailedge.cashier_expense_posting import (
 	get_cashier_expense_posting_preview,
 	refresh_cashier_expense_posting_readiness,
@@ -1155,3 +1159,115 @@ class CashierExpensePostingTests(unittest.TestCase):
 		preview = get_cashier_expense_posting_preview("RE-CE-0001")
 		self.assertFalse(preview["posting_ready"])
 		self.assertIn("Cancelled expenses", preview["posting_block_reason"])
+
+
+class CashierExpenseDashboardTests(unittest.TestCase):
+	@patch("retailedge.cashier_expense_dashboard.frappe.get_all")
+	def test_dashboard_summary_counts_statuses_and_daily_audit_states(self, mock_get_all):
+		mock_get_all.return_value = [
+			{
+				"name": "RE-CE-0601",
+				"expense_date": "2026-05-14",
+				"company": "Demo Company",
+				"branch": "HQ",
+				"pos_profile": "Testing",
+				"cashier": "cashier1@example.com",
+				"expense_category": "Transport",
+				"amount": 100,
+				"expense_status": "Draft",
+				"ledger_status": "Not Applicable",
+				"posting_ready": 0,
+				"daily_audit_inclusion_status": "Pending Review",
+				"description": "taxi",
+				"docstatus": 0,
+			},
+			{
+				"name": "RE-CE-0602",
+				"expense_date": "2026-05-14",
+				"company": "Demo Company",
+				"branch": "HQ",
+				"pos_profile": "Testing",
+				"cashier": "cashier2@example.com",
+				"expense_category": "Transport",
+				"amount": 250,
+				"expense_status": "Pending Ledger",
+				"ledger_status": "Pending Ledger",
+				"posting_ready": 1,
+				"daily_audit_inclusion_status": "Included",
+				"description": "fuel",
+				"docstatus": 1,
+			},
+			{
+				"name": "RE-CE-0603",
+				"expense_date": "2026-05-14",
+				"company": "Demo Company",
+				"branch": "HQ",
+				"pos_profile": "Testing",
+				"cashier": "cashier1@example.com",
+				"expense_category": "Supplies",
+				"amount": 50,
+				"expense_status": "Rejected",
+				"ledger_status": "Not Applicable",
+				"posting_ready": 0,
+				"daily_audit_inclusion_status": "Needs Clarification",
+				"description": "bags",
+				"docstatus": 1,
+			},
+			{
+				"name": "RE-CE-0604",
+				"expense_date": "2026-05-14",
+				"company": "Demo Company",
+				"branch": "HQ",
+				"pos_profile": "Testing",
+				"cashier": "cashier3@example.com",
+				"expense_category": "Supplies",
+				"amount": 80,
+				"expense_status": "Cancelled",
+				"ledger_status": "Not Applicable",
+				"posting_ready": 1,
+				"daily_audit_inclusion_status": "Excluded",
+				"description": "void",
+				"docstatus": 2,
+			},
+		]
+		summary = get_cashier_expense_dashboard_summary({"company": "Demo Company"})
+		self.assertEqual(summary["total_expenses"], 400)
+		self.assertEqual(summary["expense_count"], 3)
+		self.assertEqual(summary["draft_count"], 1)
+		self.assertEqual(summary["pending_ledger_count"], 1)
+		self.assertEqual(summary["rejected_count"], 1)
+		self.assertEqual(summary["cancelled_count"], 1)
+		self.assertEqual(summary["posting_ready_count"], 1)
+		self.assertEqual(summary["posting_blocked_count"], 2)
+		self.assertEqual(summary["daily_audit_pending_review_count"], 1)
+		self.assertEqual(summary["daily_audit_included_count"], 1)
+		self.assertEqual(summary["daily_audit_needs_clarification_count"], 1)
+		self.assertEqual(summary["daily_audit_excluded_count"], 0)
+		self.assertEqual(summary["top_cashiers"][0]["name"], "cashier2@example.com")
+		self.assertEqual(summary["top_categories"][0]["name"], "Transport")
+		self.assertEqual(len(summary["recent_expenses"]), 4)
+
+	@patch("retailedge.cashier_expense_dashboard.frappe.get_all")
+	def test_dashboard_summary_respects_filters(self, mock_get_all):
+		mock_get_all.return_value = []
+		get_cashier_expense_dashboard_summary(
+			{
+				"company": "Demo Company",
+				"branch": "HQ",
+				"pos_profile": "Testing",
+				"cashier": "cashier@example.com",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-14",
+			}
+		)
+		filters = mock_get_all.call_args.kwargs["filters"]
+		self.assertEqual(filters["company"], "Demo Company")
+		self.assertEqual(filters["branch"], "HQ")
+		self.assertEqual(filters["pos_profile"], "Testing")
+		self.assertEqual(filters["cashier"], "cashier@example.com")
+		self.assertEqual(filters["expense_date"], ["between", ["2026-05-01", "2026-05-14"]])
+
+	@patch("retailedge.cashier_expense_dashboard.user_has_any_role", return_value=False)
+	def test_dashboard_access_requires_manager_or_reviewer_role(self, _mock_roles):
+		with self.assertRaises(frappe.PermissionError):
+			assert_can_access_cashier_expense_dashboard()

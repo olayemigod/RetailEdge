@@ -18,6 +18,10 @@ from retailedge.cashier_expense_audit import (
 	mark_cashier_expense_included_for_daily_audit as _mark_cashier_expense_included_for_daily_audit,
 	mark_cashier_expense_needs_clarification as _mark_cashier_expense_needs_clarification,
 )
+from retailedge.cashier_expense_dashboard import (
+	assert_can_access_cashier_expense_dashboard as _assert_can_access_cashier_expense_dashboard,
+	get_cashier_expense_dashboard_summary as _get_cashier_expense_dashboard_summary,
+)
 from retailedge.cashier_expense_posting import (
 	assert_can_refresh_posting_readiness as _assert_can_refresh_posting_readiness,
 	get_cashier_expense_posting_preview as _get_cashier_expense_posting_preview,
@@ -153,6 +157,12 @@ def get_cashier_expense_daily_audit_totals(filters=None):
 @frappe.whitelist()
 def get_cashier_expense_review_summary(filters=None):
 	return _get_cashier_expense_review_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_cashier_expense_dashboard_summary(filters=None):
+	_assert_can_access_cashier_expense_dashboard()
+	return _get_cashier_expense_dashboard_summary(filters=filters)
 
 
 @frappe.whitelist()

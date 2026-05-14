@@ -2,6 +2,7 @@ frappe.listview_settings["RetailEdge Cashier Expense"] = {
 	add_fields: [
 		"expense_status",
 		"ledger_status",
+		"daily_audit_inclusion_status",
 		"posting_ready",
 		"amount",
 		"expense_category",
