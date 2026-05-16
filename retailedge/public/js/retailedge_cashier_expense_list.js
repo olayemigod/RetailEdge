@@ -32,12 +32,6 @@ frappe.listview_settings["RetailEdge Cashier Expense"] = {
 		}
 		return [__("Review: Draft"), "gray", "expense_status,=,Draft"];
 	},
-	onload(listview) {
-		setup_cashier_expense_totals(listview);
-	},
-	refresh(listview) {
-		setup_cashier_expense_totals(listview);
-	},
 };
 
 function get_effective_review_status(doc) {
@@ -48,37 +42,4 @@ function get_effective_review_status(doc) {
 		return "Submitted";
 	}
 	return doc.expense_status || "Draft";
-}
-
-function setup_cashier_expense_totals(listview) {
-	if (!listview || !listview.page) {
-		return;
-	}
-	const update = frappe.utils.debounce(() => update_cashier_expense_totals(listview), 300);
-	update();
-}
-
-function update_cashier_expense_totals(listview) {
-	const route = frappe.get_route() || [];
-	if (route[0] !== "List" || route[1] !== "RetailEdge Cashier Expense") {
-		return;
-	}
-	frappe.call({
-		method: "retailedge.api.get_cashier_expense_totals",
-		args: {
-			filters: listview.filter_area ? listview.filter_area.get() : [],
-		},
-		callback: (response) => {
-			const totals = response.message || {};
-			const count = cint(totals.count || 0);
-			const totalAmount = flt(totals.total_amount || 0);
-			listview.page.set_indicator(
-				__("Total Amount: {0} across {1} expenses", [
-					format_currency(totalAmount),
-					count,
-				]),
-				count ? "blue" : "gray"
-			);
-		},
-	});
 }

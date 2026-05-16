@@ -39,6 +39,14 @@
   "include_pending_ledger_cashier_expenses_in_daily_audit",
   "include_rejected_cashier_expenses_in_daily_audit",
   "exclude_cancelled_cashier_expenses_from_daily_audit",
+  "daily_sales_audit_tab",
+  "daily_sales_audit_controls_section",
+  "enable_daily_sales_audit",
+  "require_pos_closing_shift_for_daily_audit",
+  "include_cashier_expenses_in_daily_sales_audit_preview",
+  "include_rejected_cashier_expenses_in_daily_sales_audit_preview",
+  "daily_sales_audit_variance_tolerance",
+  "daily_sales_audit_reviewer_roles",
   "coreedge_integration_tab",
   "coreedge_integration_section",
   "enable_coreedge_integration",
@@ -282,6 +290,59 @@
    "fieldname": "exclude_cancelled_cashier_expenses_from_daily_audit",
    "fieldtype": "Check",
    "label": "Exclude Cancelled Cashier Expenses from Daily Audit"
+  },
+  {
+   "fieldname": "daily_sales_audit_tab",
+   "fieldtype": "Tab Break",
+   "label": "Daily Sales Audit"
+  },
+  {
+   "fieldname": "daily_sales_audit_controls_section",
+   "fieldtype": "Section Break",
+   "label": "Daily Sales Audit Controls"
+  },
+  {
+   "default": "0",
+   "description": "Enables the Daily Sales Audit foundation. This phase remains read-only and does not mutate invoices, payments, POS shifts, or accounting records.",
+   "fieldname": "enable_daily_sales_audit",
+   "fieldtype": "Check",
+   "label": "Enable Daily Sales Audit"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_daily_sales_audit",
+   "fieldname": "require_pos_closing_shift_for_daily_audit",
+   "fieldtype": "Check",
+   "label": "Require POS Closing Shift for Daily Sales Audit"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_daily_sales_audit",
+   "description": "Includes eligible cashier expenses in Daily Sales Audit preview calculations only. This does not modify POS variance totals.",
+   "fieldname": "include_cashier_expenses_in_daily_sales_audit_preview",
+   "fieldtype": "Check",
+   "label": "Include Cashier Expenses in Daily Sales Audit Preview"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_daily_sales_audit",
+   "fieldname": "include_rejected_cashier_expenses_in_daily_sales_audit_preview",
+   "fieldtype": "Check",
+   "label": "Include Rejected Cashier Expenses in Daily Sales Audit Preview"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_daily_sales_audit",
+   "fieldname": "daily_sales_audit_variance_tolerance",
+   "fieldtype": "Currency",
+   "label": "Daily Sales Audit Variance Tolerance"
+  },
+  {
+   "depends_on": "eval:doc.enable_daily_sales_audit",
+   "fieldname": "daily_sales_audit_reviewer_roles",
+   "fieldtype": "Table",
+   "label": "Daily Sales Audit Reviewer Roles",
+   "options": "RetailEdge Daily Sales Audit Reviewer Role"
   },
   {
    "fieldname": "coreedge_integration_tab",

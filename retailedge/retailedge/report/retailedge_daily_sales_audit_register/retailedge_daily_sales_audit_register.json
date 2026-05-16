@@ -1,0 +1,44 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-05-14 00:00:00.000000",
+ "disable_prepared_report": 0,
+ "doctype": "Report",
+ "filters": [],
+ "is_standard": "Yes",
+ "module": "RetailEdge",
+ "name": "RetailEdge Daily Sales Audit Register",
+ "prepared_report": 0,
+ "ref_doctype": "RetailEdge Daily Sales Audit",
+ "report_name": "RetailEdge Daily Sales Audit Register",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "RetailEdge Manager"
+  },
+  {
+   "role": "RetailEdgeManager"
+  },
+  {
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "role": "RetailEdgeBranchManager"
+  },
+  {
+   "role": "RetailEdge Auditor"
+  },
+  {
+   "role": "RetailEdgeAuditor"
+  }
+ ]
+}

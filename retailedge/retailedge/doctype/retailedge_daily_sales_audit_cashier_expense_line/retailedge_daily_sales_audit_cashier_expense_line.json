@@ -1,0 +1,81 @@
+{
+ "actions": [],
+ "creation": "2026-05-14 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "cashier_expense",
+  "expense_date",
+  "expense_category",
+  "amount",
+  "expense_status",
+  "daily_audit_inclusion_status",
+  "classification",
+  "include_in_expected_cash",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "cashier_expense",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cashier Expense",
+   "options": "RetailEdge Cashier Expense"
+  },
+  {
+   "fieldname": "expense_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Expense Date"
+  },
+  {
+   "fieldname": "expense_category",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Expense Category",
+   "options": "RetailEdge Expense Category"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  },
+  {
+   "fieldname": "expense_status",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Expense Status"
+  },
+  {
+   "fieldname": "daily_audit_inclusion_status",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Daily Audit Inclusion Status"
+  },
+  {
+   "fieldname": "classification",
+   "fieldtype": "Data",
+   "label": "Classification"
+  },
+  {
+   "default": "1",
+   "description": "Read-only planning flag. This phase should not deduct from existing POS variance totals.",
+   "fieldname": "include_in_expected_cash",
+   "fieldtype": "Check",
+   "label": "Include in Expected Cash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "istable": 1,
+ "module": "RetailEdge",
+ "name": "RetailEdge Daily Sales Audit Cashier Expense Line",
+ "owner": "Administrator"
+}
+

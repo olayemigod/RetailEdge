@@ -28,6 +28,14 @@ from retailedge.cashier_expense_posting import (
 	refresh_cashier_expense_posting_readiness as _refresh_cashier_expense_posting_readiness,
 	refresh_pending_cashier_expense_posting_readiness as _refresh_pending_cashier_expense_posting_readiness,
 )
+from retailedge.daily_sales_audit import (
+	create_daily_sales_audit_draft as _create_daily_sales_audit_draft,
+	get_daily_sales_audit_context as _get_daily_sales_audit_context,
+	get_daily_sales_audit_context_options as _get_daily_sales_audit_context_options,
+	refresh_daily_sales_audit_preview as _refresh_daily_sales_audit_preview,
+	resolve_daily_sales_audit_context_from_selection as _resolve_daily_sales_audit_context_from_selection,
+	user_is_daily_sales_audit_reviewer as _user_is_daily_sales_audit_reviewer,
+)
 from retailedge.cashier_context import (
 	get_cashier_expense_entry_context as _get_cashier_expense_entry_context,
 	get_current_cashier_context as _get_current_cashier_context,
@@ -163,6 +171,38 @@ def get_cashier_expense_review_summary(filters=None):
 def get_cashier_expense_dashboard_summary(filters=None):
 	_assert_can_access_cashier_expense_dashboard()
 	return _get_cashier_expense_dashboard_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_daily_sales_audit_context(filters=None):
+	_assert_can_access_cashier_expense_dashboard()
+	return _get_daily_sales_audit_context(filters=filters)
+
+
+@frappe.whitelist()
+def get_daily_sales_audit_context_options(filters=None):
+	_assert_can_access_cashier_expense_dashboard()
+	return _get_daily_sales_audit_context_options(filters=filters)
+
+
+@frappe.whitelist()
+def resolve_daily_sales_audit_context_from_selection(filters=None):
+	_assert_can_access_cashier_expense_dashboard()
+	return _resolve_daily_sales_audit_context_from_selection(filters=filters)
+
+
+@frappe.whitelist()
+def create_daily_sales_audit_draft(filters=None):
+	if not _user_is_daily_sales_audit_reviewer():
+		frappe.throw("You do not have permission to create RetailEdge Daily Sales Audit.", frappe.PermissionError)
+	return _create_daily_sales_audit_draft(filters=filters)
+
+
+@frappe.whitelist()
+def refresh_daily_sales_audit_preview(audit_name):
+	if not _user_is_daily_sales_audit_reviewer():
+		frappe.throw("You do not have permission to refresh RetailEdge Daily Sales Audit.", frappe.PermissionError)
+	return _refresh_daily_sales_audit_preview(audit_name)
 
 
 @frappe.whitelist()

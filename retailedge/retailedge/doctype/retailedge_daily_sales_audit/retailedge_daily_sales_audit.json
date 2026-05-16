@@ -1,0 +1,495 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-05-14 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "audit_context_section",
+  "naming_series",
+  "company",
+  "audit_date",
+  "branch",
+  "pos_profile",
+  "cashier",
+  "pos_opening_shift",
+  "pos_closing_shift",
+  "audit_status_section",
+  "audit_status",
+  "audit_result",
+  "review_required",
+  "sales_cash_summary_section",
+  "opening_cash_amount",
+  "cash_sales_amount",
+  "cashier_expense_amount",
+  "expected_cash_amount",
+  "actual_closing_cash_amount",
+  "cash_variance_amount",
+  "payment_summary_section",
+  "total_sales_amount",
+  "total_cash_payment_amount",
+  "total_bank_transfer_amount",
+  "total_card_pos_amount",
+  "total_mobile_money_amount",
+  "total_other_payment_amount",
+  "invoice_exception_section",
+  "invoice_count",
+  "paid_invoice_count",
+  "unpaid_invoice_count",
+  "partially_paid_invoice_count",
+  "exception_count",
+  "audit_notes",
+  "review_section",
+  "reviewed_by",
+  "reviewed_on",
+  "approval_remarks",
+  "audit_lines_section",
+  "invoice_lines",
+  "payment_lines",
+  "cashier_expense_lines",
+  "action_history_section",
+  "action_logs"
+ ],
+ "fields": [
+  {
+   "fieldname": "audit_context_section",
+   "fieldtype": "Section Break",
+   "label": "Audit Context"
+  },
+  {
+   "default": "RE-DSA-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "options": "RE-DSA-.YYYY.-.####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "audit_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Audit Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch"
+  },
+  {
+   "fieldname": "pos_profile",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "POS Profile",
+   "options": "POS Profile"
+  },
+  {
+   "fieldname": "cashier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Cashier",
+   "options": "User"
+  },
+  {
+   "fieldname": "pos_opening_shift",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "POS Opening Shift",
+   "options": "POS Opening Shift"
+  },
+  {
+   "fieldname": "pos_closing_shift",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "POS Closing Shift",
+   "options": "POS Closing Shift"
+  },
+  {
+   "fieldname": "audit_status_section",
+   "fieldtype": "Section Break",
+   "label": "Audit Status"
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Draft",
+   "fieldname": "audit_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Audit Status",
+   "options": "Draft\nReady for Review\nIn Review\nVariance Found\nApproved\nRejected\nCancelled",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Not Checked",
+   "fieldname": "audit_result",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Audit Result",
+   "options": "Not Checked\nBalanced\nShortage\nOverage\nMixed Variance\nRequires Clarification",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "1",
+   "fieldname": "review_required",
+   "fieldtype": "Check",
+   "label": "Review Required",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "sales_cash_summary_section",
+   "fieldtype": "Section Break",
+   "label": "Sales & Cash Summary"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "opening_cash_amount",
+   "fieldtype": "Currency",
+   "label": "Opening Cash Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "cash_sales_amount",
+   "fieldtype": "Currency",
+   "label": "Cash Sales Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "cashier_expense_amount",
+   "fieldtype": "Currency",
+   "label": "Cashier Expense Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Opening Cash + Cash Sales - Included Cashier Expenses",
+   "fieldname": "expected_cash_amount",
+   "fieldtype": "Currency",
+   "label": "Expected Cash Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "actual_closing_cash_amount",
+   "fieldtype": "Currency",
+   "label": "Actual Closing Cash Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "description": "Actual Closing Cash - Expected Cash",
+   "fieldname": "cash_variance_amount",
+   "fieldtype": "Currency",
+   "label": "Cash Variance Amount",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "payment_summary_section",
+   "fieldtype": "Section Break",
+   "label": "Payment Summary"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_sales_amount",
+   "fieldtype": "Currency",
+   "label": "Total Sales Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_cash_payment_amount",
+   "fieldtype": "Currency",
+   "label": "Total Cash Payment Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_bank_transfer_amount",
+   "fieldtype": "Currency",
+   "label": "Total Bank Transfer Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_card_pos_amount",
+   "fieldtype": "Currency",
+   "label": "Total Card / POS Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_mobile_money_amount",
+   "fieldtype": "Currency",
+   "label": "Total Mobile Money Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "total_other_payment_amount",
+   "fieldtype": "Currency",
+   "label": "Total Other Payment Amount",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "invoice_exception_section",
+   "fieldtype": "Section Break",
+   "label": "Invoice & Exception Summary"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "invoice_count",
+   "fieldtype": "Int",
+   "label": "Invoice Count",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "paid_invoice_count",
+   "fieldtype": "Int",
+   "label": "Paid Invoice Count",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "unpaid_invoice_count",
+   "fieldtype": "Int",
+   "label": "Unpaid Invoice Count",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "partially_paid_invoice_count",
+   "fieldtype": "Int",
+   "label": "Partially Paid Invoice Count",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "exception_count",
+   "fieldtype": "Int",
+   "label": "Exception Count",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "audit_notes",
+   "fieldtype": "Small Text",
+   "label": "Audit Notes"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "review_section",
+   "fieldtype": "Section Break",
+   "label": "Review"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approval_remarks",
+   "fieldtype": "Small Text",
+   "label": "Approval Remarks"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "audit_lines_section",
+   "fieldtype": "Section Break",
+   "label": "Audit Lines"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "invoice_lines",
+   "fieldtype": "Table",
+   "label": "Invoice Lines",
+   "options": "RetailEdge Daily Sales Audit Invoice Line",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "payment_lines",
+   "fieldtype": "Table",
+   "label": "Payment Lines",
+   "options": "RetailEdge Daily Sales Audit Payment Line",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "cashier_expense_lines",
+   "fieldtype": "Table",
+   "label": "Cashier Expense Lines",
+   "options": "RetailEdge Daily Sales Audit Cashier Expense Line",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "action_history_section",
+   "fieldtype": "Section Break",
+   "label": "Action History"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "action_logs",
+   "fieldtype": "Table",
+   "label": "Action History",
+   "options": "RetailEdge Daily Sales Audit Action Log",
+   "read_only": 1
+  }
+ ],
+ "is_submittable": 1,
+ "module": "RetailEdge",
+ "name": "RetailEdge Daily Sales Audit",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeManager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Branch Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeBranchManager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Auditor",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeAuditor",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "company",
+ "track_changes": 1
+}
+

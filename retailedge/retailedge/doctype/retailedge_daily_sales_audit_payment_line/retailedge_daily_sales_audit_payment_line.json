@@ -1,0 +1,77 @@
+{
+ "actions": [],
+ "creation": "2026-05-14 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "source_doctype",
+  "source_document",
+  "mode_of_payment",
+  "account",
+  "amount",
+  "payment_category",
+  "audit_line_status",
+  "remarks"
+ ],
+ "fields": [
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source DocType"
+  },
+  {
+   "fieldname": "source_document",
+   "fieldtype": "Dynamic Link",
+   "in_list_view": 1,
+   "label": "Source Document",
+   "options": "source_doctype"
+  },
+  {
+   "fieldname": "mode_of_payment",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Mode of Payment",
+   "options": "Mode of Payment"
+  },
+  {
+   "fieldname": "account",
+   "fieldtype": "Link",
+   "label": "Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  },
+  {
+   "default": "Other",
+   "fieldname": "payment_category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Payment Category",
+   "options": "Cash\nBank Transfer\nCard / POS\nMobile Money\nOther"
+  },
+  {
+   "default": "Pending Review",
+   "fieldname": "audit_line_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Audit Line Status",
+   "options": "Pending Review\nMatched\nVariance Found\nRequires Clarification\nExcluded"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  }
+ ],
+ "istable": 1,
+ "module": "RetailEdge",
+ "name": "RetailEdge Daily Sales Audit Payment Line",
+ "owner": "Administrator"
+}
+

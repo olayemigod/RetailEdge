@@ -166,6 +166,22 @@ This phase remains read-only. It does not create accounting entries, does not mu
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## Daily Sales Audit V1.5A - Foundation
+
+RetailEdge now includes a `RetailEdge Daily Sales Audit` control document as the foundation for later audit phases. The document captures a refreshable, read-only snapshot of shift context, sales and payment lines, cashier expense lines, expected cash, actual closing cash, and variance context for the selected company, branch, POS Profile, cashier, and shift combination.
+
+This phase is limited to settings, DocTypes, draft audit creation, refreshable preview helpers, and a read-only register report. It does not verify invoices, does not verify payments, does not modify Sales Invoices, does not modify POS Opening or POS Closing Shift records, and does not create Journal Entries or Payment Entries. Actual audit approval, payment verification, and downstream posting remain later phases.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
+## Daily Sales Audit V1.5A.1 - Context Autofill and Smart Filters
+
+The Daily Sales Audit form now narrows POS Profile, cashier, opening shift, and closing shift choices based on the context the reviewer has already selected, such as company, branch, POS Profile, cashier, audit date, and shift links. Selecting a POS Opening Shift or POS Closing Shift can also autofill company, branch, POS Profile, cashier, and audit date where the local schema makes that context safely resolvable.
+
+This behavior is schema-safe and read-only. RetailEdge inspects available fields before applying filters or defaults, skips missing schema pieces instead of failing, and does not modify any Sales Invoice, POS shift, Payment Entry, GL, or other source transaction document in this phase.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash
