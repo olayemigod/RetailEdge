@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, getdate
 
+from retailedge.branch_context import get_branch_query_filters
 from retailedge.cashier_expense_audit import get_cashier_expenses_for_daily_audit
 
 
@@ -49,6 +50,14 @@ def get_columns():
 
 
 def get_data(filters):
+	branch_scope = get_branch_query_filters(
+		"RetailEdge Cashier Expense",
+		user=frappe.session.user,
+		company=filters.get("company"),
+		branch=filters.get("branch"),
+	)
+	if branch_scope.get("branch") and not filters.get("branch"):
+		filters.branch = branch_scope["branch"]
 	rows = get_cashier_expenses_for_daily_audit(filters=filters)
 	if filters.get("posting_ready") is not None and str(filters.get("posting_ready")) != "":
 		expected = 1 if str(filters.get("posting_ready")) in {"1", "true", "True"} else 0

@@ -1,7 +1,7 @@
 {
  "app": "retailedge",
  "charts": [],
- "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"retailedge_settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Settings\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Expense Category\",\"col\":3}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Cashier Expense\",\"col\":3}},{\"id\":\"daily_sales_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Daily Sales Audit\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Closing Variance vs Expenses\",\"col\":3}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Cashier Expense Review\",\"col\":3}},{\"id\":\"daily_sales_audit_register_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"RetailEdge Daily Sales Audit Register\",\"col\":3}}]",
+ "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"operations_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Operations</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense\",\"col\":3}},{\"id\":\"daily_sales_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit\",\"col\":3}},{\"id\":\"reports_review_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports & Review</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense Review\",\"col\":3}},{\"id\":\"daily_sales_audit_register_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit Register\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Closing Variance vs Expenses\",\"col\":3}},{\"id\":\"setup_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Setup / Configuration</b></span>\",\"col\":12}},{\"id\":\"settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Settings\",\"col\":3}},{\"id\":\"branch_profile_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Profile\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Expense Category\",\"col\":3}}]",
  "creation": "2026-05-07 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -17,8 +17,8 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Configuration",
-   "link_count": 4,
+   "label": "Operations",
+   "link_count": 2,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -26,27 +26,7 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "RetailEdge Settings",
-   "link_count": 0,
-   "link_to": "RetailEdge Settings",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "RetailEdge Expense Category",
-   "link_count": 0,
-   "link_to": "RetailEdge Expense Category",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "RetailEdge Cashier Expense",
+   "label": "Cashier Expense",
    "link_count": 0,
    "link_to": "RetailEdge Cashier Expense",
    "link_type": "DocType",
@@ -56,7 +36,7 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "RetailEdge Daily Sales Audit",
+   "label": "Daily Sales Audit",
    "link_count": 0,
    "link_to": "RetailEdge Daily Sales Audit",
    "link_type": "DocType",
@@ -66,11 +46,31 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Reports",
+   "label": "Reports & Review",
    "link_count": 3,
    "link_type": "Report",
    "onboard": 0,
    "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cashier Expense Review",
+   "link_count": 0,
+   "link_to": "RetailEdge Cashier Expense Review",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Daily Sales Audit Register",
+   "link_count": 0,
+   "link_to": "RetailEdge Daily Sales Audit Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
   },
   {
    "hidden": 0,
@@ -85,20 +85,39 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "RetailEdge Cashier Expense Review",
+   "label": "Setup / Configuration",
+   "link_count": 3,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Settings",
    "link_count": 0,
-   "link_to": "RetailEdge Cashier Expense Review",
-   "link_type": "Report",
+   "link_to": "RetailEdge Settings",
+   "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
   },
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "RetailEdge Daily Sales Audit Register",
+   "label": "Branch Profile",
    "link_count": 0,
-   "link_to": "RetailEdge Daily Sales Audit Register",
-   "link_type": "Report",
+   "link_to": "RetailEdge Branch Profile",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Expense Category",
+   "link_count": 0,
+   "link_to": "RetailEdge Expense Category",
+   "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
   }
@@ -116,24 +135,8 @@
  "shortcuts": [
   {
    "color": "Blue",
-   "doc_view": "",
-   "label": "RetailEdge Settings",
-   "link_to": "RetailEdge Settings",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Blue",
    "doc_view": "List",
-   "label": "RetailEdge Expense Category",
-   "link_to": "RetailEdge Expense Category",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Blue",
-   "doc_view": "List",
-   "label": "RetailEdge Cashier Expense",
+   "label": "Cashier Expense",
    "link_to": "RetailEdge Cashier Expense",
    "stats_filter": "[]",
    "type": "DocType"
@@ -141,10 +144,26 @@
   {
    "color": "Blue",
    "doc_view": "List",
-   "label": "RetailEdge Daily Sales Audit",
+   "label": "Daily Sales Audit",
    "link_to": "RetailEdge Daily Sales Audit",
    "stats_filter": "[]",
    "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "Report",
+   "label": "Cashier Expense Review",
+   "link_to": "RetailEdge Cashier Expense Review",
+   "stats_filter": "[]",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "Report",
+   "label": "Daily Sales Audit Register",
+   "link_to": "RetailEdge Daily Sales Audit Register",
+   "stats_filter": "[]",
+   "type": "Report"
   },
   {
    "color": "Grey",
@@ -155,20 +174,28 @@
    "type": "Report"
   },
   {
-   "color": "Grey",
-   "doc_view": "Report",
-   "label": "RetailEdge Cashier Expense Review",
-   "link_to": "RetailEdge Cashier Expense Review",
+   "color": "Blue",
+   "doc_view": "",
+   "label": "Settings",
+   "link_to": "RetailEdge Settings",
    "stats_filter": "[]",
-   "type": "Report"
+   "type": "DocType"
   },
   {
-   "color": "Grey",
-   "doc_view": "Report",
-   "label": "RetailEdge Daily Sales Audit Register",
-   "link_to": "RetailEdge Daily Sales Audit Register",
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "Branch Profile",
+   "link_to": "RetailEdge Branch Profile",
    "stats_filter": "[]",
-   "type": "Report"
+   "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "Expense Category",
+   "link_to": "RetailEdge Expense Category",
+   "stats_filter": "[]",
+   "type": "DocType"
   }
  ],
  "title": "RetailEdge"

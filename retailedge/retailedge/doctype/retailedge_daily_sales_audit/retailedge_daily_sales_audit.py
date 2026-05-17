@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe.model.document import Document
 
+from retailedge.branch_context import apply_branch_context_to_doc
 from retailedge.daily_sales_audit import (
 	append_daily_sales_audit_action_log,
 	resolve_daily_sales_audit_context_from_selection,
@@ -21,6 +22,7 @@ class RetailEdgeDailySalesAudit(Document):
 			self.company = None
 		if not self.audit_date:
 			self.audit_date = None
+		apply_branch_context_to_doc(self, overwrite=False, validate_access=True)
 		self._validate_context_consistency()
 
 	def before_submit(self):

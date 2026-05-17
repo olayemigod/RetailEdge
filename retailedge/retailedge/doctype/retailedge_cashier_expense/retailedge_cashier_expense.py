@@ -4,6 +4,7 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import flt, today
 
+from retailedge.branch_context import apply_branch_context_to_doc
 from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
 from retailedge.cashier_expense import append_cashier_expense_action_log
 from retailedge.cashier_expense_posting import (
@@ -16,10 +17,12 @@ from retailedge.utils.settings import get_retailedge_settings
 class RetailEdgeCashierExpense(Document):
 	def before_validate(self):
 		self.set_cashier_defaults()
+		apply_branch_context_to_doc(self, overwrite=False, validate_access=False)
 		self.apply_expense_category()
 		self.apply_shift_cash_snapshot()
 
 	def validate(self):
+		apply_branch_context_to_doc(self, overwrite=False, validate_access=True)
 		self.validate_open_shift_requirement()
 		self.validate_cash_account_requirement()
 		self.validate_required_values()

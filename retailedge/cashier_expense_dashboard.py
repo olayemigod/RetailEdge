@@ -3,6 +3,7 @@ from __future__ import annotations
 import frappe
 from frappe.utils import flt
 
+from retailedge.branch_context import get_branch_query_filters
 from retailedge.cashier_expense import get_effective_expense_status, user_has_any_role
 
 
@@ -140,9 +141,17 @@ def _build_dashboard_filters(filters):
 		return {}
 
 	query_filters = {}
+	query_filters.update(
+		(get_branch_query_filters(
+			"RetailEdge Cashier Expense",
+			user=getattr(getattr(frappe, "session", None), "user", "Administrator"),
+			company=filters.get("company"),
+			branch=filters.get("branch"),
+		).get("filters") or {})
+	)
 	for fieldname in ("company", "branch", "pos_profile", "cashier"):
 		value = filters.get(fieldname)
-		if value:
+		if value and fieldname not in query_filters:
 			query_filters[fieldname] = value
 
 	if filters.get("from_date") and filters.get("to_date"):

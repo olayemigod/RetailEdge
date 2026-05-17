@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import frappe
 from frappe.utils import flt, get_datetime, now_datetime
 
+from retailedge.branch_context import resolve_retailedge_branch_context
 from retailedge.integrations.branch_context import get_active_branch
 from retailedge.utils.settings import get_retailedge_settings
 
@@ -239,51 +240,16 @@ def resolve_branch(
 	opening_shift=None,
 	user: str | None = None,
 ) -> dict[str, object]:
-	opening_shift_doc = _coerce_doc("POS Opening Shift", opening_shift)
-	branch_fields = ["branch", "set_branch", "service_branch", "retail_branch"]
-	if opening_shift_doc:
-		branch_value = _get_doc_value(opening_shift_doc, branch_fields)
-		if branch_value:
-			return {"branch": branch_value, "source": "opening_shift", "message": None}
-
-	profile_doc = _coerce_doc("POS Profile", pos_profile)
-	if profile_doc:
-		branch_value = _get_doc_value(profile_doc, branch_fields)
-		if branch_value:
-			return {"branch": branch_value, "source": "pos_profile", "message": None}
-
-	coreedge_branch = _get_coreedge_branch_value(user=user)
-	if coreedge_branch:
-		return {"branch": coreedge_branch, "source": "coreedge", "message": None}
-
-	try:
-		user_default_branch = frappe.defaults.get_user_default("Branch", user=user) or frappe.defaults.get_user_default("Branch")
-	except Exception:
-		user_default_branch = None
-	if user_default_branch:
-		return {"branch": user_default_branch, "source": "user_default", "message": None}
-
-	if _has_doctype("Branch"):
-		try:
-			meta = frappe.get_meta("Branch")
-			fields = ["name"]
-			if meta.has_field("company"):
-				fields.append("company")
-			branches = frappe.get_all("Branch", fields=fields, limit_page_length=0)
-		except Exception:
-			branches = []
-		has_company_field = bool(meta.has_field("company")) if 'meta' in locals() and meta else False
-		if company and has_company_field:
-			company_branches = [row for row in branches if getattr(row, "company", None) == company]
-		else:
-			company_branches = branches
-		if len(company_branches) == 1:
-			return {"branch": company_branches[0].name, "source": "single_company_branch", "message": None}
-
+	context = resolve_retailedge_branch_context(
+		company=company,
+		pos_profile=pos_profile,
+		pos_opening_shift=opening_shift,
+		user=user,
+	)
 	return {
-		"branch": None,
-		"source": "not_found",
-		"message": "Branch could not be resolved from opening shift, POS profile, CoreEdge, or defaults.",
+		"branch": context.get("branch"),
+		"source": context.get("source"),
+		"message": " ".join(context.get("messages") or []) or None,
 	}
 
 

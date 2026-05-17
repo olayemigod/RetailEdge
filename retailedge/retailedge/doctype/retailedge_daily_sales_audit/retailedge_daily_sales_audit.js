@@ -108,8 +108,16 @@ function setup_context_queries(frm) {
 }
 
 function build_name_filter(frm, option_key) {
-	const rows = (frm.__daily_sales_audit_options && frm.__daily_sales_audit_options[option_key]) || [];
+	const options = frm.__daily_sales_audit_options || {};
+	const rows = options[option_key] || [];
 	if (!rows.length) {
+		if (Object.prototype.hasOwnProperty.call(options, option_key)) {
+			return {
+				filters: {
+					name: ["in", ["__no_match__"]],
+				},
+			};
+		}
 		return {};
 	}
 	return {

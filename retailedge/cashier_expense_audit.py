@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import frappe
 from frappe.utils import flt, now_datetime
 
+from retailedge.branch_context import get_branch_query_filters
 from retailedge.cashier_expense import (
 	append_cashier_expense_action_log,
 	get_effective_expense_status,
@@ -240,6 +241,14 @@ def mark_cashier_expense_needs_clarification(expense_name, note=None):
 
 def _build_daily_audit_filters(filters, settings):
 	query_filters = {}
+	query_filters.update(
+		(get_branch_query_filters(
+			"RetailEdge Cashier Expense",
+			user=getattr(getattr(frappe, "session", None), "user", "Administrator"),
+			company=filters.get("company"),
+			branch=filters.get("branch"),
+		).get("filters") or {})
+	)
 	if settings["exclude_cancelled"] and not filters.get("expense_status"):
 		query_filters["docstatus"] = ["!=", 2]
 		query_filters["expense_status"] = ["!=", "Cancelled"]
@@ -257,7 +266,7 @@ def _build_daily_audit_filters(filters, settings):
 		"daily_audit_classification",
 	):
 		value = filters.get(fieldname)
-		if value:
+		if value and fieldname not in query_filters:
 			query_filters[fieldname] = value
 	if filters.get("from_date") and filters.get("to_date"):
 		query_filters["expense_date"] = ["between", [filters["from_date"], filters["to_date"]]]

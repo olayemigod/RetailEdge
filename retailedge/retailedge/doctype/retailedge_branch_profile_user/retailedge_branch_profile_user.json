@@ -1,0 +1,47 @@
+{
+ "actions": [],
+ "creation": "2026-05-17 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "role_type",
+  "is_default",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "default": "Other",
+   "fieldname": "role_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Role Type",
+   "options": "Cashier\nManager\nAuditor\nOther"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Default"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "istable": 1,
+ "module": "RetailEdge",
+ "name": "RetailEdge Branch Profile User",
+ "owner": "Administrator"
+}

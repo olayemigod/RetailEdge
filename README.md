@@ -182,6 +182,22 @@ This behavior is schema-safe and read-only. RetailEdge inspects available fields
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## RetailEdge V1.5A.2 - Branch Context Foundation
+
+RetailEdge now has a central branch context resolver that can be reused across documents, reports, dashboards, APIs, and future workflows instead of resolving branch differently in each module. Where CoreEdge branch context is available, RetailEdge can consume it safely; where CoreEdge is absent, RetailEdge still works in standalone mode by resolving branch from explicit document fields, POS Profile, POS Opening Shift, POS Closing Shift, Warehouse, user defaults, and User Permissions.
+
+The same branch foundation can also provide branch-aware query filters and a dry-run backfill utility for RetailEdge records with empty branch values. This phase remains schema-safe and non-mutating for ERPNext and POSNext source documents: no Sales Invoice, POS shift, payment, GL, or accounting records are modified.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
+## RetailEdge V1.5A.2B - Branch Profile and Branch Defaults
+
+RetailEdge now includes a `RetailEdge Branch Profile` DocType for branch operational defaults such as POS Profile, warehouses, cash/bank accounts, cost centers, default users, and audit behavior. Branch Profile defaults are consumed by the central branch context foundation where CoreEdge or direct document context does not already provide a stronger answer.
+
+The RetailEdge workspace is ordered as Operations, Reports & Review, and Setup / Configuration. RetailEdge Settings, Branch Profile, and Expense Category live under Setup / Configuration, while operational and review tools stay in their own sections. Visible workspace/sidebar labels now remove the redundant `RetailEdge` prefix, while internal DocType and report names remain unchanged.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash

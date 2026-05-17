@@ -1,5 +1,18 @@
 import frappe
 
+from retailedge.branch_context import (
+	backfill_retailedge_branch_context as _backfill_retailedge_branch_context,
+	get_branch_query_filters as _get_branch_query_filters,
+	get_user_allowed_branches as _get_branch_context_allowed_branches,
+	resolve_retailedge_branch_context as _resolve_retailedge_branch_context,
+	resolve_retailedge_operational_defaults as _resolve_retailedge_operational_defaults,
+)
+from retailedge.branch_profile import (
+	get_branch_profile as _get_branch_profile,
+	get_branch_profile_defaults as _get_branch_profile_defaults,
+	get_default_branch_for_user as _get_default_branch_for_user,
+	get_user_branch_profiles as _get_user_branch_profiles,
+)
 from retailedge.cashier_expense import (
 	approve_cashier_expense as _approve_cashier_expense,
 	get_cashier_expenses_for_variance as _get_cashier_expenses_for_variance,
@@ -46,7 +59,6 @@ from retailedge.cost_fields import COST_FIELDNAMES, COST_FIELD_LABEL_KEYWORDS
 from retailedge.cost_visibility import get_cost_price_visibility_context as _get_cost_price_visibility_context
 from retailedge.cost_visibility import should_hide_cost_price as _should_hide_cost_price
 from retailedge.integrations.branch_context import get_active_branch as _get_active_branch
-from retailedge.integrations.branch_context import get_user_allowed_branches as _get_user_allowed_branches
 from retailedge.integrations.coreedge import get_coreedge_status as _get_coreedge_status
 from retailedge.integrations.payments import (
 	create_payment_request_for_sales_invoice as _create_payment_request_for_sales_invoice,
@@ -75,8 +87,78 @@ def get_active_branch():
 
 
 @frappe.whitelist()
-def get_user_allowed_branches():
-	return _get_user_allowed_branches()
+def get_user_allowed_branches(user=None, company=None):
+	return _get_branch_context_allowed_branches(user=user, company=company)
+
+
+@frappe.whitelist()
+def resolve_retailedge_branch_context(**kwargs):
+	return _resolve_retailedge_branch_context(**kwargs)
+
+
+@frappe.whitelist()
+def get_branch_query_filters(doctype, user=None, company=None, branch=None, strict=False):
+	return _get_branch_query_filters(
+		doctype=doctype,
+		user=user,
+		company=company,
+		branch=branch,
+		strict=bool(int(strict)) if isinstance(strict, str) else bool(strict),
+	)
+
+
+@frappe.whitelist()
+def backfill_retailedge_branch_context(doctype=None, dry_run=True, limit=500):
+	return _backfill_retailedge_branch_context(
+		doctype=doctype,
+		dry_run=bool(int(dry_run)) if isinstance(dry_run, str) else bool(dry_run),
+		limit=int(limit or 500),
+	)
+
+
+@frappe.whitelist()
+def get_branch_profile(company=None, branch=None, user=None, pos_profile=None, warehouse=None, active_only=True):
+	profile = _get_branch_profile(
+		company=company,
+		branch=branch,
+		user=user,
+		pos_profile=pos_profile,
+		warehouse=warehouse,
+		active_only=bool(int(active_only)) if isinstance(active_only, str) else bool(active_only),
+	)
+	return profile.as_dict() if hasattr(profile, "as_dict") else profile
+
+
+@frappe.whitelist()
+def get_branch_profile_defaults(company=None, branch=None, user=None, pos_profile=None, warehouse=None):
+	return _get_branch_profile_defaults(
+		company=company,
+		branch=branch,
+		user=user,
+		pos_profile=pos_profile,
+		warehouse=warehouse,
+	)
+
+
+@frappe.whitelist()
+def get_user_branch_profiles(user=None, company=None):
+	return _get_user_branch_profiles(user=user, company=company)
+
+
+@frappe.whitelist()
+def get_default_branch_for_user(user=None, company=None):
+	return _get_default_branch_for_user(user=user, company=company)
+
+
+@frappe.whitelist()
+def resolve_retailedge_operational_defaults(company=None, branch=None, user=None, pos_profile=None, warehouse=None):
+	return _resolve_retailedge_operational_defaults(
+		company=company,
+		branch=branch,
+		user=user,
+		pos_profile=pos_profile,
+		warehouse=warehouse,
+	)
 
 
 @frappe.whitelist()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import frappe
 
@@ -44,6 +44,26 @@ from retailedge.cashier_expense_audit import (
 from retailedge.cashier_expense_dashboard import (
 	assert_can_access_cashier_expense_dashboard,
 	get_cashier_expense_dashboard_summary,
+)
+from retailedge.branch_context import (
+	apply_branch_context_to_doc,
+	backfill_retailedge_branch_context,
+	get_branch_query_filters,
+	get_user_allowed_branches as get_branch_context_allowed_branches,
+	has_field as branch_context_has_field,
+	has_doctype as branch_context_has_doctype,
+	resolve_branch_from_pos_profile,
+	resolve_retailedge_operational_defaults,
+	resolve_retailedge_branch_context,
+	user_has_global_branch_access,
+	validate_user_branch_access,
+)
+from retailedge.branch_profile import (
+	get_branch_profile,
+	get_branch_profile_defaults,
+	get_default_branch_for_user,
+	get_user_branch_profiles,
+	validate_branch_profile,
 )
 from retailedge.cashier_expense_posting import (
 	get_cashier_expense_posting_preview,
@@ -379,7 +399,7 @@ class CashierContextTests(unittest.TestCase):
 			with patch.object(frappe.defaults, "get_user_default", return_value="Main Branch"):
 				result = resolve_branch(company="Demo Company", pos_profile="PROFILE-1", opening_shift=None, user="cashier@example.com")
 		self.assertEqual(result["branch"], "Main Branch")
-		self.assertEqual(result["source"], "user_default")
+		self.assertEqual(result["source"], "User Default")
 
 	@patch("retailedge.cashier_context._is_valid_cost_center", return_value=True)
 	@patch("retailedge.cashier_context._coerce_doc")
@@ -1662,3 +1682,264 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertTrue(columns)
 		self.assertEqual(len(data), 1)
 		self.assertEqual(data[0]["name"], "RE-DSA-2026-0001")
+
+
+class BranchContextTests(unittest.TestCase):
+	@patch("retailedge.branch_context.has_doctype", return_value=False)
+	def test_has_field_safely_returns_false_for_missing_field(self, _mock_doctype):
+		self.assertFalse(branch_context_has_field("Missing DocType", "branch"))
+
+	def test_resolver_returns_explicit_branch_when_provided(self):
+		result = resolve_retailedge_branch_context(branch="HQ", company="Demo Company")
+		self.assertEqual(result["branch"], "HQ")
+		self.assertTrue(result["access"]["allowed"])
+
+	@patch("retailedge.branch_context.get_coreedge_status", return_value={"branch_context_enabled": False})
+	def test_resolver_does_not_crash_when_coreedge_unavailable(self, _mock_status):
+		result = resolve_retailedge_branch_context(company="Demo Company")
+		self.assertIn("messages", result)
+
+	@patch("retailedge.branch_context._coerce_doc")
+	@patch("retailedge.branch_context.get_first_existing_field")
+	def test_resolver_reads_pos_profile_branch_when_field_exists(self, mock_first_field, mock_doc):
+		mock_doc.return_value = _Doc(doctype="POS Profile", name="POS-1", branch="HQ", company="Demo Company")
+		mock_first_field.side_effect = lambda doctype, fields: "branch" if "branch" in fields else "company"
+		result = resolve_branch_from_pos_profile("POS-1")
+		self.assertEqual(result["branch"], "HQ")
+		self.assertEqual(result["source"], "POS Profile.branch")
+
+	@patch("retailedge.branch_context.has_doctype", return_value=False)
+	@patch("retailedge.branch_context._get_coreedge_allowed_branches", return_value=[])
+	@patch("retailedge.branch_context.frappe.defaults.get_user_default", return_value=None)
+	def test_get_user_allowed_branches_returns_safe_structure(
+		self, _mock_default_branch, _mock_coreedge_allowed, _mock_has_doctype
+	):
+		result = get_branch_context_allowed_branches(user="cashier@example.com")
+		self.assertIn("branches", result)
+		self.assertIsInstance(result["branches"], list)
+
+	@patch("retailedge.branch_context.frappe.get_roles", return_value=["System Manager"])
+	def test_validate_user_branch_access_allows_system_manager(self, _mock_roles):
+		self.assertTrue(user_has_global_branch_access(user="manager@example.com"))
+		result = validate_user_branch_access("HQ", user="manager@example.com", throw=False)
+		self.assertTrue(result["allowed"])
+
+	@patch("retailedge.branch_context.validate_user_branch_access", return_value={"allowed": True, "reason": "allowed_branch"})
+	@patch("retailedge.branch_context.resolve_retailedge_branch_context")
+	def test_apply_branch_context_to_doc_sets_branch_when_empty(self, mock_resolve, _mock_access):
+		mock_resolve.return_value = {
+			"branch": "HQ",
+			"source": "POS Opening Shift.branch",
+			"source_map": {"branch": "POS Opening Shift.branch"},
+			"messages": [],
+		}
+		doc = _Doc(doctype="RetailEdge Daily Sales Audit", branch=None, company="Demo Company", cashier="cashier@example.com")
+		result = apply_branch_context_to_doc(doc, overwrite=False, validate_access=True)
+		self.assertEqual(doc.branch, "HQ")
+		self.assertEqual(result["branch"], "HQ")
+
+	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=True)
+	def test_get_branch_query_filters_returns_no_restriction_for_global_role(self, _mock_global):
+		result = get_branch_query_filters("RetailEdge Cashier Expense", user="Administrator")
+		self.assertEqual(result["filters"], {})
+
+	def test_get_branch_query_filters_returns_explicit_branch_filter(self):
+		result = get_branch_query_filters("RetailEdge Cashier Expense", branch="HQ")
+		self.assertEqual(result["filters"], {"branch": "HQ"})
+
+	@patch("retailedge.branch_context.resolve_retailedge_branch_context", return_value={"branch": "HQ", "source": "POS Opening Shift.branch", "messages": []})
+	@patch("retailedge.branch_context.frappe.db.set_value")
+	@patch("retailedge.branch_context.frappe.get_all")
+	@patch("retailedge.branch_context.has_field", return_value=True)
+	@patch("retailedge.branch_context.has_doctype", return_value=True)
+	def test_backfill_dry_run_does_not_update_records(
+		self,
+		_mock_doctype,
+		_mock_has_field,
+		mock_get_all,
+		mock_set_value,
+		_mock_resolve,
+	):
+		mock_get_all.return_value = [{"name": "RE-CE-1", "company": "Demo Company", "branch": None}]
+		result = backfill_retailedge_branch_context(doctype="RetailEdge Cashier Expense", dry_run=True, limit=10)
+		self.assertTrue(result["dry_run"])
+		self.assertEqual(result["updated"], 0)
+		mock_set_value.assert_not_called()
+
+	@patch("retailedge.branch_context.resolve_branch_from_branch_profile")
+	def test_branch_context_can_use_branch_profile_fallback(self, mock_profile):
+		mock_profile.return_value = {
+			"branch": "HQ",
+			"company": "Demo Company",
+			"pos_profile": "Testing",
+			"source": "RetailEdge Branch Profile",
+			"messages": [],
+			"defaults": {"default_pos_profile": "Testing"},
+		}
+		result = resolve_retailedge_branch_context(company="Demo Company", user="cashier@example.com")
+		self.assertEqual(result["branch"], "HQ")
+
+	@patch("retailedge.branch_context.resolve_branch_from_branch_profile")
+	def test_operational_defaults_return_branch_profile_defaults(self, mock_profile):
+		mock_profile.return_value = {
+			"branch": "HQ",
+			"company": "Demo Company",
+			"pos_profile": "Testing",
+			"source": "RetailEdge Branch Profile",
+			"messages": [],
+			"defaults": {"default_pos_profile": "Testing", "default_cost_center": "Main - PED"},
+		}
+		result = resolve_retailedge_operational_defaults(company="Demo Company", branch="HQ")
+		self.assertEqual(result["default_pos_profile"], "Testing")
+		self.assertEqual(result["branch"], "HQ")
+
+
+class BranchProfileTests(unittest.TestCase):
+	def test_branch_profile_doctype_exists(self):
+		self.assertTrue(branch_context_has_doctype("RetailEdge Branch Profile"))
+
+	def test_branch_profile_user_child_doctype_exists(self):
+		self.assertTrue(branch_context_has_doctype("RetailEdge Branch Profile User"))
+
+	@patch("retailedge.branch_profile.frappe.db.exists", return_value=False)
+	def test_optional_defaults_are_not_mandatory(self, _mock_exists):
+		doc = _Doc(doctype="RetailEdge Branch Profile", name="HQ Default", company="Demo Company", branch="HQ", enabled=1, is_default_for_company=0)
+		self.assertIsNone(validate_branch_profile(doc))
+
+	@patch("retailedge.branch_profile.frappe.db.exists")
+	def test_duplicate_enabled_company_branch_profile_is_blocked(self, mock_exists):
+		mock_exists.side_effect = [True]
+		doc = _Doc(doctype="RetailEdge Branch Profile", name="HQ Default", company="Demo Company", branch="HQ", enabled=1, is_default_for_company=0)
+		with self.assertRaises(frappe.ValidationError):
+			validate_branch_profile(doc)
+
+	@patch("retailedge.branch_profile.frappe.db.exists")
+	def test_only_one_default_profile_per_company_is_allowed(self, mock_exists):
+		mock_exists.side_effect = [False, True]
+		doc = _Doc(doctype="RetailEdge Branch Profile", name="HQ Default", company="Demo Company", branch="HQ", enabled=1, is_default_for_company=1)
+		with self.assertRaises(frappe.ValidationError):
+			validate_branch_profile(doc)
+
+	@patch("retailedge.branch_profile._get_profile_by_filters")
+	def test_get_branch_profile_works(self, mock_get_profile):
+		mock_get_profile.return_value = _Doc(
+			doctype="RetailEdge Branch Profile",
+			name="HQ Default",
+			company="Demo Company",
+			branch="HQ",
+			default_pos_profile="Testing",
+			default_cashiers=[],
+			default_managers=[],
+			default_auditors=[],
+		)
+		profile = get_branch_profile(company="Demo Company", branch="HQ")
+		self.assertEqual(profile.branch, "HQ")
+
+	@patch("retailedge.branch_profile.get_branch_profile")
+	def test_get_branch_profile_defaults_works(self, mock_get_profile):
+		mock_get_profile.return_value = _Doc(
+			doctype="RetailEdge Branch Profile",
+			name="HQ Default",
+			default_pos_profile="Testing",
+			default_cost_center="Main - PED",
+			enable_daily_sales_audit=1,
+		)
+		defaults = get_branch_profile_defaults(company="Demo Company", branch="HQ")
+		self.assertEqual(defaults["default_pos_profile"], "Testing")
+		self.assertEqual(defaults["default_cost_center"], "Main - PED")
+
+	@patch("retailedge.branch_profile.frappe.get_all")
+	@patch("retailedge.branch_profile._has_doctype", return_value=True)
+	def test_get_user_branch_profiles_and_default_branch_for_user(self, _mock_has_doctype, mock_get_all):
+		mock_get_all.side_effect = [
+			[{"parent": "HQ Default", "role_type": "Cashier", "is_default": 1}],
+			[{"name": "HQ Default", "profile_name": "HQ Default", "company": "Demo Company", "branch": "HQ", "enabled": 1, "is_default_for_company": 1, "default_pos_profile": "Testing"}],
+			[{"parent": "HQ Default", "role_type": "Cashier", "is_default": 1}],
+			[{"name": "HQ Default", "profile_name": "HQ Default", "company": "Demo Company", "branch": "HQ", "enabled": 1, "is_default_for_company": 1, "default_pos_profile": "Testing"}],
+		]
+		profiles = get_user_branch_profiles(user="cashier@example.com", company="Demo Company")
+		self.assertEqual(len(profiles), 1)
+		self.assertEqual(get_default_branch_for_user(user="cashier@example.com", company="Demo Company"), "HQ")
+
+	def test_workspace_json_contains_required_order_and_labels(self):
+		import json
+		from pathlib import Path
+
+		path = Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace/retailedge/retailedge.json")
+		data = json.loads(path.read_text())
+		link_labels = [row.get("label") for row in data.get("links", []) if row.get("type") == "Card Break"]
+		self.assertEqual(link_labels, ["Operations", "Reports & Review", "Setup / Configuration"])
+		shortcut_labels = [row.get("label") for row in data.get("shortcuts", [])]
+		self.assertIn("Cashier Expense", shortcut_labels)
+		self.assertIn("Daily Sales Audit", shortcut_labels)
+		self.assertIn("Settings", shortcut_labels)
+		self.assertIn("Branch Profile", shortcut_labels)
+		self.assertNotIn("RetailEdge Cashier Expense", shortcut_labels)
+
+	def test_workspace_sidebar_sync_uses_grouped_sections(self):
+		from retailedge.patches.sync_retailedge_workspace import _sync_workspace_sidebar
+
+		workspace = _Doc(
+			doctype="Workspace",
+			name="RetailEdge",
+			module="RetailEdge",
+			icon="setting-gear",
+			links=[
+				_Doc(type="Card Break", label="Operations"),
+				_Doc(type="Link", label="Cashier Expense", link_to="RetailEdge Cashier Expense", link_type="DocType"),
+				_Doc(type="Card Break", label="Reports & Review"),
+				_Doc(type="Link", label="Cashier Expense Review", link_to="RetailEdge Cashier Expense Review", link_type="Report"),
+				_Doc(type="Card Break", label="Setup / Configuration"),
+				_Doc(type="Link", label="Settings", link_to="RetailEdge Settings", link_type="DocType"),
+			],
+		)
+		with patch("retailedge.patches.sync_retailedge_workspace._get_or_create_workspace_sidebar") as mock_sidebar:
+			sidebar = _Doc(doctype="Workspace Sidebar", name="RetailEdge", items=[])
+			sidebar.save = Mock()
+			mock_sidebar.return_value = sidebar
+			_sync_workspace_sidebar(workspace)
+
+		self.assertEqual(
+			[(item.type, item.label, item.child) for item in sidebar.items],
+			[
+				("Link", "Home", 0),
+				("Section Break", "Operations", 0),
+				("Link", "Cashier Expense", 1),
+				("Section Break", "Reports & Review", 0),
+				("Link", "Cashier Expense Review", 1),
+				("Section Break", "Setup / Configuration", 0),
+				("Link", "Settings", 1),
+			],
+		)
+
+	def test_standard_workspace_sidebar_json_exists_and_is_grouped(self):
+		import json
+		from pathlib import Path
+
+		paths = [
+			Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/workspace_sidebar/retailedge.json"),
+			Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace_sidebar/retailedge/retailedge.json"),
+		]
+		for path in paths:
+			self.assertTrue(path.exists(), f"Missing standard sidebar fixture: {path}")
+		data = json.loads(paths[0].read_text())
+		self.assertEqual(data.get("doctype"), "Workspace Sidebar")
+		self.assertEqual(data.get("app"), "retailedge")
+		self.assertEqual(data.get("standard"), 1)
+		self.assertEqual(
+			[(row.get("type"), row.get("label"), row.get("child", 0)) for row in data.get("items", [])],
+			[
+				("Link", "Home", 0),
+				("Section Break", "Operations", 0),
+				("Link", "Cashier Expense", 1),
+				("Link", "Daily Sales Audit", 1),
+				("Section Break", "Reports & Review", 0),
+				("Link", "Cashier Expense Review", 1),
+				("Link", "Daily Sales Audit Register", 1),
+				("Link", "POS Closing Variance vs Expenses", 1),
+				("Section Break", "Setup / Configuration", 0),
+				("Link", "Settings", 1),
+				("Link", "Branch Profile", 1),
+				("Link", "Expense Category", 1),
+			],
+		)

@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate
 
+from retailedge.branch_context import get_branch_query_filters
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
@@ -41,9 +42,17 @@ def get_columns():
 
 def get_data(filters):
 	query_filters = {}
+	query_filters.update(
+		(get_branch_query_filters(
+			"RetailEdge Daily Sales Audit",
+			user=frappe.session.user,
+			company=filters.get("company"),
+			branch=filters.get("branch"),
+		).get("filters") or {})
+	)
 	for fieldname in ("company", "branch", "pos_profile", "cashier", "audit_status", "audit_result"):
 		value = filters.get(fieldname)
-		if value:
+		if value and fieldname not in query_filters:
 			query_filters[fieldname] = value
 	if filters.get("from_date") and filters.get("to_date"):
 		query_filters["audit_date"] = ["between", [filters["from_date"], filters["to_date"]]]
@@ -76,4 +85,3 @@ def get_data(filters):
 		limit_page_length=0,
 		order_by="audit_date desc, creation desc",
 	)
-

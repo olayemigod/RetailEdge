@@ -1,0 +1,322 @@
+{
+ "actions": [],
+ "autoname": "field:profile_name",
+ "creation": "2026-05-17 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "profile_identity_section",
+  "profile_name",
+  "enabled",
+  "company",
+  "branch",
+  "is_default_for_company",
+  "pos_defaults_section",
+  "default_pos_profile",
+  "default_pos_opening_cash_account",
+  "default_cash_mode_of_payment",
+  "warehouse_defaults_section",
+  "default_warehouse",
+  "default_source_warehouse",
+  "default_target_warehouse",
+  "default_returns_warehouse",
+  "accounting_defaults_section",
+  "default_cost_center",
+  "default_sales_cost_center",
+  "default_expense_cost_center",
+  "default_cash_account",
+  "default_bank_account",
+  "default_card_pos_account",
+  "default_mobile_money_account",
+  "operational_users_section",
+  "default_cashiers",
+  "default_managers",
+  "default_auditors",
+  "audit_behavior_section",
+  "enable_cashier_expense_control",
+  "enable_daily_sales_audit",
+  "enable_transaction_branch_attribution",
+  "require_pos_closing_shift_for_audit",
+  "variance_tolerance",
+  "notes_section",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "profile_identity_section",
+   "fieldtype": "Section Break",
+   "label": "Profile Identity"
+  },
+  {
+   "fieldname": "profile_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Profile Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_default_for_company",
+   "fieldtype": "Check",
+   "label": "Default for Company"
+  },
+  {
+   "fieldname": "pos_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "POS Defaults"
+  },
+  {
+   "fieldname": "default_pos_profile",
+   "fieldtype": "Link",
+   "label": "Default POS Profile",
+   "options": "POS Profile"
+  },
+  {
+   "fieldname": "default_pos_opening_cash_account",
+   "fieldtype": "Link",
+   "label": "Default POS Opening Cash Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_cash_mode_of_payment",
+   "fieldtype": "Link",
+   "label": "Default Cash Mode of Payment",
+   "options": "Mode of Payment"
+  },
+  {
+   "fieldname": "warehouse_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Warehouse Defaults"
+  },
+  {
+   "fieldname": "default_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "default_source_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Source Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "default_target_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Target Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "default_returns_warehouse",
+   "fieldtype": "Link",
+   "label": "Default Returns Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "accounting_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting Defaults"
+  },
+  {
+   "fieldname": "default_cost_center",
+   "fieldtype": "Link",
+   "label": "Default Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "default_sales_cost_center",
+   "fieldtype": "Link",
+   "label": "Default Sales Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "default_expense_cost_center",
+   "fieldtype": "Link",
+   "label": "Default Expense Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "default_cash_account",
+   "fieldtype": "Link",
+   "label": "Default Cash Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_bank_account",
+   "fieldtype": "Link",
+   "label": "Default Bank Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_card_pos_account",
+   "fieldtype": "Link",
+   "label": "Default Card/POS Settlement Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "default_mobile_money_account",
+   "fieldtype": "Link",
+   "label": "Default Mobile Money Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "operational_users_section",
+   "fieldtype": "Section Break",
+   "label": "Operational Users"
+  },
+  {
+   "fieldname": "default_cashiers",
+   "fieldtype": "Table",
+   "label": "Default Cashiers",
+   "options": "RetailEdge Branch Profile User"
+  },
+  {
+   "fieldname": "default_managers",
+   "fieldtype": "Table",
+   "label": "Default Managers",
+   "options": "RetailEdge Branch Profile User"
+  },
+  {
+   "fieldname": "default_auditors",
+   "fieldtype": "Table",
+   "label": "Default Auditors",
+   "options": "RetailEdge Branch Profile User"
+  },
+  {
+   "fieldname": "audit_behavior_section",
+   "fieldtype": "Section Break",
+   "label": "Audit Behavior"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_cashier_expense_control",
+   "fieldtype": "Check",
+   "label": "Enable Cashier Expense Control"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_daily_sales_audit",
+   "fieldtype": "Check",
+   "label": "Enable Daily Sales Audit"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_transaction_branch_attribution",
+   "fieldtype": "Check",
+   "label": "Enable Transaction Branch Attribution"
+  },
+  {
+   "default": "0",
+   "fieldname": "require_pos_closing_shift_for_audit",
+   "fieldtype": "Check",
+   "label": "Require POS Closing Shift for Audit"
+  },
+  {
+   "default": "0",
+   "fieldname": "variance_tolerance",
+   "fieldtype": "Currency",
+   "label": "Variance Tolerance"
+  },
+  {
+   "fieldname": "notes_section",
+   "fieldtype": "Section Break",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-05-17 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge Branch Profile",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdge Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdgeManager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "read": 1,
+   "role": "RetailEdgeBranchManager"
+  },
+  {
+   "read": 1,
+   "role": "RetailEdge Auditor"
+  },
+  {
+   "read": 1,
+   "role": "RetailEdgeAuditor"
+  },
+  {
+   "read": 1,
+   "role": "Accounts Manager"
+  },
+  {
+   "read": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "search_fields": "profile_name,company,branch",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "profile_name",
+ "track_changes": 1
+}
