@@ -198,6 +198,14 @@ The RetailEdge workspace is ordered as Operations, Reports & Review, and Setup /
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## RetailEdge V1.5A.3 - Transaction Branch Attribution Layer
+
+RetailEdge now adds read-only transaction attribution fields to supported ERPNext and POSNext sales, payment, stock, procurement, and POS transaction DocTypes where those DocTypes exist on the site. The stored attribution fields include `retailedge_branch`, `retailedge_branch_source`, `retailedge_branch_resolved_on`, and `retailedge_branch_resolution_note`. Movement-oriented documents can also store `retailedge_source_branch`, `retailedge_target_branch`, and `retailedge_warehouse_branch` where that distinction is useful.
+
+This phase stores only RetailEdge attribution metadata. It does not perform historical backfill yet, does not guess ambiguous or cross-branch transactions, does not post accounting entries, does not change accounting or stock values, and does not mutate POS shift totals, payment verification, Daily Sales Audit records, or other business fields. Full historical backfill and deeper report alignment remain for V1.5A.4.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash

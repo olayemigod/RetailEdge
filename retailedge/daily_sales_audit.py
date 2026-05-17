@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import frappe
 from frappe.utils import flt, getdate, now_datetime
 
-from retailedge.branch_context import get_branch_query_filters, resolve_retailedge_branch_context
+from retailedge.branch_context import get_branch_query_filters, has_field, resolve_retailedge_branch_context
 from retailedge.cashier_context import (
 	_coerce_doc,
 	_get_doc_value,
@@ -999,6 +999,11 @@ def _get_invoice_and_payment_context(filters):
 		query_filters["is_pos"] = 1
 	if meta and meta.has_field("pos_profile") and filters.get("pos_profile"):
 		query_filters["pos_profile"] = filters.get("pos_profile")
+	if filters.get("branch"):
+		if has_field("Sales Invoice", "retailedge_branch"):
+			query_filters["retailedge_branch"] = filters.get("branch")
+		elif meta and meta.has_field("branch"):
+			query_filters["branch"] = filters.get("branch")
 	opening_shift_field = _find_first_field("Sales Invoice", ["posa_pos_opening_shift", "pos_opening_shift", "opening_shift"])
 	if opening_shift_field and filters.get("pos_opening_shift"):
 		query_filters[opening_shift_field] = filters.get("pos_opening_shift")

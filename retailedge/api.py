@@ -13,6 +13,12 @@ from retailedge.branch_profile import (
 	get_default_branch_for_user as _get_default_branch_for_user,
 	get_user_branch_profiles as _get_user_branch_profiles,
 )
+from retailedge.transaction_branch_attribution import (
+	get_branch_attribution_target_doctypes as _get_branch_attribution_target_doctypes,
+	preview_transaction_branch_backfill as _preview_transaction_branch_backfill,
+	refresh_transaction_branch_attribution as _refresh_transaction_branch_attribution,
+	resolve_transaction_branch as _resolve_transaction_branch,
+)
 from retailedge.cashier_expense import (
 	approve_cashier_expense as _approve_cashier_expense,
 	get_cashier_expenses_for_variance as _get_cashier_expenses_for_variance,
@@ -64,6 +70,16 @@ from retailedge.integrations.payments import (
 	create_payment_request_for_sales_invoice as _create_payment_request_for_sales_invoice,
 )
 from retailedge.posting_date_control import get_posting_date_context as _get_posting_date_context
+
+
+TRANSACTION_BRANCH_ATTRIBUTION_MANAGER_ROLES = (
+	"System Manager",
+	"Accounts Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+)
 
 
 @frappe.whitelist()
@@ -159,6 +175,35 @@ def resolve_retailedge_operational_defaults(company=None, branch=None, user=None
 		pos_profile=pos_profile,
 		warehouse=warehouse,
 	)
+
+
+@frappe.whitelist()
+def get_branch_attribution_target_doctypes():
+	return _get_branch_attribution_target_doctypes()
+
+
+@frappe.whitelist()
+def resolve_transaction_branch(doctype, name):
+	doc = frappe.get_doc(doctype, name)
+	if not doc.has_permission("read"):
+		frappe.throw("You do not have permission to read this document.", frappe.PermissionError)
+	return _resolve_transaction_branch(doc)
+
+
+@frappe.whitelist()
+def refresh_transaction_branch_attribution(doctype, name, overwrite=False):
+	_assert_transaction_branch_attribution_manager()
+	return _refresh_transaction_branch_attribution(
+		doctype,
+		name,
+		overwrite=bool(int(overwrite)) if isinstance(overwrite, str) else bool(overwrite),
+	)
+
+
+@frappe.whitelist()
+def preview_transaction_branch_backfill(doctype=None, filters=None, limit=500):
+	_assert_transaction_branch_attribution_manager()
+	return _preview_transaction_branch_backfill(doctype=doctype, filters=filters, limit=int(limit or 500))
 
 
 @frappe.whitelist()
@@ -339,3 +384,13 @@ def get_cost_visibility_rules():
 		"fieldnames": sorted(COST_FIELDNAMES),
 		"label_keywords": COST_FIELD_LABEL_KEYWORDS[:],
 	}
+
+
+def _assert_transaction_branch_attribution_manager():
+	user_roles = set(frappe.get_roles(frappe.session.user))
+	if user_roles.intersection(TRANSACTION_BRANCH_ATTRIBUTION_MANAGER_ROLES):
+		return
+	frappe.throw(
+		"You do not have permission to manage RetailEdge transaction branch attribution.",
+		frappe.PermissionError,
+	)

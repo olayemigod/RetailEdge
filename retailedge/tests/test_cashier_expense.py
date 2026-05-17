@@ -79,6 +79,13 @@ from retailedge.daily_sales_audit import (
 	resolve_daily_sales_audit_context_from_selection,
 	user_is_daily_sales_audit_reviewer,
 )
+from retailedge.transaction_branch_attribution import (
+	apply_transaction_branch_attribution,
+	ensure_transaction_branch_custom_fields,
+	get_branch_attribution_target_doctypes,
+	preview_transaction_branch_backfill,
+	resolve_transaction_branch,
+)
 from retailedge.events.pos_closing_shift import update_cashier_expenses_with_closing_shift
 from retailedge.retailedge.doctype.retailedge_daily_sales_audit.retailedge_daily_sales_audit import (
 	RetailEdgeDailySalesAudit,
@@ -1943,3 +1950,132 @@ class BranchProfileTests(unittest.TestCase):
 				("Link", "Expense Category", 1),
 			],
 		)
+
+
+class TransactionBranchAttributionTests(unittest.TestCase):
+	@patch("retailedge.transaction_branch_attribution.has_doctype")
+	def test_target_doctype_list_skips_missing_doctypes_safely(self, mock_has_doctype):
+		mock_has_doctype.side_effect = lambda doctype: doctype in {"Sales Invoice", "Payment Entry", "Stock Entry"}
+		self.assertEqual(
+			get_branch_attribution_target_doctypes(),
+			["Sales Invoice", "Payment Entry", "Stock Entry"],
+		)
+
+	@patch("retailedge.transaction_branch_attribution.create_custom_fields")
+	@patch("retailedge.transaction_branch_attribution.has_field")
+	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Sales Invoice"])
+	def test_custom_field_creation_is_idempotent(self, _mock_targets, mock_has_field, mock_create_custom_fields):
+		existing_fields = {"retailedge_branch"}
+		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in existing_fields
+		ensure_transaction_branch_custom_fields()
+		custom_fields = mock_create_custom_fields.call_args.args[0]["Sales Invoice"]
+		fieldnames = [field.get("fieldname") for field in custom_fields]
+		self.assertIn("retailedge_branch_attribution_section", fieldnames)
+		self.assertIn("retailedge_branch", fieldnames)
+		self.assertIn("retailedge_branch_source", fieldnames)
+
+	@patch("retailedge.transaction_branch_attribution.has_field", side_effect=lambda doctype, fieldname: fieldname != "retailedge_branch")
+	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Sales Invoice"])
+	def test_apply_transaction_branch_attribution_handles_missing_custom_fields(self, _mock_targets, _mock_has_field):
+		doc = _Doc(doctype="Sales Invoice", name="SINV-1")
+		result = apply_transaction_branch_attribution(doc)
+		self.assertIn("not available", result["note"].lower())
+
+	@patch("retailedge.transaction_branch_attribution._resolve_branch_context_for_doc", return_value={"branch": None, "source": None, "messages": []})
+	@patch("retailedge.transaction_branch_attribution._resolve_single_branch_from_warehouses", return_value=(None, None))
+	def test_explicit_branch_is_preferred(self, _mock_warehouse, _mock_context):
+		doc = _Doc(doctype="Sales Invoice", name="SINV-1", branch="HQ", company="Demo Company")
+		result = resolve_transaction_branch(doc)
+		self.assertEqual(result["branch"], "HQ")
+		self.assertEqual(result["source"], "Sales Invoice.explicit_branch")
+
+	def test_payment_entry_inherits_branch_from_single_reference(self):
+		doc = _Doc(
+			doctype="Payment Entry",
+			name="PAY-1",
+			references=[_Doc(reference_doctype="Sales Invoice", reference_name="SINV-1")],
+		)
+		with patch(
+			"retailedge.transaction_branch_attribution._get_transaction_or_linked_branch",
+			return_value={"branch": "HQ", "messages": []},
+		):
+			result = resolve_transaction_branch(doc)
+		self.assertEqual(result["branch"], "HQ")
+		self.assertEqual(result["source"], "Payment Entry Reference")
+
+	def test_payment_entry_does_not_guess_when_references_span_multiple_branches(self):
+		doc = _Doc(
+			doctype="Payment Entry",
+			name="PAY-2",
+			references=[
+				_Doc(reference_doctype="Sales Invoice", reference_name="SINV-1"),
+				_Doc(reference_doctype="Sales Invoice", reference_name="SINV-2"),
+			],
+		)
+		with patch(
+			"retailedge.transaction_branch_attribution._get_transaction_or_linked_branch",
+			side_effect=[
+				{"branch": "HQ", "messages": []},
+				{"branch": "PH", "messages": []},
+			],
+		):
+			result = resolve_transaction_branch(doc)
+		self.assertIsNone(result["branch"])
+		self.assertIn("manual review required", result["note"].lower())
+
+	@patch("retailedge.transaction_branch_attribution._resolve_single_branch_from_warehouses", return_value=(None, None))
+	@patch(
+		"retailedge.transaction_branch_attribution._resolve_branch_context_for_doc",
+		return_value={"branch": "HQ", "source": "RetailEdge Branch Profile", "messages": []},
+	)
+	def test_material_request_uses_requesting_branch_context(self, _mock_context, _mock_warehouse):
+		doc = _Doc(doctype="Material Request", name="MAT-1", company="Demo Company")
+		result = resolve_transaction_branch(doc)
+		self.assertEqual(result["branch"], "HQ")
+		self.assertEqual(result["source"], "RetailEdge Branch Profile")
+
+	@patch("retailedge.transaction_branch_attribution.resolve_branch_from_warehouse")
+	def test_stock_entry_detects_cross_branch_movement(self, mock_resolve_warehouse):
+		mock_resolve_warehouse.side_effect = lambda warehouse, company=None: {
+			"branch": {"WH-HQ": "HQ", "WH-PH": "PH"}.get(warehouse),
+			"messages": [],
+		}
+		doc = _Doc(
+			doctype="Stock Entry",
+			name="STE-1",
+			items=[_Doc(s_warehouse="WH-HQ", t_warehouse="WH-PH")],
+		)
+		result = resolve_transaction_branch(doc)
+		self.assertIsNone(result["branch"])
+		self.assertEqual(result["source_branch"], "HQ")
+		self.assertEqual(result["target_branch"], "PH")
+		self.assertIn("cross-branch", result["note"].lower())
+
+	@patch("retailedge.transaction_branch_attribution.resolve_transaction_branch")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_all")
+	@patch("retailedge.transaction_branch_attribution.has_field", return_value=True)
+	@patch("retailedge.transaction_branch_attribution.has_doctype", return_value=True)
+	def test_preview_backfill_is_dry_run_only(
+		self,
+		_mock_has_doctype,
+		_mock_has_field,
+		mock_get_all,
+		mock_get_doc,
+		mock_resolve,
+	):
+		mock_get_all.return_value = [_Row(name="SINV-1")]
+		mock_get_doc.return_value = _Doc(doctype="Sales Invoice", name="SINV-1")
+		mock_resolve.return_value = {
+			"branch": "HQ",
+			"source_branch": None,
+			"target_branch": None,
+			"warehouse_branch": None,
+			"source": "RetailEdge Branch Profile",
+			"note": None,
+			"messages": [],
+		}
+		result = preview_transaction_branch_backfill(doctype="Sales Invoice", limit=10)
+		self.assertTrue(result["dry_run"])
+		self.assertEqual(result["resolved"], 1)
+		self.assertEqual(result["items"][0]["branch"], "HQ")

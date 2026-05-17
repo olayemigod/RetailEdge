@@ -470,6 +470,10 @@ def get_business_location(pos_profile, cost_center):
 
 
 def get_entry_branch(entry):
+	if frappe.db.has_column("POS Closing Shift", "retailedge_branch"):
+		stored_branch = frappe.db.get_value("POS Closing Shift", getattr(entry, "name", None), "retailedge_branch")
+		if stored_branch:
+			return stored_branch
 	branch_context = resolve_branch(
 		company=getattr(entry, "company", None),
 		pos_profile=getattr(entry, "pos_profile", None),

@@ -162,9 +162,46 @@ doctype_list_js = {
 # }
 doc_events = {
 	"Sales Invoice": {
-		"validate": "retailedge.events.sales_invoice.validate_sales_invoice",
+		"validate": "retailedge.transaction_branch_attribution.validate_sales_invoice_with_branch_attribution",
+	},
+	"POS Invoice": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Sales Order": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Delivery Note": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Payment Entry": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Payment Request": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Material Request": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Stock Entry": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Stock Reconciliation": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Purchase Order": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Purchase Receipt": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"Purchase Invoice": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+	},
+	"POS Opening Shift": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
 	},
 	"POS Closing Shift": {
+		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
 		"on_submit": "retailedge.events.pos_closing_shift.on_pos_closing_shift_submit",
 		"after_insert": "retailedge.events.pos_closing_shift.on_pos_closing_shift_save",
 	},
@@ -195,7 +232,10 @@ doc_events = {
 # -------
 
 # before_tests = "retailedge.install.before_tests"
-after_migrate = ["retailedge.setup_roles.ensure_retailedge_roles"]
+after_migrate = [
+	"retailedge.setup_roles.ensure_retailedge_roles",
+	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
+]
 boot_session = "retailedge.boot.boot_session"
 
 # Extend DocType Class

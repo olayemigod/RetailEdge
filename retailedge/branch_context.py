@@ -38,19 +38,34 @@ SUPPORTED_RETAILEDGE_BRANCH_DOCTYPES = (
 def has_doctype(doctype: str) -> bool:
 	if not doctype:
 		return False
+	cache = getattr(frappe.local, "retailedge_has_doctype_cache", None)
+	if cache is None:
+		cache = {}
+		frappe.local.retailedge_has_doctype_cache = cache
+	if doctype in cache:
+		return cache[doctype]
 	try:
-		return bool(frappe.db.exists("DocType", doctype))
+		cache[doctype] = bool(frappe.db.exists("DocType", doctype))
 	except Exception:
-		return False
+		cache[doctype] = False
+	return cache[doctype]
 
 
 def has_field(doctype: str, fieldname: str) -> bool:
 	if not doctype or not fieldname or not has_doctype(doctype):
 		return False
+	cache = getattr(frappe.local, "retailedge_has_field_cache", None)
+	if cache is None:
+		cache = {}
+		frappe.local.retailedge_has_field_cache = cache
+	cache_key = (doctype, fieldname)
+	if cache_key in cache:
+		return cache[cache_key]
 	try:
-		return bool(frappe.get_meta(doctype).has_field(fieldname))
+		cache[cache_key] = bool(frappe.get_meta(doctype).has_field(fieldname))
 	except Exception:
-		return False
+		cache[cache_key] = False
+	return cache[cache_key]
 
 
 def get_first_existing_field(doctype: str, candidate_fields: list[str]) -> str | None:
