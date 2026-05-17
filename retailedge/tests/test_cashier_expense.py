@@ -65,6 +65,10 @@ from retailedge.branch_profile import (
 	get_user_branch_profiles,
 	validate_branch_profile,
 )
+from retailedge.branch_defaults_application import (
+	apply_branch_profile_defaults_to_doc,
+	get_branch_default_application_settings,
+)
 from retailedge.cashier_expense_posting import (
 	get_cashier_expense_posting_preview,
 	refresh_cashier_expense_posting_readiness,
@@ -85,6 +89,7 @@ from retailedge.transaction_branch_attribution import (
 	get_branch_attribution_target_doctypes,
 	preview_transaction_branch_backfill,
 	resolve_transaction_branch,
+	run_transaction_branch_backfill,
 )
 from retailedge.events.pos_closing_shift import update_cashier_expenses_with_closing_shift
 from retailedge.retailedge.doctype.retailedge_daily_sales_audit.retailedge_daily_sales_audit import (
@@ -130,6 +135,11 @@ class _Settings(SimpleNamespace):
 	include_rejected_cashier_expenses_in_daily_sales_audit_preview = 1
 	daily_sales_audit_variance_tolerance = 0
 	daily_sales_audit_reviewer_roles = []
+	enable_branch_default_application = 1
+	apply_branch_default_warehouse = 1
+	apply_branch_default_cost_center = 1
+	apply_branch_default_accounts = 0
+	apply_branch_default_pos_profile = 1
 
 
 class _Row(SimpleNamespace):
@@ -1801,6 +1811,239 @@ class BranchContextTests(unittest.TestCase):
 		self.assertEqual(result["branch"], "HQ")
 
 
+class BranchDefaultsApplicationTests(unittest.TestCase):
+	@patch("retailedge.branch_defaults_application.get_retailedge_settings")
+	def test_settings_normalize_safely(self, mock_settings):
+		mock_settings.return_value = _Settings(
+			enable_branch_default_application=1,
+			apply_branch_default_warehouse=1,
+			apply_branch_default_cost_center=0,
+			apply_branch_default_accounts=1,
+			apply_branch_default_pos_profile=0,
+		)
+		result = get_branch_default_application_settings()
+		self.assertTrue(result["enabled"])
+		self.assertTrue(result["apply_warehouse"])
+		self.assertFalse(result["apply_cost_center"])
+		self.assertTrue(result["apply_accounts"])
+		self.assertFalse(result["apply_pos_profile"])
+
+	@patch("retailedge.branch_defaults_application.has_field", return_value=True)
+	@patch("retailedge.branch_defaults_application.resolve_retailedge_operational_defaults")
+	@patch("retailedge.branch_defaults_application.get_retailedge_settings", return_value=_Settings())
+	def test_material_request_gets_default_target_warehouse(
+		self, _mock_settings, mock_defaults, _mock_has_field
+	):
+		mock_defaults.return_value = {
+			"branch": "HQ",
+			"default_target_warehouse": "WH-TARGET",
+			"default_warehouse": "WH-FALLBACK",
+			"messages": [],
+		}
+		doc = _Doc(
+			doctype="Material Request",
+			docstatus=0,
+			company="Demo Company",
+			branch="HQ",
+			owner="manager@example.com",
+			target_warehouse=None,
+			set_warehouse=None,
+			items=[_Doc(warehouse=None, qty=2), _Doc(warehouse="EXISTING-WH", qty=1)],
+		)
+		result = apply_branch_profile_defaults_to_doc(doc)
+		self.assertEqual(doc.target_warehouse, "WH-TARGET")
+		self.assertEqual(doc.set_warehouse, "WH-TARGET")
+		self.assertEqual(doc.items[0].warehouse, "WH-TARGET")
+		self.assertEqual(doc.items[1].warehouse, "EXISTING-WH")
+		self.assertEqual(doc.items[0].qty, 2)
+		self.assertTrue(any(entry["field"] == "target_warehouse" for entry in result["applied"]))
+
+	@patch("retailedge.branch_defaults_application.has_field", return_value=True)
+	@patch("retailedge.branch_defaults_application.resolve_retailedge_operational_defaults")
+	@patch("retailedge.branch_defaults_application.get_retailedge_settings", return_value=_Settings())
+	def test_material_request_does_not_overwrite_existing_target_warehouse(
+		self, _mock_settings, mock_defaults, _mock_has_field
+	):
+		mock_defaults.return_value = {
+			"branch": "HQ",
+			"default_target_warehouse": "WH-TARGET",
+			"default_warehouse": "WH-FALLBACK",
+			"messages": [],
+		}
+		doc = _Doc(
+			doctype="Material Request",
+			docstatus=0,
+			company="Demo Company",
+			branch="HQ",
+			owner="manager@example.com",
+			target_warehouse="USER-WH",
+			set_warehouse=None,
+			items=[],
+		)
+		apply_branch_profile_defaults_to_doc(doc)
+		self.assertEqual(doc.target_warehouse, "USER-WH")
+		self.assertEqual(doc.set_warehouse, "WH-TARGET")
+
+	@patch("retailedge.branch_defaults_application.has_field", return_value=True)
+	@patch("retailedge.branch_defaults_application.resolve_retailedge_operational_defaults")
+	@patch("retailedge.branch_defaults_application.get_retailedge_settings", return_value=_Settings())
+	def test_stock_entry_uses_source_and_target_defaults_without_overwrite(
+		self, _mock_settings, mock_defaults, _mock_has_field
+	):
+		mock_defaults.return_value = {
+			"branch": "HQ",
+			"default_source_warehouse": "WH-SRC",
+			"default_target_warehouse": "WH-TGT",
+			"messages": [],
+		}
+		doc = _Doc(
+			doctype="Stock Entry",
+			docstatus=0,
+			company="Demo Company",
+			branch="HQ",
+			owner="manager@example.com",
+			from_warehouse=None,
+			to_warehouse=None,
+			items=[
+				_Doc(s_warehouse=None, t_warehouse=None, qty=3),
+				_Doc(s_warehouse="USER-SRC", t_warehouse=None, qty=1),
+			],
+		)
+		apply_branch_profile_defaults_to_doc(doc)
+		self.assertEqual(doc.from_warehouse, "WH-SRC")
+		self.assertEqual(doc.to_warehouse, "WH-TGT")
+		self.assertEqual(doc.items[0].s_warehouse, "WH-SRC")
+		self.assertEqual(doc.items[0].t_warehouse, "WH-TGT")
+		self.assertEqual(doc.items[1].s_warehouse, "USER-SRC")
+		self.assertEqual(doc.items[1].t_warehouse, "WH-TGT")
+		self.assertEqual(doc.items[0].qty, 3)
+
+	@patch("retailedge.branch_defaults_application.has_field", return_value=True)
+	@patch("retailedge.branch_defaults_application.resolve_retailedge_operational_defaults")
+	@patch("retailedge.branch_defaults_application.get_retailedge_settings", return_value=_Settings())
+	def test_sales_invoice_draft_can_get_default_warehouse_and_cost_center(
+		self, _mock_settings, mock_defaults, _mock_has_field
+	):
+		mock_defaults.return_value = {
+			"branch": "HQ",
+			"default_source_warehouse": "WH-SALES",
+			"default_sales_cost_center": "CC-SALES",
+			"messages": [],
+		}
+		doc = _Doc(
+			doctype="Sales Invoice",
+			docstatus=0,
+			company="Demo Company",
+			branch="HQ",
+			owner="manager@example.com",
+			set_warehouse=None,
+			cost_center=None,
+			items=[_Doc(warehouse=None, cost_center=None)],
+		)
+		apply_branch_profile_defaults_to_doc(doc)
+		self.assertEqual(doc.set_warehouse, "WH-SALES")
+		self.assertEqual(doc.cost_center, "CC-SALES")
+		self.assertEqual(doc.items[0].warehouse, "WH-SALES")
+		self.assertEqual(doc.items[0].cost_center, "CC-SALES")
+
+	@patch("retailedge.branch_defaults_application.resolve_retailedge_operational_defaults")
+	@patch("retailedge.branch_defaults_application.get_retailedge_settings", return_value=_Settings())
+	def test_submitted_sales_invoice_is_not_modified(self, _mock_settings, mock_defaults):
+		doc = _Doc(
+			doctype="Sales Invoice",
+			docstatus=1,
+			company="Demo Company",
+			branch="HQ",
+			set_warehouse=None,
+			cost_center=None,
+		)
+		result = apply_branch_profile_defaults_to_doc(doc)
+		self.assertEqual(doc.set_warehouse, None)
+		self.assertEqual(doc.cost_center, None)
+		self.assertFalse(result["applied"])
+		mock_defaults.assert_not_called()
+
+	@patch("retailedge.branch_defaults_application.has_field", return_value=True)
+	@patch("retailedge.branch_defaults_application.resolve_retailedge_operational_defaults")
+	@patch(
+		"retailedge.branch_defaults_application.get_retailedge_settings",
+		return_value=_Settings(apply_branch_default_accounts=1),
+	)
+	def test_cashier_expense_does_not_override_open_shift_values(
+		self, _mock_settings, mock_defaults, _mock_has_field
+	):
+		mock_defaults.return_value = {
+			"branch": "HQ",
+			"default_cash_account": "BRANCH-CASH",
+			"default_expense_cost_center": "BRANCH-CC",
+			"default_pos_profile": "BRANCH-POS",
+			"messages": [],
+		}
+		doc = _Doc(
+			doctype="RetailEdge Cashier Expense",
+			docstatus=0,
+			company="Demo Company",
+			branch="HQ",
+			linked_pos_opening_shift="POS-OPEN-1",
+			payment_account="SHIFT-CASH",
+			cost_center="SHIFT-CC",
+			pos_profile="SHIFT-POS",
+			_cashier_context={"payment_account": "SHIFT-CASH"},
+		)
+		apply_branch_profile_defaults_to_doc(doc)
+		self.assertEqual(doc.payment_account, "SHIFT-CASH")
+		self.assertEqual(doc.cost_center, "SHIFT-CC")
+		self.assertEqual(doc.pos_profile, "SHIFT-POS")
+
+	@patch("retailedge.branch_defaults_application.has_field", return_value=True)
+	@patch("retailedge.branch_defaults_application.resolve_retailedge_operational_defaults")
+	@patch("retailedge.branch_defaults_application.get_retailedge_settings", return_value=_Settings())
+	def test_daily_sales_audit_can_use_default_pos_profile_for_selected_branch(
+		self, _mock_settings, mock_defaults, _mock_has_field
+	):
+		mock_defaults.return_value = {
+			"branch": "HQ",
+			"default_pos_profile": "HQ-POS",
+			"messages": [],
+		}
+		doc = _Doc(
+			doctype="RetailEdge Daily Sales Audit",
+			docstatus=0,
+			company="Demo Company",
+			branch="HQ",
+			pos_profile=None,
+			owner="auditor@example.com",
+		)
+		apply_branch_profile_defaults_to_doc(doc)
+		self.assertEqual(doc.pos_profile, "HQ-POS")
+
+	@patch("retailedge.branch_defaults_application.has_field", return_value=True)
+	@patch("retailedge.branch_defaults_application.resolve_retailedge_operational_defaults")
+	@patch("retailedge.branch_defaults_application.get_retailedge_settings", return_value=_Settings())
+	def test_ambiguous_branch_does_not_apply_defaults(self, _mock_settings, mock_defaults, _mock_has_field):
+		mock_defaults.return_value = {
+			"branch": None,
+			"default_target_warehouse": "WH-TARGET",
+			"messages": ["Multiple branches exist for company."],
+		}
+		doc = _Doc(
+			doctype="Material Request",
+			docstatus=0,
+			company="Demo Company",
+			branch=None,
+			target_warehouse=None,
+			set_warehouse=None,
+			retailedge_branch_resolution_note=None,
+			owner="manager@example.com",
+			items=[_Doc(warehouse=None, qty=1)],
+		)
+		result = apply_branch_profile_defaults_to_doc(doc)
+		self.assertIsNone(doc.target_warehouse)
+		self.assertIsNone(doc.set_warehouse)
+		self.assertIn("could not be resolved safely", doc.retailedge_branch_resolution_note)
+		self.assertFalse(result["applied"])
+
+
 class BranchProfileTests(unittest.TestCase):
 	def test_branch_profile_doctype_exists(self):
 		self.assertTrue(branch_context_has_doctype("RetailEdge Branch Profile"))
@@ -2079,3 +2322,212 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 		self.assertTrue(result["dry_run"])
 		self.assertEqual(result["resolved"], 1)
 		self.assertEqual(result["items"][0]["branch"], "HQ")
+
+	@patch("retailedge.transaction_branch_attribution.frappe.db.commit")
+	@patch("retailedge.transaction_branch_attribution.frappe.db.set_value")
+	@patch("retailedge.transaction_branch_attribution.resolve_transaction_branch")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_all")
+	@patch("retailedge.transaction_branch_attribution.has_field", return_value=True)
+	@patch("retailedge.transaction_branch_attribution.has_doctype", return_value=True)
+	def test_run_transaction_branch_backfill_dry_run_does_not_update_records(
+		self,
+		_mock_has_doctype,
+		_mock_has_field,
+		mock_get_all,
+		mock_get_doc,
+		mock_resolve,
+		mock_set_value,
+		mock_commit,
+	):
+		mock_get_all.return_value = [_Row(name="SINV-1")]
+		mock_get_doc.return_value = _Doc(doctype="Sales Invoice", name="SINV-1", retailedge_branch=None, amount=500)
+		mock_resolve.return_value = {
+			"branch": "HQ",
+			"source_branch": None,
+			"target_branch": None,
+			"warehouse_branch": None,
+			"source": "RetailEdge Branch Profile",
+			"resolved_on": datetime(2026, 5, 17, 10, 0, 0),
+			"note": None,
+			"messages": [],
+		}
+		result = run_transaction_branch_backfill(doctype="Sales Invoice", limit=10, dry_run=True)
+		self.assertTrue(result["dry_run"])
+		self.assertEqual(result["updated"], 0)
+		self.assertEqual(result["items"][0]["action"], "would_update")
+		mock_set_value.assert_not_called()
+		mock_commit.assert_not_called()
+
+	@patch("retailedge.transaction_branch_attribution.frappe.db.commit")
+	@patch("retailedge.transaction_branch_attribution.frappe.db.set_value")
+	@patch("retailedge.transaction_branch_attribution.resolve_transaction_branch")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_all")
+	@patch("retailedge.transaction_branch_attribution.has_field", return_value=True)
+	@patch("retailedge.transaction_branch_attribution.has_doctype", return_value=True)
+	def test_run_transaction_branch_backfill_updates_only_attribution_fields(
+		self,
+		_mock_has_doctype,
+		_mock_has_field,
+		mock_get_all,
+		mock_get_doc,
+		mock_resolve,
+		mock_set_value,
+		mock_commit,
+	):
+		doc = _Doc(doctype="Sales Invoice", name="SINV-2", retailedge_branch=None, amount=1250, company="Demo Company")
+		mock_get_all.return_value = [_Row(name="SINV-2")]
+		mock_get_doc.return_value = doc
+		mock_resolve.return_value = {
+			"branch": "Airport Branch",
+			"source_branch": None,
+			"target_branch": None,
+			"warehouse_branch": None,
+			"source": "RetailEdge Branch Profile",
+			"resolved_on": datetime(2026, 5, 17, 10, 5, 0),
+			"note": "Resolved safely.",
+			"messages": [],
+		}
+		result = run_transaction_branch_backfill(doctype="Sales Invoice", limit=10, dry_run=False)
+		self.assertEqual(result["updated"], 1)
+		self.assertEqual(result["items"][0]["action"], "updated")
+		args = mock_set_value.call_args.args
+		self.assertEqual(args[0], "Sales Invoice")
+		self.assertEqual(args[1], "SINV-2")
+		self.assertEqual(
+			sorted(args[2].keys()),
+			sorted(
+				[
+					"retailedge_branch",
+					"retailedge_source_branch",
+					"retailedge_target_branch",
+					"retailedge_warehouse_branch",
+					"retailedge_branch_source",
+					"retailedge_branch_resolved_on",
+					"retailedge_branch_resolution_note",
+				]
+			),
+		)
+		self.assertEqual(doc.amount, 1250)
+		mock_commit.assert_called_once()
+
+	@patch("retailedge.transaction_branch_attribution.frappe.db.set_value")
+	@patch("retailedge.transaction_branch_attribution.resolve_transaction_branch")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_all")
+	@patch("retailedge.transaction_branch_attribution.has_field", return_value=True)
+	@patch("retailedge.transaction_branch_attribution.has_doctype", return_value=True)
+	def test_run_transaction_branch_backfill_preserves_existing_branch_when_overwrite_false(
+		self,
+		_mock_has_doctype,
+		_mock_has_field,
+		mock_get_all,
+		mock_get_doc,
+		mock_resolve,
+		mock_set_value,
+	):
+		mock_get_all.return_value = [_Row(name="SINV-3")]
+		mock_get_doc.return_value = _Doc(doctype="Sales Invoice", name="SINV-3", retailedge_branch="HQ")
+		result = run_transaction_branch_backfill(doctype="Sales Invoice", limit=10, dry_run=False, overwrite=False)
+		self.assertEqual(result["skipped"], 1)
+		self.assertEqual(result["items"][0]["action"], "skipped")
+		mock_resolve.assert_not_called()
+		mock_set_value.assert_not_called()
+
+	@patch("retailedge.transaction_branch_attribution.frappe.db.set_value")
+	@patch("retailedge.transaction_branch_attribution.resolve_transaction_branch")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_all")
+	@patch("retailedge.transaction_branch_attribution.has_field", return_value=True)
+	@patch("retailedge.transaction_branch_attribution.has_doctype", return_value=True)
+	def test_run_transaction_branch_backfill_can_refresh_existing_branch_when_overwrite_true(
+		self,
+		_mock_has_doctype,
+		_mock_has_field,
+		mock_get_all,
+		mock_get_doc,
+		mock_resolve,
+		mock_set_value,
+	):
+		mock_get_all.return_value = [_Row(name="SINV-4")]
+		mock_get_doc.return_value = _Doc(doctype="Sales Invoice", name="SINV-4", retailedge_branch="HQ")
+		mock_resolve.return_value = {
+			"branch": "Airport Branch",
+			"source_branch": None,
+			"target_branch": None,
+			"warehouse_branch": None,
+			"source": "RetailEdge Branch Profile",
+			"resolved_on": datetime(2026, 5, 17, 10, 10, 0),
+			"note": None,
+			"messages": [],
+		}
+		result = run_transaction_branch_backfill(doctype="Sales Invoice", limit=10, dry_run=False, overwrite=True)
+		self.assertEqual(result["updated"], 1)
+		self.assertEqual(mock_set_value.call_args.args[2]["retailedge_branch"], "Airport Branch")
+
+	@patch("retailedge.transaction_branch_attribution.frappe.db.set_value")
+	@patch("retailedge.transaction_branch_attribution.resolve_transaction_branch")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_all")
+	@patch("retailedge.transaction_branch_attribution.has_field", return_value=True)
+	@patch("retailedge.transaction_branch_attribution.has_doctype", return_value=True)
+	def test_run_transaction_branch_backfill_marks_ambiguous_without_setting_branch(
+		self,
+		_mock_has_doctype,
+		_mock_has_field,
+		mock_get_all,
+		mock_get_doc,
+		mock_resolve,
+		mock_set_value,
+	):
+		mock_get_all.return_value = [_Row(name="PAY-1")]
+		mock_get_doc.return_value = _Doc(doctype="Payment Entry", name="PAY-1", retailedge_branch=None)
+		mock_resolve.return_value = {
+			"branch": None,
+			"source_branch": None,
+			"target_branch": None,
+			"warehouse_branch": None,
+			"source": None,
+			"resolved_on": datetime(2026, 5, 17, 10, 15, 0),
+			"note": "Multiple referenced document branches detected; manual review required.",
+			"messages": [],
+		}
+		result = run_transaction_branch_backfill(doctype="Payment Entry", limit=10, dry_run=False)
+		self.assertEqual(result["ambiguous"], 1)
+		self.assertEqual(result["items"][0]["action"], "updated")
+		self.assertIsNone(mock_set_value.call_args.args[2]["retailedge_branch"])
+
+	@patch("retailedge.transaction_branch_attribution.frappe.db.set_value")
+	@patch("retailedge.transaction_branch_attribution.resolve_transaction_branch")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.get_all")
+	@patch("retailedge.transaction_branch_attribution.has_field", return_value=True)
+	@patch("retailedge.transaction_branch_attribution.has_doctype", return_value=True)
+	def test_run_transaction_branch_backfill_sets_cross_branch_fields_without_forcing_main_branch(
+		self,
+		_mock_has_doctype,
+		_mock_has_field,
+		mock_get_all,
+		mock_get_doc,
+		mock_resolve,
+		mock_set_value,
+	):
+		mock_get_all.return_value = [_Row(name="STE-1")]
+		mock_get_doc.return_value = _Doc(doctype="Stock Entry", name="STE-1", retailedge_branch=None)
+		mock_resolve.return_value = {
+			"branch": None,
+			"source_branch": "HQ",
+			"target_branch": "Airport Branch",
+			"warehouse_branch": None,
+			"source": None,
+			"resolved_on": datetime(2026, 5, 17, 10, 20, 0),
+			"note": "Cross-branch stock movement; branch not auto-attributed.",
+			"messages": [],
+		}
+		result = run_transaction_branch_backfill(doctype="Stock Entry", limit=10, dry_run=False)
+		self.assertEqual(result["updated"], 1)
+		values = mock_set_value.call_args.args[2]
+		self.assertIsNone(values["retailedge_branch"])
+		self.assertEqual(values["retailedge_source_branch"], "HQ")
+		self.assertEqual(values["retailedge_target_branch"], "Airport Branch")

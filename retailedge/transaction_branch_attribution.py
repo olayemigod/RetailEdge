@@ -174,16 +174,41 @@ def refresh_transaction_branch_attribution(doctype, name, overwrite=False):
 
 
 def preview_transaction_branch_backfill(doctype=None, filters=None, limit=500):
-	target_doctypes = [doctype] if doctype else get_branch_attribution_target_doctypes()
+	return run_transaction_branch_backfill(
+		doctype=doctype,
+		filters=filters,
+		limit=limit,
+		overwrite=False,
+		dry_run=True,
+	)
+
+
+def run_transaction_branch_backfill(
+	doctype=None,
+	filters=None,
+	limit=500,
+	overwrite=False,
+	dry_run=True,
+	commit_every=100,
+):
+	target_doctypes = _get_backfill_target_doctypes(doctype)
 	filters = _coerce_filters(filters)
-	checked = resolved = ambiguous = unresolved = 0
-	items = []
+	dry_run = bool(dry_run)
+	overwrite = bool(overwrite)
+	commit_every = max(int(commit_every or 100), 1)
+	summary = _new_backfill_summary(doctype=doctype, dry_run=dry_run)
+	pending_commits = 0
 
 	for target_doctype in target_doctypes:
+		doctype_summary = _new_backfill_doctype_summary()
+		summary["by_doctype"][target_doctype] = doctype_summary
 		if not has_doctype(target_doctype) or not has_field(target_doctype, "retailedge_branch"):
 			continue
+
 		query_filters = dict(filters)
-		query_filters.setdefault("retailedge_branch", ["in", ["", None]])
+		if not overwrite:
+			query_filters.setdefault("retailedge_branch", ["in", ["", None]])
+
 		rows = frappe.get_all(
 			target_doctype,
 			filters=query_filters,
@@ -192,37 +217,69 @@ def preview_transaction_branch_backfill(doctype=None, filters=None, limit=500):
 			limit_page_length=int(limit or 500),
 		)
 		for row in rows:
-			checked += 1
-			doc = frappe.get_doc(target_doctype, row.name)
-			resolution = resolve_transaction_branch(doc)
-			item = {
-				"doctype": target_doctype,
-				"name": row.name,
-				"branch": resolution.get("branch"),
-				"source_branch": resolution.get("source_branch"),
-				"target_branch": resolution.get("target_branch"),
-				"warehouse_branch": resolution.get("warehouse_branch"),
-				"source": resolution.get("source"),
-				"note": resolution.get("note"),
-				"messages": resolution.get("messages") or [],
-			}
-			items.append(item)
-			if resolution.get("branch") or resolution.get("source_branch") or resolution.get("target_branch") or resolution.get("warehouse_branch"):
-				resolved += 1
-				if _is_ambiguous_resolution(resolution):
-					ambiguous += 1
-			else:
-				unresolved += 1
+			summary["checked"] += 1
+			doctype_summary["checked"] += 1
+			try:
+				doc = frappe.get_doc(target_doctype, row.name)
+				existing_branch = getattr(doc, "retailedge_branch", None) if has_field(target_doctype, "retailedge_branch") else None
+				if existing_branch and not overwrite:
+					item = _build_backfill_item(target_doctype, row.name, _new_resolution(), action="skipped", note="Existing RetailEdge branch preserved.")
+					summary["skipped"] += 1
+					doctype_summary["skipped"] += 1
+					summary["items"].append(item)
+					continue
 
-	return {
-		"dry_run": True,
-		"doctype": doctype,
-		"checked": checked,
-		"resolved": resolved,
-		"ambiguous": ambiguous,
-		"unresolved": unresolved,
-		"items": items,
-	}
+				resolution = resolve_transaction_branch(doc)
+				status = _classify_resolution(resolution)
+				if status == "resolved":
+					summary["resolved"] += 1
+					doctype_summary["resolved"] += 1
+				elif status == "ambiguous":
+					summary["ambiguous"] += 1
+					doctype_summary["ambiguous"] += 1
+				else:
+					summary["unresolved"] += 1
+					doctype_summary["unresolved"] += 1
+
+				values = _build_attribution_update_values(doc, resolution, overwrite=overwrite)
+				would_update = _would_update_attribution(doc, values)
+				action = "would_update" if dry_run and would_update else status
+
+				if not dry_run and would_update:
+					frappe.db.set_value(target_doctype, row.name, values, update_modified=False)
+					pending_commits += 1
+					summary["updated"] += 1
+					doctype_summary["updated"] += 1
+					action = "updated"
+					if pending_commits >= commit_every:
+						frappe.db.commit()
+						pending_commits = 0
+				elif not dry_run and not would_update:
+					summary["skipped"] += 1
+					doctype_summary["skipped"] += 1
+					action = "skipped"
+
+				summary["items"].append(_build_backfill_item(target_doctype, row.name, resolution, action=action))
+			except Exception as exc:
+				summary["errors"] += 1
+				doctype_summary["errors"] += 1
+				summary["items"].append(
+					{
+						"doctype": target_doctype,
+						"name": row.name,
+						"branch": None,
+						"source_branch": None,
+						"target_branch": None,
+						"warehouse_branch": None,
+						"source": None,
+						"note": _safe_error_message(exc),
+						"action": "error",
+					}
+				)
+
+	if not dry_run and pending_commits:
+		frappe.db.commit()
+	return summary
 
 
 def validate_sales_invoice_with_branch_attribution(doc, method=None):
@@ -300,6 +357,104 @@ def _new_resolution(note=None):
 		"note": note,
 		"messages": [],
 	}
+
+
+def _new_backfill_summary(doctype=None, dry_run=True):
+	return {
+		"dry_run": dry_run,
+		"doctype": doctype,
+		"checked": 0,
+		"resolved": 0,
+		"updated": 0,
+		"ambiguous": 0,
+		"unresolved": 0,
+		"skipped": 0,
+		"errors": 0,
+		"by_doctype": {},
+		"items": [],
+	}
+
+
+def _new_backfill_doctype_summary():
+	return {
+		"checked": 0,
+		"updated": 0,
+		"resolved": 0,
+		"ambiguous": 0,
+		"unresolved": 0,
+		"skipped": 0,
+		"errors": 0,
+	}
+
+
+def _get_backfill_target_doctypes(doctype=None):
+	if doctype:
+		return [doctype] if doctype in TARGET_DOCTYPE_ORDER else []
+	return get_branch_attribution_target_doctypes()
+
+
+def _classify_resolution(resolution):
+	if resolution.get("branch") or resolution.get("source_branch") or resolution.get("target_branch") or resolution.get("warehouse_branch"):
+		if _is_ambiguous_resolution(resolution) and not resolution.get("branch"):
+			return "ambiguous"
+		return "resolved"
+	if _is_ambiguous_resolution(resolution):
+		return "ambiguous"
+	return "unresolved"
+
+
+def _build_attribution_update_values(doc, resolution, overwrite=False):
+	values = {}
+	has_meaningful_resolution = any(
+		resolution.get(key) for key in ("branch", "source_branch", "target_branch", "warehouse_branch")
+	) or bool(resolution.get("note"))
+	for fieldname, key in (
+		("retailedge_branch", "branch"),
+		("retailedge_source_branch", "source_branch"),
+		("retailedge_target_branch", "target_branch"),
+		("retailedge_warehouse_branch", "warehouse_branch"),
+		("retailedge_branch_source", "source"),
+		("retailedge_branch_resolved_on", "resolved_on"),
+		("retailedge_branch_resolution_note", "note"),
+	):
+		if not has_field(doc.doctype, fieldname):
+			continue
+		if fieldname == "retailedge_branch" and not overwrite and getattr(doc, fieldname, None):
+			continue
+		if fieldname == "retailedge_branch_resolved_on" and not has_meaningful_resolution:
+			continue
+		if fieldname == "retailedge_branch_source" and not has_meaningful_resolution:
+			continue
+		if fieldname == "retailedge_branch_resolution_note" and not resolution.get("note"):
+			continue
+		values[fieldname] = resolution.get(key)
+	return values
+
+
+def _would_update_attribution(doc, values):
+	for fieldname, value in values.items():
+		if getattr(doc, fieldname, None) != value:
+			return True
+	return False
+
+
+def _build_backfill_item(doctype, name, resolution, action, note=None):
+	return {
+		"doctype": doctype,
+		"name": name,
+		"branch": resolution.get("branch"),
+		"source_branch": resolution.get("source_branch"),
+		"target_branch": resolution.get("target_branch"),
+		"warehouse_branch": resolution.get("warehouse_branch"),
+		"source": resolution.get("source"),
+		"note": note if note is not None else resolution.get("note"),
+		"action": action,
+	}
+
+
+def _safe_error_message(exc):
+	message = str(exc) or exc.__class__.__name__
+	return message[:300]
 
 
 def _resolve_generic_transaction_branch(doc, resolution):

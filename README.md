@@ -206,6 +206,22 @@ This phase stores only RetailEdge attribution metadata. It does not perform hist
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## RetailEdge V1.5A.4 - Branch Backfill and Report Alignment
+
+RetailEdge can now safely backfill historical transactions with RetailEdge branch attribution through both dry-run preview mode and controlled update mode. The backfill updates only RetailEdge attribution fields such as `retailedge_branch`, `retailedge_branch_source`, `retailedge_branch_resolved_on`, `retailedge_branch_resolution_note`, and the optional movement attribution fields where those fields exist.
+
+Ambiguous and cross-branch transactions are still not guessed. Reports and branch-aware helpers prefer stored `retailedge_branch` where available and fall back to the branch resolver only when attribution is blank. This phase does not introduce accounting, stock, invoice audit, payment verification, POS shift, or Daily Sales Audit mutation.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
+## RetailEdge V1.5A.3B - Controlled Branch Defaults Application
+
+RetailEdge can now apply Branch Profile defaults to safe empty fields on draft documents only. This includes controlled warehouse defaults for Material Request, Stock Entry, and supported sales and purchase documents, controlled cost center defaults for supported sales documents and cashier expenses, and default POS Profile suggestions where RetailEdge branch context has already been resolved safely.
+
+Existing user-entered values are preserved, ambiguous branch context does not trigger guessing, and submitted or cancelled documents are left untouched. This phase does not post accounting, does not create Journal Entries or Payment Entries, does not change stock quantities, and does not mutate POS shift totals or Daily Sales Audit source transactions.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash

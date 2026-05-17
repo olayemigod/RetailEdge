@@ -47,6 +47,12 @@
   "include_rejected_cashier_expenses_in_daily_sales_audit_preview",
   "daily_sales_audit_variance_tolerance",
   "daily_sales_audit_reviewer_roles",
+  "branch_default_application_section",
+  "enable_branch_default_application",
+  "apply_branch_default_warehouse",
+  "apply_branch_default_cost_center",
+  "apply_branch_default_accounts",
+  "apply_branch_default_pos_profile",
   "coreedge_integration_tab",
   "coreedge_integration_section",
   "enable_coreedge_integration",
@@ -343,6 +349,43 @@
    "fieldtype": "Table",
    "label": "Daily Sales Audit Reviewer Roles",
    "options": "RetailEdge Daily Sales Audit Reviewer Role"
+  },
+  {
+   "fieldname": "branch_default_application_section",
+   "fieldtype": "Section Break",
+   "label": "Branch Default Application Controls"
+  },
+  {
+   "default": "1",
+   "description": "Allows RetailEdge to apply branch profile defaults to empty fields on draft documents.",
+   "fieldname": "enable_branch_default_application",
+   "fieldtype": "Check",
+   "label": "Enable Branch Default Application"
+  },
+  {
+   "default": "1",
+   "fieldname": "apply_branch_default_warehouse",
+   "fieldtype": "Check",
+   "label": "Apply Default Warehouse"
+  },
+  {
+   "default": "1",
+   "fieldname": "apply_branch_default_cost_center",
+   "fieldtype": "Check",
+   "label": "Apply Default Cost Center"
+  },
+  {
+   "default": "0",
+   "description": "Reserved for controlled use. Do not apply accounts broadly unless document mapping is safe.",
+   "fieldname": "apply_branch_default_accounts",
+   "fieldtype": "Check",
+   "label": "Apply Default Accounts"
+  },
+  {
+   "default": "1",
+   "fieldname": "apply_branch_default_pos_profile",
+   "fieldtype": "Check",
+   "label": "Apply Default POS Profile"
   },
   {
    "fieldname": "coreedge_integration_tab",

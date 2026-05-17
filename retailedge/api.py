@@ -13,11 +13,16 @@ from retailedge.branch_profile import (
 	get_default_branch_for_user as _get_default_branch_for_user,
 	get_user_branch_profiles as _get_user_branch_profiles,
 )
+from retailedge.branch_defaults_application import (
+	assert_can_preview_branch_defaults as _assert_can_preview_branch_defaults,
+	preview_branch_defaults_for_doc as _preview_branch_defaults_for_doc,
+)
 from retailedge.transaction_branch_attribution import (
 	get_branch_attribution_target_doctypes as _get_branch_attribution_target_doctypes,
 	preview_transaction_branch_backfill as _preview_transaction_branch_backfill,
 	refresh_transaction_branch_attribution as _refresh_transaction_branch_attribution,
 	resolve_transaction_branch as _resolve_transaction_branch,
+	run_transaction_branch_backfill as _run_transaction_branch_backfill,
 )
 from retailedge.cashier_expense import (
 	approve_cashier_expense as _approve_cashier_expense,
@@ -204,6 +209,26 @@ def refresh_transaction_branch_attribution(doctype, name, overwrite=False):
 def preview_transaction_branch_backfill(doctype=None, filters=None, limit=500):
 	_assert_transaction_branch_attribution_manager()
 	return _preview_transaction_branch_backfill(doctype=doctype, filters=filters, limit=int(limit or 500))
+
+
+@frappe.whitelist()
+def run_transaction_branch_backfill(doctype=None, filters=None, limit=500, overwrite=False, dry_run=True):
+	_assert_transaction_branch_attribution_manager()
+	dry_run_flag = bool(int(dry_run)) if isinstance(dry_run, str) else bool(dry_run)
+	overwrite_flag = bool(int(overwrite)) if isinstance(overwrite, str) else bool(overwrite)
+	return _run_transaction_branch_backfill(
+		doctype=doctype,
+		filters=filters,
+		limit=int(limit or 500),
+		overwrite=overwrite_flag,
+		dry_run=dry_run_flag,
+	)
+
+
+@frappe.whitelist()
+def preview_branch_defaults_for_doc(doctype, name=None, values=None):
+	_assert_can_preview_branch_defaults()
+	return _preview_branch_defaults_for_doc(doctype=doctype, name=name, values=values)
 
 
 @frappe.whitelist()
