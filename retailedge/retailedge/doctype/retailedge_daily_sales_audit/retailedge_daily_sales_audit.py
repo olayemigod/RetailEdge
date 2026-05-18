@@ -6,6 +6,8 @@ from frappe.model.document import Document
 from retailedge.branch_context import apply_branch_context_to_doc
 from retailedge.daily_sales_audit import (
 	append_daily_sales_audit_action_log,
+	calculate_daily_sales_audit_variance,
+	refresh_daily_sales_audit_review_summary,
 	resolve_daily_sales_audit_context_from_selection,
 )
 
@@ -23,18 +25,21 @@ class RetailEdgeDailySalesAudit(Document):
 		if not self.audit_date:
 			self.audit_date = None
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=True)
+		calculate_daily_sales_audit_variance(self)
+		refresh_daily_sales_audit_review_summary(self)
 		self._validate_context_consistency()
 
 	def before_submit(self):
 		self._status_before_submit = self.audit_status or "Draft"
 		if self.audit_status in {"", "Draft"}:
 			self.audit_status = "Ready for Review"
+		refresh_daily_sales_audit_review_summary(self)
 
 	def on_submit(self):
 		append_daily_sales_audit_action_log(
 			self,
 			action="Submitted",
-			previous_status=getattr(self, "_status_before_submit", None) or "Draft",
+			old_status=getattr(self, "_status_before_submit", None) or "Draft",
 			new_status=self.audit_status,
 		)
 
@@ -46,7 +51,7 @@ class RetailEdgeDailySalesAudit(Document):
 		append_daily_sales_audit_action_log(
 			self,
 			action="Cancelled",
-			previous_status=getattr(self, "_status_before_cancel", None) or "Draft",
+			old_status=getattr(self, "_status_before_cancel", None) or "Draft",
 			new_status=self.audit_status,
 		)
 

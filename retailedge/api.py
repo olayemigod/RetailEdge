@@ -53,11 +53,24 @@ from retailedge.cashier_expense_posting import (
 	refresh_pending_cashier_expense_posting_readiness as _refresh_pending_cashier_expense_posting_readiness,
 )
 from retailedge.daily_sales_audit import (
+	approve_daily_sales_audit as _approve_daily_sales_audit,
+	cancel_daily_sales_audit_review as _cancel_daily_sales_audit_review,
 	create_daily_sales_audit_draft as _create_daily_sales_audit_draft,
 	get_daily_sales_audit_context as _get_daily_sales_audit_context,
 	get_daily_sales_audit_context_options as _get_daily_sales_audit_context_options,
+	mark_daily_sales_audit_balanced as _mark_daily_sales_audit_balanced,
+	mark_daily_sales_audit_variance_found as _mark_daily_sales_audit_variance_found,
 	refresh_daily_sales_audit_preview as _refresh_daily_sales_audit_preview,
+	reject_daily_sales_audit as _reject_daily_sales_audit,
+	reopen_daily_sales_audit as _reopen_daily_sales_audit,
+	request_daily_sales_audit_clarification as _request_daily_sales_audit_clarification,
 	resolve_daily_sales_audit_context_from_selection as _resolve_daily_sales_audit_context_from_selection,
+	resolve_daily_sales_audit_clarification as _resolve_daily_sales_audit_clarification,
+	start_daily_sales_audit_review as _start_daily_sales_audit_review,
+	submit_daily_sales_audit_for_review as _submit_daily_sales_audit_for_review,
+	update_daily_sales_audit_expense_line_status as _update_daily_sales_audit_expense_line_status,
+	update_daily_sales_audit_invoice_line_status as _update_daily_sales_audit_invoice_line_status,
+	update_daily_sales_audit_payment_line_status as _update_daily_sales_audit_payment_line_status,
 	user_is_daily_sales_audit_reviewer as _user_is_daily_sales_audit_reviewer,
 )
 from retailedge.cashier_context import (
@@ -355,6 +368,77 @@ def refresh_daily_sales_audit_preview(audit_name):
 	if not _user_is_daily_sales_audit_reviewer():
 		frappe.throw("You do not have permission to refresh RetailEdge Daily Sales Audit.", frappe.PermissionError)
 	return _refresh_daily_sales_audit_preview(audit_name)
+
+
+@frappe.whitelist()
+def submit_daily_sales_audit_for_review(audit_name, remarks=None):
+	return _submit_daily_sales_audit_for_review(audit_name, remarks=remarks)
+
+
+@frappe.whitelist()
+def start_daily_sales_audit_review(audit_name, remarks=None):
+	return _start_daily_sales_audit_review(audit_name, remarks=remarks)
+
+
+@frappe.whitelist()
+def mark_daily_sales_audit_balanced(audit_name, remarks=None):
+	return _mark_daily_sales_audit_balanced(audit_name, remarks=remarks)
+
+
+@frappe.whitelist()
+def mark_daily_sales_audit_variance_found(audit_name, reason=None, remarks=None):
+	return _mark_daily_sales_audit_variance_found(audit_name, reason=reason, remarks=remarks)
+
+
+@frappe.whitelist()
+def request_daily_sales_audit_clarification(audit_name, note=None):
+	return _request_daily_sales_audit_clarification(audit_name, note=note)
+
+
+@frappe.whitelist()
+def resolve_daily_sales_audit_clarification(audit_name, remarks=None):
+	return _resolve_daily_sales_audit_clarification(audit_name, remarks=remarks)
+
+
+@frappe.whitelist()
+def approve_daily_sales_audit(audit_name, remarks=None):
+	return _approve_daily_sales_audit(audit_name, remarks=remarks)
+
+
+@frappe.whitelist()
+def reject_daily_sales_audit(audit_name, remarks=None):
+	return _reject_daily_sales_audit(audit_name, remarks=remarks)
+
+
+@frappe.whitelist()
+def reopen_daily_sales_audit(audit_name, remarks=None):
+	return _reopen_daily_sales_audit(audit_name, remarks=remarks)
+
+
+@frappe.whitelist()
+def cancel_daily_sales_audit_review(audit_name, remarks=None):
+	return _cancel_daily_sales_audit_review(audit_name, remarks=remarks)
+
+
+@frappe.whitelist()
+def update_daily_sales_audit_invoice_line_status(audit_name, row_name, review_status, remarks=None):
+	return _update_daily_sales_audit_invoice_line_status(
+		audit_name, row_name, review_status, remarks=remarks
+	)
+
+
+@frappe.whitelist()
+def update_daily_sales_audit_payment_line_status(audit_name, row_name, review_status, remarks=None):
+	return _update_daily_sales_audit_payment_line_status(
+		audit_name, row_name, review_status, remarks=remarks
+	)
+
+
+@frappe.whitelist()
+def update_daily_sales_audit_expense_line_status(audit_name, row_name, review_status, remarks=None):
+	return _update_daily_sales_audit_expense_line_status(
+		audit_name, row_name, review_status, remarks=remarks
+	)
 
 
 @frappe.whitelist()

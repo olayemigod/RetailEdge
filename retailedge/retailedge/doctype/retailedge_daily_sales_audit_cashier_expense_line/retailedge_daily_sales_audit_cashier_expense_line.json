@@ -13,7 +13,14 @@
   "daily_audit_inclusion_status",
   "classification",
   "include_in_expected_cash",
-  "remarks"
+  "remarks",
+  "review_status",
+  "included_in_audit",
+  "variance_impact",
+  "reviewer_note",
+  "excluded_from_review",
+  "reviewed_by",
+  "reviewed_on"
  ],
  "fields": [
   {
@@ -71,6 +78,46 @@
    "fieldname": "remarks",
    "fieldtype": "Small Text",
    "label": "Remarks"
+  },
+  {
+   "default": "Pending Review",
+   "fieldname": "review_status",
+   "fieldtype": "Select",
+   "label": "Review Status",
+   "options": "Pending Review\nMatched\nVariance Found\nRequires Clarification\nExcluded\nVerified for Audit"
+  },
+  {
+   "default": "1",
+   "fieldname": "included_in_audit",
+   "fieldtype": "Check",
+   "label": "Included in Audit"
+  },
+  {
+   "fieldname": "variance_impact",
+   "fieldtype": "Currency",
+   "label": "Variance Impact"
+  },
+  {
+   "fieldname": "reviewer_note",
+   "fieldtype": "Small Text",
+   "label": "Reviewer Note"
+  },
+  {
+   "default": "0",
+   "fieldname": "excluded_from_review",
+   "fieldtype": "Check",
+   "label": "Excluded from Review"
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User"
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On"
   }
  ],
  "istable": 1,
@@ -78,4 +125,3 @@
  "name": "RetailEdge Daily Sales Audit Cashier Expense Line",
  "owner": "Administrator"
 }
-

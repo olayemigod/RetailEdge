@@ -11,7 +11,7 @@ from retailedge.transaction_branch_attribution import (
 from retailedge.utils.settings import get_retailedge_settings
 
 
-SALES_DOCTYPES = {"Sales Order", "Delivery Note", "Sales Invoice"}
+SALES_DOCTYPES = {"Sales Order", "Delivery Note", "Sales Invoice", "POS Invoice"}
 PURCHASE_DOCTYPES = {"Purchase Order", "Purchase Receipt", "Purchase Invoice"}
 DEFAULT_APPLICATION_MANAGER_ROLES = {
 	"System Manager",

@@ -13,7 +13,14 @@
   "paid_amount",
   "payment_status",
   "audit_line_status",
-  "remarks"
+  "remarks",
+  "review_status",
+  "variance_amount",
+  "variance_reason",
+  "reviewer_note",
+  "excluded_from_review",
+  "reviewed_by",
+  "reviewed_on"
  ],
  "fields": [
   {
@@ -70,6 +77,45 @@
    "fieldname": "remarks",
    "fieldtype": "Small Text",
    "label": "Remarks"
+  },
+  {
+   "default": "Pending Review",
+   "fieldname": "review_status",
+   "fieldtype": "Select",
+   "label": "Review Status",
+   "options": "Pending Review\nMatched\nVariance Found\nRequires Clarification\nExcluded\nVerified for Audit"
+  },
+  {
+   "fieldname": "variance_amount",
+   "fieldtype": "Currency",
+   "label": "Variance Amount"
+  },
+  {
+   "fieldname": "variance_reason",
+   "fieldtype": "Small Text",
+   "label": "Variance Reason"
+  },
+  {
+   "fieldname": "reviewer_note",
+   "fieldtype": "Small Text",
+   "label": "Reviewer Note"
+  },
+  {
+   "default": "0",
+   "fieldname": "excluded_from_review",
+   "fieldtype": "Check",
+   "label": "Excluded from Review"
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User"
+  },
+  {
+   "fieldname": "reviewed_on",
+   "fieldtype": "Datetime",
+   "label": "Reviewed On"
   }
  ],
  "istable": 1,
@@ -77,4 +123,3 @@
  "name": "RetailEdge Daily Sales Audit Invoice Line",
  "owner": "Administrator"
 }
-

@@ -8,9 +8,11 @@
   "action",
   "action_by",
   "action_on",
+  "old_status",
   "previous_status",
   "new_status",
   "remarks",
+  "details_json",
   "context"
  ],
  "fields": [
@@ -34,6 +36,11 @@
    "label": "Action On"
   },
   {
+   "fieldname": "old_status",
+   "fieldtype": "Data",
+   "label": "Old Status"
+  },
+  {
    "fieldname": "previous_status",
    "fieldtype": "Data",
    "label": "Previous Status"
@@ -50,6 +57,11 @@
    "label": "Remarks"
   },
   {
+   "fieldname": "details_json",
+   "fieldtype": "Long Text",
+   "label": "Details JSON"
+  },
+  {
    "fieldname": "context",
    "fieldtype": "Long Text",
    "label": "Context"
@@ -60,4 +72,3 @@
  "name": "RetailEdge Daily Sales Audit Action Log",
  "owner": "Administrator"
 }
-

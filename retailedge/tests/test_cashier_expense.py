@@ -52,6 +52,7 @@ from retailedge.branch_context import (
 	get_user_allowed_branches as get_branch_context_allowed_branches,
 	has_field as branch_context_has_field,
 	has_doctype as branch_context_has_doctype,
+	resolve_branch_from_opening_shift,
 	resolve_branch_from_pos_profile,
 	resolve_retailedge_operational_defaults,
 	resolve_retailedge_branch_context,
@@ -74,13 +75,26 @@ from retailedge.cashier_expense_posting import (
 	refresh_cashier_expense_posting_readiness,
 )
 from retailedge.daily_sales_audit import (
+	approve_daily_sales_audit,
+	calculate_daily_sales_audit_variance,
+	cancel_daily_sales_audit_review,
 	create_daily_sales_audit_draft,
 	get_daily_sales_audit_context,
 	get_daily_sales_audit_context_options,
 	get_daily_sales_audit_reviewer_roles,
 	get_daily_sales_audit_settings,
+	mark_daily_sales_audit_balanced,
+	mark_daily_sales_audit_variance_found,
+	refresh_daily_sales_audit_review_summary,
 	refresh_daily_sales_audit_preview,
+	reject_daily_sales_audit,
+	reopen_daily_sales_audit,
+	request_daily_sales_audit_clarification,
 	resolve_daily_sales_audit_context_from_selection,
+	resolve_daily_sales_audit_clarification,
+	start_daily_sales_audit_review,
+	submit_daily_sales_audit_for_review,
+	update_daily_sales_audit_invoice_line_status,
 	user_is_daily_sales_audit_reviewer,
 )
 from retailedge.transaction_branch_attribution import (
@@ -135,6 +149,7 @@ class _Settings(SimpleNamespace):
 	include_rejected_cashier_expenses_in_daily_sales_audit_preview = 1
 	daily_sales_audit_variance_tolerance = 0
 	daily_sales_audit_reviewer_roles = []
+	allow_self_review_daily_sales_audit = 0
 	enable_branch_default_application = 1
 	apply_branch_default_warehouse = 1
 	apply_branch_default_cost_center = 1
@@ -1352,6 +1367,38 @@ class DailySalesAuditTests(unittest.TestCase):
 			cashier_expense_lines=kwargs.pop("cashier_expense_lines", []),
 			action_logs=kwargs.pop("action_logs", []),
 			review_required=kwargs.pop("review_required", 1),
+			owner=kwargs.pop("owner", "owner@example.com"),
+			submitted_for_review_by=kwargs.pop("submitted_for_review_by", None),
+			submitted_for_review_on=kwargs.pop("submitted_for_review_on", None),
+			review_started_by=kwargs.pop("review_started_by", None),
+			review_started_on=kwargs.pop("review_started_on", None),
+			approved_by=kwargs.pop("approved_by", None),
+			approved_on=kwargs.pop("approved_on", None),
+			rejected_by=kwargs.pop("rejected_by", None),
+			rejected_on=kwargs.pop("rejected_on", None),
+			reopened_by=kwargs.pop("reopened_by", None),
+			reopened_on=kwargs.pop("reopened_on", None),
+			last_review_action_by=kwargs.pop("last_review_action_by", None),
+			last_review_action_on=kwargs.pop("last_review_action_on", None),
+			review_remarks=kwargs.pop("review_remarks", None),
+			clarification_required=kwargs.pop("clarification_required", 0),
+			clarification_note=kwargs.pop("clarification_note", None),
+			locked_for_review=kwargs.pop("locked_for_review", 0),
+			opening_cash_amount=kwargs.pop("opening_cash_amount", 0),
+			cash_sales_amount=kwargs.pop("cash_sales_amount", 0),
+			cashier_expense_amount=kwargs.pop("cashier_expense_amount", 0),
+			expected_cash_amount=kwargs.pop("expected_cash_amount", 0),
+			actual_closing_cash_amount=kwargs.pop("actual_closing_cash_amount", 0),
+			cash_variance_amount=kwargs.pop("cash_variance_amount", 0),
+			net_variance_amount=kwargs.pop("net_variance_amount", 0),
+			shortage_amount=kwargs.pop("shortage_amount", 0),
+			overage_amount=kwargs.pop("overage_amount", 0),
+			variance_tolerance_used=kwargs.pop("variance_tolerance_used", 0),
+			variance_within_tolerance=kwargs.pop("variance_within_tolerance", 0),
+			variance_status=kwargs.pop("variance_status", None),
+			variance_reason=kwargs.pop("variance_reason", None),
+			variance_classification=kwargs.pop("variance_classification", None),
+			exception_count=kwargs.pop("exception_count", 0),
 		)
 
 		def _set(field, value):
@@ -1497,17 +1544,18 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch("retailedge.daily_sales_audit.get_cashier_expenses_for_daily_audit")
 	@patch("retailedge.daily_sales_audit.get_shift_cash_snapshot")
 	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings())
-	@patch("retailedge.daily_sales_audit._has_doctype", return_value=True)
+	@patch("retailedge.daily_sales_audit._has_doctype")
 	def test_daily_sales_audit_context_executes_without_mutating_source_docs(
 		self,
-		_mock_has_doctype,
+		mock_has_doctype,
 		_mock_settings,
 		mock_shift_snapshot,
 		mock_expenses,
 		mock_payment_account,
 		mock_get_doc,
 		mock_get_all,
-	):
+		):
+		mock_has_doctype.side_effect = lambda doctype: doctype == "Sales Invoice"
 		mock_shift_snapshot.return_value = {"opening_cash": 1000, "cash_sales": 300}
 		mock_expenses.return_value = [
 			{
@@ -1550,6 +1598,166 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertEqual(len(context["invoice_lines"]), 1)
 		self.assertEqual(len(context["payment_lines"]), 1)
 		self.assertEqual(len(context["cashier_expense_lines"]), 1)
+
+	@patch("retailedge.daily_sales_audit.frappe.get_all")
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	@patch("retailedge.daily_sales_audit.resolve_cash_payment_account")
+	@patch("retailedge.daily_sales_audit.get_cashier_expenses_for_daily_audit")
+	@patch("retailedge.daily_sales_audit.get_shift_cash_snapshot")
+	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings())
+	@patch("retailedge.daily_sales_audit._has_doctype")
+	def test_daily_sales_audit_context_uses_shift_seed_invoices_and_shift_linked_expenses(
+		self,
+		mock_has_doctype,
+		_mock_settings,
+		mock_shift_snapshot,
+		mock_expenses,
+		mock_payment_account,
+		mock_get_doc,
+		mock_get_all,
+	):
+		mock_has_doctype.side_effect = lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Reference"}
+		mock_shift_snapshot.return_value = {"opening_cash": 1000, "cash_sales": 300}
+		mock_expenses.return_value = [
+			{
+				"name": "RE-CE-1",
+				"expense_date": "2026-05-12",
+				"expense_category": "Transport",
+				"amount": 200,
+				"expense_status": "Submitted",
+				"daily_audit_inclusion_status": "Included",
+				"daily_audit_classification": "Cash Expense",
+				"include_in_daily_audit": 1,
+			}
+		]
+		mock_payment_account.return_value = {"payment_account": "Cash - DEMO"}
+
+		def _get_all(doctype, filters=None, fields=None, **kwargs):
+			if doctype == "Sales Invoice Reference":
+				return [
+					{
+						"sales_invoice": "SINV-1",
+						"posting_date": "2026-05-11",
+						"customer": "Customer 1",
+						"grand_total": 500,
+					}
+				]
+			if doctype == "Sales Invoice":
+				return [
+					{
+						"name": "SINV-1",
+						"posting_date": "2026-05-11",
+						"customer": "Customer 1",
+						"grand_total": 500,
+						"outstanding_amount": 0,
+						"paid_amount": 500,
+						"is_pos": 1,
+						"pos_profile": "Testing",
+					}
+				]
+			return []
+
+		mock_get_all.side_effect = _get_all
+		mock_get_doc.return_value = SimpleNamespace(
+			payments=[_Row(mode_of_payment="Cash", account="Cash - DEMO", amount=500, base_amount=500)]
+		)
+
+		context = get_daily_sales_audit_context(
+			{
+				"company": "Demo Company",
+				"audit_date": "2026-05-11",
+				"pos_profile": "Testing",
+				"pos_opening_shift": "OPEN-1",
+				"pos_closing_shift": "CLOSE-1",
+			}
+		)
+		self.assertEqual(len(context["invoice_lines"]), 1)
+		self.assertEqual(context["invoice_lines"][0]["sales_invoice"], "SINV-1")
+		self.assertEqual(len(context["payment_lines"]), 1)
+		self.assertEqual(len(context["cashier_expense_lines"]), 1)
+		mock_expenses.assert_called_once()
+		expense_filters = mock_expenses.call_args.kwargs["filters"]
+		self.assertNotIn("from_date", expense_filters)
+		self.assertNotIn("to_date", expense_filters)
+		self.assertEqual(expense_filters["linked_pos_opening_shift"], "OPEN-1")
+		self.assertEqual(expense_filters["linked_pos_closing_shift"], "CLOSE-1")
+
+	@patch("retailedge.daily_sales_audit.frappe.get_all", return_value=[])
+	@patch("retailedge.daily_sales_audit.get_cashier_expenses_for_daily_audit")
+	@patch("retailedge.daily_sales_audit.get_shift_cash_snapshot", return_value={"opening_cash": 1000, "cash_sales": 300})
+	@patch(
+		"retailedge.daily_sales_audit.get_retailedge_settings",
+		return_value=_Settings(include_cashier_expenses_in_daily_sales_audit_preview=0),
+	)
+	@patch("retailedge.daily_sales_audit._has_doctype", return_value=False)
+	def test_daily_sales_audit_context_still_uses_shift_expenses_when_preview_toggle_is_off(
+		self,
+		_mock_has_doctype,
+		_mock_settings,
+		_mock_shift_snapshot,
+		mock_expenses,
+		_mock_get_all,
+	):
+		mock_expenses.return_value = [
+			{
+				"name": "RE-CE-1",
+				"expense_date": "2026-05-12",
+				"expense_category": "Transport",
+				"amount": 200,
+				"expense_status": "Submitted",
+				"daily_audit_inclusion_status": "Included",
+				"daily_audit_classification": "Cash Expense",
+				"daily_audit_should_include": 1,
+			}
+		]
+		context = get_daily_sales_audit_context(
+			{
+				"company": "Demo Company",
+				"pos_opening_shift": "OPEN-1",
+				"pos_closing_shift": "CLOSE-1",
+			}
+		)
+		self.assertEqual(context["cashier_expense_amount"], 200)
+		self.assertEqual(len(context["cashier_expense_lines"]), 1)
+
+	@patch("retailedge.daily_sales_audit.resolve_daily_sales_audit_context_from_selection")
+	@patch("retailedge.daily_sales_audit.frappe.get_all", return_value=[])
+	@patch("retailedge.daily_sales_audit.get_cashier_expenses_for_daily_audit")
+	@patch("retailedge.daily_sales_audit.get_shift_cash_snapshot", return_value={"opening_cash": 1000, "cash_sales": 300})
+	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings())
+	@patch("retailedge.daily_sales_audit._has_doctype", return_value=False)
+	def test_daily_sales_audit_context_re_resolves_shift_branch_before_expense_filters(
+		self,
+		_mock_has_doctype,
+		_mock_settings,
+		_mock_shift_snapshot,
+		mock_expenses,
+		_mock_get_all,
+		mock_resolve_context,
+	):
+		mock_resolve_context.return_value = {
+			"company": "Demo Company",
+			"branch": "HQ",
+			"pos_profile": "Airport",
+			"cashier": "cashier@example.com",
+			"pos_opening_shift": "OPEN-1",
+			"pos_closing_shift": "CLOSE-1",
+			"messages": [],
+			"source_map": {"branch": "POS Opening Shift"},
+		}
+		mock_expenses.return_value = []
+		get_daily_sales_audit_context(
+			{
+				"company": "Demo Company",
+				"branch": "Airport Branch",
+				"pos_profile": "Airport",
+				"cashier": "cashier@example.com",
+				"pos_opening_shift": "OPEN-1",
+				"pos_closing_shift": "CLOSE-1",
+			}
+		)
+		expense_filters = mock_expenses.call_args.kwargs["filters"]
+		self.assertEqual(expense_filters["branch"], "HQ")
 
 	@patch("retailedge.daily_sales_audit.append_daily_sales_audit_action_log")
 	@patch("retailedge.daily_sales_audit.frappe.new_doc")
@@ -1660,6 +1868,259 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertEqual(doc.expected_cash_amount, 1100)
 		mock_log.assert_called_once()
 
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_submit_for_review_moves_draft_to_ready_for_review(self, mock_get_doc):
+		doc = self._make_audit_doc(name="RE-DSA-1", audit_status="Draft")
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			submit_daily_sales_audit_for_review("RE-DSA-1", remarks="Submit")
+		self.assertEqual(doc.audit_status, "Ready for Review")
+		self.assertEqual(doc.submitted_for_review_by, "reviewer@example.com")
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_start_review_moves_ready_for_review_to_in_review(self, mock_get_doc, _mock_roles):
+		doc = self._make_audit_doc(name="RE-DSA-2", audit_status="Ready for Review", owner="cashier@example.com")
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			start_daily_sales_audit_review("RE-DSA-2", remarks="Start")
+		self.assertEqual(doc.audit_status, "In Review")
+		self.assertEqual(doc.locked_for_review, 1)
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_mark_balanced_sets_balanced_and_audit_result(self, mock_get_doc, _mock_roles):
+		doc = self._make_audit_doc(
+			name="RE-DSA-3",
+			audit_status="In Review",
+			opening_cash_amount=100,
+			cash_sales_amount=50,
+			actual_closing_cash_amount=150,
+			cashier_expense_lines=[],
+			owner="cashier@example.com",
+		)
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			mark_daily_sales_audit_balanced("RE-DSA-3", remarks="Balanced")
+		self.assertEqual(doc.audit_status, "Balanced")
+		self.assertEqual(doc.audit_result, "Balanced")
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_variance_found_sets_status_and_review_required(self, mock_get_doc, _mock_roles):
+		doc = self._make_audit_doc(name="RE-DSA-4", audit_status="In Review", owner="cashier@example.com")
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			mark_daily_sales_audit_variance_found("RE-DSA-4", reason="Short cash", remarks="Variance")
+		self.assertEqual(doc.audit_status, "Variance Found")
+		self.assertEqual(doc.review_required, 1)
+		self.assertEqual(doc.variance_reason, "Short cash")
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_request_and_resolve_clarification(self, mock_get_doc, _mock_roles):
+		doc = self._make_audit_doc(name="RE-DSA-5", audit_status="In Review", owner="cashier@example.com")
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			request_daily_sales_audit_clarification("RE-DSA-5", note="Need explanation")
+		self.assertEqual(doc.audit_status, "Clarification Required")
+		self.assertEqual(doc.clarification_required, 1)
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			resolve_daily_sales_audit_clarification("RE-DSA-5", remarks="Resolved")
+		self.assertEqual(doc.audit_status, "In Review")
+		self.assertEqual(doc.clarification_required, 0)
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Cashier"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_approve_requires_reviewer_role(self, mock_get_doc, _mock_roles):
+		doc = self._make_audit_doc(name="RE-DSA-6", audit_status="Balanced")
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="cashier@example.com")):
+			with self.assertRaises(frappe.PermissionError):
+				approve_daily_sales_audit("RE-DSA-6", remarks="Approve")
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_approve_updates_only_daily_sales_audit_fields(self, mock_get_doc, _mock_roles):
+		doc = self._make_audit_doc(
+			name="RE-DSA-7",
+			audit_status="Balanced",
+			owner="cashier@example.com",
+			opening_cash_amount=100,
+			cash_sales_amount=50,
+			actual_closing_cash_amount=150,
+		)
+		doc.source_invoice_status = "Submitted"
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			approve_daily_sales_audit("RE-DSA-7", remarks="Approved")
+		self.assertEqual(doc.audit_status, "Approved")
+		self.assertEqual(doc.source_invoice_status, "Submitted")
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_reject_and_reopen_workflow(self, mock_get_doc, _mock_roles):
+		doc = self._make_audit_doc(name="RE-DSA-8", audit_status="Ready for Review", owner="cashier@example.com")
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			reject_daily_sales_audit("RE-DSA-8", remarks="Reject")
+			reopen_daily_sales_audit("RE-DSA-8", remarks="Reopen")
+		self.assertEqual(doc.audit_status, "Reopened")
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_cancel_review_does_not_cancel_source_documents(self, mock_get_doc, _mock_roles):
+		doc = self._make_audit_doc(name="RE-DSA-9", audit_status="In Review", owner="cashier@example.com")
+		doc.source_docstatus = 1
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			cancel_daily_sales_audit_review("RE-DSA-9", remarks="Cancel")
+		self.assertEqual(doc.audit_status, "Cancelled")
+		self.assertEqual(doc.source_docstatus, 1)
+
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_line_review_updates_only_child_row_and_appends_log(self, mock_get_doc, _mock_roles):
+		row = _Doc(name="ROW-1", review_status="Pending Review", audit_line_status="Pending Review", remarks=None)
+		doc = self._make_audit_doc(name="RE-DSA-10", audit_status="In Review", invoice_lines=[row], owner="cashier@example.com")
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
+			update_daily_sales_audit_invoice_line_status("RE-DSA-10", "ROW-1", "Matched", remarks="ok")
+		self.assertEqual(row.review_status, "Matched")
+		self.assertEqual(row.audit_line_status, "Matched")
+		self.assertTrue(len(doc.action_logs) >= 1)
+
+	def test_variance_calculation_uses_expected_cash_formula(self):
+		doc = self._make_audit_doc(
+			opening_cash_amount=1000,
+			cash_sales_amount=300,
+			actual_closing_cash_amount=1000,
+			cashier_expense_lines=[_Doc(amount=200, included_in_audit=1, include_in_expected_cash=1, review_status="Pending Review")],
+		)
+		result = calculate_daily_sales_audit_variance(doc)
+		self.assertEqual(result["expected_cash_amount"], 1100)
+		self.assertEqual(result["net_variance_amount"], -100)
+		self.assertEqual(doc.audit_result, "Shortage")
+
+	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings(daily_sales_audit_variance_tolerance=10))
+	def test_positive_variance_within_tolerance_still_classifies_overage(self, _mock_settings):
+		doc = self._make_audit_doc(
+			opening_cash_amount=100,
+			cash_sales_amount=0,
+			actual_closing_cash_amount=105,
+		)
+		result = calculate_daily_sales_audit_variance(doc)
+		self.assertEqual(result["net_variance_amount"], 5)
+		self.assertEqual(doc.variance_within_tolerance, 1)
+		self.assertEqual(doc.audit_result, "Overage")
+		self.assertEqual(doc.variance_classification, "Within Tolerance Overage")
+
+	@patch("retailedge.daily_sales_audit.resolve_retailedge_branch_context", return_value={})
+	@patch("retailedge.daily_sales_audit.resolve_daily_sales_audit_context_from_selection", return_value={})
+	@patch("retailedge.daily_sales_audit.frappe.get_meta")
+	@patch("retailedge.daily_sales_audit.frappe.get_all")
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	@patch("retailedge.daily_sales_audit.resolve_cash_payment_account")
+	@patch("retailedge.daily_sales_audit.get_cashier_expenses_for_daily_audit")
+	@patch("retailedge.daily_sales_audit.get_shift_cash_snapshot")
+	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings())
+	@patch("retailedge.daily_sales_audit._has_doctype")
+	def test_daily_sales_audit_context_includes_pos_invoice_and_payment_entry_lines(
+		self,
+		mock_has_doctype,
+		_mock_settings,
+		mock_shift_snapshot,
+		mock_expenses,
+		mock_payment_account,
+		mock_get_doc,
+		mock_get_all,
+		mock_get_meta,
+		_mock_resolve_context,
+		_mock_branch_context,
+	):
+		class _Meta:
+			def __init__(self, fields):
+				self.fields = set(fields)
+
+			def has_field(self, fieldname):
+				return fieldname in self.fields
+
+		mock_has_doctype.side_effect = lambda doctype: doctype in {"POS Invoice", "Payment Entry"}
+		mock_shift_snapshot.return_value = {"opening_cash": 1000, "cash_sales": 300}
+		mock_expenses.return_value = []
+		mock_payment_account.return_value = {"payment_account": "Cash - DEMO"}
+		mock_get_meta.side_effect = lambda doctype: _Meta(
+			{
+				"POS Invoice": {"company", "pos_profile", "posting_date", "paid_amount", "outstanding_amount"},
+				"Payment Entry": {"company", "posting_date"},
+			}.get(doctype, set())
+		)
+
+		def _get_all(doctype, filters=None, fields=None, **kwargs):
+			if doctype == "POS Invoice":
+				return [
+					{
+						"name": "PSINV-1",
+						"posting_date": "2026-05-14",
+						"customer": "Customer 1",
+						"grand_total": 500,
+						"outstanding_amount": 0,
+						"paid_amount": 300,
+					}
+				]
+			if doctype == "Payment Entry":
+				return [
+					{
+						"name": "PAY-1",
+						"posting_date": "2026-05-14",
+						"mode_of_payment": "Bank Transfer",
+						"paid_amount": 200,
+						"received_amount": 200,
+						"paid_from": "Bank - DEMO",
+						"paid_to": "Debtors - DEMO",
+					}
+				]
+			return []
+
+		mock_get_all.side_effect = _get_all
+
+		def _get_doc(doctype, name):
+			if doctype == "POS Invoice":
+				return SimpleNamespace(
+					payments=[_Row(mode_of_payment="Cash", account="Cash - DEMO", amount=300, base_amount=300)]
+				)
+			if doctype == "Payment Entry":
+				return SimpleNamespace(
+					references=[_Row(reference_doctype="POS Invoice", reference_name="PSINV-1", allocated_amount=200)]
+				)
+			raise AssertionError(f"Unexpected doctype lookup: {doctype}")
+
+		mock_get_doc.side_effect = _get_doc
+
+		context = get_daily_sales_audit_context(
+			{
+				"company": "Demo Company",
+				"audit_date": "2026-05-14",
+				"pos_profile": "Testing",
+			}
+		)
+		self.assertEqual(len(context["invoice_lines"]), 1)
+		self.assertEqual(context["invoice_lines"][0]["remarks"], "POS Invoice")
+		self.assertEqual(len(context["payment_lines"]), 2)
+		self.assertEqual(context["total_sales_amount"], 500)
+		self.assertEqual(context["total_cash_payment_amount"], 300)
+		self.assertEqual(context["total_bank_transfer_amount"], 200)
+
+	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings(allow_self_review_daily_sales_audit=0))
+	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
+	@patch("retailedge.daily_sales_audit.frappe.get_doc")
+	def test_self_review_is_blocked_unless_allowed(self, mock_get_doc, _mock_roles, _mock_settings):
+		doc = self._make_audit_doc(name="RE-DSA-11", audit_status="Ready for Review", owner="owner@example.com", cashier="owner@example.com")
+		mock_get_doc.return_value = doc
+		with patch.object(frappe, "session", SimpleNamespace(user="owner@example.com")):
+			with self.assertRaises(frappe.PermissionError):
+				start_daily_sales_audit_review("RE-DSA-11", remarks="self")
+
 	@patch("retailedge.retailedge.doctype.retailedge_daily_sales_audit.retailedge_daily_sales_audit.append_daily_sales_audit_action_log")
 	def test_daily_sales_audit_cancel_sets_status_cancelled(self, mock_log):
 		doc = self._make_audit_doc(audit_status="Draft")
@@ -1724,6 +2185,22 @@ class BranchContextTests(unittest.TestCase):
 		result = resolve_branch_from_pos_profile("POS-1")
 		self.assertEqual(result["branch"], "HQ")
 		self.assertEqual(result["source"], "POS Profile.branch")
+
+	@patch("retailedge.branch_context._coerce_doc")
+	@patch("retailedge.branch_context.get_first_existing_field", return_value=None)
+	def test_resolver_reuses_stored_retailedge_branch_on_opening_shift(self, _mock_first_field, mock_doc):
+		mock_doc.return_value = _Doc(
+			doctype="POS Opening Shift",
+			name="OPEN-1",
+			company="Demo Company",
+			pos_profile="Testing",
+			user="cashier@example.com",
+			retailedge_branch="Airport Branch",
+			retailedge_branch_source="RetailEdge Branch Profile",
+		)
+		result = resolve_branch_from_opening_shift("OPEN-1")
+		self.assertEqual(result["branch"], "Airport Branch")
+		self.assertEqual(result["source"], "RetailEdge Branch Profile")
 
 	@patch("retailedge.branch_context.has_doctype", return_value=False)
 	@patch("retailedge.branch_context._get_coreedge_allowed_branches", return_value=[])
@@ -2276,6 +2753,21 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 		result = resolve_transaction_branch(doc)
 		self.assertEqual(result["branch"], "HQ")
 		self.assertEqual(result["source"], "RetailEdge Branch Profile")
+
+	@patch(
+		"retailedge.transaction_branch_attribution._resolve_branch_context_for_doc",
+		return_value={"branch": "Airport Branch", "source": "POS Opening Shift.retailedge_branch", "messages": []},
+	)
+	@patch(
+		"retailedge.transaction_branch_attribution._resolve_single_branch_from_warehouses",
+		return_value=(None, "No warehouse branch could be resolved."),
+	)
+	def test_sales_invoice_prefers_pos_context_before_warehouse_note(self, _mock_warehouse, _mock_context):
+		doc = _Doc(doctype="Sales Invoice", name="SINV-POS-1", company="Demo Company")
+		result = resolve_transaction_branch(doc)
+		self.assertEqual(result["branch"], "Airport Branch")
+		self.assertEqual(result["source"], "POS Opening Shift.retailedge_branch")
+		self.assertNotEqual(result["note"], "No warehouse branch could be resolved.")
 
 	@patch("retailedge.transaction_branch_attribution.resolve_branch_from_warehouse")
 	def test_stock_entry_detects_cross_branch_movement(self, mock_resolve_warehouse):

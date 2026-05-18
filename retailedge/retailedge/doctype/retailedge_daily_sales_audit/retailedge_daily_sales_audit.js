@@ -8,8 +8,7 @@ frappe.ui.form.on("RetailEdge Daily Sales Audit", {
 
 		setup_context_queries(frm);
 		await refresh_context_options(frm);
-
-		if (frm.doc.docstatus === 0 && has_daily_sales_audit_reviewer_role()) {
+		if (frm.doc.docstatus !== 2) {
 			frm.add_custom_button(__("Resolve Audit Context"), async () => {
 				const resolved = await resolve_audit_context(frm, { trigger_field: "manual", manual: true });
 				if (!resolved) {
@@ -25,16 +24,9 @@ frappe.ui.form.on("RetailEdge Daily Sales Audit", {
 					message: parts.length ? __("Resolved: {0}", [parts.join(", ")]) : __("No additional context was resolved."),
 					indicator: "blue",
 				});
-			});
-
-			frm.add_custom_button(__("Refresh Preview"), () => {
-				frappe.call({
-					method: "retailedge.api.refresh_daily_sales_audit_preview",
-					args: { audit_name: frm.doc.name },
-					callback: () => frm.reload_doc(),
-				});
-			});
+			}, __("Audit Context"));
 		}
+		add_review_workflow_buttons(frm);
 	},
 
 	async company(frm) {
@@ -324,4 +316,91 @@ function has_daily_sales_audit_reviewer_role() {
 		"RetailEdge Auditor",
 		"RetailEdgeAuditor",
 	].some((role) => roles.has(role));
+}
+
+function add_review_workflow_buttons(frm) {
+	const status = frm.doc.audit_status || "Draft";
+	const isReviewer = has_daily_sales_audit_reviewer_role();
+	const addAction = (label, method, promptLabel = __("Remarks"), valueField = "remarks", group = __("Review Actions")) => {
+		frm.add_custom_button(label, async () => {
+			const values = await prompt_for_audit_action(promptLabel, valueField);
+			if (values === null) {
+				return;
+			}
+			frappe.call({
+				method,
+				args: { audit_name: frm.doc.name, ...values },
+				callback: () => frm.reload_doc(),
+			});
+		}, group);
+	};
+
+	if (status !== "Cancelled" && frm.doc.docstatus !== 2) {
+		frm.add_custom_button(__("Refresh Preview"), () => {
+			frappe.call({
+				method: "retailedge.api.refresh_daily_sales_audit_preview",
+				args: { audit_name: frm.doc.name },
+				callback: () => frm.reload_doc(),
+			});
+		}, __("Audit Context"));
+	}
+
+	if (["Draft", "Reopened"].includes(status)) {
+		addAction(__("Submit for Review"), "retailedge.api.submit_daily_sales_audit_for_review", __("Remarks"), "remarks", __("Review Actions"));
+	}
+
+	if (!isReviewer) {
+		return;
+	}
+	if (status === "Ready for Review") {
+		addAction(__("Start Review"), "retailedge.api.start_daily_sales_audit_review", __("Remarks"), "remarks", __("Review Actions"));
+		addAction(__("Request Clarification"), "retailedge.api.request_daily_sales_audit_clarification", __("Clarification Note"), "note", __("Review Actions"));
+		addAction(__("Reject"), "retailedge.api.reject_daily_sales_audit", __("Remarks"), "remarks", __("Review Actions"));
+	}
+	if (status === "In Review") {
+		addAction(__("Mark Balanced"), "retailedge.api.mark_daily_sales_audit_balanced", __("Remarks"), "remarks", __("Review Outcome"));
+		addAction(__("Mark Variance Found"), "retailedge.api.mark_daily_sales_audit_variance_found", __("Variance Reason"), "reason", __("Review Outcome"));
+		addAction(__("Request Clarification"), "retailedge.api.request_daily_sales_audit_clarification", __("Clarification Note"), "note", __("Review Actions"));
+		addAction(__("Approve"), "retailedge.api.approve_daily_sales_audit", __("Remarks"), "remarks", __("Review Outcome"));
+		addAction(__("Reject"), "retailedge.api.reject_daily_sales_audit", __("Remarks"), "remarks", __("Review Actions"));
+	}
+	if (status === "Variance Found") {
+		addAction(__("Mark Balanced"), "retailedge.api.mark_daily_sales_audit_balanced", __("Remarks"), "remarks", __("Review Outcome"));
+		addAction(__("Request Clarification"), "retailedge.api.request_daily_sales_audit_clarification", __("Clarification Note"), "note", __("Review Actions"));
+		addAction(__("Approve with Variance"), "retailedge.api.approve_daily_sales_audit", __("Remarks"), "remarks", __("Review Outcome"));
+		addAction(__("Reject"), "retailedge.api.reject_daily_sales_audit", __("Remarks"), "remarks", __("Review Actions"));
+	}
+	if (status === "Clarification Required") {
+		addAction(__("Resolve Clarification"), "retailedge.api.resolve_daily_sales_audit_clarification", __("Remarks"), "remarks", __("Review Actions"));
+		addAction(__("Reject"), "retailedge.api.reject_daily_sales_audit", __("Remarks"), "remarks", __("Review Actions"));
+	}
+	if (["Approved", "Rejected", "Balanced", "Variance Found"].includes(status)) {
+		addAction(__("Reopen"), "retailedge.api.reopen_daily_sales_audit", __("Remarks"), "remarks", __("Review Actions"));
+	}
+	if (status !== "Cancelled") {
+		addAction(__("Cancel Review"), "retailedge.api.cancel_daily_sales_audit_review", __("Remarks"), "remarks", __("Review Actions"));
+	}
+}
+
+function prompt_for_audit_action(label, valueField = "remarks") {
+	return new Promise((resolve) => {
+		frappe.prompt(
+			[
+				{
+					fieldname: valueField,
+					fieldtype: "Small Text",
+					label,
+				},
+			],
+			(values) => {
+				frappe.show_alert({
+					message: __("This action updates only the RetailEdge Daily Sales Audit review record. No accounting, invoice, payment, or POS shift records are modified."),
+					indicator: "blue",
+				});
+				resolve(values || {});
+			},
+			__("Daily Sales Audit Review Action"),
+			__("Continue")
+		);
+	});
 }

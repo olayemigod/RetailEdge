@@ -222,6 +222,14 @@ Existing user-entered values are preserved, ambiguous branch context does not tr
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## RetailEdge V1.5B - Daily Sales Audit Review Workflow
+
+RetailEdge Daily Sales Audit now supports a controlled internal review workflow with actions such as Submit for Review, Start Review, Mark Balanced, Mark Variance Found, Request Clarification, Resolve Clarification, Approve, Reject, Reopen, and Cancel Review. These actions update only the RetailEdge Daily Sales Audit document, its child review rows, and its action log so reviewers can track audit progress without mutating ERPNext or POSNext source transactions.
+
+Line-level invoice, payment, and cashier-expense review statuses are also internal to Daily Sales Audit and do not verify payments, do not update Sales Invoice audit or payment status, and do not change POS Opening or POS Closing Shift totals. Approval in this phase does not post accounting entries, does not create Journal Entries or Payment Entries, and does not synchronize payment verification. Those downstream controls remain for later phases.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## Installation
 
 ```bash

@@ -214,6 +214,9 @@ def resolve_branch_from_pos_profile(pos_profile, company=None):
 	if branch_field:
 		result["branch"] = getattr(doc, branch_field, None)
 		result["source"] = f"POS Profile.{branch_field}"
+	elif getattr(doc, "retailedge_branch", None):
+		result["branch"] = getattr(doc, "retailedge_branch", None)
+		result["source"] = getattr(doc, "retailedge_branch_source", None) or "POS Profile.retailedge_branch"
 	else:
 		result["messages"].append("POS Profile has no branch-like field.")
 	return result
@@ -245,6 +248,9 @@ def resolve_branch_from_opening_shift(opening_shift, company=None):
 	if branch_field:
 		result["branch"] = getattr(doc, branch_field, None)
 		result["source"] = f"POS Opening Shift.{branch_field}"
+	elif getattr(doc, "retailedge_branch", None):
+		result["branch"] = getattr(doc, "retailedge_branch", None)
+		result["source"] = getattr(doc, "retailedge_branch_source", None) or "POS Opening Shift.retailedge_branch"
 	if not result["branch"] and result.get("pos_profile"):
 		profile_result = resolve_branch_from_pos_profile(result["pos_profile"], company=result.get("company"))
 		result["branch"] = profile_result.get("branch")
@@ -284,6 +290,9 @@ def resolve_branch_from_closing_shift(closing_shift, company=None):
 	if branch_field:
 		result["branch"] = getattr(doc, branch_field, None)
 		result["source"] = f"POS Closing Shift.{branch_field}"
+	elif getattr(doc, "retailedge_branch", None):
+		result["branch"] = getattr(doc, "retailedge_branch", None)
+		result["source"] = getattr(doc, "retailedge_branch_source", None) or "POS Closing Shift.retailedge_branch"
 	if not result["branch"] and result.get("pos_opening_shift"):
 		opening_result = resolve_branch_from_opening_shift(
 			result["pos_opening_shift"], company=result.get("company")
@@ -674,17 +683,23 @@ def _resolve_branch_from_doc_field(doc):
 	if not doc:
 		return None
 	branch_field = get_first_existing_field(doc.doctype, BRANCH_FIELD_CANDIDATES)
-	if not branch_field:
-		return None
-	branch = getattr(doc, branch_field, None)
-	if not branch:
-		return None
-	return {"branch": branch, "source": f"{doc.doctype}.{branch_field}", "messages": []}
+	if branch_field:
+		branch = getattr(doc, branch_field, None)
+		if branch:
+			return {"branch": branch, "source": f"{doc.doctype}.{branch_field}", "messages": []}
+	stored_branch = getattr(doc, "retailedge_branch", None)
+	if stored_branch:
+		return {
+			"branch": stored_branch,
+			"source": getattr(doc, "retailedge_branch_source", None) or f"{doc.doctype}.retailedge_branch",
+			"messages": [],
+		}
+	return None
 
 
 def _seed_context_from_doc(result, doc):
 	result["company"] = getattr(doc, "company", None) or result.get("company")
-	result["branch"] = getattr(doc, "branch", None) or result.get("branch")
+	result["branch"] = getattr(doc, "branch", None) or getattr(doc, "retailedge_branch", None) or result.get("branch")
 	result["pos_profile"] = getattr(doc, "pos_profile", None) or result.get("pos_profile")
 	result["cashier"] = getattr(doc, "cashier", None) or getattr(doc, "user", None) or result.get("cashier")
 	result["pos_opening_shift"] = (

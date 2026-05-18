@@ -19,6 +19,9 @@
   "audit_status",
   "audit_result",
   "review_required",
+  "variance_status",
+  "clarification_required",
+  "locked_for_review",
   "sales_cash_summary_section",
   "opening_cash_amount",
   "cash_sales_amount",
@@ -40,9 +43,35 @@
   "partially_paid_invoice_count",
   "exception_count",
   "audit_notes",
+  "variance_review_section",
+  "variance_reason",
+  "variance_classification",
+  "shortage_amount",
+  "overage_amount",
+  "net_variance_amount",
+  "variance_tolerance_used",
+  "variance_within_tolerance",
+  "clarification_note",
+  "clarification_requested_by",
+  "clarification_requested_on",
+  "clarification_resolved_by",
+  "clarification_resolved_on",
   "review_section",
+  "submitted_for_review_by",
+  "submitted_for_review_on",
+  "review_started_by",
+  "review_started_on",
+  "approved_by",
+  "approved_on",
+  "rejected_by",
+  "rejected_on",
+  "reopened_by",
+  "reopened_on",
+  "last_review_action_by",
+  "last_review_action_on",
   "reviewed_by",
   "reviewed_on",
+  "review_remarks",
   "approval_remarks",
   "audit_lines_section",
   "invoice_lines",
@@ -136,7 +165,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Audit Status",
-   "options": "Draft\nReady for Review\nIn Review\nVariance Found\nApproved\nRejected\nCancelled",
+   "options": "Draft\nReady for Review\nIn Review\nBalanced\nVariance Found\nClarification Required\nApproved\nRejected\nReopened\nCancelled",
    "read_only": 1
   },
   {
@@ -155,6 +184,29 @@
    "fieldname": "review_required",
    "fieldtype": "Check",
    "label": "Review Required",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "variance_status",
+   "fieldtype": "Data",
+   "label": "Variance Status",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "clarification_required",
+   "fieldtype": "Check",
+   "label": "Clarification Required",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "locked_for_review",
+   "fieldtype": "Check",
+   "label": "Locked for Review",
    "read_only": 1
   },
   {
@@ -304,9 +356,190 @@
   },
   {
    "collapsible": 1,
+   "fieldname": "variance_review_section",
+   "fieldtype": "Section Break",
+   "label": "Variance & Clarification"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "variance_reason",
+   "fieldtype": "Small Text",
+   "label": "Variance Reason"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "variance_classification",
+   "fieldtype": "Data",
+   "label": "Variance Classification",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "shortage_amount",
+   "fieldtype": "Currency",
+   "label": "Shortage Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "overage_amount",
+   "fieldtype": "Currency",
+   "label": "Overage Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "net_variance_amount",
+   "fieldtype": "Currency",
+   "label": "Net Variance Amount",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "variance_tolerance_used",
+   "fieldtype": "Currency",
+   "label": "Variance Tolerance Used",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "variance_within_tolerance",
+   "fieldtype": "Check",
+   "label": "Variance Within Tolerance",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "clarification_note",
+   "fieldtype": "Small Text",
+   "label": "Clarification Note"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "clarification_requested_by",
+   "fieldtype": "Link",
+   "label": "Clarification Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "clarification_requested_on",
+   "fieldtype": "Datetime",
+   "label": "Clarification Requested On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "clarification_resolved_by",
+   "fieldtype": "Link",
+   "label": "Clarification Resolved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "clarification_resolved_on",
+   "fieldtype": "Datetime",
+   "label": "Clarification Resolved On",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
    "fieldname": "review_section",
    "fieldtype": "Section Break",
    "label": "Review"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "submitted_for_review_by",
+   "fieldtype": "Link",
+   "label": "Submitted for Review By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "submitted_for_review_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted for Review On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "review_started_by",
+   "fieldtype": "Link",
+   "label": "Review Started By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "review_started_on",
+   "fieldtype": "Datetime",
+   "label": "Review Started On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "rejected_by",
+   "fieldtype": "Link",
+   "label": "Rejected By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "rejected_on",
+   "fieldtype": "Datetime",
+   "label": "Rejected On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reopened_by",
+   "fieldtype": "Link",
+   "label": "Reopened By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reopened_on",
+   "fieldtype": "Datetime",
+   "label": "Reopened On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "last_review_action_by",
+   "fieldtype": "Link",
+   "label": "Last Review Action By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "last_review_action_on",
+   "fieldtype": "Datetime",
+   "label": "Last Review Action On",
+   "read_only": 1
   },
   {
    "allow_on_submit": 1,
@@ -322,6 +555,12 @@
    "fieldtype": "Datetime",
    "label": "Reviewed On",
    "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "review_remarks",
+   "fieldtype": "Small Text",
+   "label": "Review Remarks"
   },
   {
    "allow_on_submit": 1,
@@ -492,4 +731,3 @@
  "title_field": "company",
  "track_changes": 1
 }
-

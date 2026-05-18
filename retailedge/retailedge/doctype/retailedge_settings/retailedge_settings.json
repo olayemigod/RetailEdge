@@ -47,6 +47,7 @@
   "include_rejected_cashier_expenses_in_daily_sales_audit_preview",
   "daily_sales_audit_variance_tolerance",
   "daily_sales_audit_reviewer_roles",
+  "allow_self_review_daily_sales_audit",
   "branch_default_application_section",
   "enable_branch_default_application",
   "apply_branch_default_warehouse",
@@ -349,6 +350,13 @@
    "fieldtype": "Table",
    "label": "Daily Sales Audit Reviewer Roles",
    "options": "RetailEdge Daily Sales Audit Reviewer Role"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_daily_sales_audit",
+   "fieldname": "allow_self_review_daily_sales_audit",
+   "fieldtype": "Check",
+   "label": "Allow Self Review for Daily Sales Audit"
   },
   {
    "fieldname": "branch_default_application_section",

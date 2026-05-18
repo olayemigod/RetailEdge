@@ -165,7 +165,7 @@ doc_events = {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
 	},
 	"POS Invoice": {
-		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
 	},
 	"Sales Order": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",

@@ -30,6 +30,16 @@ DEFAULT_DAILY_SALES_AUDIT_REVIEWER_ROLES = {
 	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 }
+SYSTEM_MANAGER_ROLE = "System Manager"
+FINAL_REVIEW_STATUSES = {"Approved", "Rejected", "Balanced", "Variance Found", "Cancelled"}
+LINE_REVIEW_STATUSES = (
+	"Pending Review",
+	"Matched",
+	"Variance Found",
+	"Requires Clarification",
+	"Excluded",
+	"Verified for Audit",
+)
 
 BRANCH_FIELD_CANDIDATES = ["branch", "set_branch", "service_branch", "retail_branch", "default_branch"]
 POS_PROFILE_FIELD_CANDIDATES = ["pos_profile"]
@@ -198,6 +208,7 @@ def get_daily_sales_audit_settings():
 		),
 		"variance_tolerance": flt(getattr(settings, "daily_sales_audit_variance_tolerance", 0)),
 		"reviewer_roles": sorted(reviewer_roles),
+		"allow_self_review": bool(getattr(settings, "allow_self_review_daily_sales_audit", 0)),
 	}
 
 
@@ -215,8 +226,33 @@ def user_is_daily_sales_audit_reviewer(user: str | None = None):
 	return user_has_any_role(user=user, roles=get_daily_sales_audit_reviewer_roles())
 
 
+def assert_daily_sales_audit_reviewer(user: str | None = None):
+	user = user or frappe.session.user
+	if not user_is_daily_sales_audit_reviewer(user=user):
+		frappe.throw(
+			"You do not have permission to manage RetailEdge Daily Sales Audit.",
+			frappe.PermissionError,
+		)
+
+
 def get_daily_sales_audit_context(filters=None):
 	filters = _coerce_filters(filters)
+	resolved_filters = resolve_daily_sales_audit_context_from_selection(filters)
+	if (
+		(filters.get("pos_opening_shift") or filters.get("pos_closing_shift"))
+		and resolved_filters.get("source_map", {}).get("branch") == "Explicit Branch"
+	):
+		shift_priority_filters = dict(filters)
+		shift_priority_filters.pop("branch", None)
+		shift_priority_resolved = resolve_daily_sales_audit_context_from_selection(shift_priority_filters)
+		if shift_priority_resolved.get("branch"):
+			resolved_filters["branch"] = shift_priority_resolved.get("branch")
+			resolved_filters.setdefault("source_map", {})["branch"] = shift_priority_resolved.get("source_map", {}).get(
+				"branch", "Shift Context"
+			)
+	for key in _context_keys():
+		if resolved_filters.get(key):
+			filters[key] = resolved_filters.get(key)
 	branch_context = resolve_retailedge_branch_context(
 		company=filters.get("company"),
 		branch=filters.get("branch"),
@@ -294,29 +330,31 @@ def get_daily_sales_audit_context(filters=None):
 	context["unpaid_invoice_count"] = payment_summary["unpaid_invoice_count"]
 	context["partially_paid_invoice_count"] = payment_summary["partially_paid_invoice_count"]
 
-	if settings["include_cashier_expenses_preview"]:
-		expense_filters = {
-			"company": filters.get("company"),
-			"branch": filters.get("branch"),
-			"pos_profile": filters.get("pos_profile"),
-			"cashier": filters.get("cashier"),
-			"linked_pos_opening_shift": filters.get("pos_opening_shift"),
-			"linked_pos_closing_shift": filters.get("pos_closing_shift"),
-			"from_date": filters.get("audit_date"),
-			"to_date": filters.get("audit_date"),
-		}
-		if not settings["include_rejected_cashier_expenses_preview"]:
-			expense_filters["include_rejected"] = 0
-		expense_rows = get_cashier_expenses_for_daily_audit(filters=expense_filters)
-		context["cashier_expense_lines"] = _filter_cashier_expense_lines(
-			expense_rows,
-			include_rejected=settings["include_rejected_cashier_expenses_preview"],
-		)
-		context["cashier_expense_amount"] = sum(
-			flt(row.get("amount"))
-			for row in context["cashier_expense_lines"]
-			if cint_int(row.get("include_in_expected_cash"))
-		)
+	expense_filters = {
+		"company": filters.get("company"),
+		"branch": filters.get("branch"),
+		"pos_profile": filters.get("pos_profile"),
+		"cashier": filters.get("cashier"),
+		"linked_pos_opening_shift": filters.get("pos_opening_shift"),
+		"linked_pos_closing_shift": filters.get("pos_closing_shift"),
+	}
+	# When a specific shift is selected, the linked shift is the strongest
+	# expense scope and should not be narrowed away by an exact audit date.
+	if not (filters.get("pos_opening_shift") or filters.get("pos_closing_shift")):
+		expense_filters["from_date"] = filters.get("audit_date")
+		expense_filters["to_date"] = filters.get("audit_date")
+	if not settings["include_rejected_cashier_expenses_preview"]:
+		expense_filters["include_rejected"] = 0
+	expense_rows = get_cashier_expenses_for_daily_audit(filters=expense_filters)
+	context["cashier_expense_lines"] = _filter_cashier_expense_lines(
+		expense_rows,
+		include_rejected=settings["include_rejected_cashier_expenses_preview"],
+	)
+	context["cashier_expense_amount"] = sum(
+		flt(row.get("amount"))
+		for row in context["cashier_expense_lines"]
+		if cint_int(row.get("include_in_expected_cash"))
+	)
 
 	context["expected_cash_amount"] = (
 		flt(context["opening_cash_amount"])
@@ -351,68 +389,361 @@ def create_daily_sales_audit_draft(filters=None):
 	append_daily_sales_audit_action_log(
 		doc,
 		action="Draft Created",
-		previous_status=None,
+		old_status=None,
 		new_status=doc.audit_status,
-		context=_log_context_from_audit_doc(doc),
+		details=_log_context_from_audit_doc(doc),
 	)
-	doc.save(ignore_permissions=True)
+	_save_audit_doc(doc)
 	return doc.name
 
 
 def refresh_daily_sales_audit_preview(audit_name):
-	_assert_daily_sales_audit_reviewer()
+	assert_daily_sales_audit_reviewer()
 	doc = frappe.get_doc("RetailEdge Daily Sales Audit", audit_name)
-	if doc.docstatus != 0:
-		frappe.throw("Only draft Daily Sales Audit documents can be refreshed.")
+	if doc.audit_status == "Cancelled":
+		frappe.throw("Cancelled Daily Sales Audit documents cannot be refreshed.")
 
 	context = get_daily_sales_audit_context(_filters_from_audit_doc(doc))
 	previous_status = doc.audit_status
 	_apply_context_to_audit_doc(doc, context)
+	refresh_daily_sales_audit_review_summary(doc)
 	append_daily_sales_audit_action_log(
 		doc,
 		action="Preview Refreshed",
-		previous_status=previous_status,
+		old_status=previous_status,
 		new_status=doc.audit_status,
-		context=_log_context_from_audit_doc(doc),
+		details=_log_context_from_audit_doc(doc),
 	)
-	doc.save(ignore_permissions=True)
+	_save_audit_doc(doc)
 	return doc.name
 
 
 def append_daily_sales_audit_action_log(
 	doc_or_name,
 	action,
-	previous_status=None,
+	old_status=None,
 	new_status=None,
 	remarks=None,
+	details=None,
+	previous_status=None,
 	context=None,
 ):
 	doc = doc_or_name
 	if getattr(doc_or_name, "doctype", None) != "RetailEdge Daily Sales Audit":
 		doc = frappe.get_doc("RetailEdge Daily Sales Audit", doc_or_name)
 
+	if old_status is None:
+		old_status = previous_status
+	if details is None:
+		details = context
 	context_text = _serialise_context(context)
+	details_text = _serialise_context(details)
 	row = doc.append(
 		"action_logs",
 		{
 			"action": action,
 			"action_by": frappe.session.user,
 			"action_on": now_datetime(),
-			"previous_status": previous_status,
+			"old_status": old_status,
+			"previous_status": old_status,
 			"new_status": new_status,
 			"remarks": remarks,
+			"details_json": details_text,
 			"context": context_text,
 		},
 	)
 	return row
 
 
+def calculate_daily_sales_audit_variance(doc):
+	settings = get_daily_sales_audit_settings()
+	included_expenses = 0.0
+	has_expense_basis = False
+	line_statuses = []
+	for row in getattr(doc, "cashier_expense_lines", []) or []:
+		included = _row_value(row, "included_in_audit")
+		if included in (None, ""):
+			included = _row_value(row, "include_in_expected_cash", 1)
+		raw_amount = _row_value(row, "amount")
+		amount_is_defined = raw_amount not in (None, "")
+		amount = flt(raw_amount) if amount_is_defined else 0.0
+		if cint_int(included) and amount_is_defined:
+			included_expenses += amount
+			has_expense_basis = True
+		elif amount_is_defined and amount:
+			has_expense_basis = True
+		status = _row_value(row, "review_status") or _row_value(row, "audit_line_status")
+		if status:
+			line_statuses.append(status)
+
+	for table_field in ("invoice_lines", "payment_lines"):
+		for row in getattr(doc, table_field, []) or []:
+			status = _row_value(row, "review_status") or _row_value(row, "audit_line_status")
+			if status:
+				line_statuses.append(status)
+
+	doc.cashier_expense_amount = flt(included_expenses) if has_expense_basis else flt(getattr(doc, "cashier_expense_amount", 0))
+	doc.expected_cash_amount = flt(doc.opening_cash_amount) + flt(doc.cash_sales_amount) - flt(doc.cashier_expense_amount)
+	doc.cash_variance_amount = flt(doc.actual_closing_cash_amount) - flt(doc.expected_cash_amount)
+	doc.net_variance_amount = flt(doc.cash_variance_amount)
+	doc.shortage_amount = abs(flt(doc.cash_variance_amount)) if flt(doc.cash_variance_amount) < 0 else 0.0
+	doc.overage_amount = flt(doc.cash_variance_amount) if flt(doc.cash_variance_amount) > 0 else 0.0
+	doc.variance_tolerance_used = flt(settings.get("variance_tolerance"))
+	doc.variance_within_tolerance = 1 if abs(flt(doc.cash_variance_amount)) <= flt(doc.variance_tolerance_used) else 0
+	doc.clarification_required = 1 if "Requires Clarification" in line_statuses else cint_int(getattr(doc, "clarification_required", 0))
+
+	if doc.clarification_required:
+		doc.audit_result = "Requires Clarification"
+		doc.variance_classification = "Clarification Required"
+	elif "Variance Found" in line_statuses and ("Matched" in line_statuses or "Verified for Audit" in line_statuses):
+		doc.audit_result = "Mixed Variance"
+		doc.variance_classification = "Mixed Variance"
+	elif flt(doc.cash_variance_amount) == 0:
+		doc.audit_result = "Balanced"
+		doc.variance_classification = "Balanced"
+	elif flt(doc.cash_variance_amount) < 0:
+		doc.audit_result = "Shortage"
+		doc.variance_classification = "Within Tolerance Shortage" if cint_int(doc.variance_within_tolerance) else "Shortage"
+	else:
+		doc.audit_result = "Overage"
+		doc.variance_classification = "Within Tolerance Overage" if cint_int(doc.variance_within_tolerance) else "Overage"
+	return {
+		"expected_cash_amount": flt(doc.expected_cash_amount),
+		"actual_closing_cash_amount": flt(doc.actual_closing_cash_amount),
+		"net_variance_amount": flt(doc.net_variance_amount),
+		"shortage_amount": flt(doc.shortage_amount),
+		"overage_amount": flt(doc.overage_amount),
+		"variance_tolerance_used": flt(doc.variance_tolerance_used),
+		"variance_within_tolerance": cint_int(doc.variance_within_tolerance),
+		"audit_result": doc.audit_result,
+	}
+
+
+def refresh_daily_sales_audit_review_summary(doc):
+	calculate_daily_sales_audit_variance(doc)
+	statuses = []
+	for table_field in ("invoice_lines", "payment_lines", "cashier_expense_lines"):
+		for row in getattr(doc, table_field, []) or []:
+			status = _row_value(row, "review_status") or _row_value(row, "audit_line_status") or "Pending Review"
+			statuses.append(status)
+	exception_count = 0
+	if flt(doc.net_variance_amount) != 0:
+		exception_count += 1
+	exception_count += sum(1 for status in statuses if status in {"Variance Found", "Requires Clarification"})
+	doc.exception_count = exception_count
+	doc.review_required = 1 if statuses or flt(doc.net_variance_amount) != 0 else 0
+	doc.variance_status = "Variance Found" if flt(doc.net_variance_amount) != 0 or "Variance Found" in statuses else "Balanced"
+	if "Requires Clarification" in statuses or cint_int(doc.clarification_required):
+		doc.audit_status = "Clarification Required" if doc.audit_status not in {"Approved", "Rejected", "Cancelled"} else doc.audit_status
+	return {
+		"exception_count": cint_int(doc.exception_count),
+		"review_required": cint_int(doc.review_required),
+		"variance_status": doc.variance_status,
+		"audit_result": doc.audit_result,
+	}
+
+
+def submit_daily_sales_audit_for_review(audit_name, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	if doc.audit_status not in {"Draft", "Reopened"}:
+		frappe.throw("Only Draft or Reopened Daily Sales Audit documents can be submitted for review.")
+	refresh_daily_sales_audit_review_summary(doc)
+	old_status = doc.audit_status
+	doc.audit_status = "Ready for Review"
+	doc.submitted_for_review_by = frappe.session.user
+	doc.submitted_for_review_on = now_datetime()
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.review_remarks = remarks
+	append_daily_sales_audit_action_log(doc, "Submitted for Review", old_status=old_status, new_status=doc.audit_status, remarks=remarks)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def start_daily_sales_audit_review(audit_name, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	assert_daily_sales_audit_reviewer()
+	_assert_not_self_review(doc)
+	if doc.audit_status != "Ready for Review":
+		frappe.throw("Only Ready for Review Daily Sales Audit documents can be started for review.")
+	old_status = doc.audit_status
+	doc.audit_status = "In Review"
+	doc.review_started_by = frappe.session.user
+	doc.review_started_on = now_datetime()
+	doc.locked_for_review = 1
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.reviewed_by = frappe.session.user
+	doc.reviewed_on = now_datetime()
+	doc.review_remarks = remarks
+	append_daily_sales_audit_action_log(doc, "Review Started", old_status=old_status, new_status=doc.audit_status, remarks=remarks)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def mark_daily_sales_audit_balanced(audit_name, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	assert_daily_sales_audit_reviewer()
+	if doc.audit_status not in {"In Review", "Variance Found", "Clarification Required"}:
+		frappe.throw("Daily Sales Audit can only be marked balanced from In Review, Variance Found, or Clarification Required.")
+	old_status = doc.audit_status
+	refresh_daily_sales_audit_review_summary(doc)
+	doc.audit_status = "Balanced"
+	doc.audit_result = "Balanced"
+	doc.review_required = 0
+	doc.clarification_required = 0
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.review_remarks = remarks
+	append_daily_sales_audit_action_log(doc, "Marked Balanced", old_status=old_status, new_status=doc.audit_status, remarks=remarks)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def mark_daily_sales_audit_variance_found(audit_name, reason=None, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	assert_daily_sales_audit_reviewer()
+	if doc.audit_status not in {"In Review", "Ready for Review", "Balanced", "Clarification Required"}:
+		frappe.throw("Daily Sales Audit can only be marked as variance found from a review state.")
+	old_status = doc.audit_status
+	refresh_daily_sales_audit_review_summary(doc)
+	doc.audit_status = "Variance Found"
+	doc.review_required = 1
+	doc.variance_reason = reason or doc.variance_reason
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.review_remarks = remarks
+	append_daily_sales_audit_action_log(doc, "Variance Found", old_status=old_status, new_status=doc.audit_status, remarks=remarks, details={"reason": reason})
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def request_daily_sales_audit_clarification(audit_name, note=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	assert_daily_sales_audit_reviewer()
+	if doc.audit_status not in {"In Review", "Variance Found", "Ready for Review"}:
+		frappe.throw("Clarification can only be requested from Ready for Review, In Review, or Variance Found.")
+	old_status = doc.audit_status
+	doc.audit_status = "Clarification Required"
+	doc.clarification_required = 1
+	doc.clarification_note = note
+	doc.clarification_requested_by = frappe.session.user
+	doc.clarification_requested_on = now_datetime()
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	append_daily_sales_audit_action_log(doc, "Clarification Requested", old_status=old_status, new_status=doc.audit_status, remarks=note)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def resolve_daily_sales_audit_clarification(audit_name, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	if doc.audit_status != "Clarification Required":
+		frappe.throw("Only Clarification Required Daily Sales Audit documents can resolve clarification.")
+	if not (user_is_daily_sales_audit_reviewer() or frappe.session.user == doc.owner):
+		frappe.throw("You do not have permission to resolve this Daily Sales Audit clarification.", frappe.PermissionError)
+	old_status = doc.audit_status
+	doc.clarification_required = 0
+	doc.clarification_resolved_by = frappe.session.user
+	doc.clarification_resolved_on = now_datetime()
+	doc.audit_status = "In Review"
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.review_remarks = remarks
+	append_daily_sales_audit_action_log(doc, "Clarification Resolved", old_status=old_status, new_status=doc.audit_status, remarks=remarks)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def approve_daily_sales_audit(audit_name, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	assert_daily_sales_audit_reviewer()
+	_assert_not_self_review(doc)
+	if doc.audit_status in {"Rejected", "Cancelled"}:
+		frappe.throw("Rejected or Cancelled Daily Sales Audit documents cannot be approved.")
+	if doc.audit_status not in {"Balanced", "Variance Found", "In Review"}:
+		frappe.throw("Daily Sales Audit can only be approved from Balanced, Variance Found, or In Review.")
+	old_status = doc.audit_status
+	refresh_daily_sales_audit_review_summary(doc)
+	doc.audit_status = "Approved"
+	doc.approved_by = frappe.session.user
+	doc.approved_on = now_datetime()
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.review_remarks = remarks
+	doc.locked_for_review = 1
+	append_daily_sales_audit_action_log(doc, "Approved", old_status=old_status, new_status=doc.audit_status, remarks=remarks)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def reject_daily_sales_audit(audit_name, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	assert_daily_sales_audit_reviewer()
+	if doc.audit_status not in {"Ready for Review", "In Review", "Variance Found", "Clarification Required", "Balanced"}:
+		frappe.throw("Daily Sales Audit can only be rejected from an active review state.")
+	old_status = doc.audit_status
+	doc.audit_status = "Rejected"
+	doc.rejected_by = frappe.session.user
+	doc.rejected_on = now_datetime()
+	doc.review_required = 1
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.review_remarks = remarks
+	append_daily_sales_audit_action_log(doc, "Rejected", old_status=old_status, new_status=doc.audit_status, remarks=remarks)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def reopen_daily_sales_audit(audit_name, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	assert_daily_sales_audit_reviewer()
+	if doc.audit_status not in {"Approved", "Rejected", "Balanced", "Variance Found"}:
+		frappe.throw("Only Approved, Rejected, Balanced, or Variance Found Daily Sales Audit documents can be reopened.")
+	old_status = doc.audit_status
+	doc.audit_status = "Reopened"
+	doc.reopened_by = frappe.session.user
+	doc.reopened_on = now_datetime()
+	doc.locked_for_review = 0
+	doc.review_required = 1
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.review_remarks = remarks
+	append_daily_sales_audit_action_log(doc, "Reopened", old_status=old_status, new_status=doc.audit_status, remarks=remarks)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def cancel_daily_sales_audit_review(audit_name, remarks=None):
+	doc = _get_daily_sales_audit_doc(audit_name)
+	assert_daily_sales_audit_reviewer()
+	if doc.audit_status == "Cancelled":
+		return doc.name
+	old_status = doc.audit_status
+	doc.audit_status = "Cancelled"
+	doc.locked_for_review = 1
+	doc.last_review_action_by = frappe.session.user
+	doc.last_review_action_on = now_datetime()
+	doc.review_remarks = remarks
+	append_daily_sales_audit_action_log(doc, "Review Cancelled", old_status=old_status, new_status=doc.audit_status, remarks=remarks)
+	_save_audit_doc(doc)
+	return doc.name
+
+
+def update_daily_sales_audit_invoice_line_status(audit_name, row_name, review_status, remarks=None):
+	return _update_daily_sales_audit_line_status(audit_name, "invoice_lines", row_name, review_status, remarks)
+
+
+def update_daily_sales_audit_payment_line_status(audit_name, row_name, review_status, remarks=None):
+	return _update_daily_sales_audit_line_status(audit_name, "payment_lines", row_name, review_status, remarks)
+
+
+def update_daily_sales_audit_expense_line_status(audit_name, row_name, review_status, remarks=None):
+	return _update_daily_sales_audit_line_status(audit_name, "cashier_expense_lines", row_name, review_status, remarks)
+
+
 def _assert_daily_sales_audit_reviewer():
-	if not user_is_daily_sales_audit_reviewer():
-		frappe.throw(
-			"You do not have permission to manage RetailEdge Daily Sales Audit.",
-			frappe.PermissionError,
-		)
+	assert_daily_sales_audit_reviewer()
 
 
 def _coerce_filters(filters):
@@ -910,6 +1241,7 @@ def _apply_context_to_audit_doc(doc, context):
 	if not doc.audit_status or doc.audit_status == "Cancelled":
 		doc.audit_status = "Draft"
 	doc.audit_result = _derive_audit_result(context)
+	doc.variance_tolerance_used = flt(context.get("variance_tolerance"))
 
 	doc.set("invoice_lines", [])
 	for row in context.get("invoice_lines", []):
@@ -920,6 +1252,7 @@ def _apply_context_to_audit_doc(doc, context):
 	doc.set("cashier_expense_lines", [])
 	for row in context.get("cashier_expense_lines", []):
 		doc.append("cashier_expense_lines", row)
+	refresh_daily_sales_audit_review_summary(doc)
 
 
 def _derive_audit_result(context):
@@ -964,6 +1297,13 @@ def _filter_cashier_expense_lines(rows, include_rejected=True):
 				"daily_audit_inclusion_status": row.get("daily_audit_inclusion_status"),
 				"classification": row.get("daily_audit_classification"),
 				"include_in_expected_cash": should_include,
+				"included_in_audit": should_include,
+				"review_status": "Pending Review",
+				"variance_impact": flt(row.get("amount")) if should_include else 0,
+				"reviewer_note": None,
+				"excluded_from_review": 0,
+				"reviewed_by": None,
+				"reviewed_on": None,
 				"remarks": row.get("daily_audit_note") or row.get("daily_audit_exclusion_reason"),
 			}
 		)
@@ -984,42 +1324,9 @@ def _get_invoice_and_payment_context(filters):
 		"unpaid_invoice_count": 0,
 		"partially_paid_invoice_count": 0,
 	}
-	if not _has_doctype("Sales Invoice"):
+	invoice_doctypes = _get_daily_sales_audit_invoice_doctypes()
+	if not invoice_doctypes:
 		return invoices, payments, summary
-
-	try:
-		meta = frappe.get_meta("Sales Invoice")
-	except Exception:
-		meta = None
-
-	query_filters = {"docstatus": 1}
-	if meta and meta.has_field("company") and filters.get("company"):
-		query_filters["company"] = filters.get("company")
-	if meta and meta.has_field("is_pos"):
-		query_filters["is_pos"] = 1
-	if meta and meta.has_field("pos_profile") and filters.get("pos_profile"):
-		query_filters["pos_profile"] = filters.get("pos_profile")
-	if filters.get("branch"):
-		if has_field("Sales Invoice", "retailedge_branch"):
-			query_filters["retailedge_branch"] = filters.get("branch")
-		elif meta and meta.has_field("branch"):
-			query_filters["branch"] = filters.get("branch")
-	opening_shift_field = _find_first_field("Sales Invoice", ["posa_pos_opening_shift", "pos_opening_shift", "opening_shift"])
-	if opening_shift_field and filters.get("pos_opening_shift"):
-		query_filters[opening_shift_field] = filters.get("pos_opening_shift")
-	if filters.get("audit_date"):
-		query_filters["posting_date"] = filters.get("audit_date")
-
-	fields = ["name", "posting_date", "customer", "grand_total", "outstanding_amount"]
-	if meta and meta.has_field("paid_amount"):
-		fields.append("paid_amount")
-	invoice_rows = frappe.get_all(
-		"Sales Invoice",
-		filters=query_filters,
-		fields=fields,
-		limit_page_length=0,
-		order_by="posting_date asc, creation asc",
-	)
 	cash_account = None
 	if filters.get("company") or filters.get("pos_profile") or filters.get("pos_opening_shift"):
 		try:
@@ -1031,58 +1338,245 @@ def _get_invoice_and_payment_context(filters):
 		except Exception:
 			cash_account = None
 
-	for row in invoice_rows:
-		paid_amount = flt(row.get("paid_amount"))
-		outstanding = flt(row.get("outstanding_amount"))
-		grand_total = flt(row.get("grand_total"))
-		if outstanding <= 0 and grand_total > 0:
-			payment_status = "Paid"
-			summary["paid_invoice_count"] += 1
-		elif paid_amount > 0 and outstanding > 0:
-			payment_status = "Partially Paid"
-			summary["partially_paid_invoice_count"] += 1
-		else:
-			payment_status = "Unpaid"
-			summary["unpaid_invoice_count"] += 1
-		invoices.append(
+	invoice_names_by_doctype = {}
+	shift_seed_rows = _get_shift_seed_invoice_rows(filters)
+	for doctype in invoice_doctypes:
+		try:
+			meta = frappe.get_meta(doctype)
+		except Exception:
+			meta = None
+		invoice_rows = shift_seed_rows.get(doctype) or frappe.get_all(
+			doctype,
+			filters=_get_daily_sales_audit_invoice_filters(doctype, meta, filters),
+			fields=_get_daily_sales_audit_invoice_fields(meta),
+			limit_page_length=0,
+			order_by="posting_date asc, creation asc",
+		)
+		invoice_names_by_doctype[doctype] = set()
+		for row in invoice_rows:
+			paid_amount = flt(row.get("paid_amount"))
+			outstanding = flt(row.get("outstanding_amount"))
+			grand_total = flt(row.get("grand_total"))
+			if outstanding <= 0 and grand_total > 0:
+				payment_status = "Paid"
+				summary["paid_invoice_count"] += 1
+			elif paid_amount > 0 and outstanding > 0:
+				payment_status = "Partially Paid"
+				summary["partially_paid_invoice_count"] += 1
+			else:
+				payment_status = "Unpaid"
+				summary["unpaid_invoice_count"] += 1
+			invoices.append(
+				{
+					"sales_invoice": row.get("name"),
+					"posting_date": row.get("posting_date"),
+					"customer": row.get("customer"),
+					"grand_total": grand_total,
+					"outstanding_amount": outstanding,
+					"paid_amount": grand_total - outstanding if paid_amount == 0 else paid_amount,
+					"payment_status": payment_status,
+					"audit_line_status": "Pending Review",
+					"review_status": "Pending Review",
+					"variance_amount": outstanding,
+					"variance_reason": None,
+					"reviewer_note": None,
+					"excluded_from_review": 0,
+					"reviewed_by": None,
+					"reviewed_on": None,
+					"remarks": None if doctype == "Sales Invoice" else doctype,
+				}
+			)
+			invoice_names_by_doctype[doctype].add(row.get("name"))
+			summary["total_sales_amount"] += grand_total
+
+			invoice_doc = frappe.get_doc(doctype, row.get("name"))
+			for payment_row in getattr(invoice_doc, "payments", []) or []:
+				payment = payment_row.as_dict() if hasattr(payment_row, "as_dict") else dict(payment_row)
+				amount = flt(payment.get("base_amount") if payment.get("base_amount") is not None else payment.get("amount"))
+				if amount <= 0:
+					continue
+				mode = payment.get("mode_of_payment")
+				account = payment.get("account") or payment.get("default_account")
+				category = _classify_payment(mode, account, cash_account)
+				payments.append(
+					{
+						"source_doctype": doctype,
+						"source_document": row.get("name"),
+						"mode_of_payment": mode,
+						"account": account,
+						"amount": amount,
+						"payment_category": category,
+						"audit_line_status": "Pending Review",
+						"review_status": "Pending Review",
+						"expected_amount": amount,
+						"actual_amount": amount,
+						"variance_amount": 0,
+						"variance_reason": None,
+						"reviewer_note": None,
+						"excluded_from_review": 0,
+						"reviewed_by": None,
+						"reviewed_on": None,
+						"remarks": None,
+					}
+				)
+				_add_payment_category_total(summary, category, amount)
+
+	payments.extend(_get_daily_sales_audit_payment_entries(filters, invoice_names_by_doctype, cash_account, summary))
+
+	return invoices, payments, summary
+
+
+def _get_shift_seed_invoice_rows(filters):
+	rows_by_doctype = {}
+	closing_shift = filters.get("pos_closing_shift") or _find_matching_pos_closing_shift(filters.get("pos_opening_shift"))
+	if not closing_shift or not _has_doctype("Sales Invoice Reference"):
+		return rows_by_doctype
+	seed_rows = frappe.get_all(
+		"Sales Invoice Reference",
+		filters={
+			"parent": closing_shift,
+			"parenttype": "POS Closing Shift",
+			"parentfield": "pos_transactions",
+		},
+		fields=["sales_invoice", "posting_date", "customer", "grand_total"],
+		limit_page_length=0,
+		order_by="idx asc",
+	)
+	if not seed_rows:
+		return rows_by_doctype
+	names = [row.get("sales_invoice") for row in seed_rows if row.get("sales_invoice")]
+	if not names:
+		return rows_by_doctype
+	invoice_docs = {
+		row.get("name"): row
+		for row in frappe.get_all(
+			"Sales Invoice",
+			filters={"name": ["in", names]},
+			fields=["name", "posting_date", "customer", "grand_total", "outstanding_amount", "paid_amount", "is_pos", "pos_profile"],
+			limit_page_length=0,
+		)
+	}
+	sales_invoice_rows = []
+	for seed_row in seed_rows:
+		doc_row = invoice_docs.get(seed_row.get("sales_invoice")) or {}
+		sales_invoice_rows.append(
 			{
-				"sales_invoice": row.get("name"),
-				"posting_date": row.get("posting_date"),
-				"customer": row.get("customer"),
-				"grand_total": grand_total,
-				"outstanding_amount": outstanding,
-				"paid_amount": grand_total - outstanding if paid_amount == 0 else paid_amount,
-				"payment_status": payment_status,
-				"audit_line_status": "Pending Review",
-				"remarks": None,
+				"name": seed_row.get("sales_invoice"),
+				"posting_date": doc_row.get("posting_date") or seed_row.get("posting_date"),
+				"customer": doc_row.get("customer") or seed_row.get("customer"),
+				"grand_total": doc_row.get("grand_total") if doc_row.get("grand_total") is not None else seed_row.get("grand_total"),
+				"outstanding_amount": doc_row.get("outstanding_amount") or 0,
+				"paid_amount": doc_row.get("paid_amount") or 0,
 			}
 		)
-		summary["total_sales_amount"] += grand_total
+	if sales_invoice_rows:
+		rows_by_doctype["Sales Invoice"] = sales_invoice_rows
+	return rows_by_doctype
 
-		invoice_doc = frappe.get_doc("Sales Invoice", row.get("name"))
-		for payment_row in getattr(invoice_doc, "payments", []) or []:
-			payment = payment_row.as_dict() if hasattr(payment_row, "as_dict") else dict(payment_row)
-			amount = flt(payment.get("base_amount") if payment.get("base_amount") is not None else payment.get("amount"))
+
+def _get_daily_sales_audit_invoice_doctypes():
+	doctypes = []
+	for doctype in ("POS Invoice", "Sales Invoice"):
+		if _has_doctype(doctype):
+			doctypes.append(doctype)
+	return doctypes
+
+
+def _get_daily_sales_audit_invoice_fields(meta):
+	fields = ["name", "posting_date", "customer", "grand_total", "outstanding_amount"]
+	if meta and meta.has_field("paid_amount"):
+		fields.append("paid_amount")
+	return fields
+
+
+def _get_daily_sales_audit_invoice_filters(doctype, meta, filters):
+	query_filters = {"docstatus": 1}
+	if meta and meta.has_field("company") and filters.get("company"):
+		query_filters["company"] = filters.get("company")
+	if doctype == "Sales Invoice" and meta and meta.has_field("is_pos"):
+		query_filters["is_pos"] = 1
+	if meta and meta.has_field("pos_profile") and filters.get("pos_profile"):
+		query_filters["pos_profile"] = filters.get("pos_profile")
+	if filters.get("branch"):
+		if has_field(doctype, "retailedge_branch"):
+			query_filters["retailedge_branch"] = filters.get("branch")
+		elif meta and meta.has_field("branch"):
+			query_filters["branch"] = filters.get("branch")
+	opening_shift_field = _find_first_field(doctype, ["posa_pos_opening_shift", "pos_opening_shift", "opening_shift"])
+	if opening_shift_field and filters.get("pos_opening_shift"):
+		query_filters[opening_shift_field] = filters.get("pos_opening_shift")
+	if filters.get("audit_date") and meta and meta.has_field("posting_date"):
+		query_filters["posting_date"] = filters.get("audit_date")
+	return query_filters
+
+
+def _get_daily_sales_audit_payment_entries(filters, invoice_names_by_doctype, cash_account, summary):
+	if not _has_doctype("Payment Entry"):
+		return []
+	if not any(invoice_names_by_doctype.values()):
+		return []
+	try:
+		meta = frappe.get_meta("Payment Entry")
+	except Exception:
+		meta = None
+	query_filters = {"docstatus": 1}
+	if meta and meta.has_field("company") and filters.get("company"):
+		query_filters["company"] = filters.get("company")
+	if filters.get("branch"):
+		if has_field("Payment Entry", "retailedge_branch"):
+			query_filters["retailedge_branch"] = filters.get("branch")
+		elif meta and meta.has_field("branch"):
+			query_filters["branch"] = filters.get("branch")
+	if filters.get("audit_date") and meta and meta.has_field("posting_date"):
+		query_filters["posting_date"] = filters.get("audit_date")
+	payment_rows = frappe.get_all(
+		"Payment Entry",
+		filters=query_filters,
+		fields=["name", "posting_date", "mode_of_payment", "paid_amount", "received_amount", "paid_from", "paid_to"],
+		limit_page_length=0,
+		order_by="posting_date asc, creation asc",
+	)
+	payments = []
+	for row in payment_rows:
+		payment_doc = frappe.get_doc("Payment Entry", row.get("name"))
+		for reference_row in getattr(payment_doc, "references", []) or []:
+			reference = reference_row.as_dict() if hasattr(reference_row, "as_dict") else dict(reference_row)
+			reference_doctype = reference.get("reference_doctype")
+			reference_name = reference.get("reference_name")
+			if reference_doctype not in invoice_names_by_doctype:
+				continue
+			if reference_name not in invoice_names_by_doctype.get(reference_doctype, set()):
+				continue
+			amount = flt(reference.get("allocated_amount") or reference.get("total_amount"))
+			if amount <= 0:
+				amount = flt(row.get("paid_amount") or row.get("received_amount"))
 			if amount <= 0:
 				continue
-			mode = payment.get("mode_of_payment")
-			account = payment.get("account") or payment.get("default_account")
-			category = _classify_payment(mode, account, cash_account)
+			account = row.get("paid_to") or row.get("paid_from")
+			category = _classify_payment(row.get("mode_of_payment"), account, cash_account)
 			payments.append(
 				{
-					"source_doctype": "Sales Invoice",
+					"source_doctype": "Payment Entry",
 					"source_document": row.get("name"),
-					"mode_of_payment": mode,
+					"mode_of_payment": row.get("mode_of_payment"),
 					"account": account,
 					"amount": amount,
 					"payment_category": category,
 					"audit_line_status": "Pending Review",
-					"remarks": None,
+					"review_status": "Pending Review",
+					"expected_amount": amount,
+					"actual_amount": amount,
+					"variance_amount": 0,
+					"variance_reason": None,
+					"reviewer_note": None,
+					"excluded_from_review": 0,
+					"reviewed_by": None,
+					"reviewed_on": None,
+					"remarks": f"{reference_doctype} {reference_name}",
 				}
 			)
 			_add_payment_category_total(summary, category, amount)
-
-	return invoices, payments, summary
+	return payments
 
 
 def _get_actual_closing_cash_amount(pos_closing_shift=None, pos_opening_shift=None, company=None, pos_profile=None):
@@ -1132,6 +1626,74 @@ def _count_exceptions(context):
 		if row.get("daily_audit_inclusion_status") == "Needs Clarification":
 			count += 1
 	return count
+
+
+def _get_daily_sales_audit_doc(audit_name):
+	doc = frappe.get_doc("RetailEdge Daily Sales Audit", audit_name)
+	if doc.audit_status == "Cancelled":
+		frappe.throw("Cancelled Daily Sales Audit documents cannot be reviewed.")
+	return doc
+
+
+def _save_audit_doc(doc):
+	if getattr(doc, "docstatus", 0) == 1:
+		doc.flags.ignore_validate_update_after_submit = True
+	doc.save(ignore_permissions=True)
+	return doc
+
+
+def _assert_not_self_review(doc):
+	settings = get_daily_sales_audit_settings()
+	if settings.get("allow_self_review"):
+		return
+	if SYSTEM_MANAGER_ROLE in frappe.get_roles(frappe.session.user):
+		return
+	reference_users = {
+		getattr(doc, "owner", None),
+		getattr(doc, "submitted_for_review_by", None),
+		getattr(doc, "cashier", None),
+	}
+	if frappe.session.user in {user for user in reference_users if user}:
+		frappe.throw("You cannot approve or start review on your own Daily Sales Audit.", frappe.PermissionError)
+
+
+def _update_daily_sales_audit_line_status(audit_name, table_field, row_name, review_status, remarks=None):
+	assert_daily_sales_audit_reviewer()
+	if review_status not in LINE_REVIEW_STATUSES:
+		frappe.throw(f"Invalid review status: {review_status}")
+	doc = _get_daily_sales_audit_doc(audit_name)
+	row = None
+	for child in getattr(doc, table_field, []) or []:
+		if child.name == row_name:
+			row = child
+			break
+	if not row:
+		frappe.throw("Audit review row was not found.")
+	old_status = getattr(row, "review_status", None) or getattr(row, "audit_line_status", None) or "Pending Review"
+	row.review_status = review_status
+	if hasattr(row, "audit_line_status"):
+		row.audit_line_status = review_status
+	if hasattr(row, "reviewer_note"):
+		row.reviewer_note = remarks
+	if hasattr(row, "remarks") and remarks:
+		row.remarks = remarks
+	if hasattr(row, "excluded_from_review"):
+		row.excluded_from_review = 1 if review_status == "Excluded" else 0
+	if hasattr(row, "reviewed_by"):
+		row.reviewed_by = frappe.session.user
+	if hasattr(row, "reviewed_on"):
+		row.reviewed_on = now_datetime()
+	refresh_daily_sales_audit_review_summary(doc)
+	append_daily_sales_audit_action_log(
+		doc,
+		action=f"{table_field} status updated",
+		old_status=doc.audit_status,
+		new_status=doc.audit_status,
+		remarks=remarks,
+		details={"row_name": row_name, "from": old_status, "to": review_status},
+	)
+	_save_audit_doc(doc)
+	return doc.name
 
 
 def _log_context_from_audit_doc(doc):
@@ -1186,6 +1748,12 @@ def _serialise_context(context):
 		return json.dumps(context, default=str, sort_keys=True)
 	except Exception:
 		return str(context)
+
+
+def _row_value(row, fieldname, default=None):
+	if isinstance(row, dict):
+		return row.get(fieldname, default)
+	return getattr(row, fieldname, default)
 
 
 def _safe_settings():
