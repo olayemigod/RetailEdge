@@ -1,0 +1,161 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "company",
+  "branch",
+  "statement_date",
+  "payment_category",
+  "mapping_template",
+  "attachment",
+  "import_status",
+  "notes",
+  "rows"
+ ],
+ "fields": [
+  {
+   "default": "RE-PSI-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Naming Series",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch"
+  },
+  {
+   "fieldname": "statement_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Statement Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "payment_category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Payment Category",
+   "options": "Bank Transfer\nCard / POS\nMobile Money\nOther",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mapping_template",
+   "fieldtype": "Link",
+   "label": "Mapping Template",
+   "options": "RetailEdge Statement Mapping Template"
+  },
+  {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Statement Attachment"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "import_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Import Status",
+   "options": "Draft\nImported\nReviewed\nArchived"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "rows",
+   "fieldtype": "Table",
+   "label": "Rows",
+   "options": "RetailEdge Statement Import Row"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge Payment Statement Import",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdge Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdgeManager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdge Branch Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdgeBranchManager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "RetailEdge Auditor"
+  },
+  {
+   "read": 1,
+   "role": "RetailEdgeAuditor"
+  },
+  {
+   "read": 1,
+   "role": "Accounts Manager"
+  },
+  {
+   "read": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "search_fields": "company,branch,payment_category",
+ "sort_field": "statement_date",
+ "sort_order": "DESC",
+ "title_field": "name",
+ "track_changes": 1
+}

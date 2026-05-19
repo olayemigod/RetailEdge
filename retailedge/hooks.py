@@ -241,6 +241,7 @@ doc_events = {
 after_migrate = [
 	"retailedge.setup_roles.ensure_retailedge_roles",
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
+	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
 ]
 boot_session = "retailedge.boot.boot_session"
 

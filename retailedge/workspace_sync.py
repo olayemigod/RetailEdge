@@ -10,6 +10,10 @@ def sync_retailedge_workspace_layout():
 	base_path = Path(frappe.get_app_path("retailedge", "retailedge"))
 	workspace_path = base_path / "workspace" / "retailedge" / "retailedge.json"
 	sidebar_path = base_path / "workspace_sidebar" / "retailedge" / "retailedge.json"
+	if not workspace_path.exists() or not sidebar_path.exists():
+		fallback_base = Path(frappe.get_app_path("retailedge"))
+		workspace_path = fallback_base / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
+		sidebar_path = fallback_base / "retailedge" / "workspace_sidebar" / "retailedge" / "retailedge.json"
 
 	workspace_data = json.loads(workspace_path.read_text())
 	sidebar_data = json.loads(sidebar_path.read_text())

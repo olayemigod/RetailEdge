@@ -1,0 +1,126 @@
+{
+ "actions": [],
+ "autoname": "field:template_name",
+ "creation": "2026-05-19 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "template_name",
+  "company",
+  "payment_category",
+  "default_account",
+  "reference_keywords",
+  "narration_keywords",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "template_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Template Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "payment_category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Payment Category",
+   "options": "Bank Transfer\nCard / POS\nMobile Money\nOther",
+   "reqd": 1
+  },
+  {
+   "fieldname": "default_account",
+   "fieldtype": "Link",
+   "label": "Default Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "reference_keywords",
+   "fieldtype": "Small Text",
+   "label": "Reference Keywords"
+  },
+  {
+   "fieldname": "narration_keywords",
+   "fieldtype": "Small Text",
+   "label": "Narration Keywords"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-05-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge Statement Mapping Template",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdge Manager",
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdgeManager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "read": 1,
+   "role": "RetailEdgeBranchManager"
+  },
+  {
+   "read": 1,
+   "role": "RetailEdge Auditor"
+  },
+  {
+   "read": 1,
+   "role": "RetailEdgeAuditor"
+  },
+  {
+   "read": 1,
+   "role": "Accounts Manager"
+  },
+  {
+   "read": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "search_fields": "template_name,company,payment_category",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "template_name",
+ "track_changes": 1
+}

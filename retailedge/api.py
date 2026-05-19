@@ -62,6 +62,12 @@ from retailedge.invoice_payment_audit import (
 	get_payment_entries_for_sales_invoice as _get_payment_entries_for_sales_invoice,
 	get_sales_invoice_payment_rows as _get_sales_invoice_payment_rows,
 )
+from retailedge.payment_evidence_matching import (
+	assert_can_access_payment_evidence_matching as _assert_can_access_payment_evidence_matching,
+	get_payment_evidence_match_list as _get_payment_evidence_match_list,
+	get_payment_evidence_match_summary as _get_payment_evidence_match_summary,
+	match_payment_evidence_for_invoice as _match_payment_evidence_for_invoice,
+)
 from retailedge.cashier_expense_posting import (
 	assert_can_refresh_posting_readiness as _assert_can_refresh_posting_readiness,
 	get_cashier_expense_posting_preview as _get_cashier_expense_posting_preview,
@@ -418,6 +424,30 @@ def get_payment_entries_for_sales_invoice(invoice_name):
 	if not doc.has_permission("read"):
 		frappe.throw("You do not have permission to read this Sales Invoice.", frappe.PermissionError)
 	return _get_payment_entries_for_sales_invoice(invoice_name)
+
+
+@frappe.whitelist()
+def match_payment_evidence_for_invoice(invoice_name, create_match_records=False):
+	_assert_can_access_payment_evidence_matching()
+	doc = frappe.get_doc("Sales Invoice", invoice_name)
+	if not doc.has_permission("read"):
+		frappe.throw("You do not have permission to read this Sales Invoice.", frappe.PermissionError)
+	return _match_payment_evidence_for_invoice(
+		invoice_name,
+		create_match_records=bool(int(create_match_records)) if isinstance(create_match_records, str) else bool(create_match_records),
+	)
+
+
+@frappe.whitelist()
+def get_payment_evidence_match_list(filters=None, limit=500):
+	_assert_can_access_payment_evidence_matching()
+	return _get_payment_evidence_match_list(filters=filters, limit=int(limit or 500))
+
+
+@frappe.whitelist()
+def get_payment_evidence_match_summary(filters=None):
+	_assert_can_access_payment_evidence_matching()
+	return _get_payment_evidence_match_summary(filters=filters)
 
 
 @frappe.whitelist()

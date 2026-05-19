@@ -242,7 +242,15 @@ RetailEdge does not implement editable selling price because POSNext already sup
 
 RetailEdge can now inspect Sales Invoices against payment rows, Payment Entry references, outstanding amount, payment methods, actual accounts, and expected branch accounts without mutating any ERPNext or POSNext source document. The audit intelligence prefers stored `retailedge_branch` attribution where available, falls back to the central branch resolver when needed, and uses RetailEdge Branch Profile defaults to determine expected cash, bank, card/POS, and mobile money accounts where they are configured.
 
-This phase classifies invoice-payment risk and status into read-only intelligence outcomes such as Credit, Partially Paid, Fully Paid Pending Audit, Payment Rows Missing, Payment Account Mismatch, Payment Amount Mismatch, Split Payment, Overpaid, Underpaid, Pending Verification, Ready for Verification, Verified in Daily Audit, and Variance Found. It also adds a read-only Invoice Payment Audit report and can feed safe invoice-payment issue counts into Branch Performance. No Sales Invoice, Payment Entry, GL, POS shift, or Daily Sales Audit source record is modified in this phase. Payment evidence matching remains for V1.5D, payment verification workflow for V1.5E, and controlled Sales Invoice audit status sync for V1.5F.
+This phase classifies invoice-payment risk and status into read-only intelligence outcomes such as Credit, Partially Paid, Fully Paid Pending Audit, Payment Rows Missing, Payment Account Mismatch, Payment Amount Mismatch, Split Payment, Overpaid, Underpaid, Pending Verification, Ready for Verification, Verified in Daily Audit, and Variance Found. It also adds a read-only Invoice Payment Audit report, visible under Reports & Review / Branch Performance, and can feed safe invoice-payment issue counts into Branch Performance. No Sales Invoice, Payment Entry, GL, POS shift, or Daily Sales Audit source record is modified in this phase. Payment evidence matching remains for V1.5D, payment verification workflow for V1.5E, and controlled Sales Invoice audit status sync for V1.5F.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
+## RetailEdge V1.5D - Bank / POS / Transfer Evidence Matching
+
+RetailEdge can now match invoice-payment audit results against read-only evidence sources such as submitted Payment Entry references, ERPNext Bank Transaction records where they exist safely on the site, and RetailEdge-owned Payment Evidence records. The matching layer produces candidate matches, confidence scores, duplicate suspicions, and mismatch summaries without verifying payments yet.
+
+This phase introduces a read-only Payment Evidence Matching report, optional RetailEdge-owned evidence and evidence-match DocTypes for later review workflow use, and safe summary counters that can flow into Branch Performance. It does not mutate Sales Invoice, Payment Entry, GL, POS shift, or Daily Sales Audit source records. Payment Verification Workflow remains reserved for V1.5E, and controlled Sales Invoice audit status sync remains reserved for V1.5F.
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 

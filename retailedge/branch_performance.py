@@ -14,6 +14,7 @@ from retailedge.branch_context import (
 from retailedge.cashier_expense import user_has_any_role
 from retailedge.cashier_expense_audit import get_cashier_expenses_for_daily_audit
 from retailedge.invoice_payment_audit import get_invoice_payment_audit_summary
+from retailedge.payment_evidence_matching import get_payment_evidence_match_summary
 
 
 BRANCH_PERFORMANCE_ROLES = {
@@ -54,6 +55,7 @@ def get_branch_performance_summary(filters=None):
 	stock = get_branch_stock_activity_summary(filters)
 	expense_rows = get_cashier_expenses_for_daily_audit(filters=filters)
 	invoice_audit = get_invoice_payment_audit_summary({**filters, "limit": 500})
+	evidence_audit = get_payment_evidence_match_summary({**filters, "limit": 200})
 
 	cashier_expense_amount = 0.0
 	cashier_expense_count = 0
@@ -110,6 +112,10 @@ def get_branch_performance_summary(filters=None):
 		"ready_for_verification_count": invoice_audit.get("ready_for_verification_count", 0),
 		"credit_invoice_count": invoice_audit.get("credit_count", 0),
 		"high_risk_invoice_count": invoice_audit.get("high_risk_count", 0),
+		"payment_evidence_matched_count": evidence_audit.get("matched_invoice_count", 0),
+		"payment_evidence_unmatched_count": evidence_audit.get("unmatched_invoice_count", 0),
+		"strong_evidence_candidate_count": evidence_audit.get("strong_candidate_count", 0),
+		"duplicate_payment_evidence_count": evidence_audit.get("duplicate_suspected_count", 0),
 		"exception_count": (
 			sales.get("unpaid_invoice_count", 0)
 			+ sales.get("partially_paid_invoice_count", 0)
@@ -118,6 +124,8 @@ def get_branch_performance_summary(filters=None):
 			+ invoice_audit.get("payment_account_mismatch_count", 0)
 			+ invoice_audit.get("payment_amount_mismatch_count", 0)
 			+ invoice_audit.get("payment_rows_missing_count", 0)
+			+ evidence_audit.get("unmatched_invoice_count", 0)
+			+ evidence_audit.get("duplicate_suspected_count", 0)
 		),
 		"messages": _dedupe_messages(messages),
 	}

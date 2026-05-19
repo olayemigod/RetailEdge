@@ -96,6 +96,7 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertNotEqual(breakdown["Cash"], 5000.0)
 
 	@patch("retailedge.branch_performance.get_cashier_expenses_for_daily_audit")
+	@patch("retailedge.branch_performance.get_payment_evidence_match_summary")
 	@patch("retailedge.branch_performance.get_invoice_payment_audit_summary")
 	@patch("retailedge.branch_performance.get_branch_stock_activity_summary")
 	@patch("retailedge.branch_performance.get_branch_variance_summary")
@@ -113,6 +114,7 @@ class BranchPerformanceTests(unittest.TestCase):
 		mock_variance,
 		mock_stock,
 		mock_invoice_audit,
+		mock_evidence_audit,
 		mock_expenses,
 	):
 		mock_sales.return_value = {
@@ -151,6 +153,12 @@ class BranchPerformanceTests(unittest.TestCase):
 			"credit_count": 0,
 			"high_risk_count": 1,
 		}
+		mock_evidence_audit.return_value = {
+			"matched_invoice_count": 1,
+			"unmatched_invoice_count": 2,
+			"strong_candidate_count": 1,
+			"duplicate_suspected_count": 1,
+		}
 		mock_expenses.return_value = [
 			{"name": "RE-CE-001", "amount": 150.0, "expense_status": "Submitted"},
 			{"name": "RE-CE-002", "amount": 75.0, "expense_status": "Cancelled"},
@@ -162,6 +170,10 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertEqual(summary["cashier_expense_count"], 1)
 		self.assertEqual(summary["invoice_payment_audit_issue_count"], 2)
 		self.assertEqual(summary["high_risk_invoice_count"], 1)
+		self.assertEqual(summary["payment_evidence_matched_count"], 1)
+		self.assertEqual(summary["payment_evidence_unmatched_count"], 2)
+		self.assertEqual(summary["duplicate_payment_evidence_count"], 1)
+		self.assertEqual(summary["exception_count"], 5)
 
 	@patch("retailedge.branch_performance._get_matching_daily_sales_audits")
 	def test_get_branch_variance_summary_counts_statuses(self, mock_audits):
