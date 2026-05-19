@@ -46,6 +46,22 @@ from retailedge.cashier_expense_dashboard import (
 	assert_can_access_cashier_expense_dashboard as _assert_can_access_cashier_expense_dashboard,
 	get_cashier_expense_dashboard_summary as _get_cashier_expense_dashboard_summary,
 )
+from retailedge.branch_performance import (
+	assert_can_access_branch_performance as _assert_can_access_branch_performance,
+	get_branch_payment_breakdown as _get_branch_payment_breakdown,
+	get_branch_performance_summary as _get_branch_performance_summary,
+	get_branch_sales_summary as _get_branch_sales_summary,
+	get_branch_stock_activity_summary as _get_branch_stock_activity_summary,
+	get_branch_variance_summary as _get_branch_variance_summary,
+)
+from retailedge.invoice_payment_audit import (
+	assert_can_access_invoice_payment_audit as _assert_can_access_invoice_payment_audit,
+	audit_sales_invoice_payment as _audit_sales_invoice_payment,
+	get_invoice_payment_audit_list as _get_invoice_payment_audit_list,
+	get_invoice_payment_audit_summary as _get_invoice_payment_audit_summary,
+	get_payment_entries_for_sales_invoice as _get_payment_entries_for_sales_invoice,
+	get_sales_invoice_payment_rows as _get_sales_invoice_payment_rows,
+)
 from retailedge.cashier_expense_posting import (
 	assert_can_refresh_posting_readiness as _assert_can_refresh_posting_readiness,
 	get_cashier_expense_posting_preview as _get_cashier_expense_posting_preview,
@@ -336,6 +352,72 @@ def get_cashier_expense_review_summary(filters=None):
 def get_cashier_expense_dashboard_summary(filters=None):
 	_assert_can_access_cashier_expense_dashboard()
 	return _get_cashier_expense_dashboard_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_branch_performance_summary(filters=None):
+	_assert_can_access_branch_performance()
+	return _get_branch_performance_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_branch_payment_breakdown(filters=None):
+	_assert_can_access_branch_performance()
+	return _get_branch_payment_breakdown(filters=filters)
+
+
+@frappe.whitelist()
+def get_branch_sales_summary(filters=None):
+	_assert_can_access_branch_performance()
+	return _get_branch_sales_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_branch_variance_summary(filters=None):
+	_assert_can_access_branch_performance()
+	return _get_branch_variance_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_branch_stock_activity_summary(filters=None):
+	_assert_can_access_branch_performance()
+	return _get_branch_stock_activity_summary(filters=filters)
+
+
+@frappe.whitelist()
+def audit_sales_invoice_payment(invoice_name):
+	_assert_can_access_invoice_payment_audit()
+	return _audit_sales_invoice_payment(invoice_name)
+
+
+@frappe.whitelist()
+def get_invoice_payment_audit_list(filters=None, limit=500):
+	_assert_can_access_invoice_payment_audit()
+	return _get_invoice_payment_audit_list(filters=filters, limit=int(limit or 500))
+
+
+@frappe.whitelist()
+def get_invoice_payment_audit_summary(filters=None):
+	_assert_can_access_invoice_payment_audit()
+	return _get_invoice_payment_audit_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_sales_invoice_payment_rows(invoice_name):
+	_assert_can_access_invoice_payment_audit()
+	doc = frappe.get_doc("Sales Invoice", invoice_name)
+	if not doc.has_permission("read"):
+		frappe.throw("You do not have permission to read this Sales Invoice.", frappe.PermissionError)
+	return _get_sales_invoice_payment_rows(doc)
+
+
+@frappe.whitelist()
+def get_payment_entries_for_sales_invoice(invoice_name):
+	_assert_can_access_invoice_payment_audit()
+	doc = frappe.get_doc("Sales Invoice", invoice_name)
+	if not doc.has_permission("read"):
+		frappe.throw("You do not have permission to read this Sales Invoice.", frappe.PermissionError)
+	return _get_payment_entries_for_sales_invoice(invoice_name)
 
 
 @frappe.whitelist()

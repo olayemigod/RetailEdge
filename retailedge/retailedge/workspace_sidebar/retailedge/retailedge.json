@@ -64,6 +64,39 @@
    "collapsible": 1,
    "indent": 0,
    "keep_closed": 0,
+   "label": "Branch Performance Summary",
+   "link_to": "RetailEdge Branch Performance Summary",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Invoice Payment Audit",
+   "link_to": "RetailEdge Invoice Payment Audit",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "POS Variance",
+   "link_to": "POS Closing Variance vs Expenses",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
    "label": "Cashier Expense Review",
    "link_to": "RetailEdge Cashier Expense Review",
    "link_type": "Report",
@@ -77,17 +110,6 @@
    "keep_closed": 0,
    "label": "Daily Sales Audit Register",
    "link_to": "RetailEdge Daily Sales Audit Register",
-   "link_type": "Report",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 1,
-   "collapsible": 1,
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "POS Closing Variance vs Expenses",
-   "link_to": "POS Closing Variance vs Expenses",
    "link_type": "Report",
    "show_arrow": 0,
    "type": "Link"

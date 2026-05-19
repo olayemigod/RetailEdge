@@ -176,6 +176,17 @@ def _get_invoice_datetime(doc):
 	return _combine_posting_datetime(posting_date, posting_time) or _coerce_datetime(getattr(doc, "creation", None))
 
 
+def _get_payment_entry_datetime(doc):
+	posting_date = getattr(doc, "posting_date", None)
+	posting_time = getattr(doc, "posting_time", None)
+	# Payment Entry often has only posting_date without a meaningful posting_time.
+	# For shift cash control we need the actual receipt timestamp when available so
+	# cash collected during the shift is not excluded as a midnight posting.
+	if posting_time:
+		return _combine_posting_datetime(posting_date, posting_time) or _coerce_datetime(getattr(doc, "creation", None))
+	return _coerce_datetime(getattr(doc, "creation", None)) or _combine_posting_datetime(posting_date, posting_time)
+
+
 def _within_window(value, start, end) -> bool:
 	value_dt = _coerce_datetime(value)
 	start_dt = _coerce_datetime(start)
@@ -594,6 +605,7 @@ def get_shift_cash_sales(
 		cash_sales = 0.0
 		matched_invoices = 0
 		matched_payments = 0
+		matched_invoice_names = set()
 		for row in invoice_rows:
 			invoice = _coerce_doc("Sales Invoice", row.name)
 			if not invoice:
@@ -618,14 +630,28 @@ def get_shift_cash_sales(
 				cash_sales += invoice_cash
 				matched_invoices += 1
 				matched_payments += invoice_payment_matches
+				matched_invoice_names.add(invoice.name)
 
+		payment_entry_result = _get_shift_cash_payment_entries(
+			window=window,
+			cash_account=cash_account,
+			matched_invoice_names=matched_invoice_names,
+		)
+		cash_sales += flt(payment_entry_result.get("cash_sales", 0.0))
+		matched_payments += payment_entry_result.get("matched_payment_count", 0)
 		if matched_payments:
+			source_parts = []
+			if matched_invoices:
+				source_parts.append("sales_invoice.payments")
+			if payment_entry_result.get("matched_payment_count"):
+				source_parts.append("payment_entry.references")
 			result.update(
 				{
 					"cash_sales": cash_sales,
-					"source": "sales_invoice.payments",
+					"source": " + ".join(source_parts) or "sales_invoice.payments",
 					"matched_invoice_count": matched_invoices,
 					"matched_payment_count": matched_payments,
+					"message": payment_entry_result.get("message"),
 				}
 			)
 			return result
@@ -660,6 +686,105 @@ def get_shift_cash_sales(
 			return result
 
 	result["message"] = "Cash sales could not be safely resolved for this POS schema."
+	return result
+
+
+def _get_shift_cash_payment_entries(window, cash_account=None, matched_invoice_names=None):
+	result = {
+		"cash_sales": 0.0,
+		"matched_payment_count": 0,
+		"message": None,
+	}
+	if not _has_doctype("Payment Entry"):
+		return result
+
+	query_filters = {"docstatus": 1}
+	if window.get("company") and _find_first_field("Payment Entry", ["company"]):
+		query_filters["company"] = window["company"]
+
+	shift_start = _coerce_datetime(window.get("shift_start"))
+	shift_end = _coerce_datetime(window.get("shift_end"))
+	if shift_start and shift_end and _find_first_field("Payment Entry", ["posting_date"]):
+		start_date = str(shift_start.date())
+		end_date = str(shift_end.date())
+		if start_date == end_date:
+			query_filters["posting_date"] = start_date
+		else:
+			query_filters["posting_date"] = ["between", [start_date, end_date]]
+
+	fields = ["name", "posting_date", "paid_amount", "received_amount", "paid_from", "paid_to", "mode_of_payment", "creation"]
+	for fieldname in ("retailedge_branch", "branch", "party_type", "party", "owner"):
+		if _find_first_field("Payment Entry", [fieldname]):
+			fields.append(fieldname)
+
+	try:
+		payment_rows = frappe.get_all("Payment Entry", filters=query_filters, fields=list(dict.fromkeys(fields)), limit_page_length=0)
+	except Exception:
+		return result
+	if not payment_rows:
+		return result
+
+	matched_invoice_names = set(matched_invoice_names or [])
+	matched_branch = window.get("branch")
+	if not matched_branch:
+		matched_branch = resolve_branch(
+			company=window.get("company"),
+			pos_profile=window.get("pos_profile"),
+			opening_shift=window.get("opening_shift"),
+			user=window.get("user"),
+		).get("branch")
+	matched_user = window.get("user")
+
+	for row in payment_rows:
+		branch = row.get("retailedge_branch") or row.get("branch")
+		if not branch:
+			branch_context = resolve_retailedge_branch_context(
+				doctype="Payment Entry",
+				name=row.get("name"),
+				company=row.get("company") or window.get("company"),
+				user=matched_user,
+			)
+			branch = branch_context.get("branch")
+		if matched_branch and branch and branch != matched_branch:
+			continue
+
+		payment_doc = _coerce_doc("Payment Entry", row.get("name"))
+		if not payment_doc:
+			continue
+		payment_dt = _get_payment_entry_datetime(payment_doc)
+		if shift_start and shift_end and not _within_window(payment_dt, shift_start, shift_end):
+			continue
+
+		references = getattr(payment_doc, "references", []) or []
+		referenced_current_shift_invoice = False
+		allocated_cash = 0.0
+		for reference_row in references:
+			reference = reference_row.as_dict() if hasattr(reference_row, "as_dict") else dict(reference_row)
+			if reference.get("reference_doctype") != "Sales Invoice":
+				continue
+			reference_name = reference.get("reference_name")
+			if reference_name in matched_invoice_names:
+				referenced_current_shift_invoice = True
+			allocated_cash += flt(reference.get("allocated_amount") or reference.get("total_amount"))
+
+		if referenced_current_shift_invoice:
+			continue
+
+		mode_name = getattr(payment_doc, "mode_of_payment", None)
+		account_name = getattr(payment_doc, "paid_to", None) or getattr(payment_doc, "paid_from", None)
+		if not (_is_cash_mode(mode_name) or (cash_account and account_name == cash_account)):
+			continue
+
+		amount = allocated_cash or flt(getattr(payment_doc, "paid_amount", None) or getattr(payment_doc, "received_amount", None))
+		if amount <= 0:
+			continue
+		result["cash_sales"] += amount
+		result["matched_payment_count"] += 1
+
+	if result["matched_payment_count"]:
+		result["message"] = (
+			"Shift cash includes cash Payment Entry receipts recorded during this shift for referenced invoices not already counted from invoice payment rows."
+		)
 	return result
 
 

@@ -40,6 +40,17 @@ LINE_REVIEW_STATUSES = (
 	"Excluded",
 	"Verified for Audit",
 )
+NON_CANCELLED_AUDIT_STATUSES = {
+	"Draft",
+	"Ready for Review",
+	"In Review",
+	"Balanced",
+	"Variance Found",
+	"Clarification Required",
+	"Approved",
+	"Rejected",
+	"Reopened",
+}
 
 BRANCH_FIELD_CANDIDATES = ["branch", "set_branch", "service_branch", "retail_branch", "default_branch"]
 POS_PROFILE_FIELD_CANDIDATES = ["pos_profile"]
@@ -377,6 +388,7 @@ def create_daily_sales_audit_draft(filters=None):
 	filters = _coerce_filters(filters)
 	context = get_daily_sales_audit_context(filters)
 	_assert_daily_sales_audit_context(context, settings)
+	_assert_opening_shift_not_already_audited(context.get("pos_opening_shift"))
 
 	existing_name = _find_existing_daily_sales_audit_draft(context)
 	if existing_name:
@@ -984,7 +996,7 @@ def _list_opening_shifts(filters):
 	if status_field and not filters.get("pos_closing_shift"):
 		query_filters.setdefault(status_field, ["not in", ["Draft", "Cancelled"]])
 	try:
-		return [
+		values = [
 			row.name
 			for row in frappe.get_all(
 				"POS Opening Shift",
@@ -994,6 +1006,7 @@ def _list_opening_shifts(filters):
 				order_by="creation desc",
 			)
 		]
+		return _exclude_already_audited_opening_shifts(values, exclude_audit=filters.get("name"))
 	except Exception:
 		return []
 
@@ -1141,6 +1154,8 @@ def _search_daily_sales_audit_shifts(shift_doctype, txt, start, page_len, filter
 		order_by="creation desc",
 	)
 	values = [row.name for row in rows if _matches_search(row.name, txt)]
+	if shift_doctype == "POS Opening Shift":
+		values = _exclude_already_audited_opening_shifts(values, exclude_audit=filters.get("name"))
 	return [(value,) for value in values[start : start + page_len]]
 
 
@@ -1206,6 +1221,73 @@ def _find_existing_daily_sales_audit_draft(context):
 		if value:
 			filters[fieldname] = value
 	return frappe.db.get_value("RetailEdge Daily Sales Audit", filters, "name")
+
+
+def _find_conflicting_daily_sales_audit_for_opening_shift(pos_opening_shift, exclude_name=None):
+	if not pos_opening_shift or not _has_doctype("RetailEdge Daily Sales Audit"):
+		return None
+	filters = {
+		"pos_opening_shift": pos_opening_shift,
+		"docstatus": ["!=", 2],
+		"audit_status": ["in", list(NON_CANCELLED_AUDIT_STATUSES)],
+	}
+	try:
+		rows = frappe.get_all(
+			"RetailEdge Daily Sales Audit",
+			filters=filters,
+			fields=["name", "audit_status"],
+			limit_page_length=0,
+			order_by="creation desc",
+		)
+	except Exception:
+		return None
+	for row in rows:
+		if exclude_name and row.get("name") == exclude_name:
+			continue
+		return row
+	return None
+
+
+def _exclude_already_audited_opening_shifts(opening_shift_names, exclude_audit=None):
+	if not opening_shift_names:
+		return []
+	if not _has_doctype("RetailEdge Daily Sales Audit"):
+		return list(opening_shift_names)
+	try:
+		rows = frappe.get_all(
+			"RetailEdge Daily Sales Audit",
+			filters={
+				"pos_opening_shift": ["in", list(opening_shift_names)],
+				"docstatus": ["!=", 2],
+				"audit_status": ["in", list(NON_CANCELLED_AUDIT_STATUSES)],
+			},
+			fields=["name", "pos_opening_shift"],
+			limit_page_length=0,
+		)
+	except Exception:
+		return list(opening_shift_names)
+	blocked = {
+		row.get("pos_opening_shift")
+		for row in rows
+		if row.get("pos_opening_shift") and row.get("name") != exclude_audit
+	}
+	return [name for name in opening_shift_names if name not in blocked]
+
+
+def _assert_opening_shift_not_already_audited(pos_opening_shift, exclude_name=None):
+	conflict = _find_conflicting_daily_sales_audit_for_opening_shift(
+		pos_opening_shift,
+		exclude_name=exclude_name,
+	)
+	if not conflict:
+		return
+	frappe.throw(
+		"POS Opening Shift {0} already has RetailEdge Daily Sales Audit {1} with status {2}. Reopen or continue that audit instead of creating a duplicate.".format(
+			pos_opening_shift,
+			conflict.get("name"),
+			conflict.get("audit_status") or "Draft",
+		)
+	)
 
 
 def _apply_context_to_audit_doc(doc, context):

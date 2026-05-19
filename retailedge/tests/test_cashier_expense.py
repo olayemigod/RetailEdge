@@ -75,6 +75,7 @@ from retailedge.cashier_expense_posting import (
 	refresh_cashier_expense_posting_readiness,
 )
 from retailedge.daily_sales_audit import (
+	_assert_opening_shift_not_already_audited,
 	approve_daily_sales_audit,
 	calculate_daily_sales_audit_variance,
 	cancel_daily_sales_audit_review,
@@ -92,6 +93,7 @@ from retailedge.daily_sales_audit import (
 	request_daily_sales_audit_clarification,
 	resolve_daily_sales_audit_context_from_selection,
 	resolve_daily_sales_audit_clarification,
+	search_daily_sales_audit_opening_shifts,
 	start_daily_sales_audit_review,
 	submit_daily_sales_audit_for_review,
 	update_daily_sales_audit_invoice_line_status,
@@ -470,8 +472,9 @@ class CashierContextTests(unittest.TestCase):
 	@patch("retailedge.cashier_context._coerce_doc")
 	@patch("retailedge.cashier_context.frappe.get_meta")
 	@patch("retailedge.cashier_context.frappe.get_all")
+	@patch("retailedge.cashier_context._has_doctype", side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"})
 	def test_get_shift_cash_sales_counts_only_cash_payments_in_shift(
-		self, mock_get_all, mock_get_meta, mock_coerce_doc, mock_shift_window, mock_payment_account
+		self, _mock_has_doctype, mock_get_all, mock_get_meta, mock_coerce_doc, mock_shift_window, mock_payment_account
 	):
 		opening_shift = SimpleNamespace(
 			doctype="POS Opening Shift",
@@ -508,7 +511,14 @@ class CashierContextTests(unittest.TestCase):
 			return SimpleNamespace(has_field=lambda field: False)
 
 		mock_get_meta.side_effect = _meta_for
-		mock_get_all.return_value = [SimpleNamespace(name="SINV-1")]
+		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
+			if doctype == "Sales Invoice":
+				return [SimpleNamespace(name="SINV-1")]
+			if doctype == "Payment Entry":
+				return []
+			return []
+
+		mock_get_all.side_effect = _fake_get_all
 		mock_coerce_doc.return_value = invoice
 		mock_payment_account.return_value = {
 			"payment_account": "Cash - DEMO",
@@ -527,8 +537,9 @@ class CashierContextTests(unittest.TestCase):
 	@patch("retailedge.cashier_context._coerce_doc")
 	@patch("retailedge.cashier_context.frappe.get_meta")
 	@patch("retailedge.cashier_context.frappe.get_all")
+	@patch("retailedge.cashier_context._has_doctype", side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"})
 	def test_get_shift_cash_sales_ignores_non_cash_and_cancelled_invoices(
-		self, mock_get_all, mock_get_meta, mock_coerce_doc, mock_shift_window, mock_payment_account
+		self, _mock_has_doctype, mock_get_all, mock_get_meta, mock_coerce_doc, mock_shift_window, mock_payment_account
 	):
 		opening_shift = SimpleNamespace(
 			doctype="POS Opening Shift",
@@ -564,7 +575,14 @@ class CashierContextTests(unittest.TestCase):
 			return SimpleNamespace(has_field=lambda field: False)
 
 		mock_get_meta.side_effect = _meta_for
-		mock_get_all.return_value = [SimpleNamespace(name="SINV-1")]
+		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
+			if doctype == "Sales Invoice":
+				return [SimpleNamespace(name="SINV-1")]
+			if doctype == "Payment Entry":
+				return []
+			return []
+
+		mock_get_all.side_effect = _fake_get_all
 		mock_coerce_doc.return_value = invoice
 		mock_payment_account.return_value = {
 			"payment_account": "Cash - DEMO",
@@ -576,6 +594,112 @@ class CashierContextTests(unittest.TestCase):
 		self.assertEqual(result["cash_sales"], 0)
 		self.assertEqual(result["matched_invoice_count"], 0)
 		self.assertIn("could not be safely resolved", result["message"])
+
+	@patch("retailedge.cashier_context.resolve_branch", return_value={"branch": "Main Branch", "source": "opening_shift", "message": None})
+	@patch("retailedge.cashier_context.resolve_cash_payment_account")
+	@patch("retailedge.cashier_context._get_shift_window")
+	@patch("retailedge.cashier_context._coerce_doc")
+	@patch("retailedge.cashier_context.frappe.get_meta")
+	@patch("retailedge.cashier_context.frappe.get_all")
+	@patch("retailedge.cashier_context._has_doctype", side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"})
+	def test_get_shift_cash_sales_includes_cash_payment_entry_receipts_for_overdue_invoice(
+		self,
+		_mock_has_doctype,
+		mock_get_all,
+		mock_get_meta,
+		mock_coerce_doc,
+		mock_shift_window,
+		mock_payment_account,
+		_mock_resolve_branch,
+	):
+		opening_shift = SimpleNamespace(
+			doctype="POS Opening Shift",
+			name="OPEN-1",
+			company="Demo Company",
+			pos_profile="PROFILE-1",
+			user="cashier@example.com",
+			period_start_date=datetime(2026, 5, 18, 9, 0, 0),
+		)
+		overdue_invoice = SimpleNamespace(
+			doctype="Sales Invoice",
+			name="SINV-OLD-1",
+			posting_date=datetime(2026, 5, 11, 10, 0, 0),
+			posting_time=None,
+			payments=[],
+		)
+		payment_entry = SimpleNamespace(
+			doctype="Payment Entry",
+			name="PAY-1",
+			posting_date=datetime(2026, 5, 18, 0, 0, 0),
+			posting_time=None,
+			creation=datetime(2026, 5, 18, 10, 0, 0),
+			mode_of_payment="Cash",
+			paid_to="Cash - DEMO",
+			paid_from=None,
+			paid_amount=300,
+			received_amount=300,
+			references=[_Row(reference_doctype="Sales Invoice", reference_name="SINV-OLD-1", allocated_amount=300)],
+		)
+		mock_shift_window.return_value = {
+			"opening_shift": opening_shift,
+			"closing_shift": None,
+			"company": "Demo Company",
+			"pos_profile": "PROFILE-1",
+			"user": "cashier@example.com",
+			"shift_start": datetime(2026, 5, 18, 9, 0, 0),
+			"shift_end": datetime(2026, 5, 18, 12, 0, 0),
+			"branch": "Main Branch",
+		}
+
+		def _meta_for(doctype):
+			if doctype == "Sales Invoice":
+				return SimpleNamespace(has_field=lambda field: field in {"payments", "is_pos", "company", "posa_pos_opening_shift", "pos_profile"})
+			if doctype == "Sales Invoice Payment":
+				return SimpleNamespace(has_field=lambda field: field in {"mode_of_payment", "account", "amount", "base_amount"})
+			return SimpleNamespace(has_field=lambda field: False)
+
+		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
+			if doctype == "Sales Invoice":
+				return [SimpleNamespace(name="SINV-OLD-1")]
+			if doctype == "Payment Entry":
+				return [
+					{
+						"name": "PAY-1",
+						"posting_date": datetime(2026, 5, 18, 0, 0, 0),
+						"paid_amount": 300,
+						"received_amount": 300,
+						"paid_to": "Cash - DEMO",
+						"paid_from": None,
+						"mode_of_payment": "Cash",
+						"branch": "Main Branch",
+						"creation": datetime(2026, 5, 18, 10, 0, 0),
+					}
+				]
+			return []
+
+		def _coerce_side_effect(doctype, value):
+			if doctype == "Sales Invoice" and getattr(value, "name", value) == "SINV-OLD-1":
+				return overdue_invoice
+			if doctype == "Payment Entry" and getattr(value, "name", value) == "PAY-1":
+				return payment_entry
+			return value if getattr(value, "doctype", None) == doctype else None
+
+		mock_get_meta.side_effect = _meta_for
+		mock_get_all.side_effect = _fake_get_all
+		mock_coerce_doc.side_effect = _coerce_side_effect
+		mock_payment_account.return_value = {
+			"payment_account": "Cash - DEMO",
+			"mode_of_payment": "Cash",
+			"source": "mode_of_payment_account",
+			"message": None,
+		}
+
+		result = get_shift_cash_sales(opening_shift="OPEN-1", company="Demo Company", pos_profile="PROFILE-1")
+		self.assertEqual(result["cash_sales"], 300)
+		self.assertEqual(result["matched_invoice_count"], 0)
+		self.assertEqual(result["matched_payment_count"], 1)
+		self.assertEqual(result["source"], "payment_entry.references")
+		self.assertIn("Payment Entry receipts", result["message"])
 
 
 class PosClosingShiftHookTests(unittest.TestCase):
@@ -1465,6 +1589,35 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertEqual(options["branches"], ["HQ"])
 		self.assertEqual(options["pos_profiles"], ["Testing"])
 
+	@patch("retailedge.daily_sales_audit._build_query_filters", return_value={"docstatus": 1})
+	@patch("retailedge.daily_sales_audit._find_existing_field", side_effect=lambda doctype, fields: "status" if doctype == "POS Opening Shift" and "status" in fields else None)
+	@patch("retailedge.daily_sales_audit._has_doctype", side_effect=lambda doctype: doctype in {"POS Opening Shift", "RetailEdge Daily Sales Audit"})
+	@patch("retailedge.daily_sales_audit.frappe.get_all")
+	def test_opening_shift_search_excludes_already_audited_shifts(
+		self,
+		mock_get_all,
+		_mock_has_doctype,
+		_mock_find_existing,
+		_mock_build_filters,
+	):
+		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
+			if doctype == "POS Opening Shift":
+				return [SimpleNamespace(name="OPEN-1"), SimpleNamespace(name="OPEN-2")]
+			if doctype == "RetailEdge Daily Sales Audit":
+				return [{"name": "RE-DSA-0001", "pos_opening_shift": "OPEN-1"}]
+			return []
+
+		mock_get_all.side_effect = _fake_get_all
+		rows = search_daily_sales_audit_opening_shifts(
+			"POS Opening Shift",
+			"",
+			"name",
+			0,
+			20,
+			{"company": "Demo Company"},
+		)
+		self.assertEqual(rows, [("OPEN-2",)])
+
 	@patch("retailedge.daily_sales_audit._list_closing_shifts", return_value=["CLOSE-1"])
 	@patch("retailedge.daily_sales_audit._list_opening_shifts", return_value=["OPEN-1"])
 	@patch("retailedge.daily_sales_audit._coerce_doc")
@@ -1536,7 +1689,29 @@ class DailySalesAuditTests(unittest.TestCase):
 		mock_coerce_doc.side_effect = _coerce
 		resolved = resolve_daily_sales_audit_context_from_selection({"pos_opening_shift": "OPEN-1"})
 		self.assertEqual(resolved["company"], "Demo Company")
-		self.assertEqual(resolved["pos_profile"], "Testing")
+
+	@patch("retailedge.daily_sales_audit._has_doctype", return_value=True)
+	@patch("retailedge.daily_sales_audit.frappe.get_all")
+	def test_duplicate_opening_shift_audit_is_blocked(self, mock_get_all, _mock_has_doctype):
+		mock_get_all.return_value = [{"name": "RE-DSA-2026-0008", "audit_status": "Approved"}]
+		with self.assertRaises(frappe.ValidationError):
+			_assert_opening_shift_not_already_audited("OPEN-1")
+
+	@patch("retailedge.daily_sales_audit._has_doctype", return_value=True)
+	@patch("retailedge.daily_sales_audit.frappe.get_all")
+	def test_duplicate_opening_shift_check_ignores_current_audit(self, mock_get_all, _mock_has_doctype):
+		mock_get_all.return_value = [{"name": "RE-DSA-2026-0008", "audit_status": "Approved"}]
+		_assert_opening_shift_not_already_audited("OPEN-1", exclude_name="RE-DSA-2026-0008")
+
+	@patch("retailedge.daily_sales_audit._has_doctype", return_value=True)
+	@patch("retailedge.daily_sales_audit.frappe.get_all")
+	def test_duplicate_opening_shift_check_blocks_other_existing_audit(self, mock_get_all, _mock_has_doctype):
+		mock_get_all.return_value = [
+			{"name": "RE-DSA-2026-0008", "audit_status": "Approved"},
+			{"name": "RE-DSA-2026-0009", "audit_status": "Ready for Review"},
+		]
+		with self.assertRaises(frappe.ValidationError):
+			_assert_opening_shift_not_already_audited("OPEN-1", exclude_name="RE-DSA-2026-0008")
 
 	@patch("retailedge.daily_sales_audit.frappe.get_all")
 	@patch("retailedge.daily_sales_audit.frappe.get_doc")

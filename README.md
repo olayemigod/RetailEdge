@@ -222,11 +222,27 @@ Existing user-entered values are preserved, ambiguous branch context does not tr
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
+## RetailEdge V1.5A.5 - Branch Performance Dashboard and Reports
+
+RetailEdge now provides branch-level performance visibility through a new Branch Performance Summary report and supporting read-only helper APIs. Branch performance prefers stored `retailedge_branch` attribution where available and falls back to the central branch resolver only when stored attribution is blank.
+
+The branch performance layer summarizes sales, payment methods, cashier expenses, cash variance, Daily Sales Audit status, and material or stock activity without mutating ERPNext or POSNext source documents. Existing review reports such as POS Variance, Cashier Expense Review, and Daily Sales Audit Register are grouped alongside the new branch performance visibility tools under Reports & Review.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
 ## RetailEdge V1.5B - Daily Sales Audit Review Workflow
 
 RetailEdge Daily Sales Audit now supports a controlled internal review workflow with actions such as Submit for Review, Start Review, Mark Balanced, Mark Variance Found, Request Clarification, Resolve Clarification, Approve, Reject, Reopen, and Cancel Review. These actions update only the RetailEdge Daily Sales Audit document, its child review rows, and its action log so reviewers can track audit progress without mutating ERPNext or POSNext source transactions.
 
 Line-level invoice, payment, and cashier-expense review statuses are also internal to Daily Sales Audit and do not verify payments, do not update Sales Invoice audit or payment status, and do not change POS Opening or POS Closing Shift totals. Approval in this phase does not post accounting entries, does not create Journal Entries or Payment Entries, and does not synchronize payment verification. Those downstream controls remain for later phases.
+
+RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
+## RetailEdge V1.5C - Invoice Payment Audit Intelligence
+
+RetailEdge can now inspect Sales Invoices against payment rows, Payment Entry references, outstanding amount, payment methods, actual accounts, and expected branch accounts without mutating any ERPNext or POSNext source document. The audit intelligence prefers stored `retailedge_branch` attribution where available, falls back to the central branch resolver when needed, and uses RetailEdge Branch Profile defaults to determine expected cash, bank, card/POS, and mobile money accounts where they are configured.
+
+This phase classifies invoice-payment risk and status into read-only intelligence outcomes such as Credit, Partially Paid, Fully Paid Pending Audit, Payment Rows Missing, Payment Account Mismatch, Payment Amount Mismatch, Split Payment, Overpaid, Underpaid, Pending Verification, Ready for Verification, Verified in Daily Audit, and Variance Found. It also adds a read-only Invoice Payment Audit report and can feed safe invoice-payment issue counts into Branch Performance. No Sales Invoice, Payment Entry, GL, POS shift, or Daily Sales Audit source record is modified in this phase. Payment evidence matching remains for V1.5D, payment verification workflow for V1.5E, and controlled Sales Invoice audit status sync for V1.5F.
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 

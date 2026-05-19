@@ -1,7 +1,7 @@
 {
  "app": "retailedge",
  "charts": [],
- "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"operations_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Operations</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense\",\"col\":3}},{\"id\":\"daily_sales_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit\",\"col\":3}},{\"id\":\"reports_review_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports & Review</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense Review\",\"col\":3}},{\"id\":\"daily_sales_audit_register_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit Register\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Closing Variance vs Expenses\",\"col\":3}},{\"id\":\"setup_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Setup / Configuration</b></span>\",\"col\":12}},{\"id\":\"settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Settings\",\"col\":3}},{\"id\":\"branch_profile_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Profile\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Expense Category\",\"col\":3}}]",
+ "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"operations_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Operations</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense\",\"col\":3}},{\"id\":\"daily_sales_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit\",\"col\":3}},{\"id\":\"reports_review_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports & Review</b></span>\",\"col\":12}},{\"id\":\"branch_performance_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h6\\\"><b>Branch Performance</b></span>\",\"col\":12}},{\"id\":\"branch_performance_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Performance Summary\",\"col\":3}},{\"id\":\"invoice_payment_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Invoice Payment Audit\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Variance\",\"col\":3}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense Review\",\"col\":3}},{\"id\":\"daily_sales_audit_register_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit Register\",\"col\":3}},{\"id\":\"setup_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Setup / Configuration</b></span>\",\"col\":12}},{\"id\":\"settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Settings\",\"col\":3}},{\"id\":\"branch_profile_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Profile\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Expense Category\",\"col\":3}}]",
  "creation": "2026-05-07 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -47,10 +47,40 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Reports & Review",
-   "link_count": 3,
+   "link_count": 4,
    "link_type": "Report",
    "onboard": 0,
    "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Branch Performance Summary",
+   "link_count": 0,
+   "link_to": "RetailEdge Branch Performance Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Invoice Payment Audit",
+   "link_count": 0,
+   "link_to": "RetailEdge Invoice Payment Audit",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "POS Variance",
+   "link_count": 0,
+   "link_to": "POS Closing Variance vs Expenses",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
   },
   {
    "hidden": 0,
@@ -68,16 +98,6 @@
    "label": "Daily Sales Audit Register",
    "link_count": 0,
    "link_to": "RetailEdge Daily Sales Audit Register",
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "POS Closing Variance vs Expenses",
-   "link_count": 0,
-   "link_to": "POS Closing Variance vs Expenses",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
@@ -151,7 +171,31 @@
   },
   {
    "color": "Grey",
-   "doc_view": "Report",
+   "doc_view": "",
+   "label": "Branch Performance Summary",
+   "link_to": "RetailEdge Branch Performance Summary",
+   "stats_filter": "[]",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "label": "Invoice Payment Audit",
+   "link_to": "RetailEdge Invoice Payment Audit",
+   "stats_filter": "[]",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "label": "POS Variance",
+   "link_to": "POS Closing Variance vs Expenses",
+   "stats_filter": "[]",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
    "label": "Cashier Expense Review",
    "link_to": "RetailEdge Cashier Expense Review",
    "stats_filter": "[]",
@@ -159,17 +203,9 @@
   },
   {
    "color": "Grey",
-   "doc_view": "Report",
+   "doc_view": "",
    "label": "Daily Sales Audit Register",
    "link_to": "RetailEdge Daily Sales Audit Register",
-   "stats_filter": "[]",
-   "type": "Report"
-  },
-  {
-   "color": "Grey",
-   "doc_view": "Report",
-   "label": "POS Closing Variance vs Expenses",
-   "link_to": "POS Closing Variance vs Expenses",
    "stats_filter": "[]",
    "type": "Report"
   },
