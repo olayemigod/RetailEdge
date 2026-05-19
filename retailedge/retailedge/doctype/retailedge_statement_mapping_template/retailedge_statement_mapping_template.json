@@ -6,8 +6,27 @@
  "engine": "InnoDB",
  "field_order": [
   "template_name",
+  "enabled",
   "company",
+  "statement_type",
   "payment_category",
+  "bank_or_provider_name",
+  "date_column",
+  "value_date_column",
+  "reference_column",
+  "narration_column",
+  "debit_column",
+  "credit_column",
+  "amount_column",
+  "balance_column",
+  "account_column",
+  "party_column",
+  "channel_column",
+  "branch_column",
+  "currency_column",
+  "date_format",
+  "amount_format",
+  "debit_credit_mode",
   "default_account",
   "reference_keywords",
   "narration_keywords",
@@ -23,11 +42,25 @@
    "unique": 1
   },
   {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
    "fieldname": "company",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Company",
    "options": "Company"
+  },
+  {
+   "fieldname": "statement_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Statement Type",
+   "options": "Bank Transfer\nCard / POS Settlement\nMobile Money\nOther",
+   "reqd": 1
   },
   {
    "fieldname": "payment_category",
@@ -36,6 +69,92 @@
    "label": "Payment Category",
    "options": "Bank Transfer\nCard / POS\nMobile Money\nOther",
    "reqd": 1
+  },
+  {
+   "fieldname": "bank_or_provider_name",
+   "fieldtype": "Data",
+   "label": "Bank or Provider Name"
+  },
+  {
+   "fieldname": "date_column",
+   "fieldtype": "Data",
+   "label": "Date Column"
+  },
+  {
+   "fieldname": "value_date_column",
+   "fieldtype": "Data",
+   "label": "Value Date Column"
+  },
+  {
+   "fieldname": "reference_column",
+   "fieldtype": "Data",
+   "label": "Reference Column"
+  },
+  {
+   "fieldname": "narration_column",
+   "fieldtype": "Data",
+   "label": "Narration Column"
+  },
+  {
+   "fieldname": "debit_column",
+   "fieldtype": "Data",
+   "label": "Debit Column"
+  },
+  {
+   "fieldname": "credit_column",
+   "fieldtype": "Data",
+   "label": "Credit Column"
+  },
+  {
+   "fieldname": "amount_column",
+   "fieldtype": "Data",
+   "label": "Amount Column"
+  },
+  {
+   "fieldname": "balance_column",
+   "fieldtype": "Data",
+   "label": "Balance Column"
+  },
+  {
+   "fieldname": "account_column",
+   "fieldtype": "Data",
+   "label": "Account Column"
+  },
+  {
+   "fieldname": "party_column",
+   "fieldtype": "Data",
+   "label": "Party Column"
+  },
+  {
+   "fieldname": "channel_column",
+   "fieldtype": "Data",
+   "label": "Channel Column"
+  },
+  {
+   "fieldname": "branch_column",
+   "fieldtype": "Data",
+   "label": "Branch Column"
+  },
+  {
+   "fieldname": "currency_column",
+   "fieldtype": "Data",
+   "label": "Currency Column"
+  },
+  {
+   "fieldname": "date_format",
+   "fieldtype": "Data",
+   "label": "Date Format"
+  },
+  {
+   "fieldname": "amount_format",
+   "fieldtype": "Data",
+   "label": "Amount Format"
+  },
+  {
+   "fieldname": "debit_credit_mode",
+   "fieldtype": "Select",
+   "label": "Debit Credit Mode",
+   "options": "Separate Debit/Credit Columns\nSigned Amount Column\nCredit Only Amount Column"
   },
   {
    "fieldname": "default_account",

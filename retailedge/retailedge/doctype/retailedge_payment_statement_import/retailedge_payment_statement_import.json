@@ -7,15 +7,24 @@
  "engine": "InnoDB",
  "field_order": [
   "naming_series",
+  "statement_details_section",
   "company",
   "branch",
+  "statement_details_column_break",
   "statement_date",
+  "statement_type",
   "payment_category",
   "mapping_template",
   "attachment",
+  "import_status_section",
   "import_status",
+  "imported_row_count",
+  "import_status_column_break",
+  "unique_row_count",
+  "duplicate_suspected_count",
+  "rejected_duplicate_count",
   "notes",
-  "rows"
+  "import_summary_note"
  ],
  "fields": [
   {
@@ -25,6 +34,11 @@
    "hidden": 1,
    "label": "Naming Series",
    "reqd": 1
+  },
+  {
+   "fieldname": "statement_details_section",
+   "fieldtype": "Section Break",
+   "label": "Statement Details"
   },
   {
    "fieldname": "company",
@@ -44,11 +58,22 @@
    "options": "Branch"
   },
   {
+   "fieldname": "statement_details_column_break",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "statement_date",
    "fieldtype": "Date",
    "in_list_view": 1,
    "label": "Statement Date",
    "reqd": 1
+  },
+  {
+   "fieldname": "statement_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Statement Type",
+   "options": "Bank Transfer\nCard / POS Settlement\nMobile Money\nOther"
   },
   {
    "fieldname": "payment_category",
@@ -71,6 +96,11 @@
    "label": "Statement Attachment"
   },
   {
+   "fieldname": "import_status_section",
+   "fieldtype": "Section Break",
+   "label": "Import Summary"
+  },
+  {
    "default": "Draft",
    "fieldname": "import_status",
    "fieldtype": "Select",
@@ -79,15 +109,48 @@
    "options": "Draft\nImported\nReviewed\nArchived"
   },
   {
+   "default": "0",
+   "fieldname": "imported_row_count",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Imported Rows",
+   "read_only": 1
+  },
+  {
+   "fieldname": "import_status_column_break",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "unique_row_count",
+   "fieldtype": "Int",
+   "label": "Unique Rows",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "duplicate_suspected_count",
+   "fieldtype": "Int",
+   "label": "Duplicate Suspected",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "rejected_duplicate_count",
+   "fieldtype": "Int",
+   "label": "Rejected Duplicates",
+   "read_only": 1
+  },
+  {
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
   },
   {
-   "fieldname": "rows",
-   "fieldtype": "Table",
-   "label": "Rows",
-   "options": "RetailEdge Statement Import Row"
+   "fieldname": "import_summary_note",
+   "fieldtype": "Small Text",
+   "label": "Import Summary Note",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
@@ -156,6 +219,6 @@
  "search_fields": "company,branch,payment_category",
  "sort_field": "statement_date",
  "sort_order": "DESC",
- "title_field": "name",
+ "title_field": "mapping_template",
  "track_changes": 1
 }

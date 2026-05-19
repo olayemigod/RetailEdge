@@ -43,6 +43,24 @@ frappe.query_reports["RetailEdge Payment Evidence Matching"] = {
 			options: "\nCandidate\nStrong Candidate\nWeak Candidate\nDuplicate Suspected\nNo Match\nIgnored",
 		},
 		{
+			fieldname: "duplicate_status",
+			label: __("Duplicate Status"),
+			fieldtype: "Select",
+			options: "\nUnique\nDuplicate Suspected\nRejected Duplicate",
+		},
+		{
+			fieldname: "statement_import",
+			label: __("Statement Import"),
+			fieldtype: "Link",
+			options: "RetailEdge Payment Statement Import",
+		},
+		{
+			fieldname: "mapping_template",
+			label: __("Mapping Template"),
+			fieldtype: "Link",
+			options: "RetailEdge Statement Mapping Template",
+		},
+		{
 			fieldname: "only_unmatched",
 			label: __("Only Unmatched"),
 			fieldtype: "Check",
@@ -51,6 +69,18 @@ frappe.query_reports["RetailEdge Payment Evidence Matching"] = {
 		{
 			fieldname: "only_duplicates",
 			label: __("Only Duplicates"),
+			fieldtype: "Check",
+			default: 0,
+		},
+		{
+			fieldname: "include_already_matched",
+			label: __("Include Already Matched"),
+			fieldtype: "Check",
+			default: 0,
+		},
+		{
+			fieldname: "include_rejected_duplicates",
+			label: __("Include Rejected Duplicates"),
 			fieldtype: "Check",
 			default: 0,
 		},

@@ -64,9 +64,14 @@ from retailedge.invoice_payment_audit import (
 )
 from retailedge.payment_evidence_matching import (
 	assert_can_access_payment_evidence_matching as _assert_can_access_payment_evidence_matching,
+	detect_duplicate_evidence as _detect_duplicate_evidence,
 	get_payment_evidence_match_list as _get_payment_evidence_match_list,
 	get_payment_evidence_match_summary as _get_payment_evidence_match_summary,
+	invoice_has_active_payment_evidence_match as _invoice_has_active_payment_evidence_match,
+	import_payment_statement_rows as _import_payment_statement_rows,
 	match_payment_evidence_for_invoice as _match_payment_evidence_for_invoice,
+	normalize_payment_reference as _normalize_payment_reference,
+	preview_payment_statement_import_rows as _preview_payment_statement_import_rows,
 )
 from retailedge.cashier_expense_posting import (
 	assert_can_refresh_posting_readiness as _assert_can_refresh_posting_readiness,
@@ -427,7 +432,40 @@ def get_payment_entries_for_sales_invoice(invoice_name):
 
 
 @frappe.whitelist()
-def match_payment_evidence_for_invoice(invoice_name, create_match_records=False):
+def normalize_payment_reference(reference=None, narration=None):
+	return _normalize_payment_reference(reference=reference, narration=narration)
+
+
+@frappe.whitelist()
+def detect_duplicate_evidence(
+	company=None,
+	account=None,
+	transaction_date=None,
+	amount=None,
+	reference=None,
+	narration=None,
+	payment_category=None,
+	statement_type=None,
+	exclude_doctype=None,
+	exclude_name=None,
+):
+	_assert_can_access_payment_evidence_matching()
+	return _detect_duplicate_evidence(
+		company=company,
+		account=account,
+		transaction_date=transaction_date,
+		amount=amount,
+		reference=reference,
+		narration=narration,
+		payment_category=payment_category,
+		statement_type=statement_type,
+		exclude_doctype=exclude_doctype,
+		exclude_name=exclude_name,
+	)
+
+
+@frappe.whitelist()
+def match_payment_evidence_for_invoice(invoice_name, create_match_records=False, force_rematch=False):
 	_assert_can_access_payment_evidence_matching()
 	doc = frappe.get_doc("Sales Invoice", invoice_name)
 	if not doc.has_permission("read"):
@@ -435,6 +473,7 @@ def match_payment_evidence_for_invoice(invoice_name, create_match_records=False)
 	return _match_payment_evidence_for_invoice(
 		invoice_name,
 		create_match_records=bool(int(create_match_records)) if isinstance(create_match_records, str) else bool(create_match_records),
+		force_rematch=bool(int(force_rematch)) if isinstance(force_rematch, str) else bool(force_rematch),
 	)
 
 
@@ -448,6 +487,25 @@ def get_payment_evidence_match_list(filters=None, limit=500):
 def get_payment_evidence_match_summary(filters=None):
 	_assert_can_access_payment_evidence_matching()
 	return _get_payment_evidence_match_summary(filters=filters)
+
+
+@frappe.whitelist()
+def invoice_has_active_payment_evidence_match(invoice_name):
+	_assert_can_access_payment_evidence_matching()
+	return _invoice_has_active_payment_evidence_match(invoice_name)
+
+
+@frappe.whitelist()
+def preview_payment_statement_import_rows(import_name):
+	_assert_can_access_payment_evidence_matching()
+	return _preview_payment_statement_import_rows(import_name)
+
+
+@frappe.whitelist()
+def import_payment_statement_rows(import_name, replace_rows=True):
+	_assert_can_access_payment_evidence_matching()
+	replace_flag = bool(int(replace_rows)) if isinstance(replace_rows, str) else bool(replace_rows)
+	return _import_payment_statement_rows(import_name, replace_rows=replace_flag)
 
 
 @frappe.whitelist()

@@ -28,6 +28,10 @@
   "match_score",
   "match_confidence",
   "match_status",
+  "duplicate_suspected",
+  "duplicate_reason",
+  "already_matched_invoice",
+  "force_rematch",
   "issue_summary",
   "details_json"
  ],
@@ -162,7 +166,27 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Match Status",
-   "options": "Candidate\nStrong Candidate\nWeak Candidate\nDuplicate Suspected\nNo Match\nIgnored"
+   "options": "Candidate\nStrong Candidate\nWeak Candidate\nDuplicate Suspected\nNo Match\nIgnored\nMatched for Review\nPending Verification\nVerified\nApproved\nCancelled\nRejected\nReopened"
+  },
+  {
+   "fieldname": "duplicate_suspected",
+   "fieldtype": "Check",
+   "label": "Duplicate Suspected"
+  },
+  {
+   "fieldname": "duplicate_reason",
+   "fieldtype": "Small Text",
+   "label": "Duplicate Reason"
+  },
+  {
+   "fieldname": "already_matched_invoice",
+   "fieldtype": "Check",
+   "label": "Already Matched Invoice"
+  },
+  {
+   "fieldname": "force_rematch",
+   "fieldtype": "Check",
+   "label": "Force Rematch"
   },
   {
    "fieldname": "issue_summary",

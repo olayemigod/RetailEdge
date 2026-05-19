@@ -12,6 +12,8 @@
   "evidence_date",
   "payment_category",
   "evidence_reference",
+  "normalized_reference",
+  "evidence_fingerprint",
   "party_type",
   "party",
   "amount",
@@ -22,6 +24,9 @@
   "attachment",
   "evidence_status",
   "match_confidence",
+  "duplicate_of",
+  "duplicate_status",
+  "duplicate_reason",
   "notes"
  ],
  "fields": [
@@ -72,6 +77,19 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Evidence Reference"
+  },
+  {
+   "fieldname": "normalized_reference",
+   "fieldtype": "Data",
+   "label": "Normalized Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "evidence_fingerprint",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Evidence Fingerprint",
+   "read_only": 1
   },
   {
    "fieldname": "party_type",
@@ -135,6 +153,28 @@
    "fieldtype": "Select",
    "label": "Match Confidence",
    "options": "Low\nMedium\nHigh"
+  },
+  {
+   "fieldname": "duplicate_of",
+   "fieldtype": "Data",
+   "label": "Duplicate Of",
+   "read_only": 1
+  },
+  {
+   "default": "Unique",
+   "fieldname": "duplicate_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Duplicate Status",
+   "options": "Unique\nDuplicate Suspected\nRejected Duplicate",
+   "read_only": 1
+  },
+  {
+   "fieldname": "duplicate_reason",
+   "fieldtype": "Small Text",
+   "label": "Duplicate Reason",
+   "read_only": 1
   },
   {
    "fieldname": "notes",

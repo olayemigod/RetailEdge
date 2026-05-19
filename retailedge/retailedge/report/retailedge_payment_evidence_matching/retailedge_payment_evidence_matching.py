@@ -33,8 +33,13 @@ def get_columns():
 		{"label": _("Payment Amount"), "fieldname": "payment_amount", "fieldtype": "Currency", "width": 110},
 		{"label": _("Evidence Type"), "fieldname": "evidence_type", "fieldtype": "Data", "width": 140},
 		{"label": _("Evidence Document"), "fieldname": "evidence_document", "fieldtype": "Data", "width": 160},
+		{"label": _("Statement Import"), "fieldname": "statement_import", "fieldtype": "Link", "options": "RetailEdge Payment Statement Import", "width": 160},
+		{"label": _("Statement Import Row"), "fieldname": "statement_import_row", "fieldtype": "Data", "width": 150},
+		{"label": _("Mapping Template"), "fieldname": "mapping_template", "fieldtype": "Link", "options": "RetailEdge Statement Mapping Template", "width": 160},
 		{"label": _("Evidence Amount"), "fieldname": "evidence_amount", "fieldtype": "Currency", "width": 110},
 		{"label": _("Amount Difference"), "fieldname": "amount_difference", "fieldtype": "Currency", "width": 120},
+		{"label": _("Normalized Reference"), "fieldname": "normalized_reference", "fieldtype": "Data", "width": 150},
+		{"label": _("Evidence Fingerprint"), "fieldname": "evidence_fingerprint", "fieldtype": "Data", "width": 200},
 		{"label": _("Reference Match"), "fieldname": "reference_match", "fieldtype": "Check", "width": 110},
 		{"label": _("Amount Match"), "fieldname": "amount_match", "fieldtype": "Check", "width": 105},
 		{"label": _("Date Match"), "fieldname": "date_match", "fieldtype": "Check", "width": 90},
@@ -43,6 +48,9 @@ def get_columns():
 		{"label": _("Match Score"), "fieldname": "match_score", "fieldtype": "Int", "width": 90},
 		{"label": _("Confidence"), "fieldname": "match_confidence", "fieldtype": "Data", "width": 90},
 		{"label": _("Match Status"), "fieldname": "match_status", "fieldtype": "Data", "width": 130},
+		{"label": _("Duplicate Status"), "fieldname": "duplicate_status", "fieldtype": "Data", "width": 130},
+		{"label": _("Duplicate Of"), "fieldname": "duplicate_of", "fieldtype": "Data", "width": 130},
+		{"label": _("Already Matched Invoice"), "fieldname": "already_matched_invoice", "fieldtype": "Check", "width": 130},
 		{"label": _("Issue Summary"), "fieldname": "issue_summary", "fieldtype": "Small Text", "width": 260},
 	]
 
