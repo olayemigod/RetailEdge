@@ -1,6 +1,6 @@
 {
  "app": "retailedge",
- "creation": "2026-05-17 00:00:00.000000",
+ "creation": "2026-05-21 00:00:00.000000",
  "docstatus": 0,
  "doctype": "Workspace Sidebar",
  "header_icon": "setting-gear",
@@ -54,17 +54,6 @@
    "collapsible": 1,
    "indent": 0,
    "keep_closed": 0,
-   "label": "Payment Evidence",
-   "link_to": "RetailEdge Payment Evidence",
-   "link_type": "DocType",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 1,
-   "collapsible": 1,
-   "indent": 0,
-   "keep_closed": 0,
    "label": "Payment Statement Import",
    "link_to": "RetailEdge Payment Statement Import",
    "link_type": "DocType",
@@ -86,8 +75,8 @@
    "collapsible": 1,
    "indent": 0,
    "keep_closed": 0,
-   "label": "Payment Evidence Matching",
-   "link_to": "RetailEdge Payment Evidence Matching",
+   "label": "Branch Performance Summary",
+   "link_to": "RetailEdge Branch Performance Summary",
    "link_type": "Report",
    "show_arrow": 0,
    "type": "Link"
@@ -108,20 +97,9 @@
    "collapsible": 1,
    "indent": 0,
    "keep_closed": 0,
-   "label": "Branch Performance Summary",
-   "link_to": "RetailEdge Branch Performance Summary",
+   "label": "Cash Shift Verification",
+   "link_to": "RetailEdge Cash Shift Verification",
    "link_type": "Report",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 1,
-   "collapsible": 1,
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "Statement Mapping Template",
-   "link_to": "RetailEdge Statement Mapping Template",
-   "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
   },
@@ -200,9 +178,20 @@
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Statement Mapping Template",
+   "link_to": "RetailEdge Statement Mapping Template",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-05-17 00:00:00.000000",
+ "modified": "2026-05-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "RetailEdge",
  "name": "RetailEdge",

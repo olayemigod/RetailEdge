@@ -19,6 +19,11 @@ def sync_retailedge_workspace_layout():
 	sidebar_data = json.loads(sidebar_path.read_text())
 
 	workspace = frappe.get_doc("Workspace", "RetailEdge")
+	workspace.label = workspace_data.get("label") or workspace.label
+	workspace.title = workspace_data.get("title") or workspace.title
+	workspace.icon = workspace_data.get("icon") or workspace.icon
+	workspace.indicator_color = workspace_data.get("indicator_color") or workspace.indicator_color
+	workspace.type = workspace_data.get("type") or workspace.type or "Workspace"
 	workspace.content = workspace_data.get("content")
 	workspace.links = []
 	for row in workspace_data.get("links", []) or []:

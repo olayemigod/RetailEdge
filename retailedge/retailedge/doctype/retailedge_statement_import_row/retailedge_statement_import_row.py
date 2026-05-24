@@ -1,6 +1,6 @@
 from frappe.model.document import Document
 
-from retailedge.payment_evidence_matching import prepare_statement_import_row_doc
+from retailedge.statement_import import prepare_statement_import_row_doc
 
 
 class RetailEdgeStatementImportRow(Document):

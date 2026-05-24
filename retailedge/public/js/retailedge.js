@@ -800,6 +800,7 @@
 		} catch (error) {
 			// Ignore Stock Entry Detail event registration errors.
 		}
+
 	}
 
 	registerRetailEdgeFormHandlers(0);

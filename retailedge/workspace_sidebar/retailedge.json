@@ -1,6 +1,6 @@
 {
  "app": "retailedge",
- "creation": "2026-05-17 00:00:00.000000",
+ "creation": "2026-05-21 00:00:00.000000",
  "docstatus": 0,
  "doctype": "Workspace Sidebar",
  "header_icon": "setting-gear",
@@ -50,6 +50,17 @@
    "type": "Link"
   },
   {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Payment Statement Import",
+   "link_to": "RetailEdge Payment Statement Import",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
    "child": 0,
    "collapsible": 1,
    "indent": 1,
@@ -58,6 +69,50 @@
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Section Break"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Branch Performance Summary",
+   "link_to": "RetailEdge Branch Performance Summary",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Invoice Payment Audit",
+   "link_to": "RetailEdge Invoice Payment Audit",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Cash Shift Verification",
+   "link_to": "RetailEdge Cash Shift Verification",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "POS Variance",
+   "link_to": "POS Closing Variance vs Expenses",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
   },
   {
    "child": 1,
@@ -77,17 +132,6 @@
    "keep_closed": 0,
    "label": "Daily Sales Audit Register",
    "link_to": "RetailEdge Daily Sales Audit Register",
-   "link_type": "Report",
-   "show_arrow": 0,
-   "type": "Link"
-  },
-  {
-   "child": 1,
-   "collapsible": 1,
-   "indent": 0,
-   "keep_closed": 0,
-   "label": "POS Closing Variance vs Expenses",
-   "link_to": "POS Closing Variance vs Expenses",
    "link_type": "Report",
    "show_arrow": 0,
    "type": "Link"
@@ -134,9 +178,20 @@
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
+   "label": "Statement Mapping Template",
+   "link_to": "RetailEdge Statement Mapping Template",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-05-17 00:00:00.000000",
+ "modified": "2026-05-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "RetailEdge",
  "name": "RetailEdge",

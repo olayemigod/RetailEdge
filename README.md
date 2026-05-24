@@ -246,15 +246,42 @@ This phase classifies invoice-payment risk and status into read-only intelligenc
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
 
-## RetailEdge V1.5D - Bank / POS / Transfer Evidence Matching
+## RetailEdge V1.5D / V1.5E - Superseded Evidence Matching Work
 
-RetailEdge can now match invoice-payment audit results against read-only evidence sources such as submitted Payment Entry references, ERPNext Bank Transaction records where they exist safely on the site, and RetailEdge-owned Payment Evidence records. The matching layer produces candidate matches, confidence scores, duplicate suspicions, and mismatch summaries without verifying payments yet.
+Earlier V1.5D and V1.5E work explored a separate evidence matching and human verification workflow. That approach has been superseded by the R1 cleanup because the extra documents and review screens made the operator flow too complex and brittle.
 
-Cash is intentionally separated from bulk statement matching and remains in the operational cash-control flow through Payment Evidence, POS Opening Shift, POS Closing Shift, Cashier Expense, Daily Sales Audit, and POS Variance. Bank transfer, card/POS settlement, mobile money, and other non-cash statement rows now use configurable Statement Mapping Templates so different bank/provider exports can be normalized safely before matching.
+RetailEdge now keeps the statement import foundation for future bank, POS settlement, and mobile-money redesign work, but it does not expose the removed evidence matching workflow as the normal user path. ERPNext Bank Transaction remains the intended accounting-side statement line for the later bank matching redesign.
 
-Statement references are normalized for intelligent comparison, evidence fingerprints are generated for each RetailEdge-owned evidence/import row, exact duplicates are flagged as `Rejected Duplicate`, and partial duplicates are flagged as `Duplicate Suspected`. Rejected duplicates are excluded from Strong Candidate matching, and invoices with active evidence matches are excluded from repeat matching by default unless a manager/admin explicitly uses force rematch. This phase introduces a read-only Payment Evidence Matching report, keeps the Invoice Payment Audit report visible under Reports & Review / Branch Performance, and adds safe summary counters that can flow into Branch Performance. It creates or updates only RetailEdge-owned evidence, import, mapping, and match records; it does not mutate Sales Invoice, Payment Entry, GL, Bank Transaction, POS shift, or Daily Sales Audit source records. Payment Verification Workflow remains reserved for V1.5E, and controlled Sales Invoice audit status sync remains reserved for V1.5F.
+### Simplified payment control flow
+
+RetailEdge now presents a simpler operational flow:
+
+1. Cash verification is shift-based and uses Daily Sales Audit and Cash Shift Verification to compare opening cash, cash sales, cashier expenses, expected cash, actual closing cash, and variance.
+2. Bank transfer, card/POS, mobile money, and other non-cash evidence remain statement-import based through Payment Statement Import and Statement Mapping Template until the redesigned bank matching process is agreed.
+3. Sales Invoice carries RetailEdge-only verification fields for cash shift and future bank verification audit visibility.
+4. RetailEdge verification sync updates only RetailEdge custom fields on Sales Invoice.
+
+In this cleanup phase, statement import rows remain as support records for the statement import foundation, while the removed evidence matching workflow is no longer part of the active RetailEdge workspace.
 
 RetailEdge does not implement editable selling price because POSNext already supports it natively.
+
+## R1 - Sales Invoice Verification Cleanup & Foundation
+
+RetailEdge Payment Evidence and RetailEdge Payment Evidence Match were removed from the simplified RetailEdge flow in this cleanup phase. RetailEdge no longer depends on those DocTypes, their matching report, or the earlier verification workflow imports that were causing instability after the manual bench cleanup.
+
+Payment Statement Import, Statement Import Row, and Statement Mapping Template remain in place as the statement-import foundation for later bank, POS settlement, and mobile-money redesign work. The later bank verification flow is intended to center ERPNext Bank Transaction as the accounting-side transaction line, while RetailEdge continues to keep its own read-only preparation and audit metadata.
+
+Cash verification is now treated as a separate shift-based control. RetailEdge uses opening cash, total cash sales, included cashier expenses, expected cash, actual closing cash, and variance to decide whether submitted cash-only POS Sales Invoices can be synced to Sales Invoice as a RetailEdge audit status. Sales Invoice now carries RetailEdge-only verification fields for status, source, verified amount, variance, reference, note, and sync metadata.
+
+Bank verification in this phase is only a safe placeholder sync from an existing ERPNext Bank Transaction to those RetailEdge Sales Invoice fields. No accounting fields are changed. RetailEdge does not modify ERPNext payment status, outstanding amount, paid amount, Payment Entry, Journal Entry, GL Entry, POS shifts, Daily Sales Audit source records, or Bank Transaction reconciliation status in this phase.
+
+## R2 - Payment Statement Import to ERPNext Bank Transaction Bridge
+
+RetailEdge now bridges imported statement rows into native ERPNext Bank Transaction records without rebuilding a parallel reconciliation engine. Payment Statement Import remains the entry point, Statement Mapping Template still defines how raw statement columns are normalized, and each imported RetailEdge Statement Import Row can now preview, create, or link a matching ERPNext Bank Transaction safely.
+
+Before any Bank Transaction is created, RetailEdge normalizes statement reference, amount, date, direction, narration, and bank-account context, then checks for duplicates in both prior RetailEdge statement rows and existing ERPNext Bank Transactions. Exact duplicates and already-imported rows are linked or skipped by default, while possible duplicates are flagged for review instead of being auto-created.
+
+This R2 phase does not perform invoice matching, does not create Payment Entry, Journal Entry, or GL Entry, does not reconcile Bank Transaction, and does not change Sales Invoice accounting status or outstanding amount. Cash verification remains separate and shift-based, while ERPNext Bank Transaction becomes the central statement line for the later matching redesign.
 
 ## Installation
 

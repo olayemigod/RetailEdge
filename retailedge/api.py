@@ -33,6 +33,7 @@ from retailedge.cashier_expense import (
 	reject_cashier_expense as _reject_cashier_expense,
 	reopen_cashier_expense as _reopen_cashier_expense,
 	submit_cashier_expense as _submit_cashier_expense,
+	user_has_any_role,
 )
 from retailedge.cashier_expense_audit import (
 	get_cashier_expense_review_summary as _get_cashier_expense_review_summary,
@@ -48,6 +49,7 @@ from retailedge.cashier_expense_dashboard import (
 )
 from retailedge.branch_performance import (
 	assert_can_access_branch_performance as _assert_can_access_branch_performance,
+	debug_branch_performance_cashier_filter as _debug_branch_performance_cashier_filter,
 	get_branch_payment_breakdown as _get_branch_payment_breakdown,
 	get_branch_performance_summary as _get_branch_performance_summary,
 	get_branch_sales_summary as _get_branch_sales_summary,
@@ -62,22 +64,26 @@ from retailedge.invoice_payment_audit import (
 	get_payment_entries_for_sales_invoice as _get_payment_entries_for_sales_invoice,
 	get_sales_invoice_payment_rows as _get_sales_invoice_payment_rows,
 )
-from retailedge.payment_evidence_matching import (
-	assert_can_access_payment_evidence_matching as _assert_can_access_payment_evidence_matching,
-	detect_duplicate_evidence as _detect_duplicate_evidence,
-	get_payment_evidence_match_list as _get_payment_evidence_match_list,
-	get_payment_evidence_match_summary as _get_payment_evidence_match_summary,
-	invoice_has_active_payment_evidence_match as _invoice_has_active_payment_evidence_match,
-	import_payment_statement_rows as _import_payment_statement_rows,
-	match_payment_evidence_for_invoice as _match_payment_evidence_for_invoice,
-	normalize_payment_reference as _normalize_payment_reference,
-	preview_payment_statement_import_rows as _preview_payment_statement_import_rows,
-)
 from retailedge.cashier_expense_posting import (
 	assert_can_refresh_posting_readiness as _assert_can_refresh_posting_readiness,
 	get_cashier_expense_posting_preview as _get_cashier_expense_posting_preview,
 	refresh_cashier_expense_posting_readiness as _refresh_cashier_expense_posting_readiness,
 	refresh_pending_cashier_expense_posting_readiness as _refresh_pending_cashier_expense_posting_readiness,
+)
+from retailedge.statement_import import (
+	import_payment_statement_rows as _import_payment_statement_rows,
+	preview_payment_statement_import_rows as _preview_payment_statement_import_rows,
+)
+from retailedge.bank_transaction_bridge import (
+	accept_possible_duplicate_statement_row as _accept_possible_duplicate_statement_row,
+	create_or_link_bank_transaction_from_statement_row as _create_or_link_bank_transaction_from_statement_row,
+	get_possible_duplicate_statement_rows as _get_possible_duplicate_statement_rows,
+	import_statement_rows_to_bank_transactions as _import_statement_rows_to_bank_transactions,
+	preview_bank_transaction_import as _preview_bank_transaction_import,
+)
+from retailedge.sales_invoice_verification_sync import (
+	sync_bank_verified_sales_invoice_from_bank_transaction as _sync_bank_verified_sales_invoice_from_bank_transaction,
+	sync_cash_verified_sales_invoices_for_shift as _sync_cash_verified_sales_invoices_for_shift,
 )
 from retailedge.daily_sales_audit import (
 	approve_daily_sales_audit as _approve_daily_sales_audit,
@@ -122,6 +128,17 @@ TRANSACTION_BRANCH_ATTRIBUTION_MANAGER_ROLES = (
 	"Accounts Manager",
 	"RetailEdge Manager",
 	"RetailEdgeManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+)
+RETAILEDGE_VERIFICATION_ROLES = (
+	"System Manager",
+	"Accounts Manager",
+	"Accounts User",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Branch Manager",
+	"RetailEdgeBranchManager",
 	"RetailEdge Auditor",
 	"RetailEdgeAuditor",
 )
@@ -396,6 +413,12 @@ def get_branch_stock_activity_summary(filters=None):
 
 
 @frappe.whitelist()
+def debug_branch_performance_cashier_filter(filters=None):
+	_assert_can_access_branch_performance()
+	return _debug_branch_performance_cashier_filter(filters=filters)
+
+
+@frappe.whitelist()
 def audit_sales_invoice_payment(invoice_name):
 	_assert_can_access_invoice_payment_audit()
 	return _audit_sales_invoice_payment(invoice_name)
@@ -432,80 +455,98 @@ def get_payment_entries_for_sales_invoice(invoice_name):
 
 
 @frappe.whitelist()
-def normalize_payment_reference(reference=None, narration=None):
-	return _normalize_payment_reference(reference=reference, narration=narration)
-
-
-@frappe.whitelist()
-def detect_duplicate_evidence(
-	company=None,
-	account=None,
-	transaction_date=None,
-	amount=None,
-	reference=None,
-	narration=None,
-	payment_category=None,
-	statement_type=None,
-	exclude_doctype=None,
-	exclude_name=None,
-):
-	_assert_can_access_payment_evidence_matching()
-	return _detect_duplicate_evidence(
-		company=company,
-		account=account,
-		transaction_date=transaction_date,
-		amount=amount,
-		reference=reference,
-		narration=narration,
-		payment_category=payment_category,
-		statement_type=statement_type,
-		exclude_doctype=exclude_doctype,
-		exclude_name=exclude_name,
-	)
-
-
-@frappe.whitelist()
-def match_payment_evidence_for_invoice(invoice_name, create_match_records=False, force_rematch=False):
-	_assert_can_access_payment_evidence_matching()
-	doc = frappe.get_doc("Sales Invoice", invoice_name)
-	if not doc.has_permission("read"):
-		frappe.throw("You do not have permission to read this Sales Invoice.", frappe.PermissionError)
-	return _match_payment_evidence_for_invoice(
-		invoice_name,
-		create_match_records=bool(int(create_match_records)) if isinstance(create_match_records, str) else bool(create_match_records),
-		force_rematch=bool(int(force_rematch)) if isinstance(force_rematch, str) else bool(force_rematch),
-	)
-
-
-@frappe.whitelist()
-def get_payment_evidence_match_list(filters=None, limit=500):
-	_assert_can_access_payment_evidence_matching()
-	return _get_payment_evidence_match_list(filters=filters, limit=int(limit or 500))
-
-
-@frappe.whitelist()
-def get_payment_evidence_match_summary(filters=None):
-	_assert_can_access_payment_evidence_matching()
-	return _get_payment_evidence_match_summary(filters=filters)
-
-
-@frappe.whitelist()
-def invoice_has_active_payment_evidence_match(invoice_name):
-	_assert_can_access_payment_evidence_matching()
-	return _invoice_has_active_payment_evidence_match(invoice_name)
-
-
-@frappe.whitelist()
 def preview_payment_statement_import_rows(import_name):
-	_assert_can_access_payment_evidence_matching()
 	return _preview_payment_statement_import_rows(import_name)
 
 
 @frappe.whitelist()
 def import_payment_statement_rows(import_name, replace_rows=True):
-	_assert_can_access_payment_evidence_matching()
 	replace_flag = bool(int(replace_rows)) if isinstance(replace_rows, str) else bool(replace_rows)
 	return _import_payment_statement_rows(import_name, replace_rows=replace_flag)
+
+
+@frappe.whitelist()
+def preview_bank_transaction_import(statement_import_name):
+	return _preview_bank_transaction_import(statement_import_name)
+
+
+@frappe.whitelist()
+def import_statement_rows_to_bank_transactions(statement_import_name, force=False):
+	_assert_retailedge_verification_role()
+	force_flag = bool(int(force)) if isinstance(force, str) else bool(force)
+	return _import_statement_rows_to_bank_transactions(statement_import_name, force=force_flag)
+
+
+@frappe.whitelist()
+def preview_statement_row_bank_transaction_import(row_name):
+	return _create_or_link_bank_transaction_from_statement_row(row_name, dry_run=True)
+
+
+@frappe.whitelist()
+def import_statement_row_to_bank_transaction(row_name, force=False):
+	_assert_retailedge_verification_role()
+	force_flag = bool(int(force)) if isinstance(force, str) else bool(force)
+	return _create_or_link_bank_transaction_from_statement_row(row_name, force=force_flag, dry_run=False)
+
+
+@frappe.whitelist()
+def accept_possible_duplicate_statement_row(row_name, acceptance_note=None):
+	_assert_retailedge_verification_role()
+	return _accept_possible_duplicate_statement_row(row_name, acceptance_note=acceptance_note)
+
+
+@frappe.whitelist()
+def get_possible_duplicate_statement_rows(statement_import_name):
+	_assert_retailedge_verification_role()
+	return _get_possible_duplicate_statement_rows(statement_import_name)
+
+
+@frappe.whitelist()
+def preview_cash_sales_invoice_verification_sync(opening_shift=None, closing_shift=None, daily_sales_audit=None):
+	_assert_retailedge_verification_role()
+	return _sync_cash_verified_sales_invoices_for_shift(
+		opening_shift=opening_shift,
+		closing_shift=closing_shift,
+		daily_sales_audit=daily_sales_audit,
+		dry_run=True,
+	)
+
+
+@frappe.whitelist()
+def sync_cash_sales_invoice_verification(opening_shift=None, closing_shift=None, daily_sales_audit=None):
+	_assert_retailedge_verification_role()
+	return _sync_cash_verified_sales_invoices_for_shift(
+		opening_shift=opening_shift,
+		closing_shift=closing_shift,
+		daily_sales_audit=daily_sales_audit,
+		dry_run=False,
+	)
+
+
+@frappe.whitelist()
+def preview_bank_sales_invoice_verification_sync(invoice_name, bank_transaction_name, verified_amount, reference=None, note=None):
+	_assert_retailedge_verification_role()
+	return _sync_bank_verified_sales_invoice_from_bank_transaction(
+		invoice_name=invoice_name,
+		bank_transaction_name=bank_transaction_name,
+		verified_amount=verified_amount,
+		reference=reference,
+		note=note,
+		dry_run=True,
+	)
+
+
+@frappe.whitelist()
+def sync_bank_sales_invoice_verification(invoice_name, bank_transaction_name, verified_amount, reference=None, note=None):
+	_assert_retailedge_verification_role()
+	return _sync_bank_verified_sales_invoice_from_bank_transaction(
+		invoice_name=invoice_name,
+		bank_transaction_name=bank_transaction_name,
+		verified_amount=verified_amount,
+		reference=reference,
+		note=note,
+		dry_run=False,
+	)
 
 
 @frappe.whitelist()
@@ -671,5 +712,14 @@ def _assert_transaction_branch_attribution_manager():
 		return
 	frappe.throw(
 		"You do not have permission to manage RetailEdge transaction branch attribution.",
+		frappe.PermissionError,
+	)
+
+
+def _assert_retailedge_verification_role():
+	if user_has_any_role(user=frappe.session.user, roles=set(RETAILEDGE_VERIFICATION_ROLES)):
+		return
+	frappe.throw(
+		"You do not have permission to manage RetailEdge Sales Invoice verification sync.",
 		frappe.PermissionError,
 	)

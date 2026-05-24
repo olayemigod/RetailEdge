@@ -1,7 +1,7 @@
 {
  "app": "retailedge",
  "charts": [],
- "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"operations_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Operations</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense\",\"col\":3}},{\"id\":\"daily_sales_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit\",\"col\":3}},{\"id\":\"payment_evidence_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Evidence\",\"col\":3}},{\"id\":\"payment_statement_import_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Statement Import\",\"col\":3}},{\"id\":\"reports_review_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports & Review</b></span>\",\"col\":12}},{\"id\":\"branch_performance_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h6\\\"><b>Branch Performance</b></span>\",\"col\":12}},{\"id\":\"payment_evidence_matching_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Evidence Matching\",\"col\":3}},{\"id\":\"invoice_payment_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Invoice Payment Audit\",\"col\":3}},{\"id\":\"branch_performance_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Performance Summary\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Variance\",\"col\":3}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense Review\",\"col\":3}},{\"id\":\"daily_sales_audit_register_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit Register\",\"col\":3}},{\"id\":\"setup_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Setup / Configuration</b></span>\",\"col\":12}},{\"id\":\"statement_mapping_template_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Statement Mapping Template\",\"col\":3}},{\"id\":\"settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Settings\",\"col\":3}},{\"id\":\"branch_profile_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Profile\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Expense Category\",\"col\":3}}]",
+ "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"operations_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Operations</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense\",\"col\":3}},{\"id\":\"daily_sales_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit\",\"col\":3}},{\"id\":\"payment_statement_import_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Statement Import\",\"col\":3}},{\"id\":\"reports_review_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports & Review</b></span>\",\"col\":12}},{\"id\":\"branch_performance_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Performance Summary\",\"col\":3}},{\"id\":\"invoice_payment_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Invoice Payment Audit\",\"col\":3}},{\"id\":\"cash_shift_verification_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cash Shift Verification\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Variance\",\"col\":3}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense Review\",\"col\":3}},{\"id\":\"daily_sales_audit_register_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit Register\",\"col\":3}},{\"id\":\"setup_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Setup / Configuration</b></span>\",\"col\":12}},{\"id\":\"settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Settings\",\"col\":3}},{\"id\":\"branch_profile_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Profile\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Expense Category\",\"col\":3}},{\"id\":\"statement_mapping_template_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Statement Mapping Template\",\"col\":3}}]",
  "creation": "2026-05-07 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -18,7 +18,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Operations",
-   "link_count": 4,
+   "link_count": 3,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -46,16 +46,6 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Payment Evidence",
-   "link_count": 0,
-   "link_to": "RetailEdge Payment Evidence",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
    "label": "Payment Statement Import",
    "link_count": 0,
    "link_to": "RetailEdge Payment Statement Import",
@@ -67,7 +57,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Reports & Review",
-   "link_count": 6,
+   "link_count": 7,
    "link_type": "Report",
    "onboard": 0,
    "type": "Card Break"
@@ -75,9 +65,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Payment Evidence Matching",
+   "label": "Branch Performance Summary",
    "link_count": 0,
-   "link_to": "RetailEdge Payment Evidence Matching",
+   "link_to": "RetailEdge Branch Performance Summary",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
@@ -95,9 +85,9 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Branch Performance Summary",
+   "label": "Cash Shift Verification",
    "link_count": 0,
-   "link_to": "RetailEdge Branch Performance Summary",
+   "link_to": "RetailEdge Cash Shift Verification",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
@@ -144,16 +134,6 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Statement Mapping Template",
-   "link_count": 0,
-   "link_to": "RetailEdge Statement Mapping Template",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
    "label": "Settings",
    "link_count": 0,
    "link_to": "RetailEdge Settings",
@@ -180,9 +160,19 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Statement Mapping Template",
+   "link_count": 0,
+   "link_to": "RetailEdge Statement Mapping Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2026-05-08 00:00:00.000000",
+ "modified": "2026-05-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "RetailEdge",
  "name": "RetailEdge",
@@ -212,14 +202,6 @@
   {
    "color": "Blue",
    "doc_view": "List",
-   "label": "Payment Evidence",
-   "link_to": "RetailEdge Payment Evidence",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Blue",
-   "doc_view": "List",
    "label": "Payment Statement Import",
    "link_to": "RetailEdge Payment Statement Import",
    "stats_filter": "[]",
@@ -228,8 +210,8 @@
   {
    "color": "Grey",
    "doc_view": "",
-   "label": "Payment Evidence Matching",
-   "link_to": "RetailEdge Payment Evidence Matching",
+   "label": "Branch Performance Summary",
+   "link_to": "RetailEdge Branch Performance Summary",
    "stats_filter": "[]",
    "type": "Report"
   },
@@ -244,8 +226,8 @@
   {
    "color": "Grey",
    "doc_view": "",
-   "label": "Branch Performance Summary",
-   "link_to": "RetailEdge Branch Performance Summary",
+   "label": "Cash Shift Verification",
+   "link_to": "RetailEdge Cash Shift Verification",
    "stats_filter": "[]",
    "type": "Report"
   },
@@ -275,14 +257,6 @@
   },
   {
    "color": "Blue",
-   "doc_view": "List",
-   "label": "Statement Mapping Template",
-   "link_to": "RetailEdge Statement Mapping Template",
-   "stats_filter": "[]",
-   "type": "DocType"
-  },
-  {
-   "color": "Blue",
    "doc_view": "",
    "label": "Settings",
    "link_to": "RetailEdge Settings",
@@ -304,7 +278,16 @@
    "link_to": "RetailEdge Expense Category",
    "stats_filter": "[]",
    "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "Statement Mapping Template",
+   "link_to": "RetailEdge Statement Mapping Template",
+   "stats_filter": "[]",
+   "type": "DocType"
   }
  ],
- "title": "RetailEdge"
+ "title": "RetailEdge",
+ "type": "Workspace"
 }

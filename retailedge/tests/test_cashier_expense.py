@@ -2774,9 +2774,14 @@ class BranchProfileTests(unittest.TestCase):
 		shortcut_labels = [row.get("label") for row in data.get("shortcuts", [])]
 		self.assertIn("Cashier Expense", shortcut_labels)
 		self.assertIn("Daily Sales Audit", shortcut_labels)
+		self.assertIn("Payment Statement Import", shortcut_labels)
+		self.assertIn("Cash Shift Verification", shortcut_labels)
+		self.assertIn("Statement Mapping Template", shortcut_labels)
 		self.assertIn("Settings", shortcut_labels)
 		self.assertIn("Branch Profile", shortcut_labels)
 		self.assertNotIn("RetailEdge Cashier Expense", shortcut_labels)
+		self.assertNotIn("Payment Evidence", shortcut_labels)
+		self.assertNotIn("Payment Verification Review", shortcut_labels)
 
 	def test_workspace_sidebar_sync_uses_grouped_sections(self):
 		from retailedge.patches.sync_retailedge_workspace import _sync_workspace_sidebar
@@ -2835,14 +2840,19 @@ class BranchProfileTests(unittest.TestCase):
 				("Section Break", "Operations", 0),
 				("Link", "Cashier Expense", 1),
 				("Link", "Daily Sales Audit", 1),
+				("Link", "Payment Statement Import", 1),
 				("Section Break", "Reports & Review", 0),
+				("Link", "Branch Performance Summary", 1),
+				("Link", "Invoice Payment Audit", 1),
+				("Link", "Cash Shift Verification", 1),
+				("Link", "POS Variance", 1),
 				("Link", "Cashier Expense Review", 1),
 				("Link", "Daily Sales Audit Register", 1),
-				("Link", "POS Closing Variance vs Expenses", 1),
 				("Section Break", "Setup / Configuration", 0),
 				("Link", "Settings", 1),
 				("Link", "Branch Profile", 1),
 				("Link", "Expense Category", 1),
+				("Link", "Statement Mapping Template", 1),
 			],
 		)
 

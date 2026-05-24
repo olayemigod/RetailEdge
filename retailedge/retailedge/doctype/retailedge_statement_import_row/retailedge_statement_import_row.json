@@ -10,25 +10,38 @@
   "payment_category",
   "reference",
   "normalized_reference",
+  "normalized_date",
+  "normalized_amount",
   "narration",
+  "normalized_narration",
   "party",
   "debit",
   "credit",
   "amount",
   "direction",
+  "transaction_direction",
   "account",
+  "normalized_account",
   "channel",
   "branch",
   "currency",
   "balance",
   "bank_transaction",
+  "existing_bank_transaction",
+  "import_status",
   "payment_entry",
   "sales_invoice",
   "mapping_template",
   "evidence_fingerprint",
+  "row_fingerprint",
   "duplicate_of",
   "duplicate_status",
+  "manually_accepted",
+  "accepted_by",
+  "accepted_on",
+  "acceptance_note",
   "duplicate_reason",
+  "row_error",
   "match_status"
  ],
  "fields": [
@@ -59,13 +72,32 @@
   {
    "fieldname": "normalized_reference",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Normalized Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "normalized_date",
+   "fieldtype": "Date",
+   "label": "Normalized Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "normalized_amount",
+   "fieldtype": "Currency",
+   "label": "Normalized Amount",
    "read_only": 1
   },
   {
    "fieldname": "narration",
    "fieldtype": "Small Text",
    "label": "Narration"
+  },
+  {
+   "fieldname": "normalized_narration",
+   "fieldtype": "Small Text",
+   "label": "Normalized Narration",
+   "read_only": 1
   },
   {
    "fieldname": "party",
@@ -95,10 +127,23 @@
    "options": "Credit\nDebit\nUnknown"
   },
   {
+   "fieldname": "transaction_direction",
+   "fieldtype": "Select",
+   "label": "Transaction Direction",
+   "options": "Inflow\nOutflow\nUnknown",
+   "read_only": 1
+  },
+  {
    "fieldname": "account",
    "fieldtype": "Link",
    "label": "Account",
    "options": "Account"
+  },
+  {
+   "fieldname": "normalized_account",
+   "fieldtype": "Data",
+   "label": "Normalized Account",
+   "read_only": 1
   },
   {
    "fieldname": "channel",
@@ -125,8 +170,27 @@
   {
    "fieldname": "bank_transaction",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Bank Transaction",
-   "options": "Bank Transaction"
+   "options": "Bank Transaction",
+   "read_only": 1
+  },
+  {
+   "fieldname": "existing_bank_transaction",
+   "fieldtype": "Link",
+   "label": "Existing Bank Transaction",
+   "options": "Bank Transaction",
+   "read_only": 1
+  },
+  {
+   "default": "Pending",
+   "fieldname": "import_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Import Status",
+   "options": "Pending\nReady\nImported\nAlready Imported\nDuplicate Suspected\nSkipped\nInvalid\nFailed\nManually Accepted",
+   "read_only": 1
   },
   {
    "fieldname": "payment_entry",
@@ -154,24 +218,64 @@
    "read_only": 1
   },
   {
-   "fieldname": "duplicate_of",
+   "fieldname": "row_fingerprint",
    "fieldtype": "Data",
-   "label": "Duplicate Of",
+   "label": "Row Fingerprint",
    "read_only": 1
   },
   {
-   "default": "Unique",
+   "fieldname": "duplicate_of",
+   "fieldtype": "Link",
+   "label": "Duplicate Of",
+   "options": "RetailEdge Statement Import Row",
+   "read_only": 1
+  },
+  {
+   "default": "Not Checked",
    "fieldname": "duplicate_status",
    "fieldtype": "Select",
    "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Duplicate Status",
-   "options": "Unique\nDuplicate Suspected\nRejected Duplicate",
+   "options": "Not Checked\nNot Duplicate\nExact Duplicate\nPossible Duplicate\nAlready Imported\nAccepted Possible Duplicate",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "manually_accepted",
+   "fieldtype": "Check",
+   "label": "Manually Accepted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accepted_by",
+   "fieldtype": "Link",
+   "label": "Accepted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "accepted_on",
+   "fieldtype": "Datetime",
+   "label": "Accepted On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "acceptance_note",
+   "fieldtype": "Small Text",
+   "label": "Acceptance Note",
    "read_only": 1
   },
   {
    "fieldname": "duplicate_reason",
    "fieldtype": "Small Text",
    "label": "Duplicate Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "row_error",
+   "fieldtype": "Small Text",
+   "label": "Row Error",
    "read_only": 1
   },
   {

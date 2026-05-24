@@ -12,19 +12,32 @@
   "branch",
   "statement_details_column_break",
   "statement_date",
+  "bank_account",
   "statement_type",
   "payment_category",
   "mapping_template",
   "attachment",
+  "rows_section",
+  "rows",
   "import_status_section",
   "import_status",
+  "total_rows",
+  "ready_rows",
   "imported_row_count",
+  "imported_rows",
+  "duplicate_rows",
+  "skipped_rows",
+  "failed_rows",
   "import_status_column_break",
   "unique_row_count",
   "duplicate_suspected_count",
   "rejected_duplicate_count",
+  "linked_bank_transactions",
+  "last_import_run_on",
+  "last_import_run_by",
   "notes",
-  "import_summary_note"
+  "import_summary_note",
+  "import_summary_json"
  ],
  "fields": [
   {
@@ -69,6 +82,15 @@
    "reqd": 1
   },
   {
+   "fieldname": "bank_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Bank Account",
+   "options": "Bank Account",
+   "reqd": 1
+  },
+  {
    "fieldname": "statement_type",
    "fieldtype": "Select",
    "in_standard_filter": 1,
@@ -96,6 +118,21 @@
    "label": "Statement Attachment"
   },
   {
+   "collapsible": 1,
+   "fieldname": "rows_section",
+   "fieldtype": "Section Break",
+   "label": "Imported Statement Rows"
+  },
+  {
+   "cannot_add_rows": 1,
+   "fieldname": "rows",
+   "fieldtype": "Table",
+   "grid_page_length": 10,
+   "label": "Imported Statement Rows",
+   "options": "RetailEdge Statement Import Row",
+   "read_only": 1
+  },
+  {
    "fieldname": "import_status_section",
    "fieldtype": "Section Break",
    "label": "Import Summary"
@@ -110,10 +147,52 @@
   },
   {
    "default": "0",
+   "fieldname": "total_rows",
+   "fieldtype": "Int",
+   "label": "Total Rows",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "ready_rows",
+   "fieldtype": "Int",
+   "label": "Ready Rows",
+   "read_only": 1
+  },
+  {
+   "default": "0",
    "fieldname": "imported_row_count",
    "fieldtype": "Int",
    "in_list_view": 1,
    "label": "Imported Rows",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "imported_rows",
+   "fieldtype": "Int",
+   "label": "Imported to Bank Transactions",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "duplicate_rows",
+   "fieldtype": "Int",
+   "label": "Duplicate Rows",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "skipped_rows",
+   "fieldtype": "Int",
+   "label": "Skipped Rows",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "failed_rows",
+   "fieldtype": "Int",
+   "label": "Failed Rows",
    "read_only": 1
   },
   {
@@ -142,6 +221,26 @@
    "read_only": 1
   },
   {
+   "default": "0",
+   "fieldname": "linked_bank_transactions",
+   "fieldtype": "Int",
+   "label": "Linked Bank Transactions",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_import_run_on",
+   "fieldtype": "Datetime",
+   "label": "Last Import Run On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_import_run_by",
+   "fieldtype": "Link",
+   "label": "Last Import Run By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes"
@@ -150,6 +249,14 @@
    "fieldname": "import_summary_note",
    "fieldtype": "Small Text",
    "label": "Import Summary Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "import_summary_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Import Summary JSON",
+   "no_copy": 1,
    "read_only": 1
   }
  ],
