@@ -81,6 +81,12 @@ from retailedge.bank_transaction_bridge import (
 	import_statement_rows_to_bank_transactions as _import_statement_rows_to_bank_transactions,
 	preview_bank_transaction_import as _preview_bank_transaction_import,
 )
+from retailedge.bank_transaction_matching import (
+	assert_can_access_bank_transaction_matching as _assert_can_access_bank_transaction_matching,
+	find_payment_entry_candidates_for_bank_transaction as _find_payment_entry_candidates_for_bank_transaction,
+	find_sales_invoice_candidates_for_bank_transaction as _find_sales_invoice_candidates_for_bank_transaction,
+	get_bank_transaction_matching_rows as _get_bank_transaction_matching_rows,
+)
 from retailedge.sales_invoice_verification_sync import (
 	sync_bank_verified_sales_invoice_from_bank_transaction as _sync_bank_verified_sales_invoice_from_bank_transaction,
 	sync_cash_verified_sales_invoices_for_shift as _sync_cash_verified_sales_invoices_for_shift,
@@ -499,6 +505,32 @@ def accept_possible_duplicate_statement_row(row_name, acceptance_note=None):
 def get_possible_duplicate_statement_rows(statement_import_name):
 	_assert_retailedge_verification_role()
 	return _get_possible_duplicate_statement_rows(statement_import_name)
+
+
+@frappe.whitelist()
+def get_bank_transaction_matching_rows(filters=None, limit=500):
+	_assert_can_access_bank_transaction_matching()
+	return _get_bank_transaction_matching_rows(filters=filters, limit=int(limit or 500))
+
+
+@frappe.whitelist()
+def find_sales_invoice_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20):
+	_assert_can_access_bank_transaction_matching()
+	return _find_sales_invoice_candidates_for_bank_transaction(
+		bank_transaction_name=bank_transaction_name,
+		filters=filters,
+		limit=int(limit or 20),
+	)
+
+
+@frappe.whitelist()
+def find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20):
+	_assert_can_access_bank_transaction_matching()
+	return _find_payment_entry_candidates_for_bank_transaction(
+		bank_transaction_name=bank_transaction_name,
+		filters=filters,
+		limit=int(limit or 20),
+	)
 
 
 @frappe.whitelist()

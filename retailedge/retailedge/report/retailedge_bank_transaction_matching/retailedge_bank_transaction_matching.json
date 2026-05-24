@@ -1,0 +1,44 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-05-24 00:00:00.000000",
+ "disable_prepared_report": 0,
+ "doctype": "Report",
+ "filters": [],
+ "is_standard": "Yes",
+ "module": "RetailEdge",
+ "name": "RetailEdge Bank Transaction Matching",
+ "prepared_report": 0,
+ "ref_doctype": "Bank Transaction",
+ "report_name": "RetailEdge Bank Transaction Matching",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "RetailEdge Manager"
+  },
+  {
+   "role": "RetailEdgeManager"
+  },
+  {
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "role": "RetailEdgeBranchManager"
+  },
+  {
+   "role": "RetailEdge Auditor"
+  },
+  {
+   "role": "RetailEdgeAuditor"
+  }
+ ]
+}

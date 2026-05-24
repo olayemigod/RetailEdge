@@ -86,6 +86,17 @@
    "collapsible": 1,
    "indent": 0,
    "keep_closed": 0,
+   "label": "Bank Transaction Matching",
+   "link_to": "RetailEdge Bank Transaction Matching",
+   "link_type": "Report",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
    "label": "Invoice Payment Audit",
    "link_to": "RetailEdge Invoice Payment Audit",
    "link_type": "Report",

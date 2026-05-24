@@ -1,7 +1,7 @@
 {
  "app": "retailedge",
  "charts": [],
- "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"operations_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Operations</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense\",\"col\":3}},{\"id\":\"daily_sales_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit\",\"col\":3}},{\"id\":\"payment_statement_import_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Statement Import\",\"col\":3}},{\"id\":\"reports_review_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports & Review</b></span>\",\"col\":12}},{\"id\":\"branch_performance_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Performance Summary\",\"col\":3}},{\"id\":\"invoice_payment_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Invoice Payment Audit\",\"col\":3}},{\"id\":\"cash_shift_verification_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cash Shift Verification\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Variance\",\"col\":3}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense Review\",\"col\":3}},{\"id\":\"daily_sales_audit_register_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit Register\",\"col\":3}},{\"id\":\"setup_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Setup / Configuration</b></span>\",\"col\":12}},{\"id\":\"settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Settings\",\"col\":3}},{\"id\":\"branch_profile_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Profile\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Expense Category\",\"col\":3}},{\"id\":\"statement_mapping_template_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Statement Mapping Template\",\"col\":3}}]",
+ "content": "[{\"id\":\"retail_edge_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"operations_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Operations</b></span>\",\"col\":12}},{\"id\":\"cashier_expense_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense\",\"col\":3}},{\"id\":\"daily_sales_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit\",\"col\":3}},{\"id\":\"payment_statement_import_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Statement Import\",\"col\":3}},{\"id\":\"reports_review_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports & Review</b></span>\",\"col\":12}},{\"id\":\"branch_performance_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Performance Summary\",\"col\":3}},{\"id\":\"bank_transaction_matching_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Bank Transaction Matching\",\"col\":3}},{\"id\":\"invoice_payment_audit_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Invoice Payment Audit\",\"col\":3}},{\"id\":\"cash_shift_verification_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cash Shift Verification\",\"col\":3}},{\"id\":\"variance_report_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"POS Variance\",\"col\":3}},{\"id\":\"cashier_expense_review_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Cashier Expense Review\",\"col\":3}},{\"id\":\"daily_sales_audit_register_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Daily Sales Audit Register\",\"col\":3}},{\"id\":\"setup_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Setup / Configuration</b></span>\",\"col\":12}},{\"id\":\"settings_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Settings\",\"col\":3}},{\"id\":\"branch_profile_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Branch Profile\",\"col\":3}},{\"id\":\"expense_category_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Expense Category\",\"col\":3}},{\"id\":\"statement_mapping_template_shortcut\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Statement Mapping Template\",\"col\":3}}]",
  "creation": "2026-05-07 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -57,7 +57,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Reports & Review",
-   "link_count": 7,
+   "link_count": 8,
    "link_type": "Report",
    "onboard": 0,
    "type": "Card Break"
@@ -68,6 +68,16 @@
    "label": "Branch Performance Summary",
    "link_count": 0,
    "link_to": "RetailEdge Branch Performance Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Bank Transaction Matching",
+   "link_count": 0,
+   "link_to": "RetailEdge Bank Transaction Matching",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"
@@ -212,6 +222,14 @@
    "doc_view": "",
    "label": "Branch Performance Summary",
    "link_to": "RetailEdge Branch Performance Summary",
+   "stats_filter": "[]",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "label": "Bank Transaction Matching",
+   "link_to": "RetailEdge Bank Transaction Matching",
    "stats_filter": "[]",
    "type": "Report"
   },

@@ -258,6 +258,12 @@ RetailEdge now presents a simpler operational flow:
 
 1. Cash verification is shift-based and uses Daily Sales Audit and Cash Shift Verification to compare opening cash, cash sales, cashier expenses, expected cash, actual closing cash, and variance.
 2. Bank transfer, card/POS, mobile money, and other non-cash evidence remain statement-import based through Payment Statement Import and Statement Mapping Template until the redesigned bank matching process is agreed.
+
+## R3 - Simple Bank Transaction Matching Report
+
+RetailEdge now provides a read-only `Bank Transaction Matching` report that uses ERPNext `Bank Transaction` as the central imported statement line. The report suggests possible `Sales Invoice` or `Payment Entry` matches and scores them using amount, date, reference, narration, customer, account, and branch clues where those fields exist on the local schema.
+
+This phase is suggestion-only. RetailEdge does not confirm, reject, reconcile, or sync anything yet, and it does not create `Payment Entry`, `Journal Entry`, `GL Entry`, or `Bank Transaction` reconciliation. Confirm and reject workflow will come in a later R4/R5 phase, and Sales Invoice verification sync from confirmed bank matches will also come later.
 3. Sales Invoice carries RetailEdge-only verification fields for cash shift and future bank verification audit visibility.
 4. RetailEdge verification sync updates only RetailEdge custom fields on Sales Invoice.
 
