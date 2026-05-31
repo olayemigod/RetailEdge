@@ -87,6 +87,21 @@ from retailedge.bank_transaction_matching import (
 	find_sales_invoice_candidates_for_bank_transaction as _find_sales_invoice_candidates_for_bank_transaction,
 	get_bank_transaction_matching_rows as _get_bank_transaction_matching_rows,
 )
+from retailedge.bank_transaction_match_workflow import (
+	assert_can_manage_bank_transaction_match as _assert_can_manage_bank_transaction_match,
+	bulk_confirm_bank_transaction_matches as _bulk_confirm_bank_transaction_matches,
+	bulk_mark_bank_transaction_matches_needs_review as _bulk_mark_bank_transaction_matches_needs_review,
+	cancel_bank_transaction_match as _cancel_bank_transaction_match,
+	confirm_bank_transaction_match as _confirm_bank_transaction_match,
+	create_bank_match_reviews_from_suggestions as _create_bank_match_reviews_from_suggestions,
+	create_or_get_bank_transaction_match as _create_or_get_bank_transaction_match,
+	get_bank_match_review_queue_summary as _get_bank_match_review_queue_summary,
+	mark_bank_transaction_match_needs_review as _mark_bank_transaction_match_needs_review,
+	preview_bulk_confirm_bank_transaction_matches as _preview_bulk_confirm_bank_transaction_matches,
+	reject_bank_transaction_match as _reject_bank_transaction_match,
+	reopen_bank_transaction_match as _reopen_bank_transaction_match,
+	run_bank_transaction_auto_match as _run_bank_transaction_auto_match,
+)
 from retailedge.sales_invoice_verification_sync import (
 	sync_bank_verified_sales_invoice_from_bank_transaction as _sync_bank_verified_sales_invoice_from_bank_transaction,
 	sync_cash_verified_sales_invoices_for_shift as _sync_cash_verified_sales_invoices_for_shift,
@@ -531,6 +546,115 @@ def find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, fi
 		filters=filters,
 		limit=int(limit or 20),
 	)
+
+
+@frappe.whitelist()
+def create_or_get_bank_transaction_match(
+	bank_transaction_name,
+	suggested_document_type=None,
+	suggested_document=None,
+	sales_invoice=None,
+	payment_entry=None,
+	source_report="Bank Transaction Matching",
+	force_refresh=False,
+):
+	_assert_can_manage_bank_transaction_match()
+	return _create_or_get_bank_transaction_match(
+		bank_transaction_name=bank_transaction_name,
+		suggested_document_type=suggested_document_type,
+		suggested_document=suggested_document,
+		sales_invoice=sales_invoice,
+		payment_entry=payment_entry,
+		source_report=source_report,
+		force_refresh=bool(int(force_refresh)) if isinstance(force_refresh, str) else bool(force_refresh),
+	)
+
+
+@frappe.whitelist()
+def create_bank_transaction_match_from_suggestion(
+	bank_transaction_name,
+	suggested_document_type=None,
+	suggested_document=None,
+	sales_invoice=None,
+	payment_entry=None,
+	source_report="Bank Transaction Matching",
+	force_refresh=False,
+):
+	return create_or_get_bank_transaction_match(
+		bank_transaction_name=bank_transaction_name,
+		suggested_document_type=suggested_document_type,
+		suggested_document=suggested_document,
+		sales_invoice=sales_invoice,
+		payment_entry=payment_entry,
+		source_report=source_report,
+		force_refresh=force_refresh,
+	)
+
+
+@frappe.whitelist()
+def confirm_bank_transaction_match(match_name, decision_note=None):
+	_assert_can_manage_bank_transaction_match()
+	return _confirm_bank_transaction_match(match_name=match_name, decision_note=decision_note)
+
+
+@frappe.whitelist()
+def reject_bank_transaction_match(match_name, decision_note=None):
+	_assert_can_manage_bank_transaction_match()
+	return _reject_bank_transaction_match(match_name=match_name, decision_note=decision_note)
+
+
+@frappe.whitelist()
+def mark_bank_transaction_match_needs_review(match_name, decision_note=None):
+	_assert_can_manage_bank_transaction_match()
+	return _mark_bank_transaction_match_needs_review(match_name=match_name, decision_note=decision_note)
+
+
+@frappe.whitelist()
+def reopen_bank_transaction_match(match_name, decision_note=None):
+	_assert_can_manage_bank_transaction_match()
+	return _reopen_bank_transaction_match(match_name=match_name, decision_note=decision_note)
+
+
+@frappe.whitelist()
+def cancel_bank_transaction_match(match_name, decision_note=None):
+	_assert_can_manage_bank_transaction_match()
+	return _cancel_bank_transaction_match(match_name=match_name, decision_note=decision_note)
+
+
+@frappe.whitelist()
+def preview_bulk_confirm_bank_transaction_matches(match_names):
+	_assert_can_manage_bank_transaction_match()
+	return _preview_bulk_confirm_bank_transaction_matches(match_names=match_names)
+
+
+@frappe.whitelist()
+def bulk_confirm_bank_transaction_matches(match_names, remarks=None):
+	_assert_can_manage_bank_transaction_match()
+	return _bulk_confirm_bank_transaction_matches(match_names=match_names, remarks=remarks)
+
+
+@frappe.whitelist()
+def bulk_mark_bank_transaction_matches_needs_review(match_names, remarks=None):
+	_assert_can_manage_bank_transaction_match()
+	return _bulk_mark_bank_transaction_matches_needs_review(match_names=match_names, remarks=remarks)
+
+
+@frappe.whitelist()
+def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected_keys=None):
+	_assert_can_manage_bank_transaction_match()
+	return _create_bank_match_reviews_from_suggestions(filters=filters, rows=rows, selected_keys=selected_keys)
+
+
+@frappe.whitelist()
+def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None):
+	_assert_can_manage_bank_transaction_match()
+	return _run_bank_transaction_auto_match(filters=filters, rows=rows, selected_keys=selected_keys)
+
+
+@frappe.whitelist()
+def get_bank_match_review_queue_summary(filters=None):
+	_assert_can_manage_bank_transaction_match()
+	return _get_bank_match_review_queue_summary(filters=filters)
 
 
 @frappe.whitelist()

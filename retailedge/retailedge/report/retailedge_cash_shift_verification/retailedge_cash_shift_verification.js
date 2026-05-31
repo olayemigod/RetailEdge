@@ -1,4 +1,16 @@
+function applyRetailEdgeSummaryCardDesign() {
+	// Report summary cards are styled through native Frappe DOM selectors in CSS.
+}
+
+function scheduleRetailEdgeSummaryCardDesign() {
+	// No-op: report summary card appearance is CSS-only.
+}
+
 frappe.query_reports["RetailEdge Cash Shift Verification"] = {
+	after_refresh(report) {
+		scheduleRetailEdgeSummaryCardDesign(report);
+	},
+
 	filters: [
 		{
 			fieldname: "company",

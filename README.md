@@ -264,6 +264,22 @@ RetailEdge now presents a simpler operational flow:
 RetailEdge now provides a read-only `Bank Transaction Matching` report that uses ERPNext `Bank Transaction` as the central imported statement line. The report suggests possible `Sales Invoice` or `Payment Entry` matches and scores them using amount, date, reference, narration, customer, account, and branch clues where those fields exist on the local schema.
 
 This phase is suggestion-only. RetailEdge does not confirm, reject, reconcile, or sync anything yet, and it does not create `Payment Entry`, `Journal Entry`, `GL Entry`, or `Bank Transaction` reconciliation. Confirm and reject workflow will come in a later R4/R5 phase, and Sales Invoice verification sync from confirmed bank matches will also come later.
+
+## R4 - RetailEdge Bank Transaction Match Decision Workflow
+
+RetailEdge now adds a controlled, RetailEdge-owned review record for bank match candidates through `RetailEdge Bank Transaction Match`. Users can open or create a review record from the `Bank Transaction Matching` report and then mark the candidate as `Confirmed`, `Rejected`, `Needs Review`, `Reopened`, or `Cancelled`.
+
+The review form hides raw technical JSON from normal users and shows readable match, reason, and decision summaries instead. `Bank Match Review` is available from the RetailEdge workspace/sidebar for reviewing persistent match decision records.
+
+Bulk review is intentionally staged through those persistent review records. Users can select `Bank Match Review` records, preview which selected records are eligible for bulk confirmation, and confirm only eligible strong matches. Bulk actions update only RetailEdge match decision records and action logs; blocked records are skipped with reasons.
+
+### R4.2 - Report-to-Review Bulk Preparation
+
+The `Bank Transaction Matching` report now includes a `Create Review Records` action. Users can select suggested report rows, or deliberately use the currently visible eligible suggestions, to create `RetailEdge Bank Transaction Match` review records in bulk. This preparation step does not confirm matches; it only creates the persistent RetailEdge-owned review records needed for audit and later bulk review.
+
+Confirmed `Sales Invoice` and `Payment Entry` candidates are excluded from preparation and from normal future suggestions until their confirmed match is reopened, rejected, or cancelled. Weak matches may be prepared for review, but they are marked for review rather than auto-confirmed. No `Payment Entry`, `Journal Entry`, `GL Entry`, Bank Transaction reconciliation, or Sales Invoice accounting/payment field is changed.
+
+This phase still does not reconcile `Bank Transaction`, does not allocate vouchers, does not create or modify `Payment Entry`, `Journal Entry`, or `GL Entry`, and does not change `Sales Invoice` accounting fields, payment status, or outstanding amount. The workflow only stores RetailEdge decision metadata, audit fields, and action logs so later phases can safely build confirmation-driven sync behavior on top of those records.
 3. Sales Invoice carries RetailEdge-only verification fields for cash shift and future bank verification audit visibility.
 4. RetailEdge verification sync updates only RetailEdge custom fields on Sales Invoice.
 

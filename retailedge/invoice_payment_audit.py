@@ -137,7 +137,7 @@ def get_expected_payment_account_for_invoice(invoice_doc, payment_category=None,
 
 def get_sales_invoice_payment_rows(invoice_doc):
 	rows = []
-	for payment_row in getattr(invoice_doc, "payments", []) or []:
+	for idx, payment_row in enumerate(getattr(invoice_doc, "payments", []) or [], start=1):
 		row = payment_row.as_dict() if hasattr(payment_row, "as_dict") else dict(payment_row)
 		amount = flt(row.get("base_amount") if row.get("base_amount") is not None else row.get("amount"))
 		classification = classify_payment_method(
@@ -160,6 +160,7 @@ def get_sales_invoice_payment_rows(invoice_doc):
 				issue = "Payment account does not match the expected branch account."
 		rows.append(
 			{
+				"payment_row_index": row.get("idx") or idx,
 				"mode_of_payment": row.get("mode_of_payment"),
 				"account": actual_account,
 				"amount": flt(row.get("amount")),

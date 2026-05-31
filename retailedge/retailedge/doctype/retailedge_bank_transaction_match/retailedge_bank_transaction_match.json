@@ -1,0 +1,517 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-05-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "match_identity_section",
+  "naming_series",
+  "bank_transaction",
+  "company",
+  "branch",
+  "bank_account",
+  "transaction_date",
+  "bank_amount",
+  "bank_reference",
+  "bank_narration",
+  "suggested_match_section",
+  "suggested_document_type",
+  "suggested_document",
+  "sales_invoice",
+  "payment_entry",
+  "customer",
+  "party_type",
+  "party",
+  "candidate_amount",
+  "amount_difference",
+  "amount_scenario",
+  "match_confidence",
+  "match_score",
+  "match_reason",
+  "review_status",
+  "match_status",
+  "risk_level",
+  "candidate_type",
+  "match_summary",
+  "amount_breakdown_summary",
+  "match_reason_summary",
+  "decision_section",
+  "decision_status",
+  "decision_note",
+  "decision_summary",
+  "confirmed_by",
+  "confirmed_on",
+  "rejected_by",
+  "rejected_on",
+  "reopened_by",
+  "reopened_on",
+  "last_action",
+  "last_action_by",
+  "last_action_on",
+  "sync_readiness_section",
+  "sales_invoice_sync_ready",
+  "sync_blocked_reason",
+  "synced_to_sales_invoice",
+  "technical_section",
+  "source_report",
+  "details_json",
+  "action_logs"
+ ],
+ "fields": [
+  {
+   "fieldname": "match_identity_section",
+   "fieldtype": "Section Break",
+   "label": "Match Identity"
+  },
+  {
+   "default": "RE-BTM-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Naming Series",
+   "reqd": 1
+  },
+  {
+   "fieldname": "bank_transaction",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Bank Transaction",
+   "options": "Bank Transaction",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch"
+  },
+  {
+   "fieldname": "bank_account",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Bank Account",
+   "options": "Bank Account"
+  },
+  {
+   "fieldname": "transaction_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Transaction Date"
+  },
+  {
+   "fieldname": "bank_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Bank Amount"
+  },
+  {
+   "fieldname": "bank_reference",
+   "fieldtype": "Data",
+   "label": "Bank Reference"
+  },
+  {
+   "fieldname": "bank_narration",
+   "fieldtype": "Small Text",
+   "label": "Bank Narration"
+  },
+  {
+   "fieldname": "suggested_match_section",
+   "fieldtype": "Section Break",
+   "label": "Suggested Match"
+  },
+  {
+   "fieldname": "suggested_document_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Suggested Document Type",
+   "options": "Sales Invoice\nPayment Entry"
+  },
+  {
+   "fieldname": "suggested_document",
+   "fieldtype": "Dynamic Link",
+   "in_list_view": 1,
+   "label": "Suggested Document",
+   "options": "suggested_document_type"
+  },
+  {
+   "fieldname": "sales_invoice",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Sales Invoice",
+   "options": "Sales Invoice"
+  },
+  {
+   "fieldname": "payment_entry",
+   "fieldtype": "Link",
+   "label": "Payment Entry",
+   "options": "Payment Entry"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Customer",
+   "options": "Customer"
+  },
+  {
+   "default": "Customer",
+   "fieldname": "party_type",
+   "fieldtype": "Select",
+   "label": "Party Type",
+   "options": "Customer\nSupplier"
+  },
+  {
+   "fieldname": "party",
+   "fieldtype": "Dynamic Link",
+   "label": "Party",
+   "options": "party_type"
+  },
+  {
+   "fieldname": "candidate_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "SI/PE Amount"
+  },
+  {
+   "fieldname": "amount_difference",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Difference"
+  },
+  {
+   "fieldname": "amount_scenario",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Amount Scenario",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_confidence",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Match Confidence",
+   "options": "Strong Match\nPossible Match\nWeak Match\nNo Match"
+  },
+  {
+   "fieldname": "match_score",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Match Score"
+  },
+  {
+   "fieldname": "match_reason",
+   "fieldtype": "Small Text",
+   "label": "Match Reason"
+  },
+  {
+   "fieldname": "review_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Review Status",
+   "options": "Pending Review\nReady to Confirm\nNeeds Review\nConfirmed\nRejected\nCancelled\nReopened",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Match Status",
+   "options": "Strong Match\nPossible Match\nWeak Match\nNo Match\nAlready Confirmed\nDuplicate Blocked",
+   "read_only": 1
+  },
+  {
+   "fieldname": "risk_level",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Risk Level",
+   "options": "Low\nMedium\nHigh\nBlocked",
+   "read_only": 1
+  },
+  {
+   "fieldname": "candidate_type",
+   "fieldtype": "Data",
+   "in_standard_filter": 1,
+   "label": "Candidate Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_summary",
+   "fieldtype": "Small Text",
+   "label": "Match Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amount_breakdown_summary",
+   "fieldtype": "Small Text",
+   "label": "Amount Breakdown",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_reason_summary",
+   "fieldtype": "Small Text",
+   "label": "Reason Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decision_section",
+   "fieldtype": "Section Break",
+   "label": "Decision"
+  },
+  {
+   "default": "Suggested",
+   "fieldname": "decision_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Decision Status",
+   "options": "Draft\nSuggested\nConfirmed\nRejected\nNeeds Review\nReopened\nCancelled"
+  },
+  {
+   "fieldname": "decision_note",
+   "fieldtype": "Small Text",
+   "label": "Decision Note"
+  },
+  {
+   "fieldname": "decision_summary",
+   "fieldtype": "Small Text",
+   "label": "Decision Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "confirmed_by",
+   "fieldtype": "Link",
+   "label": "Confirmed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "confirmed_on",
+   "fieldtype": "Datetime",
+   "label": "Confirmed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rejected_by",
+   "fieldtype": "Link",
+   "label": "Rejected By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rejected_on",
+   "fieldtype": "Datetime",
+   "label": "Rejected On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reopened_by",
+   "fieldtype": "Link",
+   "label": "Reopened By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reopened_on",
+   "fieldtype": "Datetime",
+   "label": "Reopened On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_action",
+   "fieldtype": "Data",
+   "label": "Last Action",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_action_by",
+   "fieldtype": "Link",
+   "label": "Last Action By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_action_on",
+   "fieldtype": "Datetime",
+   "label": "Last Action On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sync_readiness_section",
+   "fieldtype": "Section Break",
+   "label": "Sync Readiness"
+  },
+  {
+   "fieldname": "sales_invoice_sync_ready",
+   "fieldtype": "Check",
+   "label": "Sales Invoice Sync Ready",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sync_blocked_reason",
+   "fieldtype": "Small Text",
+   "label": "Sync Blocked Reason",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "synced_to_sales_invoice",
+   "fieldtype": "Check",
+   "label": "Synced to Sales Invoice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "technical_section",
+   "fieldtype": "Section Break",
+   "label": "Technical"
+  },
+  {
+   "default": "Bank Transaction Matching",
+   "fieldname": "source_report",
+   "fieldtype": "Data",
+   "label": "Source Report"
+  },
+  {
+   "fieldname": "details_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Details JSON",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "action_logs",
+   "fieldtype": "Table",
+   "label": "Action Logs",
+   "options": "RetailEdge Bank Transaction Match Action Log",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "RetailEdge",
+ "name": "RetailEdge Bank Transaction Match",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeManager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Branch Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeBranchManager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Auditor",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeAuditor",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "bank_transaction,suggested_document,sales_invoice,customer,decision_status",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "bank_transaction",
+ "track_changes": 1
+}

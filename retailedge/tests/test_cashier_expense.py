@@ -2776,6 +2776,7 @@ class BranchProfileTests(unittest.TestCase):
 		self.assertIn("Daily Sales Audit", shortcut_labels)
 		self.assertIn("Payment Statement Import", shortcut_labels)
 		self.assertIn("Bank Transaction Matching", shortcut_labels)
+		self.assertIn("Bank Match Review", shortcut_labels)
 		self.assertIn("Cash Shift Verification", shortcut_labels)
 		self.assertIn("Statement Mapping Template", shortcut_labels)
 		self.assertIn("Settings", shortcut_labels)
@@ -2845,6 +2846,7 @@ class BranchProfileTests(unittest.TestCase):
 				("Section Break", "Reports & Review", 0),
 				("Link", "Branch Performance Summary", 1),
 				("Link", "Bank Transaction Matching", 1),
+				("Link", "Bank Match Review", 1),
 				("Link", "Invoice Payment Audit", 1),
 				("Link", "Cash Shift Verification", 1),
 				("Link", "POS Variance", 1),

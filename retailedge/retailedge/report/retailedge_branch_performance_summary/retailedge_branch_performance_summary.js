@@ -1,3 +1,11 @@
+function applyRetailEdgeSummaryCardDesign() {
+	// Report summary cards are styled through native Frappe DOM selectors in CSS.
+}
+
+function scheduleRetailEdgeSummaryCardDesign() {
+	// No-op: report summary card appearance is CSS-only.
+}
+
 frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 	filters: [
 		{
@@ -73,5 +81,11 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 			}
 			return originalRefresh();
 		};
+
+		scheduleRetailEdgeSummaryCardDesign(report);
+	},
+
+	after_refresh(report) {
+		scheduleRetailEdgeSummaryCardDesign(report);
 	},
 };

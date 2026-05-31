@@ -790,18 +790,333 @@
 			// Ignore Stock Entry parent event registration errors.
 		}
 
-		try {
-			frappe.ui.form.on("Stock Entry Detail", {
-				form_render(frm) {
-					const targetFrm = frm && frm.doctype === "Stock Entry" ? frm : cur_frm;
-					window.retailedge.costVisibility.applyStockEntryProtection(targetFrm);
-				},
-			});
-		} catch (error) {
-			// Ignore Stock Entry Detail event registration errors.
-		}
+	try {
+		frappe.ui.form.on("Stock Entry Detail", {
+			form_render(frm) {
+				const targetFrm = frm && frm.doctype === "Stock Entry" ? frm : cur_frm;
+				window.retailedge.costVisibility.applyStockEntryProtection(targetFrm);
+			},
+		});
+	} catch (error) {
+		// Ignore Stock Entry Detail event registration errors.
+	}
 
 	}
 
+
+	function escapeHtml(value) {
+		return frappe.utils.escape_html(String(value == null ? "" : value));
+	}
+
+	function formatValue(value, datatype) {
+		if (value === undefined || value === null || value === "") {
+			return __("Not available");
+		}
+
+		if (datatype === "Currency") {
+			return format_currency(value, frappe.defaults.get_default("currency"));
+		}
+
+		if (datatype === "Int") {
+			const parsed = parseInt(value, 10);
+			return Number.isNaN(parsed) ? escapeHtml(value) : String(parsed);
+		}
+
+		return String(value);
+	}
+
+	function normalizeTone(value) {
+		const tone = String(value || "").toLowerCase();
+		if (["green", "success", "matched", "confirmed", "ready", "low"].includes(tone)) {
+			return "success";
+		}
+		if (["orange", "amber", "yellow", "warning", "needs review", "possible", "medium"].includes(tone)) {
+			return "warning";
+		}
+		if (["red", "danger", "high", "blocked", "unsafe", "unmatched", "rejected", "failed"].includes(tone)) {
+			return "danger";
+		}
+		if (["grey", "gray", "neutral"].includes(tone)) {
+			return "neutral";
+		}
+		return "info";
+	}
+
+	function inferTone(label, indicator) {
+		const raw = `${label || ""} ${indicator || ""}`.toLowerCase();
+		if (
+			raw.includes("high risk") ||
+			raw.includes("unsafe") ||
+			raw.includes("blocked") ||
+			raw.includes("mismatch") ||
+			raw.includes("variance") ||
+			raw.includes("exception") ||
+			raw.includes("rejected") ||
+			raw.includes("failed")
+		) {
+			return "danger";
+		}
+		if (
+			raw.includes("needs review") ||
+			raw.includes("possible") ||
+			raw.includes("duplicate") ||
+			raw.includes("pending") ||
+			raw.includes("warning") ||
+			raw.includes("issue")
+		) {
+			return "warning";
+		}
+		if (
+			raw.includes("confirmed") ||
+			raw.includes("matched") ||
+			raw.includes("ready") ||
+			raw.includes("low risk") ||
+			raw.includes("already reviewed")
+		) {
+			return "success";
+		}
+		return normalizeTone(indicator);
+	}
+
+	function renderStatusBadge(text, tone) {
+		if (!text) {
+			return "";
+		}
+		return `<span class="retailedge-status-badge retailedge-tone-${escapeHtml(tone)}">${escapeHtml(text)}</span>`;
+	}
+
+	function renderEmptyState(message) {
+		return `<div class="retailedge-empty-state">${escapeHtml(message)}</div>`;
+	}
+
+	function renderCard(config) {
+		const tone = config.tone || "info";
+		const riskClass =
+			tone === "danger"
+				? "retailedge-risk-high"
+				: tone === "warning"
+					? "retailedge-risk-medium"
+					: tone === "success"
+						? "retailedge-risk-low"
+						: "";
+		const meta = Array.isArray(config.meta)
+			? config.meta.filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+			: "";
+		const footer = config.footer ? `<div class="retailedge-card-footer">${escapeHtml(config.footer)}</div>` : "";
+		const content = config.content || "";
+
+		return `
+			<section class="retailedge-card retailedge-tone-${escapeHtml(tone)} ${riskClass}">
+				<div class="retailedge-card-header">
+					<div class="retailedge-card-title">${escapeHtml(config.title || "")}</div>
+					${renderStatusBadge(config.badge, tone)}
+				</div>
+				<div class="retailedge-card-value">${escapeHtml(config.value || "")}</div>
+				${meta ? `<div class="retailedge-card-meta">${meta}</div>` : ""}
+				${content}
+				${footer}
+			</section>
+		`;
+	}
+
+	function renderCardGrid(cards) {
+		if (!Array.isArray(cards) || !cards.length) {
+			return "";
+		}
+		return `<div class="retailedge-card-grid">${cards.map(renderCard).join("")}</div>`;
+	}
+
+	function renderKeyValueSection(title, rows, options) {
+		const config = options || {};
+		const visibleRows = (rows || []).filter((row) => row && row[1] !== undefined && row[1] !== null && row[1] !== "");
+		if (!visibleRows.length) {
+			return "";
+		}
+
+		const content = `
+			<div class="retailedge-card-section">
+				<dl class="retailedge-card-kv">
+					${visibleRows
+						.map(
+							([label, value]) => `
+								<div class="retailedge-card-kv-row">
+									<dt>${escapeHtml(label)}</dt>
+									<dd>${escapeHtml(value)}</dd>
+								</div>
+							`
+						)
+						.join("")}
+				</dl>
+			</div>
+		`;
+
+		return renderCard({
+			title,
+			value: config.value || __("Review Details"),
+			badge: config.badge || "",
+			tone: config.tone || "info",
+			footer: config.footer || "",
+			meta: config.meta || [],
+			content,
+		});
+	}
+
+	function renderListCard(title, items, options) {
+		const config = options || {};
+		const visibleItems = (items || []).filter(Boolean);
+		if (!visibleItems.length) {
+			return "";
+		}
+
+		return renderCard({
+			title,
+			value: config.value || `${visibleItems.length}`,
+			badge: config.badge || "",
+			tone: config.tone || "neutral",
+			footer: config.footer || "",
+			content: `<ul class="retailedge-card-list">${visibleItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`,
+		});
+	}
+
+	function renderTableCard(title, headers, rows, options) {
+		const config = options || {};
+		if (!Array.isArray(rows) || !rows.length) {
+			return "";
+		}
+
+		const headerHtml = (headers || []).map((header) => `<th>${escapeHtml(header)}</th>`).join("");
+		const bodyHtml = rows
+			.map(
+				(row) =>
+					`<tr>${(row || []).map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`
+			)
+			.join("");
+
+		return renderCard({
+			title,
+			value: config.value || __("Preview"),
+			badge: config.badge || "",
+			tone: config.tone || "neutral",
+			footer: config.footer || "",
+			content: `
+				<div class="retailedge-card-section">
+					<table class="retailedge-data-table">
+						<thead><tr>${headerHtml}</tr></thead>
+						<tbody>${bodyHtml}</tbody>
+					</table>
+				</div>
+			`,
+		});
+	}
+
+
+	function patchQueryReportSummaryReset() {
+		if (
+			typeof frappe === "undefined" ||
+			!frappe.views ||
+			!frappe.views.QueryReport ||
+			frappe.views.QueryReport.prototype.__retailedgeSummaryResetPatched
+		) {
+			return Boolean(frappe?.views?.QueryReport?.prototype?.__retailedgeSummaryResetPatched);
+		}
+
+		const QueryReport = frappe.views.QueryReport;
+		const originalLoadReport = QueryReport.prototype.load_report;
+		const originalRefresh = QueryReport.prototype.refresh;
+
+		function resetSummary(queryReport) {
+			try {
+				if (queryReport?.$summary?.empty) {
+					queryReport.$summary.empty().hide();
+				}
+			} catch (error) {
+				// Ignore summary reset errors.
+			}
+		}
+
+		QueryReport.prototype.load_report = function () {
+			resetSummary(this);
+			return originalLoadReport.apply(this, arguments);
+		};
+
+		QueryReport.prototype.refresh = function () {
+			resetSummary(this);
+			return originalRefresh.apply(this, arguments);
+		};
+
+		QueryReport.prototype.__retailedgeSummaryResetPatched = true;
+		return true;
+	}
+
+	function registerQueryReportSummaryReset(attempt) {
+		if (patchQueryReportSummaryReset()) {
+			return;
+		}
+
+		if ((attempt || 0) >= 20) {
+			return;
+		}
+
+		setTimeout(function () {
+			registerQueryReportSummaryReset((attempt || 0) + 1);
+		}, 500);
+	}
+
+	function decorateWorkspaceCards() {
+		if (typeof frappe === "undefined" || !frappe.get_route) {
+			return;
+		}
+
+		const route = frappe.get_route() || [];
+		const isRetailEdgeWorkspace =
+			route[0] === "workspace" &&
+			String(route[1] || "").toLowerCase() === "retailedge";
+
+		$(".layout-main-section").each(function () {
+			const $section = $(this);
+			if (isRetailEdgeWorkspace) {
+				$section.addClass("retailedge-workspace");
+			} else {
+				$section.removeClass("retailedge-workspace");
+			}
+		});
+	}
+
+	window.retailedge.ui = Object.assign(window.retailedge.ui || {}, {
+		formatValue,
+		inferTone,
+		renderStatusBadge,
+		renderEmptyState,
+		renderCard,
+		renderCardGrid,
+		renderKeyValueSection,
+		renderListCard,
+		renderTableCard,
+		decorateWorkspaceCards,
+	});
+
+
+	let workspaceDecorationQueued = false;
+	function scheduleWorkspaceDecoration() {
+		if (workspaceDecorationQueued) {
+			return;
+		}
+		workspaceDecorationQueued = true;
+		setTimeout(function () {
+			workspaceDecorationQueued = false;
+			decorateWorkspaceCards();
+		}, 50);
+	}
+
 	registerRetailEdgeFormHandlers(0);
+	registerQueryReportSummaryReset(0);
+
+	scheduleWorkspaceDecoration();
+
+	if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.body) {
+		const observer = new MutationObserver(function () {
+			scheduleWorkspaceDecoration();
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+	}
 })();

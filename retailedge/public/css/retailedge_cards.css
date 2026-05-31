@@ -1,0 +1,1098 @@
+:root {
+	--pe-blue-900: #0b2d5b;
+	--pe-blue-800: #123e73;
+	--pe-blue-700: #0b5cab;
+	--pe-blue-600: #0b72b9;
+	--pe-blue-100: #dceeff;
+	--pe-blue-50: #eef7ff;
+	--pe-green-800: #0f6b3a;
+	--pe-green-700: #15803d;
+	--pe-green-600: #22a65a;
+	--pe-green-100: #dff7e8;
+	--pe-green-50: #f0fbf4;
+	--pe-grey-950: #111827;
+	--pe-grey-800: #1f2937;
+	--pe-grey-700: #374151;
+	--pe-grey-600: #4b5563;
+	--pe-grey-500: #6b7280;
+	--pe-grey-300: #d1d5db;
+	--pe-grey-200: #e5e7eb;
+	--pe-grey-100: #f3f4f6;
+	--pe-grey-50: #f9fafb;
+	--pe-white: #ffffff;
+	--pe-success: #16a34a;
+	--pe-success-bg: #eaf8f0;
+	--pe-warning: #d97706;
+	--pe-warning-bg: #fff7e6;
+	--pe-danger: #dc2626;
+	--pe-danger-bg: #fef2f2;
+	--pe-info: #2563eb;
+	--pe-info-bg: #eff6ff;
+	--retailedge-blue-900: var(--pe-blue-900);
+	--retailedge-blue-700: var(--pe-blue-700);
+	--retailedge-blue-100: var(--pe-blue-100);
+	--retailedge-green-700: var(--pe-green-700);
+	--retailedge-green-100: var(--pe-green-100);
+	--retailedge-amber-700: var(--pe-warning);
+	--retailedge-amber-100: var(--pe-warning-bg);
+	--retailedge-red-700: var(--pe-danger);
+	--retailedge-red-100: var(--pe-danger-bg);
+	--retailedge-slate-900: var(--pe-grey-950);
+	--retailedge-slate-700: var(--pe-grey-700);
+	--retailedge-slate-500: var(--pe-grey-500);
+	--retailedge-slate-300: var(--pe-grey-300);
+	--retailedge-slate-200: var(--pe-grey-200);
+	--retailedge-slate-100: var(--pe-grey-100);
+	--retailedge-white: var(--pe-white);
+	--retailedge-shadow: 0 12px 30px rgba(11, 45, 91, 0.08);
+}
+
+.retailedge-report-page .retailedge-report-summary,
+.retailedge-query-report .report-summary,
+.report-summary.retailedge-report-summary-grid,
+.retailedge-card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	gap: 16px;
+}
+
+.retailedge-report-page .retailedge-report-summary,
+.retailedge-query-report .report-summary,
+.report-summary.retailedge-report-summary-grid {
+	margin-bottom: 20px;
+}
+
+.retailedge-report-page .retailedge-number-card,
+.retailedge-query-report .report-summary .summary-item,
+.report-summary.retailedge-report-summary-grid .summary-item,
+.retailedge-card,
+.retailedge-workspace .shortcut-widget-box,
+.retailedge-workspace .links-widget-box,
+.retailedge-workspace .number-widget-box,
+.retailedge-workspace .widget.shortcut-widget-box,
+.retailedge-workspace .widget.links-widget-box,
+.retailedge-workspace .widget.number-widget-box {
+	position: relative;
+	background: linear-gradient(180deg, var(--retailedge-white) 0%, var(--retailedge-slate-100) 100%);
+	border: 1px solid var(--pe-grey-200);
+	border-radius: 18px;
+	box-shadow: var(--retailedge-shadow);
+	overflow: hidden;
+}
+
+.retailedge-report-page .retailedge-number-card {
+	isolation: isolate;
+	min-height: 78px;
+	padding: 8px 12px;
+}
+
+.retailedge-report-page .retailedge-number-card > * {
+	position: relative;
+	z-index: 1;
+}
+
+.retailedge-report-page .retailedge-number-card * {
+	min-height: 0;
+}
+
+.retailedge-report-page .retailedge-number-card::before,
+.retailedge-query-report .report-summary .summary-item::before,
+.report-summary.retailedge-report-summary-grid .summary-item::before,
+.retailedge-card::before,
+.retailedge-workspace .shortcut-widget-box::before,
+.retailedge-workspace .links-widget-box::before,
+.retailedge-workspace .number-widget-box::before,
+.retailedge-workspace .widget.shortcut-widget-box::before,
+.retailedge-workspace .widget.links-widget-box::before,
+.retailedge-workspace .widget.number-widget-box::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto auto 0;
+	width: 100%;
+	height: 4px;
+	z-index: 0;
+	pointer-events: none;
+	background: linear-gradient(90deg, var(--retailedge-blue-700), var(--retailedge-green-700));
+}
+
+.retailedge-report-page .retailedge-number-card,
+.retailedge-query-report .report-summary .summary-item,
+.report-summary.retailedge-report-summary-grid .summary-item,
+.retailedge-card {
+	padding: 18px 18px 16px;
+}
+
+.retailedge-report-page .retailedge-number-card,
+.retailedge-query-report .report-summary .summary-item,
+.report-summary.retailedge-report-summary-grid .summary-item {
+	min-height: 78px;
+	height: auto !important;
+	min-width: 0 !important;
+	max-width: none !important;
+	display: flex;
+	flex-direction: column;
+	justify-content: center !important;
+	align-items: center !important;
+	isolation: isolate;
+}
+
+.retailedge-report-page .retailedge-number-card::after,
+.retailedge-query-report .report-summary .summary-item::after,
+.report-summary.retailedge-report-summary-grid .summary-item::after {
+	content: "";
+	position: absolute;
+	right: -44px;
+	top: -42px;
+	width: 130px;
+	height: 130px;
+	border-radius: 999px;
+	background: radial-gradient(circle, rgba(11, 92, 171, 0.06), rgba(11, 92, 171, 0));
+	z-index: 0;
+	pointer-events: none;
+}
+
+.retailedge-card-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+.retailedge-card-title,
+.retailedge-report-page .retailedge-card-label,
+.retailedge-report-page .retailedge-number-card .summary-label,
+.retailedge-report-page .retailedge-number-card .label,
+.retailedge-report-page .retailedge-number-card .text-muted,
+.retailedge-query-report .report-summary .summary-item .summary-label,
+.report-summary.retailedge-report-summary-grid .summary-item .summary-label {
+	position: relative;
+	z-index: 2;
+	font-size: 9px;
+	font-weight: 700;
+	line-height: 1.25;
+	letter-spacing: 0.02em;
+	text-transform: none;
+	color: var(--retailedge-slate-700);
+	margin: 0;
+	max-width: 100%;
+	margin-bottom: 1px;
+	overflow: visible !important;
+	text-overflow: unset !important;
+	white-space: normal !important;
+	text-align: center !important;
+}
+
+.retailedge-card-value,
+.retailedge-report-page .retailedge-card-value,
+.retailedge-report-page .retailedge-number-card .summary-value,
+.retailedge-report-page .retailedge-number-card .value,
+.retailedge-report-page .retailedge-number-card strong,
+.retailedge-query-report .report-summary .summary-item .summary-value {
+	position: relative;
+	z-index: 3;
+	display: block;
+	font-size: 32px;
+	font-weight: 800;
+	line-height: 1.2;
+	letter-spacing: -0.03em;
+	color: var(--retailedge-slate-900);
+	margin: 4px 0 0;
+	font-variant-numeric: tabular-nums lining-nums;
+	white-space: nowrap;
+	overflow: visible !important;
+	text-overflow: unset !important;
+	text-align: center !important;
+	align-self: center !important;
+}
+
+.retailedge-report-page .retailedge-number-card .summary-value,
+.retailedge-report-page .retailedge-number-card .value,
+.retailedge-report-page .retailedge-card-value {
+	font-size: 20px !important;
+	line-height: 1.2 !important;
+}
+
+.retailedge-report-page .retailedge-number-card .retailedge-currency-symbol,
+.retailedge-query-report .report-summary .summary-item .retailedge-currency-symbol,
+.report-summary.retailedge-report-summary-grid .summary-item .retailedge-currency-symbol {
+	font-size: 0.45em;
+	vertical-align: top;
+	margin-right: 2px;
+	font-weight: 700;
+}
+
+.retailedge-report-page .retailedge-number-card hr,
+.retailedge-report-page .retailedge-number-card .divider {
+	position: relative;
+	z-index: 1;
+	margin: 8px 0 10px;
+	opacity: 0.45;
+}
+
+.retailedge-query-report .report-summary .summary-item .summary-value,
+.report-summary.retailedge-report-summary-grid .summary-item .summary-value {
+	padding-top: 0 !important;
+	padding-bottom: 0 !important;
+	margin-bottom: 0 !important;
+	overflow: visible !important;
+	text-overflow: unset !important;
+	white-space: nowrap !important;
+	line-height: 1.2 !important;
+	height: auto !important;
+	width: 100%;
+}
+
+.retailedge-report-page .retailedge-number-card .summary-value div,
+.retailedge-query-report .report-summary .summary-item .summary-value div,
+.report-summary.retailedge-report-summary-grid .summary-item .summary-value div {
+	overflow: visible !important;
+	text-overflow: unset !important;
+	white-space: nowrap !important;
+	line-height: 1.15 !important;
+	height: auto !important;
+}
+
+.retailedge-query-report .report-summary .summary-item .summary-value.retailedge-value-currency,
+.report-summary.retailedge-report-summary-grid .summary-item .summary-value.retailedge-value-currency {
+	font-size: 30px;
+}
+
+.retailedge-query-report .report-summary .summary-item .summary-value.retailedge-value-percent,
+.report-summary.retailedge-report-summary-grid .summary-item .summary-value.retailedge-value-percent {
+	font-size: 34px;
+}
+
+.retailedge-card-meta,
+.retailedge-card-footer {
+	font-size: 13px;
+	line-height: 1.55;
+	color: var(--retailedge-slate-500);
+}
+
+.retailedge-report-page .retailedge-card-meta,
+.retailedge-report-page .retailedge-number-card .summary-subtitle,
+.retailedge-report-page .retailedge-number-card .small {
+	position: relative;
+	z-index: 2;
+	margin-top: auto;
+}
+
+.retailedge-card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 12px;
+	margin-top: 12px;
+}
+
+.retailedge-card-footer {
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px solid var(--retailedge-slate-200);
+}
+
+.retailedge-report-page .retailedge-number-card .retailedge-card-footer,
+.retailedge-query-report .report-summary .summary-item .retailedge-card-footer,
+.report-summary.retailedge-report-summary-grid .summary-item .retailedge-card-footer {
+	display: none !important;
+}
+
+.retailedge-card-section {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.retailedge-card-kv {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 10px;
+	margin: 0;
+}
+
+.retailedge-card-kv-row {
+	display: grid;
+	grid-template-columns: minmax(120px, 0.85fr) minmax(0, 1.15fr);
+	gap: 12px;
+	align-items: start;
+	padding-top: 10px;
+	border-top: 1px solid var(--retailedge-slate-200);
+}
+
+.retailedge-card-kv-row:first-child {
+	border-top: 0;
+	padding-top: 0;
+}
+
+.retailedge-card-kv-row dt {
+	margin: 0;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--retailedge-slate-700);
+}
+
+.retailedge-card-kv-row dd {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--retailedge-slate-900);
+	word-break: break-word;
+}
+
+.retailedge-status-badge,
+.retailedge-query-report .report-summary .summary-item .indicator-pill,
+.report-summary.retailedge-report-summary-grid .summary-item .indicator-pill {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 28px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	border: 1px solid transparent;
+	white-space: nowrap;
+}
+
+.retailedge-report-page .retailedge-number-card .retailedge-status-badge,
+.retailedge-query-report .report-summary .summary-item .retailedge-status-badge,
+.report-summary.retailedge-report-summary-grid .summary-item .retailedge-status-badge {
+	display: none !important;
+}
+
+.retailedge-report-page .retailedge-number-card .retailedge-orb,
+.retailedge-query-report .report-summary .summary-item .retailedge-orb,
+.report-summary.retailedge-report-summary-grid .summary-item .retailedge-orb {
+	width: 96px !important;
+	height: 96px !important;
+	right: -38px !important;
+	top: -36px !important;
+	opacity: 0.75;
+}
+
+.retailedge-tone-info,
+.retailedge-query-report .report-summary .summary-item.retailedge-tone-info .indicator-pill,
+.report-summary.retailedge-report-summary-grid .summary-item.retailedge-tone-info .indicator-pill,
+.retailedge-status-badge.retailedge-tone-info {
+	background: var(--retailedge-blue-100);
+	color: var(--retailedge-blue-900);
+	border-color: rgba(29, 93, 184, 0.15);
+}
+
+.retailedge-tone-success,
+.retailedge-query-report .report-summary .summary-item.retailedge-tone-success .indicator-pill,
+.report-summary.retailedge-report-summary-grid .summary-item.retailedge-tone-success .indicator-pill,
+.retailedge-status-badge.retailedge-tone-success {
+	background: var(--retailedge-green-100);
+	color: var(--retailedge-green-700);
+	border-color: rgba(31, 143, 99, 0.16);
+}
+
+.retailedge-tone-warning,
+.retailedge-query-report .report-summary .summary-item.retailedge-tone-warning .indicator-pill,
+.report-summary.retailedge-report-summary-grid .summary-item.retailedge-tone-warning .indicator-pill,
+.retailedge-status-badge.retailedge-tone-warning {
+	background: var(--retailedge-amber-100);
+	color: var(--retailedge-amber-700);
+	border-color: rgba(184, 106, 0, 0.18);
+}
+
+.retailedge-tone-danger,
+.retailedge-query-report .report-summary .summary-item.retailedge-tone-danger .indicator-pill,
+.report-summary.retailedge-report-summary-grid .summary-item.retailedge-tone-danger .indicator-pill,
+.retailedge-status-badge.retailedge-tone-danger {
+	background: var(--retailedge-red-100);
+	color: var(--retailedge-red-700);
+	border-color: rgba(194, 65, 12, 0.18);
+}
+
+.retailedge-tone-neutral,
+.retailedge-query-report .report-summary .summary-item.retailedge-tone-neutral .indicator-pill,
+.report-summary.retailedge-report-summary-grid .summary-item.retailedge-tone-neutral .indicator-pill,
+.retailedge-status-badge.retailedge-tone-neutral {
+	background: var(--retailedge-slate-100);
+	color: var(--retailedge-slate-700);
+	border-color: rgba(100, 116, 139, 0.18);
+}
+
+.retailedge-risk-high {
+	box-shadow: 0 12px 30px rgba(194, 65, 12, 0.12);
+}
+
+.retailedge-risk-medium {
+	box-shadow: 0 12px 30px rgba(184, 106, 0, 0.12);
+}
+
+.retailedge-risk-low {
+	box-shadow: 0 12px 30px rgba(31, 143, 99, 0.1);
+}
+
+.retailedge-dialog-content,
+.retailedge-modal-content {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.retailedge-card-list {
+	margin: 0;
+	padding-left: 18px;
+	color: var(--retailedge-slate-900);
+}
+
+.retailedge-card-list li + li {
+	margin-top: 6px;
+}
+
+.retailedge-data-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 13px;
+	overflow: hidden;
+	border: 1px solid var(--retailedge-slate-200);
+	border-radius: 14px;
+}
+
+.retailedge-data-table thead th {
+	background: var(--retailedge-slate-100);
+	color: var(--retailedge-slate-700);
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+}
+
+.retailedge-data-table th,
+.retailedge-data-table td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--retailedge-slate-200);
+	text-align: left;
+	vertical-align: top;
+}
+
+.retailedge-data-table tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.retailedge-empty-state {
+	padding: 18px 20px;
+	border-radius: 16px;
+	border: 1px dashed rgba(29, 93, 184, 0.2);
+	background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
+	color: var(--retailedge-slate-700);
+	font-size: 14px;
+	line-height: 1.6;
+}
+
+.retailedge-query-report .msg-box,
+.retailedge-query-report .no-result {
+	border-radius: 16px;
+	border: 1px dashed rgba(29, 93, 184, 0.2);
+	background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
+	color: var(--retailedge-slate-700);
+	padding: 16px 18px;
+}
+
+.retailedge-workspace .layout-main-section {
+	background:
+		radial-gradient(circle at top right, rgba(29, 93, 184, 0.08), transparent 28%),
+		radial-gradient(circle at top left, rgba(31, 143, 99, 0.08), transparent 22%);
+}
+
+.retailedge-workspace .shortcut-widget-box,
+.retailedge-workspace .widget.shortcut-widget-box,
+.retailedge-workspace .links-widget-box,
+.retailedge-workspace .widget.links-widget-box {
+	padding: 18px;
+}
+
+.retailedge-workspace .shortcut-widget-box .widget-head,
+.retailedge-workspace .widget.shortcut-widget-box .widget-head,
+.retailedge-workspace .links-widget-box .widget-head,
+.retailedge-workspace .widget.links-widget-box .widget-head {
+	font-weight: 700;
+	color: var(--retailedge-slate-900);
+}
+
+.retailedge-workspace .widget.shortcut-widget-box:hover,
+.retailedge-workspace .widget.links-widget-box:hover,
+.retailedge-workspace .shortcut-widget-box:hover,
+.retailedge-workspace .links-widget-box:hover {
+	transform: translateY(-1px);
+	transition: transform 0.18s ease, box-shadow 0.18s ease;
+	box-shadow: 0 16px 32px rgba(15, 60, 120, 0.12);
+}
+
+@media (max-width: 991px) {
+	.retailedge-card-grid,
+	.retailedge-query-report .report-summary,
+	.report-summary.retailedge-report-summary-grid {
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 12px;
+	}
+
+	.retailedge-card,
+	.retailedge-query-report .report-summary .summary-item,
+	.report-summary.retailedge-report-summary-grid .summary-item {
+		padding: 16px;
+		min-height: 132px;
+	}
+
+	.retailedge-card-value,
+	.retailedge-query-report .report-summary .summary-item .summary-value,
+	.report-summary.retailedge-report-summary-grid .summary-item .summary-value {
+		font-size: 27px;
+	}
+}
+
+@media (max-width: 640px) {
+	.retailedge-card-kv-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 6px;
+	}
+
+	.retailedge-status-badge,
+	.retailedge-query-report .report-summary .summary-item .indicator-pill,
+	.report-summary.retailedge-report-summary-grid .summary-item .indicator-pill {
+		white-space: normal;
+	}
+}
+
+/* RetailEdge report summary corrective overrides */
+.retailedge-report-page .retailedge-report-summary {
+	display: grid !important;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 10px;
+	column-gap: 10px;
+	row-gap: 12px;
+	margin: 12px 0 18px;
+	align-items: stretch;
+}
+
+.retailedge-report-page .retailedge-number-card {
+	position: relative;
+	isolation: isolate;
+	min-width: 0;
+	min-height: 116px;
+	padding: 14px 14px 13px;
+	border-radius: 16px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 6px;
+	align-items: stretch !important;
+}
+
+.retailedge-report-page .retailedge-number-card::before,
+.retailedge-report-page .retailedge-number-card::after {
+	z-index: 0;
+	pointer-events: none;
+}
+
+.retailedge-report-page .retailedge-number-card > * {
+	position: relative;
+	z-index: 1;
+}
+
+.retailedge-report-page .retailedge-number-card,
+.retailedge-report-page .retailedge-number-card * {
+	box-sizing: border-box;
+	min-width: 0;
+}
+
+.retailedge-report-page .retailedge-card-label,
+.retailedge-report-page .retailedge-number-card .summary-label,
+.retailedge-report-page .retailedge-number-card .label,
+.retailedge-report-page .retailedge-number-card .text-muted {
+	max-width: 100%;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	white-space: normal !important;
+	text-overflow: unset !important;
+	line-height: 1.25;
+	min-height: 28px;
+	font-size: 11px !important;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	text-transform: none;
+	text-align: left !important;
+	margin-bottom: 6px;
+}
+
+.retailedge-report-page .retailedge-card-value,
+.retailedge-report-page .retailedge-number-card .summary-value,
+.retailedge-report-page .retailedge-number-card .value,
+.retailedge-report-page .retailedge-number-card strong {
+	position: relative;
+	z-index: 3;
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	margin: 6px 0 8px;
+	font-size: clamp(19px, 1.45vw, 25px) !important;
+	line-height: 1.12 !important;
+	font-weight: 800 !important;
+	color: var(--pe-grey-950, #111827) !important;
+	letter-spacing: -0.035em;
+	white-space: nowrap;
+	overflow: hidden !important;
+	text-overflow: clip !important;
+	font-variant-numeric: tabular-nums;
+	text-align: left !important;
+	align-self: auto !important;
+}
+
+.retailedge-report-page .retailedge-number-card.retailedge-value-long .retailedge-card-value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-long .summary-value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-long .value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-long strong {
+	font-size: clamp(16px, 1.1vw, 21px) !important;
+	letter-spacing: -0.045em;
+}
+
+.retailedge-report-page .retailedge-number-card.retailedge-value-xlong .retailedge-card-value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-xlong .summary-value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-xlong .value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-xlong strong {
+	font-size: clamp(14px, 0.95vw, 18px) !important;
+	letter-spacing: -0.055em;
+}
+
+.retailedge-report-page .retailedge-number-card.retailedge-value-xxlong .retailedge-card-value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-xxlong .summary-value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-xxlong .value,
+.retailedge-report-page .retailedge-number-card.retailedge-value-xxlong strong {
+	font-size: clamp(12px, 0.85vw, 16px) !important;
+	letter-spacing: -0.06em;
+}
+
+.retailedge-report-page .retailedge-number-card .retailedge-currency-symbol {
+	font-size: 0.38em;
+	vertical-align: top;
+	margin-right: 1px;
+	font-weight: 700;
+}
+
+.retailedge-report-page .retailedge-number-card::after {
+	top: -50px;
+	right: -52px;
+	width: 118px;
+	height: 118px;
+	opacity: 0.75;
+	z-index: 0;
+	pointer-events: none;
+}
+
+.retailedge-report-page .retailedge-number-card::before {
+	height: 4px;
+	z-index: 0;
+	pointer-events: none;
+}
+
+.retailedge-report-page .retailedge-number-card .summary-value,
+.retailedge-report-page .retailedge-number-card .value,
+.retailedge-report-page .retailedge-card-value,
+.retailedge-report-page .retailedge-number-card .summary-value div {
+	overflow: hidden !important;
+	text-overflow: clip !important;
+	white-space: nowrap !important;
+	height: auto !important;
+}
+
+@media (max-width: 1200px) {
+	.retailedge-report-page .retailedge-report-summary {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 10px;
+	}
+}
+
+@media (max-width: 1399px) {
+	.retailedge-report-page .retailedge-report-summary {
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		gap: 10px;
+	}
+}
+
+@media (max-width: 1199px) {
+	.retailedge-report-page .retailedge-report-summary {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 10px;
+	}
+}
+
+@media (max-width: 991px) {
+	.retailedge-report-page .retailedge-report-summary {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 10px;
+	}
+}
+
+@media (max-width: 767px) {
+	.retailedge-report-page .retailedge-report-summary {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 9px;
+	}
+}
+
+@media (max-width: 520px) {
+	.retailedge-report-page .retailedge-report-summary {
+		grid-template-columns: 1fr;
+		gap: 9px;
+	}
+
+	.retailedge-report-page .retailedge-card-value,
+	.retailedge-report-page .retailedge-number-card .summary-value,
+	.retailedge-report-page .retailedge-number-card .value,
+	.retailedge-report-page .retailedge-number-card strong {
+		font-size: clamp(20px, 6vw, 26px) !important;
+	}
+}
+/* RetailEdge CSS-only report summary cards */
+:root {
+	--retailedge-card-bg: var(--card-bg, var(--control-bg, #ffffff));
+	--retailedge-card-border: var(--border-color, #e5e7eb);
+	--retailedge-card-text: var(--text-color, #111827);
+	--retailedge-card-muted: var(--text-muted, #6b7280);
+	--retailedge-card-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+	--retailedge-blue: #0b5cab;
+	--retailedge-blue-soft: rgba(11, 92, 171, 0.08);
+	--retailedge-green: #16a34a;
+	--retailedge-green-soft: rgba(22, 163, 74, 0.1);
+	--retailedge-warning: #d97706;
+	--retailedge-warning-soft: rgba(217, 119, 6, 0.11);
+	--retailedge-danger: #dc2626;
+	--retailedge-danger-soft: rgba(220, 38, 38, 0.1);
+}
+
+.report-summary {
+	display: grid !important;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 10px;
+	column-gap: 10px;
+	row-gap: 12px;
+	margin: 12px 0 18px;
+	align-items: stretch;
+}
+
+.report-summary .retailedge-status-badge,
+.report-summary .retailedge-card-footer,
+.report-summary .retailedge-accent-bar,
+.report-summary .retailedge-orb {
+	display: none !important;
+}
+
+.report-summary > .summary-item,
+.report-summary .summary-item {
+	position: relative;
+	min-width: 0 !important;
+	max-width: none !important;
+	height: auto !important;
+	min-height: 112px;
+	padding: 14px 14px 13px;
+	border: 1px solid var(--retailedge-card-border);
+	border-radius: 16px;
+	background: var(--retailedge-card-bg);
+	box-shadow: var(--retailedge-card-shadow);
+	overflow: hidden;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 6px;
+	isolation: isolate;
+}
+
+.report-summary > .summary-item::before,
+.report-summary .summary-item::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto auto 0;
+	width: 100%;
+	height: 4px;
+	background: var(--retailedge-blue);
+	z-index: 0;
+	pointer-events: none;
+}
+
+.report-summary > .summary-item::after,
+.report-summary .summary-item::after {
+	content: "";
+	position: absolute;
+	top: -52px;
+	right: -54px;
+	width: 116px;
+	height: 116px;
+	border-radius: 999px;
+	background: var(--retailedge-blue-soft);
+	opacity: 0.75;
+	z-index: 0;
+	pointer-events: none;
+}
+
+.report-summary > .summary-item > *,
+.report-summary .summary-item > * {
+	position: relative;
+	z-index: 1;
+	min-width: 0;
+}
+
+.report-summary .summary-item,
+.report-summary .summary-item * {
+	box-sizing: border-box;
+	min-width: 0;
+}
+
+.report-summary .summary-label,
+.report-summary .label,
+.report-summary .text-muted,
+.report-summary small {
+	max-width: 100%;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	white-space: normal !important;
+	text-overflow: unset !important;
+	line-height: 1.25;
+	min-height: 28px;
+	margin: 0 0 6px;
+	font-size: 11px !important;
+	font-weight: 700;
+	color: var(--retailedge-card-muted) !important;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.report-summary .summary-value,
+.report-summary .value,
+.report-summary strong,
+.report-summary .h4,
+.report-summary .h5 {
+	position: relative;
+	z-index: 2;
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	margin: 6px 0 0;
+	font-size: clamp(14px, 1.35vw, 24px) !important;
+	line-height: 1.12 !important;
+	font-weight: 800 !important;
+	color: var(--retailedge-card-text) !important;
+	letter-spacing: -0.045em;
+	white-space: nowrap;
+	overflow: hidden !important;
+	text-overflow: clip !important;
+	font-variant-numeric: tabular-nums;
+	height: auto !important;
+	padding: 0 !important;
+}
+
+.report-summary .summary-value div,
+.report-summary .value div,
+.report-summary strong div {
+	overflow: hidden !important;
+	text-overflow: clip !important;
+	white-space: nowrap !important;
+	line-height: 1.12 !important;
+	height: auto !important;
+}
+
+.report-summary .currency-symbol,
+.report-summary .retailedge-currency-symbol {
+	font-size: 0.72em;
+	font-weight: 750;
+}
+
+.report-summary .summary-item.green::before,
+.report-summary .summary-item.indicator.green::before,
+.report-summary .summary-item.success::before {
+	background: var(--retailedge-green);
+}
+
+.report-summary .summary-item.green::after,
+.report-summary .summary-item.indicator.green::after,
+.report-summary .summary-item.success::after {
+	background: var(--retailedge-green-soft);
+}
+
+.report-summary .summary-item.orange::before,
+.report-summary .summary-item.yellow::before,
+.report-summary .summary-item.warning::before {
+	background: var(--retailedge-warning);
+}
+
+.report-summary .summary-item.orange::after,
+.report-summary .summary-item.yellow::after,
+.report-summary .summary-item.warning::after {
+	background: var(--retailedge-warning-soft);
+}
+
+.report-summary .summary-item.red::before,
+.report-summary .summary-item.danger::before,
+.report-summary .summary-item.error::before {
+	background: var(--retailedge-danger);
+}
+
+.report-summary .summary-item.red::after,
+.report-summary .summary-item.danger::after,
+.report-summary .summary-item.error::after {
+	background: var(--retailedge-danger-soft);
+}
+
+.report-summary .indicator.green,
+.report-summary .green {
+	color: var(--retailedge-green) !important;
+}
+
+.report-summary .indicator.orange,
+.report-summary .orange,
+.report-summary .indicator.yellow,
+.report-summary .yellow {
+	color: var(--retailedge-warning) !important;
+}
+
+.report-summary .indicator.red,
+.report-summary .red {
+	color: var(--retailedge-danger) !important;
+}
+
+.report-summary .indicator.blue,
+.report-summary .blue {
+	color: var(--retailedge-blue) !important;
+}
+
+@media (max-width: 1199px) {
+	.report-summary {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 991px) {
+	.report-summary {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 767px) {
+	.report-summary {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 520px) {
+	.report-summary {
+		grid-template-columns: 1fr;
+	}
+
+	.report-summary .summary-value,
+	.report-summary .value,
+	.report-summary strong,
+	.report-summary .h4,
+	.report-summary .h5 {
+		font-size: clamp(16px, 5.5vw, 22px) !important;
+	}
+}
+
+
+/* RetailEdge summary negative-state and currency refinements */
+.report-summary .indicator.red,
+.report-summary .red,
+.report-summary .text-danger,
+.report-summary .danger,
+.report-summary .negative {
+	color: var(--retailedge-danger, #dc2626) !important;
+}
+
+.report-summary > .summary-item:has(.indicator.red),
+.report-summary > .summary-item:has(.red),
+.report-summary > .summary-item:has(.text-danger),
+.report-summary > .summary-item:has(.danger),
+.report-summary > .summary-item:has(.negative),
+.report-summary .summary-item:has(.indicator.red),
+.report-summary .summary-item:has(.red),
+.report-summary .summary-item:has(.text-danger),
+.report-summary .summary-item:has(.danger),
+.report-summary .summary-item:has(.negative) {
+	border-color: rgba(220, 38, 38, 0.32);
+	box-shadow: 0 8px 20px rgba(220, 38, 38, 0.08);
+}
+
+.report-summary > .summary-item:has(.indicator.red)::before,
+.report-summary > .summary-item:has(.red)::before,
+.report-summary > .summary-item:has(.text-danger)::before,
+.report-summary > .summary-item:has(.danger)::before,
+.report-summary > .summary-item:has(.negative)::before,
+.report-summary .summary-item:has(.indicator.red)::before,
+.report-summary .summary-item:has(.red)::before,
+.report-summary .summary-item:has(.text-danger)::before,
+.report-summary .summary-item:has(.danger)::before,
+.report-summary .summary-item:has(.negative)::before {
+	background: var(--retailedge-danger, #dc2626);
+}
+
+.report-summary > .summary-item:has(.indicator.red)::after,
+.report-summary > .summary-item:has(.red)::after,
+.report-summary > .summary-item:has(.text-danger)::after,
+.report-summary > .summary-item:has(.danger)::after,
+.report-summary > .summary-item:has(.negative)::after,
+.report-summary .summary-item:has(.indicator.red)::after,
+.report-summary .summary-item:has(.red)::after,
+.report-summary .summary-item:has(.text-danger)::after,
+.report-summary .summary-item:has(.danger)::after,
+.report-summary .summary-item:has(.negative)::after {
+	background: var(--retailedge-danger-soft, rgba(220, 38, 38, 0.10));
+}
+
+.report-summary > .summary-item:has(.indicator.red) .summary-value,
+.report-summary > .summary-item:has(.red) .summary-value,
+.report-summary > .summary-item:has(.text-danger) .summary-value,
+.report-summary > .summary-item:has(.danger) .summary-value,
+.report-summary > .summary-item:has(.negative) .summary-value,
+.report-summary > .summary-item:has(.indicator.red) .value,
+.report-summary > .summary-item:has(.red) .value,
+.report-summary > .summary-item:has(.text-danger) .value,
+.report-summary > .summary-item:has(.danger) .value,
+.report-summary > .summary-item:has(.negative) .value,
+.report-summary > .summary-item:has(.indicator.red) strong,
+.report-summary > .summary-item:has(.red) strong,
+.report-summary > .summary-item:has(.text-danger) strong,
+.report-summary > .summary-item:has(.danger) strong,
+.report-summary > .summary-item:has(.negative) strong,
+.report-summary .summary-item:has(.indicator.red) .summary-value,
+.report-summary .summary-item:has(.red) .summary-value,
+.report-summary .summary-item:has(.text-danger) .summary-value,
+.report-summary .summary-item:has(.danger) .summary-value,
+.report-summary .summary-item:has(.negative) .summary-value,
+.report-summary .summary-item:has(.indicator.red) .value,
+.report-summary .summary-item:has(.red) .value,
+.report-summary .summary-item:has(.text-danger) .value,
+.report-summary .summary-item:has(.danger) .value,
+.report-summary .summary-item:has(.negative) .value,
+.report-summary .summary-item:has(.indicator.red) strong,
+.report-summary .summary-item:has(.red) strong,
+.report-summary .summary-item:has(.text-danger) strong,
+.report-summary .summary-item:has(.danger) strong,
+.report-summary .summary-item:has(.negative) strong {
+	color: var(--retailedge-danger, #dc2626) !important;
+}
+
+.report-summary .currency-symbol,
+.report-summary .money-symbol,
+.report-summary .currency,
+.report-summary .retailedge-currency-symbol {
+	font-size: 0.62em !important;
+	line-height: 1;
+	font-weight: 750;
+	vertical-align: super;
+	margin-right: 1px;
+	letter-spacing: -0.02em;
+}

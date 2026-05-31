@@ -60,7 +60,22 @@
   "coreedge_required_for_portal",
   "enable_coreedge_payment_requests",
   "enable_coreedge_notifications",
-  "enable_coreedge_branch_context"
+  "enable_coreedge_branch_context",
+  "bank_transaction_matching_tab",
+  "bank_transaction_matching_section",
+  "bank_auto_match_mode",
+  "bank_auto_match_guidance",
+  "enable_bank_auto_match",
+  "auto_prepare_exact_bank_matches",
+  "auto_confirm_exact_bank_matches",
+  "minimum_auto_match_score",
+  "require_exact_reference_for_auto_match",
+  "require_same_bank_account_for_auto_match",
+  "require_same_branch_for_auto_match",
+  "allow_auto_match_payment_entry",
+  "allow_auto_match_sales_invoice",
+  "require_no_duplicate_candidate_for_auto_match",
+  "require_no_active_review_for_auto_match"
  ],
  "fields": [
   {
@@ -439,6 +454,115 @@
    "fieldname": "enable_coreedge_branch_context",
    "fieldtype": "Check",
    "label": "Use CoreEdge Branch Context"
+  },
+  {
+   "fieldname": "bank_transaction_matching_tab",
+   "fieldtype": "Tab Break",
+   "label": "Bank Transaction Matching"
+  },
+  {
+   "fieldname": "bank_transaction_matching_section",
+   "fieldtype": "Section Break",
+   "label": "RetailEdge Auto-Match Controls"
+  },
+  {
+   "fieldname": "bank_auto_match_mode",
+   "fieldtype": "Data",
+   "label": "Bank Auto-Match Mode",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bank_auto_match_guidance",
+   "fieldtype": "Small Text",
+   "label": "Auto-Match Guidance",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Master switch for RetailEdge bank auto-match at the review layer only. It does not reconcile Bank Transactions, change Bank Transaction status, or create accounting entries.",
+   "fieldname": "enable_bank_auto_match",
+   "fieldtype": "Check",
+   "label": "Enable Bank Auto-Match"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Creates RetailEdge Bank Transaction Match review records for strict exact matches only. It does not confirm them unless auto-confirm is separately enabled, and it does not reconcile Bank Transactions.",
+   "fieldname": "auto_prepare_exact_bank_matches",
+   "fieldtype": "Check",
+   "label": "Auto-Prepare Exact Bank Matches"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Confirms only strict exact RetailEdge review-layer matches. Keep disabled by default. It does not perform ERPNext bank reconciliation and does not create Payment Entries, Journal Entries, or GL Entries.",
+   "fieldname": "auto_confirm_exact_bank_matches",
+   "fieldtype": "Check",
+   "label": "Auto-Confirm Exact Bank Matches"
+  },
+  {
+   "default": "95",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Minimum score required before RetailEdge can consider a suggestion for auto-match. Lower scores remain manual review.",
+   "fieldname": "minimum_auto_match_score",
+   "fieldtype": "Int",
+   "label": "Minimum Auto-Match Score"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Requires strong or exact reference evidence before RetailEdge can auto-match a suggestion.",
+   "fieldname": "require_exact_reference_for_auto_match",
+   "fieldtype": "Check",
+   "label": "Require Exact Reference for Auto-Match"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Blocks auto-match when the expected bank account does not align with the Bank Transaction account.",
+   "fieldname": "require_same_bank_account_for_auto_match",
+   "fieldtype": "Check",
+   "label": "Require Same Bank Account for Auto-Match"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Blocks auto-match when branch context does not align, where RetailEdge branch is available.",
+   "fieldname": "require_same_branch_for_auto_match",
+   "fieldtype": "Check",
+   "label": "Require Same Branch for Auto-Match"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Allows strict exact submitted Payment Entry matches under all other RetailEdge safety gates. It does not reconcile the Bank Transaction.",
+   "fieldname": "allow_auto_match_payment_entry",
+   "fieldtype": "Check",
+   "label": "Allow Auto-Match for Payment Entry"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Conservative option. Sales Invoice auto-match confirms RetailEdge review only. It does not mark the invoice paid and does not create a Payment Entry.",
+   "fieldname": "allow_auto_match_sales_invoice",
+   "fieldtype": "Check",
+   "label": "Allow Auto-Match for Sales Invoice"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Blocks auto-match when duplicate candidate risk exists in the current RetailEdge view or queue.",
+   "fieldname": "require_no_duplicate_candidate_for_auto_match",
+   "fieldtype": "Check",
+   "label": "Require No Duplicate Candidate for Auto-Match"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_bank_auto_match",
+   "description": "Blocks auto-match when an active RetailEdge Bank Match Review record already exists for the same suggestion.",
+   "fieldname": "require_no_active_review_for_auto_match",
+   "fieldtype": "Check",
+   "label": "Require No Active Review for Auto-Match"
   }
  ],
  "issingle": 1,

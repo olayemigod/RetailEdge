@@ -25,7 +25,7 @@ app_license = "MIT"
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/retailedge/css/retailedge.css"
+app_include_css = "/assets/retailedge/css/retailedge_cards.css"
 app_include_js = "/assets/retailedge/js/retailedge.js"
 
 # include js, css files in header of web template
@@ -40,7 +40,7 @@ app_include_js = "/assets/retailedge/js/retailedge.js"
 # webform_include_css = {"doctype": "public/css/doctype.css"}
 
 # include js in page
-page_js = {"query-report": "public/js/query_report.js"}
+# Report summary cards are styled via native Frappe DOM selectors in CSS.
 
 # include js in doctype views
 doctype_js = {

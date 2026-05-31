@@ -255,20 +255,20 @@ function render_possible_duplicate_details(dialog, rows) {
 		[__("Reason"), row.reason || ""],
 	];
 
-	wrapper.html(`
-		<table class="table table-bordered table-sm" style="margin-bottom: 0;">
-			<tbody>
-				${details
-					.map(
-						([label, value]) =>
-							`<tr><td style="width: 38%;"><strong>${frappe.utils.escape_html(label)}</strong></td><td>${frappe.utils.escape_html(
-								String(value || "")
-							)}</td></tr>`
-					)
-					.join("")}
-			</tbody>
-		</table>
-	`);
+	const ui = window.retailedge && window.retailedge.ui;
+	if (ui && ui.renderKeyValueSection) {
+		wrapper.html(
+			`<div class="retailedge-dialog-content">${ui.renderKeyValueSection(__("Possible Duplicate Review"), details, {
+				value: row.name,
+				badge: row.duplicate_status || __("Possible Match"),
+				tone: "warning",
+				footer: __("Duplicate candidate is informational. Accept only after reviewer confirmation."),
+			})}</div>`
+		);
+		return;
+	}
+
+	wrapper.html("");
 }
 
 function build_possible_duplicate_option_label(row) {
@@ -298,7 +298,7 @@ function show_statement_import_summary(result, title) {
 }
 
 function build_statement_import_summary_html(result) {
-	const summaryRows = [];
+	const ui = window.retailedge && window.retailedge.ui;
 	const totalRows = asInt(result.total_rows || result.row_count);
 	const readyRows = asInt(result.ready_rows);
 	const importedRows = asInt(result.imported_rows || result.imported_row_count || result.imported);
@@ -322,42 +322,66 @@ function build_statement_import_summary_html(result) {
 	const linkedBankTransactions =
 		asInt(result.linked_bank_transactions) || asInt(result.linked_bank_transaction_count);
 
-	pushSummaryRow(summaryRows, __("Total Rows"), totalRows);
-	pushSummaryRow(summaryRows, __("Ready Rows"), readyRows);
-	pushSummaryRow(summaryRows, __("Imported Rows"), importedRows);
-	pushSummaryRow(summaryRows, __("Already Imported"), alreadyImported);
-	pushSummaryRow(summaryRows, __("Possible Duplicates"), possibleDuplicates);
-	pushSummaryRow(summaryRows, __("Exact Duplicates"), exactDuplicates);
-	pushSummaryRow(summaryRows, __("Skipped Rows"), skippedRows);
-	pushSummaryRow(summaryRows, __("Failed Rows"), failedRows);
-	pushSummaryRow(summaryRows, __("Linked Bank Transactions"), linkedBankTransactions);
+	if (ui && ui.renderCardGrid) {
+		const cards = [
+			{
+				title: __("Statement Rows"),
+				value: String(totalRows),
+				badge: failedRows ? __("Needs Review") : __("Ready"),
+				tone: failedRows ? "warning" : "success",
+				meta: [
+					`${__("Ready")}: ${readyRows}`,
+					`${__("Imported")}: ${importedRows}`,
+					`${__("Linked")}: ${linkedBankTransactions}`,
+				],
+				footer: failedRows
+					? __("Some rows need validation before downstream use.")
+					: __("Statement rows are operationally ready."),
+			},
+			{
+				title: __("Duplicate Handling"),
+				value: String(possibleDuplicates + exactDuplicates),
+				badge: possibleDuplicates ? __("Possible Match") : __("Reviewed"),
+				tone: possibleDuplicates ? "warning" : "neutral",
+				meta: [
+					`${__("Possible Duplicates")}: ${possibleDuplicates}`,
+					`${__("Exact Duplicates")}: ${exactDuplicates}`,
+					`${__("Already Imported")}: ${alreadyImported}`,
+				],
+				footer: __("Duplicate candidate rows are flagged for reviewer judgment, not treated as accounting errors."),
+			},
+			{
+				title: __("Exceptions"),
+				value: String(skippedRows + failedRows),
+				badge: failedRows ? __("Blocked") : __("Reviewed"),
+				tone: failedRows ? "danger" : "neutral",
+				meta: [
+					`${__("Skipped")}: ${skippedRows}`,
+					`${__("Failed")}: ${failedRows}`,
+				],
+				footer: __("No Payment Entry, Journal Entry, GL Entry, or bank reconciliation was created by this action."),
+			},
+		];
 
-	const rowPreview = buildRowPreviewTable(result.rows || []);
-	const guidance = buildGuidanceNotes(result, possibleDuplicates, exactDuplicates);
-	const reason = result.reason
-		? `<p style="margin-top: 12px;">${frappe.utils.escape_html(result.reason)}</p>`
-		: "";
+		const sections = [ui.renderCardGrid(cards)];
+		const guidance = buildGuidanceNotes(result, possibleDuplicates, exactDuplicates);
+		if (guidance) {
+			sections.push(guidance);
+		}
 
-	return `
-		<div>
-			<table class="table table-bordered" style="margin-bottom: 12px;">
-				<tbody>${summaryRows.join("")}</tbody>
-			</table>
-			${guidance}
-			${rowPreview}
-			${reason}
-		</div>
-	`;
-}
+		const rowPreview = buildRowPreviewTable(result.rows || []);
+		if (rowPreview) {
+			sections.push(rowPreview);
+		}
 
-function pushSummaryRow(rows, label, value) {
-	if (value === 0 || value) {
-		rows.push(
-			`<tr><td style="width: 60%;"><strong>${frappe.utils.escape_html(label)}</strong></td><td>${frappe.utils.escape_html(
-				String(value)
-			)}</td></tr>`
-		);
+		if (result.reason) {
+			sections.push(ui.renderEmptyState(result.reason));
+		}
+
+		return `<div class="retailedge-dialog-content">${sections.join("")}</div>`;
 	}
+
+	return "";
 }
 
 function buildGuidanceNotes(result, possibleDuplicates, exactDuplicates) {
@@ -383,9 +407,16 @@ function buildGuidanceNotes(result, possibleDuplicates, exactDuplicates) {
 		return "";
 	}
 
-	return `<ul style="margin: 0 0 12px 18px;">${notes
-		.map((note) => `<li>${frappe.utils.escape_html(note)}</li>`)
-		.join("")}</ul>`;
+	const ui = window.retailedge && window.retailedge.ui;
+	if (ui && ui.renderListCard) {
+		return ui.renderListCard(__("Operational Guidance"), notes, {
+			value: __("Read Before Proceeding"),
+			badge: possibleDuplicates ? __("Needs Review") : __("Ready"),
+			tone: possibleDuplicates ? "warning" : "info",
+		});
+	}
+
+	return "";
 }
 
 function buildRowPreviewTable(rows) {
@@ -394,42 +425,32 @@ function buildRowPreviewTable(rows) {
 	}
 
 	const sample = rows.slice(0, 10);
-	const body = sample
-		.map((row) => {
-			return `<tr>
-				<td>${frappe.utils.escape_html(String(row.statement_row || row.row_index || ""))}</td>
-				<td>${frappe.utils.escape_html(String(row.status || row.import_status || ""))}</td>
-				<td>${frappe.utils.escape_html(String(row.reference || row.normalized_reference || ""))}</td>
-				<td>${frappe.utils.escape_html(String(row.amount || row.normalized_amount || ""))}</td>
-				<td>${frappe.utils.escape_html(String(row.reason || row.row_error || ""))}</td>
-			</tr>`;
-		})
-		.join("");
-
 	const footer =
 		rows.length > 10
-			? `<p style="margin-top: 8px;">${frappe.utils.escape_html(
-					__("Showing first 10 rows. Open Statement Import Rows for full details.")
-			  )}</p>`
+			? __("Showing first 10 rows. Open Statement Import Rows for full details.")
 			: "";
+	const ui = window.retailedge && window.retailedge.ui;
+	if (ui && ui.renderTableCard) {
+		return ui.renderTableCard(
+			__("Row Preview"),
+			[__("Row"), __("Status"), __("Reference"), __("Amount"), __("Reason")],
+			sample.map((row) => [
+				String(row.statement_row || row.row_index || ""),
+				String(row.status || row.import_status || ""),
+				String(row.reference || row.normalized_reference || ""),
+				String(row.amount || row.normalized_amount || ""),
+				String(row.reason || row.row_error || ""),
+			]),
+			{
+				value: `${sample.length}`,
+				badge: __("Preview"),
+				tone: "neutral",
+				footer,
+			}
+		);
+	}
 
-	return `
-		<div>
-			<table class="table table-bordered table-sm">
-				<thead>
-					<tr>
-						<th>${frappe.utils.escape_html(__("Row"))}</th>
-						<th>${frappe.utils.escape_html(__("Status"))}</th>
-						<th>${frappe.utils.escape_html(__("Reference"))}</th>
-						<th>${frappe.utils.escape_html(__("Amount"))}</th>
-						<th>${frappe.utils.escape_html(__("Reason"))}</th>
-					</tr>
-				</thead>
-				<tbody>${body}</tbody>
-			</table>
-			${footer}
-		</div>
-	`;
+	return "";
 }
 
 function getNestedCount(result, key, childKey) {
