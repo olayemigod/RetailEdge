@@ -5,6 +5,9 @@ import frappe
 
 OPERATIONAL_REPORTS = (
     "RetailEdge Bank Transaction Matching",
+    "RetailEdge Unmatched Bank Transactions",
+    "RetailEdge Unmatched Bank Payment Events",
+    "RetailEdge Bank Match Reconciliation Readiness",
     "RetailEdge Branch Performance Summary",
     "RetailEdge Invoice Payment Audit",
     "RetailEdge Cashier Expense Review",

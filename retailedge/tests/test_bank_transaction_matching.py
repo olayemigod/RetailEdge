@@ -373,6 +373,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 	def test_retailedge_reports_disable_prepared_report_mode_for_normal_use(self):
 		report_paths = [
 			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_unmatched_bank_transactions/retailedge_unmatched_bank_transactions.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_unmatched_bank_payment_events/retailedge_unmatched_bank_payment_events.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_match_reconciliation_readiness/retailedge_bank_match_reconciliation_readiness.json",
 			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.json",
 			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_invoice_payment_audit/retailedge_invoice_payment_audit.json",
 			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_cashier_expense_review/retailedge_cashier_expense_review.json",
