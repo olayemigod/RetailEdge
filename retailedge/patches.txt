@@ -5,3 +5,4 @@
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
 retailedge.patches.sync_retailedge_workspace
+retailedge.patches.disable_prepared_reports_for_operational_reports

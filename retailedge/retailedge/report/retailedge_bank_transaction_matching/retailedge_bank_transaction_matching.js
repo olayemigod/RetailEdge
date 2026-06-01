@@ -6,8 +6,63 @@ function scheduleRetailEdgeSummaryCardDesign() {
 	// No-op: report summary card appearance is CSS-only.
 }
 
+function configureOperationalReportRefresh(report) {
+	if (!report || report.__retailedgeAutoRefreshConfigured) {
+		return;
+	}
+	report.__retailedgeAutoRefreshConfigured = true;
+	report.ignore_prepared_report = true;
+	report.prepared_report = false;
+	report.prepared_report_name = null;
+	report.prepared_report_document = null;
+	report.__retailedgeAutoRefreshReady = true;
+	(report.filters || []).forEach((filter) => {
+		const originalOnChange = filter.on_change;
+		filter.on_change = function (queryReport) {
+			if (typeof originalOnChange === "function") {
+				originalOnChange.call(this, queryReport || report);
+			}
+			if (!report.__retailedgeAutoRefreshReady) {
+				return;
+			}
+			scheduleOperationalReportRefresh(queryReport || report);
+		};
+	});
+}
+
+function scheduleOperationalReportRefresh(report) {
+	if (!report) {
+		return;
+	}
+	if (report.__retailedgeRefreshTimer) {
+		clearTimeout(report.__retailedgeRefreshTimer);
+	}
+	report.__retailedgeRefreshTimer = setTimeout(() => {
+		report.refresh();
+	}, 200);
+}
+
+function forceOperationalPrimaryAction(report) {
+	if (!report || !report.page || typeof report.page.set_primary_action !== "function") {
+		return;
+	}
+	report.page.set_primary_action(__("Refresh Report"), () => {
+		report.refresh();
+	});
+}
+
+function refreshOperationalReportView(report) {
+	const activeReport = report || frappe.query_report;
+	if (activeReport && typeof activeReport.clear_checked_items === "function") {
+		activeReport.clear_checked_items();
+	}
+	activeReport.refresh();
+}
+
 frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 	onload(report) {
+		configureOperationalReportRefresh(report);
+		forceOperationalPrimaryAction(report);
 		report.page.add_inner_button(__("Create Review Records"), function () {
 			open_create_review_records_dialog(report);
 		});
@@ -53,6 +108,7 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 	},
 
 	after_refresh(report) {
+		forceOperationalPrimaryAction(report);
 		scheduleRetailEdgeSummaryCardDesign(report);
 	},
 
@@ -487,7 +543,7 @@ function run_bank_match_review_action(dialog, args, options) {
 					message: options.success_message,
 					indicator: "green",
 				});
-				frappe.query_report.refresh();
+				refreshOperationalReportView(frappe.query_report);
 			},
 		});
 	});
@@ -560,7 +616,7 @@ function open_create_review_records_dialog(report) {
 			freeze_message: __("Creating RetailEdge match review records..."),
 			callback: function (r) {
 				show_create_review_records_summary((r && r.message) || {});
-				frappe.query_report.refresh();
+				refreshOperationalReportView(report);
 			},
 		});
 	});
@@ -610,7 +666,7 @@ function open_run_auto_match_dialog(report) {
 			freeze_message: __("Running RetailEdge auto-match..."),
 			callback: function (r) {
 				show_auto_match_summary((r && r.message) || {});
-				frappe.query_report.refresh();
+				refreshOperationalReportView(report);
 			},
 		});
 	});
