@@ -329,6 +329,11 @@ def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected
 	revalidation_filters = _coerce_json_payload(filters)
 	suggestion_rows = [_revalidate_suggestion_row(row, filters=revalidation_filters) for row in suggestion_rows]
 	suggestion_rows, duplicate_candidate_rows = split_duplicate_candidate_suggestions(suggestion_rows)
+	filters_payload = _coerce_json_payload(filters)
+	allow_rejected_pair_retry = bool(selected) and (
+		cstr(filters_payload.get("review_queue_status")).strip() in {"Rejected", "All"}
+		or cint(filters_payload.get("include_rejected_candidates") or 0)
+	)
 	result = {
 		"status": "success",
 		"message": "",
@@ -357,7 +362,10 @@ def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected
 	for raw_row in suggestion_rows:
 		row = frappe._dict(raw_row or {})
 		try:
-			classification = _classify_suggestion_review_preparation(row)
+			classification = _classify_suggestion_review_preparation(
+				row,
+				allow_rejected_pair_retry=allow_rejected_pair_retry,
+			)
 			if classification["status"] != "eligible":
 				_bucket = classification["status"]
 				result[_bucket].append(classification["row"])
@@ -461,7 +469,11 @@ def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None)
 	for raw_row in suggestion_rows:
 		row = frappe._dict(raw_row or {})
 		try:
-			preparation = _classify_suggestion_review_preparation(row)
+			preparation = _classify_suggestion_review_preparation(
+				row,
+				allow_rejected_pair_retry=False,
+				for_auto_match=True,
+			)
 			if preparation["status"] != "eligible":
 				_bucket = _auto_match_bucket_for_preparation_status(preparation["status"])
 				result[_bucket].append(preparation["row"])
@@ -740,7 +752,7 @@ def _revalidate_suggestion_row(row, filters=None):
 	return resolved
 
 
-def _classify_suggestion_review_preparation(row):
+def _classify_suggestion_review_preparation(row, allow_rejected_pair_retry=False, for_auto_match=False):
 	bank_transaction = cstr(row.get("bank_transaction")).strip()
 	suggested_document_type = cstr(row.get("suggested_document_type")).strip()
 	suggested_document = cstr(row.get("suggested_document")).strip()
@@ -778,6 +790,20 @@ def _classify_suggestion_review_preparation(row):
 		}
 	if cstr(row.get("decision_status")).strip() == "Confirmed" or cstr(row.get("action_status")).strip() == "Already Confirmed":
 		return {"status": "already_matched", "row": _preparation_summary_row(row, reason="Candidate is already confirmed.")}
+	rejected_pair_match = _find_rejected_exact_pair_match(
+		bank_transaction=bank_transaction,
+		suggested_document_type=suggested_document_type,
+		suggested_document=suggested_document,
+	)
+	if rejected_pair_match and (for_auto_match or not allow_rejected_pair_retry):
+		return {
+			"status": "duplicates",
+			"row": _preparation_summary_row(
+				row,
+				reason="Previously rejected match pair.",
+				match_record=rejected_pair_match,
+			),
+		}
 	if cstr(row.get("action_status")).strip() == "Duplicate Candidate" or cint(row.get("duplicate_candidate_skipped")):
 		return {
 			"status": "duplicate_candidates",
@@ -882,6 +908,20 @@ def _find_active_candidate_review_match(suggested_document_type, suggested_docum
 			"name",
 		)
 	return None
+
+def _find_rejected_exact_pair_match(bank_transaction, suggested_document_type, suggested_document):
+	if not bank_transaction or not suggested_document_type or not suggested_document:
+		return None
+	return frappe.db.get_value(
+		"RetailEdge Bank Transaction Match",
+		{
+			"bank_transaction": bank_transaction,
+			"suggested_document_type": suggested_document_type,
+			"suggested_document": suggested_document,
+			"decision_status": "Rejected",
+		},
+		"name",
+	)
 
 
 def _prepare_created_match_review_record(match_name, row):

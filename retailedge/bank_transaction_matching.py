@@ -729,6 +729,7 @@ def get_bank_transaction_matching_rows(filters=None, limit=500):
 		bank_transaction = normalize_bank_transaction(bank_transaction_row)
 		transaction_matches = existing_matches_by_transaction.get(bank_transaction.get("bank_transaction")) or []
 		confirmed_match = _first_match_with_status(transaction_matches, "Confirmed")
+		rejected_match = _first_match_with_status(transaction_matches, "Rejected")
 		active_review_match = _first_active_review_match(transaction_matches)
 		active_nonconfirmed_match = _first_active_review_match(transaction_matches, include_confirmed=False)
 		review_queue_status = _review_queue_status_mode(filters)
@@ -738,6 +739,8 @@ def get_bank_transaction_matching_rows(filters=None, limit=500):
 		if review_queue_status == "Already In Review" and not active_nonconfirmed_match:
 			continue
 		if review_queue_status == "Confirmed" and not confirmed_match:
+			continue
+		if review_queue_status == "Rejected" and not rejected_match:
 			continue
 		if confirmed_match and not filters.get("include_confirmed_matches") and review_queue_status not in {"Confirmed", "All"}:
 			continue
@@ -779,6 +782,9 @@ def get_bank_transaction_matching_rows(filters=None, limit=500):
 			reverse=True,
 		)
 		best_candidate, selected_match = _select_candidate_for_queue(candidates, transaction_matches, filters)
+		if review_queue_status == "Rejected" and rejected_match:
+			best_candidate = _find_candidate_for_match_row(candidates, rejected_match)
+			selected_match = rejected_match if best_candidate else selected_match
 		if not best_candidate and confirmed_match and filters.get("include_confirmed_matches"):
 			selected_match = confirmed_match
 		if not best_candidate and not selected_match:
@@ -847,7 +853,7 @@ def _matching_row_passes_post_suppression_filters(row, filters):
 		"already_reviewed_status": "Has Review Record" if row.get("match_record") else "No Review Record",
 		"exception_status": "Exception Only" if cint(row.get("exception_only")) else "Normal Candidate",
 		"review_queue_status": (
-			"Confirmed" if cstr(row.get("decision_status")).strip() == "Confirmed" else "Already In Review" if row.get("match_record") else "Open Suggestions Only"
+			"Confirmed" if cstr(row.get("decision_status")).strip() == "Confirmed" else "Rejected" if cstr(row.get("decision_status")).strip() == "Rejected" else "Already In Review" if row.get("match_record") else "Open Suggestions Only"
 		),
 	}
 	for fieldname, value in checks.items():
@@ -1520,6 +1526,8 @@ def _coerce_matching_filters(filters=None):
 	filters.setdefault("review_queue_status", "Open Suggestions Only")
 	if cstr(filters.get("review_queue_status")).strip() in {"Confirmed", "All"}:
 		filters["include_confirmed_matches"] = 1
+	if cstr(filters.get("review_queue_status")).strip() in {"Rejected", "All"}:
+		filters["include_rejected_candidates"] = 1
 	for fieldname in (
 		"only_unmatched",
 		"include_reconciled",
@@ -1987,6 +1995,23 @@ def _find_match_for_candidate(candidate, matches):
 			return match_row
 	return None
 
+def _find_candidate_for_match_row(candidates, match_row):
+	match_row = match_row or {}
+	suggested_document = cstr(match_row.get("suggested_document")).strip()
+	suggested_document_type = cstr(match_row.get("suggested_document_type")).strip()
+	sales_invoice = cstr(match_row.get("sales_invoice")).strip()
+	for candidate in candidates or []:
+		if (
+			suggested_document
+			and cstr(candidate.get("document_name")).strip() == suggested_document
+			and cstr(candidate.get("document_type")).strip() == suggested_document_type
+		):
+			return candidate
+	for candidate in candidates or []:
+		if sales_invoice and cstr(candidate.get("suggested_sales_invoice")).strip() == sales_invoice:
+			return candidate
+	return None
+
 
 def _first_match_with_status(matches, status):
 	for match_row in matches or []:
@@ -2014,6 +2039,8 @@ def _apply_selected_match_to_row(row, selected_match, include_confirmed=False):
 			row["exception_type"] = f"{row.get('exception_type')} (Already Confirmed)"
 	else:
 		row["action_status"] = status
+	if status == "Rejected":
+		row["match_reason"] = (row.get("match_reason") or "") + ("; " if row.get("match_reason") else "") + "Previously rejected match pair."
 
 
 def _pick_existing_match_for_row(row, matches):

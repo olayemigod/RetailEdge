@@ -995,7 +995,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 			"require_no_duplicate_candidate_for_auto_match": 1,
 			"require_no_active_review_for_auto_match": 1,
 		}
-		mock_get_value.side_effect = ["RE-BTM-ACTIVE", "Needs Review"]
+		mock_get_value.side_effect = [None, "RE-BTM-ACTIVE", "Needs Review"]
 		result = run_bank_transaction_auto_match(
 			rows=[
 				{
@@ -1015,6 +1015,58 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(result["review_record_exists_count"], 1)
 		self.assertEqual(result["review_record_exists"][0]["match_record"], "RE-BTM-ACTIVE")
 		self.assertIn("Active review record already exists", result["review_record_exists"][0]["reason"])
+
+	@patch("retailedge.bank_transaction_match_workflow._revalidate_suggestion_row", side_effect=lambda row, filters=None: row)
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value="RE-BTM-REJECTED")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch("retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings")
+	def test_auto_match_skips_previously_rejected_exact_pair(
+		self,
+		mock_settings,
+		_mock_exists,
+		_mock_get_value,
+		_mock_payment_confirmed,
+		_mock_invoice_confirmed,
+		_mock_roles,
+		_mock_access,
+		_mock_revalidate,
+	):
+		mock_settings.return_value = {
+			"enable_bank_auto_match": 1,
+			"auto_prepare_exact_bank_matches": 1,
+			"auto_confirm_exact_bank_matches": 1,
+			"minimum_auto_match_score": 40,
+			"require_exact_reference_for_auto_match": 0,
+			"require_same_bank_account_for_auto_match": 0,
+			"require_same_branch_for_auto_match": 0,
+			"allow_auto_match_payment_entry": 1,
+			"allow_auto_match_sales_invoice": 1,
+			"require_no_duplicate_candidate_for_auto_match": 1,
+			"require_no_active_review_for_auto_match": 1,
+		}
+		result = run_bank_transaction_auto_match(
+			rows=[
+				{
+					"bank_transaction": "BT-REJECTED",
+					"suggested_document_type": "Payment Entry",
+					"suggested_document": "PE-0001",
+					"candidate_category": "Payment Entry Match",
+					"payment_event_found": 1,
+					"payment_event_source": "Payment Entry",
+					"match_confidence": "Strong Match",
+					"match_score": 95,
+				}
+			]
+		)
+		self.assertEqual(result["auto_prepared_count"], 0)
+		self.assertEqual(result["auto_confirmed_count"], 0)
+		self.assertEqual(result["review_record_exists_count"], 1)
+		self.assertEqual(result["review_record_exists"][0]["match_record"], "RE-BTM-REJECTED")
+		self.assertEqual(result["review_record_exists"][0]["reason"], "Previously rejected match pair.")
 
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
@@ -1310,7 +1362,39 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False)
 	@patch("retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match", return_value=False)
-	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", side_effect=[None, "RE-BTM-EXISTING"])
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value="RE-BTM-REJECTED")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	def test_create_review_records_skips_previously_rejected_exact_pair_by_default(
+		self,
+		_mock_roles,
+		_mock_access,
+		_mock_exists,
+		_mock_get_value,
+		_mock_invoice_confirmed,
+		_mock_payment_confirmed,
+	):
+		result = create_bank_match_reviews_from_suggestions(
+			rows=[
+				{
+					"bank_transaction": "BT-REJECTED",
+					"suggested_document_type": "Payment Entry",
+					"suggested_document": "PE-0001",
+					"candidate_category": "Payment Entry Match",
+					"payment_event_found": 1,
+					"payment_event_source": "Payment Entry",
+				}
+			]
+		)
+		self.assertEqual(result["created_count"], 0)
+		self.assertEqual(result["duplicate_count"], 1)
+		self.assertEqual(result["duplicates"][0]["match_record"], "RE-BTM-REJECTED")
+		self.assertEqual(result["duplicates"][0]["reason"], "Previously rejected match pair.")
+
+	@patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", side_effect=[None, None, "RE-BTM-EXISTING"])
 	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")

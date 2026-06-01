@@ -1744,6 +1744,121 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		return_value=[
 			{
 				"document_type": "Sales Invoice",
+				"document_name": "SINV-REJECTED",
+				"suggested_sales_invoice": "SINV-REJECTED",
+				"customer_display": "Customer A",
+				"candidate_amount": 10000.0,
+				"amount_difference": 0.0,
+				"confidence": "Strong Match",
+				"score": 95,
+				"reasons": ["Exact amount match."],
+			}
+		],
+	)
+	@patch(
+		"retailedge.bank_transaction_matching.normalize_bank_transaction",
+		return_value={
+			"bank_transaction": "ACC-BTN-0001",
+			"company": "Process Edge (Demo)",
+			"bank_account": "Moniepoint - moniepoint",
+			"ledger_account": "Demo Bank Account - PED",
+			"transaction_date": "2026-05-23",
+			"amount": 10000.0,
+			"direction": "Inflow",
+			"reference": "TRF123",
+			"normalized_reference": "TRF123",
+			"description": "Customer transfer",
+			"branch": "Airport Branch",
+			"is_reconciled": False,
+		},
+	)
+	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
+	def test_rejected_exact_pair_can_show_in_rejected_queue(
+		self,
+		mock_bank_transactions,
+		_mock_normalize,
+		_mock_invoice_candidates,
+		_mock_payment_candidates,
+		mock_existing_matches,
+	):
+		mock_bank_transactions.return_value = [self._bank_transaction()]
+		mock_existing_matches.return_value = {
+			"ACC-BTN-0001": [
+				{
+					"name": "RE-BTM-0001",
+					"decision_status": "Rejected",
+					"bank_transaction": "ACC-BTN-0001",
+					"suggested_document_type": "Sales Invoice",
+					"suggested_document": "SINV-REJECTED",
+					"sales_invoice": "SINV-REJECTED",
+				}
+			]
+		}
+		rows = get_bank_transaction_matching_rows(
+			{"company": "Process Edge (Demo)", "review_queue_status": "Rejected"},
+			limit=20,
+		)
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0]["action_status"], "Rejected")
+		self.assertIn("Previously rejected match pair.", rows[0]["match_reason"])
+
+	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction", return_value={"ACC-BTN-0001": [{"name": "RE-BTM-0001", "decision_status": "Rejected", "bank_transaction": "ACC-BTN-0001", "suggested_document_type": "Payment Entry", "suggested_document": "PE-0001", "payment_entry": "PE-0001"}]})
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[
+			{
+				"document_type": "Payment Entry",
+				"document_name": "PE-0001",
+				"suggested_sales_invoice": "SINV-0001",
+				"customer_display": "Customer A",
+				"candidate_amount": 10000.0,
+				"amount_difference": 0.0,
+				"confidence": "Strong Match",
+				"score": 95,
+				"reasons": ["Exact amount match."],
+			}
+		],
+	)
+	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.normalize_bank_transaction",
+		return_value={
+			"bank_transaction": "ACC-BTN-0002",
+			"company": "Process Edge (Demo)",
+			"bank_account": "Moniepoint - moniepoint",
+			"ledger_account": "Demo Bank Account - PED",
+			"transaction_date": "2026-05-24",
+			"amount": 10000.0,
+			"direction": "Inflow",
+			"reference": "TRF456",
+			"normalized_reference": "TRF456",
+			"description": "Customer transfer",
+			"branch": "Airport Branch",
+			"is_reconciled": False,
+		},
+	)
+	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
+	def test_same_candidate_can_match_different_bank_transaction_after_other_pair_rejected(
+		self,
+		mock_bank_transactions,
+		_mock_normalize,
+		_mock_invoice_candidates,
+		_mock_payment_candidates,
+		_mock_existing_matches,
+	):
+		mock_bank_transactions.return_value = [{"name": "ACC-BTN-0002"}]
+		rows = get_bank_transaction_matching_rows({"company": "Process Edge (Demo)"}, limit=20)
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0]["bank_transaction"], "ACC-BTN-0002")
+		self.assertEqual(rows[0]["suggested_document"], "PE-0001")
+
+	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
+	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[
+			{
+				"document_type": "Sales Invoice",
 				"document_name": "SINV-0001",
 				"suggested_sales_invoice": "SINV-0001",
 				"customer_display": "Customer A",
