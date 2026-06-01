@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -34,6 +35,8 @@ from retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedg
 
 
 class BankTransactionMatchingTests(unittest.TestCase):
+	REPORT_JS_PATH = "/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.js"
+
 	def _field(self, fieldname, fieldtype="Data"):
 		return SimpleNamespace(fieldname=fieldname, fieldtype=fieldtype)
 
@@ -350,6 +353,38 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		fieldnames = [column.get("fieldname") for column in get_columns()]
 		self.assertIn("auto_match_status", fieldnames)
 		self.assertIn("auto_match_reason", fieldnames)
+
+
+	def test_bank_matching_report_refreshes_after_actions_and_clears_selections(self):
+		with open(self.REPORT_JS_PATH, encoding="utf-8") as handle:
+			script = handle.read()
+		self.assertIn("refreshOperationalReportView(report);", script)
+		self.assertIn("clear_checked_items", script)
+		self.assertIn("configureOperationalReportRefresh(report);", script)
+		self.assertIn("forceOperationalPrimaryAction(report);", script)
+		self.assertIn("Refresh Report", script)
+
+	def test_operational_reports_force_ignore_prepared_report(self):
+		with open(self.REPORT_JS_PATH, encoding="utf-8") as handle:
+			script = handle.read()
+		self.assertIn("report.ignore_prepared_report = true;", script)
+		self.assertIn("report.prepared_report = false;", script)
+
+	def test_retailedge_reports_disable_prepared_report_mode_for_normal_use(self):
+		report_paths = [
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_invoice_payment_audit/retailedge_invoice_payment_audit.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_cashier_expense_review/retailedge_cashier_expense_review.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_cash_shift_verification/retailedge_cash_shift_verification.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_daily_sales_audit_register/retailedge_daily_sales_audit_register.json",
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/pos_closing_variance_vs_expenses/pos_closing_variance_vs_expenses.json",
+		]
+		for report_path in report_paths:
+			with self.subTest(report_path=report_path):
+				with open(report_path, encoding="utf-8") as handle:
+					report_json = json.load(handle)
+				self.assertEqual(report_json.get("disable_prepared_report"), 1)
 
 	def test_retailedge_settings_json_includes_bank_auto_match_guidance(self):
 		import json

@@ -2,7 +2,7 @@
  "add_total_row": 1,
  "columns": [],
  "creation": "2026-04-11 00:00:00.000000",
- "disable_prepared_report": 0,
+ "disable_prepared_report": 1,
  "doctype": "Report",
  "filters": [],
  "idx": 0,

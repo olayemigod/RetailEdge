@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import unittest
 from unittest.mock import patch
@@ -44,6 +45,23 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertIn('fieldname: "only_pos_invoices"', script)
 		self.assertIn("default: 0", script)
 		self.assertIn('fieldname: "include_unattributed"', script)
+
+
+	def test_report_js_refreshes_when_filters_change(self):
+		script = self.REPORT_JS_PATH.read_text(encoding="utf-8")
+		self.assertIn("configureOperationalReportRefresh(report);", script)
+		self.assertIn("report.ignore_prepared_report = true;", script)
+		self.assertIn("forceOperationalPrimaryAction(report);", script)
+		self.assertIn("Refresh Report", script)
+		self.assertIn("filter.on_change = function", script)
+		self.assertIn("report.refresh();", script)
+
+	def test_branch_performance_report_disables_prepared_report_mode(self):
+		report_json_path = pathlib.Path(
+			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.json"
+		)
+		report_json = json.loads(report_json_path.read_text(encoding="utf-8"))
+		self.assertEqual(report_json.get("disable_prepared_report"), 1)
 
 	def test_validate_filters_raises_on_invalid_range(self):
 		with self.assertRaises(Exception):
