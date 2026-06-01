@@ -30,6 +30,7 @@ BANK_TRANSACTION_MATCHING_ROLES = {
 }
 
 ACTIVE_CONFIRMED_MATCH_STATUS = "Confirmed"
+RELEASED_REVIEW_MATCH_STATUSES = {"Rejected", "Cancelled", "Reopened"}
 INACTIVE_MATCH_STATUSES = {"Reopened", "Rejected", "Cancelled"}
 
 AMOUNT_SCENARIO_LABELS = {
@@ -323,10 +324,20 @@ def find_sales_invoice_candidates_for_bank_transaction(bank_transaction_name, fi
 			_apply_exception_classification(bank_transaction, candidate, filters, settings)
 			if candidate.get("exception_only") and not cint(filters.get("include_exception_candidates")):
 				continue
-			if sales_invoice_has_active_confirmed_bank_match(candidate.get("document_name")):
-				candidate.setdefault("decision_status", "Confirmed")
-				candidate.setdefault("action_status", "Already Confirmed")
-				candidate.setdefault("reason", "This invoice already has a confirmed bank match.")
+			active_review_match = _active_review_match_for_candidate("Sales Invoice", candidate.get("document_name"))
+			if active_review_match:
+				status = cstr(active_review_match.get("decision_status")).strip()
+				if status == "Confirmed":
+					candidate.setdefault("decision_status", "Confirmed")
+					candidate.setdefault("action_status", "Already Confirmed")
+					candidate.setdefault("reason", "This invoice already has a confirmed bank match.")
+				elif _review_queue_status_mode(filters) == "Open Suggestions Only":
+					continue
+				else:
+					candidate.setdefault("decision_status", status)
+					candidate.setdefault("action_status", "Existing Active Review")
+					candidate.setdefault("match_record", active_review_match.get("name"))
+					candidate.setdefault("reason", "Active review record already exists.")
 			score_payload = score_bank_transaction_candidate(bank_transaction, candidate)
 			candidate.update(score_payload)
 			if candidate["score"] >= 30:
@@ -369,10 +380,20 @@ def find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, fi
 		_apply_exception_classification(bank_transaction, candidate, filters, settings)
 		if candidate.get("exception_only") and not cint(filters.get("include_exception_candidates")):
 			continue
-		if payment_entry_has_active_confirmed_bank_match(candidate.get("document_name")):
-			candidate.setdefault("decision_status", "Confirmed")
-			candidate.setdefault("action_status", "Already Confirmed")
-			candidate.setdefault("reason", "This payment entry already has a confirmed bank match.")
+		active_review_match = _active_review_match_for_candidate("Payment Entry", candidate.get("document_name"))
+		if active_review_match:
+			status = cstr(active_review_match.get("decision_status")).strip()
+			if status == "Confirmed":
+				candidate.setdefault("decision_status", "Confirmed")
+				candidate.setdefault("action_status", "Already Confirmed")
+				candidate.setdefault("reason", "This payment entry already has a confirmed bank match.")
+			elif _review_queue_status_mode(filters) == "Open Suggestions Only":
+				continue
+			else:
+				candidate.setdefault("decision_status", status)
+				candidate.setdefault("action_status", "Existing Active Review")
+				candidate.setdefault("match_record", active_review_match.get("name"))
+				candidate.setdefault("reason", "Active review record already exists.")
 		score_payload = score_bank_transaction_candidate(bank_transaction, candidate)
 		candidate.update(score_payload)
 		if candidate["score"] >= 30:
@@ -708,8 +729,17 @@ def get_bank_transaction_matching_rows(filters=None, limit=500):
 		bank_transaction = normalize_bank_transaction(bank_transaction_row)
 		transaction_matches = existing_matches_by_transaction.get(bank_transaction.get("bank_transaction")) or []
 		confirmed_match = _first_match_with_status(transaction_matches, "Confirmed")
+		active_review_match = _first_active_review_match(transaction_matches)
+		active_nonconfirmed_match = _first_active_review_match(transaction_matches, include_confirmed=False)
+		review_queue_status = _review_queue_status_mode(filters)
 
-		if confirmed_match and not filters.get("include_confirmed_matches"):
+		if review_queue_status == "Open Suggestions Only" and active_review_match:
+			continue
+		if review_queue_status == "Already In Review" and not active_nonconfirmed_match:
+			continue
+		if review_queue_status == "Confirmed" and not confirmed_match:
+			continue
+		if confirmed_match and not filters.get("include_confirmed_matches") and review_queue_status not in {"Confirmed", "All"}:
 			continue
 		if bank_transaction.get("is_reconciled") and not filters.get("include_reconciled"):
 			continue
@@ -773,6 +803,11 @@ def get_bank_transaction_matching_rows(filters=None, limit=500):
 			selected_match or confirmed_match,
 			include_confirmed=filters.get("include_confirmed_matches"),
 		)
+		if active_review_match and not row.get("match_record") and review_queue_status in {"Already In Review", "All", "Confirmed"}:
+			row["match_record"] = active_review_match.get("name")
+			row["decision_status"] = active_review_match.get("decision_status")
+			row["action_status"] = "Existing Active Review" if cstr(active_review_match.get("decision_status")).strip() != "Confirmed" else "Already Confirmed"
+			row["match_reason"] = (row.get("match_reason") or "") + ("; " if row.get("match_reason") else "") + "Active review record already exists."
 		auto_match_status = get_auto_match_status_for_row(row, settings=settings)
 		row["auto_match_status"] = auto_match_status.get("status")
 		row["auto_match_reason"] = auto_match_status.get("reason")
@@ -811,6 +846,9 @@ def _matching_row_passes_post_suppression_filters(row, filters):
 		"duplicate_candidate_status": "Duplicate Candidate" if cint(row.get("duplicate_candidate_skipped")) else "Not Duplicate Candidate",
 		"already_reviewed_status": "Has Review Record" if row.get("match_record") else "No Review Record",
 		"exception_status": "Exception Only" if cint(row.get("exception_only")) else "Normal Candidate",
+		"review_queue_status": (
+			"Confirmed" if cstr(row.get("decision_status")).strip() == "Confirmed" else "Already In Review" if row.get("match_record") else "Open Suggestions Only"
+		),
 	}
 	for fieldname, value in checks.items():
 		if filters.get(fieldname) and cstr(filters.get(fieldname)).strip() != cstr(value).strip():
@@ -1479,6 +1517,9 @@ def _coerce_matching_filters(filters=None):
 	filters.setdefault("include_confirmed_matches", 0)
 	filters.setdefault("include_rejected_candidates", 0)
 	filters.setdefault("include_exception_candidates", 0)
+	filters.setdefault("review_queue_status", "Open Suggestions Only")
+	if cstr(filters.get("review_queue_status")).strip() in {"Confirmed", "All"}:
+		filters["include_confirmed_matches"] = 1
 	for fieldname in (
 		"only_unmatched",
 		"include_reconciled",
@@ -1819,6 +1860,55 @@ def _as_bool(value):
 	if isinstance(value, str):
 		return value.strip().lower() in {"1", "true", "yes", "y"}
 	return bool(value)
+
+
+def _review_queue_status_mode(filters):
+	mode = cstr((filters or {}).get("review_queue_status") or "Open Suggestions Only").strip()
+	return mode or "Open Suggestions Only"
+
+
+def _is_released_review_status(status):
+	return cstr(status).strip() in RELEASED_REVIEW_MATCH_STATUSES
+
+
+def _is_active_review_status(status):
+	status = cstr(status).strip()
+	return bool(status) and not _is_released_review_status(status)
+
+
+def _first_active_review_match(matches, include_confirmed=True):
+	for match_row in matches or []:
+		status = cstr(match_row.get("decision_status")).strip()
+		if not _is_active_review_status(status):
+			continue
+		if not include_confirmed and status == "Confirmed":
+			continue
+		return match_row
+	return None
+
+
+def _active_review_match_for_candidate(document_type, document_name):
+	document_name = cstr(document_name).strip()
+	document_type = cstr(document_type).strip()
+	if not document_name or document_type not in {"Sales Invoice", "Payment Entry"} or not has_doctype("RetailEdge Bank Transaction Match"):
+		return None
+	status_filter = ["not in", sorted(RELEASED_REVIEW_MATCH_STATUSES)]
+	filters = {
+		"suggested_document_type": document_type,
+		"suggested_document": document_name,
+		"decision_status": status_filter,
+	}
+	fields = ["name", "bank_transaction", "suggested_document_type", "suggested_document", "sales_invoice", "payment_entry", "decision_status", "decision_note", "last_action", "candidate_amount", "modified"]
+	rows = frappe.get_all("RetailEdge Bank Transaction Match", filters=filters, fields=fields, limit_page_length=1, order_by="modified desc")
+	if rows:
+		return rows[0]
+	if document_type == "Sales Invoice":
+		rows = frappe.get_all("RetailEdge Bank Transaction Match", filters={"sales_invoice": document_name, "decision_status": status_filter}, fields=fields, limit_page_length=1, order_by="modified desc")
+	elif document_type == "Payment Entry":
+		rows = frappe.get_all("RetailEdge Bank Transaction Match", filters={"payment_entry": document_name, "decision_status": status_filter}, fields=fields, limit_page_length=1, order_by="modified desc")
+	else:
+		rows = []
+	return rows[0] if rows else None
 
 
 def _looks_like_invoice_reference(text):

@@ -246,7 +246,7 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 			label: __("Action Status"),
 			fieldtype: "Select",
 			options:
-				"\nSuggested\nNeeds Review\nNo Match\nDuplicate Candidate\nException Only\nAlready Reconciled\nAlready Bank Verified\nAlready Confirmed\nOutflow / Not Sales Receipt\nRejected\nReopened\nCancelled",
+				"\nSuggested\nNeeds Review\nNo Match\nDuplicate Candidate\nException Only\nExisting Active Review\nAlready Reconciled\nAlready Bank Verified\nAlready Confirmed\nOutflow / Not Sales Receipt\nRejected\nReopened\nCancelled",
 		},
 		{
 			fieldname: "auto_match_status",
@@ -272,6 +272,13 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 			label: __("Review Record Status"),
 			fieldtype: "Select",
 			options: "\nHas Review Record\nNo Review Record",
+		},
+		{
+			fieldname: "review_queue_status",
+			label: __("Review Queue Status"),
+			fieldtype: "Select",
+			options: "Open Suggestions Only\nAlready In Review\nConfirmed\nAll",
+			default: "Open Suggestions Only",
 		},
 		{
 			fieldname: "only_unmatched",

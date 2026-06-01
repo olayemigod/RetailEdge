@@ -801,18 +801,20 @@ def _classify_suggestion_review_preparation(row):
 			"status": "already_matched",
 			"row": _preparation_summary_row(row, reason="Payment Entry already has a confirmed bank match."),
 		}
-	confirmed_bank_transaction_match = frappe.db.get_value(
-		"RetailEdge Bank Transaction Match",
-		{"bank_transaction": bank_transaction, "decision_status": "Confirmed"},
-		"name",
-	)
-	if confirmed_bank_transaction_match:
+	active_bank_transaction_match = _find_active_bank_transaction_review_match(bank_transaction)
+	if active_bank_transaction_match:
+		active_status = frappe.db.get_value("RetailEdge Bank Transaction Match", active_bank_transaction_match, "decision_status")
+		reason = (
+			f"Bank Transaction already has confirmed match {active_bank_transaction_match}."
+			if cstr(active_status).strip() == "Confirmed"
+			else f"Active review record already exists for Bank Transaction: {active_bank_transaction_match}."
+		)
 		return {
-			"status": "already_matched",
+			"status": "already_matched" if cstr(active_status).strip() == "Confirmed" else "duplicates",
 			"row": _preparation_summary_row(
 				row,
-				reason=f"Bank Transaction already has confirmed match {confirmed_bank_transaction_match}.",
-				match_record=confirmed_bank_transaction_match,
+				reason=reason,
+				match_record=active_bank_transaction_match,
 			),
 		}
 	existing_match = _find_existing_match_name(
@@ -839,6 +841,17 @@ def _classify_suggestion_review_preparation(row):
 			),
 		}
 	return {"status": "eligible", "row": _preparation_summary_row(row, reason="Eligible for review record creation.")}
+
+
+def _find_active_bank_transaction_review_match(bank_transaction):
+	if not bank_transaction:
+		return None
+	status_filter = ["not in", ["Rejected", "Cancelled", "Reopened"]]
+	return frappe.db.get_value(
+		"RetailEdge Bank Transaction Match",
+		{"bank_transaction": bank_transaction, "decision_status": status_filter},
+		"name",
+	)
 
 
 def _find_active_candidate_review_match(suggested_document_type, suggested_document):

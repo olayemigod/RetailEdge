@@ -963,6 +963,59 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(result["manual_review_count"], 1)
 		self.assertIn("payment entry or invoice payment row evidence", result["manual_review"][0]["reason"].lower())
 
+	@patch("retailedge.bank_transaction_match_workflow._revalidate_suggestion_row", side_effect=lambda row, filters=None: row)
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch("retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings")
+	def test_auto_match_skips_rows_with_active_review_record(
+		self,
+		mock_settings,
+		_mock_exists,
+		mock_get_value,
+		_mock_payment_confirmed,
+		_mock_invoice_confirmed,
+		_mock_roles,
+		_mock_access,
+		_mock_revalidate,
+	):
+		mock_settings.return_value = {
+			"enable_bank_auto_match": 1,
+			"auto_prepare_exact_bank_matches": 1,
+			"auto_confirm_exact_bank_matches": 1,
+			"minimum_auto_match_score": 40,
+			"require_exact_reference_for_auto_match": 0,
+			"require_same_bank_account_for_auto_match": 0,
+			"require_same_branch_for_auto_match": 0,
+			"allow_auto_match_payment_entry": 1,
+			"allow_auto_match_sales_invoice": 1,
+			"require_no_duplicate_candidate_for_auto_match": 1,
+			"require_no_active_review_for_auto_match": 1,
+		}
+		mock_get_value.side_effect = ["RE-BTM-ACTIVE", "Needs Review"]
+		result = run_bank_transaction_auto_match(
+			rows=[
+				{
+					"bank_transaction": "BTN-ACTIVE",
+					"suggested_document_type": "Payment Entry",
+					"suggested_document": "PE-ACTIVE",
+					"candidate_category": "Payment Entry Match",
+					"payment_event_found": 1,
+					"payment_event_source": "Payment Entry",
+					"match_confidence": "Strong Match",
+					"match_score": 95,
+				}
+			]
+		)
+		self.assertEqual(result["auto_prepared_count"], 0)
+		self.assertEqual(result["auto_confirmed_count"], 0)
+		self.assertEqual(result["review_record_exists_count"], 1)
+		self.assertEqual(result["review_record_exists"][0]["match_record"], "RE-BTM-ACTIVE")
+		self.assertIn("Active review record already exists", result["review_record_exists"][0]["reason"])
+
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
 	@patch("retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings")
@@ -1436,6 +1489,7 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 				"from_date": "2026-05-01",
 				"to_date": "2026-05-31",
 				"include_confirmed_matches": 1,
+			"review_queue_status": "Confirmed",
 			}
 		)
 		self.assertEqual(rows[0]["action_status"], "Already Confirmed")

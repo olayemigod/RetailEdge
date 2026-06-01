@@ -20,6 +20,7 @@ def execute(filters=None):
 	filters.setdefault("include_reconciled", 0)
 	filters.setdefault("include_verified_invoices", 0)
 	filters.setdefault("include_confirmed_matches", 0)
+	filters.setdefault("review_queue_status", "Open Suggestions Only")
 	filters.setdefault("include_rejected_candidates", 0)
 	validate_filters(filters)
 	data = get_bank_transaction_matching_rows(filters=filters, limit=filters.get("limit") or 500)

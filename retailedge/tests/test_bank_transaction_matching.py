@@ -1518,6 +1518,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(rows, [])
 
 	@patch("retailedge.bank_transaction_matching.sales_invoice_has_active_confirmed_bank_match", return_value=True)
+	@patch(
+		"retailedge.bank_transaction_matching._active_review_match_for_candidate",
+		return_value={"name": "RE-BTM-0001", "decision_status": "Confirmed"},
+	)
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
 	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
@@ -1547,6 +1551,7 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		mock_get_all,
 		_mock_defaults,
 		mock_get_doc,
+		_mock_active_review,
 		_mock_confirmed,
 	):
 		mock_has_field.return_value = True
@@ -1641,10 +1646,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		]
 		candidates = find_sales_invoice_candidates_for_bank_transaction(
 			"ACC-BTN-0001",
-			filters={"include_confirmed_matches": 1},
+			filters={"include_confirmed_matches": 1, "review_queue_status": "Confirmed"},
 		)
-		self.assertEqual(candidates[0]["decision_status"], "Confirmed")
-		self.assertEqual(candidates[0]["action_status"], "Already Confirmed")
+		self.assertEqual(candidates[0]["action_status"], "Existing Active Review")
+		self.assertEqual(candidates[0]["match_record"], "SINV-0001")
 
 	@patch("retailedge.bank_transaction_matching.payment_entry_has_active_confirmed_bank_match", return_value=True)
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
@@ -1791,7 +1796,7 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			]
 		}
 		rows = get_bank_transaction_matching_rows(
-			{"company": "Process Edge (Demo)", "include_confirmed_matches": 1},
+			{"company": "Process Edge (Demo)", "include_confirmed_matches": 1, "review_queue_status": "Confirmed"},
 			limit=20,
 		)
 		self.assertEqual(len(rows), 1)
@@ -1906,7 +1911,7 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		},
 	)
 	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
-	def test_needs_review_and_reopened_candidates_remain_visible_by_default(
+	def test_active_review_candidates_are_hidden_by_default_queue(
 		self,
 		mock_bank_transactions,
 		_mock_normalize,
@@ -1928,5 +1933,69 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			]
 		}
 		rows = get_bank_transaction_matching_rows({"company": "Process Edge (Demo)"}, limit=20)
+		self.assertEqual(rows, [])
+
+	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
+	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[
+			{
+				"document_type": "Sales Invoice",
+				"document_name": "SINV-0001",
+				"suggested_sales_invoice": "SINV-0001",
+				"customer_display": "Customer A",
+				"candidate_amount": 10000.0,
+				"amount_difference": 0.0,
+				"confidence": "Strong Match",
+				"score": 95,
+				"reasons": ["Exact amount match."],
+			}
+		],
+	)
+	@patch(
+		"retailedge.bank_transaction_matching.normalize_bank_transaction",
+		return_value={
+			"bank_transaction": "ACC-BTN-0001",
+			"company": "Process Edge (Demo)",
+			"bank_account": "Moniepoint - moniepoint",
+			"ledger_account": "Demo Bank Account - PED",
+			"transaction_date": "2026-05-23",
+			"amount": 10000.0,
+			"direction": "Inflow",
+			"reference": "TRF123",
+			"normalized_reference": "TRF123",
+			"description": "Customer transfer",
+			"branch": "Airport Branch",
+			"is_reconciled": False,
+		},
+	)
+	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
+	def test_active_review_candidates_show_only_in_already_in_review_mode(
+		self,
+		mock_bank_transactions,
+		_mock_normalize,
+		_mock_invoice_candidates,
+		_mock_payment_candidates,
+		mock_existing_matches,
+	):
+		mock_bank_transactions.return_value = [self._bank_transaction()]
+		mock_existing_matches.return_value = {
+			"ACC-BTN-0001": [
+				{
+					"name": "RE-BTM-0001",
+					"decision_status": "Needs Review",
+					"bank_transaction": "ACC-BTN-0001",
+					"suggested_document_type": "Sales Invoice",
+					"suggested_document": "SINV-0001",
+					"sales_invoice": "SINV-0001",
+				}
+			]
+		}
+		rows = get_bank_transaction_matching_rows(
+			{"company": "Process Edge (Demo)", "review_queue_status": "Already In Review"},
+			limit=20,
+		)
 		self.assertEqual(len(rows), 1)
-		self.assertEqual(rows[0]["action_status"], "Needs Review")
+		self.assertEqual(rows[0]["match_record"], "RE-BTM-0001")
+		self.assertEqual(rows[0]["decision_status"], "Needs Review")
