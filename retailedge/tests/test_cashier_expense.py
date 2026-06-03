@@ -2852,6 +2852,7 @@ class BranchProfileTests(unittest.TestCase):
 				("Link", "Unmatched Bank Transactions", 1),
 				("Link", "Unmatched Bank Payment Events", 1),
 				("Link", "Reconciliation Readiness", 1),
+				("Link", "Reconciliation Handoff", 1),
 				("Link", "Bank Match Review", 1),
 				("Link", "Invoice Payment Audit", 1),
 				("Link", "Cash Shift Verification", 1),

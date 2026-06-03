@@ -1096,3 +1096,215 @@
 	margin-right: 1px;
 	letter-spacing: -0.02em;
 }
+/* RetailEdge Cloud-safe native summary selectors */
+.report-summary,
+.summary-section,
+.report-summary-wrapper {
+	display: grid !important;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 8px;
+	column-gap: 8px;
+	row-gap: 10px;
+	margin: 12px 0 18px;
+	align-items: stretch;
+}
+
+.report-summary > *,
+.summary-section > *,
+.report-summary-wrapper > * {
+	position: relative;
+	min-width: 0;
+	min-height: 108px;
+	padding: 13px 13px 12px;
+	border: 1px solid var(--border-color, #e5e7eb);
+	border-radius: 15px;
+	background: var(--card-bg, var(--control-bg, #ffffff));
+	box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+	overflow: hidden;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 5px;
+}
+
+.report-summary > *::before,
+.summary-section > *::before,
+.report-summary-wrapper > *::before {
+	content: "";
+	position: absolute;
+	inset: 0 auto auto 0;
+	width: 100%;
+	height: 4px;
+	background: #0b5cab;
+	pointer-events: none;
+}
+
+.report-summary > *::after,
+.summary-section > *::after,
+.report-summary-wrapper > *::after {
+	content: "";
+	position: absolute;
+	top: -54px;
+	right: -56px;
+	width: 112px;
+	height: 112px;
+	border-radius: 999px;
+	background: rgba(11, 92, 171, 0.07);
+	pointer-events: none;
+}
+
+.report-summary > * > *,
+.summary-section > * > *,
+.report-summary-wrapper > * > * {
+	position: relative;
+	z-index: 1;
+	min-width: 0;
+}
+
+.report-summary .summary-value,
+.report-summary .value,
+.report-summary strong,
+.report-summary .h4,
+.report-summary .h5,
+.summary-section .summary-value,
+.summary-section .value,
+.summary-section strong,
+.summary-section .h4,
+.summary-section .h5,
+.report-summary-wrapper .summary-value,
+.report-summary-wrapper .value,
+.report-summary-wrapper strong,
+.report-summary-wrapper .h4,
+.report-summary-wrapper .h5 {
+	position: relative;
+	z-index: 2;
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	margin: 5px 0 7px;
+	font-size: clamp(13px, 1.25vw, 23px) !important;
+	line-height: 1.12 !important;
+	font-weight: 800 !important;
+	color: var(--text-color, #111827) !important;
+	letter-spacing: -0.045em;
+	white-space: nowrap;
+	overflow: hidden !important;
+	text-overflow: clip !important;
+	font-variant-numeric: tabular-nums;
+}
+
+.report-summary .summary-label,
+.report-summary .label,
+.report-summary .text-muted,
+.report-summary small,
+.summary-section .summary-label,
+.summary-section .label,
+.summary-section .text-muted,
+.summary-section small,
+.report-summary-wrapper .summary-label,
+.report-summary-wrapper .label,
+.report-summary-wrapper .text-muted,
+.report-summary-wrapper small {
+	max-width: 100%;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	white-space: normal !important;
+	text-overflow: unset !important;
+	line-height: 1.22;
+	min-height: 26px;
+	margin-bottom: 5px;
+	font-size: 10.5px !important;
+	font-weight: 700;
+	color: var(--text-muted, #6b7280) !important;
+	letter-spacing: 0.035em;
+	text-transform: uppercase;
+}
+
+.report-summary .indicator.red,
+.report-summary .red,
+.report-summary .text-danger,
+.report-summary .danger,
+.report-summary .negative,
+.summary-section .indicator.red,
+.summary-section .red,
+.summary-section .text-danger,
+.summary-section .danger,
+.summary-section .negative,
+.report-summary-wrapper .indicator.red,
+.report-summary-wrapper .red,
+.report-summary-wrapper .text-danger,
+.report-summary-wrapper .danger,
+.report-summary-wrapper .negative {
+	color: #dc2626 !important;
+}
+
+.report-summary > *:has(.indicator.red),
+.report-summary > *:has(.red),
+.report-summary > *:has(.text-danger),
+.report-summary > *:has(.danger),
+.report-summary > *:has(.negative),
+.summary-section > *:has(.indicator.red),
+.summary-section > *:has(.red),
+.summary-section > *:has(.text-danger),
+.summary-section > *:has(.danger),
+.summary-section > *:has(.negative),
+.report-summary-wrapper > *:has(.indicator.red),
+.report-summary-wrapper > *:has(.red),
+.report-summary-wrapper > *:has(.text-danger),
+.report-summary-wrapper > *:has(.danger),
+.report-summary-wrapper > *:has(.negative) {
+	border-color: rgba(220, 38, 38, 0.32);
+	box-shadow: 0 8px 20px rgba(220, 38, 38, 0.08);
+}
+
+.report-summary .currency-symbol,
+.report-summary .money-symbol,
+.report-summary .currency,
+.summary-section .currency-symbol,
+.summary-section .money-symbol,
+.summary-section .currency,
+.report-summary-wrapper .currency-symbol,
+.report-summary-wrapper .money-symbol,
+.report-summary-wrapper .currency {
+	font-size: 0.62em !important;
+	line-height: 1;
+	font-weight: 750;
+	vertical-align: super;
+	margin-right: 1px;
+	letter-spacing: -0.02em;
+}
+
+@media (max-width: 1199px) {
+	.report-summary,
+	.summary-section,
+	.report-summary-wrapper {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 991px) {
+	.report-summary,
+	.summary-section,
+	.report-summary-wrapper {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 767px) {
+	.report-summary,
+	.summary-section,
+	.report-summary-wrapper {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 520px) {
+	.report-summary,
+	.summary-section,
+	.report-summary-wrapper {
+		grid-template-columns: 1fr;
+	}
+}

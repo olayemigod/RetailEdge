@@ -87,6 +87,10 @@ from retailedge.bank_transaction_matching import (
 	find_sales_invoice_candidates_for_bank_transaction as _find_sales_invoice_candidates_for_bank_transaction,
 	get_bank_transaction_matching_rows as _get_bank_transaction_matching_rows,
 )
+from retailedge.reconciliation_handoff import (
+	get_reconciliation_handoff_for_match as _get_reconciliation_handoff_for_match,
+	get_reconciliation_handoff_summary as _get_reconciliation_handoff_summary,
+)
 from retailedge.bank_transaction_match_workflow import (
 	assert_can_manage_bank_transaction_match as _assert_can_manage_bank_transaction_match,
 	bulk_confirm_bank_transaction_matches as _bulk_confirm_bank_transaction_matches,
@@ -655,6 +659,18 @@ def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None)
 def get_bank_match_review_queue_summary(filters=None):
 	_assert_can_manage_bank_transaction_match()
 	return _get_bank_match_review_queue_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_reconciliation_handoff_summary(filters=None):
+	_assert_can_access_bank_transaction_matching()
+	return _get_reconciliation_handoff_summary(filters=filters)
+
+
+@frappe.whitelist()
+def get_reconciliation_handoff_for_match(match_name):
+	_assert_can_access_bank_transaction_matching()
+	return _get_reconciliation_handoff_for_match(match_name)
 
 
 @frappe.whitelist()

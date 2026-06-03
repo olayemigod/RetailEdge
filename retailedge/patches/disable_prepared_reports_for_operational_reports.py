@@ -8,6 +8,7 @@ OPERATIONAL_REPORTS = (
     "RetailEdge Unmatched Bank Transactions",
     "RetailEdge Unmatched Bank Payment Events",
     "RetailEdge Bank Match Reconciliation Readiness",
+    "RetailEdge Reconciliation Handoff",
     "RetailEdge Branch Performance Summary",
     "RetailEdge Invoice Payment Audit",
     "RetailEdge Cashier Expense Review",

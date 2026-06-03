@@ -300,6 +300,14 @@
   {
    "color": "Grey",
    "doc_view": "",
+   "label": "Reconciliation Handoff",
+   "link_to": "RetailEdge Reconciliation Handoff",
+   "stats_filter": "[]",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
    "label": "Bank Match Review",
    "link_to": "RetailEdge Bank Transaction Match",
    "stats_filter": "[]",
