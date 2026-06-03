@@ -242,3 +242,44 @@ class BankMatchingOperationalReportsTests(unittest.TestCase):
         mock_rows.return_value = [{"bank_match_review": "RE-BTM-0001"}]
         _columns, rows, _message, _chart, _summary = execute_readiness_report({"from_date": "2026-05-01", "to_date": "2026-05-31"})
         self.assertEqual(rows, [{"bank_match_review": "RE-BTM-0001"}])
+
+
+class BankMatchingOperationalReportFilterTests(unittest.TestCase):
+	@patch("retailedge.bank_matching_operational_reports._find_candidate_bank_transaction_for_event", return_value=None)
+	@patch("retailedge.bank_matching_operational_reports._active_review_match_for_candidate", return_value=None)
+	@patch("retailedge.bank_matching_operational_reports.payment_entry_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_matching_operational_reports._get_payment_entry_sales_invoice_references", return_value={})
+	@patch("retailedge.bank_matching_operational_reports._get_payment_entry_event_source_rows")
+	@patch("retailedge.bank_matching_operational_reports._sales_invoice_payment_event_rows", return_value=[])
+	@patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
+	def test_payment_entry_event_rows_exclude_cash_and_filter_payment_account(self, _mock_doctype, _mock_sales_rows, mock_source_rows, _mock_refs, _mock_confirmed, _mock_active_review, _mock_find_bank):
+		mock_source_rows.return_value = [
+			{"name": "ACC-PAY-0001", "posting_date": "2026-05-21", "company": "Process Edge (Demo)", "party": "West View", "party_type": "Customer", "paid_to": "Demo Bank Account - PED", "received_amount": 1000, "mode_of_payment": "Bank Transfer"},
+			{"name": "ACC-PAY-0002", "posting_date": "2026-05-22", "company": "Process Edge (Demo)", "party": "Cash Buyer", "party_type": "Customer", "paid_to": "Cash - PED", "received_amount": 500, "mode_of_payment": "Cash"},
+		]
+		rows = get_unmatched_bank_payment_event_rows({"from_date": "2026-05-01", "to_date": "2026-05-31", "payment_account": "Demo Bank Account - PED"})
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0]["payment_event_document"], "ACC-PAY-0001")
+		self.assertEqual(rows[0]["payment_account"], "Demo Bank Account - PED")
+
+	@patch("retailedge.bank_matching_operational_reports._find_candidate_bank_transaction_for_event", return_value=None)
+	@patch("retailedge.bank_matching_operational_reports._active_review_match_for_candidate", return_value=None)
+	@patch("retailedge.bank_matching_operational_reports.sales_invoice_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_matching_operational_reports.get_sales_invoice_payment_rows")
+	@patch("retailedge.bank_matching_operational_reports._get_sales_invoice_doc")
+	@patch("retailedge.bank_matching_operational_reports._get_sales_invoice_payment_event_source_rows")
+	@patch("retailedge.bank_matching_operational_reports._payment_entry_event_rows", return_value=[])
+	@patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
+	def test_invoice_payment_event_rows_filter_mode_of_payment_and_resolved_account(self, _mock_doctype, _mock_payment_entry_rows, mock_invoice_rows, mock_invoice_doc, mock_payment_rows, _mock_confirmed, _mock_active_review, _mock_find_bank):
+		mock_invoice_rows.return_value = [
+			{"name": "ACC-SINV-2026-00025", "posting_date": "2026-05-20", "company": "Process Edge (Demo)", "customer": "Palmer", "customer_name": "Palmer Productions", "retailedge_branch": "HQ"}
+		]
+		mock_invoice_doc.return_value = SimpleNamespace(docstatus=1)
+		mock_payment_rows.return_value = [
+			{"payment_row_index": 2, "mode_of_payment": "Moniepoint", "account": "", "base_amount": 810, "amount": 810, "payment_category": "Bank Transfer", "expected_account": "Demo Bank Account - PED"},
+			{"payment_row_index": 3, "mode_of_payment": "Paystack", "account": "Other Account - PED", "base_amount": 500, "amount": 500, "payment_category": "Bank Transfer", "expected_account": "Other Account - PED"},
+		]
+		rows = get_unmatched_bank_payment_event_rows({"from_date": "2026-05-01", "to_date": "2026-05-31", "mode_of_payment": "Moniepoint", "payment_account": "Demo Bank Account - PED"})
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0]["mode_of_payment"], "Moniepoint")
+		self.assertEqual(rows[0]["resolved_canonical_account"], "Demo Bank Account - PED")

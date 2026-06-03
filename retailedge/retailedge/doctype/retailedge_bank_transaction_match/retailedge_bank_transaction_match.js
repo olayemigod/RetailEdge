@@ -5,19 +5,164 @@ frappe.ui.form.on("RetailEdge Bank Transaction Match", {
 		}
 
 		frm.clear_custom_buttons();
+		setSuggestedDocumentQuery(frm);
 
-		if (frm.is_new()) {
-			return;
+		if (!frm.is_new()) {
+			add_bank_transaction_match_action_buttons(frm);
 		}
-
-		add_bank_transaction_match_action_buttons(frm);
 	},
 
 	party_type(frm) {
 		frm.set_value("party", null);
 		frm.refresh_field("party");
 	},
+
+	bank_transaction(frm) {
+		refreshBankTransactionMatchContext(frm, { preserveCandidate: true });
+	},
+
+	suggested_document_type(frm) {
+		setSuggestedDocumentQuery(frm);
+		const clearValues = {
+			suggested_document: null,
+			sales_invoice: null,
+			payment_entry: null,
+			candidate_amount: null,
+			amount_difference: null,
+			amount_scenario: null,
+			match_confidence: null,
+			match_score: null,
+			match_reason: null,
+			candidate_posting_date: null,
+			payment_event_source: null,
+			payment_row_index: null,
+			payment_mode: null,
+			payment_account: null,
+			resolved_payment_account: null,
+			account_resolution_status: null,
+		};
+		frm.set_value(clearValues);
+	},
+
+	suggested_document(frm) {
+		refreshBankTransactionMatchContext(frm);
+	},
+
+	sales_invoice(frm) {
+		if (frm.__retailedge_context_sync) {
+			return;
+		}
+		if (frm.doc.sales_invoice && frm.doc.suggested_document_type !== "Sales Invoice") {
+			frm.set_value("suggested_document_type", "Sales Invoice");
+		}
+		if (frm.doc.sales_invoice && frm.doc.suggested_document !== frm.doc.sales_invoice) {
+			frm.set_value("suggested_document", frm.doc.sales_invoice);
+		}
+	},
+
+	payment_entry(frm) {
+		if (frm.__retailedge_context_sync) {
+			return;
+		}
+		if (frm.doc.payment_entry && frm.doc.suggested_document_type !== "Payment Entry") {
+			frm.set_value("suggested_document_type", "Payment Entry");
+		}
+		if (frm.doc.payment_entry && frm.doc.suggested_document !== frm.doc.payment_entry) {
+			frm.set_value("suggested_document", frm.doc.payment_entry);
+		}
+	},
 });
+
+function setSuggestedDocumentQuery(frm) {
+	frm.set_query("suggested_document", function () {
+		return {
+			filters: {
+				docstatus: 1,
+			},
+		};
+	});
+}
+
+function refreshBankTransactionMatchContext(frm, options = {}) {
+	if (frm.__retailedge_context_sync) {
+		return;
+	}
+	const suggestedDocumentType = frm.doc.suggested_document_type;
+	const suggestedDocument = frm.doc.suggested_document || frm.doc.sales_invoice || frm.doc.payment_entry;
+	if (!frm.doc.bank_transaction && !(suggestedDocumentType && suggestedDocument)) {
+		return;
+	}
+	frappe.call({
+		method:
+			"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.get_bank_transaction_match_form_context",
+		args: {
+			bank_transaction: frm.doc.bank_transaction,
+			suggested_document_type: suggestedDocumentType,
+			suggested_document: suggestedDocument,
+			sales_invoice: frm.doc.sales_invoice,
+			payment_entry: frm.doc.payment_entry,
+		},
+		freeze: false,
+		callback: function (r) {
+			const context = (r && r.message) || {};
+			if (context.block_reason && suggestedDocumentType && suggestedDocument) {
+				frappe.show_alert({ message: __(context.block_reason), indicator: "orange" });
+			}
+			applyBankTransactionMatchContext(frm, context, options);
+		},
+	});
+}
+
+function applyBankTransactionMatchContext(frm, context, options = {}) {
+	frm.__retailedge_context_sync = true;
+	const values = {};
+	const fields = [
+		"company",
+		"branch",
+		"bank_account",
+		"transaction_date",
+		"bank_amount",
+		"bank_reference",
+		"bank_narration",
+		"bank_direction",
+		"bank_party",
+		"resolved_bank_account",
+		"suggested_document_type",
+		"suggested_document",
+		"sales_invoice",
+		"payment_entry",
+		"customer",
+		"party_type",
+		"party",
+		"candidate_amount",
+		"amount_difference",
+		"amount_scenario",
+		"match_confidence",
+		"match_score",
+		"match_reason",
+		"candidate_posting_date",
+		"payment_event_source",
+		"payment_row_index",
+		"payment_mode",
+		"payment_account",
+		"resolved_payment_account",
+		"account_resolution_status",
+		"details_json",
+	];
+	fields.forEach((fieldname) => {
+		if (Object.prototype.hasOwnProperty.call(context, fieldname)) {
+			if (options.preserveCandidate && ["suggested_document_type", "suggested_document", "sales_invoice", "payment_entry"].includes(fieldname)) {
+				return;
+			}
+			values[fieldname] = context[fieldname];
+		}
+	});
+	frm.set_value(values).then(() => {
+		frm.__retailedge_context_sync = false;
+		frm.refresh_fields(fields);
+		frm.trigger("refresh");
+	});
+}
 
 function add_bank_transaction_match_action_buttons(frm) {
 	const status = frm.doc.decision_status || "Suggested";

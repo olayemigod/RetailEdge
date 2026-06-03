@@ -2122,10 +2122,15 @@ def _reference_match_payload(bank_transaction, candidate):
 	bank_text = " ".join(part for part in (bank_reference, bank_description) if part)
 	bank_reference_normalized = normalize_statement_reference(reference=bank_reference) if bank_reference else ""
 	bank_text_normalized = normalize_statement_text(bank_text)
+	bank_text_reference = normalize_statement_reference(reference=bank_text) if bank_text else ""
 	candidate_reference = cstr(candidate.get("reference")).strip()
 	candidate_reference_normalized = normalize_statement_reference(reference=candidate_reference) if candidate_reference else ""
-	candidate_name_normalized = normalize_statement_text(cstr(candidate.get("document_name")).strip())
-	suggested_invoice_normalized = normalize_statement_text(cstr(candidate.get("suggested_sales_invoice")).strip())
+	candidate_name = cstr(candidate.get("document_name")).strip()
+	candidate_name_normalized = normalize_statement_text(candidate_name)
+	candidate_name_reference = normalize_statement_reference(reference=candidate_name) if candidate_name else ""
+	suggested_invoice = cstr(candidate.get("suggested_sales_invoice")).strip()
+	suggested_invoice_normalized = normalize_statement_text(suggested_invoice) if suggested_invoice else ""
+	suggested_invoice_reference = normalize_statement_reference(reference=suggested_invoice) if suggested_invoice else ""
 	customer_normalized = normalize_statement_text(cstr(candidate.get("customer") or candidate.get("party")).strip())
 
 	if candidate_reference_normalized and bank_reference_normalized and candidate_reference_normalized == bank_reference_normalized:
@@ -2156,10 +2161,24 @@ def _reference_match_payload(bank_transaction, candidate):
 			"reference_match_exact": 0,
 			"reference_match_strength": "narration_contains_reference",
 		}
+	if suggested_invoice_reference and _reference_contains(bank_text_reference, suggested_invoice_reference):
+		return {
+			"score": 18,
+			"reason": "Bank narration/reference contains the Sales Invoice reference.",
+			"reference_match_exact": 0,
+			"reference_match_strength": "narration_contains_reference",
+		}
 	if candidate_name_normalized and _reference_contains(bank_text_normalized, candidate_name_normalized):
 		return {
 			"score": 18,
 			"reason": "Bank narration/reference contains the suggested document name.",
+			"reference_match_exact": 0,
+			"reference_match_strength": "narration_contains_reference",
+		}
+	if candidate_name_reference and _reference_contains(bank_text_reference, candidate_name_reference):
+		return {
+			"score": 18,
+			"reason": "Bank narration/reference contains the suggested document reference.",
 			"reference_match_exact": 0,
 			"reference_match_strength": "narration_contains_reference",
 		}
@@ -2176,7 +2195,6 @@ def _reference_match_payload(bank_transaction, candidate):
 		"reference_match_exact": 0,
 		"reference_match_strength": "none",
 	}
-
 
 
 def score_bank_transaction_candidate(bank_transaction, candidate):

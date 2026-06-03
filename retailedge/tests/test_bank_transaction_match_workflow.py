@@ -51,6 +51,8 @@ class _FakeMatchDoc(SimpleNamespace):
 
 class BankTransactionMatchWorkflowTests(unittest.TestCase):
 	def _bind_match_validate(self, doc, validate_candidate=False):
+		doc._hydrate_bank_transaction_context = RetailEdgeBankTransactionMatch._hydrate_bank_transaction_context.__get__(doc, object)
+		doc._hydrate_candidate_context = RetailEdgeBankTransactionMatch._hydrate_candidate_context.__get__(doc, object)
 		if validate_candidate:
 			doc._validate_candidate_fields = RetailEdgeBankTransactionMatch._validate_candidate_fields.__get__(doc, object)
 		else:
@@ -1699,3 +1701,129 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(rows[0]["action_status"], "Already Confirmed")
 		self.assertEqual(rows[0]["decision_status"], "Confirmed")
 		self.assertEqual(rows[0]["match_record"], "RE-BTM-2026-0001")
+
+
+class BankTransactionMatchStandaloneFormTests(unittest.TestCase):
+	def _bind_validate(self, doc):
+		doc._hydrate_bank_transaction_context = RetailEdgeBankTransactionMatch._hydrate_bank_transaction_context.__get__(doc, object)
+		doc._hydrate_candidate_context = RetailEdgeBankTransactionMatch._hydrate_candidate_context.__get__(doc, object)
+		doc._validate_candidate_fields = RetailEdgeBankTransactionMatch._validate_candidate_fields.__get__(doc, object)
+		doc._validate_party_fields = RetailEdgeBankTransactionMatch._validate_party_fields.__get__(doc, object)
+		doc._sync_sales_invoice_party_fields = RetailEdgeBankTransactionMatch._sync_sales_invoice_party_fields.__get__(doc, object)
+		doc._set_amount_difference = RetailEdgeBankTransactionMatch._set_amount_difference.__get__(doc, object)
+		doc._set_review_classification = RetailEdgeBankTransactionMatch._set_review_classification.__get__(doc, object)
+		doc._set_readable_summaries = RetailEdgeBankTransactionMatch._set_readable_summaries.__get__(doc, object)
+		doc._build_amount_breakdown_summary = RetailEdgeBankTransactionMatch._build_amount_breakdown_summary.__get__(doc, object)
+		doc._refresh_sync_readiness = RetailEdgeBankTransactionMatch._refresh_sync_readiness.__get__(doc, object)
+		return doc
+
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_bank_transaction_canonical_account")
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.normalize_bank_transaction")
+	def test_bank_transaction_context_autofills_bank_side_fields(self, mock_normalize, mock_account):
+		from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match import get_bank_transaction_match_form_context
+
+		mock_normalize.return_value = {
+			"bank_transaction": "ACC-BTN-2026-00008",
+			"company": "Process Edge (Demo)",
+			"branch": "HQ",
+			"bank_account": "Moniepoint - moniepoint",
+			"transaction_date": "2026-05-20",
+			"amount": 1000,
+			"reference": "34567",
+			"description": "Moniepoint settlement 34567",
+			"direction": "Inflow",
+			"party": "West View Software Ltd.",
+		}
+		mock_account.return_value = {"canonical_account": "Demo Bank Account - PED"}
+		context = get_bank_transaction_match_form_context(bank_transaction="ACC-BTN-2026-00008")
+		self.assertEqual(context["bank_account"], "Moniepoint - moniepoint")
+		self.assertEqual(context["resolved_bank_account"], "Demo Bank Account - PED")
+		self.assertEqual(context["bank_direction"], "Inflow")
+		self.assertEqual(context["bank_party"], "West View Software Ltd.")
+
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_account_match_payload")
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_matching_candidate")
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_bank_transaction_canonical_account")
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.normalize_bank_transaction")
+	def test_payment_entry_context_autofills_candidate_side_fields(self, mock_normalize, mock_bank_account, mock_candidate, mock_account_payload):
+		from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match import get_bank_transaction_match_form_context
+
+		mock_normalize.return_value = {
+			"bank_transaction": "ACC-BTN-2026-00008",
+			"company": "Process Edge (Demo)",
+			"branch": "HQ",
+			"bank_account": "Moniepoint - moniepoint",
+			"transaction_date": "2026-05-20",
+			"amount": 1000,
+			"reference": "34567",
+			"description": "Moniepoint settlement 34567",
+			"direction": "Inflow",
+		}
+		mock_bank_account.return_value = {"canonical_account": "Demo Bank Account - PED"}
+		mock_candidate.return_value = {
+			"document_type": "Payment Entry",
+			"document_name": "ACC-PAY-2026-00008",
+			"posting_date": "2026-05-21",
+			"company": "Process Edge (Demo)",
+			"branch": "HQ",
+			"customer": "West View Software Ltd.",
+			"party": "West View Software Ltd.",
+			"party_type": "Customer",
+			"candidate_amount": 1000,
+			"candidate_category": "payment_entry_match",
+			"payment_event_source": "Payment Entry",
+			"payment_mode": "Bank Transfer",
+			"payment_account": "Demo Bank Account - PED",
+			"account": "Demo Bank Account - PED",
+			"reference": "34567",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"confidence": "Strong Match",
+			"score": 95,
+			"reasons": ["Matched submitted Payment Entry."],
+		}
+		mock_account_payload.return_value = {
+			"candidate_canonical_account": "Demo Bank Account - PED",
+			"status": "match_via_mapping",
+			"reason": "Account Match via Mapping",
+		}
+		context = get_bank_transaction_match_form_context(
+			bank_transaction="ACC-BTN-2026-00008",
+			suggested_document_type="Payment Entry",
+			suggested_document="ACC-PAY-2026-00008",
+		)
+		self.assertEqual(context["payment_entry"], "ACC-PAY-2026-00008")
+		self.assertEqual(context["payment_mode"], "Bank Transfer")
+		self.assertEqual(context["payment_account"], "Demo Bank Account - PED")
+		self.assertEqual(context["resolved_payment_account"], "Demo Bank Account - PED")
+
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.frappe.db.exists", return_value=True)
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_manual_candidate_context")
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_bank_transaction_context")
+	def test_server_side_validation_blocks_invoice_without_bank_matchable_payment_row(self, mock_bank_context, mock_candidate_context, _mock_exists):
+		mock_bank_context.return_value = {"bank_amount": 1000, "bank_reference": None, "bank_narration": None}
+		mock_candidate_context.return_value = {
+			"doc_values": {},
+			"details": {},
+			"block_reason": "Sales Invoice is context only; payment event evidence is required for review creation and auto-match.",
+		}
+		doc = self._bind_validate(
+			SimpleNamespace(
+				bank_transaction="ACC-BTN-2026-00008",
+				suggested_document_type="Sales Invoice",
+				suggested_document="ACC-SINV-2026-00001",
+				sales_invoice="ACC-SINV-2026-00001",
+				party_type="Customer",
+				party=None,
+				customer=None,
+				bank_amount=1000,
+				candidate_amount=0,
+				decision_status="Suggested",
+				synced_to_sales_invoice=0,
+				sales_invoice_sync_ready=0,
+				sync_blocked_reason=None,
+				details_json=None,
+			payment_entry=None,
+			)
+		)
+		with self.assertRaises(frappe.ValidationError):
+			RetailEdgeBankTransactionMatch.validate(doc)

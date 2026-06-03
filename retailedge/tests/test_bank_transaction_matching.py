@@ -1123,7 +1123,7 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			"candidate_amount": 10000.0,
 			"amount_difference": 0.0,
 			"reference": "TRF123",
-			"expected_bank_account": "Moniepoint - moniepoint",
+			"expected_bank_account": "Demo Bank Account - PED",
 			"branch": "Airport Branch",
 			"supports_partial_match": True,
 			"payment_verification_status": "Unverified",
@@ -2327,3 +2327,78 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(len(rows), 1)
 		self.assertEqual(rows[0]["match_record"], "RE-BTM-0001")
 		self.assertEqual(rows[0]["decision_status"], "Needs Review")
+
+
+class BankTransactionReferenceMatchingTests(unittest.TestCase):
+	def test_exact_reference_match_sets_exact_flag(self):
+		bank_transaction = {
+			"amount": 1000,
+			"reference": "TRF-12345",
+			"normalized_reference": "trf12345",
+			"description": "Payment received",
+			"transaction_date": "2026-05-21",
+			"direction": "Inflow",
+		}
+		candidate = {
+			"document_type": "Payment Entry",
+			"document_name": "ACC-PAY-0001",
+			"candidate_amount": 1000,
+			"posting_date": "2026-05-21",
+			"reference": "TRF12345",
+			"candidate_category": "payment_entry_match",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"reason": "Matched submitted Payment Entry.",
+		}
+		with patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings", return_value={"amount_tolerance": 0, "strong_match_score": 80, "minimum_possible_score": 50, "date_window_days": 3}):
+			payload = score_bank_transaction_candidate(bank_transaction, candidate)
+		self.assertEqual(payload["reference_match_exact"], 1)
+		self.assertEqual(payload["reference_match_strength"], "exact")
+
+	def test_reference_contains_match_is_strong_but_not_exact(self):
+		bank_transaction = {
+			"amount": 1000,
+			"reference": "MONIEPOINT",
+			"normalized_reference": "moniepoint",
+			"description": "Settlement REF 34567 from West View",
+			"transaction_date": "2026-05-21",
+			"direction": "Inflow",
+		}
+		candidate = {
+			"document_type": "Payment Entry",
+			"document_name": "ACC-PAY-0008",
+			"candidate_amount": 1000,
+			"posting_date": "2026-05-21",
+			"reference": "34567",
+			"candidate_category": "payment_entry_match",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"reason": "Matched submitted Payment Entry.",
+		}
+		with patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings", return_value={"amount_tolerance": 0, "strong_match_score": 80, "minimum_possible_score": 50, "date_window_days": 3}):
+			payload = score_bank_transaction_candidate(bank_transaction, candidate)
+		self.assertEqual(payload["reference_match_exact"], 0)
+		self.assertEqual(payload["reference_match_strength"], "contains")
+
+	def test_customer_name_only_is_weak_support(self):
+		bank_transaction = {
+			"amount": 1000,
+			"reference": "MONIEPOINT",
+			"normalized_reference": "moniepoint",
+			"description": "Settlement from West View Software Ltd",
+			"transaction_date": "2026-05-21",
+			"direction": "Inflow",
+		}
+		candidate = {
+			"document_type": "Payment Entry",
+			"document_name": "ACC-PAY-0008",
+			"candidate_amount": 1000,
+			"posting_date": "2026-05-21",
+			"reference": "",
+			"customer": "West View Software Ltd",
+			"candidate_category": "payment_entry_match",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"reason": "Matched submitted Payment Entry.",
+		}
+		with patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings", return_value={"amount_tolerance": 0, "strong_match_score": 80, "minimum_possible_score": 50, "date_window_days": 3}):
+			payload = score_bank_transaction_candidate(bank_transaction, candidate)
+		self.assertEqual(payload["reference_match_exact"], 0)
+		self.assertEqual(payload["reference_match_strength"], "weak")

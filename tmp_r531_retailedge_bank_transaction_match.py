@@ -33,39 +33,27 @@ class RetailEdgeBankTransactionMatch(Document):
 		self._refresh_sync_readiness()
 
 	def _hydrate_bank_transaction_context(self):
-		bank_transaction = getattr(self, "bank_transaction", None)
-		if not bank_transaction:
+		if not self.bank_transaction:
 			return
-		context = _build_bank_transaction_context(bank_transaction)
+		context = _build_bank_transaction_context(self.bank_transaction)
 		for fieldname, value in context.items():
 			if value not in (None, "") or fieldname in {"bank_reference", "bank_narration"}:
 				setattr(self, fieldname, value)
 		self._retailedge_bank_context = context
 
 	def _hydrate_candidate_context(self):
-		suggested_document_type = getattr(self, "suggested_document_type", None)
-		suggested_document = getattr(self, "suggested_document", None)
-		if not suggested_document_type or not suggested_document:
+		if not self.suggested_document_type or not self.suggested_document:
 			return
 		context = _resolve_manual_candidate_context(
-			bank_transaction=getattr(self, "bank_transaction", None),
-			suggested_document_type=suggested_document_type,
-			suggested_document=suggested_document,
-			sales_invoice=getattr(self, "sales_invoice", None),
-			payment_entry=getattr(self, "payment_entry", None),
+			bank_transaction=self.bank_transaction,
+			suggested_document_type=self.suggested_document_type,
+			suggested_document=self.suggested_document,
+			sales_invoice=self.sales_invoice,
+			payment_entry=self.payment_entry,
 		)
 		for fieldname, value in context.get("doc_values", {}).items():
 			if value is not None:
 				setattr(self, fieldname, value)
-		if context.get("details") or getattr(self, "_retailedge_bank_context", None):
-			self.details_json = json.dumps(
-				{
-					"bank_context": getattr(self, "_retailedge_bank_context", None) or {},
-					"candidate_context": context.get("details", {}),
-				},
-				default=str,
-				sort_keys=True,
-			)
 		self._retailedge_candidate_context = context
 
 	def _validate_candidate_fields(self):
@@ -93,12 +81,11 @@ class RetailEdgeBankTransactionMatch(Document):
 			frappe.throw(f"{self.party_type} {self.party} does not exist.")
 
 	def _sync_sales_invoice_party_fields(self):
-		sales_invoice = getattr(self, "sales_invoice", None)
-		if not sales_invoice:
+		if not self.sales_invoice:
 			return
-		customer = frappe.db.get_value("Sales Invoice", sales_invoice, "customer")
+		customer = frappe.db.get_value("Sales Invoice", self.sales_invoice, "customer")
 		if not customer:
-			frappe.throw(f"Sales Invoice {sales_invoice} does not have a customer.")
+			frappe.throw(f"Sales Invoice {self.sales_invoice} does not have a customer.")
 		self.party_type = "Customer"
 		self.party = customer
 		self.customer = customer
@@ -298,12 +285,8 @@ def _resolve_manual_candidate_context(
 		"branch": bank_context.get("branch") or candidate.get("branch"),
 		"suggested_document_type": candidate.get("document_type") or suggested_document_type,
 		"suggested_document": candidate.get("document_name") or suggested_document,
-		"sales_invoice": candidate.get("suggested_sales_invoice")
-		if (candidate.get("document_type") or suggested_document_type) == "Sales Invoice"
-		else candidate.get("suggested_sales_invoice") or sales_invoice,
-		"payment_entry": candidate.get("document_name")
-		if (candidate.get("document_type") or suggested_document_type) == "Payment Entry"
-		else payment_entry,
+		"sales_invoice": candidate.get("suggested_sales_invoice") if (candidate.get("document_type") or suggested_document_type) == "Sales Invoice" else candidate.get("suggested_sales_invoice") or sales_invoice,
+		"payment_entry": candidate.get("document_name") if (candidate.get("document_type") or suggested_document_type) == "Payment Entry" else payment_entry,
 		"customer": candidate.get("customer"),
 		"party_type": candidate.get("party_type") or "Customer",
 		"party": candidate.get("party") or candidate.get("customer"),
@@ -312,13 +295,6 @@ def _resolve_manual_candidate_context(
 		"match_score": cint(candidate.get("score") or 0),
 		"amount_scenario": get_amount_scenario_label(candidate.get("amount_scenario")) or candidate.get("amount_scenario"),
 		"match_reason": _build_candidate_reason_summary(candidate, details, account_payload),
-		"candidate_posting_date": candidate.get("posting_date"),
-		"payment_event_source": details.get("payment_event_source"),
-		"payment_row_index": details.get("payment_row_index"),
-		"payment_mode": details.get("payment_mode"),
-		"payment_account": details.get("payment_account"),
-		"resolved_payment_account": details.get("resolved_payment_account"),
-		"account_resolution_status": details.get("account_resolution_status"),
 	}
 	if bank_context:
 		doc_values.update(bank_context)
@@ -357,8 +333,6 @@ def _build_payment_entry_source_candidate(payment_entry_name):
 	if not payload:
 		return None
 	account = cstr(payload.get("paid_to") or payload.get("paid_from")).strip()
-	if cstr(payload.get("mode_of_payment")).strip().lower() == "cash":
-		return None
 	return {
 		"document_type": "Payment Entry",
 		"document_name": payment_entry_name,
