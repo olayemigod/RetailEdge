@@ -14,6 +14,7 @@ from retailedge.bank_transaction_matching import (
 	_candidate_category_rank,
 	_coerce_matching_filters,
 	_first_active_review_match,
+	_first_existing_sales_invoice_branch_field,
 	_first_match_with_status,
 	_get_bank_transaction_rows,
 	_get_existing_matches_by_bank_transaction,
@@ -650,3 +651,372 @@ def _days_since(value):
 	if not value:
 		return None
 	return abs((getdate(nowdate()) - getdate(value)).days)
+
+
+from retailedge.bank_transaction_matching import _resolve_mode_of_payment_default_account as _r531_resolve_mode_of_payment_default_account
+
+
+def _get_payment_entry_event_source_rows(filters):
+	fieldnames = [
+		"name",
+		"posting_date",
+		"company",
+		"party",
+		"party_type",
+		"payment_type",
+		"paid_from",
+		"paid_to",
+		"paid_amount",
+		"received_amount",
+		"reference_no",
+		"remarks",
+	]
+	if has_field("Payment Entry", "mode_of_payment"):
+		fieldnames.append("mode_of_payment")
+	if has_field("Payment Entry", "retailedge_branch"):
+		fieldnames.append("retailedge_branch")
+	query_filters = {"docstatus": 1}
+	if filters.get("company"):
+		query_filters["company"] = filters.get("company")
+	if filters.get("from_date") and filters.get("to_date"):
+		query_filters["posting_date"] = ["between", [filters.get("from_date"), filters.get("to_date")]]
+	elif filters.get("from_date"):
+		query_filters["posting_date"] = [">=", filters.get("from_date")]
+	elif filters.get("to_date"):
+		query_filters["posting_date"] = ["<=", filters.get("to_date")]
+	if filters.get("branch") and has_field("Payment Entry", "retailedge_branch"):
+		query_filters["retailedge_branch"] = filters.get("branch")
+	if filters.get("mode_of_payment") and has_field("Payment Entry", "mode_of_payment"):
+		query_filters["mode_of_payment"] = filters.get("mode_of_payment")
+	rows = frappe.get_all(
+		"Payment Entry",
+		filters=query_filters,
+		fields=fieldnames,
+		limit_page_length=500,
+		order_by="posting_date desc, modified desc",
+	)
+	if filters.get("payment_event_type") and filters.get("payment_event_type") not in {"", "All", "Payment Entry"}:
+		return []
+	if filters.get("amount_from"):
+		rows = [row for row in rows if flt(row.get("received_amount") or row.get("paid_amount")) >= flt(filters.get("amount_from"))]
+	if filters.get("amount_to"):
+		rows = [row for row in rows if flt(row.get("received_amount") or row.get("paid_amount")) <= flt(filters.get("amount_to"))]
+	return rows
+
+
+def _get_sales_invoice_payment_event_source_rows(filters):
+	fieldnames = ["name", "posting_date", "company", "customer", "customer_name"]
+	branch_field = _first_existing_sales_invoice_branch_field()
+	if branch_field:
+		fieldnames.append(branch_field)
+	query_filters = {"docstatus": 1}
+	if filters.get("company"):
+		query_filters["company"] = filters.get("company")
+	if filters.get("from_date") and filters.get("to_date"):
+		query_filters["posting_date"] = ["between", [filters.get("from_date"), filters.get("to_date")]]
+	elif filters.get("from_date"):
+		query_filters["posting_date"] = [">=", filters.get("from_date")]
+	elif filters.get("to_date"):
+		query_filters["posting_date"] = ["<=", filters.get("to_date")]
+	if filters.get("branch") and branch_field:
+		query_filters[branch_field] = filters.get("branch")
+	rows = frappe.get_all(
+		"Sales Invoice",
+		filters=query_filters,
+		fields=fieldnames,
+		limit_page_length=500,
+		order_by="posting_date desc, modified desc",
+	)
+	normalized_rows = []
+	for row in rows:
+		row = frappe._dict(row)
+		row["retailedge_branch"] = row.get(branch_field) if branch_field else None
+		normalized_rows.append(row)
+	return normalized_rows
+
+
+def _payment_entry_event_rows(filters):
+	if not has_doctype("Payment Entry"):
+		return []
+	date_filters = _default_operational_filters(filters)
+	rows = _get_payment_entry_event_source_rows(date_filters)
+	references = _get_payment_entry_sales_invoice_references([row.get("name") for row in rows])
+	results = []
+	for payment_entry in rows:
+		account = cstr(payment_entry.get("paid_to") or payment_entry.get("paid_from")).strip()
+		if not account:
+			continue
+		mode_of_payment = cstr(payment_entry.get("mode_of_payment")).strip()
+		if filters.get("mode_of_payment") and mode_of_payment != cstr(filters.get("mode_of_payment")).strip():
+			continue
+		resolved_account = account
+		if filters.get("payment_account"):
+			filter_account = cstr(filters.get("payment_account")).strip()
+			if filter_account not in {account, resolved_account}:
+				continue
+		event_type = "Payment Entry"
+		match_record = _active_review_match_for_candidate("Payment Entry", payment_entry.get("name"))
+		confirmed = payment_entry_has_active_confirmed_bank_match(payment_entry.get("name"))
+		if confirmed and not _report_boolean(filters.get("include_already_matched"), 0):
+			continue
+		linked_invoice = ", ".join(
+			row.get("reference_name")
+			for row in references.get(payment_entry.get("name")) or []
+			if row.get("reference_name")
+		)
+		event = {
+			"payment_event_type": event_type,
+			"payment_event_document": payment_entry.get("name"),
+			"payment_row_reference": "",
+			"posting_date": payment_entry.get("posting_date"),
+			"company": payment_entry.get("company"),
+			"branch": payment_entry.get("retailedge_branch"),
+			"party": payment_entry.get("party"),
+			"customer_supplier": payment_entry.get("party"),
+			"mode_of_payment": mode_of_payment or None,
+			"payment_account": account,
+			"resolved_canonical_account": resolved_account,
+			"amount": flt(payment_entry.get("received_amount") or payment_entry.get("paid_amount")),
+			"reference_no": payment_entry.get("reference_no") or payment_entry.get("name"),
+			"linked_sales_invoice": linked_invoice,
+			"linked_payment_entry": payment_entry.get("name"),
+			"existing_bank_match": match_record.get("name") if match_record else None,
+			"match_status": "Confirmed" if confirmed else (cstr((match_record or {}).get("decision_status")).strip() or "Unmatched"),
+			"candidate_bank_transaction": None,
+			"reason_exception": "",
+			"days_outstanding": _days_since(payment_entry.get("posting_date")),
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": payment_entry.get("name"),
+			"candidate_category": "payment_entry_match",
+		}
+		best_bank = _find_candidate_bank_transaction_for_event(event, filters)
+		if best_bank:
+			event["candidate_bank_transaction"] = best_bank.get("bank_transaction")
+			event["reason_exception"] = best_bank.get("match_reason") or ""
+		results.append(event)
+	return results
+
+
+def _sales_invoice_payment_event_rows(filters):
+	if not has_doctype("Sales Invoice"):
+		return []
+	invoices = _get_sales_invoice_payment_event_source_rows(filters)
+	results = []
+	for invoice in invoices:
+		invoice_doc = _get_sales_invoice_doc(invoice)
+		if not invoice_doc:
+			continue
+		if cstr(getattr(invoice_doc, "docstatus", 1)) == "2":
+			continue
+		try:
+			payment_rows = get_sales_invoice_payment_rows(invoice_doc)
+		except Exception:
+			payment_rows = []
+		for payment_row in payment_rows:
+			if not _invoice_payment_row_is_bank_matchable(payment_row):
+				continue
+			payment_category = cstr(payment_row.get("payment_category")).strip()
+			event_type = "POS Payment Row" if payment_category == "Card / POS" else "Invoice Payment Row"
+			if filters.get("payment_event_type") and filters.get("payment_event_type") not in {"", "All", event_type}:
+				continue
+			if filters.get("mode_of_payment") and cstr(payment_row.get("mode_of_payment")).strip() != cstr(filters.get("mode_of_payment")).strip():
+				continue
+			resolved_account = cstr(payment_row.get("account") or payment_row.get("expected_account")).strip()
+			if not resolved_account:
+				resolved_account = cstr(_r531_resolve_mode_of_payment_default_account(payment_row.get("mode_of_payment"), company=invoice.get("company"))).strip()
+			if filters.get("payment_account") and cstr(filters.get("payment_account")).strip() not in {cstr(payment_row.get("account")).strip(), resolved_account}:
+				continue
+			match_record = _active_review_match_for_candidate("Sales Invoice", invoice.get("name"))
+			confirmed = sales_invoice_has_active_confirmed_bank_match(invoice.get("name"))
+			if confirmed and not _report_boolean(filters.get("include_already_matched"), 0):
+				continue
+			event = {
+				"payment_event_type": event_type,
+				"payment_event_document": invoice.get("name"),
+				"payment_row_reference": payment_row.get("payment_row_index"),
+				"posting_date": invoice.get("posting_date"),
+				"company": invoice.get("company"),
+				"branch": invoice.get("retailedge_branch") or invoice.get("branch"),
+				"party": invoice.get("customer"),
+				"customer_supplier": invoice.get("customer_name") or invoice.get("customer"),
+				"mode_of_payment": payment_row.get("mode_of_payment"),
+				"payment_account": payment_row.get("account"),
+				"resolved_canonical_account": resolved_account or payment_row.get("expected_account"),
+				"amount": flt(payment_row.get("base_amount") or payment_row.get("amount")),
+				"reference_no": payment_row.get("reference") or payment_row.get("reference_no") or invoice.get("name"),
+				"linked_sales_invoice": invoice.get("name"),
+				"linked_payment_entry": _first_linked_payment_entry(invoice.get("name")),
+				"existing_bank_match": match_record.get("name") if match_record else None,
+				"match_status": "Confirmed" if confirmed else (cstr((match_record or {}).get("decision_status")).strip() or "Unmatched"),
+				"candidate_bank_transaction": None,
+				"reason_exception": "",
+				"days_outstanding": _days_since(invoice.get("posting_date")),
+				"suggested_document_type": "Sales Invoice",
+				"suggested_document": invoice.get("name"),
+				"candidate_category": "pos_payment_match" if event_type == "POS Payment Row" else "invoice_payment_row_match",
+			}
+			best_bank = _find_candidate_bank_transaction_for_event(event, filters)
+			if best_bank:
+				event["candidate_bank_transaction"] = best_bank.get("bank_transaction")
+				event["reason_exception"] = best_bank.get("match_reason") or ""
+			results.append(event)
+	return results
+
+
+def get_unmatched_bank_payment_event_rows(filters=None, limit=500):
+	filters = _default_operational_filters(filters)
+	rows = _payment_entry_event_rows(filters) + _sales_invoice_payment_event_rows(filters)
+	rows.sort(key=lambda row: (cstr(row.get("posting_date")), cstr(row.get("payment_event_document"))), reverse=True)
+	return rows[: min(int(limit or 500), len(rows) or 500)]
+
+
+def _r531_amount_in_filter_range(amount, filters):
+	if filters.get("amount_from") and flt(amount) < flt(filters.get("amount_from")):
+		return False
+	if filters.get("amount_to") and flt(amount) > flt(filters.get("amount_to")):
+		return False
+	return True
+
+
+
+def _r531_payment_entry_is_bank_matchable(payment_entry):
+	mode_of_payment = cstr(payment_entry.get("mode_of_payment")).strip().lower()
+	if mode_of_payment == "cash":
+		return False
+	account = cstr(payment_entry.get("paid_to") or payment_entry.get("paid_from")).strip()
+	return bool(account)
+
+
+
+def _payment_entry_event_rows(filters):
+	if not has_doctype("Payment Entry"):
+		return []
+	date_filters = _default_operational_filters(filters)
+	rows = _get_payment_entry_event_source_rows(date_filters)
+	references = _get_payment_entry_sales_invoice_references([row.get("name") for row in rows])
+	results = []
+	for payment_entry in rows:
+		if not _r531_payment_entry_is_bank_matchable(payment_entry):
+			continue
+		account = cstr(payment_entry.get("paid_to") or payment_entry.get("paid_from")).strip()
+		resolved_account = account
+		mode_of_payment = cstr(payment_entry.get("mode_of_payment")).strip()
+		if filters.get("mode_of_payment") and mode_of_payment != cstr(filters.get("mode_of_payment")).strip():
+			continue
+		if filters.get("payment_account") and cstr(filters.get("payment_account")).strip() not in {account, resolved_account}:
+			continue
+		amount = flt(payment_entry.get("received_amount") or payment_entry.get("paid_amount"))
+		if not _r531_amount_in_filter_range(amount, filters):
+			continue
+		event_type = "Payment Entry"
+		match_record = _active_review_match_for_candidate("Payment Entry", payment_entry.get("name"))
+		confirmed = payment_entry_has_active_confirmed_bank_match(payment_entry.get("name"))
+		if confirmed and not _report_boolean(filters.get("include_already_matched"), 0):
+			continue
+		if filters.get("payment_event_type") and filters.get("payment_event_type") not in {"", "All", event_type}:
+			continue
+		linked_invoice = ", ".join(
+			row.get("reference_name")
+			for row in references.get(payment_entry.get("name")) or []
+			if row.get("reference_name")
+		)
+		event = {
+			"payment_event_type": event_type,
+			"payment_event_document": payment_entry.get("name"),
+			"payment_row_reference": "",
+			"posting_date": payment_entry.get("posting_date"),
+			"company": payment_entry.get("company"),
+			"branch": payment_entry.get("retailedge_branch"),
+			"party": payment_entry.get("party"),
+			"customer_supplier": payment_entry.get("party"),
+			"mode_of_payment": payment_entry.get("mode_of_payment"),
+			"payment_account": account,
+			"resolved_canonical_account": resolved_account,
+			"amount": amount,
+			"reference_no": payment_entry.get("reference_no") or payment_entry.get("name"),
+			"linked_sales_invoice": linked_invoice,
+			"linked_payment_entry": payment_entry.get("name"),
+			"existing_bank_match": match_record.get("name") if match_record else None,
+			"match_status": "Confirmed" if confirmed else (cstr((match_record or {}).get("decision_status")).strip() or "Unmatched"),
+			"candidate_bank_transaction": None,
+			"reason_exception": "",
+			"days_outstanding": _days_since(payment_entry.get("posting_date")),
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": payment_entry.get("name"),
+			"candidate_category": "payment_entry_match",
+		}
+		best_bank = _find_candidate_bank_transaction_for_event(event, filters)
+		if best_bank:
+			event["candidate_bank_transaction"] = best_bank.get("bank_transaction")
+			event["reason_exception"] = best_bank.get("match_reason") or ""
+		results.append(event)
+	return results
+
+
+
+def _sales_invoice_payment_event_rows(filters):
+	if not has_doctype("Sales Invoice"):
+		return []
+	invoices = _get_sales_invoice_payment_event_source_rows(_default_operational_filters(filters))
+	results = []
+	for invoice in invoices:
+		invoice_doc = _get_sales_invoice_doc(invoice)
+		if not invoice_doc or cstr(getattr(invoice_doc, "docstatus", 1)) == "2":
+			continue
+		try:
+			payment_rows = get_sales_invoice_payment_rows(invoice_doc)
+		except Exception:
+			payment_rows = []
+		for payment_row in payment_rows:
+			if not _invoice_payment_row_is_bank_matchable(payment_row):
+				continue
+			payment_category = cstr(payment_row.get("payment_category")).strip()
+			event_type = "POS Payment Row" if payment_category == "Card / POS" else "Invoice Payment Row"
+			if filters.get("payment_event_type") and filters.get("payment_event_type") not in {"", "All", event_type}:
+				continue
+			mode_of_payment = cstr(payment_row.get("mode_of_payment")).strip()
+			if filters.get("mode_of_payment") and mode_of_payment != cstr(filters.get("mode_of_payment")).strip():
+				continue
+			resolved_account = cstr(payment_row.get("account") or payment_row.get("expected_account")).strip()
+			if not resolved_account:
+				resolved_account = cstr(_r531_resolve_mode_of_payment_default_account(payment_row.get("mode_of_payment"), company=invoice.get("company"))).strip()
+			if filters.get("payment_account") and cstr(filters.get("payment_account")).strip() not in {cstr(payment_row.get("account")).strip(), resolved_account}:
+				continue
+			amount = flt(payment_row.get("base_amount") or payment_row.get("amount"))
+			if not _r531_amount_in_filter_range(amount, filters):
+				continue
+			match_record = _active_review_match_for_candidate("Sales Invoice", invoice.get("name"))
+			confirmed = sales_invoice_has_active_confirmed_bank_match(invoice.get("name"))
+			if confirmed and not _report_boolean(filters.get("include_already_matched"), 0):
+				continue
+			event = {
+				"payment_event_type": event_type,
+				"payment_event_document": invoice.get("name"),
+				"payment_row_reference": payment_row.get("payment_row_index"),
+				"posting_date": invoice.get("posting_date"),
+				"company": invoice.get("company"),
+				"branch": invoice.get("retailedge_branch") or invoice.get("branch"),
+				"party": invoice.get("customer"),
+				"customer_supplier": invoice.get("customer_name") or invoice.get("customer"),
+				"mode_of_payment": payment_row.get("mode_of_payment"),
+				"payment_account": payment_row.get("account") or resolved_account,
+				"resolved_canonical_account": resolved_account or payment_row.get("expected_account"),
+				"amount": amount,
+				"reference_no": payment_row.get("reference") or payment_row.get("reference_no") or invoice.get("name"),
+				"linked_sales_invoice": invoice.get("name"),
+				"linked_payment_entry": _first_linked_payment_entry(invoice.get("name")),
+				"existing_bank_match": match_record.get("name") if match_record else None,
+				"match_status": "Confirmed" if confirmed else (cstr((match_record or {}).get("decision_status")).strip() or "Unmatched"),
+				"candidate_bank_transaction": None,
+				"reason_exception": "",
+				"days_outstanding": _days_since(invoice.get("posting_date")),
+				"suggested_document_type": "Sales Invoice",
+				"suggested_document": invoice.get("name"),
+				"candidate_category": "pos_payment_match" if event_type == "POS Payment Row" else "invoice_payment_row_match",
+			}
+			best_bank = _find_candidate_bank_transaction_for_event(event, filters)
+			if best_bank:
+				event["candidate_bank_transaction"] = best_bank.get("bank_transaction")
+				event["reason_exception"] = best_bank.get("match_reason") or ""
+			results.append(event)
+	return results

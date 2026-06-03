@@ -1,9 +1,14 @@
 from frappe.model.document import Document
 
+from retailedge.utils.settings import clear_retailedge_settings_cache
+
 
 class RetailEdgeSettings(Document):
 	def validate(self):
 		self._set_bank_auto_match_guidance()
+
+	def on_update(self):
+		clear_retailedge_settings_cache()
 
 	def _set_bank_auto_match_guidance(self):
 		enable_auto_match = int(getattr(self, "enable_bank_auto_match", 0) or 0)

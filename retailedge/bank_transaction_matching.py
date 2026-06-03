@@ -187,9 +187,49 @@ def is_exception_only_candidate(candidate):
 	}
 
 
-def get_bank_transaction_matching_settings():
+def _coerce_retailedge_check(value, default=0):
+	if value in (None, ""):
+		return cint(default)
+	return 1 if cint(value) else 0
+
+
+def _normalize_auto_match_score(value, default=95):
+	if value in (None, ""):
+		return cint(default)
+	raw_value = cstr(value).strip()
+	if not raw_value:
+		return cint(default)
+	if raw_value.endswith("%"):
+		raw_value = raw_value[:-1].strip()
+	score = flt(raw_value)
+	if raw_value not in {"0", "1"} and score > 0 and score <= 1:
+		score *= 100
+	return max(0, min(100, cint(round(score))))
+
+
+def get_bank_auto_match_settings(use_cache=True):
 	try:
-		settings = get_retailedge_settings()
+		settings = get_retailedge_settings(use_cache=use_cache)
+	except Exception:
+		settings = None
+	return {
+		"enable_bank_auto_match": _coerce_retailedge_check(getattr(settings, "enable_bank_auto_match", 0), default=0),
+		"auto_prepare_exact_bank_matches": _coerce_retailedge_check(getattr(settings, "auto_prepare_exact_bank_matches", 0), default=0),
+		"auto_confirm_exact_bank_matches": _coerce_retailedge_check(getattr(settings, "auto_confirm_exact_bank_matches", 0), default=0),
+		"minimum_auto_match_score": _normalize_auto_match_score(getattr(settings, "minimum_auto_match_score", 95), default=95),
+		"require_exact_reference_for_auto_match": _coerce_retailedge_check(getattr(settings, "require_exact_reference_for_auto_match", 1), default=1),
+		"require_same_bank_account_for_auto_match": _coerce_retailedge_check(getattr(settings, "require_same_bank_account_for_auto_match", 1), default=1),
+		"require_same_branch_for_auto_match": _coerce_retailedge_check(getattr(settings, "require_same_branch_for_auto_match", 1), default=1),
+		"allow_auto_match_payment_entry": _coerce_retailedge_check(getattr(settings, "allow_auto_match_payment_entry", 1), default=1),
+		"allow_auto_match_sales_invoice": _coerce_retailedge_check(getattr(settings, "allow_auto_match_sales_invoice", 0), default=0),
+		"require_no_duplicate_candidate_for_auto_match": _coerce_retailedge_check(getattr(settings, "require_no_duplicate_candidate_for_auto_match", 1), default=1),
+		"require_no_active_review_for_auto_match": _coerce_retailedge_check(getattr(settings, "require_no_active_review_for_auto_match", 1), default=1),
+	}
+
+
+def get_bank_transaction_matching_settings(use_cache=True):
+	try:
+		settings = get_retailedge_settings(use_cache=use_cache)
 	except Exception:
 		settings = None
 	return {
@@ -198,17 +238,7 @@ def get_bank_transaction_matching_settings():
 		"amount_tolerance": flt(getattr(settings, "bank_transaction_match_amount_tolerance", 0) or 0),
 		"minimum_possible_score": cint(getattr(settings, "bank_transaction_match_minimum_possible_score", 50) or 50),
 		"strong_match_score": cint(getattr(settings, "bank_transaction_match_strong_score", 80) or 80),
-		"enable_bank_auto_match": cint(getattr(settings, "enable_bank_auto_match", 0) or 0),
-		"auto_prepare_exact_bank_matches": cint(getattr(settings, "auto_prepare_exact_bank_matches", 0) or 0),
-		"auto_confirm_exact_bank_matches": cint(getattr(settings, "auto_confirm_exact_bank_matches", 0) or 0),
-		"minimum_auto_match_score": cint(getattr(settings, "minimum_auto_match_score", 95) or 95),
-		"require_exact_reference_for_auto_match": cint(getattr(settings, "require_exact_reference_for_auto_match", 1) or 0),
-		"require_same_bank_account_for_auto_match": cint(getattr(settings, "require_same_bank_account_for_auto_match", 1) or 0),
-		"require_same_branch_for_auto_match": cint(getattr(settings, "require_same_branch_for_auto_match", 1) or 0),
-		"allow_auto_match_payment_entry": cint(getattr(settings, "allow_auto_match_payment_entry", 1) or 0),
-		"allow_auto_match_sales_invoice": cint(getattr(settings, "allow_auto_match_sales_invoice", 0) or 0),
-		"require_no_duplicate_candidate_for_auto_match": cint(getattr(settings, "require_no_duplicate_candidate_for_auto_match", 1) or 0),
-		"require_no_active_review_for_auto_match": cint(getattr(settings, "require_no_active_review_for_auto_match", 1) or 0),
+		**get_bank_auto_match_settings(use_cache=use_cache),
 		"include_reconciled_bank_transactions": cint(
 			getattr(settings, "bank_transaction_match_include_reconciled", 0) or 0
 		),
@@ -445,6 +475,14 @@ def get_auto_match_status_for_row(row, settings=None):
 		for part in cstr(row.get("payment_entry_invoice_context")).split(",")
 		if part.strip()
 	]
+	match_score = _normalize_auto_match_score(
+		row.get("match_score") if row.get("match_score") not in (None, "") else row.get("score"),
+		default=0,
+	)
+	minimum_auto_match_score = _normalize_auto_match_score(
+		settings.get("minimum_auto_match_score"),
+		default=95,
+	)
 
 	def blocked(reason, category="blocked"):
 		return {
@@ -517,8 +555,11 @@ def get_auto_match_status_for_row(row, settings=None):
 		)
 	if row.get("match_confidence") != "Strong Match":
 		return manual("Only strong exact matches are eligible for RetailEdge auto-match.", category="manual_review")
-	if cint(row.get("match_score") or 0) < cint(settings.get("minimum_auto_match_score") or 95):
-		return blocked("Score below auto-match threshold.", category="score_below_threshold")
+	if match_score < minimum_auto_match_score:
+		return blocked(
+			f"Score below auto-match threshold. Match Score: {match_score}. Required Minimum: {minimum_auto_match_score}.",
+			category="score_below_threshold",
+		)
 	if abs(flt(row.get("amount_difference"))) > 0.01:
 		return manual("Amount variance requires manual review.", category="manual_review")
 	if suggested_document_type == "Sales Invoice":
@@ -1391,7 +1432,7 @@ def _build_matching_row(bank_transaction, candidate=None, action_status="No Matc
 		"candidate_amount": flt(candidate.get("candidate_amount")),
 		"amount_difference": flt(candidate.get("amount_difference")),
 		"match_confidence": candidate.get("confidence") or "No Match",
-		"match_score": cint(candidate.get("score") or 0),
+		"match_score": _normalize_auto_match_score(candidate.get("score"), default=0),
 		"match_reason": match_reason or candidate.get("reason") or "No candidate reached the minimum matching confidence.",
 		"candidate_category": candidate.get("candidate_category"),
 		"candidate_category_label": candidate.get("candidate_category_label")
@@ -2060,3 +2101,195 @@ def _pick_existing_match_for_row(row, matches):
 		if suggested_sales_invoice and cstr(match_row.get("sales_invoice")).strip() == suggested_sales_invoice:
 			return match_row
 	return matches[0]
+
+CANDIDATE_CATEGORY_LABELS.update(
+	{
+		"grouped_payment_event_match": "Grouped Payment Event Match",
+		"multi_payment_bank_transaction_candidate": "Multi-Payment Bank Transaction Candidate",
+	}
+)
+
+
+
+def _reference_contains(haystack, needle):
+	return bool(haystack and needle and needle in haystack)
+
+
+
+def _reference_match_payload(bank_transaction, candidate):
+	bank_reference = cstr(bank_transaction.get("reference")).strip()
+	bank_description = cstr(bank_transaction.get("description")).strip()
+	bank_text = " ".join(part for part in (bank_reference, bank_description) if part)
+	bank_reference_normalized = normalize_statement_reference(reference=bank_reference) if bank_reference else ""
+	bank_text_normalized = normalize_statement_text(bank_text)
+	candidate_reference = cstr(candidate.get("reference")).strip()
+	candidate_reference_normalized = normalize_statement_reference(reference=candidate_reference) if candidate_reference else ""
+	candidate_name_normalized = normalize_statement_text(cstr(candidate.get("document_name")).strip())
+	suggested_invoice_normalized = normalize_statement_text(cstr(candidate.get("suggested_sales_invoice")).strip())
+	customer_normalized = normalize_statement_text(cstr(candidate.get("customer") or candidate.get("party")).strip())
+
+	if candidate_reference_normalized and bank_reference_normalized and candidate_reference_normalized == bank_reference_normalized:
+		return {
+			"score": 25,
+			"reason": "Normalized reference matches exactly.",
+			"reference_match_exact": 1,
+			"reference_match_strength": "exact",
+		}
+	if candidate_reference_normalized and _reference_contains(bank_text_normalized, candidate_reference_normalized):
+		return {
+			"score": 20,
+			"reason": "Bank narration/reference contains the payment reference.",
+			"reference_match_exact": 0,
+			"reference_match_strength": "contains",
+		}
+	if bank_reference_normalized and _reference_contains(normalize_statement_text(candidate_reference), bank_reference_normalized):
+		return {
+			"score": 20,
+			"reason": "Payment reference/remarks contains the bank reference.",
+			"reference_match_exact": 0,
+			"reference_match_strength": "contains",
+		}
+	if suggested_invoice_normalized and _reference_contains(bank_text_normalized, suggested_invoice_normalized):
+		return {
+			"score": 18,
+			"reason": "Bank narration/reference contains the Sales Invoice name.",
+			"reference_match_exact": 0,
+			"reference_match_strength": "narration_contains_reference",
+		}
+	if candidate_name_normalized and _reference_contains(bank_text_normalized, candidate_name_normalized):
+		return {
+			"score": 18,
+			"reason": "Bank narration/reference contains the suggested document name.",
+			"reference_match_exact": 0,
+			"reference_match_strength": "narration_contains_reference",
+		}
+	if customer_normalized and _reference_contains(bank_text_normalized, customer_normalized):
+		return {
+			"score": 8,
+			"reason": "Customer or party name appears in the bank narration.",
+			"reference_match_exact": 0,
+			"reference_match_strength": "weak",
+		}
+	return {
+		"score": 0,
+		"reason": "No strong reference match found.",
+		"reference_match_exact": 0,
+		"reference_match_strength": "none",
+	}
+
+
+
+def score_bank_transaction_candidate(bank_transaction, candidate):
+	settings = get_bank_transaction_matching_settings()
+	tolerance = flt(settings.get("amount_tolerance"))
+	score = 0
+	reasons = []
+	bank_amount = flt(bank_transaction.get("amount"))
+	candidate_amount = flt(candidate.get("candidate_amount"))
+	amount_difference = abs(bank_amount - candidate_amount)
+
+	if amount_difference <= 0.01:
+		score += 35
+		reasons.append(candidate.get("reason") or "Exact amount match.")
+	elif amount_difference <= tolerance:
+		score += 25
+		reasons.append(candidate.get("reason") or "Amount is within the configured tolerance.")
+	elif candidate.get("supports_partial_match") and min(bank_amount, candidate_amount) > 0:
+		score += 15
+		reasons.append(candidate.get("reason") or "Amount suggests a possible partial or allocated match.")
+	else:
+		score -= 25
+		reasons.append(candidate.get("reason") or "Amount is materially different.")
+
+	reference_payload = _reference_match_payload(bank_transaction, candidate)
+	score += cint(reference_payload.get("score") or 0)
+	if reference_payload.get("reason") and reference_payload.get("score"):
+		reasons.append(reference_payload.get("reason"))
+
+	bank_date = bank_transaction.get("transaction_date")
+	candidate_date = candidate.get("posting_date")
+	date_difference = _date_difference_days(bank_date, candidate_date)
+	if date_difference == 0:
+		score += 10
+		reasons.append("Transaction date matches exactly.")
+	elif date_difference is not None and date_difference <= cint(settings.get("date_window_days") or 3):
+		score += 5
+		reasons.append("Transaction date is within the matching window.")
+
+	account_payload = _resolve_account_match_payload(bank_transaction, candidate)
+	account_match = account_payload.get("matched") is True
+	account_match_available = 1 if account_payload.get("available") else 0
+	if account_match:
+		score += 10
+		reasons.append(account_payload.get("reason") or "Bank account or expected account aligns with the transaction.")
+
+	branch_match = bool(bank_transaction.get("branch") and candidate.get("branch") and bank_transaction.get("branch") == candidate.get("branch"))
+	branch_match_available = 1 if bank_transaction.get("branch") and candidate.get("branch") else 0
+	if branch_match:
+		score += 5
+		reasons.append("RetailEdge branch attribution matches.")
+
+	if candidate.get("document_type") == "Sales Invoice" and cstr(candidate.get("payment_verification_status")).strip() == "Bank Verified":
+		score -= 30
+		reasons.append("Sales Invoice is already marked Bank Verified.")
+
+	if bank_transaction.get("direction") == "Outflow" and candidate.get("document_type") == "Sales Invoice":
+		score -= 60
+		reasons.append("Outflow transactions are not treated as customer sales receipts.")
+
+	category_key = normalize_candidate_category_key(candidate.get("candidate_category"))
+	if category_key == "payment_entry_match":
+		score += 20
+		reasons.append("Matched submitted Payment Entry.")
+	elif category_key in {"invoice_payment_row_match", "pos_payment_match"}:
+		score += 15
+		reasons.append("Matched POS payment row." if category_key == "pos_payment_match" else "Matched invoice payment row.")
+	elif category_key == "invoice_context_only":
+		score = min(score, cint(settings.get("strong_match_score") or 80) - 1)
+		reasons.append("Sales Invoice is context only; payment event evidence is required for auto-match.")
+	elif category_key == "weak_invoice_total_similarity":
+		score = min(score, 45)
+		reasons.append("Invoice total matched, but no matching payment event was found.")
+	elif category_key in {"grouped_payment_event_match", "multi_payment_bank_transaction_candidate"}:
+		score = min(score, cint(settings.get("strong_match_score") or 80) - 1)
+		reasons.append("Grouped or multi-payment candidates require manual review in this phase.")
+
+	if amount_scenario_requires_manual_review(candidate.get("amount_scenario")):
+		score = min(score, cint(settings.get("strong_match_score") or 80) - 1)
+		reasons.append(f"{get_amount_scenario_label(candidate.get('amount_scenario'))} requires manual review.")
+
+	if score >= cint(settings.get("strong_match_score") or 80):
+		confidence = "Strong Match"
+	elif score >= cint(settings.get("minimum_possible_score") or 50):
+		confidence = "Possible Match"
+	elif score >= 30:
+		confidence = "Weak Match"
+	else:
+		confidence = "No Match"
+
+	return {
+		"score": score,
+		"confidence": confidence,
+		"reasons": reasons,
+		"reference_match_exact": cint(reference_payload.get("reference_match_exact") or 0),
+		"reference_match_strength": reference_payload.get("reference_match_strength") or "none",
+		"date_difference_days": date_difference,
+		"date_exact": 1 if date_difference == 0 else 0,
+		"date_in_normal_window": 1 if date_difference is not None and date_difference <= cint(settings.get("date_window_days") or 3) else 0,
+		"account_match": 1 if account_match else 0,
+		"account_match_available": account_match_available,
+		"account_resolution_status": account_payload.get("status"),
+		"account_resolution_reason": account_payload.get("reason"),
+		"bank_canonical_account": account_payload.get("bank_canonical_account"),
+		"candidate_canonical_account": account_payload.get("candidate_canonical_account"),
+		"branch_match": 1 if branch_match else 0,
+		"branch_match_available": branch_match_available,
+	}
+
+
+
+def _build_multi_invoice_candidates(bank_transaction, invoices, filters, settings):
+	# R5.3.1 keeps grouped payment-event matching as a manual-review design foundation only.
+	# We intentionally avoid forcing a misleading one-document review record until the DocType
+	# can safely store multiple matched payment events in a dedicated child structure.
+	return []

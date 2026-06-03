@@ -16,6 +16,7 @@ from retailedge.bank_transaction_matching import (
 	get_candidate_category_label,
 	get_auto_match_status_for_row,
 	get_amount_scenario_label,
+	_normalize_auto_match_score,
 	get_bank_transaction_matching_settings,
 	get_bank_transaction_matching_rows,
 	get_review_creation_block_reason,
@@ -1448,7 +1449,7 @@ def _populate_match_document(doc, bank_transaction, candidate=None, source_repor
 	doc.candidate_amount = flt(candidate.get("candidate_amount"))
 	doc.amount_difference = flt(doc.bank_amount) - flt(doc.candidate_amount)
 	doc.match_confidence = candidate.get("confidence") or "No Match"
-	doc.match_score = cint(candidate.get("score") or 0)
+	doc.match_score = _normalize_auto_match_score(candidate.get("score"), default=0)
 	if hasattr(doc, "amount_scenario"):
 		doc.amount_scenario = get_amount_scenario_label(candidate.get("amount_scenario")) or candidate.get("amount_scenario")
 	if hasattr(doc, "amount_breakdown_summary"):
@@ -1459,7 +1460,7 @@ def _populate_match_document(doc, bank_transaction, candidate=None, source_repor
 				"amount_difference": flt(bank_transaction.get("amount")) - flt(candidate.get("candidate_amount")),
 				"amount_scenario": candidate.get("amount_scenario"),
 				"match_confidence": candidate.get("confidence"),
-				"match_score": candidate.get("score"),
+				"match_score": _normalize_auto_match_score(candidate.get("score"), default=0),
 				"sales_invoice_outstanding_amount": candidate.get("sales_invoice_outstanding_amount"),
 				"sales_invoice_grand_total": candidate.get("sales_invoice_grand_total"),
 				"payment_entry_paid_amount": candidate.get("payment_entry_paid_amount"),

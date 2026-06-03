@@ -80,9 +80,10 @@ class BankMatchingOperationalReportsTests(unittest.TestCase):
     @patch("retailedge.bank_matching_operational_reports.sales_invoice_has_active_confirmed_bank_match", return_value=False)
     @patch("retailedge.bank_matching_operational_reports.get_sales_invoice_payment_rows")
     @patch("retailedge.bank_matching_operational_reports._get_sales_invoice_doc")
-    @patch("retailedge.bank_matching_operational_reports._get_sales_invoice_rows")
+    @patch("retailedge.bank_matching_operational_reports._get_sales_invoice_payment_event_source_rows")
+    @patch("retailedge.bank_matching_operational_reports._payment_entry_event_rows", return_value=[])
     @patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
-    def test_unmatched_bank_payment_events_exclude_cash_rows_and_keep_non_cash_amount(self, _mock_doctype, mock_invoice_rows, mock_invoice_doc, mock_payment_rows, _mock_confirmed, _mock_active_review, _mock_find_bank):
+    def test_unmatched_bank_payment_events_exclude_cash_rows_and_keep_non_cash_amount(self, _mock_doctype, _mock_payment_entry_events, mock_invoice_rows, mock_invoice_doc, mock_payment_rows, _mock_confirmed, _mock_active_review, _mock_find_bank):
         mock_invoice_rows.return_value = [
             {"name": "ACC-SINV-2026-00025", "posting_date": "2026-05-20", "company": "Process Edge (Demo)", "customer": "Palmer", "customer_name": "Palmer Productions", "retailedge_branch": "HQ"}
         ]
@@ -98,11 +99,12 @@ class BankMatchingOperationalReportsTests(unittest.TestCase):
         self.assertEqual(rows[0]["amount"], 810)
         self.assertEqual(rows[0]["mode_of_payment"], "Moniepoint")
 
+    @patch("retailedge.bank_matching_operational_reports._sales_invoice_payment_event_rows", return_value=[])
     @patch("retailedge.bank_matching_operational_reports._get_payment_entry_sales_invoice_references", return_value={})
-    @patch("retailedge.bank_matching_operational_reports._get_payment_entry_rows")
+    @patch("retailedge.bank_matching_operational_reports._get_payment_entry_event_source_rows")
     @patch("retailedge.bank_matching_operational_reports.payment_entry_has_active_confirmed_bank_match", return_value=True)
     @patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
-    def test_confirmed_payment_entry_is_excluded_from_unmatched_events_by_default(self, _mock_doctype, _mock_confirmed, mock_rows, _mock_refs):
+    def test_confirmed_payment_entry_is_excluded_from_unmatched_events_by_default(self, _mock_doctype, _mock_confirmed, mock_rows, _mock_refs, _mock_sales_invoice_events):
         mock_rows.return_value = [
             {"name": "ACC-PAY-2026-00008", "posting_date": "2026-05-21", "company": "Process Edge (Demo)", "party": "West View", "party_type": "Customer", "paid_to": "Demo Bank Account - PED", "received_amount": 1000, "mode_of_payment": "Bank Transfer"}
         ]

@@ -84,6 +84,181 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(settings["allow_auto_match_payment_entry"], 1)
 		self.assertEqual(settings["allow_auto_match_sales_invoice"], 0)
 
+	@patch("retailedge.bank_transaction_matching.get_retailedge_settings")
+	def test_minimum_auto_match_score_is_read_from_settings(self, mock_settings):
+		mock_settings.return_value = SimpleNamespace(
+			enable_bank_auto_match=1,
+			auto_prepare_exact_bank_matches=1,
+			auto_confirm_exact_bank_matches=0,
+			minimum_auto_match_score=65,
+			require_exact_reference_for_auto_match=1,
+			require_same_bank_account_for_auto_match=1,
+			require_same_branch_for_auto_match=1,
+			allow_auto_match_payment_entry=1,
+			allow_auto_match_sales_invoice=1,
+			require_no_duplicate_candidate_for_auto_match=1,
+			require_no_active_review_for_auto_match=1,
+		)
+		settings = get_bank_transaction_matching_settings()
+		self.assertEqual(settings["minimum_auto_match_score"], 65)
+
+	def test_score_below_auto_match_threshold_is_blocked(self):
+		row = {
+			"bank_transaction": "ACC-BTN-0001",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "ACC-PAY-0001",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"candidate_category": "Payment Entry Match",
+			"match_confidence": "Strong Match",
+			"match_score": 64,
+			"amount_difference": 0,
+			"reference_match_exact": 1,
+			"account_match_available": 1,
+			"account_match": 1,
+		}
+		settings = {
+			"enable_bank_auto_match": 1,
+			"auto_prepare_exact_bank_matches": 1,
+			"auto_confirm_exact_bank_matches": 1,
+			"minimum_auto_match_score": 65,
+			"require_exact_reference_for_auto_match": 1,
+			"require_same_bank_account_for_auto_match": 1,
+			"require_same_branch_for_auto_match": 0,
+			"allow_auto_match_payment_entry": 1,
+			"allow_auto_match_sales_invoice": 0,
+			"require_no_duplicate_candidate_for_auto_match": 1,
+			"require_no_active_review_for_auto_match": 1,
+		}
+		status = get_auto_match_status_for_row(row, settings=settings)
+		self.assertEqual(status["status"], "Blocked from Auto-Match")
+		self.assertIn("Score below auto-match threshold", status["reason"])
+		self.assertIn("Match Score: 64", status["reason"])
+		self.assertIn("Required Minimum: 65", status["reason"])
+
+	def test_score_equal_to_auto_match_threshold_passes_score_gate(self):
+		row = {
+			"bank_transaction": "ACC-BTN-0001",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "ACC-PAY-0001",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"candidate_category": "Payment Entry Match",
+			"match_confidence": "Strong Match",
+			"match_score": 65,
+			"amount_difference": 0,
+			"reference_match_exact": 1,
+			"account_match_available": 1,
+			"account_match": 1,
+		}
+		settings = {
+			"enable_bank_auto_match": 1,
+			"auto_prepare_exact_bank_matches": 1,
+			"auto_confirm_exact_bank_matches": 0,
+			"minimum_auto_match_score": 65,
+			"require_exact_reference_for_auto_match": 1,
+			"require_same_bank_account_for_auto_match": 1,
+			"require_same_branch_for_auto_match": 0,
+			"allow_auto_match_payment_entry": 1,
+			"allow_auto_match_sales_invoice": 0,
+			"require_no_duplicate_candidate_for_auto_match": 1,
+			"require_no_active_review_for_auto_match": 1,
+		}
+		status = get_auto_match_status_for_row(row, settings=settings)
+		self.assertEqual(status["status"], "Eligible for Auto-Prepare")
+
+	def test_auto_match_disabled_blocks_even_exact_candidate(self):
+		row = {
+			"bank_transaction": "ACC-BTN-0001",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "ACC-PAY-0001",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"candidate_category": "Payment Entry Match",
+			"match_confidence": "Strong Match",
+			"match_score": 99,
+			"amount_difference": 0,
+			"reference_match_exact": 1,
+			"account_match_available": 1,
+			"account_match": 1,
+		}
+		settings = {
+			"enable_bank_auto_match": 0,
+			"auto_prepare_exact_bank_matches": 1,
+			"auto_confirm_exact_bank_matches": 1,
+			"minimum_auto_match_score": 65,
+			"require_exact_reference_for_auto_match": 1,
+			"require_same_bank_account_for_auto_match": 1,
+			"require_same_branch_for_auto_match": 0,
+			"allow_auto_match_payment_entry": 1,
+			"allow_auto_match_sales_invoice": 0,
+			"require_no_duplicate_candidate_for_auto_match": 1,
+			"require_no_active_review_for_auto_match": 1,
+		}
+		status = get_auto_match_status_for_row(row, settings=settings)
+		self.assertEqual(status["status"], "Blocked from Auto-Match")
+		self.assertIn("disabled in Settings", status["reason"])
+
+	def test_weak_reference_blocks_only_when_exact_reference_is_required(self):
+		row = {
+			"bank_transaction": "ACC-BTN-0001",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "ACC-PAY-0001",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"candidate_category": "Payment Entry Match",
+			"match_confidence": "Strong Match",
+			"match_score": 99,
+			"amount_difference": 0,
+			"reference_match_exact": 0,
+			"account_match_available": 1,
+			"account_match": 1,
+		}
+		strict_settings = {
+			"enable_bank_auto_match": 1,
+			"auto_prepare_exact_bank_matches": 1,
+			"auto_confirm_exact_bank_matches": 0,
+			"minimum_auto_match_score": 65,
+			"require_exact_reference_for_auto_match": 1,
+			"require_same_bank_account_for_auto_match": 1,
+			"require_same_branch_for_auto_match": 0,
+			"allow_auto_match_payment_entry": 1,
+			"allow_auto_match_sales_invoice": 0,
+			"require_no_duplicate_candidate_for_auto_match": 1,
+			"require_no_active_review_for_auto_match": 1,
+		}
+		loose_settings = dict(strict_settings, require_exact_reference_for_auto_match=0)
+		strict_status = get_auto_match_status_for_row(row, settings=strict_settings)
+		loose_status = get_auto_match_status_for_row(row, settings=loose_settings)
+		self.assertEqual(strict_status["status"], "Blocked from Auto-Match")
+		self.assertEqual(loose_status["status"], "Eligible for Auto-Prepare")
+
+	def test_ratio_style_score_is_normalized_before_threshold_comparison(self):
+		row = {
+			"bank_transaction": "ACC-BTN-0001",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "ACC-PAY-0001",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"candidate_category": "Payment Entry Match",
+			"match_confidence": "Strong Match",
+			"match_score": 0.9,
+			"amount_difference": 0,
+			"reference_match_exact": 1,
+			"account_match_available": 1,
+			"account_match": 1,
+		}
+		settings = {
+			"enable_bank_auto_match": 1,
+			"auto_prepare_exact_bank_matches": 1,
+			"auto_confirm_exact_bank_matches": 0,
+			"minimum_auto_match_score": 65,
+			"require_exact_reference_for_auto_match": 1,
+			"require_same_bank_account_for_auto_match": 1,
+			"require_same_branch_for_auto_match": 0,
+			"allow_auto_match_payment_entry": 1,
+			"allow_auto_match_sales_invoice": 0,
+			"require_no_duplicate_candidate_for_auto_match": 1,
+			"require_no_active_review_for_auto_match": 1,
+		}
+		status = get_auto_match_status_for_row(row, settings=settings)
+		self.assertEqual(status["status"], "Eligible for Auto-Prepare")
+
 	def test_exact_sales_invoice_match_can_be_eligible_for_auto_prepare(self):
 		row = {
 			"bank_transaction": "ACC-BTN-0001",
