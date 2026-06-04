@@ -91,6 +91,10 @@ from retailedge.reconciliation_handoff import (
 	get_reconciliation_handoff_for_match as _get_reconciliation_handoff_for_match,
 	get_reconciliation_handoff_summary as _get_reconciliation_handoff_summary,
 )
+from retailedge.reconciliation_bridge import (
+	get_reconciliation_preflight as _get_reconciliation_preflight,
+	reconcile_confirmed_bank_match as _reconcile_confirmed_bank_match,
+)
 from retailedge.bank_transaction_match_workflow import (
 	assert_can_manage_bank_transaction_match as _assert_can_manage_bank_transaction_match,
 	bulk_confirm_bank_transaction_matches as _bulk_confirm_bank_transaction_matches,
@@ -671,6 +675,18 @@ def get_reconciliation_handoff_summary(filters=None):
 def get_reconciliation_handoff_for_match(match_name):
 	_assert_can_access_bank_transaction_matching()
 	return _get_reconciliation_handoff_for_match(match_name)
+
+
+@frappe.whitelist()
+def get_reconciliation_preflight(match_name):
+	_assert_can_access_bank_transaction_matching()
+	return _get_reconciliation_preflight(match_name)
+
+
+@frappe.whitelist()
+def reconcile_confirmed_bank_match(match_name, dry_run=True):
+	_assert_can_access_bank_transaction_matching()
+	return _reconcile_confirmed_bank_match(match_name=match_name, dry_run=dry_run)
 
 
 @frappe.whitelist()
