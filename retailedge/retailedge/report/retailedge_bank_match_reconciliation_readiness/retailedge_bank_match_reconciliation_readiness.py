@@ -4,7 +4,10 @@ import frappe
 from frappe import _
 from frappe.utils import get_first_day, getdate, nowdate
 
-from retailedge.bank_matching_operational_reports import get_bank_match_reconciliation_readiness_rows
+from retailedge.bank_matching_operational_reports import (
+	get_bank_match_reconciliation_readiness_rows,
+	get_operational_report_message,
+)
 
 
 def execute(filters=None):
@@ -14,7 +17,7 @@ def execute(filters=None):
 	filters.setdefault("include_reconciled", 0)
 	filters.setdefault("include_rejected_cancelled", 0)
 	rows = get_bank_match_reconciliation_readiness_rows(filters=filters, limit=filters.get("limit") or 500)
-	message = None if rows else _("No bank match readiness rows were found for the selected filters.")
+	message = get_operational_report_message() or (None if rows else _("No bank match readiness rows were found for the selected filters."))
 	return get_columns(), rows, message, None, get_report_summary(rows)
 
 
@@ -25,14 +28,14 @@ def get_columns():
 		{"label": _("Transaction Date"), "fieldname": "transaction_date", "fieldtype": "Date", "width": 100},
 		{"label": _("Bank Amount"), "fieldname": "bank_amount", "fieldtype": "Currency", "width": 110},
 		{"label": _("Bank Account"), "fieldname": "bank_account", "fieldtype": "Link", "options": "Bank Account", "width": 170},
-		{"label": _("Resolved Bank Account"), "fieldname": "resolved_bank_account", "fieldtype": "Data", "width": 170},
+		{"label": _("Resolved Bank Account"), "fieldname": "resolved_bank_account", "fieldtype": "Link", "options": "Account", "width": 170},
 		{"label": _("Candidate Type"), "fieldname": "candidate_type", "fieldtype": "Data", "width": 150},
 		{"label": _("Suggested Document Type"), "fieldname": "suggested_document_type", "fieldtype": "Data", "width": 130},
 		{"label": _("Suggested Document"), "fieldname": "suggested_document", "fieldtype": "Dynamic Link", "options": "suggested_document_type", "width": 160},
 		{"label": _("Payment Event Source"), "fieldname": "payment_event_source", "fieldtype": "Data", "width": 150},
 		{"label": _("Payment Event Amount"), "fieldname": "payment_event_amount", "fieldtype": "Currency", "width": 120},
-		{"label": _("Payment Account"), "fieldname": "payment_account", "fieldtype": "Data", "width": 170},
-		{"label": _("Resolved Payment Account"), "fieldname": "resolved_payment_account", "fieldtype": "Data", "width": 170},
+		{"label": _("Payment Account"), "fieldname": "payment_account", "fieldtype": "Link", "options": "Account", "width": 170},
+		{"label": _("Resolved Payment Account"), "fieldname": "resolved_payment_account", "fieldtype": "Link", "options": "Account", "width": 170},
 		{"label": _("Party"), "fieldname": "party", "fieldtype": "Data", "width": 150},
 		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 120},
 		{"label": _("Match Confidence"), "fieldname": "match_confidence", "fieldtype": "Data", "width": 110},
@@ -56,4 +59,3 @@ def get_report_summary(rows):
 		{"label": _("Needs Review"), "value": sum(1 for row in rows if row.get("reconciliation_readiness_status") == "Needs Review"), "datatype": "Int", "indicator": "Orange"},
 		{"label": _("Exceptions / Not Ready"), "value": sum(1 for row in rows if row.get("reconciliation_readiness_status") in {"Not Ready", "Exception"}), "datatype": "Int", "indicator": "Red"},
 	]
-

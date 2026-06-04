@@ -427,3 +427,84 @@ def get_reconciliation_handoff_for_match(match_name):
 				"readiness_status": row.get("readiness_status"),
 			}
 	return {}
+
+
+def _build_handoff_row(readiness_row, conflict_counts):
+	readiness_row = frappe._dict(readiness_row or {})
+	enriched = frappe._dict(dict(readiness_row))
+	enriched["candidate_doctype"] = cstr(readiness_row.get("suggested_document_type")).strip()
+	enriched["candidate_name"] = cstr(readiness_row.get("suggested_document")).strip()
+	enriched["candidate_date"] = readiness_row.get("candidate_posting_date") or readiness_row.get("transaction_date")
+	enriched["candidate_account"] = readiness_row.get("resolved_payment_account") or readiness_row.get("payment_account")
+	enriched["candidate_amount"] = flt(readiness_row.get("payment_event_amount") or readiness_row.get("candidate_amount"))
+	enriched["bank_transaction_date"] = readiness_row.get("transaction_date")
+	enriched["bank_transaction_amount"] = flt(readiness_row.get("bank_amount"))
+	enriched["match_type"] = readiness_row.get("candidate_type") or readiness_row.get("suggested_document_type")
+	enriched["match_status"] = readiness_row.get("review_status")
+	enriched["readiness_status"] = readiness_row.get("reconciliation_readiness_status")
+	handoff_status, handoff_priority, blocking_reason = classify_reconciliation_handoff(enriched, conflict_counts=conflict_counts)
+	enriched["handoff_status"] = handoff_status
+	enriched["handoff_priority"] = handoff_priority
+	enriched["blocking_reason"] = blocking_reason
+	guidance = build_erpnext_reconciliation_guidance(enriched)
+	enriched.update(guidance)
+	enriched["notes"] = guidance.get("erpnext_reconciliation_notes")
+	return {
+		"handoff_status": enriched.get("handoff_status"),
+		"handoff_priority": enriched.get("handoff_priority"),
+		"bank_transaction": enriched.get("bank_transaction"),
+		"bank_transaction_date": enriched.get("bank_transaction_date"),
+		"bank_account": enriched.get("bank_account"),
+		"bank_transaction_amount": flt(enriched.get("bank_transaction_amount")),
+		"candidate_doctype": enriched.get("candidate_doctype"),
+		"candidate_name": enriched.get("candidate_name"),
+		"candidate_date": enriched.get("candidate_date"),
+		"candidate_account": enriched.get("candidate_account"),
+		"candidate_amount": flt(enriched.get("candidate_amount")),
+		"match_type": enriched.get("match_type"),
+		"match_status": enriched.get("match_status"),
+		"match_confidence": readiness_row.get("match_confidence"),
+		"match_score": readiness_row.get("match_score"),
+		"readiness_status": enriched.get("readiness_status"),
+		"recommended_action": enriched.get("recommended_action"),
+		"reviewer_message": enriched.get("reviewer_message"),
+		"blocking_reason": enriched.get("blocking_reason"),
+		"erpnext_reconciliation_target": enriched.get("erpnext_reconciliation_target"),
+		"erpnext_reconciliation_notes": enriched.get("erpnext_reconciliation_notes"),
+		"payment_event_source": readiness_row.get("payment_event_source"),
+		"payment_row_reference": readiness_row.get("payment_row_reference"),
+		"party": readiness_row.get("party"),
+		"branch": readiness_row.get("branch"),
+		"bank_match_review": readiness_row.get("bank_match_review"),
+	}
+
+
+
+def get_reconciliation_handoff_summary(filters=None, limit=500):
+	filters = _default_handoff_filters(filters)
+	rows = _get_match_rows(filters=filters, limit=min(int(limit or 500), 2000))
+	conflict_counts = _get_conflict_counts(rows)
+	handoff_rows = []
+	for readiness_row in rows:
+		if filters.get("candidate_doctype") and cstr(readiness_row.get("suggested_document_type")).strip() != cstr(filters.get("candidate_doctype")).strip():
+			continue
+		if filters.get("match_type") and cstr(readiness_row.get("candidate_type")).strip() != cstr(filters.get("match_type")).strip():
+			continue
+		if filters.get("match_status") and cstr(readiness_row.get("review_status")).strip() != cstr(filters.get("match_status")).strip():
+			continue
+		row = _build_handoff_row(readiness_row, conflict_counts)
+		if not _handoff_status_allowed(row, filters):
+			continue
+		handoff_rows.append(row)
+	counts = Counter(cstr(row.get("handoff_status")).strip() for row in handoff_rows)
+	return {
+		"rows": handoff_rows,
+		"summary": {
+			"ready": counts.get(HANDOFF_READY, 0),
+			"needs_review": counts.get(HANDOFF_NEEDS_REVIEW, 0),
+			"not_eligible": counts.get(HANDOFF_NOT_ELIGIBLE, 0),
+			"already_reconciled": counts.get(HANDOFF_ALREADY_RECONCILED, 0),
+			"exception": counts.get(HANDOFF_EXCEPTION, 0),
+			"total": len(handoff_rows),
+		},
+	}

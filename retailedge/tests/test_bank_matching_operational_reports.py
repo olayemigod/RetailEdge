@@ -9,6 +9,7 @@ import frappe
 
 from retailedge.bank_matching_operational_reports import (
     get_bank_match_reconciliation_readiness_rows,
+    get_operational_report_message,
     get_unmatched_bank_payment_event_rows,
     get_unmatched_bank_transaction_rows,
 )
@@ -75,22 +76,14 @@ class BankMatchingOperationalReportsTests(unittest.TestCase):
         rows = get_unmatched_bank_transaction_rows({"from_date": "2026-05-01", "to_date": "2026-05-31"})
         self.assertEqual(rows, [{"bank_transaction": "BT-OPEN"}])
 
-    @patch("retailedge.bank_matching_operational_reports._find_candidate_bank_transaction_for_event", return_value=None)
-    @patch("retailedge.bank_matching_operational_reports._active_review_match_for_candidate", return_value=None)
-    @patch("retailedge.bank_matching_operational_reports.sales_invoice_has_active_confirmed_bank_match", return_value=False)
-    @patch("retailedge.bank_matching_operational_reports.get_sales_invoice_payment_rows")
-    @patch("retailedge.bank_matching_operational_reports._get_sales_invoice_doc")
+    @patch("retailedge.bank_matching_operational_reports._get_candidate_review_state", return_value=({}, {}, set()))
     @patch("retailedge.bank_matching_operational_reports._get_sales_invoice_payment_event_source_rows")
     @patch("retailedge.bank_matching_operational_reports._payment_entry_event_rows", return_value=[])
     @patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
-    def test_unmatched_bank_payment_events_exclude_cash_rows_and_keep_non_cash_amount(self, _mock_doctype, _mock_payment_entry_events, mock_invoice_rows, mock_invoice_doc, mock_payment_rows, _mock_confirmed, _mock_active_review, _mock_find_bank):
+    def test_unmatched_bank_payment_events_exclude_cash_rows_and_keep_non_cash_amount(self, _mock_doctype, _mock_payment_entry_events, mock_invoice_rows, _mock_review_state):
         mock_invoice_rows.return_value = [
-            {"name": "ACC-SINV-2026-00025", "posting_date": "2026-05-20", "company": "Process Edge (Demo)", "customer": "Palmer", "customer_name": "Palmer Productions", "retailedge_branch": "HQ"}
-        ]
-        mock_invoice_doc.return_value = SimpleNamespace(docstatus=1)
-        mock_payment_rows.return_value = [
-            {"payment_row_index": 1, "mode_of_payment": "Cash", "account": "Cash - PED", "base_amount": 500, "amount": 500, "payment_category": "Cash", "expected_account": "Cash - PED"},
-            {"payment_row_index": 2, "mode_of_payment": "Moniepoint", "account": "Demo Bank Account - PED", "base_amount": 810, "amount": 810, "payment_category": "Bank Transfer", "expected_account": "Demo Bank Account - PED"},
+            {"name": "ACC-SINV-2026-00025", "posting_date": "2026-05-20", "company": "Process Edge (Demo)", "customer": "Palmer", "customer_name": "Palmer Productions", "retailedge_branch": "HQ", "payment_row_index": 1, "mode_of_payment": "Cash", "payment_account": "Cash - PED", "payment_amount": 500, "payment_reference": "CASH-001"},
+            {"name": "ACC-SINV-2026-00025", "posting_date": "2026-05-20", "company": "Process Edge (Demo)", "customer": "Palmer", "customer_name": "Palmer Productions", "retailedge_branch": "HQ", "payment_row_index": 2, "mode_of_payment": "Moniepoint", "payment_account": "Demo Bank Account - PED", "payment_amount": 810, "payment_reference": "MON-001"},
         ]
 
         rows = get_unmatched_bank_payment_event_rows({"from_date": "2026-05-01", "to_date": "2026-05-31"})
@@ -100,11 +93,11 @@ class BankMatchingOperationalReportsTests(unittest.TestCase):
         self.assertEqual(rows[0]["mode_of_payment"], "Moniepoint")
 
     @patch("retailedge.bank_matching_operational_reports._sales_invoice_payment_event_rows", return_value=[])
+    @patch("retailedge.bank_matching_operational_reports._get_candidate_review_state", return_value=({}, {}, {"ACC-PAY-2026-00008"}))
     @patch("retailedge.bank_matching_operational_reports._get_payment_entry_sales_invoice_references", return_value={})
     @patch("retailedge.bank_matching_operational_reports._get_payment_entry_event_source_rows")
-    @patch("retailedge.bank_matching_operational_reports.payment_entry_has_active_confirmed_bank_match", return_value=True)
     @patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
-    def test_confirmed_payment_entry_is_excluded_from_unmatched_events_by_default(self, _mock_doctype, _mock_confirmed, mock_rows, _mock_refs, _mock_sales_invoice_events):
+    def test_confirmed_payment_entry_is_excluded_from_unmatched_events_by_default(self, _mock_doctype, mock_rows, _mock_refs, _mock_review_state, _mock_sales_invoice_events):
         mock_rows.return_value = [
             {"name": "ACC-PAY-2026-00008", "posting_date": "2026-05-21", "company": "Process Edge (Demo)", "party": "West View", "party_type": "Customer", "paid_to": "Demo Bank Account - PED", "received_amount": 1000, "mode_of_payment": "Bank Transfer"}
         ]
@@ -262,24 +255,35 @@ class BankMatchingOperationalReportFilterTests(unittest.TestCase):
 		self.assertEqual(rows[0]["payment_event_document"], "ACC-PAY-0001")
 		self.assertEqual(rows[0]["payment_account"], "Demo Bank Account - PED")
 
-	@patch("retailedge.bank_matching_operational_reports._find_candidate_bank_transaction_for_event", return_value=None)
-	@patch("retailedge.bank_matching_operational_reports._active_review_match_for_candidate", return_value=None)
-	@patch("retailedge.bank_matching_operational_reports.sales_invoice_has_active_confirmed_bank_match", return_value=False)
-	@patch("retailedge.bank_matching_operational_reports.get_sales_invoice_payment_rows")
-	@patch("retailedge.bank_matching_operational_reports._get_sales_invoice_doc")
+	@patch("retailedge.bank_matching_operational_reports._get_candidate_review_state", return_value=({}, {}, set()))
 	@patch("retailedge.bank_matching_operational_reports._get_sales_invoice_payment_event_source_rows")
 	@patch("retailedge.bank_matching_operational_reports._payment_entry_event_rows", return_value=[])
 	@patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
-	def test_invoice_payment_event_rows_filter_mode_of_payment_and_resolved_account(self, _mock_doctype, _mock_payment_entry_rows, mock_invoice_rows, mock_invoice_doc, mock_payment_rows, _mock_confirmed, _mock_active_review, _mock_find_bank):
+	def test_invoice_payment_event_rows_filter_mode_of_payment_and_resolved_account(self, _mock_doctype, _mock_payment_entry_rows, mock_invoice_rows, _mock_review_state):
 		mock_invoice_rows.return_value = [
-			{"name": "ACC-SINV-2026-00025", "posting_date": "2026-05-20", "company": "Process Edge (Demo)", "customer": "Palmer", "customer_name": "Palmer Productions", "retailedge_branch": "HQ"}
-		]
-		mock_invoice_doc.return_value = SimpleNamespace(docstatus=1)
-		mock_payment_rows.return_value = [
-			{"payment_row_index": 2, "mode_of_payment": "Moniepoint", "account": "", "base_amount": 810, "amount": 810, "payment_category": "Bank Transfer", "expected_account": "Demo Bank Account - PED"},
-			{"payment_row_index": 3, "mode_of_payment": "Paystack", "account": "Other Account - PED", "base_amount": 500, "amount": 500, "payment_category": "Bank Transfer", "expected_account": "Other Account - PED"},
+			{"name": "ACC-SINV-2026-00025", "posting_date": "2026-05-20", "company": "Process Edge (Demo)", "customer": "Palmer", "customer_name": "Palmer Productions", "retailedge_branch": "HQ", "payment_row_index": 2, "mode_of_payment": "Moniepoint", "payment_account": "", "payment_amount": 810, "payment_reference": "MON-001"},
+			{"name": "ACC-SINV-2026-00025", "posting_date": "2026-05-20", "company": "Process Edge (Demo)", "customer": "Palmer", "customer_name": "Palmer Productions", "retailedge_branch": "HQ", "payment_row_index": 3, "mode_of_payment": "Paystack", "payment_account": "Other Account - PED", "payment_amount": 500, "payment_reference": "PAY-001"},
 		]
 		rows = get_unmatched_bank_payment_event_rows({"from_date": "2026-05-01", "to_date": "2026-05-31", "mode_of_payment": "Moniepoint", "payment_account": "Demo Bank Account - PED"})
 		self.assertEqual(len(rows), 1)
 		self.assertEqual(rows[0]["mode_of_payment"], "Moniepoint")
 		self.assertEqual(rows[0]["resolved_canonical_account"], "Demo Bank Account - PED")
+
+
+class BankMatchingOperationalReportPerformanceGuardsTests(unittest.TestCase):
+    @patch("retailedge.bank_matching_operational_reports._build_unmatched_bank_transaction_row")
+    @patch("retailedge.bank_matching_operational_reports._get_existing_matches_by_bank_transaction", return_value={})
+    @patch("retailedge.bank_matching_operational_reports.normalize_bank_transaction")
+    @patch("retailedge.bank_matching_operational_reports._get_bank_transaction_rows")
+    def test_unmatched_bank_transactions_enforce_row_limit(self, mock_rows, mock_normalize, _mock_matches, mock_build):
+        mock_rows.return_value = [{"name": f"BT-{idx:04d}"} for idx in range(550)]
+        mock_normalize.side_effect = lambda row: {"bank_transaction": row.get("name"), "is_reconciled": 0, "direction": "Inflow", "amount": 100}
+        mock_build.side_effect = lambda bank_transaction, matches, filters: {"bank_transaction": bank_transaction.get("bank_transaction")}
+        rows = get_unmatched_bank_transaction_rows({"from_date": "2026-05-01", "to_date": "2026-05-31"}, limit=500)
+        self.assertEqual(len(rows), 500)
+        self.assertIn("Showing first 500 rows", get_operational_report_message() or "")
+
+    def test_unmatched_bank_transactions_block_too_wide_date_range(self):
+        rows = get_unmatched_bank_transaction_rows({"from_date": "2026-01-01", "to_date": "2026-05-31"})
+        self.assertEqual(rows, [])
+        self.assertIn("60 days or less", get_operational_report_message() or "")

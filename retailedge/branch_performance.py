@@ -30,7 +30,7 @@ BRANCH_PERFORMANCE_ROLES = {
 	"RetailEdgeAuditor",
 }
 PAYMENT_CATEGORY_ORDER = ("Cash", "Bank Transfer", "Card / POS", "Mobile Money", "Other")
-MAX_BRANCH_PERFORMANCE_RANGE_DAYS = 366
+MAX_BRANCH_PERFORMANCE_RANGE_DAYS = 60
 
 
 def get_branch_performance_roles() -> set[str]:
@@ -494,7 +494,7 @@ def _coerce_filters(filters):
 	if getdate(normalised.from_date) > getdate(normalised.to_date):
 		frappe.throw("From Date cannot be after To Date.")
 	if (getdate(normalised.to_date) - getdate(normalised.from_date)).days > MAX_BRANCH_PERFORMANCE_RANGE_DAYS:
-		frappe.throw("Branch Performance date range cannot exceed 366 days.")
+		frappe.throw("Date range too wide for live report. Please use 60 days or less.")
 	return normalised
 
 

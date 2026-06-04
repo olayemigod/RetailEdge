@@ -4,7 +4,10 @@ import frappe
 from frappe import _
 from frappe.utils import get_first_day, getdate, nowdate
 
-from retailedge.bank_matching_operational_reports import get_unmatched_bank_payment_event_rows
+from retailedge.bank_matching_operational_reports import (
+	get_operational_report_message,
+	get_unmatched_bank_payment_event_rows,
+)
 
 
 def execute(filters=None):
@@ -14,8 +17,9 @@ def execute(filters=None):
 	filters.setdefault("payment_event_type", "All")
 	filters.setdefault("include_already_matched", 0)
 	filters.setdefault("include_cash", 0)
+	filters.setdefault("include_candidate_preview", 0)
 	rows = get_unmatched_bank_payment_event_rows(filters=filters, limit=filters.get("limit") or 500)
-	message = None if rows else _("No unmatched bank payment events were found for the selected filters.")
+	message = get_operational_report_message() or (None if rows else _("No unmatched bank payment events were found for the selected filters."))
 	return get_columns(), rows, message, None, get_report_summary(rows)
 
 
@@ -50,4 +54,3 @@ def get_report_summary(rows):
 		{"label": _("Payment Entries"), "value": sum(1 for row in rows if row.get("payment_event_type") == "Payment Entry"), "datatype": "Int", "indicator": "Green"},
 		{"label": _("Invoice / POS Payment Rows"), "value": sum(1 for row in rows if row.get("payment_event_type") != "Payment Entry"), "datatype": "Int", "indicator": "Blue"},
 	]
-

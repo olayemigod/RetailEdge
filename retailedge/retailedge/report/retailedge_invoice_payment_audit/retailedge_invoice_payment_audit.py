@@ -17,6 +17,8 @@ def execute(filters=None):
 def validate_filters(filters):
 	if filters.get("from_date") and filters.get("to_date") and getdate(filters.from_date) > getdate(filters.to_date):
 		frappe.throw(_("From Date cannot be after To Date."))
+	if filters.get("from_date") and filters.get("to_date") and (getdate(filters.to_date) - getdate(filters.from_date)).days + 1 > 60:
+		frappe.throw(_("Date range too wide for live report. Please use 60 days or less."))
 
 
 def get_columns():

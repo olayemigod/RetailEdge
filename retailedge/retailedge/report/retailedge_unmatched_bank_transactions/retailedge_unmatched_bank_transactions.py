@@ -4,7 +4,10 @@ import frappe
 from frappe import _
 from frappe.utils import get_first_day, getdate, nowdate
 
-from retailedge.bank_matching_operational_reports import get_unmatched_bank_transaction_rows
+from retailedge.bank_matching_operational_reports import (
+	get_operational_report_message,
+	get_unmatched_bank_transaction_rows,
+)
 
 
 def execute(filters=None):
@@ -15,8 +18,9 @@ def execute(filters=None):
 	filters.setdefault("include_already_reviewed", 0)
 	filters.setdefault("include_rejected", 0)
 	filters.setdefault("include_reconciled", 0)
+	filters.setdefault("include_candidate_preview", 0)
 	rows = get_unmatched_bank_transaction_rows(filters=filters, limit=filters.get("limit") or 500)
-	message = None if rows else _("No unmatched bank transactions were found for the selected filters.")
+	message = get_operational_report_message() or (None if rows else _("No unmatched bank transactions were found for the selected filters."))
 	return get_columns(), rows, message, None, get_report_summary(rows)
 
 
@@ -27,7 +31,7 @@ def get_columns():
 		{"label": _("Company"), "fieldname": "company", "fieldtype": "Link", "options": "Company", "width": 150},
 		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 130},
 		{"label": _("Bank Account"), "fieldname": "bank_account", "fieldtype": "Link", "options": "Bank Account", "width": 180},
-		{"label": _("Resolved Canonical Account"), "fieldname": "resolved_canonical_account", "fieldtype": "Data", "width": 180},
+		{"label": _("Resolved Canonical Account"), "fieldname": "resolved_canonical_account", "fieldtype": "Link", "options": "Account", "width": 180},
 		{"label": _("Account Resolution"), "fieldname": "account_resolution_status", "fieldtype": "Data", "width": 120},
 		{"label": _("Direction"), "fieldname": "direction", "fieldtype": "Data", "width": 90},
 		{"label": _("Amount"), "fieldname": "amount", "fieldtype": "Currency", "width": 120},
@@ -52,4 +56,3 @@ def get_report_summary(rows):
 		{"label": _("With Suggested Candidate"), "value": sum(1 for row in rows if row.get("best_candidate")), "datatype": "Int", "indicator": "Green"},
 		{"label": _("Without Candidate"), "value": sum(1 for row in rows if not row.get("best_candidate")), "datatype": "Int", "indicator": "Orange"},
 	]
-

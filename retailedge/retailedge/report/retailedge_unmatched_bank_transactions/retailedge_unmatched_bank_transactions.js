@@ -55,6 +55,7 @@ frappe.query_reports["RetailEdge Unmatched Bank Transactions"] = {
 		{ fieldname: "amount_to", label: __("Amount To"), fieldtype: "Currency" },
 		{ fieldname: "match_status", label: __("Review Status"), fieldtype: "Data" },
 		{ fieldname: "account_resolution_status", label: __("Account Resolution Status"), fieldtype: "Select", options: "\nResolved\nUnresolved" },
+		{ fieldname: "include_candidate_preview", label: __("Include Candidate Preview"), fieldtype: "Check", default: 0 },
 		{ fieldname: "include_already_reviewed", label: __("Include Already Reviewed"), fieldtype: "Check", default: 0 },
 		{ fieldname: "include_rejected", label: __("Include Rejected"), fieldtype: "Check", default: 0 },
 		{ fieldname: "include_reconciled", label: __("Include Reconciled"), fieldtype: "Check", default: 0 }

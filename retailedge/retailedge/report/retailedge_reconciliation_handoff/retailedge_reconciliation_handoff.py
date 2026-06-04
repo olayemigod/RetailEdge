@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import get_first_day, getdate, nowdate
 
+from retailedge.bank_matching_operational_reports import get_operational_report_message
 from retailedge.reconciliation_handoff import get_reconciliation_handoff_summary
 
 
@@ -16,7 +17,7 @@ def execute(filters=None):
 	filters.setdefault("include_rejected_cancelled", 0)
 	result = get_reconciliation_handoff_summary(filters=filters, limit=filters.get("limit") or 500)
 	rows = result.get("rows") or []
-	message = None if rows else _("No reconciliation handoff rows were found for the selected filters.")
+	message = get_operational_report_message() or (None if rows else _("No reconciliation handoff rows were found for the selected filters."))
 	return get_columns(), rows, message, None, get_report_summary(result.get("summary") or {})
 
 

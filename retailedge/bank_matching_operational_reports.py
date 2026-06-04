@@ -1020,3 +1020,735 @@ def _sales_invoice_payment_event_rows(filters):
 				event["reason_exception"] = best_bank.get("match_reason") or ""
 			results.append(event)
 	return results
+
+MAX_OPERATIONAL_LIVE_REPORT_RANGE_DAYS = 60
+DEFAULT_OPERATIONAL_REPORT_LIMIT = 500
+MAX_OPERATIONAL_REPORT_LIMIT = 1000
+
+
+def _set_operational_report_message(message=None):
+	frappe.flags.retailedge_operational_report_message = cstr(message).strip() or None
+
+
+
+def get_operational_report_message():
+	return cstr(getattr(frappe.flags, "retailedge_operational_report_message", "")).strip() or None
+
+
+
+def _prepare_operational_live_request(filters=None, default_limit=DEFAULT_OPERATIONAL_REPORT_LIMIT, max_limit=MAX_OPERATIONAL_REPORT_LIMIT, max_days=MAX_OPERATIONAL_LIVE_REPORT_RANGE_DAYS):
+	filters = _default_operational_filters(filters)
+	filters.setdefault("include_candidate_preview", 0)
+	from_date = cstr(filters.get("from_date")).strip()
+	to_date = cstr(filters.get("to_date")).strip()
+	limit = cint(filters.get("limit") or default_limit or DEFAULT_OPERATIONAL_REPORT_LIMIT)
+	limit = max(1, min(limit, max_limit))
+	meta = {"blocked": False, "message": None, "limit": limit}
+	_set_operational_report_message(None)
+	if not from_date or not to_date:
+		meta["blocked"] = True
+		meta["message"] = "Please select a date range."
+		_set_operational_report_message(meta["message"])
+		return filters, limit, meta
+	from_value = getdate(from_date)
+	to_value = getdate(to_date)
+	if from_value > to_value:
+		frappe.throw("From Date cannot be after To Date.")
+	range_days = (to_value - from_value).days + 1
+	if range_days > max_days:
+		meta["blocked"] = True
+		meta["message"] = f"Date range too wide for live report. Please use {max_days} days or less."
+		_set_operational_report_message(meta["message"])
+	return filters, limit, meta
+
+
+
+def _finalize_operational_rows(rows, limit, empty_message=None):
+	rows = list(rows or [])
+	message = None
+	if len(rows) > limit:
+		rows = rows[:limit]
+		message = f"Showing first {limit} rows. Narrow filters for more results."
+	elif not rows and empty_message:
+		message = empty_message
+	_set_operational_report_message(message)
+	return rows
+
+
+
+def _candidate_preview_enabled(filters):
+	return bool(_report_boolean((filters or {}).get("include_candidate_preview"), 0))
+
+
+
+def _build_unmatched_bank_transaction_row(bank_transaction, matches, filters):
+	resolved_account = _resolve_bank_transaction_canonical_account(bank_transaction)
+	preview_enabled = _candidate_preview_enabled(filters)
+	best_candidate = None
+	best_match = None
+	candidate_count = None
+	block_reason = "Candidate preview disabled for performance. Use Bank Transaction Matching for detailed matching."
+	if preview_enabled:
+		candidate_filters = _coerce_matching_filters(filters)
+		candidate_filters["include_exception_candidates"] = 1
+		if _report_boolean(filters.get("include_rejected"), 0):
+			candidate_filters["include_rejected_candidates"] = 1
+		candidates = _candidate_count_for_bank_transaction(bank_transaction.get("bank_transaction"), candidate_filters)
+		best_candidate, best_match = _select_candidate_for_queue(candidates, matches, candidate_filters)
+		candidate_count = len(candidates)
+		if best_candidate:
+			block_reason = (
+				get_review_creation_block_reason(best_candidate)
+				or cstr(best_candidate.get("account_resolution_reason")).strip()
+				or cstr(best_candidate.get("reason") or " ".join(best_candidate.get("reasons") or [])).strip()
+			)
+		else:
+			block_reason = "No bank-matchable payment event found."
+	review_status = "Open Suggestion"
+	if best_match:
+		review_status = cstr(best_match.get("decision_status")).strip() or "Reviewed"
+	elif bank_transaction.get("is_reconciled"):
+		review_status = "Already Reconciled"
+	return {
+		"bank_transaction": bank_transaction.get("bank_transaction"),
+		"transaction_date": bank_transaction.get("transaction_date"),
+		"company": bank_transaction.get("company"),
+		"branch": bank_transaction.get("branch"),
+		"bank_account": bank_transaction.get("bank_account"),
+		"resolved_canonical_account": resolved_account.get("canonical_account"),
+		"account_resolution_status": "Resolved" if resolved_account.get("resolved") else "Unresolved",
+		"direction": bank_transaction.get("direction"),
+		"amount": flt(bank_transaction.get("amount")),
+		"reference": bank_transaction.get("reference"),
+		"narration": bank_transaction.get("description"),
+		"party": bank_transaction.get("party"),
+		"review_status": review_status,
+		"existing_match": best_match.get("name") if best_match else None,
+		"suggested_candidate_count": candidate_count,
+		"best_candidate": cstr((best_candidate or {}).get("document_name")).strip() or None,
+		"best_candidate_type": cstr((best_candidate or {}).get("document_type")).strip() or None,
+		"best_candidate_category": get_candidate_category_label((best_candidate or {}).get("candidate_category")),
+		"blocked_reason": block_reason,
+		"reconciliation_status": bank_transaction.get("reconciliation_status"),
+		"days_outstanding": _days_since(bank_transaction.get("transaction_date")),
+	}
+
+
+
+def get_unmatched_bank_transaction_rows(filters=None, limit=DEFAULT_OPERATIONAL_REPORT_LIMIT):
+	filters, limit, meta = _prepare_operational_live_request(filters, default_limit=limit)
+	if meta.get("blocked"):
+		return []
+	matching_filters = _coerce_matching_filters(filters)
+	bank_rows = _get_bank_transaction_rows(matching_filters, limit + 1)
+	existing_matches = _get_existing_matches_by_bank_transaction([row.get("name") for row in bank_rows if row.get("name")])
+	include_reviewed, include_rejected, include_reconciled = _review_status_filters(filters)
+	results = []
+	for bank_row in bank_rows:
+		bank_transaction = normalize_bank_transaction(bank_row)
+		matches = existing_matches.get(bank_transaction.get("bank_transaction")) or []
+		active_review = _first_active_review_match(matches)
+		confirmed_match = _first_match_with_status(matches, ACTIVE_CONFIRMED_MATCH_STATUS)
+		rejected_match = _first_match_with_status(matches, "Rejected")
+		if bank_transaction.get("is_reconciled") and not include_reconciled:
+			continue
+		if confirmed_match and not include_reviewed:
+			continue
+		if active_review and not include_reviewed:
+			continue
+		if rejected_match and not include_rejected:
+			pass
+		if filters.get("direction") and filters.get("direction") != "All" and bank_transaction.get("direction") != filters.get("direction"):
+			continue
+		if filters.get("amount_from") and flt(bank_transaction.get("amount")) < flt(filters.get("amount_from")):
+			continue
+		if filters.get("amount_to") and flt(bank_transaction.get("amount")) > flt(filters.get("amount_to")):
+			continue
+		row = _build_unmatched_bank_transaction_row(bank_transaction, matches, filters)
+		if filters.get("account_resolution_status"):
+			expected = cstr(filters.get("account_resolution_status")).strip().lower()
+			actual = cstr(row.get("account_resolution_status")).strip().lower()
+			if expected and actual != expected:
+				continue
+		if filters.get("match_status"):
+			status_text = cstr(row.get("review_status")).strip()
+			if status_text != cstr(filters.get("match_status")).strip():
+				continue
+		results.append(row)
+	return _finalize_operational_rows(results, limit, empty_message="No unmatched bank transactions were found for the selected filters.")
+
+
+
+def _get_candidate_review_state(document_type, document_names):
+	rows_by_candidate = _get_review_matches_by_candidate(document_type, document_names)
+	active_by_candidate = {}
+	confirmed_candidates = set()
+	for document_name, match_rows in rows_by_candidate.items():
+		active_match = _first_active_review_match(match_rows)
+		confirmed_match = _first_match_with_status(match_rows, ACTIVE_CONFIRMED_MATCH_STATUS)
+		if active_match:
+			active_by_candidate[document_name] = active_match
+		if confirmed_match:
+			confirmed_candidates.add(document_name)
+	return rows_by_candidate, active_by_candidate, confirmed_candidates
+
+
+
+def _get_payment_entry_event_source_rows(filters, limit=DEFAULT_OPERATIONAL_REPORT_LIMIT):
+	fieldnames = [
+		"name",
+		"posting_date",
+		"company",
+		"party",
+		"party_type",
+		"payment_type",
+		"paid_from",
+		"paid_to",
+		"paid_amount",
+		"received_amount",
+		"reference_no",
+		"remarks",
+	]
+	if has_field("Payment Entry", "mode_of_payment"):
+		fieldnames.append("mode_of_payment")
+	if has_field("Payment Entry", "retailedge_branch"):
+		fieldnames.append("retailedge_branch")
+	query_filters = {"docstatus": 1}
+	if filters.get("company"):
+		query_filters["company"] = filters.get("company")
+	if filters.get("from_date") and filters.get("to_date"):
+		query_filters["posting_date"] = ["between", [filters.get("from_date"), filters.get("to_date")]]
+	elif filters.get("from_date"):
+		query_filters["posting_date"] = [">=", filters.get("from_date")]
+	elif filters.get("to_date"):
+		query_filters["posting_date"] = ["<=", filters.get("to_date")]
+	if filters.get("branch") and has_field("Payment Entry", "retailedge_branch"):
+		query_filters["retailedge_branch"] = filters.get("branch")
+	if filters.get("mode_of_payment") and has_field("Payment Entry", "mode_of_payment"):
+		query_filters["mode_of_payment"] = filters.get("mode_of_payment")
+	rows = frappe.get_all(
+		"Payment Entry",
+		filters=query_filters,
+		fields=fieldnames,
+		limit_page_length=limit + 1,
+		order_by="posting_date desc, modified desc",
+	)
+	if filters.get("payment_event_type") and filters.get("payment_event_type") not in {"", "All", "Payment Entry"}:
+		return []
+	return rows
+
+
+
+def _sales_invoice_payment_amount_expression(alias="sip"):
+	parts = []
+	if has_field("Sales Invoice Payment", "base_amount"):
+		parts.append(f"NULLIF({alias}.base_amount, 0)")
+	if has_field("Sales Invoice Payment", "amount"):
+		parts.append(f"NULLIF({alias}.amount, 0)")
+	if not parts:
+		return None
+	return f"COALESCE({', '.join(parts)}, 0)"
+
+
+
+def _sales_invoice_payment_account_expression(alias="sip"):
+	if has_field("Sales Invoice Payment", "account"):
+		return f"NULLIF({alias}.account, '')"
+	return "''"
+
+
+
+def _sales_invoice_payment_reference_expression(alias="sip"):
+	for fieldname in ("reference", "reference_no"):
+		if has_field("Sales Invoice Payment", fieldname):
+			return f"NULLIF({alias}.{fieldname}, '')"
+	return "''"
+
+
+
+def _get_sales_invoice_payment_event_source_rows(filters, limit=DEFAULT_OPERATIONAL_REPORT_LIMIT):
+	if not has_doctype("Sales Invoice Payment") or not has_doctype("Sales Invoice"):
+		return []
+	branch_field = _first_existing_sales_invoice_branch_field()
+	amount_expr = _sales_invoice_payment_amount_expression("sip")
+	if not amount_expr:
+		return []
+	branch_select = f"si.{branch_field}" if branch_field else "''"
+	mode_select = "sip.mode_of_payment" if has_field("Sales Invoice Payment", "mode_of_payment") else "''"
+	account_select = _sales_invoice_payment_account_expression("sip")
+	reference_select = _sales_invoice_payment_reference_expression("sip")
+	where_clauses = ["si.docstatus = 1"]
+	params = []
+	if filters.get("company") and has_field("Sales Invoice", "company"):
+		where_clauses.append("si.company = %s")
+		params.append(filters.get("company"))
+	if filters.get("from_date"):
+		where_clauses.append("si.posting_date >= %s")
+		params.append(filters.get("from_date"))
+	if filters.get("to_date"):
+		where_clauses.append("si.posting_date <= %s")
+		params.append(filters.get("to_date"))
+	if filters.get("branch") and branch_field:
+		where_clauses.append(f"si.{branch_field} = %s")
+		params.append(filters.get("branch"))
+	if has_field("Sales Invoice Payment", "mode_of_payment"):
+		where_clauses.append("COALESCE(sip.mode_of_payment, '') != 'Cash'")
+		if filters.get("mode_of_payment"):
+			where_clauses.append("sip.mode_of_payment = %s")
+			params.append(filters.get("mode_of_payment"))
+	rows = frappe.db.sql(
+		f"""
+		SELECT
+			si.name,
+			si.posting_date,
+			si.company,
+			si.customer,
+			{('si.customer_name' if has_field('Sales Invoice', 'customer_name') else 'si.customer')} AS customer_name,
+			{branch_select} AS retailedge_branch,
+			sip.idx AS payment_row_index,
+			{mode_select} AS mode_of_payment,
+			{account_select} AS payment_account,
+			{amount_expr} AS payment_amount,
+			{reference_select} AS payment_reference
+		FROM `tabSales Invoice Payment` sip
+		INNER JOIN `tabSales Invoice` si ON si.name = sip.parent
+		WHERE {' AND '.join(where_clauses)}
+		ORDER BY si.posting_date DESC, si.modified DESC, sip.idx DESC
+		LIMIT {int(limit) + 1}
+		""",
+		params,
+		as_dict=True,
+	)
+	return rows
+
+
+
+def _payment_entry_event_rows(filters):
+	filters, limit, meta = _prepare_operational_live_request(filters, default_limit=DEFAULT_OPERATIONAL_REPORT_LIMIT)
+	if meta.get("blocked"):
+		return []
+	if not has_doctype("Payment Entry"):
+		return []
+	rows = _get_payment_entry_event_source_rows(filters, limit=limit)
+	rows = [row for row in rows if _r531_payment_entry_is_bank_matchable(row)]
+	payment_entry_names = [row.get("name") for row in rows if row.get("name")]
+	references = _get_payment_entry_sales_invoice_references(payment_entry_names)
+	_matches_by_candidate, active_by_candidate, confirmed_candidates = _get_candidate_review_state("Payment Entry", payment_entry_names)
+	results = []
+	preview_enabled = _candidate_preview_enabled(filters)
+	for payment_entry in rows:
+		account = cstr(payment_entry.get("paid_to") or payment_entry.get("paid_from")).strip()
+		resolved_account = account
+		mode_of_payment = cstr(payment_entry.get("mode_of_payment")).strip()
+		amount = flt(payment_entry.get("received_amount") or payment_entry.get("paid_amount"))
+		if not _r531_amount_in_filter_range(amount, filters):
+			continue
+		if filters.get("payment_account") and cstr(filters.get("payment_account")).strip() not in {account, resolved_account}:
+			continue
+		confirmed = payment_entry.get("name") in confirmed_candidates
+		if confirmed and not _report_boolean(filters.get("include_already_matched"), 0):
+			continue
+		match_record = active_by_candidate.get(payment_entry.get("name"))
+		linked_invoice = ", ".join(
+			row.get("reference_name")
+			for row in references.get(payment_entry.get("name")) or []
+			if row.get("reference_name")
+		)
+		event = {
+			"payment_event_type": "Payment Entry",
+			"payment_event_document": payment_entry.get("name"),
+			"payment_row_reference": "",
+			"posting_date": payment_entry.get("posting_date"),
+			"company": payment_entry.get("company"),
+			"branch": payment_entry.get("retailedge_branch"),
+			"party": payment_entry.get("party"),
+			"customer_supplier": payment_entry.get("party"),
+			"mode_of_payment": payment_entry.get("mode_of_payment"),
+			"payment_account": account,
+			"resolved_canonical_account": resolved_account,
+			"amount": amount,
+			"reference_no": payment_entry.get("reference_no") or payment_entry.get("name"),
+			"linked_sales_invoice": linked_invoice,
+			"linked_payment_entry": payment_entry.get("name"),
+			"existing_bank_match": match_record.get("name") if match_record else None,
+			"match_status": "Confirmed" if confirmed else (cstr((match_record or {}).get("decision_status")).strip() or "Unmatched"),
+			"candidate_bank_transaction": None,
+			"reason_exception": "",
+			"days_outstanding": _days_since(payment_entry.get("posting_date")),
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": payment_entry.get("name"),
+			"candidate_category": "payment_entry_match",
+		}
+		if preview_enabled:
+			best_bank = _find_candidate_bank_transaction_for_event(event, filters)
+			if best_bank:
+				event["candidate_bank_transaction"] = best_bank.get("bank_transaction")
+				event["reason_exception"] = best_bank.get("match_reason") or ""
+		results.append(event)
+	return _finalize_operational_rows(results, limit)
+
+
+
+def _sales_invoice_payment_event_rows(filters):
+	filters, limit, meta = _prepare_operational_live_request(filters, default_limit=DEFAULT_OPERATIONAL_REPORT_LIMIT)
+	if meta.get("blocked"):
+		return []
+	rows = _get_sales_invoice_payment_event_source_rows(filters, limit=limit)
+	invoice_names = [row.get("name") for row in rows if row.get("name")]
+	_matches_by_candidate, active_by_candidate, confirmed_candidates = _get_candidate_review_state("Sales Invoice", invoice_names)
+	payment_entry_map = {}
+	try:
+		payment_entry_map = {
+			name: ", ".join(
+				row.get("payment_entry")
+				for row in (get_payment_entries_for_sales_invoice(name) or [])
+				if row.get("payment_entry")
+			)
+			for name in set(invoice_names)
+		}
+	except Exception:
+		payment_entry_map = {}
+	results = []
+	preview_enabled = _candidate_preview_enabled(filters)
+	for invoice in rows:
+		mode_of_payment = cstr(invoice.get("mode_of_payment")).strip()
+		if mode_of_payment.lower() == "cash":
+			continue
+		payment_account = cstr(invoice.get("payment_account")).strip()
+		resolved_account = payment_account or cstr(_r531_resolve_mode_of_payment_default_account(mode_of_payment, company=invoice.get("company"))).strip()
+		amount = flt(invoice.get("payment_amount"))
+		if not resolved_account or not _r531_amount_in_filter_range(amount, filters):
+			continue
+		if filters.get("payment_account") and cstr(filters.get("payment_account")).strip() not in {payment_account, resolved_account}:
+			continue
+		payment_category = classify_payment_method({"mode_of_payment": mode_of_payment, "account": resolved_account})
+		if cstr(payment_category).strip() == "Cash":
+			continue
+		event_type = "POS Payment Row" if payment_category == "Card / POS" else "Invoice Payment Row"
+		if filters.get("payment_event_type") and filters.get("payment_event_type") not in {"", "All", event_type}:
+			continue
+		confirmed = invoice.get("name") in confirmed_candidates
+		if confirmed and not _report_boolean(filters.get("include_already_matched"), 0):
+			continue
+		match_record = active_by_candidate.get(invoice.get("name"))
+		event = {
+			"payment_event_type": event_type,
+			"payment_event_document": invoice.get("name"),
+			"payment_row_reference": invoice.get("payment_row_index"),
+			"posting_date": invoice.get("posting_date"),
+			"company": invoice.get("company"),
+			"branch": invoice.get("retailedge_branch"),
+			"party": invoice.get("customer"),
+			"customer_supplier": invoice.get("customer_name") or invoice.get("customer"),
+			"mode_of_payment": mode_of_payment or None,
+			"payment_account": payment_account or resolved_account,
+			"resolved_canonical_account": resolved_account,
+			"amount": amount,
+			"reference_no": invoice.get("payment_reference") or invoice.get("name"),
+			"linked_sales_invoice": invoice.get("name"),
+			"linked_payment_entry": payment_entry_map.get(invoice.get("name")),
+			"existing_bank_match": match_record.get("name") if match_record else None,
+			"match_status": "Confirmed" if confirmed else (cstr((match_record or {}).get("decision_status")).strip() or "Unmatched"),
+			"candidate_bank_transaction": None,
+			"reason_exception": "",
+			"days_outstanding": _days_since(invoice.get("posting_date")),
+			"suggested_document_type": "Sales Invoice",
+			"suggested_document": invoice.get("name"),
+			"candidate_category": "pos_payment_match" if event_type == "POS Payment Row" else "invoice_payment_row_match",
+		}
+		if preview_enabled:
+			best_bank = _find_candidate_bank_transaction_for_event(event, filters)
+			if best_bank:
+				event["candidate_bank_transaction"] = best_bank.get("bank_transaction")
+				event["reason_exception"] = best_bank.get("match_reason") or ""
+		results.append(event)
+	return _finalize_operational_rows(results, limit)
+
+
+
+def get_unmatched_bank_payment_event_rows(filters=None, limit=DEFAULT_OPERATIONAL_REPORT_LIMIT):
+	filters, limit, meta = _prepare_operational_live_request(filters, default_limit=limit)
+	if meta.get("blocked"):
+		return []
+	rows = _payment_entry_event_rows(filters) + _sales_invoice_payment_event_rows(filters)
+	rows.sort(key=lambda row: (cstr(row.get("posting_date")), cstr(row.get("payment_event_document")), cint(row.get("payment_row_reference") or 0)), reverse=True)
+	return _finalize_operational_rows(rows, limit, empty_message="No unmatched bank payment events were found for the selected filters.")
+
+
+def _get_sales_invoice_payment_rows_by_parent(invoice_names):
+	invoice_names = [cstr(name).strip() for name in (invoice_names or []) if cstr(name).strip()]
+	if not invoice_names or not has_doctype("Sales Invoice Payment"):
+		return {}
+	amount_expr = _sales_invoice_payment_amount_expression("sip")
+	if not amount_expr:
+		return {}
+	mode_select = "sip.mode_of_payment" if has_field("Sales Invoice Payment", "mode_of_payment") else "''"
+	account_select = _sales_invoice_payment_account_expression("sip")
+	reference_select = _sales_invoice_payment_reference_expression("sip")
+	rows = frappe.db.sql(
+		f"""
+		SELECT
+			sip.parent,
+			sip.idx AS payment_row_index,
+			{mode_select} AS mode_of_payment,
+			{account_select} AS payment_account,
+			{amount_expr} AS payment_amount,
+			{reference_select} AS payment_reference
+		FROM `tabSales Invoice Payment` sip
+		WHERE sip.parent IN %(parents)s
+		ORDER BY sip.parent, sip.idx
+		""",
+		{"parents": tuple(invoice_names)},
+		as_dict=True,
+	)
+	grouped = defaultdict(list)
+	for row in rows:
+		row = frappe._dict(row)
+		resolved_account = cstr(row.get("payment_account")).strip() or cstr(_r531_resolve_mode_of_payment_default_account(row.get("mode_of_payment"))).strip()
+		payment_category = classify_payment_method({"mode_of_payment": row.get("mode_of_payment"), "account": resolved_account})
+		grouped[cstr(row.get("parent")).strip()].append(
+			{
+				"payment_row_index": row.get("payment_row_index"),
+				"mode_of_payment": row.get("mode_of_payment"),
+				"account": cstr(row.get("payment_account")).strip(),
+				"expected_account": resolved_account,
+				"base_amount": flt(row.get("payment_amount")),
+				"amount": flt(row.get("payment_amount")),
+				"reference": row.get("payment_reference"),
+				"payment_category": payment_category,
+			}
+		)
+	return dict(grouped)
+
+
+
+def _bulk_hydrate_match_candidate_contexts(match_rows):
+	payment_entry_names = [
+		cstr(row.get("payment_entry") or row.get("suggested_document")).strip()
+		for row in (match_rows or [])
+		if cstr(row.get("suggested_document_type")).strip() == "Payment Entry"
+	]
+	sales_invoice_names = [
+		cstr(row.get("sales_invoice") or row.get("suggested_document")).strip()
+		for row in (match_rows or [])
+		if cstr(row.get("suggested_document_type")).strip() == "Sales Invoice"
+	]
+	payment_entry_map = {}
+	if payment_entry_names and has_doctype("Payment Entry"):
+		fields = ["name", "posting_date", "paid_to", "paid_from", "received_amount", "paid_amount", "party", "party_type", "docstatus"]
+		if has_field("Payment Entry", "mode_of_payment"):
+			fields.append("mode_of_payment")
+		if has_field("Payment Entry", "reference_no"):
+			fields.append("reference_no")
+		if has_field("Payment Entry", "company"):
+			fields.append("company")
+		if has_field("Payment Entry", "retailedge_branch"):
+			fields.append("retailedge_branch")
+		payment_entry_map = {
+			row.get("name"): row
+			for row in frappe.get_all(
+				"Payment Entry",
+				filters={"name": ["in", payment_entry_names]},
+				fields=fields,
+				limit_page_length=0,
+			)
+		}
+	invoice_map = {}
+	if sales_invoice_names and has_doctype("Sales Invoice"):
+		fields = ["name", "posting_date", "customer", "docstatus"]
+		if has_field("Sales Invoice", "customer_name"):
+			fields.append("customer_name")
+		if has_field("Sales Invoice", "company"):
+			fields.append("company")
+		branch_field = _first_existing_sales_invoice_branch_field()
+		if branch_field:
+			fields.append(branch_field)
+		invoice_map = {
+			row.get("name"): row
+			for row in frappe.get_all(
+				"Sales Invoice",
+				filters={"name": ["in", sales_invoice_names]},
+				fields=fields,
+				limit_page_length=0,
+			)
+		}
+	payment_rows_by_invoice = _get_sales_invoice_payment_rows_by_parent(sales_invoice_names)
+	context_map = {}
+	for row in match_rows or []:
+		row = frappe._dict(row or {})
+		details = _safe_load_json(row.get("details_json"))
+		match_name = cstr(row.get("name")).strip()
+		if cstr(row.get("suggested_document_type")).strip() == "Payment Entry":
+			entry_name = cstr(row.get("payment_entry") or row.get("suggested_document")).strip()
+			payload = frappe._dict(payment_entry_map.get(entry_name) or {})
+			context_map[match_name] = {
+				"candidate_category": cstr(details.get("candidate_category")).strip() or "payment_entry_match",
+				"payment_event_source": cstr(details.get("payment_event_source")).strip() or "Payment Entry",
+				"payment_account": cstr(details.get("payment_account")).strip() or cstr(payload.get("paid_to") or payload.get("paid_from")).strip(),
+				"payment_event_amount": flt(details.get("payment_entry_paid_amount") or details.get("payment_row_amount") or row.get("candidate_amount") or payload.get("received_amount") or payload.get("paid_amount")),
+				"branch": details.get("branch") or payload.get("retailedge_branch") or row.get("branch"),
+				"party": payload.get("party") or row.get("party") or row.get("customer"),
+				"candidate_posting_date": payload.get("posting_date") or details.get("candidate_posting_date"),
+			}
+			continue
+		invoice_name = cstr(row.get("sales_invoice") or row.get("suggested_document")).strip()
+		invoice = frappe._dict(invoice_map.get(invoice_name) or {})
+		payment_rows = payment_rows_by_invoice.get(invoice_name) or []
+		best_row = None
+		best_diff = None
+		target_index = cint(details.get("payment_row_index") or details.get("payment_row_reference") or 0)
+		for payment_row in payment_rows:
+			if not _invoice_payment_row_is_bank_matchable(payment_row):
+				continue
+			if target_index and cint(payment_row.get("payment_row_index") or 0) == target_index:
+				best_row = payment_row
+				break
+			amount = flt(payment_row.get("base_amount") or payment_row.get("amount"))
+			diff = abs(amount - flt(row.get("candidate_amount") or 0))
+			if best_row is None or diff < best_diff:
+				best_row = payment_row
+				best_diff = diff
+		category = "invoice_payment_row_match"
+		source = "Sales Invoice"
+		payment_account = cstr(details.get("payment_account")).strip()
+		payment_amount = flt(details.get("payment_row_amount") or row.get("candidate_amount") or 0)
+		if best_row:
+			category = "pos_payment_match" if cstr(best_row.get("payment_category")).strip() == "Card / POS" else "invoice_payment_row_match"
+			source = "POS Payment Row" if category == "pos_payment_match" else "Invoice Payment Row"
+			payment_account = payment_account or cstr(best_row.get("account") or best_row.get("expected_account")).strip()
+			payment_amount = flt(payment_amount or best_row.get("base_amount") or best_row.get("amount"))
+		context_map[match_name] = {
+			"candidate_category": cstr(details.get("candidate_category")).strip() or category,
+			"payment_event_source": cstr(details.get("payment_event_source")).strip() or source,
+			"payment_account": payment_account,
+			"payment_event_amount": payment_amount,
+			"branch": details.get("branch") or invoice.get("retailedge_branch") or invoice.get("branch") or row.get("branch"),
+			"party": row.get("party") or row.get("customer") or invoice.get("customer"),
+			"candidate_posting_date": invoice.get("posting_date") or details.get("candidate_posting_date"),
+		}
+	return context_map
+
+
+
+def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPERATIONAL_REPORT_LIMIT):
+	filters, limit, meta = _prepare_operational_live_request(filters, default_limit=limit)
+	if meta.get("blocked"):
+		return []
+	if not has_doctype("RetailEdge Bank Transaction Match"):
+		return []
+	query_filters = {}
+	if filters.get("company"):
+		query_filters["company"] = filters.get("company")
+	if filters.get("branch"):
+		query_filters["branch"] = filters.get("branch")
+	if filters.get("from_date") and filters.get("to_date"):
+		query_filters["transaction_date"] = ["between", [filters.get("from_date"), filters.get("to_date")]]
+	match_rows = frappe.get_all(
+		"RetailEdge Bank Transaction Match",
+		filters=query_filters,
+		fields=[
+			"name",
+			"bank_transaction",
+			"transaction_date",
+			"bank_amount",
+			"bank_account",
+			"suggested_document_type",
+			"suggested_document",
+			"sales_invoice",
+			"payment_entry",
+			"candidate_amount",
+			"amount_difference",
+			"amount_scenario",
+			"match_confidence",
+			"match_score",
+			"match_reason",
+			"decision_status",
+			"confirmed_by",
+			"confirmed_on",
+			"branch",
+			"company",
+			"party",
+			"customer",
+			"details_json",
+			"modified",
+		],
+		limit_page_length=limit + 1,
+		order_by="transaction_date desc, modified desc",
+	)
+	context_map = _bulk_hydrate_match_candidate_contexts(match_rows)
+	results = []
+	for row in match_rows:
+		context = context_map.get(cstr(row.get("name")).strip(), {})
+		details = _safe_load_json(row.get("details_json"))
+		candidate = {
+			"document_type": row.get("suggested_document_type"),
+			"document_name": row.get("suggested_document"),
+			"candidate_category": context.get("candidate_category") or details.get("candidate_category"),
+			"posting_date": context.get("candidate_posting_date") or details.get("candidate_posting_date") or row.get("transaction_date"),
+			"payment_account": context.get("payment_account") or details.get("payment_account"),
+			"account": context.get("payment_account") or details.get("payment_account") or details.get("candidate_canonical_account"),
+			"expected_bank_account": details.get("candidate_canonical_account"),
+			"branch": context.get("branch") or row.get("branch"),
+		}
+		bank_transaction = {
+			"bank_account": row.get("bank_account"),
+			"bank_transaction": row.get("bank_transaction"),
+			"transaction_date": row.get("transaction_date"),
+			"amount": row.get("bank_amount"),
+			"branch": row.get("branch"),
+			"company": row.get("company"),
+			"direction": "Inflow",
+			"is_reconciled": _report_boolean(details.get("is_reconciled"), 0),
+		}
+		account_payload = _resolve_account_match_payload(bank_transaction, candidate)
+		combined = frappe._dict(dict(row))
+		combined["account_resolution_status"] = account_payload.get("status")
+		combined["resolved_bank_account"] = account_payload.get("bank_canonical_account")
+		combined["resolved_payment_account"] = account_payload.get("candidate_canonical_account")
+		combined["candidate_category"] = context.get("candidate_category") or details.get("candidate_category")
+		combined["payment_event_source"] = context.get("payment_event_source") or details.get("payment_event_source")
+		combined["payment_event_amount"] = flt(context.get("payment_event_amount") or details.get("payment_row_amount") or details.get("payment_entry_paid_amount") or row.get("candidate_amount"))
+		combined["payment_account"] = context.get("payment_account") or details.get("payment_account")
+		combined["branch_match"] = details.get("branch_match")
+		combined["branch_match_available"] = details.get("branch_match_available")
+		combined["candidate_posting_date"] = context.get("candidate_posting_date") or details.get("candidate_posting_date")
+		readiness, reason = _readiness_for_match_row(combined)
+		if not _report_boolean(filters.get("include_rejected_cancelled"), 0) and cstr(row.get("decision_status")).strip() in {"Rejected", "Cancelled"}:
+			continue
+		if not _report_boolean(filters.get("include_reconciled"), 0) and readiness == READINESS_ALREADY_RECONCILED:
+			continue
+		if filters.get("reconciliation_readiness_status") and cstr(filters.get("reconciliation_readiness_status")).strip() != readiness:
+			continue
+		results.append(
+			{
+				"bank_match_review": row.get("name"),
+				"bank_transaction": row.get("bank_transaction"),
+				"transaction_date": row.get("transaction_date"),
+				"bank_amount": flt(row.get("bank_amount")),
+				"bank_account": row.get("bank_account"),
+				"resolved_bank_account": account_payload.get("bank_canonical_account"),
+				"candidate_type": get_candidate_category_label(combined.get("candidate_category") or row.get("suggested_document_type")),
+				"suggested_document_type": row.get("suggested_document_type"),
+				"suggested_document": row.get("suggested_document"),
+				"payment_event_source": combined.get("payment_event_source"),
+				"payment_event_amount": flt(combined.get("payment_event_amount")),
+				"payment_account": combined.get("payment_account"),
+				"resolved_payment_account": account_payload.get("candidate_canonical_account"),
+				"party": context.get("party") or row.get("party") or row.get("customer"),
+				"branch": context.get("branch") or row.get("branch"),
+				"match_confidence": row.get("match_confidence"),
+				"match_score": cint(row.get("match_score") or 0),
+				"amount_scenario": get_amount_scenario_label(row.get("amount_scenario")),
+				"account_resolution_status": account_payload.get("status"),
+				"review_status": row.get("decision_status"),
+				"action_status": details.get("action_status") or row.get("decision_status"),
+				"reconciliation_readiness_status": readiness,
+				"exception_reason": reason,
+				"existing_reconciliation_status": "Reconciled" if readiness == READINESS_ALREADY_RECONCILED else "",
+				"confirmed_by": row.get("confirmed_by"),
+				"confirmed_on": row.get("confirmed_on"),
+				"days_since_confirmation": _days_since(row.get("confirmed_on")),
+				"candidate_posting_date": combined.get("candidate_posting_date"),
+			}
+		)
+	return _finalize_operational_rows(results, limit, empty_message="No bank match readiness rows were found for the selected filters.")

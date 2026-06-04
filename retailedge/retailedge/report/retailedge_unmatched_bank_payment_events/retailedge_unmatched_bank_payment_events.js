@@ -52,6 +52,7 @@ frappe.query_reports["RetailEdge Unmatched Bank Payment Events"] = {
 		{ fieldname: "payment_event_type", label: __("Payment Event Type"), fieldtype: "Select", options: "All\nPayment Entry\nInvoice Payment Row\nPOS Payment Row", default: "All" },
 		{ fieldname: "mode_of_payment", label: __("Mode of Payment"), fieldtype: "Link", options: "Mode of Payment" },
 		{ fieldname: "payment_account", label: __("Payment Account"), fieldtype: "Link", options: "Account" },
+		{ fieldname: "include_candidate_preview", label: __("Include Candidate Preview"), fieldtype: "Check", default: 0 },
 		{ fieldname: "include_already_matched", label: __("Include Already Matched"), fieldtype: "Check", default: 0 },
 		{ fieldname: "include_cash", label: __("Include Cash"), fieldtype: "Check", default: 0, read_only: 1 }
 	],

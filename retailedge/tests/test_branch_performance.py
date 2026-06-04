@@ -67,6 +67,10 @@ class BranchPerformanceTests(unittest.TestCase):
 		with self.assertRaises(Exception):
 			validate_filters(frappe._dict({"from_date": "2026-05-31", "to_date": "2026-05-01"}))
 
+	def test_validate_filters_raises_on_too_wide_live_range(self):
+		with self.assertRaises(Exception):
+			validate_filters(frappe._dict({"from_date": "2026-01-01", "to_date": "2026-05-31"}))
+
 	@patch("retailedge.branch_performance.resolve_branch_from_opening_shift")
 	def test_resolve_sales_invoice_cashier_prefers_pos_opening_shift_user_over_owner(self, mock_shift):
 		mock_shift.return_value = {"cashier": "cashier1@example.com", "messages": []}
