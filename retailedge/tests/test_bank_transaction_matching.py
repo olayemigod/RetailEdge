@@ -21,6 +21,7 @@ from retailedge.bank_transaction_matching import (
 	sales_invoice_has_active_confirmed_bank_match,
 	score_bank_transaction_candidate,
 	suppress_duplicate_candidate_suggestions,
+	get_candidate_document_key,
 	_apply_exception_classification,
 	_build_payment_entry_candidate,
 	_build_sales_invoice_candidates,
@@ -2402,3 +2403,97 @@ class BankTransactionReferenceMatchingTests(unittest.TestCase):
 			payload = score_bank_transaction_candidate(bank_transaction, candidate)
 		self.assertEqual(payload["reference_match_exact"], 0)
 		self.assertEqual(payload["reference_match_strength"], "weak")
+
+
+	def test_report_js_passes_stable_row_payload_to_review_creation(self):
+		from pathlib import Path
+
+		source = Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.js").read_text()
+		self.assertIn("row_payload: JSON.stringify(build_match_review_row_payload(args))", source)
+		self.assertIn("payment_entry: args.payment_entry", source)
+		self.assertIn("build_report_candidate_key", source)
+
+	def test_report_js_passes_selected_candidate_keys_for_bulk_review_and_auto_match(self):
+		from pathlib import Path
+
+		source = Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.js").read_text()
+		self.assertIn("selected_keys: JSON.stringify(selection.selected_keys || [])", source)
+		self.assertIn("get_selected_report_rows(report, rawData)", source)
+		self.assertIn("coerce_selected_report_row", source)
+
+
+class BankTransactionMatchingHotfixTests(unittest.TestCase):
+	def test_auto_match_reason_is_precise_for_possible_match_above_minimum(self):
+		row = {
+			"bank_transaction": "ACC-BTN-2026-00008",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "ACC-PAY-2026-00008",
+			"amount_scenario": "Submitted Payment Entry Amount",
+			"candidate_category": "Payment Entry Match",
+			"match_confidence": "Possible Match",
+			"match_score": 70,
+			"amount_difference": 0,
+			"reference_match_exact": 0,
+			"account_match_available": 1,
+			"account_match": 1,
+			"branch_match_available": 0,
+			"branch_match": 0,
+			"match_record": "",
+			"decision_status": "",
+			"payment_entry_invoice_context": "ACC-SINV-2026-00026",
+		}
+		settings = {
+			"enable_bank_auto_match": 1,
+			"auto_prepare_exact_bank_matches": 1,
+			"auto_confirm_exact_bank_matches": 1,
+			"minimum_auto_match_score": 70,
+			"require_exact_reference_for_auto_match": 0,
+			"require_same_bank_account_for_auto_match": 1,
+			"require_same_branch_for_auto_match": 1,
+			"allow_auto_match_payment_entry": 1,
+			"allow_auto_match_sales_invoice": 1,
+			"require_no_duplicate_candidate_for_auto_match": 1,
+			"require_no_active_review_for_auto_match": 1,
+		}
+		status = get_auto_match_status_for_row(row, settings=settings)
+		self.assertEqual(status["status"], "Needs Manual Review")
+		self.assertIn("Possible Match is not eligible for auto-confirm", status["reason"])
+
+	def test_duplicate_key_uses_sales_invoice_payment_row_identity(self):
+		first = {
+			"suggested_document_type": "Sales Invoice",
+			"suggested_document": "ACC-SINV-0001",
+			"payment_event_source": "Invoice Payment Row",
+			"payment_row_index": 1,
+		}
+		second = dict(first, payment_row_index=2)
+		self.assertNotEqual(get_candidate_document_key(first), get_candidate_document_key(second))
+
+	def test_same_amount_different_payment_entries_are_not_duplicate_candidates(self):
+		rows = [
+			{
+				"bank_transaction": "BTN-1",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "PE-1",
+				"payment_event_source": "Payment Entry",
+				"candidate_amount": 1000,
+				"match_confidence": "Strong Match",
+				"match_score": 90,
+				"amount_difference": 0,
+				"action_status": "Suggested",
+			},
+			{
+				"bank_transaction": "BTN-2",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "PE-2",
+				"payment_event_source": "Payment Entry",
+				"candidate_amount": 1000,
+				"match_confidence": "Strong Match",
+				"match_score": 89,
+				"amount_difference": 0,
+				"action_status": "Suggested",
+			},
+		]
+		result = suppress_duplicate_candidate_suggestions(rows, mark_duplicates=True)
+		self.assertEqual(len(result), 2)
+		self.assertFalse(any(int(row.get("duplicate_candidate_skipped") or 0) for row in result))

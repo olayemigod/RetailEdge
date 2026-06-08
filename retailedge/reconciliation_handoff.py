@@ -213,6 +213,14 @@ def classify_reconciliation_handoff(match_doc, conflict_counts=None):
 	if readiness_status == READINESS_ALREADY_RECONCILED:
 		return HANDOFF_ALREADY_RECONCILED, "Low", "Already reconciled in ERPNext; no RetailEdge action needed."
 
+	if cstr(match_doc.get("reconciliation_integrity_status")).strip() == "Candidate Summary Mismatch":
+		message = cstr(match_doc.get("reconciliation_integrity_reason")).strip() or "Candidate Summary Mismatch"
+		return HANDOFF_EXCEPTION, "High", message
+
+	if cstr(match_doc.get("reconciliation_status")).strip() == "Reconciliation Failed":
+		message = cstr(match_doc.get("reconciliation_result_message")).strip() or "Previous ERPNext reconciliation attempt failed."
+		return HANDOFF_EXCEPTION, "High", f"{message}"
+
 	if review_status in {"Rejected", "Cancelled"}:
 		return HANDOFF_NOT_ELIGIBLE, "Low", "Rejected or cancelled matches are not eligible for reconciliation handoff."
 
@@ -273,9 +281,13 @@ def build_erpnext_reconciliation_guidance(match_doc):
 			"erpnext_reconciliation_notes": "Review ERPNext Bank Transaction status before making any further changes.",
 		}
 	if handoff_status == HANDOFF_EXCEPTION:
+		message = blocking_reason or "A conflicting or unsafe condition was detected."
+		recommended_action = "Investigate the exception before attempting ERPNext reconciliation."
+		if "Candidate Summary Mismatch" in message:
+			recommended_action = "Reset failed reconciliation status or review and recreate the RetailEdge match before retrying."
 		return {
-			"recommended_action": "Investigate the exception before attempting ERPNext reconciliation.",
-			"reviewer_message": blocking_reason or "A conflicting or unsafe condition was detected.",
+			"recommended_action": recommended_action,
+			"reviewer_message": message,
 			"erpnext_reconciliation_target": bank_transaction,
 			"erpnext_reconciliation_notes": "Do not reconcile from RetailEdge. Resolve the exception and confirm the correct match first.",
 		}

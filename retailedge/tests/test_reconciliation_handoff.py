@@ -149,6 +149,41 @@ class ReconciliationHandoffTests(unittest.TestCase):
 		result = get_reconciliation_handoff_summary({"from_date": "2026-05-01", "to_date": "2026-05-31"})
 		self.assertEqual(result["rows"], [])
 
+	def test_failed_reconciliation_is_classified_as_exception(self):
+		status, priority, reason = classify_reconciliation_handoff(
+			{
+				"review_status": "Confirmed",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "ACC-PAY-2026-00012",
+				"bank_transaction": "ACC-BTN-2026-00007",
+				"reconciliation_readiness_status": "Not Ready",
+				"reconciliation_status": "Reconciliation Failed",
+				"reconciliation_result_message": "ERPNext native reconciliation failed: mock native failure",
+			}
+		)
+		self.assertEqual(status, HANDOFF_EXCEPTION)
+		self.assertEqual(priority, "High")
+		self.assertIn("failed", reason.lower())
+
+	def test_candidate_summary_mismatch_is_classified_as_exception(self):
+		status, priority, reason = classify_reconciliation_handoff(
+			{
+				"review_status": "Confirmed",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "ACC-PAY-2026-00004",
+				"payment_entry": "ACC-PAY-2026-00004",
+				"bank_transaction": "ACC-BTN-2026-00007",
+				"reconciliation_readiness_status": "Not Ready",
+				"reconciliation_status": "Reconciliation Failed",
+				"reconciliation_integrity_status": "Candidate Summary Mismatch",
+				"reconciliation_integrity_reason": "Current Payment Entry candidate ACC-PAY-2026-00004 does not match failed reconciliation target ACC-PAY-2026-00012.",
+			}
+		)
+		self.assertEqual(status, HANDOFF_EXCEPTION)
+		self.assertEqual(priority, "High")
+		self.assertIn("ACC-PAY-2026-00012", reason)
+
+
 	@patch("retailedge.reconciliation_handoff.get_reconciliation_handoff_summary")
 	def test_api_returns_safe_user_friendly_output(self, mock_summary):
 		mock_summary.return_value = {

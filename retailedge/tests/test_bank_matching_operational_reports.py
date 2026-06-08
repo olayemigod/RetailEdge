@@ -218,6 +218,126 @@ class BankMatchingOperationalReportsTests(unittest.TestCase):
         self.assertEqual(rows[0]["reconciliation_readiness_status"], "Exception")
         self.assertEqual(rows[0]["exception_reason"], "Account mismatch")
 
+    @patch("retailedge.bank_matching_operational_reports._hydrate_match_candidate_context")
+    @patch("retailedge.bank_matching_operational_reports._resolve_account_match_payload")
+    @patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
+    @patch("retailedge.bank_matching_operational_reports.frappe.get_all")
+    def test_reconciliation_readiness_surfaces_failed_reconciliation_as_not_ready(self, mock_get_all, _mock_doctype, mock_account_payload, mock_hydrate):
+        mock_get_all.return_value = [
+            {
+                "name": "RE-BTM-0003",
+                "bank_transaction": "ACC-BTN-2026-00007",
+                "transaction_date": "2026-05-26",
+                "bank_amount": 1090,
+                "bank_account": "Moniepoint - moniepoint",
+                "suggested_document_type": "Payment Entry",
+                "suggested_document": "ACC-PAY-2026-00012",
+                "candidate_amount": 1090,
+                "amount_difference": 0,
+                "amount_scenario": "Submitted Payment Entry Amount",
+                "match_confidence": "Strong Match",
+                "match_score": 95,
+                "match_reason": "Matched submitted Payment Entry.",
+                "decision_status": "Confirmed",
+                "confirmed_by": "Administrator",
+                "confirmed_on": "2026-05-26 10:00:00",
+                "branch": "HQ",
+                "company": "Process Edge (Demo)",
+                "party": "West View",
+                "customer": "West View",
+                "details_json": json.dumps({
+                    "candidate_category": "payment_entry_match",
+                    "payment_event_source": "Payment Entry",
+                    "payment_entry_paid_amount": 1090,
+                    "payment_account": "Demo Bank Account - PED",
+                    "branch_match": 1,
+                    "branch_match_available": 1,
+                    "action_status": "Confirmed",
+                }),
+                "modified": "2026-05-26 10:00:00",
+                "reconciliation_status": "Reconciliation Failed",
+                "reconciliation_result_message": "ERPNext native reconciliation failed: mock native failure",
+            }
+        ]
+        mock_hydrate.return_value = {
+            "candidate_category": "payment_entry_match",
+            "payment_event_source": "Payment Entry",
+            "payment_account": "Demo Bank Account - PED",
+            "payment_event_amount": 1090,
+            "branch": "HQ",
+        }
+        mock_account_payload.return_value = {
+            "status": "match_via_mapping",
+            "bank_canonical_account": "Demo Bank Account - PED",
+            "candidate_canonical_account": "Demo Bank Account - PED",
+        }
+        rows = get_bank_match_reconciliation_readiness_rows({"from_date": "2026-05-01", "to_date": "2026-05-31"})
+        self.assertEqual(rows[0]["reconciliation_readiness_status"], "Not Ready")
+        self.assertIn("failed", rows[0]["exception_reason"].lower())
+        self.assertEqual(rows[0]["existing_reconciliation_status"], "Reconciliation Failed")
+
+    @patch("retailedge.bank_matching_operational_reports._hydrate_match_candidate_context")
+    @patch("retailedge.bank_matching_operational_reports._resolve_account_match_payload")
+    @patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
+    @patch("retailedge.bank_matching_operational_reports.frappe.get_all")
+    def test_reconciliation_readiness_surfaces_candidate_summary_mismatch_as_needs_attention(self, mock_get_all, _mock_doctype, mock_account_payload, mock_hydrate):
+        mock_get_all.return_value = [
+            {
+                "name": "RE-BTM-0004",
+                "bank_transaction": "ACC-BTN-2026-00007",
+                "transaction_date": "2026-05-26",
+                "bank_amount": 1090,
+                "bank_account": "Moniepoint - moniepoint",
+                "suggested_document_type": "Payment Entry",
+                "suggested_document": "ACC-PAY-2026-00004",
+                "payment_entry": "ACC-PAY-2026-00004",
+                "candidate_amount": 15000,
+                "amount_difference": 0,
+                "amount_scenario": "Submitted Payment Entry Amount",
+                "match_confidence": "Weak Match",
+                "match_score": 45,
+                "match_reason": "Weak historical candidate.",
+                "decision_status": "Confirmed",
+                "confirmed_by": "Administrator",
+                "confirmed_on": "2026-05-26 10:00:00",
+                "branch": "HQ",
+                "company": "Process Edge (Demo)",
+                "party": "West View",
+                "customer": "West View",
+                "details_json": json.dumps({
+                    "candidate_category": "payment_entry_match",
+                    "payment_event_source": "Payment Entry",
+                    "payment_entry_paid_amount": 15000,
+                    "payment_account": "Demo Bank Account - PED",
+                    "branch_match": 1,
+                    "branch_match_available": 1,
+                    "action_status": "Confirmed",
+                }),
+                "modified": "2026-05-26 10:00:00",
+                "reconciliation_status": "Reconciliation Failed",
+                "reconciliation_target_doctype": "Payment Entry",
+                "reconciliation_target": "ACC-PAY-2026-00012",
+                "reconciliation_result_message": "ERPNext native reconciliation failed: Payment Entry ACC-PAY-2026-00012 is not affecting bank account None",
+            }
+        ]
+        mock_hydrate.return_value = {
+            "candidate_category": "payment_entry_match",
+            "payment_event_source": "Payment Entry",
+            "payment_account": "Demo Bank Account - PED",
+            "payment_event_amount": 15000,
+            "branch": "HQ",
+        }
+        mock_account_payload.return_value = {
+            "status": "match_via_mapping",
+            "bank_canonical_account": "Demo Bank Account - PED",
+            "candidate_canonical_account": "Demo Bank Account - PED",
+        }
+        rows = get_bank_match_reconciliation_readiness_rows({"from_date": "2026-05-01", "to_date": "2026-05-31"})
+        self.assertEqual(rows[0]["reconciliation_readiness_status"], "Not Ready")
+        self.assertEqual(rows[0]["reconciliation_integrity_status"], "Candidate Summary Mismatch")
+        self.assertIn("ACC-PAY-2026-00012", rows[0]["exception_reason"])
+        self.assertTrue(rows[0]["needs_attention"])
+
     @patch("retailedge.retailedge.report.retailedge_unmatched_bank_transactions.retailedge_unmatched_bank_transactions.get_unmatched_bank_transaction_rows")
     def test_unmatched_bank_transactions_report_executes_from_current_helper_data(self, mock_rows):
         mock_rows.return_value = [{"bank_transaction": "ACC-BTN-2026-00008"}]
@@ -255,6 +375,19 @@ class BankMatchingOperationalReportFilterTests(unittest.TestCase):
 		self.assertEqual(rows[0]["payment_event_document"], "ACC-PAY-0001")
 		self.assertEqual(rows[0]["payment_account"], "Demo Bank Account - PED")
 
+	@patch("retailedge.bank_matching_operational_reports._sales_invoice_payment_event_rows", return_value=[])
+	@patch("retailedge.bank_matching_operational_reports._get_candidate_review_state", return_value=({"ACC-PAY-2026-00012": {"decision_status": "Confirmed", "reconciliation_status": "Reconciliation Failed", "name": "RE-BTM-2026-0006"}}, {}, set()))
+	@patch("retailedge.bank_matching_operational_reports._get_payment_entry_sales_invoice_references", return_value={})
+	@patch("retailedge.bank_matching_operational_reports._get_payment_entry_event_source_rows")
+	@patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
+	def test_unmatched_payment_events_still_list_payment_entry_when_reconciliation_failed(self, _mock_doctype, mock_rows, _mock_refs, _mock_review_state, _mock_sales_rows):
+		mock_rows.return_value = [
+			{"name": "ACC-PAY-2026-00012", "posting_date": "2026-05-26", "company": "Process Edge (Demo)", "party": "West View", "party_type": "Customer", "paid_to": "Demo Bank Account - PED", "received_amount": 1090, "mode_of_payment": "Moniepoint"}
+		]
+		rows = get_unmatched_bank_payment_event_rows({"from_date": "2026-05-01", "to_date": "2026-05-31"})
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0]["payment_event_document"], "ACC-PAY-2026-00012")
+
 	@patch("retailedge.bank_matching_operational_reports._get_candidate_review_state", return_value=({}, {}, set()))
 	@patch("retailedge.bank_matching_operational_reports._get_sales_invoice_payment_event_source_rows")
 	@patch("retailedge.bank_matching_operational_reports._payment_entry_event_rows", return_value=[])
@@ -287,3 +420,33 @@ class BankMatchingOperationalReportPerformanceGuardsTests(unittest.TestCase):
         rows = get_unmatched_bank_transaction_rows({"from_date": "2026-01-01", "to_date": "2026-05-31"})
         self.assertEqual(rows, [])
         self.assertIn("60 days or less", get_operational_report_message() or "")
+
+
+class BankMatchingOperationalReportsHotfixTests(unittest.TestCase):
+    def test_cancelled_and_rejected_matches_do_not_block_unmatched_bank_transactions(self):
+        with patch("retailedge.bank_matching_operational_reports._build_unmatched_bank_transaction_row") as mock_build, \
+             patch("retailedge.bank_matching_operational_reports._get_existing_matches_by_bank_transaction") as mock_matches, \
+             patch("retailedge.bank_matching_operational_reports.normalize_bank_transaction") as mock_normalize, \
+             patch("retailedge.bank_matching_operational_reports._get_bank_transaction_rows") as mock_rows:
+            mock_rows.return_value = [{"name": "BT-CANCELLED"}, {"name": "BT-REJECTED"}]
+            mock_normalize.side_effect = lambda row: {"bank_transaction": row.get("name"), "is_reconciled": 0, "direction": "Inflow", "amount": 100}
+            mock_matches.return_value = {
+                "BT-CANCELLED": [{"decision_status": "Cancelled"}],
+                "BT-REJECTED": [{"decision_status": "Rejected"}],
+            }
+            mock_build.side_effect = lambda bank_transaction, matches, filters: {"bank_transaction": bank_transaction.get("bank_transaction")}
+            rows = get_unmatched_bank_transaction_rows({"from_date": "2026-05-01", "to_date": "2026-05-31"})
+        self.assertEqual(rows, [{"bank_transaction": "BT-CANCELLED"}, {"bank_transaction": "BT-REJECTED"}])
+
+    def test_cancelled_and_rejected_matches_do_not_hide_unmatched_payment_entries(self):
+        with patch("retailedge.bank_matching_operational_reports._sales_invoice_payment_event_rows", return_value=[]), \
+             patch("retailedge.bank_matching_operational_reports._get_candidate_review_state", return_value=({}, {}, set())), \
+             patch("retailedge.bank_matching_operational_reports._get_payment_entry_sales_invoice_references", return_value={}), \
+             patch("retailedge.bank_matching_operational_reports._get_payment_entry_event_source_rows") as mock_rows, \
+             patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True):
+            mock_rows.return_value = [
+                {"name": "ACC-PAY-1", "posting_date": "2026-05-26", "company": "Process Edge (Demo)", "party": "West View", "party_type": "Customer", "paid_to": "Demo Bank Account - PED", "received_amount": 1090, "mode_of_payment": "Moniepoint"}
+            ]
+            rows = get_unmatched_bank_payment_event_rows({"from_date": "2026-05-01", "to_date": "2026-05-31"})
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["payment_event_document"], "ACC-PAY-1")

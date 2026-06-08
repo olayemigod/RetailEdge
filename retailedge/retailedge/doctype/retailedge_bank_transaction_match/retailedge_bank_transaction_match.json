@@ -60,6 +60,14 @@
   "last_action",
   "last_action_by",
   "last_action_on",
+  "reconciliation_section",
+  "reconciliation_status",
+  "reconciled_by",
+  "reconciled_on",
+  "reconciliation_method",
+  "reconciliation_target_doctype",
+  "reconciliation_target",
+  "reconciliation_result_message",
   "sync_readiness_section",
   "sales_invoice_sync_ready",
   "sync_blocked_reason",
@@ -359,6 +367,57 @@
    "fieldname": "last_action_on",
    "fieldtype": "Datetime",
    "label": "Last Action On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_section",
+   "fieldtype": "Section Break",
+   "label": "Reconciliation Outcome"
+  },
+  {
+   "default": "Not Reconciled",
+   "fieldname": "reconciliation_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Reconciliation Status",
+   "options": "Not Reconciled\nReconciliation Ready\nReconciled\nReconciliation Failed\nReconciliation Skipped",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciled_by",
+   "fieldtype": "Link",
+   "label": "Reconciled By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciled_on",
+   "fieldtype": "Datetime",
+   "label": "Reconciled On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_method",
+   "fieldtype": "Data",
+   "label": "Reconciliation Method",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_target_doctype",
+   "fieldtype": "Data",
+   "label": "Reconciliation Target Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_target",
+   "fieldtype": "Data",
+   "label": "Reconciliation Target",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_result_message",
+   "fieldtype": "Small Text",
+   "label": "Reconciliation Result Message",
    "read_only": 1
   },
   {

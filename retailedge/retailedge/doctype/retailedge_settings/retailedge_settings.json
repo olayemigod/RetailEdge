@@ -75,7 +75,11 @@
   "allow_auto_match_payment_entry",
   "allow_auto_match_sales_invoice",
   "require_no_duplicate_candidate_for_auto_match",
-  "require_no_active_review_for_auto_match"
+  "require_no_active_review_for_auto_match",
+  "bank_reconciliation_bridge_section",
+  "enable_bank_reconciliation_bridge",
+  "allow_payment_entry_reconciliation_execution",
+  "require_reconciliation_preflight"
  ],
  "fields": [
   {
@@ -563,6 +567,34 @@
    "fieldname": "require_no_active_review_for_auto_match",
    "fieldtype": "Check",
    "label": "Require No Active Review for Auto-Match"
+  },
+  {
+   "fieldname": "bank_reconciliation_bridge_section",
+   "fieldtype": "Section Break",
+   "label": "RetailEdge Reconciliation Bridge"
+  },
+  {
+   "default": "0",
+   "description": "Enables the RetailEdge reconciliation bridge. RetailEdge reconciliation execution uses ERPNext native bank reconciliation only for confirmed Payment Entry matches. It does not create Payment Entries, Journal Entries, GL Entries, or reconcile Sales Invoice payment-row matches.",
+   "fieldname": "enable_bank_reconciliation_bridge",
+   "fieldtype": "Check",
+   "label": "Enable Bank Reconciliation Bridge"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_bank_reconciliation_bridge",
+   "description": "Allows RetailEdge to execute ERPNext native bank reconciliation only for confirmed Payment Entry matches that pass preflight. It does not create Payment Entries, Journal Entries, GL Entries, or reconcile Sales Invoice payment-row matches.",
+   "fieldname": "allow_payment_entry_reconciliation_execution",
+   "fieldtype": "Check",
+   "label": "Allow Payment Entry Reconciliation Execution"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_bank_reconciliation_bridge",
+   "description": "Require a fresh RetailEdge reconciliation preflight before execution. Keep enabled for safe controlled reconciliation.",
+   "fieldname": "require_reconciliation_preflight",
+   "fieldtype": "Check",
+   "label": "Require Reconciliation Preflight"
   }
  ],
  "issingle": 1,

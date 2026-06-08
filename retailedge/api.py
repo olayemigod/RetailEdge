@@ -94,6 +94,8 @@ from retailedge.reconciliation_handoff import (
 from retailedge.reconciliation_bridge import (
 	get_reconciliation_preflight as _get_reconciliation_preflight,
 	reconcile_confirmed_bank_match as _reconcile_confirmed_bank_match,
+	reset_failed_reconciliation_status as _reset_failed_reconciliation_status,
+	validate_reconciliation_match_integrity as _validate_reconciliation_match_integrity,
 )
 from retailedge.bank_transaction_match_workflow import (
 	assert_can_manage_bank_transaction_match as _assert_can_manage_bank_transaction_match,
@@ -565,6 +567,7 @@ def create_or_get_bank_transaction_match(
 	payment_entry=None,
 	source_report="Bank Transaction Matching",
 	force_refresh=False,
+	row_payload=None,
 ):
 	_assert_can_manage_bank_transaction_match()
 	return _create_or_get_bank_transaction_match(
@@ -575,6 +578,7 @@ def create_or_get_bank_transaction_match(
 		payment_entry=payment_entry,
 		source_report=source_report,
 		force_refresh=bool(int(force_refresh)) if isinstance(force_refresh, str) else bool(force_refresh),
+		row_payload=row_payload,
 	)
 
 
@@ -587,6 +591,7 @@ def create_bank_transaction_match_from_suggestion(
 	payment_entry=None,
 	source_report="Bank Transaction Matching",
 	force_refresh=False,
+	row_payload=None,
 ):
 	return create_or_get_bank_transaction_match(
 		bank_transaction_name=bank_transaction_name,
@@ -596,6 +601,7 @@ def create_bank_transaction_match_from_suggestion(
 		payment_entry=payment_entry,
 		source_report=source_report,
 		force_refresh=force_refresh,
+		row_payload=row_payload,
 	)
 
 
@@ -678,15 +684,27 @@ def get_reconciliation_handoff_for_match(match_name):
 
 
 @frappe.whitelist()
-def get_reconciliation_preflight(match_name):
+def get_reconciliation_preflight(match_name, execution_intent=False):
 	_assert_can_access_bank_transaction_matching()
-	return _get_reconciliation_preflight(match_name)
+	return _get_reconciliation_preflight(match_name, execution_intent=execution_intent)
 
 
 @frappe.whitelist()
 def reconcile_confirmed_bank_match(match_name, dry_run=True):
 	_assert_can_access_bank_transaction_matching()
 	return _reconcile_confirmed_bank_match(match_name=match_name, dry_run=dry_run)
+
+
+@frappe.whitelist()
+def reset_failed_reconciliation_status(match_name):
+	_assert_can_access_bank_transaction_matching()
+	return _reset_failed_reconciliation_status(match_name)
+
+
+@frappe.whitelist()
+def validate_reconciliation_match_integrity(match_name):
+	_assert_can_access_bank_transaction_matching()
+	return _validate_reconciliation_match_integrity(match_name)
 
 
 @frappe.whitelist()

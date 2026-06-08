@@ -23,6 +23,24 @@ from retailedge.invoice_payment_audit import get_sales_invoice_payment_rows
 class RetailEdgeBankTransactionMatch(Document):
 	def validate(self):
 		self._hydrate_bank_transaction_context()
+		flags = getattr(self, "flags", None)
+		if getattr(flags, "retailedge_preserve_reviewed_candidate", False):
+			self._validate_candidate_fields()
+			self._validate_party_fields()
+			self._sync_sales_invoice_party_fields()
+			self._set_review_classification()
+			self._set_decision_summary_only()
+			self._refresh_sync_readiness()
+			return
+		if getattr(flags, "retailedge_preserve_selected_candidate", False):
+			self._validate_candidate_fields()
+			self._validate_party_fields()
+			self._sync_sales_invoice_party_fields()
+			self._set_amount_difference()
+			self._set_review_classification()
+			self._set_readable_summaries()
+			self._refresh_sync_readiness()
+			return
 		self._hydrate_candidate_context()
 		self._validate_candidate_fields()
 		self._validate_party_fields()
@@ -43,6 +61,9 @@ class RetailEdgeBankTransactionMatch(Document):
 		self._retailedge_bank_context = context
 
 	def _hydrate_candidate_context(self):
+		flags = getattr(self, "flags", None)
+		if getattr(flags, "retailedge_preserve_reviewed_candidate", False) or getattr(flags, "retailedge_preserve_selected_candidate", False):
+			return
 		suggested_document_type = getattr(self, "suggested_document_type", None)
 		suggested_document = getattr(self, "suggested_document", None)
 		if not suggested_document_type or not suggested_document:
@@ -141,6 +162,15 @@ class RetailEdgeBankTransactionMatch(Document):
 			self.risk_level = "Medium"
 		else:
 			self.risk_level = "High"
+
+	def _set_decision_summary_only(self):
+		status = getattr(self, "decision_status", None) or "Suggested"
+		if status == "Suggested":
+			self.decision_summary = "Suggested - awaiting review."
+		elif getattr(self, "last_action_by", None) and getattr(self, "last_action_on", None):
+			self.decision_summary = f"{status} by {self.last_action_by} on {self.last_action_on}."
+		else:
+			self.decision_summary = f"{status}."
 
 	def _set_readable_summaries(self):
 		document_label = getattr(self, "suggested_document", None) or "no suggested document"

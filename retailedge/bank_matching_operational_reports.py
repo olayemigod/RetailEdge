@@ -23,6 +23,7 @@ from retailedge.bank_transaction_matching import (
 	_get_sales_invoice_doc,
 	_get_sales_invoice_rows,
 	_invoice_payment_row_is_bank_matchable,
+	_resolve_invoice_payment_row_account,
 	_is_active_review_status,
 	_is_released_review_status,
 	_queue_candidate_rank,
@@ -331,7 +332,8 @@ def _sales_invoice_payment_event_rows(filters):
 				continue
 			if filters.get("mode_of_payment") and cstr(payment_row.get("mode_of_payment")).strip() != cstr(filters.get("mode_of_payment")).strip():
 				continue
-			if filters.get("payment_account") and cstr(payment_row.get("account")).strip() != cstr(filters.get("payment_account")).strip():
+			row_account = _resolve_invoice_payment_row_account(payment_row, invoice.get("company"))
+			if filters.get("payment_account") and cstr(row_account).strip() != cstr(filters.get("payment_account")).strip():
 				continue
 			match_record = _active_review_match_for_candidate("Sales Invoice", invoice.get("name"))
 			confirmed = sales_invoice_has_active_confirmed_bank_match(invoice.get("name"))
@@ -347,8 +349,8 @@ def _sales_invoice_payment_event_rows(filters):
 				"party": invoice.get("customer"),
 				"customer_supplier": invoice.get("customer_name") or invoice.get("customer"),
 				"mode_of_payment": payment_row.get("mode_of_payment"),
-				"payment_account": payment_row.get("account"),
-				"resolved_canonical_account": payment_row.get("account") or payment_row.get("expected_account"),
+				"payment_account": row_account,
+				"resolved_canonical_account": row_account,
 				"amount": flt(payment_row.get("base_amount") or payment_row.get("amount")),
 				"reference_no": invoice.get("name"),
 				"linked_sales_invoice": invoice.get("name"),
@@ -495,7 +497,44 @@ def get_unmatched_bank_payment_event_rows(filters=None, limit=500):
 	return rows[: min(int(limit or 500), len(rows) or 500)]
 
 
+def _validate_reconciliation_candidate_consistency(match_row):
+	match_row = frappe._dict(match_row or {})
+	reconciliation_status = cstr(match_row.get("reconciliation_status")).strip()
+	target_doctype = cstr(match_row.get("reconciliation_target_doctype")).strip()
+	target_name = cstr(match_row.get("reconciliation_target")).strip()
+	current_candidate_type = cstr(match_row.get("suggested_document_type")).strip()
+	current_candidate_name = cstr(match_row.get("suggested_document")).strip()
+	current_payment_entry = cstr(match_row.get("payment_entry")).strip()
+	if not reconciliation_status or reconciliation_status == "Not Reconciled" or not target_doctype or not target_name:
+		return {"mismatch_detected": False, "integrity_status": "", "mismatch_reason": ""}
+	if target_doctype == "Payment Entry":
+		if current_candidate_type != "Payment Entry":
+			return {
+				"mismatch_detected": True,
+				"integrity_status": "Candidate Summary Mismatch",
+				"mismatch_reason": f"Current candidate type {current_candidate_type or 'Unknown'} does not match reconciliation target Payment Entry {target_name}.",
+			}
+		comparison_names = {name for name in {current_payment_entry, current_candidate_name} if name}
+		if target_name not in comparison_names:
+			return {
+				"mismatch_detected": True,
+				"integrity_status": "Candidate Summary Mismatch",
+				"mismatch_reason": (
+					"Current Payment Entry candidate "
+					+ (current_payment_entry or current_candidate_name or "Unknown")
+					+ f" does not match {reconciliation_status.lower()} target {target_name}."
+				),
+			}
+	return {"mismatch_detected": False, "integrity_status": "", "mismatch_reason": ""}
+
+
 def _readiness_for_match_row(match_row):
+	integrity = _validate_reconciliation_candidate_consistency(match_row)
+	if integrity.get("mismatch_detected"):
+		return READINESS_NOT_READY, cstr(integrity.get("mismatch_reason")).strip() or "Candidate Summary Mismatch"
+	if cstr(match_row.get("reconciliation_status")).strip() == "Reconciliation Failed":
+		message = cstr(match_row.get("reconciliation_result_message")).strip() or "Previous ERPNext reconciliation attempt failed."
+		return READINESS_NOT_READY, f"{message}"
 	review_status = cstr(match_row.get("decision_status")).strip()
 	if review_status in {"Rejected", "Cancelled"}:
 		return READINESS_NOT_READY, "Previously rejected or cancelled match."
@@ -556,6 +595,10 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=500):
 			"customer",
 			"details_json",
 			"modified",
+			"reconciliation_status",
+			"reconciliation_target_doctype",
+			"reconciliation_target",
+			"reconciliation_result_message",
 		],
 		limit_page_length=min(int(limit or 500), 2000),
 		order_by="transaction_date desc, modified desc",
@@ -596,6 +639,10 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=500):
 		combined["payment_account"] = hydrated.get("payment_account") or details.get("payment_account")
 		combined["branch_match"] = details.get("branch_match")
 		combined["branch_match_available"] = details.get("branch_match_available")
+		integrity = _validate_reconciliation_candidate_consistency(combined)
+		combined["reconciliation_integrity_status"] = integrity.get("integrity_status")
+		combined["reconciliation_integrity_reason"] = integrity.get("mismatch_reason")
+		combined["needs_attention"] = bool(integrity.get("mismatch_detected"))
 		readiness, reason = _readiness_for_match_row(combined)
 		if not _report_boolean(filters.get("include_rejected_cancelled"), 0) and cstr(row.get("decision_status")).strip() in {"Rejected", "Cancelled"}:
 			continue
@@ -628,7 +675,14 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=500):
 				"action_status": details.get("action_status") or row.get("decision_status"),
 				"reconciliation_readiness_status": readiness,
 				"exception_reason": reason,
-				"existing_reconciliation_status": "Reconciled" if readiness == READINESS_ALREADY_RECONCILED else "",
+				"reconciliation_integrity_status": integrity.get("integrity_status") or ("Candidate Summary Mismatch" if "does not match" in cstr(reason) else None),
+				"reconciliation_integrity_reason": integrity.get("mismatch_reason") or (cstr(reason).strip() if "does not match" in cstr(reason) else None),
+				"needs_attention": bool(integrity.get("mismatch_detected") or "does not match" in cstr(reason)),
+				"existing_reconciliation_status": (
+					"Reconciliation Failed"
+					if cstr(combined.get("reconciliation_status") or row.get("reconciliation_status")).strip() == "Reconciliation Failed"
+					else "Reconciled" if readiness == READINESS_ALREADY_RECONCILED else ""
+				),
 				"confirmed_by": row.get("confirmed_by"),
 				"confirmed_on": row.get("confirmed_on"),
 				"days_since_confirmation": _days_since(row.get("confirmed_on")),
@@ -1712,6 +1766,10 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 		combined["branch_match"] = details.get("branch_match")
 		combined["branch_match_available"] = details.get("branch_match_available")
 		combined["candidate_posting_date"] = context.get("candidate_posting_date") or details.get("candidate_posting_date")
+		integrity = _validate_reconciliation_candidate_consistency(combined)
+		combined["reconciliation_integrity_status"] = integrity.get("integrity_status")
+		combined["reconciliation_integrity_reason"] = integrity.get("mismatch_reason")
+		combined["needs_attention"] = bool(integrity.get("mismatch_detected"))
 		readiness, reason = _readiness_for_match_row(combined)
 		if not _report_boolean(filters.get("include_rejected_cancelled"), 0) and cstr(row.get("decision_status")).strip() in {"Rejected", "Cancelled"}:
 			continue
@@ -1744,7 +1802,14 @@ def get_bank_match_reconciliation_readiness_rows(filters=None, limit=DEFAULT_OPE
 				"action_status": details.get("action_status") or row.get("decision_status"),
 				"reconciliation_readiness_status": readiness,
 				"exception_reason": reason,
-				"existing_reconciliation_status": "Reconciled" if readiness == READINESS_ALREADY_RECONCILED else "",
+				"reconciliation_integrity_status": integrity.get("integrity_status") or ("Candidate Summary Mismatch" if "does not match" in cstr(reason) else None),
+				"reconciliation_integrity_reason": integrity.get("mismatch_reason") or (cstr(reason).strip() if "does not match" in cstr(reason) else None),
+				"needs_attention": bool(integrity.get("mismatch_detected") or "does not match" in cstr(reason)),
+				"existing_reconciliation_status": (
+					"Reconciliation Failed"
+					if cstr(combined.get("reconciliation_status") or row.get("reconciliation_status")).strip() == "Reconciliation Failed"
+					else "Reconciled" if readiness == READINESS_ALREADY_RECONCILED else ""
+				),
 				"confirmed_by": row.get("confirmed_by"),
 				"confirmed_on": row.get("confirmed_on"),
 				"days_since_confirmation": _days_since(row.get("confirmed_on")),

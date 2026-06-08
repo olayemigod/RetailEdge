@@ -534,6 +534,10 @@ def get_auto_match_status_for_row(row, settings=None):
 		return blocked("No match candidate found.", category="unsafe")
 	if action_status == "Duplicate Candidate" or cint(row.get("duplicate_candidate_skipped")):
 		return manual("Duplicate candidate in current view requires manual review.", category="duplicate_candidate")
+	if decision_status == "Rejected":
+		return blocked("Previously rejected match pair.", category="rejected_pair")
+	if match_record and decision_status not in {"", "Rejected", "Cancelled", "Reopened"}:
+		return blocked("Active review already exists.", category="active_review")
 	if action_status == "Exception Only" or cint(row.get("exception_only")):
 		return manual("Date or bank account exception requires manual review.", category="exception_only")
 	if amount_scenario_requires_manual_review(row.get("amount_scenario")):
@@ -553,8 +557,16 @@ def get_auto_match_status_for_row(row, settings=None):
 			f"{get_candidate_category_label(row.get('candidate_category')) or 'This candidate'} requires payment-event evidence before auto-match.",
 			category="manual_review",
 		)
+	if suggested_document_type == "Sales Invoice" and not settings.get("allow_auto_match_sales_invoice"):
+		return blocked("Sales Invoice auto-match is disabled in Settings.")
+	if suggested_document_type == "Payment Entry" and not settings.get("allow_auto_match_payment_entry"):
+		return blocked("Payment Entry auto-match is disabled in Settings.")
 	if row.get("match_confidence") != "Strong Match":
-		return manual("Only strong exact matches are eligible for RetailEdge auto-match.", category="manual_review")
+		confidence = cstr(row.get("match_confidence")).strip() or "This candidate"
+		return manual(
+			f"{confidence} is not eligible for auto-confirm. Only strong exact matches are eligible for RetailEdge auto-match.",
+			category="manual_review",
+		)
 	if match_score < minimum_auto_match_score:
 		return blocked(
 			f"Score below auto-match threshold. Match Score: {match_score}. Required Minimum: {minimum_auto_match_score}.",
@@ -563,8 +575,6 @@ def get_auto_match_status_for_row(row, settings=None):
 	if abs(flt(row.get("amount_difference"))) > 0.01:
 		return manual("Amount variance requires manual review.", category="manual_review")
 	if suggested_document_type == "Sales Invoice":
-		if not settings.get("allow_auto_match_sales_invoice"):
-			return blocked("Sales Invoice auto-match is disabled in Settings.")
 		if candidate_category_key not in {"invoice_payment_row_match", "pos_payment_match"}:
 			return manual(
 				"Only invoice payment row or POS payment row evidence is eligible for Sales Invoice auto-match.",
@@ -576,8 +586,6 @@ def get_auto_match_status_for_row(row, settings=None):
 				category="manual_review",
 			)
 	elif suggested_document_type == "Payment Entry":
-		if not settings.get("allow_auto_match_payment_entry"):
-			return blocked("Payment Entry auto-match is disabled in Settings.")
 		if amount_scenario_key not in AUTO_MATCH_EXACT_PAYMENT_ENTRY_SCENARIOS:
 			return manual("Only exact Payment Entry matches are eligible for auto-match.", category="manual_review")
 		if len(payment_entry_context) > 1:
@@ -965,7 +973,11 @@ def get_candidate_document_key(row):
 	document_name = cstr(row.get("suggested_document") or row.get("document_name")).strip()
 	if document_type not in {"Sales Invoice", "Payment Entry"} or not document_name:
 		return None
-	return (document_type, document_name)
+	payment_event_source = cstr(row.get("payment_event_source")).strip()
+	payment_row_key = cstr(row.get("payment_row_reference") or row.get("payment_row_index")).strip()
+	if document_type == "Sales Invoice":
+		return (document_type, document_name, payment_event_source, payment_row_key)
+	return (document_type, document_name, payment_event_source or "Payment Entry", "")
 
 
 def _suggestion_identity_key(row):
@@ -1126,12 +1138,6 @@ def _get_sales_invoice_rows(bank_transaction, filters, settings, limit=60):
 
 
 def _build_sales_invoice_candidates(bank_transaction, invoice, filters, settings):
-	amount_details = _best_invoice_amount_match(bank_transaction, invoice, settings)
-	if not amount_details["fieldname"] or amount_details["amount"] <= 0:
-		return []
-	if amount_details["difference"] > max(flt(settings.get("amount_tolerance")), flt(bank_transaction.get("amount"))):
-		return []
-
 	branch = _row_value(invoice, "retailedge_branch") or _row_value(invoice, "branch")
 	expected_account = None
 	try:
@@ -1248,6 +1254,7 @@ def _build_invoice_payment_row_candidates(bank_transaction, invoice, base_candid
 			continue
 		if not _invoice_payment_row_is_bank_matchable(payment_row):
 			continue
+		resolved_payment_account = _resolve_invoice_payment_row_account(payment_row, invoice.get("company"))
 		category_key = "pos_payment_match" if payment_category == "Card / POS" else "invoice_payment_row_match"
 		scenario = "Exact Invoice Payment Row Amount" if amount_difference <= max(tolerance, 0.01) else "Invoice Payment Row Amount Variance"
 		candidate = dict(base_candidate)
@@ -1264,9 +1271,9 @@ def _build_invoice_payment_row_candidates(bank_transaction, invoice, base_candid
 				"payment_row_index": payment_row.get("payment_row_index"),
 				"payment_row_amount": candidate_amount,
 				"payment_mode": payment_row.get("mode_of_payment"),
-				"payment_account": payment_row.get("account"),
+				"payment_account": resolved_payment_account,
 				"payment_category": payment_category,
-				"account": payment_row.get("account"),
+				"account": resolved_payment_account,
 				"expected_bank_account": payment_row.get("expected_account") or base_candidate.get("expected_bank_account"),
 				"reason": "Matched invoice payment row." if payment_category != "Card / POS" else "Matched POS payment row.",
 			}
@@ -1279,9 +1286,18 @@ def _invoice_payment_row_is_bank_matchable(payment_row):
 	payment_category = cstr((payment_row or {}).get("payment_category")).strip()
 	if payment_category == "Cash":
 		return False
-	account = cstr((payment_row or {}).get("account")).strip()
-	expected_account = cstr((payment_row or {}).get("expected_account")).strip()
-	return bool(account or expected_account)
+	return bool(_resolve_invoice_payment_row_account(payment_row))
+
+
+def _resolve_invoice_payment_row_account(payment_row, company=None):
+	payment_row = payment_row or {}
+	account = cstr(payment_row.get("account") or payment_row.get("default_account")).strip()
+	if account:
+		return account
+	expected_account = cstr(payment_row.get("expected_account")).strip()
+	if expected_account:
+		return expected_account
+	return _resolve_mode_of_payment_default_account(payment_row.get("mode_of_payment"), company=company)
 
 
 def _get_sales_invoice_doc(invoice):
