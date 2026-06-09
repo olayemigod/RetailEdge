@@ -1,0 +1,114 @@
+/* Scoped RetailEdge Workspace polish. Do not target global Frappe cards. */
+body[data-route="Workspaces/RetailEdge"] .layout-main-section,
+body[data-route="Workspaces/RetailEdge"] .workspace-body,
+.page-container[data-page-route="Workspaces/RetailEdge"] .layout-main-section,
+.page-container[data-page-route="Workspaces/RetailEdge"] .workspace-body {
+	--retailedge-home-accent: var(--primary, #0f8f7f);
+	--retailedge-home-card-bg: var(--card-bg, var(--bg-color, #fff));
+	--retailedge-home-border: color-mix(in srgb, var(--border-color, #dfe3e8) 82%, transparent);
+	--retailedge-home-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+body[data-route="Workspaces/RetailEdge"] .retailedge-home-title,
+.page-container[data-page-route="Workspaces/RetailEdge"] .retailedge-home-title {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75rem;
+	padding: 0.25rem 0 0.75rem;
+	border-bottom: 1px solid var(--retailedge-home-border, var(--border-color));
+}
+
+body[data-route="Workspaces/RetailEdge"] .retailedge-home-title span,
+.page-container[data-page-route="Workspaces/RetailEdge"] .retailedge-home-title span {
+	font-weight: 650;
+	letter-spacing: -0.01em;
+}
+
+body[data-route="Workspaces/RetailEdge"] .retailedge-home-title small,
+.page-container[data-page-route="Workspaces/RetailEdge"] .retailedge-home-title small {
+	color: var(--text-muted, #6b7280);
+	font-size: 0.8125rem;
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box,
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box,
+body[data-route="Workspaces/RetailEdge"] .shortcut-widget-box,
+.page-container[data-page-route="Workspaces/RetailEdge"] .shortcut-widget-box {
+	border: 1px solid var(--retailedge-home-border, var(--border-color));
+	border-radius: 12px;
+	background: var(--retailedge-home-card-bg, var(--card-bg));
+	box-shadow: var(--retailedge-home-shadow);
+	transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+	overflow: hidden;
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box:hover,
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box:hover,
+body[data-route="Workspaces/RetailEdge"] .shortcut-widget-box:hover,
+.page-container[data-page-route="Workspaces/RetailEdge"] .shortcut-widget-box:hover {
+	border-color: color-mix(in srgb, var(--retailedge-home-accent) 35%, var(--border-color, #dfe3e8));
+	box-shadow: 0 7px 20px rgba(15, 23, 42, 0.09);
+	transform: translateY(-1px);
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box::before,
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box::before,
+body[data-route="Workspaces/RetailEdge"] .shortcut-widget-box::before,
+.page-container[data-page-route="Workspaces/RetailEdge"] .shortcut-widget-box::before {
+	content: "";
+	display: block;
+	height: 3px;
+	width: 100%;
+	background: color-mix(in srgb, var(--retailedge-home-accent) 28%, transparent);
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box .widget-head,
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box .widget-head,
+body[data-route="Workspaces/RetailEdge"] .shortcut-widget-box .widget-head,
+.page-container[data-page-route="Workspaces/RetailEdge"] .shortcut-widget-box .widget-head {
+	padding: 0.95rem 1.05rem 0.55rem;
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box .widget-title,
+body[data-route="Workspaces/RetailEdge"] .shortcut-widget-box .widget-title,
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box .widget-title,
+.page-container[data-page-route="Workspaces/RetailEdge"] .shortcut-widget-box .widget-title {
+	font-weight: 620;
+	line-height: 1.35;
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box .widget-body,
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box .widget-body {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	padding: 0.2rem 0.75rem 0.85rem;
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box .link-item,
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box .link-item {
+	border-radius: 9px;
+	padding: 0.55rem 0.65rem;
+	color: var(--text-color, inherit);
+	background: color-mix(in srgb, var(--retailedge-home-card-bg, #fff) 88%, var(--control-bg, #f8fafc));
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box .link-item:hover,
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box .link-item:hover {
+	background: color-mix(in srgb, var(--retailedge-home-accent) 8%, var(--control-bg, #f8fafc));
+	text-decoration: none;
+}
+
+body[data-route="Workspaces/RetailEdge"] .links-widget-box:not(:has(.link-item)),
+.page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box:not(:has(.link-item)) {
+	display: none;
+}
+
+@media (max-width: 991px) {
+	body[data-route="Workspaces/RetailEdge"] .retailedge-home-title,
+	.page-container[data-page-route="Workspaces/RetailEdge"] .retailedge-home-title {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+}

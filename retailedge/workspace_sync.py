@@ -5,6 +5,12 @@ from pathlib import Path
 
 import frappe
 
+from retailedge.workspace_home import (
+	build_home_workspace_content,
+	build_home_workspace_links,
+	build_home_workspace_shortcuts,
+)
+
 
 def sync_retailedge_workspace_layout():
 	base_path = Path(frappe.get_app_path("retailedge", "retailedge"))
@@ -24,12 +30,12 @@ def sync_retailedge_workspace_layout():
 	workspace.icon = workspace_data.get("icon") or workspace.icon
 	workspace.indicator_color = workspace_data.get("indicator_color") or workspace.indicator_color
 	workspace.type = workspace_data.get("type") or workspace.type or "Workspace"
-	workspace.content = workspace_data.get("content")
+	workspace.content = build_home_workspace_content(workspace_data)
 	workspace.links = []
-	for row in workspace_data.get("links", []) or []:
+	for row in build_home_workspace_links(workspace_data):
 		workspace.append("links", row)
 	workspace.shortcuts = []
-	for row in workspace_data.get("shortcuts", []) or []:
+	for row in build_home_workspace_shortcuts(workspace_data):
 		short_row = dict(row)
 		if short_row.get("type") == "Report":
 			short_row["doc_view"] = ""
