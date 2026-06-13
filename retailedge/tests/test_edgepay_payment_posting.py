@@ -477,3 +477,31 @@ class TestEdgePayPaymentPosting(FrappeTestCase):
 		self.assertEqual(frappe.db.get_value("RetailEdge EdgePay Payment Evidence", "EPE-SUB-011", "posting_status"), "Blocked")
 		self.assertEqual(frappe.db.get_value("RetailEdge EdgePay Payment Evidence", "EPE-SUB-011", "submission_status"), "Blocked")
 		self.assertEqual(frappe.db.get_value("RetailEdge EdgePay Payment Evidence", "EPE-SUB-011", "submission_message"), "Manual hold")
+
+	def test_production_service_does_not_set_ignore_flags(self):
+		self.create_evidence("EPE-TEST-012", review_status="Reviewed")
+		
+		captured_flags = {}
+		captured_kwargs = {}
+		
+		pe = self.mock_get_payment_entry("Sales Invoice", "SINV-RE-0001")
+		pe.flags.ignore_validate = False
+		
+		original_insert = pe.insert
+		def mock_insert(*args, **kwargs):
+			captured_flags.update(pe.flags)
+			captured_kwargs.update(kwargs)
+			pe.flags.ignore_validate = True
+			return original_insert(ignore_permissions=True)
+			
+		pe.insert = mock_insert
+		
+		with patch("retailedge.services.edgepay_payment_posting.get_payment_entry", return_value=pe):
+			prepare_edgepay_payment_entry_draft("EPE-TEST-012")
+			
+		self.assertFalse(captured_flags.get("ignore_validate"))
+		self.assertFalse(captured_flags.get("ignore_mandatory"))
+		self.assertFalse(captured_flags.get("ignore_links"))
+		self.assertFalse(captured_flags.get("ignore_permissions"))
+		self.assertFalse(captured_kwargs.get("ignore_permissions"))
+

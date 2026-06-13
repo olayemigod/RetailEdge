@@ -135,8 +135,7 @@ def prepare_edgepay_payment_entry_draft(evidence_name):
 	pe.remarks = f"Prepared from RetailEdge EdgePay Payment Evidence {evidence.name}"
 	
 	# Insert draft document (does NOT submit)
-	pe.flags.ignore_validate = True
-	pe.insert(ignore_permissions=True)
+	pe.insert()
 	
 	# Update evidence document status
 	evidence.db_set("payment_entry", pe.name)
