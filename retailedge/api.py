@@ -911,3 +911,8 @@ def _assert_retailedge_verification_role():
 		"You do not have permission to manage RetailEdge Sales Invoice verification sync.",
 		frappe.PermissionError,
 	)
+
+
+@frappe.whitelist()
+def process_pending_edgepay_handoffs(limit=50):
+	return _process_pending_edgepay_handoffs(limit=limit)
