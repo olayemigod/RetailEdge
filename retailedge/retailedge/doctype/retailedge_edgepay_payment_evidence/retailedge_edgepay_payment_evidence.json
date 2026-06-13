@@ -24,7 +24,12 @@
   "review_status",
   "error_message",
   "created_from_edgepay_handoff",
-  "idempotency_key"
+  "idempotency_key",
+  "posting_status",
+  "payment_entry",
+  "posting_preflight_message",
+  "posting_prepared_on",
+  "posting_prepared_by"
  ],
  "fields": [
   {
@@ -139,6 +144,34 @@
    "fieldtype": "Data",
    "label": "Idempotency Key",
    "unique": 1
+  },
+  {
+   "default": "Not Prepared",
+   "fieldname": "posting_status",
+   "fieldtype": "Select",
+   "label": "Posting Status",
+   "options": "Not Prepared\nReady\nDraft Created\nBlocked\nCancelled"
+  },
+  {
+   "fieldname": "payment_entry",
+   "fieldtype": "Link",
+   "label": "Payment Entry",
+   "options": "Payment Entry"
+  },
+  {
+   "fieldname": "posting_preflight_message",
+   "fieldtype": "Small Text",
+   "label": "Posting Preflight Message"
+  },
+  {
+   "fieldname": "posting_prepared_on",
+   "fieldtype": "Datetime",
+   "label": "Posting Prepared On"
+  },
+  {
+   "fieldname": "posting_prepared_by",
+   "fieldtype": "Data",
+   "label": "Posting Prepared By"
   }
  ],
  "index_web_pages_for_search": 1,

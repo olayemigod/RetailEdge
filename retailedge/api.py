@@ -1020,3 +1020,27 @@ def mark_edgepay_evidence_reviewed(evidence_name):
 @frappe.whitelist()
 def mark_edgepay_evidence_rejected(evidence_name, reason=None):
 	return _mark_edgepay_evidence_rejected(evidence_name, reason=reason)
+
+
+def _assert_can_prepare_edgepay_posting():
+	if frappe.session.user == "Guest":
+		frappe.throw("Guest access is not allowed.", frappe.PermissionError)
+	user_roles = set(frappe.get_roles(frappe.session.user))
+	allowed_roles = {"System Manager", "Accounts Manager", "RetailEdge Manager", "RetailEdgeManager", "Accounts User"}
+	if not user_roles.intersection(allowed_roles):
+		frappe.throw("You do not have permission to prepare RetailEdge EdgePay postings.", frappe.PermissionError)
+
+
+@frappe.whitelist()
+def get_edgepay_evidence_posting_preflight(evidence_name):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_payment_posting import get_edgepay_evidence_posting_preflight as _get_preflight
+	return _get_preflight(evidence_name)
+
+
+@frappe.whitelist()
+def prepare_edgepay_payment_entry_draft(evidence_name):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_payment_posting import prepare_edgepay_payment_entry_draft as _prepare_draft
+	return _prepare_draft(evidence_name)
+
