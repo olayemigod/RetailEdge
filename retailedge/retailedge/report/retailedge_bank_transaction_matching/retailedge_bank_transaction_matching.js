@@ -69,6 +69,9 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 		report.page.add_inner_button(__("Run Auto-Match for Visible Results"), function () {
 			open_run_auto_match_dialog(report);
 		});
+		report.page.add_inner_button(__("View Recent Batch Jobs"), function () {
+			frappe.set_route("List", "RetailEdge Bank Match Batch Job");
+		});
 
 		$(document).off("click", ".retailedge-bank-match-review");
 		$(document).on("click", ".retailedge-bank-match-review", function () {
@@ -578,6 +581,39 @@ function ensure_bank_match_record(args, callback) {
 	});
 }
 
+
+function confirm_large_bank_match_action(selection, actionLabel, callback) {
+	const limit = 200;
+	if ((selection.rows || []).length <= limit) {
+		callback(false);
+		return;
+	}
+	const message = __(
+		"You selected {0} rows. This exceeds the safe live-processing limit of {1}. Run this as a background job?",
+		[selection.rows.length, limit]
+	);
+	frappe.confirm(
+		`<p>${frappe.utils.escape_html(message)}</p>`,
+		function () {
+			callback(true);
+		},
+		function () {}
+	);
+}
+
+function show_bank_match_batch_job_queued(result) {
+	if (!result || !result.batch_job) {
+		frappe.msgprint((result && result.message) || __("Bank Match Batch Job has been queued."));
+		return;
+	}
+	frappe.msgprint({
+		title: __("Bank Match Batch Job Queued"),
+		indicator: "blue",
+		message: `<p>${frappe.utils.escape_html(result.message || "")}</p>
+			<p><a href="/app/retailedge-bank-match-batch-job/${encodeURIComponent(result.batch_job)}">${frappe.utils.escape_html(result.batch_job)}</a></p>`,
+	});
+}
+
 function open_create_review_records_dialog(report) {
 	const selection = get_report_suggestion_rows(report, { eligibleOnly: true });
 	if (!selection.rows.length) {
@@ -606,18 +642,26 @@ function open_create_review_records_dialog(report) {
 	`;
 
 	frappe.confirm(message, function () {
-		frappe.call({
-			method: "retailedge.api.create_bank_match_reviews_from_suggestions",
-			args: {
-				filters: JSON.stringify(frappe.query_report.get_filter_values()),
-				rows: JSON.stringify(selection.rows),
-			},
-			freeze: true,
-			freeze_message: __("Creating RetailEdge match review records..."),
-			callback: function (r) {
-				show_create_review_records_summary((r && r.message) || {});
-				refreshOperationalReportView(report);
-			},
+		confirm_large_bank_match_action(selection, __("Create Review Records"), function (runBackground) {
+			frappe.call({
+				method: "retailedge.api.create_bank_match_reviews_from_suggestions",
+				args: {
+					filters: JSON.stringify(frappe.query_report.get_filter_values()),
+					rows: JSON.stringify(selection.rows),
+					run_background: runBackground ? 1 : 0,
+				},
+				freeze: !runBackground,
+				freeze_message: __("Creating RetailEdge match review records..."),
+				callback: function (r) {
+					const result = (r && r.message) || {};
+					if (result.status === "queued" || result.batch_job) {
+						show_bank_match_batch_job_queued(result);
+					} else {
+						show_create_review_records_summary(result);
+						refreshOperationalReportView(report);
+					}
+				},
+			});
 		});
 	});
 }
@@ -656,18 +700,26 @@ function open_run_auto_match_dialog(report) {
 	`;
 
 	frappe.confirm(message, function () {
-		frappe.call({
-			method: "retailedge.api.run_bank_transaction_auto_match",
-			args: {
-				filters: JSON.stringify(frappe.query_report.get_filter_values()),
-				rows: JSON.stringify(selection.rows),
-			},
-			freeze: true,
-			freeze_message: __("Running RetailEdge auto-match..."),
-			callback: function (r) {
-				show_auto_match_summary((r && r.message) || {});
-				refreshOperationalReportView(report);
-			},
+		confirm_large_bank_match_action(selection, __("Run Auto-Match"), function (runBackground) {
+			frappe.call({
+				method: "retailedge.api.run_bank_transaction_auto_match",
+				args: {
+					filters: JSON.stringify(frappe.query_report.get_filter_values()),
+					rows: JSON.stringify(selection.rows),
+					run_background: runBackground ? 1 : 0,
+				},
+				freeze: !runBackground,
+				freeze_message: __("Running RetailEdge auto-match..."),
+				callback: function (r) {
+					const result = (r && r.message) || {};
+					if (result.status === "queued" || result.batch_job) {
+						show_bank_match_batch_job_queued(result);
+					} else {
+						show_auto_match_summary(result);
+						refreshOperationalReportView(report);
+					}
+				},
+			});
 		});
 	});
 }

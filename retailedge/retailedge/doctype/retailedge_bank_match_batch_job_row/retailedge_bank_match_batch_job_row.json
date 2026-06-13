@@ -1,0 +1,175 @@
+{
+ "actions": [],
+ "creation": "2026-06-09 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "row_index",
+  "candidate_key",
+  "bank_transaction",
+  "suggested_document_type",
+  "suggested_document",
+  "candidate_category",
+  "payment_event_source",
+  "payment_row_reference",
+  "payment_row_index",
+  "payment_account",
+  "resolved_payment_account",
+  "amount_scenario",
+  "match_score",
+  "match_confidence",
+  "input_payload_json",
+  "result_status",
+  "result_message",
+  "review_record",
+  "processed_on",
+  "error_traceback"
+ ],
+ "fields": [
+  {
+   "fieldname": "row_index",
+   "fieldtype": "Int",
+   "label": "Row Index",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "candidate_key",
+   "fieldtype": "Data",
+   "label": "Candidate Key",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "bank_transaction",
+   "fieldtype": "Link",
+   "label": "Bank Transaction",
+   "options": "Bank Transaction",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "suggested_document_type",
+   "fieldtype": "Data",
+   "label": "Suggested Document Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "suggested_document",
+   "fieldtype": "Dynamic Link",
+   "label": "Suggested Document",
+   "options": "suggested_document_type",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "candidate_category",
+   "fieldtype": "Data",
+   "label": "Candidate Category",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_event_source",
+   "fieldtype": "Data",
+   "label": "Payment Event Source",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_row_reference",
+   "fieldtype": "Data",
+   "label": "Payment Row Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_row_index",
+   "fieldtype": "Data",
+   "label": "Payment Row Index",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_account",
+   "fieldtype": "Link",
+   "label": "Payment Account",
+   "options": "Account",
+   "read_only": 1
+  },
+  {
+   "fieldname": "resolved_payment_account",
+   "fieldtype": "Link",
+   "label": "Resolved Payment Account",
+   "options": "Account",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amount_scenario",
+   "fieldtype": "Data",
+   "label": "Amount Scenario",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_score",
+   "fieldtype": "Float",
+   "label": "Match Score",
+   "read_only": 1
+  },
+  {
+   "fieldname": "match_confidence",
+   "fieldtype": "Data",
+   "label": "Match Confidence",
+   "read_only": 1
+  },
+  {
+   "fieldname": "input_payload_json",
+   "fieldtype": "Long Text",
+   "label": "Input Payload JSON",
+   "hidden": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_status",
+   "fieldtype": "Select",
+   "label": "Result Status",
+   "options": "Pending\nCreated\nConfirmed\nSkipped\nBlocked\nFailed\nAlready Exists",
+   "default": "Pending",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_message",
+   "fieldtype": "Small Text",
+   "label": "Result Message",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "review_record",
+   "fieldtype": "Link",
+   "label": "Review Record",
+   "options": "RetailEdge Bank Transaction Match",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processed_on",
+   "fieldtype": "Datetime",
+   "label": "Processed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_traceback",
+   "fieldtype": "Long Text",
+   "label": "Error Traceback",
+   "hidden": 1,
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "modified": "2026-06-09 00:00:00.000000",
+ "module": "RetailEdge",
+ "name": "RetailEdge Bank Match Batch Job Row",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -8,6 +8,7 @@ import frappe
 
 from retailedge.bank_transaction_match_workflow import (
 	_revalidate_suggestion_row,
+	_resolve_matching_candidate,
 	bulk_confirm_bank_transaction_matches,
 	bulk_mark_bank_transaction_matches_needs_review,
 	cancel_bank_transaction_match,
@@ -254,11 +255,64 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(doc.risk_level, "Low")
 		self.assertEqual(doc.candidate_type, "Sales Invoice")
 
+
+	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[
+			{
+				"document_type": "Payment Entry",
+				"document_name": "ACC-PAY-2026-00008",
+				"candidate_amount": 1090,
+				"score": 92,
+				"confidence": "Strong Match",
+				"candidate_category": "payment_entry_match",
+				"payment_event_found": 1,
+				"payment_event_source": "Payment Entry",
+			}
+		],
+	)
+	def test_resolve_matching_candidate_does_not_fallback_when_explicit_target_missing(
+		self,
+		_mock_payment_candidates,
+		_mock_sales_candidates,
+	):
+		candidate = _resolve_matching_candidate(
+			bank_transaction_name="ACC-BTN-2026-00007",
+			suggested_document_type="Payment Entry",
+			suggested_document="ACC-PAY-2026-00012",
+		)
+		self.assertIsNone(candidate)
+
+	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[
+			{
+				"document_type": "Payment Entry",
+				"document_name": "ACC-PAY-2026-00008",
+				"candidate_amount": 1090,
+				"score": 92,
+				"confidence": "Strong Match",
+				"candidate_category": "payment_entry_match",
+				"payment_event_found": 1,
+				"payment_event_source": "Payment Entry",
+			}
+		],
+	)
+	def test_resolve_matching_candidate_still_uses_best_candidate_without_explicit_target(
+		self,
+		_mock_payment_candidates,
+		_mock_sales_candidates,
+	):
+		candidate = _resolve_matching_candidate(bank_transaction_name="ACC-BTN-2026-00007")
+		self.assertEqual(candidate.get("document_name"), "ACC-PAY-2026-00008")
+
 	@patch("retailedge.bank_transaction_match_workflow._select_candidate_for_queue")
 	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
 	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction")
 	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
-	def test_revalidate_suggestion_row_uses_current_backend_candidate(
+	def test_revalidate_suggestion_row_preserves_explicit_candidate_when_missing(
 		self,
 		mock_normalize,
 		mock_sales_candidates,
@@ -306,9 +360,11 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 				"suggested_document": "ACC-PAY-OLD",
 			}
 		)
-		self.assertEqual(row["suggested_document_type"], "Sales Invoice")
-		self.assertEqual(row["suggested_document"], "ACC-SINV-2026-00025")
+		self.assertEqual(row["suggested_document_type"], "Payment Entry")
+		self.assertEqual(row["suggested_document"], "ACC-PAY-OLD")
 		self.assertEqual(row["candidate_revalidated"], 1)
+		self.assertIn("Locked candidate was not found", row["candidate_changed_reason"])
+		mock_select.assert_not_called()
 
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
@@ -769,6 +825,215 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertEqual(doc.confirmed_by, "auditor@example.com")
 		self.assertEqual(doc.action_logs[-1]["action"], "Confirmed")
 		self.assertTrue(doc.save_called)
+
+
+	def _make_candidate_lock_confirm_doc(self, name="RE-BTM-CANDIDATE-LOCK"):
+		doc = _FakeMatchDoc(
+			doctype="RetailEdge Bank Transaction Match",
+			name=name,
+			decision_status="Suggested",
+			bank_transaction="ACC-BTN-LOCK-1",
+			suggested_document="PE-A",
+			suggested_document_type="Payment Entry",
+			sales_invoice=None,
+			payment_entry="PE-A",
+			bank_amount=100,
+			candidate_amount=100,
+			amount_difference=0,
+			match_confidence="Strong Match",
+			match_score=95,
+			amount_scenario="Exact Amount",
+			party_type="Customer",
+			party=None,
+			customer=None,
+			action_logs=[],
+			synced_to_sales_invoice=0,
+			sales_invoice_sync_ready=0,
+			sync_blocked_reason=None,
+		)
+		self._bind_match_validate(doc, validate_candidate=True)
+
+		def validating_save(ignore_permissions=True):
+			doc._hydrate_bank_transaction_context()
+			doc._hydrate_candidate_context()
+			doc._validate_candidate_fields()
+			doc.save_called = True
+			return doc
+
+		doc.save = validating_save
+		return doc
+
+	def _candidate_lock_bank_context(self):
+		return {
+			"bank_transaction": "ACC-BTN-LOCK-1",
+			"company": "Process Edge (Demo)",
+			"branch": "Airport Branch",
+			"bank_account": "Moniepoint - moniepoint",
+			"transaction_date": "2026-06-12",
+			"bank_amount": 100,
+			"amount": 100,
+			"bank_reference": "LOCK-A",
+			"bank_narration": "Candidate lock confirmation test",
+		}
+
+	def _candidate_lock_source_candidate(self):
+		return {
+			"document_type": "Payment Entry",
+			"document_name": "PE-A",
+			"suggested_sales_invoice": None,
+			"candidate_amount": 100,
+			"score": 95,
+			"confidence": "Strong Match",
+			"candidate_category": "payment_entry_match",
+			"payment_event_found": 1,
+			"payment_event_source": "Payment Entry",
+			"party_type": "Customer",
+			"party": None,
+			"customer": None,
+			"reasons": ["Stored reviewed candidate."],
+		}
+
+	def _current_best_different_candidate(self):
+		return {
+			"document_type": "Payment Entry",
+			"document_name": "PE-B",
+			"suggested_sales_invoice": None,
+			"candidate_amount": 100,
+			"score": 99,
+			"confidence": "Strong Match",
+			"candidate_category": "payment_entry_match",
+			"payment_event_found": 1,
+			"payment_event_source": "Payment Entry",
+			"party_type": "Customer",
+			"party": None,
+			"customer": None,
+			"reasons": ["Current best candidate should not replace stored review candidate."],
+		}
+
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_doc")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_bank_transaction_context"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_source_candidate_context"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_matching_candidate"
+	)
+	def test_confirm_preserves_reviewed_candidate_when_current_best_differs(
+		self,
+		mock_resolve,
+		mock_source_candidate,
+		mock_bank_context,
+		_mock_exists,
+		_mock_get_value,
+		mock_get_doc,
+		_mock_roles,
+	):
+		doc = self._make_candidate_lock_confirm_doc()
+		mock_get_doc.return_value = doc
+		mock_bank_context.return_value = self._candidate_lock_bank_context()
+		mock_source_candidate.return_value = self._candidate_lock_source_candidate()
+		mock_resolve.return_value = self._current_best_different_candidate()
+
+		with patch("retailedge.bank_transaction_match_workflow.now_datetime", return_value="2026-06-12 10:00:00"), patch(
+			"retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False
+		):
+			result = confirm_bank_transaction_match(doc.name, decision_note="Confirmed stored candidate")
+
+		self.assertEqual(result["decision_status"], "Confirmed")
+		self.assertEqual(doc.decision_status, "Confirmed")
+		self.assertEqual(doc.suggested_document_type, "Payment Entry")
+		self.assertEqual(doc.suggested_document, "PE-A")
+		self.assertEqual(doc.payment_entry, "PE-A")
+		self.assertNotEqual(doc.suggested_document, "PE-B")
+
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_doc")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_bank_transaction_context"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_source_candidate_context"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_matching_candidate"
+	)
+	def test_bulk_confirm_preserves_reviewed_candidate_when_current_best_differs(
+		self,
+		mock_resolve,
+		mock_source_candidate,
+		mock_bank_context,
+		_mock_exists,
+		_mock_get_value,
+		mock_get_doc,
+		_mock_roles,
+	):
+		doc = self._make_candidate_lock_confirm_doc(name="RE-BTM-BULK-CANDIDATE-LOCK")
+		mock_get_doc.return_value = doc
+		mock_bank_context.return_value = self._candidate_lock_bank_context()
+		mock_source_candidate.return_value = self._candidate_lock_source_candidate()
+		mock_resolve.return_value = self._current_best_different_candidate()
+
+		with patch("retailedge.bank_transaction_match_workflow.now_datetime", return_value="2026-06-12 10:00:00"), patch(
+			"retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False
+		):
+			result = bulk_confirm_bank_transaction_matches([doc.name], remarks="Bulk confirmed stored candidate")
+
+		self.assertEqual(result["confirmed_count"], 1)
+		self.assertEqual(doc.decision_status, "Confirmed")
+		self.assertEqual(doc.suggested_document, "PE-A")
+		self.assertEqual(doc.payment_entry, "PE-A")
+		self.assertNotEqual(doc.suggested_document, "PE-B")
+
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_doc")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_bank_transaction_context"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_source_candidate_context",
+		return_value=None,
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_matching_candidate"
+	)
+	def test_confirm_invalid_reviewed_candidate_blocks_without_substituting_current_best(
+		self,
+		mock_resolve,
+		_mock_source_candidate,
+		mock_bank_context,
+		_mock_exists,
+		_mock_get_value,
+		mock_get_doc,
+		_mock_roles,
+	):
+		doc = self._make_candidate_lock_confirm_doc(name="RE-BTM-INVALID-CANDIDATE-LOCK")
+		mock_get_doc.return_value = doc
+		mock_bank_context.return_value = self._candidate_lock_bank_context()
+		mock_resolve.return_value = self._current_best_different_candidate()
+
+		with patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False), patch(
+			"retailedge.bank_transaction_match_workflow.now_datetime", return_value="2026-06-12 10:00:00"
+		):
+			with self.assertRaises(frappe.ValidationError) as exc:
+				confirm_bank_transaction_match(doc.name, decision_note="Should block")
+
+		self.assertIn("Cannot create review record", str(exc.exception))
+		self.assertFalse(getattr(doc, "save_called", False))
+		self.assertEqual(doc.suggested_document, "PE-A")
+		self.assertEqual(doc.payment_entry, "PE-A")
+		self.assertNotEqual(doc.suggested_document, "PE-B")
 
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
 	@patch("retailedge.bank_transaction_match_workflow.frappe.session", SimpleNamespace(user="auditor@example.com"))

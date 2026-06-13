@@ -262,6 +262,11 @@ def _resolve_manual_candidate_context(
 			sales_invoice=sales_invoice or (suggested_document if suggested_document_type == "Sales Invoice" else None),
 			payment_entry=payment_entry or (suggested_document if suggested_document_type == "Payment Entry" else None),
 		)
+		if candidate and (
+			cstr(candidate.get("document_type")).strip() != suggested_document_type
+			or cstr(candidate.get("document_name")).strip() != suggested_document
+		):
+			candidate = None
 	if not candidate:
 		candidate = _build_source_candidate_context(suggested_document_type, suggested_document)
 	if not candidate:

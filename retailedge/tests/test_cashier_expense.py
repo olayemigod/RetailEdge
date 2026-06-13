@@ -2770,8 +2770,19 @@ class BranchProfileTests(unittest.TestCase):
 		path = Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace/retailedge/retailedge.json")
 		data = json.loads(path.read_text())
 		link_labels = [row.get("label") for row in data.get("links", []) if row.get("type") == "Card Break"]
-		self.assertEqual(link_labels, ["Operations", "Reports & Review", "Setup / Configuration"])
+		self.assertEqual(
+			link_labels,
+			[
+				"Operations",
+				"Review & Approvals",
+				"Reports & Analytics",
+				"Accounting / Ledger Bridge",
+				"Setup / Configuration",
+				"Admin / Maintenance",
+			],
+		)
 		shortcut_labels = [row.get("label") for row in data.get("shortcuts", [])]
+		self.assertIn("Start POS", shortcut_labels)
 		self.assertIn("Cashier Expense", shortcut_labels)
 		self.assertIn("Daily Sales Audit", shortcut_labels)
 		self.assertIn("Payment Statement Import", shortcut_labels)
@@ -2784,6 +2795,7 @@ class BranchProfileTests(unittest.TestCase):
 		self.assertIn("Statement Mapping Template", shortcut_labels)
 		self.assertIn("Settings", shortcut_labels)
 		self.assertIn("Branch Profile", shortcut_labels)
+		self.assertIn("Bank Match Batch Jobs", shortcut_labels)
 		self.assertNotIn("RetailEdge Cashier Expense", shortcut_labels)
 		self.assertNotIn("Payment Evidence", shortcut_labels)
 		self.assertNotIn("Payment Verification Review", shortcut_labels)

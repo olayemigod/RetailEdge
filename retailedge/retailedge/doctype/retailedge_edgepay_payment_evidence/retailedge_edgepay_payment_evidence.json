@@ -33,7 +33,13 @@
   "submitted_on",
   "submitted_by",
   "submission_status",
-  "submission_message"
+  "submission_message",
+  "reconciliation_status",
+  "reconciliation_message",
+  "linked_bank_transaction",
+  "linked_bank_match_review",
+  "reconciliation_checked_on",
+  "reconciliation_checked_by"
  ],
  "fields": [
   {
@@ -198,6 +204,40 @@
    "fieldname": "submission_message",
    "fieldtype": "Small Text",
    "label": "Submission Message"
+  },
+  {
+   "default": "Not Ready",
+   "fieldname": "reconciliation_status",
+   "fieldtype": "Select",
+   "label": "Reconciliation Status",
+   "options": "Not Ready\nReady\nMatched\nReconciled\nBlocked\nException"
+  },
+  {
+   "fieldname": "reconciliation_message",
+   "fieldtype": "Small Text",
+   "label": "Reconciliation Message"
+  },
+  {
+   "fieldname": "linked_bank_transaction",
+   "fieldtype": "Link",
+   "label": "Linked Bank Transaction",
+   "options": "Bank Transaction"
+  },
+  {
+   "fieldname": "linked_bank_match_review",
+   "fieldtype": "Link",
+   "label": "Linked Bank Match Review",
+   "options": "RetailEdge Bank Transaction Match"
+  },
+  {
+   "fieldname": "reconciliation_checked_on",
+   "fieldtype": "Datetime",
+   "label": "Reconciliation Checked On"
+  },
+  {
+   "fieldname": "reconciliation_checked_by",
+   "fieldtype": "Data",
+   "label": "Reconciliation Checked By"
   }
  ],
  "index_web_pages_for_search": 1,

@@ -1058,3 +1058,25 @@ def submit_edgepay_payment_entry(evidence_name):
 	from retailedge.services.edgepay_payment_posting import submit_edgepay_payment_entry as _submit_entry
 	return _submit_entry(evidence_name)
 
+
+@frappe.whitelist()
+def get_edgepay_reconciliation_readiness(evidence_name):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_reconciliation_readiness import get_edgepay_reconciliation_readiness as _get_readiness
+	return _get_readiness(evidence_name)
+
+
+@frappe.whitelist()
+def mark_edgepay_evidence_reconciliation_ready(evidence_name):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_reconciliation_readiness import mark_edgepay_evidence_reconciliation_ready as _ready
+	return _ready(evidence_name)
+
+
+@frappe.whitelist()
+def mark_edgepay_evidence_reconciliation_blocked(evidence_name, reason=None):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_reconciliation_readiness import mark_edgepay_evidence_reconciliation_blocked as _blocked
+	return _blocked(evidence_name, reason=reason)
+
+

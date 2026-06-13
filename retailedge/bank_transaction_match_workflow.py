@@ -73,6 +73,8 @@ def create_or_get_bank_transaction_match(
 		sales_invoice=sales_invoice,
 		payment_entry=payment_entry,
 	)
+	if (suggested_document or sales_invoice or payment_entry) and not candidate:
+		frappe.throw("Locked candidate was not found during validation; no alternate candidate was selected.")
 	_ensure_valid_candidate(candidate)
 
 	existing_name = _find_existing_match_name(
@@ -723,6 +725,27 @@ def _revalidate_suggestion_row(row, filters=None):
 		filters=candidate_filters,
 		limit=20,
 	)
+	explicit_type = cstr(row.get("suggested_document_type")).strip()
+	explicit_name = cstr(row.get("suggested_document")).strip()
+	if explicit_type and explicit_name:
+		locked_candidate = None
+		for candidate in candidates:
+			if cstr(candidate.get("document_type")).strip() == explicit_type and cstr(candidate.get("document_name")).strip() == explicit_name:
+				locked_candidate = candidate
+				break
+		if not locked_candidate:
+			row["candidate_revalidated"] = 1
+			row["candidate_changed_reason"] = "Locked candidate was not found during validation; no alternate candidate was selected."
+			return row
+		return frappe._dict(
+			_build_matching_row(
+				bank_transaction,
+				candidate=locked_candidate,
+				action_status=_derive_action_status(bank_transaction, locked_candidate),
+				match_reason="; ".join((locked_candidate or {}).get("reasons") or []) or locked_candidate.get("reason"),
+			)
+		)
+
 	best_candidate, _selected_match = _select_candidate_for_queue(candidates, [], candidate_filters)
 	if not best_candidate:
 		return frappe._dict(
@@ -733,7 +756,7 @@ def _revalidate_suggestion_row(row, filters=None):
 				match_reason="No candidate reached the minimum matching confidence.",
 			)
 		)
-	resolved = frappe._dict(
+	return frappe._dict(
 		_build_matching_row(
 			bank_transaction,
 			candidate=best_candidate,
@@ -741,16 +764,6 @@ def _revalidate_suggestion_row(row, filters=None):
 			match_reason="; ".join((best_candidate or {}).get("reasons") or []) or best_candidate.get("reason"),
 		)
 	)
-	original_key = _suggestion_row_key(row)
-	resolved_key = _suggestion_row_key(resolved)
-	if original_key and resolved_key and original_key != resolved_key:
-		resolved["candidate_revalidated"] = 1
-		resolved["candidate_changed_reason"] = (
-			"Current best suggestion differs from the candidate sent by Desk. RetailEdge revalidated this bank transaction server-side before proceeding."
-		)
-		resolved["original_suggested_document_type"] = row.get("suggested_document_type")
-		resolved["original_suggested_document"] = row.get("suggested_document")
-	return resolved
 
 
 def _classify_suggestion_review_preparation(row, allow_rejected_pair_retry=False, for_auto_match=False):
@@ -1389,6 +1402,7 @@ def _resolve_matching_candidate(
 				not explicit_type or cstr(candidate.get("document_type")) == cstr(explicit_type)
 			):
 				return candidate
+		return None
 
 	return candidates[0] if candidates else None
 

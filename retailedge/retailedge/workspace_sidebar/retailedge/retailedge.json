@@ -742,6 +742,17 @@
    "collapsible": 1,
    "indent": 0,
    "keep_closed": 0,
+   "label": "Bank Match Batch Jobs",
+   "link_to": "RetailEdge Bank Match Batch Job",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
    "label": "Failed Reconciliation Repair",
    "link_to": "RetailEdge Reconciliation Handoff",
    "link_type": "Report",

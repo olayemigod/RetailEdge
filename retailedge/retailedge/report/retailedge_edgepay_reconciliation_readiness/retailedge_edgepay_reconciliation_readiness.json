@@ -1,0 +1,44 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-06-13 00:00:00.000000",
+ "disable_prepared_report": 1,
+ "doctype": "Report",
+ "filters": [],
+ "is_standard": "Yes",
+ "module": "RetailEdge",
+ "name": "RetailEdge EdgePay Reconciliation Readiness",
+ "prepared_report": 0,
+ "ref_doctype": "RetailEdge EdgePay Payment Evidence",
+ "report_name": "RetailEdge EdgePay Reconciliation Readiness",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "RetailEdge Manager"
+  },
+  {
+   "role": "RetailEdgeManager"
+  },
+  {
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "role": "RetailEdgeBranchManager"
+  },
+  {
+   "role": "RetailEdge Auditor"
+  },
+  {
+   "role": "RetailEdgeAuditor"
+  }
+ ]
+}

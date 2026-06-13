@@ -553,7 +553,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Admin / Maintenance",
-   "link_count": 4,
+   "link_count": 5,
    "link_type": "Report",
    "onboard": 0,
    "type": "Card Break"
@@ -577,6 +577,16 @@
    "onboard": 0,
    "type": "Link",
    "link_to": "RetailEdge Bank Match Reconciliation Readiness"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Bank Match Batch Jobs",
+   "link_count": 0,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge Bank Match Batch Job"
   },
   {
    "hidden": 0,
@@ -1025,6 +1035,14 @@
    "stats_filter": "[]",
    "type": "Report",
    "link_to": "RetailEdge Bank Match Reconciliation Readiness"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Bank Match Batch Jobs",
+   "stats_filter": "[]",
+   "type": "DocType",
+   "link_to": "RetailEdge Bank Match Batch Job"
   },
   {
    "color": "Grey",

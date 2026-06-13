@@ -81,6 +81,7 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Serial No", "DocType", "Serial No", "Setup / Configuration", 150, "admin", "ERPNext Link", "Grey"),
 	WorkspaceHomeItem("Sales Invoice Verification Sync", "Report", "RetailEdge Invoice Payment Audit", "Admin / Maintenance", 10, "admin", "RetailEdge Native", "Grey"),
 	WorkspaceHomeItem("Bank Match Integrity Check", "Report", "RetailEdge Bank Match Reconciliation Readiness", "Admin / Maintenance", 20, "admin", "RetailEdge Overlay", "Grey"),
+	WorkspaceHomeItem("Bank Match Batch Jobs", "DocType", "RetailEdge Bank Match Batch Job", "Admin / Maintenance", 25, "admin", "RetailEdge Native", "Grey"),
 	WorkspaceHomeItem("Failed Reconciliation Repair", "Report", "RetailEdge Reconciliation Handoff", "Admin / Maintenance", 30, "admin", "RetailEdge Overlay", "Grey"),
 	WorkspaceHomeItem("Error Log", "DocType", "Error Log", "Admin / Maintenance", 100, "admin", "ERPNext Link", "Grey"),
 )
@@ -119,7 +120,7 @@ def get_home_workspace_items(workspace_data: dict, check_dependencies: bool = Tr
 		)
 		for item in section_items:
 			key = (item.label, item.link_type, item.url or item.link_to)
-			if key in seen or (item.link_type != "URL" and key not in available) or (check_dependencies and not target_exists(item)):
+			if key in seen or (check_dependencies and not target_exists(item)):
 				continue
 			seen.add(key)
 			items.append(item)

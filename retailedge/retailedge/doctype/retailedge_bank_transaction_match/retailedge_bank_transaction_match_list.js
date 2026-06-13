@@ -30,6 +30,10 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 			show_bank_match_queue_summary(listview);
 		});
 
+		listview.page.add_inner_button(__("Open Batch Jobs"), function () {
+			frappe.set_route("List", "RetailEdge Bank Match Batch Job");
+		});
+
 		listview.page.add_actions_menu_item(__("Preview Bulk Confirm"), function () {
 			const names = get_selected_bank_match_names(listview);
 			if (!names.length) {
@@ -84,6 +88,36 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 	},
 };
 
+
+function show_bank_match_batch_job_queued(result) {
+	frappe.msgprint({
+		title: __("Bank Match Batch Job Queued"),
+		indicator: "blue",
+		message: `<p>${frappe.utils.escape_html((result && result.message) || __("Bank Match Batch Job has been queued."))}</p>
+			${result && result.batch_job ? `<p><a href="/app/retailedge-bank-match-batch-job/${encodeURIComponent(result.batch_job)}">${frappe.utils.escape_html(result.batch_job)}</a></p>` : ""}`,
+	});
+}
+
+function should_run_bank_match_background(names) {
+	return (names || []).length > 200;
+}
+
+function confirm_large_bank_match_bulk_action(names, callback) {
+	if (!should_run_bank_match_background(names)) {
+		callback(false);
+		return;
+	}
+	frappe.confirm(
+		__(
+			"You selected {0} records. This exceeds the safe live-processing limit of 200. Run this as a background job?",
+			[names.length]
+		),
+		function () {
+			callback(true);
+		}
+	);
+}
+
 function get_selected_bank_match_names(listview) {
 	return (listview.get_checked_items() || []).map((row) => row.name).filter(Boolean);
 }
@@ -116,18 +150,26 @@ function preview_bulk_confirm_bank_matches(names, confirmAfterPreview, listview)
 							},
 						],
 						function (values) {
-							frappe.call({
-								method: "retailedge.api.bulk_confirm_bank_transaction_matches",
-								args: {
-									match_names: JSON.stringify(names),
-									remarks: values.remarks || "",
-								},
-								freeze: true,
-								freeze_message: __("Confirming eligible matches..."),
-								callback: function (confirmResponse) {
-									show_bulk_bank_match_result(confirmResponse.message, __("Bulk Confirm Summary"));
-									listview.refresh();
-								},
+							confirm_large_bank_match_bulk_action(names, function (runBackground) {
+								frappe.call({
+									method: "retailedge.api.bulk_confirm_bank_transaction_matches",
+									args: {
+										match_names: JSON.stringify(names),
+										remarks: values.remarks || "",
+										run_background: runBackground ? 1 : 0,
+									},
+									freeze: !runBackground,
+									freeze_message: __("Confirming eligible matches..."),
+									callback: function (confirmResponse) {
+										const confirmResult = confirmResponse.message || {};
+										if (confirmResult.status === "queued" || confirmResult.batch_job) {
+											show_bank_match_batch_job_queued(confirmResult);
+										} else {
+											show_bulk_bank_match_result(confirmResult, __("Bulk Confirm Summary"));
+											listview.refresh();
+										}
+									},
+								});
 							});
 						},
 						__("Bulk Confirm Selected"),

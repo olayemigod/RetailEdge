@@ -1,0 +1,360 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "naming_series:",
+ "creation": "2026-06-09 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "company",
+  "branch",
+  "bank_account",
+  "action_type",
+  "source_report",
+  "status",
+  "dry_run",
+  "started_by",
+  "started_on",
+  "completed_on",
+  "chunk_size",
+  "counts_section",
+  "total_rows",
+  "pending_rows",
+  "processed_rows",
+  "progress_percent",
+  "created_count",
+  "confirmed_count",
+  "skipped_count",
+  "blocked_count",
+  "failed_count",
+  "already_exists_count",
+  "payload_section",
+  "filters_json",
+  "selected_keys_json",
+  "selected_rows_json",
+  "selection_fingerprint",
+  "summary_json",
+  "last_error",
+  "retry_section",
+  "retry_of",
+  "retry_source_row_count",
+  "retry_reason",
+  "cancel_requested",
+  "cancelled_by",
+  "cancelled_on",
+  "cancel_reason",
+  "rows_section",
+  "rows"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Naming Series",
+   "options": "RE-BMBJ-.YYYY.-.#####",
+   "default": "RE-BMBJ-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Data",
+   "label": "Branch"
+  },
+  {
+   "fieldname": "bank_account",
+   "fieldtype": "Link",
+   "label": "Bank Account",
+   "options": "Bank Account"
+  },
+  {
+   "fieldname": "action_type",
+   "fieldtype": "Select",
+   "label": "Action Type",
+   "options": "Create Review Records\nRun Auto-Match\nBulk Confirm Selected",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "source_report",
+   "fieldtype": "Data",
+   "label": "Source Report"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Queued\nRunning\nCompleted\nCompleted With Errors\nFailed\nCancelled",
+   "default": "Queued",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "dry_run",
+   "fieldtype": "Check",
+   "label": "Dry Run"
+  },
+  {
+   "fieldname": "started_by",
+   "fieldtype": "Link",
+   "label": "Started By",
+   "options": "User",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "started_on",
+   "fieldtype": "Datetime",
+   "label": "Started On",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_on",
+   "fieldtype": "Datetime",
+   "label": "Completed On",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "chunk_size",
+   "fieldtype": "Int",
+   "label": "Chunk Size",
+   "default": 100
+  },
+  {
+   "fieldname": "counts_section",
+   "fieldtype": "Section Break",
+   "label": "Counts"
+  },
+  {
+   "fieldname": "total_rows",
+   "fieldtype": "Int",
+   "label": "Total Rows",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "processed_rows",
+   "fieldtype": "Int",
+   "label": "Processed Rows",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "created_count",
+   "fieldtype": "Int",
+   "label": "Created Count",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "confirmed_count",
+   "fieldtype": "Int",
+   "label": "Confirmed Count",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "skipped_count",
+   "fieldtype": "Int",
+   "label": "Skipped Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "blocked_count",
+   "fieldtype": "Int",
+   "label": "Blocked Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "failed_count",
+   "fieldtype": "Int",
+   "label": "Failed Count",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "payload_section",
+   "fieldtype": "Section Break",
+   "label": "Payload"
+  },
+  {
+   "fieldname": "filters_json",
+   "fieldtype": "Long Text",
+   "label": "Filters JSON",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "selected_keys_json",
+   "fieldtype": "Long Text",
+   "label": "Selected Keys JSON",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "selected_rows_json",
+   "fieldtype": "Long Text",
+   "label": "Selected Rows JSON",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "summary_json",
+   "fieldtype": "Long Text",
+   "label": "Summary JSON",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Long Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rows_section",
+   "fieldtype": "Section Break",
+   "label": "Rows"
+  },
+  {
+   "fieldname": "rows",
+   "fieldtype": "Table",
+   "label": "Rows",
+   "options": "RetailEdge Bank Match Batch Job Row"
+  },
+  {
+   "fieldname": "pending_rows",
+   "fieldtype": "Int",
+   "label": "Pending Rows",
+   "read_only": 1
+  },
+  {
+   "fieldname": "already_exists_count",
+   "fieldtype": "Int",
+   "label": "Already Exists Count",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "progress_percent",
+   "fieldtype": "Percent",
+   "label": "Progress Percent",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "selection_fingerprint",
+   "fieldtype": "Data",
+   "label": "Selection Fingerprint",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1,
+   "unique": 0
+  },
+  {
+   "fieldname": "retry_section",
+   "fieldtype": "Section Break",
+   "label": "Retry / Cancellation"
+  },
+  {
+   "fieldname": "retry_of",
+   "fieldtype": "Link",
+   "label": "Retry Of",
+   "options": "RetailEdge Bank Match Batch Job",
+   "read_only": 1
+  },
+  {
+   "fieldname": "retry_source_row_count",
+   "fieldtype": "Int",
+   "label": "Retry Source Row Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "retry_reason",
+   "fieldtype": "Small Text",
+   "label": "Retry Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancel_requested",
+   "fieldtype": "Check",
+   "label": "Cancel Requested",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancelled_by",
+   "fieldtype": "Link",
+   "label": "Cancelled By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancelled_on",
+   "fieldtype": "Datetime",
+   "label": "Cancelled On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancel_reason",
+   "fieldtype": "Small Text",
+   "label": "Cancel Reason",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-06-09 00:00:00.000000",
+ "module": "RetailEdge",
+ "name": "RetailEdge Bank Match Batch Job",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "submit": 0,
+   "cancel": 0,
+   "amend": 0
+  },
+  {
+   "role": "RetailEdge Bank Match Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "RetailEdge Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "RetailEdgeManager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  },
+  {
+   "role": "RetailEdgeAuditor",
+   "read": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
