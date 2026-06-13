@@ -29,7 +29,11 @@
   "payment_entry",
   "posting_preflight_message",
   "posting_prepared_on",
-  "posting_prepared_by"
+  "posting_prepared_by",
+  "submitted_on",
+  "submitted_by",
+  "submission_status",
+  "submission_message"
  ],
  "fields": [
   {
@@ -150,7 +154,7 @@
    "fieldname": "posting_status",
    "fieldtype": "Select",
    "label": "Posting Status",
-   "options": "Not Prepared\nReady\nDraft Created\nBlocked\nCancelled"
+   "options": "Not Prepared\nReady\nDraft Created\nSubmitted\nBlocked\nFailed\nCancelled"
   },
   {
    "fieldname": "payment_entry",
@@ -172,6 +176,28 @@
    "fieldname": "posting_prepared_by",
    "fieldtype": "Data",
    "label": "Posting Prepared By"
+  },
+  {
+   "fieldname": "submitted_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On"
+  },
+  {
+   "fieldname": "submitted_by",
+   "fieldtype": "Data",
+   "label": "Submitted By"
+  },
+  {
+   "default": "Not Submitted",
+   "fieldname": "submission_status",
+   "fieldtype": "Select",
+   "label": "Submission Status",
+   "options": "Not Submitted\nSubmitted\nFailed\nBlocked"
+  },
+  {
+   "fieldname": "submission_message",
+   "fieldtype": "Small Text",
+   "label": "Submission Message"
   }
  ],
  "index_web_pages_for_search": 1,

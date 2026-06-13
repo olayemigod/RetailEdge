@@ -1044,3 +1044,17 @@ def prepare_edgepay_payment_entry_draft(evidence_name):
 	from retailedge.services.edgepay_payment_posting import prepare_edgepay_payment_entry_draft as _prepare_draft
 	return _prepare_draft(evidence_name)
 
+
+@frappe.whitelist()
+def get_edgepay_payment_entry_submission_preflight(evidence_name):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_payment_posting import get_edgepay_payment_entry_submission_preflight as _get_sub_preflight
+	return _get_sub_preflight(evidence_name)
+
+
+@frappe.whitelist()
+def submit_edgepay_payment_entry(evidence_name):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_payment_posting import submit_edgepay_payment_entry as _submit_entry
+	return _submit_entry(evidence_name)
+
