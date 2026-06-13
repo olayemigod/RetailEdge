@@ -1,0 +1,176 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-06-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "edgepay_handoff_event",
+  "edgepay_payment_request",
+  "edgepay_payment_transaction",
+  "source_app",
+  "source_doctype",
+  "source_name",
+  "provider",
+  "provider_reference",
+  "transaction_reference",
+  "amount",
+  "currency",
+  "request_status",
+  "transaction_status",
+  "paid_on",
+  "processing_status",
+  "review_status",
+  "error_message",
+  "created_from_edgepay_handoff",
+  "idempotency_key"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Naming Series",
+   "options": "RE-EPE-.YYYY.-"
+  },
+  {
+   "fieldname": "edgepay_handoff_event",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "EdgePay Handoff Event",
+   "options": "EdgePay Status Handoff Event"
+  },
+  {
+   "fieldname": "edgepay_payment_request",
+   "fieldtype": "Link",
+   "label": "EdgePay Payment Request",
+   "options": "EdgePay Payment Request"
+  },
+  {
+   "fieldname": "edgepay_payment_transaction",
+   "fieldtype": "Link",
+   "label": "EdgePay Payment Transaction",
+   "options": "EdgePay Payment Transaction"
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App"
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Data",
+   "label": "Source DocType"
+  },
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source Name"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider"
+  },
+  {
+   "fieldname": "provider_reference",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Provider Reference"
+  },
+  {
+   "fieldname": "transaction_reference",
+   "fieldtype": "Data",
+   "label": "Transaction Reference"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Data",
+   "label": "Currency"
+  },
+  {
+   "fieldname": "request_status",
+   "fieldtype": "Data",
+   "label": "Request Status"
+  },
+  {
+   "fieldname": "transaction_status",
+   "fieldtype": "Data",
+   "label": "Transaction Status"
+  },
+  {
+   "fieldname": "paid_on",
+   "fieldtype": "Datetime",
+   "label": "Paid On"
+  },
+  {
+   "fieldname": "processing_status",
+   "fieldtype": "Select",
+   "label": "Processing Status",
+   "options": "Pending\nEvidence Created\nEvidence Updated\nFailed\nIgnored"
+  },
+  {
+   "fieldname": "review_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Review Status",
+   "options": "Pending Review\nReviewed\nRejected\nException"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Text",
+   "label": "Error Message"
+  },
+  {
+   "default": "0",
+   "fieldname": "created_from_edgepay_handoff",
+   "fieldtype": "Check",
+   "label": "Created From EdgePay Handoff"
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "unique": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-06-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge EdgePay Payment Evidence",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdge Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

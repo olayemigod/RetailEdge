@@ -95,6 +95,18 @@ from retailedge.reconciliation_bridge import (
 	get_reconciliation_preflight as _get_reconciliation_preflight,
 	reconcile_confirmed_bank_match as _reconcile_confirmed_bank_match,
 )
+
+from retailedge.bank_match_batch_jobs import (
+	MAX_SYNC_ROWS as BANK_MATCH_MAX_SYNC_ROWS,
+	background_required_response as _bank_match_background_required_response,
+	cancel_bank_match_batch_job as _cancel_bank_match_batch_job,
+	create_bank_match_batch_job as _create_bank_match_batch_job,
+	get_recent_bank_match_batch_jobs as _get_recent_bank_match_batch_jobs,
+	refresh_bank_match_batch_job_progress as _refresh_bank_match_batch_job_progress,
+	retry_bank_match_batch_job_rows as _retry_bank_match_batch_job_rows,
+	row_count_for_payload as _bank_match_row_count_for_payload,
+	should_run_background as _should_run_bank_match_background,
+)
 from retailedge.bank_transaction_match_workflow import (
 	assert_can_manage_bank_transaction_match as _assert_can_manage_bank_transaction_match,
 	bulk_confirm_bank_transaction_matches as _bulk_confirm_bank_transaction_matches,
@@ -113,6 +125,11 @@ from retailedge.bank_transaction_match_workflow import (
 from retailedge.sales_invoice_verification_sync import (
 	sync_bank_verified_sales_invoice_from_bank_transaction as _sync_bank_verified_sales_invoice_from_bank_transaction,
 	sync_cash_verified_sales_invoices_for_shift as _sync_cash_verified_sales_invoices_for_shift,
+)
+from retailedge.services.edgepay_handoff_consumer import (
+	process_pending_edgepay_handoffs as _process_pending_edgepay_handoffs,
+	mark_edgepay_evidence_reviewed as _mark_edgepay_evidence_reviewed,
+	mark_edgepay_evidence_rejected as _mark_edgepay_evidence_rejected,
 )
 from retailedge.daily_sales_audit import (
 	approve_daily_sales_audit as _approve_daily_sales_audit,
@@ -636,8 +653,16 @@ def preview_bulk_confirm_bank_transaction_matches(match_names):
 
 
 @frappe.whitelist()
-def bulk_confirm_bank_transaction_matches(match_names, remarks=None):
+def bulk_confirm_bank_transaction_matches(match_names, remarks=None, run_background=0):
 	_assert_can_manage_bank_transaction_match()
+	if _should_run_bank_match_background(match_names=match_names) and not int(run_background or 0):
+		return _bank_match_background_required_response(
+			"Bulk Confirm Selected",
+			_bank_match_row_count_for_payload(match_names=match_names),
+			BANK_MATCH_MAX_SYNC_ROWS,
+		)
+	if int(run_background or 0):
+		return _create_bank_match_batch_job(action_type="Bulk Confirm Selected", match_names=match_names)
 	return _bulk_confirm_bank_transaction_matches(match_names=match_names, remarks=remarks)
 
 
@@ -648,16 +673,85 @@ def bulk_mark_bank_transaction_matches_needs_review(match_names, remarks=None):
 
 
 @frappe.whitelist()
-def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected_keys=None):
+def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected_keys=None, run_background=0):
 	_assert_can_manage_bank_transaction_match()
+	if _should_run_bank_match_background(rows=rows) and not int(run_background or 0):
+		return _bank_match_background_required_response(
+			"Create Review Records",
+			_bank_match_row_count_for_payload(rows=rows),
+			BANK_MATCH_MAX_SYNC_ROWS,
+		)
+	if int(run_background or 0):
+		return _create_bank_match_batch_job(
+			action_type="Create Review Records",
+			filters=filters,
+			rows=rows,
+			selected_keys=selected_keys,
+		)
 	return _create_bank_match_reviews_from_suggestions(filters=filters, rows=rows, selected_keys=selected_keys)
 
 
 @frappe.whitelist()
-def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None):
+def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None, run_background=0):
 	_assert_can_manage_bank_transaction_match()
+	if _should_run_bank_match_background(rows=rows) and not int(run_background or 0):
+		return _bank_match_background_required_response(
+			"Run Auto-Match",
+			_bank_match_row_count_for_payload(rows=rows),
+			BANK_MATCH_MAX_SYNC_ROWS,
+		)
+	if int(run_background or 0):
+		return _create_bank_match_batch_job(
+			action_type="Run Auto-Match",
+			filters=filters,
+			rows=rows,
+			selected_keys=selected_keys,
+		)
 	return _run_bank_transaction_auto_match(filters=filters, rows=rows, selected_keys=selected_keys)
 
+
+
+
+@frappe.whitelist()
+def create_bank_match_batch_job(action_type, filters=None, rows=None, selected_keys=None, match_names=None, dry_run=0, chunk_size=None):
+	_assert_can_manage_bank_transaction_match()
+	return _create_bank_match_batch_job(
+		action_type=action_type,
+		filters=filters,
+		rows=rows,
+		selected_keys=selected_keys,
+		match_names=match_names,
+		dry_run=dry_run,
+		chunk_size=chunk_size,
+	)
+
+
+@frappe.whitelist()
+def refresh_bank_match_batch_job_progress(batch_job_name):
+	_assert_can_manage_bank_transaction_match()
+	return _refresh_bank_match_batch_job_progress(batch_job_name=batch_job_name)
+
+
+@frappe.whitelist()
+def retry_bank_match_batch_job_rows(batch_job_name, retry_statuses=None, retry_reason=None):
+	_assert_can_manage_bank_transaction_match()
+	return _retry_bank_match_batch_job_rows(
+		batch_job_name=batch_job_name,
+		retry_statuses=retry_statuses,
+		retry_reason=retry_reason,
+	)
+
+
+@frappe.whitelist()
+def cancel_bank_match_batch_job(batch_job_name, reason=None):
+	_assert_can_manage_bank_transaction_match()
+	return _cancel_bank_match_batch_job(batch_job_name=batch_job_name, reason=reason)
+
+
+@frappe.whitelist()
+def get_recent_bank_match_batch_jobs(action_type=None, limit=20):
+	_assert_can_manage_bank_transaction_match()
+	return _get_recent_bank_match_batch_jobs(action_type=action_type, limit=limit)
 
 @frappe.whitelist()
 def get_bank_match_review_queue_summary(filters=None):
@@ -916,3 +1010,13 @@ def _assert_retailedge_verification_role():
 @frappe.whitelist()
 def process_pending_edgepay_handoffs(limit=50):
 	return _process_pending_edgepay_handoffs(limit=limit)
+
+
+@frappe.whitelist()
+def mark_edgepay_evidence_reviewed(evidence_name):
+	return _mark_edgepay_evidence_reviewed(evidence_name)
+
+
+@frappe.whitelist()
+def mark_edgepay_evidence_rejected(evidence_name, reason=None):
+	return _mark_edgepay_evidence_rejected(evidence_name, reason=reason)
