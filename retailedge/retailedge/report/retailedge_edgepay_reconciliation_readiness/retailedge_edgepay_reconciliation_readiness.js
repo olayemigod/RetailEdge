@@ -54,6 +54,92 @@ frappe.query_reports["RetailEdge EdgePay Reconciliation Readiness"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		
+		report.page.add_inner_button(__('Create Match Review'), () => {
+			// Step 1: Prompt user for Evidence Name
+			frappe.prompt([
+				{
+					label: __('Payment Evidence'),
+					fieldname: 'evidence',
+					fieldtype: 'Link',
+					options: 'RetailEdge EdgePay Payment Evidence',
+					get_query: () => {
+						return {
+							filters: {
+								reconciliation_status: 'Ready',
+								docstatus: 0
+							}
+						};
+					},
+					reqd: 1
+				}
+			], (values) => {
+				let evidence_name = values.evidence;
+				// Step 2: Fetch candidates
+				frappe.call({
+					method: 'retailedge.api.find_edgepay_payment_entry_bank_match_candidates',
+					args: {
+						evidence_name: evidence_name
+					},
+					callback: function(r) {
+						let candidates = r.message || [];
+						if (candidates.length === 0) {
+							frappe.msgprint(__('No candidate Bank Transactions found matching this evidence.'));
+							return;
+						}
+						
+						let options = candidates.map(c => ({
+							value: c.bank_transaction,
+							label: `${c.bank_transaction} - Date: ${c.date} | Ref: ${c.reference_number || 'None'} | Conf: ${c.confidence}`
+						}));
+						
+						frappe.prompt([
+							{
+								label: __('Bank Transaction Candidate'),
+								fieldname: 'bank_transaction',
+								fieldtype: 'Select',
+								options: options,
+								reqd: 1
+							}
+						], (cand_values) => {
+							// Step 3: Call preflight first
+							frappe.call({
+								method: 'retailedge.api.get_edgepay_bank_match_review_preflight',
+								args: {
+									evidence_name: evidence_name,
+									bank_transaction_name: cand_values.bank_transaction
+								},
+								callback: function(res) {
+									if (res.message && res.message.ok) {
+										// Step 4: Create match review
+										frappe.call({
+											method: 'retailedge.api.create_edgepay_bank_match_review',
+											args: {
+												evidence_name: evidence_name,
+												bank_transaction_name: cand_values.bank_transaction
+											},
+											callback: function(create_res) {
+												if (create_res.message && create_res.message.ok) {
+													frappe.show_alert({
+														message: __('Bank Match Review {0} created successfully.', [create_res.message.review_name]),
+														indicator: 'green'
+													});
+													report.refresh();
+												} else {
+													frappe.msgprint(create_res.message.message || __('Failed to create match review.'));
+												}
+											}
+										});
+									} else {
+										frappe.msgprint(res.message.message || __('Preflight validation failed.'));
+									}
+								}
+							});
+						}, __('Select Candidate'), __('Create Match Review'));
+					}
+				});
+			}, __('Select Payment Evidence'), __('Next'));
+		});
 	},
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);

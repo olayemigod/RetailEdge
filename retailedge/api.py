@@ -1080,3 +1080,24 @@ def mark_edgepay_evidence_reconciliation_blocked(evidence_name, reason=None):
 	return _blocked(evidence_name, reason=reason)
 
 
+@frappe.whitelist()
+def find_edgepay_payment_entry_bank_match_candidates(evidence_name):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_reconciliation_readiness import find_edgepay_payment_entry_bank_match_candidates as _find_candidates
+	return _find_candidates(evidence_name)
+
+
+@frappe.whitelist()
+def get_edgepay_bank_match_review_preflight(evidence_name, bank_transaction_name=None):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_bank_match_review import get_edgepay_bank_match_review_preflight as _preflight
+	return _preflight(evidence_name, bank_transaction_name=bank_transaction_name)
+
+
+@frappe.whitelist()
+def create_edgepay_bank_match_review(evidence_name, bank_transaction_name):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_bank_match_review import create_edgepay_bank_match_review as _create_review
+	return _create_review(evidence_name, bank_transaction_name)
+
+
