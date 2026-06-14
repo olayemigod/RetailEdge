@@ -20,6 +20,7 @@ from retailedge.bank_transaction_matching import (
 )
 from retailedge.branch_context import has_doctype
 from retailedge.invoice_payment_audit import get_payment_entries_for_sales_invoice, get_sales_invoice_payment_rows
+from retailedge.utils.settings import get_retailedge_settings
 from retailedge.reconciliation_handoff import (
 	HANDOFF_ALREADY_RECONCILED,
 	HANDOFF_EXCEPTION,
@@ -63,6 +64,19 @@ TARGET_AVAILABLE = "Reconciliation Target Available"
 TARGET_AMBIGUOUS = "Target Ambiguous"
 TARGET_MISSING = "Payment Voucher Missing"
 TARGET_MANUAL_REVIEW = "Manual ERPNext Review Required"
+
+EXECUTION_GATE_ALLOWED = "Allowed"
+EXECUTION_GATE_BLOCKED = "Blocked"
+EXECUTION_GATE_NEEDS_APPROVAL = "Needs Approval"
+EXECUTION_GATE_SETTINGS_DISABLED = "Settings Disabled"
+EXECUTION_GATE_PERMISSION_DENIED = "Permission Denied"
+
+DEFAULT_RECONCILIATION_EXECUTION_ROLES = (
+	"System Manager",
+	"Accounts Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+)
 
 ERPNext_NATIVE_RECONCILIATION_METHOD = (
 	"erpnext.accounts.doctype.bank_reconciliation_tool.bank_reconciliation_tool.reconcile_vouchers"
@@ -689,3 +703,213 @@ def get_reconciliation_readiness_summary(filters=None, limit=100):
 		limit_page_length=int(limit or 100),
 	)
 	return dry_run_reconciliation_for_matches(names)
+
+
+
+def _split_roles(value):
+	if not value:
+		return list(DEFAULT_RECONCILIATION_EXECUTION_ROLES)
+	if isinstance(value, str):
+		parts = []
+		for chunk in value.replace(",", "\n").splitlines():
+			role = cstr(chunk).strip()
+			if role:
+				parts.append(role)
+		return parts or list(DEFAULT_RECONCILIATION_EXECUTION_ROLES)
+	if isinstance(value, (list, tuple, set)):
+		return [cstr(role).strip() for role in value if cstr(role).strip()] or list(DEFAULT_RECONCILIATION_EXECUTION_ROLES)
+	return list(DEFAULT_RECONCILIATION_EXECUTION_ROLES)
+
+
+def _settings_value(settings, fieldname, default=None):
+	if isinstance(settings, dict):
+		return settings.get(fieldname, default)
+	return getattr(settings, fieldname, default)
+
+
+def _safe_enabled(value, default=True):
+	if value in (None, ""):
+		return bool(default)
+	return bool(cint_or_zero(value))
+
+
+def get_reconciliation_execution_settings_snapshot(settings=None):
+	settings = get_retailedge_settings() if settings is None else settings
+	enable_execution = _safe_enabled(_settings_value(settings, "enable_bank_reconciliation_execution", None), default=False)
+	require_dry_run = _safe_enabled(
+		_settings_value(settings, "require_reconciliation_dry_run_before_execution", None),
+		default=True,
+	)
+	require_second_approval = _safe_enabled(
+		_settings_value(settings, "require_second_approval_for_reconciliation_execution", None),
+		default=True,
+	)
+	return {
+		"enable_bank_reconciliation_execution": enable_execution,
+		"require_reconciliation_dry_run_before_execution": require_dry_run,
+		"minimum_reconciliation_readiness_status": cstr(
+			_settings_value(settings, "minimum_reconciliation_readiness_status", READINESS_GROUP_READY) or READINESS_GROUP_READY
+		).strip()
+		or READINESS_GROUP_READY,
+		"allowed_reconciliation_execution_roles": _split_roles(
+			_settings_value(settings, "allowed_reconciliation_execution_roles", None)
+		),
+		"require_second_approval_for_reconciliation_execution": require_second_approval,
+	}
+
+
+def _user_has_allowed_reconciliation_execution_role(user, allowed_roles):
+	user = user or frappe.session.user
+	user_roles = set(frappe.get_roles(user) or [])
+	return bool(user_roles.intersection(set(allowed_roles or [])))
+
+
+def _execution_gate_result(status, block_reasons, warnings, dry_run_result, settings_snapshot, user, can_execute=False):
+	block_reasons = [reason for reason in block_reasons if reason]
+	warnings = [warning for warning in warnings if warning]
+	if can_execute:
+		safe_next_step = "Future execution phase may proceed only after final operator confirmation. R5.8 did not execute reconciliation."
+	else:
+		safe_next_step = block_reasons[0] if block_reasons else "Resolve the listed gate requirements before future reconciliation execution."
+	return {
+		"can_execute": bool(can_execute),
+		"status": status,
+		"block_reasons": block_reasons,
+		"warnings": warnings,
+		"dry_run_status": (dry_run_result or {}).get("readiness_group") or (dry_run_result or {}).get("eligibility_status"),
+		"dry_run_block_reason": (dry_run_result or {}).get("block_reason"),
+		"required_roles": settings_snapshot.get("allowed_reconciliation_execution_roles") or [],
+		"settings_snapshot": settings_snapshot,
+		"safe_next_step": safe_next_step,
+		"final_confirmation_required": True,
+		"execution_attempted": False,
+		"execution_available_in_r58": False,
+		"message": _execution_gate_message(status, can_execute, block_reasons),
+	}
+
+
+def _execution_gate_message(status, can_execute, block_reasons):
+	if can_execute:
+		return "Execution gate passed for future controlled reconciliation. R5.8 did not execute reconciliation."
+	if status == EXECUTION_GATE_SETTINGS_DISABLED:
+		return "Reconciliation execution is disabled in RetailEdge Settings. No execution was performed."
+	if status == EXECUTION_GATE_PERMISSION_DENIED:
+		return "You do not have an allowed role for future reconciliation execution. No execution was performed."
+	if status == EXECUTION_GATE_NEEDS_APPROVAL:
+		return "Second approval is required before future reconciliation execution. No execution was performed."
+	return (block_reasons or ["Reconciliation execution gate is blocked. No execution was performed."])[0]
+
+
+def check_reconciliation_execution_gate(match_name, user=None, settings=None, dry_run_result=None):
+	assert_can_access_bank_transaction_matching(user=user)
+	match_doc = _load_match_for_preflight(match_name)
+	settings_snapshot = get_reconciliation_execution_settings_snapshot(settings=settings)
+	block_reasons = []
+	warnings = []
+	user = user or frappe.session.user
+
+	if not match_doc:
+		return _execution_gate_result(
+			EXECUTION_GATE_BLOCKED,
+			["Bank Match Review was not found."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
+
+	if not settings_snapshot["enable_bank_reconciliation_execution"]:
+		return _execution_gate_result(
+			EXECUTION_GATE_SETTINGS_DISABLED,
+			["Bank reconciliation execution is disabled in RetailEdge Settings."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
+
+	if not _user_has_allowed_reconciliation_execution_role(user, settings_snapshot["allowed_reconciliation_execution_roles"]):
+		return _execution_gate_result(
+			EXECUTION_GATE_PERMISSION_DENIED,
+			["User does not have an allowed reconciliation execution role."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
+
+	if cstr(match_doc.get("decision_status") or match_doc.get("review_status")).strip() != "Confirmed":
+		block_reasons.append("Bank Match Review must be confirmed before reconciliation execution can be considered.")
+
+	if not cstr(match_doc.get("bank_transaction")).strip():
+		block_reasons.append("Candidate-lock identity is incomplete: Bank Transaction is missing.")
+	if not cstr(match_doc.get("suggested_document_type") or match_doc.get("candidate_doctype")).strip():
+		block_reasons.append("Candidate-lock identity is incomplete: candidate type is missing.")
+	if not cstr(match_doc.get("suggested_document") or match_doc.get("candidate_name")).strip():
+		block_reasons.append("Candidate-lock identity is incomplete: candidate document is missing.")
+
+	if settings_snapshot["require_reconciliation_dry_run_before_execution"] or dry_run_result is None:
+		dry_run_result = build_reconciliation_readiness_result(match_doc)
+
+	dry_run_status = (dry_run_result or {}).get("readiness_group") or (dry_run_result or {}).get("eligibility_status")
+	minimum_status = settings_snapshot["minimum_reconciliation_readiness_status"]
+	if minimum_status != READINESS_GROUP_READY:
+		warnings.append("R5.8 only treats Ready as execution-eligible, even if settings name another minimum status.")
+	if dry_run_status != READINESS_GROUP_READY:
+		block_reasons.append(
+			(dry_run_result or {}).get("block_reason")
+			or f"Dry-run readiness must be Ready before execution can be considered. Current status: {dry_run_status or 'Unknown'}."
+		)
+	if (dry_run_result or {}).get("block_reason"):
+		block_reasons.append((dry_run_result or {}).get("block_reason"))
+	if dry_run_status == READINESS_GROUP_ALREADY_HANDLED:
+		block_reasons.append("This match already appears handled or reconciled.")
+
+	if block_reasons:
+		return _execution_gate_result(
+			EXECUTION_GATE_BLOCKED,
+			list(dict.fromkeys(block_reasons)),
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
+
+	if settings_snapshot["require_second_approval_for_reconciliation_execution"]:
+		return _execution_gate_result(
+			EXECUTION_GATE_NEEDS_APPROVAL,
+			["Second approval is required before live reconciliation execution."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
+
+	return _execution_gate_result(
+		EXECUTION_GATE_ALLOWED,
+		[],
+		warnings,
+		dry_run_result,
+		settings_snapshot,
+		user,
+		can_execute=True,
+	)
+
+
+@frappe.whitelist()
+def check_reconciliation_execution_gate_for_matches(match_names, user=None):
+	assert_can_access_bank_transaction_matching(user=user)
+	names = _coerce_json_list(match_names)
+	results = [check_reconciliation_execution_gate(name, user=user) for name in names]
+	return {
+		"execution_attempted": False,
+		"execution_available_in_r58": False,
+		"total_count": len(results),
+		"allowed_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_ALLOWED),
+		"blocked_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_BLOCKED),
+		"needs_approval_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_NEEDS_APPROVAL),
+		"settings_disabled_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_SETTINGS_DISABLED),
+		"permission_denied_count": sum(1 for row in results if row.get("status") == EXECUTION_GATE_PERMISSION_DENIED),
+		"results": results,
+		"message": f"Checked reconciliation execution gate for {len(results)} match(es). No reconciliation was executed.",
+	}

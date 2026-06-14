@@ -185,6 +185,18 @@ function add_bank_transaction_match_action_buttons(frm) {
 	}
 
 	if (status === "Confirmed") {
+		frm.add_custom_button(__("Check Reconciliation Gate"), function () {
+			frappe.call({
+				method: "retailedge.api.check_reconciliation_execution_gate",
+				args: { match_name: frm.doc.name },
+				freeze: true,
+				freeze_message: __("Checking execution gate..."),
+				callback: function (r) {
+					show_reconciliation_gate_result(r.message);
+				},
+			});
+		}, __("Reconciliation"));
+
 		frm.add_custom_button(__("Dry Run Reconciliation"), function () {
 			frappe.call({
 				method: "retailedge.api.dry_run_reconciliation_for_match",
@@ -271,5 +283,29 @@ function show_reconciliation_dry_run_result(result) {
 		title: __("Reconciliation Dry Run"),
 		indicator,
 		message: frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 180px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows }),
+	});
+}
+
+
+function show_reconciliation_gate_result(result) {
+	if (!result) {
+		frappe.msgprint({ title: __("Reconciliation Execution Gate"), indicator: "orange", message: __("No gate result returned.") });
+		return;
+	}
+	const indicator = result.can_execute ? "green" : result.status === "Settings Disabled" ? "gray" : "orange";
+	const reasons = (result.block_reasons || []).map((reason) => `<li>${frappe.utils.escape_html(reason)}</li>`).join("");
+	const rows = [
+		[__("Gate Status"), result.status || ""],
+		[__("Can Execute Later"), result.can_execute ? __("Yes") : __("No")],
+		[__("Dry Run Status"), result.dry_run_status || ""],
+		[__("Final Confirmation Required"), result.final_confirmation_required ? __("Yes") : __("No")],
+		[__("Execution in R5.8"), result.execution_available_in_r58 ? __("Available") : __("Not Available")],
+		[__("Safe Next Step"), result.safe_next_step || ""],
+	];
+	frappe.msgprint({
+		title: __("Reconciliation Execution Gate"),
+		indicator,
+		message: `${frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 220px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows })}
+			${reasons ? `<p><b>${frappe.utils.escape_html(__("Gate Reasons"))}</b></p><ul>${reasons}</ul>` : ""}`,
 	});
 }

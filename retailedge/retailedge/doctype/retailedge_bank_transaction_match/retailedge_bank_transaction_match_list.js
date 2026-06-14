@@ -35,6 +35,30 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 		});
 
 
+
+		listview.page.add_actions_menu_item(__("Check Execution Readiness"), function () {
+			const rows = listview.get_checked_items() || [];
+			const names = rows.map((row) => row.name).filter(Boolean);
+			if (!names.length) {
+				frappe.msgprint(__("Select one or more confirmed Bank Match Review records first."));
+				return;
+			}
+			const unconfirmed = rows.filter((row) => (row.decision_status || row.review_status) !== "Confirmed");
+			if (unconfirmed.length) {
+				frappe.msgprint(__("Execution readiness can only be checked for confirmed Bank Match Review records."));
+				return;
+			}
+			frappe.call({
+				method: "retailedge.api.check_reconciliation_execution_gate_for_matches",
+				args: { match_names: JSON.stringify(names) },
+				freeze: true,
+				freeze_message: __("Checking execution gate..."),
+				callback: function (r) {
+					show_reconciliation_gate_summary(r.message);
+				},
+			});
+		});
+
 		listview.page.add_actions_menu_item(__("Dry Run Selected"), function () {
 			const rows = listview.get_checked_items() || [];
 			const names = rows.map((row) => row.name).filter(Boolean);
@@ -395,5 +419,32 @@ function show_reconciliation_dry_run_summary(result) {
 		indicator: result.blocked_count ? "orange" : "green",
 		message: `${frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 180px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows })}
 			${blocked.length ? `<p><b>${frappe.utils.escape_html(__("Blocked Items"))}</b></p><ul>${blocked.map((line) => `<li>${frappe.utils.escape_html(line)}</li>`).join("")}</ul>` : ""}`,
+	});
+}
+
+
+function show_reconciliation_gate_summary(result) {
+	if (!result) {
+		frappe.msgprint({ title: __("Reconciliation Execution Gate"), indicator: "orange", message: __("No gate summary returned.") });
+		return;
+	}
+	const rows = [
+		[__("Checked"), result.total_count || 0],
+		[__("Allowed Later"), result.allowed_count || 0],
+		[__("Blocked"), result.blocked_count || 0],
+		[__("Needs Approval"), result.needs_approval_count || 0],
+		[__("Settings Disabled"), result.settings_disabled_count || 0],
+		[__("Permission Denied"), result.permission_denied_count || 0],
+	];
+	const blocked = (result.results || [])
+		.filter((row) => !row.can_execute)
+		.slice(0, 10)
+		.map((row) => `${row.status || ""}: ${(row.block_reasons || [row.safe_next_step || ""])[0] || ""}`);
+	frappe.msgprint({
+		title: __("Reconciliation Execution Gate Summary"),
+		indicator: result.allowed_count ? "green" : "orange",
+		message: `${frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 200px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows })}
+			<p>${frappe.utils.escape_html(__("R5.8 checks the execution gate only. No reconciliation was executed."))}</p>
+			${blocked.length ? `<ul>${blocked.map((line) => `<li>${frappe.utils.escape_html(line)}</li>`).join("")}</ul>` : ""}`,
 	});
 }

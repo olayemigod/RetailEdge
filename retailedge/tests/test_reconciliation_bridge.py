@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import frappe
@@ -14,8 +16,14 @@ from retailedge.reconciliation_bridge import (
 	PREFLIGHT_NOT_READY,
 	PREFLIGHT_READY,
 	PREFLIGHT_TARGET_AMBIGUOUS,
+	EXECUTION_GATE_ALLOWED,
+	EXECUTION_GATE_BLOCKED,
+	EXECUTION_GATE_NEEDS_APPROVAL,
+	EXECUTION_GATE_PERMISSION_DENIED,
+	EXECUTION_GATE_SETTINGS_DISABLED,
 	READINESS_GROUP_ALREADY_HANDLED,
 	READINESS_GROUP_BLOCKED,
+	READINESS_GROUP_NEEDS_REVIEW,
 	READINESS_GROUP_READY,
 	BLOCK_ALREADY_HANDLED,
 	BLOCK_AMOUNT_MISMATCH,
@@ -28,8 +36,11 @@ from retailedge.reconciliation_bridge import (
 	TARGET_MANUAL_REVIEW,
 	build_reconciliation_preflight,
 	build_reconciliation_readiness_result,
+	check_reconciliation_execution_gate,
+	check_reconciliation_execution_gate_for_matches,
 	dry_run_reconciliation_for_matches,
 	dry_run_reconciliation_for_match,
+	get_reconciliation_execution_settings_snapshot,
 	get_reconciliation_preflight,
 	reconcile_confirmed_bank_match,
 	resolve_reconciliation_target,
@@ -72,6 +83,169 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		}
 		row.update(overrides)
 		return row
+
+	def _execution_enabled_settings(self, **overrides):
+		settings = {
+			"enable_bank_reconciliation_execution": 1,
+			"require_reconciliation_dry_run_before_execution": 1,
+			"minimum_reconciliation_readiness_status": "Ready",
+			"allowed_reconciliation_execution_roles": "System Manager\nAccounts Manager\nRetailEdge Manager\nRetailEdgeManager",
+			"require_second_approval_for_reconciliation_execution": 0,
+		}
+		settings.update(overrides)
+		return settings
+
+	def _run_gate(self, match=None, settings=None, roles=None, user="test@example.com"):
+		match = match or self._ready_payment_entry_match()
+		settings = settings if settings is not None else self._execution_enabled_settings()
+		roles = roles or ["System Manager"]
+		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
+			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
+		), patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=roles):
+			return check_reconciliation_execution_gate("RE-BTM-2026-0006", user=user, settings=settings)
+
+	def test_execution_settings_snapshot_defaults_are_safe(self):
+		snapshot = get_reconciliation_execution_settings_snapshot(settings={})
+
+		self.assertFalse(snapshot["enable_bank_reconciliation_execution"])
+		self.assertTrue(snapshot["require_reconciliation_dry_run_before_execution"])
+		self.assertEqual(snapshot["minimum_reconciliation_readiness_status"], READINESS_GROUP_READY)
+		self.assertIn("System Manager", snapshot["allowed_reconciliation_execution_roles"])
+		self.assertTrue(snapshot["require_second_approval_for_reconciliation_execution"])
+
+	def test_execution_settings_snapshot_empty_values_are_safe(self):
+		snapshot = get_reconciliation_execution_settings_snapshot(
+			settings={
+				"enable_bank_reconciliation_execution": "",
+				"require_reconciliation_dry_run_before_execution": "",
+				"minimum_reconciliation_readiness_status": "",
+				"allowed_reconciliation_execution_roles": "",
+				"require_second_approval_for_reconciliation_execution": "",
+			}
+		)
+
+		self.assertFalse(snapshot["enable_bank_reconciliation_execution"])
+		self.assertTrue(snapshot["require_reconciliation_dry_run_before_execution"])
+		self.assertEqual(snapshot["minimum_reconciliation_readiness_status"], READINESS_GROUP_READY)
+		self.assertIn("System Manager", snapshot["allowed_reconciliation_execution_roles"])
+		self.assertTrue(snapshot["require_second_approval_for_reconciliation_execution"])
+
+	def test_execution_settings_snapshot_respects_explicit_boolean_values(self):
+		snapshot = get_reconciliation_execution_settings_snapshot(
+			settings={
+				"enable_bank_reconciliation_execution": 1,
+				"require_reconciliation_dry_run_before_execution": 0,
+				"require_second_approval_for_reconciliation_execution": 0,
+			}
+		)
+
+		self.assertTrue(snapshot["enable_bank_reconciliation_execution"])
+		self.assertFalse(snapshot["require_reconciliation_dry_run_before_execution"])
+		self.assertFalse(snapshot["require_second_approval_for_reconciliation_execution"])
+
+	def test_reconciliation_execution_settings_fields_exist_with_safe_defaults(self):
+		path = "/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_settings/retailedge_settings.json"
+		settings = json.loads(Path(path).read_text())
+		fields = {field["fieldname"]: field for field in settings["fields"]}
+
+		self.assertEqual(fields["enable_bank_reconciliation_execution"].get("default"), "0")
+		self.assertEqual(fields["require_reconciliation_dry_run_before_execution"].get("default"), "1")
+		self.assertEqual(fields["minimum_reconciliation_readiness_status"].get("default"), "Ready")
+		self.assertIn("System Manager", fields["allowed_reconciliation_execution_roles"].get("default"))
+		self.assertEqual(fields["require_second_approval_for_reconciliation_execution"].get("default"), "1")
+
+	def test_execution_gate_blocked_when_setting_disabled(self):
+		payload = self._run_gate(settings={})
+
+		self.assertFalse(payload["can_execute"])
+		self.assertEqual(payload["status"], EXECUTION_GATE_SETTINGS_DISABLED)
+		self.assertFalse(payload["execution_attempted"])
+
+	def test_execution_gate_blocked_when_match_not_confirmed(self):
+		payload = self._run_gate(match=self._ready_payment_entry_match(decision_status="Needs Review", review_status="Needs Review"))
+
+		self.assertFalse(payload["can_execute"])
+		self.assertEqual(payload["status"], EXECUTION_GATE_BLOCKED)
+		self.assertIn("confirmed", " ".join(payload["block_reasons"]).lower())
+
+	def test_execution_gate_blocked_when_dry_run_not_ready(self):
+		payload = self._run_gate(match=self._ready_payment_entry_match(candidate_amount=1089, amount_difference=1))
+
+		self.assertFalse(payload["can_execute"])
+		self.assertEqual(payload["status"], EXECUTION_GATE_BLOCKED)
+		self.assertEqual(payload["dry_run_status"], READINESS_GROUP_BLOCKED)
+
+	def test_execution_gate_blocks_blocked_needs_review_and_already_handled_readiness(self):
+		blocked = self._run_gate(match=self._ready_payment_entry_match(candidate_amount=1089, amount_difference=1))
+		needs_review = self._run_gate(match=self._ready_payment_entry_match(decision_status="Needs Review", review_status="Needs Review"))
+		already = self._run_gate(
+			match=self._ready_payment_entry_match(
+				reconciliation_readiness_status="Already Reconciled",
+				handoff_status="Already Reconciled",
+			)
+		)
+
+		self.assertEqual(blocked["dry_run_status"], READINESS_GROUP_BLOCKED)
+		self.assertEqual(needs_review["dry_run_status"], READINESS_GROUP_NEEDS_REVIEW)
+		self.assertEqual(already["dry_run_status"], READINESS_GROUP_ALREADY_HANDLED)
+		self.assertFalse(blocked["can_execute"])
+		self.assertFalse(needs_review["can_execute"])
+		self.assertFalse(already["can_execute"])
+
+	def test_execution_gate_blocked_when_user_lacks_allowed_role(self):
+		payload = self._run_gate(roles=["RetailEdgeAuditor"])
+
+		self.assertFalse(payload["can_execute"])
+		self.assertEqual(payload["status"], EXECUTION_GATE_PERMISSION_DENIED)
+
+	def test_execution_gate_needs_approval_when_second_approval_required(self):
+		payload = self._run_gate(settings=self._execution_enabled_settings(require_second_approval_for_reconciliation_execution=1))
+
+		self.assertFalse(payload["can_execute"])
+		self.assertEqual(payload["status"], EXECUTION_GATE_NEEDS_APPROVAL)
+
+	def test_execution_gate_allowed_only_when_all_gates_pass(self):
+		payload = self._run_gate()
+
+		self.assertTrue(payload["can_execute"])
+		self.assertEqual(payload["status"], EXECUTION_GATE_ALLOWED)
+		self.assertFalse(payload["execution_attempted"])
+		self.assertFalse(payload["execution_available_in_r58"])
+		self.assertTrue(payload["final_confirmation_required"])
+
+	def test_execution_gate_does_not_mutate_bank_transaction(self):
+		with patch("retailedge.reconciliation_bridge.frappe.db.set_value") as mock_set_value:
+			payload = self._run_gate()
+
+		self.assertEqual(payload["status"], EXECUTION_GATE_ALLOWED)
+		mock_set_value.assert_not_called()
+
+	def test_execution_gate_does_not_mutate_payment_entry_or_sales_invoice(self):
+		with patch("retailedge.reconciliation_bridge.frappe.get_doc") as mock_get_doc:
+			self._run_gate()
+
+		mock_get_doc.assert_not_called()
+
+	def test_execution_gate_does_not_create_journal_entry_or_gl_entry(self):
+		with patch("retailedge.reconciliation_bridge.frappe.new_doc") as mock_new_doc:
+			self._run_gate()
+
+		mock_new_doc.assert_not_called()
+
+	def test_execution_gate_for_matches_summarizes_without_execution(self):
+		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
+			"retailedge.reconciliation_bridge.check_reconciliation_execution_gate",
+			side_effect=[
+				{"status": EXECUTION_GATE_ALLOWED, "can_execute": True},
+				{"status": EXECUTION_GATE_BLOCKED, "can_execute": False},
+			],
+		):
+			summary = check_reconciliation_execution_gate_for_matches(["A", "B"])
+
+		self.assertEqual(summary["total_count"], 2)
+		self.assertEqual(summary["allowed_count"], 1)
+		self.assertEqual(summary["blocked_count"], 1)
+		self.assertFalse(summary["execution_attempted"])
 
 	def test_payment_entry_target_resolves_cleanly(self):
 		target = resolve_reconciliation_target(self._ready_payment_entry_match())
