@@ -92,6 +92,9 @@ from retailedge.reconciliation_handoff import (
 	get_reconciliation_handoff_summary as _get_reconciliation_handoff_summary,
 )
 from retailedge.reconciliation_bridge import (
+	dry_run_reconciliation_for_match as _dry_run_reconciliation_for_match,
+	dry_run_reconciliation_for_matches as _dry_run_reconciliation_for_matches,
+	get_reconciliation_readiness_summary as _get_reconciliation_readiness_summary,
 	get_reconciliation_preflight as _get_reconciliation_preflight,
 	reconcile_confirmed_bank_match as _reconcile_confirmed_bank_match,
 )
@@ -782,6 +785,23 @@ def reconcile_confirmed_bank_match(match_name, dry_run=True):
 	_assert_can_access_bank_transaction_matching()
 	return _reconcile_confirmed_bank_match(match_name=match_name, dry_run=dry_run)
 
+@frappe.whitelist()
+def dry_run_reconciliation_for_match(match_name):
+	_assert_can_access_bank_transaction_matching()
+	return _dry_run_reconciliation_for_match(match_name=match_name)
+
+
+@frappe.whitelist()
+def dry_run_reconciliation_for_matches(match_names):
+	_assert_can_access_bank_transaction_matching()
+	return _dry_run_reconciliation_for_matches(match_names=match_names)
+
+
+@frappe.whitelist()
+def get_reconciliation_readiness_summary(filters=None, limit=100):
+	_assert_can_access_bank_transaction_matching()
+	return _get_reconciliation_readiness_summary(filters=filters, limit=limit)
+
 
 @frappe.whitelist()
 def preview_cash_sales_invoice_verification_sync(opening_shift=None, closing_shift=None, daily_sales_audit=None):
@@ -1113,6 +1133,14 @@ def confirm_edgepay_bank_match_review(evidence_name, review_name=None):
 	_assert_can_prepare_edgepay_posting()
 	from retailedge.services.edgepay_bank_match_confirmation import confirm_edgepay_bank_match_review as _confirm_review
 	return _confirm_review(evidence_name, review_name=review_name)
+
+
+@frappe.whitelist()
+def get_edgepay_retail_readiness_summary():
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_readiness_checklist import get_edgepay_retail_readiness_summary as _summary
+	return _summary()
+
 
 
 

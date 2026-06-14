@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import frappe
@@ -13,6 +14,7 @@ from retailedge.bank_matching_operational_reports import (
 )
 from retailedge.bank_transaction_matching import (
 	INACTIVE_MATCH_STATUSES,
+	assert_can_access_bank_transaction_matching,
 	_invoice_payment_row_is_bank_matchable,
 	_resolve_account_match_payload,
 )
@@ -36,6 +38,26 @@ PREFLIGHT_ALREADY_RECONCILED = "Already Reconciled"
 PREFLIGHT_NEEDS_REVIEW = "Needs Review"
 PREFLIGHT_TARGET_AMBIGUOUS = "Target Ambiguous"
 PREFLIGHT_EXCEPTION = "Exception"
+
+READINESS_GROUP_READY = "Ready"
+READINESS_GROUP_BLOCKED = "Blocked"
+READINESS_GROUP_ALREADY_HANDLED = "Already Handled"
+READINESS_GROUP_NEEDS_REVIEW = "Needs Review"
+
+BLOCK_NONE = "ready"
+BLOCK_ALREADY_HANDLED = "already_handled"
+BLOCK_UNCONFIRMED = "not_confirmed"
+BLOCK_UNSUPPORTED_CANDIDATE_TYPE = "unsupported_candidate_type"
+BLOCK_MISSING_SOURCE_DOCUMENT = "missing_source_document"
+BLOCK_MISSING_BANK_TRANSACTION = "missing_bank_transaction"
+BLOCK_BANK_ACCOUNT_MISMATCH = "bank_account_mismatch"
+BLOCK_AMOUNT_MISMATCH = "amount_mismatch"
+BLOCK_DATE_REFERENCE_CONCERN = "date_reference_concern"
+BLOCK_MISSING_PAYMENT_EVENT_IDENTITY = "missing_payment_event_identity"
+BLOCK_CANDIDATE_INVALID = "candidate_no_longer_valid"
+BLOCK_DUPLICATE_ACTIVE_CONFLICT = "duplicate_active_conflict"
+BLOCK_PERMISSION_SETUP = "permission_or_setup_issue"
+BLOCK_TARGET_AMBIGUOUS = "target_ambiguous"
 
 TARGET_AVAILABLE = "Reconciliation Target Available"
 TARGET_AMBIGUOUS = "Target Ambiguous"
@@ -424,3 +446,246 @@ def reconcile_confirmed_bank_match(match_name, dry_run=True):
 		+ " RetailEdge execution is deferred in R6.0 because the native ERPNext method mutates Bank Transaction status and linked voucher clearance fields; only read-only preflight is enabled in this phase."
 	).strip()
 	return result
+
+
+
+def _coerce_json_list(value):
+	if value in (None, ""):
+		return []
+	if isinstance(value, str):
+		try:
+			value = json.loads(value)
+		except Exception:
+			return [value]
+	if isinstance(value, (list, tuple, set)):
+		return [cstr(item).strip() for item in value if cstr(item).strip()]
+	return [cstr(value).strip()] if cstr(value).strip() else []
+
+
+def _payment_event_identity(match_doc, preflight):
+	source = cstr(preflight.get("payment_event_source") or match_doc.get("payment_event_source")).strip()
+	candidate_doctype = cstr(preflight.get("candidate_doctype") or match_doc.get("suggested_document_type")).strip()
+	candidate_name = cstr(preflight.get("candidate_name") or match_doc.get("suggested_document")).strip()
+	details = _safe_load_json(match_doc.get("details_json")) if hasattr(match_doc, "get") else {}
+	row_reference = cstr(
+		match_doc.get("payment_row_reference")
+		or match_doc.get("payment_row_index")
+		or details.get("payment_row_reference")
+		or details.get("payment_row_index")
+	).strip()
+	if source and row_reference:
+		return f"{source}:{row_reference}"
+	if source == "Payment Entry" and candidate_doctype == "Payment Entry" and candidate_name:
+		return f"Payment Entry:{candidate_name}"
+	if source and candidate_name:
+		return f"{source}:{candidate_name}"
+	if candidate_doctype == "Payment Entry" and candidate_name:
+		return f"Payment Entry:{candidate_name}"
+	return ""
+
+
+def _amounts_differ(bank_amount, candidate_amount, amount_difference=None):
+	if abs(flt(amount_difference)) > 0.005:
+		return True
+	if bank_amount not in (None, "") and candidate_amount not in (None, ""):
+		return abs(abs(flt(bank_amount)) - abs(flt(candidate_amount))) > 0.005
+	return False
+
+
+def _block_code_for_preflight(preflight, match_doc):
+	status = preflight.get("status")
+	candidate_doctype = cstr(preflight.get("candidate_doctype") or match_doc.get("suggested_document_type")).strip()
+	candidate_name = cstr(preflight.get("candidate_name") or match_doc.get("suggested_document")).strip()
+	bank_transaction = cstr(preflight.get("bank_transaction") or match_doc.get("bank_transaction")).strip()
+	account_status = cstr(preflight.get("account_resolution_status") or match_doc.get("account_resolution_status")).strip().lower()
+	blocking_reason = cstr(preflight.get("blocking_reason") or match_doc.get("blocking_reason") or match_doc.get("exception_reason")).lower()
+	decision_status = cstr(match_doc.get("decision_status") or match_doc.get("review_status")).strip()
+	payment_identity = _payment_event_identity(match_doc, preflight)
+	candidate_docstatus = match_doc.get("candidate_docstatus")
+
+	if status == PREFLIGHT_ALREADY_RECONCILED:
+		return BLOCK_ALREADY_HANDLED
+	if decision_status and decision_status != "Confirmed":
+		return BLOCK_UNCONFIRMED
+	if not bank_transaction or match_doc.get("bank_transaction_missing"):
+		return BLOCK_MISSING_BANK_TRANSACTION
+	if not candidate_doctype or not candidate_name or match_doc.get("candidate_missing") or match_doc.get("candidate_exists") is False:
+		return BLOCK_MISSING_SOURCE_DOCUMENT
+	if candidate_doctype not in {"Payment Entry", "Sales Invoice"}:
+		return BLOCK_UNSUPPORTED_CANDIDATE_TYPE
+	if candidate_docstatus not in (None, 1):
+		return BLOCK_CANDIDATE_INVALID
+	if "mismatch" in account_status or "account" in blocking_reason and "mismatch" in blocking_reason:
+		return BLOCK_BANK_ACCOUNT_MISMATCH
+	if _amounts_differ(preflight.get("bank_amount"), preflight.get("candidate_amount"), preflight.get("amount_difference")):
+		return BLOCK_AMOUNT_MISMATCH
+	if status == PREFLIGHT_READY:
+		return BLOCK_NONE
+	if candidate_doctype == "Sales Invoice" and not payment_identity:
+		return BLOCK_MISSING_PAYMENT_EVENT_IDENTITY
+	if "duplicate" in blocking_reason or "conflict" in blocking_reason or "active" in blocking_reason:
+		return BLOCK_DUPLICATE_ACTIVE_CONFLICT
+	if status == PREFLIGHT_TARGET_AMBIGUOUS:
+		return BLOCK_TARGET_AMBIGUOUS
+	if "date" in blocking_reason or "reference" in blocking_reason:
+		return BLOCK_DATE_REFERENCE_CONCERN
+	if status == PREFLIGHT_NEEDS_REVIEW:
+		return BLOCK_UNCONFIRMED
+	if status == PREFLIGHT_EXCEPTION:
+		return BLOCK_PERMISSION_SETUP
+	return BLOCK_PERMISSION_SETUP
+
+
+def _readiness_group_for_preflight(preflight, block_code):
+	if block_code == BLOCK_NONE:
+		return READINESS_GROUP_READY
+	if block_code == BLOCK_ALREADY_HANDLED:
+		return READINESS_GROUP_ALREADY_HANDLED
+	if preflight.get("status") == PREFLIGHT_NEEDS_REVIEW or block_code in {BLOCK_UNCONFIRMED, BLOCK_DATE_REFERENCE_CONCERN}:
+		return READINESS_GROUP_NEEDS_REVIEW
+	return READINESS_GROUP_BLOCKED
+
+
+def _readiness_warnings(preflight, match_doc, block_code):
+	warnings = []
+	if block_code == BLOCK_AMOUNT_MISMATCH:
+		warnings.append("Bank amount and candidate amount differ.")
+	if block_code == BLOCK_BANK_ACCOUNT_MISMATCH:
+		warnings.append("Bank account and candidate payment account do not align.")
+	if block_code == BLOCK_TARGET_AMBIGUOUS:
+		warnings.append("ERPNext target is ambiguous for automated reconciliation.")
+	if cstr(preflight.get("match_confidence")) and cstr(preflight.get("match_confidence")) != "Strong Match":
+		warnings.append(f"Match confidence is {preflight.get('match_confidence')}.")
+	return warnings
+
+
+def build_reconciliation_readiness_result(match_doc):
+	match_doc = frappe._dict(match_doc or {})
+	preflight = build_reconciliation_preflight(match_doc)
+	block_code = _block_code_for_preflight(preflight, match_doc)
+	group = _readiness_group_for_preflight(preflight, block_code)
+	payment_identity = _payment_event_identity(match_doc, preflight)
+	block_reason = preflight.get("blocking_reason") or ""
+	if group == READINESS_GROUP_READY:
+		block_reason = ""
+	elif not block_reason:
+		block_reason = _default_block_reason(block_code)
+	return {
+		"review_name": preflight.get("match_name") or match_doc.get("name"),
+		"bank_match_review": preflight.get("match_name") or match_doc.get("name"),
+		"bank_transaction": preflight.get("bank_transaction"),
+		"candidate_doctype": preflight.get("candidate_doctype"),
+		"candidate_name": preflight.get("candidate_name"),
+		"payment_event_identity": payment_identity,
+		"bank_account": preflight.get("bank_account"),
+		"bank_amount": preflight.get("bank_amount"),
+		"candidate_amount": preflight.get("candidate_amount"),
+		"eligibility_status": group,
+		"readiness_group": group,
+		"block_code": block_code,
+		"block_reason": block_reason,
+		"dry_run_action_summary": preflight.get("recommended_action"),
+		"warnings": _readiness_warnings(preflight, match_doc, block_code),
+		"safe_next_step": preflight.get("recommended_action"),
+		"dry_run": True,
+		"native_execution_supported": False,
+		"execution_attempted": False,
+		"preflight_status": preflight.get("status"),
+		"erpnext_target_status": preflight.get("erpnext_target_status"),
+		"erpnext_target_doctype": preflight.get("erpnext_target_doctype"),
+		"erpnext_target_name": preflight.get("erpnext_target_name"),
+		"operator_message": _operator_message_for_readiness(group, block_reason),
+	}
+
+
+
+def _default_block_reason(block_code):
+	reasons = {
+		BLOCK_ALREADY_HANDLED: "Bank Transaction already appears reconciled or handled.",
+		BLOCK_UNCONFIRMED: "The Bank Match Review must be confirmed before reconciliation readiness.",
+		BLOCK_UNSUPPORTED_CANDIDATE_TYPE: "This candidate type is not supported for RetailEdge reconciliation readiness.",
+		BLOCK_MISSING_SOURCE_DOCUMENT: "The selected candidate document is missing or no longer available.",
+		BLOCK_MISSING_BANK_TRANSACTION: "The linked Bank Transaction is missing or no longer available.",
+		BLOCK_BANK_ACCOUNT_MISMATCH: "Bank account and candidate payment account do not align for safe reconciliation.",
+		BLOCK_AMOUNT_MISMATCH: "Bank amount and candidate amount do not align for safe reconciliation.",
+		BLOCK_DATE_REFERENCE_CONCERN: "Date or reference concerns require review before reconciliation readiness.",
+		BLOCK_MISSING_PAYMENT_EVENT_IDENTITY: "RetailEdge could not identify the matched payment event safely.",
+		BLOCK_CANDIDATE_INVALID: "The selected candidate is no longer valid for reconciliation readiness.",
+		BLOCK_DUPLICATE_ACTIVE_CONFLICT: "Another active or duplicate match conflicts with this reconciliation candidate.",
+		BLOCK_PERMISSION_SETUP: "A permission or setup issue blocks reconciliation readiness.",
+		BLOCK_TARGET_AMBIGUOUS: "The ERPNext reconciliation target is ambiguous for this match.",
+	}
+	return reasons.get(block_code) or "This confirmed review is not ready for reconciliation."
+
+
+def _operator_message_for_readiness(group, block_reason):
+	if group == READINESS_GROUP_READY:
+		return "This confirmed Bank Match Review is ready for future controlled reconciliation. No execution was performed."
+	if group == READINESS_GROUP_ALREADY_HANDLED:
+		return "This item already appears handled or reconciled. No action is required."
+	if group == READINESS_GROUP_NEEDS_REVIEW:
+		return block_reason or "Review this match before reconciliation readiness can be approved."
+	return block_reason or "This confirmed Bank Match Review is blocked from reconciliation readiness."
+
+
+def _summarize_readiness_results(results):
+	groups = {
+		READINESS_GROUP_READY: [],
+		READINESS_GROUP_BLOCKED: [],
+		READINESS_GROUP_ALREADY_HANDLED: [],
+		READINESS_GROUP_NEEDS_REVIEW: [],
+	}
+	for row in results:
+		groups.setdefault(row.get("readiness_group") or READINESS_GROUP_BLOCKED, []).append(row)
+	return {
+		"dry_run": True,
+		"execution_attempted": False,
+		"total_count": len(results),
+		"ready_count": len(groups[READINESS_GROUP_READY]),
+		"blocked_count": len(groups[READINESS_GROUP_BLOCKED]),
+		"already_handled_count": len(groups[READINESS_GROUP_ALREADY_HANDLED]),
+		"needs_review_count": len(groups[READINESS_GROUP_NEEDS_REVIEW]),
+		"groups": groups,
+		"results": results,
+		"message": f"Dry-run checked {len(results)} confirmed Bank Match Review record(s). No reconciliation was executed.",
+	}
+
+
+@frappe.whitelist()
+def dry_run_reconciliation_for_match(match_name):
+	assert_can_access_bank_transaction_matching()
+	return build_reconciliation_readiness_result(_load_match_for_preflight(match_name))
+
+
+@frappe.whitelist()
+def dry_run_reconciliation_for_matches(match_names):
+	assert_can_access_bank_transaction_matching()
+	names = _coerce_json_list(match_names)
+	results = [dry_run_reconciliation_for_match(name) for name in names]
+	return _summarize_readiness_results(results)
+
+
+@frappe.whitelist()
+def get_reconciliation_readiness_summary(filters=None, limit=100):
+	assert_can_access_bank_transaction_matching()
+	filters_payload = {}
+	if filters:
+		if isinstance(filters, str):
+			try:
+				filters_payload = json.loads(filters) or {}
+			except Exception:
+				filters_payload = {}
+		elif isinstance(filters, dict):
+			filters_payload = filters
+	db_filters = {"decision_status": "Confirmed"}
+	for fieldname in ("company", "branch", "bank_account"):
+		if filters_payload.get(fieldname):
+			db_filters[fieldname] = filters_payload.get(fieldname)
+	names = frappe.get_all(
+		"RetailEdge Bank Transaction Match",
+		filters=db_filters,
+		pluck="name",
+		order_by="confirmed_on desc, modified desc",
+		limit_page_length=int(limit or 100),
+	)
+	return dry_run_reconciliation_for_matches(names)

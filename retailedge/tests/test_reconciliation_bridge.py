@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
+import frappe
+
 from retailedge import api as retailedge_api
 from retailedge.reconciliation_bridge import (
 	ERPNext_NATIVE_RECONCILIATION_METHOD,
@@ -12,11 +14,22 @@ from retailedge.reconciliation_bridge import (
 	PREFLIGHT_NOT_READY,
 	PREFLIGHT_READY,
 	PREFLIGHT_TARGET_AMBIGUOUS,
+	READINESS_GROUP_ALREADY_HANDLED,
+	READINESS_GROUP_BLOCKED,
+	READINESS_GROUP_READY,
+	BLOCK_ALREADY_HANDLED,
+	BLOCK_AMOUNT_MISMATCH,
+	BLOCK_BANK_ACCOUNT_MISMATCH,
+	BLOCK_MISSING_SOURCE_DOCUMENT,
+	BLOCK_UNSUPPORTED_CANDIDATE_TYPE,
 	TARGET_AMBIGUOUS,
 	TARGET_AVAILABLE,
 	TARGET_MISSING,
 	TARGET_MANUAL_REVIEW,
 	build_reconciliation_preflight,
+	build_reconciliation_readiness_result,
+	dry_run_reconciliation_for_matches,
+	dry_run_reconciliation_for_match,
 	get_reconciliation_preflight,
 	reconcile_confirmed_bank_match,
 	resolve_reconciliation_target,
@@ -111,6 +124,123 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		self.assertEqual(payload["erpnext_target_status"], TARGET_AVAILABLE)
 		self.assertEqual(payload["erpnext_target_doctype"], "Payment Entry")
 		self.assertFalse(payload["native_execution_supported"])
+
+	def test_readiness_result_ready_shape_for_confirmed_payment_entry(self):
+		payload = build_reconciliation_readiness_result(self._ready_payment_entry_match())
+
+		self.assertEqual(payload["eligibility_status"], READINESS_GROUP_READY)
+		self.assertEqual(payload["block_code"], "ready")
+		self.assertEqual(payload["review_name"], "RE-BTM-2026-0006")
+		self.assertEqual(payload["candidate_doctype"], "Payment Entry")
+		self.assertEqual(payload["candidate_name"], "ACC-PAY-2026-00012")
+		self.assertEqual(payload["payment_event_identity"], "Payment Entry:ACC-PAY-2026-00012")
+		self.assertTrue(payload["dry_run"])
+		self.assertFalse(payload["native_execution_supported"])
+		self.assertFalse(payload["execution_attempted"])
+
+	def test_readiness_bank_account_mismatch_returns_blocked(self):
+		payload = build_reconciliation_readiness_result(
+			self._ready_payment_entry_match(
+				account_resolution_status="mismatch",
+				blocking_reason="Bank and payment accounts do not align for safe reconciliation.",
+			)
+		)
+
+		self.assertEqual(payload["eligibility_status"], READINESS_GROUP_BLOCKED)
+		self.assertEqual(payload["block_code"], BLOCK_BANK_ACCOUNT_MISMATCH)
+		self.assertIn("account", payload["block_reason"].lower())
+
+	def test_readiness_amount_mismatch_returns_blocked(self):
+		payload = build_reconciliation_readiness_result(
+			self._ready_payment_entry_match(candidate_amount=1089, amount_difference=1)
+		)
+
+		self.assertEqual(payload["eligibility_status"], READINESS_GROUP_BLOCKED)
+		self.assertEqual(payload["block_code"], BLOCK_AMOUNT_MISMATCH)
+		self.assertIn("amount", " ".join(payload["warnings"]).lower())
+
+	def test_readiness_missing_candidate_returns_blocked(self):
+		payload = build_reconciliation_readiness_result(
+			self._ready_payment_entry_match(suggested_document="", candidate_name="", candidate_exists=False)
+		)
+
+		self.assertEqual(payload["eligibility_status"], READINESS_GROUP_BLOCKED)
+		self.assertEqual(payload["block_code"], BLOCK_MISSING_SOURCE_DOCUMENT)
+
+	def test_readiness_unsupported_candidate_type_returns_blocked(self):
+		payload = build_reconciliation_readiness_result(
+			self._ready_payment_entry_match(
+				suggested_document_type="Journal Entry",
+				suggested_document="ACC-JV-2026-00001",
+				candidate_doctype="Journal Entry",
+				candidate_name="ACC-JV-2026-00001",
+			)
+		)
+
+		self.assertEqual(payload["eligibility_status"], READINESS_GROUP_BLOCKED)
+		self.assertEqual(payload["block_code"], BLOCK_UNSUPPORTED_CANDIDATE_TYPE)
+
+	def test_readiness_already_reconciled_is_already_handled(self):
+		payload = build_reconciliation_readiness_result(
+			self._ready_payment_entry_match(
+				reconciliation_readiness_status="Already Reconciled",
+				handoff_status="Already Reconciled",
+			)
+		)
+
+		self.assertEqual(payload["eligibility_status"], READINESS_GROUP_ALREADY_HANDLED)
+		self.assertEqual(payload["block_code"], BLOCK_ALREADY_HANDLED)
+
+	@patch("retailedge.reconciliation_bridge._load_match_for_preflight")
+	@patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching")
+	def test_dry_run_one_confirmed_review_does_not_mutate_bank_transaction(self, _mock_access, mock_load):
+		mock_load.return_value = self._ready_payment_entry_match()
+		with patch("retailedge.reconciliation_bridge.frappe.db.set_value") as mock_set_value:
+			payload = dry_run_reconciliation_for_match("RE-BTM-2026-0006")
+
+		self.assertEqual(payload["eligibility_status"], READINESS_GROUP_READY)
+		mock_set_value.assert_not_called()
+
+	@patch("retailedge.reconciliation_bridge._load_match_for_preflight")
+	@patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching")
+	def test_dry_run_does_not_mutate_payment_entry_or_sales_invoice(self, _mock_access, mock_load):
+		mock_load.return_value = self._ready_payment_entry_match()
+		with patch("retailedge.reconciliation_bridge.frappe.get_doc") as mock_get_doc:
+			dry_run_reconciliation_for_match("RE-BTM-2026-0006")
+
+		mock_get_doc.assert_not_called()
+
+	@patch("retailedge.reconciliation_bridge._load_match_for_preflight")
+	@patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching")
+	def test_dry_run_does_not_create_journal_entry_or_gl_entry(self, _mock_access, mock_load):
+		mock_load.return_value = self._ready_payment_entry_match()
+		with patch("retailedge.reconciliation_bridge.frappe.new_doc") as mock_new_doc:
+			dry_run_reconciliation_for_match("RE-BTM-2026-0006")
+
+		mock_new_doc.assert_not_called()
+
+	@patch("retailedge.reconciliation_bridge._load_match_for_preflight")
+	@patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching")
+	def test_dry_run_selected_groups_ready_and_blocked_results(self, _mock_access, mock_load):
+		def load(name):
+			if name == "READY":
+				return self._ready_payment_entry_match(name="READY", bank_match_review="READY")
+			return self._ready_payment_entry_match(
+				name="BLOCKED",
+				bank_match_review="BLOCKED",
+				account_resolution_status="mismatch",
+				blocking_reason="Bank and payment accounts do not align for safe reconciliation.",
+			)
+
+		mock_load.side_effect = load
+		summary = dry_run_reconciliation_for_matches(["READY", "BLOCKED"])
+
+		self.assertTrue(summary["dry_run"])
+		self.assertEqual(summary["total_count"], 2)
+		self.assertEqual(summary["ready_count"], 1)
+		self.assertEqual(summary["blocked_count"], 1)
+		self.assertEqual(len(summary["groups"][READINESS_GROUP_READY]), 1)
+		self.assertEqual(len(summary["groups"][READINESS_GROUP_BLOCKED]), 1)
 
 	def test_unconfirmed_match_fails_preflight(self):
 		payload = build_reconciliation_preflight(

@@ -34,6 +34,30 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 			frappe.set_route("List", "RetailEdge Bank Match Batch Job");
 		});
 
+
+		listview.page.add_actions_menu_item(__("Dry Run Selected"), function () {
+			const rows = listview.get_checked_items() || [];
+			const names = rows.map((row) => row.name).filter(Boolean);
+			if (!names.length) {
+				frappe.msgprint(__("Select one or more confirmed Bank Match Review records first."));
+				return;
+			}
+			const unconfirmed = rows.filter((row) => (row.decision_status || row.review_status) !== "Confirmed");
+			if (unconfirmed.length) {
+				frappe.msgprint(__("Dry Run Selected is only available for confirmed Bank Match Review records."));
+				return;
+			}
+			frappe.call({
+				method: "retailedge.api.dry_run_reconciliation_for_matches",
+				args: { match_names: JSON.stringify(names) },
+				freeze: true,
+				freeze_message: __("Checking reconciliation readiness..."),
+				callback: function (r) {
+					show_reconciliation_dry_run_summary(r.message);
+				},
+			});
+		});
+
 		listview.page.add_actions_menu_item(__("Preview Bulk Confirm"), function () {
 			const names = get_selected_bank_match_names(listview);
 			if (!names.length) {
@@ -348,4 +372,28 @@ function get_bank_match_list_filters(listview) {
 		}
 	});
 	return filters;
+}
+
+
+function show_reconciliation_dry_run_summary(result) {
+	if (!result) {
+		frappe.msgprint({ title: __("Reconciliation Dry Run"), indicator: "orange", message: __("No dry-run summary returned.") });
+		return;
+	}
+	const blocked = (result.groups && result.groups.Blocked ? result.groups.Blocked : [])
+		.slice(0, 10)
+		.map((row) => `${row.review_name || ""}: ${row.block_reason || ""}`);
+	const rows = [
+		[__("Checked"), result.total_count || 0],
+		[__("Ready"), result.ready_count || 0],
+		[__("Blocked"), result.blocked_count || 0],
+		[__("Already Handled"), result.already_handled_count || 0],
+		[__("Needs Review"), result.needs_review_count || 0],
+	];
+	frappe.msgprint({
+		title: __("Reconciliation Dry Run Summary"),
+		indicator: result.blocked_count ? "orange" : "green",
+		message: `${frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 180px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows })}
+			${blocked.length ? `<p><b>${frappe.utils.escape_html(__("Blocked Items"))}</b></p><ul>${blocked.map((line) => `<li>${frappe.utils.escape_html(line)}</li>`).join("")}</ul>` : ""}`,
+	});
 }

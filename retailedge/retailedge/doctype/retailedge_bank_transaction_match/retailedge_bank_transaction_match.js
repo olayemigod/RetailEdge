@@ -185,6 +185,17 @@ function add_bank_transaction_match_action_buttons(frm) {
 	}
 
 	if (status === "Confirmed") {
+		frm.add_custom_button(__("Dry Run Reconciliation"), function () {
+			frappe.call({
+				method: "retailedge.api.dry_run_reconciliation_for_match",
+				args: { match_name: frm.doc.name },
+				freeze: true,
+				freeze_message: __("Checking reconciliation readiness..."),
+				callback: function (r) {
+					show_reconciliation_dry_run_result(r.message);
+				},
+			});
+		}, __("Reconciliation"));
 		addBankTransactionMatchButton(frm, __("Reopen"), "retailedge.api.reopen_bank_transaction_match", __("Reopening candidate..."), __("Reopened"), __("More Actions"));
 		addBankTransactionMatchButton(frm, __("Cancel"), "retailedge.api.cancel_bank_transaction_match", __("Cancelling candidate..."), __("Cancelled"), __("More Actions"));
 	}
@@ -236,4 +247,29 @@ function addBankTransactionMatchButton(frm, label, method, freezeMessage, title,
 			__("Apply")
 		);
 	}, group);
+}
+
+
+function show_reconciliation_dry_run_result(result) {
+	if (!result) {
+		frappe.msgprint({ title: __("Reconciliation Dry Run"), indicator: "orange", message: __("No dry-run result returned.") });
+		return;
+	}
+	const indicator = result.readiness_group === "Ready" ? "green" : result.readiness_group === "Already Handled" ? "gray" : "orange";
+	const rows = [
+		[__("Status"), result.readiness_group || result.eligibility_status || ""],
+		[__("Review"), result.review_name || ""],
+		[__("Bank Transaction"), result.bank_transaction || ""],
+		[__("Candidate"), `${result.candidate_doctype || ""} ${result.candidate_name || ""}`.trim()],
+		[__("Payment Event"), result.payment_event_identity || ""],
+		[__("Bank Amount"), result.bank_amount || 0],
+		[__("Candidate Amount"), result.candidate_amount || 0],
+		[__("Block Reason"), result.block_reason || ""],
+		[__("Safe Next Step"), result.safe_next_step || ""],
+	];
+	frappe.msgprint({
+		title: __("Reconciliation Dry Run"),
+		indicator,
+		message: frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 180px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows }),
+	});
 }
