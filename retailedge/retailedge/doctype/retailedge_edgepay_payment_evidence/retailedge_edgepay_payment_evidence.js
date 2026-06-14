@@ -78,5 +78,46 @@ frappe.ui.form.on('RetailEdge EdgePay Payment Evidence', {
 				});
 			});
 		}
+		
+		if (frm.doc.reconciliation_status === 'Matched' && frm.doc.docstatus === 0) {
+			frm.add_custom_button(__('Confirm Match Review'), function() {
+				frappe.call({
+					method: 'retailedge.api.get_edgepay_bank_match_confirmation_preflight',
+					args: {
+						evidence_name: frm.doc.name,
+						review_name: frm.doc.linked_bank_match_review
+					},
+					callback: function(res) {
+						if (res.message && res.message.ok) {
+							frappe.confirm(
+								__('Are you sure you want to confirm this Bank Match Review?'),
+								() => {
+									frappe.call({
+										method: 'retailedge.api.confirm_edgepay_bank_match_review',
+										args: {
+											evidence_name: frm.doc.name,
+											review_name: frm.doc.linked_bank_match_review
+										},
+										callback: function(confirm_res) {
+											if (confirm_res.message && confirm_res.message.ok) {
+												frappe.show_alert({
+													message: __('Bank Match Review confirmed successfully.'),
+													indicator: 'green'
+												});
+												frm.reload_doc();
+											} else {
+												frappe.msgprint(confirm_res.message.message || __('Failed to confirm match review.'));
+											}
+										}
+									});
+								}
+							);
+						} else {
+							frappe.msgprint(res.message.message || __('Confirmation preflight validation failed.'));
+						}
+					}
+				});
+			});
+		}
 	}
 });

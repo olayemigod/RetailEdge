@@ -1101,3 +1101,18 @@ def create_edgepay_bank_match_review(evidence_name, bank_transaction_name):
 	return _create_review(evidence_name, bank_transaction_name)
 
 
+@frappe.whitelist()
+def get_edgepay_bank_match_confirmation_preflight(evidence_name, review_name=None):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_bank_match_confirmation import get_edgepay_bank_match_confirmation_preflight as _conf_preflight
+	return _conf_preflight(evidence_name, review_name=review_name)
+
+
+@frappe.whitelist()
+def confirm_edgepay_bank_match_review(evidence_name, review_name=None):
+	_assert_can_prepare_edgepay_posting()
+	from retailedge.services.edgepay_bank_match_confirmation import confirm_edgepay_bank_match_review as _confirm_review
+	return _confirm_review(evidence_name, review_name=review_name)
+
+
+

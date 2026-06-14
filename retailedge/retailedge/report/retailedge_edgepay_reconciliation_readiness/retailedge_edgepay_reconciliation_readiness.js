@@ -140,6 +140,71 @@ frappe.query_reports["RetailEdge EdgePay Reconciliation Readiness"] = {
 				});
 			}, __('Select Payment Evidence'), __('Next'));
 		});
+
+		report.page.add_inner_button(__('Confirm Match Review'), () => {
+			frappe.prompt([
+				{
+					label: __('Payment Evidence'),
+					fieldname: 'evidence',
+					fieldtype: 'Link',
+					options: 'RetailEdge EdgePay Payment Evidence',
+					get_query: () => {
+						return {
+							filters: {
+								reconciliation_status: 'Matched',
+								docstatus: 0
+							}
+						};
+					},
+					reqd: 1
+				}
+			], (values) => {
+				let evidence_name = values.evidence;
+				frappe.db.get_doc('RetailEdge EdgePay Payment Evidence', evidence_name).then(doc => {
+					let review_name = doc.linked_bank_match_review;
+					if (!review_name) {
+						frappe.msgprint(__('No linked Bank Match Review found on evidence.'));
+						return;
+					}
+					frappe.call({
+						method: 'retailedge.api.get_edgepay_bank_match_confirmation_preflight',
+						args: {
+							evidence_name: evidence_name,
+							review_name: review_name
+						},
+						callback: function(res) {
+							if (res.message && res.message.ok) {
+								frappe.confirm(
+									__('Are you sure you want to confirm this Bank Match Review?'),
+									() => {
+										frappe.call({
+											method: 'retailedge.api.confirm_edgepay_bank_match_review',
+											args: {
+												evidence_name: evidence_name,
+												review_name: review_name
+											},
+											callback: function(confirm_res) {
+												if (confirm_res.message && confirm_res.message.ok) {
+													frappe.show_alert({
+														message: __('Bank Match Review confirmed successfully.'),
+														indicator: 'green'
+													});
+													report.refresh();
+												} else {
+													frappe.msgprint(confirm_res.message.message || __('Failed to confirm match review.'));
+												}
+											}
+										});
+									}
+								);
+							} else {
+								frappe.msgprint(res.message.message || __('Confirmation preflight validation failed.'));
+							}
+						}
+					});
+				});
+			}, __('Select Payment Evidence to Confirm'), __('Confirm'));
+		});
 	},
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
