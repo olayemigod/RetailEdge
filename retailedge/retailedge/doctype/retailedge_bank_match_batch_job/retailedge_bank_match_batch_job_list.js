@@ -6,6 +6,8 @@ frappe.listview_settings["RetailEdge Bank Match Batch Job"] = {
 		"total_rows",
 		"processed_rows",
 		"failed_count",
+		"blocked_count",
+		"skipped_count",
 		"created_count",
 		"confirmed_count",
 		"already_exists_count",

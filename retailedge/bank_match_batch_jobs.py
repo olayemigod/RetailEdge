@@ -8,6 +8,7 @@ import frappe
 from frappe.utils import cint, cstr, flt, now_datetime
 
 from retailedge.bank_transaction_match_workflow import (
+	assert_can_manage_bank_transaction_match,
 	bulk_confirm_bank_transaction_matches,
 	create_bank_match_reviews_from_suggestions,
 	run_bank_transaction_auto_match,
@@ -19,6 +20,20 @@ ALLOWED_ACTIONS = {"Create Review Records", "Run Auto-Match", "Bulk Confirm Sele
 ACTIVE_JOB_STATUSES = {"Queued", "Running"}
 TERMINAL_JOB_STATUSES = {"Completed", "Completed With Errors", "Failed", "Cancelled"}
 RETRYABLE_ROW_STATUSES = {"Failed"}
+
+
+def _load_batch_job_for_action(batch_job_name, permission_type="read"):
+	job = frappe.get_doc("RetailEdge Bank Match Batch Job", batch_job_name)
+	if not job.has_permission(permission_type):
+		frappe.throw(
+			"You do not have permission to access this Bank Match Batch Job.",
+			frappe.PermissionError,
+		)
+	return job
+
+
+def _assert_can_create_batch_job():
+	assert_can_manage_bank_transaction_match()
 
 
 def coerce_json(value, default=None):
@@ -123,6 +138,7 @@ def create_bank_match_batch_job(
 	retry_of=None,
 	retry_reason=None,
 ):
+	_assert_can_create_batch_job()
 	if action_type not in ALLOWED_ACTIONS:
 		frappe.throw(f"Unsupported bank match batch action: {action_type}")
 
@@ -194,7 +210,7 @@ def create_bank_match_batch_job(
 
 @frappe.whitelist()
 def refresh_bank_match_batch_job_progress(batch_job_name):
-	job = frappe.get_doc("RetailEdge Bank Match Batch Job", batch_job_name)
+	job = _load_batch_job_for_action(batch_job_name, "read")
 	_recount_job(job)
 	job.summary_json = json.dumps(_job_summary(job), default=str)
 	_save_job(job)
@@ -204,11 +220,13 @@ def refresh_bank_match_batch_job_progress(batch_job_name):
 
 @frappe.whitelist()
 def retry_bank_match_batch_job_rows(batch_job_name, retry_statuses=None, retry_reason=None, enqueue=1):
-	job = frappe.get_doc("RetailEdge Bank Match Batch Job", batch_job_name)
+	job = _load_batch_job_for_action(batch_job_name, "write")
 	statuses = set(coerce_json(retry_statuses, list(RETRYABLE_ROW_STATUSES)) or [])
 	statuses = statuses.intersection(RETRYABLE_ROW_STATUSES)
 	if not statuses:
 		frappe.throw("Only failed rows are retryable in this phase.")
+	if job.status not in TERMINAL_JOB_STATUSES:
+		frappe.throw(f"Only completed, failed, or cancelled batch jobs can be retried. Current status: {job.status}.")
 	rows = []
 	for row in job.rows:
 		if row.result_status in statuses:
@@ -231,7 +249,7 @@ def retry_bank_match_batch_job_rows(batch_job_name, retry_statuses=None, retry_r
 
 @frappe.whitelist()
 def cancel_bank_match_batch_job(batch_job_name, reason=None):
-	job = frappe.get_doc("RetailEdge Bank Match Batch Job", batch_job_name)
+	job = _load_batch_job_for_action(batch_job_name, "write")
 	if job.status not in ACTIVE_JOB_STATUSES:
 		frappe.throw(f"Only queued or running batch jobs can be cancelled. Current status: {job.status}.")
 	job.cancel_requested = 1
@@ -481,11 +499,23 @@ def _job_summary(job):
 	for row in getattr(job, "rows", []) or []:
 		row_status = row.result_status or "Pending"
 		row_status_counts[row_status] = row_status_counts.get(row_status, 0) + 1
+	can_read = bool(job.has_permission("read")) if getattr(job, "name", None) else False
+	can_write = bool(job.has_permission("write")) if getattr(job, "name", None) else False
+	can_cancel = can_write and status in ACTIVE_JOB_STATUSES
+	can_retry_failed = can_write and status in TERMINAL_JOB_STATUSES and cint(getattr(job, "failed_count", 0)) > 0
+	message = f"{status}: {processed_rows} of {total_rows} rows processed."
+	if can_retry_failed:
+		message += " Failed rows can be retried as a new batch job."
+	elif cint(getattr(job, "failed_count", 0)) > 0:
+		message += " Failed rows exist, but you do not have permission to retry them."
+	if can_cancel:
+		message += " This job can be cancelled."
 	return {
 		"batch_job": job.name,
 		"status": status,
 		"status_label": status,
 		"action_type": job.action_type,
+		"message": message,
 		"total_rows": total_rows,
 		"pending_rows": getattr(job, "pending_rows", 0),
 		"processed_rows": processed_rows,
@@ -500,8 +530,12 @@ def _job_summary(job):
 		"row_status_counts": row_status_counts,
 		"is_active": status in ACTIVE_JOB_STATUSES,
 		"is_terminal": status in TERMINAL_JOB_STATUSES,
-		"can_cancel": status in ACTIVE_JOB_STATUSES,
-		"can_retry": status in TERMINAL_JOB_STATUSES and cint(getattr(job, "failed_count", 0)) > 0,
+		"can_read": can_read,
+		"can_write": can_write,
+		"can_cancel": can_cancel,
+		"can_retry": can_retry_failed,
+		"can_retry_failed": can_retry_failed,
+		"can_retry_blocked": False,
 		"started_on": getattr(job, "started_on", None),
 		"completed_on": getattr(job, "completed_on", None),
 		"last_error": getattr(job, "last_error", None),

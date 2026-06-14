@@ -11,6 +11,9 @@ from retailedge.bank_match_batch_jobs import (
 	MAX_SYNC_ROWS,
 	_job_summary,
 	_process_job_row,
+	refresh_bank_match_batch_job_progress,
+	retry_bank_match_batch_job_rows,
+	cancel_bank_match_batch_job,
 	background_required_response,
 	create_bank_match_batch_job,
 	process_bank_match_batch_job,
@@ -123,6 +126,121 @@ class BankMatchBatchJobTests(unittest.TestCase):
 			self.assertEqual(summary["row_status_counts"]["Skipped"], 1)
 		finally:
 			frappe.delete_doc("RetailEdge Bank Match Batch Job", job.name, force=True)
+
+	def test_cancel_active_job_marks_pending_rows_cancelled(self):
+		row = {
+			"candidate_key": "BTN-ACTIVE-CANCEL|Payment Entry|PE-ACTIVE-CANCEL|Payment Entry Match|",
+			"bank_transaction": "BTN-ACTIVE-CANCEL",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "PE-ACTIVE-CANCEL",
+			"candidate_category": "Payment Entry Match",
+		}
+		result = create_bank_match_batch_job(
+			action_type="Create Review Records",
+			rows=json.dumps([row]),
+			enqueue=0,
+		)
+		try:
+			summary = cancel_bank_match_batch_job(result["batch_job"], reason="Operator cancelled")
+			job = frappe.get_doc("RetailEdge Bank Match Batch Job", result["batch_job"])
+
+			self.assertEqual(summary["status"], "Cancelled")
+			self.assertFalse(summary["can_cancel"])
+			self.assertEqual(job.cancel_requested, 1)
+			self.assertEqual(job.rows[0].result_status, "Skipped")
+			self.assertIn("cancelled", job.rows[0].result_message.lower())
+		finally:
+			frappe.delete_doc("RetailEdge Bank Match Batch Job", result["batch_job"], force=True)
+
+	def test_cancel_terminal_job_is_denied(self):
+		row = {"candidate_key": "BTN-TERMINAL-CANCEL", "bank_transaction": "BTN-TERMINAL-CANCEL"}
+		result = create_bank_match_batch_job(
+			action_type="Create Review Records",
+			rows=json.dumps([row]),
+			enqueue=0,
+		)
+		job = frappe.get_doc("RetailEdge Bank Match Batch Job", result["batch_job"])
+		try:
+			job.status = "Completed"
+			job.flags.ignore_links = True
+			job.save(ignore_permissions=True)
+			with self.assertRaises(frappe.ValidationError):
+				cancel_bank_match_batch_job(job.name, reason="Too late")
+		finally:
+			frappe.delete_doc("RetailEdge Bank Match Batch Job", job.name, force=True)
+
+	def test_retry_failed_rows_only_includes_failed_rows(self):
+		failed_row = {"candidate_key": "BTN-FAILED", "bank_transaction": "BTN-FAILED"}
+		success_row = {"candidate_key": "BTN-SUCCESS", "bank_transaction": "BTN-SUCCESS"}
+		result = create_bank_match_batch_job(
+			action_type="Create Review Records",
+			rows=json.dumps([failed_row, success_row]),
+			enqueue=0,
+		)
+		job = frappe.get_doc("RetailEdge Bank Match Batch Job", result["batch_job"])
+		try:
+			job.status = "Completed With Errors"
+			job.rows[0].result_status = "Failed"
+			job.rows[1].result_status = "Created"
+			job.flags.ignore_links = True
+			job.save(ignore_permissions=True)
+
+			with patch("retailedge.bank_match_batch_jobs.create_bank_match_batch_job") as mock_create_job:
+				mock_create_job.return_value = {"status": "queued", "batch_job": "RE-BMBJ-RETRY"}
+				retry_bank_match_batch_job_rows(job.name, enqueue=0)
+
+			kwargs = mock_create_job.call_args.kwargs
+			retry_rows = json.loads(kwargs["rows"])
+			self.assertEqual(len(retry_rows), 1)
+			self.assertEqual(retry_rows[0]["candidate_key"], "BTN-FAILED")
+			self.assertNotIn("BTN-SUCCESS", json.dumps(retry_rows))
+			self.assertEqual(kwargs["retry_of"], job.name)
+		finally:
+			frappe.delete_doc("RetailEdge Bank Match Batch Job", job.name, force=True)
+
+	def test_retry_active_job_is_denied(self):
+		row = {"candidate_key": "BTN-ACTIVE-RETRY", "bank_transaction": "BTN-ACTIVE-RETRY"}
+		result = create_bank_match_batch_job(
+			action_type="Create Review Records",
+			rows=json.dumps([row]),
+			enqueue=0,
+		)
+		try:
+			with self.assertRaises(frappe.ValidationError):
+				retry_bank_match_batch_job_rows(result["batch_job"], enqueue=0)
+		finally:
+			frappe.delete_doc("RetailEdge Bank Match Batch Job", result["batch_job"], force=True)
+
+	def test_refresh_summary_is_operator_friendly_and_omits_payloads(self):
+		row = {
+			"candidate_key": "BTN-SUMMARY|Payment Entry|PE-SUMMARY|Payment Entry Match|",
+			"bank_transaction": "BTN-SUMMARY",
+			"suggested_document": "PE-SUMMARY",
+		}
+		result = create_bank_match_batch_job(
+			action_type="Create Review Records",
+			rows=json.dumps([row]),
+			enqueue=0,
+		)
+		try:
+			summary = refresh_bank_match_batch_job_progress(result["batch_job"])
+			self.assertIn("message", summary)
+			self.assertIn("rows processed", summary["message"])
+			self.assertNotIn("selected_rows_json", summary)
+			self.assertNotIn("filters_json", summary)
+		finally:
+			frappe.delete_doc("RetailEdge Bank Match Batch Job", result["batch_job"], force=True)
+
+	def test_batch_job_action_permission_guard_denies_without_document_access(self):
+		class FakeJob:
+			name = "RE-BMBJ-NOACCESS"
+
+			def has_permission(self, permission_type):
+				return False
+
+		with patch("retailedge.bank_match_batch_jobs.frappe.get_doc", return_value=FakeJob()):
+			with self.assertRaises(frappe.PermissionError):
+				refresh_bank_match_batch_job_progress("RE-BMBJ-NOACCESS")
 
 	def test_batch_job_payload_metadata_is_hidden_no_copy_and_visible_to_retailedge_roles(self):
 		path = Path(
