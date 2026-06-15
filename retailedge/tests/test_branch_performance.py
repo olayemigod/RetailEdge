@@ -243,7 +243,7 @@ class BranchPerformanceTests(unittest.TestCase):
 	def _summary_by_label(self, summary):
 		return {card.get("label"): card for card in summary}
 
-	def test_report_summary_cards_include_cash_bank_and_variance_last(self):
+	def test_report_summary_card_order_restores_payment_issues(self):
 		summary = get_report_summary([
 			{
 				"gross_sales": 1500.0,
@@ -252,19 +252,60 @@ class BranchPerformanceTests(unittest.TestCase):
 				"Card / POS": 300.0,
 				"Mobile Money": 100.0,
 				"cashier_expenses": 50.0,
+				"ledger_expenses": 75.0,
+				"expected_cash": 450.0,
+				"actual_closing_cash": 425.0,
 				"audit_variance": -25.0,
 				"payment_issues": 4,
 			}
 		])
-		labels = [card["label"] for card in summary]
-		self.assertIn("Cash Sales", labels)
-		self.assertIn("Bank Sales", labels)
-		self.assertNotIn("Payment Issue", labels)
-		self.assertNotIn("Payment Issues", labels)
-		self.assertEqual(labels[-1], "Audit Variance")
+		self.assertEqual([card["label"] for card in summary], [
+			"Gross Sales",
+			"Cash Sales",
+			"Bank Sales",
+			"Cashier Expenses",
+			"Ledger Expenses",
+			"Expected Cash",
+			"Actual Cash",
+			"Audit Variance",
+			"Payment Issues",
+		])
 		cards = self._summary_by_label(summary)
+		self.assertEqual(cards["Gross Sales"]["value"], 1500.0)
 		self.assertEqual(cards["Cash Sales"]["value"], 500.0)
 		self.assertEqual(cards["Bank Sales"]["value"], 1000.0)
+		self.assertEqual(cards["Cashier Expenses"]["value"], 50.0)
+		self.assertEqual(cards["Ledger Expenses"]["value"], 75.0)
+		self.assertEqual(cards["Expected Cash"]["value"], 450.0)
+		self.assertEqual(cards["Actual Cash"]["value"], 425.0)
+		self.assertEqual(cards["Audit Variance"]["value"], -25.0)
+		self.assertEqual(cards["Payment Issues"]["value"], 4)
+
+	def test_report_summary_card_order_without_unsupported_ledger_expenses(self):
+		summary = get_report_summary([
+			{
+				"gross_sales": 1500.0,
+				"cash_sales": 500.0,
+				"Bank Transfer": 600.0,
+				"Card / POS": 300.0,
+				"Mobile Money": 100.0,
+				"cashier_expenses": 50.0,
+				"net_cash_expected": 450.0,
+				"actual_closing_cash": 425.0,
+				"audit_variance": -25.0,
+				"payment_issues": 4,
+			}
+		])
+		self.assertEqual([card["label"] for card in summary], [
+			"Gross Sales",
+			"Cash Sales",
+			"Bank Sales",
+			"Cashier Expenses",
+			"Expected Cash",
+			"Actual Cash",
+			"Audit Variance",
+			"Payment Issues",
+		])
 
 	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary", return_value={"submitted_sales_invoice_count": 1, "sales_invoice_with_retailedge_branch_count": 1, "cashier_expense_count": 0, "daily_sales_audit_count": 0})
 	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
