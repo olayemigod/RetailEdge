@@ -89,6 +89,7 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Bank Match Integrity Check", "Report", "RetailEdge Bank Match Reconciliation Readiness", "Admin / Maintenance", 20, "admin", "RetailEdge Overlay", "Grey"),
 	WorkspaceHomeItem("Bank Match Batch Jobs", "DocType", "RetailEdge Bank Match Batch Job", "Admin / Maintenance", 25, "admin", "RetailEdge Native", "Grey"),
 	WorkspaceHomeItem("Failed Reconciliation Repair", "Report", "RetailEdge Reconciliation Handoff", "Admin / Maintenance", 30, "admin", "RetailEdge Overlay", "Grey"),
+	WorkspaceHomeItem("EdgePay Readiness Checklist", "Report", "RetailEdge EdgePay Readiness Checklist", "Admin / Maintenance", 35, "admin", "RetailEdge Native", "Grey"),
 	WorkspaceHomeItem("Error Log", "DocType", "Error Log", "Admin / Maintenance", 100, "admin", "ERPNext Link", "Grey"),
 )
 
