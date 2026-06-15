@@ -18,6 +18,7 @@ from retailedge.branch_performance import (
 )
 from retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary import (
 	execute as execute_branch_performance_report,
+	get_report_summary,
 	validate_filters,
 )
 
@@ -108,6 +109,8 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertEqual(summary["branch"], "HQ")
 		self.assertEqual(summary["gross_sales"], 1200.0)
 		self.assertEqual(summary["cash_sales"], 1000.0)
+		self.assertEqual(summary["bank_sales"], 200.0)
+		self.assertEqual(summary["bank_card_mobile_sales"], 200.0)
 		self.assertEqual(summary["cashier_expenses"], 100.0)
 		self.assertEqual(summary["net_cash_expected"], 900.0)
 		self.assertEqual(summary["audit_variance"], 50.0)
@@ -116,13 +119,14 @@ class BranchPerformanceTests(unittest.TestCase):
 	@patch("retailedge.branch_performance.get_branch_performance_rows")
 	def test_get_branch_performance_summary_aggregates_all_rows_when_branch_not_selected(self, mock_rows):
 		mock_rows.return_value = [
-			{"branch": "Airport Branch", "period": "2026-05-01 to 2026-05-31", "invoice_count": 3, "gross_sales": 2430.0, "cash_sales": 810.0, "cashier_expenses": 5000.0, "audit_variance": -1000.0, "payment_issues": 3, "review_status": "Needs Review", "Bank Transfer": 1620.0},
-			{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 2, "gross_sales": 1900.0, "cash_sales": 1000.0, "cashier_expenses": 0.0, "audit_variance": 0.0, "payment_issues": 0, "review_status": "Reviewed", "Bank Transfer": 0.0},
+			{"branch": "Airport Branch", "period": "2026-05-01 to 2026-05-31", "invoice_count": 3, "gross_sales": 2430.0, "cash_sales": 810.0, "bank_sales": 1620.0, "cashier_expenses": 5000.0, "audit_variance": -1000.0, "payment_issues": 3, "review_status": "Needs Review", "Bank Transfer": 1620.0},
+			{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 2, "gross_sales": 1900.0, "cash_sales": 1000.0, "bank_sales": 0.0, "cashier_expenses": 0.0, "audit_variance": 0.0, "payment_issues": 0, "review_status": "Reviewed", "Bank Transfer": 0.0},
 		]
 		summary = get_branch_performance_summary({"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31"})
 		self.assertEqual(summary["branch"], "All Branches")
 		self.assertEqual(summary["gross_sales"], 4330.0)
 		self.assertEqual(summary["cash_sales"], 1810.0)
+		self.assertEqual(summary["bank_sales"], 1620.0)
 		self.assertEqual(summary["Bank Transfer"], 1620.0)
 		self.assertEqual(summary["review_status"], "Needs Review")
 
@@ -235,6 +239,66 @@ class BranchPerformanceTests(unittest.TestCase):
 		breakdown = get_branch_payment_breakdown({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31"})
 		self.assertEqual(breakdown["by_branch"]["HQ"]["Cash"], 1000.0)
 		self.assertEqual(breakdown["by_branch"]["HQ"]["Bank Transfer"], 500.0)
+
+	def _summary_by_label(self, summary):
+		return {card.get("label"): card for card in summary}
+
+	def test_report_summary_cards_include_cash_bank_and_variance_last(self):
+		summary = get_report_summary([
+			{
+				"gross_sales": 1500.0,
+				"cash_sales": 500.0,
+				"Bank Transfer": 600.0,
+				"Card / POS": 300.0,
+				"Mobile Money": 100.0,
+				"cashier_expenses": 50.0,
+				"audit_variance": -25.0,
+				"payment_issues": 4,
+			}
+		])
+		labels = [card["label"] for card in summary]
+		self.assertIn("Cash Sales", labels)
+		self.assertIn("Bank Sales", labels)
+		self.assertNotIn("Payment Issue", labels)
+		self.assertNotIn("Payment Issues", labels)
+		self.assertEqual(labels[-1], "Audit Variance")
+		cards = self._summary_by_label(summary)
+		self.assertEqual(cards["Cash Sales"]["value"], 500.0)
+		self.assertEqual(cards["Bank Sales"]["value"], 1000.0)
+
+	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary", return_value={"submitted_sales_invoice_count": 1, "sales_invoice_with_retailedge_branch_count": 1, "cashier_expense_count": 0, "daily_sales_audit_count": 0})
+	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	def test_cash_only_pos_invoice_increases_cash_sales_only(self, mock_rows, _mock_debug):
+		mock_rows.return_value = [{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 1, "gross_sales": 500.0, "cash_sales": 500.0, "Cash": 500.0, "Bank Transfer": 0.0, "Card / POS": 0.0, "Mobile Money": 0.0, "cashier_expenses": 0.0, "audit_variance": 0.0}]
+		_, data, _, _, summary = execute_branch_performance_report({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31", "only_pos_invoices": 1})
+		cards = self._summary_by_label(summary)
+		self.assertEqual(data[0]["cash_sales"], 500.0)
+		self.assertEqual(data[0]["bank_sales"], 0.0)
+		self.assertEqual(cards["Cash Sales"]["value"], 500.0)
+		self.assertEqual(cards["Bank Sales"]["value"], 0.0)
+
+	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary", return_value={"submitted_sales_invoice_count": 1, "sales_invoice_with_retailedge_branch_count": 1, "cashier_expense_count": 0, "daily_sales_audit_count": 0})
+	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	def test_bank_payment_pos_invoice_increases_bank_sales_only(self, mock_rows, _mock_debug):
+		mock_rows.return_value = [{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 1, "gross_sales": 750.0, "cash_sales": 0.0, "Cash": 0.0, "Bank Transfer": 250.0, "Card / POS": 300.0, "Mobile Money": 200.0, "cashier_expenses": 0.0, "audit_variance": 0.0}]
+		_, data, _, _, summary = execute_branch_performance_report({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31", "only_pos_invoices": 1})
+		cards = self._summary_by_label(summary)
+		self.assertEqual(data[0]["cash_sales"], 0.0)
+		self.assertEqual(data[0]["bank_sales"], 750.0)
+		self.assertEqual(cards["Cash Sales"]["value"], 0.0)
+		self.assertEqual(cards["Bank Sales"]["value"], 750.0)
+
+	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary", return_value={"submitted_sales_invoice_count": 1, "sales_invoice_with_retailedge_branch_count": 1, "cashier_expense_count": 0, "daily_sales_audit_count": 0})
+	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	def test_mixed_payment_pos_invoice_splits_cash_and_bank_sales(self, mock_rows, _mock_debug):
+		mock_rows.return_value = [{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 1, "gross_sales": 1000.0, "cash_sales": 400.0, "Cash": 400.0, "Bank Transfer": 250.0, "Card / POS": 350.0, "Mobile Money": 0.0, "cashier_expenses": 0.0, "audit_variance": 0.0}]
+		_, data, _, _, summary = execute_branch_performance_report({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31", "only_pos_invoices": 1})
+		cards = self._summary_by_label(summary)
+		self.assertEqual(data[0]["cash_sales"], 400.0)
+		self.assertEqual(data[0]["bank_sales"], 600.0)
+		self.assertEqual(data[0]["bank_card_mobile_sales"], 600.0)
+		self.assertEqual(cards["Cash Sales"]["value"], 400.0)
+		self.assertEqual(cards["Bank Sales"]["value"], 600.0)
 
 	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
 	def test_report_executes(self, mock_rows):

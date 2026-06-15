@@ -30,6 +30,7 @@ BRANCH_PERFORMANCE_ROLES = {
 	"RetailEdgeAuditor",
 }
 PAYMENT_CATEGORY_ORDER = ("Cash", "Bank Transfer", "Card / POS", "Mobile Money", "Other")
+BANK_SALES_PAYMENT_CATEGORIES = ("Bank Transfer", "Card / POS", "Mobile Money")
 MAX_BRANCH_PERFORMANCE_RANGE_DAYS = 60
 
 
@@ -80,6 +81,8 @@ def get_branch_performance_rows(filters=None):
 
 	for row in row_map.values():
 		row["cash_sales"] = flt(row.get("Cash"))
+		row["bank_sales"] = get_bank_sales_total(row)
+		row["bank_card_mobile_sales"] = row["bank_sales"]
 		row["net_cash_expected"] = flt(row.get("cash_sales")) - flt(row.get("cashier_expenses"))
 		row["payment_issues"] = (
 			int(row.get("outstanding_invoice_count") or 0)
@@ -759,13 +762,17 @@ def _sales_invoice_payment_amount_expression(alias="sip"):
 	return None
 
 
+def get_bank_sales_total(row):
+	return sum(flt(row.get(category)) for category in BANK_SALES_PAYMENT_CATEGORIES)
+
+
 def _payment_category_sql(alias="sip"):
 	mode_expr = f"LOWER(COALESCE({alias}.mode_of_payment, ''))" if has_field("Sales Invoice Payment", "mode_of_payment") else "''"
 	account_expr = f"LOWER(COALESCE({alias}.account, ''))" if has_field("Sales Invoice Payment", "account") else "''"
 	return (
 		f"CASE "
 		f"WHEN {mode_expr} LIKE '%%cash%%' OR {account_expr} LIKE '%%cash%%' THEN 'Cash' "
-		f"WHEN {mode_expr} LIKE '%%bank%%' OR {mode_expr} LIKE '%%transfer%%' OR {account_expr} LIKE '%%bank%%' THEN 'Bank Transfer' "
+		f"WHEN {mode_expr} LIKE '%%bank%%' OR {mode_expr} LIKE '%%transfer%%' OR {mode_expr} LIKE '%%monnify%%' OR {mode_expr} LIKE '%%moniepoint%%' OR {account_expr} LIKE '%%bank%%' THEN 'Bank Transfer' "
 		f"WHEN {mode_expr} LIKE '%%card%%' OR {mode_expr} LIKE '%%pos%%' OR {mode_expr} LIKE '%%terminal%%' THEN 'Card / POS' "
 		f"WHEN {mode_expr} LIKE '%%mobile%%' OR {mode_expr} LIKE '%%wallet%%' OR {mode_expr} LIKE '%%money%%' THEN 'Mobile Money' "
 		f"ELSE 'Other' END"
@@ -870,6 +877,7 @@ def _build_empty_row(filters, branch=None, messages=None):
 		"paid_amount": 0.0,
 		"cash_sales": 0.0,
 		"Cash": 0.0,
+		"bank_sales": 0.0,
 		"bank_card_mobile_sales": 0.0,
 		"cashier_expenses": 0.0,
 		"net_cash_expected": 0.0,
@@ -906,6 +914,7 @@ def _aggregate_branch_performance_rows(rows, filters):
 		"paid_amount",
 		"cash_sales",
 		"Cash",
+		"bank_sales",
 		"bank_card_mobile_sales",
 		"cashier_expenses",
 		"net_cash_expected",
