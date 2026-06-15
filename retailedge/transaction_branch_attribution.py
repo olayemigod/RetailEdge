@@ -290,39 +290,37 @@ def validate_sales_invoice_with_branch_attribution(doc, method=None):
 
 
 def _get_field_defs_for_doctype(doctype):
-	section_fieldname = "retailedge_branch_attribution_section"
-	insert_after = _get_insert_after(doctype)
-	field_defs = []
+	layout_insert_after = _get_insert_after(doctype)
+	field_defs = [
+		{
+			"fieldname": "retailedge_branch_attribution_section",
+			"label": "RetailEdge Branch Metadata",
+			"fieldtype": "Section Break",
+			"hidden": 1,
+			"collapsible": 0,
+			"read_only": 1,
+			"insert_after": layout_insert_after,
+		}
+	]
 	field_defs.append(
 		{
-			"fieldname": section_fieldname,
-			"label": "RetailEdge Branch Attribution",
-			"fieldtype": "Section Break",
-			"collapsible": 1,
-			"insert_after": insert_after,
+			"fieldname": "retailedge_branch",
+			"label": "RetailEdge Branch",
+			"fieldtype": "Link",
+			"options": "Branch",
+			"read_only": 1,
+			"in_standard_filter": 1,
+			"insert_after": layout_insert_after,
+			"description": "Branch attributed by RetailEdge for filtering/reporting.",
 		}
 	)
-	insert_after = section_fieldname
-	for fieldname, label, fieldtype, extra in (
-		(
-			"retailedge_branch",
-			"RetailEdge Branch",
-			"Link",
-			{"options": "Branch", "in_standard_filter": 1, "description": "Branch attributed by RetailEdge for filtering/reporting."},
-		),
-		("retailedge_branch_source", "RetailEdge Branch Source", "Data", {}),
-		("retailedge_branch_resolved_on", "RetailEdge Branch Resolved On", "Datetime", {}),
-		("retailedge_branch_resolution_note", "RetailEdge Branch Resolution Note", "Small Text", {}),
+	insert_after = "retailedge_branch"
+	for fieldname, label, fieldtype in (
+		("retailedge_branch_source", "RetailEdge Branch Source", "Data"),
+		("retailedge_branch_resolved_on", "RetailEdge Branch Resolved On", "Datetime"),
+		("retailedge_branch_resolution_note", "RetailEdge Branch Resolution Note", "Small Text"),
 	):
-		field_def = {
-			"fieldname": fieldname,
-			"label": label,
-			"fieldtype": fieldtype,
-			"read_only": 1,
-			"insert_after": insert_after,
-		}
-		field_def.update(extra)
-		field_defs.append(field_def)
+		field_defs.append(_hidden_attribution_field(fieldname, label, fieldtype, insert_after=insert_after))
 		insert_after = fieldname
 
 	if doctype in MOVEMENT_DOCTYPES:
@@ -332,18 +330,31 @@ def _get_field_defs_for_doctype(doctype):
 			("retailedge_warehouse_branch", "RetailEdge Warehouse Branch"),
 		):
 			field_defs.append(
-				{
-					"fieldname": fieldname,
-					"label": label,
-					"fieldtype": "Link",
-					"options": "Branch",
-					"read_only": 1,
-					"in_standard_filter": 1,
-					"insert_after": insert_after,
-				}
+				_hidden_attribution_field(
+					fieldname,
+					label,
+					"Link",
+					insert_after=insert_after,
+					extra={"options": "Branch", "in_standard_filter": 1},
+				)
 			)
 			insert_after = fieldname
 	return field_defs
+
+
+def _hidden_attribution_field(fieldname, label, fieldtype, insert_after=None, extra=None):
+	field_def = {
+		"fieldname": fieldname,
+		"label": label,
+		"fieldtype": fieldtype,
+		"hidden": 1,
+		"read_only": 1,
+		"no_copy": 1,
+		"print_hide": 1,
+		"insert_after": insert_after,
+	}
+	field_def.update(extra or {})
+	return field_def
 
 
 def _new_resolution(note=None):

@@ -2892,15 +2892,43 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 	@patch("retailedge.transaction_branch_attribution.create_custom_fields")
 	@patch("retailedge.transaction_branch_attribution.has_field")
 	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Sales Invoice"])
-	def test_custom_field_creation_is_idempotent(self, _mock_targets, mock_has_field, mock_create_custom_fields):
+	def test_custom_field_creation_keeps_only_branch_visible(self, _mock_targets, mock_has_field, mock_create_custom_fields):
 		existing_fields = {"retailedge_branch"}
 		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in existing_fields
 		ensure_transaction_branch_custom_fields()
 		custom_fields = mock_create_custom_fields.call_args.args[0]["Sales Invoice"]
-		fieldnames = [field.get("fieldname") for field in custom_fields]
-		self.assertIn("retailedge_branch_attribution_section", fieldnames)
-		self.assertIn("retailedge_branch", fieldnames)
-		self.assertIn("retailedge_branch_source", fieldnames)
+		by_fieldname = {field.get("fieldname"): field for field in custom_fields}
+		visible_fields = [
+			field.get("fieldname")
+			for field in custom_fields
+			if not field.get("hidden") and field.get("fieldtype") not in {"Section Break", "Column Break"}
+		]
+		self.assertEqual(visible_fields, ["retailedge_branch"])
+		self.assertEqual(by_fieldname["retailedge_branch"].get("label"), "RetailEdge Branch")
+		self.assertNotEqual(by_fieldname["retailedge_branch"].get("insert_after"), "retailedge_branch_attribution_section")
+		self.assertEqual(by_fieldname["retailedge_branch_attribution_section"].get("hidden"), 1)
+		self.assertEqual(by_fieldname["retailedge_branch_attribution_section"].get("collapsible"), 0)
+		self.assertEqual(by_fieldname["retailedge_branch_source"].get("hidden"), 1)
+		self.assertEqual(by_fieldname["retailedge_branch_resolved_on"].get("hidden"), 1)
+		self.assertEqual(by_fieldname["retailedge_branch_resolution_note"].get("hidden"), 1)
+
+	@patch("retailedge.transaction_branch_attribution.create_custom_fields")
+	@patch("retailedge.transaction_branch_attribution.has_field", return_value=False)
+	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Stock Entry"])
+	def test_movement_attribution_fields_are_hidden_metadata(self, _mock_targets, _mock_has_field, mock_create_custom_fields):
+		ensure_transaction_branch_custom_fields()
+		custom_fields = mock_create_custom_fields.call_args.args[0]["Stock Entry"]
+		by_fieldname = {field.get("fieldname"): field for field in custom_fields}
+		visible_fields = [
+			field.get("fieldname")
+			for field in custom_fields
+			if not field.get("hidden") and field.get("fieldtype") not in {"Section Break", "Column Break"}
+		]
+		self.assertEqual(visible_fields, ["retailedge_branch"])
+		for fieldname in ("retailedge_source_branch", "retailedge_target_branch", "retailedge_warehouse_branch"):
+			self.assertEqual(by_fieldname[fieldname].get("hidden"), 1)
+			self.assertEqual(by_fieldname[fieldname].get("read_only"), 1)
+
 
 	@patch("retailedge.transaction_branch_attribution.has_field", side_effect=lambda doctype, fieldname: fieldname != "retailedge_branch")
 	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Sales Invoice"])
