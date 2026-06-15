@@ -69,7 +69,8 @@ def get_edgepay_retail_readiness_summary():
 	summary["reports"] = {
 		"readiness_report_exists": bool(frappe.db.exists("Report", "RetailEdge EdgePay Reconciliation Readiness")),
 		"summary_report_exists": bool(frappe.db.exists("Report", "RetailEdge EdgePay Payment Evidence Summary")),
-		"lifecycle_report_exists": bool(frappe.db.exists("Report", "RetailEdge EdgePay Lifecycle Status"))
+		"lifecycle_report_exists": bool(frappe.db.exists("Report", "RetailEdge EdgePay Lifecycle Status")),
+		"rollout_monitor_report_exists": bool(frappe.db.exists("Report", "RetailEdge EdgePay Rollout Monitor"))
 	}
 	
 	# 5. Endpoint guest gating

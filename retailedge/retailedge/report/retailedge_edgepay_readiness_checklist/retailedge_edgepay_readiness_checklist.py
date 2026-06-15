@@ -45,6 +45,7 @@ def execute(filters=None):
 	add_check("RetailEdge Reports", "Reconciliation Readiness Report Exists", reports.get("readiness_report_exists"), "RetailEdge EdgePay Reconciliation Readiness report exists.")
 	add_check("RetailEdge Reports", "Payment Evidence Summary Report Exists", reports.get("summary_report_exists"), "RetailEdge EdgePay Payment Evidence Summary report exists.")
 	add_check("RetailEdge Reports", "Lifecycle Status Report Exists", reports.get("lifecycle_report_exists"), "RetailEdge EdgePay Lifecycle Status report exists.")
+	add_check("RetailEdge Reports", "Rollout Monitor Report Exists", reports.get("rollout_monitor_report_exists"), "RetailEdge EdgePay Rollout Monitor report exists.")
 
 	# Endpoint safety gating
 	endpoints = summary.get("endpoints", {})

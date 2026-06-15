@@ -85,10 +85,10 @@ class TestEdgePayReporting(FrappeTestCase):
 
 	def test_workspace_definitions_are_valid(self):
 		# Verify that new items in HOME_WORKSPACE_ITEMS point to valid targets
-		new_labels = ["EdgePay Handoff Log", "EdgePay Payment Evidence", "EdgePay Reconciliation Readiness", "EdgePay Evidence Summary", "EdgePay Lifecycle Status"]
+		new_labels = ["EdgePay Handoff Log", "EdgePay Payment Evidence", "EdgePay Reconciliation Readiness", "EdgePay Evidence Summary", "EdgePay Lifecycle Status", "EdgePay Rollout Monitor"]
 		
 		found_items = [item for item in HOME_WORKSPACE_ITEMS if item.label in new_labels]
-		self.assertEqual(len(found_items), 5)
+		self.assertEqual(len(found_items), 6)
 
 		for item in found_items:
 			self.assertEqual(item.section, "EdgePay Review")
@@ -96,7 +96,20 @@ class TestEdgePayReporting(FrappeTestCase):
 				self.assertTrue(frappe.db.exists("DocType", item.link_to), f"DocType {item.link_to} does not exist.")
 			elif item.link_type == "Report":
 				# Standard reports might not be imported yet in the database, but we verify target name
-				self.assertTrue(item.link_to in ["RetailEdge EdgePay Reconciliation Readiness", "RetailEdge EdgePay Payment Evidence Summary", "RetailEdge EdgePay Lifecycle Status"])
+				self.assertTrue(item.link_to in ["RetailEdge EdgePay Reconciliation Readiness", "RetailEdge EdgePay Payment Evidence Summary", "RetailEdge EdgePay Lifecycle Status", "RetailEdge EdgePay Rollout Monitor"])
+
+	def test_rollout_monitor_report_executes_correctly(self):
+		from retailedge.retailedge.report.retailedge_edgepay_rollout_monitor.retailedge_edgepay_rollout_monitor import execute
+		
+		columns, data, message, chart, report_summary = execute(filters={"stale_days": 3})
+
+		# Ensure columns exist
+		self.assertTrue(len(columns) > 0)
+		# Ensure 9 metric rows are returned
+		self.assertEqual(len(data), 9)
+		
+		# Verify report summary structure
+		self.assertTrue(len(report_summary) > 0)
 
 	def test_reports_are_read_only_and_do_not_mutate(self):
 		# Run execute on both reports and verify no new records are inserted in DB
@@ -105,9 +118,11 @@ class TestEdgePayReporting(FrappeTestCase):
 
 		from retailedge.retailedge.report.retailedge_edgepay_payment_evidence_summary.retailedge_edgepay_payment_evidence_summary import execute as execute_summary
 		from retailedge.retailedge.report.retailedge_edgepay_lifecycle_status.retailedge_edgepay_lifecycle_status import execute as execute_lifecycle
+		from retailedge.retailedge.report.retailedge_edgepay_rollout_monitor.retailedge_edgepay_rollout_monitor import execute as execute_monitor
 
 		execute_summary()
 		execute_lifecycle()
+		execute_monitor()
 
 		self.assertEqual(frappe.db.count("RetailEdge EdgePay Payment Evidence"), ev_count_before)
 		self.assertEqual(frappe.db.count("RetailEdge EdgePay Handoff Log"), hl_count_before)

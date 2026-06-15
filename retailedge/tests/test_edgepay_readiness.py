@@ -129,3 +129,8 @@ class TestEdgePayReadiness(FrappeTestCase):
 						# Scan for forbidden imports of retailedge, erpnext
 						forbidden = re.findall(r"import\s+(retailedge|erpnext|pos_next|vetedge|coreedge)", code)
 						self.assertFalse(forbidden, f"Standalone violation: forbidden import of {forbidden} found in file {file}.")
+
+	def test_readiness_checklist_includes_rollout_monitor_report(self):
+		from retailedge.services.edgepay_readiness_checklist import get_edgepay_retail_readiness_summary
+		summary = get_edgepay_retail_readiness_summary()
+		self.assertIn("rollout_monitor_report_exists", summary.get("reports", {}))

@@ -58,6 +58,7 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("EdgePay Reconciliation Readiness", "Report", "RetailEdge EdgePay Reconciliation Readiness", "EdgePay Review", 30, "reviewer", "RetailEdge Overlay", "Blue"),
 	WorkspaceHomeItem("EdgePay Evidence Summary", "Report", "RetailEdge EdgePay Payment Evidence Summary", "EdgePay Review", 40, "reviewer", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("EdgePay Lifecycle Status", "Report", "RetailEdge EdgePay Lifecycle Status", "EdgePay Review", 50, "reviewer", "RetailEdge Native", "Blue"),
+	WorkspaceHomeItem("EdgePay Rollout Monitor", "Report", "RetailEdge EdgePay Rollout Monitor", "EdgePay Review", 60, "reviewer", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("Branch Performance Summary", "Report", "RetailEdge Branch Performance Summary", "Reports & Analytics", 10, "manager", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("Daily Sales Audit Register", "Report", "RetailEdge Daily Sales Audit Register", "Reports & Analytics", 20, "manager", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("Unmatched Bank Transactions", "Report", "RetailEdge Unmatched Bank Transactions", "Reports & Analytics", 30, "bank_ops", "RetailEdge Native", "Blue"),
