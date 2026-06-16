@@ -11,6 +11,9 @@ from retailedge.bank_transaction_matching import (
 	get_bank_transaction_matching_settings,
 )
 
+DEFAULT_RESULT_LIMIT = 10
+MAX_RESULT_LIMIT = 500
+
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
@@ -22,14 +25,28 @@ def execute(filters=None):
 	filters.setdefault("include_confirmed_matches", 0)
 	filters.setdefault("review_queue_status", "Open Suggestions Only")
 	filters.setdefault("include_rejected_candidates", 0)
+	result_limit = normalize_result_limit(filters)
+	filters["result_limit"] = result_limit
 	validate_filters(filters)
-	data = get_bank_transaction_matching_rows(filters=filters, limit=filters.get("limit") or 500)
+	data = get_bank_transaction_matching_rows(filters=filters, limit=result_limit)
 	for row in data:
 		row["suggested_match"] = build_suggested_match_label(row)
 		row["amount_scenario_label"] = get_amount_scenario_label(row.get("amount_scenario"))
 		row["candidate_category_label"] = get_candidate_category_label(row.get("candidate_category"))
-	message = None if data else _("No matching bank transactions were found for the selected filters.")
+	if data:
+		message = _("Showing first {0} results. Narrow filters for more precise matching.").format(result_limit) if len(data) >= result_limit else None
+	else:
+		message = _(
+			"No matching bank transactions were found. Adjust filters or date range. Cash-only payments, already confirmed matches, and reconciled records may be excluded."
+		)
 	return get_columns(), data, message, None, get_report_summary(data)
+
+
+def normalize_result_limit(filters):
+	requested = cint(filters.get("result_limit") or filters.get("limit") or DEFAULT_RESULT_LIMIT)
+	if requested <= 0:
+		requested = DEFAULT_RESULT_LIMIT
+	return min(requested, MAX_RESULT_LIMIT)
 
 
 def validate_filters(filters):

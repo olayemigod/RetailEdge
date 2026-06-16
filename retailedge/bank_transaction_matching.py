@@ -1544,10 +1544,21 @@ def _get_bank_transaction_rows(filters, limit):
 	if filters.get("from_date") and filters.get("to_date") and date_field:
 		filters_payload[date_field] = ["between", [filters.get("from_date"), filters.get("to_date")]]
 
+	keyword = cstr(filters.get("reference_search") or filters.get("keyword") or filters.get("search") or "").strip()
+	or_filters = []
+	if keyword:
+		like_keyword = f"%{keyword}%"
+		for canonical in ("reference_number", "description", "transaction_id", "party"):
+			fieldname = field_map.get(canonical)
+			if fieldname:
+				or_filters.append([fieldname, "like", like_keyword])
+		or_filters.append(["name", "like", like_keyword])
+
 	order_by = f"{date_field or 'modified'} desc, modified desc"
 	return frappe.get_all(
 		"Bank Transaction",
 		filters=filters_payload,
+		or_filters=or_filters or None,
 		fields=fields,
 		limit_page_length=limit,
 		order_by=order_by,

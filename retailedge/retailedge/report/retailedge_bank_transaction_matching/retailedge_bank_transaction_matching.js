@@ -272,6 +272,19 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 			reqd: 1,
 		},
 		{
+			fieldname: "reference_search",
+			label: __("Reference / Keyword"),
+			fieldtype: "Data",
+			description: __("Search Bank Transaction reference, narration, transaction id, party, or name."),
+		},
+		{
+			fieldname: "result_limit",
+			label: __("Result Limit"),
+			fieldtype: "Int",
+			default: 10,
+			description: __("Default 10. Maximum 500."),
+		},
+		{
 			fieldname: "match_confidence",
 			label: __("Match Confidence"),
 			fieldtype: "Select",

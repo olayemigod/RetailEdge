@@ -26,11 +26,15 @@ from retailedge.bank_transaction_matching import (
 	_build_sales_invoice_candidates,
 	_resolve_account_match_payload,
 	_select_candidate_for_queue,
+	_get_bank_transaction_rows,
 )
 from retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching import (
+	DEFAULT_RESULT_LIMIT,
+	MAX_RESULT_LIMIT,
 	build_suggested_match_label,
 	execute as execute_bank_transaction_matching_report,
 	get_columns,
+	normalize_result_limit,
 )
 
 
@@ -1392,6 +1396,53 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(candidates[0]["exception_only"], 1)
 		self.assertIn("outside the normal matching window", candidates[0]["reason"])
 		self.assertIn("Bank transaction resolved account differs from payment account", candidates[0]["reason"])
+
+	def test_report_execution_uses_default_result_limit(self):
+		self.assertEqual(normalize_result_limit({}), DEFAULT_RESULT_LIMIT)
+		with patch(
+			"retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching.get_bank_transaction_matching_rows",
+			return_value=[],
+		) as mock_rows:
+			execute_bank_transaction_matching_report({})
+		self.assertEqual(mock_rows.call_args.kwargs["limit"], DEFAULT_RESULT_LIMIT)
+
+	def test_report_execution_clamps_excessive_result_limit(self):
+		self.assertEqual(normalize_result_limit({"result_limit": 9999}), MAX_RESULT_LIMIT)
+		with patch(
+			"retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching.get_bank_transaction_matching_rows",
+			return_value=[{"bank_transaction": f"BT-{idx}", "match_confidence": "Strong Match"} for idx in range(MAX_RESULT_LIMIT)],
+		) as mock_rows:
+			_columns, data, message, _chart, _summary = execute_bank_transaction_matching_report({"result_limit": 9999})
+		self.assertEqual(mock_rows.call_args.kwargs["limit"], MAX_RESULT_LIMIT)
+		self.assertEqual(len(data), MAX_RESULT_LIMIT)
+		self.assertIn(str(MAX_RESULT_LIMIT), message)
+
+	@patch("retailedge.bank_transaction_matching.frappe.get_all")
+	@patch("retailedge.bank_transaction_matching.get_bank_transaction_field_map")
+	def test_bank_transaction_rows_apply_keyword_before_candidate_resolution(self, mock_field_map, mock_get_all):
+		mock_field_map.return_value = {
+			"bank_account": "bank_account",
+			"company": "company",
+			"transaction_date": "date",
+			"deposit": "deposit",
+			"withdrawal": "withdrawal",
+			"description": "description",
+			"reference_number": "reference_number",
+			"transaction_id": "transaction_id",
+			"party": "party",
+			"status": "status",
+		}
+		mock_get_all.return_value = []
+		_get_bank_transaction_rows(
+			frappe._dict({"reference_search": "RE-LIVE-BATCH-TEST", "from_date": "2026-06-01", "to_date": "2026-06-16"}),
+			limit=50,
+		)
+		kwargs = mock_get_all.call_args.kwargs
+		self.assertEqual(kwargs["limit_page_length"], 50)
+		self.assertIn(["reference_number", "like", "%RE-LIVE-BATCH-TEST%"], kwargs["or_filters"])
+		self.assertIn(["description", "like", "%RE-LIVE-BATCH-TEST%"], kwargs["or_filters"])
+		self.assertEqual(kwargs["filters"]["date"], ["between", ["2026-06-01", "2026-06-16"]])
+
 
 	@patch("retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching.get_bank_transaction_matching_rows")
 	def test_report_execute_works_with_filters_none(self, mock_rows):
