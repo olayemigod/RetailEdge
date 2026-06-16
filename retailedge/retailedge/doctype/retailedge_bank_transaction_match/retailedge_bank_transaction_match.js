@@ -185,6 +185,8 @@ function add_bank_transaction_match_action_buttons(frm) {
 	}
 
 	if (status === "Confirmed") {
+		maybe_add_execute_reconciliation_button(frm);
+
 		frm.add_custom_button(__("Check Reconciliation Gate"), function () {
 			frappe.call({
 				method: "retailedge.api.check_reconciliation_execution_gate",
@@ -219,6 +221,43 @@ function add_bank_transaction_match_action_buttons(frm) {
 	if (frm.page && frm.page.set_inner_btn_group_as_primary) {
 		frm.page.set_inner_btn_group_as_primary(__("Review Actions"));
 	}
+}
+
+
+function maybe_add_execute_reconciliation_button(frm) {
+	if (!frm.doc.name || frm.is_new() || frm.doc.decision_status !== "Confirmed") {
+		return;
+	}
+	frappe.call({
+		method: "retailedge.api.check_reconciliation_execution_gate",
+		args: { match_name: frm.doc.name },
+		freeze: false,
+		callback: function (r) {
+			const result = (r && r.message) || {};
+			if (!result.can_execute) {
+				return;
+			}
+			frm.add_custom_button(__("Execute Reconciliation"), function () {
+				frappe.confirm(
+					__(
+						"This will reconcile the selected Bank Transaction using the confirmed reviewed candidate only. This action is controlled by RetailEdge gates and cannot choose another candidate. Continue?"
+					),
+					function () {
+						frappe.call({
+							method: "retailedge.api.execute_reconciliation_for_match",
+							args: { match_name: frm.doc.name, confirm: true },
+							freeze: true,
+							freeze_message: __("Executing reconciliation..."),
+							callback: function (response) {
+								show_reconciliation_execution_result(response.message);
+								frm.reload_doc();
+							},
+						});
+					}
+				);
+			}, __("Reconciliation"));
+		},
+	});
 }
 
 function addBankTransactionMatchButton(frm, label, method, freezeMessage, title, group) {
@@ -299,7 +338,7 @@ function show_reconciliation_gate_result(result) {
 		[__("Can Execute Later"), result.can_execute ? __("Yes") : __("No")],
 		[__("Dry Run Status"), result.dry_run_status || ""],
 		[__("Final Confirmation Required"), result.final_confirmation_required ? __("Yes") : __("No")],
-		[__("Execution in R5.8"), result.execution_available_in_r58 ? __("Available") : __("Not Available")],
+		[__("Execution in R5.9"), result.execution_available_in_r59 ? __("Available after confirmation") : __("Not Available")],
 		[__("Safe Next Step"), result.safe_next_step || ""],
 	];
 	frappe.msgprint({
@@ -307,5 +346,30 @@ function show_reconciliation_gate_result(result) {
 		indicator,
 		message: `${frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 220px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows })}
 			${reasons ? `<p><b>${frappe.utils.escape_html(__("Gate Reasons"))}</b></p><ul>${reasons}</ul>` : ""}`,
+	});
+}
+
+function show_reconciliation_execution_result(result) {
+	if (!result) {
+		frappe.msgprint({ title: __("Reconciliation Execution"), indicator: "orange", message: __("No execution result returned.") });
+		return;
+	}
+	const indicator = result.execution_status === "Executed" ? "green" : result.execution_status === "Already Handled" ? "gray" : "orange";
+	const rows = [
+		[__("Execution Status"), result.execution_status || result.status || ""],
+		[__("Review"), result.match_name || ""],
+		[__("Bank Transaction"), result.bank_transaction || ""],
+		[__("Candidate"), `${result.candidate_doctype || ""} ${result.candidate_name || ""}`.trim()],
+		[__("Payment Event"), result.payment_event_identity || ""],
+		[__("Dry Run Status"), result.dry_run_status_at_execution || ""],
+		[__("Gate Status"), result.gate_status_at_execution || ""],
+		[__("Reference"), result.execution_reference || ""],
+		[__("Message"), result.message || ""],
+		[__("Error"), result.execution_error_summary || ""],
+	];
+	frappe.msgprint({
+		title: __("Reconciliation Execution"),
+		indicator,
+		message: frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 220px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows }),
 	});
 }

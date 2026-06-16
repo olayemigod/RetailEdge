@@ -92,6 +92,7 @@ from retailedge.reconciliation_handoff import (
 	get_reconciliation_handoff_summary as _get_reconciliation_handoff_summary,
 )
 from retailedge.reconciliation_bridge import (
+	execute_reconciliation_for_match as _execute_reconciliation_for_match,
 	check_reconciliation_execution_gate as _check_reconciliation_execution_gate,
 	check_reconciliation_execution_gate_for_matches as _check_reconciliation_execution_gate_for_matches,
 	dry_run_reconciliation_for_match as _dry_run_reconciliation_for_match,
@@ -808,6 +809,12 @@ def get_reconciliation_readiness_summary(filters=None, limit=100):
 def check_reconciliation_execution_gate(match_name):
 	_assert_can_access_bank_transaction_matching()
 	return _check_reconciliation_execution_gate(match_name=match_name)
+
+
+@frappe.whitelist()
+def execute_reconciliation_for_match(match_name, confirm=False):
+	_assert_can_access_bank_transaction_matching()
+	return _execute_reconciliation_for_match(match_name=match_name, confirm=confirm)
 
 
 @frappe.whitelist()
