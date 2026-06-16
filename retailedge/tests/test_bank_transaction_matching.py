@@ -23,6 +23,8 @@ from retailedge.bank_transaction_matching import (
 	suppress_duplicate_candidate_suggestions,
 	_apply_exception_classification,
 	_build_payment_entry_candidate,
+	_build_matching_row,
+	build_matching_report_context,
 	_build_sales_invoice_candidates,
 	_resolve_account_match_payload,
 	_select_candidate_for_queue,
@@ -395,6 +397,54 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		status = get_auto_match_status_for_row(row, settings=settings)
 		self.assertEqual(status["status"], "Blocked from Auto-Match")
 		self.assertIn("Bank account mismatch", status["reason"])
+
+	def test_matching_row_carries_canonical_locked_candidate_payload_fields(self):
+		bank_transaction = normalize_bank_transaction(self._bank_transaction())
+		candidate = {
+			"document_type": "Sales Invoice",
+			"document_name": "SINV-0001",
+			"suggested_sales_invoice": "SINV-0001",
+			"candidate_amount": 10000,
+			"amount_difference": 0,
+			"candidate_category": "invoice_payment_row_match",
+			"payment_event_found": 1,
+			"payment_event_source": "Invoice Payment Row",
+			"payment_reference": "TRF123",
+			"payment_row_index": 1,
+			"payment_row_amount": 10000,
+			"payment_mode": "Bank Transfer",
+			"payment_account": "Demo Bank Account - PED",
+			"payment_category": "Bank Transfer",
+		}
+		row = _build_matching_row(bank_transaction, candidate=candidate, action_status="Suggested")
+		self.assertEqual(row["candidate_doctype"], "Sales Invoice")
+		self.assertEqual(row["candidate_name"], "SINV-0001")
+		self.assertEqual(row["payment_event_found"], 1)
+		self.assertEqual(row["payment_event_source"], "Invoice Payment Row")
+		self.assertEqual(row["payment_reference"], "TRF123")
+		self.assertEqual(row["payment_row_index"], 1)
+		self.assertEqual(row["payment_row_amount"], 10000)
+		self.assertEqual(row["mode_of_payment"], "Bank Transfer")
+		self.assertEqual(row["payment_account"], "Demo Bank Account - PED")
+
+	def test_report_js_preserves_locked_candidate_payload_in_clean_rows(self):
+		source = open(self.REPORT_JS_PATH).read()
+		for fieldname in (
+			"candidate_doctype",
+			"candidate_name",
+			"payment_event_found",
+			"payment_event_source",
+			"payment_reference",
+			"payment_row_index",
+			"payment_row_amount",
+			"payment_mode",
+			"mode_of_payment",
+			"payment_account",
+			"payment_category",
+			"candidate_category",
+		):
+			self.assertIn(f"{fieldname}:", source)
+		self.assertIn('row.suggested_document_type === "Sales Invoice" && !Number(row.payment_event_found || 0)', source)
 
 	@patch("retailedge.bank_transaction_matching.frappe.db.exists", return_value=False)
 	@patch("retailedge.bank_transaction_matching.has_doctype")
@@ -2378,6 +2428,91 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(len(rows), 1)
 		self.assertEqual(rows[0]["match_record"], "RE-BTM-0001")
 		self.assertEqual(rows[0]["decision_status"], "Needs Review")
+
+
+	@patch("retailedge.bank_transaction_matching.has_field", return_value=True)
+	@patch("retailedge.bank_transaction_matching.has_doctype")
+	@patch("retailedge.bank_transaction_matching.frappe.get_all")
+	def test_report_prefetch_context_keeps_only_sales_invoices_with_payment_rows(
+		self,
+		mock_get_all,
+		mock_has_doctype,
+		_mock_has_field,
+	):
+		def has_doctype_side_effect(doctype):
+			return doctype in {"Sales Invoice", "Sales Invoice Payment", "RetailEdge Bank Transaction Match"}
+
+		def get_all_side_effect(doctype, **kwargs):
+			if doctype == "Sales Invoice":
+				return [
+					{
+						"name": "SINV-WITH-BANK-ROW",
+						"posting_date": "2026-05-23",
+						"company": "Process Edge (Demo)",
+						"customer": "Customer A",
+						"customer_name": "Customer A",
+						"grand_total": 10000,
+						"outstanding_amount": 0,
+					},
+					{
+						"name": "SINV-NO-PAYMENT-ROW",
+						"posting_date": "2026-05-23",
+						"company": "Process Edge (Demo)",
+						"customer": "Customer B",
+						"customer_name": "Customer B",
+						"grand_total": 10000,
+						"outstanding_amount": 0,
+					},
+				]
+			if doctype == "Sales Invoice Payment":
+				return [
+					{
+						"parent": "SINV-WITH-BANK-ROW",
+						"idx": 1,
+						"mode_of_payment": "Bank Transfer",
+						"account": "Demo Bank Account - PED",
+						"amount": 10000,
+						"base_amount": 10000,
+					}
+				]
+			return []
+
+		mock_has_doctype.side_effect = has_doctype_side_effect
+		mock_get_all.side_effect = get_all_side_effect
+		context = build_matching_report_context(
+			[self._bank_transaction()],
+			filters={"company": "Process Edge (Demo)"},
+			settings={"date_window_days": 3, "exception_date_window_days": 400, "amount_tolerance": 0},
+		)
+		invoice_names = [row.get("name") for row in context.sales_invoices_by_bank_transaction["ACC-BTN-0001"]]
+		self.assertEqual(invoice_names, ["SINV-WITH-BANK-ROW"])
+
+	@patch("retailedge.bank_transaction_matching.build_matching_report_context")
+	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction", return_value={})
+	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
+	def test_report_uses_bounded_prefetch_context_before_candidate_resolution(
+		self,
+		mock_bank_transactions,
+		mock_invoice_candidates,
+		mock_payment_candidates,
+		_mock_existing_matches,
+		mock_context_builder,
+	):
+		mock_bank_transactions.return_value = [self._bank_transaction()]
+		context = frappe._dict(
+			{
+				"bank_transactions_by_name": {"ACC-BTN-0001": normalize_bank_transaction(self._bank_transaction())},
+				"settings": get_bank_transaction_matching_settings(),
+			}
+		)
+		mock_context_builder.return_value = context
+		get_bank_transaction_matching_rows({"company": "Process Edge (Demo)"}, limit=1)
+		mock_context_builder.assert_called_once()
+		self.assertEqual(mock_context_builder.call_args.args[0], mock_bank_transactions.return_value)
+		self.assertEqual(mock_invoice_candidates.call_args.kwargs.get("context"), context)
+		self.assertEqual(mock_payment_candidates.call_args.kwargs.get("context"), context)
 
 
 class BankTransactionReferenceMatchingTests(unittest.TestCase):

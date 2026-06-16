@@ -85,6 +85,8 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				reference: $btn.data("reference"),
 				narration: $btn.data("narration"),
 				branch: $btn.data("branch"),
+				candidate_doctype: $btn.data("candidateDoctype"),
+				candidate_name: $btn.data("candidateName"),
 				suggested_document_type: $btn.data("suggestedDocumentType"),
 				suggested_document: $btn.data("suggestedDocument"),
 				sales_invoice: $btn.data("salesInvoice"),
@@ -96,6 +98,16 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				payment_entry_paid_amount: $btn.data("paymentEntryPaidAmount"),
 				payment_entry_allocated_amount: $btn.data("paymentEntryAllocatedAmount"),
 				payment_entry_invoice_context: $btn.data("paymentEntryInvoiceContext"),
+				payment_event_found: $btn.data("paymentEventFound"),
+				payment_event_source: $btn.data("paymentEventSource"),
+				payment_reference: $btn.data("paymentReference"),
+				payment_row_index: $btn.data("paymentRowIndex"),
+				payment_row_amount: $btn.data("paymentRowAmount"),
+				payment_mode: $btn.data("paymentMode"),
+				mode_of_payment: $btn.data("modeOfPayment"),
+				payment_account: $btn.data("paymentAccount"),
+				payment_category: $btn.data("paymentCategory"),
+				candidate_category: $btn.data("candidateCategory"),
 				multi_invoice_references: $btn.data("multiInvoiceReferences"),
 				amount_difference: $btn.data("amountDifference"),
 				match_confidence: $btn.data("matchConfidence"),
@@ -214,6 +226,8 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				data-reference="${frappe.utils.escape_html(String(data.reference || ""))}"
 				data-narration="${frappe.utils.escape_html(String(data.narration || ""))}"
 				data-branch="${frappe.utils.escape_html(String(data.branch || ""))}"
+				data-candidate-doctype="${frappe.utils.escape_html(String(data.candidate_doctype || data.suggested_document_type || ""))}"
+				data-candidate-name="${frappe.utils.escape_html(String(data.candidate_name || data.suggested_document || ""))}"
 				data-suggested-document-type="${frappe.utils.escape_html(String(data.suggested_document_type || ""))}"
 				data-suggested-document="${frappe.utils.escape_html(String(data.suggested_document || ""))}"
 				data-sales-invoice="${frappe.utils.escape_html(String(data.suggested_sales_invoice || ""))}"
@@ -226,6 +240,16 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				data-payment-entry-paid-amount="${frappe.utils.escape_html(String(data.payment_entry_paid_amount || ""))}"
 				data-payment-entry-allocated-amount="${frappe.utils.escape_html(String(data.payment_entry_allocated_amount || ""))}"
 				data-payment-entry-invoice-context="${frappe.utils.escape_html(String(data.payment_entry_invoice_context || ""))}"
+				data-payment-event-found="${frappe.utils.escape_html(String(data.payment_event_found || ""))}"
+				data-payment-event-source="${frappe.utils.escape_html(String(data.payment_event_source || ""))}"
+				data-payment-reference="${frappe.utils.escape_html(String(data.payment_reference || ""))}"
+				data-payment-row-index="${frappe.utils.escape_html(String(data.payment_row_index || ""))}"
+				data-payment-row-amount="${frappe.utils.escape_html(String(data.payment_row_amount || ""))}"
+				data-payment-mode="${frappe.utils.escape_html(String(data.payment_mode || data.mode_of_payment || ""))}"
+				data-mode-of-payment="${frappe.utils.escape_html(String(data.mode_of_payment || data.payment_mode || ""))}"
+				data-payment-account="${frappe.utils.escape_html(String(data.payment_account || ""))}"
+				data-payment-category="${frappe.utils.escape_html(String(data.payment_category || ""))}"
+				data-candidate-category="${frappe.utils.escape_html(String(data.candidate_category || ""))}"
 				data-multi-invoice-references="${frappe.utils.escape_html(String(data.multi_invoice_references || ""))}"
 				data-match-confidence="${frappe.utils.escape_html(String(data.match_confidence || ""))}"
 				data-match-score="${frappe.utils.escape_html(String(data.match_score || ""))}"
@@ -572,24 +596,25 @@ function ensure_bank_match_record(args, callback) {
 	}
 
 	frappe.call({
-		method: "retailedge.api.create_bank_transaction_match_from_suggestion",
+		method: "retailedge.api.create_bank_match_reviews_from_suggestions",
 		args: {
-			bank_transaction_name: args.bank_transaction,
-			suggested_document_type: args.suggested_document_type,
-			suggested_document: args.suggested_document,
-			sales_invoice: args.sales_invoice,
-			force_refresh: 1,
+			filters: JSON.stringify(frappe.query_report.get_filter_values()),
+			rows: JSON.stringify([clean_report_suggestion_row(args)]),
+			run_background: 0,
 		},
 		freeze: true,
 		freeze_message: __("Creating RetailEdge match review record..."),
 		callback: function (r) {
-			const result = r && r.message;
-			if (!result || !result.name) {
-				frappe.msgprint(__("RetailEdge could not create a match review record for this row."));
+			const result = (r && r.message) || {};
+			const created = (result.created || [])[0];
+			const duplicate = (result.duplicates || [])[0] || (result.review_record_exists || [])[0];
+			const matchRecord = (created && created.match_record) || (duplicate && duplicate.match_record);
+			if (!matchRecord) {
+				show_create_review_records_summary(result);
 				return;
 			}
-			args.match_record = result.name;
-			callback(result.name);
+			args.match_record = matchRecord;
+			callback(matchRecord);
 		},
 	});
 }
@@ -780,6 +805,9 @@ function is_eligible_report_suggestion_row(row) {
 	if (["No Match", "Outflow / Not Sales Receipt", "Duplicate Candidate", "Exception Only"].includes(row.action_status)) {
 		return false;
 	}
+	if (row.suggested_document_type === "Sales Invoice" && !Number(row.payment_event_found || 0)) {
+		return false;
+	}
 	return ["Sales Invoice", "Payment Entry"].includes(row.suggested_document_type);
 }
 
@@ -801,6 +829,8 @@ function clean_report_suggestion_row(row) {
 		direction: row.direction,
 		amount: row.amount,
 		bank_amount: row.amount,
+		candidate_doctype: row.candidate_doctype || row.suggested_document_type,
+		candidate_name: row.candidate_name || row.suggested_document,
 		suggested_document_type: row.suggested_document_type,
 		suggested_document: row.suggested_document,
 		suggested_sales_invoice: row.suggested_sales_invoice,
@@ -814,6 +844,17 @@ function clean_report_suggestion_row(row) {
 		payment_entry_paid_amount: row.payment_entry_paid_amount,
 		payment_entry_allocated_amount: row.payment_entry_allocated_amount,
 		payment_entry_invoice_context: row.payment_entry_invoice_context,
+		payment_event_found: row.payment_event_found,
+		payment_event_source: row.payment_event_source,
+		payment_reference: row.payment_reference,
+		payment_row_index: row.payment_row_index,
+		payment_row_amount: row.payment_row_amount,
+		payment_mode: row.payment_mode,
+		mode_of_payment: row.mode_of_payment || row.payment_mode,
+		payment_account: row.payment_account,
+		payment_category: row.payment_category,
+		candidate_category: row.candidate_category,
+		candidate_category_label: row.candidate_category_label,
 		multi_invoice_references: row.multi_invoice_references,
 		exception_only: row.exception_only,
 		exception_type: row.exception_type,

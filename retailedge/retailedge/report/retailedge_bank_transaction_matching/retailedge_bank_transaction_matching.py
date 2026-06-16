@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import frappe
 from frappe import _
 from frappe.utils import cint, cstr, get_first_day, getdate, nowdate
@@ -195,3 +197,47 @@ def get_report_summary(rows):
 			"indicator": "Blue",
 		},
 	]
+
+
+
+def get_bank_transaction_matching_timing(filters=None):
+	"""Developer-only timing helper for local report profiling."""
+	filters = frappe._dict(filters or {})
+	filters.setdefault("from_date", str(get_first_day(nowdate())))
+	filters.setdefault("to_date", str(getdate(nowdate())))
+	filters.setdefault("only_unmatched", 1)
+	filters.setdefault("include_reconciled", 0)
+	filters.setdefault("include_verified_invoices", 0)
+	filters.setdefault("include_confirmed_matches", 0)
+	filters.setdefault("review_queue_status", "Open Suggestions Only")
+	filters.setdefault("include_rejected_candidates", 0)
+	result_limit = normalize_result_limit(filters)
+	filters["result_limit"] = result_limit
+	validate_filters(filters)
+	debug_timings = {}
+	start = time.perf_counter()
+	data = get_bank_transaction_matching_rows(filters=filters, limit=result_limit, debug_timings=debug_timings)
+	total = time.perf_counter() - start
+	return {
+		"total_seconds": round(total, 3),
+		"rows": len(data or []),
+		"result_limit": result_limit,
+		"timings": {key: round(value, 3) if isinstance(value, float) else value for key, value in debug_timings.items()},
+	}
+
+
+
+def profile_bank_transaction_matching_default_10():
+	return get_bank_transaction_matching_timing({"result_limit": 10})
+
+
+def profile_bank_transaction_matching_keyword_10():
+	return get_bank_transaction_matching_timing({"reference_search": "RE-LIVE-BATCH-TEST", "result_limit": 10})
+
+
+def profile_bank_transaction_matching_keyword_50():
+	return get_bank_transaction_matching_timing({"reference_search": "RE-LIVE-BATCH-TEST", "result_limit": 50})
+
+
+def profile_bank_transaction_matching_keyword_200():
+	return get_bank_transaction_matching_timing({"reference_search": "RE-LIVE-BATCH-TEST", "result_limit": 200})

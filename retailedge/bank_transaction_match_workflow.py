@@ -62,17 +62,20 @@ def create_or_get_bank_transaction_match(
 	payment_entry=None,
 	source_report="Bank Transaction Matching",
 	force_refresh=False,
+	locked_candidate=None,
 ):
 	assert_can_manage_bank_transaction_match()
 	assert_can_access_bank_transaction_matching()
 	normalized = normalize_bank_transaction(bank_transaction_name)
-	candidate = _resolve_matching_candidate(
-		bank_transaction_name=bank_transaction_name,
-		suggested_document_type=suggested_document_type,
-		suggested_document=suggested_document,
-		sales_invoice=sales_invoice,
-		payment_entry=payment_entry,
-	)
+	candidate = frappe._dict(locked_candidate or {}) if locked_candidate else None
+	if not candidate:
+		candidate = _resolve_matching_candidate(
+			bank_transaction_name=bank_transaction_name,
+			suggested_document_type=suggested_document_type,
+			suggested_document=suggested_document,
+			sales_invoice=sales_invoice,
+			payment_entry=payment_entry,
+		)
 	if (suggested_document or sales_invoice or payment_entry) and not candidate:
 		frappe.throw("Locked candidate was not found during validation; no alternate candidate was selected.")
 	_ensure_valid_candidate(candidate)
@@ -383,6 +386,7 @@ def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected
 				payment_entry=row.get("suggested_document") if row.get("suggested_document_type") == "Payment Entry" else None,
 				source_report="Bank Transaction Matching",
 				force_refresh=True,
+				locked_candidate=_candidate_from_revalidated_row(row),
 			)
 			if not created.get("created"):
 				result["duplicates"].append(
@@ -502,6 +506,7 @@ def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None)
 				payment_entry=row.get("suggested_document") if row.get("suggested_document_type") == "Payment Entry" else None,
 				source_report="Bank Transaction Matching",
 				force_refresh=True,
+				locked_candidate=_candidate_from_revalidated_row(row),
 			)
 			match_name = created.get("name")
 			if not created.get("created"):
@@ -704,6 +709,102 @@ def _suggestion_row_key(row):
 	)
 
 
+
+def _candidate_from_revalidated_row(row):
+	row = frappe._dict(row or {})
+	if cstr(row.get("candidate_changed_reason")).strip():
+		return None
+	document_type = cstr(row.get("candidate_doctype") or row.get("suggested_document_type")).strip()
+	document_name = cstr(row.get("candidate_name") or row.get("suggested_document")).strip()
+	if document_type not in {"Sales Invoice", "Payment Entry"} or not document_name:
+		return None
+	return frappe._dict(
+		{
+			"document_type": document_type,
+			"document_name": document_name,
+			"suggested_document": document_name,
+			"suggested_sales_invoice": row.get("suggested_sales_invoice") or (document_name if document_type == "Sales Invoice" else None),
+			"posting_date": row.get("candidate_posting_date") or row.get("transaction_date"),
+			"customer": row.get("customer"),
+			"customer_display": row.get("customer"),
+			"party": row.get("party") or row.get("customer"),
+			"party_type": row.get("party_type") or "Customer",
+			"candidate_amount": flt(row.get("candidate_amount")),
+			"amount_difference": flt(row.get("amount_difference")),
+			"amount_scenario": row.get("amount_scenario"),
+			"amount_scenario_label": get_amount_scenario_label(row.get("amount_scenario")),
+			"candidate_category": row.get("candidate_category"),
+			"candidate_category_label": get_candidate_category_label(row.get("candidate_category")),
+			"payment_event_found": cint(row.get("payment_event_found")),
+			"payment_event_source": row.get("payment_event_source"),
+			"payment_reference": row.get("payment_reference"),
+			"payment_row_index": row.get("payment_row_index"),
+			"payment_row_amount": flt(row.get("payment_row_amount")),
+			"payment_mode": row.get("payment_mode") or row.get("mode_of_payment"),
+			"payment_account": row.get("payment_account"),
+			"payment_category": row.get("payment_category"),
+			"payment_entry_paid_amount": flt(row.get("payment_entry_paid_amount")),
+			"payment_entry_allocated_amount": flt(row.get("payment_entry_allocated_amount")),
+			"payment_entry_invoice_context": row.get("payment_entry_invoice_context"),
+			"sales_invoice_outstanding_amount": flt(row.get("sales_invoice_outstanding_amount")),
+			"sales_invoice_grand_total": flt(row.get("sales_invoice_grand_total")),
+			"reference": row.get("payment_reference") or row.get("reference") or document_name,
+			"account": row.get("payment_account"),
+			"branch": row.get("branch"),
+			"confidence": row.get("match_confidence"),
+			"score": row.get("match_score"),
+			"reason": row.get("match_reason"),
+			"reasons": [row.get("match_reason")] if row.get("match_reason") else [],
+			"reference_match_exact": row.get("reference_match_exact"),
+			"account_match": row.get("account_match"),
+			"branch_match": row.get("branch_match"),
+		}
+	)
+
+
+def _locked_candidate_identity_problem(row):
+	row = frappe._dict(row or {})
+	bank_transaction = cstr(row.get("bank_transaction")).strip()
+	candidate_doctype = cstr(row.get("candidate_doctype")).strip()
+	candidate_name = cstr(row.get("candidate_name")).strip()
+	suggested_document_type = cstr(row.get("suggested_document_type")).strip()
+	suggested_document = cstr(row.get("suggested_document")).strip()
+	locked_type = candidate_doctype or suggested_document_type
+	locked_name = candidate_name or suggested_document
+	context = f" for {bank_transaction}" if bank_transaction else ""
+
+	if candidate_doctype and suggested_document_type and candidate_doctype != suggested_document_type:
+		return (
+			f"Locked candidate identity mismatch{context}: candidate_doctype {candidate_doctype} "
+			f"differs from suggested_document_type {suggested_document_type}. No alternate candidate was selected."
+		)
+	if candidate_name and suggested_document and candidate_name != suggested_document:
+		return (
+			f"Locked candidate identity mismatch{context}: candidate_name {candidate_name} "
+			f"differs from suggested_document {suggested_document}. No alternate candidate was selected."
+		)
+	if not locked_type:
+		return f"Locked candidate payload missing candidate_doctype/suggested_document_type{context}. No review created."
+	if not locked_name:
+		return f"Locked {locked_type} candidate missing candidate_name/suggested_document{context}. No review created."
+	if locked_type == "Sales Invoice":
+		candidate_category = cstr(row.get("candidate_category")).strip().lower()
+		payment_event_expected = candidate_category in {"invoice_payment_row_match", "pos_payment_match"} or cint(
+			row.get("payment_event_found")
+		)
+		if payment_event_expected and not cint(row.get("payment_event_found")):
+			return (
+				f"Locked Sales Invoice payment-row candidate missing payment_event_found{context} / "
+				f"Sales Invoice {locked_name}. No review created."
+			)
+		if payment_event_expected and not cstr(row.get("payment_event_source")).strip():
+			return (
+				f"Locked Sales Invoice payment-row candidate missing payment_event_source{context} / "
+				f"Sales Invoice {locked_name}. No review created."
+			)
+	return ""
+
+
 def _revalidate_suggestion_row(row, filters=None):
 	row = frappe._dict(row or {})
 	bank_transaction_name = cstr(row.get("bank_transaction")).strip()
@@ -725,8 +826,13 @@ def _revalidate_suggestion_row(row, filters=None):
 		filters=candidate_filters,
 		limit=20,
 	)
-	explicit_type = cstr(row.get("suggested_document_type")).strip()
-	explicit_name = cstr(row.get("suggested_document")).strip()
+	explicit_type = cstr(row.get("candidate_doctype") or row.get("suggested_document_type")).strip()
+	explicit_name = cstr(row.get("candidate_name") or row.get("suggested_document")).strip()
+	identity_problem = _locked_candidate_identity_problem(row)
+	if identity_problem:
+		row["candidate_revalidated"] = 1
+		row["candidate_changed_reason"] = identity_problem
+		return row
 	if explicit_type and explicit_name:
 		locked_candidate = None
 		for candidate in candidates:
@@ -735,7 +841,10 @@ def _revalidate_suggestion_row(row, filters=None):
 				break
 		if not locked_candidate:
 			row["candidate_revalidated"] = 1
-			row["candidate_changed_reason"] = "Locked candidate was not found during validation; no alternate candidate was selected."
+			row["candidate_changed_reason"] = (
+				f"Locked candidate was not found during validation for {bank_transaction_name} / "
+				f"{explicit_type} {explicit_name}. No alternate candidate was selected."
+			)
 			return row
 		return frappe._dict(
 			_build_matching_row(
@@ -775,6 +884,8 @@ def _classify_suggestion_review_preparation(row, allow_rejected_pair_retry=False
 
 	if not bank_transaction:
 		return {"status": "unsafe", "row": _preparation_summary_row(row, reason="Missing Bank Transaction.")}
+	if cstr(row.get("candidate_changed_reason")).strip():
+		return {"status": "unsafe", "row": _preparation_summary_row(row, reason=row.get("candidate_changed_reason"))}
 	if not frappe.db.exists("Bank Transaction", bank_transaction):
 		return {"status": "unsafe", "row": _preparation_summary_row(row, reason=f"Bank Transaction {bank_transaction} does not exist.")}
 	if suggested_document_type not in {"Sales Invoice", "Payment Entry"} or not suggested_document:

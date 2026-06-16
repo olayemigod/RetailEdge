@@ -7,6 +7,7 @@ from unittest.mock import patch
 import frappe
 
 from retailedge.bank_transaction_match_workflow import (
+	_candidate_from_revalidated_row,
 	_revalidate_suggestion_row,
 	_resolve_matching_candidate,
 	bulk_confirm_bank_transaction_matches,
@@ -658,6 +659,120 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		message = "Exact high-confidence RetailEdge Bank Match Review record auto-confirmed by RetailEdge settings only. No reconciliation or accounting posting was performed."
 		self.assertIn("RetailEdge Bank Match Review record auto-confirmed", message)
 		self.assertIn("No reconciliation or accounting posting was performed", message)
+
+	def test_candidate_from_revalidated_row_preserves_payment_event_payload(self):
+		row = frappe._dict(
+			{
+				"candidate_doctype": "Sales Invoice",
+				"candidate_name": "SINV-0001",
+				"suggested_document_type": "Sales Invoice",
+				"suggested_document": "SINV-0001",
+				"payment_event_found": 1,
+				"payment_event_source": "Invoice Payment Row",
+				"payment_reference": "TRF123",
+				"payment_row_index": 2,
+				"payment_row_amount": 5000,
+				"payment_mode": "Bank Transfer",
+				"payment_account": "Demo Bank Account - PED",
+				"payment_category": "Bank Transfer",
+				"candidate_category": "invoice_payment_row_match",
+				"candidate_amount": 5000,
+			}
+		)
+		candidate = _candidate_from_revalidated_row(row)
+		self.assertEqual(candidate.document_type, "Sales Invoice")
+		self.assertEqual(candidate.document_name, "SINV-0001")
+		self.assertEqual(candidate.payment_event_found, 1)
+		self.assertEqual(candidate.payment_event_source, "Invoice Payment Row")
+		self.assertEqual(candidate.payment_row_index, 2)
+		self.assertEqual(candidate.payment_account, "Demo Bank Account - PED")
+
+	@patch("retailedge.bank_transaction_match_workflow._find_active_bank_transaction_review_match", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow._find_active_candidate_review_match", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow._find_rejected_exact_pair_match", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch("retailedge.bank_transaction_match_workflow._prepare_created_match_review_record")
+	@patch("retailedge.bank_transaction_match_workflow.create_or_get_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow._revalidate_suggestion_row")
+	def test_create_review_records_passes_locked_candidate_payload_to_create(
+		self,
+		mock_revalidate,
+		mock_create,
+		_mock_prepare,
+		_mock_exists,
+		_mock_sales_confirmed,
+		_mock_payment_confirmed,
+		_mock_rejected,
+		_mock_active_candidate,
+		_mock_active_bank,
+	):
+		row = frappe._dict(
+			{
+				"bank_transaction": "ACC-BTN-0001",
+				"candidate_doctype": "Payment Entry",
+				"candidate_name": "ACC-PAY-0001",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "ACC-PAY-0001",
+				"candidate_category": "payment_entry_match",
+				"payment_event_found": 1,
+				"payment_event_source": "Payment Entry",
+				"candidate_amount": 10000,
+				"match_confidence": "Strong Match",
+				"match_score": 95,
+				"action_status": "Suggested",
+			}
+		)
+		mock_revalidate.return_value = row
+		mock_create.return_value = {"created": True, "name": "RE-BTM-0001"}
+		result = create_bank_match_reviews_from_suggestions(rows=[row])
+		self.assertEqual(result["created_count"], 1)
+		locked_candidate = mock_create.call_args.kwargs.get("locked_candidate")
+		self.assertEqual(locked_candidate.document_type, "Payment Entry")
+		self.assertEqual(locked_candidate.document_name, "ACC-PAY-0001")
+		self.assertEqual(locked_candidate.payment_event_found, 1)
+
+	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+	def test_revalidate_reports_missing_locked_candidate_name(self, mock_bank_transaction, _mock_sales, _mock_payment):
+		mock_bank_transaction.return_value = frappe._dict(
+			{
+				"bank_transaction": "ACC-BTN-0001",
+				"transaction_date": "2026-06-16",
+				"amount": 1000,
+			}
+		)
+		row = frappe._dict(
+			{
+				"bank_transaction": "ACC-BTN-0001",
+				"candidate_doctype": "Payment Entry",
+				"suggested_document_type": "Payment Entry",
+			}
+		)
+		revalidated = _revalidate_suggestion_row(row)
+		self.assertEqual(revalidated.candidate_revalidated, 1)
+		self.assertIn("missing candidate_name/suggested_document", revalidated.candidate_changed_reason)
+		self.assertIn("ACC-BTN-0001", revalidated.candidate_changed_reason)
+
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow._revalidate_suggestion_row")
+	def test_create_review_records_skips_revalidated_locked_candidate_failure(self, mock_revalidate, _mock_roles, _mock_access):
+		row = frappe._dict(
+			{
+				"bank_transaction": "ACC-BTN-0001",
+				"candidate_doctype": "Payment Entry",
+				"suggested_document_type": "Payment Entry",
+				"candidate_changed_reason": "Locked Payment Entry candidate missing candidate_name/suggested_document for ACC-BTN-0001. No review created.",
+			}
+		)
+		mock_revalidate.return_value = row
+		result = create_bank_match_reviews_from_suggestions(rows=[row])
+		self.assertEqual(result["created_count"], 0)
+		self.assertEqual(result["skipped_count"], 1)
+		self.assertIn("missing candidate_name/suggested_document", result["unsafe"][0]["reason"])
 
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
