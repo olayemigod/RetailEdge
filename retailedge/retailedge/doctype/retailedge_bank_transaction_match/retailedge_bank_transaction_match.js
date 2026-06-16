@@ -185,6 +185,7 @@ function add_bank_transaction_match_action_buttons(frm) {
 	}
 
 	if (status === "Confirmed") {
+		add_reconciliation_execution_status_buttons(frm);
 		maybe_add_execute_reconciliation_button(frm);
 
 		frm.add_custom_button(__("Check Reconciliation Gate"), function () {
@@ -221,6 +222,56 @@ function add_bank_transaction_match_action_buttons(frm) {
 	if (frm.page && frm.page.set_inner_btn_group_as_primary) {
 		frm.page.set_inner_btn_group_as_primary(__("Review Actions"));
 	}
+}
+
+
+function add_reconciliation_execution_status_buttons(frm) {
+	if (!frm.doc.name || frm.is_new() || frm.doc.decision_status !== "Confirmed") {
+		return;
+	}
+	frm.add_custom_button(__("Refresh Execution Status"), function () {
+		frappe.call({
+			method: "retailedge.api.get_reconciliation_execution_summary",
+			args: { match_name: frm.doc.name },
+			freeze: true,
+			freeze_message: __("Refreshing execution status..."),
+			callback: function (r) {
+				show_reconciliation_execution_result(r.message);
+				frm.reload_doc();
+			},
+		});
+	}, __("Reconciliation"));
+
+	frappe.call({
+		method: "retailedge.api.get_reconciliation_execution_summary",
+		args: { match_name: frm.doc.name },
+		freeze: false,
+		callback: function (r) {
+			const result = (r && r.message) || {};
+			if (!result.retryable) {
+				return;
+			}
+			frm.add_custom_button(__("Retry Reconciliation Execution"), function () {
+				frappe.confirm(
+					__(
+						"This will retry reconciliation using the stored reviewed candidate only. RetailEdge will re-run dry-run and execution gates before calling ERPNext. Continue?"
+					),
+					function () {
+						frappe.call({
+							method: "retailedge.api.retry_reconciliation_execution_for_match",
+							args: { match_name: frm.doc.name, confirm: true },
+							freeze: true,
+							freeze_message: __("Retrying reconciliation execution..."),
+							callback: function (response) {
+								show_reconciliation_execution_result(response.message);
+								frm.reload_doc();
+							},
+						});
+					}
+				);
+			}, __("Reconciliation"));
+		},
+	});
 }
 
 
@@ -358,14 +409,21 @@ function show_reconciliation_execution_result(result) {
 	const rows = [
 		[__("Execution Status"), result.execution_status || result.status || ""],
 		[__("Review"), result.match_name || ""],
+		[__("Match Status"), result.match_status || ""],
 		[__("Bank Transaction"), result.bank_transaction || ""],
 		[__("Candidate"), `${result.candidate_doctype || ""} ${result.candidate_name || ""}`.trim()],
 		[__("Payment Event"), result.payment_event_identity || ""],
-		[__("Dry Run Status"), result.dry_run_status_at_execution || ""],
-		[__("Gate Status"), result.gate_status_at_execution || ""],
+		[__("Dry Run at Execution"), result.dry_run_status_at_execution || ""],
+		[__("Gate at Execution"), result.gate_status_at_execution || ""],
+		[__("Current Dry Run"), result.current_dry_run_status || ""],
+		[__("Current Gate"), result.current_gate_status || ""],
+		[__("Retryable"), result.retryable ? __("Yes") : __("No")],
+		[__("Already Handled"), result.already_handled ? __("Yes") : __("No")],
+		[__("Conflict"), result.has_conflict ? __("Yes") : __("No")],
 		[__("Reference"), result.execution_reference || ""],
-		[__("Message"), result.message || ""],
+		[__("Message"), result.message || result.execution_message || ""],
 		[__("Error"), result.execution_error_summary || ""],
+		[__("Safe Next Step"), result.safe_next_step || ""],
 	];
 	frappe.msgprint({
 		title: __("Reconciliation Execution"),

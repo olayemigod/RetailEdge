@@ -9,9 +9,26 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 		"bank_account",
 		"company",
 		"suggested_document_type",
+		"suggested_document",
+		"execution_status",
+		"executed_by",
+		"executed_on",
+		"dry_run_status_at_execution",
+		"gate_status_at_execution",
+		"execution_reference",
 	],
 
 	get_indicator(doc) {
+		const executionStatus = doc.execution_status || "Not Executed";
+		if (executionStatus && executionStatus !== "Not Executed") {
+			const executionIndicators = {
+				Executed: "green",
+				Failed: "red",
+				Blocked: "orange",
+				"Already Handled": "gray",
+			};
+			return [__(executionStatus), executionIndicators[executionStatus] || "gray", `execution_status,=,${executionStatus}`];
+		}
 		const status = doc.review_status || doc.decision_status || "Pending Review";
 		const indicators = {
 			"Needs Review": "orange",
