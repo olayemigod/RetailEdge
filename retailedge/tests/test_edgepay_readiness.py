@@ -2,16 +2,20 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from unittest.mock import patch
+from edgepayv1.edgepay.tests.utils import DatabaseStateBackup
 import os
 
 class TestEdgePayReadiness(FrappeTestCase):
 	def setUp(self):
+		self.db_backup = DatabaseStateBackup()
+		self.db_backup.backup()
 		super(TestEdgePayReadiness, self).setUp()
 		frappe.set_user("Administrator")
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		super(TestEdgePayReadiness, self).tearDown()
+		self.db_backup.restore()
 
 	def test_readiness_checklist_report_executes_read_only(self):
 		from retailedge.retailedge.report.retailedge_edgepay_readiness_checklist.retailedge_edgepay_readiness_checklist import execute
@@ -34,6 +38,7 @@ class TestEdgePayReadiness(FrappeTestCase):
 		
 		# Create mock provider with secret key values
 		frappe.db.delete("EdgePay Provider", "Test Monnify Provider")
+		frappe.db.delete("EdgePay Provider", {"provider_code": "monnify"})
 		prov = frappe.get_doc({
 			"doctype": "EdgePay Provider",
 			"provider_name": "Test Monnify Provider",

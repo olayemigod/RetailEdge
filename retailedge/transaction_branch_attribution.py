@@ -81,6 +81,12 @@ def get_branch_attribution_target_doctypes():
 
 
 def ensure_transaction_branch_custom_fields():
+	# Clean up the old hidden Section Break so it doesn't group and hide native ERPNext fields
+	for doctype in get_branch_attribution_target_doctypes():
+		cf_name = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": "retailedge_branch_attribution_section"}, "name")
+		if cf_name:
+			frappe.delete_doc("Custom Field", cf_name, ignore_permissions=True, force=True)
+
 	custom_fields = {}
 	for doctype in get_branch_attribution_target_doctypes():
 		field_defs = _get_field_defs_for_doctype(doctype)
@@ -293,17 +299,6 @@ def _get_field_defs_for_doctype(doctype):
 	layout_insert_after = _get_insert_after(doctype)
 	field_defs = [
 		{
-			"fieldname": "retailedge_branch_attribution_section",
-			"label": "RetailEdge Branch Metadata",
-			"fieldtype": "Section Break",
-			"hidden": 1,
-			"collapsible": 0,
-			"read_only": 1,
-			"insert_after": layout_insert_after,
-		}
-	]
-	field_defs.append(
-		{
 			"fieldname": "retailedge_branch",
 			"label": "RetailEdge Branch",
 			"fieldtype": "Link",
@@ -313,7 +308,7 @@ def _get_field_defs_for_doctype(doctype):
 			"insert_after": layout_insert_after,
 			"description": "Branch attributed by RetailEdge for filtering/reporting.",
 		}
-	)
+	]
 	insert_after = "retailedge_branch"
 	for fieldname, label, fieldtype in (
 		("retailedge_branch_source", "RetailEdge Branch Source", "Data"),

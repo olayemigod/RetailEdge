@@ -2,6 +2,7 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from unittest.mock import patch
+from edgepayv1.edgepay.tests.utils import DatabaseStateBackup
 from retailedge.services.edgepay_handoff_consumer import (
 	fetch_pending_edgepay_handoffs,
 	process_edgepay_handoff,
@@ -13,6 +14,8 @@ from retailedge.services.edgepay_handoff_consumer import (
 
 class TestEdgePayHandoffConsumer(FrappeTestCase):
 	def setUp(self):
+		self.db_backup = DatabaseStateBackup()
+		self.db_backup.backup()
 		super(TestEdgePayHandoffConsumer, self).setUp()
 		self.original_exists = frappe.db.exists
 		self.original_get_doc = frappe.get_doc
@@ -29,6 +32,7 @@ class TestEdgePayHandoffConsumer(FrappeTestCase):
 		frappe.db.delete("EdgePay Payment Request")
 		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
 		
+		frappe.db.delete("EdgePay Provider", {"provider_code": "monnify"})
 		if not frappe.db.exists("EdgePay Provider", "Test Consumer Provider"):
 			frappe.get_doc({
 				"doctype": "EdgePay Provider",
@@ -54,6 +58,7 @@ class TestEdgePayHandoffConsumer(FrappeTestCase):
 		if frappe.db.exists("EdgePay Provider", "Test Consumer Provider"):
 			frappe.db.delete("EdgePay Provider", "Test Consumer Provider")
 		super(TestEdgePayHandoffConsumer, self).tearDown()
+		self.db_backup.restore()
 
 	def mock_exists(self, *args, **kwargs):
 		if args:

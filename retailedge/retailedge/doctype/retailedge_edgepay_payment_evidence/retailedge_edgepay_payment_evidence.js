@@ -3,6 +3,106 @@
 
 frappe.ui.form.on('RetailEdge EdgePay Payment Evidence', {
 	refresh: function(frm) {
+		// 1. Review Actions
+		if (frm.doc.review_status === 'Pending Review' && frm.doc.docstatus === 0) {
+			frm.add_custom_button(__('Mark as Reviewed'), function() {
+				frappe.call({
+					method: 'retailedge.api.mark_edgepay_evidence_reviewed',
+					args: {
+						evidence_name: frm.doc.name
+					},
+					callback: function(r) {
+						if (r.message && r.message.ok) {
+							frappe.show_alert({
+								message: __('Payment evidence marked as Reviewed.'),
+								indicator: 'green'
+							});
+							frm.reload_doc();
+						}
+					}
+				});
+			}, __('Actions'));
+
+			frm.add_custom_button(__('Reject'), function() {
+				frappe.prompt(
+					[
+						{
+							label: __('Reason for Rejection'),
+							fieldname: 'reason',
+							fieldtype: 'Small Text'
+						}
+					],
+					(values) => {
+						frappe.call({
+							method: 'retailedge.api.mark_edgepay_evidence_rejected',
+							args: {
+								evidence_name: frm.doc.name,
+								reason: values.reason
+							},
+							callback: function(r) {
+								if (r.message && r.message.ok) {
+									frappe.show_alert({
+										message: __('Payment evidence marked as Rejected.'),
+										indicator: 'red'
+									});
+									frm.reload_doc();
+								}
+							}
+						});
+					},
+					__('Reject Payment Evidence'),
+					__('Reject')
+				);
+			}, __('Actions'));
+		}
+
+		// 2. Posting Actions
+		if (frm.doc.review_status === 'Reviewed' && frm.doc.docstatus === 0) {
+			if (!frm.doc.payment_entry) {
+				frm.add_custom_button(__('Prepare Draft Payment Entry'), function() {
+					frappe.call({
+						method: 'retailedge.api.prepare_edgepay_payment_entry_draft',
+						args: {
+							evidence_name: frm.doc.name
+						},
+						callback: function(r) {
+							if (r.message && r.message.ok) {
+								frappe.show_alert({
+									message: __('Draft Payment Entry {0} prepared successfully.', [r.message.payment_entry]),
+									indicator: 'green'
+								});
+								frm.reload_doc();
+							}
+						}
+					});
+				});
+			} else if (frm.doc.posting_status !== 'Submitted') {
+				frm.add_custom_button(__('Submit Payment Entry'), function() {
+					frappe.confirm(
+						__('Are you sure you want to submit the linked Payment Entry {0}? This will post to the ledger.', [frm.doc.payment_entry]),
+						() => {
+							frappe.call({
+								method: 'retailedge.api.submit_edgepay_payment_entry',
+								args: {
+									evidence_name: frm.doc.name
+								},
+								callback: function(r) {
+									if (r.message && r.message.ok) {
+										frappe.show_alert({
+											message: __('Payment Entry submitted successfully.'),
+											indicator: 'green'
+										});
+										frm.reload_doc();
+									}
+								}
+							});
+						}
+					);
+				});
+			}
+		}
+
+		// 3. Reconciliation Actions
 		if (frm.doc.reconciliation_status === 'Ready' && frm.doc.docstatus === 0) {
 			frm.add_custom_button(__('Create Match Review'), function() {
 				// 1. Fetch candidate bank transactions

@@ -2,6 +2,7 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from unittest.mock import patch
+from edgepayv1.edgepay.tests.utils import DatabaseStateBackup
 from retailedge.services.edgepay_payment_posting import (
 	get_edgepay_evidence_posting_preflight,
 	prepare_edgepay_payment_entry_draft,
@@ -20,6 +21,8 @@ from retailedge.api import (
 
 class TestEdgePayPaymentPosting(FrappeTestCase):
 	def setUp(self):
+		self.db_backup = DatabaseStateBackup()
+		self.db_backup.backup()
 		super(TestEdgePayPaymentPosting, self).setUp()
 		self.original_exists = frappe.db.exists
 		self.original_get_doc = frappe.get_doc
@@ -44,6 +47,7 @@ class TestEdgePayPaymentPosting(FrappeTestCase):
 		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
 		frappe.db.delete("Payment Entry")
 		
+		frappe.db.delete("EdgePay Provider", {"provider_code": "monnify"})
 		# Ensure test role/provider exists
 		if not frappe.db.exists("EdgePay Provider", "Test Posting Provider"):
 			frappe.get_doc({
@@ -76,6 +80,7 @@ class TestEdgePayPaymentPosting(FrappeTestCase):
 			frappe.db.delete("EdgePay Provider", "Test Posting Provider")
 		frappe.db.commit()
 		frappe.set_user("Administrator")
+		self.db_backup.restore()
 		super(TestEdgePayPaymentPosting, self).tearDown()
 
 	def mock_exists(self, *args, **kwargs):

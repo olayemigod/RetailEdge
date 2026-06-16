@@ -2889,10 +2889,14 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 			["Sales Invoice", "Payment Entry", "Stock Entry"],
 		)
 
+	@patch("retailedge.transaction_branch_attribution.frappe.delete_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.db.get_value")
 	@patch("retailedge.transaction_branch_attribution.create_custom_fields")
 	@patch("retailedge.transaction_branch_attribution.has_field")
 	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Sales Invoice"])
-	def test_custom_field_creation_keeps_only_branch_visible(self, _mock_targets, mock_has_field, mock_create_custom_fields):
+	def test_custom_field_creation_keeps_only_branch_visible(
+		self, _mock_targets, mock_has_field, mock_create_custom_fields, mock_get_value, mock_delete_doc
+	):
 		existing_fields = {"retailedge_branch"}
 		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in existing_fields
 		ensure_transaction_branch_custom_fields()
@@ -2905,17 +2909,19 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 		]
 		self.assertEqual(visible_fields, ["retailedge_branch"])
 		self.assertEqual(by_fieldname["retailedge_branch"].get("label"), "RetailEdge Branch")
-		self.assertNotEqual(by_fieldname["retailedge_branch"].get("insert_after"), "retailedge_branch_attribution_section")
-		self.assertEqual(by_fieldname["retailedge_branch_attribution_section"].get("hidden"), 1)
-		self.assertEqual(by_fieldname["retailedge_branch_attribution_section"].get("collapsible"), 0)
+		self.assertNotIn("retailedge_branch_attribution_section", by_fieldname)
 		self.assertEqual(by_fieldname["retailedge_branch_source"].get("hidden"), 1)
 		self.assertEqual(by_fieldname["retailedge_branch_resolved_on"].get("hidden"), 1)
 		self.assertEqual(by_fieldname["retailedge_branch_resolution_note"].get("hidden"), 1)
 
+	@patch("retailedge.transaction_branch_attribution.frappe.delete_doc")
+	@patch("retailedge.transaction_branch_attribution.frappe.db.get_value")
 	@patch("retailedge.transaction_branch_attribution.create_custom_fields")
 	@patch("retailedge.transaction_branch_attribution.has_field", return_value=False)
 	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Stock Entry"])
-	def test_movement_attribution_fields_are_hidden_metadata(self, _mock_targets, _mock_has_field, mock_create_custom_fields):
+	def test_movement_attribution_fields_are_hidden_metadata(
+		self, _mock_targets, _mock_has_field, mock_create_custom_fields, mock_get_value, mock_delete_doc
+	):
 		ensure_transaction_branch_custom_fields()
 		custom_fields = mock_create_custom_fields.call_args.args[0]["Stock Entry"]
 		by_fieldname = {field.get("fieldname"): field for field in custom_fields}
@@ -2925,9 +2931,69 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 			if not field.get("hidden") and field.get("fieldtype") not in {"Section Break", "Column Break"}
 		]
 		self.assertEqual(visible_fields, ["retailedge_branch"])
+		self.assertNotIn("retailedge_branch_attribution_section", by_fieldname)
 		for fieldname in ("retailedge_source_branch", "retailedge_target_branch", "retailedge_warehouse_branch"):
 			self.assertEqual(by_fieldname[fieldname].get("hidden"), 1)
 			self.assertEqual(by_fieldname[fieldname].get("read_only"), 1)
+
+	def test_transaction_fields_visibility_restored(self):
+		# Run ensure_transaction_branch_custom_fields to sync custom fields
+		ensure_transaction_branch_custom_fields()
+
+		# Verify that the custom Section Break has been deleted from the database
+		for doctype in ["Sales Invoice", "Stock Entry"]:
+			cf_exists = frappe.db.exists("Custom Field", {"dt": doctype, "fieldname": "retailedge_branch_attribution_section"})
+			self.assertFalse(cf_exists, f"Section break custom field should not exist for {doctype}")
+
+			# Verify retailedge_branch custom field exists and is visible (hidden = 0)
+			branch_field = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": "retailedge_branch"}, ["fieldname", "hidden"], as_dict=True)
+			self.assertIsNotNone(branch_field)
+			self.assertEqual(branch_field.hidden or 0, 0)
+
+			# Verify technical metadata fields are hidden (hidden = 1) and marked as print_hide, no_copy, read_only
+			metadata_fields = [
+				"retailedge_branch_source",
+				"retailedge_branch_resolved_on",
+				"retailedge_branch_resolution_note"
+			]
+			if doctype == "Stock Entry":
+				metadata_fields.extend(["retailedge_source_branch", "retailedge_target_branch", "retailedge_warehouse_branch"])
+			
+			for fieldname in metadata_fields:
+				field_meta = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": fieldname}, ["fieldname", "hidden", "read_only", "no_copy", "print_hide"], as_dict=True)
+				self.assertIsNotNone(field_meta, f"Metadata field {fieldname} should exist for {doctype}")
+				self.assertEqual(field_meta.hidden, 1, f"Metadata field {fieldname} should be hidden")
+				self.assertEqual(field_meta.read_only, 1, f"Metadata field {fieldname} should be read-only")
+				self.assertEqual(field_meta.no_copy, 1, f"Metadata field {fieldname} should have no_copy enabled")
+				self.assertEqual(field_meta.print_hide, 1, f"Metadata field {fieldname} should have print_hide enabled")
+
+		# Confirm native ERPNext fields remain visible on Stock Entry
+		meta_stock = frappe.get_meta("Stock Entry")
+		for fieldname in ["stock_entry_type", "posting_date"]:
+			field = meta_stock.get_field(fieldname)
+			if field:
+				self.assertEqual(field.hidden or 0, 0, f"Native field {fieldname} on Stock Entry should not be hidden")
+		field_spt = meta_stock.get_field("set_posting_time")
+		if field_spt:
+			self.assertEqual(field_spt.hidden or 0, 0, "set_posting_time on Stock Entry should not be hidden")
+
+		# Confirm native ERPNext fields remain visible on Sales Invoice
+		meta_sales = frappe.get_meta("Sales Invoice")
+		for fieldname in ["posting_date", "posting_time"]:
+			field = meta_sales.get_field(fieldname)
+			if field:
+				self.assertEqual(field.hidden or 0, 0, f"Native field {fieldname} on Sales Invoice should not be hidden")
+		field_spt_sales = meta_sales.get_field("set_posting_time")
+		if field_spt_sales:
+			self.assertEqual(field_spt_sales.hidden or 0, 0, "set_posting_time on Sales Invoice should not be hidden")
+
+		# Confirm no active Property Setter hides the native fields
+		for doctype in ["Sales Invoice", "Stock Entry"]:
+			for fieldname in ["posting_date", "posting_time", "set_posting_time", "stock_entry_type"]:
+				ps = frappe.db.get_value("Property Setter", {"doc_type": doctype, "field_name": fieldname, "property": "hidden"}, "value")
+				if ps:
+					self.assertNotEqual(ps, "1", f"Property Setter should not hide native field {fieldname} on {doctype}")
+
 
 
 	@patch("retailedge.transaction_branch_attribution.has_field", side_effect=lambda doctype, fieldname: fieldname != "retailedge_branch")

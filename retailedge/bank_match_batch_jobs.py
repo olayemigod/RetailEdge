@@ -427,8 +427,12 @@ def _apply_create_result(row, result):
 		row.result_status = "Blocked"
 		row.result_message = _first_reason(result, "already_matched")
 	elif result.get("unsafe_count") or result.get("duplicate_candidate_skipped_count"):
-		row.result_status = "Skipped"
-		row.result_message = _first_reason(result, "unsafe") or _first_reason(result, "duplicate_candidates")
+		reason = _first_reason(result, "unsafe") or _first_reason(result, "duplicate_candidates")
+		if _is_locked_candidate_validation_failure(reason):
+			row.result_status = "Failed"
+		else:
+			row.result_status = "Skipped"
+		row.result_message = reason
 	elif result.get("error_count"):
 		row.result_status = "Failed"
 		row.result_message = _first_reason(result, "errors")
@@ -468,6 +472,11 @@ def _apply_bulk_confirm_result(row, result):
 	else:
 		row.result_status = "Blocked"
 		row.result_message = (result.get("blocked") or [{}])[0].get("reason") or "Not eligible for bulk confirmation."
+
+
+def _is_locked_candidate_validation_failure(reason):
+	reason = cstr(reason).strip()
+	return reason.startswith("Locked candidate") or "Locked Payment Entry candidate" in reason or "Locked Sales Invoice" in reason
 
 
 def _first_reason(result, bucket):
