@@ -2850,3 +2850,478 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 					suggested_document="ACC-PAY-LOCKED"
 				)
 				self.assertIsNone(candidate)
+
+	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_all")
+	@patch("retailedge.bank_transaction_match_workflow.create_or_get_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists")
+	def test_selected_create_review_uses_direct_locked_candidate_validation(
+		self, mock_exists, mock_normalize, mock_create_match, mock_get_all, mock_get_value, mock_find_si, mock_find_pe
+	):
+		mock_find_si.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
+		mock_find_pe.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
+
+		mock_normalize.return_value = {
+			"bank_transaction": "ACC-BTN-1",
+			"company": "Company 1",
+			"branch": "Airport Branch",
+			"bank_account": "Bank Account 1",
+			"transaction_date": "2026-05-23",
+			"amount": 10000.0,
+			"deposit": 10000.0,
+			"withdrawal": 0.0,
+			"reference": "TRF123",
+			"description": "Desc",
+			"status": "Pending",
+			"direction": "Inflow",
+			"is_reconciled": False,
+		}
+
+		def exists_side_effect(dt, name=None, *args, **kwargs):
+			if dt == "RetailEdge Bank Transaction Match":
+				return False
+			return True
+		mock_exists.side_effect = exists_side_effect
+
+		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
+			if doctype == "Bank Transaction":
+				return frappe._dict({
+					"name": "ACC-BTN-1",
+					"status": "Pending",
+					"company": "Company 1",
+					"bank_account": "Bank Account 1",
+					"date": "2026-05-23",
+					"deposit": 10000.0,
+					"withdrawal": 0.0,
+					"reference_number": "TRF123",
+					"description": "Desc"
+				})
+			if doctype == "Payment Entry":
+				return frappe._dict({
+					"name": "PE-1",
+					"docstatus": 1,
+					"posting_date": "2026-05-23",
+					"received_amount": 10000.0,
+					"paid_amount": 0.0,
+					"party": "CUST-1",
+					"party_type": "Customer",
+					"mode_of_payment": "Bank Transfer",
+					"paid_to": "Bank Account 1",
+					"paid_from": "Receivables",
+					"reference_no": "TRF123",
+					"retailedge_branch": "Airport Branch"
+				})
+			if doctype == "RetailEdge Bank Transaction Match":
+				return None
+			return None
+
+		mock_get_value.side_effect = get_value_side_effect
+		mock_get_all.return_value = []
+
+		from retailedge.bank_transaction_match_workflow import create_bank_match_reviews_from_suggestions
+
+		selected_row = {
+			"bank_transaction": "ACC-BTN-1",
+			"candidate_doctype": "Payment Entry",
+			"candidate_name": "PE-1",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "PE-1",
+			"payment_reference": "TRF123",
+			"payment_account": "Bank Account 1"
+		}
+
+		result = create_bank_match_reviews_from_suggestions(
+			rows=[selected_row]
+		)
+
+		mock_find_si.assert_not_called()
+		mock_find_pe.assert_not_called()
+		mock_create_match.assert_called_once()
+		called_kwargs = mock_create_match.call_args[1]
+		self.assertEqual(called_kwargs.get("allow_fallback"), False)
+
+	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_all")
+	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists")
+	def test_selected_create_review_does_not_search_alternate_candidate(
+		self, mock_exists, mock_normalize, mock_get_all, mock_get_value, mock_find_si, mock_find_pe
+	):
+		mock_find_si.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
+		mock_find_pe.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
+
+		mock_normalize.return_value = {
+			"bank_transaction": "ACC-BTN-1",
+			"company": "Company 1",
+			"branch": "Airport Branch",
+			"bank_account": "Bank Account 1",
+			"transaction_date": "2026-05-23",
+			"amount": 10000.0,
+			"deposit": 10000.0,
+			"withdrawal": 0.0,
+			"reference": "TRF123",
+			"description": "Desc",
+			"status": "Pending",
+			"direction": "Inflow",
+			"is_reconciled": False,
+		}
+
+		def exists_side_effect(dt, name=None, *args, **kwargs):
+			if dt == "RetailEdge Bank Transaction Match":
+				return False
+			return True
+		mock_exists.side_effect = exists_side_effect
+
+		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
+			if doctype == "Bank Transaction":
+				return frappe._dict({
+					"name": "ACC-BTN-1",
+					"status": "Pending",
+					"company": "Company 1",
+					"bank_account": "Bank Account 1",
+					"date": "2026-05-23",
+					"deposit": 10000.0,
+					"withdrawal": 0.0,
+					"reference_number": "TRF123",
+					"description": "Desc"
+				})
+			if doctype == "Payment Entry":
+				return frappe._dict({
+					"name": "PE-1",
+					"docstatus": 0, # Draft PE is invalid
+					"posting_date": "2026-05-23",
+					"received_amount": 10000.0,
+					"paid_amount": 0.0,
+					"party": "CUST-1",
+					"party_type": "Customer",
+					"mode_of_payment": "Bank Transfer",
+					"paid_to": "Bank Account 1",
+					"paid_from": "Receivables",
+					"reference_no": "TRF123",
+					"retailedge_branch": "Airport Branch"
+				})
+			if doctype == "RetailEdge Bank Transaction Match":
+				return None
+			return None
+
+		mock_get_value.side_effect = get_value_side_effect
+		mock_get_all.return_value = []
+
+		from retailedge.bank_transaction_match_workflow import create_bank_match_reviews_from_suggestions
+
+		selected_row = {
+			"bank_transaction": "ACC-BTN-1",
+			"candidate_doctype": "Payment Entry",
+			"candidate_name": "PE-1",
+			"suggested_document_type": "Payment Entry",
+			"suggested_document": "PE-1",
+			"payment_reference": "TRF123",
+			"payment_account": "Bank Account 1"
+		}
+
+		result = create_bank_match_reviews_from_suggestions(
+			rows=[selected_row]
+		)
+
+		self.assertEqual(result["created_count"], 0)
+		self.assertEqual(result["unsafe_count"], 1)
+		self.assertIn("PE-1 is not submitted", result["unsafe"][0]["reason"])
+
+		mock_find_si.assert_not_called()
+		mock_find_pe.assert_not_called()
+
+	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_all")
+	@patch("retailedge.bank_transaction_match_workflow.create_or_get_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists")
+	def test_selected_sales_invoice_payment_row_uses_direct_validation(
+		self, mock_exists, mock_normalize, mock_create_match, mock_get_all, mock_get_value, mock_find_si, mock_find_pe
+	):
+		mock_find_si.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
+		mock_find_pe.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
+
+		mock_normalize.return_value = {
+			"bank_transaction": "ACC-BTN-1",
+			"company": "Company 1",
+			"branch": "Airport Branch",
+			"bank_account": "Bank Account 1",
+			"transaction_date": "2026-05-23",
+			"amount": 5000.0,
+			"deposit": 5000.0,
+			"withdrawal": 0.0,
+			"reference": "TRF123",
+			"description": "Desc",
+			"status": "Pending",
+			"direction": "Inflow",
+			"is_reconciled": False,
+		}
+
+		def exists_side_effect(dt, name=None, *args, **kwargs):
+			if dt == "RetailEdge Bank Transaction Match":
+				return False
+			return True
+		mock_exists.side_effect = exists_side_effect
+
+		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
+			if doctype == "Bank Transaction":
+				return frappe._dict({
+					"name": "ACC-BTN-1",
+					"status": "Pending",
+					"company": "Company 1",
+					"bank_account": "Bank Account 1",
+					"date": "2026-05-23",
+					"deposit": 5000.0,
+					"withdrawal": 0.0,
+					"reference_number": "TRF123",
+					"description": "Desc"
+				})
+			if doctype == "Sales Invoice":
+				return frappe._dict({
+					"name": "SINV-1",
+					"docstatus": 1,
+					"posting_date": "2026-05-23",
+					"grand_total": 5000.0,
+					"outstanding_amount": 0.0,
+					"retailedge_branch": "Airport Branch"
+				})
+			if doctype == "RetailEdge Bank Transaction Match":
+				return None
+			return None
+
+		mock_get_value.side_effect = get_value_side_effect
+		mock_get_all.return_value = [
+			frappe._dict({
+				"idx": 1,
+				"mode_of_payment": "POS",
+				"account": "Bank Account 1",
+				"amount": 5000.0
+			})
+		]
+
+		from retailedge.bank_transaction_match_workflow import create_bank_match_reviews_from_suggestions
+
+		selected_row = {
+			"bank_transaction": "ACC-BTN-1",
+			"candidate_doctype": "Sales Invoice",
+			"candidate_name": "SINV-1",
+			"suggested_document_type": "Sales Invoice",
+			"suggested_document": "SINV-1",
+			"payment_event_found": 1,
+			"payment_row_index": 1,
+			"payment_row_amount": 5000.0,
+			"mode_of_payment": "POS",
+			"payment_account": "Bank Account 1"
+		}
+
+		result = create_bank_match_reviews_from_suggestions(
+			rows=[selected_row]
+		)
+
+		mock_find_si.assert_not_called()
+		mock_find_pe.assert_not_called()
+		mock_create_match.assert_called_once()
+		called_kwargs = mock_create_match.call_args[1]
+		self.assertEqual(called_kwargs.get("allow_fallback"), False)
+
+	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_all")
+	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists")
+	def test_selected_context_only_sales_invoice_blocks_without_search(
+		self, mock_exists, mock_normalize, mock_get_all, mock_get_value, mock_find_si, mock_find_pe
+	):
+		mock_find_si.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
+		mock_find_pe.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
+
+		mock_normalize.return_value = {
+			"bank_transaction": "ACC-BTN-1",
+			"company": "Company 1",
+			"branch": "Airport Branch",
+			"bank_account": "Bank Account 1",
+			"transaction_date": "2026-05-23",
+			"amount": 5000.0,
+			"deposit": 5000.0,
+			"withdrawal": 0.0,
+			"reference": "TRF123",
+			"description": "Desc",
+			"status": "Pending",
+			"direction": "Inflow",
+			"is_reconciled": False,
+		}
+
+		def exists_side_effect(dt, name=None, *args, **kwargs):
+			if dt == "RetailEdge Bank Transaction Match":
+				return False
+			return True
+		mock_exists.side_effect = exists_side_effect
+
+		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
+			if doctype == "Bank Transaction":
+				return frappe._dict({
+					"name": "ACC-BTN-1",
+					"status": "Pending",
+					"company": "Company 1",
+					"bank_account": "Bank Account 1",
+					"date": "2026-05-23",
+					"deposit": 5000.0,
+					"withdrawal": 0.0,
+					"reference_number": "TRF123",
+					"description": "Desc"
+				})
+			if doctype == "Sales Invoice":
+				return frappe._dict({
+					"name": "SINV-1",
+					"docstatus": 1,
+					"posting_date": "2026-05-23",
+					"grand_total": 5000.0,
+					"outstanding_amount": 5000.0,
+					"retailedge_branch": "Airport Branch"
+				})
+			if doctype == "RetailEdge Bank Transaction Match":
+				return None
+			return None
+
+		mock_get_value.side_effect = get_value_side_effect
+		mock_get_all.return_value = []
+
+		from retailedge.bank_transaction_match_workflow import create_bank_match_reviews_from_suggestions
+
+		selected_row = {
+			"bank_transaction": "ACC-BTN-1",
+			"candidate_doctype": "Sales Invoice",
+			"candidate_name": "SINV-1",
+			"suggested_document_type": "Sales Invoice",
+			"suggested_document": "SINV-1",
+			"payment_event_found": 0,
+			"payment_row_index": 0
+		}
+
+		result = create_bank_match_reviews_from_suggestions(
+			rows=[selected_row]
+		)
+
+		self.assertEqual(result["created_count"], 0)
+		self.assertEqual(result["unsafe_count"], 1)
+		self.assertIn("context-only", result["unsafe"][0]["reason"])
+
+		mock_find_si.assert_not_called()
+		mock_find_pe.assert_not_called()
+
+	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_all")
+	@patch("retailedge.bank_transaction_match_workflow.create_or_get_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists")
+	def test_selected_auto_match_does_not_run_broad_candidate_discovery(
+		self, mock_exists, mock_normalize, mock_create_match, mock_get_all, mock_get_value, mock_find_si, mock_find_pe
+	):
+		mock_find_si.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
+		mock_find_pe.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
+
+		mock_normalize.return_value = {
+			"bank_transaction": "ACC-BTN-1",
+			"company": "Company 1",
+			"branch": "Airport Branch",
+			"bank_account": "Bank Account 1",
+			"transaction_date": "2026-05-23",
+			"amount": 10000.0,
+			"deposit": 10000.0,
+			"withdrawal": 0.0,
+			"reference": "TRF123",
+			"description": "Desc",
+			"status": "Pending",
+			"direction": "Inflow",
+			"is_reconciled": False,
+		}
+
+		def exists_side_effect(dt, name=None, *args, **kwargs):
+			if dt == "RetailEdge Bank Transaction Match":
+				return False
+			return True
+		mock_exists.side_effect = exists_side_effect
+
+		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
+			if doctype == "Bank Transaction":
+				return frappe._dict({
+					"name": "ACC-BTN-1",
+					"status": "Pending",
+					"company": "Company 1",
+					"bank_account": "Bank Account 1",
+					"date": "2026-05-23",
+					"deposit": 10000.0,
+					"withdrawal": 0.0,
+					"reference_number": "TRF123",
+					"description": "Desc"
+				})
+			if doctype == "Payment Entry":
+				return frappe._dict({
+					"name": "PE-1",
+					"docstatus": 1,
+					"posting_date": "2026-05-23",
+					"received_amount": 10000.0,
+					"paid_amount": 0.0,
+					"party": "CUST-1",
+					"party_type": "Customer",
+					"mode_of_payment": "Bank Transfer",
+					"paid_to": "Bank Account 1",
+					"paid_from": "Receivables",
+					"reference_no": "TRF123",
+					"retailedge_branch": "Airport Branch"
+				})
+			if doctype == "RetailEdge Bank Transaction Match":
+				return None
+			return None
+
+		mock_get_value.side_effect = get_value_side_effect
+		mock_get_all.return_value = []
+
+		with patch("retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings") as mock_settings:
+			mock_settings.return_value = {
+				"enable_bank_auto_match": 1,
+				"auto_prepare_exact_bank_matches": 1,
+				"auto_confirm_exact_bank_matches": 1,
+				"minimum_auto_match_score": 95,
+				"require_exact_reference_for_auto_match": 1,
+				"require_same_bank_account_for_auto_match": 1,
+				"require_same_branch_for_auto_match": 0,
+				"allow_auto_match_payment_entry": 1,
+				"allow_auto_match_sales_invoice": 1,
+				"require_no_duplicate_candidate_for_auto_match": 1,
+				"require_no_active_review_for_auto_match": 1,
+			}
+
+			from retailedge.bank_transaction_match_workflow import run_bank_transaction_auto_match
+
+			selected_row = {
+				"bank_transaction": "ACC-BTN-1",
+				"candidate_doctype": "Payment Entry",
+				"candidate_name": "PE-1",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "PE-1",
+				"payment_reference": "TRF123",
+				"payment_account": "Bank Account 1",
+				"match_score": 99,
+				"match_confidence": "Strong Match"
+			}
+
+			result = run_bank_transaction_auto_match(
+				rows=[selected_row]
+			)
+
+			mock_find_si.assert_not_called()
+			mock_find_pe.assert_not_called()
+			mock_create_match.assert_called_once()
+			called_kwargs = mock_create_match.call_args[1]
+			self.assertEqual(called_kwargs.get("allow_fallback"), False)

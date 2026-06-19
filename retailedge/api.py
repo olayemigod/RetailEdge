@@ -590,6 +590,7 @@ def create_or_get_bank_transaction_match(
 	payment_entry=None,
 	source_report="Bank Transaction Matching",
 	force_refresh=False,
+	allow_fallback=True,
 ):
 	_assert_can_manage_bank_transaction_match()
 	return _create_or_get_bank_transaction_match(
@@ -600,6 +601,7 @@ def create_or_get_bank_transaction_match(
 		payment_entry=payment_entry,
 		source_report=source_report,
 		force_refresh=bool(int(force_refresh)) if isinstance(force_refresh, str) else bool(force_refresh),
+		allow_fallback=bool(int(allow_fallback)) if isinstance(allow_fallback, str) else bool(allow_fallback),
 	)
 
 
@@ -612,6 +614,7 @@ def create_bank_transaction_match_from_suggestion(
 	payment_entry=None,
 	source_report="Bank Transaction Matching",
 	force_refresh=False,
+	allow_fallback=True,
 ):
 	return create_or_get_bank_transaction_match(
 		bank_transaction_name=bank_transaction_name,
@@ -621,6 +624,7 @@ def create_bank_transaction_match_from_suggestion(
 		payment_entry=payment_entry,
 		source_report=source_report,
 		force_refresh=force_refresh,
+		allow_fallback=allow_fallback,
 	)
 
 

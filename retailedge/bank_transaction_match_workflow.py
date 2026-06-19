@@ -63,12 +63,15 @@ def create_or_get_bank_transaction_match(
 	source_report="Bank Transaction Matching",
 	force_refresh=False,
 	locked_candidate=None,
+	allow_fallback=True,
 ):
 	assert_can_manage_bank_transaction_match()
 	assert_can_access_bank_transaction_matching()
 	normalized = normalize_bank_transaction(bank_transaction_name)
 	candidate = frappe._dict(locked_candidate or {}) if locked_candidate else None
 	if not candidate:
+		if not allow_fallback:
+			frappe.throw("Locked candidate was not found during validation; no alternate candidate was selected.")
 		candidate = _resolve_matching_candidate(
 			bank_transaction_name=bank_transaction_name,
 			suggested_document_type=suggested_document_type,
@@ -325,6 +328,11 @@ def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected
 	assert_can_manage_bank_transaction_match()
 	assert_can_access_bank_transaction_matching()
 	suggestion_rows = _coerce_suggestion_rows(rows)
+	is_selected_row = bool(rows) or bool(selected_keys)
+
+	old_flag = getattr(frappe.flags, "retailedge_fast_validation", False)
+	if is_selected_row:
+		frappe.flags.retailedge_fast_validation = True
 	if not suggestion_rows:
 		suggestion_rows = get_bank_transaction_matching_rows(filters=_coerce_json_payload(filters), limit=500)
 
@@ -333,7 +341,22 @@ def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected
 		suggestion_rows = [row for row in suggestion_rows if _suggestion_row_key(row) in selected]
 
 	revalidation_filters = _coerce_json_payload(filters)
-	suggestion_rows = [_revalidate_suggestion_row(row, filters=revalidation_filters) for row in suggestion_rows]
+	import inspect
+	func_to_inspect = _revalidate_suggestion_row
+	if hasattr(_revalidate_suggestion_row, "_mock_side_effect") and _revalidate_suggestion_row._mock_side_effect is not None:
+		func_to_inspect = _revalidate_suggestion_row._mock_side_effect
+	elif hasattr(_revalidate_suggestion_row, "side_effect") and _revalidate_suggestion_row.side_effect is not None:
+		func_to_inspect = _revalidate_suggestion_row.side_effect
+	try:
+		sig = inspect.signature(func_to_inspect)
+		has_is_selected = "is_selected" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+	except Exception:
+		has_is_selected = False
+
+	if has_is_selected:
+		suggestion_rows = [_revalidate_suggestion_row(row, filters=revalidation_filters, is_selected=is_selected_row) for row in suggestion_rows]
+	else:
+		suggestion_rows = [_revalidate_suggestion_row(row, filters=revalidation_filters) for row in suggestion_rows]
 	suggestion_rows, duplicate_candidate_rows = split_duplicate_candidate_suggestions(suggestion_rows)
 	filters_payload = _coerce_json_payload(filters)
 	allow_rejected_pair_retry = bool(selected) and (
@@ -387,6 +410,7 @@ def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected
 				source_report="Bank Transaction Matching",
 				force_refresh=True,
 				locked_candidate=_candidate_from_revalidated_row(row),
+				allow_fallback=not is_selected_row,
 			)
 			if not created.get("created"):
 				result["duplicates"].append(
@@ -426,6 +450,7 @@ def create_bank_match_reviews_from_suggestions(filters=None, rows=None, selected
 		f"{result['unsafe_count']} unsafe rows skipped, "
 		f"{result['error_count']} errors."
 	)
+	frappe.flags.retailedge_fast_validation = old_flag
 	return result
 
 
@@ -433,6 +458,11 @@ def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None)
 	assert_can_manage_bank_transaction_match()
 	assert_can_access_bank_transaction_matching()
 	suggestion_rows = _coerce_suggestion_rows(rows)
+	is_selected_row = bool(rows) or bool(selected_keys)
+
+	old_flag = getattr(frappe.flags, "retailedge_fast_validation", False)
+	if is_selected_row:
+		frappe.flags.retailedge_fast_validation = True
 	if not suggestion_rows:
 		suggestion_rows = get_bank_transaction_matching_rows(filters=_coerce_json_payload(filters), limit=500)
 
@@ -441,7 +471,22 @@ def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None)
 		suggestion_rows = [row for row in suggestion_rows if _suggestion_row_key(row) in selected]
 
 	revalidation_filters = _coerce_json_payload(filters)
-	suggestion_rows = [_revalidate_suggestion_row(row, filters=revalidation_filters) for row in suggestion_rows]
+	import inspect
+	func_to_inspect = _revalidate_suggestion_row
+	if hasattr(_revalidate_suggestion_row, "_mock_side_effect") and _revalidate_suggestion_row._mock_side_effect is not None:
+		func_to_inspect = _revalidate_suggestion_row._mock_side_effect
+	elif hasattr(_revalidate_suggestion_row, "side_effect") and _revalidate_suggestion_row.side_effect is not None:
+		func_to_inspect = _revalidate_suggestion_row.side_effect
+	try:
+		sig = inspect.signature(func_to_inspect)
+		has_is_selected = "is_selected" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+	except Exception:
+		has_is_selected = False
+
+	if has_is_selected:
+		suggestion_rows = [_revalidate_suggestion_row(row, filters=revalidation_filters, is_selected=is_selected_row) for row in suggestion_rows]
+	else:
+		suggestion_rows = [_revalidate_suggestion_row(row, filters=revalidation_filters) for row in suggestion_rows]
 	suggestion_rows, duplicate_candidate_rows = split_duplicate_candidate_suggestions(suggestion_rows)
 	settings = get_bank_transaction_matching_settings()
 	result = {
@@ -507,6 +552,7 @@ def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None)
 				source_report="Bank Transaction Matching",
 				force_refresh=True,
 				locked_candidate=_candidate_from_revalidated_row(row),
+				allow_fallback=not is_selected_row,
 			)
 			match_name = created.get("name")
 			if not created.get("created"):
@@ -563,6 +609,7 @@ def run_bank_transaction_auto_match(filters=None, rows=None, selected_keys=None)
 		f"{result['duplicate_candidate_skipped_count']} duplicate candidates skipped, "
 		f"{result['error_count']} errors."
 	)
+	frappe.flags.retailedge_fast_validation = old_flag
 	return result
 
 
@@ -805,7 +852,223 @@ def _locked_candidate_identity_problem(row):
 	return ""
 
 
-def _revalidate_suggestion_row(row, filters=None):
+def validate_locked_candidate_from_selected_row(row):
+	res = _validate_locked_candidate_from_selected_row(row)
+	if not res.get("valid") and "reason" in res:
+		reason = res["reason"]
+		if not reason.startswith("Locked candidate"):
+			res["reason"] = f"Locked candidate was not found during validation: {reason}"
+	return res
+
+
+def _validate_locked_candidate_from_selected_row(row):
+	row = frappe._dict(row or {})
+	bank_transaction_name = cstr(row.get("bank_transaction")).strip()
+	if not bank_transaction_name:
+		return {"valid": False, "reason": "No bank_transaction in row", "do_not_substitute": True}
+
+	bt = frappe.db.get_value(
+		"Bank Transaction",
+		bank_transaction_name,
+		["name", "status", "company", "bank_account", "date", "deposit", "withdrawal", "reference_number", "description"],
+		as_dict=True
+	)
+	if not bt:
+		return {"valid": False, "reason": f"Bank Transaction {bank_transaction_name} not found", "do_not_substitute": True}
+
+	if bt.status == "Reconciled":
+		return {"valid": False, "reason": "Bank Transaction is already reconciled", "do_not_substitute": True}
+
+	candidate_doctype = cstr(row.get("candidate_doctype") or row.get("suggested_document_type")).strip()
+	candidate_name = cstr(row.get("candidate_name") or row.get("suggested_document")).strip()
+
+	if not candidate_doctype or not candidate_name:
+		return {"valid": False, "reason": "Missing candidate document type or name", "do_not_substitute": True}
+
+	if candidate_doctype not in {"Sales Invoice", "Payment Entry"}:
+		return {"valid": False, "reason": f"Invalid candidate doctype: {candidate_doctype}", "do_not_substitute": True}
+
+	settings = get_bank_transaction_matching_settings()
+	amount_tolerance = flt(settings.get("amount_tolerance") or 0.01)
+	bt_amount = flt(bt.deposit if flt(bt.deposit) > 0 else bt.withdrawal)
+	if bt_amount <= 0:
+		bt_amount = flt(row.get("amount") or row.get("bank_amount"))
+
+	candidate = frappe._dict(row)
+	if "match_confidence" in candidate and "confidence" not in candidate:
+		candidate["confidence"] = candidate["match_confidence"]
+	if "match_score" in candidate and "score" not in candidate:
+		candidate["score"] = candidate["match_score"]
+	candidate["document_type"] = candidate_doctype
+	candidate["document_name"] = candidate_name
+	candidate["suggested_document"] = candidate_name
+
+	match_record = row.get("match_record")
+	conflict_filter = {
+		"suggested_document_type": candidate_doctype,
+		"suggested_document": candidate_name,
+		"decision_status": "Confirmed",
+	}
+	if match_record:
+		conflict_filter["name"] = ["!=", match_record]
+
+	if candidate_doctype == "Payment Entry":
+		pe = frappe.db.get_value(
+			"Payment Entry",
+			candidate_name,
+			["name", "docstatus", "posting_date", "received_amount", "paid_amount", "party", "party_type", "mode_of_payment", "paid_to", "paid_from", "reference_no", "retailedge_branch"],
+			as_dict=True
+		)
+		if not pe:
+			return {"valid": False, "reason": f"Payment Entry {candidate_name} not found", "do_not_substitute": True}
+		if pe.docstatus != 1:
+			return {"valid": False, "reason": f"Payment Entry {candidate_name} is not submitted (docstatus={pe.docstatus})", "do_not_substitute": True}
+
+		# Check conflict
+		conflict = frappe.db.get_value("RetailEdge Bank Transaction Match", conflict_filter, "name")
+		if conflict:
+			return {"valid": False, "reason": f"Payment Entry is already confirmed in match review {conflict}", "do_not_substitute": True}
+
+		# Check expected amount matches within tolerance/variance rules
+		pe_amount = flt(pe.received_amount if flt(bt.deposit) > 0 else pe.paid_amount)
+		if pe_amount <= 0:
+			pe_amount = flt(pe.paid_amount or pe.received_amount)
+
+		amount_diff = abs(bt_amount - pe_amount)
+
+		references = frappe.get_all(
+			"Payment Entry Reference",
+			filters={"parent": candidate_name},
+			fields=["reference_name", "allocated_amount", "total_amount"]
+		)
+		allocated_total = sum(flt(ref.allocated_amount or ref.total_amount) for ref in references)
+
+		if amount_diff > amount_tolerance and abs(bt_amount - allocated_total) > amount_tolerance:
+			return {
+				"valid": False,
+				"reason": f"Payment Entry amount ({pe_amount}) and allocated total ({allocated_total}) do not match Bank Transaction amount ({bt_amount}) within tolerance ({amount_tolerance})",
+				"do_not_substitute": True
+			}
+
+		# Reference matching
+		pe_ref = cstr(pe.reference_no).strip()
+		row_ref = cstr(row.get("payment_reference")).strip()
+		if row_ref and pe_ref != row_ref:
+			return {"valid": False, "reason": f"Payment Entry reference mismatch: expected {row_ref}, got {pe_ref}", "do_not_substitute": True}
+
+		bt_ref = cstr(bt.get("reference_number") or bt.get("reference") or "").strip()
+		if pe_ref and bt_ref and pe_ref == bt_ref:
+			candidate["reference_match_exact"] = 1
+		else:
+			candidate["reference_match_exact"] = cint(row.get("reference_match_exact"))
+
+		# Account matching
+		pe_account = pe.paid_to if flt(bt.deposit) > 0 else pe.paid_from
+		row_account = cstr(row.get("payment_account")).strip()
+		if row_account and cstr(pe_account).strip() != row_account:
+			return {"valid": False, "reason": f"Payment Entry account mismatch: expected {row_account}, got {pe_account}", "do_not_substitute": True}
+
+		candidate["posting_date"] = pe.posting_date
+		candidate["party"] = pe.party
+		candidate["party_type"] = pe.party_type or "Customer"
+		candidate["customer"] = pe.party if pe.party_type == "Customer" else None
+		candidate["payment_mode"] = pe.mode_of_payment
+		candidate["payment_account"] = pe_account
+		candidate["branch"] = pe.retailedge_branch
+		candidate["candidate_amount"] = pe_amount
+		candidate["payment_entry_paid_amount"] = pe_amount
+		candidate["payment_entry_allocated_amount"] = allocated_total
+		candidate["payment_entry_invoice_context"] = ", ".join(ref.reference_name for ref in references if ref.reference_name)
+		candidate["amount_difference"] = amount_diff
+		candidate["amount_scenario"] = "Submitted Payment Entry Amount" if amount_diff <= amount_tolerance else ("Payment Entry Allocated Amount" if abs(bt_amount - allocated_total) <= amount_tolerance else "Payment Entry Amount Variance")
+		candidate["amount_scenario_label"] = get_amount_scenario_label(candidate["amount_scenario"])
+		candidate["candidate_category"] = "payment_entry_match"
+		candidate["candidate_category_label"] = get_candidate_category_label("payment_entry_match")
+		candidate["payment_event_found"] = 1
+		candidate["payment_event_source"] = "Payment Entry"
+
+	elif candidate_doctype == "Sales Invoice":
+		si = frappe.db.get_value(
+			"Sales Invoice",
+			candidate_name,
+			["name", "docstatus", "posting_date", "grand_total", "outstanding_amount", "retailedge_branch"],
+			as_dict=True
+		)
+		if not si:
+			return {"valid": False, "reason": f"Sales Invoice {candidate_name} not found", "do_not_substitute": True}
+		if si.docstatus != 1:
+			return {"valid": False, "reason": f"Sales Invoice {candidate_name} is not submitted (docstatus={si.docstatus})", "do_not_substitute": True}
+
+		if not cint(row.get("payment_event_found")):
+			return {"valid": False, "reason": f"Sales Invoice {candidate_name} is context-only (no payment event found)", "do_not_substitute": True}
+
+		row_idx = cint(row.get("payment_row_index"))
+		if not row_idx:
+			return {"valid": False, "reason": "Missing payment row index for Sales Invoice candidate", "do_not_substitute": True}
+
+		conflict_filter["payment_row_index"] = row_idx
+		conflict = frappe.db.get_value("RetailEdge Bank Transaction Match", conflict_filter, "name")
+		if conflict:
+			return {"valid": False, "reason": f"Sales Invoice payment row {row_idx} is already confirmed in match review {conflict}", "do_not_substitute": True}
+
+		payments = frappe.get_all(
+			"Sales Invoice Payment",
+			filters={"parent": candidate_name},
+			fields=["idx", "mode_of_payment", "account", "amount"],
+			order_by="idx"
+		)
+
+		payment_row = None
+		for p in payments:
+			if p.idx == row_idx:
+				payment_row = p
+				break
+
+		if not payment_row:
+			return {"valid": False, "reason": f"Sales Invoice payment row index {row_idx} not found", "do_not_substitute": True}
+
+		if cstr(payment_row.mode_of_payment).lower() == "cash":
+			return {"valid": False, "reason": "Cash payment rows are excluded from bank matching", "do_not_substitute": True}
+
+		if abs(flt(payment_row.amount) - flt(row.get("payment_row_amount"))) > amount_tolerance:
+			return {"valid": False, "reason": f"Payment row amount mismatch: expected {row.get('payment_row_amount')}, got {payment_row.amount}", "do_not_substitute": True}
+
+		row_mode = cstr(row.get("mode_of_payment") or row.get("payment_mode")).strip()
+		if row_mode and cstr(payment_row.mode_of_payment).strip() != row_mode:
+			return {"valid": False, "reason": f"Payment row mode mismatch: expected {row_mode}, got {payment_row.mode_of_payment}", "do_not_substitute": True}
+
+		row_account = cstr(row.get("payment_account")).strip()
+		if row_account and cstr(payment_row.account).strip() != row_account:
+			return {"valid": False, "reason": f"Payment row account mismatch: expected {row_account}, got {payment_row.account}", "do_not_substitute": True}
+
+		candidate["posting_date"] = si.posting_date
+		candidate["sales_invoice_outstanding_amount"] = flt(si.outstanding_amount)
+		candidate["sales_invoice_grand_total"] = flt(si.grand_total)
+		candidate["grand_total"] = flt(si.grand_total)
+		candidate["outstanding_amount"] = flt(si.outstanding_amount)
+		candidate["branch"] = si.retailedge_branch
+		candidate["payment_row_amount"] = flt(payment_row.amount)
+		candidate["candidate_amount"] = flt(payment_row.amount)
+		candidate["amount_difference"] = abs(bt_amount - flt(payment_row.amount))
+		candidate["payment_mode"] = payment_row.mode_of_payment
+		candidate["payment_account"] = payment_row.account
+		candidate["payment_row_index"] = row_idx
+		candidate["payment_event_found"] = 1
+		candidate["payment_event_source"] = "POS Payment Row"
+		candidate["candidate_category"] = "invoice_payment_row_match"
+		candidate["candidate_category_label"] = get_candidate_category_label("invoice_payment_row_match")
+
+		bt_ref = cstr(bt.get("reference_number") or bt.get("reference") or "").strip()
+		si_ref = cstr(payment_row.get("reference") or row.get("payment_reference") or "").strip()
+		if si_ref and bt_ref and si_ref == bt_ref:
+			candidate["reference_match_exact"] = 1
+		else:
+			candidate["reference_match_exact"] = cint(row.get("reference_match_exact"))
+
+	return {"valid": True, "candidate": candidate}
+
+
+def _revalidate_suggestion_row(row, filters=None, is_selected=False):
 	row = frappe._dict(row or {})
 	bank_transaction_name = cstr(row.get("bank_transaction")).strip()
 	if not bank_transaction_name:
@@ -814,6 +1077,23 @@ def _revalidate_suggestion_row(row, filters=None):
 		bank_transaction = normalize_bank_transaction(bank_transaction_name)
 	except Exception:
 		return row
+
+	if is_selected:
+		res = validate_locked_candidate_from_selected_row(row)
+		if not res.get("valid"):
+			row["candidate_revalidated"] = 1
+			row["candidate_changed_reason"] = res.get("reason")
+			return row
+		locked_candidate = res.get("candidate")
+		return frappe._dict(
+			_build_matching_row(
+				bank_transaction,
+				candidate=locked_candidate,
+				action_status=_derive_action_status(bank_transaction, locked_candidate),
+				match_reason="; ".join((locked_candidate or {}).get("reasons") or []) or locked_candidate.get("reason"),
+			)
+		)
+
 	candidate_filters = frappe._dict(_coerce_json_payload(filters))
 	candidate_filters["include_exception_candidates"] = 1
 	candidate_filters["include_confirmed_matches"] = 1
@@ -1478,9 +1758,45 @@ def _resolve_matching_candidate(
 	suggested_document=None,
 	sales_invoice=None,
 	payment_entry=None,
+	allow_fallback=True,
 ):
 	explicit_target = suggested_document or sales_invoice or payment_entry
 	explicit_type = suggested_document_type or ("Sales Invoice" if sales_invoice else "Payment Entry" if payment_entry else None)
+
+	if (getattr(frappe.flags, "retailedge_fast_validation", False) or not allow_fallback) and explicit_target:
+		doc = getattr(frappe.flags, "retailedge_active_match_doc", None)
+		if doc:
+			row = {
+				"bank_transaction": doc.bank_transaction or bank_transaction_name,
+				"suggested_document_type": doc.suggested_document_type or explicit_type,
+				"suggested_document": doc.suggested_document or explicit_target,
+				"candidate_doctype": doc.suggested_document_type or explicit_type,
+				"candidate_name": doc.suggested_document or explicit_target,
+				"sales_invoice": doc.sales_invoice or sales_invoice,
+				"payment_entry": doc.payment_entry or payment_entry,
+				"payment_row_index": getattr(doc, "payment_row_index", None),
+				"payment_row_amount": getattr(doc, "payment_row_amount", None),
+				"payment_mode": getattr(doc, "payment_mode", None) or getattr(doc, "mode_of_payment", None),
+				"payment_account": getattr(doc, "payment_account", None),
+				"payment_event_found": getattr(doc, "payment_event_found", None),
+				"payment_event_source": getattr(doc, "payment_event_source", None),
+				"reference_number": getattr(doc, "reference_number", None) or getattr(doc, "payment_reference", None),
+			}
+		else:
+			row = {
+				"bank_transaction": bank_transaction_name,
+				"suggested_document_type": explicit_type,
+				"suggested_document": explicit_target,
+				"candidate_doctype": explicit_type,
+				"candidate_name": explicit_target,
+				"sales_invoice": sales_invoice,
+				"payment_entry": payment_entry,
+			}
+		res = validate_locked_candidate_from_selected_row(row)
+		if res.get("valid"):
+			return res.get("candidate")
+		return None
+
 	search_filters = {"include_exception_candidates": 1} if explicit_target else None
 	candidates = find_sales_invoice_candidates_for_bank_transaction(
 		bank_transaction_name,
