@@ -1544,11 +1544,12 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertTrue(summary)
 
 	def test_report_columns_put_decision_fields_first(self):
-		labels = [column["label"] for column in get_columns()[:13]]
+		labels = [column["label"] for column in get_columns()[:14]]
 		self.assertEqual(
 			labels,
 			[
-				"Date",
+				"Bank Transaction Date",
+				"Candidate Date",
 				"Branch",
 				"Bank Amount",
 				"SI/PE Amount",
@@ -3325,3 +3326,93 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			mock_create_match.assert_called_once()
 			called_kwargs = mock_create_match.call_args[1]
 			self.assertEqual(called_kwargs.get("allow_fallback"), False)
+
+	def test_report_columns_include_date_visibility(self):
+		# 1. Verify get_columns returns the correct columns
+		columns = get_columns()
+		labels = [col.get("label") for col in columns]
+		fieldnames = [col.get("fieldname") for col in columns]
+
+		self.assertIn("Bank Transaction Date", labels)
+		self.assertIn("Candidate Date", labels)
+		self.assertIn("transaction_date", fieldnames)
+		self.assertIn("candidate_date", fieldnames)
+
+		# 2. Verify PE row building populates date fields
+		bank_transaction = frappe._dict({
+			"bank_transaction": "ACC-BTN-X",
+			"transaction_date": "2026-06-19",
+			"amount": 1000.0,
+			"direction": "Inflow"
+		})
+		pe_candidate = frappe._dict({
+			"document_type": "Payment Entry",
+			"document_name": "ACC-PE-X",
+			"posting_date": "2026-06-18",
+			"candidate_amount": 1000.0,
+			"confidence": "Strong Match",
+			"score": 99,
+			"reference": "REF1"
+		})
+
+		pe_row = _build_matching_row(bank_transaction, pe_candidate)
+		self.assertEqual(pe_row.get("transaction_date"), "2026-06-19")
+		self.assertEqual(pe_row.get("bank_transaction_date"), "2026-06-19")
+		self.assertEqual(pe_row.get("candidate_date"), "2026-06-18")
+		self.assertEqual(pe_row.get("candidate_posting_date"), "2026-06-18")
+		self.assertEqual(pe_row.get("payment_entry_posting_date"), "2026-06-18")
+		self.assertIsNone(pe_row.get("sales_invoice_posting_date"))
+
+		# 3. Verify SI row building populates date fields
+		si_candidate = frappe._dict({
+			"document_type": "Sales Invoice",
+			"document_name": "ACC-SI-X",
+			"posting_date": "2026-06-17",
+			"candidate_amount": 1000.0,
+			"confidence": "Strong Match",
+			"score": 99,
+			"payment_event_found": 1,
+			"payment_event_source": "POS Payment Row"
+		})
+		si_row = _build_matching_row(bank_transaction, si_candidate)
+		self.assertEqual(si_row.get("transaction_date"), "2026-06-19")
+		self.assertEqual(si_row.get("bank_transaction_date"), "2026-06-19")
+		self.assertEqual(si_row.get("candidate_date"), "2026-06-17")
+		self.assertEqual(si_row.get("candidate_posting_date"), "2026-06-17")
+		self.assertEqual(si_row.get("sales_invoice_posting_date"), "2026-06-17")
+		self.assertIsNone(si_row.get("payment_entry_posting_date"))
+
+		# 4. Verify context-only SI row blocks
+		context_only_si = frappe._dict({
+			"document_type": "Sales Invoice",
+			"document_name": "ACC-SI-X",
+			"posting_date": "2026-06-17",
+			"payment_event_found": 0
+		})
+		block_reason = get_review_creation_block_reason(context_only_si)
+		self.assertIn("payment event evidence is required", block_reason.lower())
+
+		# 5. Verify cash candidate blocks
+		from retailedge.bank_transaction_match_workflow import validate_locked_candidate_from_selected_row
+		with patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value") as mock_get:
+			def side_effect(dt, filters=None, *args, **kwargs):
+				if dt == "Bank Transaction":
+					return frappe._dict({"name": "ACC-BTN-X", "status": "Pending"})
+				if dt == "Sales Invoice":
+					return frappe._dict({"name": "ACC-SI-X", "docstatus": 1})
+				return None
+			mock_get.side_effect = side_effect
+
+			with patch("retailedge.bank_transaction_match_workflow.frappe.get_all") as mock_get_all:
+				mock_get_all.return_value = [frappe._dict({"idx": 1, "mode_of_payment": "cash", "amount": 1000.0})]
+				res = validate_locked_candidate_from_selected_row({
+					"bank_transaction": "ACC-BTN-X",
+					"candidate_doctype": "Sales Invoice",
+					"candidate_name": "ACC-SI-X",
+					"payment_event_found": 1,
+					"payment_row_index": 1,
+					"payment_row_amount": 1000.0,
+					"mode_of_payment": "cash"
+				})
+				self.assertFalse(res.get("valid"))
+				self.assertIn("Cash payment rows are excluded", res.get("reason"))

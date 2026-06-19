@@ -166,8 +166,31 @@ function applyBankTransactionMatchContext(frm, context, options = {}) {
 
 function add_bank_transaction_match_action_buttons(frm) {
 	const status = frm.doc.decision_status || "Suggested";
+
+	// Add Navigation / Evidence links
+	if (frm.doc.bank_transaction) {
+		frm.add_custom_button(__("Open Bank Transaction"), function () {
+			frappe.set_route("Form", "Bank Transaction", frm.doc.bank_transaction);
+		}, __("Navigation / Evidence"));
+	}
+	if (frm.doc.suggested_document_type && frm.doc.suggested_document) {
+		frm.add_custom_button(__("Open Candidate Document"), function () {
+			frappe.set_route("Form", frm.doc.suggested_document_type, frm.doc.suggested_document);
+		}, __("Navigation / Evidence"));
+	}
+	if (frm.doc.sales_invoice) {
+		frm.add_custom_button(__("View Linked Sales Invoice"), function () {
+			frappe.set_route("Form", "Sales Invoice", frm.doc.sales_invoice);
+		}, __("Navigation / Evidence"));
+	}
+	if (frm.doc.payment_entry) {
+		frm.add_custom_button(__("View Linked Payment Entry"), function () {
+			frappe.set_route("Form", "Payment Entry", frm.doc.payment_entry);
+		}, __("Navigation / Evidence"));
+	}
+
 	if (["Suggested", "Reopened"].includes(status)) {
-		addBankTransactionMatchButton(frm, __("Confirm Candidate"), "retailedge.api.confirm_bank_transaction_match", __("Confirming candidate..."), __("Confirmed"), __("Review Actions"));
+		addBankTransactionMatchButton(frm, __("Confirm Match"), "retailedge.api.confirm_bank_transaction_match", __("Confirming candidate..."), __("Confirmed"), __("Review Actions"));
 		addBankTransactionMatchButton(
 			frm,
 			__("Mark Needs Review"),
@@ -176,12 +199,12 @@ function add_bank_transaction_match_action_buttons(frm) {
 			__("Needs Review"),
 			__("Review Actions")
 		);
-		addBankTransactionMatchButton(frm, __("Reject Candidate"), "retailedge.api.reject_bank_transaction_match", __("Rejecting candidate..."), __("Rejected"), __("Review Actions"));
+		addBankTransactionMatchButton(frm, __("Reject Match"), "retailedge.api.reject_bank_transaction_match", __("Rejecting candidate..."), __("Rejected"), __("Review Actions"));
 	}
 
 	if (status === "Needs Review") {
-		addBankTransactionMatchButton(frm, __("Confirm Candidate"), "retailedge.api.confirm_bank_transaction_match", __("Confirming candidate..."), __("Confirmed"), __("Review Actions"));
-		addBankTransactionMatchButton(frm, __("Reject Candidate"), "retailedge.api.reject_bank_transaction_match", __("Rejecting candidate..."), __("Rejected"), __("Review Actions"));
+		addBankTransactionMatchButton(frm, __("Confirm Match"), "retailedge.api.confirm_bank_transaction_match", __("Confirming candidate..."), __("Confirmed"), __("Review Actions"));
+		addBankTransactionMatchButton(frm, __("Reject Match"), "retailedge.api.reject_bank_transaction_match", __("Rejecting candidate..."), __("Rejected"), __("Review Actions"));
 	}
 
 	if (status === "Confirmed") {
@@ -198,7 +221,7 @@ function add_bank_transaction_match_action_buttons(frm) {
 					show_reconciliation_gate_result(r.message);
 				},
 			});
-		}, __("Reconciliation"));
+		}, __("Reconciliation Actions"));
 
 		frm.add_custom_button(__("Dry Run Reconciliation"), function () {
 			frappe.call({
@@ -210,14 +233,18 @@ function add_bank_transaction_match_action_buttons(frm) {
 					show_reconciliation_dry_run_result(r.message);
 				},
 			});
-		}, __("Reconciliation"));
-		addBankTransactionMatchButton(frm, __("Reopen"), "retailedge.api.reopen_bank_transaction_match", __("Reopening candidate..."), __("Reopened"), __("More Actions"));
-		addBankTransactionMatchButton(frm, __("Cancel"), "retailedge.api.cancel_bank_transaction_match", __("Cancelling candidate..."), __("Cancelled"), __("More Actions"));
+		}, __("Reconciliation Actions"));
+		addBankTransactionMatchButton(frm, __("Reopen Review"), "retailedge.api.reopen_bank_transaction_match", __("Reopening candidate..."), __("Reopened"), __("Review Actions"));
+		addBankTransactionMatchButton(frm, __("Cancel Review"), "retailedge.api.cancel_bank_transaction_match", __("Cancelling candidate..."), __("Cancelled"), __("Review Actions"));
 	}
 
 	if (["Rejected", "Cancelled"].includes(status)) {
-		addBankTransactionMatchButton(frm, __("Reopen"), "retailedge.api.reopen_bank_transaction_match", __("Reopening candidate..."), __("Reopened"), __("More Actions"));
+		addBankTransactionMatchButton(frm, __("Reopen Review"), "retailedge.api.reopen_bank_transaction_match", __("Reopening candidate..."), __("Reopened"), __("Review Actions"));
 	}
+
+	frm.add_custom_button(__("Refresh Candidate Context"), function () {
+		refreshBankTransactionMatchContext(frm, { preserveCandidate: true });
+	}, __("Review Actions"));
 
 	if (frm.page && frm.page.set_inner_btn_group_as_primary) {
 		frm.page.set_inner_btn_group_as_primary(__("Review Actions"));
@@ -240,7 +267,7 @@ function add_reconciliation_execution_status_buttons(frm) {
 				frm.reload_doc();
 			},
 		});
-	}, __("Reconciliation"));
+	}, __("Reconciliation Actions"));
 
 	frappe.call({
 		method: "retailedge.api.get_reconciliation_execution_summary",
@@ -269,7 +296,7 @@ function add_reconciliation_execution_status_buttons(frm) {
 						});
 					}
 				);
-			}, __("Reconciliation"));
+			}, __("Reconciliation Actions"));
 		},
 	});
 }
@@ -306,7 +333,7 @@ function maybe_add_execute_reconciliation_button(frm) {
 						});
 					}
 				);
-			}, __("Reconciliation"));
+			}, __("Reconciliation Actions"));
 		},
 	});
 }

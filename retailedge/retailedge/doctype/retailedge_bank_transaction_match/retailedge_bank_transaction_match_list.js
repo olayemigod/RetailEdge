@@ -45,11 +45,11 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 	onload(listview) {
 		listview.page.add_inner_button(__("Review Queue Summary"), function () {
 			show_bank_match_queue_summary(listview);
-		});
+		}, __("Review Actions"));
 
-		listview.page.add_inner_button(__("Open Batch Jobs"), function () {
+		listview.page.add_inner_button(__("View Batch jobs"), function () {
 			frappe.set_route("List", "RetailEdge Bank Match Batch Job");
-		});
+		}, __("Review Actions"));
 
 
 

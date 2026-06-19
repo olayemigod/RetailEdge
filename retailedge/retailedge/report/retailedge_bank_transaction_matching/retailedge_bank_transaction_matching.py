@@ -60,7 +60,8 @@ def validate_filters(filters):
 
 def get_columns():
 	return [
-		{"label": _("Date"), "fieldname": "transaction_date", "fieldtype": "Date", "width": 95},
+		{"label": _("Bank Transaction Date"), "fieldname": "transaction_date", "fieldtype": "Date", "width": 150},
+		{"label": _("Candidate Date"), "fieldname": "candidate_date", "fieldtype": "Date", "width": 120},
 		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 120},
 		{"label": _("Bank Amount"), "fieldname": "amount", "fieldtype": "Currency", "width": 110},
 		{"label": _("SI/PE Amount"), "fieldname": "candidate_amount", "fieldtype": "Currency", "width": 110},

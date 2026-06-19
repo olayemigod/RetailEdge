@@ -988,6 +988,7 @@ function clean_report_suggestion_row(row) {
 	const res = {
 		bank_transaction: row.bank_transaction,
 		transaction_date: row.transaction_date,
+		bank_transaction_date: row.bank_transaction_date,
 		bank_account: row.bank_account,
 		reference: row.reference,
 		narration: row.narration,
@@ -1000,6 +1001,10 @@ function clean_report_suggestion_row(row) {
 		suggested_document_type: row.suggested_document_type,
 		suggested_document: row.suggested_document,
 		suggested_sales_invoice: row.suggested_sales_invoice,
+		candidate_date: row.candidate_date,
+		candidate_posting_date: row.candidate_posting_date,
+		payment_entry_posting_date: row.payment_entry_posting_date,
+		sales_invoice_posting_date: row.sales_invoice_posting_date,
 		customer: row.customer,
 		candidate_amount: row.candidate_amount,
 		amount_difference: row.amount_difference,

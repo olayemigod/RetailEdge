@@ -136,7 +136,8 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		)
 		source = path.read_text()
 		self.assertIn('__("Review Actions")', source)
-		self.assertIn('__("More Actions")', source)
+		self.assertIn('__("Reconciliation Actions")', source)
+		self.assertIn('__("Navigation / Evidence")', source)
 		self.assertIn("set_inner_btn_group_as_primary", source)
 
 	def test_list_js_exposes_bulk_review_actions(self):
@@ -151,6 +152,8 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertIn("Bulk Mark Needs Review", source)
 		self.assertIn("get_indicator", source)
 		self.assertIn("Review Queue Summary", source)
+		self.assertIn('__("Review Actions")', source)
+		self.assertIn("View Batch jobs", source)
 		self.assertIn("review_status,=,", source)
 
 	def test_invalid_party_type_is_rejected(self):

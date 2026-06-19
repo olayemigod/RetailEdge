@@ -1927,6 +1927,7 @@ def _build_matching_row(bank_transaction, candidate=None, action_status="No Matc
 	return {
 		"bank_transaction": bank_transaction.get("bank_transaction"),
 		"transaction_date": bank_transaction.get("transaction_date"),
+		"bank_transaction_date": bank_transaction.get("transaction_date"),
 		"bank_account": bank_transaction.get("bank_account"),
 		"reference": bank_transaction.get("reference"),
 		"narration": bank_transaction.get("description"),
@@ -1938,6 +1939,9 @@ def _build_matching_row(bank_transaction, candidate=None, action_status="No Matc
 		"suggested_document": candidate_name,
 		"suggested_sales_invoice": candidate.get("suggested_sales_invoice"),
 		"candidate_posting_date": candidate.get("posting_date"),
+		"candidate_date": candidate.get("posting_date"),
+		"payment_entry_posting_date": candidate.get("posting_date") if candidate_doctype == "Payment Entry" else None,
+		"sales_invoice_posting_date": candidate.get("posting_date") if candidate_doctype == "Sales Invoice" else None,
 		"customer": candidate.get("customer_display") or candidate.get("customer") or bank_transaction.get("party"),
 		"party": candidate.get("party") or bank_transaction.get("party"),
 		"party_type": candidate.get("party_type") or bank_transaction.get("party_type") or "Customer",
