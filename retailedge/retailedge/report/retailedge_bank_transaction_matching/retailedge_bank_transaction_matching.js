@@ -52,26 +52,160 @@ function forceOperationalPrimaryAction(report) {
 }
 
 function refreshOperationalReportView(report) {
-	const activeReport = report || frappe.query_report;
-	if (activeReport && typeof activeReport.clear_checked_items === "function") {
-		activeReport.clear_checked_items();
+	const activeReport = get_active_bank_match_report(report);
+	if (activeReport) {
+		if (typeof activeReport.clear_checked_items === "function") {
+			activeReport.clear_checked_items();
+		} else if (activeReport.datatable && activeReport.datatable.rowmanager && typeof activeReport.datatable.rowmanager.checkAll === "function") {
+			activeReport.datatable.rowmanager.checkAll(false);
+		}
+		activeReport.refresh();
 	}
-	activeReport.refresh();
+}
+
+function get_active_bank_match_report(report) {
+	if (frappe.query_report && frappe.query_report.report_name === "RetailEdge Bank Transaction Matching") {
+		return frappe.query_report;
+	}
+	return report && report.page ? report : frappe.query_report;
+}
+
+function get_selected_report_row_indexes(report) {
+	const activeReport = get_active_bank_match_report(report);
+	console.log("[RetailEdge Bank Match] get_selected_report_row_indexes checking sources for report:", activeReport);
+	if (!activeReport) {
+		console.log("[RetailEdge Bank Match] activeReport not found");
+		return [];
+	}
+
+	let checkedIndices = [];
+
+	// Source 1: datatable.rowmanager.getCheckedRowIndices() or getCheckedRows()
+	const datatable = activeReport.datatable;
+	if (datatable) {
+		const rowmanager = datatable.rowmanager;
+		if (rowmanager) {
+			if (typeof rowmanager.getCheckedRowIndices === "function") {
+				checkedIndices = rowmanager.getCheckedRowIndices() || [];
+				console.log("[RetailEdge Bank Match] rowmanager.getCheckedRowIndices() returned:", checkedIndices);
+			} else if (typeof rowmanager.getCheckedRows === "function") {
+				const checked = rowmanager.getCheckedRows() || [];
+				console.log("[RetailEdge Bank Match] rowmanager.getCheckedRows() returned:", checked);
+				checked.forEach((row) => {
+					let idx = -1;
+					if (typeof row === "number") {
+						idx = row;
+					} else if (row && typeof row.index === "number") {
+						idx = row.index;
+					} else if (row && typeof row.rowIndex === "number") {
+						idx = row.rowIndex;
+					}
+					if (idx >= 0) {
+						checkedIndices.push(idx);
+					}
+				});
+			}
+		}
+
+		// Source 2: datamanager checked rows check if checkedIndices is still empty
+		if (checkedIndices.length === 0) {
+			const datamanager = datatable.datamanager;
+			if (datamanager && datamanager.rows) {
+				datamanager.rows.forEach((r) => {
+					if (r && r.checked && r.idx !== undefined) {
+						checkedIndices.push(r.idx);
+					}
+				});
+				console.log("[RetailEdge Bank Match] datamanager.rows checked indices:", checkedIndices);
+			}
+		}
+	}
+
+	// Source 3: if still empty, map get_checked_items() to indices
+	if (checkedIndices.length === 0 && typeof activeReport.get_checked_items === "function") {
+		const items = activeReport.get_checked_items() || [];
+		const rawData = activeReport.data || [];
+		items.forEach((item) => {
+			const idx = rawData.indexOf(item);
+			if (idx >= 0) {
+				checkedIndices.push(idx);
+			}
+		});
+		console.log("[RetailEdge Bank Match] mapped get_checked_items() to indices:", checkedIndices);
+	}
+
+	console.log("[RetailEdge Bank Match] selected indexes:", checkedIndices);
+	return checkedIndices;
+}
+
+function get_report_selected_rows(report) {
+	const activeReport = get_active_bank_match_report(report);
+	const indexes = get_selected_report_row_indexes(activeReport);
+	const rawData = activeReport.data || [];
+	const items = [];
+	indexes.forEach((idx) => {
+		if (idx >= 0 && idx < rawData.length) {
+			items.push(rawData[idx]);
+		}
+	});
+	console.log("[RetailEdge Bank Match] selected rows:", items);
+	return items;
+}
+
+function setup_report_menu_actions(report) {
+	console.log("[RetailEdge Bank Match] setup_report_menu_actions fired");
+	const activeReport = get_active_bank_match_report(report);
+	console.log("[RetailEdge Bank Match] active report:", activeReport);
+	if (!activeReport || !activeReport.page) {
+		return;
+	}
+	const group = __("Bank Match Actions");
+
+	const labels = [
+		__("Create Review Records"),
+		__("Run Auto-Match"),
+		__("View Recent Batch Jobs"),
+		__("Refresh Report")
+	];
+	labels.forEach((label) => {
+		try {
+			activeReport.page.remove_inner_button(label, group);
+		} catch (e) {}
+	});
+
+	activeReport.page.add_inner_button(__("Create Review Records"), function () {
+		console.log("[RetailEdge Bank Match] action fired: Create Review Records");
+		const targetReport = get_active_bank_match_report(report);
+		console.log("[RetailEdge Bank Match] target report:", targetReport);
+		open_create_review_records_dialog(targetReport);
+	}, group);
+
+	activeReport.page.add_inner_button(__("Run Auto-Match"), function () {
+		console.log("[RetailEdge Bank Match] action fired: Run Auto-Match");
+		const targetReport = get_active_bank_match_report(report);
+		console.log("[RetailEdge Bank Match] target report:", targetReport);
+		open_run_auto_match_dialog(targetReport);
+	}, group);
+
+	activeReport.page.add_inner_button(__("View Recent Batch Jobs"), function () {
+		console.log("[RetailEdge Bank Match] action fired: View Recent Batch Jobs");
+		frappe.set_route("List", "RetailEdge Bank Match Batch Job");
+	}, group);
+
+	activeReport.page.add_inner_button(__("Refresh Report"), function () {
+		console.log("[RetailEdge Bank Match] action fired: Refresh Report");
+		const refreshReport = get_active_bank_match_report(report);
+		if (refreshReport && refreshReport.refresh) {
+			refreshReport.refresh();
+		}
+	}, group);
 }
 
 frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
-		report.page.add_inner_button(__("Create Review Records"), function () {
-			open_create_review_records_dialog(report);
-		});
-		report.page.add_inner_button(__("Run Auto-Match for Visible Results"), function () {
-			open_run_auto_match_dialog(report);
-		});
-		report.page.add_inner_button(__("View Recent Batch Jobs"), function () {
-			frappe.set_route("List", "RetailEdge Bank Match Batch Job");
-		});
+		setup_report_menu_actions(report);
 
 		$(document).off("click", ".retailedge-bank-match-review");
 		$(document).on("click", ".retailedge-bank-match-review", function () {
@@ -124,7 +258,13 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
+		setup_report_menu_actions(report);
 		scheduleRetailEdgeSummaryCardDesign(report);
+	},
+
+	get_datatable_options(options) {
+		options.checkboxColumn = true;
+		return options;
 	},
 
 	open_match_review_dialog(args) {
@@ -595,10 +735,11 @@ function ensure_bank_match_record(args, callback) {
 		return;
 	}
 
+	const activeReport = get_active_bank_match_report();
 	frappe.call({
 		method: "retailedge.api.create_bank_match_reviews_from_suggestions",
 		args: {
-			filters: JSON.stringify(frappe.query_report.get_filter_values()),
+			filters: JSON.stringify(activeReport.get_filter_values()),
 			rows: JSON.stringify([clean_report_suggestion_row(args)]),
 			run_background: 0,
 		},
@@ -653,8 +794,13 @@ function show_bank_match_batch_job_queued(result) {
 }
 
 function open_create_review_records_dialog(report) {
-	const selection = get_report_suggestion_rows(report, { eligibleOnly: true });
+	console.log("[RetailEdge Bank Match] open_create_review_records_dialog fired");
+	const activeReport = get_active_bank_match_report(report);
+	const selection = get_report_suggestion_rows(activeReport, { eligibleOnly: true });
+	console.log("[RetailEdge Bank Match] suggestion selection rows length:", selection.rows.length);
+
 	if (!selection.rows.length) {
+		console.log("[RetailEdge Bank Match] No eligible selection found, showing msgprint");
 		frappe.msgprint(__("No eligible suggested rows are visible in the report."));
 		return;
 	}
@@ -679,18 +825,27 @@ function open_create_review_records_dialog(report) {
 		}
 	`;
 
+	console.log("[RetailEdge Bank Match] opening confirm dialog");
 	frappe.confirm(message, function () {
+		console.log("[RetailEdge Bank Match] confirmation accepted");
 		confirm_large_bank_match_action(selection, __("Create Review Records"), function (runBackground) {
+			const finalReport = get_active_bank_match_report(report);
+			console.log("[RetailEdge Bank Match] preparing frappe.call with filters and payload");
+			const reqArgs = {
+				filters: JSON.stringify(finalReport.get_filter_values()),
+				rows: JSON.stringify(selection.rows),
+				run_background: runBackground ? 1 : 0,
+			};
+			console.log("[RetailEdge Bank Match] method called: retailedge.api.create_bank_match_reviews_from_suggestions");
+			console.log("[RetailEdge Bank Match] args payload:", reqArgs);
+
 			frappe.call({
 				method: "retailedge.api.create_bank_match_reviews_from_suggestions",
-				args: {
-					filters: JSON.stringify(frappe.query_report.get_filter_values()),
-					rows: JSON.stringify(selection.rows),
-					run_background: runBackground ? 1 : 0,
-				},
+				args: reqArgs,
 				freeze: !runBackground,
 				freeze_message: __("Creating RetailEdge match review records..."),
 				callback: function (r) {
+					console.log("[RetailEdge Bank Match] server response:", r);
 					const result = (r && r.message) || {};
 					if (result.status === "queued" || result.batch_job) {
 						show_bank_match_batch_job_queued(result);
@@ -705,8 +860,13 @@ function open_create_review_records_dialog(report) {
 }
 
 function open_run_auto_match_dialog(report) {
-	const selection = get_report_suggestion_rows(report, { eligibleOnly: false });
+	console.log("[RetailEdge Bank Match] open_run_auto_match_dialog fired");
+	const activeReport = get_active_bank_match_report(report);
+	const selection = get_report_suggestion_rows(activeReport, { eligibleOnly: false });
+	console.log("[RetailEdge Bank Match] suggestion selection rows length:", selection.rows.length);
+
 	if (!selection.rows.length) {
+		console.log("[RetailEdge Bank Match] No eligible selection found, showing msgprint");
 		frappe.msgprint(__("No candidate suggestion rows are visible in the report."));
 		return;
 	}
@@ -737,18 +897,27 @@ function open_run_auto_match_dialog(report) {
 		}
 	`;
 
+	console.log("[RetailEdge Bank Match] opening confirm dialog");
 	frappe.confirm(message, function () {
+		console.log("[RetailEdge Bank Match] confirmation accepted");
 		confirm_large_bank_match_action(selection, __("Run Auto-Match"), function (runBackground) {
+			const finalReport = get_active_bank_match_report(report);
+			console.log("[RetailEdge Bank Match] preparing frappe.call with filters and payload");
+			const reqArgs = {
+				filters: JSON.stringify(finalReport.get_filter_values()),
+				rows: JSON.stringify(selection.rows),
+				run_background: runBackground ? 1 : 0,
+			};
+			console.log("[RetailEdge Bank Match] method called: retailedge.api.run_bank_transaction_auto_match");
+			console.log("[RetailEdge Bank Match] args payload:", reqArgs);
+
 			frappe.call({
 				method: "retailedge.api.run_bank_transaction_auto_match",
-				args: {
-					filters: JSON.stringify(frappe.query_report.get_filter_values()),
-					rows: JSON.stringify(selection.rows),
-					run_background: runBackground ? 1 : 0,
-				},
+				args: reqArgs,
 				freeze: !runBackground,
 				freeze_message: __("Running RetailEdge auto-match..."),
 				callback: function (r) {
+					console.log("[RetailEdge Bank Match] server response:", r);
 					const result = (r && r.message) || {};
 					if (result.status === "queued" || result.batch_job) {
 						show_bank_match_batch_job_queued(result);
@@ -763,36 +932,25 @@ function open_run_auto_match_dialog(report) {
 }
 
 function get_report_suggestion_rows(report, options) {
+	console.log("[RetailEdge Bank Match] get_report_suggestion_rows fired with options:", options);
 	const config = options || {};
-	const rawData = (report && report.data) || frappe.query_report.data || [];
+	const activeReport = get_active_bank_match_report(report);
+	const rawData = (activeReport && activeReport.data) || [];
 	const rowFilter = config.eligibleOnly ? is_eligible_report_suggestion_row : is_report_candidate_row;
 	const data = rawData.filter(rowFilter);
-	const selectedIndexes = get_selected_report_row_indexes(report);
-	const selectedRows = selectedIndexes
-		.map((index) => rawData[index])
-		.filter(rowFilter);
+	const selectedRows = get_report_selected_rows(activeReport).filter(rowFilter);
+	console.log("[RetailEdge Bank Match] visible matching candidates count:", data.length);
+	console.log("[RetailEdge Bank Match] selected matching candidates count:", selectedRows.length);
 
 	if (selectedRows.length) {
-		return { rows: selectedRows.map(clean_report_suggestion_row), used_selection: true };
+		const cleaned = selectedRows.map(clean_report_suggestion_row);
+		console.log("[RetailEdge Bank Match] using selection, count:", cleaned.length);
+		console.log("[RetailEdge Bank Match] first cleaned row payload:", cleaned[0]);
+		return { rows: cleaned, used_selection: true };
 	}
-	return { rows: data.map(clean_report_suggestion_row), used_selection: false };
-}
-
-function get_selected_report_row_indexes(report) {
-	const datatable = (report && report.datatable) || frappe.query_report.datatable;
-	const rowmanager = datatable && datatable.rowmanager;
-	if (!rowmanager) {
-		return [];
-	}
-	let checkedRows = [];
-	if (typeof rowmanager.getCheckedRows === "function") {
-		checkedRows = rowmanager.getCheckedRows() || [];
-	} else if (typeof rowmanager.getCheckedRowIndices === "function") {
-		checkedRows = rowmanager.getCheckedRowIndices() || [];
-	}
-	return checkedRows
-		.map((row) => (typeof row === "number" ? row : row && (row.rowIndex ?? row.index)))
-		.filter((rowIndex) => rowIndex !== undefined && rowIndex !== null);
+	const cleanedData = data.map(clean_report_suggestion_row);
+	console.log("[RetailEdge Bank Match] using visible rows, count:", cleanedData.length);
+	return { rows: cleanedData, used_selection: false };
 }
 
 function is_eligible_report_suggestion_row(row) {
@@ -812,14 +970,22 @@ function is_eligible_report_suggestion_row(row) {
 }
 
 function is_report_candidate_row(row) {
-	if (!row || !row.bank_transaction || !row.suggested_document || !row.suggested_document_type) {
-		return false;
-	}
-	return ["Sales Invoice", "Payment Entry"].includes(row.suggested_document_type);
+	const res = (function() {
+		if (!row || !row.bank_transaction || !row.suggested_document || !row.suggested_document_type) {
+			return false;
+		}
+		if (row.suggested_document_type === "Sales Invoice" && !Number(row.payment_event_found || 0)) {
+			return false;
+		}
+		return ["Sales Invoice", "Payment Entry"].includes(row.suggested_document_type);
+	})();
+	console.log("[RetailEdge Bank Match] is_report_candidate_row result for BTN: " + (row && row.bank_transaction) + ":", res);
+	return res;
 }
 
 function clean_report_suggestion_row(row) {
-	return {
+	console.log("[RetailEdge Bank Match] clean_report_suggestion_row fired for BTN:", row && row.bank_transaction);
+	const res = {
 		bank_transaction: row.bank_transaction,
 		transaction_date: row.transaction_date,
 		bank_account: row.bank_account,
@@ -869,7 +1035,9 @@ function clean_report_suggestion_row(row) {
 		branch_match: row.branch_match,
 		auto_match_status: row.auto_match_status,
 		auto_match_reason: row.auto_match_reason,
+		reference_number: row.reference_number || row.reference || "",
 	};
+	return res;
 }
 
 function show_create_review_records_summary(result) {
