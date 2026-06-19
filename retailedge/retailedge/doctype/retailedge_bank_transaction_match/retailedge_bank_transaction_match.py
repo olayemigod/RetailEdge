@@ -22,15 +22,19 @@ from retailedge.invoice_payment_audit import get_sales_invoice_payment_rows
 
 class RetailEdgeBankTransactionMatch(Document):
 	def validate(self):
-		self._hydrate_bank_transaction_context()
-		self._hydrate_candidate_context()
-		self._validate_candidate_fields()
-		self._validate_party_fields()
-		self._sync_sales_invoice_party_fields()
-		self._set_amount_difference()
-		self._set_review_classification()
-		self._set_readable_summaries()
-		self._refresh_sync_readiness()
+		frappe.flags.retailedge_active_match_doc = self
+		try:
+			self._hydrate_bank_transaction_context()
+			self._hydrate_candidate_context()
+			self._validate_candidate_fields()
+			self._validate_party_fields()
+			self._sync_sales_invoice_party_fields()
+			self._set_amount_difference()
+			self._set_review_classification()
+			self._set_readable_summaries()
+			self._refresh_sync_readiness()
+		finally:
+			frappe.flags.retailedge_active_match_doc = None
 
 	def _hydrate_bank_transaction_context(self):
 		bank_transaction = getattr(self, "bank_transaction", None)
