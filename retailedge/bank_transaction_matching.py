@@ -339,19 +339,77 @@ def normalize_bank_transaction(bank_transaction_name_or_row):
 	}
 
 
-def find_sales_invoice_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20, context=None):
-	filters = frappe._dict(filters or {})
-	context = context or getattr(frappe.local, "_retailedge_bank_match_context", None)
-	settings = (context or {}).get("settings") or get_bank_transaction_matching_settings()
-	bank_transaction = ((context or {}).get("bank_transactions_by_name") or {}).get(bank_transaction_name) or normalize_bank_transaction(bank_transaction_name)
-	if bank_transaction.get("direction") != "Inflow":
-		return []
-	if not has_doctype("Sales Invoice"):
-		return []
+def _is_weak_ref_match_similar(c, bank_transaction, settings, all_candidates):
+	if c.get("exception_only"):
+		return False
+		
+	bank_amount = flt(bank_transaction.get("amount"))
+	c_amount = flt(c.get("candidate_amount"))
+	if abs(bank_amount - c_amount) > 0.01:
+		return False
+		
+	c_account_compatible = c.get("account_match") == 1 or c.get("account_resolution_status") in {"match", "match_via_mapping"}
+	if not c_account_compatible:
+		return False
+		
+	c_date_diff = c.get("date_difference_days")
+	window = settings.get("date_window_days") or 3
+	if c_date_diff is None or c_date_diff > window:
+		return False
+		
+	c_party = cstr(c.get("customer") or c.get("party") or "").strip().lower()
+	bt_party = cstr(bank_transaction.get("party") or "").strip().lower()
+	bt_desc = cstr(bank_transaction.get("description") or "").strip().lower()
+	bt_ref = cstr(bank_transaction.get("reference") or "").strip().lower()
+	
+	if c_party and bt_party:
+		if c_party != bt_party:
+			return False
+	elif c_party:
+		c_display = cstr(c.get("customer_display") or c.get("customer") or "").strip().lower()
+		c_normalized = normalize_statement_text(c_display or c_party)
+		bt_normalized = normalize_statement_text(f"{bt_ref} {bt_desc}")
+		if c_normalized and bt_normalized and c_normalized not in bt_normalized:
+			has_other_matching_customer = False
+			for other in all_candidates or []:
+				other_display = cstr(other.get("customer_display") or other.get("customer") or "").strip().lower()
+				other_normalized = normalize_statement_text(other_display)
+				if other_normalized and other_normalized in bt_normalized:
+					has_other_matching_customer = True
+					break
+			if has_other_matching_customer:
+				return False
+				
+	return True
 
-	invoices = ((context or {}).get("sales_invoices_by_bank_transaction") or {}).get(bank_transaction.get("bank_transaction"))
-	if invoices is None:
-		invoices = _get_sales_invoice_rows(bank_transaction, filters, settings, limit=max(int(limit or 20) * 3, 20))
+
+def _validate_prefetched_candidate_identity(bank_transaction, candidate, all_candidates, settings):
+	if not candidate:
+		return False
+		
+	strength = candidate.get("reference_match_strength") or "none"
+	is_strong_ref = strength in {"exact", "strong", "contains", "narration_contains_reference"}
+	if is_strong_ref:
+		return True
+		
+	# Weak reference rules:
+	if candidate.get("exception_only"):
+		return False
+		
+	if not _is_weak_ref_match_similar(candidate, bank_transaction, settings, all_candidates):
+		return False
+		
+	matches_count = 0
+	for other in all_candidates or []:
+		if _is_weak_ref_match_similar(other, bank_transaction, settings, all_candidates):
+			matches_count += 1
+	if matches_count > 1:
+		return False
+		
+	return True
+
+
+def _build_scored_sales_invoices(bank_transaction, invoices, filters, settings, context):
 	results = []
 	for invoice in invoices:
 		if sales_invoice_has_active_confirmed_bank_match(invoice.get("name")) and not cint(filters.get("include_confirmed_matches")):
@@ -381,33 +439,20 @@ def find_sales_invoice_candidates_for_bank_transaction(bank_transaction_name, fi
 			if candidate["score"] >= 30:
 				results.append(candidate)
 	results.extend(_build_multi_invoice_candidates(bank_transaction, invoices, filters, settings))
+	strength_map = {"strong": 4, "exact": 3, "contains": 2, "narration_contains_reference": 1}
 	results.sort(
 		key=lambda row: (
 			-_candidate_category_rank(row.get("candidate_category")),
 			-int(row.get("score") or 0),
+			-strength_map.get(cstr(row.get("reference_match_strength")).strip().lower(), 0),
 			abs(flt(row.get("amount_difference"))),
 			cstr(row.get("document_name")),
 		)
 	)
-	return results[: int(limit or 20)]
+	return results
 
 
-def find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20, context=None):
-	filters = frappe._dict(filters or {})
-	context = context or getattr(frappe.local, "_retailedge_bank_match_context", None)
-	settings = (context or {}).get("settings") or get_bank_transaction_matching_settings()
-	bank_transaction = ((context or {}).get("bank_transactions_by_name") or {}).get(bank_transaction_name) or normalize_bank_transaction(bank_transaction_name)
-	if not has_doctype("Payment Entry"):
-		return []
-
-	payment_entries = ((context or {}).get("payment_entries_by_bank_transaction") or {}).get(bank_transaction.get("bank_transaction"))
-	if payment_entries is None:
-		payment_entries = _get_payment_entry_rows(
-			bank_transaction,
-			filters,
-			settings,
-			limit=max(int(limit or 20) * 3, 20),
-		)
+def _build_scored_payment_entries(bank_transaction, payment_entries, filters, settings, context):
 	references_by_entry = (context or {}).get("payment_entry_references_by_entry") or _get_payment_entry_sales_invoice_references([row.get("name") for row in payment_entries])
 	results = []
 	for payment_entry in payment_entries:
@@ -439,15 +484,65 @@ def find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, fi
 		candidate.update(score_payload)
 		if candidate["score"] >= 30:
 			results.append(candidate)
+	strength_map = {"strong": 4, "exact": 3, "contains": 2, "narration_contains_reference": 1}
 	results.sort(
 		key=lambda row: (
 			-_candidate_category_rank(row.get("candidate_category")),
 			-int(row.get("score") or 0),
+			-strength_map.get(cstr(row.get("reference_match_strength")).strip().lower(), 0),
 			abs(flt(row.get("amount_difference"))),
 			cstr(row.get("document_name")),
 		)
 	)
-	return results[: int(limit or 20)]
+	return results
+
+
+def find_sales_invoice_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20, context=None):
+	filters = frappe._dict(filters or {})
+	context = context or getattr(frappe.local, "_retailedge_bank_match_context", None)
+	settings = (context or {}).get("settings") or get_bank_transaction_matching_settings()
+	bank_transaction = ((context or {}).get("bank_transactions_by_name") or {}).get(bank_transaction_name) or normalize_bank_transaction(bank_transaction_name)
+	if bank_transaction.get("direction") != "Inflow":
+		return []
+	if not has_doctype("Sales Invoice"):
+		return []
+
+	# Try prefetch
+	prefetched_invoices = ((context or {}).get("sales_invoices_by_bank_transaction") or {}).get(bank_transaction.get("bank_transaction"))
+	if prefetched_invoices is not None:
+		results = _build_scored_sales_invoices(bank_transaction, prefetched_invoices, filters, settings, context)
+		safe_results = [c for c in results if _validate_prefetched_candidate_identity(bank_transaction, c, results, settings)]
+		if safe_results:
+			return safe_results[: int(limit or 20)]
+
+	# Fallback to direct resolver
+	direct_invoices = _get_sales_invoice_rows(bank_transaction, filters, settings, limit=max(int(limit or 20) * 3, 20))
+	results = _build_scored_sales_invoices(bank_transaction, direct_invoices, filters, settings, context)
+	safe_results = [c for c in results if _validate_prefetched_candidate_identity(bank_transaction, c, results, settings)]
+	return safe_results[: int(limit or 20)]
+
+
+def find_payment_entry_candidates_for_bank_transaction(bank_transaction_name, filters=None, limit=20, context=None):
+	filters = frappe._dict(filters or {})
+	context = context or getattr(frappe.local, "_retailedge_bank_match_context", None)
+	settings = (context or {}).get("settings") or get_bank_transaction_matching_settings()
+	bank_transaction = ((context or {}).get("bank_transactions_by_name") or {}).get(bank_transaction_name) or normalize_bank_transaction(bank_transaction_name)
+	if not has_doctype("Payment Entry"):
+		return []
+
+	# Try prefetch
+	prefetched_entries = ((context or {}).get("payment_entries_by_bank_transaction") or {}).get(bank_transaction.get("bank_transaction"))
+	if prefetched_entries is not None:
+		results = _build_scored_payment_entries(bank_transaction, prefetched_entries, filters, settings, context)
+		safe_results = [c for c in results if _validate_prefetched_candidate_identity(bank_transaction, c, results, settings)]
+		if safe_results:
+			return safe_results[: int(limit or 20)]
+
+	# Fallback to direct resolver
+	direct_entries = _get_payment_entry_rows(bank_transaction, filters, settings, limit=max(int(limit or 20) * 3, 20))
+	results = _build_scored_payment_entries(bank_transaction, direct_entries, filters, settings, context)
+	safe_results = [c for c in results if _validate_prefetched_candidate_identity(bank_transaction, c, results, settings)]
+	return safe_results[: int(limit or 20)]
 
 
 def sales_invoice_has_active_confirmed_bank_match(sales_invoice):
@@ -844,6 +939,76 @@ def build_matching_report_context(bank_transaction_rows, filters=None, settings=
 	return context
 
 
+def _prefetch_payment_entry_sort_key(row, bank_transaction, bank_canonical_account):
+	direction = bank_transaction.get("direction")
+	candidate_amount = flt(row.get("received_amount") if direction == "Inflow" else row.get("paid_amount"))
+	if candidate_amount <= 0:
+		candidate_amount = flt(row.get("paid_amount") or row.get("received_amount"))
+	
+	amt_diff = abs(flt(bank_transaction.get("amount")) - candidate_amount)
+	is_exact_amount = 1 if amt_diff <= 0.01 else 0
+	
+	bank_ref_norm = bank_transaction.get("normalized_reference")
+	bank_text = " ".join(part for part in (cstr(bank_transaction.get("reference")).strip(), cstr(bank_transaction.get("description")).strip()) if part).lower()
+	
+	candidate_ref = cstr(row.get("reference_no")).strip()
+	candidate_ref_norm = normalize_statement_reference(reference=candidate_ref) if candidate_ref else ""
+	candidate_name = cstr(row.get("name")).strip().lower()
+	
+	ref_rank = 0
+	if candidate_ref_norm and bank_ref_norm and candidate_ref_norm == bank_ref_norm:
+		ref_rank = 3
+	elif (candidate_ref_norm and candidate_ref_norm in bank_text) or (candidate_name in bank_text):
+		ref_rank = 2
+	
+	candidate_account = row.get("paid_to") if direction == "Inflow" else row.get("paid_from")
+	is_account_match = 0
+	if bank_canonical_account and candidate_account and bank_canonical_account == candidate_account:
+		is_account_match = 1
+		
+	date_diff = 9999
+	if bank_transaction.get("transaction_date") and row.get("posting_date"):
+		try:
+			date_diff = abs((getdate(bank_transaction.get("transaction_date")) - getdate(row.get("posting_date"))).days)
+		except Exception:
+			pass
+			
+	return (-ref_rank, -is_exact_amount, -is_account_match, date_diff, -candidate_amount)
+
+
+def _prefetch_sales_invoice_sort_key(row, bank_transaction, bank_canonical_account):
+	bank_amount = flt(bank_transaction.get("amount"))
+	best_amt_diff = min(
+		abs(bank_amount - flt(row.get("outstanding_amount"))),
+		abs(bank_amount - flt(row.get("grand_total"))),
+		abs(bank_amount - flt(row.get("paid_amount"))) if flt(row.get("paid_amount")) > 0 else 999999
+	)
+	is_exact_amount = 1 if best_amt_diff <= 0.01 else 0
+	
+	bank_ref_norm = bank_transaction.get("normalized_reference")
+	bank_text = " ".join(part for part in (cstr(bank_transaction.get("reference")).strip(), cstr(bank_transaction.get("description")).strip()) if part).lower()
+	
+	candidate_name = cstr(row.get("name")).strip().lower()
+	customer_name = cstr(row.get("customer_name") or row.get("customer")).strip().lower()
+	
+	ref_rank = 0
+	if bank_ref_norm and normalize_statement_reference(reference=row.get("name")) == bank_ref_norm:
+		ref_rank = 3
+	elif candidate_name in bank_text:
+		ref_rank = 2
+	elif customer_name and customer_name in bank_text:
+		ref_rank = 1
+		
+	date_diff = 9999
+	if bank_transaction.get("transaction_date") and row.get("posting_date"):
+		try:
+			date_diff = abs((getdate(bank_transaction.get("transaction_date")) - getdate(row.get("posting_date"))).days)
+		except Exception:
+			pass
+			
+	return (-ref_rank, -is_exact_amount, date_diff, -flt(row.get("grand_total")))
+
+
 def _prefetch_payment_entry_context(context, bank_transactions, filters, settings, debug_timings=None):
 	if not bank_transactions or not has_doctype("Payment Entry"):
 		return
@@ -888,6 +1053,9 @@ def _prefetch_payment_entry_context(context, bank_transactions, filters, setting
 					if posting_date < date_filter[1][0] or posting_date > date_filter[1][1]:
 						continue
 				rows.append(row)
+			
+			bank_canonical_account = _resolve_bank_transaction_canonical_account(bank_transaction).get("canonical_account")
+			rows.sort(key=lambda r: _prefetch_payment_entry_sort_key(r, bank_transaction, bank_canonical_account))
 			context.payment_entries_by_bank_transaction[bank_transaction.get("bank_transaction")] = _dedupe_named_rows(rows)[:60]
 	finally:
 		_finish_timing(debug_timings, "payment_entry_prefetch", start)
@@ -944,6 +1112,9 @@ def _prefetch_sales_invoice_context(context, bank_transactions, filters, setting
 					if posting_date < date_filter[1][0] or posting_date > date_filter[1][1]:
 						continue
 				rows.append(row)
+			
+			bank_canonical_account = _resolve_bank_transaction_canonical_account(bank_transaction).get("canonical_account")
+			rows.sort(key=lambda r: _prefetch_sales_invoice_sort_key(r, bank_transaction, bank_canonical_account))
 			context.sales_invoices_by_bank_transaction[bank_transaction.get("bank_transaction")] = _dedupe_named_rows(rows)[:60]
 		invoice_names = sorted({row.get("name") for rows in context.sales_invoices_by_bank_transaction.values() for row in rows if row.get("name")})
 		context.invoice_payment_rows_by_invoice = _prefetch_invoice_payment_rows(invoice_names, all_rows)
@@ -1311,10 +1482,12 @@ def _duplicate_candidate_rank(row, index):
 
 def _queue_candidate_rank(row):
 	confidence_rank = {"Strong Match": 3, "Possible Match": 2, "Weak Match": 1, "No Match": 0}
+	strength_map = {"strong": 4, "exact": 3, "contains": 2, "narration_contains_reference": 1}
 	return (
 		_amount_scenario_rank(row.get("amount_scenario")),
 		confidence_rank.get(cstr(row.get("match_confidence") or row.get("confidence")).strip(), 0),
 		cint(row.get("match_score") or row.get("score") or 0),
+		strength_map.get(cstr(row.get("reference_match_strength")).strip().lower(), 0),
 		_candidate_category_rank(row.get("candidate_category")),
 		-abs(flt(row.get("amount_difference"))),
 		-_transaction_candidate_date_gap(row),
@@ -2514,6 +2687,20 @@ def _reference_match_payload(bank_transaction, candidate):
 	suggested_invoice_reference = normalize_statement_reference(reference=suggested_invoice) if suggested_invoice else ""
 	customer_normalized = normalize_statement_text(cstr(candidate.get("customer") or candidate.get("party")).strip())
 
+	if candidate_name_normalized and _reference_contains(bank_text_normalized, candidate_name_normalized):
+		return {
+			"score": 30,
+			"reason": "Bank narration/reference contains the suggested document name.",
+			"reference_match_exact": 1,
+			"reference_match_strength": "strong",
+		}
+	if suggested_invoice_normalized and _reference_contains(bank_text_normalized, suggested_invoice_normalized):
+		return {
+			"score": 30,
+			"reason": "Bank narration/reference contains the Sales Invoice name.",
+			"reference_match_exact": 1,
+			"reference_match_strength": "strong",
+		}
 	if candidate_reference_normalized and bank_reference_normalized and candidate_reference_normalized == bank_reference_normalized:
 		return {
 			"score": 25,
@@ -2535,24 +2722,10 @@ def _reference_match_payload(bank_transaction, candidate):
 			"reference_match_exact": 0,
 			"reference_match_strength": "contains",
 		}
-	if suggested_invoice_normalized and _reference_contains(bank_text_normalized, suggested_invoice_normalized):
-		return {
-			"score": 18,
-			"reason": "Bank narration/reference contains the Sales Invoice name.",
-			"reference_match_exact": 0,
-			"reference_match_strength": "narration_contains_reference",
-		}
 	if suggested_invoice_reference and _reference_contains(bank_text_reference, suggested_invoice_reference):
 		return {
 			"score": 18,
 			"reason": "Bank narration/reference contains the Sales Invoice reference.",
-			"reference_match_exact": 0,
-			"reference_match_strength": "narration_contains_reference",
-		}
-	if candidate_name_normalized and _reference_contains(bank_text_normalized, candidate_name_normalized):
-		return {
-			"score": 18,
-			"reason": "Bank narration/reference contains the suggested document name.",
 			"reference_match_exact": 0,
 			"reference_match_strength": "narration_contains_reference",
 		}
