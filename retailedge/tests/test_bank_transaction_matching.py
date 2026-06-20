@@ -3416,3 +3416,199 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 				})
 				self.assertFalse(res.get("valid"))
 				self.assertIn("Cash payment rows are excluded", res.get("reason"))
+
+	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
+	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
+	def test_result_limit_refills_after_open_suggestions_are_processed(self, mock_existing, _mock_si, mock_pe, mock_bt):
+		# Create 25 bank transactions
+		bts = []
+		for i in range(1, 26):
+			bts.append(frappe._dict(self._bank_transaction(
+				name=f"ACC-BTN-{i}",
+				deposit=1000.0,
+				reference_number=f"REF{i}",
+				description=f"Payment {i}",
+				date="2026-05-23",
+				company="Process Edge (Demo)"
+			)))
+
+		def bt_side_effect(filters, limit, limit_start=0):
+			return bts[limit_start:limit_start+limit]
+		mock_bt.side_effect = bt_side_effect
+
+		def pe_side_effect(bank_transaction_name, **kwargs):
+			i = int(bank_transaction_name.split("-")[-1])
+			return [{
+				"document_type": "Payment Entry",
+				"document_name": f"ACC-PAY-{i}",
+				"suggested_document": f"ACC-PAY-{i}",
+				"score": 90,
+				"candidate_amount": 1000.0,
+				"amount_difference": 0.0,
+				"confidence": "Strong Match",
+				"reference_match_strength": "exact",
+				"account_match": 1,
+				"date_difference_days": 0,
+				"posting_date": "2026-05-23"
+			}]
+		mock_pe.side_effect = pe_side_effect
+
+		existing_matches = {}
+		for i in range(1, 11):
+			existing_matches[f"ACC-BTN-{i}"] = [{
+				"name": f"MATCH-{i}",
+				"bank_transaction": f"ACC-BTN-{i}",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": f"ACC-PAY-{i}",
+				"decision_status": "Pending",
+				"modified": "2026-05-24 12:00:00"
+			}]
+
+		def existing_side_effect(bt_names):
+			return {name: existing_matches.get(name, []) for name in bt_names}
+		mock_existing.side_effect = existing_side_effect
+
+		dt = {}
+		rows = get_bank_transaction_matching_rows(
+			filters={"review_queue_status": "Open Suggestions Only", "include_confirmed_matches": 0},
+			limit=10,
+			debug_timings=dt
+		)
+
+		self.assertEqual(len(rows), 10)
+		returned_names = [r.get("bank_transaction") for r in rows]
+		expected_names = [f"ACC-BTN-{i}" for i in range(11, 21)]
+		self.assertEqual(returned_names, expected_names)
+		self.assertEqual(dt.get("raw_rows_scanned"), 25)
+		self.assertEqual(dt.get("eligible_rows_returned"), 15)
+
+	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
+	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
+	def test_result_limit_is_not_raw_bank_transaction_scan_limit(self, mock_existing, _mock_si, mock_pe, mock_bt):
+		bts = []
+		for i in range(1, 21):
+			bts.append(frappe._dict(self._bank_transaction(
+				name=f"ACC-BTN-{i}",
+				deposit=1000.0,
+				reference_number=f"REF{i}",
+				description=f"Payment {i}",
+				date="2026-05-23",
+				company="Process Edge (Demo)"
+			)))
+
+		def bt_side_effect(filters, limit, limit_start=0):
+			return bts[limit_start:limit_start+limit]
+		mock_bt.side_effect = bt_side_effect
+
+		def pe_side_effect(bank_transaction_name, **kwargs):
+			i = int(bank_transaction_name.split("-")[-1])
+			if i in {3, 4, 5, 6}:
+				return []
+			
+			pe_num = 9 if i in {7, 8} else i
+			return [{
+				"document_type": "Payment Entry",
+				"document_name": f"ACC-PAY-{pe_num}",
+				"suggested_document": f"ACC-PAY-{pe_num}",
+				"score": 90,
+				"candidate_amount": 1000.0,
+				"amount_difference": 0.0,
+				"confidence": "Strong Match",
+				"reference_match_strength": "exact",
+				"account_match": 1,
+				"date_difference_days": 0,
+				"posting_date": "2026-05-23"
+			}]
+		mock_pe.side_effect = pe_side_effect
+
+		existing_matches = {
+			"ACC-BTN-1": [{
+				"name": "MATCH-1",
+				"bank_transaction": "ACC-BTN-1",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "ACC-PAY-1",
+				"decision_status": "Pending",
+				"modified": "2026-05-24 12:00:00"
+			}],
+			"ACC-BTN-2": [{
+				"name": "MATCH-2",
+				"bank_transaction": "ACC-BTN-2",
+				"suggested_document_type": "Payment Entry",
+				"suggested_document": "ACC-PAY-2",
+				"decision_status": "Pending",
+				"modified": "2026-05-24 12:00:00"
+			}]
+		}
+		def existing_side_effect(bt_names):
+			return {name: existing_matches.get(name, []) for name in bt_names}
+		mock_existing.side_effect = existing_side_effect
+
+		dt = {}
+		rows = get_bank_transaction_matching_rows(
+			filters={
+				"review_queue_status": "Open Suggestions Only",
+				"include_confirmed_matches": 0,
+				"duplicate_candidate_status": "Not Duplicate Candidate"
+			},
+			limit=10,
+			debug_timings=dt
+		)
+
+		self.assertEqual(len(rows), 10)
+		returned_names = [r.get("bank_transaction") for r in rows]
+		expected_names = ["ACC-BTN-7"] + [f"ACC-BTN-{i}" for i in range(10, 19)]
+		self.assertEqual(returned_names, expected_names)
+
+	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
+	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction")
+	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction", return_value={})
+	def test_result_limit_returns_less_only_when_no_more_eligible_rows(self, _mock_existing, _mock_si, mock_pe, mock_bt):
+		bts = []
+		for i in range(1, 6):
+			bts.append(frappe._dict(self._bank_transaction(
+				name=f"ACC-BTN-{i}",
+				deposit=1000.0,
+				reference_number=f"REF{i}",
+				description=f"Payment {i}",
+				date="2026-05-23",
+				company="Process Edge (Demo)"
+			)))
+
+		def bt_side_effect(filters, limit, limit_start=0):
+			return bts[limit_start:limit_start+limit]
+		mock_bt.side_effect = bt_side_effect
+
+		def pe_side_effect(bank_transaction_name, **kwargs):
+			i = int(bank_transaction_name.split("-")[-1])
+			if i == 3:
+				return [{
+					"document_type": "Payment Entry",
+					"document_name": "ACC-PAY-3",
+					"suggested_document": "ACC-PAY-3",
+					"score": 90,
+					"candidate_amount": 1000.0,
+					"amount_difference": 0.0,
+					"confidence": "Strong Match",
+					"reference_match_strength": "exact",
+					"account_match": 1,
+					"date_difference_days": 0,
+					"posting_date": "2026-05-23"
+				}]
+			return []
+		mock_pe.side_effect = pe_side_effect
+
+		dt = {}
+		rows = get_bank_transaction_matching_rows(
+			filters={"review_queue_status": "Open Suggestions Only", "include_confirmed_matches": 0},
+			limit=10,
+			debug_timings=dt
+		)
+
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0].get("bank_transaction"), "ACC-BTN-3")
+		self.assertEqual(dt.get("scan_stopped_reason"), "No more source Bank Transactions exist")

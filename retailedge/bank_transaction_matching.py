@@ -840,9 +840,13 @@ def score_bank_transaction_candidate(bank_transaction, candidate):
 			"Matched POS payment row." if category_key == "pos_payment_match" else "Matched invoice payment row."
 		)
 	elif category_key == "invoice_context_only":
+		if getattr(frappe.local, "_retailedge_matching_diagnostics", None) is not None:
+			frappe.local._retailedge_matching_diagnostics["excluded_context_only"] += 1
 		score = min(score, cint(settings.get("strong_match_score") or 80) - 1)
 		reasons.append("Sales Invoice is context only; payment event evidence is required for auto-match.")
 	elif category_key == "weak_invoice_total_similarity":
+		if getattr(frappe.local, "_retailedge_matching_diagnostics", None) is not None:
+			frappe.local._retailedge_matching_diagnostics["excluded_context_only"] += 1
 		score = min(score, 45)
 		reasons.append("Invoice total matched, but no matching payment event was found.")
 
@@ -1225,50 +1229,167 @@ def _prefetch_active_review_context(context, debug_timings=None):
 def get_bank_transaction_matching_rows(filters=None, limit=500, debug_timings=None):
 	filters = _coerce_matching_filters(filters)
 	settings = get_bank_transaction_matching_settings()
-	filtered_limit = min(int(limit or 500), 2000)
-	start = _timing_bucket(debug_timings, "bank_transaction_fetch")
-	bank_transaction_rows = _get_bank_transaction_rows(filters, filtered_limit)
-	_finish_timing(debug_timings, "bank_transaction_fetch", start)
-	start = _timing_bucket(debug_timings, "existing_match_fetch")
-	existing_matches_by_transaction = _get_existing_matches_by_bank_transaction(
-		[row.get("name") for row in bank_transaction_rows if row.get("name")]
-	)
-	_finish_timing(debug_timings, "existing_match_fetch", start)
-	context = build_matching_report_context(bank_transaction_rows, filters=filters, settings=settings, debug_timings=debug_timings)
-	previous_context = getattr(frappe.local, "_retailedge_bank_match_context", None)
-	frappe.local._retailedge_bank_match_context = context
-	rows = []
-	try:
-		for bank_transaction_row in bank_transaction_rows:
-			bank_transaction = context.bank_transactions_by_name.get(bank_transaction_row.get("name")) or normalize_bank_transaction(bank_transaction_row)
-			transaction_matches = existing_matches_by_transaction.get(bank_transaction.get("bank_transaction")) or []
-			confirmed_match = _first_match_with_status(transaction_matches, "Confirmed")
-			rejected_match = _first_match_with_status(transaction_matches, "Rejected")
-			active_review_match = _first_active_review_match(transaction_matches)
-			active_nonconfirmed_match = _first_active_review_match(transaction_matches, include_confirmed=False)
-			review_queue_status = _review_queue_status_mode(filters)
+	result_limit = min(int(limit or 500), 2000)
 
-			if review_queue_status == "Open Suggestions Only" and active_review_match:
-				continue
-			if review_queue_status == "Already In Review" and not active_nonconfirmed_match:
-				continue
-			if review_queue_status == "Confirmed" and not confirmed_match:
-				continue
-			if review_queue_status == "Rejected" and not rejected_match:
-				continue
-			if confirmed_match and not filters.get("include_confirmed_matches") and review_queue_status not in {"Confirmed", "All"}:
-				continue
-			if bank_transaction.get("is_reconciled") and not filters.get("include_reconciled"):
-				continue
-			if bank_transaction.get("direction") == "Outflow":
-				if confirmed_match and filters.get("include_confirmed_matches"):
+	# Determine chunking configurations
+	chunk_size = 100
+	scan_limit = min(max(1000, result_limit * 10), 5000)
+
+	candidate_rows = []
+	suppressed_rows = []
+	eligible_rows = []
+	raw_rows_scanned = 0
+	limit_start = 0
+	stop_reason = "No more source Bank Transactions exist"
+
+	# Diagnostics counters
+	diagnostics = {
+		"excluded_active_review": 0,
+	}
+
+	# Register diagnostics on thread-local
+	frappe.local._retailedge_matching_diagnostics = {
+		"excluded_cash": 0,
+		"excluded_context_only": 0,
+	}
+
+	fetched_names = set()
+	try:
+		while raw_rows_scanned < scan_limit:
+			next_chunk_size = min(chunk_size, scan_limit - raw_rows_scanned)
+			if next_chunk_size <= 0:
+				stop_reason = "scan_limit reached"
+				break
+
+			chunk_rows = _get_bank_transaction_rows(filters, next_chunk_size, limit_start=limit_start)
+			if not chunk_rows:
+				stop_reason = "No more source Bank Transactions exist"
+				break
+
+			new_chunk_rows = []
+			for r in chunk_rows:
+				name = r.get("name")
+				if name not in fetched_names:
+					fetched_names.add(name)
+					new_chunk_rows.append(r)
+
+			if not new_chunk_rows:
+				stop_reason = "No more source Bank Transactions exist"
+				break
+
+			chunk_rows = new_chunk_rows
+			raw_rows_scanned += len(chunk_rows)
+			limit_start += len(chunk_rows)
+
+			start_time = _timing_bucket(debug_timings, "existing_match_fetch")
+			existing_matches_by_transaction = _get_existing_matches_by_bank_transaction(
+				[row.get("name") for row in chunk_rows if row.get("name")]
+			)
+			_finish_timing(debug_timings, "existing_match_fetch", start_time)
+
+			context = build_matching_report_context(chunk_rows, filters=filters, settings=settings, debug_timings=debug_timings)
+			previous_context = getattr(frappe.local, "_retailedge_bank_match_context", None)
+			frappe.local._retailedge_bank_match_context = context
+
+			chunk_candidate_rows = []
+			try:
+				for bank_transaction_row in chunk_rows:
+					bank_transaction = context.bank_transactions_by_name.get(bank_transaction_row.get("name")) or normalize_bank_transaction(bank_transaction_row)
+					transaction_matches = existing_matches_by_transaction.get(bank_transaction.get("bank_transaction")) or []
+					confirmed_match = _first_match_with_status(transaction_matches, "Confirmed")
+					rejected_match = _first_match_with_status(transaction_matches, "Rejected")
+					active_review_match = _first_active_review_match(transaction_matches)
+					active_nonconfirmed_match = _first_active_review_match(transaction_matches, include_confirmed=False)
+					review_queue_status = _review_queue_status_mode(filters)
+
+					if review_queue_status == "Open Suggestions Only" and active_review_match:
+						diagnostics["excluded_active_review"] += 1
+						continue
+					if review_queue_status == "Already In Review" and not active_nonconfirmed_match:
+						continue
+					if review_queue_status == "Confirmed" and not confirmed_match:
+						continue
+					if review_queue_status == "Rejected" and not rejected_match:
+						continue
+					if confirmed_match and not filters.get("include_confirmed_matches") and review_queue_status not in {"Confirmed", "All"}:
+						diagnostics["excluded_active_review"] += 1
+						continue
+					if bank_transaction.get("is_reconciled") and not filters.get("include_reconciled"):
+						continue
+					if bank_transaction.get("direction") == "Outflow":
+						if confirmed_match and filters.get("include_confirmed_matches"):
+							row = _build_matching_row(
+								bank_transaction,
+								candidate=None,
+								action_status="Outflow / Not Sales Receipt",
+								match_reason="Outflow transactions are not eligible for customer receipt bank matching in this phase.",
+							)
+							_apply_selected_match_to_row(row, confirmed_match, include_confirmed=filters.get("include_confirmed_matches"))
+							auto_match_status = get_auto_match_status_for_row(row, settings=settings)
+							row["auto_match_status"] = auto_match_status.get("status")
+							row["auto_match_reason"] = auto_match_status.get("reason")
+							row["auto_match_category"] = auto_match_status.get("category")
+							row["eligible_for_auto_prepare"] = 1 if auto_match_status.get("eligible_prepare") else 0
+							row["eligible_for_auto_confirm"] = 1 if auto_match_status.get("eligible_confirm") else 0
+							if not _matching_row_passes_optional_filters(row, filters):
+								continue
+							chunk_candidate_rows.append(row)
+						continue
+
+					sales_start = _timing_bucket(debug_timings, "sales_invoice_resolution")
+					sales_candidates = find_sales_invoice_candidates_for_bank_transaction(
+						bank_transaction.get("bank_transaction"),
+						filters=filters,
+						limit=20,
+						context=context,
+					)
+					_finish_timing(debug_timings, "sales_invoice_resolution", sales_start)
+					payment_start = _timing_bucket(debug_timings, "payment_entry_resolution")
+					payment_candidates = find_payment_entry_candidates_for_bank_transaction(
+						bank_transaction.get("bank_transaction"),
+						filters=filters,
+						limit=20,
+						context=context,
+					)
+					_finish_timing(debug_timings, "payment_entry_resolution", payment_start)
+					candidates = sorted(
+						sales_candidates + payment_candidates,
+						key=_queue_candidate_rank,
+						reverse=True,
+					)
+					best_candidate, selected_match = _select_candidate_for_queue(candidates, transaction_matches, filters)
+					if review_queue_status == "Rejected" and rejected_match:
+						best_candidate = _find_candidate_for_match_row(candidates, rejected_match)
+						selected_match = rejected_match if best_candidate else selected_match
+					if not best_candidate and confirmed_match and filters.get("include_confirmed_matches"):
+						selected_match = confirmed_match
+					if not best_candidate and not selected_match:
+						continue
+					action_status = _derive_action_status(bank_transaction, best_candidate)
+					match_reason = "; ".join((best_candidate or {}).get("reasons") or []) if best_candidate else "No candidate reached the minimum matching confidence."
 					row = _build_matching_row(
 						bank_transaction,
-						candidate=None,
-						action_status="Outflow / Not Sales Receipt",
-						match_reason="Outflow transactions are not eligible for customer receipt bank matching in this phase.",
+						candidate=best_candidate,
+						action_status=action_status,
+						match_reason=match_reason,
 					)
-					_apply_selected_match_to_row(row, confirmed_match, include_confirmed=filters.get("include_confirmed_matches"))
+					if filters.get("match_confidence") and row.get("match_confidence") != filters.get("match_confidence"):
+						continue
+					if _as_bool(filters.get("only_unmatched")) and row.get("action_status") in {"Already Reconciled", "Already Bank Verified"}:
+						continue
+					min_score = cint(filters.get("min_score") or 0)
+					if min_score and cint(row.get("match_score") or 0) < min_score:
+						continue
+					_apply_selected_match_to_row(
+						row,
+						selected_match or confirmed_match,
+						include_confirmed=filters.get("include_confirmed_matches"),
+					)
+					if active_review_match and not row.get("match_record") and review_queue_status in {"Already In Review", "All", "Confirmed"}:
+						row["match_record"] = active_review_match.get("name")
+						row["decision_status"] = active_review_match.get("decision_status")
+						row["action_status"] = "Existing Active Review" if cstr(active_review_match.get("decision_status")).strip() != "Confirmed" else "Already Confirmed"
+						row["match_reason"] = (row.get("match_reason") or "") + ("; " if row.get("match_reason") else "") + "Active review record already exists."
 					auto_match_status = get_auto_match_status_for_row(row, settings=settings)
 					row["auto_match_status"] = auto_match_status.get("status")
 					row["auto_match_reason"] = auto_match_status.get("reason")
@@ -1277,85 +1398,54 @@ def get_bank_transaction_matching_rows(filters=None, limit=500, debug_timings=No
 					row["eligible_for_auto_confirm"] = 1 if auto_match_status.get("eligible_confirm") else 0
 					if not _matching_row_passes_optional_filters(row, filters):
 						continue
-					rows.append(row)
-				continue
+					chunk_candidate_rows.append(row)
+			finally:
+				if previous_context is None:
+					try:
+						del frappe.local._retailedge_bank_match_context
+					except AttributeError:
+						pass
+				else:
+					frappe.local._retailedge_bank_match_context = previous_context
 
-			sales_start = _timing_bucket(debug_timings, "sales_invoice_resolution")
-			sales_candidates = find_sales_invoice_candidates_for_bank_transaction(
-				bank_transaction.get("bank_transaction"),
-				filters=filters,
-				limit=20,
-				context=context,
-			)
-			_finish_timing(debug_timings, "sales_invoice_resolution", sales_start)
-			payment_start = _timing_bucket(debug_timings, "payment_entry_resolution")
-			payment_candidates = find_payment_entry_candidates_for_bank_transaction(
-				bank_transaction.get("bank_transaction"),
-				filters=filters,
-				limit=20,
-				context=context,
-			)
-			_finish_timing(debug_timings, "payment_entry_resolution", payment_start)
-			candidates = sorted(
-				sales_candidates + payment_candidates,
-				key=_queue_candidate_rank,
-				reverse=True,
-			)
-			best_candidate, selected_match = _select_candidate_for_queue(candidates, transaction_matches, filters)
-			if review_queue_status == "Rejected" and rejected_match:
-				best_candidate = _find_candidate_for_match_row(candidates, rejected_match)
-				selected_match = rejected_match if best_candidate else selected_match
-			if not best_candidate and confirmed_match and filters.get("include_confirmed_matches"):
-				selected_match = confirmed_match
-			if not best_candidate and not selected_match:
-				continue
-			action_status = _derive_action_status(bank_transaction, best_candidate)
-			match_reason = "; ".join((best_candidate or {}).get("reasons") or []) if best_candidate else "No candidate reached the minimum matching confidence."
-			row = _build_matching_row(
-				bank_transaction,
-				candidate=best_candidate,
-				action_status=action_status,
-				match_reason=match_reason,
-			)
-			if filters.get("match_confidence") and row.get("match_confidence") != filters.get("match_confidence"):
-				continue
-			if _as_bool(filters.get("only_unmatched")) and row.get("action_status") in {"Already Reconciled", "Already Bank Verified"}:
-				continue
-			min_score = cint(filters.get("min_score") or 0)
-			if min_score and cint(row.get("match_score") or 0) < min_score:
-				continue
-			_apply_selected_match_to_row(
-				row,
-				selected_match or confirmed_match,
-				include_confirmed=filters.get("include_confirmed_matches"),
-			)
-			if active_review_match and not row.get("match_record") and review_queue_status in {"Already In Review", "All", "Confirmed"}:
-				row["match_record"] = active_review_match.get("name")
-				row["decision_status"] = active_review_match.get("decision_status")
-				row["action_status"] = "Existing Active Review" if cstr(active_review_match.get("decision_status")).strip() != "Confirmed" else "Already Confirmed"
-				row["match_reason"] = (row.get("match_reason") or "") + ("; " if row.get("match_reason") else "") + "Active review record already exists."
-			auto_match_status = get_auto_match_status_for_row(row, settings=settings)
-			row["auto_match_status"] = auto_match_status.get("status")
-			row["auto_match_reason"] = auto_match_status.get("reason")
-			row["auto_match_category"] = auto_match_status.get("category")
-			row["eligible_for_auto_prepare"] = 1 if auto_match_status.get("eligible_prepare") else 0
-			row["eligible_for_auto_confirm"] = 1 if auto_match_status.get("eligible_confirm") else 0
-			if not _matching_row_passes_optional_filters(row, filters):
-				continue
-			rows.append(row)
+			candidate_rows.extend(chunk_candidate_rows)
+
+			# Re-apply duplicate suppression + post filters on the entire collected candidate_rows
+			suppressed_rows = suppress_duplicate_candidate_suggestions(candidate_rows, mark_duplicates=True)
+			eligible_rows = [row for row in suppressed_rows if _matching_row_passes_post_suppression_filters(row, filters)]
+
+			if len(eligible_rows) >= result_limit:
+				stop_reason = "eligible_rows_returned >= result_limit"
+				break
 	finally:
-		if previous_context is None:
-			try:
-				del frappe.local._retailedge_bank_match_context
-			except AttributeError:
-				pass
-		else:
-			frappe.local._retailedge_bank_match_context = previous_context
-	rows = suppress_duplicate_candidate_suggestions(rows, mark_duplicates=True)
-	rows = [row for row in rows if _matching_row_passes_post_suppression_filters(row, filters)]
+		# Extract and clean up thread-local diagnostics
+		local_diag = getattr(frappe.local, "_retailedge_matching_diagnostics", {})
+		if hasattr(frappe.local, "_retailedge_matching_diagnostics"):
+			del frappe.local._retailedge_matching_diagnostics
+
+	# Compute duplicate conflict exclusion count
+	excluded_duplicate_conflict = sum(
+		1 for row in suppressed_rows
+		if row.get("duplicate_candidate_skipped") or row.get("action_status") == "Duplicate Candidate"
+	)
+
+	# Expose diagnostics in debug_timings if passed
 	if debug_timings is not None:
-		debug_timings["rows_returned"] = len(rows[:filtered_limit])
-	return rows[:filtered_limit]
+		debug_timings.update({
+			"result_limit": result_limit,
+			"scan_limit": scan_limit,
+			"raw_rows_scanned": raw_rows_scanned,
+			"candidate_rows_built": len(candidate_rows),
+			"excluded_active_review": diagnostics["excluded_active_review"],
+			"excluded_context_only": local_diag.get("excluded_context_only", 0),
+			"excluded_cash": local_diag.get("excluded_cash", 0),
+			"excluded_duplicate_conflict": excluded_duplicate_conflict,
+			"eligible_rows_returned": len(eligible_rows),
+			"scan_stopped_reason": stop_reason
+		})
+		debug_timings["rows_returned"] = len(eligible_rows[:result_limit])
+
+	return eligible_rows[:result_limit]
 
 def _matching_row_passes_optional_filters(row, filters):
 	checks = {
@@ -1785,6 +1875,8 @@ def _build_invoice_payment_row_candidates(bank_transaction, invoice, base_candid
 def _invoice_payment_row_is_bank_matchable(payment_row):
 	payment_category = cstr((payment_row or {}).get("payment_category")).strip()
 	if payment_category == "Cash":
+		if getattr(frappe.local, "_retailedge_matching_diagnostics", None) is not None:
+			frappe.local._retailedge_matching_diagnostics["excluded_cash"] += 1
 		return False
 	account = cstr((payment_row or {}).get("account")).strip()
 	expected_account = cstr((payment_row or {}).get("expected_account")).strip()
@@ -2025,7 +2117,7 @@ def _candidate_account_matches_bank_transaction(bank_transaction, candidate):
 	return _resolve_account_match_payload(bank_transaction, candidate).get("matched") is True
 
 
-def _get_bank_transaction_rows(filters, limit):
+def _get_bank_transaction_rows(filters, limit, limit_start=0):
 	field_map = get_bank_transaction_field_map()
 	fields = ["name"]
 	for canonical in (
@@ -2079,6 +2171,7 @@ def _get_bank_transaction_rows(filters, limit):
 		or_filters=or_filters or None,
 		fields=fields,
 		limit_page_length=limit,
+		limit_start=limit_start,
 		order_by=order_by,
 	)
 
