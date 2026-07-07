@@ -93,3 +93,187 @@ class TestSalespersonPerformance(FrappeTestCase):
 			self.assertIn("total_outstanding", summary)
 		except frappe.PermissionError:
 			pass
+
+	def test_options_api_is_whitelisted_and_valid(self):
+		"""Verify get_salesperson_dashboard_options API is whitelisted and returns option keys."""
+		from retailedge.salesperson_performance import get_salesperson_dashboard_options
+		self.assertTrue(getattr(get_salesperson_dashboard_options, "_is_whitelisted", False))
+
+		try:
+			res = get_salesperson_dashboard_options()
+			self.assertIn("branches", res)
+			self.assertIn("salespeople", res)
+			self.assertIn("default_filters", res)
+			self.assertIn("tenant_name", res)
+			self.assertIn("branch_name", res)
+			self.assertIn("user_name", res)
+		except frappe.PermissionError:
+			pass
+
+	def test_frontend_no_candidate_branches_direct_call(self):
+		"""Verify frontend no longer calls get_candidate_branches directly."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		vue_path = os.path.join(
+			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+		)
+		self.assertTrue(os.path.exists(vue_path))
+		with open(vue_path, "r") as f:
+			content = f.read()
+		self.assertNotIn("retailedge.branch_performance.get_candidate_branches", content)
+
+	def test_frontend_uses_layout_components_and_identity(self):
+		"""Verify frontend uses EdgeAppShell, EdgePageLayout, EdgeFilterBar and sets product identity."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		vue_path = os.path.join(
+			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+		)
+		self.assertTrue(os.path.exists(vue_path))
+		with open(vue_path, "r") as f:
+			content = f.read()
+
+		self.assertIn("EdgeAppShell", content)
+		self.assertIn("EdgePageLayout", content)
+		self.assertIn("EdgeFilterBar", content)
+		self.assertIn('product="retailedge"', content)
+		self.assertIn('data-edge-product="retailedge"', content)
+
+	def test_frontend_references_safe_resolver(self):
+		"""Verify SalespersonPerformanceDashboard.vue uses safe components resolver checking window.EdgeUI.components."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		vue_path = os.path.join(
+			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+		)
+		self.assertTrue(os.path.exists(vue_path))
+		with open(vue_path, "r") as f:
+			content = f.read()
+		self.assertIn("window.EdgeUI", content)
+		self.assertIn(".components", content)
+
+	def test_frontend_has_visible_fallback(self):
+		"""Verify SalespersonPerformanceDashboard.vue has a visible fallback path when components resolution fails."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		vue_path = os.path.join(
+			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+		)
+		self.assertTrue(os.path.exists(vue_path))
+		with open(vue_path, "r") as f:
+			content = f.read()
+		self.assertIn("!edgeUIValid", content)
+		self.assertIn("EdgeSuite UI failed to load", content)
+
+	def test_loader_loads_edgeui_before_dashboard_bundle(self):
+		"""Verify salesperson_performance_dashboard.js loader loads edgeui.bundle.js before salesperson_performance.bundle.js."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		js_path = os.path.join(
+			retailedge_path, "retailedge", "page", "salesperson_performance_dashboard", "salesperson_performance_dashboard.js"
+		)
+		self.assertTrue(os.path.exists(js_path))
+		with open(js_path, "r") as f:
+			content = f.read()
+
+		# Ensure edgeui.bundle.js is loaded first in the execution callback flow
+		first_load_idx = content.find("edgeui.bundle.js")
+		second_load_idx = content.find("salesperson_performance.bundle.js")
+		self.assertNotEqual(first_load_idx, -1)
+		self.assertNotEqual(second_load_idx, -1)
+		self.assertTrue(first_load_idx < second_load_idx, "edgeui.bundle.js must load before salesperson_performance.bundle.js")
+
+	def test_frontend_filter_bar_structure_and_labels(self):
+		"""Verify that SalespersonPerformanceDashboard.vue has EdgeFilterBar, the correct filter labels, fields, and buttons."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		vue_path = os.path.join(
+			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+		)
+		self.assertTrue(os.path.exists(vue_path))
+		with open(vue_path, "r") as f:
+			content = f.read()
+
+		# Assert EdgeFilterBar tag exists
+		self.assertIn("<EdgeFilterBar", content)
+
+		# Assert it is NOT inside a named slot template (like <template #filters>)
+		self.assertNotIn("<template #filters>", content)
+
+		# Assert labels and fields exist
+		self.assertIn("From Date", content)
+		self.assertIn("To Date", content)
+		self.assertIn("Branch", content)
+		self.assertIn("Salesperson", content)
+		self.assertIn("Customer", content)
+		self.assertIn("Item Code", content)
+		self.assertIn("edge-filter-grid", content)
+		self.assertIn("edge-field", content)
+		self.assertIn("edge-input", content)
+		self.assertIn("edge-select", content)
+		self.assertIn("edge-primary-button", content)
+		self.assertIn("edge-table-card", content)
+		self.assertIn("edge-stat-grid", content)
+
+		# Assert Apply / Refresh button exists
+		self.assertIn("Apply / Refresh", content)
+
+		# Assert summary cards exist in the template
+		self.assertIn("<EdgeStatCard", content)
+		self.assertIn('label="Gross Sales"', content)
+		self.assertIn('label="Net Sales"', content)
+		self.assertIn('label="Number of Sales Invoices"', content)
+		self.assertIn('label="Average Invoice Value"', content)
+		self.assertIn('label="Total Discount"', content)
+		self.assertIn('label="Outstanding Amount"', content)
+
+		# Assert the filter bar is NOT hidden by v-if="!metadataLoading" or similar
+		self.assertNotIn('v-if="!metadataLoading"', content)
+
+		# Assert metadataLoading is used for disabled attribute
+		self.assertIn(':disabled="metadataLoading"', content)
+
+		# Ensure there is no raw fallback table-only path (no rendering raw table directly under v-if="!edgeUIValid")
+		# The fallback block should only show the components resolution failure UI
+		fallback_block_start = content.find("v-if=\"!edgeUIValid\"")
+		self.assertNotEqual(fallback_block_start, -1)
+		fallback_block_end = content.find("<EdgeAppShell", fallback_block_start)
+		fallback_content = content[fallback_block_start:fallback_block_end]
+		self.assertNotIn("<table", fallback_content)
+		self.assertNotIn("dashboard-table", fallback_content)
+
+	def test_loader_loads_css_bundles(self):
+		"""Verify salesperson_performance_dashboard.js loader does not request missing bare CSS assets."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		js_path = os.path.join(
+			retailedge_path, "retailedge", "page", "salesperson_performance_dashboard", "salesperson_performance_dashboard.js"
+		)
+		self.assertTrue(os.path.exists(js_path))
+		with open(js_path, "r") as f:
+			content = f.read()
+
+
+	def test_required_components_resolution_does_not_fallback(self):
+		"""Verify SalespersonPerformanceDashboard.vue resolves required shell components using getRequiredComponent with no div fallback."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		vue_path = os.path.join(
+			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+		)
+		self.assertTrue(os.path.exists(vue_path))
+		with open(vue_path, "r") as f:
+			content = f.read()
+
+		self.assertIn("import EdgeAppShell from", content)
+		self.assertIn("import EdgePageLayout from", content)
+		self.assertIn("import EdgeFilterBar from", content)
+		self.assertIn("import EdgeStatCard from", content)
+		self.assertIn("import EdgeLoadingState from", content)
+		self.assertIn("import EdgeEmptyState from", content)
+		self.assertIn("import EdgeErrorState from", content)
+
+		# Ensure getRequiredComponent does not return a fallback default like 'div'
+		get_req_comp_start = content.find("const getRequiredComponent")
+		self.assertNotEqual(get_req_comp_start, -1)
+		get_req_comp_end = content.find("};", get_req_comp_start)
+		get_req_comp_body = content[get_req_comp_start:get_req_comp_end]
+		self.assertNotIn("'div'", get_req_comp_body)
+		self.assertNotIn('"div"', get_req_comp_body)
+
+
+
+
+

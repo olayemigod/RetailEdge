@@ -128,3 +128,58 @@ def get_salesperson_performance(filters=None):
 		"limit": limit,
 		"offset": offset
 	}
+
+@frappe.whitelist()
+def get_salesperson_dashboard_options():
+	"""Fetches filter options and user default context for the salesperson performance dashboard."""
+	# Assert page security permissions
+	assert_can_access_branch_performance(frappe.session.user)
+
+	# Fetch candidate branches using the internal helper
+	from retailedge.branch_performance import get_candidate_branches
+	branches = get_candidate_branches()
+
+	# Fetch active salespeople
+	salespeople = frappe.get_all(
+		"Sales Person",
+		filters={"enabled": 1},
+		fields=["name"],
+		pluck="name",
+		limit_page_length=500
+	) or []
+
+	# Default filter values
+	default_filters = {
+		"from_date": get_first_day(nowdate()),
+		"to_date": nowdate(),
+		"branch": "",
+		"salesperson": "",
+		"customer": "",
+		"item": "",
+		"limit": 50,
+		"offset": 0
+	}
+
+	# Resolve user fullname and company details
+	user_fullname = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
+	company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company") or "RetailEdge Tenant"
+
+	# Resolve active branch from user context
+	active_branch = ""
+	try:
+		from retailedge.branch_context import resolve_retailedge_branch_context
+		branch_ctx = resolve_retailedge_branch_context(user=frappe.session.user)
+		if branch_ctx and branch_ctx.get("branch"):
+			active_branch = branch_ctx.get("branch")
+	except Exception:
+		pass
+
+	return {
+		"branches": branches,
+		"salespeople": salespeople,
+		"default_filters": default_filters,
+		"tenant_name": company,
+		"branch_name": active_branch or (branches[0] if branches else ""),
+		"user_name": user_fullname
+	}
+
