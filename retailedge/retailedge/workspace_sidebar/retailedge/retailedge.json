@@ -381,6 +381,17 @@
    "collapsible": 1,
    "indent": 0,
    "keep_closed": 0,
+   "label": "Salesperson Performance Dashboard",
+   "link_to": "salesperson-performance-dashboard",
+   "link_type": "Page",
+   "show_arrow": 0,
+   "type": "Link"
+  },
+  {
+   "child": 1,
+   "collapsible": 1,
+   "indent": 0,
+   "keep_closed": 0,
    "label": "Cashier Expense Review",
    "link_to": "RetailEdge Cashier Expense Review",
    "link_type": "Report",
