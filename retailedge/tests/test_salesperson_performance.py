@@ -5,6 +5,7 @@
 import os
 import json
 import py_compile
+from collections import Counter
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -97,7 +98,10 @@ class TestSalespersonPerformance(FrappeTestCase):
 	def test_options_api_is_whitelisted_and_valid(self):
 		"""Verify get_salesperson_dashboard_options API is whitelisted and returns option keys."""
 		from retailedge.salesperson_performance import get_salesperson_dashboard_options
-		self.assertTrue(getattr(get_salesperson_dashboard_options, "_is_whitelisted", False))
+		is_whitelisted = getattr(get_salesperson_dashboard_options, "_is_whitelisted", False)
+		if not is_whitelisted and hasattr(frappe, "whitelisted"):
+			is_whitelisted = get_salesperson_dashboard_options in frappe.whitelisted
+		self.assertTrue(is_whitelisted)
 
 		try:
 			res = get_salesperson_dashboard_options()
@@ -114,7 +118,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		"""Verify frontend no longer calls get_candidate_branches directly."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
-			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
 		)
 		self.assertTrue(os.path.exists(vue_path))
 		with open(vue_path, "r") as f:
@@ -125,7 +129,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		"""Verify frontend uses EdgeAppShell, EdgePageLayout, EdgeFilterBar and sets product identity."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
-			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
 		)
 		self.assertTrue(os.path.exists(vue_path))
 		with open(vue_path, "r") as f:
@@ -141,7 +145,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		"""Verify SalespersonPerformanceDashboard.vue uses safe components resolver checking window.EdgeUI.components."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
-			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
 		)
 		self.assertTrue(os.path.exists(vue_path))
 		with open(vue_path, "r") as f:
@@ -153,7 +157,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		"""Verify SalespersonPerformanceDashboard.vue has a visible fallback path when components resolution fails."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
-			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
 		)
 		self.assertTrue(os.path.exists(vue_path))
 		with open(vue_path, "r") as f:
@@ -182,7 +186,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		"""Verify that SalespersonPerformanceDashboard.vue has EdgeFilterBar, the correct filter labels, fields, and buttons."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
-			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
 		)
 		self.assertTrue(os.path.exists(vue_path))
 		with open(vue_path, "r") as f:
@@ -251,7 +255,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		"""Verify SalespersonPerformanceDashboard.vue resolves required shell components using getRequiredComponent with no div fallback."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
-			retailedge_path, "retailedge", "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
+			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
 		)
 		self.assertTrue(os.path.exists(vue_path))
 		with open(vue_path, "r") as f:
@@ -273,7 +277,41 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertNotIn("'div'", get_req_comp_body)
 		self.assertNotIn('"div"', get_req_comp_body)
 
+	def test_salesperson_dashboard_is_discoverable_from_standard_navigation(self):
+		"""Verify Phase 2F navigation exposes the dashboard with the standard label and route."""
+		retailedge_path = frappe.get_app_path("retailedge")
+		workspace_path = os.path.join(
+			retailedge_path, "retailedge", "workspace", "retailedge", "retailedge.json"
+		)
+		sidebar_path = os.path.join(
+			retailedge_path, "retailedge", "workspace_sidebar", "retailedge", "retailedge.json"
+		)
+		with open(workspace_path, "r") as f:
+			workspace = json.load(f)
+		with open(sidebar_path, "r") as f:
+			sidebar = json.load(f)
 
+		expected_groups = ["Dashboard", "Operations", "Records", "Reports", "Settings"]
+		workspace_groups = [row["label"] for row in workspace["links"] if row.get("type") == "Card Break"]
+		sidebar_groups = [row["label"] for row in sidebar["items"] if row.get("type") == "Section Break"]
+		self.assertEqual(workspace_groups, expected_groups)
+		self.assertEqual(sidebar_groups, expected_groups)
+
+		for rows, group_type in ((workspace["links"], "Card Break"), (sidebar["items"], "Section Break")):
+			links = {
+				row["label"]: row
+				for row in rows
+				if row.get("type") == "Link"
+			}
+			self.assertIn("Salesperson Performance Dashboard", links)
+			self.assertEqual(links["Salesperson Performance Dashboard"]["link_type"], "Page")
+			self.assertEqual(links["Salesperson Performance Dashboard"]["link_to"], "salesperson-performance-dashboard")
+			counts = Counter(
+				(row.get("link_type"), row.get("link_to") or row.get("url"))
+				for row in rows
+				if row.get("type") == "Link"
+			)
+			self.assertFalse([key for key, count in counts.items() if key[1] and count > 1])
 
 
 

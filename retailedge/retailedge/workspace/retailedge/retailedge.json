@@ -1,7 +1,7 @@
 {
  "app": "retailedge",
  "charts": [],
- "content": "[{\"id\":\"retailedge_home_header\",\"type\":\"header\",\"data\":{\"text\":\"<div class=\\\"retailedge-home-title\\\"><span>RetailEdge</span><small>ProcessEdge operational workspace</small></div>\",\"col\":12}},{\"id\":\"retailedge_home_start_pos\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Start POS\",\"col\":4}},{\"id\":\"retailedge_home_section_1\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations\",\"col\":4}},{\"id\":\"retailedge_home_section_2\",\"type\":\"card\",\"data\":{\"card_name\":\"Review & Approvals\",\"col\":4}},{\"id\":\"retailedge_home_section_3\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports & Analytics\",\"col\":4}},{\"id\":\"retailedge_home_section_4\",\"type\":\"card\",\"data\":{\"card_name\":\"Accounting / Ledger Bridge\",\"col\":4}},{\"id\":\"retailedge_home_section_5\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup / Configuration\",\"col\":4}},{\"id\":\"retailedge_home_section_6\",\"type\":\"card\",\"data\":{\"card_name\":\"Admin / Maintenance\",\"col\":4}}]",
+ "content": "[{\"id\":\"retailedge_workspace_header\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>RetailEdge</b></span>\",\"col\":12}},{\"id\":\"retailedge_workspace_section_1\",\"type\":\"card\",\"data\":{\"card_name\":\"Dashboard\",\"col\":4}},{\"id\":\"retailedge_workspace_section_2\",\"type\":\"card\",\"data\":{\"card_name\":\"Operations\",\"col\":4}},{\"id\":\"retailedge_workspace_section_3\",\"type\":\"card\",\"data\":{\"card_name\":\"Records\",\"col\":4}},{\"id\":\"retailedge_workspace_section_4\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":4}},{\"id\":\"retailedge_workspace_section_5\",\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":4}}]",
  "creation": "2026-05-07 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -17,8 +17,27 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Dashboard",
+   "link_count": 1,
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Salesperson Performance Dashboard",
+   "link_count": 0,
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "salesperson-performance-dashboard"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Operations",
-   "link_count": 16,
+   "link_count": 7,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -82,6 +101,25 @@
    "onboard": 0,
    "type": "Link",
    "link_to": "POS Closing Shift"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Bank Match Review",
+   "link_count": 0,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge Bank Transaction Match"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Records",
+   "link_count": 13,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
   },
   {
    "hidden": 0,
@@ -186,21 +224,91 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Review & Approvals",
-   "link_count": 6,
+   "label": "Journal Entry",
+   "link_count": 0,
    "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "Journal Entry"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "EdgePay Handoff Log",
+   "link_count": 0,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge EdgePay Handoff Log"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "EdgePay Payment Evidence",
+   "link_count": 0,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge EdgePay Payment Evidence"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Reports",
+   "link_count": 21,
+   "link_type": "Report",
    "onboard": 0,
    "type": "Card Break"
   },
   {
    "hidden": 0,
-   "is_query_report": 0,
-   "label": "Bank Match Review",
+   "is_query_report": 1,
+   "label": "Branch Performance Summary",
    "link_count": 0,
-   "link_type": "DocType",
+   "link_type": "Report",
    "onboard": 0,
    "type": "Link",
-   "link_to": "RetailEdge Bank Transaction Match"
+   "link_to": "RetailEdge Branch Performance Summary"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Cashier Expense Review",
+   "link_count": 0,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge Cashier Expense Review"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Cash Shift Verification",
+   "link_count": 0,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge Cash Shift Verification"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Daily Sales Audit Register",
+   "link_count": 0,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge Daily Sales Audit Register"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Invoice Payment Audit",
+   "link_count": 0,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge Invoice Payment Audit"
   },
   {
    "hidden": 0,
@@ -225,65 +333,6 @@
   {
    "hidden": 0,
    "is_query_report": 1,
-   "label": "Invoice Payment Audit",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Invoice Payment Audit"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Cashier Expense Review",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Cashier Expense Review"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Cash Shift Verification",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Cash Shift Verification"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Reports & Analytics",
-   "link_count": 14,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Branch Performance Summary",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Branch Performance Summary"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Daily Sales Audit Register",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Daily Sales Audit Register"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
    "label": "Unmatched Bank Transactions",
    "link_count": 0,
    "link_type": "Report",
@@ -304,26 +353,6 @@
   {
    "hidden": 0,
    "is_query_report": 1,
-   "label": "Bank Transaction Matching Report",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Bank Transaction Matching"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Reconciliation Handoff Report",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Reconciliation Handoff"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
    "label": "POS Closing Variance vs Expenses",
    "link_count": 0,
    "link_type": "Report",
@@ -333,13 +362,53 @@
   },
   {
    "hidden": 0,
-   "is_query_report": 0,
-   "label": "Payment Statement Import Register",
+   "is_query_report": 1,
+   "label": "EdgePay Reconciliation Readiness",
    "link_count": 0,
-   "link_type": "DocType",
+   "link_type": "Report",
    "onboard": 0,
    "type": "Link",
-   "link_to": "RetailEdge Payment Statement Import"
+   "link_to": "RetailEdge EdgePay Reconciliation Readiness"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "EdgePay Evidence Summary",
+   "link_count": 0,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge EdgePay Payment Evidence Summary"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "EdgePay Lifecycle Status",
+   "link_count": 0,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge EdgePay Lifecycle Status"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "EdgePay Rollout Monitor",
+   "link_count": 0,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge EdgePay Rollout Monitor"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "EdgePay Readiness Checklist",
+   "link_count": 0,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "RetailEdge EdgePay Readiness Checklist"
   },
   {
    "hidden": 0,
@@ -404,37 +473,8 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Accounting / Ledger Bridge",
-   "link_count": 2,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Journal Entry",
-   "link_count": 0,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "Journal Entry"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Reconciliation Readiness",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Bank Match Reconciliation Readiness"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Setup / Configuration",
-   "link_count": 11,
+   "label": "Settings",
+   "link_count": 13,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -552,51 +592,12 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Admin / Maintenance",
-   "link_count": 5,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Sales Invoice Verification Sync",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Invoice Payment Audit"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Bank Match Integrity Check",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Bank Match Reconciliation Readiness"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
    "label": "Bank Match Batch Jobs",
    "link_count": 0,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link",
    "link_to": "RetailEdge Bank Match Batch Job"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 1,
-   "label": "Failed Reconciliation Repair",
-   "link_count": 0,
-   "link_type": "Report",
-   "onboard": 0,
-   "type": "Link",
-   "link_to": "RetailEdge Reconciliation Handoff"
   },
   {
    "hidden": 0,
