@@ -68,9 +68,49 @@ class BranchPerformanceTests(unittest.TestCase):
 		with self.assertRaises(Exception):
 			validate_filters(frappe._dict({"from_date": "2026-05-31", "to_date": "2026-05-01"}))
 
-	def test_validate_filters_raises_on_too_wide_live_range(self):
-		with self.assertRaises(Exception):
+	def test_validate_filters_does_not_raise_on_too_wide_live_range(self):
+		# Ranges > 60 days are now warning-only (non-blocking) and must not throw an exception.
+		try:
 			validate_filters(frappe._dict({"from_date": "2026-01-01", "to_date": "2026-05-31"}))
+		except Exception as e:
+			self.fail(f"validate_filters raised an unexpected exception for a wide range: {e}")
+
+	def test_date_range_presets_calculation(self):
+		from retailedge.branch_performance import get_preset_dates
+		from frappe.utils import getdate, nowdate, get_first_day, add_days
+		from datetime import timedelta
+
+		today = getdate(nowdate())
+
+		# Today
+		f, t = get_preset_dates("Today")
+		self.assertEqual(f, today)
+		self.assertEqual(t, today)
+
+		# Yesterday
+		f, t = get_preset_dates("Yesterday")
+		self.assertEqual(f, add_days(today, -1))
+		self.assertEqual(t, add_days(today, -1))
+
+		# This Month
+		f, t = get_preset_dates("This Month")
+		self.assertEqual(f, get_first_day(today))
+		self.assertEqual(t, today)
+
+		# This Week
+		f, t = get_preset_dates("This Week")
+		self.assertEqual(f, today - timedelta(days=today.weekday()))
+		self.assertEqual(t, today)
+
+		# Full Branch History
+		f, t = get_preset_dates("Full Branch History")
+		self.assertEqual(t, today)
+		self.assertIsNotNone(f)
+
+		# Custom Period
+		f, t = get_preset_dates("Custom Period")
+		self.assertIsNone(f)
+		self.assertIsNone(t)
 
 	@patch("retailedge.branch_performance.resolve_branch_from_opening_shift")
 	def test_resolve_sales_invoice_cashier_prefers_pos_opening_shift_user_over_owner(self, mock_shift):

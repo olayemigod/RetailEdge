@@ -4,16 +4,18 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_first_day, getdate, nowdate
 
-from retailedge.branch_performance import get_bank_sales_total, get_branch_performance_debug_summary, get_branch_performance_rows
+from retailedge.branch_performance import (
+	_coerce_filters,
+	get_bank_sales_total,
+	get_branch_performance_debug_summary,
+	get_branch_performance_rows,
+)
 
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
-	filters.setdefault("from_date", str(get_first_day(nowdate())))
-	filters.setdefault("to_date", str(getdate(nowdate())))
-	filters.setdefault("only_pos_invoices", 0)
-	filters.setdefault("include_unattributed", 1)
-	filters.setdefault("include_fallback_branch_resolution", 0)
+	filters.setdefault("date_range_preset", "This Month")
+	filters = _coerce_filters(filters)
 	validate_filters(filters)
 	data = get_data(filters)
 	message = None
@@ -26,8 +28,6 @@ def execute(filters=None):
 def validate_filters(filters):
 	if filters.get("from_date") and filters.get("to_date") and getdate(filters.from_date) > getdate(filters.to_date):
 		frappe.throw(_("From Date cannot be after To Date."))
-	if filters.get("from_date") and filters.get("to_date") and (getdate(filters.to_date) - getdate(filters.from_date)).days + 1 > 60:
-		frappe.throw(_("Date range too wide for live report. Please use 60 days or less."))
 
 
 def get_columns():

@@ -484,11 +484,80 @@ def get_candidate_branches(filters=None):
 	return frappe.get_all("Branch", filters=query_filters, pluck="name", limit_page_length=0) or []
 
 
+def get_preset_dates(preset):
+	from datetime import timedelta
+	from frappe.utils import add_days, get_first_day, getdate, nowdate
+
+	today = getdate(nowdate())
+
+	if preset == "Today":
+		from_date = today
+		to_date = today
+	elif preset == "Yesterday":
+		yesterday = add_days(today, -1)
+		from_date = yesterday
+		to_date = yesterday
+	elif preset == "This Week":
+		# Start of current week (Monday)
+		from_date = today - timedelta(days=today.weekday())
+		to_date = today
+	elif preset == "This Month":
+		from_date = get_first_day(today)
+		to_date = today
+	elif preset == "This Quarter":
+		quarter_month = ((today.month - 1) // 3) * 3 + 1
+		from_date = getdate(f"{today.year}-{quarter_month:02d}-01")
+		to_date = today
+	elif preset == "This Year":
+		from_date = getdate(f"{today.year}-01-01")
+		to_date = today
+	elif preset == "Last Week":
+		this_week_start = today - timedelta(days=today.weekday())
+		from_date = this_week_start - timedelta(days=7)
+		to_date = this_week_start - timedelta(days=1)
+	elif preset == "Last Month":
+		first_of_this_month = get_first_day(today)
+		last_of_last_month = add_days(first_of_this_month, -1)
+		from_date = get_first_day(last_of_last_month)
+		to_date = last_of_last_month
+	elif preset == "Last Quarter":
+		current_quarter_start_month = ((today.month - 1) // 3) * 3 + 1
+		first_of_this_quarter = getdate(f"{today.year}-{current_quarter_start_month:02d}-01")
+		last_of_last_quarter = add_days(first_of_this_quarter, -1)
+		last_quarter_start_month = ((last_of_last_quarter.month - 1) // 3) * 3 + 1
+		from_date = getdate(f"{last_of_last_quarter.year}-{last_quarter_start_month:02d}-01")
+		to_date = last_of_last_quarter
+	elif preset == "Last Year":
+		from_date = getdate(f"{today.year - 1}-01-01")
+		to_date = getdate(f"{today.year - 1}-12-31")
+	elif preset == "Full Branch History":
+		earliest = None
+		if has_doctype("Sales Invoice"):
+			earliest = frappe.db.get_value("Sales Invoice", filters={}, fieldname="posting_date", order_by="posting_date asc")
+		if not earliest:
+			earliest = "2020-01-01"
+		from_date = getdate(earliest)
+		to_date = today
+	else:
+		from_date = None
+		to_date = None
+
+	return from_date, to_date
+
+
 def _coerce_filters(filters):
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	if isinstance(filters, frappe._dict):
 		filters = dict(filters)
 	normalised = frappe._dict(filters)
+
+	preset = normalised.get("date_range_preset")
+	if preset and preset != "Custom Period":
+		preset_from, preset_to = get_preset_dates(preset)
+		if preset_from and preset_to:
+			normalised["from_date"] = str(preset_from)
+			normalised["to_date"] = str(preset_to)
+
 	normalised["from_date"] = str(getdate(normalised.get("from_date") or get_first_day(nowdate())))
 	normalised["to_date"] = str(getdate(normalised.get("to_date") or nowdate()))
 	normalised["include_fallback_branch_resolution"] = _truthy(normalised.get("include_fallback_branch_resolution"))
@@ -496,8 +565,8 @@ def _coerce_filters(filters):
 	normalised["only_pos_invoices"] = 0 if normalised.get("only_pos_invoices") in (None, "") else _truthy(normalised.get("only_pos_invoices"))
 	if getdate(normalised.from_date) > getdate(normalised.to_date):
 		frappe.throw("From Date cannot be after To Date.")
-	if (getdate(normalised.to_date) - getdate(normalised.from_date)).days > MAX_BRANCH_PERFORMANCE_RANGE_DAYS:
-		frappe.throw("Date range too wide for live report. Please use 60 days or less.")
+	if (getdate(normalised.to_date) - getdate(normalised.from_date)).days + 1 > 60:
+		frappe.msgprint(frappe._("Large date ranges may take longer to load."), alert=True)
 	return normalised
 
 
