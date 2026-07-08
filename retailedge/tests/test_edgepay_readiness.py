@@ -11,6 +11,12 @@ class TestEdgePayReadiness(FrappeTestCase):
 		self.db_backup.backup()
 		super(TestEdgePayReadiness, self).setUp()
 		frappe.set_user("Administrator")
+		# Stabilize: clear database settings record to ensure defaults from schema are loaded
+		try:
+			frappe.db.delete("Singles", {"doctype": "EdgePay Settings"})
+			frappe.db.commit()
+		except Exception:
+			pass
 
 	def tearDown(self):
 		frappe.set_user("Administrator")

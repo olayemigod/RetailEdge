@@ -47,8 +47,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn("RetailEdge Manager", roles)
 		self.assertIn("RetailEdge Branch Manager", roles)
 
-	def test_loader_does_not_require_coreedge_edgeui_bundle(self):
-		"""Verify salesperson_performance_dashboard.js loads only the RetailEdge bundle."""
+	def test_loader_loads_edgeui_before_product_bundle(self):
+		"""Verify salesperson_performance_dashboard.js loads public EdgeUI before the RetailEdge bundle."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		js_path = os.path.join(
 			retailedge_path, "retailedge", "page", "salesperson_performance_dashboard", "salesperson_performance_dashboard.js"
@@ -58,9 +58,14 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(js_path, "r") as f:
 			content = f.read()
 			
-		self.assertNotIn("frappe.require('edgeui.bundle.js'", content)
-		self.assertNotIn("edgeui.bundle.js", content)
+		edgeui_idx = content.find("frappe.require('edgeui.bundle.js'")
+		product_idx = content.find("frappe.require('salesperson_performance.bundle.js'")
+		self.assertNotEqual(edgeui_idx, -1)
+		self.assertNotEqual(product_idx, -1)
+		self.assertLess(edgeui_idx, product_idx)
 		self.assertIn("frappe.require('salesperson_performance.bundle.js'", content)
+		self.assertIn("window.EdgeUI", content)
+		self.assertIn("Required EdgeSuite shell components could not be resolved", content)
 		self.assertIn("unmount()", content)
 		self.assertIn("current_visit_id", content)
 
@@ -144,7 +149,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn('data-edge-product="retailedge"', content)
 
 	def test_frontend_references_safe_resolver(self):
-		"""Verify SalespersonPerformanceDashboard.vue uses app-local EdgeUI-compatible components."""
+		"""Verify SalespersonPerformanceDashboard.vue prefers runtime EdgeUI with local build-safe wrappers."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
 			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
@@ -153,6 +158,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(vue_path, "r") as f:
 			content = f.read()
 		self.assertIn("localEdgeUIComponents", content)
+		self.assertIn("resolveEdgeUIComponents", content)
+		self.assertIn("window.EdgeUI", content)
 		self.assertIn("import { h } from 'vue'", content)
 		self.assertNotIn("coreedge/coreedge/public/js/edgeui", content)
 		self.assertNotIn("../../../../../coreedge", content)
@@ -169,8 +176,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn("!edgeUIValid", content)
 		self.assertIn("EdgeSuite UI failed to load", content)
 
-	def test_loader_uses_product_bundle_without_coreedge_edgeui(self):
-		"""Verify salesperson_performance_dashboard.js loader does not require CoreEdge EdgeUI bundle."""
+	def test_loader_uses_public_edgeui_before_product_bundle(self):
+		"""Verify salesperson_performance_dashboard.js loader requires EdgeUI before the product bundle."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		js_path = os.path.join(
 			retailedge_path, "retailedge", "page", "salesperson_performance_dashboard", "salesperson_performance_dashboard.js"
@@ -179,7 +186,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(js_path, "r") as f:
 			content = f.read()
 
-		self.assertNotIn("edgeui.bundle.js", content)
+		self.assertIn("edgeui.bundle.js", content)
 		self.assertIn("salesperson_performance.bundle.js", content)
 
 	def test_frontend_filter_bar_structure_and_labels(self):
@@ -288,7 +295,17 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(sidebar_path, "r") as f:
 			sidebar = json.load(f)
 
-		expected_groups = ["Dashboard", "Operations", "Records", "Reports", "Settings"]
+		expected_groups = [
+			"Dashboard",
+			"Sales & POS",
+			"Cash, Bank & Reconciliation",
+			"Inventory & Purchasing",
+			"Expenses, Payables & Receivables",
+			"Reviews & Exceptions",
+			"Reports & Insights",
+			"Setup & Configuration",
+			"Admin & Maintenance",
+		]
 		workspace_groups = [row["label"] for row in workspace["links"] if row.get("type") == "Card Break"]
 		sidebar_groups = [row["label"] for row in sidebar["items"] if row.get("type") == "Section Break"]
 		self.assertEqual(workspace_groups, expected_groups)

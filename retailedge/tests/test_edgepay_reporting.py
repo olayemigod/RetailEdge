@@ -38,17 +38,20 @@ class TestEdgePayReporting(FrappeTestCase):
 
 	def test_payment_evidence_summary_report_executes_correctly(self):
 		# Create test evidence
-		self.create_evidence("EPE-REP-001", review_status="Pending Review")
+		doc = self.create_evidence("EPE-REP-001", review_status="Pending Review")
 		self.create_evidence("EPE-REP-002", review_status="Reviewed", posting_status="Draft Created")
 		self.create_evidence("EPE-REP-003", review_status="Reviewed", submission_status="Submitted", reconciliation_status="Ready")
 		self.create_evidence("EPE-REP-004", review_status="Reviewed", reconciliation_status="Blocked")
+
+		from frappe.utils import getdate
+		created_date = getdate(doc.creation).strftime("%Y-%m-%d")
 
 		# Import execute method of report
 		from retailedge.retailedge.report.retailedge_edgepay_payment_evidence_summary.retailedge_edgepay_payment_evidence_summary import execute
 		
 		columns, data, message, chart, report_summary = execute(filters={
-			"from_date": "2026-06-01",
-			"to_date": "2026-06-30"
+			"from_date": created_date,
+			"to_date": created_date
 		})
 
 		# Ensure columns exist
@@ -65,13 +68,16 @@ class TestEdgePayReporting(FrappeTestCase):
 		self.assertEqual(summary_dict.get("Blocked / Exception"), 1)
 
 	def test_lifecycle_status_report_executes_correctly(self):
-		self.create_evidence("EPE-REP-010", review_status="Reviewed", submission_status="Submitted", reconciliation_status="Matched")
+		doc = self.create_evidence("EPE-REP-010", review_status="Reviewed", submission_status="Submitted", reconciliation_status="Matched")
+
+		from frappe.utils import getdate
+		created_date = getdate(doc.creation).strftime("%Y-%m-%d")
 
 		from retailedge.retailedge.report.retailedge_edgepay_lifecycle_status.retailedge_edgepay_lifecycle_status import execute
 		
 		columns, data, message, chart, report_summary = execute(filters={
-			"from_date": "2026-06-01",
-			"to_date": "2026-06-30"
+			"from_date": created_date,
+			"to_date": created_date
 		})
 
 		self.assertTrue(len(columns) > 0)

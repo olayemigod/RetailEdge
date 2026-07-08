@@ -2773,14 +2773,21 @@ class BranchProfileTests(unittest.TestCase):
 		self.assertEqual(
 			link_labels,
 			[
-				"Operations",
-				"Review & Approvals",
-				"Reports & Analytics",
-				"Accounting / Ledger Bridge",
-				"Setup / Configuration",
-				"Admin / Maintenance",
+				"Dashboard",
+				"Sales & POS",
+				"Cash, Bank & Reconciliation",
+				"Inventory & Purchasing",
+				"Expenses, Payables & Receivables",
+				"Reviews & Exceptions",
+				"Reports & Insights",
+				"Setup & Configuration",
+				"Admin & Maintenance",
 			],
 		)
+		for row in data.get("links", []):
+			if row.get("type") == "Card Break":
+				self.assertEqual(row.get("close"), 1, f"Section {row.get('label')} is not collapsed by default.")
+
 		shortcut_labels = [row.get("label") for row in data.get("shortcuts", [])]
 		self.assertIn("Start POS", shortcut_labels)
 		self.assertIn("Cashier Expense", shortcut_labels)
@@ -2790,7 +2797,7 @@ class BranchProfileTests(unittest.TestCase):
 		self.assertIn("Bank Match Review", shortcut_labels)
 		self.assertIn("Unmatched Bank Transactions", shortcut_labels)
 		self.assertIn("Unmatched Bank Payment Events", shortcut_labels)
-		self.assertIn("Reconciliation Readiness", shortcut_labels)
+		self.assertIn("Reconciliation Readiness Review", shortcut_labels)
 		self.assertIn("Cash Shift Verification", shortcut_labels)
 		self.assertIn("Statement Mapping Template", shortcut_labels)
 		self.assertIn("Settings", shortcut_labels)
@@ -2824,15 +2831,15 @@ class BranchProfileTests(unittest.TestCase):
 			_sync_workspace_sidebar(workspace)
 
 		self.assertEqual(
-			[(item.type, item.label, item.child) for item in sidebar.items],
+			[(item.type, item.label, item.child, item.keep_closed if item.type == "Section Break" else None) for item in sidebar.items],
 			[
-				("Link", "Home", 0),
-				("Section Break", "Operations", 0),
-				("Link", "Cashier Expense", 1),
-				("Section Break", "Reports & Review", 0),
-				("Link", "Cashier Expense Review", 1),
-				("Section Break", "Setup / Configuration", 0),
-				("Link", "Settings", 1),
+				("Link", "Home", 0, None),
+				("Section Break", "Operations", 0, 1),
+				("Link", "Cashier Expense", 1, None),
+				("Section Break", "Reports & Review", 0, 1),
+				("Link", "Cashier Expense Review", 1, None),
+				("Section Break", "Setup / Configuration", 0, 1),
+				("Link", "Settings", 1, None),
 			],
 		)
 
@@ -2850,34 +2857,120 @@ class BranchProfileTests(unittest.TestCase):
 		self.assertEqual(data.get("doctype"), "Workspace Sidebar")
 		self.assertEqual(data.get("app"), "retailedge")
 		self.assertEqual(data.get("standard"), 1)
+
+		# Verify all section breaks have keep_closed set to 1
+		for row in data.get("items", []):
+			if row.get("type") == "Section Break":
+				self.assertEqual(row.get("keep_closed"), 1, f"Sidebar section break {row.get('label')} is not collapsed.")
+
 		self.assertEqual(
 			[(row.get("type"), row.get("label"), row.get("child", 0)) for row in data.get("items", [])],
 			[
 				("Link", "Home", 0),
-				("Section Break", "Operations", 0),
-				("Link", "Cashier Expense", 1),
-				("Link", "Daily Sales Audit", 1),
-				("Link", "Payment Statement Import", 1),
-				("Section Break", "Reports & Review", 0),
+				("Section Break", "Dashboard", 0),
+				("Link", "Salesperson Performance Dashboard", 1),
 				("Link", "Branch Performance Summary", 1),
+				("Section Break", "Sales & POS", 0),
+				("Link", "POS Opening Shift", 1),
+				("Link", "POS Closing Shift", 1),
+				("Link", "Sales Invoice", 1),
+				("Link", "Customer", 1),
+				("Section Break", "Cash, Bank & Reconciliation", 0),
+				("Link", "Payment Entry", 1),
+				("Link", "Bank Transaction", 1),
+				("Link", "Payment Statement Import", 1),
+				("Link", "Bank Match Review", 1),
 				("Link", "Bank Transaction Matching", 1),
+				("Link", "Cashier Expense", 1),
+				("Section Break", "Inventory & Purchasing", 0),
+				("Link", "Item", 1),
+				("Link", "Warehouse", 1),
+				("Link", "Stock Entry", 1),
+				("Link", "Stock Reconciliation", 1),
+				("Link", "Material Request", 1),
+				("Link", "Purchase Receipt", 1),
+				("Link", "Delivery Note", 1),
+				("Section Break", "Expenses, Payables & Receivables", 0),
+				("Link", "Journal Entry", 1),
+				("Section Break", "Reviews & Exceptions", 0),
+				("Link", "Daily Sales Audit", 1),
+				("Link", "Cashier Expense Review", 1),
+				("Link", "Cash Shift Verification", 1),
+				("Link", "Invoice Payment Audit", 1),
+				("Link", "POS Closing Variance vs Expenses", 1),
+				("Link", "Daily Sales Audit Register", 1),
+				("Section Break", "Reports & Insights", 0),
+				("Link", "Stock Ledger", 1),
+				("Link", "Stock Balance", 1),
+				("Link", "Stock Projected Qty", 1),
+				("Link", "Stock Ageing", 1),
+				("Link", "Batch-Wise Balance History", 1),
+				("Link", "Serial No and Batch Traceability", 1),
 				("Link", "Unmatched Bank Transactions", 1),
 				("Link", "Unmatched Bank Payment Events", 1),
-				("Link", "Reconciliation Readiness", 1),
+				("Link", "Reconciliation Readiness Review", 1),
 				("Link", "Reconciliation Handoff", 1),
-				("Link", "Bank Match Review", 1),
-				("Link", "Invoice Payment Audit", 1),
-				("Link", "Cash Shift Verification", 1),
-				("Link", "POS Variance", 1),
-				("Link", "Cashier Expense Review", 1),
-				("Link", "Daily Sales Audit Register", 1),
-				("Section Break", "Setup / Configuration", 0),
+				("Section Break", "Setup & Configuration", 0),
 				("Link", "Settings", 1),
 				("Link", "Branch Profile", 1),
+				("Link", "Branch Profile User", 1),
 				("Link", "Expense Category", 1),
 				("Link", "Statement Mapping Template", 1),
+				("Link", "Bank Account", 1),
+				("Link", "Mode of Payment", 1),
+				("Link", "Item Group", 1),
+				("Link", "UOM", 1),
+				("Link", "Batch", 1),
+				("Link", "Serial No", 1),
+				("Section Break", "Admin & Maintenance", 0),
+				("Link", "Bank Match Batch Jobs", 1),
+				("Link", "Error Log", 1),
 			],
 		)
+
+	def test_workspace_and_sidebar_links_are_valid_and_non_url(self):
+		import json
+		from pathlib import Path
+
+		# 1. Check workspace JSON
+		workspace_path = Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace/retailedge/retailedge.json")
+		workspace = json.loads(workspace_path.read_text())
+
+		# Check workspace links
+		for row in workspace.get("links", []):
+			if row.get("type") == "Link":
+				# Must not use URL as link type
+				self.assertNotEqual(row.get("link_type"), "URL")
+				self.assertNotEqual(row.get("link_to"), "URL")
+				# If link_type is DocType/Page/Report, verify it points to an existing target
+				link_type = row.get("link_type")
+				link_to = row.get("link_to")
+				if link_type in ["DocType", "Page", "Report", "Workspace"]:
+					self.assertTrue(
+						frappe.db.exists(link_type, link_to),
+						f"Workspace link target {link_to} of type {link_type} does not exist!"
+					)
+
+		# 2. Check sidebar JSONs
+		sidebar_paths = [
+			Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/workspace_sidebar/retailedge.json"),
+			Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace_sidebar/retailedge/retailedge.json"),
+		]
+		for path in sidebar_paths:
+			sidebar = json.loads(path.read_text())
+			for row in sidebar.get("items", []):
+				if row.get("type") == "Link":
+					# Must not use URL as link type in sidebar
+					self.assertNotEqual(row.get("link_type"), "URL")
+					self.assertNotEqual(row.get("link_to"), "URL")
+					# If link_type is DocType/Page/Report/Workspace, verify target exists
+					link_type = row.get("link_type")
+					link_to = row.get("link_to")
+					if link_type in ["DocType", "Page", "Report", "Workspace"]:
+						self.assertTrue(
+							frappe.db.exists(link_type, link_to),
+							f"Sidebar link target {link_to} of type {link_type} in {path.name} does not exist!"
+						)
 
 
 class TransactionBranchAttributionTests(unittest.TestCase):
