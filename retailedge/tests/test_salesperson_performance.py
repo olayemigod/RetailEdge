@@ -47,8 +47,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn("RetailEdge Manager", roles)
 		self.assertIn("RetailEdge Branch Manager", roles)
 
-	def test_lazy_loads_edgeui_bundle(self):
-		"""Verify salesperson_performance_dashboard.js lazy-loads edgeui.bundle.js via frappe.require."""
+	def test_loader_does_not_require_coreedge_edgeui_bundle(self):
+		"""Verify salesperson_performance_dashboard.js loads only the RetailEdge bundle."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		js_path = os.path.join(
 			retailedge_path, "retailedge", "page", "salesperson_performance_dashboard", "salesperson_performance_dashboard.js"
@@ -58,7 +58,9 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(js_path, "r") as f:
 			content = f.read()
 			
-		self.assertIn("frappe.require('edgeui.bundle.js'", content)
+		self.assertNotIn("frappe.require('edgeui.bundle.js'", content)
+		self.assertNotIn("edgeui.bundle.js", content)
+		self.assertIn("frappe.require('salesperson_performance.bundle.js'", content)
 		self.assertIn("unmount()", content)
 		self.assertIn("current_visit_id", content)
 
@@ -142,7 +144,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn('data-edge-product="retailedge"', content)
 
 	def test_frontend_references_safe_resolver(self):
-		"""Verify SalespersonPerformanceDashboard.vue uses safe components resolver checking window.EdgeUI.components."""
+		"""Verify SalespersonPerformanceDashboard.vue uses app-local EdgeUI-compatible components."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
 			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
@@ -150,8 +152,10 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertTrue(os.path.exists(vue_path))
 		with open(vue_path, "r") as f:
 			content = f.read()
-		self.assertIn("window.EdgeUI", content)
-		self.assertIn(".components", content)
+		self.assertIn("localEdgeUIComponents", content)
+		self.assertIn("import { h } from 'vue'", content)
+		self.assertNotIn("coreedge/coreedge/public/js/edgeui", content)
+		self.assertNotIn("../../../../../coreedge", content)
 
 	def test_frontend_has_visible_fallback(self):
 		"""Verify SalespersonPerformanceDashboard.vue has a visible fallback path when components resolution fails."""
@@ -165,8 +169,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn("!edgeUIValid", content)
 		self.assertIn("EdgeSuite UI failed to load", content)
 
-	def test_loader_loads_edgeui_before_dashboard_bundle(self):
-		"""Verify salesperson_performance_dashboard.js loader loads edgeui.bundle.js before salesperson_performance.bundle.js."""
+	def test_loader_uses_product_bundle_without_coreedge_edgeui(self):
+		"""Verify salesperson_performance_dashboard.js loader does not require CoreEdge EdgeUI bundle."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		js_path = os.path.join(
 			retailedge_path, "retailedge", "page", "salesperson_performance_dashboard", "salesperson_performance_dashboard.js"
@@ -175,12 +179,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(js_path, "r") as f:
 			content = f.read()
 
-		# Ensure edgeui.bundle.js is loaded first in the execution callback flow
-		first_load_idx = content.find("edgeui.bundle.js")
-		second_load_idx = content.find("salesperson_performance.bundle.js")
-		self.assertNotEqual(first_load_idx, -1)
-		self.assertNotEqual(second_load_idx, -1)
-		self.assertTrue(first_load_idx < second_load_idx, "edgeui.bundle.js must load before salesperson_performance.bundle.js")
+		self.assertNotIn("edgeui.bundle.js", content)
+		self.assertIn("salesperson_performance.bundle.js", content)
 
 	def test_frontend_filter_bar_structure_and_labels(self):
 		"""Verify that SalespersonPerformanceDashboard.vue has EdgeFilterBar, the correct filter labels, fields, and buttons."""
@@ -252,7 +252,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 
 
 	def test_required_components_resolution_does_not_fallback(self):
-		"""Verify SalespersonPerformanceDashboard.vue resolves required shell components using getRequiredComponent with no div fallback."""
+		"""Verify SalespersonPerformanceDashboard.vue has local shell components with no CoreEdge private import."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		vue_path = os.path.join(
 			retailedge_path, "public", "js", "salesperson_performance_dashboard", "SalespersonPerformanceDashboard.vue"
@@ -261,21 +261,18 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(vue_path, "r") as f:
 			content = f.read()
 
-		self.assertIn("import EdgeAppShell from", content)
-		self.assertIn("import EdgePageLayout from", content)
-		self.assertIn("import EdgeFilterBar from", content)
-		self.assertIn("import EdgeStatCard from", content)
-		self.assertIn("import EdgeLoadingState from", content)
-		self.assertIn("import EdgeEmptyState from", content)
-		self.assertIn("import EdgeErrorState from", content)
-
-		# Ensure getRequiredComponent does not return a fallback default like 'div'
-		get_req_comp_start = content.find("const getRequiredComponent")
-		self.assertNotEqual(get_req_comp_start, -1)
-		get_req_comp_end = content.find("};", get_req_comp_start)
-		get_req_comp_body = content[get_req_comp_start:get_req_comp_end]
-		self.assertNotIn("'div'", get_req_comp_body)
-		self.assertNotIn('"div"', get_req_comp_body)
+		self.assertIn("const EdgeAppShell", content)
+		self.assertIn("const EdgePageLayout", content)
+		self.assertIn("const EdgeFilterBar", content)
+		self.assertIn("const EdgeStatCard", content)
+		self.assertIn("const EdgeLoadingState", content)
+		self.assertIn("const EdgeEmptyState", content)
+		self.assertIn("const EdgeErrorState", content)
+		self.assertNotIn("import EdgeAppShell from", content)
+		self.assertNotIn("import EdgePageLayout from", content)
+		self.assertNotIn("import EdgeFilterBar from", content)
+		self.assertNotIn("coreedge/coreedge/public/js/edgeui", content)
+		self.assertNotIn("../../../../../coreedge", content)
 
 	def test_salesperson_dashboard_is_discoverable_from_standard_navigation(self):
 		"""Verify Phase 2F navigation exposes the dashboard with the standard label and route."""
@@ -312,6 +309,3 @@ class TestSalespersonPerformance(FrappeTestCase):
 				if row.get("type") == "Link"
 			)
 			self.assertFalse([key for key, count in counts.items() if key[1] and count > 1])
-
-
-

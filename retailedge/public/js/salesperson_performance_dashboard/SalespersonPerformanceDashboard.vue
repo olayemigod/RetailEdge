@@ -219,42 +219,140 @@
 </template>
 
 <script>
-import EdgePageHeader from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgePageHeader.vue';
-import EdgeStatCard from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgeStatCard.vue';
-import EdgeStatusBadge from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgeStatusBadge.vue';
-import EdgeEmptyState from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgeEmptyState.vue';
-import EdgeLoadingState from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgeLoadingState.vue';
-import EdgeErrorState from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgeErrorState.vue';
-import EdgeAppShell from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgeAppShell.vue';
-import EdgePageLayout from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgePageLayout.vue';
-import EdgeFilterBar from '../../../../../coreedge/coreedge/public/js/edgeui/components/EdgeFilterBar.vue';// Consume CoreEdge EdgeUI elements safely from global namespace wrapper
-const getRequiredComponent = (name) => {
-  if (typeof window === 'undefined') return null;
-  const edgeUI = window.EdgeUI || {};
-  const componentsSrc = edgeUI.components || edgeUI;
-  return componentsSrc[name] || null;
+import { h } from 'vue';
+
+const EdgeAppShell = {
+  name: 'EdgeAppShell',
+  props: ['product', 'menuItems', 'activeRoute', 'title', 'tenantName', 'branchName', 'userName'],
+  emits: ['navigate'],
+  render() {
+    const menu = (this.menuItems || []).map((item) =>
+      h('button', {
+        class: ['edge-sidebar-item', item.route === this.activeRoute ? 'active' : ''],
+        type: 'button',
+        onClick: () => this.$emit('navigate', item.route)
+      }, [h('span', { class: 'edge-sidebar-icon' }, item.icon || ''), h('span', item.label || '')])
+    );
+    const context = [this.tenantName, this.branchName, this.userName].filter(Boolean).join(' · ');
+    return h('div', { class: 'edge-app-shell', 'data-edge-product': this.product }, [
+      h('div', { class: 'edge-topbar' }, [
+        h('div', { class: 'edge-topbar-title' }, this.title || ''),
+        h('div', { class: 'edge-topbar-context' }, context)
+      ]),
+      h('div', { class: 'edge-shell-body' }, [
+        h('aside', { class: 'edge-sidebar' }, menu),
+        h('main', { class: 'edge-shell-main' }, this.$slots.default ? this.$slots.default() : [])
+      ])
+    ]);
+  }
 };
 
-const getComponent = (name) => {
-  if (typeof window === 'undefined') return null;
-  const edgeUI = window.EdgeUI || {};
-  const componentsSrc = edgeUI.components || edgeUI;
-  return componentsSrc[name] || null;
+const EdgePageLayout = {
+  name: 'EdgePageLayout',
+  render() {
+    return h('section', { class: 'edge-page-layout' }, [
+      this.$slots.header ? h('div', { class: 'edge-page-layout-header' }, this.$slots.header()) : null,
+      h('div', { class: 'edge-page-layout-body' }, this.$slots.default ? this.$slots.default() : [])
+    ]);
+  }
+};
+
+const EdgePageHeader = {
+  name: 'EdgePageHeader',
+  props: ['title', 'subtitle'],
+  render() {
+    return h('div', { class: 'edge-page-header' }, [
+      h('h1', { class: 'edge-page-title' }, this.title || ''),
+      this.subtitle ? h('p', { class: 'edge-page-subtitle' }, this.subtitle) : null
+    ]);
+  }
+};
+
+const EdgeFilterBar = {
+  name: 'EdgeFilterBar',
+  props: ['title'],
+  render() {
+    return h('section', { class: 'edge-filter-bar' }, [
+      this.title ? h('h2', { class: 'edge-filter-title' }, this.title) : null,
+      h('div', { class: 'edge-filter-body' }, this.$slots.default ? this.$slots.default() : [])
+    ]);
+  }
+};
+
+const EdgeStatCard = {
+  name: 'EdgeStatCard',
+  props: ['label', 'value', 'icon', 'tooltip'],
+  render() {
+    return h('div', { class: 'edge-stat-card', title: this.tooltip || '' }, [
+      h('div', { class: 'edge-stat-icon' }, this.icon || ''),
+      h('div', { class: 'edge-stat-content' }, [
+        h('div', { class: 'edge-stat-label' }, this.label || ''),
+        h('div', { class: 'edge-stat-value' }, String(this.value ?? ''))
+      ])
+    ]);
+  }
+};
+
+const EdgeStatusBadge = {
+  name: 'EdgeStatusBadge',
+  props: ['label', 'status'],
+  render() {
+    const status = String(this.status || this.label || '').toLowerCase().replace(/\s+/g, '-');
+    return h('span', { class: ['edge-status-badge', `edge-status-${status}`] }, this.label || this.status || '');
+  }
+};
+
+const EdgeEmptyState = {
+  name: 'EdgeEmptyState',
+  props: ['title', 'description', 'icon'],
+  render() {
+    return h('div', { class: 'edge-empty-state' }, [
+      h('div', { class: 'edge-empty-icon' }, this.icon || ''),
+      h('h3', this.title || ''),
+      h('p', this.description || '')
+    ]);
+  }
+};
+
+const EdgeLoadingState = {
+  name: 'EdgeLoadingState',
+  props: ['message', 'skeleton'],
+  render() {
+    return h('div', { class: ['edge-loading-state', this.skeleton ? 'with-skeleton' : ''] }, [
+      h('div', { class: 'edge-loading-spinner' }),
+      h('p', this.message || 'Loading...')
+    ]);
+  }
+};
+
+const EdgeErrorState = {
+  name: 'EdgeErrorState',
+  props: ['title', 'message'],
+  emits: ['retry'],
+  render() {
+    return h('div', { class: 'edge-error-state' }, [
+      h('h3', this.title || 'Error'),
+      h('p', this.message || ''),
+      h('button', { class: 'edge-primary-button', type: 'button', onClick: () => this.$emit('retry') }, 'Retry')
+    ]);
+  }
+};
+
+const localEdgeUIComponents = {
+  EdgePageHeader,
+  EdgeStatCard,
+  EdgeStatusBadge,
+  EdgeEmptyState,
+  EdgeLoadingState,
+  EdgeErrorState,
+  EdgeAppShell,
+  EdgePageLayout,
+  EdgeFilterBar
 };
 
 export default {
   name: 'SalespersonPerformanceDashboard',
-  components: Object.fromEntries(Object.entries({
-    EdgePageHeader,
-    EdgeStatCard,
-    EdgeStatusBadge,
-    EdgeEmptyState,
-    EdgeLoadingState,
-    EdgeErrorState,
-    EdgeAppShell,
-    EdgePageLayout,
-    EdgeFilterBar
-  }).filter(([, component]) => component)),
+  components: localEdgeUIComponents,
   data() {
     return {
       edgeUIValid: true,
@@ -290,8 +388,6 @@ export default {
     };
   },
   created() {
-    const edgeUI = typeof window !== 'undefined' ? (window.EdgeUI || {}) : {};
-    const componentsSrc = edgeUI.components || edgeUI;
     const requiredComponents = [
       'EdgeAppShell',
       'EdgePageLayout',
@@ -302,7 +398,7 @@ export default {
       'EdgeEmptyState',
       'EdgeErrorState'
     ];
-    this.missingComponents = requiredComponents.filter((name) => !componentsSrc[name]);
+    this.missingComponents = requiredComponents.filter((name) => !localEdgeUIComponents[name]);
     this.edgeUIValid = this.missingComponents.length === 0;
   },
   mounted() {
