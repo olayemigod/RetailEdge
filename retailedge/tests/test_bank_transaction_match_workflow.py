@@ -194,6 +194,73 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			RetailEdgeBankTransactionMatch.validate(doc)
 
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_bank_transaction_context",
+		return_value={"bank_amount": 10000, "bank_reference": "TRF-MISSING", "bank_narration": "Walkin PH transfer"},
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._build_source_candidate_context",
+		return_value=None,
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match._resolve_matching_candidate",
+		return_value={
+			"document_type": "Payment Entry",
+			"document_name": "PE-MISSING-PARTY",
+			"suggested_sales_invoice": None,
+			"customer": "Walkin PH",
+			"party": "Walkin PH",
+			"party_type": "Customer",
+			"candidate_amount": 10000,
+			"score": 95,
+			"confidence": "Strong Match",
+			"candidate_category": "payment_entry_match",
+			"payment_event_found": 1,
+			"payment_event_source": "Payment Entry",
+			"payment_mode": "Bank Transfer",
+			"payment_account": "Moniepoint - moniepoint",
+			"reasons": ["Matched submitted Payment Entry."],
+		},
+	)
+	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.frappe.db.exists")
+	def test_controller_hydration_keeps_missing_candidate_party_as_evidence(self, mock_exists, _mock_candidate, _mock_source, _mock_bank):
+		def exists_side_effect(doctype, name):
+			if doctype == "Payment Entry" and name == "PE-MISSING-PARTY":
+				return True
+			if doctype == "Customer" and name == "Walkin PH":
+				return False
+			return False
+
+		mock_exists.side_effect = exists_side_effect
+		doc = self._bind_match_validate(
+			SimpleNamespace(
+				bank_transaction="ACC-BTN-MISSING-PARTY",
+				suggested_document_type="Payment Entry",
+				suggested_document="PE-MISSING-PARTY",
+				sales_invoice=None,
+				payment_entry=None,
+				party_type="Customer",
+				party=None,
+				customer=None,
+				bank_amount=10000,
+				candidate_amount=0,
+				decision_status="Suggested",
+				synced_to_sales_invoice=0,
+				sales_invoice_sync_ready=0,
+				sync_blocked_reason=None,
+				details_json=None,
+			),
+			validate_candidate=True,
+		)
+
+		RetailEdgeBankTransactionMatch.validate(doc)
+
+		self.assertIsNone(doc.customer)
+		self.assertIsNone(doc.party)
+		self.assertEqual(doc.party_type, "Customer")
+		self.assertIn("Walkin PH", doc.details_json)
+		self.assertIn("missing_party_link", doc.details_json)
+
 	@patch("retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.frappe.db.exists", return_value=True)
 	def test_supplier_party_type_is_allowed(self, _mock_exists):
 		doc = self._bind_match_validate(
@@ -879,9 +946,11 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		},
 	)
 	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
 	@patch("retailedge.bank_transaction_match_workflow.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	def test_create_or_get_match_creates_retailedge_record(
 		self,
+		_mock_exists,
 		_mock_existing,
 		_mock_normalize,
 		_mock_invoice_candidates,
@@ -915,6 +984,155 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		self.assertTrue(fake_doc.insert_called)
 		self.assertTrue(fake_doc.save_called)
 		self.assertEqual(fake_doc.action_logs[0]["action"], "Created")
+
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch(
+		"retailedge.bank_transaction_match_workflow.normalize_bank_transaction",
+		return_value={
+			"bank_transaction": "ACC-BTN-MISSING-PARTY",
+			"company": "Process Edge (Demo)",
+			"branch": "Airport Branch",
+			"bank_account": "Moniepoint - moniepoint",
+			"transaction_date": "2026-05-24",
+			"amount": 10000,
+			"reference": "TRF-MISSING",
+			"description": "Walkin PH transfer",
+		},
+	)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.set_value")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=False)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	def test_create_review_tolerates_missing_customer_party_link(
+		self,
+		_mock_exists,
+		_mock_existing,
+		mock_set_value,
+		_mock_normalize,
+		_mock_roles,
+		_mock_access,
+	):
+		fake_doc = _FakeMatchDoc(
+			doctype="RetailEdge Bank Transaction Match",
+			decision_status=None,
+			action_logs=[],
+			synced_to_sales_invoice=0,
+		)
+
+		def fake_get_doc(payload, *args, **kwargs):
+			if isinstance(payload, dict) and payload.get("doctype") == "RetailEdge Bank Transaction Match":
+				return fake_doc
+			raise AssertionError(f"Unexpected get_doc payload: {payload}")
+
+		locked_candidate = {
+			"document_type": "Payment Entry",
+			"document_name": "PE-MISSING-PARTY",
+			"suggested_sales_invoice": None,
+			"customer": "Walkin PH",
+			"party": "Walkin PH",
+			"party_type": "Customer",
+			"candidate_amount": 10000,
+			"score": 95,
+			"confidence": "Strong Match",
+			"candidate_category": "payment_entry_match",
+			"payment_event_found": 1,
+			"payment_event_source": "Payment Entry",
+			"payment_mode": "Bank Transfer",
+			"payment_account": "Moniepoint - moniepoint",
+			"reasons": ["Matched submitted Payment Entry."],
+		}
+
+		with patch("retailedge.bank_transaction_match_workflow.frappe.get_doc", side_effect=fake_get_doc), patch(
+			"retailedge.bank_transaction_match_workflow.now_datetime", return_value="2026-05-24 10:00:00"
+		):
+			result = create_or_get_bank_transaction_match(
+				"ACC-BTN-MISSING-PARTY",
+				locked_candidate=locked_candidate,
+				allow_fallback=False,
+			)
+
+		self.assertTrue(result["created"])
+		self.assertEqual(fake_doc.bank_transaction, "ACC-BTN-MISSING-PARTY")
+		self.assertIsNone(fake_doc.customer)
+		self.assertIsNone(fake_doc.party)
+		self.assertEqual(fake_doc.party_type, "Customer")
+		self.assertIn("Walkin PH", fake_doc.details_json)
+		self.assertIn("missing_party_link", fake_doc.details_json)
+		self.assertIn("Party not found: Customer Walkin PH", fake_doc.match_reason)
+		mock_set_value.assert_not_called()
+
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch(
+		"retailedge.bank_transaction_match_workflow.normalize_bank_transaction",
+		return_value={
+			"bank_transaction": "ACC-BTN-EXISTING-PARTY",
+			"company": "Process Edge (Demo)",
+			"branch": "Airport Branch",
+			"bank_account": "Moniepoint - moniepoint",
+			"transaction_date": "2026-05-24",
+			"amount": 10000,
+			"reference": "TRF-EXISTING",
+			"description": "Walkin PH transfer",
+		},
+	)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.session", SimpleNamespace(user="auditor@example.com"))
+	def test_create_review_preserves_existing_customer_party_link(
+		self,
+		_mock_exists,
+		_mock_existing,
+		_mock_normalize,
+		_mock_roles,
+		_mock_access,
+	):
+		fake_doc = _FakeMatchDoc(
+			doctype="RetailEdge Bank Transaction Match",
+			decision_status=None,
+			action_logs=[],
+			synced_to_sales_invoice=0,
+		)
+
+		def fake_get_doc(payload, *args, **kwargs):
+			if isinstance(payload, dict) and payload.get("doctype") == "RetailEdge Bank Transaction Match":
+				return fake_doc
+			raise AssertionError(f"Unexpected get_doc payload: {payload}")
+
+		locked_candidate = {
+			"document_type": "Payment Entry",
+			"document_name": "PE-EXISTING-PARTY",
+			"suggested_sales_invoice": None,
+			"customer": "Walkin PH",
+			"party": "Walkin PH",
+			"party_type": "Customer",
+			"candidate_amount": 10000,
+			"score": 95,
+			"confidence": "Strong Match",
+			"candidate_category": "payment_entry_match",
+			"payment_event_found": 1,
+			"payment_event_source": "Payment Entry",
+			"payment_mode": "Bank Transfer",
+			"payment_account": "Moniepoint - moniepoint",
+			"reasons": ["Matched submitted Payment Entry."],
+		}
+
+		with patch("retailedge.bank_transaction_match_workflow.frappe.get_doc", side_effect=fake_get_doc), patch(
+			"retailedge.bank_transaction_match_workflow.now_datetime", return_value="2026-05-24 10:00:00"
+		):
+			result = create_or_get_bank_transaction_match(
+				"ACC-BTN-EXISTING-PARTY",
+				locked_candidate=locked_candidate,
+				allow_fallback=False,
+			)
+
+		self.assertTrue(result["created"])
+		self.assertEqual(fake_doc.customer, "Walkin PH")
+		self.assertEqual(fake_doc.party, "Walkin PH")
+		self.assertEqual(fake_doc.party_type, "Customer")
+		self.assertIn('"missing_party_link": 0', fake_doc.details_json)
+		self.assertNotIn("Party not found", fake_doc.details_json)
 
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
 	@patch("retailedge.bank_transaction_match_workflow.frappe.session", SimpleNamespace(user="auditor@example.com"))

@@ -7,7 +7,7 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, cstr, flt, fmt_money
 
-from retailedge.bank_transaction_match_workflow import _resolve_matching_candidate
+from retailedge.bank_transaction_match_workflow import _resolve_matching_candidate, resolve_bank_match_party_link
 from retailedge.bank_transaction_matching import (
 	_get_sales_invoice_doc,
 	_invoice_payment_row_is_bank_matchable,
@@ -103,6 +103,14 @@ class RetailEdgeBankTransactionMatch(Document):
 		customer = frappe.db.get_value("Sales Invoice", sales_invoice, "customer")
 		if not customer:
 			frappe.throw(f"Sales Invoice {sales_invoice} does not have a customer.")
+		if not frappe.db.exists("Customer", customer):
+			self.party_type = "Customer"
+			self.party = None
+			self.customer = None
+			diagnostic = f"Party not found: Customer {customer}"
+			if diagnostic not in cstr(getattr(self, "match_reason", "")):
+				self.match_reason = "; ".join(filter(None, [getattr(self, "match_reason", None), diagnostic]))
+			return
 		self.party_type = "Customer"
 		self.party = customer
 		self.customer = customer
@@ -313,9 +321,9 @@ def _resolve_manual_candidate_context(
 		"payment_entry": candidate.get("document_name")
 		if (candidate.get("document_type") or suggested_document_type) == "Payment Entry"
 		else payment_entry,
-		"customer": candidate.get("customer"),
-		"party_type": candidate.get("party_type") or "Customer",
-		"party": candidate.get("party") or candidate.get("customer"),
+		"customer": None,
+		"party_type": "Customer",
+		"party": None,
 		"candidate_amount": flt(candidate.get("candidate_amount")),
 		"match_confidence": candidate.get("confidence") or "No Match",
 		"match_score": cint(candidate.get("score") or 0),
@@ -332,6 +340,23 @@ def _resolve_manual_candidate_context(
 	if bank_context:
 		doc_values.update(bank_context)
 		doc_values["amount_difference"] = flt(bank_context.get("bank_amount")) - flt(doc_values.get("candidate_amount"))
+	party_resolution = resolve_bank_match_party_link(
+		party_type=candidate.get("party_type"),
+		party=candidate.get("party"),
+		customer=candidate.get("customer"),
+	)
+	doc_values.update(
+		{
+			"customer": party_resolution.customer,
+			"party_type": party_resolution.party_type,
+			"party": party_resolution.party,
+		}
+	)
+	if party_resolution.get("diagnostic_message"):
+		details["missing_party_link"] = 1
+		details["party_diagnostic"] = party_resolution.diagnostic_message
+		details["party_display"] = party_resolution.display_party
+		details["party_type_display"] = party_resolution.display_party_type
 	return {"doc_values": doc_values, "details": details, "candidate": candidate, "block_reason": None}
 
 

@@ -45,6 +45,39 @@ BANK_TRANSACTION_MATCH_WORKFLOW_ROLES = {
 NO_MATCH_CANDIDATE_MESSAGE = "No match candidate found."
 
 
+def resolve_bank_match_party_link(party_type=None, party=None, customer=None):
+	party_type = cstr(party_type or ("Customer" if customer else "")).strip()
+	party = cstr(party or customer).strip()
+	customer = cstr(customer or (party if party_type == "Customer" else "")).strip()
+	allowed_party_types = {"Customer", "Supplier"}
+	result = frappe._dict(
+		{
+			"party_type": party_type if party_type in allowed_party_types else "Customer",
+			"party": None,
+			"customer": None,
+			"display_party_type": party_type,
+			"display_party": party or customer,
+			"missing_party_link": 0,
+			"diagnostic_message": None,
+		}
+	)
+	if not party:
+		return result
+	if party_type in allowed_party_types and frappe.db.exists(party_type, party):
+		result.party_type = party_type
+		result.party = party
+		if party_type == "Customer":
+			result.customer = party
+		elif customer and frappe.db.exists("Customer", customer):
+			result.customer = customer
+		return result
+	result.missing_party_link = 1
+	result.diagnostic_message = f"Party not found: {party_type or 'Party'} {party}"
+	if customer and customer != party and frappe.db.exists("Customer", customer):
+		result.customer = customer
+	return result
+
+
 def assert_can_manage_bank_transaction_match(user: str | None = None):
 	if user_has_any_role(user=user, roles=BANK_TRANSACTION_MATCH_WORKFLOW_ROLES):
 		return
@@ -1884,9 +1917,14 @@ def _populate_match_document(doc, bank_transaction, candidate=None, source_repor
 	doc.suggested_document = candidate.get("document_name")
 	doc.sales_invoice = candidate.get("suggested_sales_invoice") if candidate.get("document_type") == "Sales Invoice" else candidate.get("suggested_sales_invoice")
 	doc.payment_entry = candidate.get("document_name") if candidate.get("document_type") == "Payment Entry" else None
-	doc.customer = candidate.get("customer")
-	doc.party_type = candidate.get("party_type") or "Customer"
-	doc.party = candidate.get("party") or candidate.get("customer")
+	party_resolution = resolve_bank_match_party_link(
+		party_type=candidate.get("party_type"),
+		party=candidate.get("party"),
+		customer=candidate.get("customer"),
+	)
+	doc.customer = party_resolution.customer
+	doc.party_type = party_resolution.party_type
+	doc.party = party_resolution.party
 	doc.candidate_amount = flt(candidate.get("candidate_amount"))
 	doc.amount_difference = flt(doc.bank_amount) - flt(doc.candidate_amount)
 	doc.match_confidence = candidate.get("confidence") or "No Match"
@@ -1922,6 +1960,8 @@ def _populate_match_document(doc, bank_transaction, candidate=None, source_repor
 		context_reasons.append(f"Candidate Category: {get_candidate_category_label(candidate.get('candidate_category'))}")
 	if candidate.get("multi_invoice_references"):
 		context_reasons.append(f"Multi Invoice References: {', '.join(candidate.get('multi_invoice_references') or [])}")
+	if party_resolution.get("diagnostic_message"):
+		context_reasons.append(party_resolution.diagnostic_message)
 	doc.match_reason = "; ".join(context_reasons) or candidate.get("reason")
 	doc.decision_status = doc.decision_status or ("Needs Review" if candidate.get("exception_only") else "Suggested")
 	doc.source_report = source_report or doc.source_report or "Bank Transaction Matching"
@@ -1929,6 +1969,7 @@ def _populate_match_document(doc, bank_transaction, candidate=None, source_repor
 		{
 			"bank_transaction": bank_transaction,
 			"candidate": candidate,
+			"party_resolution": party_resolution,
 		},
 		default=str,
 		sort_keys=True,
