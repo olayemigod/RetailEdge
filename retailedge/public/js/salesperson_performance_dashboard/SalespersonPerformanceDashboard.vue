@@ -350,9 +350,30 @@ const localEdgeUIComponents = {
   EdgeFilterBar
 };
 
+const requiredEdgeUIComponents = [
+  'EdgeAppShell',
+  'EdgePageLayout',
+  'EdgeFilterBar',
+  'EdgeStatCard',
+  'EdgeStatusBadge',
+  'EdgeLoadingState',
+  'EdgeEmptyState',
+  'EdgeErrorState'
+];
+
+const resolveEdgeUIComponents = () => {
+  const runtimeComponents =
+    typeof window !== 'undefined' && window.EdgeUI
+      ? (window.EdgeUI.components || window.EdgeUI)
+      : {};
+  return Object.fromEntries(
+    requiredEdgeUIComponents.map((name) => [name, runtimeComponents[name] || localEdgeUIComponents[name]])
+  );
+};
+
 export default {
   name: 'SalespersonPerformanceDashboard',
-  components: localEdgeUIComponents,
+  components: resolveEdgeUIComponents(),
   data() {
     return {
       edgeUIValid: true,
@@ -388,17 +409,11 @@ export default {
     };
   },
   created() {
-    const requiredComponents = [
-      'EdgeAppShell',
-      'EdgePageLayout',
-      'EdgeFilterBar',
-      'EdgeStatCard',
-      'EdgeStatusBadge',
-      'EdgeLoadingState',
-      'EdgeEmptyState',
-      'EdgeErrorState'
-    ];
-    this.missingComponents = requiredComponents.filter((name) => !localEdgeUIComponents[name]);
+    const runtimeComponents =
+      typeof window !== 'undefined' && window.EdgeUI
+        ? (window.EdgeUI.components || window.EdgeUI)
+        : {};
+    this.missingComponents = requiredEdgeUIComponents.filter((name) => !runtimeComponents[name]);
     this.edgeUIValid = this.missingComponents.length === 0;
   },
   mounted() {
