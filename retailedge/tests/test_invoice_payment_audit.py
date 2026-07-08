@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import unittest
+import frappe
 from unittest.mock import patch
 
 from retailedge.invoice_payment_audit import (
@@ -272,3 +273,40 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 		self.assertTrue(columns)
 		self.assertEqual(len(data), 1)
 		self.assertTrue(summary)
+
+	@patch("retailedge.retailedge.report.retailedge_invoice_payment_audit.retailedge_invoice_payment_audit.get_invoice_payment_audit_list", return_value=[])
+	def test_invoice_payment_audit_report_date_presets(self, mock_list):
+		# 1. Preset is accepted by backend
+		execute_invoice_payment_audit_report({
+			"date_range_preset": "This Month"
+		})
+		mock_list.assert_called()
+		args, kwargs = mock_list.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertIsNotNone(filters.get("from_date"))
+		self.assertIsNotNone(filters.get("to_date"))
+
+		# 2. Custom Period respects user-selected from_date/to_date
+		execute_invoice_payment_audit_report({
+			"date_range_preset": "Custom Period",
+			"from_date": "2026-01-01",
+			"to_date": "2026-01-10"
+		})
+		args, kwargs = mock_list.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertEqual(filters.get("from_date"), "2026-01-01")
+		self.assertEqual(filters.get("to_date"), "2026-01-10")
+
+		# 3. Manual date range over 60 days is accepted
+		execute_invoice_payment_audit_report({
+			"date_range_preset": "Custom Period",
+			"from_date": "2026-01-01",
+			"to_date": "2026-04-01"
+		})
+
+		# 4. Invalid date order is still blocked
+		with self.assertRaises(frappe.ValidationError):
+			execute_invoice_payment_audit_report({
+				"from_date": "2026-05-18",
+				"to_date": "2026-05-10"
+			})

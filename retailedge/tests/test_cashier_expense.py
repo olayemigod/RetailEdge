@@ -118,6 +118,7 @@ from retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_v
 	_build_retailedge_expense_totals,
 	_deduplicate_retailedge_expenses,
 	get_retailedge_cashier_expense_context,
+	execute as execute_variance_report,
 )
 from retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review import (
 	execute as execute_cashier_expense_review_report,
@@ -2335,6 +2336,117 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertTrue(columns)
 		self.assertEqual(len(data), 1)
 		self.assertEqual(data[0]["name"], "RE-DSA-2026-0001")
+
+	@patch("retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all")
+	def test_daily_sales_audit_register_report_date_presets(self, mock_get_all):
+		mock_get_all.return_value = []
+
+		# 1. Preset is accepted by backend
+		execute_daily_sales_audit_register_report({
+			"date_range_preset": "This Month"
+		})
+		mock_get_all.assert_called()
+		args, kwargs = mock_get_all.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertIsNotNone(filters.get("audit_date"))
+
+		# 2. Custom Period respects user-selected from_date/to_date
+		execute_daily_sales_audit_register_report({
+			"date_range_preset": "Custom Period",
+			"from_date": "2026-01-01",
+			"to_date": "2026-01-10"
+		})
+		args, kwargs = mock_get_all.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertEqual(filters.get("audit_date"), ["between", ["2026-01-01", "2026-01-10"]])
+
+		# 3. Manual date range over 60 days is accepted
+		execute_daily_sales_audit_register_report({
+			"date_range_preset": "Custom Period",
+			"from_date": "2026-01-01",
+			"to_date": "2026-04-01"
+		})
+
+		# 4. Invalid date order is still blocked
+		with self.assertRaises(frappe.ValidationError):
+			execute_daily_sales_audit_register_report({
+				"from_date": "2026-05-18",
+				"to_date": "2026-05-10"
+			})
+
+	@patch("retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_data", return_value=[])
+	def test_pos_closing_variance_vs_expenses_report_date_presets(self, mock_get_data):
+		# 1. Preset is accepted by backend
+		execute_variance_report({
+			"date_range_preset": "This Month"
+		})
+		mock_get_data.assert_called()
+		args, kwargs = mock_get_data.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertIsNotNone(filters.get("from_date"))
+		self.assertIsNotNone(filters.get("to_date"))
+
+		# 2. Custom Period respects user-selected from_date/to_date
+		execute_variance_report({
+			"date_range_preset": "Custom Period",
+			"from_date": "2026-01-01",
+			"to_date": "2026-01-10"
+		})
+		args, kwargs = mock_get_data.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertEqual(filters.get("from_date"), "2026-01-01")
+		self.assertEqual(filters.get("to_date"), "2026-01-10")
+
+		# 3. Manual date range over 60 days is accepted
+		execute_variance_report({
+			"date_range_preset": "Custom Period",
+			"from_date": "2026-01-01",
+			"to_date": "2026-04-01"
+		})
+
+		# 4. Invalid date order is still blocked
+		with self.assertRaises(frappe.ValidationError):
+			execute_variance_report({
+				"from_date": "2026-05-18",
+				"to_date": "2026-05-10"
+			})
+
+	@patch("retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review.get_data", return_value=[])
+	def test_cashier_expense_review_report_date_presets(self, mock_get_data):
+		# 1. Preset is accepted by backend
+		execute_cashier_expense_review_report({
+			"date_range_preset": "This Month"
+		})
+		mock_get_data.assert_called()
+		args, kwargs = mock_get_data.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertIsNotNone(filters.get("from_date"))
+		self.assertIsNotNone(filters.get("to_date"))
+
+		# 2. Custom Period respects user-selected from_date/to_date
+		execute_cashier_expense_review_report({
+			"date_range_preset": "Custom Period",
+			"from_date": "2026-01-01",
+			"to_date": "2026-01-10"
+		})
+		args, kwargs = mock_get_data.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertEqual(filters.get("from_date"), "2026-01-01")
+		self.assertEqual(filters.get("to_date"), "2026-01-10")
+
+		# 3. Manual date range over 60 days is accepted
+		execute_cashier_expense_review_report({
+			"date_range_preset": "Custom Period",
+			"from_date": "2026-01-01",
+			"to_date": "2026-04-01"
+		})
+
+		# 4. Invalid date order is still blocked
+		with self.assertRaises(frappe.ValidationError):
+			execute_cashier_expense_review_report({
+				"from_date": "2026-05-18",
+				"to_date": "2026-05-10"
+			})
 
 
 class BranchContextTests(unittest.TestCase):

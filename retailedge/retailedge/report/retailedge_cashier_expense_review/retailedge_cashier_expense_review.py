@@ -10,6 +10,14 @@ from retailedge.cashier_expense_audit import get_cashier_expenses_for_daily_audi
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
+	preset = filters.get("date_range_preset")
+	if preset and preset != "Custom Period":
+		from retailedge.reporting.date_ranges import get_preset_dates
+		preset_from, preset_to = get_preset_dates(preset)
+		if preset_from and preset_to:
+			filters["from_date"] = str(preset_from)
+			filters["to_date"] = str(preset_to)
+
 	validate_filters(filters)
 	data = get_data(filters)
 	return get_columns(), data, None, get_chart_data(data), get_report_summary(data)
@@ -19,6 +27,8 @@ def validate_filters(filters):
 	if filters.get("from_date") and filters.get("to_date"):
 		if getdate(filters.from_date) > getdate(filters.to_date):
 			frappe.throw(_("From Date cannot be after To Date."))
+		if (getdate(filters.to_date) - getdate(filters.from_date)).days + 1 > 60:
+			frappe.msgprint(_("Large date ranges may take longer to load."), alert=True)
 
 
 def get_columns():

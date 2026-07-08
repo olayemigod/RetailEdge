@@ -7,6 +7,7 @@ import json
 import py_compile
 from collections import Counter
 import frappe
+from unittest.mock import patch
 from frappe.tests.utils import FrappeTestCase
 
 class TestSalespersonPerformance(FrappeTestCase):
@@ -326,3 +327,17 @@ class TestSalespersonPerformance(FrappeTestCase):
 				if row.get("type") == "Link"
 			)
 			self.assertFalse([key for key, count in counts.items() if key[1] and count > 1])
+
+	@patch("retailedge.salesperson_performance.frappe.db.sql", return_value=[])
+	def test_salesperson_performance_api_date_presets(self, mock_sql):
+		from retailedge.salesperson_performance import get_salesperson_performance
+
+		# 1. Preset is accepted by backend
+		get_salesperson_performance({
+			"date_range_preset": "This Month",
+			"limit": 5,
+			"offset": 0
+		})
+
+		# Verify that sql query is executed
+		mock_sql.assert_called()

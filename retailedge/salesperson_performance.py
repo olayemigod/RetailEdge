@@ -16,6 +16,14 @@ def get_salesperson_performance(filters=None):
 	# Parse filters
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	
+	preset = filters.get("date_range_preset")
+	if preset and preset != "Custom Period":
+		from retailedge.reporting.date_ranges import get_preset_dates
+		preset_from, preset_to = get_preset_dates(preset)
+		if preset_from and preset_to:
+			filters["from_date"] = str(preset_from)
+			filters["to_date"] = str(preset_to)
+
 	# Coerce dates
 	from_date = filters.get("from_date") or get_first_day(nowdate())
 	to_date = filters.get("to_date") or nowdate()
@@ -148,8 +156,8 @@ def get_salesperson_dashboard_options():
 		limit_page_length=500
 	) or []
 
-	# Default filter values
 	default_filters = {
+		"date_range_preset": "This Month",
 		"from_date": get_first_day(nowdate()),
 		"to_date": nowdate(),
 		"branch": "",
