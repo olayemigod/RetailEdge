@@ -100,18 +100,6 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 				"Full Branch History"
 			].join("\n"),
 			default: "This Month",
-			on_change: function (queryReport) {
-				const val = queryReport.get_filter_value("date_range_preset");
-				if (val && val !== "Custom Period") {
-					const dates = getPresetDates(val);
-					if (dates) {
-						queryReport.__programmatic_date_change = true;
-						queryReport.set_filter_value("from_date", dates.from_date);
-						queryReport.set_filter_value("to_date", dates.to_date);
-						queryReport.__programmatic_date_change = false;
-					}
-				}
-			}
 		},
 		{
 			fieldname: "from_date",
@@ -119,11 +107,6 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 			fieldtype: "Date",
 			default: frappe.datetime.month_start(),
 			reqd: 1,
-			on_change: function (queryReport) {
-				if (!queryReport.__programmatic_date_change) {
-					queryReport.set_filter_value("date_range_preset", "Custom Period");
-				}
-			}
 		},
 		{
 			fieldname: "to_date",
@@ -131,11 +114,6 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 			fieldtype: "Date",
 			default: frappe.datetime.get_today(),
 			reqd: 1,
-			on_change: function (queryReport) {
-				if (!queryReport.__programmatic_date_change) {
-					queryReport.set_filter_value("date_range_preset", "Custom Period");
-				}
-			}
 		},
 		{
 			fieldname: "payment_method",
@@ -165,6 +143,7 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		window.retailedge.setupDateRangePresets(report);
 		const originalRefresh = report.refresh.bind(report);
 		report.refresh = function () {
 			const fromDate = report.get_filter_value("from_date");

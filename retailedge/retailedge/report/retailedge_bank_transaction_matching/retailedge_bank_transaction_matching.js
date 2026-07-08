@@ -206,6 +206,7 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
 		setup_report_menu_actions(report);
+		window.retailedge.setupDateRangePresets(report);
 
 		const originalRefresh = report.refresh.bind(report);
 		report.refresh = function () {
@@ -459,18 +460,6 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				"Full History"
 			].join("\n"),
 			default: "This Month",
-			on_change: function (queryReport) {
-				const val = queryReport.get_filter_value("date_range_preset");
-				if (val && val !== "Custom Period") {
-					const dates = window.retailedge && window.retailedge.getPresetDates ? window.retailedge.getPresetDates(val) : null;
-					if (dates) {
-						queryReport.__programmatic_date_change = true;
-						queryReport.set_filter_value("from_date", dates.from_date);
-						queryReport.set_filter_value("to_date", dates.to_date);
-						queryReport.__programmatic_date_change = false;
-					}
-				}
-			}
 		},
 		{
 			fieldname: "from_date",
@@ -478,11 +467,6 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 			fieldtype: "Date",
 			default: frappe.datetime.month_start(),
 			reqd: 1,
-			on_change: function (queryReport) {
-				if (!queryReport.__programmatic_date_change) {
-					queryReport.set_filter_value("date_range_preset", "Custom Period");
-				}
-			}
 		},
 		{
 			fieldname: "to_date",
@@ -490,11 +474,6 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 			fieldtype: "Date",
 			default: frappe.datetime.get_today(),
 			reqd: 1,
-			on_change: function (queryReport) {
-				if (!queryReport.__programmatic_date_change) {
-					queryReport.set_filter_value("date_range_preset", "Custom Period");
-				}
-			}
 		},
 		{
 			fieldname: "reference_search",
