@@ -157,7 +157,7 @@ def _sync_workspace_sidebar(workspace):
 					item_type="Section Break",
 					idx=idx,
 					collapsible=1,
-					keep_closed=0,
+					keep_closed=1,
 					indent=1,
 				)
 			)
