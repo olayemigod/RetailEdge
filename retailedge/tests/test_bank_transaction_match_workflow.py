@@ -1890,8 +1890,128 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 		mock_confirm.return_value = {"decision_status": "Confirmed", "message": "Confirmed"}
 		result = bulk_confirm_bank_transaction_matches(["RE-BTM-ELIGIBLE", "RE-BTM-BLOCKED"], remarks="Batch")
 		self.assertEqual(result["confirmed_count"], 1)
+		self.assertEqual(result["updated_count"], 1)
+		self.assertEqual(result["created_count"], 0)
 		self.assertEqual(result["skipped_count"], 1)
 		mock_confirm.assert_called_once_with("RE-BTM-ELIGIBLE", decision_note="Batch")
+
+	@patch("retailedge.bank_transaction_match_workflow.run_bank_transaction_auto_match")
+	@patch("retailedge.bank_transaction_match_workflow.confirm_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.preview_bulk_confirm_bank_transaction_matches")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	def test_bulk_confirm_selected_does_not_call_auto_match(self, _mock_roles, mock_preview, mock_confirm, mock_auto_match):
+		mock_preview.return_value = {
+			"total_selected": 1,
+			"eligible_count": 1,
+			"blocked_count": 0,
+			"eligible": [{"name": "RE-BTM-SELECTED"}],
+			"blocked": [],
+			"warnings": [],
+			"reasons": [],
+		}
+		mock_confirm.return_value = {"decision_status": "Confirmed", "message": "Confirmed"}
+
+		result = bulk_confirm_bank_transaction_matches(["RE-BTM-SELECTED"], remarks="Reviewer selected candidate")
+
+		self.assertEqual(result["confirmed_count"], 1)
+		mock_auto_match.assert_not_called()
+		mock_confirm.assert_called_once_with("RE-BTM-SELECTED", decision_note="Reviewer selected candidate")
+
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.get_retailedge_settings")
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", return_value=None)
+	@patch("retailedge.bank_transaction_match_workflow.frappe.get_doc")
+	def test_bulk_confirm_selected_does_not_require_auto_match_settings(
+		self,
+		mock_get_doc,
+		_mock_get_value,
+		_mock_exists,
+		mock_settings,
+		_mock_roles,
+	):
+		mock_settings.return_value = SimpleNamespace(
+			enable_bank_transaction_auto_match=0,
+			auto_confirm_bank_transaction_matches=0,
+			minimum_auto_match_score=100,
+			allow_bulk_confirm_possible_bank_matches=0,
+			bank_match_bulk_confirm_min_score=100,
+			bank_transaction_match_amount_tolerance=0,
+		)
+		doc = _FakeMatchDoc(
+			name="RE-BTM-POSSIBLE-MANUAL",
+			decision_status="Suggested",
+			match_confidence="Possible Match",
+			match_score=10,
+			bank_transaction="BT-0001",
+			suggested_document_type="Payment Entry",
+			suggested_document="PE-0001",
+			sales_invoice=None,
+			payment_entry="PE-0001",
+			candidate_amount=100,
+			amount_difference=0,
+			amount_scenario="Exact Amount",
+			match_reason="Reviewer selected payment event evidence.",
+			synced_to_sales_invoice=0,
+		)
+		mock_get_doc.return_value = doc
+
+		result = preview_bulk_confirm_bank_transaction_matches([doc.name])
+
+		self.assertEqual(result["eligible_count"], 1)
+		self.assertEqual(result["blocked_count"], 0)
+		self.assertEqual(result["eligible"][0]["name"], doc.name)
+
+	@patch("retailedge.bank_transaction_match_workflow.confirm_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.preview_bulk_confirm_bank_transaction_matches")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	def test_bulk_confirm_selected_confirms_multiple_review_records(self, _mock_roles, mock_preview, mock_confirm):
+		mock_preview.return_value = {
+			"total_selected": 2,
+			"eligible_count": 2,
+			"blocked_count": 0,
+			"eligible": [{"name": "RE-BTM-A"}, {"name": "RE-BTM-B"}],
+			"blocked": [],
+			"warnings": [],
+			"reasons": [],
+		}
+		mock_confirm.return_value = {"decision_status": "Confirmed", "message": "Confirmed"}
+
+		result = bulk_confirm_bank_transaction_matches(["RE-BTM-A", "RE-BTM-B"])
+
+		self.assertEqual(result["confirmed_count"], 2)
+		self.assertEqual(result["updated_count"], 2)
+		self.assertEqual(result["created_count"], 0)
+		self.assertEqual([row["name"] for row in result["confirmed"]], ["RE-BTM-A", "RE-BTM-B"])
+		self.assertEqual(mock_confirm.call_count, 2)
+		mock_confirm.assert_any_call("RE-BTM-A", decision_note="Bulk manual review confirmation.")
+		mock_confirm.assert_any_call("RE-BTM-B", decision_note="Bulk manual review confirmation.")
+
+	@patch("retailedge.bank_transaction_match_workflow.frappe.db.set_value")
+	@patch("retailedge.bank_transaction_match_workflow.confirm_bank_transaction_match")
+	@patch("retailedge.bank_transaction_match_workflow.preview_bulk_confirm_bank_transaction_matches")
+	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
+	def test_bulk_confirm_selected_does_not_mutate_bank_transaction(
+		self,
+		_mock_roles,
+		mock_preview,
+		mock_confirm,
+		mock_set_value,
+	):
+		mock_preview.return_value = {
+			"total_selected": 1,
+			"eligible_count": 1,
+			"blocked_count": 0,
+			"eligible": [{"name": "RE-BTM-NO-BT-MUTATION"}],
+			"blocked": [],
+			"warnings": [],
+			"reasons": [],
+		}
+		mock_confirm.return_value = {"decision_status": "Confirmed", "message": "Confirmed"}
+
+		bulk_confirm_bank_transaction_matches(["RE-BTM-NO-BT-MUTATION"])
+
+		mock_set_value.assert_not_called()
 
 	@patch("retailedge.bank_transaction_match_workflow.mark_bank_transaction_match_needs_review")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")

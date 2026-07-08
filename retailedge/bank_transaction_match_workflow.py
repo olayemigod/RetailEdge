@@ -315,24 +315,31 @@ def bulk_confirm_bank_transaction_matches(match_names, remarks=None):
 	result = {
 		"total_selected": preview["total_selected"],
 		"confirmed_count": 0,
+		"created_count": 0,
+		"updated_count": 0,
 		"skipped_count": preview["blocked_count"],
 		"blocked": preview["blocked"],
 		"confirmed": [],
+		"reasons": list(preview.get("reasons") or []),
 	}
+	decision_note = remarks or "Bulk manual review confirmation."
 	for row in preview["eligible"]:
 		try:
-			decision = confirm_bank_transaction_match(row["name"], decision_note=remarks)
+			decision = confirm_bank_transaction_match(row["name"], decision_note=decision_note)
 			result["confirmed"].append(
 				{
 					"name": row["name"],
 					"decision_status": decision.get("decision_status"),
 					"message": decision.get("message"),
+					"operation": "updated",
 				}
 			)
 		except Exception as exc:
 			result["blocked"].append({"name": row["name"], "reason": cstr(exc)})
 			result["skipped_count"] += 1
 	result["confirmed_count"] = len(result["confirmed"])
+	result["updated_count"] = result["confirmed_count"]
+	result["reasons"] = _summarize_rows_by_reason(result["blocked"])
 	return result
 
 
@@ -1544,8 +1551,6 @@ def _get_bulk_confirm_settings():
 	except Exception:
 		settings = None
 	return {
-		"allow_possible": cint(getattr(settings, "allow_bulk_confirm_possible_bank_matches", 0) or 0),
-		"min_score": cint(getattr(settings, "bank_match_bulk_confirm_min_score", 80) or 80),
 		"amount_tolerance": flt(getattr(settings, "bank_transaction_match_amount_tolerance", 0) or 0),
 	}
 
@@ -1585,10 +1590,6 @@ def _get_bulk_confirm_eligibility(doc):
 			"warnings": warnings,
 			"category": "weak_needs_review",
 		}
-	if doc.match_confidence == "Possible Match" and not settings["allow_possible"]:
-		return {"eligible": False, "reason": "Possible Match records require manual confirmation.", "warnings": warnings, "category": "weak_needs_review"}
-	if cint(doc.match_score or 0) < settings["min_score"] and doc.match_confidence != "Strong Match":
-		return {"eligible": False, "reason": "Match score is below the bulk confirmation threshold.", "warnings": warnings, "category": "weak_needs_review"}
 	if not doc.bank_transaction or not frappe.db.exists("Bank Transaction", doc.bank_transaction):
 		return {"eligible": False, "reason": "Bank Transaction does not exist.", "warnings": warnings, "category": "unsafe"}
 	if not doc.suggested_document_type or not doc.suggested_document:

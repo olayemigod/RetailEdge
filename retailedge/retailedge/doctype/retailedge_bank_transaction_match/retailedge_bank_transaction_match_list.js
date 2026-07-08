@@ -203,7 +203,7 @@ function preview_bulk_confirm_bank_matches(names, confirmAfterPreview, listview)
 			}
 			frappe.confirm(
 				__(
-					"You are about to confirm selected RetailEdge bank match records. This will not reconcile Bank Transactions, create Payment Entries, post GL, or update Sales Invoice accounting fields. It only updates RetailEdge match decisions."
+					"You are about to confirm selected RetailEdge bank match records as manual review confirmations. This will not run auto-match, reconcile Bank Transactions, create Payment Entries, post GL, or update Sales Invoice accounting fields. It only updates RetailEdge match decisions."
 				),
 				function () {
 					frappe.prompt(
@@ -258,6 +258,9 @@ function show_bulk_bank_match_result(result, title) {
 	const rows = [
 		[__("Total Selected"), result.total_selected || 0],
 		[__("Eligible"), result.eligible_count || result.confirmed_count || 0],
+		[__("Confirmed"), result.confirmed_count || 0],
+		[__("Created"), result.created_count || 0],
+		[__("Updated"), result.updated_count || 0],
 		[__("Blocked / Skipped"), result.blocked_count || result.skipped_count || 0],
 		[__("Unsafe"), result.unsafe_count || 0],
 		[__("Already Confirmed"), result.already_confirmed_count || 0],
@@ -282,9 +285,11 @@ function show_bulk_bank_match_result(result, title) {
 								tone: result.confirmed_count ? "success" : "warning",
 								meta: [
 									`${__("Eligible")}: ${result.eligible_count || result.confirmed_count || 0}`,
+									`${__("Created")}: ${result.created_count || 0}`,
+									`${__("Updated")}: ${result.updated_count || 0}`,
 									`${__("Blocked / Skipped")}: ${result.blocked_count || result.skipped_count || 0}`,
 								],
-								footer: __("RetailEdge updates only review decisions here."),
+								footer: __("RetailEdge updates only review decisions here and does not run auto-match."),
 							},
 							{
 								title: __("Risk Signals"),
