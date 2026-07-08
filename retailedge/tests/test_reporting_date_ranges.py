@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import os
 import unittest
 import frappe
 from frappe.utils import getdate, nowdate, get_first_day, add_days
@@ -83,3 +84,32 @@ class TestReportingDateRanges(unittest.TestCase):
 		f, t = get_preset_dates("Custom Period")
 		self.assertIsNone(f)
 		self.assertIsNone(t)
+
+	def test_frontend_preset_helper_uses_stable_filter_shape(self):
+		retailedge_path = frappe.get_app_path("retailedge")
+		js_path = os.path.join(retailedge_path, "public", "js", "retailedge.js")
+		with open(js_path, "r") as f:
+			content = f.read()
+
+		self.assertIn("window.retailedge.getPresetDates", content)
+		self.assertIn("from_date", content)
+		self.assertIn("to_date", content)
+		self.assertIn('case "Full History"', content)
+		self.assertIn('case "Full Branch History"', content)
+		self.assertIn('from_date: ""', content)
+		self.assertIn('to_date: ""', content)
+
+	def test_frontend_preset_binder_updates_visible_controls_before_refresh(self):
+		retailedge_path = frappe.get_app_path("retailedge")
+		js_path = os.path.join(retailedge_path, "public", "js", "retailedge.js")
+		with open(js_path, "r") as f:
+			content = f.read()
+
+		self.assertIn("window.retailedge.setupDateRangePresets", content)
+		self.assertIn("filter.fieldname || (filter.df && filter.df.fieldname)", content)
+		self.assertIn("await setFilterControlValue(fromField, dates.from_date)", content)
+		self.assertIn("await setFilterControlValue(toField, dates.to_date)", content)
+		self.assertIn("queryReport.__retailedge_applying_preset", content)
+		self.assertIn("queryReport._no_refresh = true", content)
+		self.assertIn("queryReport.refresh()", content)
+		self.assertIn('queryReport.set_filter_value(presetField, "Custom Period")', content)

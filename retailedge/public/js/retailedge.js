@@ -1174,9 +1174,10 @@
 				break;
 			case "Full History":
 			case "Full Branch History":
-				from_date = new Date(2000, 0, 1);
-				to_date = frappe.datetime.str_to_obj(frappe.datetime.get_today());
-				break;
+				return {
+					from_date: "",
+					to_date: ""
+				};
 			default:
 				return null;
 		}
@@ -1184,6 +1185,123 @@
 		return {
 			from_date: frappe.datetime.obj_to_str(from_date),
 			to_date: frappe.datetime.obj_to_str(to_date)
+		};
+	};
+
+	window.retailedge.setupDateRangePresets = function (report, presetField = "date_range_preset", fromField = "from_date", toField = "to_date") {
+		if (!report || report.__retailedgePresetsBound) {
+			return;
+		}
+		report.__retailedgePresetsBound = true;
+
+		if (presetField && typeof presetField === "object") {
+			const options = presetField;
+			presetField = options.presetField || "date_range_preset";
+			fromField = options.fromField || "from_date";
+			toField = options.toField || "to_date";
+		}
+
+		const filters = report.filters || [];
+		const getFieldname = function (filter) {
+			return filter && (filter.fieldname || (filter.df && filter.df.fieldname));
+		};
+		const getFilter = function (fieldname) {
+			if (report.get_filter) {
+				const filter = report.get_filter(fieldname, false);
+				if (filter) {
+					return filter;
+				}
+			}
+			return filters.find(f => getFieldname(f) === fieldname);
+		};
+		const getFilterValue = function (fieldname) {
+			if (report.get_filter_value) {
+				return report.get_filter_value(fieldname, false);
+			}
+			const filter = getFilter(fieldname);
+			return filter && filter.get_value ? filter.get_value() : null;
+		};
+		const setFilterControlValue = async function (fieldname, value) {
+			const filter = getFilter(fieldname);
+			if (!filter || !filter.set_value) {
+				return;
+			}
+			await Promise.resolve(filter.set_value(value));
+		};
+
+		const presetFilter = getFilter(presetField);
+		const fromFilter = getFilter(fromField);
+		const toFilter = getFilter(toField);
+
+		if (!presetFilter || !fromFilter || !toFilter) {
+			return;
+		}
+
+		const origPresetOnChange = presetFilter.on_change;
+		const origFromOnChange = fromFilter.on_change;
+		const origToOnChange = toFilter.on_change;
+
+		presetFilter.on_change = async function (queryReport) {
+			queryReport = queryReport || report;
+			const val = getFilterValue(presetField);
+			if (val && val !== "Custom Period") {
+				const dates = window.retailedge.getPresetDates(val);
+				if (dates) {
+					queryReport.__retailedge_applying_preset = val;
+					queryReport._no_refresh = true;
+					await setFilterControlValue(fromField, dates.from_date);
+					await setFilterControlValue(toField, dates.to_date);
+					setTimeout(function () {
+						delete queryReport.__retailedge_applying_preset;
+						queryReport._no_refresh = false;
+						queryReport.refresh();
+					}, 0);
+				}
+			}
+			if (origPresetOnChange) {
+				origPresetOnChange.call(this, queryReport);
+			}
+		};
+
+		const handleDateChange = function (queryReport, fieldname, origOnChange) {
+			queryReport = queryReport || report;
+			const presetVal = getFilterValue(presetField);
+			if (presetVal && presetVal !== "Custom Period") {
+				if (queryReport.__retailedge_applying_preset) {
+					if (origOnChange) {
+						origOnChange.call(this, queryReport);
+					}
+					return;
+				}
+
+				const dates = window.retailedge.getPresetDates(presetVal);
+				if (dates) {
+					const currentFrom = getFilterValue(fromField) || "";
+					const currentTo = getFilterValue(toField) || "";
+
+					if (currentFrom !== dates.from_date || currentTo !== dates.to_date) {
+						if (queryReport.set_filter_value) {
+							queryReport.set_filter_value(presetField, "Custom Period");
+						} else {
+							setFilterControlValue(presetField, "Custom Period");
+						}
+					}
+				}
+			}
+
+			if (origOnChange) {
+				origOnChange.call(this, queryReport);
+			} else if (!queryReport._no_refresh && queryReport.refresh) {
+				queryReport.refresh();
+			}
+		};
+
+		fromFilter.on_change = function (queryReport) {
+			handleDateChange.call(this, queryReport, fromField, origFromOnChange);
+		};
+
+		toFilter.on_change = function (queryReport) {
+			handleDateChange.call(this, queryReport, toField, origToOnChange);
 		};
 	};
 

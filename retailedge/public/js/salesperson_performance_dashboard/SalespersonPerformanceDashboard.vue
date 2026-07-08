@@ -35,12 +35,29 @@
       <EdgeFilterBar title="Filter Records">
         <div class="edge-filter-grid">
         <div class="edge-field filter-group">
+          <label class="edge-field-label filter-label">Date Range Preset</label>
+          <select v-model="filters.date_range_preset" class="edge-select filter-select" :disabled="metadataLoading" @change="onPresetChange">
+            <option value="This Month">This Month</option>
+            <option value="Today">Today</option>
+            <option value="Yesterday">Yesterday</option>
+            <option value="This Week">This Week</option>
+            <option value="This Quarter">This Quarter</option>
+            <option value="This Year">This Year</option>
+            <option value="Last Week">Last Week</option>
+            <option value="Last Month">Last Month</option>
+            <option value="Last Quarter">Last Quarter</option>
+            <option value="Last Year">Last Year</option>
+            <option value="Custom Period">Custom Period</option>
+            <option value="Full History">Full History</option>
+          </select>
+        </div>
+        <div class="edge-field filter-group">
           <label class="edge-field-label filter-label">From Date</label>
-          <input type="date" v-model="filters.from_date" class="edge-input filter-input" :disabled="metadataLoading" @change="fetchData" />
+          <input type="date" v-model="filters.from_date" class="edge-input filter-input" :disabled="metadataLoading" @change="onDateChange" />
         </div>
         <div class="edge-field filter-group">
           <label class="edge-field-label filter-label">To Date</label>
-          <input type="date" v-model="filters.to_date" class="edge-input filter-input" :disabled="metadataLoading" @change="fetchData" />
+          <input type="date" v-model="filters.to_date" class="edge-input filter-input" :disabled="metadataLoading" @change="onDateChange" />
         </div>
         <div class="edge-field filter-group">
           <label class="edge-field-label filter-label">Branch</label>
@@ -391,6 +408,7 @@ export default {
       userName: '',
       searchTimeout: null,
       filters: {
+        date_range_preset: 'This Month',
         from_date: '',
         to_date: '',
         branch: '',
@@ -420,6 +438,38 @@ export default {
     this.fetchMetadata();
   },
   methods: {
+    async onPresetChange() {
+      const val = this.filters.date_range_preset;
+      if (val && val !== 'Custom Period') {
+        const dates = window.retailedge && window.retailedge.getPresetDates ? window.retailedge.getPresetDates(val) : null;
+        if (dates) {
+          this.__applying_preset = true;
+          this.filters.from_date = dates.from_date;
+          this.filters.to_date = dates.to_date;
+          await this.$nextTick();
+          this.__applying_preset = false;
+        }
+      }
+      this.fetchData();
+    },
+    onDateChange() {
+      if (this.__applying_preset) {
+        this.fetchData();
+        return;
+      }
+      const val = this.filters.date_range_preset;
+      if (val && val !== 'Custom Period') {
+        const dates = window.retailedge && window.retailedge.getPresetDates ? window.retailedge.getPresetDates(val) : null;
+        if (dates) {
+          const currentFrom = this.filters.from_date || '';
+          const currentTo = this.filters.to_date || '';
+          if (currentFrom !== dates.from_date || currentTo !== dates.to_date) {
+            this.filters.date_range_preset = 'Custom Period';
+          }
+        }
+      }
+      this.fetchData();
+    },
     formatDate(dateStr) {
       if (!dateStr || typeof frappe === 'undefined') return dateStr;
       return frappe.datetime.str_to_user(dateStr);
