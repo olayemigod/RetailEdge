@@ -59,12 +59,14 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(js_path, "r") as f:
 			content = f.read()
 			
-		edgeui_idx = content.find("frappe.require('edgeui.bundle.js'")
-		product_idx = content.find("frappe.require('salesperson_performance.bundle.js'")
+		edgeui_idx = content.find("requireAsset('edgeui.bundle.js'")
+		product_idx = content.find("requireAsset('salesperson_performance.bundle.js'")
 		self.assertNotEqual(edgeui_idx, -1)
 		self.assertNotEqual(product_idx, -1)
 		self.assertLess(edgeui_idx, product_idx)
-		self.assertIn("frappe.require('salesperson_performance.bundle.js'", content)
+		self.assertIn("frappe.require(assetName", content)
+		self.assertIn("Timed out loading asset", content)
+		self.assertIn("Failed to request asset", content)
 		self.assertIn("window.EdgeUI", content)
 		self.assertIn("Required EdgeSuite shell components could not be resolved", content)
 		self.assertIn("unmount()", content)
@@ -189,6 +191,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 
 		self.assertIn("edgeui.bundle.js", content)
 		self.assertIn("salesperson_performance.bundle.js", content)
+		self.assertIn("requireAsset", content)
+		self.assertIn("retailedge-dashboard-load-error", content)
 
 	def test_frontend_filter_bar_structure_and_labels(self):
 		"""Verify that SalespersonPerformanceDashboard.vue has EdgeFilterBar, the correct filter labels, fields, and buttons."""
@@ -341,3 +345,124 @@ class TestSalespersonPerformance(FrappeTestCase):
 
 		# Verify that sql query is executed
 		mock_sql.assert_called()
+
+	# ──────────────────────────────────────────────────────────────────────────
+	# Phase 4A.2 – Boot Diagnostic Invariant Tests
+	# These tests assert properties that must hold in the FINAL fixed controller.
+	# They document the root cause of the blank-page regression and enforce that
+	# the fix survives future edits.
+	# ──────────────────────────────────────────────────────────────────────────
+
+	def _read_page_js(self):
+		retailedge_path = frappe.get_app_path("retailedge")
+		js_path = os.path.join(
+			retailedge_path, "retailedge", "page",
+			"salesperson_performance_dashboard",
+			"salesperson_performance_dashboard.js"
+		)
+		self.assertTrue(os.path.exists(js_path), "Page JS file does not exist")
+		with open(js_path, "r") as f:
+			return f.read()
+
+	def test_page_controller_has_boot_console_log(self):
+		"""Assert on_page_load has a first-line boot console.log so we can confirm
+		the controller executed at all in DevTools. This is the Step 1 invariant:
+		if this log never appears in the browser, the controller never ran."""
+		content = self._read_page_js()
+		self.assertIn("[BOOT]", content,
+			"Page controller must emit a [BOOT] console.log as its first executable statement")
+		self.assertIn("Salesperson Performance Dashboard", content,
+			"Boot log must identify the page by name")
+
+	def test_page_controller_top_level_try_catch(self):
+		"""Assert the entire page controller body is wrapped in a top-level try/catch.
+		Without this, any synchronous error in frappe.pages registration silently
+		terminates execution, leaving frappe.pages['salesperson-performance-dashboard']
+		unpopulated and on_page_load/on_page_show as undefined."""
+		content = self._read_page_js()
+		# The try block must appear before the frappe.pages registration
+		try_idx = content.find("try {")
+		pages_idx = content.find("frappe.pages['salesperson-performance-dashboard']")
+		self.assertNotEqual(try_idx, -1, "Top-level try block is missing")
+		self.assertLess(try_idx, pages_idx,
+			"Top-level try must wrap the frappe.pages registration, not appear after it")
+
+	def test_page_controller_on_page_load_has_try_catch(self):
+		"""Assert on_page_load body is also wrapped in its own try/catch so
+		make_app_page failures are caught and rendered visibly rather than
+		leaving wrapper.page unset."""
+		content = self._read_page_js()
+		self.assertIn("on_page_load", content)
+		# There must be at least two try blocks (top-level + on_page_load)
+		try_count = content.count("try {")
+		self.assertGreaterEqual(try_count, 2,
+			"on_page_load must have its own try/catch in addition to the top-level one")
+
+
+	def test_page_controller_boot_dom_render_before_frappe_require(self):
+		"""Assert that a plain DOM element is written to wrapper BEFORE any
+		frappe.require call. This is the Step 1 invariant: the page must never
+		be blank while assets are loading. No Vue, no EdgeUI, no CSS needed.
+		Block and single-line comments are stripped before the search so that
+		commented-out requireAsset calls or descriptive comments do not trigger a false failure."""
+		import re
+		content = self._read_page_js()
+		# Strip block comments and single-line comments so disabled Vue code doesn't interfere
+		active_content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+		active_content = re.sub(r'//.*?\n', '\n', active_content)
+		# 'EDGEUI BOOT OK' or 'Loading EdgeSuite UI...' must appear before require
+		boot_strings = ["EDGEUI BOOT OK", "Loading EdgeSuite UI"]
+		boot_idx = min(
+			(active_content.find(s) for s in boot_strings if active_content.find(s) != -1),
+			default=-1
+		)
+		require_idx = active_content.find("frappe.require")
+		self.assertNotEqual(boot_idx, -1,
+			"Page controller must write a visible boot indicator before frappe.require")
+		if require_idx != -1:
+			self.assertLess(boot_idx, require_idx,
+				"Boot indicator DOM render must appear before frappe.require calls (check active code, not comments)")
+
+	def test_page_controller_failure_block_rendered_into_wrapper(self):
+		"""Assert that on error, the failure block writes into wrapper (the outermost
+		container), not page.body (which may be undefined if on_page_load failed).
+		This prevents a silent blank page when make_app_page throws."""
+		content = self._read_page_js()
+		self.assertIn("wrapper.appendChild", content,
+			"Failure block must use wrapper.appendChild to be visible even when page.body is unavailable")
+
+	def test_page_controller_failure_block_has_no_edgeui_dependency(self):
+		"""Assert the failure block does not depend on EdgeUI, Vue, or external CSS.
+		It must render using only plain DOM operations so it is visible even when
+		the asset load chain completely fails. Block and single-line comments are stripped before
+		analysis to avoid false positives from commented-out code."""
+		import re
+		content = self._read_page_js()
+		# Strip block comments and single-line comments so disabled Vue code doesn't interfere
+		active_content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+		active_content = re.sub(r'//.*?\n', '\n', active_content)
+		catch_positions = []
+		pos = 0
+		while True:
+			idx = active_content.find("} catch (", pos)
+			if idx == -1:
+				break
+			catch_positions.append(idx)
+			pos = idx + 1
+		self.assertGreater(len(catch_positions), 0, "No catch blocks found")
+		# None of the catch blocks should contain frappe.require
+		for idx in catch_positions:
+			block = active_content[idx:idx + 500]
+			self.assertNotIn("frappe.require", block,
+				"Catch/failure block must not call frappe.require – it would create a dependency cycle")
+
+	def test_page_controller_on_page_show_guards_wrapper_page(self):
+		"""Assert on_page_show checks wrapper.page is defined before using it.
+		If on_page_load failed silently (wrapper.page = undefined), accessing
+		page.body in on_page_show throws TypeError, silently killing the show handler."""
+		content = self._read_page_js()
+		self.assertIn("wrapper.page", content)
+		# Must have a guard: either 'if (!page)' or 'if (!wrapper.page)' pattern
+		has_guard = "if (!page)" in content or "if (!wrapper.page)" in content
+		self.assertTrue(has_guard,
+			"on_page_show must guard against wrapper.page being undefined before accessing page.body")

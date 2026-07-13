@@ -1,19 +1,18 @@
-import { createApp } from 'vue';
+import * as Vue from 'vue';
 import SalespersonPerformanceDashboard from './salesperson_performance_dashboard/SalespersonPerformanceDashboard.vue';
 
 function mountSalespersonPerformanceDashboard(target) {
-  const app = createApp(SalespersonPerformanceDashboard);
-  const edgeUI = window.EdgeUI || {};
-  const components = edgeUI.components || edgeUI;
+  if (typeof window === 'undefined') return null;
 
-  Object.entries(components).forEach(([name, component]) => {
-    if (name.startsWith('Edge') && component) {
-      app.component(name, component);
-    }
-  });
+  if (!window.EdgeUI) {
+    throw new Error("EdgeSuite UI runtime not loaded: window.EdgeUI is undefined");
+  }
+  if (!window.EdgeUI.createEdgeApp) {
+    throw new Error("EdgeSuite UI runtime compatibility error: createEdgeApp is missing");
+  }
 
-  app.mount(target);
-  return app;
+  console.log("EdgeUI version:", window.EdgeUI.version);
+  return window.EdgeUI.createEdgeApp(SalespersonPerformanceDashboard, target);
 }
 
 if (typeof window !== 'undefined') {

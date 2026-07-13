@@ -1,6 +1,6 @@
 {
  "app": "retailedge",
- "creation": "2026-05-21 00:00:00.000000",
+ "creation": "2026-05-21 00:00:00",
  "docstatus": 0,
  "doctype": "Workspace Sidebar",
  "header_icon": "setting-gear",
@@ -647,7 +647,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-05-21 00:00:00.000000",
+ "modified": "2026-07-12 22:08:51.680674",
  "modified_by": "Administrator",
  "module": "RetailEdge",
  "name": "RetailEdge",
