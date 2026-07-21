@@ -1,32 +1,38 @@
 // salesperson_performance_dashboard.js
-console.log("[BOOT] TRACE 1 - page JS evaluated");
+console.log("[BOOT] Salesperson Performance Dashboard controller evaluated");
 
 try {
 	frappe.pages["salesperson-performance-dashboard"].on_page_load = async function (wrapper) {
-		console.log("[BOOT] TRACE 2 - on_page_load");
+		console.log("[BOOT] Salesperson Performance Dashboard on_page_load");
 		try {
-			// Immediate visible loading state rendered into wrapper before any assets load (Step 1 Invariant)
 			const $bootLoading = $(
 				'<div class="edge-boot-loading p-6 text-center text-muted" style="padding: 20px; font-size: 16px;">' +
-					__("Loading EdgeSuite UI...") +
+					__("Loading Salesperson Performance Dashboard...") +
 					"</div>"
 			).appendTo(wrapper);
 
-			const requireAsync = function (asset) {
+			const requireAsync = function (asset, options = {}) {
+				const optional = Boolean(options.optional);
+				const timeout = Number(options.timeout || 5000);
+
 				return new Promise((resolve, reject) => {
 					let completed = false;
 
 					frappe.require(asset, () => {
 						completed = true;
 						console.log("[BOOT] Loaded:", asset);
-						resolve();
+						resolve(true);
 					});
 
 					setTimeout(() => {
-						if (!completed) {
-							reject(new Error("Timed out loading " + asset));
+						if (completed) return;
+						if (optional) {
+							console.info("[BOOT] Optional asset unavailable:", asset);
+							resolve(false);
+							return;
 						}
-					}, 5000);
+						reject(new Error("Timed out loading " + asset));
+					}, timeout);
 				});
 			};
 
@@ -37,78 +43,58 @@ try {
 			});
 			wrapper.page = page;
 			wrapper._bootLoading = $bootLoading;
-			console.log("[BOOT] TRACE 3 - wrapper created");
 
-			console.log("[BOOT] TRACE 4 - loading edgeui.bundle.js");
-			await requireAsync("edgeui.bundle.js");
-			console.log("[BOOT] TRACE 5 - EdgeUI loaded");
+			// Shared EdgeUI enhances the page when present, but RetailEdge owns a
+			// compatible local runtime so a standalone product installation remains usable.
+			if (!window.EdgeUI?.createEdgeApp) {
+				await requireAsync("edgeui.bundle.js", { optional: true, timeout: 750 });
+			}
 
-			// Verify Global Objects (Step 2)
-			console.log("Verify Global Objects - EdgeUI:", window.EdgeUI);
-			console.log("Verify Global Objects - EdgeUI.components:", window.EdgeUI?.components);
-			console.log(
-				"Verify Global Objects - components keys:",
-				Object.keys(window.EdgeUI?.components || {})
-			);
-
-			console.log("[BOOT] TRACE 6 - loading product bundle");
 			await requireAsync("salesperson_performance.bundle.js");
-			console.log("[BOOT] TRACE 7 - product bundle loaded");
 
-			// Verify Global Objects (Step 2)
-			console.log(
-				"Verify Global Objects - mountSalespersonPerformanceDashboard:",
-				window.mountSalespersonPerformanceDashboard
-			);
+			if (typeof window.mountSalespersonPerformanceDashboard !== "function") {
+				throw new Error("Salesperson Performance Dashboard mount function is unavailable");
+			}
 
-			// Verify Mount Target (Step 3)
-			console.log("Verify Mount Target - page:", page);
-			console.log("Verify Mount Target - page.wrapper:", page.wrapper);
-			console.log("Verify Mount Target - page.main:", page.main);
-			console.log("Verify Mount Target - page.body:", page.body);
-
-			console.log("[BOOT] TRACE 8 - mounting Vue");
-
-			// Wrap ONLY Vue Mount (Step 4)
 			try {
 				if (wrapper._bootLoading) {
 					wrapper._bootLoading.remove();
 					wrapper._bootLoading = null;
 				}
-				const root = $('<div class="retailedge-dashboard-root"></div>').appendTo(
-					page.body
-				);
-				console.log("Mounting Vue under target:", root[0]);
-
-				await window.mountSalespersonPerformanceDashboard(root[0]);
-				console.log("Vue mounted successfully");
-				console.log("[BOOT] TRACE 9 - mount complete");
-			} catch (e) {
-				console.error("Vue mount failed:", e.message);
-				console.error("Stack trace:\n", e.stack);
+				const root = $('<div class="retailedge-dashboard-root"></div>').appendTo(page.body);
+				wrapper.vue_app = await window.mountSalespersonPerformanceDashboard(root[0]);
+				console.log("[BOOT] Salesperson Performance Dashboard mounted");
+			} catch (error) {
+				console.error("Salesperson Performance Dashboard mount failed:", error);
+				throw error;
 			}
-		} catch (err) {
-			console.error("[BOOT] TRACE ERROR - Exception caught in on_page_load flow:", err);
-			var $errDiv = document.createElement("div");
-			$errDiv.className = "alert alert-danger p-6 text-center";
-			$errDiv.innerHTML =
-				"<strong>" +
-				__("EdgeSuite page controller failed") +
-				"</strong><div>" +
-				err.message +
-				"</div>";
-			wrapper.appendChild($errDiv);
+		} catch (error) {
+			console.error("[BOOT] Salesperson Performance Dashboard failed:", error);
+			if (wrapper._bootLoading) {
+				wrapper._bootLoading.remove();
+				wrapper._bootLoading = null;
+			}
+
+			const errorBlock = document.createElement("div");
+			errorBlock.className = "alert alert-danger p-6 text-center";
+			const title = document.createElement("strong");
+			title.textContent = __("Salesperson Performance Dashboard failed to load");
+			const detail = document.createElement("div");
+			detail.textContent = error.message || String(error);
+			errorBlock.appendChild(title);
+			errorBlock.appendChild(detail);
+			wrapper.appendChild(errorBlock);
 		}
 	};
 
 	frappe.pages["salesperson-performance-dashboard"].on_page_show = function (wrapper) {
 		const page = wrapper.page;
 		if (!page) {
-			console.log("[BOOT] on_page_show - wrapper.page is undefined");
+			console.log("[BOOT] Salesperson Performance Dashboard page shell is unavailable");
 			return;
 		}
-		console.log("[BOOT] on_page_show - page shown");
+		console.log("[BOOT] Salesperson Performance Dashboard page shown");
 	};
-} catch (err) {
-	console.error("[BOOT] Fatal error evaluating page JS:", err);
+} catch (error) {
+	console.error("[BOOT] Fatal Salesperson Performance Dashboard controller error:", error);
 }
