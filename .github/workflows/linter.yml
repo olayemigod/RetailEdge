@@ -31,6 +31,8 @@ jobs:
         run: pip install pre-commit
 
       - name: Run pre-commit on pull request changes
+        id: precommit
+        continue-on-error: true
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -39,11 +41,22 @@ jobs:
             git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA"
           )
           if [ "${#changed_files[@]}" -eq 0 ]; then
-            echo "No added, copied, modified, or renamed files to lint."
+            echo "No added, copied, modified, or renamed files to lint." | tee precommit.log
             exit 0
           fi
-          printf 'Linting changed file: %s\n' "${changed_files[@]}"
-          pre-commit run --files "${changed_files[@]}"
+          printf 'Linting changed file: %s\n' "${changed_files[@]}" | tee precommit.log
+          pre-commit run --files "${changed_files[@]}" 2>&1 | tee -a precommit.log
+
+      - name: Upload changed-file lint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: changed-file-lint-diagnostics
+          path: precommit.log
+
+      - name: Enforce pre-commit result
+        if: steps.precommit.outcome == 'failure'
+        run: exit 1
 
       - name: Download Semgrep rules
         run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
