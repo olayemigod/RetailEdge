@@ -11,16 +11,19 @@ from frappe.tests.utils import FrappeTestCase
 class TestSalespersonPerformanceSecurity(FrappeTestCase):
 	@patch("retailedge.salesperson_performance.frappe.db.sql")
 	@patch("retailedge.salesperson_performance.assert_can_access_branch_performance")
-	@patch("retailedge.salesperson_performance.validate_user_branch_access")
+	@patch(
+		"retailedge.salesperson_performance.get_user_allowed_branches",
+		return_value={"branches": ["Allowed Branch"]},
+	)
+	@patch("retailedge.salesperson_performance.user_has_global_branch_access", return_value=False)
 	def test_unauthorised_explicit_branch_is_rejected_before_query(
 		self,
-		mock_validate_branch,
+		mock_global_access,
+		mock_allowed_branches,
 		mock_assert_page_access,
 		mock_sql,
 	):
 		from retailedge.salesperson_performance import get_salesperson_performance
-
-		mock_validate_branch.side_effect = frappe.PermissionError
 
 		with self.assertRaises(frappe.PermissionError):
 			get_salesperson_performance(
@@ -32,30 +35,49 @@ class TestSalespersonPerformanceSecurity(FrappeTestCase):
 			)
 
 		mock_assert_page_access.assert_called_once_with(frappe.session.user)
-		mock_validate_branch.assert_called_once_with(
-			"Restricted Branch",
-			user=frappe.session.user,
-			company=None,
-			throw=True,
-		)
+		mock_global_access.assert_called_once_with(user=frappe.session.user)
+		mock_allowed_branches.assert_called_once_with(user=frappe.session.user, company=None)
+		mock_sql.assert_not_called()
+
+	@patch("retailedge.salesperson_performance.frappe.db.sql")
+	@patch("retailedge.salesperson_performance.assert_can_access_branch_performance")
+	@patch("retailedge.salesperson_performance.get_user_allowed_branches", return_value={"branches": []})
+	@patch("retailedge.salesperson_performance.user_has_global_branch_access", return_value=False)
+	def test_restricted_user_without_branch_assignment_is_rejected(
+		self,
+		mock_global_access,
+		mock_allowed_branches,
+		mock_assert_page_access,
+		mock_sql,
+	):
+		from retailedge.salesperson_performance import get_salesperson_performance
+
+		with self.assertRaises(frappe.PermissionError):
+			get_salesperson_performance(
+				{
+					"from_date": "2026-07-01",
+					"to_date": "2026-07-21",
+				}
+			)
+
+		mock_assert_page_access.assert_called_once_with(frappe.session.user)
+		mock_global_access.assert_called_once_with(user=frappe.session.user)
+		mock_allowed_branches.assert_called_once_with(user=frappe.session.user, company=None)
 		mock_sql.assert_not_called()
 
 	@patch("retailedge.salesperson_performance.frappe.db.sql")
 	@patch("retailedge.salesperson_performance.has_field", return_value=True)
-	@patch(
-		"retailedge.salesperson_performance.get_branch_query_filters",
-		return_value={"branch": "Allowed Branch", "allowed_branches": []},
-	)
 	@patch("retailedge.salesperson_performance.assert_can_access_branch_performance")
 	@patch(
-		"retailedge.salesperson_performance.validate_user_branch_access",
-		return_value={"allowed": True, "reason": "allowed_branch"},
+		"retailedge.salesperson_performance.get_user_allowed_branches",
+		return_value={"branches": ["Allowed Branch"]},
 	)
+	@patch("retailedge.salesperson_performance.user_has_global_branch_access", return_value=False)
 	def test_authorised_explicit_branch_is_applied_to_queries(
 		self,
-		mock_validate_branch,
+		mock_global_access,
+		mock_allowed_branches,
 		mock_assert_page_access,
-		mock_scope,
 		mock_has_field,
 		mock_sql,
 	):
@@ -86,17 +108,10 @@ class TestSalespersonPerformanceSecurity(FrappeTestCase):
 		)
 
 		mock_assert_page_access.assert_called_once_with(frappe.session.user)
-		mock_validate_branch.assert_called_once_with(
-			"Allowed Branch",
+		mock_global_access.assert_called_once_with(user=frappe.session.user)
+		mock_allowed_branches.assert_called_once_with(
 			user=frappe.session.user,
 			company="Retail Company",
-			throw=True,
-		)
-		mock_scope.assert_called_once_with(
-			"Sales Invoice",
-			user=frappe.session.user,
-			company="Retail Company",
-			branch="Allowed Branch",
 		)
 		self.assertTrue(mock_has_field.called)
 		self.assertEqual(mock_sql.call_count, 2)
@@ -106,6 +121,56 @@ class TestSalespersonPerformanceSecurity(FrappeTestCase):
 			query = call.args[0]
 			self.assertIn("si.retailedge_branch = %s", query)
 			self.assertIn("Allowed Branch", call.args[1])
+
+	@patch("retailedge.salesperson_performance.frappe.db.sql")
+	@patch("retailedge.salesperson_performance.has_field", return_value=True)
+	@patch("retailedge.salesperson_performance.assert_can_access_branch_performance")
+	@patch(
+		"retailedge.salesperson_performance.get_user_allowed_branches",
+		return_value={"branches": ["Branch A", "Branch B"]},
+	)
+	@patch("retailedge.salesperson_performance.user_has_global_branch_access", return_value=False)
+	def test_restricted_user_without_explicit_filter_is_limited_to_allowed_branches(
+		self,
+		mock_global_access,
+		mock_allowed_branches,
+		mock_assert_page_access,
+		mock_has_field,
+		mock_sql,
+	):
+		from retailedge.salesperson_performance import get_salesperson_performance
+
+		mock_sql.side_effect = [
+			[
+				frappe._dict(
+					gross_sales=0,
+					net_sales=0,
+					total_invoices=0,
+					total_discount=0,
+					total_outstanding=0,
+				)
+			],
+			[],
+		]
+
+		get_salesperson_performance(
+			{
+				"from_date": "2026-07-01",
+				"to_date": "2026-07-21",
+				"limit": 5,
+				"offset": 0,
+			}
+		)
+
+		mock_assert_page_access.assert_called_once_with(frappe.session.user)
+		mock_global_access.assert_called_once_with(user=frappe.session.user)
+		mock_allowed_branches.assert_called_once_with(user=frappe.session.user, company=None)
+		self.assertTrue(mock_has_field.called)
+		for call in mock_sql.call_args_list:
+			query = call.args[0]
+			self.assertIn("si.retailedge_branch in (%s, %s)", query)
+			self.assertIn("Branch A", call.args[1])
+			self.assertIn("Branch B", call.args[1])
 
 	def test_dashboard_runtime_is_optional_and_standalone_safe(self):
 		retailedge_path = frappe.get_app_path("retailedge")
