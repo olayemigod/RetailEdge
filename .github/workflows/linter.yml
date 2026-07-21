@@ -48,7 +48,7 @@ jobs:
           pre-commit run --files "${changed_files[@]}" 2>&1 | tee -a precommit.log
 
       - name: Upload changed-file lint diagnostics
-        if: always()
+        if: steps.precommit.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: changed-file-lint-diagnostics
@@ -84,7 +84,7 @@ jobs:
             "${changed_files[@]}" 2>&1 | tee semgrep.log
 
       - name: Upload changed-file Semgrep diagnostics
-        if: always()
+        if: steps.semgrep.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: changed-file-semgrep-diagnostics
