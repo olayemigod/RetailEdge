@@ -96,10 +96,23 @@ jobs:
         env:
           CI: 'Yes'
 
-      - name: Run Tests
+      - name: Run Tests with diagnostics
+        id: server_tests
+        continue-on-error: true
         working-directory: /home/runner/frappe-bench
         run: |
           bench --site test_site set-config allow_tests true
-          bench --site test_site run-tests --app retailedge
+          bench --site test_site run-tests --app retailedge 2>&1 | tee "$GITHUB_WORKSPACE/server-tests.log"
         env:
           TYPE: server
+
+      - name: Upload server test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-diagnostics
+          path: server-tests.log
+
+      - name: Enforce server test result
+        if: steps.server_tests.outcome == 'failure'
+        run: exit 1
