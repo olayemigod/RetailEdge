@@ -3,7 +3,6 @@
 
 import frappe
 from frappe.utils import flt, get_first_day, getdate, nowdate
-
 from retailedge.branch_context import (
 	get_branch_query_filters,
 	has_field,
