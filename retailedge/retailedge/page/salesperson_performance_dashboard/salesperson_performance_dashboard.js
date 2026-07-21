@@ -8,12 +8,12 @@ try {
 			const $bootLoading = $(
 				'<div class="edge-boot-loading p-6 text-center text-muted" style="padding: 20px; font-size: 16px;">' +
 					__("Loading Salesperson Performance Dashboard...") +
-					"</div>"
+					"</div>",
 			).appendTo(wrapper);
 
 			const requireAsync = function (asset, options = {}) {
-				const optional = Boolean(options.optional);
-				const timeout = Number(options.timeout || 5000);
+				const optional = options.optional ?? asset === "edgeui.bundle.js";
+				const timeout = Number(options.timeout || (optional ? 750 : 5000));
 
 				return new Promise((resolve, reject) => {
 					let completed = false;
@@ -47,7 +47,7 @@ try {
 			// Shared EdgeUI enhances the page when present, but RetailEdge owns a
 			// compatible local runtime so a standalone product installation remains usable.
 			if (!window.EdgeUI?.createEdgeApp) {
-				await requireAsync("edgeui.bundle.js", { optional: true, timeout: 750 });
+				await requireAsync("edgeui.bundle.js");
 			}
 
 			await requireAsync("salesperson_performance.bundle.js");
@@ -61,7 +61,9 @@ try {
 					wrapper._bootLoading.remove();
 					wrapper._bootLoading = null;
 				}
-				const root = $('<div class="retailedge-dashboard-root"></div>').appendTo(page.body);
+				const root = $('<div class="retailedge-dashboard-root"></div>').appendTo(
+					page.body,
+				);
 				wrapper.vue_app = await window.mountSalespersonPerformanceDashboard(root[0]);
 				console.log("[BOOT] Salesperson Performance Dashboard mounted");
 			} catch (error) {
