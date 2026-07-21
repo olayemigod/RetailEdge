@@ -7,7 +7,7 @@ try {
 		try {
 			const $bootLoading = $(
 				'<div class="edge-boot-loading p-6 text-center text-muted" style="padding: 20px; font-size: 16px;">' +
-					__("Loading Salesperson Performance Dashboard...") +
+					__("Loading EdgeSuite UI for Salesperson Performance Dashboard...") +
 					"</div>",
 			).appendTo(wrapper);
 
