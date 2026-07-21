@@ -256,7 +256,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Reports & Analytics",
-   "link_count": 14,
+   "link_count": 15,
    "link_type": "Report",
    "onboard": 0,
    "type": "Card Break"
@@ -400,6 +400,16 @@
    "onboard": 0,
    "type": "Link",
    "link_to": "Serial No and Batch Traceability"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Salesperson Performance Dashboard",
+   "link_count": 0,
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link",
+   "link_to": "salesperson-performance-dashboard"
   },
   {
    "hidden": 0,
