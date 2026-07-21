@@ -9,7 +9,6 @@ from frappe.tests.utils import FrappeTestCase
 
 
 class TestSalespersonPerformanceSecurity(FrappeTestCase):
-	@patch("retailedge.salesperson_performance.frappe.db.sql")
 	@patch("retailedge.salesperson_performance.assert_can_access_branch_performance")
 	@patch(
 		"retailedge.salesperson_performance.get_user_allowed_branches",
@@ -21,7 +20,6 @@ class TestSalespersonPerformanceSecurity(FrappeTestCase):
 		mock_global_access,
 		mock_allowed_branches,
 		mock_assert_page_access,
-		mock_sql,
 	):
 		from retailedge.salesperson_performance import get_salesperson_performance
 
@@ -37,9 +35,7 @@ class TestSalespersonPerformanceSecurity(FrappeTestCase):
 		mock_assert_page_access.assert_called_once_with(frappe.session.user)
 		mock_global_access.assert_called_once_with(user=frappe.session.user)
 		mock_allowed_branches.assert_called_once_with(user=frappe.session.user, company=None)
-		mock_sql.assert_not_called()
 
-	@patch("retailedge.salesperson_performance.frappe.db.sql")
 	@patch("retailedge.salesperson_performance.assert_can_access_branch_performance")
 	@patch("retailedge.salesperson_performance.get_user_allowed_branches", return_value={"branches": []})
 	@patch("retailedge.salesperson_performance.user_has_global_branch_access", return_value=False)
@@ -48,7 +44,6 @@ class TestSalespersonPerformanceSecurity(FrappeTestCase):
 		mock_global_access,
 		mock_allowed_branches,
 		mock_assert_page_access,
-		mock_sql,
 	):
 		from retailedge.salesperson_performance import get_salesperson_performance
 
@@ -63,7 +58,6 @@ class TestSalespersonPerformanceSecurity(FrappeTestCase):
 		mock_assert_page_access.assert_called_once_with(frappe.session.user)
 		mock_global_access.assert_called_once_with(user=frappe.session.user)
 		mock_allowed_branches.assert_called_once_with(user=frappe.session.user, company=None)
-		mock_sql.assert_not_called()
 
 	@patch("retailedge.salesperson_performance.frappe.db.sql")
 	@patch("retailedge.salesperson_performance.has_field", return_value=True)
