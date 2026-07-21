@@ -4,7 +4,11 @@
 import frappe
 from frappe.utils import flt, get_first_day, getdate, nowdate
 
-from retailedge.branch_context import get_branch_query_filters, has_field
+from retailedge.branch_context import (
+	get_branch_query_filters,
+	has_field,
+	validate_user_branch_access,
+)
 from retailedge.branch_performance import assert_can_access_branch_performance
 
 
@@ -49,8 +53,24 @@ def get_salesperson_performance(filters=None):
 		conditions.append("si.customer = %s")
 		params.append(filters.get("customer"))
 
-	# Branch context enforcement
-	scope = get_branch_query_filters("Sales Invoice", user=frappe.session.user, branch=filters.get("branch"))
+	# Branch context enforcement. An explicitly requested branch must be checked
+	# before it is passed into get_branch_query_filters because that helper treats
+	# explicit values as already trusted.
+	requested_branch = filters.get("branch")
+	if requested_branch:
+		validate_user_branch_access(
+			requested_branch,
+			user=frappe.session.user,
+			company=filters.get("company"),
+			throw=True,
+		)
+
+	scope = get_branch_query_filters(
+		"Sales Invoice",
+		user=frappe.session.user,
+		company=filters.get("company"),
+		branch=requested_branch,
+	)
 
 	branch_field = (
 		"retailedge_branch"
@@ -58,12 +78,12 @@ def get_salesperson_performance(filters=None):
 		else ("branch" if has_field("Sales Invoice", "branch") else None)
 	)
 
-	effective_branch = filters.get("branch") or scope.get("branch")
+	effective_branch = requested_branch or scope.get("branch")
 	if branch_field and effective_branch:
 		conditions.append(f"si.{branch_field} = %s")
 		params.append(effective_branch)
 	elif branch_field and scope.get("allowed_branches"):
-		allowed = [b for b in scope.get("allowed_branches") if b]
+		allowed = [branch for branch in scope.get("allowed_branches") if branch]
 		if allowed:
 			conditions.append(f"si.{branch_field} in ({', '.join(['%s'] * len(allowed))})")
 			params.extend(allowed)
