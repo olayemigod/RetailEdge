@@ -61,10 +61,38 @@ jobs:
       - name: Download Semgrep rules
         run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
 
-      - name: Run Semgrep rules
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep on pull request changes
+        id: semgrep
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          pip install semgrep
-          semgrep ci --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness
+          mapfile -d '' changed_files < <(
+            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA"
+          )
+          if [ "${#changed_files[@]}" -eq 0 ]; then
+            echo "No added, copied, modified, or renamed files to scan." | tee semgrep.log
+            exit 0
+          fi
+          semgrep scan --error \
+            --config ./frappe-semgrep-rules/rules \
+            --config r/python.lang.correctness \
+            "${changed_files[@]}" 2>&1 | tee semgrep.log
+
+      - name: Upload changed-file Semgrep diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: changed-file-semgrep-diagnostics
+          path: semgrep.log
+
+      - name: Enforce Semgrep result
+        if: steps.semgrep.outcome == 'failure'
+        run: exit 1
 
   deps-vulnerable-check:
     name: 'Vulnerable Dependency Check'
