@@ -23,7 +23,26 @@ jobs:
         with:
           python-version: '3.14'
           cache: pip
-      - uses: pre-commit/action@v3.0.0
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit with diagnostics
+        id: precommit
+        continue-on-error: true
+        run: |
+          pre-commit run --all-files > precommit.log 2>&1
+
+      - name: Upload pre-commit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: precommit-diagnostics
+          path: precommit.log
+
+      - name: Enforce pre-commit result
+        if: steps.precommit.outcome == 'failure'
+        run: exit 1
 
       - name: Download Semgrep rules
         run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
