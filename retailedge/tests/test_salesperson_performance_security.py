@@ -128,7 +128,9 @@ class TestSalespersonPerformanceSecurity(FrappeTestCase):
 		with open(bundle_path) as source:
 			bundle_source = source.read()
 
-		self.assertIn('requireAsync("edgeui.bundle.js", { optional: true', page_source)
+		self.assertIn('requireAsync("edgeui.bundle.js")', page_source)
+		self.assertIn('asset === "edgeui.bundle.js"', page_source)
+		self.assertIn("optional ? 750 : 5000", page_source)
 		self.assertIn('requireAsync("salesperson_performance.bundle.js")', page_source)
 		self.assertIn("retailedge-local", bundle_source)
 		self.assertIn("Vue.createApp", bundle_source)
