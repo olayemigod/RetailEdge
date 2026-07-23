@@ -6,13 +6,18 @@ from frappe.utils import flt, getdate
 
 from retailedge.branch_context import get_branch_query_filters
 from retailedge.cashier_expense_audit import get_cashier_expenses_for_daily_audit
+from retailedge.report_edgeui import append_report_metadata, build_report_metadata, recommendation
 
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	validate_filters(filters)
 	data = get_data(filters)
-	return get_columns(), data, None, get_chart_data(data), get_report_summary(data)
+	summary = append_report_metadata(
+		get_report_summary(data),
+		get_edgesuite_metadata(filters, data),
+	)
+	return get_columns(), data, None, get_chart_data(data), summary
 
 
 def validate_filters(filters):
@@ -129,6 +134,78 @@ def get_report_summary(rows):
 			"indicator": "Red" if summary["posting_blocked_count"] else "Green",
 		},
 	]
+
+
+def get_edgesuite_metadata(filters, rows):
+	visible_rows = get_visible_rows(rows)
+	summary = build_review_summary(visible_rows)
+	recommendations = []
+	if summary["pending_review_count"]:
+		recommendations.append(
+			recommendation(
+				_("Complete expense review"),
+				_("{0} expense(s) are still waiting for a daily-audit inclusion decision.").format(summary["pending_review_count"]),
+				"warning",
+			)
+		)
+	if summary["needs_clarification_count"]:
+		recommendations.append(
+			recommendation(
+				_("Request clarification"),
+				_("Resolve the supporting explanation for {0} expense(s) before approving the daily audit.").format(summary["needs_clarification_count"]),
+				"danger",
+			)
+		)
+	if summary["posting_blocked_count"]:
+		recommendations.append(
+			recommendation(
+				_("Resolve posting blockers"),
+				_("{0} expense(s) are not posting-ready. Review accounts, cost centres, approval state, and block reasons.").format(summary["posting_blocked_count"]),
+				"danger",
+			)
+		)
+	if summary["pending_ledger_amount"]:
+		recommendations.append(
+			recommendation(
+				_("Complete ledger handoff"),
+				_("Reviewed expenses remain in Pending Ledger. Post them through the approved RetailEdge accounting workflow."),
+				"warning",
+			)
+		)
+
+	return build_report_metadata(
+		title=_("Cashier Expense Review"),
+		icon="wallet",
+		filters=filters,
+		filter_fields=(
+			("company", _("Company")),
+			("branch", _("Branch")),
+			("pos_profile", _("POS Profile")),
+			("cashier", _("Cashier")),
+			("expense_category", _("Expense Category")),
+			("expense_status", _("Expense Status")),
+			("ledger_status", _("Ledger Status")),
+			("daily_audit_inclusion_status", _("Daily Audit Status")),
+			("posting_ready", _("Posting Ready")),
+		),
+		row_count=len(visible_rows),
+		empty_message=_("No cashier expense matched the selected filters."),
+		empty_suggestions=(
+			_("Choose another date range, branch, cashier, expense status, or inclusion status."),
+			_("Confirm that cashier expenses were recorded against the correct company and branch."),
+		),
+		recommendations=recommendations,
+		visible_card_labels=(
+			_("Total Expenses"),
+			_("Expense Count"),
+			_("Pending Review Count"),
+			_("Needs Clarification Count"),
+			_("Pending Ledger Amount"),
+			_("Posting Blocked Count"),
+		),
+		status_label=_("Review required") if recommendations else _("Expense controls clear in current view"),
+		status_tone="warning" if recommendations else "success",
+	)
 
 
 def build_review_summary(rows):
