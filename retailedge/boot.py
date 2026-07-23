@@ -5,6 +5,7 @@ import frappe
 from retailedge.cost_visibility import get_cost_price_visibility_context
 from retailedge.integrations.coreedge import get_coreedge_status
 from retailedge.posting_date_control import get_posting_date_context
+from retailedge.ui_identity import extend_bootinfo
 from retailedge.utils.settings import get_retailedge_settings
 
 
@@ -21,6 +22,12 @@ def boot_session(bootinfo):
 		except Exception:
 			bootinfo.retailedge[key] = {}
 			frappe.logger("retailedge.boot").exception("Failed to populate RetailEdge boot context for %s", key)
+
+	try:
+		bootinfo.retailedge["ui"] = extend_bootinfo(bootinfo)
+	except Exception:
+		bootinfo.retailedge["ui"] = {}
+		frappe.logger("retailedge.boot").exception("Failed to populate RetailEdge EdgeSuite UI identity")
 
 	try:
 		settings = get_retailedge_settings()
