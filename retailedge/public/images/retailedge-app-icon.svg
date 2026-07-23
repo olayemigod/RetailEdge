@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">RetailEdge</title>
+  <desc id="desc">RetailEdge blue, green and grey retail intelligence mark</desc>
+  <rect width="64" height="64" rx="15" fill="#f4f7fa"/>
+  <path d="M15 18h34l-3 10H18l-3-10Z" fill="#2563a6"/>
+  <path d="M19 30h26v18a4 4 0 0 1-4 4H23a4 4 0 0 1-4-4V30Z" fill="#ffffff" stroke="#708090" stroke-width="3"/>
+  <path d="M24 44l6-7 5 4 7-9" fill="none" stroke="#2f9e62" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="42" cy="32" r="2.5" fill="#2f9e62"/>
+</svg>
