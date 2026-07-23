@@ -31,11 +31,13 @@ add_to_apps_screen = [
 # include js, css files in header of desk.html
 app_include_css = [
 	"/assets/retailedge/css/retailedge_cards.css",
+	"/assets/retailedge/css/retailedge_report_edgeui.css",
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
 	"/assets/retailedge/js/retailedge_ui_bridge.js",
 	"/assets/retailedge/js/retailedge_product_menu.js",
+	"/assets/retailedge/js/retailedge_report_edgeui.js",
 ]
 
 # include js, css files in header of web template
@@ -305,12 +307,12 @@ boot_session = "retailedge.boot.boot_session"
 # 	{
 # 		"doctype": "{doctype_1}",
 # 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
+# 		"redact_fields": ["field_1", "field_2"],
 # 		"partial": 1,
 # 	},
 # 	{
 # 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
+# 		"filter_by": "filter_by",
 # 		"partial": 1,
 # 	},
 # 	{
