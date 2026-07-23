@@ -10,8 +10,9 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 			on_change() {
 				const company = frappe.query_report.get_filter_value("company");
 				for (const fieldname of ["branch", "warehouse"]) {
-					const value = frappe.query_report.get_filter_value(fieldname);
-					if (value) frappe.query_report.set_filter_value(fieldname, "");
+					if (frappe.query_report.get_filter_value(fieldname)) {
+						frappe.query_report.set_filter_value(fieldname, "");
+					}
 				}
 				if (company) frappe.query_report.refresh();
 			},
@@ -77,6 +78,7 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 			label: __("Warehouse"),
 			fieldtype: "Link",
 			options: "Warehouse",
+			reqd: 1,
 			get_query() {
 				const company = frappe.query_report.get_filter_value("company");
 				const filters = { is_group: 0 };
@@ -142,15 +144,6 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 			const toDate = report.get_filter_value("to_date");
 			if (fromDate && toDate && frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)) {
 				frappe.throw(__("From Date cannot be after To Date."));
-			}
-			if (fromDate && toDate) {
-				const days = frappe.datetime.get_day_diff(toDate, fromDate) + 1;
-				if (days > 90) {
-					frappe.show_alert({
-						message: __("Large date ranges may take longer to load. Use Warehouse or Branch to narrow the selected item history."),
-						indicator: "orange",
-					});
-				}
 			}
 			return originalRefresh();
 		};
