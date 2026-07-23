@@ -1,9 +1,21 @@
 function applyRetailEdgeSummaryCardDesign() {
-	// Report summary cards are styled through native Frappe DOM selectors in CSS.
+	// EdgeSuite UI renders the business summary while the native report table remains unchanged.
 }
 
 function scheduleRetailEdgeSummaryCardDesign() {
-	// No-op: report summary card appearance is CSS-only.
+	// Retained for compatibility with existing operational report refresh helpers.
+}
+
+function attachRetailEdgeReportEdgeUI(report, reportName, config) {
+	const attach = () => {
+		window.retailedgeReportEdgeUI?.register(reportName, config);
+		window.retailedgeReportEdgeUI?.attach(report, reportName);
+	};
+	if (window.retailedgeReportEdgeUI) {
+		attach();
+		return;
+	}
+	frappe.require("/assets/retailedge/js/retailedge_report_edgeui.js", attach);
 }
 
 function configureOperationalReportRefresh(report) {
@@ -55,11 +67,18 @@ frappe.query_reports["RetailEdge Invoice Payment Audit"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		attachRetailEdgeReportEdgeUI(report, "RetailEdge Invoice Payment Audit", {
+			eyebrow: __("Payment Control"),
+			title: __("Invoice Payment Audit"),
+			subtitle: __("Review invoice payment evidence, account alignment, audit status, and risk without changing invoice or ledger records."),
+			emptyDescription: __("Choose another operational context or confirm that submitted invoices and payment evidence exist for the selected period."),
+		});
 	},
 
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
 		scheduleRetailEdgeSummaryCardDesign(report);
+		window.retailedgeReportEdgeUI?.refresh(report, "RetailEdge Invoice Payment Audit");
 	},
 
 	filters: [
