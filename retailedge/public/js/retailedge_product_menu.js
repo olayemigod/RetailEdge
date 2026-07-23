@@ -33,8 +33,11 @@
 	});
 	const SECTION_META = Object.freeze({
 		Operations: { icon: "activity", description: "Sales, cash, stock and statement operations." },
-		"Reports & Review": { icon: "chart", description: "Performance, bank matching and control reports." },
+		"Review & Approvals": { icon: "check", description: "Review exceptions, evidence and reconciliation readiness." },
+		"Reports & Analytics": { icon: "chart", description: "Branch, cash, stock and bank intelligence." },
+		"Accounting / Ledger Bridge": { icon: "book", description: "Controlled access to native accounting records." },
 		"Setup / Configuration": { icon: "settings", description: "RetailEdge setup and operating defaults." },
+		"Admin / Maintenance": { icon: "shield", description: "Technical diagnostics and maintenance records." },
 	});
 	const ITEM_DESCRIPTIONS = Object.freeze({
 		"Cashier Expense": "Record branch cash expenses against existing shift controls.",
@@ -42,13 +45,26 @@
 		"Payment Statement Import": "Import statement evidence for bank matching.",
 		"Branch Performance Summary": "Compare branch sales, collections and operational results.",
 		"Bank Transaction Matching": "Review intelligent payment and bank transaction candidates.",
-		"Reconciliation Readiness": "Check whether reviewed matches are ready for ERPNext reconciliation.",
-		"Reconciliation Handoff": "Move verified review evidence to the native reconciliation workflow.",
+		"Reconciliation Readiness Review": "Check whether reviewed matches are ready for native reconciliation.",
+		"Reconciliation Handoff": "Review approved evidence prepared for the native ERPNext reconciliation workflow.",
+		"Invoice Payment Audit": "Inspect invoice payment evidence, account mismatches and risk.",
+		"Cashier Expense Review": "Review expense decisions, clarification and ledger readiness.",
+		"Cash Shift Verification": "Compare expected cash, closing cash and shift exceptions.",
+		"Daily Sales Audit Register": "Review daily audit results and cash-control exceptions.",
+		"Unmatched Bank Transactions": "Review Bank Transactions that do not yet have reliable payment evidence.",
+		"Unmatched Bank Payment Events": "Review payment events that do not yet have reliable Bank Transaction evidence.",
+		"POS Closing Variance vs Expenses": "Compare POS closing shortages with ERPNext and RetailEdge expense evidence.",
+		"Salesperson Performance Dashboard": "Review proportional salesperson results from submitted invoices.",
+		"Journal Entry": "Open native ERPNext journal records; posting permissions remain authoritative.",
 		Settings: "Configure RetailEdge behaviour and controls.",
 		"Branch Profile": "Manage branch-specific defaults and operating context.",
 		"Expense Category": "Maintain approved expense classifications and ledger defaults.",
 		"Statement Mapping Template": "Define reusable statement column mappings for bank and payment imports.",
+		"Error Log": "Inspect technical errors for administrator troubleshooting.",
 	});
+	const HIDDEN_NAVIGATION_TARGETS = new Set([
+		"DocType:RetailEdge Branch Profile User",
+	]);
 
 	function edgeRuntime() {
 		return window.EdgeSuiteUI || window.EdgeUI || null;
@@ -72,6 +88,12 @@
 		};
 	}
 
+	function navigationKey(item) {
+		const linkType = String(item?.link_type || "").trim();
+		const target = String(item?.link_to || item?.route || "").trim();
+		return linkType && target ? `${linkType}:${target}` : "";
+	}
+
 	function sections() {
 		const result = [
 			{
@@ -81,6 +103,7 @@
 				items: [HOME_ITEM],
 			},
 		];
+		const seenTargets = new Set([navigationKey(HOME_ITEM)]);
 		let current = null;
 		for (const item of sidebar()?.items || []) {
 			if (item.type === "Section Break") {
@@ -94,9 +117,16 @@
 				result.push(current);
 				continue;
 			}
-			if (item.type === "Link" && item.label !== "Home" && current && item.hidden !== 1) {
-				current.items.push(normalizeItem(item));
+			if (item.type !== "Link" || item.label === "Home" || !current || item.hidden === 1) {
+				continue;
 			}
+			const normalized = normalizeItem(item);
+			const key = navigationKey(normalized);
+			if (!key || HIDDEN_NAVIGATION_TARGETS.has(key) || seenTargets.has(key)) {
+				continue;
+			}
+			seenTargets.add(key);
+			current.items.push(normalized);
 		}
 		let setupSection = result.find((section) => section.label === "Setup / Configuration");
 		if (!setupSection) {
