@@ -1,0 +1,129 @@
+.retailedge-edgeui-report-page .layout-main-section {
+	background: var(--edge-page-bg, var(--bg-color));
+}
+
+.retailedge-report-edgeui-host {
+	margin-bottom: 1rem;
+}
+
+.retailedge-report-edgeui-surface {
+	display: grid;
+	gap: 1rem;
+	position: relative;
+}
+
+.retailedge-report-edgeui-product-mark {
+	align-items: center;
+	background: var(--edge-color-brand-50, #eef7ff);
+	border: 1px solid var(--edge-color-brand-100, #d9edff);
+	border-radius: 999px;
+	color: var(--edge-color-brand-700, #0c4f87);
+	display: inline-flex;
+	height: 2rem;
+	justify-content: center;
+	position: absolute;
+	right: 0;
+	top: 0;
+	width: 2rem;
+}
+
+.retailedge-report-edgeui-context {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.retailedge-report-edgeui-card {
+	border-radius: var(--edge-radius-lg, 12px);
+	min-width: 0;
+}
+
+.retailedge-report-edgeui-recommendations,
+.retailedge-report-edgeui-empty {
+	background: var(--card-bg);
+	border: 1px solid var(--border-color);
+	border-radius: var(--edge-radius-lg, 12px);
+	padding: 1rem;
+}
+
+.retailedge-report-edgeui-section-heading {
+	display: grid;
+	gap: 0.15rem;
+	margin-bottom: 0.75rem;
+}
+
+.retailedge-report-edgeui-section-heading h2 {
+	font-size: 1rem;
+	margin: 0;
+}
+
+.retailedge-report-edgeui-recommendation-list {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.retailedge-report-edgeui-recommendation {
+	align-items: flex-start;
+	border-top: 1px solid var(--border-color);
+	display: grid;
+	gap: 0.75rem;
+	grid-template-columns: auto minmax(0, 1fr);
+	padding-top: 0.75rem;
+}
+
+.retailedge-report-edgeui-recommendation:first-child {
+	border-top: 0;
+	padding-top: 0;
+}
+
+.retailedge-report-edgeui-recommendation p {
+	color: var(--text-muted);
+	margin: 0.2rem 0 0;
+}
+
+.retailedge-report-edgeui-suggestions {
+	color: var(--text-muted);
+	margin: 0.75rem auto 0;
+	max-width: 42rem;
+	padding-left: 1.25rem;
+}
+
+.retailedge-edgeui-report-page .page-form {
+	align-items: flex-end;
+	background: var(--card-bg);
+	border: 1px solid var(--border-color);
+	border-radius: var(--edge-radius-lg, 12px);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.65rem;
+	margin-bottom: 1rem;
+	padding: 0.85rem;
+}
+
+.retailedge-edgeui-report-page .page-form .form-group {
+	margin-bottom: 0;
+}
+
+.retailedge-edgeui-report-page .datatable-container,
+.retailedge-edgeui-report-page .chart-container {
+	background: var(--card-bg);
+	border: 1px solid var(--border-color);
+	border-radius: var(--edge-radius-lg, 12px);
+	overflow: hidden;
+}
+
+.retailedge-edgeui-report-page .datatable .dt-header .dt-cell {
+	font-weight: 600;
+}
+
+@media (max-width: 47.99rem) {
+	.retailedge-report-edgeui-product-mark {
+		display: none;
+	}
+
+	.retailedge-edgeui-report-page .page-form {
+		align-items: stretch;
+		flex-direction: column;
+	}
+}
