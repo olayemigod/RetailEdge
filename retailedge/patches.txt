@@ -7,3 +7,4 @@
 retailedge.patches.sync_retailedge_workspace
 retailedge.patches.disable_prepared_reports_for_operational_reports
 retailedge.patches.add_report_performance_indexes
+retailedge.patches.add_stock_movement_history_report_link
