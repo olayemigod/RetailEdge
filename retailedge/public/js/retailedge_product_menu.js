@@ -4,6 +4,7 @@
 	if (typeof window === "undefined") return;
 
 	const PRODUCT = "RetailEdge";
+	const PRODUCT_KEY = "retailedge";
 	const HOME_ITEM = Object.freeze({
 		label: "RetailEdge Home",
 		description: "Open the retail operations command centre.",
@@ -160,7 +161,16 @@
 		const edgeUI = edgeRuntime();
 		if (!edgeUI?.registerProductMenu) return false;
 		const config = {
+			product_key: PRODUCT_KEY,
 			product: PRODUCT,
+			label: PRODUCT,
+			icon: "grid",
+			home_route: "/app/retailedge-home",
+			route_patterns: [
+				"/app/retailedge*",
+				"/app/salesperson-performance-dashboard*",
+				"/app/query-report/RetailEdge*",
+			],
 			subtitle: "Retail operations and business intelligence",
 			sections: sections(),
 			profile: profile(),
