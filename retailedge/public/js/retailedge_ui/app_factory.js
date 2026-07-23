@@ -14,6 +14,10 @@ const REQUIRED_COMPONENTS = Object.freeze([
 	"EdgeEmptyState",
 	"EdgeBranchContextSwitcher",
 	"EdgeLinkField",
+	"EdgeDataTable",
+	"EdgeDocumentForm",
+	"EdgeWorkflowBar",
+	"EdgeSettingsLayout",
 	"EdgeIcon",
 ]);
 
