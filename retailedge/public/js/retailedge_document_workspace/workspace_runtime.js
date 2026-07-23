@@ -1,14 +1,30 @@
+const EXTRA_RESOURCE_OPTIONS = Object.freeze([
+	{ value: "expense-categories", label: "Expense Categories" },
+	{ value: "statement-mapping-templates", label: "Statement Mapping Templates" },
+]);
+
+function mergeResourceOptions(options = []) {
+	const seen = new Set();
+	return [...options, ...EXTRA_RESOURCE_OPTIONS].filter((option) => {
+		if (!option?.value || seen.has(option.value)) return false;
+		seen.add(option.value);
+		return true;
+	});
+}
+
 export function installRetailEdgeWorkspaceRuntime(component) {
 	if (!component || component.__retailedgeWorkspaceRuntimeInstalled) return component;
 
 	const originalData = component.data;
 	component.data = function () {
 		const state = originalData.call(this);
-		const selected = state.resourceOptions.some((option) => option.value === state.resource)
-			? state.resource
+		state.resourceOptions = mergeResourceOptions(state.resourceOptions);
+		const route = new URLSearchParams(window.location.search || "");
+		const requested = route.get("resource") || state.resource;
+		const selected = state.resourceOptions.some((option) => option.value === requested)
+			? requested
 			: state.resourceOptions[0]?.value || "branch-profiles";
 		state.resource = selected;
-		const route = new URLSearchParams(window.location.search || "");
 		state.mode = selected === "settings" || route.get("name") || route.get("new") === "1" ? "form" : "list";
 		return state;
 	};
