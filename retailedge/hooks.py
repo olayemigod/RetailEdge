@@ -4,7 +4,7 @@ app_publisher = "ProcessEdge Solutions"
 app_description = "Retail operations, POS control, sales audit, payment verification, branch workflows, and retail intelligence for ERPNext/POSNext."
 app_email = "support@processedge.com.ng"
 app_license = "MIT"
-app_logo_url = "/assets/retailedge/logo.png"
+app_logo_url = "/assets/retailedge/images/retailedge-app-icon.svg"
 app_home = "/app/retailedge-home"
 
 # Apps
