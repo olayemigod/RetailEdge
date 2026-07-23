@@ -259,6 +259,10 @@ after_migrate = [
 ]
 boot_session = "retailedge.boot.boot_session"
 
+permission_query_conditions = {
+	"RetailEdge Branch Profile": "retailedge.document_workspace_permissions.get_branch_profile_query",
+}
+
 # Extend DocType Class
 # ------------------------------
 #
@@ -306,7 +310,7 @@ boot_session = "retailedge.boot.boot_session"
 # user_data_fields = [
 # 	{
 # 		"doctype": "{doctype_1}",
-# 		"filter_by": "{filter_by}",
+# 		"filter_by": "filter_by",
 # 		"redact_fields": ["field_1", "field_2"],
 # 		"partial": 1,
 # 	},
