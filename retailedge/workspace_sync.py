@@ -10,6 +10,7 @@ from retailedge.workspace_home import (
 	build_home_workspace_links,
 	build_home_workspace_shortcuts,
 )
+from retailedge.workspace_navigation import normalize_sidebar_data, normalize_workspace_data
 
 
 def sync_retailedge_workspace_layout():
@@ -21,8 +22,8 @@ def sync_retailedge_workspace_layout():
 		workspace_path = fallback_base / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
 		sidebar_path = fallback_base / "retailedge" / "workspace_sidebar" / "retailedge" / "retailedge.json"
 
-	workspace_data = json.loads(workspace_path.read_text())
-	sidebar_data = json.loads(sidebar_path.read_text())
+	workspace_data = normalize_workspace_data(json.loads(workspace_path.read_text()))
+	sidebar_data = normalize_sidebar_data(json.loads(sidebar_path.read_text()))
 
 	workspace = frappe.get_doc("Workspace", "RetailEdge")
 	workspace.label = workspace_data.get("label") or workspace.label
