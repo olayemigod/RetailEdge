@@ -7,6 +7,8 @@ import frappe
 
 
 WORKSPACE_NAME = "RetailEdge"
+STOCK_MOVEMENT_REPORT = "RetailEdge Stock Movement History"
+REPORTS_SECTION_LABEL = "Reports & Insights"
 VALID_SHORTCUT_VIEWS = {"", "List", "Report Builder", "Dashboard", "Tree", "New", "Calendar", "Kanban", "Image"}
 
 
@@ -25,6 +27,13 @@ def execute():
 	workspace = _get_or_create_workspace(data)
 	shortcuts = _normalise_shortcuts(data.get("shortcuts", []))
 	links = _normalise_links(data.get("links", []))
+	links = _ensure_report_menu_link(
+		links,
+		report_name=STOCK_MOVEMENT_REPORT,
+		label="Stock Movement History",
+		section_label=REPORTS_SECTION_LABEL,
+		after_link_to="Stock Ledger",
+	)
 	workspace.content = _normalise_content(data.get("content"), shortcuts)
 	workspace.public = data.get("public", 1)
 	workspace.is_hidden = data.get("is_hidden", 0)
@@ -99,6 +108,84 @@ def _normalise_links(links: list[dict]) -> list[dict]:
 		normalised.append(row)
 
 	return normalised
+
+
+def _ensure_report_menu_link(
+	links: list[dict],
+	*,
+	report_name: str,
+	label: str,
+	section_label: str,
+	after_link_to: str | None = None,
+) -> list[dict]:
+	"""Keep a report in both the workspace card and generated sidebar menu."""
+	if not frappe.db.exists("Report", report_name):
+		return links
+
+	if any(row.get("type") == "Link" and row.get("link_to") == report_name for row in links):
+		return _recount_link_counts(links)
+
+	section_index = next(
+		(
+			index
+			for index, row in enumerate(links)
+			if row.get("type") == "Card Break" and row.get("label") == section_label
+		),
+		None,
+	)
+	if section_index is None:
+		links.append(
+			{
+				"type": "Card Break",
+				"label": section_label,
+				"link_type": "Report",
+				"link_count": 0,
+				"hidden": 0,
+				"is_query_report": 0,
+				"onboard": 0,
+				"close": 1,
+			}
+		)
+		insert_at = len(links)
+	else:
+		section_end = len(links)
+		for index in range(section_index + 1, len(links)):
+			if links[index].get("type") == "Card Break":
+				section_end = index
+				break
+
+		insert_at = section_end
+		if after_link_to:
+			for index in range(section_index + 1, section_end):
+				if links[index].get("type") == "Link" and links[index].get("link_to") == after_link_to:
+					insert_at = index + 1
+					break
+
+	links.insert(
+		insert_at,
+		{
+			"type": "Link",
+			"label": label,
+			"link_to": report_name,
+			"link_type": "Report",
+			"link_count": 0,
+			"hidden": 0,
+			"is_query_report": 1,
+			"onboard": 0,
+		},
+	)
+	return _recount_link_counts(links)
+
+
+def _recount_link_counts(links: list[dict]) -> list[dict]:
+	current_card = None
+	for row in links:
+		if row.get("type") == "Card Break":
+			row["link_count"] = 0
+			current_card = row
+		elif row.get("type") == "Link" and current_card is not None:
+			current_card["link_count"] = int(current_card.get("link_count") or 0) + 1
+	return links
 
 
 def _normalise_content(content: str | None, shortcuts: list[dict]) -> str | None:
