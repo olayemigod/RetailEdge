@@ -133,8 +133,8 @@ jobs:
         working-directory: /home/runner/frappe-bench
         run: |
           bench get-app --branch version-16 erpnext https://github.com/frappe/erpnext
-          bench get-app --skip-assets edgesuite_ui "$GITHUB_WORKSPACE/edgesuite-ui-source"
-          bench get-app --skip-assets retailedge "$GITHUB_WORKSPACE"
+          bench get-app --skip-assets "file://$GITHUB_WORKSPACE/edgesuite-ui-source"
+          bench get-app --skip-assets "file://$GITHUB_WORKSPACE"
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin test_site
           bench --site test_site install-app erpnext
