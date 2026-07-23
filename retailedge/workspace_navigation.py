@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 
 
@@ -9,6 +9,8 @@ HIDDEN_NAVIGATION_TARGETS = frozenset(
 		("DocType", "RetailEdge Branch Profile User"),
 	}
 )
+
+NavigationTargetExists = Callable[[str, str], bool]
 
 
 def navigation_target_key(row: Mapping | None) -> tuple[str, str] | None:
@@ -34,6 +36,7 @@ def normalize_grouped_navigation(
 	*,
 	section_types: frozenset[str],
 	hidden_targets: frozenset[tuple[str, str]] = HIDDEN_NAVIGATION_TARGETS,
+	target_exists: NavigationTargetExists | None = None,
 ) -> list[dict]:
 	result: list[dict] = []
 	seen_targets: set[tuple[str, str]] = set()
@@ -59,6 +62,8 @@ def normalize_grouped_navigation(
 		if key:
 			if key in hidden_targets or key in seen_targets:
 				continue
+			if target_exists is not None and not target_exists(*key):
+				continue
 			seen_targets.add(key)
 
 		if pending_section is not None:
@@ -70,19 +75,29 @@ def normalize_grouped_navigation(
 	return result
 
 
-def normalize_workspace_data(workspace_data: Mapping | None) -> dict:
+def normalize_workspace_data(
+	workspace_data: Mapping | None,
+	*,
+	target_exists: NavigationTargetExists | None = None,
+) -> dict:
 	data = deepcopy(dict(workspace_data or {}))
 	data["links"] = normalize_grouped_navigation(
 		data.get("links"),
 		section_types=frozenset({"Card Break"}),
+		target_exists=target_exists,
 	)
 	return data
 
 
-def normalize_sidebar_data(sidebar_data: Mapping | None) -> dict:
+def normalize_sidebar_data(
+	sidebar_data: Mapping | None,
+	*,
+	target_exists: NavigationTargetExists | None = None,
+) -> dict:
 	data = deepcopy(dict(sidebar_data or {}))
 	data["items"] = normalize_grouped_navigation(
 		data.get("items"),
 		section_types=frozenset({"Section Break"}),
+		target_exists=target_exists,
 	)
 	return data
