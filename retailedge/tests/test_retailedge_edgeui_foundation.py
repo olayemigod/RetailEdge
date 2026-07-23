@@ -82,12 +82,12 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 
 		with patch("retailedge.api.product_context.has_app_permission", return_value=False):
 			context = get_product_context()
-		self.assertNotIn(
-			"retailedge",
-			{product["key"] for product in context["available_products"]},
-		)
-		with self.assertRaises(frappe.PermissionError):
-			switch_product("retailedge")
+			self.assertNotIn(
+				"retailedge",
+				{product["key"] for product in context["available_products"]},
+			)
+			with self.assertRaises(frappe.PermissionError):
+				switch_product("retailedge")
 
 	def test_product_menu_registers_stable_product_context(self):
 		menu = self.app_path("public", "js", "retailedge_product_menu.js").read_text()
