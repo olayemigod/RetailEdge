@@ -62,6 +62,10 @@
 			window.location.assign(value);
 			return true;
 		}
+		if ((value.startsWith("/app/") || value.startsWith("app/")) && /[?#]/.test(value)) {
+			window.location.assign(value.startsWith("/") ? value : `/${value}`);
+			return true;
+		}
 		if (value.startsWith("/app/") || value.startsWith("app/")) {
 			const parts = value
 				.replace(/^\//, "")
