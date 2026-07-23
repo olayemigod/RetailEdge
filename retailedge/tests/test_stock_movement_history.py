@@ -14,10 +14,28 @@ class TestStockMovementHistory(unittest.TestCase):
 		self.assertIsNone(report.convert_quantity(24, None))
 		self.assertIsNone(report.convert_quantity(24, 0))
 
-	def test_quantity_display_includes_uom_name(self):
-		self.assertEqual(report.format_quantity(24, "Nos"), "24 Nos")
-		self.assertEqual(report.format_quantity(2.5, "Carton"), "2.5 Carton")
-		self.assertEqual(report.format_quantity(None, "Nos"), "")
+	def test_directional_quantities_keep_numeric_in_and_out_columns(self):
+		in_quantity, out_quantity = report.split_movement_quantity(
+			24,
+			source_warehouse="Main Store",
+			destination_warehouse="Branch Store",
+		)
+		self.assertEqual(in_quantity, 24)
+		self.assertEqual(out_quantity, 24)
+
+		in_quantity, out_quantity = report.split_movement_quantity(
+			24,
+			destination_warehouse="Branch Store",
+		)
+		self.assertEqual(in_quantity, 24)
+		self.assertIsNone(out_quantity)
+
+		in_quantity, out_quantity = report.split_movement_quantity(
+			24,
+			source_warehouse="Main Store",
+		)
+		self.assertIsNone(in_quantity)
+		self.assertEqual(out_quantity, 24)
 
 	def test_transfer_classification(self):
 		self.assertEqual(report.classify_stock_entry_movement("Material Transfer", "Stores", "Shop"), "Internal Transfer")
@@ -29,14 +47,15 @@ class TestStockMovementHistory(unittest.TestCase):
 		self.assertEqual(report.classify_ledger_movement("Purchase Receipt", True, {}), "Purchase Receipt")
 		self.assertEqual(report.classify_ledger_movement("Purchase Receipt", False, {"is_return": 1}), "Purchase Return")
 
-	def test_output_has_destination_balances_in_both_uoms(self):
+	def test_output_has_numeric_quantities_and_destination_balances(self):
 		row = report.make_output_row(
 			posting_datetime="2026-07-23 10:00:00",
 			movement_type="Internal Transfer",
 			item_code="ITEM-001",
 			item_name="Sample Item",
-			base_quantity=24,
-			base_uom="Nos",
+			stock_uom="Nos",
+			in_quantity=24,
+			out_quantity=24,
 			compare_uom="Carton",
 			conversion_factor=12,
 			source_warehouse="Main Store",
@@ -48,21 +67,47 @@ class TestStockMovementHistory(unittest.TestCase):
 			batch_no=None,
 			remarks="",
 		)
-		self.assertEqual(row["base_quantity_display"], "24 Nos")
-		self.assertEqual(row["compare_quantity_display"], "2 Carton")
-		self.assertEqual(row["destination_balance_display"], "120 Nos")
-		self.assertEqual(row["destination_balance_compare_display"], "10 Carton")
+		self.assertEqual(row["stock_uom"], "Nos")
+		self.assertEqual(row["in_quantity"], 24)
+		self.assertEqual(row["out_quantity"], 24)
+		self.assertEqual(row["compare_uom"], "Carton")
+		self.assertEqual(row["compare_in_quantity"], 2)
+		self.assertEqual(row["compare_out_quantity"], 2)
+		self.assertEqual(row["destination_balance"], 120)
+		self.assertEqual(row["destination_balance_compare"], 10)
+		for fieldname in (
+			"in_quantity",
+			"out_quantity",
+			"compare_in_quantity",
+			"compare_out_quantity",
+			"destination_balance",
+			"destination_balance_compare",
+		):
+			self.assertIsInstance(row[fieldname], (int, float))
 
-	def test_columns_exclude_removed_fields(self):
+	def test_columns_use_separate_uom_and_numeric_quantity_fields(self):
 		columns = report.get_columns(frappe._dict({"compare_uom": "Carton"}))
-		fieldnames = {column["fieldname"] for column in columns}
-		self.assertNotIn("source_branch", fieldnames)
-		self.assertNotIn("destination_branch", fieldnames)
-		self.assertNotIn("party", fieldnames)
-		self.assertNotIn("base_uom", fieldnames)
-		self.assertNotIn("compare_uom", fieldnames)
-		self.assertIn("destination_balance_display", fieldnames)
-		self.assertIn("destination_balance_compare_display", fieldnames)
+		column_map = {column["fieldname"]: column for column in columns}
+
+		self.assertNotIn("source_branch", column_map)
+		self.assertNotIn("destination_branch", column_map)
+		self.assertNotIn("party", column_map)
+		self.assertNotIn("base_quantity_display", column_map)
+		self.assertNotIn("compare_quantity_display", column_map)
+		self.assertNotIn("destination_balance_display", column_map)
+		self.assertNotIn("destination_balance_compare_display", column_map)
+
+		self.assertEqual(column_map["stock_uom"]["fieldtype"], "Link")
+		self.assertEqual(column_map["compare_uom"]["fieldtype"], "Link")
+		for fieldname in (
+			"in_quantity",
+			"out_quantity",
+			"compare_in_quantity",
+			"compare_out_quantity",
+			"destination_balance",
+			"destination_balance_compare",
+		):
+			self.assertEqual(column_map[fieldname]["fieldtype"], "Float")
 
 	def test_report_has_no_edgesuite_ui_dependency(self):
 		app_path = frappe.get_app_path("retailedge")
