@@ -2,14 +2,21 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import getdate
+from frappe.utils import flt, getdate
 
 from retailedge.branch_context import get_branch_query_filters
+from retailedge.report_edgeui import append_report_metadata, build_report_metadata, recommendation
+
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	validate_filters(filters)
-	return get_columns(), get_data(filters)
+	data = get_data(filters)
+	summary = append_report_metadata(
+		get_report_summary(data),
+		get_edgesuite_metadata(filters, data),
+	)
+	return get_columns(), data, None, None, summary
 
 
 def validate_filters(filters):
@@ -51,12 +58,15 @@ def get_columns():
 def get_data(filters):
 	query_filters = {}
 	query_filters.update(
-		(get_branch_query_filters(
-			"RetailEdge Daily Sales Audit",
-			user=frappe.session.user,
-			company=filters.get("company"),
-			branch=filters.get("branch"),
-		).get("filters") or {})
+		(
+			get_branch_query_filters(
+				"RetailEdge Daily Sales Audit",
+				user=frappe.session.user,
+				company=filters.get("company"),
+				branch=filters.get("branch"),
+			).get("filters")
+			or {}
+		)
 	)
 	for fieldname in ("company", "branch", "pos_profile", "cashier", "audit_status", "audit_result"):
 		value = filters.get(fieldname)
@@ -101,3 +111,101 @@ def get_data(filters):
 		limit_page_length=0,
 		order_by="audit_date desc, creation desc",
 	)
+
+
+def get_report_summary(rows):
+	total_cash_sales = sum(flt(row.get("cash_sales_amount")) for row in rows)
+	total_expected_cash = sum(flt(row.get("expected_cash_amount")) for row in rows)
+	total_actual_cash = sum(flt(row.get("actual_closing_cash_amount")) for row in rows)
+	total_absolute_variance = sum(abs(flt(row.get("net_variance_amount"))) for row in rows)
+	review_required_count = sum(1 for row in rows if _truthy(row.get("review_required")))
+	clarification_count = sum(1 for row in rows if _truthy(row.get("clarification_required")))
+	return [
+		{"value": total_cash_sales, "label": _("Cash Sales"), "datatype": "Currency", "indicator": "Blue"},
+		{"value": total_expected_cash, "label": _("Expected Cash"), "datatype": "Currency", "indicator": "Blue"},
+		{"value": total_actual_cash, "label": _("Actual Closing Cash"), "datatype": "Currency", "indicator": "Green"},
+		{
+			"value": total_absolute_variance,
+			"label": _("Absolute Variance"),
+			"datatype": "Currency",
+			"indicator": "Red" if total_absolute_variance else "Green",
+		},
+		{
+			"value": review_required_count,
+			"label": _("Review Required"),
+			"datatype": "Int",
+			"indicator": "Orange" if review_required_count else "Green",
+		},
+		{
+			"value": clarification_count,
+			"label": _("Clarification Required"),
+			"datatype": "Int",
+			"indicator": "Orange" if clarification_count else "Green",
+		},
+	]
+
+
+def get_edgesuite_metadata(filters, rows):
+	total_absolute_variance = sum(abs(flt(row.get("net_variance_amount"))) for row in rows)
+	review_required_count = sum(1 for row in rows if _truthy(row.get("review_required")))
+	clarification_count = sum(1 for row in rows if _truthy(row.get("clarification_required")))
+	recommendations = []
+	if total_absolute_variance:
+		recommendations.append(
+			recommendation(
+				_("Investigate cash variance"),
+				_("Open the affected daily audits and reconcile opening cash, cash sales, expenses, expected cash, and closing count evidence."),
+				"danger",
+			)
+		)
+	if review_required_count:
+		recommendations.append(
+			recommendation(
+				_("Complete audit review"),
+				_("{0} daily audit(s) still require reviewer action.").format(review_required_count),
+				"warning",
+			)
+		)
+	if clarification_count:
+		recommendations.append(
+			recommendation(
+				_("Resolve clarification requests"),
+				_("Obtain and record supporting explanations for {0} daily audit(s).").format(clarification_count),
+				"warning",
+			)
+		)
+
+	return build_report_metadata(
+		title=_("Daily Sales Audit Register"),
+		icon="assessment",
+		filters=filters,
+		filter_fields=(
+			("company", _("Company")),
+			("branch", _("Branch")),
+			("pos_profile", _("POS Profile")),
+			("cashier", _("Cashier")),
+			("audit_status", _("Audit Status")),
+			("audit_result", _("Audit Result")),
+		),
+		row_count=len(rows),
+		empty_message=_("No daily sales audit matched the selected filters."),
+		empty_suggestions=(
+			_("Choose another date range, branch, cashier, audit status, or audit result."),
+			_("Confirm that daily audits were created from the correct POS opening and closing shifts."),
+		),
+		recommendations=recommendations,
+		visible_card_labels=(
+			_("Cash Sales"),
+			_("Expected Cash"),
+			_("Actual Closing Cash"),
+			_("Absolute Variance"),
+			_("Review Required"),
+			_("Clarification Required"),
+		),
+		status_label=_("Review required") if recommendations else _("Audits clear in current view"),
+		status_tone="warning" if recommendations else "success",
+	)
+
+
+def _truthy(value):
+	return value is True or str(value or "").strip().lower() in {"1", "true", "yes"}
