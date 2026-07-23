@@ -32,9 +32,8 @@ def execute(filters=None):
 	validate_filters(filters)
 	warehouse_scope = resolve_warehouse_scope(filters)
 	stock_ledger_rows = get_stock_ledger_rows(filters, warehouse_scope)
-	data = build_movement_rows(stock_ledger_rows, filters)
-	if filters.get("movement_type"):
-		data = [row for row in data if row.get("movement_type") == filters.movement_type]
+	data = build_movement_rows(stock_ledger_rows, filters, warehouse_scope)
+	data = apply_display_filters(data, filters)
 	return get_columns(filters), data, None, None, get_report_summary(data)
 
 
@@ -43,6 +42,7 @@ def validate_filters(filters):
 		("company", _("Company")),
 		("from_date", _("From Date")),
 		("to_date", _("To Date")),
+		("item_code", _("Item")),
 	):
 		if not filters.get(fieldname):
 			frappe.throw(_("{0} is required.").format(label))
@@ -52,10 +52,10 @@ def validate_filters(filters):
 	if from_date > to_date:
 		frappe.throw(_("From Date cannot be after To Date."))
 
-	if not any(filters.get(fieldname) for fieldname in ("item_code", "warehouse", "branch")):
+	if not filters.get("warehouse") and not filters.get("branch"):
 		if (to_date - from_date).days + 1 > MAX_UNSCOPED_DAYS:
 			frappe.throw(
-				_("Select an Item, Warehouse or Branch for date ranges longer than {0} days.").format(
+				_("Select a Warehouse or Branch for date ranges longer than {0} days.").format(
 					MAX_UNSCOPED_DAYS
 				)
 			)
@@ -243,8 +243,15 @@ def expand_group_warehouses(company: str, warehouse_names: set[str]) -> set[str]
 
 
 def get_stock_ledger_rows(filters, warehouse_scope=None):
+	"""Fetch every selected-item movement needed for the running balance.
+
+	Voucher, movement and batch filters are deliberately applied after balances
+	are calculated. Skipping intervening entries would make the displayed
+	balance mathematically incorrect.
+	"""
 	query_filters: dict[str, Any] = {
 		"company": filters.company,
+		"item_code": filters.item_code,
 		"posting_datetime": [
 			"between",
 			[f"{filters.from_date} 00:00:00", f"{filters.to_date} 23:59:59.999999"],
@@ -254,22 +261,6 @@ def get_stock_ledger_rows(filters, warehouse_scope=None):
 	}
 	if warehouse_scope:
 		query_filters["warehouse"] = ["in", warehouse_scope]
-	if filters.get("warehouse"):
-		query_filters["warehouse"] = filters.warehouse
-	if filters.get("item_code"):
-		query_filters["item_code"] = filters.item_code
-	if filters.get("voucher_type"):
-		query_filters["voucher_type"] = filters.voucher_type
-	if filters.get("voucher_no"):
-		query_filters["voucher_no"] = filters.voucher_no
-	if filters.get("batch_no"):
-		query_filters["batch_no"] = filters.batch_no
-
-	if filters.get("item_group") and not filters.get("item_code"):
-		item_codes = get_item_codes_for_group(filters.item_group)
-		if not item_codes:
-			return []
-		query_filters["item_code"] = ["in", item_codes]
 
 	return frappe.get_list(
 		"Stock Ledger Entry",
@@ -296,71 +287,63 @@ def get_stock_ledger_rows(filters, warehouse_scope=None):
 	)
 
 
-def get_item_codes_for_group(item_group: str) -> list[str]:
-	bounds = frappe.db.get_value("Item Group", item_group, ["lft", "rgt"])
-	if not bounds:
-		return []
-
-	lft, rgt = bounds
-	groups = frappe.get_all(
-		"Item Group",
-		filters={"lft": [">=", lft], "rgt": ["<=", rgt]},
-		pluck="name",
-		limit_page_length=0,
-	)
-	return frappe.get_all(
-		"Item",
-		filters={"disabled": 0, "is_stock_item": 1, "item_group": ["in", groups]},
-		pluck="name",
-		limit_page_length=0,
-	)
-
-
-def build_movement_rows(stock_ledger_rows, filters):
+def build_movement_rows(stock_ledger_rows, filters, warehouse_scope=None):
 	if not stock_ledger_rows:
 		return []
 
-	item_codes = sorted({row.item_code for row in stock_ledger_rows if row.item_code})
-	item_map = {
-		row.name: row
-		for row in frappe.get_all(
-			"Item",
-			filters={"name": ["in", item_codes]},
-			fields=["name", "item_name", "stock_uom"],
-			limit_page_length=0,
-		)
-	}
-	conversion_map = get_conversion_map(item_codes, filters.get("compare_uom"))
+	item_code = filters.item_code
+	item = frappe.db.get_value(
+		"Item",
+		item_code,
+		["item_name", "stock_uom"],
+		as_dict=True,
+	) or frappe._dict()
+	conversion_map = get_conversion_map([item_code], filters.get("compare_uom"))
 	stock_entry_detail_map = get_stock_entry_detail_map(stock_ledger_rows)
 	voucher_headers = get_voucher_headers(stock_ledger_rows)
 
-	data = []
+	grouped_stock_entries = defaultdict(list)
+	other_rows = []
 	for sle in stock_ledger_rows:
-		header = voucher_headers.get(sle.voucher_type, {}).get(sle.voucher_no, {})
-		detail = (
-			stock_entry_detail_map.get(sle.voucher_detail_no)
-			if sle.voucher_type == "Stock Entry" and sle.voucher_detail_no
-			else None
+		if sle.voucher_type == "Stock Entry" and sle.voucher_detail_no:
+			grouped_stock_entries[(sle.voucher_no, sle.voucher_detail_no, sle.item_code)].append(sle)
+		else:
+			other_rows.append(sle)
+
+	data = []
+	for group_rows in grouped_stock_entries.values():
+		row = build_stock_entry_movement_row(
+			group_rows,
+			detail_map=stock_entry_detail_map,
+			header_map=voucher_headers.get("Stock Entry", {}),
+			item=item,
+			conversion_map=conversion_map,
+			compare_uom=filters.get("compare_uom"),
 		)
+		if row:
+			data.append(row)
+
+	for sle in other_rows:
 		data.append(
-			build_ledger_row(
+			build_single_movement_row(
 				sle,
-				header=header,
-				stock_entry_detail=detail,
-				item_map=item_map,
+				header=voucher_headers.get(sle.voucher_type, {}).get(sle.voucher_no, {}),
+				item=item,
 				conversion_map=conversion_map,
 				compare_uom=filters.get("compare_uom"),
 			)
 		)
 
-	return sorted(
+	data = sorted(
 		[row for row in data if row],
 		key=lambda row: (
 			get_datetime(row.get("posting_datetime")) if row.get("posting_datetime") else datetime.min,
 			get_datetime(row.get("creation")) if row.get("creation") else datetime.min,
-			row.get("sle_name") or "",
+			row.get("sort_key") or "",
 		),
 	)
+	opening_balance = get_opening_balance(filters, warehouse_scope)
+	return apply_running_balances(data, opening_balance)
 
 
 def get_conversion_map(item_codes, compare_uom):
@@ -458,44 +441,89 @@ def get_voucher_headers(stock_ledger_rows):
 	return result
 
 
-def build_ledger_row(sle, header, stock_entry_detail, item_map, conversion_map, compare_uom):
-	item = item_map.get(sle.item_code, {})
-	actual_qty = flt(sle.actual_qty)
-	incoming = actual_qty > 0
-	stock_uom = sle.get("stock_uom") or item.get("stock_uom")
-
-	source_warehouse, destination_warehouse = resolve_movement_warehouses(
-		sle,
-		stock_entry_detail=stock_entry_detail,
-		incoming=incoming,
+def build_stock_entry_movement_row(
+	group_rows,
+	detail_map,
+	header_map,
+	item,
+	conversion_map,
+	compare_uom,
+):
+	first = min(
+		group_rows,
+		key=lambda row: (
+			get_datetime(row.posting_datetime),
+			get_datetime(row.creation),
+			row.name,
+		),
 	)
-	movement_type = (
-		classify_stock_entry_movement(
+	detail = detail_map.get(first.voucher_detail_no)
+	header = header_map.get(first.voucher_no, {})
+	positive_qty = sum(flt(row.actual_qty) for row in group_rows if flt(row.actual_qty) > 0)
+	negative_qty = abs(sum(flt(row.actual_qty) for row in group_rows if flt(row.actual_qty) < 0))
+
+	source_warehouse = (detail and detail.get("s_warehouse")) or next(
+		(row.warehouse for row in group_rows if flt(row.actual_qty) < 0),
+		None,
+	)
+	destination_warehouse = (detail and detail.get("t_warehouse")) or next(
+		(row.warehouse for row in group_rows if flt(row.actual_qty) > 0),
+		None,
+	)
+	stock_uom = (detail and detail.get("stock_uom")) or first.get("stock_uom") or item.get("stock_uom")
+	factor = resolve_conversion_factor(first.item_code, stock_uom, compare_uom, conversion_map)
+	batch_numbers = sorted({row.get("batch_no") for row in group_rows if row.get("batch_no")})
+
+	return make_output_row(
+		sort_key="|".join(sorted(row.name for row in group_rows)),
+		creation=min(row.creation for row in group_rows),
+		posting_datetime=first.posting_datetime,
+		movement_type=classify_stock_entry_movement(
 			header.get("purpose"),
 			source_warehouse,
 			destination_warehouse,
-		)
-		if sle.voucher_type == "Stock Entry"
-		else classify_ledger_movement(sle.voucher_type, incoming, header)
-	)
-	factor = resolve_conversion_factor(sle.item_code, stock_uom, compare_uom, conversion_map)
-	batch_no = (stock_entry_detail and stock_entry_detail.get("batch_no")) or sle.get("batch_no")
-
-	return make_output_row(
-		sle_name=sle.name,
-		creation=sle.creation,
-		posting_datetime=sle.posting_datetime,
-		movement_type=movement_type,
-		item_code=sle.item_code,
-		item_name=(stock_entry_detail and stock_entry_detail.get("item_name")) or item.get("item_name"),
+		),
+		item_code=first.item_code,
+		item_name=(detail and detail.get("item_name")) or item.get("item_name"),
 		stock_uom=stock_uom,
-		in_quantity=actual_qty if incoming else None,
-		out_quantity=abs(actual_qty) if not incoming else None,
-		balance=flt(sle.qty_after_transaction),
+		in_quantity=positive_qty or None,
+		out_quantity=negative_qty or None,
+		balance=None,
 		compare_uom=compare_uom,
 		conversion_factor=factor,
 		source_warehouse=source_warehouse,
 		destination_warehouse=destination_warehouse,
+		voucher_type=first.voucher_type,
+		voucher_no=first.voucher_no,
+		voucher_detail_no=first.voucher_detail_no,
+		purpose=clean_text(header.get("purpose") or header.get("title")),
+		batch_no=batch_numbers[0] if len(batch_numbers) == 1 else "",
+		batch_numbers=batch_numbers,
+		remarks=clean_text(header.get("remarks") or header.get("remark")),
+	)
+
+
+def build_single_movement_row(sle, header, item, conversion_map, compare_uom):
+	actual_qty = flt(sle.actual_qty)
+	incoming = actual_qty > 0
+	stock_uom = sle.get("stock_uom") or item.get("stock_uom")
+	factor = resolve_conversion_factor(sle.item_code, stock_uom, compare_uom, conversion_map)
+
+	return make_output_row(
+		sort_key=sle.name,
+		creation=sle.creation,
+		posting_datetime=sle.posting_datetime,
+		movement_type=classify_ledger_movement(sle.voucher_type, incoming, header),
+		item_code=sle.item_code,
+		item_name=item.get("item_name"),
+		stock_uom=stock_uom,
+		in_quantity=actual_qty if incoming else None,
+		out_quantity=abs(actual_qty) if not incoming else None,
+		balance=None,
+		compare_uom=compare_uom,
+		conversion_factor=factor,
+		source_warehouse=None if incoming else sle.warehouse,
+		destination_warehouse=sle.warehouse if incoming else None,
 		voucher_type=sle.voucher_type,
 		voucher_no=sle.voucher_no,
 		voucher_detail_no=sle.voucher_detail_no,
@@ -505,23 +533,64 @@ def build_ledger_row(sle, header, stock_entry_detail, item_map, conversion_map, 
 			or header.get("project")
 			or header.get("title")
 		),
-		batch_no=batch_no,
+		batch_no=sle.get("batch_no"),
+		batch_numbers=[sle.get("batch_no")] if sle.get("batch_no") else [],
 		remarks=clean_text(header.get("remarks") or header.get("remark")),
 	)
 
 
-def resolve_movement_warehouses(sle, stock_entry_detail=None, incoming=None):
-	if stock_entry_detail:
-		return (
-			stock_entry_detail.get("s_warehouse"),
-			stock_entry_detail.get("t_warehouse"),
-		)
+def get_opening_balance(filters, warehouse_scope=None):
+	"""Return selected-item stock immediately before the report start.
 
-	incoming = flt(sle.actual_qty) > 0 if incoming is None else incoming
-	return (
-		None if incoming else sle.warehouse,
-		sle.warehouse if incoming else None,
+	The aggregate uses ``frappe.get_list`` so normal Stock Ledger Entry
+	permissions remain active. It is scoped to the same company and warehouse
+	set as the report.
+	"""
+	query_filters: dict[str, Any] = {
+		"company": filters.company,
+		"item_code": filters.item_code,
+		"posting_datetime": ["<", f"{filters.from_date} 00:00:00"],
+		"is_cancelled": 0,
+	}
+	if warehouse_scope:
+		query_filters["warehouse"] = ["in", warehouse_scope]
+
+	rows = frappe.get_list(
+		"Stock Ledger Entry",
+		filters=query_filters,
+		fields=["sum(actual_qty) as opening_balance"],
+		limit_page_length=1,
 	)
+	return flt(rows[0].opening_balance) if rows else 0.0
+
+
+def apply_running_balances(rows, opening_balance=0):
+	balance = flt(opening_balance)
+	for row in rows:
+		balance = balance - flt(row.get("out_quantity")) + flt(row.get("in_quantity"))
+		row["balance"] = balance
+		row["compare_balance"] = (
+			convert_quantity(balance, row.get("_conversion_factor"))
+			if row.get("compare_uom")
+			else None
+		)
+	return rows
+
+
+def apply_display_filters(rows, filters):
+	filtered = rows
+	for fieldname in ("voucher_type", "voucher_no", "movement_type"):
+		if filters.get(fieldname):
+			filtered = [row for row in filtered if row.get(fieldname) == filters.get(fieldname)]
+
+	if filters.get("batch_no"):
+		filtered = [
+			row
+			for row in filtered
+			if filters.batch_no in (row.get("batch_numbers") or [])
+			or row.get("batch_no") == filters.batch_no
+		]
+	return filtered
 
 
 def make_output_row(**values):
@@ -545,6 +614,7 @@ def make_output_row(**values):
 		"compare_out_quantity": compare_out_quantity,
 		"compare_balance": compare_balance,
 		"conversion_status": conversion_status,
+		"_conversion_factor": factor,
 	}
 
 
@@ -596,18 +666,20 @@ def clean_text(value):
 
 
 def get_report_summary(rows):
-	sales = {
-		(row.get("voucher_type"), row.get("voucher_no"))
-		for row in rows
-		if row.get("movement_type") == "Sale" and row.get("voucher_no")
-	}
 	warehouses = {
 		warehouse
 		for row in rows
 		for warehouse in (row.get("source_warehouse"), row.get("destination_warehouse"))
 		if warehouse
 	}
-	missing_conversions = sum(1 for row in rows if row.get("conversion_status") == "Not Configured")
+	sales = {
+		(row.get("voucher_type"), row.get("voucher_no"))
+		for row in rows
+		if row.get("movement_type") == "Sale" and row.get("voucher_no")
+	}
+	missing_conversions = sum(
+		1 for row in rows if row.get("conversion_status") == "Not Configured"
+	)
 	internal_transfers = {
 		(row.get("voucher_no"), row.get("voucher_detail_no"), row.get("item_code"))
 		for row in rows
@@ -615,7 +687,6 @@ def get_report_summary(rows):
 	}
 
 	return [
-		{"value": len(sales), "label": _("Sales"), "datatype": "Int", "indicator": "Green"},
 		{"value": len(rows), "label": _("Movement Rows"), "datatype": "Int", "indicator": "Blue"},
 		{
 			"value": len({row.get("item_code") for row in rows if row.get("item_code")}),
@@ -629,6 +700,7 @@ def get_report_summary(rows):
 			"datatype": "Int",
 			"indicator": "Blue",
 		},
+		{"value": len(sales), "label": _("Sales"), "datatype": "Int", "indicator": "Green"},
 		{
 			"value": len(internal_transfers),
 			"label": _("Internal Transfers"),
