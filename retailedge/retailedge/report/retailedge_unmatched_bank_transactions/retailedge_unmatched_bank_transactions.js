@@ -1,3 +1,15 @@
+function attachRetailEdgeReportEdgeUI(report, reportName, config) {
+	const attach = () => {
+		window.retailedgeReportEdgeUI?.register(reportName, config);
+		window.retailedgeReportEdgeUI?.attach(report, reportName);
+	};
+	if (window.retailedgeReportEdgeUI) {
+		attach();
+		return;
+	}
+	frappe.require("/assets/retailedge/js/retailedge_report_edgeui.js", attach);
+}
+
 function configureOperationalReportRefresh(report) {
 	if (!report || report.__retailedgeAutoRefreshConfigured) {
 		return;
@@ -58,13 +70,20 @@ frappe.query_reports["RetailEdge Unmatched Bank Transactions"] = {
 		{ fieldname: "include_candidate_preview", label: __("Include Candidate Preview"), fieldtype: "Check", default: 0 },
 		{ fieldname: "include_already_reviewed", label: __("Include Already Reviewed"), fieldtype: "Check", default: 0 },
 		{ fieldname: "include_rejected", label: __("Include Rejected"), fieldtype: "Check", default: 0 },
-		{ fieldname: "include_reconciled", label: __("Include Reconciled"), fieldtype: "Check", default: 0 }
+		{ fieldname: "include_reconciled", label: __("Include Reconciled"), fieldtype: "Check", default: 0 },
 	],
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		attachRetailEdgeReportEdgeUI(report, "RetailEdge Unmatched Bank Transactions", {
+			eyebrow: __("Bank Control"),
+			title: __("Unmatched Bank Transactions"),
+			subtitle: __("Prioritise unmatched transactions, account-resolution gaps, candidate availability, blockers, and ageing without confirming or reconciling any transaction."),
+			emptyDescription: __("Choose another operational context or confirm that imported Bank Transactions are available for the selected account and period."),
+		});
 	},
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
-	}
+		window.retailedgeReportEdgeUI?.refresh(report, "RetailEdge Unmatched Bank Transactions");
+	},
 };
