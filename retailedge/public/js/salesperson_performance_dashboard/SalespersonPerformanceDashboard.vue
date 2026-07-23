@@ -1,578 +1,231 @@
 <template>
-	<div
-		v-if="!edgeUIValid"
-		class="p-6 text-center"
-		style="
-			border: 1px solid var(--edge-danger, #ff4d4f);
-			border-radius: 8px;
-			background-color: var(--edge-surface, #ffffff);
-			margin: 20px;
-		"
-	>
-		<div
-			style="
-				color: var(--edge-danger, #ff4d4f);
-				font-weight: bold;
-				font-size: 1.2rem;
-				margin-bottom: 12px;
-			"
-		>
-			EdgeSuite UI failed to load
-		</div>
-		<div style="color: var(--edge-text-muted, #8c8c8c); margin-bottom: 20px; font-size: 14px">
-			Missing components: {{ missingComponents.join(", ") }}
-		</div>
-		<button
-			@click="fetchMetadata"
-			style="
-				padding: 8px 16px;
-				background-color: var(--edge-primary, #1890ff);
-				color: white;
-				border: none;
-				border-radius: 4px;
-				cursor: pointer;
-				font-weight: 600;
-			"
-		>
-			Retry Loading Dashboard
-		</button>
-	</div>
-
 	<EdgeAppShell
-		v-else
 		product="retailedge"
-		:menuItems="menuItems"
-		activeRoute="/app/salesperson-performance-dashboard"
+		:menu-items="menuItems"
+		active-route="/app/salesperson-performance-dashboard"
 		title="RetailEdge"
-		:tenantName="tenantName"
-		:branchName="branchName"
-		:userName="userName"
+		:tenant-name="tenantName"
+		:branch-name="workingBranchLabel"
+		:user-name="userName"
 		@navigate="handleNavigation"
 		data-edge-product="retailedge"
 	>
 		<EdgePageLayout>
 			<template #header>
 				<EdgePageHeader
-					title="Salesperson Performance Dashboard"
-					subtitle="Proportional salesperson allocations for submitted RetailEdge invoices"
-					:withBackButton="false"
+					title="Salesperson Performance"
+					subtitle="Review proportional salesperson allocations from submitted invoices without changing ERPNext sales or accounting records."
+					:with-back-button="false"
 				/>
 			</template>
-			<!-- EdgeFilterBar in default slot body flow -->
-			<EdgeFilterBar title="Filter Records">
-				<div class="edge-filter-grid">
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">Date Range Preset</label>
+
+			<EdgeBranchContextSwitcher
+				v-model="filters.branch"
+				:options="branchOptions"
+				:current-label="workingBranchLabel"
+				:current-company="filters.company"
+				:can-switch="branchOptions.length > 0"
+				:busy="metadataLoading || loading"
+				label="Reporting branch"
+				helper="The selected branch limits dashboard results. Leaving it blank includes only branches you are permitted to access."
+				placeholder="All permitted branches"
+				@switch="onBranchSwitch"
+			/>
+
+			<EdgeFilterBar title="Filter performance">
+				<div class="salesperson-filter-grid">
+					<div class="salesperson-filter-field">
+						<label for="salesperson-date-preset">Date range</label>
 						<select
+							id="salesperson-date-preset"
 							v-model="filters.date_range_preset"
-							class="edge-select filter-select"
+							class="form-control"
 							:disabled="metadataLoading"
 							@change="onPresetChange"
 						>
-							<option value="This Month">This Month</option>
-							<option value="Today">Today</option>
-							<option value="Yesterday">Yesterday</option>
-							<option value="This Week">This Week</option>
-							<option value="This Quarter">This Quarter</option>
-							<option value="This Year">This Year</option>
-							<option value="Last Week">Last Week</option>
-							<option value="Last Month">Last Month</option>
-							<option value="Last Quarter">Last Quarter</option>
-							<option value="Last Year">Last Year</option>
-							<option value="Custom Period">Custom Period</option>
-							<option value="Full History">Full History</option>
+							<option v-for="preset in datePresets" :key="preset" :value="preset">{{ preset }}</option>
 						</select>
 					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">From Date</label>
+
+					<div class="salesperson-filter-field">
+						<label for="salesperson-from-date">From date</label>
 						<input
-							type="date"
+							id="salesperson-from-date"
 							v-model="filters.from_date"
-							class="edge-input filter-input"
-							:disabled="metadataLoading"
-							@change="onDateChange"
-						/>
-					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">To Date</label>
-						<input
 							type="date"
-							v-model="filters.to_date"
-							class="edge-input filter-input"
+							class="form-control"
 							:disabled="metadataLoading"
 							@change="onDateChange"
 						/>
 					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">Branch</label>
-						<select
-							v-model="filters.branch"
-							class="edge-select filter-select"
-							:disabled="metadataLoading || branches.length === 0"
-							@change="fetchData"
-						>
-							<option v-if="metadataLoading" value="">Loading branches...</option>
-							<option v-else-if="branches.length === 0" value="">
-								No branch available
-							</option>
-							<option v-else value="">All Branches</option>
-							<option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
-						</select>
-					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">Salesperson</label>
-						<select
-							v-model="filters.salesperson"
-							class="edge-select filter-select"
-							:disabled="metadataLoading"
-							@change="fetchData"
-						>
-							<option v-if="metadataLoading" value="">Loading salespeople...</option>
-							<option v-else value="">All Salespeople</option>
-							<option v-for="s in salespeople" :key="s" :value="s">{{ s }}</option>
-						</select>
-					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">Customer</label>
+
+					<div class="salesperson-filter-field">
+						<label for="salesperson-to-date">To date</label>
 						<input
-							type="text"
-							v-model="filters.customer"
-							placeholder="Customer Name"
-							class="edge-input filter-input"
+							id="salesperson-to-date"
+							v-model="filters.to_date"
+							type="date"
+							class="form-control"
 							:disabled="metadataLoading"
-							@input="debounceFetchData"
-							@change="fetchData"
+							@change="onDateChange"
 						/>
 					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label"
-							>Item Code / Item Search</label
-						>
-						<input
-							type="text"
-							v-model="filters.item"
-							placeholder="Item Code"
-							class="edge-input filter-input"
-							:disabled="metadataLoading"
-							@change="fetchData"
-						/>
-					</div>
-					<div class="edge-field filter-group filter-action-group">
-						<label class="edge-field-label filter-label" style="visibility: hidden"
-							>Action</label
-						>
+
+					<EdgeLinkField
+						v-model="filters.salesperson"
+						:selected-label="selectedLabels.salesperson || filters.salesperson"
+						label="Salesperson"
+						placeholder="Search enabled salespeople"
+						description="Results load as you search; the dashboard does not preload every salesperson."
+						:searcher="searchSalespeople"
+						:context="linkContext"
+						:disabled="metadataLoading"
+						:min-chars="0"
+						@select="onLinkSelect('salesperson', $event)"
+						@clear="onLinkClear('salesperson')"
+						@search-error="onLinkSearchError"
+					/>
+
+					<EdgeLinkField
+						v-model="filters.customer"
+						:selected-label="selectedLabels.customer || filters.customer"
+						label="Customer"
+						placeholder="Search permitted customers"
+						description="Only active customers readable by the current user are returned."
+						:searcher="searchCustomers"
+						:context="linkContext"
+						:disabled="metadataLoading"
+						:min-chars="0"
+						@select="onLinkSelect('customer', $event)"
+						@clear="onLinkClear('customer')"
+						@search-error="onLinkSearchError"
+					/>
+
+					<EdgeLinkField
+						v-model="filters.item"
+						:selected-label="selectedLabels.item || filters.item"
+						label="Item"
+						placeholder="Search active sales items"
+						description="The selected Item Code filters submitted invoice items exactly."
+						:searcher="searchItems"
+						:context="linkContext"
+						:disabled="metadataLoading"
+						:min-chars="0"
+						@select="onLinkSelect('item', $event)"
+						@clear="onLinkClear('item')"
+						@search-error="onLinkSearchError"
+					/>
+
+					<div class="salesperson-filter-action">
 						<button
-							class="edge-primary-button filter-btn primary"
-							:disabled="metadataLoading"
-							@click="fetchData"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="metadataLoading || loading"
+							@click="applyFilters"
 						>
-							Apply / Refresh
+							{{ loading ? "Refreshing…" : "Apply / Refresh" }}
 						</button>
 					</div>
 				</div>
 			</EdgeFilterBar>
 
-			<!-- Error/Loading states -->
-			<div v-if="error" class="p-6">
-				<EdgeErrorState
-					title="Aggregation Query Failed"
-					:message="error"
-					@retry="fetchMetadata"
-				/>
+			<div v-if="error" class="salesperson-dashboard-state">
+				<EdgeErrorState title="Performance dashboard could not load" :message="error" @retry="fetchMetadata" />
 			</div>
-
-			<div v-else-if="loading" class="p-6">
-				<EdgeLoadingState
-					message="Aggregating performance calculations..."
-					:skeleton="true"
-				/>
+			<div v-else-if="loading && !rows.length" class="salesperson-dashboard-state">
+				<EdgeLoadingState message="Calculating proportional salesperson performance…" :skeleton="true" />
 			</div>
-
-			<div v-else>
-				<!-- Summary stats grid -->
-				<div class="edge-stat-grid summary-stats-grid">
-					<EdgeStatCard
-						label="Gross Sales"
-						:value="formatCurrency(summary.gross_sales)"
-						icon="💰"
-						tooltip="Sum of allocated sales total (Gross total * allocation percentage)"
-					/>
-					<EdgeStatCard
-						label="Net Sales"
-						:value="formatCurrency(summary.net_sales)"
-						icon="📈"
-						tooltip="Sum of allocated net sales (excluding taxes)"
-					/>
-					<EdgeStatCard
-						label="Number of Sales Invoices"
-						:value="summary.total_invoices || 0"
-						icon="📝"
-						tooltip="Unique number of submitted invoices attributed to salespeople"
-					/>
-					<EdgeStatCard
-						label="Average Invoice Value"
-						:value="formatCurrency(summary.avg_invoice_value)"
-						icon="📊"
-						tooltip="Average allocated invoice value"
-					/>
-					<EdgeStatCard
-						label="Total Discount"
-						:value="formatCurrency(summary.total_discount)"
-						icon="🏷️"
-						tooltip="Sum of allocated discount value splits"
-					/>
-					<EdgeStatCard
-						label="Outstanding Amount"
-						:value="formatCurrency(summary.total_outstanding)"
-						icon="⚠️"
-						tooltip="Sum of allocated outstanding invoice amount splits"
-					/>
+			<template v-else>
+				<div class="edge-stat-grid salesperson-summary-grid">
+					<EdgeStatCard label="Gross sales" :value="formatCurrency(summary.gross_sales)" tooltip="Allocated grand total using the Sales Team percentage.">
+						<template #icon><EdgeIcon name="wallet" size="md" /></template>
+					</EdgeStatCard>
+					<EdgeStatCard label="Net sales" :value="formatCurrency(summary.net_sales)" tooltip="Allocated net total excluding taxes.">
+						<template #icon><EdgeIcon name="chart" size="md" /></template>
+					</EdgeStatCard>
+					<EdgeStatCard label="Sales invoices" :value="summary.total_invoices || 0" tooltip="Unique submitted invoices represented in the selected scope.">
+						<template #icon><EdgeIcon name="report" size="md" /></template>
+					</EdgeStatCard>
+					<EdgeStatCard label="Average invoice value" :value="formatCurrency(summary.avg_invoice_value)" tooltip="Gross allocated value divided by unique invoices.">
+						<template #icon><EdgeIcon name="assessment" size="md" /></template>
+					</EdgeStatCard>
+					<EdgeStatCard label="Total discount" :value="formatCurrency(summary.total_discount)" tooltip="Allocated discount value.">
+						<template #icon><EdgeIcon name="activity" size="md" /></template>
+					</EdgeStatCard>
+					<EdgeStatCard label="Outstanding" :value="formatCurrency(summary.total_outstanding)" tone="warning" tooltip="Allocated outstanding invoice amount.">
+						<template #icon><EdgeIcon name="bell" size="md" /></template>
+					</EdgeStatCard>
 				</div>
 
-				<!-- Main Data Table -->
-				<div v-if="rows.length > 0" class="edge-table-card table-container-card">
-					<div class="table-responsive">
-						<table class="edge-dashboard-table dashboard-table">
+				<section v-if="rows.length" class="salesperson-table-card">
+					<div class="salesperson-table-scroll">
+						<table class="salesperson-dashboard-table">
 							<thead>
 								<tr>
 									<th>Salesperson</th>
-									<th>Sales Invoice</th>
+									<th>Sales invoice</th>
 									<th>Date</th>
 									<th>Customer</th>
-									<th>Items Sold</th>
-									<th class="text-right">Qty</th>
-									<th class="text-right">Gross (Split)</th>
-									<th class="text-right">Disc. (Split)</th>
-									<th class="text-right">Net (Split)</th>
-									<th class="text-right">Outstanding (Split)</th>
+									<th>Items sold</th>
+									<th class="is-number">Qty</th>
+									<th class="is-number">Gross split</th>
+									<th class="is-number">Discount split</th>
+									<th class="is-number">Net split</th>
+									<th class="is-number">Outstanding split</th>
 									<th>Status</th>
 								</tr>
 							</thead>
 							<tbody>
-								<tr
-									v-for="row in rows"
-									:key="row.salesperson + '-' + row.sales_invoice"
-								>
-									<td class="bold-text">
-										<a
-											href="#"
-											@click.prevent="
-												openDoc('Sales Person', row.salesperson)
-											"
-											class="doc-link"
-										>
-											{{ row.salesperson }}
-										</a>
-									</td>
-									<td>
-										<a
-											href="#"
-											@click.prevent="
-												openDoc('Sales Invoice', row.sales_invoice)
-											"
-											class="doc-link"
-										>
-											{{ row.sales_invoice }}
-										</a>
-									</td>
+								<tr v-for="row in rows" :key="`${row.salesperson}-${row.sales_invoice}`">
+									<td><button type="button" class="salesperson-doc-link" @click="openDoc('Sales Person', row.salesperson)">{{ row.salesperson }}</button></td>
+									<td><button type="button" class="salesperson-doc-link" @click="openDoc('Sales Invoice', row.sales_invoice)">{{ row.sales_invoice }}</button></td>
 									<td>{{ formatDate(row.posting_date) }}</td>
-									<td>
-										<a
-											href="#"
-											@click.prevent="openDoc('Customer', row.customer)"
-											class="doc-link"
-										>
-											{{ row.customer }}
-										</a>
-									</td>
-									<td class="items-cell" :title="row.items">
-										{{ row.items || "--" }}
-									</td>
-									<td class="text-right">{{ row.total_qty || 0 }}</td>
-									<td class="text-right font-mono">
-										{{ formatCurrency(row.gross_amount) }}
-									</td>
-									<td class="text-right font-mono text-muted">
-										{{ formatCurrency(row.discount) }}
-									</td>
-									<td class="text-right font-mono bold-text">
-										{{ formatCurrency(row.net_amount) }}
-									</td>
-									<td
-										class="text-right font-mono"
-										:class="{ 'red-text': row.outstanding_amount > 0 }"
-									>
-										{{ formatCurrency(row.outstanding_amount) }}
-									</td>
-									<td>
-										<EdgeStatusBadge
-											:label="row.payment_status"
-											:status="row.payment_status"
-										/>
-									</td>
+									<td><button type="button" class="salesperson-doc-link" @click="openDoc('Customer', row.customer)">{{ row.customer }}</button></td>
+									<td class="salesperson-items-cell" :title="row.items">{{ row.items || "—" }}</td>
+									<td class="is-number">{{ row.total_qty || 0 }}</td>
+									<td class="is-number">{{ formatCurrency(row.gross_amount) }}</td>
+									<td class="is-number is-muted">{{ formatCurrency(row.discount) }}</td>
+									<td class="is-number is-strong">{{ formatCurrency(row.net_amount) }}</td>
+									<td class="is-number" :class="{ 'is-danger': Number(row.outstanding_amount || 0) > 0 }">{{ formatCurrency(row.outstanding_amount) }}</td>
+									<td><EdgeStatusBadge :label="row.payment_status" :status="row.payment_status" :tone="paymentTone(row.payment_status)" /></td>
 								</tr>
 							</tbody>
 						</table>
 					</div>
-
-					<!-- Pagination -->
-					<div class="pagination-footer">
-						<span class="page-info"
-							>Showing page {{ currentPage }} ({{ rows.length }} records)</span
-						>
-						<div class="pagination-buttons">
-							<button
-								class="pagination-btn"
-								:disabled="currentPage === 1"
-								@click="changePage(-1)"
-							>
-								Previous
-							</button>
-							<button
-								class="pagination-btn"
-								:disabled="rows.length < filters.limit"
-								@click="changePage(1)"
-							>
-								Next
-							</button>
+					<footer class="salesperson-pagination">
+						<span>Page {{ currentPage }} · {{ rows.length }} row(s)</span>
+						<div>
+							<button type="button" class="edge-button edge-button--compact" :disabled="currentPage === 1 || loading" @click="changePage(-1)">Previous</button>
+							<button type="button" class="edge-button edge-button--compact" :disabled="rows.length < filters.limit || loading" @click="changePage(1)">Next</button>
 						</div>
-					</div>
+					</footer>
+				</section>
+				<div v-else class="salesperson-dashboard-state">
+					<EdgeEmptyState title="No salesperson attribution found" description="No submitted invoice allocation matched the selected company, branch, date and Link filters." icon="search" />
 				</div>
-
-				<!-- Empty State -->
-				<div v-else class="empty-state-container">
-					<EdgeEmptyState
-						title="No Sales Attribution Found"
-						description="There are no submitted invoices or salesperson splits matching the current filters."
-						icon="search"
-					/>
-				</div>
-			</div>
+			</template>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
-import { h } from "vue";
-
-const EdgeAppShell = {
-	name: "EdgeAppShell",
-	props: [
-		"product",
-		"menuItems",
-		"activeRoute",
-		"title",
-		"tenantName",
-		"branchName",
-		"userName",
-	],
-	emits: ["navigate"],
-	render() {
-		const menu = (this.menuItems || []).map((item) =>
-			h(
-				"button",
-				{
-					class: ["edge-sidebar-item", item.route === this.activeRoute ? "active" : ""],
-					type: "button",
-					onClick: () => this.$emit("navigate", item.route),
-				},
-				[
-					h("span", { class: "edge-sidebar-icon" }, item.icon || ""),
-					h("span", item.label || ""),
-				]
-			)
-		);
-		const context = [this.tenantName, this.branchName, this.userName]
-			.filter(Boolean)
-			.join(" · ");
-		return h("div", { class: "edge-app-shell", "data-edge-product": this.product }, [
-			h("div", { class: "edge-topbar" }, [
-				h("div", { class: "edge-topbar-title" }, this.title || ""),
-				h("div", { class: "edge-topbar-context" }, context),
-			]),
-			h("div", { class: "edge-shell-body" }, [
-				h("aside", { class: "edge-sidebar" }, menu),
-				h(
-					"main",
-					{ class: "edge-shell-main" },
-					this.$slots.default ? this.$slots.default() : []
-				),
-			]),
-		]);
-	},
-};
-
-const EdgePageLayout = {
-	name: "EdgePageLayout",
-	render() {
-		return h("section", { class: "edge-page-layout" }, [
-			this.$slots.header
-				? h("div", { class: "edge-page-layout-header" }, this.$slots.header())
-				: null,
-			h(
-				"div",
-				{ class: "edge-page-layout-body" },
-				this.$slots.default ? this.$slots.default() : []
-			),
-		]);
-	},
-};
-
-const EdgePageHeader = {
-	name: "EdgePageHeader",
-	props: ["title", "subtitle"],
-	render() {
-		return h("div", { class: "edge-page-header" }, [
-			h("h1", { class: "edge-page-title" }, this.title || ""),
-			this.subtitle ? h("p", { class: "edge-page-subtitle" }, this.subtitle) : null,
-		]);
-	},
-};
-
-const EdgeFilterBar = {
-	name: "EdgeFilterBar",
-	props: ["title"],
-	render() {
-		return h("section", { class: "edge-filter-bar" }, [
-			this.title ? h("h2", { class: "edge-filter-title" }, this.title) : null,
-			h(
-				"div",
-				{ class: "edge-filter-body" },
-				this.$slots.default ? this.$slots.default() : []
-			),
-		]);
-	},
-};
-
-const EdgeStatCard = {
-	name: "EdgeStatCard",
-	props: ["label", "value", "icon", "tooltip"],
-	render() {
-		return h("div", { class: "edge-stat-card", title: this.tooltip || "" }, [
-			h("div", { class: "edge-stat-icon" }, this.icon || ""),
-			h("div", { class: "edge-stat-content" }, [
-				h("div", { class: "edge-stat-label" }, this.label || ""),
-				h("div", { class: "edge-stat-value" }, String(this.value ?? "")),
-			]),
-		]);
-	},
-};
-
-const EdgeStatusBadge = {
-	name: "EdgeStatusBadge",
-	props: ["label", "status"],
-	render() {
-		const status = String(this.status || this.label || "")
-			.toLowerCase()
-			.replace(/\s+/g, "-");
-		return h(
-			"span",
-			{ class: ["edge-status-badge", `edge-status-${status}`] },
-			this.label || this.status || ""
-		);
-	},
-};
-
-const EdgeEmptyState = {
-	name: "EdgeEmptyState",
-	props: ["title", "description", "icon"],
-	render() {
-		return h("div", { class: "edge-empty-state" }, [
-			h("div", { class: "edge-empty-icon" }, this.icon || ""),
-			h("h3", this.title || ""),
-			h("p", this.description || ""),
-		]);
-	},
-};
-
-const EdgeLoadingState = {
-	name: "EdgeLoadingState",
-	props: ["message", "skeleton"],
-	render() {
-		return h("div", { class: ["edge-loading-state", this.skeleton ? "with-skeleton" : ""] }, [
-			h("div", { class: "edge-loading-spinner" }),
-			h("p", this.message || "Loading..."),
-		]);
-	},
-};
-
-const EdgeErrorState = {
-	name: "EdgeErrorState",
-	props: ["title", "message"],
-	emits: ["retry"],
-	render() {
-		return h("div", { class: "edge-error-state" }, [
-			h("h3", this.title || "Error"),
-			h("p", this.message || ""),
-			h(
-				"button",
-				{
-					class: "edge-primary-button",
-					type: "button",
-					onClick: () => this.$emit("retry"),
-				},
-				"Retry"
-			),
-		]);
-	},
-};
-
-const localEdgeUIComponents = {
-	EdgePageHeader,
-	EdgeStatCard,
-	EdgeStatusBadge,
-	EdgeEmptyState,
-	EdgeLoadingState,
-	EdgeErrorState,
-	EdgeAppShell,
-	EdgePageLayout,
-	EdgeFilterBar,
-};
-
-const requiredEdgeUIComponents = [
-	"EdgeAppShell",
-	"EdgePageLayout",
-	"EdgeFilterBar",
-	"EdgeStatCard",
-	"EdgeStatusBadge",
-	"EdgeLoadingState",
-	"EdgeEmptyState",
-	"EdgeErrorState",
-];
-
-const resolveEdgeUIComponents = () => {
-	const runtimeComponents =
-		typeof window !== "undefined" && window.EdgeUI
-			? window.EdgeUI.components || window.EdgeUI
-			: {};
-	return Object.fromEntries(
-		requiredEdgeUIComponents.map((name) => [
-			name,
-			runtimeComponents[name] || localEdgeUIComponents[name],
-		])
-	);
-};
-
 export default {
 	name: "SalespersonPerformanceDashboard",
-	components: resolveEdgeUIComponents(),
 	data() {
 		return {
-			edgeUIValid: true,
-			missingComponents: [],
 			metadataLoading: true,
 			loading: true,
 			error: "",
 			summary: {},
 			rows: [],
-			salespeople: [],
-			branches: [],
+			branchOptions: [],
 			currentPage: 1,
 			tenantName: "",
-			branchName: "",
 			userName: "",
-			searchTimeout: null,
+			requestToken: 0,
+			selectedLabels: { salesperson: "", customer: "", item: "" },
 			filters: {
+				company: "",
 				date_range_preset: "This Month",
 				from_date: "",
 				to_date: "",
@@ -583,453 +236,326 @@ export default {
 				limit: 50,
 				offset: 0,
 			},
+			datePresets: [
+				"This Month", "Today", "Yesterday", "This Week", "This Quarter", "This Year",
+				"Last Week", "Last Month", "Last Quarter", "Last Year", "Custom Period", "Full History",
+			],
 			menuItems: [
-				{
-					label: "Salesperson Performance",
-					route: "/app/salesperson-performance-dashboard",
-					icon: "📈",
-				},
-				{ label: "Sales Invoices", route: "/app/sales-invoice", icon: "🧾" },
-				{ label: "Salespeople", route: "/app/sales-person", icon: "💼" },
-				{ label: "Customers", route: "/app/customer", icon: "👥" },
+				{ label: "RetailEdge Home", route: "/app/retailedge-home" },
+				{ label: "Salesperson Performance", route: "/app/salesperson-performance-dashboard" },
+				{ label: "Sales Invoices", route: "/app/sales-invoice" },
+				{ label: "Salespeople", route: "/app/sales-person" },
+				{ label: "Customers", route: "/app/customer" },
 			],
 		};
 	},
-	created() {
-		const runtimeComponents =
-			typeof window !== "undefined" && window.EdgeUI
-				? window.EdgeUI.components || window.EdgeUI
-				: {};
-		this.missingComponents = requiredEdgeUIComponents.filter(
-			(name) => !runtimeComponents[name]
-		);
-		this.edgeUIValid = this.missingComponents.length === 0;
+	computed: {
+		workingBranchLabel() {
+			return this.filters.branch || "All permitted branches";
+		},
+		linkContext() {
+			return {
+				company: this.filters.company,
+				branch: this.filters.branch,
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				salesperson: this.filters.salesperson,
+				customer: this.filters.customer,
+			};
+		},
 	},
 	mounted() {
 		this.fetchMetadata();
 	},
 	methods: {
-		async onPresetChange() {
-			const val = this.filters.date_range_preset;
-			if (val && val !== "Custom Period") {
-				const dates =
-					window.retailedge && window.retailedge.getPresetDates
-						? window.retailedge.getPresetDates(val)
-						: null;
-				if (dates) {
-					this.__applying_preset = true;
-					this.filters.from_date = dates.from_date;
-					this.filters.to_date = dates.to_date;
-					await this.$nextTick();
-					this.__applying_preset = false;
-				}
-			}
-			this.fetchData();
+		normalizeError(error, fallback) {
+			return error?.message || error?.exc_type || error?._server_messages || fallback;
 		},
-		onDateChange() {
-			if (this.__applying_preset) {
-				this.fetchData();
-				return;
-			}
-			const val = this.filters.date_range_preset;
-			if (val && val !== "Custom Period") {
-				const dates =
-					window.retailedge && window.retailedge.getPresetDates
-						? window.retailedge.getPresetDates(val)
-						: null;
-				if (dates) {
-					const currentFrom = this.filters.from_date || "";
-					const currentTo = this.filters.to_date || "";
-					if (currentFrom !== dates.from_date || currentTo !== dates.to_date) {
-						this.filters.date_range_preset = "Custom Period";
-					}
-				}
-			}
-			this.fetchData();
+		async call(method, args = {}) {
+			const response = await window.frappe.call(method, args);
+			return response?.message;
 		},
-		formatDate(dateStr) {
-			if (!dateStr || typeof frappe === "undefined") return dateStr;
-			return frappe.datetime.str_to_user(dateStr);
-		},
-		formatCurrency(val) {
-			const num = parseFloat(val || 0);
-			if (typeof frappe !== "undefined") {
-				return format_currency(num, frappe.boot.sysdefaults.currency || "USD");
-			}
-			return "$" + num.toFixed(2);
-		},
-		openDoc(doctype, name) {
-			if (typeof frappe !== "undefined") {
-				frappe.set_route("Form", doctype, name);
-			}
-		},
-		fetchMetadata() {
-			if (typeof frappe === "undefined") {
-				this.loading = false;
-				this.metadataLoading = false;
-				return;
-			}
-
+		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.loading = true;
 			this.error = "";
-
-			frappe.call({
-				method: "retailedge.salesperson_performance.get_salesperson_dashboard_options",
-				callback: (r) => {
-					this.metadataLoading = false;
-					if (r.message) {
-						this.branches = r.message.branches || [];
-						this.salespeople = r.message.salespeople || [];
-						this.tenantName = r.message.tenant_name || "";
-						this.branchName = r.message.branch_name || "";
-						this.userName = r.message.user_name || "";
-						if (r.message.default_filters) {
-							this.filters = { ...this.filters, ...r.message.default_filters };
-						}
-					}
-					this.fetchData();
-				},
-				error: (err) => {
-					this.metadataLoading = false;
-					this.loading = false;
-					this.error = err.message || "Failed to load dashboard filters and options.";
-				},
-			});
+			try {
+				const payload = await this.call("retailedge.salesperson_performance.get_salesperson_dashboard_options");
+				this.branchOptions = payload?.branch_options || (payload?.branches || []).map((value) => ({ value, label: value }));
+				this.tenantName = payload?.tenant_name || payload?.company || "Retail Business";
+				this.userName = payload?.user_name || window.frappe?.session?.user || "RetailEdge User";
+				this.filters = { ...this.filters, ...(payload?.default_filters || {}) };
+				this.currentPage = 1;
+				await this.fetchData();
+			} catch (error) {
+				this.error = this.normalizeError(error, "Failed to load dashboard context.");
+				this.loading = false;
+			} finally {
+				this.metadataLoading = false;
+			}
 		},
-		fetchData() {
-			if (typeof frappe === "undefined") {
+		async searchLink(fieldname, query) {
+			return (await this.call("retailedge.salesperson_performance.search_salesperson_dashboard_link", {
+				fieldname,
+				txt: query || "",
+				context: this.linkContext,
+				limit: 20,
+			})) || [];
+		},
+		searchSalespeople(query) {
+			return this.searchLink("salesperson", query);
+		},
+		searchCustomers(query) {
+			return this.searchLink("customer", query);
+		},
+		searchItems(query) {
+			return this.searchLink("item", query);
+		},
+		onLinkSearchError(error) {
+			window.frappe?.show_alert?.({ message: this.normalizeError(error, "Link search failed."), indicator: "orange" });
+		},
+		onLinkSelect(fieldname, option) {
+			this.selectedLabels[fieldname] = option?.label || option?.value || "";
+			if (fieldname === "customer") {
+				this.filters.item = "";
+				this.selectedLabels.item = "";
+			}
+			this.applyFilters();
+		},
+		onLinkClear(fieldname) {
+			this.selectedLabels[fieldname] = "";
+			if (fieldname === "customer") {
+				this.filters.item = "";
+				this.selectedLabels.item = "";
+			}
+			this.applyFilters();
+		},
+		onBranchSwitch(option) {
+			this.filters.branch = option?.value || "";
+			this.filters.customer = "";
+			this.filters.item = "";
+			this.selectedLabels.customer = "";
+			this.selectedLabels.item = "";
+			this.applyFilters();
+		},
+		async onPresetChange() {
+			const preset = this.filters.date_range_preset;
+			if (preset && preset !== "Custom Period") {
+				const dates = window.retailedge?.getPresetDates?.(preset);
+				if (dates) {
+					this.__applyingPreset = true;
+					this.filters.from_date = dates.from_date || "";
+					this.filters.to_date = dates.to_date || "";
+					await this.$nextTick();
+					this.__applyingPreset = false;
+				}
+			}
+			this.applyFilters();
+		},
+		onDateChange() {
+			if (!this.__applyingPreset && this.filters.date_range_preset !== "Custom Period") {
+				const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset);
+				if (!dates || (this.filters.from_date || "") !== (dates.from_date || "") || (this.filters.to_date || "") !== (dates.to_date || "")) {
+					this.filters.date_range_preset = "Custom Period";
+				}
+			}
+			this.applyFilters();
+		},
+		applyFilters() {
+			this.currentPage = 1;
+			this.fetchData();
+		},
+		async fetchData() {
+			if (this.filters.from_date && this.filters.to_date && this.filters.from_date > this.filters.to_date) {
+				this.error = "From Date cannot be after To Date.";
 				this.loading = false;
 				return;
 			}
-
+			const token = ++this.requestToken;
 			this.loading = true;
 			this.error = "";
-
 			this.filters.offset = (this.currentPage - 1) * this.filters.limit;
-
-			frappe.call({
-				method: "retailedge.salesperson_performance.get_salesperson_performance",
-				args: {
-					filters: this.filters,
-				},
-				callback: (r) => {
-					this.loading = false;
-					if (r.message) {
-						this.summary = r.message.summary || {};
-						this.rows = r.message.rows || [];
-					}
-				},
-				error: (err) => {
-					this.loading = false;
-					this.error = err.message || "An error occurred during aggregation.";
-				},
-			});
-		},
-		debounceFetchData() {
-			clearTimeout(this.searchTimeout);
-			this.searchTimeout = setTimeout(() => {
-				this.fetchData();
-			}, 300);
+			try {
+				const payload = await this.call("retailedge.salesperson_performance.get_salesperson_performance", { filters: this.filters });
+				if (token !== this.requestToken) return;
+				this.summary = payload?.summary || {};
+				this.rows = payload?.rows || [];
+			} catch (error) {
+				if (token !== this.requestToken) return;
+				this.error = this.normalizeError(error, "Performance aggregation failed.");
+			} finally {
+				if (token === this.requestToken) this.loading = false;
+			}
 		},
 		changePage(direction) {
-			this.currentPage += direction;
+			this.currentPage = Math.max(1, this.currentPage + direction);
 			this.fetchData();
 		},
+		formatDate(value) {
+			return value && window.frappe?.datetime?.str_to_user ? window.frappe.datetime.str_to_user(value) : value || "—";
+		},
+		formatCurrency(value) {
+			const amount = Number(value || 0);
+			const currency = window.frappe?.boot?.sysdefaults?.currency || "NGN";
+			if (window.frappe?.format_value) return window.frappe.format_value(amount, { fieldtype: "Currency", options: currency });
+			return `${currency} ${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+		},
+		paymentTone(status) {
+			const value = String(status || "").toLowerCase();
+			if (value.includes("paid") && !value.includes("unpaid")) return "success";
+			if (value.includes("overdue")) return "danger";
+			if (value.includes("unpaid") || value.includes("outstanding")) return "warning";
+			return "neutral";
+		},
+		openDoc(doctype, name) {
+			if (doctype && name) window.frappe?.set_route?.("Form", doctype, name);
+		},
 		handleNavigation(route) {
-			if (typeof frappe !== "undefined") {
-				if (route === "/app/salesperson-performance-dashboard") {
-					frappe.set_route("salesperson-performance-dashboard");
-				} else if (route === "/app/sales-invoice") {
-					frappe.set_route("List", "Sales Invoice");
-				} else if (route === "/app/sales-person") {
-					frappe.set_route("List", "Sales Person");
-				} else if (route === "/app/customer") {
-					frappe.set_route("List", "Customer");
-				}
-			}
+			if (window.RetailEdgeUIBridge?.openRoute?.(route)) return;
+			if (route) window.location.assign(route);
 		},
 	},
 };
 </script>
 
 <style scoped>
-/* Filter Group styles */
-.filter-group {
-	display: flex;
-	flex-direction: column;
-	gap: var(--edge-space-xs);
-}
-
-.filter-label {
-	font-size: 0.75rem;
-	font-weight: 600;
-	color: var(--edge-text-muted);
-}
-
-.filter-input,
-.filter-select {
-	padding: 8px 12px;
-	border: 1px solid var(--edge-border);
-	border-radius: var(--edge-radius-md);
-	background-color: var(--edge-bg);
-	color: var(--edge-text);
-	font-size: var(--edge-text-sm);
-	transition: border-color 0.2s ease;
-	width: 100%;
-}
-
-.filter-input:focus,
-.filter-select:focus {
-	border-color: var(--edge-primary);
-	outline: none;
-}
-
-.filter-action-group {
-	display: flex;
-	flex-direction: column;
-	justify-content: flex-end;
-}
-
-.filter-btn {
-	padding: 8px 16px;
-	border-radius: var(--edge-radius-md);
-	font-size: var(--edge-text-sm);
-	font-weight: 600;
-	cursor: pointer;
-	transition: all 0.2s ease;
-	border: none;
-	width: 100%;
-	height: 36px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-.filter-btn.primary {
-	background-color: var(--edge-primary);
-	color: white;
-}
-
-.filter-btn.primary:hover:not(:disabled) {
-	opacity: 0.9;
-}
-
-.filter-btn:disabled {
-	opacity: 0.6;
-	cursor: not-allowed;
-}
-
-/* Stats grid */
-.summary-stats-grid {
+.salesperson-filter-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-	gap: var(--edge-space-md);
-	margin-bottom: var(--edge-space-lg);
-}
-
-/* Table Card */
-.table-container-card {
-	background-color: var(--edge-surface);
-	border: 1px solid var(--edge-border);
-	border-radius: var(--edge-radius-lg);
-	box-shadow: var(--edge-shadow-sm);
-	overflow: hidden;
-	margin-top: var(--edge-space-lg);
-}
-
-.table-responsive {
-	overflow-x: auto;
-}
-
-.dashboard-table {
+	gap: 0.8rem;
+	grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
 	width: 100%;
-	border-collapse: collapse;
-	font-size: var(--edge-text-sm);
 }
 
-.dashboard-table th {
-	background-color: var(--edge-bg);
-	border-bottom: 1px solid var(--edge-border);
-	padding: var(--edge-space-md);
-	text-align: left;
-	font-weight: 600;
-	color: var(--edge-text-muted);
-	white-space: nowrap;
-}
-
-.dashboard-table td {
-	padding: var(--edge-space-md);
-	border-bottom: 1px solid var(--edge-border);
-	white-space: nowrap;
-}
-
-.dashboard-table tr:last-child td {
-	border-bottom: none;
-}
-
-.doc-link {
-	color: var(--edge-primary);
-	text-decoration: none;
-	font-weight: 500;
-}
-
-.doc-link:hover {
-	text-decoration: underline;
-}
-
-.items-cell {
-	max-width: 200px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	color: var(--edge-text-muted);
-}
-
-.bold-text {
-	font-weight: 600;
-}
-
-.text-right {
-	text-align: right !important;
-}
-
-.font-mono {
-	font-family: monospace;
-}
-
-.text-muted {
-	color: var(--edge-text-muted);
-}
-
-.red-text {
-	color: var(--edge-danger);
-	font-weight: 600;
-}
-
-/* Pagination */
-.pagination-footer {
-	padding: var(--edge-space-md) var(--edge-space-lg);
-	border-top: 1px solid var(--edge-border);
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: var(--edge-space-md);
-	background-color: var(--edge-bg);
-}
-
-.page-info {
-	font-size: 0.815rem;
-	color: var(--edge-text-muted);
-}
-
-.pagination-buttons {
-	display: flex;
-	gap: var(--edge-space-sm);
-}
-
-.pagination-btn {
-	padding: 6px 12px;
-	border: 1px solid var(--edge-border);
-	border-radius: var(--edge-radius-md);
-	background-color: var(--edge-surface);
-	color: var(--edge-text);
-	font-size: 0.815rem;
-	font-weight: 600;
-	cursor: pointer;
-	transition: all 0.2s ease;
-}
-
-.pagination-btn:hover:not(:disabled) {
-	border-color: var(--edge-primary);
-	color: var(--edge-primary);
-}
-
-.pagination-btn:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
-
-.empty-state-container {
-	padding: var(--edge-space-xl) 0;
-}
-
-.edge-filter-grid {
+.salesperson-filter-field {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-	gap: var(--edge-space-md);
-	width: 100%;
-}
-
-.edge-field {
-	display: flex;
-	flex-direction: column;
-	gap: var(--edge-space-xs);
+	gap: 0.35rem;
 	min-width: 0;
 }
 
-.edge-field-label {
-	font-size: 0.75rem;
+.salesperson-filter-field label {
+	color: var(--text-muted, #6b7d90);
+	font-size: 0.72rem;
 	font-weight: 700;
-	color: var(--edge-muted-text, var(--edge-text-muted));
-	text-transform: uppercase;
-	letter-spacing: 0;
 }
 
-.edge-input,
-.edge-select {
-	min-height: 40px;
-	padding: 8px 12px;
-	border: 1px solid var(--edge-border);
-	border-radius: var(--edge-radius, var(--edge-radius-md));
-	background-color: var(--edge-surface);
-	color: var(--edge-text);
-	font-family: var(--edge-font);
-	font-size: var(--edge-text-sm);
-	box-shadow: var(--edge-shadow-sm);
+.salesperson-filter-action {
+	align-items: end;
+	display: flex;
 }
 
-.edge-select {
-	appearance: none;
-	padding-right: 34px;
+.salesperson-filter-action .edge-button {
+	min-height: 2.5rem;
+	width: 100%;
 }
 
-.edge-input:focus,
-.edge-select:focus {
-	border-color: var(--edge-primary);
-	box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
-	outline: none;
+.salesperson-summary-grid {
+	margin: 1rem 0;
 }
 
-.edge-primary-button {
-	min-height: 40px;
-	padding: 8px 16px;
-	border: 1px solid var(--edge-primary);
-	border-radius: var(--edge-radius, var(--edge-radius-md));
-	background-color: var(--edge-primary);
-	color: white;
-	font-family: var(--edge-font);
-	font-size: var(--edge-text-sm);
+.salesperson-dashboard-state {
+	margin-top: 1rem;
+}
+
+.salesperson-table-card {
+	background: var(--card-bg, #fff);
+	border: 1px solid var(--border-color, #dce5ef);
+	border-radius: var(--edge-radius-lg, 1rem);
+	overflow: hidden;
+}
+
+.salesperson-table-scroll {
+	overflow-x: auto;
+}
+
+.salesperson-dashboard-table {
+	border-collapse: collapse;
+	font-size: 0.76rem;
+	min-width: 78rem;
+	width: 100%;
+}
+
+.salesperson-dashboard-table th,
+.salesperson-dashboard-table td {
+	border-bottom: 1px solid var(--border-color, #dce5ef);
+	padding: 0.75rem;
+	text-align: left;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.salesperson-dashboard-table th {
+	background: var(--subtle-fg, #f8fafc);
+	color: var(--text-muted, #6b7d90);
 	font-weight: 700;
+}
+
+.salesperson-dashboard-table tbody tr:hover {
+	background: var(--subtle-fg, #f8fafc);
+}
+
+.salesperson-dashboard-table .is-number {
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.salesperson-dashboard-table .is-muted {
+	color: var(--text-muted, #6b7d90);
+}
+
+.salesperson-dashboard-table .is-strong {
+	font-weight: 700;
+}
+
+.salesperson-dashboard-table .is-danger {
+	color: var(--red-600, #b42318);
+	font-weight: 700;
+}
+
+.salesperson-items-cell {
+	max-width: 14rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.salesperson-doc-link {
+	background: transparent;
+	border: 0;
+	color: var(--primary, #0b6e99);
 	cursor: pointer;
-	box-shadow: var(--edge-shadow-sm);
+	font: inherit;
+	font-weight: 600;
+	padding: 0;
+	text-align: left;
 }
 
-.edge-primary-button:hover:not(:disabled) {
-	background-color: var(--edge-primary-hover);
-	border-color: var(--edge-primary-hover);
+.salesperson-doc-link:hover,
+.salesperson-doc-link:focus-visible {
+	text-decoration: underline;
 }
 
-.edge-table-card {
-	background-color: var(--edge-surface);
-	border: 1px solid var(--edge-border);
-	border-radius: var(--edge-radius, var(--edge-radius-lg));
-	box-shadow: var(--edge-shadow, var(--edge-shadow-sm));
+.salesperson-pagination {
+	align-items: center;
+	background: var(--subtle-fg, #f8fafc);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	justify-content: space-between;
+	padding: 0.75rem 1rem;
 }
 
-.edge-stat-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: var(--edge-space-md);
+.salesperson-pagination > div {
+	display: flex;
+	gap: 0.5rem;
+}
+
+@media (max-width: 47.99rem) {
+	.salesperson-filter-action {
+		align-items: stretch;
+	}
+	.salesperson-pagination,
+	.salesperson-pagination > div {
+		align-items: stretch;
+		flex-direction: column;
+	}
 }
 </style>
