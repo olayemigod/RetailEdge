@@ -1,3 +1,15 @@
+function attachRetailEdgeReportEdgeUI(report, reportName, config) {
+	const attach = () => {
+		window.retailedgeReportEdgeUI?.register(reportName, config);
+		window.retailedgeReportEdgeUI?.attach(report, reportName);
+	};
+	if (window.retailedgeReportEdgeUI) {
+		attach();
+		return;
+	}
+	frappe.require("/assets/retailedge/js/retailedge_report_edgeui.js", attach);
+}
+
 function configureOperationalReportRefresh(report) {
 	if (!report || report.__retailedgeAutoRefreshConfigured) {
 		return;
@@ -47,6 +59,17 @@ frappe.query_reports["RetailEdge Daily Sales Audit Register"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		attachRetailEdgeReportEdgeUI(report, "RetailEdge Daily Sales Audit Register", {
+			eyebrow: __("Daily Cash Control"),
+			title: __("Daily Sales Audit Register"),
+			subtitle: __("Review cash sales, expected cash, closing counts, variance, clarification, and approval state across permitted branches and shifts."),
+			emptyDescription: __("Choose another date range or operational context, or confirm that daily audits were created from the correct opening and closing shifts."),
+		});
+	},
+
+	after_refresh(report) {
+		forceOperationalPrimaryAction(report);
+		window.retailedgeReportEdgeUI?.refresh(report, "RetailEdge Daily Sales Audit Register");
 	},
 
 	filters: [
@@ -100,4 +123,3 @@ frappe.query_reports["RetailEdge Daily Sales Audit Register"] = {
 		},
 	],
 };
-
