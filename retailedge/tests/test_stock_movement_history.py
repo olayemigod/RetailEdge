@@ -109,6 +109,22 @@ class TestStockMovementHistory(unittest.TestCase):
 		):
 			self.assertEqual(column_map[fieldname]["fieldtype"], "Float")
 
+	def test_export_quantity_fields_do_not_embed_uom_text(self):
+		row = report.make_output_row(
+			stock_uom="Nos",
+			in_quantity=36,
+			out_quantity=None,
+			compare_uom="Carton",
+			conversion_factor=12,
+			destination_balance=120,
+		)
+		self.assertEqual(row["in_quantity"], 36)
+		self.assertEqual(row["compare_in_quantity"], 3)
+		self.assertNotIsInstance(row["in_quantity"], str)
+		self.assertNotIsInstance(row["compare_in_quantity"], str)
+		self.assertNotIsInstance(row["destination_balance"], str)
+		self.assertNotIsInstance(row["destination_balance_compare"], str)
+
 	def test_report_has_no_edgesuite_ui_dependency(self):
 		app_path = frappe.get_app_path("retailedge")
 		js_path = os.path.join(
