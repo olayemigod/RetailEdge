@@ -5,13 +5,27 @@ from frappe import _
 from frappe.utils import cint, flt, getdate
 
 from retailedge.branch_context import get_branch_query_filters, has_doctype
+from retailedge.report_edgeui import append_report_metadata, build_report_metadata, recommendation
+
+
+EXCEPTION_CASH_STATUSES = {
+	"Shortage",
+	"Overage",
+	"Needs Review",
+	"Missing Closing Shift",
+	"Missing Opening Shift",
+}
 
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	validate_filters(filters)
 	rows = get_data(filters)
-	return get_columns(), rows, None, None, get_report_summary(rows)
+	summary = append_report_metadata(
+		get_report_summary(rows),
+		get_edgesuite_metadata(filters, rows),
+	)
+	return get_columns(), rows, None, None, summary
 
 
 def validate_filters(filters):
@@ -48,12 +62,15 @@ def get_data(filters):
 
 	query_filters = {}
 	query_filters.update(
-		(get_branch_query_filters(
-			"RetailEdge Daily Sales Audit",
-			user=frappe.session.user,
-			company=filters.get("company"),
-			branch=filters.get("branch"),
-		).get("filters") or {})
+		(
+			get_branch_query_filters(
+				"RetailEdge Daily Sales Audit",
+				user=frappe.session.user,
+				company=filters.get("company"),
+				branch=filters.get("branch"),
+			).get("filters")
+			or {}
+		)
 	)
 
 	for fieldname in ("company", "branch", "pos_profile", "cashier", "pos_opening_shift", "pos_closing_shift"):
@@ -112,7 +129,9 @@ def get_data(filters):
 			"review_status": row.get("audit_status"),
 		}
 		report_row["cash_status"] = get_cash_status(report_row)
-		report_row["eligible_cash_invoices"], report_row["synced_cash_invoices"] = get_cash_invoice_sync_counts(row.get("name"))
+		report_row["eligible_cash_invoices"], report_row["synced_cash_invoices"] = get_cash_invoice_sync_counts(
+			row.get("name")
+		)
 		if filters.get("cash_status") and report_row["cash_status"] != filters.get("cash_status"):
 			continue
 		if filters.get("review_status") and report_row.get("review_status") != filters.get("review_status"):
@@ -161,12 +180,100 @@ def get_report_summary(rows):
 			"indicator": "Red" if any(flt(row.get("cash_variance")) for row in rows) else "Green",
 		},
 		{
-			"value": len([row for row in rows if row.get("cash_status") in {"Shortage", "Overage", "Needs Review", "Missing Closing Shift", "Missing Opening Shift"}]),
+			"value": len([row for row in rows if row.get("cash_status") in EXCEPTION_CASH_STATUSES]),
 			"label": _("Exceptions"),
 			"datatype": "Int",
 			"indicator": "Orange",
 		},
 	]
+
+
+def get_edgesuite_metadata(filters, rows):
+	shortages = [row for row in rows if row.get("cash_status") == "Shortage"]
+	overages = [row for row in rows if row.get("cash_status") == "Overage"]
+	missing_shifts = [
+		row
+		for row in rows
+		if row.get("cash_status") in {"Missing Opening Shift", "Missing Closing Shift"}
+	]
+	unsynced_invoices = sum(
+		max(cint(row.get("eligible_cash_invoices")) - cint(row.get("synced_cash_invoices")), 0)
+		for row in rows
+	)
+	absolute_variance = sum(abs(flt(row.get("cash_variance"))) for row in rows)
+	recommendations = []
+	if missing_shifts:
+		recommendations.append(
+			recommendation(
+				_("Complete missing shift records"),
+				_("{0} cash verification row(s) are missing an opening or closing shift. Resolve the shift evidence before audit sign-off.").format(len(missing_shifts)),
+				"danger",
+			)
+		)
+	if shortages:
+		recommendations.append(
+			recommendation(
+				_("Investigate cash shortages"),
+				_("Review {0} shortage row(s), confirm counted cash and supporting expenses, and document the outcome in the linked daily audit.").format(len(shortages)),
+				"danger",
+			)
+		)
+	if overages:
+		recommendations.append(
+			recommendation(
+				_("Explain cash overages"),
+				_("Review {0} overage row(s) for omitted sales, incorrect counts, or timing differences.").format(len(overages)),
+				"warning",
+			)
+		)
+	if unsynced_invoices:
+		recommendations.append(
+			recommendation(
+				_("Complete cash invoice verification sync"),
+				_("{0} eligible cash invoice(s) have not yet been reflected as cash verified by shift.").format(unsynced_invoices),
+				"warning",
+			)
+		)
+
+	if missing_shifts or shortages:
+		status_label = _("Cash-control exceptions require action")
+		status_tone = "danger"
+	elif overages or unsynced_invoices or absolute_variance:
+		status_label = _("Cash verification requires review")
+		status_tone = "warning"
+	else:
+		status_label = _("Cash verification balanced in current view")
+		status_tone = "success"
+
+	return build_report_metadata(
+		title=_("Cash Shift Verification"),
+		icon="cash",
+		filters=filters,
+		filter_fields=(
+			("company", _("Company")),
+			("branch", _("Branch")),
+			("pos_profile", _("POS Profile")),
+			("cashier", _("Cashier")),
+			("cash_status", _("Cash Status")),
+			("review_status", _("Review Status")),
+			("only_unsynced", _("Only Unsynced")),
+		),
+		row_count=len(rows),
+		empty_message=_("No cash-shift verification rows matched the selected filters."),
+		empty_suggestions=(
+			_("Choose another date range, company, branch, POS Profile, cashier, or cash status."),
+			_("Confirm that daily sales audits and their opening and closing shift links exist for the selected context."),
+		),
+		recommendations=recommendations,
+		visible_card_labels=(
+			_("Expected Cash"),
+			_("Actual Closing Cash"),
+			_("Cash Variance"),
+			_("Exceptions"),
+		),
+		status_label=status_label,
+		status_tone=status_tone,
+	)
 
 
 def get_cash_invoice_sync_counts(daily_sales_audit):
