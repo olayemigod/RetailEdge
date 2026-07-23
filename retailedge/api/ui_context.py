@@ -13,11 +13,11 @@ from retailedge.workspace_home import HOME_SECTIONS, HOME_WORKSPACE_ITEMS, Works
 
 SECTION_META = {
 	"Operations": {
-		"icon": "store",
+		"icon": "activity",
 		"description": "Run sales, cash, stock and statement activities.",
 	},
 	"Review & Approvals": {
-		"icon": "check-circle",
+		"icon": "check",
 		"description": "Resolve exceptions and complete controlled reviews.",
 	},
 	"Reports & Analytics": {
@@ -25,7 +25,7 @@ SECTION_META = {
 		"description": "Understand branch, sales, cash, bank and stock performance.",
 	},
 	"Accounting / Ledger Bridge": {
-		"icon": "ledger",
+		"icon": "wallet",
 		"description": "Move verified operational evidence into ERPNext accounting workflows.",
 	},
 	"Setup / Configuration": {
@@ -33,7 +33,7 @@ SECTION_META = {
 		"description": "Configure branches, expenses, statements and retail defaults.",
 	},
 	"Admin / Maintenance": {
-		"icon": "tools",
+		"icon": "shield",
 		"description": "Inspect integrity, failures and administrator-only utilities.",
 	},
 }
@@ -89,14 +89,7 @@ def _serialize_item(item: WorkspaceHomeItem) -> dict:
 		"section": item.section,
 		"source": item.source,
 		"audience": item.audience,
-		"icon": {
-			"Operations": "play",
-			"Review & Approvals": "check-circle",
-			"Reports & Analytics": "chart",
-			"Accounting / Ledger Bridge": "ledger",
-			"Setup / Configuration": "settings",
-			"Admin / Maintenance": "tools",
-		}.get(item.section, "list"),
+		"icon": SECTION_META.get(item.section, {}).get("icon") or "list",
 	}
 
 
