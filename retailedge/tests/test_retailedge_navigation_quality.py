@@ -62,6 +62,58 @@ class TestRetailEdgeNavigationQuality(unittest.TestCase):
 		)
 		self.assertEqual([row.get("label") for row in normalized], ["Review", "Reconciliation Handoff"])
 
+	def test_optional_posnext_links_are_kept_when_targets_exist(self):
+		rows = [
+			{"type": "Section Break", "label": "Operations"},
+			{
+				"type": "Link",
+				"label": "POS Opening Shift",
+				"link_type": "DocType",
+				"link_to": "POS Opening Shift",
+			},
+			{
+				"type": "Link",
+				"label": "POS Closing Shift",
+				"link_type": "DocType",
+				"link_to": "POS Closing Shift",
+			},
+		]
+		normalized = normalize_grouped_navigation(
+			rows,
+			section_types=frozenset({"Section Break"}),
+			target_exists=lambda link_type, target: True,
+		)
+		self.assertEqual(
+			[row.get("label") for row in normalized],
+			["Operations", "POS Opening Shift", "POS Closing Shift"],
+		)
+
+	def test_optional_posnext_links_are_omitted_when_targets_are_unavailable(self):
+		rows = [
+			{"type": "Section Break", "label": "Operations"},
+			{
+				"type": "Link",
+				"label": "POS Opening Shift",
+				"link_type": "DocType",
+				"link_to": "POS Opening Shift",
+			},
+			{
+				"type": "Link",
+				"label": "RetailEdge Cashier Expense",
+				"link_type": "DocType",
+				"link_to": "RetailEdge Cashier Expense",
+			},
+		]
+		normalized = normalize_grouped_navigation(
+			rows,
+			section_types=frozenset({"Section Break"}),
+			target_exists=lambda link_type, target: target != "POS Opening Shift",
+		)
+		self.assertEqual(
+			[row.get("label") for row in normalized],
+			["Operations", "RetailEdge Cashier Expense"],
+		)
+
 	def test_source_workspace_normalization_removes_aliases_and_child_tables(self):
 		workspace_path = self.app_path(
 			"retailedge",
@@ -118,11 +170,19 @@ class TestRetailEdgeNavigationQuality(unittest.TestCase):
 
 		self.assertIn("normalize_workspace_data", workspace_sync)
 		self.assertIn("normalize_sidebar_data", workspace_sync)
+		self.assertIn("_navigation_target_exists", workspace_sync)
+		self.assertIn("frappe.db.exists", workspace_sync)
 		self.assertIn('"Reports & Analytics"', product_menu)
 		self.assertIn("seenTargets", product_menu)
 		self.assertIn("HIDDEN_NAVIGATION_TARGETS", product_menu)
 		self.assertIn("navigationKey(normalized)", product_menu)
 		self.assertNotIn('"Reports & Review"', product_menu)
+
+	def test_ci_uses_file_urls_for_checked_out_apps(self):
+		workflow = self.app_path("..", ".github", "workflows", "ci.yml").resolve().read_text()
+		self.assertIn('bench get-app --skip-assets "file://$GITHUB_WORKSPACE/edgesuite-ui-source"', workflow)
+		self.assertIn('bench get-app --skip-assets "file://$GITHUB_WORKSPACE"', workflow)
+		self.assertNotIn('bench get-app --skip-assets edgesuite_ui "$GITHUB_WORKSPACE/edgesuite-ui-source"', workflow)
 
 	def test_navigation_quality_phase_does_not_add_business_document_writes(self):
 		paths = [
