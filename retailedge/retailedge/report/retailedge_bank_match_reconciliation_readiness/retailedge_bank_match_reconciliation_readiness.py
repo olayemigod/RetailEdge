@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import get_first_day, getdate, nowdate
+from frappe.utils import cint, get_first_day, getdate, nowdate
 
 from retailedge.bank_matching_operational_reports import (
 	get_bank_match_reconciliation_readiness_rows,
 	get_operational_report_message,
 )
+from retailedge.report_edgeui import append_report_metadata, build_report_metadata, recommendation
 
 
 def execute(filters=None):
@@ -18,7 +19,11 @@ def execute(filters=None):
 	filters.setdefault("include_rejected_cancelled", 0)
 	rows = get_bank_match_reconciliation_readiness_rows(filters=filters, limit=filters.get("limit") or 500)
 	message = get_operational_report_message() or (None if rows else _("No bank match readiness rows were found for the selected filters."))
-	return get_columns(), rows, message, None, get_report_summary(rows)
+	summary = append_report_metadata(
+		get_report_summary(rows),
+		get_edgesuite_metadata(filters, rows),
+	)
+	return get_columns(), rows, message, None, summary
 
 
 def get_columns():
@@ -59,3 +64,98 @@ def get_report_summary(rows):
 		{"label": _("Needs Review"), "value": sum(1 for row in rows if row.get("reconciliation_readiness_status") == "Needs Review"), "datatype": "Int", "indicator": "Orange"},
 		{"label": _("Exceptions / Not Ready"), "value": sum(1 for row in rows if row.get("reconciliation_readiness_status") in {"Not Ready", "Exception"}), "datatype": "Int", "indicator": "Red"},
 	]
+
+
+def get_edgesuite_metadata(filters, rows):
+	ready_count = sum(1 for row in rows if row.get("reconciliation_readiness_status") == "Ready for Reconciliation")
+	needs_review_count = sum(1 for row in rows if row.get("reconciliation_readiness_status") == "Needs Review")
+	exception_count = sum(1 for row in rows if row.get("reconciliation_readiness_status") in {"Not Ready", "Exception"})
+	account_gap_count = sum(
+		1
+		for row in rows
+		if row.get("account_resolution_status") not in {"Resolved", "Fully Resolved"}
+		or not row.get("resolved_bank_account")
+		or not row.get("resolved_payment_account")
+	)
+	aged_confirmation_count = sum(
+		1
+		for row in rows
+		if cint(row.get("days_since_confirmation")) >= 3
+		and row.get("reconciliation_readiness_status") != "Ready for Reconciliation"
+	)
+	recommendations = []
+	if exception_count:
+		recommendations.append(
+			recommendation(
+				_("Resolve reconciliation exceptions"),
+				_("Investigate the {0} row(s) marked Not Ready or Exception before any ERPNext reconciliation action.").format(exception_count),
+				"danger",
+			)
+		)
+	if needs_review_count:
+		recommendations.append(
+			recommendation(
+				_("Complete review before handoff"),
+				_("Complete evidence and approval review for {0} row(s) before they enter the reconciliation queue.").format(needs_review_count),
+				"warning",
+			)
+		)
+	if account_gap_count:
+		recommendations.append(
+			recommendation(
+				_("Resolve account context"),
+				_("Confirm the canonical bank and payment accounts for {0} row(s) so reconciliation does not post against the wrong ledger account.").format(account_gap_count),
+				"danger",
+			)
+		)
+	if aged_confirmation_count:
+		recommendations.append(
+			recommendation(
+				_("Escalate aged confirmed matches"),
+				_("Review {0} confirmed row(s) that have remained outside the ready queue for three days or more.").format(aged_confirmation_count),
+				"warning",
+			)
+		)
+
+	if exception_count or account_gap_count:
+		status_label = _("Exceptions require attention")
+		status_tone = "danger"
+	elif needs_review_count or aged_confirmation_count:
+		status_label = _("Review required before reconciliation")
+		status_tone = "warning"
+	elif ready_count:
+		status_label = _("Ready queue available")
+		status_tone = "success"
+	else:
+		status_label = _("No readiness rows in current view")
+		status_tone = "neutral"
+
+	return build_report_metadata(
+		title=_("Reconciliation Readiness"),
+		icon="check-circle",
+		filters=filters,
+		filter_fields=(
+			("company", _("Company")),
+			("branch", _("Branch")),
+			("bank_account", _("Bank Account")),
+			("review_status", _("Review Status")),
+			("match_confidence", _("Match Confidence")),
+			("reconciliation_readiness_status", _("Readiness Status")),
+			("include_reconciled", _("Include Reconciled")),
+			("include_rejected_cancelled", _("Include Rejected / Cancelled")),
+		),
+		row_count=len(rows),
+		empty_message=_("No bank match readiness rows matched the selected filters."),
+		empty_suggestions=(
+			_("Choose another date, company, branch, bank account, confidence, or readiness status."),
+			_("Confirm that bank match reviews have completed evidence, account resolution, confirmation, and approval information."),
+		),
+		recommendations=recommendations,
+		visible_card_labels=(
+			_("Ready for Reconciliation"),
+			_("Needs Review"),
+			_("Exceptions / Not Ready"),
+		),
+		status_label=status_label,
+		status_tone=status_tone,
+	)
