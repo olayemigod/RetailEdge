@@ -14,7 +14,7 @@
 	});
 	const SETUP_WORKSPACE_ITEM = Object.freeze({
 		label: "RetailEdge Setup Workspace",
-		description: "Manage Branch Profiles and RetailEdge Settings through the shared EdgeSuite document experience.",
+		description: "Manage branch defaults, expense categories, statement mappings and RetailEdge settings through EdgeSuite UI.",
 		icon: "settings",
 		link_type: "Page",
 		link_to: "retailedge-document-workspace",
@@ -46,6 +46,8 @@
 		"Reconciliation Handoff": "Move verified review evidence to the native reconciliation workflow.",
 		Settings: "Configure RetailEdge behaviour and controls.",
 		"Branch Profile": "Manage branch-specific defaults and operating context.",
+		"Expense Category": "Maintain approved expense classifications and ledger defaults.",
+		"Statement Mapping Template": "Define reusable statement column mappings for bank and payment imports.",
 	});
 
 	function edgeRuntime() {
