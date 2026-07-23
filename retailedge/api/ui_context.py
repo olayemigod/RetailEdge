@@ -161,7 +161,7 @@ def get_home_context(branch: str | None = None, company: str | None = None) -> d
 			"permitted_branches": len(branches),
 		},
 		"context_note": (
-			"The branch selection currently filters this RetailEdge Home view. "
-			"Existing ERPNext document defaults and accounting behaviour are unchanged."
+			"The selected branch is a Home context preview in this phase. "
+			"It does not filter linked reports or change ERPNext document defaults."
 		),
 	}
