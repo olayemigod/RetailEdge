@@ -70,14 +70,14 @@ def get_report_summary(rows, message=None):
 	total_expenses = sum(flt(row.get("cashier_expenses")) for row in rows)
 	total_net_cash = sum(flt(row.get("net_cash_expected")) for row in rows)
 	total_outstanding = sum(flt(row.get("outstanding_amount")) for row in rows)
-	total_variance = sum(flt(row.get("audit_variance")) for row in rows)
+	total_absolute_variance = sum(abs(flt(row.get("audit_variance"))) for row in rows)
 	total_issues = sum(int(row.get("payment_issues") or 0) for row in rows)
 	return [
 		{"value": total_sales, "label": _("Gross Sales"), "datatype": "Currency", "indicator": "Blue"},
 		{"value": total_expenses, "label": _("Cashier Expenses"), "datatype": "Currency", "indicator": "Orange"},
 		{"value": total_net_cash, "label": _("Net Cash Expected"), "datatype": "Currency", "indicator": "Blue"},
 		{"value": total_outstanding, "label": _("Credit / Outstanding"), "datatype": "Currency", "indicator": "Orange" if total_outstanding else "Green"},
-		{"value": total_variance, "label": _("Audit Variance"), "datatype": "Currency", "indicator": "Red" if total_variance else "Green"},
+		{"value": total_absolute_variance, "label": _("Absolute Audit Variance"), "datatype": "Currency", "indicator": "Red" if total_absolute_variance else "Green"},
 		{"value": total_issues, "label": _("Payment Issues"), "datatype": "Int", "indicator": "Orange" if total_issues else "Green"},
 	]
 
@@ -137,7 +137,7 @@ def get_edgesuite_metadata(filters, rows):
 			_("Cashier Expenses"),
 			_("Net Cash Expected"),
 			_("Credit / Outstanding"),
-			_("Audit Variance"),
+			_("Absolute Audit Variance"),
 			_("Payment Issues"),
 		),
 		status_label=_("Review required") if recommendations else _("No material exception in current view"),
