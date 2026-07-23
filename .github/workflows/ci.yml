@@ -40,6 +40,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check out EdgeSuite UI document foundation
+        uses: actions/checkout@v6
+        with:
+          repository: olayemigod/processedge-edge-suite-ui
+          ref: agent/edgeui-document-foundation
+          token: ${{ secrets.EDGESUITE_UI_TOKEN }}
+          path: edgesuite-ui-source
+
       - name: Resolve changed RetailEdge test modules
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -119,18 +127,22 @@ jobs:
       - name: Setup
         run: |
           pip install frappe-bench
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
+          bench init --frappe-branch version-16 --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
 
-      - name: Install ERPNext and RetailEdge
+      - name: Install ERPNext, EdgeSuite UI and RetailEdge
         working-directory: /home/runner/frappe-bench
         run: |
           bench get-app --branch version-16 erpnext https://github.com/frappe/erpnext
-          bench get-app retailedge "$GITHUB_WORKSPACE"
+          bench get-app --skip-assets edgesuite_ui "$GITHUB_WORKSPACE/edgesuite-ui-source"
+          bench get-app --skip-assets retailedge "$GITHUB_WORKSPACE"
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin test_site
           bench --site test_site install-app erpnext
+          bench --site test_site install-app edgesuite_ui
           bench --site test_site install-app retailedge
+          bench build --app edgesuite_ui
           bench build --app retailedge
+          bench --site test_site migrate
         env:
           CI: 'Yes'
 
