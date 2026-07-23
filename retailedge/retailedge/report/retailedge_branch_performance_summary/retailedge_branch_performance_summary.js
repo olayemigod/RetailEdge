@@ -1,9 +1,21 @@
 function applyRetailEdgeSummaryCardDesign() {
-	// Report summary cards are styled through native Frappe DOM selectors in CSS.
+	// EdgeSuite UI renders the business summary while the native report table remains unchanged.
 }
 
 function scheduleRetailEdgeSummaryCardDesign() {
-	// No-op: report summary card appearance is CSS-only.
+	// Retained for compatibility with existing operational report refresh helpers.
+}
+
+function attachRetailEdgeReportEdgeUI(report, reportName, config) {
+	const attach = () => {
+		window.retailedgeReportEdgeUI?.register(reportName, config);
+		window.retailedgeReportEdgeUI?.attach(report, reportName);
+	};
+	if (window.retailedgeReportEdgeUI) {
+		attach();
+		return;
+	}
+	frappe.require("/assets/retailedge/js/retailedge_report_edgeui.js", attach);
 }
 
 function configureOperationalReportRefresh(report) {
@@ -119,6 +131,12 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		attachRetailEdgeReportEdgeUI(report, "RetailEdge Branch Performance Summary", {
+			eyebrow: __("Management Intelligence"),
+			title: __("Branch Performance"),
+			subtitle: __("Compare sales, collections, cashier expenses, expected cash, outstanding balances, audit variance, and payment issues across permitted branches."),
+			emptyDescription: __("Choose another operational context or confirm that submitted invoices and control records carry the correct RetailEdge branch."),
+		});
 		const originalRefresh = report.refresh.bind(report);
 		report.refresh = function () {
 			const fromDate = report.get_filter_value("from_date");
@@ -128,12 +146,12 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 			}
 			return originalRefresh();
 		};
-
 		scheduleRetailEdgeSummaryCardDesign(report);
 	},
 
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
 		scheduleRetailEdgeSummaryCardDesign(report);
+		window.retailedgeReportEdgeUI?.refresh(report, "RetailEdge Branch Performance Summary");
 	},
 };
