@@ -59,38 +59,49 @@ def validate_filters(filters):
 
 def get_columns(filters):
 	compare_uom = filters.get("compare_uom")
-	compare_quantity_label = _("Compare Quantity")
-	compare_balance_label = _("Balance in Destination Warehouse (Compare UOM)")
-	if compare_uom:
-		compare_quantity_label = _("Quantity ({0})").format(compare_uom)
-		compare_balance_label = _("Balance in Destination Warehouse ({0})").format(compare_uom)
-
 	return [
 		{"label": _("Date and Time"), "fieldname": "posting_datetime", "fieldtype": "Datetime", "width": 150},
 		{"label": _("Movement Type"), "fieldname": "movement_type", "fieldtype": "Data", "width": 135},
 		{"label": _("Item Code"), "fieldname": "item_code", "fieldtype": "Link", "options": "Item", "width": 130},
 		{"label": _("Item Name"), "fieldname": "item_name", "fieldtype": "Data", "width": 190},
-		{"label": _("Quantity"), "fieldname": "base_quantity_display", "fieldtype": "Data", "width": 120},
+		{"label": _("Stock UOM"), "fieldname": "stock_uom", "fieldtype": "Link", "options": "UOM", "width": 95},
+		{"label": _("In Quantity"), "fieldname": "in_quantity", "fieldtype": "Float", "width": 110},
+		{"label": _("Out Quantity"), "fieldname": "out_quantity", "fieldtype": "Float", "width": 110},
 		{
-			"label": compare_quantity_label,
-			"fieldname": "compare_quantity_display",
-			"fieldtype": "Data",
-			"width": 125,
+			"label": _("Compare UOM"),
+			"fieldname": "compare_uom",
+			"fieldtype": "Link",
+			"options": "UOM",
+			"width": 105,
+			"hidden": 0 if compare_uom else 1,
+		},
+		{
+			"label": _("Compare In Quantity"),
+			"fieldname": "compare_in_quantity",
+			"fieldtype": "Float",
+			"width": 135,
+			"hidden": 0 if compare_uom else 1,
+		},
+		{
+			"label": _("Compare Out Quantity"),
+			"fieldname": "compare_out_quantity",
+			"fieldtype": "Float",
+			"width": 140,
 			"hidden": 0 if compare_uom else 1,
 		},
 		{"label": _("Source Warehouse"), "fieldname": "source_warehouse", "fieldtype": "Link", "options": "Warehouse", "width": 165},
 		{"label": _("Destination Warehouse"), "fieldname": "destination_warehouse", "fieldtype": "Link", "options": "Warehouse", "width": 165},
 		{
 			"label": _("Balance in Destination Warehouse"),
-			"fieldname": "destination_balance_display",
-			"fieldtype": "Data",
+			"fieldname": "destination_balance",
+			"fieldtype": "Float",
 			"width": 190,
 		},
 		{
-			"label": compare_balance_label,
-			"fieldname": "destination_balance_compare_display",
-			"fieldtype": "Data",
-			"width": 205,
+			"label": _("Destination Balance (Compare UOM)"),
+			"fieldname": "destination_balance_compare",
+			"fieldtype": "Float",
+			"width": 190,
 			"hidden": 0 if compare_uom else 1,
 		},
 		{"label": _("Voucher Type"), "fieldname": "voucher_type", "fieldtype": "Data", "width": 125},
@@ -163,7 +174,11 @@ def get_branch_warehouses(company: str, branch: str) -> set[str]:
 		)
 
 	if frappe.db.exists("DocType", "RetailEdge Branch Profile"):
-		fields = ["name"] + [fieldname for fieldname in BRANCH_PROFILE_WAREHOUSE_FIELDS if has_field("RetailEdge Branch Profile", fieldname)]
+		fields = ["name"] + [
+			fieldname
+			for fieldname in BRANCH_PROFILE_WAREHOUSE_FIELDS
+			if has_field("RetailEdge Branch Profile", fieldname)
+		]
 		profiles = frappe.get_all(
 			"RetailEdge Branch Profile",
 			filters={"company": company, "branch": branch, "enabled": 1},
@@ -345,7 +360,13 @@ def get_conversion_map(item_codes, compare_uom):
 
 
 def get_stock_entry_detail_map(stock_ledger_rows):
-	detail_names = sorted({row.voucher_detail_no for row in stock_ledger_rows if row.voucher_type == "Stock Entry" and row.voucher_detail_no})
+	detail_names = sorted(
+		{
+			row.voucher_detail_no
+			for row in stock_ledger_rows
+			if row.voucher_type == "Stock Entry" and row.voucher_detail_no
+		}
+	)
 	if not detail_names:
 		return {}
 	fields = [
@@ -413,12 +434,17 @@ def build_stock_entry_row(group_rows, detail_map, header_map, item_map, conversi
 
 	source_warehouse = (detail and detail.get("s_warehouse")) or (negative and negative.warehouse)
 	destination_warehouse = (detail and detail.get("t_warehouse")) or (positive and positive.warehouse)
-	base_uom = (detail and detail.get("stock_uom")) or first.get("stock_uom") or item.get("stock_uom")
+	stock_uom = (detail and detail.get("stock_uom")) or first.get("stock_uom") or item.get("stock_uom")
 	base_quantity = flt(detail.get("transfer_qty")) if detail else 0
 	if not base_quantity and detail:
 		base_quantity = flt(detail.get("qty")) * flt(detail.get("conversion_factor") or 1)
 	if not base_quantity:
 		base_quantity = max(abs(flt(row.actual_qty)) for row in group_rows)
+	in_quantity, out_quantity = split_movement_quantity(
+		base_quantity,
+		source_warehouse=source_warehouse,
+		destination_warehouse=destination_warehouse,
+	)
 	destination_balance = flt(positive.qty_after_transaction) if positive else None
 	movement_type = classify_stock_entry_movement(header.get("purpose"), source_warehouse, destination_warehouse)
 	batch_no = (detail and detail.get("batch_no")) or next((row.batch_no for row in group_rows if row.batch_no), None)
@@ -430,10 +456,11 @@ def build_stock_entry_row(group_rows, detail_map, header_map, item_map, conversi
 		movement_type=movement_type,
 		item_code=first.item_code,
 		item_name=(detail and detail.get("item_name")) or item.get("item_name"),
-		base_quantity=base_quantity,
-		base_uom=base_uom,
+		stock_uom=stock_uom,
+		in_quantity=in_quantity,
+		out_quantity=out_quantity,
 		compare_uom=compare_uom,
-		conversion_factor=resolve_conversion_factor(first.item_code, base_uom, compare_uom, conversion_map),
+		conversion_factor=resolve_conversion_factor(first.item_code, stock_uom, compare_uom, conversion_map),
 		source_warehouse=source_warehouse,
 		destination_warehouse=destination_warehouse,
 		destination_balance=destination_balance,
@@ -449,18 +476,26 @@ def build_single_ledger_row(sle, header, item_map, conversion_map, compare_uom):
 	item = item_map.get(sle.item_code, {})
 	actual_qty = flt(sle.actual_qty)
 	incoming = actual_qty > 0
-	base_uom = sle.get("stock_uom") or item.get("stock_uom")
+	stock_uom = sle.get("stock_uom") or item.get("stock_uom")
+	source_warehouse = None if incoming else sle.warehouse
+	destination_warehouse = sle.warehouse if incoming else None
+	in_quantity, out_quantity = split_movement_quantity(
+		abs(actual_qty),
+		source_warehouse=source_warehouse,
+		destination_warehouse=destination_warehouse,
+	)
 	return make_output_row(
 		posting_datetime=sle.posting_datetime,
 		movement_type=classify_ledger_movement(sle.voucher_type, incoming, header),
 		item_code=sle.item_code,
 		item_name=item.get("item_name"),
-		base_quantity=abs(actual_qty),
-		base_uom=base_uom,
+		stock_uom=stock_uom,
+		in_quantity=in_quantity,
+		out_quantity=out_quantity,
 		compare_uom=compare_uom,
-		conversion_factor=resolve_conversion_factor(sle.item_code, base_uom, compare_uom, conversion_map),
-		source_warehouse=None if incoming else sle.warehouse,
-		destination_warehouse=sle.warehouse if incoming else None,
+		conversion_factor=resolve_conversion_factor(sle.item_code, stock_uom, compare_uom, conversion_map),
+		source_warehouse=source_warehouse,
+		destination_warehouse=destination_warehouse,
 		destination_balance=flt(sle.qty_after_transaction) if incoming else None,
 		voucher_type=sle.voucher_type,
 		voucher_no=sle.voucher_no,
@@ -470,39 +505,42 @@ def build_single_ledger_row(sle, header, item_map, conversion_map, compare_uom):
 	)
 
 
+def split_movement_quantity(quantity, source_warehouse=None, destination_warehouse=None):
+	quantity = abs(flt(quantity))
+	return (
+		quantity if destination_warehouse else None,
+		quantity if source_warehouse else None,
+	)
+
+
 def make_output_row(**values):
 	factor = values.pop("conversion_factor", None)
-	base_quantity = values.pop("base_quantity", None)
-	base_uom = values.pop("base_uom", None)
-	compare_uom = values.pop("compare_uom", None)
+	in_quantity = values.pop("in_quantity", None)
+	out_quantity = values.pop("out_quantity", None)
+	compare_uom = values.get("compare_uom")
 	destination_balance = values.pop("destination_balance", None)
 
-	compare_quantity = convert_quantity(base_quantity, factor) if compare_uom else None
+	compare_in_quantity = convert_quantity(in_quantity, factor) if compare_uom else None
+	compare_out_quantity = convert_quantity(out_quantity, factor) if compare_uom else None
 	destination_balance_compare = convert_quantity(destination_balance, factor) if compare_uom else None
 	conversion_status = "Configured" if compare_uom and factor else ("Not Configured" if compare_uom else "")
 
 	return {
 		**values,
-		"base_quantity": base_quantity,
-		"stock_uom": base_uom,
-		"compare_quantity": compare_quantity,
-		"compare_uom": compare_uom,
+		"in_quantity": in_quantity,
+		"out_quantity": out_quantity,
+		"compare_in_quantity": compare_in_quantity,
+		"compare_out_quantity": compare_out_quantity,
 		"destination_balance": destination_balance,
 		"destination_balance_compare": destination_balance_compare,
 		"conversion_status": conversion_status,
-		"base_quantity_display": format_quantity(base_quantity, base_uom),
-		"compare_quantity_display": format_quantity(compare_quantity, compare_uom) if compare_uom else "",
-		"destination_balance_display": format_quantity(destination_balance, base_uom),
-		"destination_balance_compare_display": (
-			format_quantity(destination_balance_compare, compare_uom) if compare_uom else ""
-		),
 	}
 
 
-def resolve_conversion_factor(item_code, base_uom, compare_uom, conversion_map):
+def resolve_conversion_factor(item_code, stock_uom, compare_uom, conversion_map):
 	if not compare_uom:
 		return None
-	if compare_uom == base_uom:
+	if compare_uom == stock_uom:
 		return 1.0
 	return conversion_map.get((item_code, compare_uom))
 
@@ -511,13 +549,6 @@ def convert_quantity(quantity, conversion_factor):
 	if quantity is None or not conversion_factor or flt(conversion_factor) <= 0:
 		return None
 	return flt(quantity) / flt(conversion_factor)
-
-
-def format_quantity(quantity, uom):
-	if quantity is None:
-		return ""
-	text = f"{flt(quantity):,.6f}".rstrip("0").rstrip(".")
-	return f"{text} {uom}".strip()
 
 
 def classify_stock_entry_movement(purpose, source_warehouse, destination_warehouse):
