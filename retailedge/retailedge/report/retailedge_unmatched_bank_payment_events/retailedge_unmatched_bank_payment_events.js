@@ -1,3 +1,15 @@
+function attachRetailEdgeReportEdgeUI(report, reportName, config) {
+	const attach = () => {
+		window.retailedgeReportEdgeUI?.register(reportName, config);
+		window.retailedgeReportEdgeUI?.attach(report, reportName);
+	};
+	if (window.retailedgeReportEdgeUI) {
+		attach();
+		return;
+	}
+	frappe.require("/assets/retailedge/js/retailedge_report_edgeui.js", attach);
+}
+
 function configureOperationalReportRefresh(report) {
 	if (!report || report.__retailedgeAutoRefreshConfigured) {
 		return;
@@ -59,8 +71,15 @@ frappe.query_reports["RetailEdge Unmatched Bank Payment Events"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		attachRetailEdgeReportEdgeUI(report, "RetailEdge Unmatched Bank Payment Events", {
+			eyebrow: __("Reconciliation Oversight"),
+			title: __("Unmatched Bank Payment Events"),
+			subtitle: __("Review payment entries and invoice or POS payment rows that do not yet have reliable Bank Transaction evidence."),
+			emptyDescription: __("Choose another context or confirm that source payment documents contain correct references, dates, amounts and account information."),
+		});
 	},
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
+		window.retailedgeReportEdgeUI?.refresh(report, "RetailEdge Unmatched Bank Payment Events");
 	}
 };
