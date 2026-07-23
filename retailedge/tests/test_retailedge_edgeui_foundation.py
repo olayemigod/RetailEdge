@@ -7,7 +7,7 @@ from pathlib import Path
 import frappe
 
 from retailedge import hooks
-from retailedge.api.ui_context import _route_for
+from retailedge.api.ui_context import SECTION_META, _route_for
 from retailedge.workspace_home import WorkspaceHomeItem
 
 
@@ -53,6 +53,8 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 		self.assertIn('import * as Vue from "vue"', factory)
 		self.assertIn('MINIMUM_EDGE_SUITE_UI_VERSION = "0.5.0"', factory)
 		self.assertIn("runtime.install(app)", factory)
+		self.assertIn('"EdgeStatusBadge"', factory)
+		self.assertIn('"EdgeIcon"', factory)
 		self.assertNotIn("coreedge/public", factory.lower())
 		self.assertNotIn("../../../../../coreedge", factory.lower())
 
@@ -64,9 +66,14 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 			"RetailEdgeHome.vue",
 		).read_text()
 		self.assertIn("EdgeBranchContextSwitcher", home)
-		self.assertIn("Filters this Home view only", home)
+		self.assertIn("Previews context on this Home only", home)
+		self.assertIn("does not filter linked reports", self.app_path("api", "ui_context.py").read_text())
 		self.assertNotIn("set_user_default", home)
 		self.assertNotIn("frappe.defaults", home)
+
+	def test_home_icons_use_shared_edgeui_names(self):
+		allowed = {"activity", "check", "chart", "wallet", "settings", "shield"}
+		self.assertEqual({meta["icon"] for meta in SECTION_META.values()}, allowed)
 
 	def test_navigation_and_routes_preserve_native_erpnext_targets(self):
 		doctype = WorkspaceHomeItem(
