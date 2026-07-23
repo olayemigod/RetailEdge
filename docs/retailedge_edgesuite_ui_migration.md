@@ -8,6 +8,7 @@ It establishes:
 
 - a required local `edgesuite_ui` dependency;
 - a RetailEdge app launcher route at `/app/retailedge-home`;
+- a source-controlled RetailEdge launcher icon;
 - a product-owned Vue application factory using `runtime.install(app)`;
 - EdgeSuite UI 0.5+ runtime and component validation;
 - tenant, company, user and branch identity in Frappe boot context;
@@ -24,6 +25,8 @@ agent/edgeui-document-foundation
 ```
 
 The branch currently exposes EdgeSuite UI 0.5.4 even though its draft PR originally described the work as 0.5.0.
+
+The separate EdgeSuite UI primary-menu branch has not been consolidated into the document foundation. RetailEdge Home is therefore the first normal product-menu section in this phase. It should be promoted to the dedicated `primary_item` contract only after that shared feature is merged and validated, avoiding duplicate Home entries.
 
 ## Safety boundaries
 
@@ -43,7 +46,7 @@ It does not mutate:
 
 Home items are returned only when the configured target exists and the current user has read permission.
 
-The branch selector currently filters only the RetailEdge Home request. It does not change User Defaults, CoreEdge context, ERPNext defaults or document attribution.
+The branch selector is a Home context preview in this phase. It does not filter linked reports, change User Defaults, switch CoreEdge runtime context, change ERPNext defaults or alter document attribution.
 
 ## Dependency and CI gate
 
@@ -55,7 +58,9 @@ EDGESUITE_UI_TOKEN
 
 That repository secret must be configured before the clean Frappe v16 install, asset build and migration job can pass.
 
-This dependency must not be replaced with a copied CoreEdge frontend path or a locally duplicated EdgeSuite component set.
+The current GitHub linter workflow passes. The full CI workflow stops at the private EdgeSuite UI checkout step, before bench setup, builds, migration or RetailEdge tests run.
+
+This dependency must not be replaced with a copied CoreEdge frontend path, a fake CI-only app or a locally duplicated EdgeSuite component set.
 
 ## Manual QA gate
 
