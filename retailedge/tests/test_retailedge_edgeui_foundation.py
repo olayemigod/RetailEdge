@@ -94,8 +94,6 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 			self.app_path("public", "js", "retailedge_product_menu.js"),
 		]
 		combined = "\n".join(path.read_text() for path in paths).lower()
-		for forbidden in (
-			"sales invoice").split("|"):
-			self.assertNotIn("doc.submit()", combined)
-			self.assertNotIn("doc.save()", combined)
-			self.assertNotIn("frappe.client.save", combined)
+		self.assertNotIn("doc.submit()", combined)
+		self.assertNotIn("doc.save()", combined)
+		self.assertNotIn("frappe.client.save", combined)
