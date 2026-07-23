@@ -24,6 +24,13 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 			hooks.add_to_apps_screen[0]["has_permission"],
 			"retailedge.api.permission.has_app_permission",
 		)
+		self.assertEqual(
+			hooks.app_logo_url,
+			"/assets/retailedge/images/retailedge-app-icon.svg",
+		)
+		self.assertTrue(
+			self.app_path("public", "images", "retailedge-app-icon.svg").exists()
+		)
 
 	def test_home_page_and_bundle_are_source_controlled(self):
 		page_path = self.app_path(
