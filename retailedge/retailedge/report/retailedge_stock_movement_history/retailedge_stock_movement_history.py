@@ -18,7 +18,6 @@ from retailedge.branch_context import (
 )
 
 REPORT_NAME = "RetailEdge Stock Movement History"
-MAX_UNSCOPED_DAYS = 366
 BRANCH_PROFILE_WAREHOUSE_FIELDS = (
 	"default_warehouse",
 	"default_source_warehouse",
@@ -43,22 +42,13 @@ def validate_filters(filters):
 		("from_date", _("From Date")),
 		("to_date", _("To Date")),
 		("item_code", _("Item")),
+		("warehouse", _("Warehouse")),
 	):
 		if not filters.get(fieldname):
 			frappe.throw(_("{0} is required.").format(label))
 
-	from_date = getdate(filters.from_date)
-	to_date = getdate(filters.to_date)
-	if from_date > to_date:
+	if getdate(filters.from_date) > getdate(filters.to_date):
 		frappe.throw(_("From Date cannot be after To Date."))
-
-	if not filters.get("warehouse") and not filters.get("branch"):
-		if (to_date - from_date).days + 1 > MAX_UNSCOPED_DAYS:
-			frappe.throw(
-				_("Select a Warehouse or Branch for date ranges longer than {0} days.").format(
-					MAX_UNSCOPED_DAYS
-				)
-			)
 
 
 def get_columns(filters):
@@ -130,9 +120,10 @@ def get_columns(filters):
 
 
 def resolve_warehouse_scope(filters):
+	"""Validate the required warehouse and return its exact authoritative scope."""
 	company = filters.company
 	branch = filters.get("branch")
-	warehouse = filters.get("warehouse")
+	warehouse = filters.warehouse
 	user = frappe.session.user
 	global_access = user_has_global_branch_access(user=user)
 	allowed_branches = (
@@ -159,24 +150,22 @@ def resolve_warehouse_scope(filters):
 			frappe.PermissionError,
 		)
 
-	if warehouse:
-		warehouse_company, is_group = frappe.db.get_value(
-			"Warehouse",
-			warehouse,
-			["company", "is_group"],
-		) or (None, None)
-		if warehouse_company != company:
-			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
-		if is_group:
-			frappe.throw(_("Select a non-group Warehouse."))
-		if branch_warehouses and warehouse not in branch_warehouses:
-			frappe.throw(
-				_("Warehouse {0} is outside the selected or permitted Branch scope.").format(warehouse),
-				frappe.PermissionError,
-			)
-		return [warehouse]
+	warehouse_company, is_group = frappe.db.get_value(
+		"Warehouse",
+		warehouse,
+		["company", "is_group"],
+	) or (None, None)
+	if warehouse_company != company:
+		frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
+	if is_group:
+		frappe.throw(_("Select a non-group Warehouse."))
+	if branch_warehouses and warehouse not in branch_warehouses:
+		frappe.throw(
+			_("Warehouse {0} is outside the selected or permitted Branch scope.").format(warehouse),
+			frappe.PermissionError,
+		)
 
-	return sorted(branch_warehouses) if branch_warehouses else None
+	return [warehouse]
 
 
 def get_branch_warehouses(company: str, branch: str) -> set[str]:
@@ -243,15 +232,11 @@ def expand_group_warehouses(company: str, warehouse_names: set[str]) -> set[str]
 
 
 def get_stock_ledger_rows(filters, warehouse_scope=None):
-	"""Fetch every selected-item movement needed for the running balance.
-
-	Voucher, movement and batch filters are deliberately applied after balances
-	are calculated. Skipping intervening entries would make the displayed
-	balance mathematically incorrect.
-	"""
+	"""Fetch every selected-item movement for the required warehouse."""
 	query_filters: dict[str, Any] = {
 		"company": filters.company,
 		"item_code": filters.item_code,
+		"warehouse": filters.warehouse,
 		"posting_datetime": [
 			"between",
 			[f"{filters.from_date} 00:00:00", f"{filters.to_date} 23:59:59.999999"],
@@ -259,8 +244,6 @@ def get_stock_ledger_rows(filters, warehouse_scope=None):
 		"is_cancelled": 0,
 		"actual_qty": ["!=", 0],
 	}
-	if warehouse_scope:
-		query_filters["warehouse"] = ["in", warehouse_scope]
 
 	return frappe.get_list(
 		"Stock Ledger Entry",
@@ -540,25 +523,17 @@ def build_single_movement_row(sle, header, item, conversion_map, compare_uom):
 
 
 def get_opening_balance(filters, warehouse_scope=None):
-	"""Return selected-item stock immediately before the report start.
-
-	The aggregate uses ``frappe.get_list`` so normal Stock Ledger Entry
-	permissions remain active. It is scoped to the same company and warehouse
-	set as the report.
-	"""
-	query_filters: dict[str, Any] = {
-		"company": filters.company,
-		"item_code": filters.item_code,
-		"posting_datetime": ["<", f"{filters.from_date} 00:00:00"],
-		"is_cancelled": 0,
-	}
-	if warehouse_scope:
-		query_filters["warehouse"] = ["in", warehouse_scope]
-
+	"""Return stock immediately before From Date for one Item and Warehouse."""
 	rows = frappe.get_list(
 		"Stock Ledger Entry",
-		filters=query_filters,
-		fields=["sum(actual_qty) as opening_balance"],
+		filters={
+			"company": filters.company,
+			"item_code": filters.item_code,
+			"warehouse": filters.warehouse,
+			"posting_datetime": ["<", f"{filters.from_date} 00:00:00"],
+			"is_cancelled": 0,
+		},
+		fields=[{"SUM": "actual_qty", "as": "opening_balance"}],
 		limit_page_length=1,
 	)
 	return flt(rows[0].opening_balance) if rows else 0.0
