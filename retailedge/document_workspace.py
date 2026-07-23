@@ -47,6 +47,8 @@ COMPANY_DEPENDENT_FIELDS = [
 	"default_bank_account",
 	"default_card_pos_account",
 	"default_mobile_money_account",
+	"expense_account",
+	"default_account",
 ]
 BRANCH_DEPENDENT_FIELDS = [
 	"default_pos_profile",
@@ -89,6 +91,56 @@ RESOURCE_CONFIG: dict[str, dict[str, Any]] = {
 		"search_fields": ["name", "profile_name", "company", "branch", "default_pos_profile"],
 		"filter_fields": ["enabled", "company", "branch"],
 		"branch_field": "branch",
+		"allow_create": True,
+		"allow_delete": False,
+	},
+	"expense-categories": {
+		"doctype": "RetailEdge Expense Category",
+		"title": _("Expense Categories"),
+		"singular": _("Expense Category"),
+		"subtitle": _("Maintain controlled retail expense classifications and their accounting defaults."),
+		"icon": "wallet",
+		"list_fields": [
+			"name",
+			"category_name",
+			"category_code",
+			"company",
+			"expense_account",
+			"default_cost_center",
+			"is_active",
+			"modified",
+		],
+		"search_fields": ["name", "category_name", "category_code", "company", "expense_account"],
+		"filter_fields": ["is_active", "company"],
+		"allow_create": True,
+		"allow_delete": False,
+	},
+	"statement-mapping-templates": {
+		"doctype": "RetailEdge Statement Mapping Template",
+		"title": _("Statement Mapping Templates"),
+		"singular": _("Statement Mapping Template"),
+		"subtitle": _("Define reusable bank, POS and mobile-money statement column mappings."),
+		"icon": "list",
+		"list_fields": [
+			"name",
+			"template_name",
+			"enabled",
+			"company",
+			"statement_type",
+			"payment_category",
+			"bank_or_provider_name",
+			"default_account",
+			"modified",
+		],
+		"search_fields": [
+			"name",
+			"template_name",
+			"company",
+			"statement_type",
+			"payment_category",
+			"bank_or_provider_name",
+		],
+		"filter_fields": ["enabled", "company", "statement_type", "payment_category"],
 		"allow_create": True,
 		"allow_delete": False,
 	},
@@ -139,12 +191,16 @@ def _field_label(field) -> str:
 
 
 def _field_clear_fields(resource: str, fieldname: str) -> list[str]:
-	if resource != "branch-profiles":
+	if fieldname != "company":
+		if resource == "branch-profiles" and fieldname == "branch":
+			return BRANCH_DEPENDENT_FIELDS
 		return []
-	if fieldname == "company":
+	if resource == "branch-profiles":
 		return COMPANY_DEPENDENT_FIELDS
-	if fieldname == "branch":
-		return BRANCH_DEPENDENT_FIELDS
+	if resource == "expense-categories":
+		return ["expense_account", "default_cost_center"]
+	if resource == "statement-mapping-templates":
+		return ["default_account"]
 	return []
 
 
@@ -277,7 +333,7 @@ def _column_schema(meta, fieldnames: list[str]) -> list[dict[str, Any]]:
 				"fieldname": fieldname,
 				"label": _field_label(field),
 				"fieldtype": field.fieldtype,
-				"status": fieldname in {"enabled", "status", "workflow_state"},
+				"status": fieldname in {"enabled", "is_active", "status", "workflow_state"},
 			}
 		)
 	return columns
@@ -318,6 +374,12 @@ def _allowed_branch_filters(company: str | None = None) -> dict[str, Any]:
 		return {}
 	allowed = get_user_allowed_branches(user=frappe.session.user, company=company).get("branches") or []
 	return {"branch": ["in", allowed]} if allowed else {}
+
+
+def _resource_list_filters(config: dict[str, Any], requested: dict[str, Any]) -> dict[str, Any]:
+	if config["key"] == "branch-profiles":
+		return _allowed_branch_filters(requested.get("company"))
+	return {}
 
 
 def _assert_branch_profile_scope(doc) -> None:
@@ -392,6 +454,38 @@ def _check_readable_link(doctype: str, name: str) -> None:
 	linked.check_permission("read")
 	if has_field(doctype, "disabled") and cint(linked.get("disabled")):
 		frappe.throw(_("{0} {1} is disabled.").format(doctype, name))
+	if has_field(doctype, "enabled") and not cint(linked.get("enabled")):
+		frappe.throw(_("{0} {1} is disabled.").format(doctype, name))
+
+
+def _validate_company_link(
+	doctype: str,
+	name: str,
+	company: str | None,
+	*,
+	require_non_group: bool = False,
+	required_root_type: str | None = None,
+) -> None:
+	if not name:
+		return
+	_check_readable_link(doctype, name)
+	if company and has_field(doctype, "company"):
+		linked_company = frappe.db.get_value(doctype, name, "company")
+		if linked_company and linked_company != company:
+			frappe.throw(
+				_("{0} {1} belongs to Company {2}, not {3}.").format(
+					doctype,
+					name,
+					linked_company,
+					company,
+				)
+			)
+	if require_non_group and has_field(doctype, "is_group") and cint(frappe.db.get_value(doctype, name, "is_group")):
+		frappe.throw(_("{0} {1} must be a ledger record, not a group.").format(doctype, name))
+	if required_root_type and has_field(doctype, "root_type"):
+		root_type = frappe.db.get_value(doctype, name, "root_type")
+		if root_type and root_type != required_root_type:
+			frappe.throw(_("{0} {1} must have Root Type {2}.").format(doctype, name, required_root_type))
 
 
 def _validate_branch_profile_links(doc) -> None:
@@ -423,13 +517,54 @@ def _validate_branch_profile_links(doc) -> None:
 	for table_field in CHILD_ROLE_BY_FIELD:
 		for row in doc.get(table_field) or []:
 			_check_readable_link("User", row.get("user"))
-			if has_field("User", "enabled") and not cint(frappe.db.get_value("User", row.get("user"), "enabled")):
-				frappe.throw(_("User {0} is disabled.").format(row.get("user")))
+
+
+def _validate_expense_category_links(doc) -> None:
+	company = doc.get("company")
+	_check_readable_link("Company", company)
+	_validate_company_link(
+		"Account",
+		doc.get("expense_account"),
+		company,
+		require_non_group=True,
+		required_root_type="Expense",
+	)
+	_validate_company_link(
+		"Cost Center",
+		doc.get("default_cost_center"),
+		company,
+		require_non_group=True,
+	)
+
+
+def _validate_statement_mapping_links(doc) -> None:
+	company = doc.get("company")
+	_check_readable_link("Company", company)
+	_validate_company_link("Account", doc.get("default_account"), company, require_non_group=True)
+
+
+def _validate_resource_document(config: dict[str, Any], doc) -> None:
+	if config["key"] == "branch-profiles":
+		_validate_branch_profile_links(doc)
+	elif config["key"] == "expense-categories":
+		_validate_expense_category_links(doc)
+	elif config["key"] == "statement-mapping-templates":
+		_validate_statement_mapping_links(doc)
 
 
 def _settings_company() -> str:
 	identity = get_retailedge_ui_identity()
 	return identity.get("company") or frappe.defaults.get_user_default("Company") or ""
+
+
+def _default_document_context(meta) -> dict[str, Any]:
+	identity = get_retailedge_ui_identity()
+	defaults: dict[str, Any] = {}
+	if meta.has_field("company") and identity.get("company"):
+		defaults["company"] = identity.get("company")
+	if meta.has_field("branch") and identity.get("branch"):
+		defaults["branch"] = identity.get("branch")
+	return defaults
 
 
 @frappe.whitelist()
@@ -469,7 +604,7 @@ def get_document_list(
 		frappe.throw(_("You are not permitted to view {0}.").format(doctype), frappe.PermissionError)
 	meta = frappe.get_meta(doctype)
 	requested = _parse_json_object(filters)
-	query_filters = _allowed_branch_filters(requested.get("company"))
+	query_filters = _resource_list_filters(config, requested)
 	allowed_filters = set(config.get("filter_fields") or [])
 	for fieldname, value in requested.items():
 		if fieldname in allowed_filters and value not in (None, "", []):
@@ -477,10 +612,18 @@ def get_document_list(
 	query = str(search or "").strip()
 	or_filters = None
 	if query:
-		or_filters = [[doctype, fieldname, "like", f"%{query}%"] for fieldname in config.get("search_fields") or ["name"]]
+		or_filters = [
+			[doctype, fieldname, "like", f"%{query}%"]
+			for fieldname in config.get("search_fields") or ["name"]
+			if fieldname == "name" or meta.has_field(fieldname)
+		]
 	start = max(cint(start), 0)
 	page_length = min(max(cint(page_length) or 25, 1), PAGE_LENGTH_MAX)
-	fields = [fieldname for fieldname in config.get("list_fields") or ["name"] if fieldname == "name" or meta.has_field(fieldname)]
+	fields = [
+		fieldname
+		for fieldname in config.get("list_fields") or ["name"]
+		if fieldname == "name" or meta.has_field(fieldname)
+	]
 	rows = frappe.get_list(
 		doctype,
 		fields=fields,
@@ -517,18 +660,18 @@ def get_document(resource: str, name: str | None = None, defaults: str | dict | 
 	elif name:
 		doc = frappe.get_doc(doctype, name)
 		doc.check_permission("read")
-		_assert_branch_profile_scope(doc)
+		if config["key"] == "branch-profiles":
+			_assert_branch_profile_scope(doc)
 	else:
 		if not config.get("allow_create") or not frappe.has_permission(doctype, ptype="create"):
 			frappe.throw(_("You are not permitted to create {0}.").format(doctype), frappe.PermissionError)
 		doc = frappe.new_doc(doctype)
-		identity = get_retailedge_ui_identity()
-		initial = {"company": identity.get("company"), "branch": identity.get("branch")}
+		initial = _default_document_context(meta)
 		initial.update(_parse_json_object(defaults))
 		for fieldname, value in initial.items():
 			if value not in (None, "") and meta.has_field(fieldname):
 				doc.set(fieldname, value)
-		if doc.get("branch"):
+		if config["key"] == "branch-profiles" and doc.get("branch"):
 			_assert_branch_profile_scope(doc)
 
 	schema = _build_form_schema(config, meta)
@@ -570,17 +713,17 @@ def save_document(
 	elif name:
 		doc = frappe.get_doc(doctype, name)
 		doc.check_permission("write")
-		_assert_branch_profile_scope(doc)
+		if config["key"] == "branch-profiles":
+			_assert_branch_profile_scope(doc)
 		if modified and str(doc.modified) != str(modified):
-			frappe.throw(_("This branch profile changed after you opened it. Reload before saving."), frappe.TimestampMismatchError)
+			frappe.throw(_("This document changed after you opened it. Reload before saving."), frappe.TimestampMismatchError)
 	else:
 		if not config.get("allow_create") or not frappe.has_permission(doctype, ptype="create"):
 			frappe.throw(_("You are not permitted to create {0}.").format(doctype), frappe.PermissionError)
 		doc = frappe.new_doc(doctype)
 
 	_apply_values(doc, meta, _parse_json_object(values))
-	if config["key"] == "branch-profiles":
-		_validate_branch_profile_links(doc)
+	_validate_resource_document(config, doc)
 	if doc.is_new():
 		doc.insert()
 	else:
@@ -593,21 +736,34 @@ def _allowed_child_doctypes(config: dict[str, Any]) -> set[str]:
 	return {field.options for field in meta.fields if field.fieldtype == "Table" and field.options}
 
 
+def _option_company(config: dict[str, Any], context: dict[str, Any]) -> str:
+	if context.get("company"):
+		return context.get("company")
+	if config.get("is_single"):
+		return _settings_company()
+	return ""
+
+
 def _option_filters(config: dict[str, Any], field, context: dict[str, Any]) -> dict[str, Any]:
 	options = field.options
 	filters: dict[str, Any] = {}
-	company = context.get("company") or _settings_company()
+	company = _option_company(config, context)
 	if options == "Branch":
-		if company and has_field(options, "company"):
+		if not company:
+			return {"name": ["in", []]}
+		if has_field(options, "company"):
 			filters["company"] = company
 		if not user_has_global_branch_access(user=frappe.session.user):
 			allowed = get_user_allowed_branches(user=frappe.session.user, company=company).get("branches") or []
-			if allowed:
-				filters["name"] = ["in", allowed]
-	elif options in COMPANY_SCOPED_LINKS and company and has_field(options, "company"):
+			filters["name"] = ["in", allowed]
+	elif options in COMPANY_SCOPED_LINKS and has_field(options, "company"):
+		if not company:
+			return {"name": ["in", []]}
 		filters["company"] = company
 	if options in {"Account", "Warehouse", "Cost Center"} and has_field(options, "is_group"):
 		filters["is_group"] = 0
+	if config["key"] == "expense-categories" and field.fieldname == "expense_account" and has_field("Account", "root_type"):
+		filters["root_type"] = "Expense"
 	if options == "Item" and has_field(options, "is_sales_item"):
 		filters["is_sales_item"] = 1
 	if options == "User":
@@ -666,7 +822,14 @@ def get_link_options(
 	)
 	result = []
 	for row in rows:
-		label = row.get(title_field) or row.get("full_name") or row.get("account_name") or row.get("warehouse_name") or row.get("cost_center_name") or row.get("name")
+		label = (
+			row.get(title_field)
+			or row.get("full_name")
+			or row.get("account_name")
+			or row.get("warehouse_name")
+			or row.get("cost_center_name")
+			or row.get("name")
+		)
 		description_parts = []
 		if label != row.get("name"):
 			description_parts.append(row.get("name"))
