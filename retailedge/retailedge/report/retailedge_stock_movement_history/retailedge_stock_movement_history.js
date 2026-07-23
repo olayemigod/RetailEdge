@@ -50,6 +50,16 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 			reqd: 1,
 		},
 		{
+			fieldname: "item_code",
+			label: __("Item"),
+			fieldtype: "Link",
+			options: "Item",
+			reqd: 1,
+			get_query() {
+				return { filters: { disabled: 0, is_stock_item: 1 } };
+			},
+		},
+		{
 			fieldname: "branch",
 			label: __("Branch"),
 			fieldtype: "Link",
@@ -73,21 +83,6 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 				if (company) filters.company = company;
 				return { filters };
 			},
-		},
-		{
-			fieldname: "item_code",
-			label: __("Item"),
-			fieldtype: "Link",
-			options: "Item",
-			get_query() {
-				return { filters: { disabled: 0, is_stock_item: 1 } };
-			},
-		},
-		{
-			fieldname: "item_group",
-			label: __("Item Group"),
-			fieldtype: "Link",
-			options: "Item Group",
 		},
 		{
 			fieldname: "compare_uom",
@@ -152,7 +147,7 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 				const days = frappe.datetime.get_day_diff(toDate, fromDate) + 1;
 				if (days > 90) {
 					frappe.show_alert({
-						message: __("Large date ranges may take longer to load. Use Item, Warehouse or Branch to narrow the report."),
+						message: __("Large date ranges may take longer to load. Use Warehouse or Branch to narrow the selected item history."),
 						indicator: "orange",
 					});
 				}
