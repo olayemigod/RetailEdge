@@ -40,11 +40,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check out EdgeSuite UI document foundation
+      - name: Check out EdgeSuite UI Product App Switcher
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: agent/edgeui-document-foundation
+          ref: agent/edgeui-product-app-switcher
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
