@@ -45,7 +45,7 @@
 			/>
 
 			<div v-if="contextNote" class="retailedge-context-note" role="note">
-				<EdgeIcon name="info" size="sm" />
+				<EdgeIcon name="activity" size="sm" />
 				<span>{{ contextNote }}</span>
 			</div>
 
@@ -60,21 +60,24 @@
 					<EdgeStatCard
 						label="Accessible actions"
 						:value="summary.accessible_actions || 0"
-						icon="apps"
 						tooltip="Routes available after permission and target checks."
-					/>
+					>
+						<template #icon><EdgeIcon name="grid" size="sm" /></template>
+					</EdgeStatCard>
 					<EdgeStatCard
 						label="Workspace sections"
 						:value="summary.workspace_sections || 0"
-						icon="layers"
 						tooltip="Operational groups available to the current user."
-					/>
+					>
+						<template #icon><EdgeIcon name="layers" size="sm" /></template>
+					</EdgeStatCard>
 					<EdgeStatCard
 						label="Permitted branches"
 						:value="summary.permitted_branches || 0"
-						icon="building"
 						tooltip="Branches resolved from RetailEdge and existing permission context."
-					/>
+					>
+						<template #icon><EdgeIcon name="building" size="sm" /></template>
+					</EdgeStatCard>
 				</div>
 
 				<div v-if="sections.length" class="retailedge-home-sections">
