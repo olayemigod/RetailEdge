@@ -14,98 +14,145 @@ class TestStockMovementHistory(unittest.TestCase):
 		self.assertIsNone(report.convert_quantity(24, None))
 		self.assertIsNone(report.convert_quantity(24, 0))
 
-	def test_directional_quantities_keep_numeric_in_and_out_columns(self):
-		in_quantity, out_quantity = report.split_movement_quantity(
-			24,
-			source_warehouse="Main Store",
-			destination_warehouse="Branch Store",
-		)
-		self.assertEqual(in_quantity, 24)
-		self.assertEqual(out_quantity, 24)
-
-		in_quantity, out_quantity = report.split_movement_quantity(
-			24,
-			destination_warehouse="Branch Store",
-		)
-		self.assertEqual(in_quantity, 24)
-		self.assertIsNone(out_quantity)
-
-		in_quantity, out_quantity = report.split_movement_quantity(
-			24,
-			source_warehouse="Main Store",
-		)
-		self.assertIsNone(in_quantity)
-		self.assertEqual(out_quantity, 24)
-
 	def test_transfer_classification(self):
-		self.assertEqual(report.classify_stock_entry_movement("Material Transfer", "Stores", "Shop"), "Internal Transfer")
-		self.assertEqual(report.classify_stock_entry_movement("Material Issue", "Stores", None), "Material Issue")
+		self.assertEqual(
+			report.classify_stock_entry_movement("Material Transfer", "Stores", "Shop"),
+			"Internal Transfer",
+		)
+		self.assertEqual(
+			report.classify_stock_entry_movement("Material Issue", "Stores", None),
+			"Material Issue",
+		)
 
 	def test_sales_and_purchase_return_classification(self):
 		self.assertEqual(report.classify_ledger_movement("Sales Invoice", False, {}), "Sale")
-		self.assertEqual(report.classify_ledger_movement("Sales Invoice", True, {"is_return": 1}), "Sales Return")
-		self.assertEqual(report.classify_ledger_movement("Purchase Receipt", True, {}), "Purchase Receipt")
-		self.assertEqual(report.classify_ledger_movement("Purchase Receipt", False, {"is_return": 1}), "Purchase Return")
-
-	def test_output_has_numeric_quantities_and_destination_balances(self):
-		row = report.make_output_row(
-			posting_datetime="2026-07-23 10:00:00",
-			movement_type="Internal Transfer",
-			item_code="ITEM-001",
-			item_name="Sample Item",
-			stock_uom="Nos",
-			in_quantity=24,
-			out_quantity=24,
-			compare_uom="Carton",
-			conversion_factor=12,
-			source_warehouse="Main Store",
-			destination_warehouse="Branch Store",
-			destination_balance=120,
-			voucher_type="Stock Entry",
-			voucher_no="MAT-STE-0001",
-			purpose="Material Transfer",
-			batch_no=None,
-			remarks="",
+		self.assertEqual(
+			report.classify_ledger_movement("Sales Invoice", True, {"is_return": 1}),
+			"Sales Return",
 		)
-		self.assertEqual(row["stock_uom"], "Nos")
-		self.assertEqual(row["in_quantity"], 24)
-		self.assertEqual(row["out_quantity"], 24)
-		self.assertEqual(row["compare_uom"], "Carton")
-		self.assertEqual(row["compare_in_quantity"], 2)
-		self.assertEqual(row["compare_out_quantity"], 2)
-		self.assertEqual(row["destination_balance"], 120)
-		self.assertEqual(row["destination_balance_compare"], 10)
-		for fieldname in (
-			"in_quantity",
-			"out_quantity",
-			"compare_in_quantity",
-			"compare_out_quantity",
-			"destination_balance",
-			"destination_balance_compare",
-		):
-			self.assertIsInstance(row[fieldname], (int, float))
+		self.assertEqual(
+			report.classify_ledger_movement("Purchase Receipt", True, {}),
+			"Purchase Receipt",
+		)
+		self.assertEqual(
+			report.classify_ledger_movement("Purchase Receipt", False, {"is_return": 1}),
+			"Purchase Return",
+		)
+
+	def test_every_row_uses_stock_ledger_balance(self):
+		common = {
+			"header": frappe._dict({"purpose": "Material Transfer"}),
+			"stock_entry_detail": frappe._dict(
+				{
+					"item_name": "Sample Item",
+					"s_warehouse": "Main Store",
+					"t_warehouse": "Branch Store",
+				}
+			),
+			"item_map": {"ITEM-001": frappe._dict({"item_name": "Sample Item", "stock_uom": "Nos"})},
+			"conversion_map": {("ITEM-001", "Carton"): 12},
+			"compare_uom": "Carton",
+		}
+		out_sle = frappe._dict(
+			{
+				"name": "SLE-OUT",
+				"creation": "2026-07-23 09:59:59",
+				"posting_datetime": "2026-07-23 10:00:00",
+				"item_code": "ITEM-001",
+				"warehouse": "Main Store",
+				"actual_qty": -24,
+				"qty_after_transaction": 96,
+				"voucher_type": "Stock Entry",
+				"voucher_no": "MAT-STE-0001",
+				"voucher_detail_no": "DETAIL-1",
+				"stock_uom": "Nos",
+			}
+		)
+		in_sle = frappe._dict(
+			{
+				"name": "SLE-IN",
+				"creation": "2026-07-23 10:00:01",
+				"posting_datetime": "2026-07-23 10:00:00",
+				"item_code": "ITEM-001",
+				"warehouse": "Branch Store",
+				"actual_qty": 24,
+				"qty_after_transaction": 48,
+				"voucher_type": "Stock Entry",
+				"voucher_no": "MAT-STE-0001",
+				"voucher_detail_no": "DETAIL-1",
+				"stock_uom": "Nos",
+			}
+		)
+
+		out_row = report.build_ledger_row(out_sle, **common)
+		in_row = report.build_ledger_row(in_sle, **common)
+
+		self.assertIsNone(out_row["in_quantity"])
+		self.assertEqual(out_row["out_quantity"], 24)
+		self.assertEqual(out_row["balance"], 96)
+		self.assertEqual(out_row["compare_balance"], 8)
+
+		self.assertEqual(in_row["in_quantity"], 24)
+		self.assertIsNone(in_row["out_quantity"])
+		self.assertEqual(in_row["balance"], 48)
+		self.assertEqual(in_row["compare_balance"], 4)
+
+	def test_zero_and_negative_stock_ledger_balances_are_preserved(self):
+		zero = report.make_output_row(
+			stock_uom="Nos",
+			in_quantity=5,
+			out_quantity=None,
+			balance=0,
+			compare_uom="Carton",
+			conversion_factor=5,
+		)
+		negative = report.make_output_row(
+			stock_uom="Nos",
+			in_quantity=None,
+			out_quantity=5,
+			balance=-5,
+			compare_uom="Carton",
+			conversion_factor=5,
+		)
+		self.assertEqual(zero["balance"], 0)
+		self.assertEqual(zero["compare_balance"], 0)
+		self.assertEqual(negative["balance"], -5)
+		self.assertEqual(negative["compare_balance"], -1)
+
+	def test_balance_column_immediately_follows_in_and_out_quantity(self):
+		columns = report.get_columns(frappe._dict({"compare_uom": "Carton"}))
+		fieldnames = [column["fieldname"] for column in columns]
+		out_index = fieldnames.index("out_quantity")
+		self.assertEqual(fieldnames[out_index - 1], "in_quantity")
+		self.assertEqual(fieldnames[out_index + 1], "balance")
+		balance_column = columns[fieldnames.index("balance")]
+		self.assertEqual(balance_column["label"], "Balance")
+		self.assertEqual(balance_column["fieldtype"], "Float")
 
 	def test_columns_use_separate_uom_and_numeric_quantity_fields(self):
 		columns = report.get_columns(frappe._dict({"compare_uom": "Carton"}))
 		column_map = {column["fieldname"]: column for column in columns}
 
-		self.assertNotIn("source_branch", column_map)
-		self.assertNotIn("destination_branch", column_map)
-		self.assertNotIn("party", column_map)
-		self.assertNotIn("base_quantity_display", column_map)
-		self.assertNotIn("compare_quantity_display", column_map)
-		self.assertNotIn("destination_balance_display", column_map)
-		self.assertNotIn("destination_balance_compare_display", column_map)
+		for removed in (
+			"source_branch",
+			"destination_branch",
+			"party",
+			"base_quantity_display",
+			"compare_quantity_display",
+			"destination_balance",
+			"destination_balance_compare",
+		):
+			self.assertNotIn(removed, column_map)
 
 		self.assertEqual(column_map["stock_uom"]["fieldtype"], "Link")
 		self.assertEqual(column_map["compare_uom"]["fieldtype"], "Link")
 		for fieldname in (
 			"in_quantity",
 			"out_quantity",
+			"balance",
 			"compare_in_quantity",
 			"compare_out_quantity",
-			"destination_balance",
-			"destination_balance_compare",
+			"compare_balance",
 		):
 			self.assertEqual(column_map[fieldname]["fieldtype"], "Float")
 
@@ -114,16 +161,28 @@ class TestStockMovementHistory(unittest.TestCase):
 			stock_uom="Nos",
 			in_quantity=36,
 			out_quantity=None,
+			balance=120,
 			compare_uom="Carton",
 			conversion_factor=12,
-			destination_balance=120,
 		)
 		self.assertEqual(row["in_quantity"], 36)
 		self.assertEqual(row["compare_in_quantity"], 3)
-		self.assertNotIsInstance(row["in_quantity"], str)
-		self.assertNotIsInstance(row["compare_in_quantity"], str)
-		self.assertNotIsInstance(row["destination_balance"], str)
-		self.assertNotIsInstance(row["destination_balance_compare"], str)
+		self.assertEqual(row["balance"], 120)
+		self.assertEqual(row["compare_balance"], 10)
+		for fieldname in ("in_quantity", "compare_in_quantity", "balance", "compare_balance"):
+			self.assertNotIsInstance(row[fieldname], str)
+
+	def test_sales_summary_card_counts_distinct_sales_documents(self):
+		summary = report.get_report_summary(
+			[
+				{"movement_type": "Sale", "voucher_type": "Sales Invoice", "voucher_no": "SINV-1"},
+				{"movement_type": "Sale", "voucher_type": "Sales Invoice", "voucher_no": "SINV-1"},
+				{"movement_type": "Sale", "voucher_type": "Delivery Note", "voucher_no": "DN-1"},
+				{"movement_type": "Sales Return", "voucher_type": "Sales Invoice", "voucher_no": "SINV-R1"},
+			]
+		)
+		self.assertEqual(summary[0]["label"], "Sales")
+		self.assertEqual(summary[0]["value"], 2)
 
 	def test_report_has_no_edgesuite_ui_dependency(self):
 		app_path = frappe.get_app_path("retailedge")
@@ -146,3 +205,10 @@ class TestStockMovementHistory(unittest.TestCase):
 		with open(patches_path, encoding="utf-8") as handle:
 			content = handle.read()
 		self.assertIn("retailedge.patches.add_stock_movement_history_report_link", content)
+
+	def test_frappe_cloud_version_compatibility_is_declared(self):
+		pyproject_path = os.path.join(os.path.dirname(frappe.get_app_path("retailedge")), "pyproject.toml")
+		with open(pyproject_path, encoding="utf-8") as handle:
+			content = handle.read()
+		self.assertIn("[tool.bench.frappe-dependencies]", content)
+		self.assertIn('frappe = ">=16.0.0,<17.0.0"', content)
