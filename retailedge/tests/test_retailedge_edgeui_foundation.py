@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import frappe
 
 from retailedge import hooks
+from retailedge.api.product_context import get_product_availability
 from retailedge.api.ui_context import SECTION_META, _route_for
 from retailedge.workspace_home import WorkspaceHomeItem
 
@@ -51,12 +53,33 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 	def test_product_bundle_uses_product_vue_and_shared_install_contract(self):
 		factory = self.app_path("public", "js", "retailedge_ui", "app_factory.js").read_text()
 		self.assertIn('import * as Vue from "vue"', factory)
-		self.assertIn('MINIMUM_EDGE_SUITE_UI_VERSION = "0.5.0"', factory)
+		self.assertIn('MINIMUM_EDGE_SUITE_UI_VERSION = "0.6.0"', factory)
 		self.assertIn("runtime.install(app)", factory)
 		self.assertIn('"EdgeStatusBadge"', factory)
 		self.assertIn('"EdgeIcon"', factory)
 		self.assertNotIn("coreedge/public", factory.lower())
 		self.assertNotIn("../../../../../coreedge", factory.lower())
+
+	def test_retailedge_provides_final_product_availability(self):
+		with patch("retailedge.api.product_context.has_app_permission", return_value=True):
+			product = get_product_availability()
+		self.assertEqual(product["key"], "retailedge")
+		self.assertEqual(product["label"], "RetailEdge")
+		self.assertEqual(product["home_route"], "/app/retailedge-home")
+		self.assertIn("/app/retailedge*", product["route_patterns"])
+
+		with patch("retailedge.api.product_context.has_app_permission", return_value=False):
+			self.assertIsNone(get_product_availability())
+
+	def test_product_menu_registers_stable_product_context(self):
+		menu = self.app_path("public", "js", "retailedge_product_menu.js").read_text()
+		for expected in (
+			'PRODUCT_KEY = "retailedge"',
+			"product_key: PRODUCT_KEY",
+			'home_route: "/app/retailedge-home"',
+			"route_patterns:",
+		):
+			self.assertIn(expected, menu)
 
 	def test_home_uses_shared_branch_context_without_persisting_defaults(self):
 		home = self.app_path(
@@ -103,6 +126,7 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 	def test_foundation_does_not_add_business_document_writes(self):
 		paths = [
 			self.app_path("api", "ui_context.py"),
+			self.app_path("api", "product_context.py"),
 			self.app_path("ui_identity.py"),
 			self.app_path("public", "js", "retailedge_ui_bridge.js"),
 			self.app_path("public", "js", "retailedge_product_menu.js"),
