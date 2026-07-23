@@ -45,10 +45,3 @@ frappe.pages["retailedge-home"].on_page_load = async function (wrapper) {
 			.appendTo(page.body);
 	}
 };
-
-frappe.pages["retailedge-home"].on_page_hide = function (wrapper) {
-	if (wrapper.retailedge_home_app?.unmount) {
-		wrapper.retailedge_home_app.unmount();
-		wrapper.retailedge_home_app = null;
-	}
-};
