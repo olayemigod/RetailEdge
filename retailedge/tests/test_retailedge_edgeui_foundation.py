@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import frappe
+from edgesuite_ui.api.product_context import get_product_context, switch_product
 
 from retailedge import hooks
 from retailedge.api.product_context import get_product_availability
@@ -70,6 +71,23 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 
 		with patch("retailedge.api.product_context.has_app_permission", return_value=False):
 			self.assertIsNone(get_product_availability())
+
+	def test_shared_context_aggregates_only_currently_available_retailedge(self):
+		with patch("retailedge.api.product_context.has_app_permission", return_value=True):
+			context = get_product_context()
+		self.assertIn(
+			"retailedge",
+			{product["key"] for product in context["available_products"]},
+		)
+
+		with patch("retailedge.api.product_context.has_app_permission", return_value=False):
+			context = get_product_context()
+		self.assertNotIn(
+			"retailedge",
+			{product["key"] for product in context["available_products"]},
+		)
+		with self.assertRaises(frappe.PermissionError):
+			switch_product("retailedge")
 
 	def test_product_menu_registers_stable_product_context(self):
 		menu = self.app_path("public", "js", "retailedge_product_menu.js").read_text()
