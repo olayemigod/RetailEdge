@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+import unittest
+
+from retailedge.retailedge.report.retailedge_branch_performance_summary import (
+	retailedge_branch_performance_summary as branch_report,
+)
+
+
+class TestBranchPerformanceVarianceQuality(unittest.TestCase):
+	def test_headline_variance_does_not_cancel_shortages_and_overages(self):
+		rows = [
+			{
+				"branch": "Lagos",
+				"gross_sales": 100000,
+				"audit_variance": -1500,
+			},
+			{
+				"branch": "Abuja",
+				"gross_sales": 80000,
+				"audit_variance": 1000,
+			},
+		]
+		cards = {card["label"]: card["value"] for card in branch_report.get_report_summary(rows)}
+		self.assertEqual(cards["Absolute Audit Variance"], 2500)
+		self.assertNotIn("Audit Variance", cards)
+
+	def test_edgesuite_metadata_selects_absolute_variance_card(self):
+		rows = [
+			{
+				"branch": "Lagos",
+				"invoice_count": 1,
+				"gross_sales": 100000,
+				"audit_variance": -1500,
+			}
+		]
+		metadata = branch_report.get_edgesuite_metadata({}, rows)
+		self.assertIn("Absolute Audit Variance", metadata["visible_card_labels"])
+		self.assertNotIn("Audit Variance", metadata["visible_card_labels"])
+		self.assertEqual(metadata["status"]["tone"], "warning")
+		self.assertIn(
+			"Investigate audit variance",
+			{item["title"] for item in metadata["recommendations"]},
+		)
+
+	def test_row_level_column_remains_signed_audit_variance(self):
+		columns = {column["fieldname"]: column for column in branch_report.get_columns()}
+		self.assertEqual(columns["audit_variance"]["label"], "Audit Variance")
+		self.assertEqual(columns["audit_variance"]["fieldtype"], "Currency")
