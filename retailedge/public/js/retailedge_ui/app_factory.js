@@ -7,10 +7,12 @@ const REQUIRED_COMPONENTS = Object.freeze([
 	"EdgePageLayout",
 	"EdgePageHeader",
 	"EdgeStatCard",
+	"EdgeStatusBadge",
 	"EdgeLoadingState",
 	"EdgeErrorState",
 	"EdgeEmptyState",
 	"EdgeBranchContextSwitcher",
+	"EdgeIcon",
 ]);
 
 function versionParts(version) {
