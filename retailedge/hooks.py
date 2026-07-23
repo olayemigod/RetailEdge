@@ -45,7 +45,7 @@ app_include_js = [
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "retailedge/public/scss/website"
 
-# include js in web form
+# include js, css files in header of web form
 # webform_include_js = {"doctype": "public/js/doctype.js"}
 # webform_include_css = {"doctype": "public/css/doctype.css"}
 
@@ -85,7 +85,7 @@ doctype_js = {
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
-	"Purchase Order": "public/js/purchase_order.js",
+	"Purchase Order": "public/js/purchase_documents_list.js",
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
@@ -141,7 +141,7 @@ doctype_list_js = {
 # Integration Setup
 # ------------------
 # To set up dependencies/integrations with other apps
-# Name of app being installed is passed as an argument
+# Name of the app being installed is passed as an argument
 
 # before_app_install = "retailedge.utils.before_app_install"
 # after_app_install = "retailedge.utils.after_app_install"
@@ -149,7 +149,7 @@ doctype_list_js = {
 # Integration Cleanup
 # -------------------
 # To clean up dependencies/integrations with other apps
-# Name of app being uninstalled is passed as an argument
+# Name of the app being uninstalled is passed as an argument
 
 # before_app_uninstall = "retailedge.utils.before_app_uninstall"
 # after_app_uninstall = "retailedge.utils.after_app_uninstall"
@@ -260,7 +260,7 @@ boot_session = "retailedge.boot.boot_session"
 # Extend DocType Class
 # ------------------------------
 #
-# Specify custom mixins to extend standard doctype controller.
+# Specify custom mixins to extend the standard doctype controller.
 # extend_doctype_class = {
 # 	"Task": "retailedge.custom.task.CustomTaskMixin"
 # }
@@ -273,7 +273,7 @@ boot_session = "retailedge.boot.boot_session"
 # }
 #
 # each overriding function accepts a `data` argument;
-# generated from base implementation of doctype dashboard,
+# generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
 # override_doctype_dashboards = {
 # 	"Task": "retailedge.task.get_dashboard_data"
