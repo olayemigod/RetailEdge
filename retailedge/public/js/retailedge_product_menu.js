@@ -98,7 +98,6 @@
 		const config = {
 			product: PRODUCT,
 			subtitle: "Retail operations and business intelligence",
-			primary_item: HOME_ITEM,
 			sections: sections(),
 			profile: profile(),
 			menu_source: "workspace_sidebar",
