@@ -12,6 +12,25 @@
 		link_to: "retailedge-home",
 		route: "/app/retailedge-home",
 	});
+	const SETUP_WORKSPACE_ITEM = Object.freeze({
+		label: "RetailEdge Setup Workspace",
+		description: "Manage Branch Profiles and RetailEdge Settings through the shared EdgeSuite document experience.",
+		icon: "settings",
+		link_type: "Page",
+		link_to: "retailedge-document-workspace",
+		route: "/app/retailedge-document-workspace?resource=branch-profiles",
+		roles: [
+			"System Manager",
+			"RetailEdge Manager",
+			"RetailEdgeManager",
+			"RetailEdge Branch Manager",
+			"RetailEdgeBranchManager",
+			"RetailEdge Auditor",
+			"RetailEdgeAuditor",
+			"Accounts Manager",
+			"Accounts User",
+		],
+	});
 	const SECTION_META = Object.freeze({
 		Operations: { icon: "activity", description: "Sales, cash, stock and statement operations." },
 		"Reports & Review": { icon: "chart", description: "Performance, bank matching and control reports." },
@@ -76,6 +95,19 @@
 			if (item.type === "Link" && item.label !== "Home" && current && item.hidden !== 1) {
 				current.items.push(normalizeItem(item));
 			}
+		}
+		let setupSection = result.find((section) => section.label === "Setup / Configuration");
+		if (!setupSection) {
+			setupSection = {
+				label: "Setup / Configuration",
+				description: SECTION_META["Setup / Configuration"].description,
+				icon: "settings",
+				items: [],
+			};
+			result.push(setupSection);
+		}
+		if (!setupSection.items.some((item) => item.link_to === SETUP_WORKSPACE_ITEM.link_to)) {
+			setupSection.items.unshift(SETUP_WORKSPACE_ITEM);
 		}
 		return result.filter((section) => section.items.length);
 	}
