@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import flt, get_first_day, getdate, nowdate
 
 from retailedge.branch_performance import get_branch_performance_debug_summary, get_branch_performance_rows
+from retailedge.report_edgeui import append_report_metadata, build_report_metadata, recommendation
 
 
 def execute(filters=None):
@@ -20,7 +21,11 @@ def execute(filters=None):
 	if _rows_have_no_activity(data):
 		debug_summary = get_branch_performance_debug_summary(filters)
 		message = _build_no_data_message(debug_summary)
-	return get_columns(), data, message, None, get_report_summary(data, message=message)
+	summary = append_report_metadata(
+		get_report_summary(data, message=message),
+		get_edgesuite_metadata(filters, data),
+	)
+	return get_columns(), data, message, None, summary
 
 
 def validate_filters(filters):
@@ -63,14 +68,81 @@ def get_report_summary(rows, message=None):
 		return [{"value": message or _("No matching records found for the selected filters."), "label": _("Report Status"), "datatype": "Data", "indicator": "Orange"}]
 	total_sales = sum(flt(row.get("gross_sales")) for row in rows)
 	total_expenses = sum(flt(row.get("cashier_expenses")) for row in rows)
+	total_net_cash = sum(flt(row.get("net_cash_expected")) for row in rows)
+	total_outstanding = sum(flt(row.get("outstanding_amount")) for row in rows)
 	total_variance = sum(flt(row.get("audit_variance")) for row in rows)
 	total_issues = sum(int(row.get("payment_issues") or 0) for row in rows)
 	return [
 		{"value": total_sales, "label": _("Gross Sales"), "datatype": "Currency", "indicator": "Blue"},
 		{"value": total_expenses, "label": _("Cashier Expenses"), "datatype": "Currency", "indicator": "Orange"},
+		{"value": total_net_cash, "label": _("Net Cash Expected"), "datatype": "Currency", "indicator": "Blue"},
+		{"value": total_outstanding, "label": _("Credit / Outstanding"), "datatype": "Currency", "indicator": "Orange" if total_outstanding else "Green"},
 		{"value": total_variance, "label": _("Audit Variance"), "datatype": "Currency", "indicator": "Red" if total_variance else "Green"},
 		{"value": total_issues, "label": _("Payment Issues"), "datatype": "Int", "indicator": "Orange" if total_issues else "Green"},
 	]
+
+
+def get_edgesuite_metadata(filters, rows):
+	no_activity = _rows_have_no_activity(rows)
+	total_issues = sum(int(row.get("payment_issues") or 0) for row in rows)
+	total_variance = sum(abs(flt(row.get("audit_variance"))) for row in rows)
+	total_outstanding = sum(flt(row.get("outstanding_amount")) for row in rows)
+	recommendations = []
+	if total_issues:
+		recommendations.append(
+			recommendation(
+				_("Resolve payment exceptions"),
+				_("Review the branches contributing {0} payment issue(s) before reconciliation or management sign-off.").format(total_issues),
+				"warning",
+			)
+		)
+	if total_variance:
+		recommendations.append(
+			recommendation(
+				_("Investigate audit variance"),
+				_("The selected branches contain cash audit variance. Open the linked daily audits and confirm the supporting evidence."),
+				"danger",
+			)
+		)
+	if total_outstanding:
+		recommendations.append(
+			recommendation(
+				_("Follow up outstanding sales"),
+				_("Review credit and outstanding balances by branch so collection responsibility is clear."),
+				"warning",
+			)
+		)
+
+	return build_report_metadata(
+		title=_("Branch Performance"),
+		icon="building",
+		filters=filters,
+		filter_fields=(
+			("company", _("Company")),
+			("branch", _("Branch")),
+			("pos_profile", _("POS Profile")),
+			("cashier", _("Cashier")),
+			("payment_method", _("Payment Method")),
+			("only_pos_invoices", _("Only POS Invoices")),
+		),
+		row_count=0 if no_activity else len(rows),
+		empty_message=_("No branch activity matched the selected filters."),
+		empty_suggestions=(
+			_("Choose another date range, company, branch, POS Profile, or cashier."),
+			_("Confirm that submitted invoices, cashier expenses, and daily audits carry the correct RetailEdge branch."),
+		),
+		recommendations=recommendations,
+		visible_card_labels=(
+			_("Gross Sales"),
+			_("Cashier Expenses"),
+			_("Net Cash Expected"),
+			_("Credit / Outstanding"),
+			_("Audit Variance"),
+			_("Payment Issues"),
+		),
+		status_label=_("Review required") if recommendations else _("No material exception in current view"),
+		status_tone="warning" if recommendations else "success",
+	)
 
 
 def _build_no_data_message(debug_summary):
