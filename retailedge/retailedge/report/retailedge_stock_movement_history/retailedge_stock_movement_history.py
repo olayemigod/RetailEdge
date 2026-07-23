@@ -32,7 +32,7 @@ def execute(filters=None):
 	validate_filters(filters)
 	warehouse_scope = resolve_warehouse_scope(filters)
 	stock_ledger_rows = get_stock_ledger_rows(filters, warehouse_scope)
-	data = build_movement_rows(stock_ledger_rows, filters)
+	data = build_movement_rows(stock_ledger_rows, filters, warehouse_scope=warehouse_scope)
 	if filters.get("movement_type"):
 		data = [row for row in data if row.get("movement_type") == filters.movement_type]
 	return get_columns(filters), data, None, None, get_report_summary(data)
@@ -287,10 +287,14 @@ def get_item_codes_for_group(item_group: str) -> list[str]:
 	)
 
 
-def build_movement_rows(stock_ledger_rows, filters):
+def build_movement_rows(stock_ledger_rows, filters, warehouse_scope=None):
 	if not stock_ledger_rows:
 		return []
 
+	stock_ledger_rows = enrich_stock_entry_counterparts(
+		stock_ledger_rows,
+		warehouse_scope=warehouse_scope,
+	)
 	item_codes = sorted({row.item_code for row in stock_ledger_rows if row.item_code})
 	item_map = {
 		row.name: row
@@ -345,6 +349,52 @@ def build_movement_rows(stock_ledger_rows, filters):
 			row.get("item_code") or "",
 		),
 	)
+
+
+def enrich_stock_entry_counterparts(stock_ledger_rows, warehouse_scope=None):
+	stock_entry_rows = [
+		row
+		for row in stock_ledger_rows
+		if row.voucher_type == "Stock Entry" and row.voucher_detail_no and row.voucher_no and row.item_code
+	]
+	if not stock_entry_rows:
+		return stock_ledger_rows
+
+	detail_names = sorted({row.voucher_detail_no for row in stock_entry_rows})
+	query_filters: dict[str, Any] = {
+		"voucher_type": "Stock Entry",
+		"voucher_detail_no": ["in", detail_names],
+		"is_cancelled": 0,
+		"actual_qty": ["!=", 0],
+	}
+	if warehouse_scope:
+		query_filters["warehouse"] = ["in", warehouse_scope]
+	counterparts = frappe.get_list(
+		"Stock Ledger Entry",
+		filters=query_filters,
+		fields=[
+			"name",
+			"posting_datetime",
+			"posting_date",
+			"posting_time",
+			"item_code",
+			"warehouse",
+			"actual_qty",
+			"qty_after_transaction",
+			"voucher_type",
+			"voucher_no",
+			"voucher_detail_no",
+			"batch_no",
+			"serial_no",
+			"stock_uom",
+			"creation",
+		],
+		limit_page_length=0,
+	)
+	rows_by_name = {row.name: row for row in stock_ledger_rows}
+	for row in counterparts:
+		rows_by_name.setdefault(row.name, row)
+	return list(rows_by_name.values())
 
 
 def get_conversion_map(item_codes, compare_uom):
