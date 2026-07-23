@@ -13,7 +13,7 @@
 		route: "/app/retailedge-home",
 	});
 	const SECTION_META = Object.freeze({
-		Operations: { icon: "store", description: "Sales, cash, stock and statement operations." },
+		Operations: { icon: "activity", description: "Sales, cash, stock and statement operations." },
 		"Reports & Review": { icon: "chart", description: "Performance, bank matching and control reports." },
 		"Setup / Configuration": { icon: "settings", description: "RetailEdge setup and operating defaults." },
 	});
