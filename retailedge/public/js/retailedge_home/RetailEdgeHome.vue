@@ -35,12 +35,12 @@
 				v-model="activeBranch"
 				:options="branches"
 				:current-company="company"
-				:current-label="activeBranch || 'All permitted branches'"
+				:current-label="activeBranch || 'No branch selected'"
 				:can-switch="canSwitchBranch"
 				:busy="loading"
-				label="Home branch filter"
-				helper="Filters this Home view only. Existing ERPNext document defaults remain unchanged."
-				placeholder="All permitted branches"
+				label="Home branch context"
+				helper="Previews context on this Home only. Linked reports and ERPNext defaults remain unchanged."
+				placeholder="No branch selected"
 				@switch="onBranchSwitch"
 			/>
 
