@@ -1,9 +1,21 @@
 function applyRetailEdgeSummaryCardDesign() {
-	// Report summary cards are styled through native Frappe DOM selectors in CSS.
+	// EdgeSuite UI renders the business summary while the native report table remains unchanged.
 }
 
 function scheduleRetailEdgeSummaryCardDesign() {
-	// No-op: report summary card appearance is CSS-only.
+	// Retained for compatibility with existing operational report refresh helpers.
+}
+
+function attachRetailEdgeReportEdgeUI(report, reportName, config) {
+	const attach = () => {
+		window.retailedgeReportEdgeUI?.register(reportName, config);
+		window.retailedgeReportEdgeUI?.attach(report, reportName);
+	};
+	if (window.retailedgeReportEdgeUI) {
+		attach();
+		return;
+	}
+	frappe.require("/assets/retailedge/js/retailedge_report_edgeui.js", attach);
 }
 
 function configureOperationalReportRefresh(report) {
@@ -55,11 +67,18 @@ frappe.query_reports["RetailEdge Cashier Expense Review"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		attachRetailEdgeReportEdgeUI(report, "RetailEdge Cashier Expense Review", {
+			eyebrow: __("Cash Control Review"),
+			title: __("Cashier Expense Review"),
+			subtitle: __("Review branch expenses, daily-audit inclusion, clarification, posting readiness, and pending ledger handoff without bypassing ERPNext accounting controls."),
+			emptyDescription: __("Choose another date range or operational context, or confirm that cashier expenses were recorded against the correct branch and shift."),
+		});
 	},
 
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
 		scheduleRetailEdgeSummaryCardDesign(report);
+		window.retailedgeReportEdgeUI?.refresh(report, "RetailEdge Cashier Expense Review");
 	},
 
 	filters: [
