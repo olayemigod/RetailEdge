@@ -5,8 +5,9 @@ from datetime import datetime
 from typing import Any
 
 import frappe
+from erpnext.stock.utils import get_stock_balance
 from frappe import _
-from frappe.utils import flt, get_datetime, getdate, strip_html
+from frappe.utils import add_days, flt, get_datetime, getdate, strip_html
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
@@ -233,21 +234,19 @@ def expand_group_warehouses(company: str, warehouse_names: set[str]) -> set[str]
 
 def get_stock_ledger_rows(filters, warehouse_scope=None):
 	"""Fetch every selected-item movement for the required warehouse."""
-	query_filters: dict[str, Any] = {
-		"company": filters.company,
-		"item_code": filters.item_code,
-		"warehouse": filters.warehouse,
-		"posting_datetime": [
-			"between",
-			[f"{filters.from_date} 00:00:00", f"{filters.to_date} 23:59:59.999999"],
-		],
-		"is_cancelled": 0,
-		"actual_qty": ["!=", 0],
-	}
-
 	return frappe.get_list(
 		"Stock Ledger Entry",
-		filters=query_filters,
+		filters={
+			"company": filters.company,
+			"item_code": filters.item_code,
+			"warehouse": filters.warehouse,
+			"posting_datetime": [
+				"between",
+				[f"{filters.from_date} 00:00:00", f"{filters.to_date} 23:59:59.999999"],
+			],
+			"is_cancelled": 0,
+			"actual_qty": ["!=", 0],
+		},
 		fields=[
 			"name",
 			"posting_datetime",
@@ -325,8 +324,7 @@ def build_movement_rows(stock_ledger_rows, filters, warehouse_scope=None):
 			row.get("sort_key") or "",
 		),
 	)
-	opening_balance = get_opening_balance(filters, warehouse_scope)
-	return apply_running_balances(data, opening_balance)
+	return apply_running_balances(data, get_opening_balance(filters, warehouse_scope))
 
 
 def get_conversion_map(item_codes, compare_uom):
@@ -523,20 +521,16 @@ def build_single_movement_row(sle, header, item, conversion_map, compare_uom):
 
 
 def get_opening_balance(filters, warehouse_scope=None):
-	"""Return stock immediately before From Date for one Item and Warehouse."""
-	rows = frappe.get_list(
-		"Stock Ledger Entry",
-		filters={
-			"company": filters.company,
-			"item_code": filters.item_code,
-			"warehouse": filters.warehouse,
-			"posting_datetime": ["<", f"{filters.from_date} 00:00:00"],
-			"is_cancelled": 0,
-		},
-		fields=[{"SUM": "actual_qty", "as": "opening_balance"}],
-		limit_page_length=1,
+	"""Use ERPNext stock truth immediately before From Date."""
+	opening_date = add_days(getdate(filters.from_date), -1)
+	return flt(
+		get_stock_balance(
+			filters.item_code,
+			filters.warehouse,
+			posting_date=opening_date,
+			posting_time="23:59:59.999999",
+		)
 	)
-	return flt(rows[0].opening_balance) if rows else 0.0
 
 
 def apply_running_balances(rows, opening_balance=0):
