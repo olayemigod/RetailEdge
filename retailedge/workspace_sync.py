@@ -13,6 +13,21 @@ from retailedge.workspace_home import (
 from retailedge.workspace_navigation import normalize_sidebar_data, normalize_workspace_data
 
 
+NAVIGATION_TARGET_DOCTYPES = {
+	"DocType": "DocType",
+	"Page": "Page",
+	"Report": "Report",
+	"Workspace": "Workspace",
+}
+
+
+def _navigation_target_exists(link_type: str, target: str) -> bool:
+	target_doctype = NAVIGATION_TARGET_DOCTYPES.get(link_type)
+	if not target_doctype:
+		return True
+	return bool(frappe.db.exists(target_doctype, target))
+
+
 def sync_retailedge_workspace_layout():
 	base_path = Path(frappe.get_app_path("retailedge", "retailedge"))
 	workspace_path = base_path / "workspace" / "retailedge" / "retailedge.json"
@@ -22,8 +37,14 @@ def sync_retailedge_workspace_layout():
 		workspace_path = fallback_base / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
 		sidebar_path = fallback_base / "retailedge" / "workspace_sidebar" / "retailedge" / "retailedge.json"
 
-	workspace_data = normalize_workspace_data(json.loads(workspace_path.read_text()))
-	sidebar_data = normalize_sidebar_data(json.loads(sidebar_path.read_text()))
+	workspace_data = normalize_workspace_data(
+		json.loads(workspace_path.read_text()),
+		target_exists=_navigation_target_exists,
+	)
+	sidebar_data = normalize_sidebar_data(
+		json.loads(sidebar_path.read_text()),
+		target_exists=_navigation_target_exists,
+	)
 
 	workspace = frappe.get_doc("Workspace", "RetailEdge")
 	workspace.label = workspace_data.get("label") or workspace.label
