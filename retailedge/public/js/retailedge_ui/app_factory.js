@@ -1,6 +1,6 @@
 import * as Vue from "vue";
 
-export const MINIMUM_EDGE_SUITE_UI_VERSION = "0.5.0";
+export const MINIMUM_EDGE_SUITE_UI_VERSION = "0.6.0";
 
 const REQUIRED_COMPONENTS = Object.freeze([
 	"EdgeAppShell",
