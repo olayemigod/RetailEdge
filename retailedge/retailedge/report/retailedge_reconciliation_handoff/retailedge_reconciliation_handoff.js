@@ -1,3 +1,15 @@
+function attachRetailEdgeReportEdgeUI(report, reportName, config) {
+	const attach = () => {
+		window.retailedgeReportEdgeUI?.register(reportName, config);
+		window.retailedgeReportEdgeUI?.attach(report, reportName);
+	};
+	if (window.retailedgeReportEdgeUI) {
+		attach();
+		return;
+	}
+	frappe.require("/assets/retailedge/js/retailedge_report_edgeui.js", attach);
+}
+
 function configureOperationalReportRefresh(report) {
 	if (!report || report.__retailedgeAutoRefreshConfigured) {
 		return;
@@ -61,8 +73,15 @@ frappe.query_reports["RetailEdge Reconciliation Handoff"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		attachRetailEdgeReportEdgeUI(report, "RetailEdge Reconciliation Handoff", {
+			eyebrow: __("Reconciliation Oversight"),
+			title: __("Reconciliation Handoff"),
+			subtitle: __("Review ready items, blockers, candidate evidence and exceptions before processing anything in ERPNext reconciliation."),
+			emptyDescription: __("Choose another context or confirm that approved bank match reviews have complete candidate, account, amount and reconciliation evidence."),
+		});
 	},
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
+		window.retailedgeReportEdgeUI?.refresh(report, "RetailEdge Reconciliation Handoff");
 	}
 };
