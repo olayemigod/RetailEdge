@@ -61,7 +61,7 @@ def _document_permission(doctype: str, name: str) -> bool:
 			return False
 		doc = frappe.get_doc(doctype, name)
 		return bool(frappe.has_permission(doctype, ptype="read", doc=doc))
-	 except Exception:
+	except Exception:
 		return False
 
 
