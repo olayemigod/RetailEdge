@@ -10,11 +10,20 @@ from retailedge.report_edgeui import EDGESUITE_METADATA_FLAG, build_filter_summa
 from retailedge.retailedge.report.retailedge_branch_performance_summary import (
 	retailedge_branch_performance_summary as branch_report,
 )
+from retailedge.retailedge.report.retailedge_cash_shift_verification import (
+	retailedge_cash_shift_verification as cash_shift_report,
+)
 from retailedge.retailedge.report.retailedge_cashier_expense_review import (
 	retailedge_cashier_expense_review as expense_report,
 )
 from retailedge.retailedge.report.retailedge_daily_sales_audit_register import (
 	retailedge_daily_sales_audit_register as audit_report,
+)
+from retailedge.retailedge.report.retailedge_invoice_payment_audit import (
+	retailedge_invoice_payment_audit as invoice_payment_report,
+)
+from retailedge.retailedge.report.retailedge_unmatched_bank_transactions import (
+	retailedge_unmatched_bank_transactions as unmatched_bank_report,
 )
 
 
@@ -53,7 +62,7 @@ class TestRetailEdgeReportEdgeUI(unittest.TestCase):
 		self.assertNotIn("coreedge/public", adapter.lower())
 		self.assertNotIn("frappe.client.save", adapter)
 
-	def test_pilot_reports_register_and_attach_to_shared_adapter(self):
+	def test_migrated_reports_register_and_attach_to_shared_adapter(self):
 		paths = {
 			"RetailEdge Branch Performance Summary": self.app_path(
 				"retailedge",
@@ -72,6 +81,24 @@ class TestRetailEdgeReportEdgeUI(unittest.TestCase):
 				"report",
 				"retailedge_daily_sales_audit_register",
 				"retailedge_daily_sales_audit_register.js",
+			),
+			"RetailEdge Invoice Payment Audit": self.app_path(
+				"retailedge",
+				"report",
+				"retailedge_invoice_payment_audit",
+				"retailedge_invoice_payment_audit.js",
+			),
+			"RetailEdge Cash Shift Verification": self.app_path(
+				"retailedge",
+				"report",
+				"retailedge_cash_shift_verification",
+				"retailedge_cash_shift_verification.js",
+			),
+			"RetailEdge Unmatched Bank Transactions": self.app_path(
+				"retailedge",
+				"report",
+				"retailedge_unmatched_bank_transactions",
+				"retailedge_unmatched_bank_transactions.js",
 			),
 		}
 		for report_name, path in paths.items():
@@ -177,6 +204,73 @@ class TestRetailEdgeReportEdgeUI(unittest.TestCase):
 		self.assertEqual(cards["Clarification Required"], 1)
 		self.assertEqual(metadata["row_count"], 2)
 
+	def test_invoice_payment_metadata_prioritises_payment_exceptions(self):
+		summary = {
+			"total_invoice_count": 12,
+			"payment_rows_missing_count": 2,
+			"payment_account_mismatch_count": 1,
+			"high_risk_count": 3,
+		}
+		cards = invoice_payment_report.get_report_summary({}, summary=summary)
+		metadata = invoice_payment_report.get_edgesuite_metadata({}, [{"sales_invoice": "SINV-1"}], summary)
+		self.assertEqual({card["label"] for card in cards}, {"Invoices", "Missing Payment Rows", "Account Mismatches", "High Risk"})
+		self.assertEqual(metadata["row_count"], 1)
+		self.assertEqual(metadata["status"]["tone"], "danger")
+		titles = {item["title"] for item in metadata["recommendations"]}
+		self.assertIn("Review high-risk invoices", titles)
+		self.assertIn("Resolve payment account mismatches", titles)
+		self.assertIn("Complete missing payment evidence", titles)
+
+	def test_cash_shift_metadata_surfaces_missing_shifts_shortages_and_sync_gaps(self):
+		rows = [
+			{
+				"cash_status": "Shortage",
+				"cash_variance": -1500,
+				"eligible_cash_invoices": 4,
+				"synced_cash_invoices": 2,
+			},
+			{
+				"cash_status": "Missing Closing Shift",
+				"cash_variance": 0,
+				"eligible_cash_invoices": 1,
+				"synced_cash_invoices": 1,
+			},
+		]
+		metadata = cash_shift_report.get_edgesuite_metadata({}, rows)
+		self.assertEqual(metadata["row_count"], 2)
+		self.assertEqual(metadata["status"]["tone"], "danger")
+		titles = {item["title"] for item in metadata["recommendations"]}
+		self.assertIn("Complete missing shift records", titles)
+		self.assertIn("Investigate cash shortages", titles)
+		self.assertIn("Complete cash invoice verification sync", titles)
+
+	def test_unmatched_bank_metadata_prioritises_context_ageing_and_candidate_gaps(self):
+		rows = [
+			{
+				"bank_transaction": "BT-1",
+				"bank_account": "BANK-1",
+				"resolved_canonical_account": "",
+				"account_resolution_status": "Unresolved",
+				"best_candidate": "",
+				"blocked_reason": "Account context missing",
+				"days_outstanding": 10,
+			},
+			{
+				"bank_transaction": "BT-2",
+				"account_resolution_status": "Resolved",
+				"best_candidate": "PE-1",
+				"days_outstanding": 2,
+			},
+		]
+		metadata = unmatched_bank_report.get_edgesuite_metadata({}, rows)
+		self.assertEqual(metadata["row_count"], 2)
+		self.assertEqual(metadata["status"]["tone"], "danger")
+		titles = {item["title"] for item in metadata["recommendations"]}
+		self.assertIn("Resolve bank-account context", titles)
+		self.assertIn("Escalate aged unmatched transactions", titles)
+		self.assertIn("Investigate transactions without candidates", titles)
+		self.assertIn("Resolve candidate blockers", titles)
+
 	def test_report_phase_contains_no_document_write_operations(self):
 		paths = [
 			self.app_path("report_edgeui.py"),
@@ -198,6 +292,24 @@ class TestRetailEdgeReportEdgeUI(unittest.TestCase):
 				"report",
 				"retailedge_daily_sales_audit_register",
 				"retailedge_daily_sales_audit_register.py",
+			),
+			self.app_path(
+				"retailedge",
+				"report",
+				"retailedge_invoice_payment_audit",
+				"retailedge_invoice_payment_audit.py",
+			),
+			self.app_path(
+				"retailedge",
+				"report",
+				"retailedge_cash_shift_verification",
+				"retailedge_cash_shift_verification.py",
+			),
+			self.app_path(
+				"retailedge",
+				"report",
+				"retailedge_unmatched_bank_transactions",
+				"retailedge_unmatched_bank_transactions.py",
 			),
 		]
 		combined = "\n".join(path.read_text().lower() for path in paths)
