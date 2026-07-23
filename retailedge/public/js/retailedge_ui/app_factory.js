@@ -6,12 +6,14 @@ const REQUIRED_COMPONENTS = Object.freeze([
 	"EdgeAppShell",
 	"EdgePageLayout",
 	"EdgePageHeader",
+	"EdgeFilterBar",
 	"EdgeStatCard",
 	"EdgeStatusBadge",
 	"EdgeLoadingState",
 	"EdgeErrorState",
 	"EdgeEmptyState",
 	"EdgeBranchContextSwitcher",
+	"EdgeLinkField",
 	"EdgeIcon",
 ]);
 
