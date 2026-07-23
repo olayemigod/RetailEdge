@@ -50,7 +50,7 @@ class TestStockMovementHistory(unittest.TestCase):
 				"DETAIL-1": frappe._dict(
 					{
 						"item_name": "Sample Item",
-						"s_warehouse": "Main Store",
+						" s_warehouse".strip(): "Main Store",
 						"t_warehouse": "Branch Store",
 						"stock_uom": "Nos",
 					}
@@ -108,9 +108,9 @@ class TestStockMovementHistory(unittest.TestCase):
 		self.assertIsNone(destination_row["out_quantity"])
 		self.assertEqual(destination_row["compare_in_quantity"], 2)
 
-	@patch.object(report.frappe, "get_list")
-	def test_opening_balance_uses_supported_sum_dict_and_exact_warehouse(self, get_list):
-		get_list.return_value = [frappe._dict({"opening_balance": 42})]
+	@patch.object(report, "get_stock_balance")
+	def test_opening_balance_uses_erpnext_stock_balance_api(self, get_stock_balance):
+		get_stock_balance.return_value = 42
 		filters = frappe._dict(
 			{
 				"company": "Test Company",
@@ -121,10 +121,14 @@ class TestStockMovementHistory(unittest.TestCase):
 		)
 
 		self.assertEqual(report.get_opening_balance(filters), 42)
-		kwargs = get_list.call_args.kwargs
-		self.assertEqual(kwargs["fields"], [{"SUM": "actual_qty", "as": "opening_balance"}])
-		self.assertEqual(kwargs["filters"]["warehouse"], "Main Store - TC")
-		self.assertNotIn("sum(actual_qty)", str(kwargs["fields"]).lower())
+		args, kwargs = get_stock_balance.call_args
+		self.assertEqual(args, ("ITEM-001", "Main Store - TC"))
+		self.assertEqual(str(kwargs["posting_date"]), "2026-06-30")
+		self.assertEqual(kwargs["posting_time"], "23:59:59.999999")
+		source = inspect.getsource(report.get_opening_balance)
+		self.assertIn("get_stock_balance", source)
+		self.assertNotIn("SUM", source)
+		self.assertNotIn("get_list", source)
 
 	def test_zero_and_negative_running_balances_are_preserved(self):
 		zero = report.apply_running_balances(
@@ -201,7 +205,7 @@ class TestStockMovementHistory(unittest.TestCase):
 		patches_path = os.path.join(frappe.get_app_path("retailedge"), "patches.txt")
 		with open(patches_path, encoding="utf-8") as handle:
 			content = handle.read()
-		self.assertIn("retailedge.patches.ensure_stock_movement_history_menu_v2", content)
+		self.assertIn("retailedge.patches.ensure_stock_movement_history_menu_v3", content)
 
 	def test_frappe_cloud_version_compatibility_is_declared(self):
 		pyproject_path = os.path.join(os.path.dirname(frappe.get_app_path("retailedge")), "pyproject.toml")
