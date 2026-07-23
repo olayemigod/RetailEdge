@@ -142,7 +142,7 @@ def get_home_context(branch: str | None = None, company: str | None = None) -> d
 
 	identity = get_retailedge_ui_identity()
 	company = company or identity.get("company") or ""
-	active_branch = branch or identity.get("branch") or ""
+	active_branch = (branch or "").strip()
 	if active_branch:
 		company = _company_for_branch(active_branch, company)
 		validate_user_branch_access(
@@ -152,19 +152,20 @@ def get_home_context(branch: str | None = None, company: str | None = None) -> d
 			throw=True,
 		)
 
+	branches = identity.get("branches") or []
 	sections = _sections()
 	item_count = sum(len(section["items"]) for section in sections)
 	return {
 		"identity": identity,
 		"company": company,
 		"active_branch": active_branch,
-		"branches": identity.get("branches") or [],
-		"can_switch_branch": bool(identity.get("can_switch_branch")),
+		"branches": branches,
+		"can_switch_branch": bool(branches),
 		"sections": sections,
 		"summary": {
 			"accessible_actions": item_count,
 			"workspace_sections": len(sections),
-			"permitted_branches": len(identity.get("branches") or []),
+			"permitted_branches": len(branches),
 		},
 		"context_note": (
 			"The branch selection currently filters this RetailEdge Home view. "
