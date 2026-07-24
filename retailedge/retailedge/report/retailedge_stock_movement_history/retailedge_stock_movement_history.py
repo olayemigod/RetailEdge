@@ -31,9 +31,28 @@ def execute(filters=None):
 	filters = frappe._dict(filters or {})
 	validate_filters(filters)
 	warehouse_scope = resolve_warehouse_scope(filters)
+	item = get_item_details(filters.item_code)
+	conversion_map = get_conversion_map([filters.item_code], filters.get("compare_uom"))
+	opening_balance = get_opening_balance(filters, warehouse_scope)
 	stock_ledger_rows = get_stock_ledger_rows(filters, warehouse_scope)
-	data = build_movement_rows(stock_ledger_rows, filters, warehouse_scope)
-	data = apply_display_filters(data, filters)
+	movement_rows = build_movement_rows(
+		stock_ledger_rows,
+		filters,
+		warehouse_scope,
+		item=item,
+		conversion_map=conversion_map,
+		opening_balance=opening_balance,
+	)
+	movement_rows = apply_display_filters(movement_rows, filters)
+	data = [
+		build_opening_balance_row(
+			filters,
+			item=item,
+			conversion_map=conversion_map,
+			opening_balance=opening_balance,
+		),
+		*movement_rows,
+	]
 	return get_columns(filters), data, None, None, get_report_summary(data)
 
 
@@ -269,18 +288,29 @@ def get_stock_ledger_rows(filters, warehouse_scope=None):
 	)
 
 
-def build_movement_rows(stock_ledger_rows, filters, warehouse_scope=None):
-	if not stock_ledger_rows:
-		return []
-
-	item_code = filters.item_code
-	item = frappe.db.get_value(
+def get_item_details(item_code):
+	return frappe.db.get_value(
 		"Item",
 		item_code,
 		["item_name", "stock_uom"],
 		as_dict=True,
 	) or frappe._dict()
-	conversion_map = get_conversion_map([item_code], filters.get("compare_uom"))
+
+
+def build_movement_rows(
+	stock_ledger_rows,
+	filters,
+	warehouse_scope=None,
+	*,
+	item=None,
+	conversion_map=None,
+	opening_balance=None,
+):
+	if not stock_ledger_rows:
+		return []
+
+	item = item or get_item_details(filters.item_code)
+	conversion_map = conversion_map or get_conversion_map([filters.item_code], filters.get("compare_uom"))
 	stock_entry_detail_map = get_stock_entry_detail_map(stock_ledger_rows)
 	voucher_headers = get_voucher_headers(stock_ledger_rows)
 
@@ -324,7 +354,9 @@ def build_movement_rows(stock_ledger_rows, filters, warehouse_scope=None):
 			row.get("sort_key") or "",
 		),
 	)
-	return apply_running_balances(data, get_opening_balance(filters, warehouse_scope))
+	if opening_balance is None:
+		opening_balance = get_opening_balance(filters, warehouse_scope)
+	return apply_running_balances(data, opening_balance)
 
 
 def get_conversion_map(item_codes, compare_uom):
@@ -533,6 +565,38 @@ def get_opening_balance(filters, warehouse_scope=None):
 	)
 
 
+def build_opening_balance_row(filters, *, item, conversion_map, opening_balance):
+	"""Build the first visible report row, matching ERPNext Stock Ledger behaviour."""
+	stock_uom = item.get("stock_uom")
+	compare_uom = filters.get("compare_uom")
+	factor = resolve_conversion_factor(filters.item_code, stock_uom, compare_uom, conversion_map)
+	opening_date = add_days(getdate(filters.from_date), -1)
+	return make_output_row(
+		sort_key="__opening_balance__",
+		creation=f"{filters.from_date} 00:00:00",
+		posting_datetime=f"{filters.from_date} 00:00:00",
+		movement_type=_("Opening Balance"),
+		item_code=filters.item_code,
+		item_name=item.get("item_name"),
+		stock_uom=stock_uom,
+		in_quantity=None,
+		out_quantity=None,
+		balance=flt(opening_balance),
+		compare_uom=compare_uom,
+		conversion_factor=factor,
+		source_warehouse=None,
+		destination_warehouse=None,
+		voucher_type=None,
+		voucher_no=None,
+		voucher_detail_no=None,
+		purpose=_("Opening stock before report period"),
+		batch_no=None,
+		batch_numbers=[],
+		remarks=_("Balance as at {0} 23:59:59").format(opening_date),
+		is_opening_row=1,
+	)
+
+
 def apply_running_balances(rows, opening_balance=0):
 	balance = flt(opening_balance)
 	for row in rows:
@@ -635,30 +699,31 @@ def clean_text(value):
 
 
 def get_report_summary(rows):
+	movement_rows = [row for row in rows if not row.get("is_opening_row")]
 	warehouses = {
 		warehouse
-		for row in rows
+		for row in movement_rows
 		for warehouse in (row.get("source_warehouse"), row.get("destination_warehouse"))
 		if warehouse
 	}
 	sales = {
 		(row.get("voucher_type"), row.get("voucher_no"))
-		for row in rows
+		for row in movement_rows
 		if row.get("movement_type") == "Sale" and row.get("voucher_no")
 	}
 	missing_conversions = sum(
-		1 for row in rows if row.get("conversion_status") == "Not Configured"
+		1 for row in movement_rows if row.get("conversion_status") == "Not Configured"
 	)
 	internal_transfers = {
 		(row.get("voucher_no"), row.get("voucher_detail_no"), row.get("item_code"))
-		for row in rows
+		for row in movement_rows
 		if row.get("movement_type") == "Internal Transfer"
 	}
 
 	return [
-		{"value": len(rows), "label": _("Movement Rows"), "datatype": "Int", "indicator": "Blue"},
+		{"value": len(movement_rows), "label": _("Movement Rows"), "datatype": "Int", "indicator": "Blue"},
 		{
-			"value": len({row.get("item_code") for row in rows if row.get("item_code")}),
+			"value": len({row.get("item_code") for row in movement_rows if row.get("item_code")}),
 			"label": _("Distinct Items"),
 			"datatype": "Int",
 			"indicator": "Blue",
