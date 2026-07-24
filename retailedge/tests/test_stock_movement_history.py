@@ -44,13 +44,82 @@ class TestStockMovementHistory(unittest.TestCase):
 		self.assertEqual(result[1]["balance"], 115)
 		self.assertEqual(result[1]["compare_balance"], 11.5)
 
+	def test_opening_balance_row_is_first_visible_row_before_transactions(self):
+		filters = frappe._dict(
+			{
+				"item_code": "ITEM-001",
+				"warehouse": "Main Store - TC",
+				"from_date": "2026-07-01",
+				"compare_uom": "Carton",
+			}
+		)
+		item = frappe._dict({"item_name": "Sample Item", "stock_uom": "Nos"})
+		opening = report.build_opening_balance_row(
+			filters,
+			item=item,
+			conversion_map={("ITEM-001", "Carton"): 10},
+			opening_balance=100,
+		)
+		transactions = report.apply_running_balances(
+			[
+				report.make_output_row(
+					item_code="ITEM-001",
+					movement_type="Sale",
+					in_quantity=None,
+					out_quantity=5,
+					balance=None,
+					compare_uom="Carton",
+					conversion_factor=10,
+				)
+			],
+			opening_balance=100,
+		)
+		data = [opening, *transactions]
+
+		self.assertEqual(data[0]["movement_type"], "Opening Balance")
+		self.assertEqual(data[0]["posting_datetime"], "2026-07-01 00:00:00")
+		self.assertIsNone(data[0]["in_quantity"])
+		self.assertIsNone(data[0]["out_quantity"])
+		self.assertEqual(data[0]["balance"], 100)
+		self.assertEqual(data[0]["compare_balance"], 10)
+		self.assertEqual(data[1]["balance"], 95)
+
+	def test_opening_row_is_not_counted_as_movement(self):
+		opening = report.make_output_row(
+			item_code="ITEM-001",
+			movement_type="Opening Balance",
+			in_quantity=None,
+			out_quantity=None,
+			balance=100,
+			compare_uom=None,
+			conversion_factor=None,
+			is_opening_row=1,
+		)
+		movement = report.make_output_row(
+			item_code="ITEM-001",
+			movement_type="Sale",
+			voucher_type="Sales Invoice",
+			voucher_no="SINV-1",
+			source_warehouse="Main Store",
+			in_quantity=None,
+			out_quantity=5,
+			balance=95,
+			compare_uom=None,
+			conversion_factor=None,
+		)
+
+		summary = report.get_report_summary([opening, movement])
+
+		self.assertEqual(summary[0]["label"], "Movement Rows")
+		self.assertEqual(summary[0]["value"], 1)
+
 	def test_stock_entry_transfer_uses_only_selected_warehouse_side(self):
 		common = {
 			"detail_map": {
 				"DETAIL-1": frappe._dict(
 					{
 						"item_name": "Sample Item",
-						" s_warehouse".strip(): "Main Store",
+						"s_warehouse": "Main Store",
 						"t_warehouse": "Branch Store",
 						"stock_uom": "Nos",
 					}
