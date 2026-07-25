@@ -31,7 +31,7 @@ try {
 					}, timeout);
 				});
 
-			await requireAsync("edgeui.bundle.js");
+			await requireAsync("edgesuite_ui.bundle.js");
 			await requireAsync("salesperson_performance.bundle.js");
 
 			if (typeof window.mountSalespersonPerformanceDashboard !== "function") {
