@@ -61,6 +61,27 @@ class TestRetailEdgeEdgeUIFoundation(unittest.TestCase):
 		self.assertNotIn("coreedge/public", factory.lower())
 		self.assertNotIn("../../../../../coreedge", factory.lower())
 
+	def test_active_page_loaders_use_collision_safe_bundle(self):
+		loaders = (
+			self.app_path(
+				"retailedge",
+				"page",
+				"salesperson_performance_dashboard",
+				"salesperson_performance_dashboard.js",
+			),
+			self.app_path(
+				"retailedge",
+				"page",
+				"retailedge_document_workspace",
+				"retailedge_document_workspace.js",
+			),
+		)
+		for loader in loaders:
+			content = loader.read_text()
+			self.assertIn("edgesuite_ui.bundle.js", content, loader)
+			self.assertNotIn('await requireAsync("edgeui.bundle.js")', content, loader)
+			self.assertNotIn("coreedge/public", content.lower(), loader)
+
 	def test_retailedge_provides_final_product_availability(self):
 		with patch("retailedge.api.product_context.has_app_permission", return_value=True):
 			product = get_product_availability()
