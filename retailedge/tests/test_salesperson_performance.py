@@ -44,11 +44,12 @@ class TestSalespersonPerformance(FrappeTestCase):
 			"salesperson_performance_dashboard",
 			"salesperson_performance_dashboard.js",
 		)
-		edgeui_index = content.find('requireAsync("edgeui.bundle.js")')
+		edgeui_index = content.find('requireAsync("edgesuite_ui.bundle.js")')
 		product_index = content.find('requireAsync("salesperson_performance.bundle.js")')
 		self.assertGreaterEqual(edgeui_index, 0)
 		self.assertGreaterEqual(product_index, 0)
 		self.assertLess(edgeui_index, product_index)
+		self.assertNotIn('await requireAsync("edgeui.bundle.js")', content)
 		self.assertNotIn("optional", content)
 		self.assertIn("Timed out loading", content)
 		self.assertIn("wrapper.appendChild", content)
@@ -116,7 +117,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		content = self.read("public", "js", "retailedge_ui", "app_factory.js")
 		self.assertIn('"EdgeLinkField"', content)
 		self.assertIn('"EdgeFilterBar"', content)
-		self.assertIn('MINIMUM_EDGE_SUITE_UI_VERSION = "0.5.0"', content)
+		self.assertIn('MINIMUM_EDGE_SUITE_UI_VERSION = "0.6.0"', content)
 		self.assertIn("runtime.install(app)", content)
 
 	def test_dashboard_apis_are_whitelisted(self):
