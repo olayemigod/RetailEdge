@@ -21,6 +21,8 @@ async function mountRetailEdgeDocumentWorkspacePage(wrapper) {
 				}, timeout);
 			});
 
+		// Legacy requireAsync("edgeui.bundle.js") is intentionally not called because
+		// that generic manifest key collides with CoreEdge on mixed-app sites.
 		await requireAsync("edgesuite_ui.bundle.js");
 		await requireAsync("retailedge_document_workspace.bundle.js");
 		if (typeof window.mountRetailEdgeDocumentWorkspace !== "function") {
