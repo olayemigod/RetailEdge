@@ -21,7 +21,7 @@ async function mountRetailEdgeDocumentWorkspacePage(wrapper) {
 				}, timeout);
 			});
 
-		await requireAsync("edgeui.bundle.js");
+		await requireAsync("edgesuite_ui.bundle.js");
 		await requireAsync("retailedge_document_workspace.bundle.js");
 		if (typeof window.mountRetailEdgeDocumentWorkspace !== "function") {
 			throw new Error("RetailEdge Setup Workspace mount function is unavailable.");
