@@ -104,11 +104,23 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertNotIn("switch_product_app", menu)
 		self.assertNotIn("CoreEdge", menu)
 
-	def test_standard_page_loader_delegates_to_global_controller(self):
+	def test_standard_page_loader_boots_current_wrapper_and_route_bridge(self):
 		path = APP_ROOT / "retailedge" / "page" / "retailedge_business_hub" / "retailedge_business_hub.js"
 		source = path.read_text()
 		self.assertIn("window.retailedgeRegisterBusinessHubPage", source)
+		self.assertIn("window.retailedgeBootBusinessHubPage", source)
+		self.assertIn("retailedge_business_hub_route_bridge.js", source)
 		self.assertNotIn("frappe.ui.make_app_page", source)
+
+	def test_route_bridge_recovers_when_page_was_open_before_controller_registration(self):
+		bridge = (APP_ROOT / "public" / "js" / "retailedge_business_hub_route_bridge.js").read_text()
+		self.assertIn('const PAGE_NAME = "retailedge-business-hub"', bridge)
+		self.assertIn("frappe?.pages?.[PAGE_NAME]", bridge)
+		self.assertIn("retailedgeBootBusinessHubPage", bridge)
+		self.assertIn("page-change", bridge)
+		self.assertIn("router?.on", bridge)
+		self.assertIn("MAX_ATTEMPTS", bridge)
+		self.assertNotIn("CoreEdge", bridge)
 
 	def test_product_bundle_and_vue_use_canonical_runtime_only(self):
 		bundle = (APP_ROOT / "public" / "js" / "retailedge_business_hub.bundle.js").read_text()
