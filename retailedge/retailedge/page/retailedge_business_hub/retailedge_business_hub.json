@@ -1,0 +1,29 @@
+{
+  "content": null,
+  "creation": "2026-08-05 00:00:00.000000",
+  "docstatus": 0,
+  "doctype": "Page",
+  "idx": 0,
+  "modified": "2026-08-05 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "RetailEdge",
+  "name": "retailedge-business-hub",
+  "owner": "Administrator",
+  "page_name": "retailedge-business-hub",
+  "roles": [
+    {"role": "System Manager"},
+    {"role": "Accounts Manager"},
+    {"role": "Accounts User"},
+    {"role": "Stock Manager"},
+    {"role": "Stock User"},
+    {"role": "RetailEdge Manager"},
+    {"role": "RetailEdge Branch Manager"},
+    {"role": "RetailEdge Cashier"},
+    {"role": "RetailEdge Accounts Reviewer"}
+  ],
+  "script": null,
+  "standard": "Yes",
+  "style": null,
+  "system_page": 0,
+  "title": "RetailEdge Business Hub"
+}
