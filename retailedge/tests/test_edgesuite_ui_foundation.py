@@ -52,6 +52,11 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertEqual(data["standard"], "Yes")
 		self.assertIn("RetailEdge Manager", {row["role"] for row in data["roles"]})
 
+	def test_retailedge_requires_standalone_edgesuite_ui_app(self):
+		hooks = (APP_ROOT / "hooks.py").read_text()
+		self.assertIn('required_apps = ["edgesuite_ui"]', hooks)
+		self.assertNotIn('required_apps = ["coreedge"]', hooks)
+
 	def test_page_loader_requires_canonical_edgesuite_ui_before_product_bundle(self):
 		path = APP_ROOT / "retailedge" / "page" / "retailedge_business_hub" / "retailedge_business_hub.js"
 		source = path.read_text()
