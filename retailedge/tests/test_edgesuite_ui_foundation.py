@@ -84,6 +84,26 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("if (!wrapper._retailedgeBusinessHub)", controller)
 		self.assertIn("return bootBusinessHub(wrapper)", controller)
 
+	def test_edge_suite_waffle_is_booted_across_desk(self):
+		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
+		self.assertIn('const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js"', controller)
+		self.assertIn("retailedgeBootProductMenu", controller)
+		self.assertIn("retailedgeInstallProductMenu", controller)
+		self.assertIn("bootProductMenu()", controller)
+
+	def test_product_menu_uses_permission_aware_navigation_without_product_switching(self):
+		menu = (APP_ROOT / "public" / "js" / "retailedge_product_menu.bundle.js").read_text()
+		self.assertIn("window.EdgeSuiteUI", menu)
+		self.assertNotIn("window.EdgeUI", menu)
+		self.assertIn("registerProductMenu", menu)
+		self.assertIn("refreshProductMenu", menu)
+		self.assertIn("mountProductMenu", menu)
+		self.assertIn("get_retailedge_business_hub_context", menu)
+		self.assertIn("data.navigation_groups", menu)
+		self.assertIn('product: PRODUCT', menu)
+		self.assertNotIn("switch_product_app", menu)
+		self.assertNotIn("CoreEdge", menu)
+
 	def test_standard_page_loader_delegates_to_global_controller(self):
 		path = APP_ROOT / "retailedge" / "page" / "retailedge_business_hub" / "retailedge_business_hub.js"
 		source = path.read_text()
@@ -99,11 +119,12 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 			self.assertIn("window.EdgeSuiteUI", source)
 			self.assertNotIn("window.EdgeUI", source)
 
-	def test_product_switcher_is_explicitly_suspended_in_api_contract(self):
+	def test_product_switching_is_suspended_but_product_menu_is_not(self):
 		path = APP_ROOT / "edgesuite_ui.py"
 		source = path.read_text()
 		self.assertIn('"product_switcher_enabled": False', source)
 		self.assertNotIn("switch_product_app", source)
+		self.assertTrue((APP_ROOT / "public" / "js" / "retailedge_product_menu.bundle.js").exists())
 
 
 if __name__ == "__main__":
