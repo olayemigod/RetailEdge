@@ -12,6 +12,9 @@ from retailedge.workspace_home import (
 )
 
 
+BUSINESS_HUB_PAGE = "retailedge-business-hub"
+BUSINESS_HUB_LABEL = "RetailEdge Business Hub"
+DASHBOARD_SECTION_LABEL = "Dashboard"
 STOCK_MOVEMENT_REPORT = "RetailEdge Stock Movement History"
 STOCK_MOVEMENT_LABEL = "Stock Movement History"
 REPORTS_SECTION_LABEL = "Reports & Insights"
@@ -36,12 +39,14 @@ def sync_retailedge_workspace_layout():
 	workspace.indicator_color = workspace_data.get("indicator_color") or workspace.indicator_color
 	workspace.type = workspace_data.get("type") or workspace.type or "Workspace"
 	workspace.content = build_home_workspace_content(workspace_data)
-	workspace_links = _ensure_workspace_report_link(build_home_workspace_links(workspace_data))
+	workspace_links = _ensure_workspace_business_hub_link(
+		_ensure_workspace_report_link(build_home_workspace_links(workspace_data))
+	)
 	workspace.links = []
 	for row in workspace_links:
 		workspace.append("links", row)
 	workspace.shortcuts = []
-	for row in build_home_workspace_shortcuts(workspace_data):
+	for row in _ensure_business_hub_shortcut(build_home_workspace_shortcuts(workspace_data)):
 		short_row = dict(row)
 		if short_row.get("type") == "Report":
 			short_row["doc_view"] = ""
@@ -51,7 +56,10 @@ def sync_retailedge_workspace_layout():
 	sidebar = frappe.get_doc("Workspace Sidebar", "RetailEdge")
 	sidebar.header_icon = sidebar_data.get("header_icon")
 	sidebar.items = []
-	for row in _ensure_sidebar_report_link(list(sidebar_data.get("items", []) or [])):
+	sidebar_items = _ensure_sidebar_business_hub_link(
+		_ensure_sidebar_report_link(list(sidebar_data.get("items", []) or []))
+	)
+	for row in sidebar_items:
 		sidebar.append("items", row)
 	sidebar.save(ignore_permissions=True)
 
@@ -67,8 +75,109 @@ def sync_retailedge_workspace_layout():
 	}
 
 
+def _business_hub_exists() -> bool:
+	return bool(frappe.db.exists("Page", BUSINESS_HUB_PAGE))
+
+
 def _report_exists() -> bool:
 	return bool(frappe.db.exists("Report", STOCK_MOVEMENT_REPORT))
+
+
+def _ensure_business_hub_shortcut(shortcuts: list[dict]) -> list[dict]:
+	if not _business_hub_exists() or any(
+		row.get("type") == "Page" and row.get("link_to") == BUSINESS_HUB_PAGE for row in shortcuts
+	):
+		return shortcuts
+	return [
+		{
+			"color": "Blue",
+			"doc_view": "List",
+			"label": BUSINESS_HUB_LABEL,
+			"link_to": BUSINESS_HUB_PAGE,
+			"stats_filter": "[]",
+			"type": "Page",
+		},
+		*shortcuts,
+	]
+
+
+def _ensure_workspace_business_hub_link(links: list[dict]) -> list[dict]:
+	if not _business_hub_exists() or any(
+		row.get("type") == "Link" and row.get("link_to") == BUSINESS_HUB_PAGE for row in links
+	):
+		return _recount_workspace_links(links)
+
+	section_index = _find_section_index(links, DASHBOARD_SECTION_LABEL)
+	if section_index is None:
+		links.insert(
+			0,
+			{
+				"hidden": 0,
+				"is_query_report": 0,
+				"label": DASHBOARD_SECTION_LABEL,
+				"link_count": 0,
+				"link_type": "Page",
+				"onboard": 0,
+				"type": "Card Break",
+				"close": 1,
+			},
+		)
+		section_index = 0
+
+	links.insert(
+		section_index + 1,
+		{
+			"hidden": 0,
+			"is_query_report": 0,
+			"label": BUSINESS_HUB_LABEL,
+			"link_count": 0,
+			"link_to": BUSINESS_HUB_PAGE,
+			"link_type": "Page",
+			"onboard": 0,
+			"type": "Link",
+		},
+	)
+	return _recount_workspace_links(links)
+
+
+def _ensure_sidebar_business_hub_link(items: list[dict]) -> list[dict]:
+	if not _business_hub_exists() or any(
+		row.get("type") == "Link" and row.get("link_to") == BUSINESS_HUB_PAGE for row in items
+	):
+		return items
+
+	section_index = _find_section_index(items, DASHBOARD_SECTION_LABEL)
+	if section_index is None:
+		items.insert(
+			0,
+			{
+				"child": 0,
+				"collapsible": 1,
+				"indent": 1,
+				"keep_closed": 0,
+				"label": DASHBOARD_SECTION_LABEL,
+				"link_type": "Page",
+				"show_arrow": 0,
+				"type": "Section Break",
+			},
+		)
+		section_index = 0
+
+	items.insert(
+		section_index + 1,
+		{
+			"child": 1,
+			"collapsible": 0,
+			"indent": 0,
+			"keep_closed": 0,
+			"label": BUSINESS_HUB_LABEL,
+			"link_to": BUSINESS_HUB_PAGE,
+			"link_type": "Page",
+			"show_arrow": 0,
+			"type": "Link",
+		},
+	)
+	return items
 
 
 def _ensure_workspace_report_link(links: list[dict]) -> list[dict]:
