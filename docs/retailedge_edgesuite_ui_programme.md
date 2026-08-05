@@ -84,6 +84,19 @@ The quick actions are intentionally safe native fallbacks. They do not yet claim
 - Retry mounting from `on_page_show` when the first route lifecycle misses or fails before creating the Vue app.
 - Display a visible failure state rather than leaving an empty native Frappe shell.
 
+## Local verification
+
+```bash
+bench build --app edgesuite_ui
+bench build --app retailedge
+bench --site <site-name> migrate
+bench --site <site-name> clear-cache
+bench clear-website-cache
+grep -E 'edgeui\.bundle|retailedge_business_hub\.bundle' sites/assets/assets.json
+```
+
+The asset manifest must contain both the shared EdgeSuite bundle and the RetailEdge Business Hub bundle before browser QA proceeds.
+
 ## Next slices
 
 ### Slice 2 — Navigation migration
