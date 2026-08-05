@@ -57,15 +57,29 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn('required_apps = ["edgesuite_ui"]', hooks)
 		self.assertNotIn('required_apps = ["coreedge"]', hooks)
 
-	def test_page_loader_requires_canonical_edgesuite_ui_before_product_bundle(self):
+	def test_business_hub_controller_is_loaded_globally_in_desk(self):
+		hooks = (APP_ROOT / "hooks.py").read_text()
+		self.assertIn("retailedge_business_hub_page.js", hooks)
+		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
+		self.assertIn('const PAGE_NAME = "retailedge-business-hub"', controller)
+		self.assertIn("retailedgeRegisterBusinessHubPage", controller)
+		self.assertIn("__retailedge_business_hub_registered", controller)
+		self.assertIn("Loading RetailEdge Business Hub", controller)
+		self.assertIn("RetailEdge Business Hub failed to load", controller)
+
+	def test_global_controller_requires_canonical_edgesuite_ui_before_product_bundle(self):
+		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
+		self.assertLess(controller.index("edgesuite_ui.bundle.js"), controller.index("retailedge_business_hub.bundle.js"))
+		self.assertIn("assertEdgeSuiteUIRuntime", controller)
+		self.assertIn("global.EdgeSuiteUI", controller)
+		self.assertNotIn('"edgeui.bundle.js"', controller)
+		self.assertNotIn("global.EdgeUI", controller)
+
+	def test_standard_page_loader_delegates_to_global_controller(self):
 		path = APP_ROOT / "retailedge" / "page" / "retailedge_business_hub" / "retailedge_business_hub.js"
 		source = path.read_text()
-		self.assertLess(source.index("edgesuite_ui.bundle.js"), source.index("retailedge_business_hub.bundle.js"))
-		self.assertIn("assertEdgeSuiteUIRuntime", source)
-		self.assertIn("window.EdgeSuiteUI", source)
-		self.assertNotIn("'edgeui.bundle.js'", source)
-		self.assertNotIn("window.EdgeUI", source)
-		self.assertIn("failed to load", source)
+		self.assertIn("window.retailedgeRegisterBusinessHubPage", source)
+		self.assertNotIn("frappe.ui.make_app_page", source)
 
 	def test_product_bundle_and_vue_use_canonical_runtime_only(self):
 		bundle = (APP_ROOT / "public" / "js" / "retailedge_business_hub.bundle.js").read_text()
