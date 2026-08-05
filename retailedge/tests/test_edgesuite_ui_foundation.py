@@ -52,12 +52,24 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertEqual(data["standard"], "Yes")
 		self.assertIn("RetailEdge Manager", {row["role"] for row in data["roles"]})
 
-	def test_page_loader_requires_shared_edgeui_before_product_bundle(self):
+	def test_page_loader_requires_canonical_edgesuite_ui_before_product_bundle(self):
 		path = APP_ROOT / "retailedge" / "page" / "retailedge_business_hub" / "retailedge_business_hub.js"
 		source = path.read_text()
-		self.assertLess(source.index("edgeui.bundle.js"), source.index("retailedge_business_hub.bundle.js"))
-		self.assertIn("assertEdgeUIRuntime", source)
+		self.assertLess(source.index("edgesuite_ui.bundle.js"), source.index("retailedge_business_hub.bundle.js"))
+		self.assertIn("assertEdgeSuiteUIRuntime", source)
+		self.assertIn("window.EdgeSuiteUI", source)
+		self.assertNotIn("'edgeui.bundle.js'", source)
+		self.assertNotIn("window.EdgeUI", source)
 		self.assertIn("failed to load", source)
+
+	def test_product_bundle_and_vue_use_canonical_runtime_only(self):
+		bundle = (APP_ROOT / "public" / "js" / "retailedge_business_hub.bundle.js").read_text()
+		component = (
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
+		).read_text()
+		for source in (bundle, component):
+			self.assertIn("window.EdgeSuiteUI", source)
+			self.assertNotIn("window.EdgeUI", source)
 
 	def test_product_switcher_is_explicitly_suspended_in_api_contract(self):
 		path = APP_ROOT / "edgesuite_ui.py"
