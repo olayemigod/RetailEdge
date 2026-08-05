@@ -11,8 +11,8 @@ frappe.pages['retailedge-business-hub'].on_page_load = async function (wrapper) 
 		.appendTo(page.body);
 
 	try {
-		await requireAsset('edgeui.bundle.js');
-		assertEdgeUIRuntime();
+		await requireAsset('edgesuite_ui.bundle.js');
+		assertEdgeSuiteUIRuntime();
 		await requireAsset('retailedge_business_hub.bundle.js');
 
 		if (typeof window.mountRetailEdgeBusinessHub !== 'function') {
@@ -51,10 +51,10 @@ function requireAsset(asset) {
 	});
 }
 
-function assertEdgeUIRuntime() {
-	const runtime = window.EdgeUI;
+function assertEdgeSuiteUIRuntime() {
+	const runtime = window.EdgeSuiteUI;
 	if (!runtime || typeof runtime.createEdgeApp !== 'function') {
-		throw new Error(__('EdgeSuite UI runtime is unavailable or incompatible.'));
+		throw new Error(__('Standalone EdgeSuite UI runtime is unavailable or incompatible.'));
 	}
 	const components = runtime.components || runtime;
 	const required = [
