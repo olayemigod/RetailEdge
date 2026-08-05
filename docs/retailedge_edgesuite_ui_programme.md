@@ -7,11 +7,11 @@ RetailEdge will continue from the completed Stock Movement History baseline into
 RetailEdge UI migration targets the independent `processedge-edge-suite-ui` Frappe app (`edgesuite_ui`). It must not import UI components, Vue files, bundles, or browser runtime objects from CoreEdge. The canonical consumer contract is:
 
 - Frappe app: `edgesuite_ui`
-- Browser asset: `edgesuite_ui.bundle.js`
+- Browser asset: `edgeui.bundle.js`
 - Browser runtime: `window.EdgeSuiteUI`
 - Product apps retain all business rules, permissions, APIs, and document writes
 
-The temporary `edgeui.bundle.js` and `window.EdgeUI` compatibility aliases are not valid for new RetailEdge migration work.
+The temporary `window.EdgeUI` browser alias is not valid for new RetailEdge migration work. New product pages must use `window.EdgeSuiteUI`, while the shared asset continues to use its established Frappe bundle name, `edgeui.bundle.js`.
 
 The product switcher and waffle work are suspended. No new product-switcher behaviour is part of the current implementation branch.
 
@@ -135,5 +135,5 @@ CoreEdge may provide platform services through APIs, but it is not the RetailEdg
 - Cost values continue to respect RetailEdge cost-price masking.
 - Every dashboard metric must use a documented KPI definition and drill down to evidence.
 - Existing bank matching, POS, branch attribution, and reporting behaviour must be preserved.
-- New RetailEdge UI pages must use `edgesuite_ui.bundle.js` and `window.EdgeSuiteUI` only.
+- New RetailEdge UI pages must use `edgeui.bundle.js` and `window.EdgeSuiteUI` only.
 - No private CoreEdge frontend imports are permitted.
