@@ -4,7 +4,9 @@
 	const PAGE_NAME = "retailedge-business-hub";
 	const RUNTIME_ASSET = "edgeui.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
+	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
 	const LOAD_TIMEOUT_MS = 15000;
+	let productMenuBootPromise = null;
 
 	function registerPage() {
 		if (!global.frappe || !frappe.pages) {
@@ -24,6 +26,7 @@
 
 		definition.on_page_show = function onPageShow(wrapper) {
 			ensurePage(wrapper);
+			bootProductMenu();
 			if (!wrapper._retailedgeBusinessHub) {
 				return bootBusinessHub(wrapper);
 			}
@@ -88,6 +91,7 @@
 			const root = $("<div class=\"retailedge-business-hub-root\"></div>").appendTo(target);
 			wrapper._retailedgeBusinessHubRoot = root;
 			wrapper._retailedgeBusinessHub = global.mountRetailEdgeBusinessHub(root[0]);
+			global.retailedgeRefreshProductMenu?.();
 			return wrapper._retailedgeBusinessHub;
 		} catch (error) {
 			loading.remove();
@@ -95,6 +99,31 @@
 			renderFailure(target, error);
 			return null;
 		}
+	}
+
+	function bootProductMenu() {
+		if (typeof global.retailedgeInstallProductMenu === "function") {
+			return global.retailedgeInstallProductMenu();
+		}
+		if (productMenuBootPromise) return productMenuBootPromise;
+
+		productMenuBootPromise = requireAsset(PRODUCT_MENU_ASSET)
+			.then(() => {
+				if (typeof global.retailedgeInstallProductMenu !== "function") {
+					throw new Error(
+						__("RetailEdge product-menu bundle loaded without exposing its installer: {0}", [PRODUCT_MENU_ASSET])
+					);
+				}
+				return global.retailedgeInstallProductMenu();
+			})
+			.catch((error) => {
+				console.error("[RetailEdge Product Menu] boot failed", error);
+				return null;
+			})
+			.finally(() => {
+				productMenuBootPromise = null;
+			});
+		return productMenuBootPromise;
 	}
 
 	function getMountedComponent(wrapper) {
@@ -197,9 +226,16 @@
 		errorBox.appendTo(target);
 	}
 
+	function initialiseDeskFeatures() {
+		const pageRegistered = registerPage();
+		if (pageRegistered) bootProductMenu();
+		return pageRegistered;
+	}
+
 	global.retailedgeRegisterBusinessHubPage = registerPage;
 	global.retailedgeBootBusinessHubPage = bootBusinessHub;
-	if (!registerPage() && global.document) {
-		global.document.addEventListener("DOMContentLoaded", registerPage, { once: true });
+	global.retailedgeBootProductMenu = bootProductMenu;
+	if (!initialiseDeskFeatures() && global.document) {
+		global.document.addEventListener("DOMContentLoaded", initialiseDeskFeatures, { once: true });
 	}
 })(window);
