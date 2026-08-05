@@ -125,8 +125,8 @@
 
 <script>
 const runtimeComponents =
-  typeof window !== 'undefined' && window.EdgeUI
-    ? (window.EdgeUI.components || window.EdgeUI)
+  typeof window !== 'undefined' && window.EdgeSuiteUI
+    ? (window.EdgeSuiteUI.components || window.EdgeSuiteUI)
     : {};
 
 export default {
