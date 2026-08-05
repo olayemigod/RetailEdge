@@ -100,7 +100,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("mountProductMenu", menu)
 		self.assertIn("get_retailedge_business_hub_context", menu)
 		self.assertIn("data.navigation_groups", menu)
-		self.assertIn('product: PRODUCT', menu)
+		self.assertIn("product: PRODUCT", menu)
 		self.assertNotIn("switch_product_app", menu)
 		self.assertNotIn("CoreEdge", menu)
 
