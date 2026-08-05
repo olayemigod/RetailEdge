@@ -13,7 +13,7 @@ RetailEdge UI migration targets the independent `processedge-edge-suite-ui` Frap
 
 The temporary `window.EdgeUI` browser alias is not valid for new RetailEdge migration work. New product pages must use `window.EdgeSuiteUI`, while the shared asset continues to use its established Frappe bundle name, `edgeui.bundle.js`.
 
-The product switcher and waffle work are suspended. No new product-switcher behaviour is part of the current implementation branch.
+The **RetailEdge waffle product menu is active**. Only cross-product switching is suspended. The waffle currently provides professional, permission-aware navigation inside RetailEdge and does not call CoreEdge or switch to another EdgeSuite product.
 
 ## Protected pre-EdgeSuite checkpoint
 
@@ -59,7 +59,7 @@ RetailEdge will deliver five connected experiences:
 4. **Understand** — reports, dashboards, and trusted KPI definitions.
 5. **Respond** — alerts, reminders, follow-up actions, and explainable recommendations.
 
-Product switching remains a future Navigate capability but is not active in the current phase.
+The RetailEdge waffle is part of Navigate and is active in the current phase. Cross-product switching remains a later Navigate capability.
 
 ## Current implementation slice
 
@@ -67,11 +67,12 @@ The first EdgeSuite slice introduces:
 
 - A permission-aware RetailEdge programme and navigation registry.
 - A new `RetailEdge Business Hub` EdgeSuite UI page.
+- A RetailEdge waffle product menu that works across native Desk and EdgeSuite shell pages.
 - The five programme experiences displayed as one coherent product direction.
 - Quick actions that create existing native ERPNext/RetailEdge documents.
 - Professional business navigation groups.
-- An explicit API feature flag keeping product switching disabled.
-- Regression tests for programme order, menu structure, canonical standalone runtime loading, and product-switcher suspension.
+- An explicit API feature flag keeping cross-product switching disabled.
+- Regression tests for programme order, menu structure, standalone runtime loading, waffle registration, and product-switcher suspension.
 
 The quick actions are intentionally safe native fallbacks. They do not yet claim to be guided RetailEdge forms.
 
@@ -79,10 +80,19 @@ The quick actions are intentionally safe native fallbacks. They do not yet claim
 
 - Register the standard Frappe Page controller explicitly from RetailEdge Desk assets.
 - Load the shared runtime from `edgeui.bundle.js` only when it is not already present.
+- Load `retailedge_product_menu.bundle.js` at Desk startup and register the permission-aware RetailEdge waffle.
 - Load the product-owned `retailedge_business_hub.bundle.js` lazily through Frappe's Promise-based asset API.
 - Support the older callback completion path during migration.
-- Retry mounting from `on_page_show` when the first route lifecycle misses or fails before creating the Vue app.
-- Display a visible failure state rather than leaving an empty native Frappe shell.
+- Retry Business Hub mounting from `on_page_show` when the first route lifecycle misses or fails before creating the Vue app.
+- Refresh and remount the waffle on toolbar, route, sidebar, and desktop lifecycle changes.
+- Display a visible Business Hub failure state rather than leaving an empty native Frappe shell.
+
+## Waffle versus product switching
+
+The two behaviours are deliberately separate:
+
+- **Waffle product menu:** enabled now. It opens RetailEdge sections such as Sales, Purchases, Inventory, Cash & Banking, Expenses, Reports & Insights, Setup, and restricted Administration.
+- **Cross-product switching:** suspended. The current waffle does not switch from RetailEdge to VetEdge, EduEdge, CoreEdge, or another product.
 
 ## Local verification
 
@@ -92,19 +102,23 @@ bench build --app retailedge
 bench --site <site-name> migrate
 bench --site <site-name> clear-cache
 bench clear-website-cache
-grep -E 'edgeui\.bundle|retailedge_business_hub\.bundle' sites/assets/assets.json
+grep -E 'edgeui\.bundle|retailedge_(business_hub|product_menu)\.bundle' sites/assets/assets.json
 ```
 
-The asset manifest must contain both the shared EdgeSuite bundle and the RetailEdge Business Hub bundle before browser QA proceeds.
+The asset manifest must contain all three bundles before browser QA proceeds:
+
+- `edgeui.bundle.js`
+- `retailedge_business_hub.bundle.js`
+- `retailedge_product_menu.bundle.js`
 
 ## Next slices
 
 ### Slice 2 — Navigation migration
 
-- Add the Business Hub to the RetailEdge workspace and sidebar.
-- Replace the current technical workspace classification with the approved professional groups.
+- Complete the professional workspace and sidebar classification.
 - Apply role-focused visibility without weakening ERPNext permissions.
 - Remove ordinary-user exposure to administration and unused EdgePay surfaces.
+- Keep the waffle registry aligned with the workspace navigation registry.
 
 ### Slice 3 — Guided Entry framework
 
@@ -158,4 +172,6 @@ CoreEdge may provide platform services through APIs, but it is not the RetailEdg
 - Every dashboard metric must use a documented KPI definition and drill down to evidence.
 - Existing bank matching, POS, branch attribution, and reporting behaviour must be preserved.
 - New RetailEdge UI pages must use `edgeui.bundle.js` and `window.EdgeSuiteUI` only.
+- The RetailEdge waffle may show only permission-approved RetailEdge destinations.
+- Cross-product switching remains disabled until it is intentionally resumed.
 - No private CoreEdge frontend imports are permitted.
