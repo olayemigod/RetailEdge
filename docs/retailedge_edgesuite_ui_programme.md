@@ -75,6 +75,15 @@ The first EdgeSuite slice introduces:
 
 The quick actions are intentionally safe native fallbacks. They do not yet claim to be guided RetailEdge forms.
 
+## Browser boot contract
+
+- Register the standard Frappe Page controller explicitly from RetailEdge Desk assets.
+- Load the shared runtime from `edgeui.bundle.js` only when it is not already present.
+- Load the product-owned `retailedge_business_hub.bundle.js` lazily through Frappe's Promise-based asset API.
+- Support the older callback completion path during migration.
+- Retry mounting from `on_page_show` when the first route lifecycle misses or fails before creating the Vue app.
+- Display a visible failure state rather than leaving an empty native Frappe shell.
+
 ## Next slices
 
 ### Slice 2 — Navigation migration
