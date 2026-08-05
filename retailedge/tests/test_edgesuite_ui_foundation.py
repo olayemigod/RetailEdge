@@ -63,17 +63,26 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
 		self.assertIn('const PAGE_NAME = "retailedge-business-hub"', controller)
 		self.assertIn("retailedgeRegisterBusinessHubPage", controller)
+		self.assertIn("retailedgeBootBusinessHubPage", controller)
 		self.assertIn("__retailedge_business_hub_registered", controller)
 		self.assertIn("Loading RetailEdge Business Hub", controller)
 		self.assertIn("RetailEdge Business Hub failed to load", controller)
 
-	def test_global_controller_requires_canonical_edgesuite_ui_before_product_bundle(self):
+	def test_global_controller_uses_canonical_runtime_and_product_bundles(self):
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
-		self.assertLess(controller.index("edgesuite_ui.bundle.js"), controller.index("retailedge_business_hub.bundle.js"))
+		self.assertLess(controller.index("edgeui.bundle.js"), controller.index("retailedge_business_hub.bundle.js"))
 		self.assertIn("assertEdgeSuiteUIRuntime", controller)
 		self.assertIn("global.EdgeSuiteUI", controller)
-		self.assertNotIn('"edgeui.bundle.js"', controller)
+		self.assertNotIn('"edgesuite_ui.bundle.js"', controller)
 		self.assertNotIn("global.EdgeUI", controller)
+
+	def test_global_controller_supports_promise_based_frappe_require(self):
+		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
+		self.assertIn("const pending = frappe.require(asset, finish)", controller)
+		self.assertIn('typeof pending.then === "function"', controller)
+		self.assertIn("pending.then(finish).catch(fail)", controller)
+		self.assertIn("if (!wrapper._retailedgeBusinessHub)", controller)
+		self.assertIn("return bootBusinessHub(wrapper)", controller)
 
 	def test_standard_page_loader_delegates_to_global_controller(self):
 		path = APP_ROOT / "retailedge" / "page" / "retailedge_business_hub" / "retailedge_business_hub.js"
