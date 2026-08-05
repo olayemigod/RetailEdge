@@ -4,6 +4,15 @@
 
 RetailEdge will continue from the completed Stock Movement History baseline into a phased EdgeSuite UI migration and business-product redesign.
 
+RetailEdge UI migration targets the independent `processedge-edge-suite-ui` Frappe app (`edgesuite_ui`). It must not import UI components, Vue files, bundles, or browser runtime objects from CoreEdge. The canonical consumer contract is:
+
+- Frappe app: `edgesuite_ui`
+- Browser asset: `edgesuite_ui.bundle.js`
+- Browser runtime: `window.EdgeSuiteUI`
+- Product apps retain all business rules, permissions, APIs, and document writes
+
+The temporary `edgeui.bundle.js` and `window.EdgeUI` compatibility aliases are not valid for new RetailEdge migration work.
+
 The product switcher and waffle work are suspended. No new product-switcher behaviour is part of the current implementation branch.
 
 ## Protected pre-EdgeSuite checkpoint
@@ -57,12 +66,12 @@ Product switching remains a future Navigate capability but is not active in the 
 The first EdgeSuite slice introduces:
 
 - A permission-aware RetailEdge programme and navigation registry.
-- A new `RetailEdge Business Hub` EdgeUI page.
+- A new `RetailEdge Business Hub` EdgeSuite UI page.
 - The five programme experiences displayed as one coherent product direction.
 - Quick actions that create existing native ERPNext/RetailEdge documents.
 - Professional business navigation groups.
 - An explicit API feature flag keeping product switching disabled.
-- Regression tests for programme order, menu structure, page loading, and product-switcher suspension.
+- Regression tests for programme order, menu structure, canonical standalone runtime loading, and product-switcher suspension.
 
 The quick actions are intentionally safe native fallbacks. They do not yet claim to be guided RetailEdge forms.
 
@@ -95,7 +104,7 @@ The quick actions are intentionally safe native fallbacks. They do not yet claim
 
 - Sales Invoice Register.
 - Item Sales Analysis.
-- Stock Movement History EdgeUI presentation.
+- Stock Movement History EdgeSuite UI presentation.
 - Stock Position.
 - Cash Movement Statement.
 - Expense Register.
@@ -115,6 +124,8 @@ The quick actions are intentionally safe native fallbacks. They do not yet claim
 - CoreEdge-delivered email, SMS, WhatsApp, and in-app reminders where appropriate.
 - Explainable recommendations linked to source documents.
 
+CoreEdge may provide platform services through APIs, but it is not the RetailEdge frontend component library.
+
 ## Safety rules
 
 - Native ERPNext documents remain the accounting and stock truth.
@@ -124,3 +135,5 @@ The quick actions are intentionally safe native fallbacks. They do not yet claim
 - Cost values continue to respect RetailEdge cost-price masking.
 - Every dashboard metric must use a documented KPI definition and drill down to evidence.
 - Existing bank matching, POS, branch attribution, and reporting behaviour must be preserved.
+- New RetailEdge UI pages must use `edgesuite_ui.bundle.js` and `window.EdgeSuiteUI` only.
+- No private CoreEdge frontend imports are permitted.
