@@ -32,7 +32,10 @@ app_include_css = [
 	"/assets/retailedge/css/retailedge_cards.css",
 	"/assets/retailedge/css/retailedge_workspace_home.css",
 ]
-app_include_js = "/assets/retailedge/js/retailedge.js"
+app_include_js = [
+	"/assets/retailedge/js/retailedge.js",
+	"/assets/retailedge/js/retailedge_business_hub_page.js",
+]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/retailedge/css/retailedge.css"
@@ -270,7 +273,7 @@ boot_session = "retailedge.boot.boot_session"
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
-# along with any modifications made in other Frappe apps
+# along with any modifications made in other apps
 # override_doctype_dashboards = {
 # 	"Task": "retailedge.task.get_dashboard_data"
 # }
