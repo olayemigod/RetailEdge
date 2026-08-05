@@ -5,10 +5,13 @@ app_description = "Retail operations, POS control, sales audit, payment verifica
 app_email = "support@processedge.com.ng"
 app_license = "MIT"
 
+# The standalone ProcessEdge EdgeSuite UI app is the only supported shared
+# frontend runtime for new RetailEdge product pages. RetailEdge must not depend
+# on CoreEdge for Vue components, bundles, or browser UI runtime objects.
+required_apps = ["edgesuite_ui"]
+
 # Apps
 # ------------------
-
-# required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -38,7 +41,7 @@ app_include_js = "/assets/retailedge/js/retailedge.js"
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "retailedge/public/scss/website"
 
-# include js, css files in header of web form
+# include js in web form
 # webform_include_js = {"doctype": "public/js/doctype.js"}
 # webform_include_css = {"doctype": "public/css/doctype.css"}
 
@@ -132,7 +135,7 @@ doctype_list_js = {
 # after_uninstall = "retailedge.uninstall.after_uninstall"
 
 # Integration Setup
-# ------------------
+# -------------------
 # To set up dependencies/integrations with other apps
 # Name of the app being installed is passed as an argument
 
@@ -157,13 +160,6 @@ doctype_list_js = {
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
 doc_events = {
 	"Sales Invoice": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
@@ -273,10 +269,9 @@ boot_session = "retailedge.boot.boot_session"
 # }
 
 # exempt linked doctypes from being automatically cancelled
-#
 # auto_cancel_exempted_doctypes = ["Auto Repeat"]
 
-# Ignore links to specified DocTypes when deleting documents
+# Ignore links on delete
 # -----------------------------------------------------------
 
 # ignore_links_on_delete = ["Communication", "ToDo"]
@@ -298,21 +293,9 @@ boot_session = "retailedge.boot.boot_session"
 # 	{
 # 		"doctype": "{doctype_1}",
 # 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
+# 		"redact_fields": ["{field_1}"],
 # 		"partial": 1,
 # 	},
-# 	{
-# 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_3}",
-# 		"strict": False,
-# 	},
-# 	{
-# 		"doctype": "{doctype_4}"
-# 	}
 # ]
 
 # Authentication and authorization
