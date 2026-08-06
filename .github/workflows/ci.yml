@@ -5,101 +5,159 @@ on:
     branches:
       - version-16
   pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: version-16-retailedge-${{ github.event.number }}
+  group: version-16-retailedge-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-    name: Server
+    name: Frappe v16 standalone integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     services:
-      redis-cache:
-        image: redis:alpine
+      redis:
+        image: redis:7-alpine
         ports:
-          - 13000:6379
-      redis-queue:
-        image: redis:alpine
-        ports:
-          - 11000:6379
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
       mariadb:
-        image: mariadb:11.8
+        image: mariadb:11.4
         env:
-          MYSQL_ROOT_PASSWORD: root
+          MARIADB_ROOT_PASSWORD: root
         ports:
           - 3306:3306
-        options: --health-cmd="mariadb-admin ping" --health-interval=5s --health-timeout=2s --health-retries=3
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     steps:
-      - name: Clone
+      - name: Check out RetailEdge
         uses: actions/checkout@v6
 
-      - name: Find tests
-        run: |
-          echo "Finding tests"
-          grep -rn "def test" > /dev/null
-
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.14'
+          python-version: "3.14"
+          cache: pip
 
-      - name: Setup Node
+      - name: Set up Node
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: "24"
           check-latest: true
 
-      - name: Cache pip
-        uses: actions/cache@v4
+      - name: Install bench prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmariadb-dev pkg-config redis-tools
+          python -m pip install --upgrade frappe-bench
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Create clean Frappe v16 bench
+        run: |
+          bench init \
+            --frappe-branch version-16 \
+            --python "$(command -v python)" \
+            --skip-assets \
+            --skip-redis-config-generation \
+            frappe-bench
+
+          cd frappe-bench
+          bench set-config -g db_host 127.0.0.1
+          bench set-config -g redis_cache redis://127.0.0.1:6379
+          bench set-config -g redis_queue redis://127.0.0.1:6379
+          bench set-config -g redis_socketio redis://127.0.0.1:6379
+
+      - name: Check out standalone EdgeSuite UI
+        uses: actions/checkout@v6
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
+          repository: olayemigod/processedge-edge-suite-ui
+          ref: fix/edgeui-frappe-v16-menu-host
+          token: ${{ secrets.EDGESUITE_UI_TOKEN }}
+          path: edgesuite-ui-source
 
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: 'echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT'
-
-      - uses: actions/cache@v4
-        id: yarn-cache
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
-
-      - name: Install MariaDB Client
+      - name: Fetch ERPNext, Payments, EdgeSuite UI, and RetailEdge
+        working-directory: frappe-bench
         run: |
-          sudo apt update
-          sudo apt-get install mariadb-client
+          bench get-app \
+            --branch version-16 \
+            --skip-assets \
+            https://github.com/frappe/erpnext.git
 
-      - name: Setup
-        run: |
-          pip install frappe-bench
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
+          bench get-app \
+            --branch develop \
+            --skip-assets \
+            https://github.com/frappe/payments.git
 
-      - name: Install
-        working-directory: /home/runner/frappe-bench
+          bench get-app \
+            --skip-assets \
+            "$GITHUB_WORKSPACE/edgesuite-ui-source"
+
+          bench get-app \
+            --skip-assets \
+            "$GITHUB_WORKSPACE"
+
+      - name: Create standalone RetailEdge site
+        working-directory: frappe-bench
         run: |
-          bench get-app retailedge $GITHUB_WORKSPACE
-          bench setup requirements --dev
-          bench new-site --db-root-password root --admin-password admin test_site
-          bench --site test_site install-app retailedge
-          bench build
+          bench new-site retail-ci.localhost \
+            --db-host 127.0.0.1 \
+            --mariadb-root-password root \
+            --admin-password admin \
+            --no-mariadb-socket
+
+          bench --site retail-ci.localhost install-app payments
+          bench --site retail-ci.localhost install-app erpnext
+          bench --site retail-ci.localhost install-app edgesuite_ui
+          bench --site retail-ci.localhost install-app retailedge
+          bench --site retail-ci.localhost set-config allow_tests true
+
+      - name: Verify standalone application set
+        working-directory: frappe-bench
+        run: |
+          bench --site retail-ci.localhost list-apps | tee /tmp/installed-apps.txt
+
+          grep -Eq '^frappe[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^payments[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^erpnext[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^edgesuite_ui[[:space:]]' /tmp/installed-apps.txt
+          grep -Eq '^retailedge[[:space:]]' /tmp/installed-apps.txt
+
+          if grep -Eq '^coreedge[[:space:]]' /tmp/installed-apps.txt; then
+            echo "CoreEdge must not be installed in the standalone RetailEdge CI site."
+            exit 1
+          fi
+
+      - name: Build shared and product assets
+        working-directory: frappe-bench
+        run: |
+          bench build --app edgesuite_ui
+          bench build --app retailedge
+          bench --site retail-ci.localhost migrate
+
+      - name: Verify EdgeSuite UI asset contract
+        working-directory: frappe-bench
+        run: |
+          grep -Eq 'edgeui\.bundle' sites/assets/assets.json
+          grep -Eq 'retailedge_business_hub\.bundle' sites/assets/assets.json
+          grep -Eq 'retailedge_product_menu\.bundle' sites/assets/assets.json
+
+      - name: Run RetailEdge tests
+        working-directory: frappe-bench
+        run: |
+          bench --site retail-ci.localhost run-tests --app retailedge
         env:
-          CI: 'Yes'
-
-      - name: Run Tests
-        working-directory: /home/runner/frappe-bench
-        run: |
-          bench --site test_site set-config allow_tests true
-          bench --site test_site run-tests --app retailedge
-        env:
-          TYPE: server
+          CI: "Yes"
