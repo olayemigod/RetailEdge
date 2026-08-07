@@ -5,6 +5,11 @@ from pathlib import Path
 
 import frappe
 
+from retailedge.patches.sync_retailedge_workspace import (
+	_normalise_links,
+	_normalise_shortcuts,
+	_target_exists,
+)
 from retailedge.workspace_home import (
 	build_home_workspace_content,
 	build_home_workspace_links,
@@ -38,15 +43,21 @@ def sync_retailedge_workspace_layout():
 	workspace.icon = workspace_data.get("icon") or workspace.icon
 	workspace.indicator_color = workspace_data.get("indicator_color") or workspace.indicator_color
 	workspace.type = workspace_data.get("type") or workspace.type or "Workspace"
-	workspace.content = build_home_workspace_content(workspace_data)
+
+	workspace_shortcuts = _normalise_shortcuts(build_home_workspace_shortcuts(workspace_data))
+	workspace.content = _filter_workspace_content(
+		build_home_workspace_content(workspace_data),
+		workspace_shortcuts,
+	)
+	workspace_links = _normalise_links(build_home_workspace_links(workspace_data))
 	workspace_links = _ensure_workspace_business_hub_link(
-		_ensure_workspace_report_link(build_home_workspace_links(workspace_data))
+		_ensure_workspace_report_link(workspace_links)
 	)
 	workspace.links = []
 	for row in workspace_links:
 		workspace.append("links", row)
 	workspace.shortcuts = []
-	for row in _ensure_business_hub_shortcut(build_home_workspace_shortcuts(workspace_data)):
+	for row in _ensure_business_hub_shortcut(workspace_shortcuts):
 		short_row = dict(row)
 		if short_row.get("type") == "Report":
 			short_row["doc_view"] = ""
@@ -56,8 +67,9 @@ def sync_retailedge_workspace_layout():
 	sidebar = frappe.get_doc("Workspace Sidebar", "RetailEdge")
 	sidebar.header_icon = sidebar_data.get("header_icon")
 	sidebar.items = []
+	sidebar_items = _normalise_sidebar_items(list(sidebar_data.get("items", []) or []))
 	sidebar_items = _ensure_sidebar_business_hub_link(
-		_ensure_sidebar_report_link(list(sidebar_data.get("items", []) or []))
+		_ensure_sidebar_report_link(sidebar_items)
 	)
 	for row in sidebar_items:
 		sidebar.append("items", row)
@@ -73,6 +85,57 @@ def sync_retailedge_workspace_layout():
 		"sidebar": sidebar.name,
 		"sidebar_items": len(sidebar.items or []),
 	}
+
+
+def _filter_workspace_content(content: str | None, shortcuts: list[dict]) -> str | None:
+	if not content:
+		return content
+	try:
+		blocks = json.loads(content)
+	except (TypeError, ValueError):
+		return content
+
+	valid_shortcut_names = {row.get("label") for row in shortcuts or []}
+	filtered = []
+	for block in blocks or []:
+		if block.get("type") != "shortcut":
+			filtered.append(block)
+			continue
+		shortcut_name = ((block.get("data") or {}).get("shortcut_name"))
+		if shortcut_name in valid_shortcut_names:
+			filtered.append(block)
+	return json.dumps(filtered, separators=(",", ":"))
+
+
+def _normalise_sidebar_items(items: list[dict]) -> list[dict]:
+	"""Drop links to optional-app targets that are unavailable on this site.
+
+	Sections are retained only when they still contain at least one valid child.
+	This keeps POSNext links when POSNext is installed without making it a hard
+	dependency for a clean standalone RetailEdge installation.
+	"""
+	normalised: list[dict] = []
+	pending_section: dict | None = None
+	seen: set[tuple] = set()
+
+	for item in items or []:
+		row = dict(item)
+		if row.get("type") == "Section Break":
+			pending_section = row
+			continue
+
+		if row.get("type") == "Link":
+			identity = (row.get("label"), row.get("link_to"), row.get("link_type"))
+			if identity in seen or not _target_exists(row.get("link_type"), row.get("link_to")):
+				continue
+			seen.add(identity)
+
+		if pending_section is not None:
+			normalised.append(pending_section)
+			pending_section = None
+		normalised.append(row)
+
+	return normalised
 
 
 def _business_hub_exists() -> bool:
