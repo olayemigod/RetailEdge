@@ -49,23 +49,23 @@
    "options": "RE-EPE-.YYYY.-"
   },
   {
+   "description": "Remote EdgePay handoff event identifier. EdgePay is a service and is not installed on this site.",
    "fieldname": "edgepay_handoff_event",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "EdgePay Handoff Event",
-   "options": "EdgePay Status Handoff Event"
+   "label": "EdgePay Handoff Event"
   },
   {
+   "description": "Remote EdgePay payment request identifier.",
    "fieldname": "edgepay_payment_request",
-   "fieldtype": "Link",
-   "label": "EdgePay Payment Request",
-   "options": "EdgePay Payment Request"
+   "fieldtype": "Data",
+   "label": "EdgePay Payment Request"
   },
   {
+   "description": "Remote EdgePay payment transaction identifier.",
    "fieldname": "edgepay_payment_transaction",
-   "fieldtype": "Link",
-   "label": "EdgePay Payment Transaction",
-   "options": "EdgePay Payment Transaction"
+   "fieldtype": "Data",
+   "label": "EdgePay Payment Transaction"
   },
   {
    "fieldname": "source_app",
