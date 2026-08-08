@@ -26,11 +26,11 @@
    "options": "RE-EHL-.YYYY.-"
   },
   {
+   "description": "Remote EdgePay handoff event identifier. EdgePay is a service and is not installed on this site.",
    "fieldname": "edgepay_event",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "EdgePay Event",
-   "options": "EdgePay Status Handoff Event"
+   "label": "EdgePay Event"
   },
   {
    "fieldname": "source_doctype",
