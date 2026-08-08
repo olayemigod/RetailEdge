@@ -1,82 +1,85 @@
 # -*- coding: utf-8 -*-
+
 import frappe
 from frappe import _
-from edgepayv1.edgepay.sdk import (
+
+from retailedge.integrations.edgepay_service import (
+	EdgePayServiceError,
 	get_pending_payment_handoffs,
 	mark_payment_handoff_delivered,
-	mark_payment_handoff_failed
+	mark_payment_handoff_failed,
+	redact_edgepay_error,
 )
-from edgepayv1.edgepay.services.security import redact_secrets
+
 
 def fetch_pending_edgepay_handoffs(limit=50):
-	"""
-	Fetches pending payment handoffs from EdgePay queue where source_app is RetailEdge.
-	"""
-	res = get_pending_payment_handoffs(source_app="RetailEdge", limit=limit)
-	if not res or not res.get("ok"):
+	"""Fetch pending RetailEdge handoffs from the remote EdgePay service."""
+	try:
+		res = get_pending_payment_handoffs(source_app="RetailEdge", limit=limit)
+	except EdgePayServiceError as exc:
+		frappe.logger("retailedge.edgepay").warning(
+			"EdgePay handoff fetch unavailable: %s", redact_edgepay_error(exc)
+		)
 		return []
-	
+
 	events = res.get("data") or []
-	# Extra safety filter
-	filtered = [e for e in events if e.get("source_app") in ("RetailEdge", "retailedge")]
-	return filtered
+	return [event for event in events if event.get("source_app") in ("RetailEdge", "retailedge")]
+
 
 def validate_edgepay_handoff(event):
-	"""
-	Validates the structure, fields, and existence of the source document.
-	"""
+	"""Validate a remote handoff before creating local payment evidence."""
 	required = ["source_app", "source_doctype", "source_name", "amount", "currency", "request_status"]
-	for req in required:
-		if not event.get(req):
-			frappe.throw(_("Missing required event field: {0}").format(req))
-			
+	for fieldname in required:
+		if not event.get(fieldname):
+			frappe.throw(_("Missing required event field: {0}").format(fieldname))
+
 	if event.get("source_app") not in ("RetailEdge", "retailedge"):
 		frappe.throw(_("Invalid source_app: {0}").format(event.get("source_app")))
-		
+
 	try:
 		amount = float(event.get("amount"))
 		if amount <= 0:
 			frappe.throw(_("Amount must be greater than zero"))
 	except (ValueError, TypeError):
 		frappe.throw(_("Invalid amount format"))
-		
-	# Confirm source document exists
+
 	doc_type = event.get("source_doctype")
 	doc_name = event.get("source_name")
 	if not frappe.db.exists(doc_type, doc_name):
 		frappe.throw(_("Source document {0} {1} does not exist").format(doc_type, doc_name))
 
+
 def mark_edgepay_handoff_delivered(event_name):
-	"""
-	Invokes EdgePay SDK wrapper to mark event as Delivered.
-	"""
-	res = mark_payment_handoff_delivered(event_name)
-	if not res or not res.get("ok"):
-		msg = res.get("message") if res else "Unknown error"
-		frappe.throw(_("Failed to mark handoff delivered: {0}").format(msg))
-	return res
+	"""Acknowledge a locally persisted handoff to the remote EdgePay service."""
+	try:
+		return mark_payment_handoff_delivered(event_name)
+	except EdgePayServiceError as exc:
+		frappe.throw(_("Failed to mark handoff delivered: {0}").format(redact_edgepay_error(exc)))
+
 
 def mark_edgepay_handoff_failed(event_name, error_message):
-	"""
-	Invokes EdgePay SDK wrapper to mark event as Failed with a redacted error.
-	"""
-	redacted = redact_secrets(str(error_message))
-	res = mark_payment_handoff_failed(event_name, error_message=redacted)
-	if not res or not res.get("ok"):
-		msg = res.get("message") if res else "Unknown error"
-		frappe.throw(_("Failed to mark handoff failed: {0}").format(msg))
-	return res
+	"""Report a failed handoff to EdgePay without exposing credentials."""
+	redacted = redact_edgepay_error(error_message)
+	try:
+		return mark_payment_handoff_failed(event_name, error_message=redacted)
+	except EdgePayServiceError as exc:
+		frappe.throw(_("Failed to mark handoff failed: {0}").format(redact_edgepay_error(exc)))
 
-def upsert_payment_evidence(event, idempotency_key, review_status="Pending Review", processing_status=None, error_message=None):
-	"""
-	Creates or updates exactly one RetailEdge EdgePay Payment Evidence record idempotently.
-	"""
+
+def upsert_payment_evidence(
+	event,
+	idempotency_key,
+	review_status="Pending Review",
+	processing_status=None,
+	error_message=None,
+):
+	"""Create or update one local RetailEdge payment-evidence record idempotently."""
 	existing_name = frappe.db.get_value(
 		"RetailEdge EdgePay Payment Evidence",
 		{"idempotency_key": idempotency_key},
-		"name"
+		"name",
 	)
-	
+
 	if existing_name:
 		doc = frappe.get_doc("RetailEdge EdgePay Payment Evidence", existing_name)
 		proc_status = processing_status or "Evidence Updated"
@@ -99,207 +102,189 @@ def upsert_payment_evidence(event, idempotency_key, review_status="Pending Revie
 	doc.currency = event.get("currency")
 	doc.request_status = event.get("request_status")
 	doc.transaction_status = event.get("transaction_status")
-	
+
 	if event.get("paid_on"):
 		doc.paid_on = event.get("paid_on")
-		
+
 	doc.processing_status = proc_status
 	doc.review_status = review_status
-	
+
 	if error_message:
-		doc.error_message = error_message
-		
+		doc.error_message = redact_edgepay_error(error_message)
+
 	doc.save(ignore_permissions=True)
 	return doc.name, proc_status
 
+
+def _create_handoff_log(event, processing_status, error_message=None):
+	log_doc = frappe.get_doc(
+		{
+			"doctype": "RetailEdge EdgePay Handoff Log",
+			"edgepay_event": event.get("name"),
+			"source_doctype": event.get("source_doctype"),
+			"source_name": event.get("source_name"),
+			"provider_reference": event.get("provider_reference"),
+			"amount": event.get("amount"),
+			"currency": event.get("currency"),
+			"request_status": event.get("request_status"),
+			"transaction_status": event.get("transaction_status"),
+			"processing_status": processing_status,
+			"error_message": redact_edgepay_error(error_message) if error_message else None,
+			"processed_on": frappe.utils.now_datetime(),
+		}
+	)
+	log_doc.insert(ignore_permissions=True)
+	return log_doc.name
+
+
 def process_edgepay_handoff(event):
-	"""
-	Processes a single payment handoff event, performing validation, logging, and evidence intake.
-	"""
+	"""Validate a remote EdgePay event and persist local evidence without posting accounting."""
 	event_name = event.get("name")
 	if event.get("source_app") not in ("RetailEdge", "retailedge"):
 		return False
-		
-	idempotency_key = f"{event_name}-{event.get('payment_request') or ''}-{event.get('payment_transaction') or ''}-{event.get('provider_reference') or ''}-{event.get('transaction_reference') or ''}"
-	
+
+	idempotency_key = (
+		f"{event_name}-{event.get('payment_request') or ''}-"
+		f"{event.get('payment_transaction') or ''}-{event.get('provider_reference') or ''}-"
+		f"{event.get('transaction_reference') or ''}"
+	)
+
 	try:
-		# 1. Validate formats and existence of source document
 		validate_edgepay_handoff(event)
-		
+
 		doc_type = event.get("source_doctype")
 		doc_name = event.get("source_name")
-		
-		# 2. Check for amount/currency mismatch against host source document
 		doc = frappe.get_doc(doc_type, doc_name)
 		source_amount = doc.get("grand_total") or doc.get("amount") or 0.0
 		source_currency = doc.get("currency")
-		
+
 		from frappe.utils import flt
+
 		amount_mismatch = flt(event.get("amount")) != flt(source_amount)
-		currency_mismatch = bool(event.get("currency") and source_currency and event.get("currency").upper() != source_currency.upper())
-		
+		currency_mismatch = bool(
+			event.get("currency")
+			and source_currency
+			and event.get("currency").upper() != source_currency.upper()
+		)
+
 		if amount_mismatch or currency_mismatch:
-			err_msg = ""
+			error_parts = []
 			if amount_mismatch:
-				err_msg += f"Amount mismatch: event {event.get('amount')}, source {source_amount}. "
+				error_parts.append(f"Amount mismatch: event {event.get('amount')}, source {source_amount}.")
 			if currency_mismatch:
-				err_msg += f"Currency mismatch: event {event.get('currency')}, source {source_currency}. "
-				
-			# Block or record as Exception review status safely
+				error_parts.append(
+					f"Currency mismatch: event {event.get('currency')}, source {source_currency}."
+				)
+			err_msg = " ".join(error_parts)
+
 			upsert_payment_evidence(
-				event, idempotency_key, review_status="Exception", 
-				processing_status="Failed", error_message=err_msg
+				event,
+				idempotency_key,
+				review_status="Exception",
+				processing_status="Failed",
+				error_message=err_msg,
 			)
-			
-			log_doc = frappe.get_doc({
-				"doctype": "RetailEdge EdgePay Handoff Log",
-				"edgepay_event": event_name,
-				"source_doctype": doc_type,
-				"source_name": doc_name,
-				"provider_reference": event.get("provider_reference"),
-				"amount": event.get("amount"),
-				"currency": event.get("currency"),
-				"request_status": event.get("request_status"),
-				"transaction_status": event.get("transaction_status"),
-				"processing_status": "Failed",
-				"error_message": err_msg,
-				"processed_on": frappe.utils.now_datetime()
-			})
-			log_doc.insert(ignore_permissions=True)
-			
+			_create_handoff_log(event, "Failed", err_msg)
 			mark_edgepay_handoff_failed(event_name, err_msg)
 			return False
-		
-		# 3. Require provider_reference for Paid events
+
 		if event.get("request_status") == "Paid" and not event.get("provider_reference"):
 			frappe.throw(_("Missing provider_reference for Paid event"))
-			
-		# Determine review status
+
 		if event.get("request_status") == "Paid":
 			review_status = "Pending Review"
 		elif event.get("request_status") in ("Failed", "Expired", "Cancelled"):
 			review_status = "Rejected"
 		else:
 			review_status = "Pending Review"
-			
-		# Upsert Payment Evidence idempotently
-		upsert_payment_evidence(event, idempotency_key, review_status=review_status, error_message=None)
-		
-		# Log handoff successfully
-		log_doc = frappe.get_doc({
-			"doctype": "RetailEdge EdgePay Handoff Log",
-			"edgepay_event": event_name,
-			"source_doctype": doc_type,
-			"source_name": doc_name,
-			"provider_reference": event.get("provider_reference"),
-			"amount": event.get("amount"),
-			"currency": event.get("currency"),
-			"request_status": event.get("request_status"),
-			"transaction_status": event.get("transaction_status"),
-			"processing_status": "Processed",
-			"processed_on": frappe.utils.now_datetime()
-		})
-		log_doc.insert(ignore_permissions=True)
-		
-		# Acknowledge event to EdgePay only after evidence and log are successfully persisted
+
+		upsert_payment_evidence(event, idempotency_key, review_status=review_status)
+		_create_handoff_log(event, "Processed")
+
+		# Remote acknowledgement happens only after local evidence and audit logging persist.
 		mark_edgepay_handoff_delivered(event_name)
 		return True
-		
-	except Exception as e:
-		redacted_err = redact_secrets(str(e))
-		
+
+	except Exception as exc:
+		redacted_err = redact_edgepay_error(exc)
+
 		try:
-			log_doc = frappe.get_doc({
-				"doctype": "RetailEdge EdgePay Handoff Log",
-				"edgepay_event": event_name,
-				"source_doctype": event.get("source_doctype"),
-				"source_name": event.get("source_name"),
-				"provider_reference": event.get("provider_reference"),
-				"amount": event.get("amount"),
-				"currency": event.get("currency"),
-				"request_status": event.get("request_status"),
-				"transaction_status": event.get("transaction_status"),
-				"processing_status": "Failed",
-				"error_message": redacted_err,
-				"processed_on": frappe.utils.now_datetime()
-			})
-			log_doc.insert(ignore_permissions=True)
-		except Exception as log_ex:
-			frappe.log_error(f"Failed to create RetailEdge EdgePay Handoff Log: {str(log_ex)}", "RetailEdge Handoff Log Error")
-			
+			_create_handoff_log(event, "Failed", redacted_err)
+		except Exception as log_exc:
+			frappe.log_error(
+				f"Failed to create RetailEdge EdgePay Handoff Log: {redact_edgepay_error(log_exc)}",
+				"RetailEdge Handoff Log Error",
+			)
+
 		if event.get("source_doctype") and event.get("source_name"):
 			try:
 				upsert_payment_evidence(
-					event, idempotency_key, review_status="Exception", 
-					processing_status="Failed", error_message=redacted_err
+					event,
+					idempotency_key,
+					review_status="Exception",
+					processing_status="Failed",
+					error_message=redacted_err,
 				)
 			except Exception:
 				pass
 
-		try:
-			mark_edgepay_handoff_failed(event_name, redacted_err)
-		except Exception as fail_ex:
-			frappe.log_error(f"Failed to mark RetailEdge handoff failed in EdgePay: {str(fail_ex)}", "RetailEdge Handoff Mark Failed Error")
-			
+		if event_name:
+			try:
+				mark_edgepay_handoff_failed(event_name, redacted_err)
+			except Exception as fail_exc:
+				frappe.log_error(
+					f"Failed to mark RetailEdge handoff failed in EdgePay: {redact_edgepay_error(fail_exc)}",
+					"RetailEdge Handoff Mark Failed Error",
+				)
+
 		return False
+
 
 @frappe.whitelist()
 def process_pending_edgepay_handoffs(limit=50):
-	"""
-	Fetches and processes all pending EdgePay status handoffs for RetailEdge.
-	"""
-	limit_int = int(limit) if limit else 50
-	events = fetch_pending_edgepay_handoffs(limit=limit_int)
-	success_count = 0
-	for event in events:
-		if process_edgepay_handoff(event):
-			success_count += 1
-	return success_count
+	"""Fetch and process pending handoffs from the configured EdgePay service."""
+	try:
+		limit_int = int(limit) if limit else 50
+	except (TypeError, ValueError):
+		frappe.throw(_("Limit must be a valid integer"))
+
+	events = fetch_pending_edgepay_handoffs(limit=max(1, min(limit_int, 500)))
+	return sum(1 for event in events if process_edgepay_handoff(event))
+
 
 @frappe.whitelist()
 def mark_edgepay_evidence_reviewed(evidence_name):
-	"""
-	Sets the review status of the specified payment evidence to 'Reviewed'.
-	This method must NOT post accounting or mutate source documents.
-	"""
+	"""Mark local payment evidence Reviewed without posting accounting."""
 	if not frappe.db.exists("RetailEdge EdgePay Payment Evidence", evidence_name):
 		frappe.throw(_("Payment Evidence {0} not found").format(evidence_name))
-		
+
 	doc = frappe.get_doc("RetailEdge EdgePay Payment Evidence", evidence_name)
 	doc.review_status = "Reviewed"
 	doc.save(ignore_permissions=True)
-	
+
 	return {
 		"ok": True,
 		"status": "success",
 		"message": f"Payment evidence {evidence_name} marked as Reviewed",
-		"data": {
-			"name": doc.name,
-			"review_status": doc.review_status
-		}
+		"data": {"name": doc.name, "review_status": doc.review_status},
 	}
+
 
 @frappe.whitelist()
 def mark_edgepay_evidence_rejected(evidence_name, reason=None):
-	"""
-	Sets the review status of the specified payment evidence to 'Rejected'.
-	This method must NOT post accounting or mutate source documents.
-	"""
+	"""Mark local payment evidence Rejected without posting accounting."""
 	if not frappe.db.exists("RetailEdge EdgePay Payment Evidence", evidence_name):
 		frappe.throw(_("Payment Evidence {0} not found").format(evidence_name))
-		
+
 	doc = frappe.get_doc("RetailEdge EdgePay Payment Evidence", evidence_name)
 	doc.review_status = "Rejected"
 	if reason:
-		doc.error_message = redact_secrets(str(reason))
+		doc.error_message = redact_edgepay_error(reason)
 	doc.save(ignore_permissions=True)
-	
+
 	return {
 		"ok": True,
 		"status": "success",
 		"message": f"Payment evidence {evidence_name} marked as Rejected",
-		"data": {
-			"name": doc.name,
-			"review_status": doc.review_status
-		}
+		"data": {"name": doc.name, "review_status": doc.review_status},
 	}
