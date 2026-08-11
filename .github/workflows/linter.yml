@@ -19,80 +19,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
           cache: pip
-
-      - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Run pre-commit on pull request changes
-        id: precommit
-        continue-on-error: true
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          mapfile -d '' changed_files < <(
-            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA"
-          )
-          if [ "${#changed_files[@]}" -eq 0 ]; then
-            echo "No added, copied, modified, or renamed files to lint." | tee precommit.log
-            exit 0
-          fi
-          printf 'Linting changed file: %s\n' "${changed_files[@]}" | tee precommit.log
-          pre-commit run --files "${changed_files[@]}" 2>&1 | tee -a precommit.log
-
-      - name: Upload changed-file lint diagnostics
-        if: steps.precommit.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: changed-file-lint-diagnostics
-          path: precommit.log
-
-      - name: Enforce pre-commit result
-        if: steps.precommit.outcome == 'failure'
-        run: exit 1
+      - uses: pre-commit/action@v3.0.0
 
       - name: Download Semgrep rules
         run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules
 
-      - name: Install Semgrep
-        run: pip install semgrep
-
-      - name: Run Semgrep on pull request changes
-        id: semgrep
-        continue-on-error: true
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      - name: Run Semgrep rules
         run: |
-          mapfile -d '' changed_files < <(
-            git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA"
-          )
-          if [ "${#changed_files[@]}" -eq 0 ]; then
-            echo "No added, copied, modified, or renamed files to scan." | tee semgrep.log
-            exit 0
-          fi
-          semgrep scan --error \
-            --config ./frappe-semgrep-rules/rules \
-            --config r/python.lang.correctness \
-            "${changed_files[@]}" 2>&1 | tee semgrep.log
-
-      - name: Upload changed-file Semgrep diagnostics
-        if: steps.semgrep.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: changed-file-semgrep-diagnostics
-          path: semgrep.log
-
-      - name: Enforce Semgrep result
-        if: steps.semgrep.outcome == 'failure'
-        run: exit 1
+          pip install semgrep
+          semgrep ci --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness
 
   deps-vulnerable-check:
     name: 'Vulnerable Dependency Check'
