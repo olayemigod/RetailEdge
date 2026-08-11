@@ -1,0 +1,37 @@
+name: Reconcile version-16 ancestry
+
+on:
+  push:
+    branches:
+      - feat/retailedge-edgesuite-ui-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out RetailEdge feature branch
+        uses: actions/checkout@v6
+        with:
+          ref: feat/retailedge-edgesuite-ui-foundation
+          fetch-depth: 0
+
+      - name: Record authoritative version-16 ancestry without changing the feature tree
+        run: |
+          set -euo pipefail
+          git fetch origin version-16
+
+          if git merge-base --is-ancestor origin/version-16 HEAD; then
+            echo "version-16 is already an ancestor; nothing to do."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --strategy=ours --no-edit origin/version-16 -m "chore(retailedge): record version-16 ancestry"
+          git push origin HEAD:feat/retailedge-edgesuite-ui-foundation
