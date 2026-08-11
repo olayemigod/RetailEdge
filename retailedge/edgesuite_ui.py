@@ -7,6 +7,13 @@ import frappe
 from frappe import _
 
 
+START_POS_LABEL = "Start POS"
+POSNEXT_POS_URL = "/pos/"
+POSNEXT_OPENING_SHIFT = "POS Opening Shift"
+POSNEXT_CLOSING_SHIFT = "POS Closing Shift"
+ERPNEXT_POS_PAGE = "point-of-sale"
+
+
 PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 	{
 		"key": "navigate",
@@ -60,7 +67,12 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "sales",
 		"label": "Sales",
 		"items": (
-			{"label": "Start POS", "target_type": "URL", "target": "/pos/"},
+			{
+				"label": START_POS_LABEL,
+				"target_type": "URL",
+				"target": POSNEXT_POS_URL,
+				"runtime_target": "pos",
+			},
 			{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice"},
 			{"label": "Customers", "target_type": "DocType", "target": "Customer"},
 			{"label": "Sales Orders", "target_type": "DocType", "target": "Sales Order"},
@@ -97,8 +109,8 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction"},
 			{"label": "Bank Matching", "target_type": "Report", "target": "RetailEdge Bank Transaction Matching"},
 			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match"},
-			{"label": "POS Opening Shifts", "target_type": "DocType", "target": "POS Opening Shift"},
-			{"label": "POS Closing Shifts", "target_type": "DocType", "target": "POS Closing Shift"},
+			{"label": "POS Opening Shifts", "target_type": "DocType", "target": POSNEXT_OPENING_SHIFT},
+			{"label": "POS Closing Shifts", "target_type": "DocType", "target": POSNEXT_CLOSING_SHIFT},
 		),
 	},
 	{
@@ -245,11 +257,31 @@ def _get_permitted_navigation_groups(roles: set[str]) -> list[dict[str, Any]]:
 		required_roles = set(group.get("required_roles") or ())
 		if required_roles and not roles.intersection(required_roles):
 			continue
-		items = [deepcopy(item) for item in group["items"] if _can_open_target(item)]
+
+		items: list[dict[str, Any]] = []
+		for item in group["items"]:
+			resolved = _resolve_navigation_item(item)
+			if resolved is not None and _can_open_target(resolved):
+				items.append(resolved)
 		if not items:
 			continue
 		groups.append({"key": group["key"], "label": _(group["label"]), "items": items})
 	return groups
+
+
+def _resolve_navigation_item(item: dict[str, Any]) -> dict[str, Any] | None:
+	resolved = deepcopy(item)
+	if resolved.pop("runtime_target", None) != "pos":
+		return resolved
+	if _posnext_available():
+		resolved["target_type"] = "URL"
+		resolved["target"] = POSNEXT_POS_URL
+		return resolved
+	if _target_exists("Page", ERPNEXT_POS_PAGE):
+		resolved["target_type"] = "Page"
+		resolved["target"] = ERPNEXT_POS_PAGE
+		return resolved
+	return None
 
 
 def _get_permitted_quick_actions() -> list[dict[str, Any]]:
@@ -270,15 +302,23 @@ def _can_open_target(item: dict[str, Any]) -> bool:
 	if target_type == "DocType":
 		return _doctype_exists(target) and _has_permission(target, "read")
 	if target_type in {"Page", "Report"}:
-		return bool(frappe.db.exists(target_type, target))
+		return _target_exists(target_type, target)
 	return False
 
 
-def _doctype_exists(doctype: str) -> bool:
+def _target_exists(target_type: str, target: str) -> bool:
 	try:
-		return bool(frappe.db.exists("DocType", doctype))
+		return bool(frappe.db.exists(target_type, target))
 	except Exception:
 		return False
+
+
+def _doctype_exists(doctype: str) -> bool:
+	return _target_exists("DocType", doctype)
+
+
+def _posnext_available() -> bool:
+	return _doctype_exists(POSNEXT_OPENING_SHIFT) and _doctype_exists(POSNEXT_CLOSING_SHIFT)
 
 
 def _has_permission(doctype: str, permission_type: str) -> bool:
