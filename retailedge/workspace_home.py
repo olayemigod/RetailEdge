@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
 import frappe
+
+
+START_POS_LABEL = "Start POS"
+POSNEXT_POS_URL = "/pos/"
+POSNEXT_OPENING_SHIFT = "POS Opening Shift"
+POSNEXT_CLOSING_SHIFT = "POS Closing Shift"
+ERPNEXT_POS_PAGE = "point-of-sale"
 
 
 @dataclass(frozen=True)
@@ -35,9 +43,9 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Salesperson Performance Dashboard", "Page", "salesperson-performance-dashboard", "Dashboard", 10, "manager", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("Branch Performance Summary", "Report", "RetailEdge Branch Performance Summary", "Dashboard", 20, "manager", "RetailEdge Native", "Blue"),
 
-	WorkspaceHomeItem("Start POS", "URL", "/pos/", "Sales & POS", 10, "cashier", "POSNext Link", "Green", "/pos/"),
-	WorkspaceHomeItem("POS Opening Shift", "DocType", "POS Opening Shift", "Sales & POS", 20, "cashier", "ERPNext Link", "Grey"),
-	WorkspaceHomeItem("POS Closing Shift", "DocType", "POS Closing Shift", "Sales & POS", 30, "cashier", "ERPNext Link", "Grey"),
+	WorkspaceHomeItem(START_POS_LABEL, "URL", POSNEXT_POS_URL, "Sales & POS", 10, "cashier", "POS Runtime", "Green", POSNEXT_POS_URL),
+	WorkspaceHomeItem("POS Opening Shift", "DocType", POSNEXT_OPENING_SHIFT, "Sales & POS", 20, "cashier", "POSNext Link", "Grey"),
+	WorkspaceHomeItem("POS Closing Shift", "DocType", POSNEXT_CLOSING_SHIFT, "Sales & POS", 30, "cashier", "POSNext Link", "Grey"),
 	WorkspaceHomeItem("Sales Invoice", "DocType", "Sales Invoice", "Sales & POS", 40, "operations", "ERPNext Link", "Grey"),
 	WorkspaceHomeItem("Customer", "DocType", "Customer", "Sales & POS", 50, "cashier", "ERPNext Link", "Grey"),
 
@@ -101,30 +109,52 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 )
 
 
+def _target_exists(link_type: str, link_to: str) -> bool:
+	if link_type == "URL":
+		return bool(link_to)
+	if link_type not in {"DocType", "Report", "Page", "Workspace"}:
+		return True
+	try:
+		return bool(frappe.db.exists(link_type, link_to))
+	except Exception:
+		return False
+
+
 def target_exists(item: WorkspaceHomeItem) -> bool:
 	if item.link_type == "URL":
 		return bool(item.url or item.link_to)
-	if item.link_type in {"DocType", "Report", "Page", "Workspace"}:
-		return bool(frappe.db.exists(item.link_type, item.link_to))
-	return True
+	return _target_exists(item.link_type, item.link_to)
 
 
-def _json_link_index(workspace_data: dict) -> set[tuple[str, str, str]]:
-	link_index = {
-		(row.get("label"), row.get("link_type"), row.get("link_to"))
-		for row in workspace_data.get("links", []) or []
-		if row.get("type") == "Link"
-	}
-	link_index.update(
-		(row.get("label"), row.get("type"), row.get("url") or row.get("link_to"))
-		for row in workspace_data.get("shortcuts", []) or []
-		if row.get("type") == "URL"
+def _posnext_available() -> bool:
+	return _target_exists("DocType", POSNEXT_OPENING_SHIFT) and _target_exists(
+		"DocType", POSNEXT_CLOSING_SHIFT
 	)
-	return link_index
+
+
+def _resolve_runtime_item(item: WorkspaceHomeItem) -> WorkspaceHomeItem | None:
+	if item.label != START_POS_LABEL or item.section != "Sales & POS":
+		return item
+	if _posnext_available():
+		return replace(
+			item,
+			link_type="URL",
+			link_to=POSNEXT_POS_URL,
+			source="POSNext Link",
+			url=POSNEXT_POS_URL,
+		)
+	if _target_exists("Page", ERPNEXT_POS_PAGE):
+		return replace(
+			item,
+			link_type="Page",
+			link_to=ERPNEXT_POS_PAGE,
+			source="ERPNext Link",
+			url=None,
+		)
+	return None
 
 
 def get_home_workspace_items(workspace_data: dict, check_dependencies: bool = True) -> list[WorkspaceHomeItem]:
-	available = _json_link_index(workspace_data)
 	seen: set[tuple[str, str]] = set()
 	items: list[WorkspaceHomeItem] = []
 	for section in HOME_SECTIONS:
@@ -132,7 +162,10 @@ def get_home_workspace_items(workspace_data: dict, check_dependencies: bool = Tr
 			(item for item in HOME_WORKSPACE_ITEMS if item.section == section),
 			key=lambda item: item.priority,
 		)
-		for item in section_items:
+		for base_item in section_items:
+			item = _resolve_runtime_item(base_item)
+			if item is None:
+				continue
 			key = (item.link_type, item.url or item.link_to)
 			if key in seen or (check_dependencies and not target_exists(item)):
 				continue
@@ -168,7 +201,7 @@ def _items_by_section(
 ) -> dict[str, list[WorkspaceHomeItem]]:
 	sections = {section: [] for section in HOME_SECTIONS}
 	for item in get_home_workspace_items(workspace_data, check_dependencies=check_dependencies):
-		if item.link_type == "URL" and not include_urls:
+		if item.label == START_POS_LABEL and not include_urls:
 			continue
 		sections.setdefault(item.section, []).append(item)
 	return {section: items for section, items in sections.items() if items}
@@ -219,7 +252,7 @@ def build_home_workspace_content(workspace_data: dict, check_dependencies: bool 
 		}
 	]
 	for item in get_home_workspace_items(workspace_data, check_dependencies=check_dependencies):
-		if item.link_type == "URL":
+		if item.label == START_POS_LABEL:
 			content.append(
 				{
 					"id": "retailedge_home_start_pos",
