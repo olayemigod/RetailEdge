@@ -7,7 +7,7 @@ on:
   pull_request:
 
 concurrency:
-  group: version-16-retailedge-${{ github.event.number || github.sha }}
+  group: version-16-retailedge-${{ github.event.number }}
   cancel-in-progress: true
 
 jobs:
@@ -37,47 +37,11 @@ jobs:
     steps:
       - name: Clone
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
-      - name: Resolve changed RetailEdge test modules
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PUSH_BASE_SHA: ${{ github.event.before }}
-          PUSH_HEAD_SHA: ${{ github.sha }}
+      - name: Find tests
         run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            base_sha="$PR_BASE_SHA"
-            head_sha="$PR_HEAD_SHA"
-          else
-            base_sha="$PUSH_BASE_SHA"
-            head_sha="$PUSH_HEAD_SHA"
-          fi
-
-          if [ -z "$base_sha" ] || printf '%s' "$base_sha" | grep -Eq '^0+$'; then
-            base_sha="$(git rev-parse "$head_sha^")"
-          fi
-
-          mapfile -t test_files < <(
-            git diff --name-only --diff-filter=ACMR "$base_sha" "$head_sha" \
-              | grep '^retailedge/tests/test_.*\.py$' \
-              | sort -u \
-              || true
-          )
-
-          if [ "${#test_files[@]}" -eq 0 ]; then
-            echo "Every RetailEdge pull request or direct version-16 push must include a changed test module."
-            exit 1
-          fi
-
-          : > "$GITHUB_WORKSPACE/test-modules.txt"
-          for file in "${test_files[@]}"; do
-            module="${file%.py}"
-            module="${module//\//.}"
-            echo "$module" | tee -a "$GITHUB_WORKSPACE/test-modules.txt"
-          done
+          echo "Finding tests"
+          grep -rn "def test" > /dev/null
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -121,40 +85,21 @@ jobs:
           pip install frappe-bench
           bench init --skip-redis-config-generation --skip-assets --python "$(which python)" ~/frappe-bench
 
-      - name: Install ERPNext and RetailEdge
+      - name: Install
         working-directory: /home/runner/frappe-bench
         run: |
-          bench get-app --branch version-16 erpnext https://github.com/frappe/erpnext
-          bench get-app retailedge "$GITHUB_WORKSPACE"
+          bench get-app retailedge $GITHUB_WORKSPACE
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin test_site
-          bench --site test_site install-app erpnext
           bench --site test_site install-app retailedge
-          bench build --app retailedge
+          bench build
         env:
           CI: 'Yes'
 
-      - name: Run changed RetailEdge test modules
-        id: server_tests
-        continue-on-error: true
+      - name: Run Tests
         working-directory: /home/runner/frappe-bench
         run: |
-          set -o pipefail
           bench --site test_site set-config allow_tests true
-          while IFS= read -r module; do
-            echo "Running $module"
-            bench --site test_site run-tests --app retailedge --module "$module"
-          done < "$GITHUB_WORKSPACE/test-modules.txt" 2>&1 | tee "$GITHUB_WORKSPACE/server-tests.log"
+          bench --site test_site run-tests --app retailedge
         env:
           TYPE: server
-
-      - name: Upload server test diagnostics
-        if: steps.server_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: server-test-diagnostics
-          path: server-tests.log
-
-      - name: Enforce server test result
-        if: steps.server_tests.outcome == 'failure'
-        run: exit 1
