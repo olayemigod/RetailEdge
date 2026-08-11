@@ -11,6 +11,11 @@ from retailedge.patches.sync_retailedge_workspace import (
 	_target_exists,
 )
 from retailedge.workspace_home import (
+	ERPNEXT_POS_PAGE,
+	POSNEXT_CLOSING_SHIFT,
+	POSNEXT_OPENING_SHIFT,
+	POSNEXT_POS_URL,
+	START_POS_LABEL,
 	build_home_workspace_content,
 	build_home_workspace_links,
 	build_home_workspace_shortcuts,
@@ -20,6 +25,7 @@ from retailedge.workspace_home import (
 BUSINESS_HUB_PAGE = "retailedge-business-hub"
 BUSINESS_HUB_LABEL = "RetailEdge Business Hub"
 DASHBOARD_SECTION_LABEL = "Dashboard"
+SALES_POS_SECTION_LABEL = "Sales & POS"
 STOCK_MOVEMENT_REPORT = "RetailEdge Stock Movement History"
 STOCK_MOVEMENT_LABEL = "Stock Movement History"
 REPORTS_SECTION_LABEL = "Reports & Insights"
@@ -68,6 +74,7 @@ def sync_retailedge_workspace_layout():
 	sidebar.header_icon = sidebar_data.get("header_icon")
 	sidebar.items = []
 	sidebar_items = _normalise_sidebar_items(list(sidebar_data.get("items", []) or []))
+	sidebar_items = _ensure_sidebar_start_pos_link(sidebar_items)
 	sidebar_items = _ensure_sidebar_business_hub_link(
 		_ensure_sidebar_report_link(sidebar_items)
 	)
@@ -125,8 +132,10 @@ def _normalise_sidebar_items(items: list[dict]) -> list[dict]:
 			continue
 
 		if row.get("type") == "Link":
-			identity = (row.get("label"), row.get("link_to"), row.get("link_type"))
-			if identity in seen or not _target_exists(row.get("link_type"), row.get("link_to")):
+			link_type = row.get("link_type")
+			target = row.get("url") if link_type == "URL" else row.get("link_to")
+			identity = (row.get("label"), target, link_type)
+			if identity in seen or not _sidebar_target_exists(row):
 				continue
 			seen.add(identity)
 
@@ -136,6 +145,54 @@ def _normalise_sidebar_items(items: list[dict]) -> list[dict]:
 		normalised.append(row)
 
 	return normalised
+
+
+def _sidebar_target_exists(row: dict) -> bool:
+	if row.get("link_type") == "URL":
+		return bool(row.get("url"))
+	return _target_exists(row.get("link_type"), row.get("link_to"))
+
+
+def _posnext_available() -> bool:
+	return _target_exists("DocType", POSNEXT_OPENING_SHIFT) and _target_exists(
+		"DocType", POSNEXT_CLOSING_SHIFT
+	)
+
+
+def _start_pos_sidebar_row() -> dict | None:
+	row = {
+		"child": 1,
+		"collapsible": 0,
+		"indent": 0,
+		"keep_closed": 0,
+		"label": START_POS_LABEL,
+		"show_arrow": 0,
+		"type": "Link",
+	}
+	if _posnext_available():
+		row.update({"link_type": "URL", "url": POSNEXT_POS_URL})
+		return row
+	if _target_exists("Page", ERPNEXT_POS_PAGE):
+		row.update({"link_type": "Page", "link_to": ERPNEXT_POS_PAGE})
+		return row
+	return None
+
+
+def _ensure_sidebar_start_pos_link(items: list[dict]) -> list[dict]:
+	items = [
+		row
+		for row in items
+		if not (row.get("type") == "Link" and row.get("label") == START_POS_LABEL)
+	]
+	row = _start_pos_sidebar_row()
+	if row is None:
+		return items
+
+	section_index = _find_section_index(items, SALES_POS_SECTION_LABEL)
+	if section_index is None:
+		return items
+	items.insert(section_index + 1, row)
+	return items
 
 
 def _business_hub_exists() -> bool:
