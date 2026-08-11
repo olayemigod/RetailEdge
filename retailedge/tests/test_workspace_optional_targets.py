@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from unittest.mock import patch
 
 from retailedge.workspace_home import (
@@ -188,3 +190,36 @@ def test_workspace_content_removes_shortcuts_filtered_from_workspace():
 	assert "POS Opening Shift" not in filtered
 	assert "Sales Invoice" in filtered
 	assert '"type":"header"' in filtered
+
+
+def test_static_workspace_uses_native_pos_and_has_no_posnext_dependencies():
+	app_path = Path(__file__).resolve().parents[1]
+	workspace_path = app_path / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
+	sidebar_path = app_path / "retailedge" / "workspace_sidebar" / "retailedge" / "retailedge.json"
+
+	workspace = json.loads(workspace_path.read_text())
+	workspace_link_labels = {row.get("label") for row in workspace.get("links", [])}
+	shortcut_labels = {row.get("label") for row in workspace.get("shortcuts", [])}
+
+	assert POSNEXT_OPENING_SHIFT not in workspace_link_labels
+	assert POSNEXT_CLOSING_SHIFT not in workspace_link_labels
+	assert POSNEXT_OPENING_SHIFT not in shortcut_labels
+	assert POSNEXT_CLOSING_SHIFT not in shortcut_labels
+
+	start_pos = next(row for row in workspace["shortcuts"] if row.get("label") == START_POS_LABEL)
+	assert start_pos["type"] == "Page"
+	assert start_pos["link_to"] == ERPNEXT_POS_PAGE
+	assert "url" not in start_pos
+
+	sales_pos = next(
+		row
+		for row in workspace["links"]
+		if row.get("type") == "Card Break" and row.get("label") == "Sales & POS"
+	)
+	assert sales_pos["link_count"] == 2
+
+	sidebar = json.loads(sidebar_path.read_text())
+	sidebar_labels = {row.get("label") for row in sidebar.get("items", [])}
+	assert POSNEXT_OPENING_SHIFT not in sidebar_labels
+	assert POSNEXT_CLOSING_SHIFT not in sidebar_labels
+	assert START_POS_LABEL not in sidebar_labels
