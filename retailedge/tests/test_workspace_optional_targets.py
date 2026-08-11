@@ -2,8 +2,15 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from retailedge.workspace_home import ERPNEXT_POS_PAGE, POSNEXT_POS_URL, START_POS_LABEL
+from retailedge.workspace_home import (
+	ERPNEXT_POS_PAGE,
+	POSNEXT_CLOSING_SHIFT,
+	POSNEXT_OPENING_SHIFT,
+	POSNEXT_POS_URL,
+	START_POS_LABEL,
+)
 from retailedge.workspace_sync import (
+	_ensure_sidebar_posnext_shift_links,
 	_ensure_sidebar_start_pos_link,
 	_filter_workspace_content,
 	_normalise_sidebar_items,
@@ -26,15 +33,15 @@ def test_sidebar_filters_optional_posnext_targets_but_keeps_native_links():
 		{"type": "Section Break", "label": "Sales & POS"},
 		{
 			"type": "Link",
-			"label": "POS Opening Shift",
+			"label": POSNEXT_OPENING_SHIFT,
 			"link_type": "DocType",
-			"link_to": "POS Opening Shift",
+			"link_to": POSNEXT_OPENING_SHIFT,
 		},
 		{
 			"type": "Link",
-			"label": "POS Closing Shift",
+			"label": POSNEXT_CLOSING_SHIFT,
 			"link_type": "DocType",
-			"link_to": "POS Closing Shift",
+			"link_to": POSNEXT_CLOSING_SHIFT,
 		},
 		{
 			"type": "Link",
@@ -55,9 +62,9 @@ def test_sidebar_retains_posnext_targets_when_posnext_is_installed():
 		{"type": "Section Break", "label": "Sales & POS"},
 		{
 			"type": "Link",
-			"label": "POS Opening Shift",
+			"label": POSNEXT_OPENING_SHIFT,
 			"link_type": "DocType",
-			"link_to": "POS Opening Shift",
+			"link_to": POSNEXT_OPENING_SHIFT,
 		},
 	]
 
@@ -67,7 +74,7 @@ def test_sidebar_retains_posnext_targets_when_posnext_is_installed():
 	):
 		normalised = _normalise_sidebar_items(items)
 
-	assert [row.get("label") for row in normalised] == ["Sales & POS", "POS Opening Shift"]
+	assert [row.get("label") for row in normalised] == ["Sales & POS", POSNEXT_OPENING_SHIFT]
 
 
 def test_sidebar_drops_empty_optional_section():
@@ -75,9 +82,9 @@ def test_sidebar_drops_empty_optional_section():
 		{"type": "Section Break", "label": "POSNext Only"},
 		{
 			"type": "Link",
-			"label": "POS Closing Shift",
+			"label": POSNEXT_CLOSING_SHIFT,
 			"link_type": "DocType",
-			"link_to": "POS Closing Shift",
+			"link_to": POSNEXT_CLOSING_SHIFT,
 		},
 	]
 
@@ -126,6 +133,46 @@ def test_sidebar_start_pos_uses_posnext_url_when_posnext_is_available():
 	assert start_pos["link_type"] == "URL"
 	assert start_pos["url"] == POSNEXT_POS_URL
 	assert "link_to" not in start_pos
+
+
+def test_sidebar_does_not_provision_posnext_shift_links_when_posnext_is_unavailable():
+	items = [
+		{"type": "Section Break", "label": "Sales & POS"},
+		{"type": "Link", "label": START_POS_LABEL, "link_type": "Page", "link_to": ERPNEXT_POS_PAGE},
+		{"type": "Link", "label": "Sales Invoice", "link_type": "DocType", "link_to": "Sales Invoice"},
+	]
+
+	with patch("retailedge.patches.sync_retailedge_workspace.frappe.db.exists", side_effect=_exists):
+		resolved = _ensure_sidebar_posnext_shift_links(items)
+
+	labels = [row.get("label") for row in resolved]
+	assert POSNEXT_OPENING_SHIFT not in labels
+	assert POSNEXT_CLOSING_SHIFT not in labels
+
+
+def test_sidebar_provisions_posnext_shift_links_only_when_posnext_is_available():
+	items = [
+		{"type": "Section Break", "label": "Sales & POS"},
+		{"type": "Link", "label": START_POS_LABEL, "link_type": "URL", "url": POSNEXT_POS_URL},
+		{"type": "Link", "label": "Sales Invoice", "link_type": "DocType", "link_to": "Sales Invoice"},
+	]
+
+	with patch(
+		"retailedge.patches.sync_retailedge_workspace.frappe.db.exists",
+		return_value=True,
+	):
+		resolved = _ensure_sidebar_posnext_shift_links(items)
+
+	labels = [row.get("label") for row in resolved]
+	assert labels[:5] == [
+		"Sales & POS",
+		START_POS_LABEL,
+		POSNEXT_OPENING_SHIFT,
+		POSNEXT_CLOSING_SHIFT,
+		"Sales Invoice",
+	]
+	assert labels.count(POSNEXT_OPENING_SHIFT) == 1
+	assert labels.count(POSNEXT_CLOSING_SHIFT) == 1
 
 
 def test_workspace_content_removes_shortcuts_filtered_from_workspace():
