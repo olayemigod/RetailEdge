@@ -75,6 +75,7 @@ def sync_retailedge_workspace_layout():
 	sidebar.items = []
 	sidebar_items = _normalise_sidebar_items(list(sidebar_data.get("items", []) or []))
 	sidebar_items = _ensure_sidebar_start_pos_link(sidebar_items)
+	sidebar_items = _ensure_sidebar_posnext_shift_links(sidebar_items)
 	sidebar_items = _ensure_sidebar_business_hub_link(
 		_ensure_sidebar_report_link(sidebar_items)
 	)
@@ -118,8 +119,8 @@ def _normalise_sidebar_items(items: list[dict]) -> list[dict]:
 	"""Drop links to optional-app targets that are unavailable on this site.
 
 	Sections are retained only when they still contain at least one valid child.
-	This keeps POSNext links when POSNext is installed without making it a hard
-	dependency for a clean standalone RetailEdge installation.
+	Optional POSNext links are provisioned after this pass so a standalone
+	RetailEdge site never imports hard POSNext dependencies from static fixtures.
 	"""
 	normalised: list[dict] = []
 	pending_section: dict | None = None
@@ -192,6 +193,45 @@ def _ensure_sidebar_start_pos_link(items: list[dict]) -> list[dict]:
 	if section_index is None:
 		return items
 	items.insert(section_index + 1, row)
+	return items
+
+
+def _posnext_shift_sidebar_row(label: str) -> dict:
+	return {
+		"child": 1,
+		"collapsible": 0,
+		"indent": 0,
+		"keep_closed": 0,
+		"label": label,
+		"link_to": label,
+		"link_type": "DocType",
+		"show_arrow": 0,
+		"type": "Link",
+	}
+
+
+def _ensure_sidebar_posnext_shift_links(items: list[dict]) -> list[dict]:
+	shift_targets = {POSNEXT_OPENING_SHIFT, POSNEXT_CLOSING_SHIFT}
+	items = [
+		row
+		for row in items
+		if not (
+			row.get("type") == "Link"
+			and (row.get("label") in shift_targets or row.get("link_to") in shift_targets)
+		)
+	]
+	if not _posnext_available():
+		return items
+
+	section_index = _find_section_index(items, SALES_POS_SECTION_LABEL)
+	if section_index is None:
+		return items
+
+	insert_at = section_index + 1
+	if insert_at < len(items) and items[insert_at].get("label") == START_POS_LABEL:
+		insert_at += 1
+	for offset, label in enumerate((POSNEXT_OPENING_SHIFT, POSNEXT_CLOSING_SHIFT)):
+		items.insert(insert_at + offset, _posnext_shift_sidebar_row(label))
 	return items
 
 
