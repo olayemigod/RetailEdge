@@ -66,7 +66,7 @@ def get_report_summary(rows, message=None):
 	total_ledger_expenses = sum(flt(row.get("ledger_expenses")) for row in rows) if has_ledger_expenses else 0
 	total_expected_cash = sum(flt(row.get("expected_cash", row.get("net_cash_expected"))) for row in rows)
 	total_actual_cash = sum(flt(row.get("actual_cash", row.get("actual_closing_cash"))) for row in rows)
-	total_variance = sum(flt(row.get("audit_variance")) for row in rows)
+	total_absolute_variance = sum(abs(flt(row.get("audit_variance"))) for row in rows)
 	total_issues = sum(int(row.get("payment_issues") or 0) for row in rows)
 	summary = [
 		{"value": total_sales, "label": _("Gross Sales"), "datatype": "Currency", "indicator": "Blue"},
@@ -79,7 +79,7 @@ def get_report_summary(rows, message=None):
 	summary.extend([
 		{"value": total_expected_cash, "label": _("Expected Cash"), "datatype": "Currency", "indicator": "Blue"},
 		{"value": total_actual_cash, "label": _("Actual Cash"), "datatype": "Currency", "indicator": "Blue"},
-		{"value": total_variance, "label": _("Audit Variance"), "datatype": "Currency", "indicator": "Red" if total_variance else "Green"},
+		{"value": total_absolute_variance, "label": _("Absolute Audit Variance"), "datatype": "Currency", "indicator": "Red" if total_absolute_variance else "Green"},
 		{"value": total_issues, "label": _("Payment Issues"), "datatype": "Int", "indicator": "Orange" if total_issues else "Green"},
 	])
 	return summary
