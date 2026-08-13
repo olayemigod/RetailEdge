@@ -64,8 +64,8 @@
    "collapsible": 0,
    "indent": 0,
    "keep_closed": 0,
-   "label": "POS Opening Shift",
-   "link_to": "POS Opening Shift",
+   "label": "POS Opening Entry",
+   "link_to": "POS Opening Entry",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
@@ -75,8 +75,8 @@
    "collapsible": 0,
    "indent": 0,
    "keep_closed": 0,
-   "label": "POS Closing Shift",
-   "link_to": "POS Closing Shift",
+   "label": "POS Closing Entry",
+   "link_to": "POS Closing Entry",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Link"
