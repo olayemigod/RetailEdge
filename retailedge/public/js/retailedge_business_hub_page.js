@@ -5,8 +5,10 @@
 	const RUNTIME_ASSET = "edgeui.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
+	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge.js";
 	const LOAD_TIMEOUT_MS = 15000;
 	let productMenuBootPromise = null;
+	let routeBridgeBootPromise = null;
 
 	function registerPage() {
 		if (!global.frappe || !frappe.pages) {
@@ -68,6 +70,7 @@
 	}
 
 	async function mountBusinessHub(wrapper) {
+		ensurePage(wrapper);
 		const target =
 			wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
 		clearPreviousMount(wrapper, target);
@@ -131,6 +134,33 @@
 				productMenuBootPromise = null;
 			});
 		return productMenuBootPromise;
+	}
+
+	function bootRouteBridge() {
+		if (global.retailedgeBusinessHubRouteBridge) {
+			return global.retailedgeBusinessHubRouteBridge.boot();
+		}
+		if (routeBridgeBootPromise) return routeBridgeBootPromise;
+
+		routeBridgeBootPromise = requireAsset(ROUTE_BRIDGE_ASSET)
+			.then(() => {
+				if (!global.retailedgeBusinessHubRouteBridge) {
+					throw new Error(
+						__("RetailEdge Business Hub route bridge failed to register: {0}", [
+							ROUTE_BRIDGE_ASSET,
+						])
+					);
+				}
+				return global.retailedgeBusinessHubRouteBridge.boot();
+			})
+			.catch((bridgeError) => {
+				console.error("[RetailEdge Business Hub] route bridge failed to load", bridgeError);
+				return null;
+			})
+			.finally(() => {
+				routeBridgeBootPromise = null;
+			});
+		return routeBridgeBootPromise;
 	}
 
 	function getMountedComponent(wrapper) {
@@ -243,13 +273,17 @@
 
 	function initialiseDeskFeatures() {
 		const pageRegistered = registerPage();
-		if (pageRegistered) bootProductMenu();
+		if (pageRegistered) {
+			bootProductMenu();
+			bootRouteBridge();
+		}
 		return pageRegistered;
 	}
 
 	global.retailedgeRegisterBusinessHubPage = registerPage;
 	global.retailedgeBootBusinessHubPage = bootBusinessHub;
 	global.retailedgeBootProductMenu = bootProductMenu;
+	global.retailedgeBootBusinessHubRouteBridge = bootRouteBridge;
 	if (!initialiseDeskFeatures() && global.document) {
 		global.document.addEventListener("DOMContentLoaded", initialiseDeskFeatures, {
 			once: true,
