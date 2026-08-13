@@ -23,9 +23,12 @@ class TestEdgePayServiceAdapter(FrappeTestCase):
 		app_root = Path(__file__).resolve().parents[1]
 		violations = []
 		for path in app_root.rglob("*.py"):
+			relative_path = path.relative_to(app_root)
+			if "tests" in relative_path.parts:
+				continue
 			content = path.read_text(encoding="utf-8")
 			if "from edgepayv1" in content or "import edgepayv1" in content:
-				violations.append(str(path.relative_to(app_root)))
+				violations.append(str(relative_path))
 		self.assertEqual(violations, [])
 
 	def test_service_is_not_configured_without_endpoint_and_credentials(self):

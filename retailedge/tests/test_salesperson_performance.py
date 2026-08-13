@@ -59,8 +59,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(js_path, "r") as f:
 			content = f.read()
 			
-		edgeui_idx = content.find("requireAsset('edgeui.bundle.js'")
-		product_idx = content.find("requireAsset('salesperson_performance.bundle.js'")
+		edgeui_idx = content.find("requireAsync('edgeui.bundle.js'")
+		product_idx = content.find("requireAsync('salesperson_performance.bundle.js'")
 		self.assertNotEqual(edgeui_idx, -1)
 		self.assertNotEqual(product_idx, -1)
 		self.assertLess(edgeui_idx, product_idx)
@@ -191,7 +191,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 
 		self.assertIn("edgeui.bundle.js", content)
 		self.assertIn("salesperson_performance.bundle.js", content)
-		self.assertIn("requireAsset", content)
+		self.assertIn("requireAsync", content)
 		self.assertIn("retailedge-dashboard-load-error", content)
 
 	def test_frontend_filter_bar_structure_and_labels(self):

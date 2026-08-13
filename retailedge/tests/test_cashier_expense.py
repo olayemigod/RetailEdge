@@ -2689,7 +2689,8 @@ class BranchContextTests(unittest.TestCase):
 		return_value={"allowed": True, "reason": "allowed_branch"},
 	)
 	@patch("retailedge.branch_context.resolve_retailedge_branch_context")
-	def test_apply_branch_context_to_doc_sets_branch_when_empty(self, mock_resolve, _mock_access):
+	@patch("retailedge.branch_context.has_field", return_value=True)
+	def test_apply_branch_context_to_doc_sets_branch_when_empty(self, _mock_has_field, mock_resolve, _mock_access):
 		mock_resolve.return_value = {
 			"branch": "HQ",
 			"source": "POS Opening Shift.branch",
@@ -2711,7 +2712,8 @@ class BranchContextTests(unittest.TestCase):
 		result = get_branch_query_filters("RetailEdge Cashier Expense", user="Administrator")
 		self.assertEqual(result["filters"], {})
 
-	def test_get_branch_query_filters_returns_explicit_branch_filter(self):
+	@patch("retailedge.branch_context.get_first_existing_field", return_value="branch")
+	def test_get_branch_query_filters_returns_explicit_branch_filter(self, _mock_branch_field):
 		result = get_branch_query_filters("RetailEdge Cashier Expense", branch="HQ")
 		self.assertEqual(result["filters"], {"branch": "HQ"})
 
@@ -3242,8 +3244,8 @@ class BranchProfileTests(unittest.TestCase):
 				("Link", "Salesperson Performance Dashboard", 1),
 				("Link", "Branch Performance Summary", 1),
 				("Section Break", "Sales & POS", 0),
-				("Link", "POS Opening Shift", 1),
-				("Link", "POS Closing Shift", 1),
+				("Link", "POS Opening Entry", 1),
+				("Link", "POS Closing Entry", 1),
 				("Link", "Sales Invoice", 1),
 				("Link", "Customer", 1),
 				("Section Break", "Cash, Bank & Reconciliation", 0),

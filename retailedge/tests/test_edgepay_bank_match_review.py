@@ -206,7 +206,7 @@ class TestEdgePayBankMatchReview(FrappeTestCase):
 		ev = self.create_evidence("EPE-MTR-003")
 		res = get_edgepay_bank_match_review_preflight(ev.name)
 		self.assertFalse(res["ok"])
-		self.assertIn("No linked Payment Entry", res["message"])
+		self.assertIn("No linked RetailEdge Payment Entry", res["message"])
 
 	def test_missing_bank_transaction_blocks_review_creation(self):
 		ev = self.create_evidence("EPE-MTR-004")

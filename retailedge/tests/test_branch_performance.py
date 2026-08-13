@@ -590,7 +590,7 @@ class BranchPerformanceTests(unittest.TestCase):
 				"Ledger Expenses",
 				"Expected Cash",
 				"Actual Cash",
-				"Audit Variance",
+				"Absolute Audit Variance",
 				"Payment Issues",
 			],
 		)
@@ -631,7 +631,7 @@ class BranchPerformanceTests(unittest.TestCase):
 				"Cashier Expenses",
 				"Expected Cash",
 				"Actual Cash",
-				"Audit Variance",
+				"Absolute Audit Variance",
 				"Payment Issues",
 			],
 		)
