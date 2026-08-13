@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from retailedge import api as retailedge_api
-
 from retailedge.reconciliation_handoff import (
 	HANDOFF_ALREADY_RECONCILED,
 	HANDOFF_EXCEPTION,
@@ -21,17 +21,21 @@ from retailedge.retailedge.report.retailedge_reconciliation_handoff.retailedge_r
 )
 
 
+APP_ROOT = Path(__file__).resolve().parents[1]
+REPORT_ROOT = APP_ROOT / "retailedge" / "report" / "retailedge_reconciliation_handoff"
+
+
 class ReconciliationHandoffTests(unittest.TestCase):
 	def test_r54_report_json_disables_prepared_report_mode(self):
-		report_path = "/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_reconciliation_handoff/retailedge_reconciliation_handoff.json"
-		with open(report_path, encoding="utf-8") as handle:
+		report_path = REPORT_ROOT / "retailedge_reconciliation_handoff.json"
+		with report_path.open(encoding="utf-8") as handle:
 			report_json = json.load(handle)
 		self.assertEqual(report_json.get("disable_prepared_report"), 1)
 		self.assertEqual(report_json.get("prepared_report"), 0)
 
 	def test_r54_report_js_forces_live_refresh_behavior(self):
-		report_path = "/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_reconciliation_handoff/retailedge_reconciliation_handoff.js"
-		script = open(report_path, encoding="utf-8").read()
+		report_path = REPORT_ROOT / "retailedge_reconciliation_handoff.js"
+		script = report_path.read_text(encoding="utf-8")
 		self.assertIn("report.ignore_prepared_report = true;", script)
 		self.assertIn("report.prepared_report = false;", script)
 		self.assertIn('__("Refresh Report")', script)
