@@ -10,12 +10,15 @@ from retailedge.patches.sync_retailedge_workspace import (
 	_normalise_shortcuts,
 	_target_exists,
 )
-from retailedge.workspace_home import (
-	ERPNEXT_POS_PAGE,
+from retailedge.pos_runtime import (
+	ERPNEXT_POS_CLOSING_ENTRY,
+	ERPNEXT_POS_OPENING_ENTRY,
 	POSNEXT_CLOSING_SHIFT,
 	POSNEXT_OPENING_SHIFT,
-	POSNEXT_POS_URL,
 	START_POS_LABEL,
+	get_pos_runtime_capabilities,
+)
+from retailedge.workspace_home import (
 	build_home_workspace_content,
 	build_home_workspace_links,
 	build_home_workspace_shortcuts,
@@ -75,7 +78,7 @@ def sync_retailedge_workspace_layout():
 	sidebar.items = []
 	sidebar_items = _normalise_sidebar_items(list(sidebar_data.get("items", []) or []))
 	sidebar_items = _ensure_sidebar_start_pos_link(sidebar_items)
-	sidebar_items = _ensure_sidebar_posnext_shift_links(sidebar_items)
+	sidebar_items = _ensure_sidebar_pos_shift_links(sidebar_items)
 	sidebar_items = _ensure_sidebar_business_hub_link(
 		_ensure_sidebar_report_link(sidebar_items)
 	)
@@ -116,11 +119,11 @@ def _filter_workspace_content(content: str | None, shortcuts: list[dict]) -> str
 
 
 def _normalise_sidebar_items(items: list[dict]) -> list[dict]:
-	"""Drop links to optional-app targets that are unavailable on this site.
+	"""Drop links to targets that are unavailable on this site.
 
 	Sections are retained only when they still contain at least one valid child.
-	Optional POSNext links are provisioned after this pass so a standalone
-	RetailEdge site never imports hard POSNext dependencies from static fixtures.
+	Provider-specific POS opening/closing links are provisioned after this pass,
+	so RetailEdge remains valid with ERPNext alone or with POSNext installed.
 	"""
 	normalised: list[dict] = []
 	pending_section: dict | None = None
@@ -154,29 +157,25 @@ def _sidebar_target_exists(row: dict) -> bool:
 	return _target_exists(row.get("link_type"), row.get("link_to"))
 
 
-def _posnext_available() -> bool:
-	return _target_exists("DocType", POSNEXT_OPENING_SHIFT) and _target_exists(
-		"DocType", POSNEXT_CLOSING_SHIFT
-	)
-
-
 def _start_pos_sidebar_row() -> dict | None:
+	capabilities = get_pos_runtime_capabilities(_target_exists)
+	if not capabilities.start_link_type or not capabilities.start_target:
+		return None
 	row = {
 		"child": 1,
 		"collapsible": 0,
 		"indent": 0,
 		"keep_closed": 0,
 		"label": START_POS_LABEL,
+		"link_type": capabilities.start_link_type,
 		"show_arrow": 0,
 		"type": "Link",
 	}
-	if _posnext_available():
-		row.update({"link_type": "URL", "url": POSNEXT_POS_URL})
-		return row
-	if _target_exists("Page", ERPNEXT_POS_PAGE):
-		row.update({"link_type": "Page", "link_to": ERPNEXT_POS_PAGE})
-		return row
-	return None
+	if capabilities.start_link_type == "URL":
+		row["url"] = capabilities.start_url or capabilities.start_target
+	else:
+		row["link_to"] = capabilities.start_target
+	return row
 
 
 def _ensure_sidebar_start_pos_link(items: list[dict]) -> list[dict]:
@@ -196,22 +195,27 @@ def _ensure_sidebar_start_pos_link(items: list[dict]) -> list[dict]:
 	return items
 
 
-def _posnext_shift_sidebar_row(label: str) -> dict:
+def _pos_shift_sidebar_row(doctype: str) -> dict:
 	return {
 		"child": 1,
 		"collapsible": 0,
 		"indent": 0,
 		"keep_closed": 0,
-		"label": label,
-		"link_to": label,
+		"label": doctype,
+		"link_to": doctype,
 		"link_type": "DocType",
 		"show_arrow": 0,
 		"type": "Link",
 	}
 
 
-def _ensure_sidebar_posnext_shift_links(items: list[dict]) -> list[dict]:
-	shift_targets = {POSNEXT_OPENING_SHIFT, POSNEXT_CLOSING_SHIFT}
+def _ensure_sidebar_pos_shift_links(items: list[dict]) -> list[dict]:
+	shift_targets = {
+		POSNEXT_OPENING_SHIFT,
+		POSNEXT_CLOSING_SHIFT,
+		ERPNEXT_POS_OPENING_ENTRY,
+		ERPNEXT_POS_CLOSING_ENTRY,
+	}
 	items = [
 		row
 		for row in items
@@ -220,7 +224,13 @@ def _ensure_sidebar_posnext_shift_links(items: list[dict]) -> list[dict]:
 			and (row.get("label") in shift_targets or row.get("link_to") in shift_targets)
 		)
 	]
-	if not _posnext_available():
+	capabilities = get_pos_runtime_capabilities(_target_exists)
+	shift_doctypes = [
+		doctype
+		for doctype in (capabilities.opening_doctype, capabilities.closing_doctype)
+		if doctype
+	]
+	if not shift_doctypes:
 		return items
 
 	section_index = _find_section_index(items, SALES_POS_SECTION_LABEL)
@@ -230,9 +240,14 @@ def _ensure_sidebar_posnext_shift_links(items: list[dict]) -> list[dict]:
 	insert_at = section_index + 1
 	if insert_at < len(items) and items[insert_at].get("label") == START_POS_LABEL:
 		insert_at += 1
-	for offset, label in enumerate((POSNEXT_OPENING_SHIFT, POSNEXT_CLOSING_SHIFT)):
-		items.insert(insert_at + offset, _posnext_shift_sidebar_row(label))
+	for offset, doctype in enumerate(shift_doctypes):
+		items.insert(insert_at + offset, _pos_shift_sidebar_row(doctype))
 	return items
+
+
+# Compatibility alias for existing callers/tests while the provider-neutral name rolls out.
+def _ensure_sidebar_posnext_shift_links(items: list[dict]) -> list[dict]:
+	return _ensure_sidebar_pos_shift_links(items)
 
 
 def _business_hub_exists() -> bool:
