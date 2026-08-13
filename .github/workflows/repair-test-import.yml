@@ -1,0 +1,49 @@
+name: Repair RetailEdge Test Import
+
+on:
+  push:
+    branches:
+      - feat/retailedge-edgesuite-ui-foundation
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/retailedge-edgesuite-ui-foundation
+          fetch-depth: 0
+      - name: Add missing pathlib import
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('retailedge/tests/test_bank_transaction_match_workflow.py')
+          source = path.read_text()
+          marker = 'import unittest\n'
+          required = 'from pathlib import Path\n'
+          if required not in source.split('import frappe', 1)[0]:
+              if marker not in source:
+                  raise SystemExit('Expected import marker not found')
+              source = source.replace(marker, marker + required, 1)
+              path.write_text(source)
+          PY
+          python -m py_compile retailedge/tests/test_bank_transaction_match_workflow.py
+          git diff --check
+      - name: Commit repair
+        run: |
+          if git diff --quiet; then
+            echo 'No import repair required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add retailedge/tests/test_bank_transaction_match_workflow.py
+          git commit -m 'test(retailedge): restore pathlib import for portable paths'
+          git push origin HEAD:feat/retailedge-edgesuite-ui-foundation
