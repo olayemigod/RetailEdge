@@ -6,12 +6,13 @@ from typing import Any
 import frappe
 from frappe import _
 
-
-START_POS_LABEL = "Start POS"
-POSNEXT_POS_URL = "/pos/"
-POSNEXT_OPENING_SHIFT = "POS Opening Shift"
-POSNEXT_CLOSING_SHIFT = "POS Closing Shift"
-ERPNEXT_POS_PAGE = "point-of-sale"
+from retailedge.pos_runtime import (
+	ERPNEXT_POS_CLOSING_ENTRY,
+	ERPNEXT_POS_OPENING_ENTRY,
+	POSNEXT_POS_URL,
+	START_POS_LABEL,
+	get_pos_runtime_capabilities,
+)
 
 
 PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
@@ -109,8 +110,18 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction"},
 			{"label": "Bank Matching", "target_type": "Report", "target": "RetailEdge Bank Transaction Matching"},
 			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match"},
-			{"label": "POS Opening Shifts", "target_type": "DocType", "target": POSNEXT_OPENING_SHIFT},
-			{"label": "POS Closing Shifts", "target_type": "DocType", "target": POSNEXT_CLOSING_SHIFT},
+			{
+				"label": "POS Opening",
+				"target_type": "DocType",
+				"target": ERPNEXT_POS_OPENING_ENTRY,
+				"runtime_target": "pos_opening",
+			},
+			{
+				"label": "POS Closing",
+				"target_type": "DocType",
+				"target": ERPNEXT_POS_CLOSING_ENTRY,
+				"runtime_target": "pos_closing",
+			},
 		),
 	},
 	{
@@ -271,17 +282,32 @@ def _get_permitted_navigation_groups(roles: set[str]) -> list[dict[str, Any]]:
 
 def _resolve_navigation_item(item: dict[str, Any]) -> dict[str, Any] | None:
 	resolved = deepcopy(item)
-	if resolved.pop("runtime_target", None) != "pos":
+	runtime_target = resolved.pop("runtime_target", None)
+	if runtime_target is None:
 		return resolved
-	if _posnext_available():
-		resolved["target_type"] = "URL"
-		resolved["target"] = POSNEXT_POS_URL
+
+	capabilities = get_pos_runtime_capabilities(_target_exists)
+	if runtime_target == "pos":
+		if not capabilities.start_link_type or not capabilities.start_target:
+			return None
+		resolved["target_type"] = capabilities.start_link_type
+		resolved["target"] = capabilities.start_target
 		return resolved
-	if _target_exists("Page", ERPNEXT_POS_PAGE):
-		resolved["target_type"] = "Page"
-		resolved["target"] = ERPNEXT_POS_PAGE
+	if runtime_target == "pos_opening":
+		if not capabilities.opening_doctype:
+			return None
+		resolved["label"] = capabilities.opening_doctype
+		resolved["target_type"] = "DocType"
+		resolved["target"] = capabilities.opening_doctype
 		return resolved
-	return None
+	if runtime_target == "pos_closing":
+		if not capabilities.closing_doctype:
+			return None
+		resolved["label"] = capabilities.closing_doctype
+		resolved["target_type"] = "DocType"
+		resolved["target"] = capabilities.closing_doctype
+		return resolved
+	return resolved
 
 
 def _get_permitted_quick_actions() -> list[dict[str, Any]]:
@@ -315,10 +341,6 @@ def _target_exists(target_type: str, target: str) -> bool:
 
 def _doctype_exists(doctype: str) -> bool:
 	return _target_exists("DocType", doctype)
-
-
-def _posnext_available() -> bool:
-	return _doctype_exists(POSNEXT_OPENING_SHIFT) and _doctype_exists(POSNEXT_CLOSING_SHIFT)
 
 
 def _has_permission(doctype: str, permission_type: str) -> bool:
