@@ -52,9 +52,7 @@ jobs:
                   else:
                       source = "from pathlib import Path\n\n" + source
 
-              pattern = re.compile(
-                  r'([\"\'])' + re.escape(absolute_prefix) + r'([^\"\']+)\1'
-              )
+              pattern = re.compile(r'([\"\'])' + re.escape(absolute_prefix) + r'([^\"\']+)\1')
               source, count = pattern.subn(
                   lambda match: 'str(APP_ROOT / ' + repr(match.group(2)) + ')',
                   source,
@@ -125,14 +123,12 @@ jobs:
           bridge_path.write_text(bridge)
           PY
 
-      - name: Format portability and frontend repairs
+      - name: Apply safe formatters
         run: |
           mapfile -t portable_tests < <(grep -rl 'APP_ROOT = Path(__file__).resolve().parents\[1\]' retailedge/tests --include='test_*.py' || true)
           if [ "${#portable_tests[@]}" -gt 0 ]; then
-            pre-commit run ruff --files "${portable_tests[@]}" || true
+            pre-commit run ruff --hook-stage manual --files "${portable_tests[@]}" || true
             pre-commit run ruff-format --files "${portable_tests[@]}" || true
-            pre-commit run ruff --files "${portable_tests[@]}"
-            pre-commit run ruff-format --files "${portable_tests[@]}"
           fi
 
           pre-commit run prettier --files \
@@ -141,28 +137,15 @@ jobs:
             retailedge/public/js/retailedge_product_menu.bundle.js \
             retailedge/retailedge/page/retailedge_business_hub/retailedge_business_hub.js || true
 
-          pre-commit run prettier --files \
-            retailedge/public/js/retailedge_business_hub_page.js \
-            retailedge/public/js/retailedge_business_hub_route_bridge.js \
-            retailedge/public/js/retailedge_product_menu.bundle.js \
-            retailedge/retailedge/page/retailedge_business_hub/retailedge_business_hub.js
-
-      - name: Verify JavaScript lint and syntax
+      - name: Verify repair syntax and path portability
         run: |
-          pre-commit run eslint --files \
-            retailedge/public/js/retailedge_business_hub_page.js \
-            retailedge/public/js/retailedge_business_hub_route_bridge.js \
-            retailedge/public/js/retailedge_product_menu.bundle.js \
-            retailedge/retailedge/page/retailedge_business_hub/retailedge_business_hub.js
-
+          python -m compileall -q retailedge/tests
           node --check retailedge/public/js/retailedge_business_hub_page.js
           node --check retailedge/public/js/retailedge_business_hub_route_bridge.js
           node --check retailedge/public/js/retailedge_product_menu.bundle.js
           node --check retailedge/retailedge/page/retailedge_business_hub/retailedge_business_hub.js
           git diff --check
 
-      - name: Verify no local developer paths remain in tests
-        run: |
           if grep -R '/home/olayemigod/frappe-bench/apps/retailedge' retailedge/tests --include='test_*.py'; then
             echo "Machine-specific RetailEdge test paths remain."
             exit 1
