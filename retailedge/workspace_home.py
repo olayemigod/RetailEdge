@@ -5,12 +5,16 @@ from dataclasses import dataclass, replace
 
 import frappe
 
-
-START_POS_LABEL = "Start POS"
-POSNEXT_POS_URL = "/pos/"
-POSNEXT_OPENING_SHIFT = "POS Opening Shift"
-POSNEXT_CLOSING_SHIFT = "POS Closing Shift"
-ERPNEXT_POS_PAGE = "point-of-sale"
+from retailedge.pos_runtime import (
+	ERPNEXT_POS_CLOSING_ENTRY,
+	ERPNEXT_POS_OPENING_ENTRY,
+	ERPNEXT_POS_PAGE,
+	POSNEXT_CLOSING_SHIFT,
+	POSNEXT_OPENING_SHIFT,
+	POSNEXT_POS_URL,
+	START_POS_LABEL,
+	get_pos_runtime_capabilities,
+)
 
 
 @dataclass(frozen=True)
@@ -44,8 +48,8 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Branch Performance Summary", "Report", "RetailEdge Branch Performance Summary", "Dashboard", 20, "manager", "RetailEdge Native", "Blue"),
 
 	WorkspaceHomeItem(START_POS_LABEL, "URL", POSNEXT_POS_URL, "Sales & POS", 10, "cashier", "POS Runtime", "Green", POSNEXT_POS_URL),
-	WorkspaceHomeItem("POS Opening Shift", "DocType", POSNEXT_OPENING_SHIFT, "Sales & POS", 20, "cashier", "POSNext Link", "Grey"),
-	WorkspaceHomeItem("POS Closing Shift", "DocType", POSNEXT_CLOSING_SHIFT, "Sales & POS", 30, "cashier", "POSNext Link", "Grey"),
+	WorkspaceHomeItem("POS Opening", "DocType", POSNEXT_OPENING_SHIFT, "Sales & POS", 20, "cashier", "POS Runtime", "Grey"),
+	WorkspaceHomeItem("POS Closing", "DocType", POSNEXT_CLOSING_SHIFT, "Sales & POS", 30, "cashier", "POS Runtime", "Grey"),
 	WorkspaceHomeItem("Sales Invoice", "DocType", "Sales Invoice", "Sales & POS", 40, "operations", "ERPNext Link", "Grey"),
 	WorkspaceHomeItem("Customer", "DocType", "Customer", "Sales & POS", 50, "cashier", "ERPNext Link", "Grey"),
 
@@ -126,32 +130,44 @@ def target_exists(item: WorkspaceHomeItem) -> bool:
 	return _target_exists(item.link_type, item.link_to)
 
 
-def _posnext_available() -> bool:
-	return _target_exists("DocType", POSNEXT_OPENING_SHIFT) and _target_exists(
-		"DocType", POSNEXT_CLOSING_SHIFT
-	)
-
-
 def _resolve_runtime_item(item: WorkspaceHomeItem) -> WorkspaceHomeItem | None:
-	if item.label != START_POS_LABEL or item.section != "Sales & POS":
+	if item.section != "Sales & POS":
 		return item
-	if _posnext_available():
+
+	capabilities = get_pos_runtime_capabilities(_target_exists)
+	if item.label == START_POS_LABEL:
+		if not capabilities.start_link_type or not capabilities.start_target:
+			return None
 		return replace(
 			item,
-			link_type="URL",
-			link_to=POSNEXT_POS_URL,
-			source="POSNext Link",
-			url=POSNEXT_POS_URL,
+			link_type=capabilities.start_link_type,
+			link_to=capabilities.start_target,
+			source="POSNext Link" if capabilities.provider == "posnext" else "ERPNext Link",
+			url=capabilities.start_url,
 		)
-	if _target_exists("Page", ERPNEXT_POS_PAGE):
+
+	if item.link_to in {POSNEXT_OPENING_SHIFT, ERPNEXT_POS_OPENING_ENTRY}:
+		if not capabilities.opening_doctype:
+			return None
 		return replace(
 			item,
-			link_type="Page",
-			link_to=ERPNEXT_POS_PAGE,
-			source="ERPNext Link",
+			label=capabilities.opening_doctype,
+			link_to=capabilities.opening_doctype,
+			source="POSNext Link" if capabilities.provider == "posnext" else "ERPNext Link",
 			url=None,
 		)
-	return None
+
+	if item.link_to in {POSNEXT_CLOSING_SHIFT, ERPNEXT_POS_CLOSING_ENTRY}:
+		if not capabilities.closing_doctype:
+			return None
+		return replace(
+			item,
+			label=capabilities.closing_doctype,
+			link_to=capabilities.closing_doctype,
+			source="POSNext Link" if capabilities.provider == "posnext" else "ERPNext Link",
+			url=None,
+		)
+	return item
 
 
 def get_home_workspace_items(workspace_data: dict, check_dependencies: bool = True) -> list[WorkspaceHomeItem]:
