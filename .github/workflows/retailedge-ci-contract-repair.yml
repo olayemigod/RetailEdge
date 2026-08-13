@@ -75,3 +75,5 @@ jobs:
           git add retailedge/tests
           git commit -m "test(retailedge): align standalone runtime contracts"
           git push origin HEAD:feat/retailedge-edgesuite-ui-foundation
+
+# One-shot repair workflow; remove after the repair commit lands.
