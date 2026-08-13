@@ -128,6 +128,9 @@ from retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier
 )
 
 
+APP_ROOT = Path(__file__).resolve().parents[1]
+
+
 class _Settings(SimpleNamespace):
 	require_open_shift_for_cashier_expense = 1
 	allow_cashier_expense_date_edit = 0
@@ -221,20 +224,36 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		doc.set_cashier_defaults = RetailEdgeCashierExpense.set_cashier_defaults.__get__(doc, _Doc)
 		doc.apply_expense_category = RetailEdgeCashierExpense.apply_expense_category.__get__(doc, _Doc)
 		doc.apply_shift_cash_snapshot = RetailEdgeCashierExpense.apply_shift_cash_snapshot.__get__(doc, _Doc)
-		doc.validate_open_shift_requirement = RetailEdgeCashierExpense.validate_open_shift_requirement.__get__(doc, _Doc)
-		doc.validate_cash_account_requirement = RetailEdgeCashierExpense.validate_cash_account_requirement.__get__(doc, _Doc)
+		doc.validate_open_shift_requirement = (
+			RetailEdgeCashierExpense.validate_open_shift_requirement.__get__(doc, _Doc)
+		)
+		doc.validate_cash_account_requirement = (
+			RetailEdgeCashierExpense.validate_cash_account_requirement.__get__(doc, _Doc)
+		)
 		doc.validate_required_values = RetailEdgeCashierExpense.validate_required_values.__get__(doc, _Doc)
-		doc.validate_cash_availability = RetailEdgeCashierExpense.validate_cash_availability.__get__(doc, _Doc)
-		doc.set_posting_readiness_preview = RetailEdgeCashierExpense.set_posting_readiness_preview.__get__(doc, _Doc)
+		doc.validate_cash_availability = RetailEdgeCashierExpense.validate_cash_availability.__get__(
+			doc, _Doc
+		)
+		doc.set_posting_readiness_preview = RetailEdgeCashierExpense.set_posting_readiness_preview.__get__(
+			doc, _Doc
+		)
 		doc.before_submit = RetailEdgeCashierExpense.before_submit.__get__(doc, _Doc)
 		doc.on_submit = RetailEdgeCashierExpense.on_submit.__get__(doc, _Doc)
 		doc.before_cancel = RetailEdgeCashierExpense.before_cancel.__get__(doc, _Doc)
 		doc.on_cancel = RetailEdgeCashierExpense.on_cancel.__get__(doc, _Doc)
 		return doc
 
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.today", return_value="2026-05-11")
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_current_cashier_context")
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_retailedge_settings", return_value=_Settings())
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.today",
+		return_value="2026-05-11",
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_current_cashier_context"
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_retailedge_settings",
+		return_value=_Settings(),
+	)
 	def test_defaults_cashier_and_expense_date(self, _mock_settings, mock_context, _mock_today):
 		mock_context.return_value = {}
 		doc = self._make_doc()
@@ -243,8 +262,13 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		self.assertEqual(doc.cashier, "cashier@example.com")
 		self.assertEqual(doc.expense_date, "2026-05-11")
 
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.today", return_value="2026-05-11")
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_current_cashier_context")
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.today",
+		return_value="2026-05-11",
+	)
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_current_cashier_context"
+	)
 	@patch(
 		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_retailedge_settings",
 		return_value=_Settings(allow_cashier_expense_date_edit=0),
@@ -255,7 +279,9 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		doc.set_cashier_defaults()
 		self.assertEqual(doc.expense_date, "2026-05-11")
 
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_current_cashier_context")
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_current_cashier_context"
+	)
 	@patch(
 		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_retailedge_settings",
 		return_value=_Settings(allow_cashier_expense_date_edit=1),
@@ -293,11 +319,15 @@ class CashierExpenseControllerTests(unittest.TestCase):
 			doc.validate_cash_account_requirement()
 
 	def test_insufficient_shift_cash_blocks_save(self):
-		doc = self._make_doc(linked_pos_opening_shift="OPEN-1", amount=500, available_shift_cash_before_expense=100)
+		doc = self._make_doc(
+			linked_pos_opening_shift="OPEN-1", amount=500, available_shift_cash_before_expense=100
+		)
 		with self.assertRaises(frappe.ValidationError):
 			doc.validate_cash_availability()
 
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_shift_cash_snapshot")
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_shift_cash_snapshot"
+	)
 	@patch(
 		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.get_retailedge_settings",
 		return_value=_Settings(),
@@ -316,7 +346,9 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		self.assertEqual(mock_snapshot.call_args.kwargs["expense_name"], "RE-CE-0001")
 		self.assertEqual(doc.available_shift_cash_after_expense, 750)
 
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log")
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log"
+	)
 	def test_before_submit_sets_submitted_status(self, mock_log):
 		doc = self._make_doc(expense_status="Draft", ledger_status=None)
 		doc.before_submit()
@@ -325,7 +357,9 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		self.assertEqual(doc.ledger_status, "Not Applicable")
 		mock_log.assert_called_once()
 
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log")
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.append_cashier_expense_action_log"
+	)
 	def test_before_cancel_sets_cancelled_status(self, mock_log):
 		doc = self._make_doc(expense_status="Submitted")
 		doc.before_cancel()
@@ -337,7 +371,9 @@ class CashierExpenseControllerTests(unittest.TestCase):
 		doc = SimpleNamespace(docstatus=1, expense_status="Draft")
 		self.assertEqual(get_effective_expense_status(doc), "Submitted")
 
-	@patch("retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.build_cashier_expense_posting_preview")
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.build_cashier_expense_posting_preview"
+	)
 	def test_set_posting_readiness_preview_sets_fields_in_memory(self, mock_preview):
 		mock_preview.return_value = {
 			"posting_ready": True,
@@ -395,8 +431,16 @@ class CashierContextTests(unittest.TestCase):
 			"source": "mode_of_payment_account",
 			"message": None,
 		}
-		mock_resolve_branch.return_value = {"branch": "Main Branch", "source": "user_default", "message": None}
-		mock_resolve_cost_center.return_value = {"cost_center": "Main - CC", "source": "pos_profile", "message": None}
+		mock_resolve_branch.return_value = {
+			"branch": "Main Branch",
+			"source": "user_default",
+			"message": None,
+		}
+		mock_resolve_cost_center.return_value = {
+			"cost_center": "Main - CC",
+			"source": "pos_profile",
+			"message": None,
+		}
 		context = get_current_cashier_context(user="cashier@example.com")
 		self.assertEqual(context["linked_pos_opening_shift"], "OPEN-1")
 		self.assertEqual(context["pos_profile"], "PROFILE-1")
@@ -432,7 +476,12 @@ class CashierContextTests(unittest.TestCase):
 		mock_coerce_doc.return_value = SimpleNamespace(doctype="POS Profile")
 		with patch("retailedge.cashier_context._get_coreedge_branch_value", return_value=None):
 			with patch.object(frappe.defaults, "get_user_default", return_value="Main Branch"):
-				result = resolve_branch(company="Demo Company", pos_profile="PROFILE-1", opening_shift=None, user="cashier@example.com")
+				result = resolve_branch(
+					company="Demo Company",
+					pos_profile="PROFILE-1",
+					opening_shift=None,
+					user="cashier@example.com",
+				)
 		self.assertEqual(result["branch"], "Main Branch")
 		self.assertEqual(result["source"], "User Default")
 
@@ -451,7 +500,10 @@ class CashierContextTests(unittest.TestCase):
 		self.assertEqual(result["cost_center"], "Main - CC")
 		self.assertEqual(result["source"], "pos_profile")
 
-	@patch("retailedge.cashier_context.get_shift_cash_sales", return_value={"cash_sales": 100, "source": "sales_invoice.payments", "message": None})
+	@patch(
+		"retailedge.cashier_context.get_shift_cash_sales",
+		return_value={"cash_sales": 100, "source": "sales_invoice.payments", "message": None},
+	)
 	@patch("retailedge.cashier_context._safe_settings", return_value=_Settings())
 	@patch("retailedge.cashier_context.frappe.get_all")
 	def test_prior_expenses_reduce_available_cash(self, mock_get_all, _mock_settings, _mock_cash_sales):
@@ -473,9 +525,18 @@ class CashierContextTests(unittest.TestCase):
 	@patch("retailedge.cashier_context._coerce_doc")
 	@patch("retailedge.cashier_context.frappe.get_meta")
 	@patch("retailedge.cashier_context.frappe.get_all")
-	@patch("retailedge.cashier_context._has_doctype", side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"})
+	@patch(
+		"retailedge.cashier_context._has_doctype",
+		side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"},
+	)
 	def test_get_shift_cash_sales_counts_only_cash_payments_in_shift(
-		self, _mock_has_doctype, mock_get_all, mock_get_meta, mock_coerce_doc, mock_shift_window, mock_payment_account
+		self,
+		_mock_has_doctype,
+		mock_get_all,
+		mock_get_meta,
+		mock_coerce_doc,
+		mock_shift_window,
+		mock_payment_account,
 	):
 		opening_shift = SimpleNamespace(
 			doctype="POS Opening Shift",
@@ -504,14 +565,21 @@ class CashierContextTests(unittest.TestCase):
 			"shift_start": datetime(2026, 5, 11, 9, 0, 0),
 			"shift_end": datetime(2026, 5, 11, 11, 0, 0),
 		}
+
 		def _meta_for(doctype):
 			if doctype == "Sales Invoice":
-				return SimpleNamespace(has_field=lambda field: field in {"payments", "is_pos", "company", "posa_pos_opening_shift", "pos_profile"})
+				return SimpleNamespace(
+					has_field=lambda field: field
+					in {"payments", "is_pos", "company", "posa_pos_opening_shift", "pos_profile"}
+				)
 			if doctype == "Sales Invoice Payment":
-				return SimpleNamespace(has_field=lambda field: field in {"mode_of_payment", "account", "amount", "base_amount"})
+				return SimpleNamespace(
+					has_field=lambda field: field in {"mode_of_payment", "account", "amount", "base_amount"}
+				)
 			return SimpleNamespace(has_field=lambda field: False)
 
 		mock_get_meta.side_effect = _meta_for
+
 		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
 			if doctype == "Sales Invoice":
 				return [SimpleNamespace(name="SINV-1")]
@@ -538,9 +606,18 @@ class CashierContextTests(unittest.TestCase):
 	@patch("retailedge.cashier_context._coerce_doc")
 	@patch("retailedge.cashier_context.frappe.get_meta")
 	@patch("retailedge.cashier_context.frappe.get_all")
-	@patch("retailedge.cashier_context._has_doctype", side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"})
+	@patch(
+		"retailedge.cashier_context._has_doctype",
+		side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"},
+	)
 	def test_get_shift_cash_sales_ignores_non_cash_and_cancelled_invoices(
-		self, _mock_has_doctype, mock_get_all, mock_get_meta, mock_coerce_doc, mock_shift_window, mock_payment_account
+		self,
+		_mock_has_doctype,
+		mock_get_all,
+		mock_get_meta,
+		mock_coerce_doc,
+		mock_shift_window,
+		mock_payment_account,
 	):
 		opening_shift = SimpleNamespace(
 			doctype="POS Opening Shift",
@@ -568,14 +645,21 @@ class CashierContextTests(unittest.TestCase):
 			"shift_start": datetime(2026, 5, 11, 9, 0, 0),
 			"shift_end": datetime(2026, 5, 11, 11, 0, 0),
 		}
+
 		def _meta_for(doctype):
 			if doctype == "Sales Invoice":
-				return SimpleNamespace(has_field=lambda field: field in {"payments", "is_pos", "company", "posa_pos_opening_shift", "pos_profile"})
+				return SimpleNamespace(
+					has_field=lambda field: field
+					in {"payments", "is_pos", "company", "posa_pos_opening_shift", "pos_profile"}
+				)
 			if doctype == "Sales Invoice Payment":
-				return SimpleNamespace(has_field=lambda field: field in {"mode_of_payment", "account", "amount", "base_amount"})
+				return SimpleNamespace(
+					has_field=lambda field: field in {"mode_of_payment", "account", "amount", "base_amount"}
+				)
 			return SimpleNamespace(has_field=lambda field: False)
 
 		mock_get_meta.side_effect = _meta_for
+
 		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
 			if doctype == "Sales Invoice":
 				return [SimpleNamespace(name="SINV-1")]
@@ -596,13 +680,19 @@ class CashierContextTests(unittest.TestCase):
 		self.assertEqual(result["matched_invoice_count"], 0)
 		self.assertIn("could not be safely resolved", result["message"])
 
-	@patch("retailedge.cashier_context.resolve_branch", return_value={"branch": "Main Branch", "source": "opening_shift", "message": None})
+	@patch(
+		"retailedge.cashier_context.resolve_branch",
+		return_value={"branch": "Main Branch", "source": "opening_shift", "message": None},
+	)
 	@patch("retailedge.cashier_context.resolve_cash_payment_account")
 	@patch("retailedge.cashier_context._get_shift_window")
 	@patch("retailedge.cashier_context._coerce_doc")
 	@patch("retailedge.cashier_context.frappe.get_meta")
 	@patch("retailedge.cashier_context.frappe.get_all")
-	@patch("retailedge.cashier_context._has_doctype", side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"})
+	@patch(
+		"retailedge.cashier_context._has_doctype",
+		side_effect=lambda doctype: doctype in {"Sales Invoice", "Sales Invoice Payment", "Payment Entry"},
+	)
 	def test_get_shift_cash_sales_includes_cash_payment_entry_receipts_for_overdue_invoice(
 		self,
 		_mock_has_doctype,
@@ -639,7 +729,9 @@ class CashierContextTests(unittest.TestCase):
 			paid_from=None,
 			paid_amount=300,
 			received_amount=300,
-			references=[_Row(reference_doctype="Sales Invoice", reference_name="SINV-OLD-1", allocated_amount=300)],
+			references=[
+				_Row(reference_doctype="Sales Invoice", reference_name="SINV-OLD-1", allocated_amount=300)
+			],
 		)
 		mock_shift_window.return_value = {
 			"opening_shift": opening_shift,
@@ -654,9 +746,14 @@ class CashierContextTests(unittest.TestCase):
 
 		def _meta_for(doctype):
 			if doctype == "Sales Invoice":
-				return SimpleNamespace(has_field=lambda field: field in {"payments", "is_pos", "company", "posa_pos_opening_shift", "pos_profile"})
+				return SimpleNamespace(
+					has_field=lambda field: field
+					in {"payments", "is_pos", "company", "posa_pos_opening_shift", "pos_profile"}
+				)
 			if doctype == "Sales Invoice Payment":
-				return SimpleNamespace(has_field=lambda field: field in {"mode_of_payment", "account", "amount", "base_amount"})
+				return SimpleNamespace(
+					has_field=lambda field: field in {"mode_of_payment", "account", "amount", "base_amount"}
+				)
 			return SimpleNamespace(has_field=lambda field: False)
 
 		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
@@ -741,9 +838,11 @@ class CashierExpenseServiceTests(unittest.TestCase):
 			ledger_status="Not Applicable",
 			has_permission=lambda perm: perm == "submit",
 		)
+
 		def _submit():
 			doc.docstatus = 1
 			doc.expense_status = "Submitted"
+
 		doc.submit = _submit
 		mock_get_doc.return_value = doc
 		result = submit_cashier_expense("RE-CE-0001")
@@ -775,7 +874,9 @@ class CashierExpenseServiceTests(unittest.TestCase):
 	@patch("retailedge.cashier_expense.frappe.get_roles", return_value=["RetailEdge Auditor"])
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
-	def test_approve_normalises_stale_submitted_docstatus(self, mock_get_doc, _mock_roles, mock_set_value, mock_log):
+	def test_approve_normalises_stale_submitted_docstatus(
+		self, mock_get_doc, _mock_roles, mock_set_value, mock_log
+	):
 		doc = SimpleNamespace(
 			doctype="RetailEdge Cashier Expense",
 			name="RE-CE-0002B",
@@ -841,7 +942,9 @@ class CashierExpenseServiceTests(unittest.TestCase):
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="cashier@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_cashier_only_user_cannot_approve(self, mock_get_doc, _mock_roles):
-		doc = SimpleNamespace(name="RE-CE-0100", docstatus=1, expense_status="Submitted", cashier="other@example.com")
+		doc = SimpleNamespace(
+			name="RE-CE-0100", docstatus=1, expense_status="Submitted", cashier="other@example.com"
+		)
 		mock_get_doc.return_value = doc
 		with self.assertRaises(frappe.PermissionError):
 			approve_cashier_expense("RE-CE-0100")
@@ -850,7 +953,9 @@ class CashierExpenseServiceTests(unittest.TestCase):
 	@patch("retailedge.cashier_expense.frappe.session", SimpleNamespace(user="auditor@example.com"))
 	@patch("retailedge.cashier_expense.frappe.get_doc")
 	def test_cancelled_expense_cannot_be_approved_rejected_or_reopened(self, mock_get_doc, _mock_roles):
-		doc = SimpleNamespace(name="RE-CE-0101", docstatus=2, expense_status="Cancelled", cashier="cashier@example.com")
+		doc = SimpleNamespace(
+			name="RE-CE-0101", docstatus=2, expense_status="Cancelled", cashier="cashier@example.com"
+		)
 		mock_get_doc.return_value = doc
 		with self.assertRaises(frappe.ValidationError):
 			approve_cashier_expense("RE-CE-0101")
@@ -891,7 +996,9 @@ class CashierExpenseServiceTests(unittest.TestCase):
 
 	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.cashier_expense.frappe.get_all")
-	def test_get_cashier_expenses_for_variance_excludes_cancelled_by_default(self, mock_get_all, _mock_settings):
+	def test_get_cashier_expenses_for_variance_excludes_cancelled_by_default(
+		self, mock_get_all, _mock_settings
+	):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance()
 		filters = mock_get_all.call_args.kwargs["filters"]
@@ -900,7 +1007,9 @@ class CashierExpenseServiceTests(unittest.TestCase):
 
 	@patch("retailedge.cashier_expense.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.cashier_expense.frappe.get_all")
-	def test_get_cashier_expenses_for_variance_includes_rejected_by_default(self, mock_get_all, _mock_settings):
+	def test_get_cashier_expenses_for_variance_includes_rejected_by_default(
+		self, mock_get_all, _mock_settings
+	):
 		mock_get_all.return_value = []
 		get_cashier_expenses_for_variance()
 		filters = mock_get_all.call_args.kwargs["filters"]
@@ -989,8 +1098,22 @@ class CashierExpenseServiceTests(unittest.TestCase):
 	@patch("retailedge.cashier_expense.frappe.get_list")
 	def test_get_cashier_expense_totals_groups_visible_rows(self, mock_get_list):
 		mock_get_list.return_value = [
-			{"name": "RE-CE-1", "amount": 100, "expense_status": "Draft", "ledger_status": "Not Applicable", "posting_ready": 1, "docstatus": 0},
-			{"name": "RE-CE-2", "amount": 250, "expense_status": "Submitted", "ledger_status": "Pending Ledger", "posting_ready": 0, "docstatus": 1},
+			{
+				"name": "RE-CE-1",
+				"amount": 100,
+				"expense_status": "Draft",
+				"ledger_status": "Not Applicable",
+				"posting_ready": 1,
+				"docstatus": 0,
+			},
+			{
+				"name": "RE-CE-2",
+				"amount": 250,
+				"expense_status": "Submitted",
+				"ledger_status": "Pending Ledger",
+				"posting_ready": 0,
+				"docstatus": 1,
+			},
 		]
 		result = get_cashier_expense_totals([["RetailEdge Cashier Expense", "company", "=", "Demo Company"]])
 		self.assertEqual(result["count"], 2)
@@ -1001,12 +1124,16 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["posting_ready_count"], 1)
 		self.assertEqual(result["posting_blocked_count"], 1)
 
-	@patch("retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_shift_cash_snapshot")
-	@patch("retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_cashier_expense_totals_for_variance")
-	@patch("retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_cashier_expenses_for_variance")
-	def test_report_context_reuses_shift_snapshot(
-		self, mock_get_expenses, mock_get_totals, mock_snapshot
-	):
+	@patch(
+		"retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_shift_cash_snapshot"
+	)
+	@patch(
+		"retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_cashier_expense_totals_for_variance"
+	)
+	@patch(
+		"retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_cashier_expenses_for_variance"
+	)
+	def test_report_context_reuses_shift_snapshot(self, mock_get_expenses, mock_get_totals, mock_snapshot):
 		entry = SimpleNamespace(
 			name="POSC-1",
 			company="Demo Company",
@@ -1016,8 +1143,18 @@ class CashierExpenseServiceTests(unittest.TestCase):
 			posting_date="2026-05-11",
 		)
 		mock_get_expenses.return_value = [{"name": "RE-CE-1", "amount": 100}]
-		mock_get_totals.return_value = {"total_expense_amount": 100, "count": 1, "by_status": {}, "by_category": {}}
-		mock_snapshot.return_value = {"opening_cash": 30000, "cash_sales": 1800, "prior_expenses": 100, "available_before": 31700}
+		mock_get_totals.return_value = {
+			"total_expense_amount": 100,
+			"count": 1,
+			"by_status": {},
+			"by_category": {},
+		}
+		mock_snapshot.return_value = {
+			"opening_cash": 30000,
+			"cash_sales": 1800,
+			"prior_expenses": 100,
+			"available_before": 31700,
+		}
 		context = get_retailedge_cashier_expense_context(entry)
 		self.assertEqual(context["snapshot"]["cash_sales"], 1800)
 		self.assertEqual(mock_snapshot.call_args.kwargs["opening_shift"], "OPEN-1")
@@ -1036,7 +1173,12 @@ class CashierExpenseServiceTests(unittest.TestCase):
 	def test_retailedge_expense_totals_are_built_from_deduplicated_rows(self):
 		totals = _build_retailedge_expense_totals(
 			[
-				{"name": "RE-CE-1", "expense_status": "Draft", "expense_category": "Transport", "amount": 100},
+				{
+					"name": "RE-CE-1",
+					"expense_status": "Draft",
+					"expense_category": "Transport",
+					"amount": 100,
+				},
 				{"name": "RE-CE-2", "expense_status": "Rejected", "expense_category": "Fuel", "amount": 50},
 			]
 		)
@@ -1116,9 +1258,7 @@ class CashierExpenseServiceTests(unittest.TestCase):
 	@patch("retailedge.cashier_expense_audit.frappe.get_doc")
 	@patch("retailedge.cashier_expense_audit.user_is_reviewer", return_value=True)
 	@patch("retailedge.cashier_expense_audit.frappe.session", SimpleNamespace(user="auditor@example.com"))
-	def test_mark_excluded_sets_include_zero(
-		self, _mock_reviewer, mock_get_doc, mock_set_value, mock_log
-	):
+	def test_mark_excluded_sets_include_zero(self, _mock_reviewer, mock_get_doc, mock_set_value, mock_log):
 		doc = SimpleNamespace(
 			doctype="RetailEdge Cashier Expense",
 			name="RE-CE-0302",
@@ -1269,7 +1409,9 @@ class CashierExpenseServiceTests(unittest.TestCase):
 			{"name": "RE-CE-1", "expense_status": "Submitted", "posting_ready": 1},
 			{"name": "RE-CE-2", "expense_status": "Rejected", "posting_ready": 0},
 		]
-		_columns, data, _message, _chart, summary = execute_cashier_expense_review_report({"posting_ready": 1})
+		_columns, data, _message, _chart, summary = execute_cashier_expense_review_report(
+			{"posting_ready": 1}
+		)
 		self.assertEqual([row["name"] for row in data], ["RE-CE-1", "Totals"])
 		self.assertEqual(summary[1]["value"], 1)
 
@@ -1591,8 +1733,16 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertEqual(options["pos_profiles"], ["Testing"])
 
 	@patch("retailedge.daily_sales_audit._build_query_filters", return_value={"docstatus": 1})
-	@patch("retailedge.daily_sales_audit._find_existing_field", side_effect=lambda doctype, fields: "status" if doctype == "POS Opening Shift" and "status" in fields else None)
-	@patch("retailedge.daily_sales_audit._has_doctype", side_effect=lambda doctype: doctype in {"POS Opening Shift", "RetailEdge Daily Sales Audit"})
+	@patch(
+		"retailedge.daily_sales_audit._find_existing_field",
+		side_effect=lambda doctype, fields: "status"
+		if doctype == "POS Opening Shift" and "status" in fields
+		else None,
+	)
+	@patch(
+		"retailedge.daily_sales_audit._has_doctype",
+		side_effect=lambda doctype: doctype in {"POS Opening Shift", "RetailEdge Daily Sales Audit"},
+	)
 	@patch("retailedge.daily_sales_audit.frappe.get_all")
 	def test_opening_shift_search_excludes_already_audited_shifts(
 		self,
@@ -1730,7 +1880,7 @@ class DailySalesAuditTests(unittest.TestCase):
 		mock_payment_account,
 		mock_get_doc,
 		mock_get_all,
-		):
+	):
 		mock_has_doctype.side_effect = lambda doctype: doctype == "Sales Invoice"
 		mock_shift_snapshot.return_value = {"opening_cash": 1000, "cash_sales": 300}
 		mock_expenses.return_value = [
@@ -1860,7 +2010,10 @@ class DailySalesAuditTests(unittest.TestCase):
 
 	@patch("retailedge.daily_sales_audit.frappe.get_all", return_value=[])
 	@patch("retailedge.daily_sales_audit.get_cashier_expenses_for_daily_audit")
-	@patch("retailedge.daily_sales_audit.get_shift_cash_snapshot", return_value={"opening_cash": 1000, "cash_sales": 300})
+	@patch(
+		"retailedge.daily_sales_audit.get_shift_cash_snapshot",
+		return_value={"opening_cash": 1000, "cash_sales": 300},
+	)
 	@patch(
 		"retailedge.daily_sales_audit.get_retailedge_settings",
 		return_value=_Settings(include_cashier_expenses_in_daily_sales_audit_preview=0),
@@ -1899,7 +2052,10 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch("retailedge.daily_sales_audit.resolve_daily_sales_audit_context_from_selection")
 	@patch("retailedge.daily_sales_audit.frappe.get_all", return_value=[])
 	@patch("retailedge.daily_sales_audit.get_cashier_expenses_for_daily_audit")
-	@patch("retailedge.daily_sales_audit.get_shift_cash_snapshot", return_value={"opening_cash": 1000, "cash_sales": 300})
+	@patch(
+		"retailedge.daily_sales_audit.get_shift_cash_snapshot",
+		return_value={"opening_cash": 1000, "cash_sales": 300},
+	)
 	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings())
 	@patch("retailedge.daily_sales_audit._has_doctype", return_value=False)
 	def test_daily_sales_audit_context_re_resolves_shift_branch_before_expense_filters(
@@ -2056,7 +2212,9 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
 	@patch("retailedge.daily_sales_audit.frappe.get_doc")
 	def test_start_review_moves_ready_for_review_to_in_review(self, mock_get_doc, _mock_roles):
-		doc = self._make_audit_doc(name="RE-DSA-2", audit_status="Ready for Review", owner="cashier@example.com")
+		doc = self._make_audit_doc(
+			name="RE-DSA-2", audit_status="Ready for Review", owner="cashier@example.com"
+		)
 		mock_get_doc.return_value = doc
 		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
 			start_daily_sales_audit_review("RE-DSA-2", remarks="Start")
@@ -2136,7 +2294,9 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
 	@patch("retailedge.daily_sales_audit.frappe.get_doc")
 	def test_reject_and_reopen_workflow(self, mock_get_doc, _mock_roles):
-		doc = self._make_audit_doc(name="RE-DSA-8", audit_status="Ready for Review", owner="cashier@example.com")
+		doc = self._make_audit_doc(
+			name="RE-DSA-8", audit_status="Ready for Review", owner="cashier@example.com"
+		)
 		mock_get_doc.return_value = doc
 		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
 			reject_daily_sales_audit("RE-DSA-8", remarks="Reject")
@@ -2157,8 +2317,12 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
 	@patch("retailedge.daily_sales_audit.frappe.get_doc")
 	def test_line_review_updates_only_child_row_and_appends_log(self, mock_get_doc, _mock_roles):
-		row = _Doc(name="ROW-1", review_status="Pending Review", audit_line_status="Pending Review", remarks=None)
-		doc = self._make_audit_doc(name="RE-DSA-10", audit_status="In Review", invoice_lines=[row], owner="cashier@example.com")
+		row = _Doc(
+			name="ROW-1", review_status="Pending Review", audit_line_status="Pending Review", remarks=None
+		)
+		doc = self._make_audit_doc(
+			name="RE-DSA-10", audit_status="In Review", invoice_lines=[row], owner="cashier@example.com"
+		)
 		mock_get_doc.return_value = doc
 		with patch.object(frappe, "session", SimpleNamespace(user="reviewer@example.com")):
 			update_daily_sales_audit_invoice_line_status("RE-DSA-10", "ROW-1", "Matched", remarks="ok")
@@ -2171,14 +2335,24 @@ class DailySalesAuditTests(unittest.TestCase):
 			opening_cash_amount=1000,
 			cash_sales_amount=300,
 			actual_closing_cash_amount=1000,
-			cashier_expense_lines=[_Doc(amount=200, included_in_audit=1, include_in_expected_cash=1, review_status="Pending Review")],
+			cashier_expense_lines=[
+				_Doc(
+					amount=200,
+					included_in_audit=1,
+					include_in_expected_cash=1,
+					review_status="Pending Review",
+				)
+			],
 		)
 		result = calculate_daily_sales_audit_variance(doc)
 		self.assertEqual(result["expected_cash_amount"], 1100)
 		self.assertEqual(result["net_variance_amount"], -100)
 		self.assertEqual(doc.audit_result, "Shortage")
 
-	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings(daily_sales_audit_variance_tolerance=10))
+	@patch(
+		"retailedge.daily_sales_audit.get_retailedge_settings",
+		return_value=_Settings(daily_sales_audit_variance_tolerance=10),
+	)
 	def test_positive_variance_within_tolerance_still_classifies_overage(self, _mock_settings):
 		doc = self._make_audit_doc(
 			opening_cash_amount=100,
@@ -2227,7 +2401,13 @@ class DailySalesAuditTests(unittest.TestCase):
 		mock_payment_account.return_value = {"payment_account": "Cash - DEMO"}
 		mock_get_meta.side_effect = lambda doctype: _Meta(
 			{
-				"POS Invoice": {"company", "pos_profile", "posting_date", "paid_amount", "outstanding_amount"},
+				"POS Invoice": {
+					"company",
+					"pos_profile",
+					"posting_date",
+					"paid_amount",
+					"outstanding_amount",
+				},
 				"Payment Entry": {"company", "posting_date"},
 			}.get(doctype, set())
 		)
@@ -2263,11 +2443,15 @@ class DailySalesAuditTests(unittest.TestCase):
 		def _get_doc(doctype, name):
 			if doctype == "POS Invoice":
 				return SimpleNamespace(
-					payments=[_Row(mode_of_payment="Cash", account="Cash - DEMO", amount=300, base_amount=300)]
+					payments=[
+						_Row(mode_of_payment="Cash", account="Cash - DEMO", amount=300, base_amount=300)
+					]
 				)
 			if doctype == "Payment Entry":
 				return SimpleNamespace(
-					references=[_Row(reference_doctype="POS Invoice", reference_name="PSINV-1", allocated_amount=200)]
+					references=[
+						_Row(reference_doctype="POS Invoice", reference_name="PSINV-1", allocated_amount=200)
+					]
 				)
 			raise AssertionError(f"Unexpected doctype lookup: {doctype}")
 
@@ -2287,17 +2471,27 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertEqual(context["total_cash_payment_amount"], 300)
 		self.assertEqual(context["total_bank_transfer_amount"], 200)
 
-	@patch("retailedge.daily_sales_audit.get_retailedge_settings", return_value=_Settings(allow_self_review_daily_sales_audit=0))
+	@patch(
+		"retailedge.daily_sales_audit.get_retailedge_settings",
+		return_value=_Settings(allow_self_review_daily_sales_audit=0),
+	)
 	@patch("retailedge.daily_sales_audit.frappe.get_roles", return_value=["Accounts Manager"])
 	@patch("retailedge.daily_sales_audit.frappe.get_doc")
 	def test_self_review_is_blocked_unless_allowed(self, mock_get_doc, _mock_roles, _mock_settings):
-		doc = self._make_audit_doc(name="RE-DSA-11", audit_status="Ready for Review", owner="owner@example.com", cashier="owner@example.com")
+		doc = self._make_audit_doc(
+			name="RE-DSA-11",
+			audit_status="Ready for Review",
+			owner="owner@example.com",
+			cashier="owner@example.com",
+		)
 		mock_get_doc.return_value = doc
 		with patch.object(frappe, "session", SimpleNamespace(user="owner@example.com")):
 			with self.assertRaises(frappe.PermissionError):
 				start_daily_sales_audit_review("RE-DSA-11", remarks="self")
 
-	@patch("retailedge.retailedge.doctype.retailedge_daily_sales_audit.retailedge_daily_sales_audit.append_daily_sales_audit_action_log")
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_daily_sales_audit.retailedge_daily_sales_audit.append_daily_sales_audit_action_log"
+	)
 	def test_daily_sales_audit_cancel_sets_status_cancelled(self, mock_log):
 		doc = self._make_audit_doc(audit_status="Draft")
 		doc.before_submit = RetailEdgeDailySalesAudit.before_submit.__get__(doc, _Doc)
@@ -2309,7 +2503,9 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertEqual(doc.audit_status, "Cancelled")
 		mock_log.assert_called_once()
 
-	@patch("retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all")
+	@patch(
+		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all"
+	)
 	def test_daily_sales_audit_register_report_executes(self, mock_get_all):
 		mock_get_all.return_value = [
 			{
@@ -2337,49 +2533,43 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertEqual(len(data), 1)
 		self.assertEqual(data[0]["name"], "RE-DSA-2026-0001")
 
-	@patch("retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all")
+	@patch(
+		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all"
+	)
 	def test_daily_sales_audit_register_report_date_presets(self, mock_get_all):
 		mock_get_all.return_value = []
 
 		# 1. Preset is accepted by backend
-		execute_daily_sales_audit_register_report({
-			"date_range_preset": "This Month"
-		})
+		execute_daily_sales_audit_register_report({"date_range_preset": "This Month"})
 		mock_get_all.assert_called()
 		args, kwargs = mock_get_all.call_args
 		filters = kwargs.get("filters") or args[0]
 		self.assertIsNotNone(filters.get("audit_date"))
 
 		# 2. Custom Period respects user-selected from_date/to_date
-		execute_daily_sales_audit_register_report({
-			"date_range_preset": "Custom Period",
-			"from_date": "2026-01-01",
-			"to_date": "2026-01-10"
-		})
+		execute_daily_sales_audit_register_report(
+			{"date_range_preset": "Custom Period", "from_date": "2026-01-01", "to_date": "2026-01-10"}
+		)
 		args, kwargs = mock_get_all.call_args
 		filters = kwargs.get("filters") or args[0]
 		self.assertEqual(filters.get("audit_date"), ["between", ["2026-01-01", "2026-01-10"]])
 
 		# 3. Manual date range over 60 days is accepted
-		execute_daily_sales_audit_register_report({
-			"date_range_preset": "Custom Period",
-			"from_date": "2026-01-01",
-			"to_date": "2026-04-01"
-		})
+		execute_daily_sales_audit_register_report(
+			{"date_range_preset": "Custom Period", "from_date": "2026-01-01", "to_date": "2026-04-01"}
+		)
 
 		# 4. Invalid date order is still blocked
 		with self.assertRaises(frappe.ValidationError):
-			execute_daily_sales_audit_register_report({
-				"from_date": "2026-05-18",
-				"to_date": "2026-05-10"
-			})
+			execute_daily_sales_audit_register_report({"from_date": "2026-05-18", "to_date": "2026-05-10"})
 
-	@patch("retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_data", return_value=[])
+	@patch(
+		"retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses.get_data",
+		return_value=[],
+	)
 	def test_pos_closing_variance_vs_expenses_report_date_presets(self, mock_get_data):
 		# 1. Preset is accepted by backend
-		execute_variance_report({
-			"date_range_preset": "This Month"
-		})
+		execute_variance_report({"date_range_preset": "This Month"})
 		mock_get_data.assert_called()
 		args, kwargs = mock_get_data.call_args
 		filters = kwargs.get("filters") or args[0]
@@ -2387,36 +2577,30 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertIsNotNone(filters.get("to_date"))
 
 		# 2. Custom Period respects user-selected from_date/to_date
-		execute_variance_report({
-			"date_range_preset": "Custom Period",
-			"from_date": "2026-01-01",
-			"to_date": "2026-01-10"
-		})
+		execute_variance_report(
+			{"date_range_preset": "Custom Period", "from_date": "2026-01-01", "to_date": "2026-01-10"}
+		)
 		args, kwargs = mock_get_data.call_args
 		filters = kwargs.get("filters") or args[0]
 		self.assertEqual(filters.get("from_date"), "2026-01-01")
 		self.assertEqual(filters.get("to_date"), "2026-01-10")
 
 		# 3. Manual date range over 60 days is accepted
-		execute_variance_report({
-			"date_range_preset": "Custom Period",
-			"from_date": "2026-01-01",
-			"to_date": "2026-04-01"
-		})
+		execute_variance_report(
+			{"date_range_preset": "Custom Period", "from_date": "2026-01-01", "to_date": "2026-04-01"}
+		)
 
 		# 4. Invalid date order is still blocked
 		with self.assertRaises(frappe.ValidationError):
-			execute_variance_report({
-				"from_date": "2026-05-18",
-				"to_date": "2026-05-10"
-			})
+			execute_variance_report({"from_date": "2026-05-18", "to_date": "2026-05-10"})
 
-	@patch("retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review.get_data", return_value=[])
+	@patch(
+		"retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review.get_data",
+		return_value=[],
+	)
 	def test_cashier_expense_review_report_date_presets(self, mock_get_data):
 		# 1. Preset is accepted by backend
-		execute_cashier_expense_review_report({
-			"date_range_preset": "This Month"
-		})
+		execute_cashier_expense_review_report({"date_range_preset": "This Month"})
 		mock_get_data.assert_called()
 		args, kwargs = mock_get_data.call_args
 		filters = kwargs.get("filters") or args[0]
@@ -2424,29 +2608,22 @@ class DailySalesAuditTests(unittest.TestCase):
 		self.assertIsNotNone(filters.get("to_date"))
 
 		# 2. Custom Period respects user-selected from_date/to_date
-		execute_cashier_expense_review_report({
-			"date_range_preset": "Custom Period",
-			"from_date": "2026-01-01",
-			"to_date": "2026-01-10"
-		})
+		execute_cashier_expense_review_report(
+			{"date_range_preset": "Custom Period", "from_date": "2026-01-01", "to_date": "2026-01-10"}
+		)
 		args, kwargs = mock_get_data.call_args
 		filters = kwargs.get("filters") or args[0]
 		self.assertEqual(filters.get("from_date"), "2026-01-01")
 		self.assertEqual(filters.get("to_date"), "2026-01-10")
 
 		# 3. Manual date range over 60 days is accepted
-		execute_cashier_expense_review_report({
-			"date_range_preset": "Custom Period",
-			"from_date": "2026-01-01",
-			"to_date": "2026-04-01"
-		})
+		execute_cashier_expense_review_report(
+			{"date_range_preset": "Custom Period", "from_date": "2026-01-01", "to_date": "2026-04-01"}
+		)
 
 		# 4. Invalid date order is still blocked
 		with self.assertRaises(frappe.ValidationError):
-			execute_cashier_expense_review_report({
-				"from_date": "2026-05-18",
-				"to_date": "2026-05-10"
-			})
+			execute_cashier_expense_review_report({"from_date": "2026-05-18", "to_date": "2026-05-10"})
 
 
 class BranchContextTests(unittest.TestCase):
@@ -2505,7 +2682,10 @@ class BranchContextTests(unittest.TestCase):
 		result = validate_user_branch_access("HQ", user="manager@example.com", throw=False)
 		self.assertTrue(result["allowed"])
 
-	@patch("retailedge.branch_context.validate_user_branch_access", return_value={"allowed": True, "reason": "allowed_branch"})
+	@patch(
+		"retailedge.branch_context.validate_user_branch_access",
+		return_value={"allowed": True, "reason": "allowed_branch"},
+	)
 	@patch("retailedge.branch_context.resolve_retailedge_branch_context")
 	def test_apply_branch_context_to_doc_sets_branch_when_empty(self, mock_resolve, _mock_access):
 		mock_resolve.return_value = {
@@ -2514,7 +2694,12 @@ class BranchContextTests(unittest.TestCase):
 			"source_map": {"branch": "POS Opening Shift.branch"},
 			"messages": [],
 		}
-		doc = _Doc(doctype="RetailEdge Daily Sales Audit", branch=None, company="Demo Company", cashier="cashier@example.com")
+		doc = _Doc(
+			doctype="RetailEdge Daily Sales Audit",
+			branch=None,
+			company="Demo Company",
+			cashier="cashier@example.com",
+		)
 		result = apply_branch_context_to_doc(doc, overwrite=False, validate_access=True)
 		self.assertEqual(doc.branch, "HQ")
 		self.assertEqual(result["branch"], "HQ")
@@ -2528,7 +2713,10 @@ class BranchContextTests(unittest.TestCase):
 		result = get_branch_query_filters("RetailEdge Cashier Expense", branch="HQ")
 		self.assertEqual(result["filters"], {"branch": "HQ"})
 
-	@patch("retailedge.branch_context.resolve_retailedge_branch_context", return_value={"branch": "HQ", "source": "POS Opening Shift.branch", "messages": []})
+	@patch(
+		"retailedge.branch_context.resolve_retailedge_branch_context",
+		return_value={"branch": "HQ", "source": "POS Opening Shift.branch", "messages": []},
+	)
 	@patch("retailedge.branch_context.frappe.db.set_value")
 	@patch("retailedge.branch_context.frappe.get_all")
 	@patch("retailedge.branch_context.has_field", return_value=True)
@@ -2542,7 +2730,9 @@ class BranchContextTests(unittest.TestCase):
 		_mock_resolve,
 	):
 		mock_get_all.return_value = [{"name": "RE-CE-1", "company": "Demo Company", "branch": None}]
-		result = backfill_retailedge_branch_context(doctype="RetailEdge Cashier Expense", dry_run=True, limit=10)
+		result = backfill_retailedge_branch_context(
+			doctype="RetailEdge Cashier Expense", dry_run=True, limit=10
+		)
 		self.assertTrue(result["dry_run"])
 		self.assertEqual(result["updated"], 0)
 		mock_set_value.assert_not_called()
@@ -2817,20 +3007,41 @@ class BranchProfileTests(unittest.TestCase):
 
 	@patch("retailedge.branch_profile.frappe.db.exists", return_value=False)
 	def test_optional_defaults_are_not_mandatory(self, _mock_exists):
-		doc = _Doc(doctype="RetailEdge Branch Profile", name="HQ Default", company="Demo Company", branch="HQ", enabled=1, is_default_for_company=0)
+		doc = _Doc(
+			doctype="RetailEdge Branch Profile",
+			name="HQ Default",
+			company="Demo Company",
+			branch="HQ",
+			enabled=1,
+			is_default_for_company=0,
+		)
 		self.assertIsNone(validate_branch_profile(doc))
 
 	@patch("retailedge.branch_profile.frappe.db.exists")
 	def test_duplicate_enabled_company_branch_profile_is_blocked(self, mock_exists):
 		mock_exists.side_effect = [True]
-		doc = _Doc(doctype="RetailEdge Branch Profile", name="HQ Default", company="Demo Company", branch="HQ", enabled=1, is_default_for_company=0)
+		doc = _Doc(
+			doctype="RetailEdge Branch Profile",
+			name="HQ Default",
+			company="Demo Company",
+			branch="HQ",
+			enabled=1,
+			is_default_for_company=0,
+		)
 		with self.assertRaises(frappe.ValidationError):
 			validate_branch_profile(doc)
 
 	@patch("retailedge.branch_profile.frappe.db.exists")
 	def test_only_one_default_profile_per_company_is_allowed(self, mock_exists):
 		mock_exists.side_effect = [False, True]
-		doc = _Doc(doctype="RetailEdge Branch Profile", name="HQ Default", company="Demo Company", branch="HQ", enabled=1, is_default_for_company=1)
+		doc = _Doc(
+			doctype="RetailEdge Branch Profile",
+			name="HQ Default",
+			company="Demo Company",
+			branch="HQ",
+			enabled=1,
+			is_default_for_company=1,
+		)
 		with self.assertRaises(frappe.ValidationError):
 			validate_branch_profile(doc)
 
@@ -2867,19 +3078,41 @@ class BranchProfileTests(unittest.TestCase):
 	def test_get_user_branch_profiles_and_default_branch_for_user(self, _mock_has_doctype, mock_get_all):
 		mock_get_all.side_effect = [
 			[{"parent": "HQ Default", "role_type": "Cashier", "is_default": 1}],
-			[{"name": "HQ Default", "profile_name": "HQ Default", "company": "Demo Company", "branch": "HQ", "enabled": 1, "is_default_for_company": 1, "default_pos_profile": "Testing"}],
+			[
+				{
+					"name": "HQ Default",
+					"profile_name": "HQ Default",
+					"company": "Demo Company",
+					"branch": "HQ",
+					"enabled": 1,
+					"is_default_for_company": 1,
+					"default_pos_profile": "Testing",
+				}
+			],
 			[{"parent": "HQ Default", "role_type": "Cashier", "is_default": 1}],
-			[{"name": "HQ Default", "profile_name": "HQ Default", "company": "Demo Company", "branch": "HQ", "enabled": 1, "is_default_for_company": 1, "default_pos_profile": "Testing"}],
+			[
+				{
+					"name": "HQ Default",
+					"profile_name": "HQ Default",
+					"company": "Demo Company",
+					"branch": "HQ",
+					"enabled": 1,
+					"is_default_for_company": 1,
+					"default_pos_profile": "Testing",
+				}
+			],
 		]
 		profiles = get_user_branch_profiles(user="cashier@example.com", company="Demo Company")
 		self.assertEqual(len(profiles), 1)
-		self.assertEqual(get_default_branch_for_user(user="cashier@example.com", company="Demo Company"), "HQ")
+		self.assertEqual(
+			get_default_branch_for_user(user="cashier@example.com", company="Demo Company"), "HQ"
+		)
 
 	def test_workspace_json_contains_required_order_and_labels(self):
 		import json
 		from pathlib import Path
 
-		path = Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace/retailedge/retailedge.json")
+		path = Path(str(APP_ROOT / "retailedge/workspace/retailedge/retailedge.json"))
 		data = json.loads(path.read_text())
 		link_labels = [row.get("label") for row in data.get("links", []) if row.get("type") == "Card Break"]
 		self.assertEqual(
@@ -2898,7 +3131,9 @@ class BranchProfileTests(unittest.TestCase):
 		)
 		for row in data.get("links", []):
 			if row.get("type") == "Card Break":
-				self.assertEqual(row.get("close"), 1, f"Section {row.get('label')} is not collapsed by default.")
+				self.assertEqual(
+					row.get("close"), 1, f"Section {row.get('label')} is not collapsed by default."
+				)
 
 		shortcut_labels = [row.get("label") for row in data.get("shortcuts", [])]
 		self.assertIn("Start POS", shortcut_labels)
@@ -2929,21 +3164,41 @@ class BranchProfileTests(unittest.TestCase):
 			icon="setting-gear",
 			links=[
 				_Doc(type="Card Break", label="Operations"),
-				_Doc(type="Link", label="Cashier Expense", link_to="RetailEdge Cashier Expense", link_type="DocType"),
+				_Doc(
+					type="Link",
+					label="Cashier Expense",
+					link_to="RetailEdge Cashier Expense",
+					link_type="DocType",
+				),
 				_Doc(type="Card Break", label="Reports & Review"),
-				_Doc(type="Link", label="Cashier Expense Review", link_to="RetailEdge Cashier Expense Review", link_type="Report"),
+				_Doc(
+					type="Link",
+					label="Cashier Expense Review",
+					link_to="RetailEdge Cashier Expense Review",
+					link_type="Report",
+				),
 				_Doc(type="Card Break", label="Setup / Configuration"),
 				_Doc(type="Link", label="Settings", link_to="RetailEdge Settings", link_type="DocType"),
 			],
 		)
-		with patch("retailedge.patches.sync_retailedge_workspace._get_or_create_workspace_sidebar") as mock_sidebar:
+		with patch(
+			"retailedge.patches.sync_retailedge_workspace._get_or_create_workspace_sidebar"
+		) as mock_sidebar:
 			sidebar = _Doc(doctype="Workspace Sidebar", name="RetailEdge", items=[])
 			sidebar.save = Mock()
 			mock_sidebar.return_value = sidebar
 			_sync_workspace_sidebar(workspace)
 
 		self.assertEqual(
-			[(item.type, item.label, item.child, item.keep_closed if item.type == "Section Break" else None) for item in sidebar.items],
+			[
+				(
+					item.type,
+					item.label,
+					item.child,
+					item.keep_closed if item.type == "Section Break" else None,
+				)
+				for item in sidebar.items
+			],
 			[
 				("Link", "Home", 0, None),
 				("Section Break", "Operations", 0, 1),
@@ -2960,8 +3215,8 @@ class BranchProfileTests(unittest.TestCase):
 		from pathlib import Path
 
 		paths = [
-			Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/workspace_sidebar/retailedge.json"),
-			Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace_sidebar/retailedge/retailedge.json"),
+			Path(str(APP_ROOT / "workspace_sidebar/retailedge.json")),
+			Path(str(APP_ROOT / "retailedge/workspace_sidebar/retailedge/retailedge.json")),
 		]
 		for path in paths:
 			self.assertTrue(path.exists(), f"Missing standard sidebar fixture: {path}")
@@ -2973,7 +3228,9 @@ class BranchProfileTests(unittest.TestCase):
 		# Verify all section breaks have keep_closed set to 1
 		for row in data.get("items", []):
 			if row.get("type") == "Section Break":
-				self.assertEqual(row.get("keep_closed"), 1, f"Sidebar section break {row.get('label')} is not collapsed.")
+				self.assertEqual(
+					row.get("keep_closed"), 1, f"Sidebar section break {row.get('label')} is not collapsed."
+				)
 
 		self.assertEqual(
 			[(row.get("type"), row.get("label"), row.get("child", 0)) for row in data.get("items", [])],
@@ -3045,7 +3302,7 @@ class BranchProfileTests(unittest.TestCase):
 		from pathlib import Path
 
 		# 1. Check workspace JSON
-		workspace_path = Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace/retailedge/retailedge.json")
+		workspace_path = Path(str(APP_ROOT / "retailedge/workspace/retailedge/retailedge.json"))
 		workspace = json.loads(workspace_path.read_text())
 
 		# Check workspace links
@@ -3060,13 +3317,13 @@ class BranchProfileTests(unittest.TestCase):
 				if link_type in ["DocType", "Page", "Report", "Workspace"]:
 					self.assertTrue(
 						frappe.db.exists(link_type, link_to),
-						f"Workspace link target {link_to} of type {link_type} does not exist!"
+						f"Workspace link target {link_to} of type {link_type} does not exist!",
 					)
 
 		# 2. Check sidebar JSONs
 		sidebar_paths = [
-			Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/workspace_sidebar/retailedge.json"),
-			Path("/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/workspace_sidebar/retailedge/retailedge.json"),
+			Path(str(APP_ROOT / "workspace_sidebar/retailedge.json")),
+			Path(str(APP_ROOT / "retailedge/workspace_sidebar/retailedge/retailedge.json")),
 		]
 		for path in sidebar_paths:
 			sidebar = json.loads(path.read_text())
@@ -3081,14 +3338,18 @@ class BranchProfileTests(unittest.TestCase):
 					if link_type in ["DocType", "Page", "Report", "Workspace"]:
 						self.assertTrue(
 							frappe.db.exists(link_type, link_to),
-							f"Sidebar link target {link_to} of type {link_type} in {path.name} does not exist!"
+							f"Sidebar link target {link_to} of type {link_type} in {path.name} does not exist!",
 						)
 
 
 class TransactionBranchAttributionTests(unittest.TestCase):
 	@patch("retailedge.transaction_branch_attribution.has_doctype")
 	def test_target_doctype_list_skips_missing_doctypes_safely(self, mock_has_doctype):
-		mock_has_doctype.side_effect = lambda doctype: doctype in {"Sales Invoice", "Payment Entry", "Stock Entry"}
+		mock_has_doctype.side_effect = lambda doctype: doctype in {
+			"Sales Invoice",
+			"Payment Entry",
+			"Stock Entry",
+		}
 		self.assertEqual(
 			get_branch_attribution_target_doctypes(),
 			["Sales Invoice", "Payment Entry", "Stock Entry"],
@@ -3098,7 +3359,10 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 	@patch("retailedge.transaction_branch_attribution.frappe.db.get_value")
 	@patch("retailedge.transaction_branch_attribution.create_custom_fields")
 	@patch("retailedge.transaction_branch_attribution.has_field")
-	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Sales Invoice"])
+	@patch(
+		"retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes",
+		return_value=["Sales Invoice"],
+	)
 	def test_custom_field_creation_keeps_only_branch_visible(
 		self, _mock_targets, mock_has_field, mock_create_custom_fields, mock_get_value, mock_delete_doc
 	):
@@ -3123,7 +3387,10 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 	@patch("retailedge.transaction_branch_attribution.frappe.db.get_value")
 	@patch("retailedge.transaction_branch_attribution.create_custom_fields")
 	@patch("retailedge.transaction_branch_attribution.has_field", return_value=False)
-	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Stock Entry"])
+	@patch(
+		"retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes",
+		return_value=["Stock Entry"],
+	)
 	def test_movement_attribution_fields_are_hidden_metadata(
 		self, _mock_targets, _mock_has_field, mock_create_custom_fields, mock_get_value, mock_delete_doc
 	):
@@ -3137,7 +3404,11 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 		]
 		self.assertEqual(visible_fields, ["retailedge_branch"])
 		self.assertNotIn("retailedge_branch_attribution_section", by_fieldname)
-		for fieldname in ("retailedge_source_branch", "retailedge_target_branch", "retailedge_warehouse_branch"):
+		for fieldname in (
+			"retailedge_source_branch",
+			"retailedge_target_branch",
+			"retailedge_warehouse_branch",
+		):
 			self.assertEqual(by_fieldname[fieldname].get("hidden"), 1)
 			self.assertEqual(by_fieldname[fieldname].get("read_only"), 1)
 
@@ -3147,11 +3418,18 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 
 		# Verify that the custom Section Break has been deleted from the database
 		for doctype in ["Sales Invoice", "Stock Entry"]:
-			cf_exists = frappe.db.exists("Custom Field", {"dt": doctype, "fieldname": "retailedge_branch_attribution_section"})
+			cf_exists = frappe.db.exists(
+				"Custom Field", {"dt": doctype, "fieldname": "retailedge_branch_attribution_section"}
+			)
 			self.assertFalse(cf_exists, f"Section break custom field should not exist for {doctype}")
 
 			# Verify retailedge_branch custom field exists and is visible (hidden = 0)
-			branch_field = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": "retailedge_branch"}, ["fieldname", "hidden"], as_dict=True)
+			branch_field = frappe.db.get_value(
+				"Custom Field",
+				{"dt": doctype, "fieldname": "retailedge_branch"},
+				["fieldname", "hidden"],
+				as_dict=True,
+			)
 			self.assertIsNotNone(branch_field)
 			self.assertEqual(branch_field.hidden or 0, 0)
 
@@ -3159,25 +3437,38 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 			metadata_fields = [
 				"retailedge_branch_source",
 				"retailedge_branch_resolved_on",
-				"retailedge_branch_resolution_note"
+				"retailedge_branch_resolution_note",
 			]
 			if doctype == "Stock Entry":
-				metadata_fields.extend(["retailedge_source_branch", "retailedge_target_branch", "retailedge_warehouse_branch"])
-			
+				metadata_fields.extend(
+					["retailedge_source_branch", "retailedge_target_branch", "retailedge_warehouse_branch"]
+				)
+
 			for fieldname in metadata_fields:
-				field_meta = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": fieldname}, ["fieldname", "hidden", "read_only", "no_copy", "print_hide"], as_dict=True)
+				field_meta = frappe.db.get_value(
+					"Custom Field",
+					{"dt": doctype, "fieldname": fieldname},
+					["fieldname", "hidden", "read_only", "no_copy", "print_hide"],
+					as_dict=True,
+				)
 				self.assertIsNotNone(field_meta, f"Metadata field {fieldname} should exist for {doctype}")
 				self.assertEqual(field_meta.hidden, 1, f"Metadata field {fieldname} should be hidden")
 				self.assertEqual(field_meta.read_only, 1, f"Metadata field {fieldname} should be read-only")
-				self.assertEqual(field_meta.no_copy, 1, f"Metadata field {fieldname} should have no_copy enabled")
-				self.assertEqual(field_meta.print_hide, 1, f"Metadata field {fieldname} should have print_hide enabled")
+				self.assertEqual(
+					field_meta.no_copy, 1, f"Metadata field {fieldname} should have no_copy enabled"
+				)
+				self.assertEqual(
+					field_meta.print_hide, 1, f"Metadata field {fieldname} should have print_hide enabled"
+				)
 
 		# Confirm native ERPNext fields remain visible on Stock Entry
 		meta_stock = frappe.get_meta("Stock Entry")
 		for fieldname in ["stock_entry_type", "posting_date"]:
 			field = meta_stock.get_field(fieldname)
 			if field:
-				self.assertEqual(field.hidden or 0, 0, f"Native field {fieldname} on Stock Entry should not be hidden")
+				self.assertEqual(
+					field.hidden or 0, 0, f"Native field {fieldname} on Stock Entry should not be hidden"
+				)
 		field_spt = meta_stock.get_field("set_posting_time")
 		if field_spt:
 			self.assertEqual(field_spt.hidden or 0, 0, "set_posting_time on Stock Entry should not be hidden")
@@ -3187,29 +3478,51 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 		for fieldname in ["posting_date", "posting_time"]:
 			field = meta_sales.get_field(fieldname)
 			if field:
-				self.assertEqual(field.hidden or 0, 0, f"Native field {fieldname} on Sales Invoice should not be hidden")
+				self.assertEqual(
+					field.hidden or 0, 0, f"Native field {fieldname} on Sales Invoice should not be hidden"
+				)
 		field_spt_sales = meta_sales.get_field("set_posting_time")
 		if field_spt_sales:
-			self.assertEqual(field_spt_sales.hidden or 0, 0, "set_posting_time on Sales Invoice should not be hidden")
+			self.assertEqual(
+				field_spt_sales.hidden or 0, 0, "set_posting_time on Sales Invoice should not be hidden"
+			)
 
 		# Confirm no active Property Setter hides the native fields
 		for doctype in ["Sales Invoice", "Stock Entry"]:
 			for fieldname in ["posting_date", "posting_time", "set_posting_time", "stock_entry_type"]:
-				ps = frappe.db.get_value("Property Setter", {"doc_type": doctype, "field_name": fieldname, "property": "hidden"}, "value")
+				ps = frappe.db.get_value(
+					"Property Setter",
+					{"doc_type": doctype, "field_name": fieldname, "property": "hidden"},
+					"value",
+				)
 				if ps:
-					self.assertNotEqual(ps, "1", f"Property Setter should not hide native field {fieldname} on {doctype}")
+					self.assertNotEqual(
+						ps, "1", f"Property Setter should not hide native field {fieldname} on {doctype}"
+					)
 
-
-
-	@patch("retailedge.transaction_branch_attribution.has_field", side_effect=lambda doctype, fieldname: fieldname != "retailedge_branch")
-	@patch("retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes", return_value=["Sales Invoice"])
-	def test_apply_transaction_branch_attribution_handles_missing_custom_fields(self, _mock_targets, _mock_has_field):
+	@patch(
+		"retailedge.transaction_branch_attribution.has_field",
+		side_effect=lambda doctype, fieldname: fieldname != "retailedge_branch",
+	)
+	@patch(
+		"retailedge.transaction_branch_attribution.get_branch_attribution_target_doctypes",
+		return_value=["Sales Invoice"],
+	)
+	def test_apply_transaction_branch_attribution_handles_missing_custom_fields(
+		self, _mock_targets, _mock_has_field
+	):
 		doc = _Doc(doctype="Sales Invoice", name="SINV-1")
 		result = apply_transaction_branch_attribution(doc)
 		self.assertIn("not available", result["note"].lower())
 
-	@patch("retailedge.transaction_branch_attribution._resolve_branch_context_for_doc", return_value={"branch": None, "source": None, "messages": []})
-	@patch("retailedge.transaction_branch_attribution._resolve_single_branch_from_warehouses", return_value=(None, None))
+	@patch(
+		"retailedge.transaction_branch_attribution._resolve_branch_context_for_doc",
+		return_value={"branch": None, "source": None, "messages": []},
+	)
+	@patch(
+		"retailedge.transaction_branch_attribution._resolve_single_branch_from_warehouses",
+		return_value=(None, None),
+	)
 	def test_explicit_branch_is_preferred(self, _mock_warehouse, _mock_context):
 		doc = _Doc(doctype="Sales Invoice", name="SINV-1", branch="HQ", company="Demo Company")
 		result = resolve_transaction_branch(doc)
@@ -3250,7 +3563,10 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 		self.assertIsNone(result["branch"])
 		self.assertIn("manual review required", result["note"].lower())
 
-	@patch("retailedge.transaction_branch_attribution._resolve_single_branch_from_warehouses", return_value=(None, None))
+	@patch(
+		"retailedge.transaction_branch_attribution._resolve_single_branch_from_warehouses",
+		return_value=(None, None),
+	)
 	@patch(
 		"retailedge.transaction_branch_attribution._resolve_branch_context_for_doc",
 		return_value={"branch": "HQ", "source": "RetailEdge Branch Profile", "messages": []},
@@ -3263,7 +3579,11 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 
 	@patch(
 		"retailedge.transaction_branch_attribution._resolve_branch_context_for_doc",
-		return_value={"branch": "Airport Branch", "source": "POS Opening Shift.retailedge_branch", "messages": []},
+		return_value={
+			"branch": "Airport Branch",
+			"source": "POS Opening Shift.retailedge_branch",
+			"messages": [],
+		},
 	)
 	@patch(
 		"retailedge.transaction_branch_attribution._resolve_single_branch_from_warehouses",
@@ -3340,7 +3660,9 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 		mock_commit,
 	):
 		mock_get_all.return_value = [_Row(name="SINV-1")]
-		mock_get_doc.return_value = _Doc(doctype="Sales Invoice", name="SINV-1", retailedge_branch=None, amount=500)
+		mock_get_doc.return_value = _Doc(
+			doctype="Sales Invoice", name="SINV-1", retailedge_branch=None, amount=500
+		)
 		mock_resolve.return_value = {
 			"branch": "HQ",
 			"source_branch": None,
@@ -3375,7 +3697,13 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 		mock_set_value,
 		mock_commit,
 	):
-		doc = _Doc(doctype="Sales Invoice", name="SINV-2", retailedge_branch=None, amount=1250, company="Demo Company")
+		doc = _Doc(
+			doctype="Sales Invoice",
+			name="SINV-2",
+			retailedge_branch=None,
+			amount=1250,
+			company="Demo Company",
+		)
 		mock_get_all.return_value = [_Row(name="SINV-2")]
 		mock_get_doc.return_value = doc
 		mock_resolve.return_value = {
@@ -3428,7 +3756,9 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 	):
 		mock_get_all.return_value = [_Row(name="SINV-3")]
 		mock_get_doc.return_value = _Doc(doctype="Sales Invoice", name="SINV-3", retailedge_branch="HQ")
-		result = run_transaction_branch_backfill(doctype="Sales Invoice", limit=10, dry_run=False, overwrite=False)
+		result = run_transaction_branch_backfill(
+			doctype="Sales Invoice", limit=10, dry_run=False, overwrite=False
+		)
 		self.assertEqual(result["skipped"], 1)
 		self.assertEqual(result["items"][0]["action"], "skipped")
 		mock_resolve.assert_not_called()
@@ -3461,7 +3791,9 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 			"note": None,
 			"messages": [],
 		}
-		result = run_transaction_branch_backfill(doctype="Sales Invoice", limit=10, dry_run=False, overwrite=True)
+		result = run_transaction_branch_backfill(
+			doctype="Sales Invoice", limit=10, dry_run=False, overwrite=True
+		)
 		self.assertEqual(result["updated"], 1)
 		self.assertEqual(mock_set_value.call_args.args[2]["retailedge_branch"], "Airport Branch")
 

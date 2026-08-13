@@ -68,7 +68,8 @@
 	}
 
 	async function mountBusinessHub(wrapper) {
-		const target = wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
+		const target =
+			wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
 		clearPreviousMount(wrapper, target);
 		const loading = renderLoading(target);
 
@@ -83,20 +84,23 @@
 			}
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
 				throw new Error(
-					__("RetailEdge Business Hub bundle loaded without exposing its mount function: {0}", [PRODUCT_ASSET])
+					__(
+						"RetailEdge Business Hub bundle loaded without exposing its mount function: {0}",
+						[PRODUCT_ASSET]
+					)
 				);
 			}
 
 			loading.remove();
-			const root = $("<div class=\"retailedge-business-hub-root\"></div>").appendTo(target);
+			const root = $('<div class="retailedge-business-hub-root"></div>').appendTo(target);
 			wrapper._retailedgeBusinessHubRoot = root;
 			wrapper._retailedgeBusinessHub = global.mountRetailEdgeBusinessHub(root[0]);
 			global.retailedgeRefreshProductMenu?.();
 			return wrapper._retailedgeBusinessHub;
-		} catch (error) {
+		} catch (mountError) {
 			loading.remove();
-			console.error("[RetailEdge Business Hub] mount failed", error);
-			renderFailure(target, error);
+			console.error("[RetailEdge Business Hub] mount failed", mountError);
+			renderFailure(target, mountError);
 			return null;
 		}
 	}
@@ -111,13 +115,16 @@
 			.then(() => {
 				if (typeof global.retailedgeInstallProductMenu !== "function") {
 					throw new Error(
-						__("RetailEdge product-menu bundle loaded without exposing its installer: {0}", [PRODUCT_MENU_ASSET])
+						__(
+							"RetailEdge product-menu bundle loaded without exposing its installer: {0}",
+							[PRODUCT_MENU_ASSET]
+						)
 					);
 				}
 				return global.retailedgeInstallProductMenu();
 			})
-			.catch((error) => {
-				console.error("[RetailEdge Product Menu] boot failed", error);
+			.catch((menuError) => {
+				console.error("[RetailEdge Product Menu] boot failed", menuError);
 				return null;
 			})
 			.finally(() => {
@@ -147,19 +154,24 @@
 		if (instance && typeof instance.unmount === "function") {
 			try {
 				instance.unmount();
-			} catch (error) {
-				console.warn("[RetailEdge Business Hub] previous app unmount failed", error);
+			} catch (unmountError) {
+				console.warn(
+					"[RetailEdge Business Hub] previous app unmount failed",
+					unmountError
+				);
 			}
 		}
 		wrapper._retailedgeBusinessHub = null;
 		wrapper._retailedgeBusinessHubRoot = null;
 		$(target)
-			.find(".retailedge-business-hub-root, .retailedge-business-hub-error, .edge-boot-loading")
+			.find(
+				".retailedge-business-hub-root, .retailedge-business-hub-error, .edge-boot-loading"
+			)
 			.remove();
 	}
 
 	function renderLoading(target) {
-		return $("<div class=\"edge-boot-loading p-6 text-center text-muted\"></div>")
+		return $('<div class="edge-boot-loading p-6 text-center text-muted"></div>')
 			.text(__("Loading RetailEdge Business Hub..."))
 			.appendTo(target);
 	}
@@ -188,8 +200,8 @@
 				if (pending && typeof pending.then === "function") {
 					pending.then(finish).catch(fail);
 				}
-			} catch (error) {
-				fail(error);
+			} catch (requireError) {
+				fail(requireError);
 			}
 		});
 	}
@@ -212,17 +224,20 @@
 		];
 		const missing = required.filter((name) => !components[name]);
 		if (missing.length) {
-			throw new Error(__("EdgeSuite UI is missing required components: {0}", [missing.join(", ")]));
+			throw new Error(
+				__("EdgeSuite UI is missing required components: {0}", [missing.join(", ")])
+			);
 		}
 	}
 
-	function renderFailure(target, error) {
-		const message = error && error.message ? error.message : __("Unknown loading error.");
+	function renderFailure(target, failure) {
+		const message =
+			failure && failure.message ? failure.message : __("Unknown loading error.");
 		const errorBox = $(
-			"<div class=\"retailedge-business-hub-error alert alert-danger p-6 text-center\"></div>"
+			'<div class="retailedge-business-hub-error alert alert-danger p-6 text-center"></div>'
 		);
 		errorBox.append($("<strong></strong>").text(__("RetailEdge Business Hub failed to load")));
-		errorBox.append($("<div class=\"mt-2\"></div>").text(message));
+		errorBox.append($('<div class="mt-2"></div>').text(message));
 		errorBox.appendTo(target);
 	}
 
@@ -236,6 +251,8 @@
 	global.retailedgeBootBusinessHubPage = bootBusinessHub;
 	global.retailedgeBootProductMenu = bootProductMenu;
 	if (!initialiseDeskFeatures() && global.document) {
-		global.document.addEventListener("DOMContentLoaded", initialiseDeskFeatures, { once: true });
+		global.document.addEventListener("DOMContentLoaded", initialiseDeskFeatures, {
+			once: true,
+		});
 	}
 })(window);

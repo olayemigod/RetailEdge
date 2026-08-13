@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import json
 import pathlib
 import unittest
@@ -23,9 +25,15 @@ from retailedge.retailedge.report.retailedge_branch_performance_summary.retailed
 )
 
 
+APP_ROOT = Path(__file__).resolve().parents[1]
+
+
 class BranchPerformanceTests(unittest.TestCase):
 	REPORT_JS_PATH = pathlib.Path(
-		"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.js"
+		str(
+			APP_ROOT
+			/ "retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.js"
+		)
 	)
 
 	def test_report_imports_cleanly(self):
@@ -40,13 +48,12 @@ class BranchPerformanceTests(unittest.TestCase):
 	def test_report_js_default_filters_are_safe_for_first_load(self):
 		script = self.REPORT_JS_PATH.read_text(encoding="utf-8")
 		self.assertIn('fieldname: "from_date"', script)
-		self.assertIn('default: frappe.datetime.month_start()', script)
+		self.assertIn("default: frappe.datetime.month_start()", script)
 		self.assertIn('fieldname: "to_date"', script)
-		self.assertIn('default: frappe.datetime.get_today()', script)
+		self.assertIn("default: frappe.datetime.get_today()", script)
 		self.assertIn('fieldname: "only_pos_invoices"', script)
 		self.assertIn("default: 0", script)
 		self.assertIn('fieldname: "include_unattributed"', script)
-
 
 	def test_report_js_refreshes_when_filters_change(self):
 		script = self.REPORT_JS_PATH.read_text(encoding="utf-8")
@@ -59,7 +66,10 @@ class BranchPerformanceTests(unittest.TestCase):
 
 	def test_branch_performance_report_disables_prepared_report_mode(self):
 		report_json_path = pathlib.Path(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.json"
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.json"
+			)
 		)
 		report_json = json.loads(report_json_path.read_text(encoding="utf-8"))
 		self.assertEqual(report_json.get("disable_prepared_report"), 1)
@@ -130,12 +140,89 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertEqual(result["cashier"], "Guest")
 		self.assertEqual(result["source"], "Sales Invoice.owner")
 
-	@patch("retailedge.branch_performance._resolve_branch_scope", return_value={"filters": frappe._dict({"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31", "branch": "HQ", "only_pos_invoices": 1, "include_unattributed": 0, "include_fallback_branch_resolution": 0}), "messages": [], "allowed_branches": []})
-	@patch("retailedge.branch_performance.get_branch_stock_activity_summary", return_value={"by_branch": {"HQ": {"material_request_count": 1, "stock_entry_count": 1}}, "messages": []})
-	@patch("retailedge.branch_performance.get_branch_variance_summary", return_value={"by_branch": {"HQ": {"expected_cash": 900.0, "actual_closing_cash": 950.0, "audit_variance": 50.0, "daily_audit_count": 1, "pending_audit_count": 0, "approved_audit_count": 1, "high_variance_count": 0}}, "messages": []})
-	@patch("retailedge.branch_performance.get_branch_expense_summary", return_value={"by_branch": {"HQ": {"cashier_expenses": 100.0, "cashier_expense_count": 1}}, "messages": []})
-	@patch("retailedge.branch_performance.get_branch_payment_breakdown", return_value={"by_branch": {"HQ": {"Cash": 1000.0, "Bank Transfer": 200.0, "Card / POS": 0.0, "Mobile Money": 0.0, "Other": 0.0}}, "messages": []})
-	@patch("retailedge.branch_performance.get_branch_sales_summary", return_value={"by_branch": {"HQ": {"invoice_count": 2, "gross_sales": 1200.0, "net_total": 1150.0, "outstanding_amount": 200.0, "paid_amount": 1000.0, "paid_invoice_count": 1, "partially_paid_invoice_count": 0, "outstanding_invoice_count": 1, "unattributed_invoice_count": 0}}, "messages": []})
+	@patch(
+		"retailedge.branch_performance._resolve_branch_scope",
+		return_value={
+			"filters": frappe._dict(
+				{
+					"company": "Process Edge (Demo)",
+					"from_date": "2026-05-01",
+					"to_date": "2026-05-31",
+					"branch": "HQ",
+					"only_pos_invoices": 1,
+					"include_unattributed": 0,
+					"include_fallback_branch_resolution": 0,
+				}
+			),
+			"messages": [],
+			"allowed_branches": [],
+		},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_stock_activity_summary",
+		return_value={
+			"by_branch": {"HQ": {"material_request_count": 1, "stock_entry_count": 1}},
+			"messages": [],
+		},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_variance_summary",
+		return_value={
+			"by_branch": {
+				"HQ": {
+					"expected_cash": 900.0,
+					"actual_closing_cash": 950.0,
+					"audit_variance": 50.0,
+					"daily_audit_count": 1,
+					"pending_audit_count": 0,
+					"approved_audit_count": 1,
+					"high_variance_count": 0,
+				}
+			},
+			"messages": [],
+		},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_expense_summary",
+		return_value={
+			"by_branch": {"HQ": {"cashier_expenses": 100.0, "cashier_expense_count": 1}},
+			"messages": [],
+		},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_payment_breakdown",
+		return_value={
+			"by_branch": {
+				"HQ": {
+					"Cash": 1000.0,
+					"Bank Transfer": 200.0,
+					"Card / POS": 0.0,
+					"Mobile Money": 0.0,
+					"Other": 0.0,
+				}
+			},
+			"messages": [],
+		},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_sales_summary",
+		return_value={
+			"by_branch": {
+				"HQ": {
+					"invoice_count": 2,
+					"gross_sales": 1200.0,
+					"net_total": 1150.0,
+					"outstanding_amount": 200.0,
+					"paid_amount": 1000.0,
+					"paid_invoice_count": 1,
+					"partially_paid_invoice_count": 0,
+					"outstanding_invoice_count": 1,
+					"unattributed_invoice_count": 0,
+				}
+			},
+			"messages": [],
+		},
+	)
 	def test_get_branch_performance_summary_builds_read_only_summary(
 		self,
 		_mock_sales,
@@ -159,10 +246,36 @@ class BranchPerformanceTests(unittest.TestCase):
 	@patch("retailedge.branch_performance.get_branch_performance_rows")
 	def test_get_branch_performance_summary_aggregates_all_rows_when_branch_not_selected(self, mock_rows):
 		mock_rows.return_value = [
-			{"branch": "Airport Branch", "period": "2026-05-01 to 2026-05-31", "invoice_count": 3, "gross_sales": 2430.0, "cash_sales": 810.0, "bank_sales": 1620.0, "cashier_expenses": 5000.0, "audit_variance": -1000.0, "payment_issues": 3, "review_status": "Needs Review", "Bank Transfer": 1620.0},
-			{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 2, "gross_sales": 1900.0, "cash_sales": 1000.0, "bank_sales": 0.0, "cashier_expenses": 0.0, "audit_variance": 0.0, "payment_issues": 0, "review_status": "Reviewed", "Bank Transfer": 0.0},
+			{
+				"branch": "Airport Branch",
+				"period": "2026-05-01 to 2026-05-31",
+				"invoice_count": 3,
+				"gross_sales": 2430.0,
+				"cash_sales": 810.0,
+				"bank_sales": 1620.0,
+				"cashier_expenses": 5000.0,
+				"audit_variance": -1000.0,
+				"payment_issues": 3,
+				"review_status": "Needs Review",
+				"Bank Transfer": 1620.0,
+			},
+			{
+				"branch": "HQ",
+				"period": "2026-05-01 to 2026-05-31",
+				"invoice_count": 2,
+				"gross_sales": 1900.0,
+				"cash_sales": 1000.0,
+				"bank_sales": 0.0,
+				"cashier_expenses": 0.0,
+				"audit_variance": 0.0,
+				"payment_issues": 0,
+				"review_status": "Reviewed",
+				"Bank Transfer": 0.0,
+			},
 		]
-		summary = get_branch_performance_summary({"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		summary = get_branch_performance_summary(
+			{"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31"}
+		)
 		self.assertEqual(summary["branch"], "All Branches")
 		self.assertEqual(summary["gross_sales"], 4330.0)
 		self.assertEqual(summary["cash_sales"], 1810.0)
@@ -174,32 +287,92 @@ class BranchPerformanceTests(unittest.TestCase):
 	@patch("retailedge.branch_performance.frappe.db.sql")
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype", return_value=True)
-	def test_fallback_branch_resolution_is_not_used_by_default(self, _mock_doctype, mock_has_field, mock_sql, mock_resolve):
+	def test_fallback_branch_resolution_is_not_used_by_default(
+		self, _mock_doctype, mock_has_field, mock_sql, mock_resolve
+	):
 		mock_has_field.return_value = True
-		mock_sql.return_value = [{"branch": "HQ", "invoice_count": 1, "gross_sales": 1000.0, "net_total": 900.0, "outstanding_amount": 0.0, "paid_amount": 1000.0, "paid_invoice_count": 1, "partially_paid_invoice_count": 0, "unpaid_invoice_count": 0}]
-		get_branch_sales_summary({"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		mock_sql.return_value = [
+			{
+				"branch": "HQ",
+				"invoice_count": 1,
+				"gross_sales": 1000.0,
+				"net_total": 900.0,
+				"outstanding_amount": 0.0,
+				"paid_amount": 1000.0,
+				"paid_invoice_count": 1,
+				"partially_paid_invoice_count": 0,
+				"unpaid_invoice_count": 0,
+			}
+		]
+		get_branch_sales_summary(
+			{"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31"}
+		)
 		mock_resolve.assert_not_called()
 
-	@patch("retailedge.branch_performance.resolve_retailedge_branch_context", return_value={"branch": "HQ", "messages": []})
+	@patch(
+		"retailedge.branch_performance.resolve_retailedge_branch_context",
+		return_value={"branch": "HQ", "messages": []},
+	)
 	@patch("retailedge.branch_performance.frappe.db.sql")
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype", return_value=True)
-	def test_fallback_branch_resolution_runs_only_when_enabled(self, _mock_doctype, mock_has_field, mock_sql, mock_resolve):
+	def test_fallback_branch_resolution_runs_only_when_enabled(
+		self, _mock_doctype, mock_has_field, mock_sql, mock_resolve
+	):
 		mock_has_field.return_value = True
 		mock_sql.side_effect = [
 			[],
-			[{"name": "SINV-001", "company": "Process Edge (Demo)", "pos_profile": "POS-1", "owner": "cashier@example.com", "grand_total": 1000.0, "net_total": 900.0, "outstanding_amount": 0.0, "paid_amount": 1000.0}],
+			[
+				{
+					"name": "SINV-001",
+					"company": "Process Edge (Demo)",
+					"pos_profile": "POS-1",
+					"owner": "cashier@example.com",
+					"grand_total": 1000.0,
+					"net_total": 900.0,
+					"outstanding_amount": 0.0,
+					"paid_amount": 1000.0,
+				}
+			],
 		]
-		get_branch_sales_summary({"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31", "include_fallback_branch_resolution": 1})
+		get_branch_sales_summary(
+			{
+				"company": "Process Edge (Demo)",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+				"include_fallback_branch_resolution": 1,
+			}
+		)
 		mock_resolve.assert_called_once()
 
 	@patch("retailedge.branch_performance.frappe.db.sql")
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype", return_value=True)
-	def test_branch_filter_applies_correctly_using_stored_branch(self, _mock_doctype, mock_has_field, mock_sql):
+	def test_branch_filter_applies_correctly_using_stored_branch(
+		self, _mock_doctype, mock_has_field, mock_sql
+	):
 		mock_has_field.return_value = True
-		mock_sql.return_value = [{"branch": "HQ", "invoice_count": 1, "gross_sales": 1000.0, "net_total": 900.0, "outstanding_amount": 0.0, "paid_amount": 1000.0, "paid_invoice_count": 1, "partially_paid_invoice_count": 0, "unpaid_invoice_count": 0}]
-		get_branch_sales_summary({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		mock_sql.return_value = [
+			{
+				"branch": "HQ",
+				"invoice_count": 1,
+				"gross_sales": 1000.0,
+				"net_total": 900.0,
+				"outstanding_amount": 0.0,
+				"paid_amount": 1000.0,
+				"paid_invoice_count": 1,
+				"partially_paid_invoice_count": 0,
+				"unpaid_invoice_count": 0,
+			}
+		]
+		get_branch_sales_summary(
+			{
+				"company": "Process Edge (Demo)",
+				"branch": "HQ",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+			}
+		)
 		sql_text = mock_sql.call_args[0][0]
 		self.assertIn("COALESCE(NULLIF(si.retailedge_branch, ''), NULLIF(si.branch, ''))", sql_text)
 		self.assertIn("= %s", sql_text)
@@ -209,33 +382,90 @@ class BranchPerformanceTests(unittest.TestCase):
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype", return_value=True)
 	def test_pos_profile_filter_applies_correctly(self, _mock_doctype, mock_has_field, mock_sql):
-		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in {"company", "posting_date", "pos_profile", "retailedge_branch", "grand_total", "outstanding_amount", "paid_amount", "net_total", "is_pos"}
+		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in {
+			"company",
+			"posting_date",
+			"pos_profile",
+			"retailedge_branch",
+			"grand_total",
+			"outstanding_amount",
+			"paid_amount",
+			"net_total",
+			"is_pos",
+		}
 		mock_sql.return_value = []
-		get_branch_sales_summary({"company": "Process Edge (Demo)", "pos_profile": "POS-HQ", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		get_branch_sales_summary(
+			{
+				"company": "Process Edge (Demo)",
+				"pos_profile": "POS-HQ",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+			}
+		)
 		self.assertIn("si.pos_profile = %s", mock_sql.call_args[0][0])
 		self.assertIn("POS-HQ", mock_sql.call_args[0][1])
 
 	@patch("retailedge.branch_performance.frappe.db.sql")
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype", return_value=True)
-	def test_cashier_filter_does_not_crash_if_cashier_field_is_missing(self, _mock_doctype, mock_has_field, mock_sql):
-		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in {"company", "posting_date", "retailedge_branch", "grand_total", "outstanding_amount", "paid_amount", "net_total"}
+	def test_cashier_filter_does_not_crash_if_cashier_field_is_missing(
+		self, _mock_doctype, mock_has_field, mock_sql
+	):
+		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in {
+			"company",
+			"posting_date",
+			"retailedge_branch",
+			"grand_total",
+			"outstanding_amount",
+			"paid_amount",
+			"net_total",
+		}
 		mock_sql.return_value = []
-		get_branch_sales_summary({"company": "Process Edge (Demo)", "cashier": "cashier@example.com", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		get_branch_sales_summary(
+			{
+				"company": "Process Edge (Demo)",
+				"cashier": "cashier@example.com",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+			}
+		)
 		self.assertIn("si.owner", mock_sql.call_args[0][0])
 		self.assertIn("cashier@example.com", mock_sql.call_args[0][1])
 
 	@patch("retailedge.branch_performance.frappe.db.sql")
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype")
-	def test_cashier_filter_uses_pos_opening_shift_user_not_only_owner(self, mock_has_doctype, mock_has_field, mock_sql):
+	def test_cashier_filter_uses_pos_opening_shift_user_not_only_owner(
+		self, mock_has_doctype, mock_has_field, mock_sql
+	):
 		mock_has_doctype.side_effect = lambda doctype: doctype in {"Sales Invoice", "POS Opening Shift"}
 		mock_has_field.side_effect = lambda doctype, fieldname: (
-			(doctype == "Sales Invoice" and fieldname in {"company", "posting_date", "retailedge_branch", "grand_total", "outstanding_amount", "paid_amount", "net_total", "is_pos", "posa_pos_opening_shift"})
+			(
+				doctype == "Sales Invoice"
+				and fieldname
+				in {
+					"company",
+					"posting_date",
+					"retailedge_branch",
+					"grand_total",
+					"outstanding_amount",
+					"paid_amount",
+					"net_total",
+					"is_pos",
+					"posa_pos_opening_shift",
+				}
+			)
 			or (doctype == "POS Opening Shift" and fieldname in {"user"})
 		)
 		mock_sql.return_value = []
-		get_branch_sales_summary({"company": "Process Edge (Demo)", "cashier": "cashier1@example.com", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		get_branch_sales_summary(
+			{
+				"company": "Process Edge (Demo)",
+				"cashier": "cashier1@example.com",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+			}
+		)
 		sql_text = mock_sql.call_args[0][0]
 		params = mock_sql.call_args[0][1]
 		self.assertIn("LEFT JOIN `tabPOS Opening Shift` si_posa_opening_shift", sql_text)
@@ -245,14 +475,37 @@ class BranchPerformanceTests(unittest.TestCase):
 	@patch("retailedge.branch_performance.frappe.db.sql")
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype")
-	def test_guest_filter_does_not_absorb_invoice_when_shift_user_exists(self, mock_has_doctype, mock_has_field, mock_sql):
+	def test_guest_filter_does_not_absorb_invoice_when_shift_user_exists(
+		self, mock_has_doctype, mock_has_field, mock_sql
+	):
 		mock_has_doctype.side_effect = lambda doctype: doctype in {"Sales Invoice", "POS Opening Shift"}
 		mock_has_field.side_effect = lambda doctype, fieldname: (
-			(doctype == "Sales Invoice" and fieldname in {"company", "posting_date", "retailedge_branch", "grand_total", "outstanding_amount", "paid_amount", "net_total", "is_pos", "posa_pos_opening_shift"})
+			(
+				doctype == "Sales Invoice"
+				and fieldname
+				in {
+					"company",
+					"posting_date",
+					"retailedge_branch",
+					"grand_total",
+					"outstanding_amount",
+					"paid_amount",
+					"net_total",
+					"is_pos",
+					"posa_pos_opening_shift",
+				}
+			)
 			or (doctype == "POS Opening Shift" and fieldname in {"user"})
 		)
 		mock_sql.return_value = []
-		get_branch_sales_summary({"company": "Process Edge (Demo)", "cashier": "Guest", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		get_branch_sales_summary(
+			{
+				"company": "Process Edge (Demo)",
+				"cashier": "Guest",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+			}
+		)
 		sql_text = mock_sql.call_args[0][0]
 		self.assertNotIn("si.owner = %s", sql_text)
 		self.assertIn("si_posa_opening_shift.user", sql_text)
@@ -262,8 +515,27 @@ class BranchPerformanceTests(unittest.TestCase):
 	@patch("retailedge.branch_performance.has_doctype", return_value=True)
 	def test_sales_totals_use_submitted_invoices_only(self, _mock_doctype, mock_has_field, mock_sql):
 		mock_has_field.return_value = True
-		mock_sql.return_value = [{"branch": "HQ", "invoice_count": 2, "gross_sales": 1500.0, "net_total": 1400.0, "outstanding_amount": 500.0, "paid_amount": 1000.0, "paid_invoice_count": 1, "partially_paid_invoice_count": 0, "unpaid_invoice_count": 1}]
-		summary = get_branch_sales_summary({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		mock_sql.return_value = [
+			{
+				"branch": "HQ",
+				"invoice_count": 2,
+				"gross_sales": 1500.0,
+				"net_total": 1400.0,
+				"outstanding_amount": 500.0,
+				"paid_amount": 1000.0,
+				"paid_invoice_count": 1,
+				"partially_paid_invoice_count": 0,
+				"unpaid_invoice_count": 1,
+			}
+		]
+		summary = get_branch_sales_summary(
+			{
+				"company": "Process Edge (Demo)",
+				"branch": "HQ",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+			}
+		)
 		self.assertEqual(summary["by_branch"]["HQ"]["invoice_count"], 2)
 		self.assertIn("docstatus = 1", mock_sql.call_args[0][0])
 
@@ -276,7 +548,14 @@ class BranchPerformanceTests(unittest.TestCase):
 			{"branch": "HQ", "payment_category": "Cash", "total_amount": 1000.0},
 			{"branch": "HQ", "payment_category": "Bank Transfer", "total_amount": 500.0},
 		]
-		breakdown = get_branch_payment_breakdown({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		breakdown = get_branch_payment_breakdown(
+			{
+				"company": "Process Edge (Demo)",
+				"branch": "HQ",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+			}
+		)
 		self.assertEqual(breakdown["by_branch"]["HQ"]["Cash"], 1000.0)
 		self.assertEqual(breakdown["by_branch"]["HQ"]["Bank Transfer"], 500.0)
 
@@ -284,32 +563,37 @@ class BranchPerformanceTests(unittest.TestCase):
 		return {card.get("label"): card for card in summary}
 
 	def test_report_summary_card_order_restores_payment_issues(self):
-		summary = get_report_summary([
-			{
-				"gross_sales": 1500.0,
-				"cash_sales": 500.0,
-				"Bank Transfer": 600.0,
-				"Card / POS": 300.0,
-				"Mobile Money": 100.0,
-				"cashier_expenses": 50.0,
-				"ledger_expenses": 75.0,
-				"expected_cash": 450.0,
-				"actual_closing_cash": 425.0,
-				"audit_variance": -25.0,
-				"payment_issues": 4,
-			}
-		])
-		self.assertEqual([card["label"] for card in summary], [
-			"Gross Sales",
-			"Cash Sales",
-			"Bank Sales",
-			"Cashier Expenses",
-			"Ledger Expenses",
-			"Expected Cash",
-			"Actual Cash",
-			"Audit Variance",
-			"Payment Issues",
-		])
+		summary = get_report_summary(
+			[
+				{
+					"gross_sales": 1500.0,
+					"cash_sales": 500.0,
+					"Bank Transfer": 600.0,
+					"Card / POS": 300.0,
+					"Mobile Money": 100.0,
+					"cashier_expenses": 50.0,
+					"ledger_expenses": 75.0,
+					"expected_cash": 450.0,
+					"actual_closing_cash": 425.0,
+					"audit_variance": -25.0,
+					"payment_issues": 4,
+				}
+			]
+		)
+		self.assertEqual(
+			[card["label"] for card in summary],
+			[
+				"Gross Sales",
+				"Cash Sales",
+				"Bank Sales",
+				"Cashier Expenses",
+				"Ledger Expenses",
+				"Expected Cash",
+				"Actual Cash",
+				"Audit Variance",
+				"Payment Issues",
+			],
+		)
 		cards = self._summary_by_label(summary)
 		self.assertEqual(cards["Gross Sales"]["value"], 1500.0)
 		self.assertEqual(cards["Cash Sales"]["value"], 500.0)
@@ -322,58 +606,159 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertEqual(cards["Payment Issues"]["value"], 4)
 
 	def test_report_summary_card_order_without_unsupported_ledger_expenses(self):
-		summary = get_report_summary([
-			{
-				"gross_sales": 1500.0,
-				"cash_sales": 500.0,
-				"Bank Transfer": 600.0,
-				"Card / POS": 300.0,
-				"Mobile Money": 100.0,
-				"cashier_expenses": 50.0,
-				"net_cash_expected": 450.0,
-				"actual_closing_cash": 425.0,
-				"audit_variance": -25.0,
-				"payment_issues": 4,
-			}
-		])
-		self.assertEqual([card["label"] for card in summary], [
-			"Gross Sales",
-			"Cash Sales",
-			"Bank Sales",
-			"Cashier Expenses",
-			"Expected Cash",
-			"Actual Cash",
-			"Audit Variance",
-			"Payment Issues",
-		])
+		summary = get_report_summary(
+			[
+				{
+					"gross_sales": 1500.0,
+					"cash_sales": 500.0,
+					"Bank Transfer": 600.0,
+					"Card / POS": 300.0,
+					"Mobile Money": 100.0,
+					"cashier_expenses": 50.0,
+					"net_cash_expected": 450.0,
+					"actual_closing_cash": 425.0,
+					"audit_variance": -25.0,
+					"payment_issues": 4,
+				}
+			]
+		)
+		self.assertEqual(
+			[card["label"] for card in summary],
+			[
+				"Gross Sales",
+				"Cash Sales",
+				"Bank Sales",
+				"Cashier Expenses",
+				"Expected Cash",
+				"Actual Cash",
+				"Audit Variance",
+				"Payment Issues",
+			],
+		)
 
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary", return_value={"submitted_sales_invoice_count": 1, "sales_invoice_with_retailedge_branch_count": 1, "cashier_expense_count": 0, "daily_sales_audit_count": 0})
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary",
+		return_value={
+			"submitted_sales_invoice_count": 1,
+			"sales_invoice_with_retailedge_branch_count": 1,
+			"cashier_expense_count": 0,
+			"daily_sales_audit_count": 0,
+		},
+	)
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows"
+	)
 	def test_cash_only_pos_invoice_increases_cash_sales_only(self, mock_rows, _mock_debug):
-		mock_rows.return_value = [{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 1, "gross_sales": 500.0, "cash_sales": 500.0, "Cash": 500.0, "Bank Transfer": 0.0, "Card / POS": 0.0, "Mobile Money": 0.0, "cashier_expenses": 0.0, "audit_variance": 0.0}]
-		_, data, _, _, summary = execute_branch_performance_report({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31", "only_pos_invoices": 1})
+		mock_rows.return_value = [
+			{
+				"branch": "HQ",
+				"period": "2026-05-01 to 2026-05-31",
+				"invoice_count": 1,
+				"gross_sales": 500.0,
+				"cash_sales": 500.0,
+				"Cash": 500.0,
+				"Bank Transfer": 0.0,
+				"Card / POS": 0.0,
+				"Mobile Money": 0.0,
+				"cashier_expenses": 0.0,
+				"audit_variance": 0.0,
+			}
+		]
+		_, data, _, _, summary = execute_branch_performance_report(
+			{
+				"company": "Process Edge (Demo)",
+				"branch": "HQ",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+				"only_pos_invoices": 1,
+			}
+		)
 		cards = self._summary_by_label(summary)
 		self.assertEqual(data[0]["cash_sales"], 500.0)
 		self.assertEqual(data[0]["bank_sales"], 0.0)
 		self.assertEqual(cards["Cash Sales"]["value"], 500.0)
 		self.assertEqual(cards["Bank Sales"]["value"], 0.0)
 
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary", return_value={"submitted_sales_invoice_count": 1, "sales_invoice_with_retailedge_branch_count": 1, "cashier_expense_count": 0, "daily_sales_audit_count": 0})
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary",
+		return_value={
+			"submitted_sales_invoice_count": 1,
+			"sales_invoice_with_retailedge_branch_count": 1,
+			"cashier_expense_count": 0,
+			"daily_sales_audit_count": 0,
+		},
+	)
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows"
+	)
 	def test_bank_payment_pos_invoice_increases_bank_sales_only(self, mock_rows, _mock_debug):
-		mock_rows.return_value = [{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 1, "gross_sales": 750.0, "cash_sales": 0.0, "Cash": 0.0, "Bank Transfer": 250.0, "Card / POS": 300.0, "Mobile Money": 200.0, "cashier_expenses": 0.0, "audit_variance": 0.0}]
-		_, data, _, _, summary = execute_branch_performance_report({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31", "only_pos_invoices": 1})
+		mock_rows.return_value = [
+			{
+				"branch": "HQ",
+				"period": "2026-05-01 to 2026-05-31",
+				"invoice_count": 1,
+				"gross_sales": 750.0,
+				"cash_sales": 0.0,
+				"Cash": 0.0,
+				"Bank Transfer": 250.0,
+				"Card / POS": 300.0,
+				"Mobile Money": 200.0,
+				"cashier_expenses": 0.0,
+				"audit_variance": 0.0,
+			}
+		]
+		_, data, _, _, summary = execute_branch_performance_report(
+			{
+				"company": "Process Edge (Demo)",
+				"branch": "HQ",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+				"only_pos_invoices": 1,
+			}
+		)
 		cards = self._summary_by_label(summary)
 		self.assertEqual(data[0]["cash_sales"], 0.0)
 		self.assertEqual(data[0]["bank_sales"], 750.0)
 		self.assertEqual(cards["Cash Sales"]["value"], 0.0)
 		self.assertEqual(cards["Bank Sales"]["value"], 750.0)
 
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary", return_value={"submitted_sales_invoice_count": 1, "sales_invoice_with_retailedge_branch_count": 1, "cashier_expense_count": 0, "daily_sales_audit_count": 0})
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary",
+		return_value={
+			"submitted_sales_invoice_count": 1,
+			"sales_invoice_with_retailedge_branch_count": 1,
+			"cashier_expense_count": 0,
+			"daily_sales_audit_count": 0,
+		},
+	)
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows"
+	)
 	def test_mixed_payment_pos_invoice_splits_cash_and_bank_sales(self, mock_rows, _mock_debug):
-		mock_rows.return_value = [{"branch": "HQ", "period": "2026-05-01 to 2026-05-31", "invoice_count": 1, "gross_sales": 1000.0, "cash_sales": 400.0, "Cash": 400.0, "Bank Transfer": 250.0, "Card / POS": 350.0, "Mobile Money": 0.0, "cashier_expenses": 0.0, "audit_variance": 0.0}]
-		_, data, _, _, summary = execute_branch_performance_report({"company": "Process Edge (Demo)", "branch": "HQ", "from_date": "2026-05-01", "to_date": "2026-05-31", "only_pos_invoices": 1})
+		mock_rows.return_value = [
+			{
+				"branch": "HQ",
+				"period": "2026-05-01 to 2026-05-31",
+				"invoice_count": 1,
+				"gross_sales": 1000.0,
+				"cash_sales": 400.0,
+				"Cash": 400.0,
+				"Bank Transfer": 250.0,
+				"Card / POS": 350.0,
+				"Mobile Money": 0.0,
+				"cashier_expenses": 0.0,
+				"audit_variance": 0.0,
+			}
+		]
+		_, data, _, _, summary = execute_branch_performance_report(
+			{
+				"company": "Process Edge (Demo)",
+				"branch": "HQ",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+				"only_pos_invoices": 1,
+			}
+		)
 		cards = self._summary_by_label(summary)
 		self.assertEqual(data[0]["cash_sales"], 400.0)
 		self.assertEqual(data[0]["bank_sales"], 600.0)
@@ -381,7 +766,9 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertEqual(cards["Cash Sales"]["value"], 400.0)
 		self.assertEqual(cards["Bank Sales"]["value"], 600.0)
 
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows"
+	)
 	def test_report_executes(self, mock_rows):
 		mock_rows.return_value = [
 			{
@@ -401,15 +788,26 @@ class BranchPerformanceTests(unittest.TestCase):
 				"Mobile Money": 0.0,
 			}
 		]
-		columns, data, _, _, summary = execute_branch_performance_report({"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31", "branch": "HQ"})
+		columns, data, _, _, summary = execute_branch_performance_report(
+			{
+				"company": "Process Edge (Demo)",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+				"branch": "HQ",
+			}
+		)
 		self.assertTrue(columns)
 		self.assertEqual(len(data), 1)
 		self.assertEqual(data[0]["branch"], "HQ")
 		self.assertEqual(data[0]["bank_card_mobile_sales"], 200.0)
 		self.assertTrue(summary)
 
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary")
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary"
+	)
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows"
+	)
 	def test_report_execute_works_with_none_and_returns_columns_when_no_data(self, mock_rows, mock_debug):
 		mock_rows.return_value = []
 		mock_debug.return_value = {
@@ -425,8 +823,12 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertIn("No matching records found", message)
 		self.assertTrue(summary)
 
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary")
-	@patch("retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows")
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_debug_summary"
+	)
+	@patch(
+		"retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary.get_branch_performance_rows"
+	)
 	def test_report_execute_works_with_empty_filters(self, mock_rows, mock_debug):
 		mock_rows.return_value = []
 		mock_debug.return_value = {
@@ -441,12 +843,57 @@ class BranchPerformanceTests(unittest.TestCase):
 		self.assertEqual(data, [])
 		self.assertIsNotNone(message)
 
-	@patch("retailedge.branch_performance.get_branch_stock_activity_summary", return_value={"by_branch": {}, "messages": []})
-	@patch("retailedge.branch_performance.get_branch_variance_summary", return_value={"by_branch": {}, "messages": []})
-	@patch("retailedge.branch_performance.get_branch_expense_summary", return_value={"by_branch": {}, "messages": []})
-	@patch("retailedge.branch_performance.get_branch_payment_breakdown", return_value={"by_branch": {}, "messages": []})
-	@patch("retailedge.branch_performance.get_branch_sales_summary", return_value={"by_branch": {"Unattributed": {"invoice_count": 2, "gross_sales": 500.0, "net_total": 480.0, "outstanding_amount": 20.0, "paid_amount": 480.0, "paid_invoice_count": 1, "partially_paid_invoice_count": 1, "outstanding_invoice_count": 0, "unattributed_invoice_count": 2}}, "messages": []})
-	@patch("retailedge.branch_performance._resolve_branch_scope", return_value={"filters": frappe._dict({"from_date": "2026-05-01", "to_date": "2026-05-31", "only_pos_invoices": 0, "include_unattributed": 1, "include_fallback_branch_resolution": 0}), "messages": [], "allowed_branches": []})
+	@patch(
+		"retailedge.branch_performance.get_branch_stock_activity_summary",
+		return_value={"by_branch": {}, "messages": []},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_variance_summary",
+		return_value={"by_branch": {}, "messages": []},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_expense_summary",
+		return_value={"by_branch": {}, "messages": []},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_payment_breakdown",
+		return_value={"by_branch": {}, "messages": []},
+	)
+	@patch(
+		"retailedge.branch_performance.get_branch_sales_summary",
+		return_value={
+			"by_branch": {
+				"Unattributed": {
+					"invoice_count": 2,
+					"gross_sales": 500.0,
+					"net_total": 480.0,
+					"outstanding_amount": 20.0,
+					"paid_amount": 480.0,
+					"paid_invoice_count": 1,
+					"partially_paid_invoice_count": 1,
+					"outstanding_invoice_count": 0,
+					"unattributed_invoice_count": 2,
+				}
+			},
+			"messages": [],
+		},
+	)
+	@patch(
+		"retailedge.branch_performance._resolve_branch_scope",
+		return_value={
+			"filters": frappe._dict(
+				{
+					"from_date": "2026-05-01",
+					"to_date": "2026-05-31",
+					"only_pos_invoices": 0,
+					"include_unattributed": 1,
+					"include_fallback_branch_resolution": 0,
+				}
+			),
+			"messages": [],
+			"allowed_branches": [],
+		},
+	)
 	def test_report_groups_missing_branch_as_unattributed_by_default(
 		self,
 		_mock_scope,
@@ -456,14 +903,25 @@ class BranchPerformanceTests(unittest.TestCase):
 		_mock_variance,
 		_mock_stock,
 	):
-		rows = get_branch_performance_rows({"from_date": "2026-05-01", "to_date": "2026-05-31", "include_unattributed": 1})
+		rows = get_branch_performance_rows(
+			{"from_date": "2026-05-01", "to_date": "2026-05-31", "include_unattributed": 1}
+		)
 		self.assertEqual(rows[0]["branch"], "Unattributed")
 
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype", return_value=True)
 	@patch("retailedge.branch_performance.frappe.db.sql")
-	def test_debug_summary_uses_transaction_tables_not_branch_company(self, mock_sql, _mock_doctype, mock_has_field):
-		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in {"company", "posting_date", "retailedge_branch", "expense_date", "audit_date"}
+	def test_debug_summary_uses_transaction_tables_not_branch_company(
+		self, mock_sql, _mock_doctype, mock_has_field
+	):
+		mock_has_field.side_effect = lambda doctype, fieldname: fieldname in {
+			"company",
+			"posting_date",
+			"retailedge_branch",
+			"expense_date",
+			"audit_date",
+		}
+
 		def _sql_side_effect(query, _params=None, **_kwargs):
 			if "tabSales Invoice" in query and "retailedge_branch" in query:
 				return [(2,)]
@@ -474,8 +932,11 @@ class BranchPerformanceTests(unittest.TestCase):
 			if "tabRetailEdge Daily Sales Audit" in query:
 				return [(1,)]
 			return [(0,)]
+
 		mock_sql.side_effect = _sql_side_effect
-		summary = get_branch_performance_debug_summary({"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		summary = get_branch_performance_debug_summary(
+			{"company": "Process Edge (Demo)", "from_date": "2026-05-01", "to_date": "2026-05-31"}
+		)
 		self.assertEqual(summary["submitted_sales_invoice_count"], 4)
 		sql_text = "\n".join(call.args[0] for call in mock_sql.call_args_list)
 		self.assertNotIn("tabBranch", sql_text)
@@ -483,15 +944,35 @@ class BranchPerformanceTests(unittest.TestCase):
 	@patch("retailedge.branch_performance.frappe.db.sql")
 	@patch("retailedge.branch_performance.has_field")
 	@patch("retailedge.branch_performance.has_doctype")
-	def test_debug_cashier_filter_reports_available_sources_and_samples(self, mock_has_doctype, mock_has_field, mock_sql):
+	def test_debug_cashier_filter_reports_available_sources_and_samples(
+		self, mock_has_doctype, mock_has_field, mock_sql
+	):
 		mock_has_doctype.side_effect = lambda doctype: doctype in {"Sales Invoice", "POS Opening Shift"}
 		mock_has_field.side_effect = lambda doctype, fieldname: (
-			(doctype == "Sales Invoice" and fieldname in {"company", "posting_date", "retailedge_branch", "grand_total", "is_pos", "pos_profile", "owner", "posa_pos_opening_shift"})
+			(
+				doctype == "Sales Invoice"
+				and fieldname
+				in {
+					"company",
+					"posting_date",
+					"retailedge_branch",
+					"grand_total",
+					"is_pos",
+					"pos_profile",
+					"owner",
+					"posa_pos_opening_shift",
+				}
+			)
 			or (doctype == "POS Opening Shift" and fieldname in {"user", "retailedge_branch"})
 		)
 		mock_sql.side_effect = [
 			[
-				{"sales_invoice_count": 2, "resolved_cashier_source": "POS Opening Shift.user", "resolved_cashier": "cashier1@example.com", "gross_sales": 1800.0}
+				{
+					"sales_invoice_count": 2,
+					"resolved_cashier_source": "POS Opening Shift.user",
+					"resolved_cashier": "cashier1@example.com",
+					"gross_sales": 1800.0,
+				}
 			],
 			[
 				{
@@ -509,7 +990,14 @@ class BranchPerformanceTests(unittest.TestCase):
 				}
 			],
 		]
-		summary = debug_branch_performance_cashier_filter({"company": "Process Edge (Demo)", "cashier": "cashier1@example.com", "from_date": "2026-05-01", "to_date": "2026-05-31"})
+		summary = debug_branch_performance_cashier_filter(
+			{
+				"company": "Process Edge (Demo)",
+				"cashier": "cashier1@example.com",
+				"from_date": "2026-05-01",
+				"to_date": "2026-05-31",
+			}
+		)
 		self.assertEqual(summary["cashier_filter"], "cashier1@example.com")
 		self.assertIn("POS Opening Shift.user", summary["available_cashier_fields"])
 		self.assertEqual(summary["sample_invoices"][0]["resolved_cashier"], "cashier1@example.com")

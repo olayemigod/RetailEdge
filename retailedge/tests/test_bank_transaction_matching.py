@@ -44,8 +44,14 @@ from retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedg
 )
 
 
+APP_ROOT = Path(__file__).resolve().parents[1]
+
+
 class BankTransactionMatchingTests(unittest.TestCase):
-	REPORT_JS_PATH = "/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.js"
+	REPORT_JS_PATH = str(
+		APP_ROOT
+		/ "retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.js"
+	)
 
 	def _field(self, fieldname, fieldtype="Data"):
 		return SimpleNamespace(fieldname=fieldname, fieldtype=fieldtype)
@@ -448,13 +454,17 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			"candidate_category",
 		):
 			self.assertIn(f"{fieldname}:", source)
-		self.assertIn('row.suggested_document_type === "Sales Invoice" && !Number(row.payment_event_found || 0)', source)
+		self.assertIn(
+			'row.suggested_document_type === "Sales Invoice" && !Number(row.payment_event_found || 0)', source
+		)
 
 	@patch("retailedge.bank_transaction_matching.frappe.db.exists", return_value=False)
 	@patch("retailedge.bank_transaction_matching.has_doctype")
 	@patch("retailedge.bank_transaction_matching.has_field", return_value=True)
 	@patch("retailedge.bank_transaction_matching.frappe.db.get_value", return_value="Demo Bank Account - PED")
-	def test_account_mapping_match_uses_canonical_ledger_account(self, mock_get_value, _mock_has_field, mock_has_doctype, _mock_exists):
+	def test_account_mapping_match_uses_canonical_ledger_account(
+		self, mock_get_value, _mock_has_field, mock_has_doctype, _mock_exists
+	):
 		mock_has_doctype.side_effect = lambda doctype: doctype in {"Bank Account", "Account"}
 		payload = _resolve_account_match_payload(
 			{"bank_account": "Moniepoint - moniepoint"},
@@ -470,8 +480,14 @@ class BankTransactionMatchingTests(unittest.TestCase):
 	@patch("retailedge.bank_transaction_matching.frappe.db.exists", return_value=False)
 	@patch("retailedge.bank_transaction_matching.has_field", return_value=True)
 	@patch("retailedge.bank_transaction_matching.has_doctype")
-	def test_mode_of_payment_mapping_resolves_bank_transaction_account(self, mock_has_doctype, _mock_has_field, _mock_exists, _mock_get_value, mock_get_all):
-		mock_has_doctype.side_effect = lambda doctype: doctype in {"Bank Account", "Account", "Mode of Payment Account"}
+	def test_mode_of_payment_mapping_resolves_bank_transaction_account(
+		self, mock_has_doctype, _mock_has_field, _mock_exists, _mock_get_value, mock_get_all
+	):
+		mock_has_doctype.side_effect = lambda doctype: doctype in {
+			"Bank Account",
+			"Account",
+			"Mode of Payment Account",
+		}
 		mock_get_all.return_value = [{"default_account": "Demo Bank Account - PED"}]
 		payload = _resolve_account_match_payload(
 			{"bank_account": "Moniepoint - moniepoint", "company": "Process Edge (Demo)"},
@@ -486,7 +502,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 	@patch("retailedge.bank_transaction_matching.has_doctype")
 	@patch("retailedge.bank_transaction_matching.has_field", return_value=True)
 	@patch("retailedge.bank_transaction_matching.frappe.db.get_value", return_value="Demo Bank Account - PED")
-	def test_account_mapping_removes_false_account_mismatch_exception(self, _mock_get_value, _mock_has_field, mock_has_doctype, _mock_exists):
+	def test_account_mapping_removes_false_account_mismatch_exception(
+		self, _mock_get_value, _mock_has_field, mock_has_doctype, _mock_exists
+	):
 		mock_has_doctype.side_effect = lambda doctype: doctype in {"Bank Account", "Account"}
 		candidate = {
 			"document_type": "Payment Entry",
@@ -587,7 +605,6 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertIn("auto_match_status", fieldnames)
 		self.assertIn("auto_match_reason", fieldnames)
 
-
 	def test_bank_matching_report_refreshes_after_actions_and_clears_selections(self):
 		with open(self.REPORT_JS_PATH, encoding="utf-8") as handle:
 			script = handle.read()
@@ -605,16 +622,46 @@ class BankTransactionMatchingTests(unittest.TestCase):
 
 	def test_retailedge_reports_disable_prepared_report_mode_for_normal_use(self):
 		report_paths = [
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_unmatched_bank_transactions/retailedge_unmatched_bank_transactions.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_unmatched_bank_payment_events/retailedge_unmatched_bank_payment_events.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_match_reconciliation_readiness/retailedge_bank_match_reconciliation_readiness.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_invoice_payment_audit/retailedge_invoice_payment_audit.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_cashier_expense_review/retailedge_cashier_expense_review.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_cash_shift_verification/retailedge_cash_shift_verification.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_daily_sales_audit_register/retailedge_daily_sales_audit_register.json",
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/pos_closing_variance_vs_expenses/pos_closing_variance_vs_expenses.json",
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_unmatched_bank_transactions/retailedge_unmatched_bank_transactions.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_unmatched_bank_payment_events/retailedge_unmatched_bank_payment_events.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_bank_match_reconciliation_readiness/retailedge_bank_match_reconciliation_readiness.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_branch_performance_summary/retailedge_branch_performance_summary.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_invoice_payment_audit/retailedge_invoice_payment_audit.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_cashier_expense_review/retailedge_cashier_expense_review.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_cash_shift_verification/retailedge_cash_shift_verification.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_daily_sales_audit_register/retailedge_daily_sales_audit_register.json"
+			),
+			str(
+				APP_ROOT
+				/ "retailedge/report/pos_closing_variance_vs_expenses/pos_closing_variance_vs_expenses.json"
+			),
 		]
 		for report_path in report_paths:
 			with self.subTest(report_path=report_path):
@@ -626,16 +673,21 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		import json
 		from pathlib import Path
 
-		path = Path(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_settings/retailedge_settings.json"
-		)
+		path = Path(str(APP_ROOT / "retailedge/doctype/retailedge_settings/retailedge_settings.json"))
 		data = json.loads(path.read_text())
 		fields = {row.get("fieldname"): row for row in data.get("fields", [])}
 		self.assertIn("bank_auto_match_mode", fields)
 		self.assertIn("bank_auto_match_guidance", fields)
-		self.assertIn("does not reconcile Bank Transactions", fields["enable_bank_auto_match"].get("description", ""))
-		self.assertIn("does not create Payment Entries", fields["auto_confirm_exact_bank_matches"].get("description", ""))
-		self.assertIn("does not mark the invoice paid", fields["allow_auto_match_sales_invoice"].get("description", ""))
+		self.assertIn(
+			"does not reconcile Bank Transactions", fields["enable_bank_auto_match"].get("description", "")
+		)
+		self.assertIn(
+			"does not create Payment Entries",
+			fields["auto_confirm_exact_bank_matches"].get("description", ""),
+		)
+		self.assertIn(
+			"does not mark the invoice paid", fields["allow_auto_match_sales_invoice"].get("description", "")
+		)
 
 	def test_queue_prefers_exact_invoice_payment_row_over_weaker_payment_entry_variance(self):
 		candidates = [
@@ -663,7 +715,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(best_candidate["document_name"], "ACC-SINV-2026-00023")
 		self.assertIsNone(selected_match)
 
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Demo Bank Account - PED"},
+	)
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
 	def test_invoice_payment_row_match_is_classified_as_payment_event(self, mock_get_doc, _mock_defaults):
 		mock_get_doc.return_value = SimpleNamespace(
@@ -678,7 +733,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 				)
 			]
 		)
-		bank_transaction = {**self._bank_transaction(deposit=1000, bank_account="Demo Bank Account - PED"), "amount": 1000}
+		bank_transaction = {
+			**self._bank_transaction(deposit=1000, bank_account="Demo Bank Account - PED"),
+			"amount": 1000,
+		}
 		invoice = {
 			"name": "ACC-SINV-0001",
 			"posting_date": "2026-05-23",
@@ -696,7 +754,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(candidates[0]["payment_row_amount"], 1000)
 		self.assertEqual(candidates[0]["payment_row_index"], 1)
 
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Demo Bank Account - PED"},
+	)
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
 	def test_cash_payment_row_is_excluded_from_bank_matching_candidates(self, mock_get_doc, _mock_defaults):
 		mock_get_doc.return_value = SimpleNamespace(
@@ -712,7 +773,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 				)
 			]
 		)
-		bank_transaction = {**self._bank_transaction(deposit=1000, bank_account="Demo Bank Account - PED"), "amount": 1000}
+		bank_transaction = {
+			**self._bank_transaction(deposit=1000, bank_account="Demo Bank Account - PED"),
+			"amount": 1000,
+		}
 		invoice = {
 			"name": "ACC-SINV-CASH",
 			"posting_date": "2026-05-23",
@@ -726,7 +790,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		candidates = _build_sales_invoice_candidates(bank_transaction, invoice, {}, {"amount_tolerance": 0})
 		self.assertEqual(candidates, [])
 
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Demo Bank Account - PED"},
+	)
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
 	def test_mixed_cash_and_moniepoint_rows_keep_only_bank_matchable_row(self, mock_get_doc, _mock_defaults):
 		mock_get_doc.return_value = SimpleNamespace(
@@ -751,7 +818,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 				),
 			]
 		)
-		bank_transaction = {**self._bank_transaction(deposit=810, bank_account="Moniepoint - moniepoint"), "amount": 810}
+		bank_transaction = {
+			**self._bank_transaction(deposit=810, bank_account="Moniepoint - moniepoint"),
+			"amount": 810,
+		}
 		invoice = {
 			"name": "ACC-SINV-MIXED",
 			"posting_date": "2026-05-23",
@@ -769,7 +839,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(candidates[0]["payment_row_index"], 2)
 		self.assertEqual(candidates[0]["candidate_category"], "invoice_payment_row_match")
 
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "POS Clearing - PED"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "POS Clearing - PED"},
+	)
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
 	def test_mixed_cash_and_pos_rows_keep_only_pos_row(self, mock_get_doc, _mock_defaults):
 		mock_get_doc.return_value = SimpleNamespace(
@@ -794,7 +867,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 				),
 			]
 		)
-		bank_transaction = {**self._bank_transaction(deposit=810, bank_account="POS Clearing - PED"), "amount": 810}
+		bank_transaction = {
+			**self._bank_transaction(deposit=810, bank_account="POS Clearing - PED"),
+			"amount": 810,
+		}
 		invoice = {
 			"name": "ACC-SINV-POS",
 			"posting_date": "2026-05-23",
@@ -811,9 +887,14 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(candidates[0]["candidate_category"], "pos_payment_match")
 		self.assertEqual(candidates[0]["payment_row_index"], 2)
 
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Demo Bank Account - PED"},
+	)
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
-	def test_mixed_cash_and_bank_transfer_rows_keep_only_bank_transfer_row(self, mock_get_doc, _mock_defaults):
+	def test_mixed_cash_and_bank_transfer_rows_keep_only_bank_transfer_row(
+		self, mock_get_doc, _mock_defaults
+	):
 		mock_get_doc.return_value = SimpleNamespace(
 			payments=[
 				SimpleNamespace(
@@ -836,7 +917,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 				),
 			]
 		)
-		bank_transaction = {**self._bank_transaction(deposit=810, bank_account="Demo Bank Account - PED"), "amount": 810}
+		bank_transaction = {
+			**self._bank_transaction(deposit=810, bank_account="Demo Bank Account - PED"),
+			"amount": 810,
+		}
 		invoice = {
 			"name": "ACC-SINV-BANK",
 			"posting_date": "2026-05-23",
@@ -853,9 +937,17 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(candidates[0]["payment_mode"], "Bank Transfer")
 		self.assertEqual(candidates[0]["payment_row_index"], 2)
 
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
-	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc", return_value=SimpleNamespace(payments=[]))
-	def test_invoice_total_only_match_is_excluded_from_bank_matching_candidates(self, _mock_doc, _mock_defaults):
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Demo Bank Account - PED"},
+	)
+	@patch(
+		"retailedge.bank_transaction_matching._get_sales_invoice_doc",
+		return_value=SimpleNamespace(payments=[]),
+	)
+	def test_invoice_total_only_match_is_excluded_from_bank_matching_candidates(
+		self, _mock_doc, _mock_defaults
+	):
 		bank_transaction = {**self._bank_transaction(deposit=1000), "amount": 1000}
 		invoice = {
 			"name": "ACC-SINV-0002",
@@ -932,7 +1024,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(normalized["direction"], "Outflow")
 		self.assertEqual(normalized["amount"], 4500.0)
 
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Demo Bank Account - PED"},
+	)
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
 	@patch("retailedge.bank_transaction_matching.has_field")
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
@@ -1144,7 +1239,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			"branch": "Airport Branch",
 		},
 	)
-	def test_already_bank_verified_invoices_are_excluded_by_default(self, _mock_normalize, _mock_doctype, mock_has_field, mock_get_all):
+	def test_already_bank_verified_invoices_are_excluded_by_default(
+		self, _mock_normalize, _mock_doctype, mock_has_field, mock_get_all
+	):
 		mock_has_field.return_value = True
 		mock_get_all.return_value = [
 			{
@@ -1449,7 +1546,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(candidates[0]["amount_scenario_label"], "Date + Account Mismatch")
 		self.assertEqual(candidates[0]["exception_only"], 1)
 		self.assertIn("outside the normal matching window", candidates[0]["reason"])
-		self.assertIn("Bank transaction resolved account differs from payment account", candidates[0]["reason"])
+		self.assertIn(
+			"Bank transaction resolved account differs from payment account", candidates[0]["reason"]
+		)
 
 	def test_report_execution_uses_default_result_limit(self):
 		self.assertEqual(normalize_result_limit({}), DEFAULT_RESULT_LIMIT)
@@ -1464,16 +1563,23 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(normalize_result_limit({"result_limit": 9999}), MAX_RESULT_LIMIT)
 		with patch(
 			"retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching.get_bank_transaction_matching_rows",
-			return_value=[{"bank_transaction": f"BT-{idx}", "match_confidence": "Strong Match"} for idx in range(MAX_RESULT_LIMIT)],
+			return_value=[
+				{"bank_transaction": f"BT-{idx}", "match_confidence": "Strong Match"}
+				for idx in range(MAX_RESULT_LIMIT)
+			],
 		) as mock_rows:
-			_columns, data, message, _chart, _summary = execute_bank_transaction_matching_report({"result_limit": 9999})
+			_columns, data, message, _chart, _summary = execute_bank_transaction_matching_report(
+				{"result_limit": 9999}
+			)
 		self.assertEqual(mock_rows.call_args.kwargs["limit"], MAX_RESULT_LIMIT)
 		self.assertEqual(len(data), MAX_RESULT_LIMIT)
 		self.assertIn(str(MAX_RESULT_LIMIT), message)
 
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
 	@patch("retailedge.bank_transaction_matching.get_bank_transaction_field_map")
-	def test_bank_transaction_rows_apply_keyword_before_candidate_resolution(self, mock_field_map, mock_get_all):
+	def test_bank_transaction_rows_apply_keyword_before_candidate_resolution(
+		self, mock_field_map, mock_get_all
+	):
 		mock_field_map.return_value = {
 			"bank_account": "bank_account",
 			"company": "company",
@@ -1488,7 +1594,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		}
 		mock_get_all.return_value = []
 		_get_bank_transaction_rows(
-			frappe._dict({"reference_search": "RE-LIVE-BATCH-TEST", "from_date": "2026-06-01", "to_date": "2026-06-16"}),
+			frappe._dict(
+				{"reference_search": "RE-LIVE-BATCH-TEST", "from_date": "2026-06-01", "to_date": "2026-06-16"}
+			),
 			limit=50,
 		)
 		kwargs = mock_get_all.call_args.kwargs
@@ -1497,8 +1605,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertIn(["description", "like", "%RE-LIVE-BATCH-TEST%"], kwargs["or_filters"])
 		self.assertEqual(kwargs["filters"]["date"], ["between", ["2026-06-01", "2026-06-16"]])
 
-
-	@patch("retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching.get_bank_transaction_matching_rows")
+	@patch(
+		"retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching.get_bank_transaction_matching_rows"
+	)
 	def test_report_execute_works_with_filters_none(self, mock_rows):
 		mock_rows.return_value = []
 		columns, data, message, _, summary = execute_bank_transaction_matching_report(None)
@@ -1507,7 +1616,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertIn("No matching bank transactions", message)
 		self.assertTrue(summary)
 
-	@patch("retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching.get_bank_transaction_matching_rows")
+	@patch(
+		"retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching.get_bank_transaction_matching_rows"
+	)
 	def test_report_execute_works_with_company_date_filters(self, mock_rows):
 		mock_rows.return_value = [
 			{
@@ -1602,7 +1713,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		from pathlib import Path
 
 		path = Path(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.js"
+			str(
+				APP_ROOT
+				/ "retailedge/report/retailedge_bank_transaction_matching/retailedge_bank_transaction_matching.js"
+			)
 		)
 		source = path.read_text()
 		self.assertIn("Create Review Records", source)
@@ -1661,7 +1775,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 	def test_amount_scenario_labels_are_friendly(self):
 		self.assertEqual(get_amount_scenario_label("exact_outstanding_match"), "Exact Outstanding Match")
 		self.assertEqual(get_amount_scenario_label("Partial Payment"), "Partial Payment")
-		self.assertEqual(get_amount_scenario_label("payment_entry_allocated"), "Payment Entry with Invoice Allocation")
+		self.assertEqual(
+			get_amount_scenario_label("payment_entry_allocated"), "Payment Entry with Invoice Allocation"
+		)
 		self.assertEqual(get_amount_scenario_label("Date + Account Mismatch"), "Date + Account Mismatch")
 
 	def test_duplicate_candidate_suppression_keeps_best_ranked_row(self):
@@ -1746,7 +1862,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
 	@patch("retailedge.bank_transaction_matching.frappe.db.exists")
-	def test_confirmed_sales_invoice_helper_detects_only_active_confirmed_matches(self, mock_exists, _mock_doctype):
+	def test_confirmed_sales_invoice_helper_detects_only_active_confirmed_matches(
+		self, mock_exists, _mock_doctype
+	):
 		mock_exists.side_effect = [True, False, False]
 		self.assertTrue(sales_invoice_has_active_confirmed_bank_match("SINV-0001"))
 		self.assertFalse(payment_entry_has_active_confirmed_bank_match("PE-0001"))
@@ -1758,7 +1876,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
 	@patch("retailedge.bank_transaction_matching.frappe.db.exists", return_value=False)
-	def test_reopened_rejected_and_cancelled_matches_do_not_block_candidate_reuse(self, mock_exists, _mock_doctype):
+	def test_reopened_rejected_and_cancelled_matches_do_not_block_candidate_reuse(
+		self, mock_exists, _mock_doctype
+	):
 		self.assertFalse(sales_invoice_has_active_confirmed_bank_match("SINV-REOPENED"))
 		self.assertFalse(payment_entry_has_active_confirmed_bank_match("PE-CANCELLED"))
 		for call_args in mock_exists.call_args_list:
@@ -1767,8 +1887,14 @@ class BankTransactionMatchingTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_matching.frappe.new_doc")
 	@patch("retailedge.bank_transaction_matching.frappe.db.set_value")
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.normalize_bank_transaction",
 		return_value={
@@ -1786,7 +1912,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			"is_reconciled": False,
 		},
 	)
-	@patch("retailedge.bank_transaction_matching.get_bank_transaction_field_map", return_value={"transaction_date": "date"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_bank_transaction_field_map",
+		return_value={"transaction_date": "date"},
+	)
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
 	def test_matching_rows_do_not_mutate_documents(
 		self,
@@ -1805,8 +1934,14 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		mock_set_value.assert_not_called()
 
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction", return_value={})
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.normalize_bank_transaction",
 		return_value={
@@ -1836,13 +1971,19 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		rows = get_bank_transaction_matching_rows({"company": "Process Edge (Demo)"}, limit=20)
 		self.assertEqual(rows, [])
 
-	@patch("retailedge.bank_transaction_matching.sales_invoice_has_active_confirmed_bank_match", return_value=True)
+	@patch(
+		"retailedge.bank_transaction_matching.sales_invoice_has_active_confirmed_bank_match",
+		return_value=True,
+	)
 	@patch(
 		"retailedge.bank_transaction_matching._active_review_match_for_candidate",
 		return_value={"name": "RE-BTM-0001", "decision_status": "Confirmed"},
 	)
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Demo Bank Account - PED"},
+	)
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
 	@patch("retailedge.bank_transaction_matching.has_field")
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
@@ -1903,9 +2044,15 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		]
 		self.assertEqual(find_sales_invoice_candidates_for_bank_transaction("ACC-BTN-0001"), [])
 
-	@patch("retailedge.bank_transaction_matching.sales_invoice_has_active_confirmed_bank_match", return_value=True)
+	@patch(
+		"retailedge.bank_transaction_matching.sales_invoice_has_active_confirmed_bank_match",
+		return_value=True,
+	)
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
-	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={"default_bank_account": "Demo Bank Account - PED"})
+	@patch(
+		"retailedge.bank_transaction_matching.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Demo Bank Account - PED"},
+	)
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
 	@patch("retailedge.bank_transaction_matching.has_field")
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
@@ -1970,7 +2117,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(candidates[0]["action_status"], "Existing Active Review")
 		self.assertEqual(candidates[0]["match_record"], "SINV-0001")
 
-	@patch("retailedge.bank_transaction_matching.payment_entry_has_active_confirmed_bank_match", return_value=True)
+	@patch(
+		"retailedge.bank_transaction_matching.payment_entry_has_active_confirmed_bank_match",
+		return_value=True,
+	)
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
 	@patch("retailedge.bank_transaction_matching.has_field")
 	@patch("retailedge.bank_transaction_matching.has_doctype")
@@ -2022,8 +2172,14 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(find_payment_entry_candidates_for_bank_transaction("ACC-BTN-0001"), [])
 
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.normalize_bank_transaction",
 		return_value={
@@ -2052,12 +2208,17 @@ class BankTransactionMatchingTests(unittest.TestCase):
 	):
 		mock_bank_transactions.return_value = [self._bank_transaction()]
 		mock_existing_matches.return_value = {
-			"ACC-BTN-0001": [{"name": "RE-BTM-0001", "decision_status": "Confirmed", "bank_transaction": "ACC-BTN-0001"}]
+			"ACC-BTN-0001": [
+				{"name": "RE-BTM-0001", "decision_status": "Confirmed", "bank_transaction": "ACC-BTN-0001"}
+			]
 		}
 		self.assertEqual(get_bank_transaction_matching_rows({"company": "Process Edge (Demo)"}, limit=20), [])
 
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[
@@ -2121,7 +2282,21 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(rows[0]["action_status"], "Rejected")
 		self.assertIn("Previously rejected match pair.", rows[0]["match_reason"])
 
-	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction", return_value={"ACC-BTN-0001": [{"name": "RE-BTM-0001", "decision_status": "Rejected", "bank_transaction": "ACC-BTN-0001", "suggested_document_type": "Payment Entry", "suggested_document": "PE-0001", "payment_entry": "PE-0001"}]})
+	@patch(
+		"retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction",
+		return_value={
+			"ACC-BTN-0001": [
+				{
+					"name": "RE-BTM-0001",
+					"decision_status": "Rejected",
+					"bank_transaction": "ACC-BTN-0001",
+					"suggested_document_type": "Payment Entry",
+					"suggested_document": "PE-0001",
+					"payment_entry": "PE-0001",
+				}
+			]
+		},
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
 		return_value=[
@@ -2138,7 +2313,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			}
 		],
 	)
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.normalize_bank_transaction",
 		return_value={
@@ -2172,7 +2350,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(rows[0]["suggested_document"], "PE-0001")
 
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[
@@ -2230,7 +2411,11 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			]
 		}
 		rows = get_bank_transaction_matching_rows(
-			{"company": "Process Edge (Demo)", "include_confirmed_matches": 1, "review_queue_status": "Confirmed"},
+			{
+				"company": "Process Edge (Demo)",
+				"include_confirmed_matches": 1,
+				"review_queue_status": "Confirmed",
+			},
 			limit=20,
 		)
 		self.assertEqual(len(rows), 1)
@@ -2238,7 +2423,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(rows[0]["decision_status"], "Confirmed")
 
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[
@@ -2310,7 +2498,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(rows[0]["suggested_document"], "SINV-ALTERNATIVE")
 
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[
@@ -2370,7 +2561,10 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(rows, [])
 
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
 		return_value=[
@@ -2434,7 +2628,6 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(rows[0]["match_record"], "RE-BTM-0001")
 		self.assertEqual(rows[0]["decision_status"], "Needs Review")
 
-
 	@patch("retailedge.bank_transaction_matching.has_field", return_value=True)
 	@patch("retailedge.bank_transaction_matching.has_doctype")
 	@patch("retailedge.bank_transaction_matching.frappe.get_all")
@@ -2489,13 +2682,21 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			filters={"company": "Process Edge (Demo)"},
 			settings={"date_window_days": 3, "exception_date_window_days": 400, "amount_tolerance": 0},
 		)
-		invoice_names = [row.get("name") for row in context.sales_invoices_by_bank_transaction["ACC-BTN-0001"]]
+		invoice_names = [
+			row.get("name") for row in context.sales_invoices_by_bank_transaction["ACC-BTN-0001"]
+		]
 		self.assertEqual(invoice_names, ["SINV-WITH-BANK-ROW"])
 
 	@patch("retailedge.bank_transaction_matching.build_matching_report_context")
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction", return_value={})
-	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction", return_value=[])
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction",
+		return_value=[],
+	)
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
 	def test_report_uses_bounded_prefetch_context_before_candidate_resolution(
 		self,
@@ -2508,7 +2709,9 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		mock_bank_transactions.return_value = [self._bank_transaction()]
 		context = frappe._dict(
 			{
-				"bank_transactions_by_name": {"ACC-BTN-0001": normalize_bank_transaction(self._bank_transaction())},
+				"bank_transactions_by_name": {
+					"ACC-BTN-0001": normalize_bank_transaction(self._bank_transaction())
+				},
 				"settings": get_bank_transaction_matching_settings(),
 			}
 		)
@@ -2540,7 +2743,15 @@ class BankTransactionReferenceMatchingTests(unittest.TestCase):
 			"amount_scenario": "Submitted Payment Entry Amount",
 			"reason": "Matched submitted Payment Entry.",
 		}
-		with patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings", return_value={"amount_tolerance": 0, "strong_match_score": 80, "minimum_possible_score": 50, "date_window_days": 3}):
+		with patch(
+			"retailedge.bank_transaction_matching.get_bank_transaction_matching_settings",
+			return_value={
+				"amount_tolerance": 0,
+				"strong_match_score": 80,
+				"minimum_possible_score": 50,
+				"date_window_days": 3,
+			},
+		):
 			payload = score_bank_transaction_candidate(bank_transaction, candidate)
 		self.assertEqual(payload["reference_match_exact"], 1)
 		self.assertEqual(payload["reference_match_strength"], "exact")
@@ -2564,7 +2775,15 @@ class BankTransactionReferenceMatchingTests(unittest.TestCase):
 			"amount_scenario": "Submitted Payment Entry Amount",
 			"reason": "Matched submitted Payment Entry.",
 		}
-		with patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings", return_value={"amount_tolerance": 0, "strong_match_score": 80, "minimum_possible_score": 50, "date_window_days": 3}):
+		with patch(
+			"retailedge.bank_transaction_matching.get_bank_transaction_matching_settings",
+			return_value={
+				"amount_tolerance": 0,
+				"strong_match_score": 80,
+				"minimum_possible_score": 50,
+				"date_window_days": 3,
+			},
+		):
 			payload = score_bank_transaction_candidate(bank_transaction, candidate)
 		self.assertEqual(payload["reference_match_exact"], 0)
 		self.assertEqual(payload["reference_match_strength"], "contains")
@@ -2589,7 +2808,15 @@ class BankTransactionReferenceMatchingTests(unittest.TestCase):
 			"amount_scenario": "Submitted Payment Entry Amount",
 			"reason": "Matched submitted Payment Entry.",
 		}
-		with patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings", return_value={"amount_tolerance": 0, "strong_match_score": 80, "minimum_possible_score": 50, "date_window_days": 3}):
+		with patch(
+			"retailedge.bank_transaction_matching.get_bank_transaction_matching_settings",
+			return_value={
+				"amount_tolerance": 0,
+				"strong_match_score": 80,
+				"minimum_possible_score": 50,
+				"date_window_days": 3,
+			},
+		):
 			payload = score_bank_transaction_candidate(bank_transaction, candidate)
 		self.assertEqual(payload["reference_match_exact"], 0)
 		self.assertEqual(payload["reference_match_strength"], "weak")
@@ -2600,13 +2827,15 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
 	def test_similar_bank_transactions_do_not_cross_assign(self, _mock_has_field, _mock_has_doctype):
 		# Test 1: Similar Bank Transactions do not cross-assign Payment Entries
-		bt1 = frappe._dict(self._bank_transaction(
-			name="ACC-BTN-1",
-			deposit=1000.0,
-			reference_number="REF1",
-			description="Payment for REF1",
-			date="2026-05-23"
-		))
+		bt1 = frappe._dict(
+			self._bank_transaction(
+				name="ACC-BTN-1",
+				deposit=1000.0,
+				reference_number="REF1",
+				description="Payment for REF1",
+				date="2026-05-23",
+			)
+		)
 		bt1 = normalize_bank_transaction(bt1)
 		pe1 = {
 			"document_type": "Payment Entry",
@@ -2617,7 +2846,7 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"account": "Demo Bank Account - PED",
 			"account_match": 1,
 			"date_difference_days": 0,
-			"exception_only": 0
+			"exception_only": 0,
 		}
 		pe2 = {
 			"document_type": "Payment Entry",
@@ -2628,13 +2857,16 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"account": "Demo Bank Account - PED",
 			"account_match": 1,
 			"date_difference_days": 0,
-			"exception_only": 0
+			"exception_only": 0,
 		}
 		settings = {"date_window_days": 3}
-		with patch("retailedge.bank_transaction_matching.get_bank_transaction_matching_settings", return_value=settings):
+		with patch(
+			"retailedge.bank_transaction_matching.get_bank_transaction_matching_settings",
+			return_value=settings,
+		):
 			res1 = score_bank_transaction_candidate(bt1, pe1)
 			res2 = score_bank_transaction_candidate(bt1, pe2)
-			
+
 		self.assertEqual(res1["reference_match_strength"], "exact")
 		self.assertEqual(res2["reference_match_strength"], "none")
 		self.assertGreater(res1["score"], res2["score"])
@@ -2642,13 +2874,15 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 	@patch("retailedge.bank_transaction_matching.has_doctype", return_value=True)
 	def test_prefetch_candidate_identity_not_keyed_by_amount_alone(self, _mock_has_doctype):
 		# Test 2: Prefetch candidate identity is not keyed by amount alone
-		bt = frappe._dict(self._bank_transaction(
-			name="ACC-BTN-1",
-			deposit=1000.0,
-			reference_number="XYZ",
-			description="Narration",
-			date="2026-05-23"
-		))
+		bt = frappe._dict(
+			self._bank_transaction(
+				name="ACC-BTN-1",
+				deposit=1000.0,
+				reference_number="XYZ",
+				description="Narration",
+				date="2026-05-23",
+			)
+		)
 		pe = {
 			"document_type": "Payment Entry",
 			"document_name": "ACC-PAY-1",
@@ -2657,7 +2891,7 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"reference_match_strength": "none",
 			"account_match": 0,
 			"date_difference_days": 0,
-			"exception_only": 0
+			"exception_only": 0,
 		}
 		settings = {"date_window_days": 3}
 		self.assertFalse(_validate_prefetched_candidate_identity(bt, pe, [pe], settings))
@@ -2673,7 +2907,7 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 				"match_confidence": "Strong Match",
 				"match_score": 90,
 				"amount_difference": 0.0,
-				"posting_date": "2026-05-23"
+				"posting_date": "2026-05-23",
 			},
 			{
 				"bank_transaction": "ACC-BTN-2",
@@ -2683,8 +2917,8 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 				"match_confidence": "Strong Match",
 				"match_score": 85,
 				"amount_difference": 0.0,
-				"posting_date": "2026-05-23"
-			}
+				"posting_date": "2026-05-23",
+			},
 		]
 		suppressed = suppress_duplicate_candidate_suggestions(rows, mark_duplicates=True)
 		self.assertEqual(suppressed[0].get("duplicate_candidate_skipped"), None)
@@ -2693,40 +2927,56 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 
 	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
 	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction", return_value={})
 	def test_result_limit_50_returns_multiple_valid_rows(self, _mock_existing, _mock_si, mock_pe, mock_bt):
 		# Test 4: Result Limit 50 returns multiple valid rows when they exist
 		mock_bt.return_value = [
-			frappe._dict(self._bank_transaction(name="ACC-BTN-1", date="2026-05-23", deposit=100.0, company="Process Edge (Demo)")),
-			frappe._dict(self._bank_transaction(name="ACC-BTN-2", date="2026-05-23", deposit=200.0, company="Process Edge (Demo)"))
+			frappe._dict(
+				self._bank_transaction(
+					name="ACC-BTN-1", date="2026-05-23", deposit=100.0, company="Process Edge (Demo)"
+				)
+			),
+			frappe._dict(
+				self._bank_transaction(
+					name="ACC-BTN-2", date="2026-05-23", deposit=200.0, company="Process Edge (Demo)"
+				)
+			),
 		]
-		
+
 		def pe_side_effect(bank_transaction_name, **kwargs):
 			if bank_transaction_name == "ACC-BTN-1":
-				return [{
-					"document_type": "Payment Entry",
-					"document_name": "ACC-PAY-1",
-					"score": 90,
-					"confidence": "Strong Match",
-					"candidate_amount": 100.0,
-					"amount_difference": 0.0,
-					"candidate_category": "payment_entry_match",
-					"reasons": ["Exact match"]
-				}]
+				return [
+					{
+						"document_type": "Payment Entry",
+						"document_name": "ACC-PAY-1",
+						"score": 90,
+						"confidence": "Strong Match",
+						"candidate_amount": 100.0,
+						"amount_difference": 0.0,
+						"candidate_category": "payment_entry_match",
+						"reasons": ["Exact match"],
+					}
+				]
 			else:
-				return [{
-					"document_type": "Payment Entry",
-					"document_name": "ACC-PAY-2",
-					"score": 90,
-					"confidence": "Strong Match",
-					"candidate_amount": 200.0,
-					"amount_difference": 0.0,
-					"candidate_category": "payment_entry_match",
-					"reasons": ["Exact match"]
-				}]
+				return [
+					{
+						"document_type": "Payment Entry",
+						"document_name": "ACC-PAY-2",
+						"score": 90,
+						"confidence": "Strong Match",
+						"candidate_amount": 200.0,
+						"amount_difference": 0.0,
+						"candidate_category": "payment_entry_match",
+						"reasons": ["Exact match"],
+					}
+				]
+
 		mock_pe.side_effect = pe_side_effect
-		
+
 		rows = get_bank_transaction_matching_rows({"company": "Process Edge (Demo)"}, limit=50)
 		self.assertEqual(len(rows), 2)
 		self.assertEqual(rows[0]["suggested_document"], "ACC-PAY-1")
@@ -2736,24 +2986,24 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 	@patch("retailedge.bank_transaction_match_workflow._resolve_matching_candidate")
 	@patch("retailedge.bank_transaction_match_workflow._find_existing_match_name", return_value=None)
 	@patch("retailedge.bank_transaction_match_workflow.frappe.get_doc")
-	def test_bulk_create_review_uses_selected_candidate_exactly(self, mock_get_doc, _mock_exists_name, mock_resolve_cand, _mock_exists):
+	def test_bulk_create_review_uses_selected_candidate_exactly(
+		self, mock_get_doc, _mock_exists_name, mock_resolve_cand, _mock_exists
+	):
 		# Test 5: Bulk Create Review uses the selected report row candidate exactly
 		from unittest.mock import MagicMock
+
 		mock_doc = MagicMock()
 		mock_get_doc.return_value = mock_doc
-		
+
 		locked = {
 			"document_type": "Payment Entry",
 			"document_name": "ACC-PAY-1",
 			"candidate_amount": 1000.0,
-			"posting_date": "2026-05-23"
+			"posting_date": "2026-05-23",
 		}
-		
-		create_or_get_bank_transaction_match(
-			"ACC-BTN-1",
-			locked_candidate=locked
-		)
-		
+
+		create_or_get_bank_transaction_match("ACC-BTN-1", locked_candidate=locked)
+
 		mock_doc.suggested_document = "ACC-PAY-1"
 		mock_doc.suggested_document_type = "Payment Entry"
 		self.assertEqual(mock_doc.suggested_document, "ACC-PAY-1")
@@ -2762,18 +3012,20 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True)
 	def test_bulk_create_review_blocks_on_validation_failure(self, _mock_exists):
 		# Test 6: Bulk Create Review blocks instead of substituting another candidate
-		with patch("retailedge.bank_transaction_match_workflow._resolve_matching_candidate", return_value=None):
+		with patch(
+			"retailedge.bank_transaction_match_workflow._resolve_matching_candidate", return_value=None
+		):
 			with self.assertRaises(Exception):
 				create_or_get_bank_transaction_match(
-					"ACC-BTN-1",
-					suggested_document_type="Payment Entry",
-					suggested_document="ACC-PAY-MISSING"
+					"ACC-BTN-1", suggested_document_type="Payment Entry", suggested_document="ACC-PAY-MISSING"
 				)
 
 	@patch("retailedge.bank_transaction_matching.get_sales_invoice_payment_rows")
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
 	@patch("retailedge.bank_transaction_matching.get_branch_profile_defaults", return_value={})
-	def test_sales_invoice_payment_row_identity_survives_lifecycle(self, _mock_defaults, _mock_get_doc, mock_payment_rows):
+	def test_sales_invoice_payment_row_identity_survives_lifecycle(
+		self, _mock_defaults, _mock_get_doc, mock_payment_rows
+	):
 		# Test 7: Sales Invoice payment-row identity survives lifecycle
 		mock_payment_rows.return_value = [
 			{
@@ -2782,10 +3034,10 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 				"account": "Clearing - PED",
 				"amount": 500,
 				"base_amount": 500,
-				"payment_category": "Card / POS"
+				"payment_category": "Card / POS",
 			}
 		]
-		
+
 		bt = {
 			"amount": 500.0,
 			"reference": "REF1",
@@ -2793,17 +3045,17 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"description": "narration",
 			"transaction_date": "2026-05-23",
 			"direction": "Inflow",
-			"bank_account": "Bank Account 1"
+			"bank_account": "Bank Account 1",
 		}
-		
+
 		invoice = {
 			"name": "SINV-1",
 			"posting_date": "2026-05-23",
 			"company": "Company 1",
 			"grand_total": 500.0,
-			"outstanding_amount": 0.0
+			"outstanding_amount": 0.0,
 		}
-		
+
 		candidates = _build_sales_invoice_candidates(bt, invoice, {}, {"amount_tolerance": 0})
 		self.assertEqual(len(candidates), 1)
 		self.assertEqual(candidates[0]["payment_row_index"], 2)
@@ -2816,10 +3068,13 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"suggested_document_type": "Sales Invoice",
 			"suggested_document": "SINV-1",
 			"candidate_category": "invoice_context_only",
-			"payment_event_found": 0
+			"payment_event_found": 0,
 		}
 		self.assertFalse(is_payment_basis_review_candidate(candidate))
-		self.assertEqual(get_review_creation_block_reason(candidate), "Invoice is context only. No payment event was found.")
+		self.assertEqual(
+			get_review_creation_block_reason(candidate),
+			"Invoice is context only. No payment event was found.",
+		)
 
 	@patch("retailedge.bank_transaction_matching.get_sales_invoice_payment_rows")
 	@patch("retailedge.bank_transaction_matching._get_sales_invoice_doc")
@@ -2832,7 +3087,7 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 				"account": "Cash - PED",
 				"amount": 500,
 				"base_amount": 500,
-				"payment_category": "Cash"
+				"payment_category": "Cash",
 			}
 		]
 		bt = {"amount": 500.0}
@@ -2843,12 +3098,17 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 	def test_candidate_lock_regression_protection(self):
 		# Test 10: Existing safety regressions (R5.5.1/R5.5.2) pass
 		from retailedge.bank_transaction_match_workflow import _resolve_matching_candidate
-		with patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction", return_value=[]):
-			with patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction", return_value=[]):
+
+		with patch(
+			"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
+			return_value=[],
+		):
+			with patch(
+				"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
+				return_value=[],
+			):
 				candidate = _resolve_matching_candidate(
-					"ACC-BTN-1",
-					suggested_document_type="Payment Entry",
-					suggested_document="ACC-PAY-LOCKED"
+					"ACC-BTN-1", suggested_document_type="Payment Entry", suggested_document="ACC-PAY-LOCKED"
 				)
 				self.assertIsNone(candidate)
 
@@ -2860,7 +3120,14 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
 	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists")
 	def test_selected_create_review_uses_direct_locked_candidate_validation(
-		self, mock_exists, mock_normalize, mock_create_match, mock_get_all, mock_get_value, mock_find_si, mock_find_pe
+		self,
+		mock_exists,
+		mock_normalize,
+		mock_create_match,
+		mock_get_all,
+		mock_get_value,
+		mock_find_si,
+		mock_find_pe,
 	):
 		mock_find_si.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
 		mock_find_pe.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
@@ -2885,36 +3152,41 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			if dt == "RetailEdge Bank Transaction Match":
 				return False
 			return True
+
 		mock_exists.side_effect = exists_side_effect
 
 		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
 			if doctype == "Bank Transaction":
-				return frappe._dict({
-					"name": "ACC-BTN-1",
-					"status": "Pending",
-					"company": "Company 1",
-					"bank_account": "Bank Account 1",
-					"date": "2026-05-23",
-					"deposit": 10000.0,
-					"withdrawal": 0.0,
-					"reference_number": "TRF123",
-					"description": "Desc"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-BTN-1",
+						"status": "Pending",
+						"company": "Company 1",
+						"bank_account": "Bank Account 1",
+						"date": "2026-05-23",
+						"deposit": 10000.0,
+						"withdrawal": 0.0,
+						"reference_number": "TRF123",
+						"description": "Desc",
+					}
+				)
 			if doctype == "Payment Entry":
-				return frappe._dict({
-					"name": "PE-1",
-					"docstatus": 1,
-					"posting_date": "2026-05-23",
-					"received_amount": 10000.0,
-					"paid_amount": 0.0,
-					"party": "CUST-1",
-					"party_type": "Customer",
-					"mode_of_payment": "Bank Transfer",
-					"paid_to": "Bank Account 1",
-					"paid_from": "Receivables",
-					"reference_no": "TRF123",
-					"retailedge_branch": "Airport Branch"
-				})
+				return frappe._dict(
+					{
+						"name": "PE-1",
+						"docstatus": 1,
+						"posting_date": "2026-05-23",
+						"received_amount": 10000.0,
+						"paid_amount": 0.0,
+						"party": "CUST-1",
+						"party_type": "Customer",
+						"mode_of_payment": "Bank Transfer",
+						"paid_to": "Bank Account 1",
+						"paid_from": "Receivables",
+						"reference_no": "TRF123",
+						"retailedge_branch": "Airport Branch",
+					}
+				)
 			if doctype == "RetailEdge Bank Transaction Match":
 				return None
 			return None
@@ -2931,12 +3203,10 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"suggested_document_type": "Payment Entry",
 			"suggested_document": "PE-1",
 			"payment_reference": "TRF123",
-			"payment_account": "Bank Account 1"
+			"payment_account": "Bank Account 1",
 		}
 
-		result = create_bank_match_reviews_from_suggestions(
-			rows=[selected_row]
-		)
+		result = create_bank_match_reviews_from_suggestions(rows=[selected_row])
 
 		mock_find_si.assert_not_called()
 		mock_find_pe.assert_not_called()
@@ -2976,36 +3246,41 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			if dt == "RetailEdge Bank Transaction Match":
 				return False
 			return True
+
 		mock_exists.side_effect = exists_side_effect
 
 		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
 			if doctype == "Bank Transaction":
-				return frappe._dict({
-					"name": "ACC-BTN-1",
-					"status": "Pending",
-					"company": "Company 1",
-					"bank_account": "Bank Account 1",
-					"date": "2026-05-23",
-					"deposit": 10000.0,
-					"withdrawal": 0.0,
-					"reference_number": "TRF123",
-					"description": "Desc"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-BTN-1",
+						"status": "Pending",
+						"company": "Company 1",
+						"bank_account": "Bank Account 1",
+						"date": "2026-05-23",
+						"deposit": 10000.0,
+						"withdrawal": 0.0,
+						"reference_number": "TRF123",
+						"description": "Desc",
+					}
+				)
 			if doctype == "Payment Entry":
-				return frappe._dict({
-					"name": "PE-1",
-					"docstatus": 0, # Draft PE is invalid
-					"posting_date": "2026-05-23",
-					"received_amount": 10000.0,
-					"paid_amount": 0.0,
-					"party": "CUST-1",
-					"party_type": "Customer",
-					"mode_of_payment": "Bank Transfer",
-					"paid_to": "Bank Account 1",
-					"paid_from": "Receivables",
-					"reference_no": "TRF123",
-					"retailedge_branch": "Airport Branch"
-				})
+				return frappe._dict(
+					{
+						"name": "PE-1",
+						"docstatus": 0,  # Draft PE is invalid
+						"posting_date": "2026-05-23",
+						"received_amount": 10000.0,
+						"paid_amount": 0.0,
+						"party": "CUST-1",
+						"party_type": "Customer",
+						"mode_of_payment": "Bank Transfer",
+						"paid_to": "Bank Account 1",
+						"paid_from": "Receivables",
+						"reference_no": "TRF123",
+						"retailedge_branch": "Airport Branch",
+					}
+				)
 			if doctype == "RetailEdge Bank Transaction Match":
 				return None
 			return None
@@ -3022,12 +3297,10 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"suggested_document_type": "Payment Entry",
 			"suggested_document": "PE-1",
 			"payment_reference": "TRF123",
-			"payment_account": "Bank Account 1"
+			"payment_account": "Bank Account 1",
 		}
 
-		result = create_bank_match_reviews_from_suggestions(
-			rows=[selected_row]
-		)
+		result = create_bank_match_reviews_from_suggestions(rows=[selected_row])
 
 		self.assertEqual(result["created_count"], 0)
 		self.assertEqual(result["unsafe_count"], 1)
@@ -3044,7 +3317,14 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
 	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists")
 	def test_selected_sales_invoice_payment_row_uses_direct_validation(
-		self, mock_exists, mock_normalize, mock_create_match, mock_get_all, mock_get_value, mock_find_si, mock_find_pe
+		self,
+		mock_exists,
+		mock_normalize,
+		mock_create_match,
+		mock_get_all,
+		mock_get_value,
+		mock_find_si,
+		mock_find_pe,
 	):
 		mock_find_si.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
 		mock_find_pe.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
@@ -3069,42 +3349,42 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			if dt == "RetailEdge Bank Transaction Match":
 				return False
 			return True
+
 		mock_exists.side_effect = exists_side_effect
 
 		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
 			if doctype == "Bank Transaction":
-				return frappe._dict({
-					"name": "ACC-BTN-1",
-					"status": "Pending",
-					"company": "Company 1",
-					"bank_account": "Bank Account 1",
-					"date": "2026-05-23",
-					"deposit": 5000.0,
-					"withdrawal": 0.0,
-					"reference_number": "TRF123",
-					"description": "Desc"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-BTN-1",
+						"status": "Pending",
+						"company": "Company 1",
+						"bank_account": "Bank Account 1",
+						"date": "2026-05-23",
+						"deposit": 5000.0,
+						"withdrawal": 0.0,
+						"reference_number": "TRF123",
+						"description": "Desc",
+					}
+				)
 			if doctype == "Sales Invoice":
-				return frappe._dict({
-					"name": "SINV-1",
-					"docstatus": 1,
-					"posting_date": "2026-05-23",
-					"grand_total": 5000.0,
-					"outstanding_amount": 0.0,
-					"retailedge_branch": "Airport Branch"
-				})
+				return frappe._dict(
+					{
+						"name": "SINV-1",
+						"docstatus": 1,
+						"posting_date": "2026-05-23",
+						"grand_total": 5000.0,
+						"outstanding_amount": 0.0,
+						"retailedge_branch": "Airport Branch",
+					}
+				)
 			if doctype == "RetailEdge Bank Transaction Match":
 				return None
 			return None
 
 		mock_get_value.side_effect = get_value_side_effect
 		mock_get_all.return_value = [
-			frappe._dict({
-				"idx": 1,
-				"mode_of_payment": "POS",
-				"account": "Bank Account 1",
-				"amount": 5000.0
-			})
+			frappe._dict({"idx": 1, "mode_of_payment": "POS", "account": "Bank Account 1", "amount": 5000.0})
 		]
 
 		from retailedge.bank_transaction_match_workflow import create_bank_match_reviews_from_suggestions
@@ -3119,12 +3399,10 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"payment_row_index": 1,
 			"payment_row_amount": 5000.0,
 			"mode_of_payment": "POS",
-			"payment_account": "Bank Account 1"
+			"payment_account": "Bank Account 1",
 		}
 
-		result = create_bank_match_reviews_from_suggestions(
-			rows=[selected_row]
-		)
+		result = create_bank_match_reviews_from_suggestions(rows=[selected_row])
 
 		mock_find_si.assert_not_called()
 		mock_find_pe.assert_not_called()
@@ -3164,30 +3442,35 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			if dt == "RetailEdge Bank Transaction Match":
 				return False
 			return True
+
 		mock_exists.side_effect = exists_side_effect
 
 		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
 			if doctype == "Bank Transaction":
-				return frappe._dict({
-					"name": "ACC-BTN-1",
-					"status": "Pending",
-					"company": "Company 1",
-					"bank_account": "Bank Account 1",
-					"date": "2026-05-23",
-					"deposit": 5000.0,
-					"withdrawal": 0.0,
-					"reference_number": "TRF123",
-					"description": "Desc"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-BTN-1",
+						"status": "Pending",
+						"company": "Company 1",
+						"bank_account": "Bank Account 1",
+						"date": "2026-05-23",
+						"deposit": 5000.0,
+						"withdrawal": 0.0,
+						"reference_number": "TRF123",
+						"description": "Desc",
+					}
+				)
 			if doctype == "Sales Invoice":
-				return frappe._dict({
-					"name": "SINV-1",
-					"docstatus": 1,
-					"posting_date": "2026-05-23",
-					"grand_total": 5000.0,
-					"outstanding_amount": 5000.0,
-					"retailedge_branch": "Airport Branch"
-				})
+				return frappe._dict(
+					{
+						"name": "SINV-1",
+						"docstatus": 1,
+						"posting_date": "2026-05-23",
+						"grand_total": 5000.0,
+						"outstanding_amount": 5000.0,
+						"retailedge_branch": "Airport Branch",
+					}
+				)
 			if doctype == "RetailEdge Bank Transaction Match":
 				return None
 			return None
@@ -3204,12 +3487,10 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"suggested_document_type": "Sales Invoice",
 			"suggested_document": "SINV-1",
 			"payment_event_found": 0,
-			"payment_row_index": 0
+			"payment_row_index": 0,
 		}
 
-		result = create_bank_match_reviews_from_suggestions(
-			rows=[selected_row]
-		)
+		result = create_bank_match_reviews_from_suggestions(rows=[selected_row])
 
 		self.assertEqual(result["created_count"], 0)
 		self.assertEqual(result["unsafe_count"], 1)
@@ -3226,7 +3507,14 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 	@patch("retailedge.bank_transaction_match_workflow.normalize_bank_transaction")
 	@patch("retailedge.bank_transaction_match_workflow.frappe.db.exists")
 	def test_selected_auto_match_does_not_run_broad_candidate_discovery(
-		self, mock_exists, mock_normalize, mock_create_match, mock_get_all, mock_get_value, mock_find_si, mock_find_pe
+		self,
+		mock_exists,
+		mock_normalize,
+		mock_create_match,
+		mock_get_all,
+		mock_get_value,
+		mock_find_si,
+		mock_find_pe,
 	):
 		mock_find_si.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
 		mock_find_pe.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
@@ -3251,36 +3539,41 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			if dt == "RetailEdge Bank Transaction Match":
 				return False
 			return True
+
 		mock_exists.side_effect = exists_side_effect
 
 		def get_value_side_effect(doctype, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
 			if doctype == "Bank Transaction":
-				return frappe._dict({
-					"name": "ACC-BTN-1",
-					"status": "Pending",
-					"company": "Company 1",
-					"bank_account": "Bank Account 1",
-					"date": "2026-05-23",
-					"deposit": 10000.0,
-					"withdrawal": 0.0,
-					"reference_number": "TRF123",
-					"description": "Desc"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-BTN-1",
+						"status": "Pending",
+						"company": "Company 1",
+						"bank_account": "Bank Account 1",
+						"date": "2026-05-23",
+						"deposit": 10000.0,
+						"withdrawal": 0.0,
+						"reference_number": "TRF123",
+						"description": "Desc",
+					}
+				)
 			if doctype == "Payment Entry":
-				return frappe._dict({
-					"name": "PE-1",
-					"docstatus": 1,
-					"posting_date": "2026-05-23",
-					"received_amount": 10000.0,
-					"paid_amount": 0.0,
-					"party": "CUST-1",
-					"party_type": "Customer",
-					"mode_of_payment": "Bank Transfer",
-					"paid_to": "Bank Account 1",
-					"paid_from": "Receivables",
-					"reference_no": "TRF123",
-					"retailedge_branch": "Airport Branch"
-				})
+				return frappe._dict(
+					{
+						"name": "PE-1",
+						"docstatus": 1,
+						"posting_date": "2026-05-23",
+						"received_amount": 10000.0,
+						"paid_amount": 0.0,
+						"party": "CUST-1",
+						"party_type": "Customer",
+						"mode_of_payment": "Bank Transfer",
+						"paid_to": "Bank Account 1",
+						"paid_from": "Receivables",
+						"reference_no": "TRF123",
+						"retailedge_branch": "Airport Branch",
+					}
+				)
 			if doctype == "RetailEdge Bank Transaction Match":
 				return None
 			return None
@@ -3288,7 +3581,9 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 		mock_get_value.side_effect = get_value_side_effect
 		mock_get_all.return_value = []
 
-		with patch("retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings") as mock_settings:
+		with patch(
+			"retailedge.bank_transaction_match_workflow.get_bank_transaction_matching_settings"
+		) as mock_settings:
 			mock_settings.return_value = {
 				"enable_bank_auto_match": 1,
 				"auto_prepare_exact_bank_matches": 1,
@@ -3314,12 +3609,10 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 				"payment_reference": "TRF123",
 				"payment_account": "Bank Account 1",
 				"match_score": 99,
-				"match_confidence": "Strong Match"
+				"match_confidence": "Strong Match",
 			}
 
-			result = run_bank_transaction_auto_match(
-				rows=[selected_row]
-			)
+			result = run_bank_transaction_auto_match(rows=[selected_row])
 
 			mock_find_si.assert_not_called()
 			mock_find_pe.assert_not_called()
@@ -3339,21 +3632,25 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 		self.assertIn("candidate_date", fieldnames)
 
 		# 2. Verify PE row building populates date fields
-		bank_transaction = frappe._dict({
-			"bank_transaction": "ACC-BTN-X",
-			"transaction_date": "2026-06-19",
-			"amount": 1000.0,
-			"direction": "Inflow"
-		})
-		pe_candidate = frappe._dict({
-			"document_type": "Payment Entry",
-			"document_name": "ACC-PE-X",
-			"posting_date": "2026-06-18",
-			"candidate_amount": 1000.0,
-			"confidence": "Strong Match",
-			"score": 99,
-			"reference": "REF1"
-		})
+		bank_transaction = frappe._dict(
+			{
+				"bank_transaction": "ACC-BTN-X",
+				"transaction_date": "2026-06-19",
+				"amount": 1000.0,
+				"direction": "Inflow",
+			}
+		)
+		pe_candidate = frappe._dict(
+			{
+				"document_type": "Payment Entry",
+				"document_name": "ACC-PE-X",
+				"posting_date": "2026-06-18",
+				"candidate_amount": 1000.0,
+				"confidence": "Strong Match",
+				"score": 99,
+				"reference": "REF1",
+			}
+		)
 
 		pe_row = _build_matching_row(bank_transaction, pe_candidate)
 		self.assertEqual(pe_row.get("transaction_date"), "2026-06-19")
@@ -3364,16 +3661,18 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 		self.assertIsNone(pe_row.get("sales_invoice_posting_date"))
 
 		# 3. Verify SI row building populates date fields
-		si_candidate = frappe._dict({
-			"document_type": "Sales Invoice",
-			"document_name": "ACC-SI-X",
-			"posting_date": "2026-06-17",
-			"candidate_amount": 1000.0,
-			"confidence": "Strong Match",
-			"score": 99,
-			"payment_event_found": 1,
-			"payment_event_source": "POS Payment Row"
-		})
+		si_candidate = frappe._dict(
+			{
+				"document_type": "Sales Invoice",
+				"document_name": "ACC-SI-X",
+				"posting_date": "2026-06-17",
+				"candidate_amount": 1000.0,
+				"confidence": "Strong Match",
+				"score": 99,
+				"payment_event_found": 1,
+				"payment_event_source": "POS Payment Row",
+			}
+		)
 		si_row = _build_matching_row(bank_transaction, si_candidate)
 		self.assertEqual(si_row.get("transaction_date"), "2026-06-19")
 		self.assertEqual(si_row.get("bank_transaction_date"), "2026-06-19")
@@ -3383,98 +3682,123 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 		self.assertIsNone(si_row.get("payment_entry_posting_date"))
 
 		# 4. Verify context-only SI row blocks
-		context_only_si = frappe._dict({
-			"document_type": "Sales Invoice",
-			"document_name": "ACC-SI-X",
-			"posting_date": "2026-06-17",
-			"payment_event_found": 0
-		})
+		context_only_si = frappe._dict(
+			{
+				"document_type": "Sales Invoice",
+				"document_name": "ACC-SI-X",
+				"posting_date": "2026-06-17",
+				"payment_event_found": 0,
+			}
+		)
 		block_reason = get_review_creation_block_reason(context_only_si)
 		self.assertIn("payment event evidence is required", block_reason.lower())
 
 		# 5. Verify cash candidate blocks
 		from retailedge.bank_transaction_match_workflow import validate_locked_candidate_from_selected_row
+
 		with patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value") as mock_get:
+
 			def side_effect(dt, filters=None, *args, **kwargs):
 				if dt == "Bank Transaction":
 					return frappe._dict({"name": "ACC-BTN-X", "status": "Pending"})
 				if dt == "Sales Invoice":
 					return frappe._dict({"name": "ACC-SI-X", "docstatus": 1})
 				return None
+
 			mock_get.side_effect = side_effect
 
 			with patch("retailedge.bank_transaction_match_workflow.frappe.get_all") as mock_get_all:
-				mock_get_all.return_value = [frappe._dict({"idx": 1, "mode_of_payment": "cash", "amount": 1000.0})]
-				res = validate_locked_candidate_from_selected_row({
-					"bank_transaction": "ACC-BTN-X",
-					"candidate_doctype": "Sales Invoice",
-					"candidate_name": "ACC-SI-X",
-					"payment_event_found": 1,
-					"payment_row_index": 1,
-					"payment_row_amount": 1000.0,
-					"mode_of_payment": "cash"
-				})
+				mock_get_all.return_value = [
+					frappe._dict({"idx": 1, "mode_of_payment": "cash", "amount": 1000.0})
+				]
+				res = validate_locked_candidate_from_selected_row(
+					{
+						"bank_transaction": "ACC-BTN-X",
+						"candidate_doctype": "Sales Invoice",
+						"candidate_name": "ACC-SI-X",
+						"payment_event_found": 1,
+						"payment_row_index": 1,
+						"payment_row_amount": 1000.0,
+						"mode_of_payment": "cash",
+					}
+				)
 				self.assertFalse(res.get("valid"))
 				self.assertIn("Cash payment rows are excluded", res.get("reason"))
 
 	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
 	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
-	def test_result_limit_refills_after_open_suggestions_are_processed(self, mock_existing, _mock_si, mock_pe, mock_bt):
+	def test_result_limit_refills_after_open_suggestions_are_processed(
+		self, mock_existing, _mock_si, mock_pe, mock_bt
+	):
 		# Create 25 bank transactions
 		bts = []
 		for i in range(1, 26):
-			bts.append(frappe._dict(self._bank_transaction(
-				name=f"ACC-BTN-{i}",
-				deposit=1000.0,
-				reference_number=f"REF{i}",
-				description=f"Payment {i}",
-				date="2026-05-23",
-				company="Process Edge (Demo)"
-			)))
+			bts.append(
+				frappe._dict(
+					self._bank_transaction(
+						name=f"ACC-BTN-{i}",
+						deposit=1000.0,
+						reference_number=f"REF{i}",
+						description=f"Payment {i}",
+						date="2026-05-23",
+						company="Process Edge (Demo)",
+					)
+				)
+			)
 
 		def bt_side_effect(filters, limit, limit_start=0):
-			return bts[limit_start:limit_start+limit]
+			return bts[limit_start : limit_start + limit]
+
 		mock_bt.side_effect = bt_side_effect
 
 		def pe_side_effect(bank_transaction_name, **kwargs):
 			i = int(bank_transaction_name.split("-")[-1])
-			return [{
-				"document_type": "Payment Entry",
-				"document_name": f"ACC-PAY-{i}",
-				"suggested_document": f"ACC-PAY-{i}",
-				"score": 90,
-				"candidate_amount": 1000.0,
-				"amount_difference": 0.0,
-				"confidence": "Strong Match",
-				"reference_match_strength": "exact",
-				"account_match": 1,
-				"date_difference_days": 0,
-				"posting_date": "2026-05-23"
-			}]
+			return [
+				{
+					"document_type": "Payment Entry",
+					"document_name": f"ACC-PAY-{i}",
+					"suggested_document": f"ACC-PAY-{i}",
+					"score": 90,
+					"candidate_amount": 1000.0,
+					"amount_difference": 0.0,
+					"confidence": "Strong Match",
+					"reference_match_strength": "exact",
+					"account_match": 1,
+					"date_difference_days": 0,
+					"posting_date": "2026-05-23",
+				}
+			]
+
 		mock_pe.side_effect = pe_side_effect
 
 		existing_matches = {}
 		for i in range(1, 11):
-			existing_matches[f"ACC-BTN-{i}"] = [{
-				"name": f"MATCH-{i}",
-				"bank_transaction": f"ACC-BTN-{i}",
-				"suggested_document_type": "Payment Entry",
-				"suggested_document": f"ACC-PAY-{i}",
-				"decision_status": "Pending",
-				"modified": "2026-05-24 12:00:00"
-			}]
+			existing_matches[f"ACC-BTN-{i}"] = [
+				{
+					"name": f"MATCH-{i}",
+					"bank_transaction": f"ACC-BTN-{i}",
+					"suggested_document_type": "Payment Entry",
+					"suggested_document": f"ACC-PAY-{i}",
+					"decision_status": "Pending",
+					"modified": "2026-05-24 12:00:00",
+				}
+			]
 
 		def existing_side_effect(bt_names):
 			return {name: existing_matches.get(name, []) for name in bt_names}
+
 		mock_existing.side_effect = existing_side_effect
 
 		dt = {}
 		rows = get_bank_transaction_matching_rows(
 			filters={"review_queue_status": "Open Suggestions Only", "include_confirmed_matches": 0},
 			limit=10,
-			debug_timings=dt
+			debug_timings=dt,
 		)
 
 		self.assertEqual(len(rows), 10)
@@ -3486,65 +3810,84 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 
 	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
 	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction")
-	def test_result_limit_is_not_raw_bank_transaction_scan_limit(self, mock_existing, _mock_si, mock_pe, mock_bt):
+	def test_result_limit_is_not_raw_bank_transaction_scan_limit(
+		self, mock_existing, _mock_si, mock_pe, mock_bt
+	):
 		bts = []
 		for i in range(1, 21):
-			bts.append(frappe._dict(self._bank_transaction(
-				name=f"ACC-BTN-{i}",
-				deposit=1000.0,
-				reference_number=f"REF{i}",
-				description=f"Payment {i}",
-				date="2026-05-23",
-				company="Process Edge (Demo)"
-			)))
+			bts.append(
+				frappe._dict(
+					self._bank_transaction(
+						name=f"ACC-BTN-{i}",
+						deposit=1000.0,
+						reference_number=f"REF{i}",
+						description=f"Payment {i}",
+						date="2026-05-23",
+						company="Process Edge (Demo)",
+					)
+				)
+			)
 
 		def bt_side_effect(filters, limit, limit_start=0):
-			return bts[limit_start:limit_start+limit]
+			return bts[limit_start : limit_start + limit]
+
 		mock_bt.side_effect = bt_side_effect
 
 		def pe_side_effect(bank_transaction_name, **kwargs):
 			i = int(bank_transaction_name.split("-")[-1])
 			if i in {3, 4, 5, 6}:
 				return []
-			
+
 			pe_num = 9 if i in {7, 8} else i
-			return [{
-				"document_type": "Payment Entry",
-				"document_name": f"ACC-PAY-{pe_num}",
-				"suggested_document": f"ACC-PAY-{pe_num}",
-				"score": 90,
-				"candidate_amount": 1000.0,
-				"amount_difference": 0.0,
-				"confidence": "Strong Match",
-				"reference_match_strength": "exact",
-				"account_match": 1,
-				"date_difference_days": 0,
-				"posting_date": "2026-05-23"
-			}]
+			return [
+				{
+					"document_type": "Payment Entry",
+					"document_name": f"ACC-PAY-{pe_num}",
+					"suggested_document": f"ACC-PAY-{pe_num}",
+					"score": 90,
+					"candidate_amount": 1000.0,
+					"amount_difference": 0.0,
+					"confidence": "Strong Match",
+					"reference_match_strength": "exact",
+					"account_match": 1,
+					"date_difference_days": 0,
+					"posting_date": "2026-05-23",
+				}
+			]
+
 		mock_pe.side_effect = pe_side_effect
 
 		existing_matches = {
-			"ACC-BTN-1": [{
-				"name": "MATCH-1",
-				"bank_transaction": "ACC-BTN-1",
-				"suggested_document_type": "Payment Entry",
-				"suggested_document": "ACC-PAY-1",
-				"decision_status": "Pending",
-				"modified": "2026-05-24 12:00:00"
-			}],
-			"ACC-BTN-2": [{
-				"name": "MATCH-2",
-				"bank_transaction": "ACC-BTN-2",
-				"suggested_document_type": "Payment Entry",
-				"suggested_document": "ACC-PAY-2",
-				"decision_status": "Pending",
-				"modified": "2026-05-24 12:00:00"
-			}]
+			"ACC-BTN-1": [
+				{
+					"name": "MATCH-1",
+					"bank_transaction": "ACC-BTN-1",
+					"suggested_document_type": "Payment Entry",
+					"suggested_document": "ACC-PAY-1",
+					"decision_status": "Pending",
+					"modified": "2026-05-24 12:00:00",
+				}
+			],
+			"ACC-BTN-2": [
+				{
+					"name": "MATCH-2",
+					"bank_transaction": "ACC-BTN-2",
+					"suggested_document_type": "Payment Entry",
+					"suggested_document": "ACC-PAY-2",
+					"decision_status": "Pending",
+					"modified": "2026-05-24 12:00:00",
+				}
+			],
 		}
+
 		def existing_side_effect(bt_names):
 			return {name: existing_matches.get(name, []) for name in bt_names}
+
 		mock_existing.side_effect = existing_side_effect
 
 		dt = {}
@@ -3552,10 +3895,10 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			filters={
 				"review_queue_status": "Open Suggestions Only",
 				"include_confirmed_matches": 0,
-				"duplicate_candidate_status": "Not Duplicate Candidate"
+				"duplicate_candidate_status": "Not Duplicate Candidate",
 			},
 			limit=10,
-			debug_timings=dt
+			debug_timings=dt,
 		)
 
 		self.assertEqual(len(rows), 10)
@@ -3565,48 +3908,61 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 
 	@patch("retailedge.bank_transaction_matching._get_bank_transaction_rows")
 	@patch("retailedge.bank_transaction_matching.find_payment_entry_candidates_for_bank_transaction")
-	@patch("retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_matching.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch("retailedge.bank_transaction_matching._get_existing_matches_by_bank_transaction", return_value={})
-	def test_result_limit_returns_less_only_when_no_more_eligible_rows(self, _mock_existing, _mock_si, mock_pe, mock_bt):
+	def test_result_limit_returns_less_only_when_no_more_eligible_rows(
+		self, _mock_existing, _mock_si, mock_pe, mock_bt
+	):
 		bts = []
 		for i in range(1, 6):
-			bts.append(frappe._dict(self._bank_transaction(
-				name=f"ACC-BTN-{i}",
-				deposit=1000.0,
-				reference_number=f"REF{i}",
-				description=f"Payment {i}",
-				date="2026-05-23",
-				company="Process Edge (Demo)"
-			)))
+			bts.append(
+				frappe._dict(
+					self._bank_transaction(
+						name=f"ACC-BTN-{i}",
+						deposit=1000.0,
+						reference_number=f"REF{i}",
+						description=f"Payment {i}",
+						date="2026-05-23",
+						company="Process Edge (Demo)",
+					)
+				)
+			)
 
 		def bt_side_effect(filters, limit, limit_start=0):
-			return bts[limit_start:limit_start+limit]
+			return bts[limit_start : limit_start + limit]
+
 		mock_bt.side_effect = bt_side_effect
 
 		def pe_side_effect(bank_transaction_name, **kwargs):
 			i = int(bank_transaction_name.split("-")[-1])
 			if i == 3:
-				return [{
-					"document_type": "Payment Entry",
-					"document_name": "ACC-PAY-3",
-					"suggested_document": "ACC-PAY-3",
-					"score": 90,
-					"candidate_amount": 1000.0,
-					"amount_difference": 0.0,
-					"confidence": "Strong Match",
-					"reference_match_strength": "exact",
-					"account_match": 1,
-					"date_difference_days": 0,
-					"posting_date": "2026-05-23"
-				}]
+				return [
+					{
+						"document_type": "Payment Entry",
+						"document_name": "ACC-PAY-3",
+						"suggested_document": "ACC-PAY-3",
+						"score": 90,
+						"candidate_amount": 1000.0,
+						"amount_difference": 0.0,
+						"confidence": "Strong Match",
+						"reference_match_strength": "exact",
+						"account_match": 1,
+						"date_difference_days": 0,
+						"posting_date": "2026-05-23",
+					}
+				]
 			return []
+
 		mock_pe.side_effect = pe_side_effect
 
 		dt = {}
 		rows = get_bank_transaction_matching_rows(
 			filters={"review_queue_status": "Open Suggestions Only", "include_confirmed_matches": 0},
 			limit=10,
-			debug_timings=dt
+			debug_timings=dt,
 		)
 
 		self.assertEqual(len(rows), 1)

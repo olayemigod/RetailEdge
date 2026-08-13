@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import json
 import importlib
 import unittest
@@ -20,6 +22,9 @@ from retailedge.bank_transaction_bridge import (
 	normalize_statement_row_for_bank_transaction,
 	preview_bank_transaction_import,
 )
+
+
+APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class BankTransactionBridgeTests(unittest.TestCase):
@@ -71,7 +76,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_bridge.frappe.get_meta")
 	def test_bank_transaction_schema_inspection_works(self, mock_get_meta):
-		mock_get_meta.return_value = SimpleNamespace(fields=[self._field("bank_account", "Link"), self._field("date", "Date")])
+		mock_get_meta.return_value = SimpleNamespace(
+			fields=[self._field("bank_account", "Link"), self._field("date", "Date")]
+		)
 		meta_fields = get_bank_transaction_meta_fields()
 		self.assertIn("bank_account", meta_fields)
 		self.assertEqual(meta_fields["date"].fieldtype, "Date")
@@ -109,14 +116,18 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		self.assertEqual(first, second)
 
 	def test_normalized_credit_row_maps_to_deposit(self):
-		normalized = normalize_statement_row_for_bank_transaction(self._row_doc(), import_doc=self._import_doc())
+		normalized = normalize_statement_row_for_bank_transaction(
+			self._row_doc(), import_doc=self._import_doc()
+		)
 		self.assertEqual(normalized["direction"], "Inflow")
 		self.assertEqual(normalized["deposit"], 1000.0)
 		self.assertEqual(normalized["withdrawal"], 0.0)
 		self.assertFalse(normalized["errors"])
 
 	def test_normalized_debit_row_maps_to_withdrawal(self):
-		row = self._row_doc(direction="Debit", credit=0.0, debit=750.0, amount=750.0, narration="Settlement charge")
+		row = self._row_doc(
+			direction="Debit", credit=0.0, debit=750.0, amount=750.0, narration="Settlement charge"
+		)
 		normalized = normalize_statement_row_for_bank_transaction(row, import_doc=self._import_doc())
 		self.assertEqual(normalized["direction"], "Outflow")
 		self.assertEqual(normalized["deposit"], 0.0)
@@ -124,24 +135,32 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	def test_invalid_row_detected_when_required_values_missing(self):
 		row = self._row_doc(transaction_date=None, amount=0, credit=0, debit=0, direction="Unknown")
-		normalized = normalize_statement_row_for_bank_transaction(row, import_doc=self._import_doc(bank_account=None))
+		normalized = normalize_statement_row_for_bank_transaction(
+			row, import_doc=self._import_doc(bank_account=None)
+		)
 		self.assertGreaterEqual(len(normalized["errors"]), 3)
 
-	@patch("retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields", return_value={"bank_account": {}, "date": {}, "deposit": {}})
+	@patch(
+		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
+		return_value={"bank_account": {}, "date": {}, "deposit": {}},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	def test_existing_bank_transaction_duplicate_is_detected(self, mock_get_all, _mock_meta):
-		mock_get_all.side_effect = [[
-			SimpleNamespace(
-				name="ACC-BTN-0001",
-				bank_account="Moniepoint - moniepoint",
-				date="2026-05-22",
-				deposit=1000.0,
-				withdrawal=0.0,
-				description="Customer transfer",
-				reference_number="TRF001998",
-				status="Pending",
-			)
-		], []]
+		mock_get_all.side_effect = [
+			[
+				SimpleNamespace(
+					name="ACC-BTN-0001",
+					bank_account="Moniepoint - moniepoint",
+					date="2026-05-22",
+					deposit=1000.0,
+					withdrawal=0.0,
+					description="Customer transfer",
+					reference_number="TRF001998",
+					status="Pending",
+				)
+			],
+			[],
+		]
 		result = find_existing_bank_transaction_duplicate(
 			{
 				"bank_account": "Moniepoint - moniepoint",
@@ -155,21 +174,27 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		self.assertTrue(result["is_duplicate"])
 		self.assertEqual(result["bank_transaction"], "ACC-BTN-0001")
 
-	@patch("retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields", return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}})
+	@patch(
+		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
+		return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	def test_same_date_amount_different_reliable_reference_is_not_duplicate(self, mock_get_all, _mock_meta):
-		mock_get_all.side_effect = [[
-			SimpleNamespace(
-				name="ACC-BTN-0002",
-				bank_account="Moniepoint - moniepoint",
-				date="2026-05-22",
-				deposit=1000.0,
-				withdrawal=0.0,
-				description="Another transfer",
-				reference_number="TRF999999",
-				status="Pending",
-			)
-		], []]
+		mock_get_all.side_effect = [
+			[
+				SimpleNamespace(
+					name="ACC-BTN-0002",
+					bank_account="Moniepoint - moniepoint",
+					date="2026-05-22",
+					deposit=1000.0,
+					withdrawal=0.0,
+					description="Another transfer",
+					reference_number="TRF999999",
+					status="Pending",
+				)
+			],
+			[],
+		]
 		result = find_existing_bank_transaction_duplicate(
 			{
 				"bank_account": "Moniepoint - moniepoint",
@@ -183,21 +208,27 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		)
 		self.assertFalse(result["is_duplicate"])
 
-	@patch("retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields", return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}})
+	@patch(
+		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
+		return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	def test_same_date_amount_missing_reference_is_possible_duplicate(self, mock_get_all, _mock_meta):
-		mock_get_all.side_effect = [[
-			SimpleNamespace(
-				name="ACC-BTN-0003",
-				bank_account="Moniepoint - moniepoint",
-				date="2026-05-22",
-				deposit=1000.0,
-				withdrawal=0.0,
-				description="Customer transfer",
-				reference_number="",
-				status="Pending",
-			)
-		], []]
+		mock_get_all.side_effect = [
+			[
+				SimpleNamespace(
+					name="ACC-BTN-0003",
+					bank_account="Moniepoint - moniepoint",
+					date="2026-05-22",
+					deposit=1000.0,
+					withdrawal=0.0,
+					description="Customer transfer",
+					reference_number="",
+					status="Pending",
+				)
+			],
+			[],
+		]
 		result = find_existing_bank_transaction_duplicate(
 			{
 				"bank_account": "Moniepoint - moniepoint",
@@ -212,25 +243,30 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		self.assertTrue(result["is_duplicate"])
 		self.assertEqual(result["duplicate_type"], "Possible Duplicate")
 		self.assertTrue(
-			"missing or weak reference" in result["reason"]
-			or "similar narration" in result["reason"]
+			"missing or weak reference" in result["reason"] or "similar narration" in result["reason"]
 		)
 
-	@patch("retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields", return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}})
+	@patch(
+		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
+		return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	def test_same_date_amount_weak_reference_is_possible_duplicate(self, mock_get_all, _mock_meta):
-		mock_get_all.side_effect = [[
-			SimpleNamespace(
-				name="ACC-BTN-0004",
-				bank_account="Moniepoint - moniepoint",
-				date="2026-05-22",
-				deposit=1000.0,
-				withdrawal=0.0,
-				description="Customer transfer",
-				reference_number="POS",
-				status="Pending",
-			)
-		], []]
+		mock_get_all.side_effect = [
+			[
+				SimpleNamespace(
+					name="ACC-BTN-0004",
+					bank_account="Moniepoint - moniepoint",
+					date="2026-05-22",
+					deposit=1000.0,
+					withdrawal=0.0,
+					description="Customer transfer",
+					reference_number="POS",
+					status="Pending",
+				)
+			],
+			[],
+		]
 		result = find_existing_bank_transaction_duplicate(
 			{
 				"bank_account": "Moniepoint - moniepoint",
@@ -245,21 +281,27 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		self.assertTrue(result["is_duplicate"])
 		self.assertEqual(result["duplicate_type"], "Possible Duplicate")
 
-	@patch("retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields", return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}})
+	@patch(
+		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
+		return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	def test_similar_narration_missing_reference_is_possible_duplicate(self, mock_get_all, _mock_meta):
-		mock_get_all.side_effect = [[
-			SimpleNamespace(
-				name="ACC-BTN-0005",
-				bank_account="Moniepoint - moniepoint",
-				date="2026-05-22",
-				deposit=1000.0,
-				withdrawal=0.0,
-				description="Customer transfer",
-				reference_number="",
-				status="Pending",
-			)
-		], []]
+		mock_get_all.side_effect = [
+			[
+				SimpleNamespace(
+					name="ACC-BTN-0005",
+					bank_account="Moniepoint - moniepoint",
+					date="2026-05-22",
+					deposit=1000.0,
+					withdrawal=0.0,
+					description="Customer transfer",
+					reference_number="",
+					status="Pending",
+				)
+			],
+			[],
+		]
 		result = find_existing_bank_transaction_duplicate(
 			{
 				"bank_account": "Moniepoint - moniepoint",
@@ -296,7 +338,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_bridge.frappe.get_cached_doc")
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
-	def test_same_date_amount_different_reliable_reference_is_not_duplicate_statement_row(self, mock_get_all, mock_get_cached_doc):
+	def test_same_date_amount_different_reliable_reference_is_not_duplicate_statement_row(
+		self, mock_get_all, mock_get_cached_doc
+	):
 		row = self._row_doc(name="ROW-NEW")
 		mock_get_cached_doc.return_value = self._import_doc()
 		mock_get_all.side_effect = [
@@ -329,7 +373,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_bridge.frappe.get_cached_doc")
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
-	def test_same_date_amount_same_reliable_reference_is_exact_duplicate_statement_row(self, mock_get_all, mock_get_cached_doc):
+	def test_same_date_amount_same_reliable_reference_is_exact_duplicate_statement_row(
+		self, mock_get_all, mock_get_cached_doc
+	):
 		row = self._row_doc(name="ROW-NEW")
 		mock_get_cached_doc.return_value = self._import_doc()
 		mock_get_all.side_effect = [
@@ -360,7 +406,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_bridge.frappe.get_cached_doc")
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
-	def test_same_date_amount_missing_reference_is_possible_duplicate_statement_row(self, mock_get_all, mock_get_cached_doc):
+	def test_same_date_amount_missing_reference_is_possible_duplicate_statement_row(
+		self, mock_get_all, mock_get_cached_doc
+	):
 		row = self._row_doc(name="ROW-NEW", normalized_reference="", reference="")
 		mock_get_cached_doc.return_value = self._import_doc()
 		mock_get_all.side_effect = [
@@ -392,9 +440,14 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		self.assertEqual(result["duplicate_type"], "Possible Duplicate")
 		self.assertIn("missing or weak reference", result["reason"])
 
-	@patch("retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields", return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}})
+	@patch(
+		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
+		return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
-	def test_different_direction_with_same_date_amount_reference_is_not_exact_duplicate(self, mock_get_all, _mock_meta):
+	def test_different_direction_with_same_date_amount_reference_is_not_exact_duplicate(
+		self, mock_get_all, _mock_meta
+	):
 		mock_get_all.side_effect = [
 			[],
 			[
@@ -422,9 +475,14 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		)
 		self.assertFalse(result["is_duplicate"])
 
-	@patch("retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields", return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}})
+	@patch(
+		"retailedge.bank_transaction_bridge.get_bank_transaction_meta_fields",
+		return_value={"bank_account": {}, "date": {}, "deposit": {}, "reference_number": {}},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
-	def test_different_bank_account_with_same_date_amount_reference_is_not_exact_duplicate(self, mock_get_all, _mock_meta):
+	def test_different_bank_account_with_same_date_amount_reference_is_not_exact_duplicate(
+		self, mock_get_all, _mock_meta
+	):
 		mock_get_all.side_effect = [[], []]
 		result = find_existing_bank_transaction_duplicate(
 			{
@@ -439,13 +497,35 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		)
 		self.assertFalse(result["is_duplicate"])
 
-	@patch("retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
-	@patch("retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
-	def test_dry_run_does_not_create_bank_transaction(self, mock_get_doc, _mock_row_duplicate, _mock_bank_duplicate):
+	def test_dry_run_does_not_create_bank_transaction(
+		self, mock_get_doc, _mock_row_duplicate, _mock_bank_duplicate
+	):
 		row = self._row_doc()
 		parent = self._import_doc()
-		mock_get_doc.side_effect = lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		mock_get_doc.side_effect = (
+			lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		)
 		with patch("retailedge.bank_transaction_bridge._create_bank_transaction") as mock_create:
 			result = create_or_link_bank_transaction_from_statement_row(row.name, dry_run=True)
 		self.assertEqual(result["status"], "Would Import")
@@ -453,8 +533,26 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_bridge._update_statement_row_bridge_fields")
 	@patch("retailedge.bank_transaction_bridge._create_bank_transaction", return_value="ACC-BTN-0003")
-	@patch("retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
-	@patch("retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
 	def test_non_dry_run_creates_bank_transaction_for_valid_row(
 		self,
@@ -466,7 +564,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 	):
 		row = self._row_doc()
 		parent = self._import_doc()
-		mock_get_doc.side_effect = lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		mock_get_doc.side_effect = (
+			lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		)
 		result = create_or_link_bank_transaction_from_statement_row(row.name, dry_run=False)
 		self.assertEqual(result["status"], "Imported")
 		self.assertEqual(result["bank_transaction"], "ACC-BTN-0003")
@@ -474,8 +574,26 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		mock_update_row.assert_called_once()
 
 	@patch("retailedge.bank_transaction_bridge._update_statement_row_bridge_fields")
-	@patch("retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate", return_value={"is_duplicate": True, "duplicate_type": "Already Imported", "statement_row": None, "bank_transaction": "ACC-BTN-0004", "reason": "Existing transaction found"})
-	@patch("retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
+		return_value={
+			"is_duplicate": True,
+			"duplicate_type": "Already Imported",
+			"statement_row": None,
+			"bank_transaction": "ACC-BTN-0004",
+			"reason": "Existing transaction found",
+		},
+	)
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
 	def test_existing_bank_transaction_is_linked_instead_of_creating_duplicate(
 		self,
@@ -486,7 +604,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 	):
 		row = self._row_doc()
 		parent = self._import_doc()
-		mock_get_doc.side_effect = lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		mock_get_doc.side_effect = (
+			lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		)
 		with patch("retailedge.bank_transaction_bridge._create_bank_transaction") as mock_create:
 			result = create_or_link_bank_transaction_from_statement_row(row.name, dry_run=False)
 		self.assertEqual(result["status"], "Already Imported")
@@ -495,8 +615,26 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		mock_update_row.assert_called_once()
 
 	@patch("retailedge.bank_transaction_bridge._update_statement_row_bridge_fields")
-	@patch("retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
-	@patch("retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate", return_value={"is_duplicate": True, "duplicate_type": "Exact Duplicate", "statement_row": "ROW-OLD", "bank_transaction": None, "reason": "Duplicate row"})
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate",
+		return_value={
+			"is_duplicate": True,
+			"duplicate_type": "Exact Duplicate",
+			"statement_row": "ROW-OLD",
+			"bank_transaction": None,
+			"reason": "Duplicate row",
+		},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
 	def test_duplicate_row_is_skipped_by_default(
 		self,
@@ -507,7 +645,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 	):
 		row = self._row_doc()
 		parent = self._import_doc()
-		mock_get_doc.side_effect = lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		mock_get_doc.side_effect = (
+			lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		)
 		with patch("retailedge.bank_transaction_bridge._create_bank_transaction") as mock_create:
 			result = create_or_link_bank_transaction_from_statement_row(row.name, dry_run=False)
 		self.assertEqual(result["status"], "Exact Duplicate")
@@ -516,8 +656,26 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_bridge._update_statement_row_bridge_fields")
 	@patch("retailedge.bank_transaction_bridge._create_bank_transaction", return_value="ACC-BTN-NEW")
-	@patch("retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate", return_value={"is_duplicate": True, "duplicate_type": "Possible Duplicate", "statement_row": None, "bank_transaction": "ACC-BTN-OLD", "reason": "Narration looks similar"})
-	@patch("retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
+		return_value={
+			"is_duplicate": True,
+			"duplicate_type": "Possible Duplicate",
+			"statement_row": None,
+			"bank_transaction": "ACC-BTN-OLD",
+			"reason": "Narration looks similar",
+		},
+	)
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
 	def test_force_import_allows_possible_duplicate_row_to_create_new_bank_transaction(
 		self,
@@ -529,7 +687,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 	):
 		row = self._row_doc(name="ROW-FORCE")
 		parent = self._import_doc()
-		mock_get_doc.side_effect = lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		mock_get_doc.side_effect = (
+			lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		)
 		result = create_or_link_bank_transaction_from_statement_row(row.name, force=True, dry_run=False)
 		self.assertEqual(result["status"], "Imported")
 		self.assertEqual(result["bank_transaction"], "ACC-BTN-NEW")
@@ -582,9 +742,29 @@ class BankTransactionBridgeTests(unittest.TestCase):
 	@patch("retailedge.bank_transaction_bridge._refresh_statement_import_bridge_summary")
 	@patch("retailedge.bank_transaction_bridge.frappe.db.set_value")
 	@patch("retailedge.bank_transaction_bridge.now_datetime", return_value="2026-05-23 10:00:00")
-	@patch("retailedge.bank_transaction_bridge.create_or_link_bank_transaction_from_statement_row", return_value={"status": "Imported", "reason": "Imported cleanly", "bank_transaction": "ACC-BTN-0007"})
-	@patch("retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate", return_value={"is_duplicate": True, "duplicate_type": "Possible Duplicate", "bank_transaction": "ACC-BTN-OLD", "reason": "Possible duplicate"})
-	@patch("retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
+	@patch(
+		"retailedge.bank_transaction_bridge.create_or_link_bank_transaction_from_statement_row",
+		return_value={"status": "Imported", "reason": "Imported cleanly", "bank_transaction": "ACC-BTN-0007"},
+	)
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
+		return_value={
+			"is_duplicate": True,
+			"duplicate_type": "Possible Duplicate",
+			"bank_transaction": "ACC-BTN-OLD",
+			"reason": "Possible duplicate",
+		},
+	)
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_cached_doc")
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
 	def test_possible_duplicate_can_be_manually_accepted(
@@ -599,12 +779,20 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		mock_refresh_summary,
 		_mock_commit,
 	):
-		row = self._row_doc(name="ROW-POSSIBLE", duplicate_status="Possible Duplicate", import_status="Skipped")
+		row = self._row_doc(
+			name="ROW-POSSIBLE", duplicate_status="Possible Duplicate", import_status="Skipped"
+		)
 		parent = self._import_doc()
-		mock_get_doc.side_effect = lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		mock_get_doc.side_effect = (
+			lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		)
 		mock_get_cached_doc.return_value = parent
-		with patch("retailedge.bank_transaction_bridge.frappe.session", SimpleNamespace(user="manager@example.com")):
-			result = accept_possible_duplicate_statement_row("ROW-POSSIBLE", acceptance_note="Valid repeated amount")
+		with patch(
+			"retailedge.bank_transaction_bridge.frappe.session", SimpleNamespace(user="manager@example.com")
+		):
+			result = accept_possible_duplicate_statement_row(
+				"ROW-POSSIBLE", acceptance_note="Valid repeated amount"
+			)
 		self.assertEqual(result["status"], "Manually Accepted")
 		mock_import.assert_called_once_with("ROW-POSSIBLE", force=True, dry_run=False)
 		mock_set_value.assert_called_once()
@@ -614,8 +802,25 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		self.assertEqual(values["accepted_by"], "manager@example.com")
 		mock_refresh_summary.assert_called_once()
 
-	@patch("retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate", return_value={"is_duplicate": True, "duplicate_type": "Already Imported", "bank_transaction": "ACC-BTN-EXACT", "reason": "Exact duplicate exists"})
-	@patch("retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None})
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
+		return_value={
+			"is_duplicate": True,
+			"duplicate_type": "Already Imported",
+			"bank_transaction": "ACC-BTN-EXACT",
+			"reason": "Exact duplicate exists",
+		},
+	)
+	@patch(
+		"retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate",
+		return_value={
+			"is_duplicate": False,
+			"duplicate_type": None,
+			"statement_row": None,
+			"bank_transaction": None,
+			"reason": None,
+		},
+	)
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
 	def test_exact_duplicate_cannot_be_manually_accepted(
 		self,
@@ -625,13 +830,18 @@ class BankTransactionBridgeTests(unittest.TestCase):
 	):
 		row = self._row_doc(name="ROW-BLOCK", duplicate_status="Possible Duplicate", import_status="Skipped")
 		parent = self._import_doc()
-		mock_get_doc.side_effect = lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		mock_get_doc.side_effect = (
+			lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+		)
 		with self.assertRaises(Exception):
 			accept_possible_duplicate_statement_row("ROW-BLOCK", acceptance_note="Should fail")
 
 	def test_import_summary_json_is_hidden_from_normal_form_display(self):
 		with open(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_payment_statement_import/retailedge_payment_statement_import.json",
+			str(
+				APP_ROOT
+				/ "retailedge/doctype/retailedge_payment_statement_import/retailedge_payment_statement_import.json"
+			),
 			encoding="utf-8",
 		) as handle:
 			doc = json.load(handle)
@@ -641,7 +851,10 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	def test_friendly_summary_script_does_not_dump_raw_json(self):
 		with open(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_payment_statement_import/retailedge_payment_statement_import.js",
+			str(
+				APP_ROOT
+				/ "retailedge/doctype/retailedge_payment_statement_import/retailedge_payment_statement_import.js"
+			),
 			encoding="utf-8",
 		) as handle:
 			script = handle.read()
@@ -651,7 +864,10 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	def test_payment_statement_import_js_has_review_possible_duplicates_under_bank_transactions(self):
 		with open(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_payment_statement_import/retailedge_payment_statement_import.js",
+			str(
+				APP_ROOT
+				/ "retailedge/doctype/retailedge_payment_statement_import/retailedge_payment_statement_import.js"
+			),
 			encoding="utf-8",
 		) as handle:
 			script = handle.read()
@@ -664,8 +880,12 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
-	def test_get_possible_duplicate_statement_rows_returns_rows_for_parent_import(self, mock_get_doc, mock_get_all):
-		mock_get_doc.return_value = self._import_doc(name="RE-PSI-0002", bank_account="Moniepoint - moniepoint")
+	def test_get_possible_duplicate_statement_rows_returns_rows_for_parent_import(
+		self, mock_get_doc, mock_get_all
+	):
+		mock_get_doc.return_value = self._import_doc(
+			name="RE-PSI-0002", bank_account="Moniepoint - moniepoint"
+		)
 		mock_get_all.return_value = [
 			SimpleNamespace(
 				name="ROW-PD-1",
@@ -706,7 +926,9 @@ class BankTransactionBridgeTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_bridge.frappe.get_all")
 	@patch("retailedge.bank_transaction_bridge.frappe.get_doc")
-	def test_get_possible_duplicate_statement_rows_does_not_return_exact_duplicates_as_reviewable(self, mock_get_doc, mock_get_all):
+	def test_get_possible_duplicate_statement_rows_does_not_return_exact_duplicates_as_reviewable(
+		self, mock_get_doc, mock_get_all
+	):
 		mock_get_doc.return_value = self._import_doc(name="RE-PSI-0003")
 		mock_get_all.return_value = [
 			SimpleNamespace(
@@ -743,15 +965,35 @@ class BankTransactionBridgeTests(unittest.TestCase):
 		doc = MagicMock()
 		doc.name = "ACC-BTN-0099"
 		mock_new_doc.return_value = doc
-		with patch("retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate", return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None}), patch(
-			"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
-			return_value={"is_duplicate": False, "duplicate_type": None, "statement_row": None, "bank_transaction": None, "reason": None},
-		), patch("retailedge.bank_transaction_bridge._update_statement_row_bridge_fields"), patch(
-			"retailedge.bank_transaction_bridge.frappe.get_doc"
-		) as mock_get_doc:
+		with (
+			patch(
+				"retailedge.bank_transaction_bridge.find_existing_statement_row_duplicate",
+				return_value={
+					"is_duplicate": False,
+					"duplicate_type": None,
+					"statement_row": None,
+					"bank_transaction": None,
+					"reason": None,
+				},
+			),
+			patch(
+				"retailedge.bank_transaction_bridge.find_existing_bank_transaction_duplicate",
+				return_value={
+					"is_duplicate": False,
+					"duplicate_type": None,
+					"statement_row": None,
+					"bank_transaction": None,
+					"reason": None,
+				},
+			),
+			patch("retailedge.bank_transaction_bridge._update_statement_row_bridge_fields"),
+			patch("retailedge.bank_transaction_bridge.frappe.get_doc") as mock_get_doc,
+		):
 			row = self._row_doc()
 			parent = self._import_doc()
-			mock_get_doc.side_effect = lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+			mock_get_doc.side_effect = (
+				lambda doctype, name: row if doctype == "RetailEdge Statement Import Row" else parent
+			)
 			create_or_link_bank_transaction_from_statement_row(row.name, dry_run=False)
 		mock_new_doc.assert_called_once_with("Bank Transaction")
 

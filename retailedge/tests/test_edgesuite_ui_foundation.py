@@ -43,7 +43,9 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		keys = [action["key"] for action in QUICK_ACTIONS]
 		self.assertEqual(len(keys), len(set(keys)))
 		self.assertTrue(all(action.get("doctype") for action in QUICK_ACTIONS))
-		self.assertTrue(all(action.get("mode") in {"available", "native_fallback"} for action in QUICK_ACTIONS))
+		self.assertTrue(
+			all(action.get("mode") in {"available", "native_fallback"} for action in QUICK_ACTIONS)
+		)
 
 	def test_business_hub_page_definition_is_standard(self):
 		path = APP_ROOT / "retailedge" / "page" / "retailedge_business_hub" / "retailedge_business_hub.json"
@@ -70,7 +72,9 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 
 	def test_global_controller_uses_canonical_runtime_and_product_bundles(self):
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
-		self.assertLess(controller.index("edgeui.bundle.js"), controller.index("retailedge_business_hub.bundle.js"))
+		self.assertLess(
+			controller.index("edgeui.bundle.js"), controller.index("retailedge_business_hub.bundle.js")
+		)
 		self.assertIn("assertEdgeSuiteUIRuntime", controller)
 		self.assertIn("global.EdgeSuiteUI", controller)
 		self.assertNotIn('"edgesuite_ui.bundle.js"', controller)

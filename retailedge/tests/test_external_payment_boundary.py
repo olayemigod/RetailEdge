@@ -31,9 +31,7 @@ def test_retailedge_package_does_not_require_edgepay_app():
 
 
 def test_external_payment_review_keeps_candidate_ownership_in_retailedge():
-	service = (
-		APP_ROOT / "services" / "edgepay_bank_match_review.py"
-	).read_text(encoding="utf-8")
+	service = (APP_ROOT / "services" / "edgepay_bank_match_review.py").read_text(encoding="utf-8")
 
 	assert "validate_locked_candidate_from_selected_row" in service
 	assert "locked_candidate=locked_candidate" in service
@@ -42,9 +40,7 @@ def test_external_payment_review_keeps_candidate_ownership_in_retailedge():
 
 
 def test_external_payment_review_does_not_reconcile_bank_transaction_directly():
-	service = (
-		APP_ROOT / "services" / "edgepay_bank_match_review.py"
-	).read_text(encoding="utf-8")
+	service = (APP_ROOT / "services" / "edgepay_bank_match_review.py").read_text(encoding="utf-8")
 
 	assert 'db_set("status", "Reconciled")' not in service
 	assert "reconcile_vouchers" not in service

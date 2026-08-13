@@ -55,6 +55,9 @@ from retailedge.reconciliation_bridge import (
 )
 
 
+APP_ROOT = Path(__file__).resolve().parents[1]
+
+
 class ReconciliationBridgeTests(unittest.TestCase):
 	def _ready_payment_entry_match(self, **overrides):
 		row = {
@@ -107,9 +110,11 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		match = match or self._ready_payment_entry_match()
 		settings = settings if settings is not None else self._execution_enabled_settings()
 		roles = roles or ["System Manager"]
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=roles):
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=roles),
+		):
 			return check_reconciliation_execution_gate("RE-BTM-2026-0006", user=user, settings=settings)
 
 	def test_execution_settings_snapshot_defaults_are_safe(self):
@@ -152,7 +157,7 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		self.assertFalse(snapshot["require_second_approval_for_reconciliation_execution"])
 
 	def test_reconciliation_execution_settings_fields_exist_with_safe_defaults(self):
-		path = "/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_settings/retailedge_settings.json"
+		path = str(APP_ROOT / "retailedge/doctype/retailedge_settings/retailedge_settings.json")
 		settings = json.loads(Path(path).read_text())
 		fields = {field["fieldname"]: field for field in settings["fields"]}
 
@@ -170,22 +175,34 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		self.assertFalse(payload["execution_attempted"])
 
 	def test_execution_gate_blocked_when_match_not_confirmed(self):
-		payload = self._run_gate(match=self._ready_payment_entry_match(decision_status="Needs Review", review_status="Needs Review"))
+		payload = self._run_gate(
+			match=self._ready_payment_entry_match(
+				decision_status="Needs Review", review_status="Needs Review"
+			)
+		)
 
 		self.assertFalse(payload["can_execute"])
 		self.assertEqual(payload["status"], EXECUTION_GATE_BLOCKED)
 		self.assertIn("confirmed", " ".join(payload["block_reasons"]).lower())
 
 	def test_execution_gate_blocked_when_dry_run_not_ready(self):
-		payload = self._run_gate(match=self._ready_payment_entry_match(candidate_amount=1089, amount_difference=1))
+		payload = self._run_gate(
+			match=self._ready_payment_entry_match(candidate_amount=1089, amount_difference=1)
+		)
 
 		self.assertFalse(payload["can_execute"])
 		self.assertEqual(payload["status"], EXECUTION_GATE_BLOCKED)
 		self.assertEqual(payload["dry_run_status"], READINESS_GROUP_BLOCKED)
 
 	def test_execution_gate_blocks_blocked_needs_review_and_already_handled_readiness(self):
-		blocked = self._run_gate(match=self._ready_payment_entry_match(candidate_amount=1089, amount_difference=1))
-		needs_review = self._run_gate(match=self._ready_payment_entry_match(decision_status="Needs Review", review_status="Needs Review"))
+		blocked = self._run_gate(
+			match=self._ready_payment_entry_match(candidate_amount=1089, amount_difference=1)
+		)
+		needs_review = self._run_gate(
+			match=self._ready_payment_entry_match(
+				decision_status="Needs Review", review_status="Needs Review"
+			)
+		)
 		already = self._run_gate(
 			match=self._ready_payment_entry_match(
 				reconciliation_readiness_status="Already Reconciled",
@@ -207,7 +224,9 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		self.assertEqual(payload["status"], EXECUTION_GATE_PERMISSION_DENIED)
 
 	def test_execution_gate_needs_approval_when_second_approval_required(self):
-		payload = self._run_gate(settings=self._execution_enabled_settings(require_second_approval_for_reconciliation_execution=1))
+		payload = self._run_gate(
+			settings=self._execution_enabled_settings(require_second_approval_for_reconciliation_execution=1)
+		)
 
 		self.assertFalse(payload["can_execute"])
 		self.assertEqual(payload["status"], EXECUTION_GATE_NEEDS_APPROVAL)
@@ -242,12 +261,15 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		mock_new_doc.assert_not_called()
 
 	def test_execution_gate_for_matches_summarizes_without_execution(self):
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge.check_reconciliation_execution_gate",
-			side_effect=[
-				{"status": EXECUTION_GATE_ALLOWED, "can_execute": True},
-				{"status": EXECUTION_GATE_BLOCKED, "can_execute": False},
-			],
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch(
+				"retailedge.reconciliation_bridge.check_reconciliation_execution_gate",
+				side_effect=[
+					{"status": EXECUTION_GATE_ALLOWED, "can_execute": True},
+					{"status": EXECUTION_GATE_BLOCKED, "can_execute": False},
+				],
+			),
 		):
 			summary = check_reconciliation_execution_gate_for_matches(["A", "B"])
 
@@ -274,15 +296,27 @@ class ReconciliationBridgeTests(unittest.TestCase):
 			self._bank_transaction_doc(
 				status="Reconciled",
 				unallocated_amount=0,
-				links=[{"payment_document": "Payment Entry", "payment_entry": match["suggested_document"], "allocated_amount": match["candidate_amount"]}],
+				links=[
+					{
+						"payment_document": "Payment Entry",
+						"payment_entry": match["suggested_document"],
+						"allocated_amount": match["candidate_amount"],
+					}
+				],
 			),
 		]
-		return patch.multiple(
-			"retailedge.reconciliation_bridge",
-			assert_can_access_bank_transaction_matching=unittest.mock.DEFAULT,
-			_load_match_for_preflight=unittest.mock.DEFAULT,
-			get_retailedge_settings=unittest.mock.DEFAULT,
-		), match, settings, roles, bank_docs
+		return (
+			patch.multiple(
+				"retailedge.reconciliation_bridge",
+				assert_can_access_bank_transaction_matching=unittest.mock.DEFAULT,
+				_load_match_for_preflight=unittest.mock.DEFAULT,
+				get_retailedge_settings=unittest.mock.DEFAULT,
+			),
+			match,
+			settings,
+			roles,
+			bank_docs,
+		)
 
 	def test_execution_summary_returns_safe_operator_fields(self):
 		match = self._ready_payment_entry_match(
@@ -292,11 +326,18 @@ class ReconciliationBridgeTests(unittest.TestCase):
 			dry_run_status_at_execution=READINESS_GROUP_READY,
 			gate_status_at_execution=EXECUTION_GATE_ALLOWED,
 		)
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=self._bank_transaction_doc()):
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch(
+				"retailedge.reconciliation_bridge.frappe.get_doc", return_value=self._bank_transaction_doc()
+			),
+		):
 			payload = get_reconciliation_execution_summary("RE-BTM-2026-0006")
 
 		self.assertEqual(payload["match_name"], "RE-BTM-2026-0006")
@@ -310,12 +351,27 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execution_summary_executed_match_shows_already_handled(self):
 		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_EXECUTED)
-		linked_doc = self._bank_transaction_doc(status="Reconciled", unallocated_amount=0, links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-2026-00012", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=linked_doc):
+		linked_doc = self._bank_transaction_doc(
+			status="Reconciled",
+			unallocated_amount=0,
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-2026-00012",
+					"allocated_amount": 1090,
+				}
+			],
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=linked_doc),
+		):
 			payload = get_reconciliation_execution_summary("RE-BTM-2026-0006")
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_EXECUTED)
@@ -325,12 +381,25 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execution_summary_conflict_is_not_retryable(self):
 		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED)
-		conflict_doc = self._bank_transaction_doc(links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-OTHER", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=conflict_doc):
+		conflict_doc = self._bank_transaction_doc(
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-OTHER",
+					"allocated_amount": 1090,
+				}
+			]
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=conflict_doc),
+		):
 			payload = get_reconciliation_execution_summary("RE-BTM-2026-0006")
 
 		self.assertTrue(payload["has_conflict"])
@@ -339,9 +408,11 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_retry_reconciliation_requires_explicit_confirmation(self):
 		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED)
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=False)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -350,13 +421,17 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_retry_reconciliation_blocks_when_setting_disabled(self):
 		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED)
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value={}), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=self._bank_transaction_doc()), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value={}),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch(
+				"retailedge.reconciliation_bridge.frappe.get_doc", return_value=self._bank_transaction_doc()
+			),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -364,14 +439,23 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		mock_get_attr.assert_not_called()
 
 	def test_retry_reconciliation_blocks_when_dry_run_or_gate_not_ready(self):
-		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED, candidate_amount=1089, amount_difference=1)
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=self._bank_transaction_doc()), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		match = self._ready_payment_entry_match(
+			execution_status=EXECUTION_STATUS_FAILED, candidate_amount=1089, amount_difference=1
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch(
+				"retailedge.reconciliation_bridge.frappe.get_doc", return_value=self._bank_transaction_doc()
+			),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -379,14 +463,29 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_retry_reconciliation_blocks_when_already_handled(self):
 		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED)
-		linked_doc = self._bank_transaction_doc(status="Reconciled", unallocated_amount=0, links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-2026-00012", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=linked_doc), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		linked_doc = self._bank_transaction_doc(
+			status="Reconciled",
+			unallocated_amount=0,
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-2026-00012",
+					"allocated_amount": 1090,
+				}
+			],
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=linked_doc),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_ALREADY_HANDLED)
@@ -394,14 +493,27 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_retry_reconciliation_blocks_when_conflict_exists(self):
 		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED)
-		conflict_doc = self._bank_transaction_doc(links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-OTHER", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=conflict_doc), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		conflict_doc = self._bank_transaction_doc(
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-OTHER",
+					"allocated_amount": 1090,
+				}
+			]
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=conflict_doc),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -409,55 +521,116 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		mock_get_attr.assert_not_called()
 
 	def test_retry_reconciliation_uses_stored_reviewed_candidate_only(self):
-		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED, suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED")
+		match = self._ready_payment_entry_match(
+			execution_status=EXECUTION_STATUS_FAILED,
+			suggested_document="ACC-PAY-LOCKED",
+			candidate_name="ACC-PAY-LOCKED",
+		)
 		summary_doc = self._bank_transaction_doc()
 		before_doc = self._bank_transaction_doc()
-		after_doc = self._bank_transaction_doc(status="Reconciled", unallocated_amount=0, links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-LOCKED", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", side_effect=[summary_doc, before_doc, after_doc]), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		after_doc = self._bank_transaction_doc(
+			status="Reconciled",
+			unallocated_amount=0,
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-LOCKED",
+					"allocated_amount": 1090,
+				}
+			],
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch(
+				"retailedge.reconciliation_bridge.frappe.get_doc",
+				side_effect=[summary_doc, before_doc, after_doc],
+			),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			mock_native = unittest.mock.Mock()
 			mock_get_attr.return_value = mock_native
 			payload = retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_EXECUTED)
 		mock_native.assert_called_once()
-		self.assertEqual(json.loads(mock_native.call_args.args[1]), [{"payment_doctype": "Payment Entry", "payment_name": "ACC-PAY-LOCKED"}])
+		self.assertEqual(
+			json.loads(mock_native.call_args.args[1]),
+			[{"payment_doctype": "Payment Entry", "payment_name": "ACC-PAY-LOCKED"}],
+		)
 		self.assertNotIn("CURRENT", mock_native.call_args.args[1])
 
 	def test_retry_reconciliation_does_not_substitute_candidate_when_target_differs(self):
-		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED, suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED")
+		match = self._ready_payment_entry_match(
+			execution_status=EXECUTION_STATUS_FAILED,
+			suggested_document="ACC-PAY-LOCKED",
+			candidate_name="ACC-PAY-LOCKED",
+		)
 		dry_run = build_reconciliation_readiness_result(match)
 		dry_run["erpnext_target_name"] = "ACC-PAY-CURRENT"
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.build_reconciliation_readiness_result", return_value=dry_run), patch(
-			"retailedge.reconciliation_bridge.check_reconciliation_execution_gate", return_value={"can_execute": True, "status": EXECUTION_GATE_ALLOWED}
-		), patch("retailedge.reconciliation_bridge._update_execution_audit"), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.build_reconciliation_readiness_result", return_value=dry_run
+			),
+			patch(
+				"retailedge.reconciliation_bridge.check_reconciliation_execution_gate",
+				return_value={"can_execute": True, "status": EXECUTION_GATE_ALLOWED},
+			),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
 		self.assertIn("does not match", payload["message"])
 		mock_get_attr.assert_not_called()
 
-	def test_retry_reconciliation_does_not_create_journal_or_payment_entry_or_mutate_sales_invoice_manually(self):
-		match = self._ready_payment_entry_match(execution_status=EXECUTION_STATUS_FAILED, suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED")
+	def test_retry_reconciliation_does_not_create_journal_or_payment_entry_or_mutate_sales_invoice_manually(
+		self,
+	):
+		match = self._ready_payment_entry_match(
+			execution_status=EXECUTION_STATUS_FAILED,
+			suggested_document="ACC-PAY-LOCKED",
+			candidate_name="ACC-PAY-LOCKED",
+		)
 		summary_doc = self._bank_transaction_doc()
 		before_doc = self._bank_transaction_doc()
-		after_doc = self._bank_transaction_doc(status="Reconciled", unallocated_amount=0, links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-LOCKED", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", side_effect=[summary_doc, before_doc, after_doc]), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr", return_value=unittest.mock.Mock()), patch(
-			"retailedge.reconciliation_bridge.frappe.new_doc"
-		) as mock_new_doc, patch("retailedge.reconciliation_bridge.frappe.db.set_value") as mock_set_value:
+		after_doc = self._bank_transaction_doc(
+			status="Reconciled",
+			unallocated_amount=0,
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-LOCKED",
+					"allocated_amount": 1090,
+				}
+			],
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch(
+				"retailedge.reconciliation_bridge.frappe.get_doc",
+				side_effect=[summary_doc, before_doc, after_doc],
+			),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr", return_value=unittest.mock.Mock()),
+			patch("retailedge.reconciliation_bridge.frappe.new_doc") as mock_new_doc,
+			patch("retailedge.reconciliation_bridge.frappe.db.set_value") as mock_set_value,
+		):
 			payload = retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_EXECUTED)
@@ -465,11 +638,17 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		mock_set_value.assert_not_called()
 
 	def test_api_wrappers_expose_execution_summary_and_retry(self):
-		with patch("retailedge.api._assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.api._get_reconciliation_execution_summary", return_value={"execution_status": EXECUTION_STATUS_FAILED}
-		) as mock_summary, patch(
-			"retailedge.api._retry_reconciliation_execution_for_match", return_value={"execution_status": EXECUTION_STATUS_EXECUTED}
-		) as mock_retry:
+		with (
+			patch("retailedge.api._assert_can_access_bank_transaction_matching"),
+			patch(
+				"retailedge.api._get_reconciliation_execution_summary",
+				return_value={"execution_status": EXECUTION_STATUS_FAILED},
+			) as mock_summary,
+			patch(
+				"retailedge.api._retry_reconciliation_execution_for_match",
+				return_value={"execution_status": EXECUTION_STATUS_EXECUTED},
+			) as mock_retry,
+		):
 			summary = retailedge_api.get_reconciliation_execution_summary("RE-BTM-2026-0006")
 			retry = retailedge_api.retry_reconciliation_execution_for_match("RE-BTM-2026-0006", confirm=True)
 
@@ -478,12 +657,14 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		mock_summary.assert_called_once_with(match_name="RE-BTM-2026-0006")
 		mock_retry.assert_called_once_with(match_name="RE-BTM-2026-0006", confirm=True)
 
-
 	def test_execute_reconciliation_blocks_when_confirm_missing(self):
 		match = self._ready_payment_entry_match()
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge._update_execution_audit") as mock_audit, patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch("retailedge.reconciliation_bridge._update_execution_audit") as mock_audit,
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=False)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -493,11 +674,14 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execute_reconciliation_blocks_when_setting_disabled(self):
 		match = self._ready_payment_entry_match()
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value={}), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge._update_execution_audit"), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value={}),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -506,11 +690,17 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execute_reconciliation_blocks_when_match_not_confirmed(self):
 		match = self._ready_payment_entry_match(decision_status="Needs Review", review_status="Needs Review")
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge._update_execution_audit"), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -519,11 +709,17 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execute_reconciliation_blocks_when_dry_run_not_ready(self):
 		match = self._ready_payment_entry_match(candidate_amount=1089, amount_difference=1)
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge._update_execution_audit"), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -532,11 +728,20 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execute_reconciliation_blocks_when_gate_not_allowed(self):
 		match = self._ready_payment_entry_match()
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.check_reconciliation_execution_gate", return_value={"can_execute": False, "status": EXECUTION_GATE_BLOCKED, "message": "Blocked by test gate."}), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.check_reconciliation_execution_gate",
+				return_value={
+					"can_execute": False,
+					"status": EXECUTION_GATE_BLOCKED,
+					"message": "Blocked by test gate.",
+				},
+			),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -545,11 +750,17 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execute_reconciliation_blocks_when_user_lacks_role(self):
 		match = self._ready_payment_entry_match()
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["RetailEdgeAuditor"]
-		), patch("retailedge.reconciliation_bridge._update_execution_audit"), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["RetailEdgeAuditor"]),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -559,11 +770,14 @@ class ReconciliationBridgeTests(unittest.TestCase):
 	def test_execute_reconciliation_blocks_when_second_approval_required(self):
 		match = self._ready_payment_entry_match()
 		settings = self._execution_enabled_settings(require_second_approval_for_reconciliation_execution=1)
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=settings), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge._update_execution_audit"), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=settings),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -571,34 +785,64 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		mock_get_attr.assert_not_called()
 
 	def test_execute_reconciliation_uses_stored_reviewed_candidate_only(self):
-		match = self._ready_payment_entry_match(suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED")
+		match = self._ready_payment_entry_match(
+			suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED"
+		)
 		before_doc = self._bank_transaction_doc()
-		after_doc = self._bank_transaction_doc(status="Reconciled", unallocated_amount=0, links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-LOCKED", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", side_effect=[before_doc, after_doc]), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		after_doc = self._bank_transaction_doc(
+			status="Reconciled",
+			unallocated_amount=0,
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-LOCKED",
+					"allocated_amount": 1090,
+				}
+			],
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge.frappe.get_doc", side_effect=[before_doc, after_doc]),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			mock_native = unittest.mock.Mock()
 			mock_get_attr.return_value = mock_native
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_EXECUTED)
 		mock_native.assert_called_once()
-		self.assertEqual(json.loads(mock_native.call_args.args[1]), [{"payment_doctype": "Payment Entry", "payment_name": "ACC-PAY-LOCKED"}])
+		self.assertEqual(
+			json.loads(mock_native.call_args.args[1]),
+			[{"payment_doctype": "Payment Entry", "payment_name": "ACC-PAY-LOCKED"}],
+		)
 		self.assertNotIn("CURRENT", mock_native.call_args.args[1])
 
 	def test_execute_reconciliation_does_not_substitute_candidate_when_target_differs(self):
-		match = self._ready_payment_entry_match(suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED")
+		match = self._ready_payment_entry_match(
+			suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED"
+		)
 		dry_run = build_reconciliation_readiness_result(match)
 		dry_run["erpnext_target_name"] = "ACC-PAY-CURRENT"
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.build_reconciliation_readiness_result", return_value=dry_run), patch(
-			"retailedge.reconciliation_bridge.check_reconciliation_execution_gate", return_value={"can_execute": True, "status": EXECUTION_GATE_ALLOWED}
-		), patch("retailedge.reconciliation_bridge._update_execution_audit"), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.build_reconciliation_readiness_result", return_value=dry_run
+			),
+			patch(
+				"retailedge.reconciliation_bridge.check_reconciliation_execution_gate",
+				return_value={"can_execute": True, "status": EXECUTION_GATE_ALLOWED},
+			),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -607,14 +851,29 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execute_reconciliation_already_handled_is_idempotent(self):
 		match = self._ready_payment_entry_match()
-		linked_doc = self._bank_transaction_doc(status="Reconciled", unallocated_amount=0, links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-2026-00012", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=linked_doc), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		linked_doc = self._bank_transaction_doc(
+			status="Reconciled",
+			unallocated_amount=0,
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-2026-00012",
+					"allocated_amount": 1090,
+				}
+			],
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=linked_doc),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_ALREADY_HANDLED)
@@ -622,14 +881,27 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execute_reconciliation_conflict_blocks_safely(self):
 		match = self._ready_payment_entry_match()
-		conflict_doc = self._bank_transaction_doc(links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-OTHER", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=conflict_doc), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr:
+		conflict_doc = self._bank_transaction_doc(
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-OTHER",
+					"allocated_amount": 1090,
+				}
+			]
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=conflict_doc),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr") as mock_get_attr,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_BLOCKED)
@@ -638,32 +910,61 @@ class ReconciliationBridgeTests(unittest.TestCase):
 
 	def test_execute_reconciliation_failure_is_sanitized(self):
 		match = self._ready_payment_entry_match()
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", return_value=self._bank_transaction_doc()), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr", side_effect=Exception("native route unavailable: secret stack detail")):
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch(
+				"retailedge.reconciliation_bridge.frappe.get_doc", return_value=self._bank_transaction_doc()
+			),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch(
+				"retailedge.reconciliation_bridge.frappe.get_attr",
+				side_effect=Exception("native route unavailable: secret stack detail"),
+			),
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_FAILED)
 		self.assertIn("failed", payload["message"].lower())
 		self.assertIn("native route unavailable", payload["execution_error_summary"])
 
-	def test_execute_reconciliation_does_not_create_journal_or_payment_entry_or_mutate_sales_invoice_manually(self):
-		match = self._ready_payment_entry_match(suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED")
+	def test_execute_reconciliation_does_not_create_journal_or_payment_entry_or_mutate_sales_invoice_manually(
+		self,
+	):
+		match = self._ready_payment_entry_match(
+			suggested_document="ACC-PAY-LOCKED", candidate_name="ACC-PAY-LOCKED"
+		)
 		before_doc = self._bank_transaction_doc()
-		after_doc = self._bank_transaction_doc(status="Reconciled", unallocated_amount=0, links=[{"payment_document": "Payment Entry", "payment_entry": "ACC-PAY-LOCKED", "allocated_amount": 1090}])
-		with patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match
-		), patch("retailedge.reconciliation_bridge.get_retailedge_settings", return_value=self._execution_enabled_settings()), patch(
-			"retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]
-		), patch("retailedge.reconciliation_bridge.frappe.get_doc", side_effect=[before_doc, after_doc]), patch(
-			"retailedge.reconciliation_bridge._update_execution_audit"
-		), patch("retailedge.reconciliation_bridge.frappe.get_attr", return_value=unittest.mock.Mock()), patch(
-			"retailedge.reconciliation_bridge.frappe.new_doc"
-		) as mock_new_doc, patch("retailedge.reconciliation_bridge.frappe.db.set_value") as mock_set_value:
+		after_doc = self._bank_transaction_doc(
+			status="Reconciled",
+			unallocated_amount=0,
+			links=[
+				{
+					"payment_document": "Payment Entry",
+					"payment_entry": "ACC-PAY-LOCKED",
+					"allocated_amount": 1090,
+				}
+			],
+		)
+		with (
+			patch("retailedge.reconciliation_bridge.assert_can_access_bank_transaction_matching"),
+			patch("retailedge.reconciliation_bridge._load_match_for_preflight", return_value=match),
+			patch(
+				"retailedge.reconciliation_bridge.get_retailedge_settings",
+				return_value=self._execution_enabled_settings(),
+			),
+			patch("retailedge.reconciliation_bridge.frappe.get_roles", return_value=["System Manager"]),
+			patch("retailedge.reconciliation_bridge.frappe.get_doc", side_effect=[before_doc, after_doc]),
+			patch("retailedge.reconciliation_bridge._update_execution_audit"),
+			patch("retailedge.reconciliation_bridge.frappe.get_attr", return_value=unittest.mock.Mock()),
+			patch("retailedge.reconciliation_bridge.frappe.new_doc") as mock_new_doc,
+			patch("retailedge.reconciliation_bridge.frappe.db.set_value") as mock_set_value,
+		):
 			payload = execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_EXECUTED)
@@ -671,15 +972,22 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		mock_set_value.assert_not_called()
 
 	def test_api_wrapper_exposes_execute_reconciliation_for_match(self):
-		with patch("retailedge.api._assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.api._execute_reconciliation_for_match", return_value={"execution_status": EXECUTION_STATUS_EXECUTED}
-		) as mock_execute:
+		with (
+			patch("retailedge.api._assert_can_access_bank_transaction_matching"),
+			patch(
+				"retailedge.api._execute_reconciliation_for_match",
+				return_value={"execution_status": EXECUTION_STATUS_EXECUTED},
+			) as mock_execute,
+		):
 			payload = retailedge_api.execute_reconciliation_for_match("RE-BTM-2026-0006", confirm=True)
 		self.assertEqual(payload["execution_status"], EXECUTION_STATUS_EXECUTED)
 		mock_execute.assert_called_once_with(match_name="RE-BTM-2026-0006", confirm=True)
 
 	def test_execution_audit_fields_exist_on_match_doctype(self):
-		path = "/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_bank_transaction_match/retailedge_bank_transaction_match.json"
+		path = str(
+			APP_ROOT
+			/ "retailedge/doctype/retailedge_bank_transaction_match/retailedge_bank_transaction_match.json"
+		)
 		match_json = json.loads(Path(path).read_text())
 		fields = {field["fieldname"]: field for field in match_json["fields"]}
 		self.assertEqual(fields["execution_status"].get("default"), "Not Executed")
@@ -698,7 +1006,6 @@ class ReconciliationBridgeTests(unittest.TestCase):
 			"execution_payment_event_identity",
 		):
 			self.assertIn(fieldname, fields)
-
 
 	def test_payment_entry_target_resolves_cleanly(self):
 		target = resolve_reconciliation_target(self._ready_payment_entry_match())
@@ -959,20 +1266,25 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		self.assertIn("deferred in R6.0", payload["notes"])
 
 	def test_api_wrapper_exposes_safe_preflight_output(self):
-		with patch("retailedge.api._assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.api._get_reconciliation_preflight",
-			return_value={"status": PREFLIGHT_READY, "dry_run": True},
-		) as mock_preflight:
+		with (
+			patch("retailedge.api._assert_can_access_bank_transaction_matching"),
+			patch(
+				"retailedge.api._get_reconciliation_preflight",
+				return_value={"status": PREFLIGHT_READY, "dry_run": True},
+			) as mock_preflight,
+		):
 			payload = retailedge_api.get_reconciliation_preflight("RE-BTM-2026-0006")
 			self.assertEqual(payload["status"], PREFLIGHT_READY)
 			mock_preflight.assert_called_once_with("RE-BTM-2026-0006")
 
 	def test_api_wrapper_exposes_guarded_reconcile_bridge(self):
-		with patch("retailedge.api._assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.api._reconcile_confirmed_bank_match",
-			return_value={"status": PREFLIGHT_READY, "dry_run": True},
-		) as mock_bridge:
+		with (
+			patch("retailedge.api._assert_can_access_bank_transaction_matching"),
+			patch(
+				"retailedge.api._reconcile_confirmed_bank_match",
+				return_value={"status": PREFLIGHT_READY, "dry_run": True},
+			) as mock_bridge,
+		):
 			payload = retailedge_api.reconcile_confirmed_bank_match("RE-BTM-2026-0006", dry_run=True)
 			self.assertEqual(payload["status"], PREFLIGHT_READY)
 			mock_bridge.assert_called_once_with(match_name="RE-BTM-2026-0006", dry_run=True)
-

@@ -7,25 +7,21 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[1]
 THEME_CSS = APP_ROOT / "public" / "css" / "retailedge_edgeui_theme_compat.css"
 WORKSPACE_CSS = APP_ROOT / "public" / "css" / "retailedge_workspace_home.css"
-BUSINESS_HUB = (
-	APP_ROOT
-	/ "public"
-	/ "js"
-	/ "retailedge_business_hub"
-	/ "RetailEdgeBusinessHub.vue"
-)
+BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 
 
 class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 	def test_workspace_loads_theme_compatibility_after_card_layer(self):
 		workspace = WORKSPACE_CSS.read_text(encoding="utf-8")
-		self.assertTrue(workspace.startswith('@import url("/assets/retailedge/css/retailedge_edgeui_theme_compat.css");'))
+		self.assertTrue(
+			workspace.startswith('@import url("/assets/retailedge/css/retailedge_edgeui_theme_compat.css");')
+		)
 		self.assertTrue(THEME_CSS.exists())
 
 	def test_retailedge_neutrals_and_statuses_follow_edgesuite_semantic_tokens(self):
 		css = THEME_CSS.read_text(encoding="utf-8")
 		for expected in (
-			':root[data-edge-palette]',
+			":root[data-edge-palette]",
 			"--pe-blue-700: var(--edge-color-brand-600)",
 			"--pe-grey-950: var(--edge-color-ink-950)",
 			"--pe-grey-500: var(--edge-color-ink-500)",

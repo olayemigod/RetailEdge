@@ -6,12 +6,24 @@ const MAX_INSTALL_ATTEMPTS = 6;
 const GROUP_PRESENTATION = Object.freeze({
 	home: { icon: "home", description: "Business overview and performance." },
 	sales: { icon: "shopping-cart", description: "Sell, serve customers, and review sales." },
-	purchases: { icon: "shopping-bag", description: "Buy stock, services, and operating supplies." },
+	purchases: {
+		icon: "shopping-bag",
+		description: "Buy stock, services, and operating supplies.",
+	},
 	inventory: { icon: "stock", description: "Control items, warehouses, movements, and counts." },
-	"cash-banking": { icon: "credit-card", description: "Manage collections, payments, shifts, and reconciliation." },
+	"cash-banking": {
+		icon: "credit-card",
+		description: "Manage collections, payments, shifts, and reconciliation.",
+	},
 	expenses: { icon: "file-text", description: "Record and review operating expenses." },
-	"customers-suppliers": { icon: "users", description: "Manage business relationships and balances." },
-	"reports-insights": { icon: "chart", description: "Understand sales, stock, cash, and branch performance." },
+	"customers-suppliers": {
+		icon: "users",
+		description: "Manage business relationships and balances.",
+	},
+	"reports-insights": {
+		icon: "chart",
+		description: "Understand sales, stock, cash, and branch performance.",
+	},
 	setup: { icon: "settings", description: "Configure RetailEdge business rules and defaults." },
 	administration: { icon: "shield", description: "Restricted technical and governance tools." },
 });
@@ -79,7 +91,11 @@ function fetchContext() {
 				resolve(response.message || {});
 			},
 			error(error) {
-				reject(error instanceof Error ? error : new Error("Unable to load RetailEdge product menu."));
+				reject(
+					error instanceof Error
+						? error
+						: new Error("Unable to load RetailEdge product menu.")
+				);
 			},
 		});
 	});
@@ -202,7 +218,8 @@ function refreshProductMenu() {
 }
 
 function scheduleRefresh() {
-	const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+	const schedule =
+		window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
 	schedule(() => {
 		if (state.installed) refreshProductMenu();
 		else installProductMenu();

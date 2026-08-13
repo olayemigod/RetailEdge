@@ -126,7 +126,10 @@ class ReconciliationHandoffTests(unittest.TestCase):
 				"account_resolution_status": "match",
 				"amount_scenario": "Submitted Payment Entry Amount",
 			},
-			conflict_counts={"by_bank_transaction": {}, "by_candidate": {"Payment Entry::ACC-PAY-2026-00008": 2}},
+			conflict_counts={
+				"by_bank_transaction": {},
+				"by_candidate": {"Payment Entry::ACC-PAY-2026-00008": 2},
+			},
 		)
 		self.assertEqual(status, HANDOFF_EXCEPTION)
 		self.assertIn("multiple active or confirmed matches", reason)
@@ -148,7 +151,10 @@ class ReconciliationHandoffTests(unittest.TestCase):
 				"amount_scenario": "Submitted Payment Entry Amount",
 			}
 		]
-		mock_payment_ctx.return_value = {"candidate_doctype": "Payment Entry", "candidate_name": "ACC-PAY-2026-00007"}
+		mock_payment_ctx.return_value = {
+			"candidate_doctype": "Payment Entry",
+			"candidate_name": "ACC-PAY-2026-00007",
+		}
 		mock_bank_ctx.return_value = {"bank_transaction": "ACC-BTN-2026-00005"}
 		result = get_reconciliation_handoff_summary({"from_date": "2026-05-01", "to_date": "2026-05-31"})
 		self.assertEqual(result["rows"], [])
@@ -180,18 +186,31 @@ class ReconciliationHandoffTests(unittest.TestCase):
 		self.assertNotIn("details_json", payload)
 
 	def test_api_wrapper_exposes_safe_handoff_output(self):
-		with patch("retailedge.api._assert_can_access_bank_transaction_matching"), patch(
-			"retailedge.api._get_reconciliation_handoff_for_match",
-			return_value={"handoff_status": HANDOFF_READY, "recommended_action": "Open ERPNext Bank Reconciliation..."},
-		) as mock_handoff:
+		with (
+			patch("retailedge.api._assert_can_access_bank_transaction_matching"),
+			patch(
+				"retailedge.api._get_reconciliation_handoff_for_match",
+				return_value={
+					"handoff_status": HANDOFF_READY,
+					"recommended_action": "Open ERPNext Bank Reconciliation...",
+				},
+			) as mock_handoff,
+		):
 			payload = retailedge_api.get_reconciliation_handoff_for_match("RE-BTM-0001")
 			self.assertEqual(payload["handoff_status"], HANDOFF_READY)
 			mock_handoff.assert_called_once_with("RE-BTM-0001")
 
-	@patch("retailedge.retailedge.report.retailedge_reconciliation_handoff.retailedge_reconciliation_handoff.get_reconciliation_handoff_summary")
+	@patch(
+		"retailedge.retailedge.report.retailedge_reconciliation_handoff.retailedge_reconciliation_handoff.get_reconciliation_handoff_summary"
+	)
 	def test_report_executes_from_current_helper_data(self, mock_summary):
-		mock_summary.return_value = {"rows": [{"bank_transaction": "ACC-BTN-2026-00008"}], "summary": {"ready": 1, "needs_review": 0, "exception": 0}}
-		_columns, rows, _message, _chart, summary = execute_handoff_report({"from_date": "2026-05-01", "to_date": "2026-05-31"})
+		mock_summary.return_value = {
+			"rows": [{"bank_transaction": "ACC-BTN-2026-00008"}],
+			"summary": {"ready": 1, "needs_review": 0, "exception": 0},
+		}
+		_columns, rows, _message, _chart, summary = execute_handoff_report(
+			{"from_date": "2026-05-01", "to_date": "2026-05-31"}
+		)
 		self.assertEqual(rows, [{"bank_transaction": "ACC-BTN-2026-00008"}])
 		self.assertEqual(summary[0]["value"], 1)
 

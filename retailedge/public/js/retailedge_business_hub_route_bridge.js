@@ -31,19 +31,21 @@
 			`.page-container[data-route="${PAGE_NAME}"]`,
 		];
 		for (const selector of selectors) {
-			const node = global.document?.querySelector(selector);
-			if (node) {
+			const matchedNode = global.document?.querySelector(selector);
+			if (matchedNode) {
 				state.lastWrapperSource = selector;
-				return node;
+				return matchedNode;
 			}
 		}
 
-		const visiblePages = Array.from(global.document?.querySelectorAll?.(".page-container") || []).filter(
-			(node) => {
-				const style = global.getComputedStyle?.(node);
-				return node.isConnected && style?.display !== "none" && style?.visibility !== "hidden";
-			},
-		);
+		const visiblePages = Array.from(
+			global.document?.querySelectorAll?.(".page-container") || []
+		).filter((pageNode) => {
+			const style = global.getComputedStyle?.(pageNode);
+			return (
+				pageNode.isConnected && style?.display !== "none" && style?.visibility !== "hidden"
+			);
+		});
 		if (visiblePages.length === 1) {
 			state.lastWrapperSource = "single visible .page-container";
 			return visiblePages[0];

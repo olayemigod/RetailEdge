@@ -22,6 +22,9 @@ from retailedge.bank_match_batch_jobs import (
 from retailedge.tests.test_bank_transaction_match_workflow import _FakeMatchDoc
 
 
+APP_ROOT = Path(__file__).resolve().parents[1]
+
+
 class BankMatchBatchJobTests(unittest.TestCase):
 	def test_background_threshold_uses_safe_sync_limit(self):
 		rows = [{"bank_transaction": f"BTN-{idx}"} for idx in range(MAX_SYNC_ROWS)]
@@ -41,10 +44,16 @@ class BankMatchBatchJobTests(unittest.TestCase):
 		self.assertTrue(frappe.db.exists("DocType", "RetailEdge Bank Match Batch Job Row"))
 
 		parent_path = Path(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_bank_match_batch_job/retailedge_bank_match_batch_job.py"
+			str(
+				APP_ROOT
+				/ "retailedge/doctype/retailedge_bank_match_batch_job/retailedge_bank_match_batch_job.py"
+			)
 		)
 		child_path = Path(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_bank_match_batch_job_row/retailedge_bank_match_batch_job_row.py"
+			str(
+				APP_ROOT
+				/ "retailedge/doctype/retailedge_bank_match_batch_job_row/retailedge_bank_match_batch_job_row.py"
+			)
 		)
 		self.assertIn("class RetailEdgeBankMatchBatchJob", parent_path.read_text())
 		self.assertIn("class RetailEdgeBankMatchBatchJobRow", child_path.read_text())
@@ -244,11 +253,20 @@ class BankMatchBatchJobTests(unittest.TestCase):
 
 	def test_batch_job_payload_metadata_is_hidden_no_copy_and_visible_to_retailedge_roles(self):
 		path = Path(
-			"/home/olayemigod/frappe-bench/apps/retailedge/retailedge/retailedge/doctype/retailedge_bank_match_batch_job/retailedge_bank_match_batch_job.json"
+			str(
+				APP_ROOT
+				/ "retailedge/doctype/retailedge_bank_match_batch_job/retailedge_bank_match_batch_job.json"
+			)
 		)
 		doctype = json.loads(path.read_text())
 		fields = {field["fieldname"]: field for field in doctype["fields"]}
-		for fieldname in ("filters_json", "selected_keys_json", "selected_rows_json", "summary_json", "selection_fingerprint"):
+		for fieldname in (
+			"filters_json",
+			"selected_keys_json",
+			"selected_rows_json",
+			"summary_json",
+			"selection_fingerprint",
+		):
 			with self.subTest(fieldname=fieldname):
 				self.assertEqual(fields[fieldname].get("hidden"), 1)
 				self.assertEqual(fields[fieldname].get("no_copy"), 1)
@@ -286,12 +304,20 @@ class BankMatchBatchJobTests(unittest.TestCase):
 		self.assertEqual(job.rows[0].review_record, "RE-BTM-TEST")
 		frappe.delete_doc("RetailEdge Bank Match Batch Job", job.name, force=True)
 
-
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
-	@patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False)
-	@patch("retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match", return_value=False)
-	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match",
+		return_value=False,
+	)
+	@patch(
+		"retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match",
+		return_value=False,
+	)
+	@patch(
+		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
 		return_value=[
@@ -326,7 +352,7 @@ class BankMatchBatchJobTests(unittest.TestCase):
 				"payment_event_found": 1,
 				"payment_event_source": "Payment Entry",
 				"reasons": ["Current best candidate from backend search."],
-			}
+			},
 		],
 	)
 	@patch(
@@ -385,64 +411,86 @@ class BankMatchBatchJobTests(unittest.TestCase):
 				return fake_doc
 			if payload == "RetailEdge Bank Transaction Match" and args and args[0] == fake_doc.name:
 				return fake_doc
-			raise AssertionError(f"Unexpected get_doc payload during batch review creation: {payload!r}, {args!r}")
+			raise AssertionError(
+				f"Unexpected get_doc payload during batch review creation: {payload!r}, {args!r}"
+			)
 
 		def get_value_side_effect(dt, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
 			if dt == "Bank Transaction":
-				return frappe._dict({
-					"name": "ACC-BTN-2026-00007",
-					"status": "Pending",
-					"company": "Process Edge (Demo)",
-					"bank_account": "Moniepoint - moniepoint",
-					"date": "2026-05-24",
-					"deposit": 1090.0,
-					"withdrawal": 0.0,
-					"reference_number": "TRF-1090",
-					"description": "Selected row should stay locked"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-BTN-2026-00007",
+						"status": "Pending",
+						"company": "Process Edge (Demo)",
+						"bank_account": "Moniepoint - moniepoint",
+						"date": "2026-05-24",
+						"deposit": 1090.0,
+						"withdrawal": 0.0,
+						"reference_number": "TRF-1090",
+						"description": "Selected row should stay locked",
+					}
+				)
 			if dt == "Payment Entry":
-				return frappe._dict({
-					"name": "ACC-PAY-2026-00012",
-					"docstatus": 1,
-					"posting_date": "2026-05-24",
-					"received_amount": 1090.0,
-					"paid_amount": 0.0,
-					"party": "Walk-in Customer",
-					"party_type": "Customer",
-					"mode_of_payment": "Bank Transfer",
-					"paid_to": "Moniepoint - moniepoint",
-					"paid_from": "Receivables",
-					"reference_no": "TRF-1090",
-					"retailedge_branch": "Airport Branch"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-PAY-2026-00012",
+						"docstatus": 1,
+						"posting_date": "2026-05-24",
+						"received_amount": 1090.0,
+						"paid_amount": 0.0,
+						"party": "Walk-in Customer",
+						"party_type": "Customer",
+						"mode_of_payment": "Bank Transfer",
+						"paid_to": "Moniepoint - moniepoint",
+						"paid_from": "Receivables",
+						"reference_no": "TRF-1090",
+						"retailedge_branch": "Airport Branch",
+					}
+				)
 			if dt == "RetailEdge Bank Transaction Match":
 				return None
 			return None
 
 		try:
-			with patch("retailedge.bank_transaction_match_workflow.frappe.get_doc", side_effect=fake_get_doc), patch(
-				"retailedge.bank_transaction_match_workflow.now_datetime", return_value="2026-06-12 10:00:00"
-			), patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True), patch(
-				"retailedge.bank_transaction_match_workflow.frappe.db.get_value", side_effect=get_value_side_effect
-			), patch(
-				"retailedge.bank_transaction_match_workflow.frappe.get_all", return_value=[]
+			with (
+				patch("retailedge.bank_transaction_match_workflow.frappe.get_doc", side_effect=fake_get_doc),
+				patch(
+					"retailedge.bank_transaction_match_workflow.now_datetime",
+					return_value="2026-06-12 10:00:00",
+				),
+				patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True),
+				patch(
+					"retailedge.bank_transaction_match_workflow.frappe.db.get_value",
+					side_effect=get_value_side_effect,
+				),
+				patch("retailedge.bank_transaction_match_workflow.frappe.get_all", return_value=[]),
 			):
 				_process_job_row(job, job.rows[0])
 
 			self.assertEqual(job.rows[0].candidate_key, selected_row["candidate_key"])
-			self.assertEqual(json.loads(job.rows[0].input_payload_json)["suggested_document"], "ACC-PAY-2026-00012")
+			self.assertEqual(
+				json.loads(job.rows[0].input_payload_json)["suggested_document"], "ACC-PAY-2026-00012"
+			)
 			self.assertEqual(fake_doc.suggested_document_type, "Payment Entry")
 			self.assertEqual(fake_doc.suggested_document, "ACC-PAY-2026-00012")
 			self.assertEqual(fake_doc.payment_entry, "ACC-PAY-2026-00012")
 		finally:
 			frappe.delete_doc("RetailEdge Bank Match Batch Job", job.name, force=True)
 
-
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
-	@patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False)
-	@patch("retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match", return_value=False)
-	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction", return_value=[])
+	@patch(
+		"retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match",
+		return_value=False,
+	)
+	@patch(
+		"retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match",
+		return_value=False,
+	)
+	@patch(
+		"retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction",
+		return_value=[],
+	)
 	@patch(
 		"retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction",
 		return_value=[
@@ -513,28 +561,39 @@ class BankMatchBatchJobTests(unittest.TestCase):
 		def fake_get_doc(payload, *args, **kwargs):
 			if isinstance(payload, dict) and payload.get("doctype") == "RetailEdge Bank Transaction Match":
 				created_docs.append(payload)
-				return _FakeMatchDoc(doctype="RetailEdge Bank Transaction Match", decision_status=None, action_logs=[])
-			raise AssertionError(f"Unexpected get_doc payload during missing locked candidate test: {payload!r}, {args!r}")
+				return _FakeMatchDoc(
+					doctype="RetailEdge Bank Transaction Match", decision_status=None, action_logs=[]
+				)
+			raise AssertionError(
+				f"Unexpected get_doc payload during missing locked candidate test: {payload!r}, {args!r}"
+			)
 
 		def get_value_side_effect(dt, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
 			if dt == "Bank Transaction":
-				return frappe._dict({
-					"name": "ACC-BTN-2026-00007",
-					"status": "Pending",
-					"company": "Process Edge (Demo)",
-					"bank_account": "Moniepoint - moniepoint",
-					"date": "2026-05-24",
-					"deposit": 1090.0,
-					"withdrawal": 0.0,
-					"reference_number": "TRF-1090",
-					"description": "Selected row should stay locked"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-BTN-2026-00007",
+						"status": "Pending",
+						"company": "Process Edge (Demo)",
+						"bank_account": "Moniepoint - moniepoint",
+						"date": "2026-05-24",
+						"deposit": 1090.0,
+						"withdrawal": 0.0,
+						"reference_number": "TRF-1090",
+						"description": "Selected row should stay locked",
+					}
+				)
 			return None
 
 		try:
-			with patch("retailedge.bank_transaction_match_workflow.frappe.get_doc", side_effect=fake_get_doc), patch(
-				"retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True
-			), patch("retailedge.bank_transaction_match_workflow.frappe.db.get_value", side_effect=get_value_side_effect):
+			with (
+				patch("retailedge.bank_transaction_match_workflow.frappe.get_doc", side_effect=fake_get_doc),
+				patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True),
+				patch(
+					"retailedge.bank_transaction_match_workflow.frappe.db.get_value",
+					side_effect=get_value_side_effect,
+				),
+			):
 				_process_job_row(job, job.rows[0])
 
 			self.assertEqual(job.rows[0].result_status, "Failed")
@@ -545,8 +604,14 @@ class BankMatchBatchJobTests(unittest.TestCase):
 
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_access_bank_transaction_matching")
 	@patch("retailedge.bank_transaction_match_workflow.assert_can_manage_bank_transaction_match")
-	@patch("retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match", return_value=False)
-	@patch("retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match", return_value=False)
+	@patch(
+		"retailedge.bank_transaction_match_workflow.payment_entry_has_active_confirmed_bank_match",
+		return_value=False,
+	)
+	@patch(
+		"retailedge.bank_transaction_match_workflow.sales_invoice_has_active_confirmed_bank_match",
+		return_value=False,
+	)
 	@patch("retailedge.bank_transaction_match_workflow.find_sales_invoice_candidates_for_bank_transaction")
 	@patch("retailedge.bank_transaction_match_workflow.find_payment_entry_candidates_for_bank_transaction")
 	@patch(
@@ -572,8 +637,12 @@ class BankMatchBatchJobTests(unittest.TestCase):
 		_mock_manage,
 		_mock_access,
 	):
-		_mock_payment_candidates.side_effect = Exception("Broad Payment Entry candidate discovery should not be called")
-		_mock_sales_candidates.side_effect = Exception("Broad Sales Invoice candidate discovery should not be called")
+		_mock_payment_candidates.side_effect = Exception(
+			"Broad Payment Entry candidate discovery should not be called"
+		)
+		_mock_sales_candidates.side_effect = Exception(
+			"Broad Sales Invoice candidate discovery should not be called"
+		)
 
 		selected_row = {
 			"candidate_key": "ACC-BTN-2026-00007|Payment Entry|ACC-PAY-2026-00012|Payment Entry Match|",
@@ -606,45 +675,57 @@ class BankMatchBatchJobTests(unittest.TestCase):
 		def fake_get_doc(payload, *args, **kwargs):
 			if isinstance(payload, dict) and payload.get("doctype") == "RetailEdge Bank Transaction Match":
 				return fake_doc
-			return _FakeMatchDoc(doctype="RetailEdge Bank Transaction Match", decision_status=None, action_logs=[])
+			return _FakeMatchDoc(
+				doctype="RetailEdge Bank Transaction Match", decision_status=None, action_logs=[]
+			)
 
 		def get_value_side_effect(dt, filters=None, fieldname=None, as_dict=False, *args, **kwargs):
 			if dt == "Bank Transaction":
-				return frappe._dict({
-					"name": "ACC-BTN-2026-00007",
-					"status": "Pending",
-					"company": "Process Edge (Demo)",
-					"bank_account": "Moniepoint - moniepoint",
-					"date": "2026-05-24",
-					"deposit": 1090.0,
-					"withdrawal": 0.0,
-					"reference_number": "TRF-1090",
-					"description": "Selected row should stay locked"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-BTN-2026-00007",
+						"status": "Pending",
+						"company": "Process Edge (Demo)",
+						"bank_account": "Moniepoint - moniepoint",
+						"date": "2026-05-24",
+						"deposit": 1090.0,
+						"withdrawal": 0.0,
+						"reference_number": "TRF-1090",
+						"description": "Selected row should stay locked",
+					}
+				)
 			if dt == "Payment Entry":
-				return frappe._dict({
-					"name": "ACC-PAY-2026-00012",
-					"docstatus": 1,
-					"posting_date": "2026-05-24",
-					"received_amount": 1090.0,
-					"paid_amount": 0.0,
-					"party": "Walk-in Customer",
-					"party_type": "Customer",
-					"mode_of_payment": "Bank Transfer",
-					"paid_to": "Moniepoint - moniepoint",
-					"paid_from": "Receivables",
-					"reference_no": "TRF-1090",
-					"retailedge_branch": "Airport Branch"
-				})
+				return frappe._dict(
+					{
+						"name": "ACC-PAY-2026-00012",
+						"docstatus": 1,
+						"posting_date": "2026-05-24",
+						"received_amount": 1090.0,
+						"paid_amount": 0.0,
+						"party": "Walk-in Customer",
+						"party_type": "Customer",
+						"mode_of_payment": "Bank Transfer",
+						"paid_to": "Moniepoint - moniepoint",
+						"paid_from": "Receivables",
+						"reference_no": "TRF-1090",
+						"retailedge_branch": "Airport Branch",
+					}
+				)
 			return None
 
 		try:
-			with patch("retailedge.bank_transaction_match_workflow.frappe.get_doc", side_effect=fake_get_doc), patch(
-				"retailedge.bank_transaction_match_workflow.now_datetime", return_value="2026-06-12 10:00:00"
-			), patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True), patch(
-				"retailedge.bank_transaction_match_workflow.frappe.db.get_value", side_effect=get_value_side_effect
-			), patch(
-				"retailedge.bank_transaction_match_workflow.frappe.get_all", return_value=[]
+			with (
+				patch("retailedge.bank_transaction_match_workflow.frappe.get_doc", side_effect=fake_get_doc),
+				patch(
+					"retailedge.bank_transaction_match_workflow.now_datetime",
+					return_value="2026-06-12 10:00:00",
+				),
+				patch("retailedge.bank_transaction_match_workflow.frappe.db.exists", return_value=True),
+				patch(
+					"retailedge.bank_transaction_match_workflow.frappe.db.get_value",
+					side_effect=get_value_side_effect,
+				),
+				patch("retailedge.bank_transaction_match_workflow.frappe.get_all", return_value=[]),
 			):
 				_process_job_row(job, job.rows[0])
 
