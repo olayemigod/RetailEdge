@@ -2,25 +2,25 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from retailedge.edgesuite_ui import (
-	ERPNEXT_POS_PAGE as EDGEUI_ERPNEXT_POS_PAGE,
-	NAVIGATION_GROUPS,
-	POSNEXT_POS_URL as EDGEUI_POSNEXT_POS_URL,
-	_resolve_navigation_item,
-)
-from retailedge.workspace_home import (
+from retailedge.edgesuite_ui import NAVIGATION_GROUPS, _resolve_navigation_item
+from retailedge.pos_runtime import (
+	ERPNEXT_POS_CLOSING_ENTRY,
+	ERPNEXT_POS_OPENING_ENTRY,
 	ERPNEXT_POS_PAGE,
-	HOME_WORKSPACE_ITEMS,
 	POSNEXT_CLOSING_SHIFT,
 	POSNEXT_OPENING_SHIFT,
 	POSNEXT_POS_URL,
 	START_POS_LABEL,
-	get_home_workspace_items,
 )
+from retailedge.workspace_home import HOME_WORKSPACE_ITEMS, get_home_workspace_items
 
 
 def _workspace_exists_without_posnext(link_type: str, link_to: str) -> bool:
-	return (link_type, link_to) == ("Page", ERPNEXT_POS_PAGE)
+	return (link_type, link_to) in {
+		("DocType", ERPNEXT_POS_OPENING_ENTRY),
+		("DocType", ERPNEXT_POS_CLOSING_ENTRY),
+		("Page", ERPNEXT_POS_PAGE),
+	}
 
 
 def _workspace_exists_with_posnext(link_type: str, link_to: str) -> bool:
@@ -35,9 +35,12 @@ def _start_pos_workspace_item():
 	return next(item for item in HOME_WORKSPACE_ITEMS if item.label == START_POS_LABEL)
 
 
-def _start_pos_navigation_item():
-	sales = next(group for group in NAVIGATION_GROUPS if group["key"] == "sales")
-	return next(item for item in sales["items"] if item["label"] == START_POS_LABEL)
+def _navigation_item(runtime_target: str):
+	for group in NAVIGATION_GROUPS:
+		for item in group["items"]:
+			if item.get("runtime_target") == runtime_target:
+				return item
+	raise AssertionError(f"runtime navigation item not found: {runtime_target}")
 
 
 def test_workspace_uses_native_erpnext_pos_when_posnext_is_unavailable():
@@ -49,6 +52,8 @@ def test_workspace_uses_native_erpnext_pos_when_posnext_is_unavailable():
 	assert start_pos.link_to == ERPNEXT_POS_PAGE
 	assert start_pos.url is None
 	assert start_pos.source == "ERPNext Link"
+	assert ERPNEXT_POS_OPENING_ENTRY in {item.link_to for item in items}
+	assert ERPNEXT_POS_CLOSING_ENTRY in {item.link_to for item in items}
 	assert POSNEXT_OPENING_SHIFT not in {item.link_to for item in items}
 	assert POSNEXT_CLOSING_SHIFT not in {item.link_to for item in items}
 
@@ -64,33 +69,44 @@ def test_workspace_uses_posnext_and_retains_shift_links_when_available():
 	assert start_pos.source == "POSNext Link"
 	assert POSNEXT_OPENING_SHIFT in {item.link_to for item in items}
 	assert POSNEXT_CLOSING_SHIFT in {item.link_to for item in items}
+	assert ERPNEXT_POS_OPENING_ENTRY not in {item.link_to for item in items}
+	assert ERPNEXT_POS_CLOSING_ENTRY not in {item.link_to for item in items}
 
 
-def test_business_hub_uses_native_erpnext_pos_when_posnext_is_unavailable():
-	with (
-		patch("retailedge.edgesuite_ui._posnext_available", return_value=False),
-		patch(
-			"retailedge.edgesuite_ui._target_exists",
-			side_effect=lambda target_type, target: (target_type, target)
-			== ("Page", EDGEUI_ERPNEXT_POS_PAGE),
-		),
-	):
-		resolved = _resolve_navigation_item(_start_pos_navigation_item())
+def test_business_hub_uses_native_erpnext_pos_and_entries_without_posnext():
+	with patch("retailedge.edgesuite_ui._target_exists", side_effect=_workspace_exists_without_posnext):
+		start = _resolve_navigation_item(_navigation_item("pos"))
+		opening = _resolve_navigation_item(_navigation_item("pos_opening"))
+		closing = _resolve_navigation_item(_navigation_item("pos_closing"))
 
-	assert resolved is not None
-	assert resolved["target_type"] == "Page"
-	assert resolved["target"] == EDGEUI_ERPNEXT_POS_PAGE
-	assert "runtime_target" not in resolved
+	assert start is not None
+	assert start["target_type"] == "Page"
+	assert start["target"] == ERPNEXT_POS_PAGE
+	assert opening is not None
+	assert opening["target_type"] == "DocType"
+	assert opening["target"] == ERPNEXT_POS_OPENING_ENTRY
+	assert opening["label"] == ERPNEXT_POS_OPENING_ENTRY
+	assert closing is not None
+	assert closing["target_type"] == "DocType"
+	assert closing["target"] == ERPNEXT_POS_CLOSING_ENTRY
+	assert closing["label"] == ERPNEXT_POS_CLOSING_ENTRY
 
 
-def test_business_hub_uses_posnext_url_when_posnext_is_available():
-	with patch("retailedge.edgesuite_ui._posnext_available", return_value=True):
-		resolved = _resolve_navigation_item(_start_pos_navigation_item())
+def test_business_hub_uses_posnext_url_and_shift_documents_when_available():
+	with patch("retailedge.edgesuite_ui._target_exists", side_effect=_workspace_exists_with_posnext):
+		start = _resolve_navigation_item(_navigation_item("pos"))
+		opening = _resolve_navigation_item(_navigation_item("pos_opening"))
+		closing = _resolve_navigation_item(_navigation_item("pos_closing"))
 
-	assert resolved is not None
-	assert resolved["target_type"] == "URL"
-	assert resolved["target"] == EDGEUI_POSNEXT_POS_URL
-	assert "runtime_target" not in resolved
+	assert start is not None
+	assert start["target_type"] == "URL"
+	assert start["target"] == POSNEXT_POS_URL
+	assert opening is not None
+	assert opening["target"] == POSNEXT_OPENING_SHIFT
+	assert opening["label"] == POSNEXT_OPENING_SHIFT
+	assert closing is not None
+	assert closing["target"] == POSNEXT_CLOSING_SHIFT
+	assert closing["label"] == POSNEXT_CLOSING_SHIFT
 
 
 def test_start_pos_workspace_definition_remains_single_runtime_action():
