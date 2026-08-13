@@ -5,7 +5,7 @@
 	const RUNTIME_ASSET = "edgeui.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
-	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge.js";
+	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge_v2.js";
 	const LOAD_TIMEOUT_MS = 15000;
 	let productMenuBootPromise = null;
 	let routeBridgeBootPromise = null;
