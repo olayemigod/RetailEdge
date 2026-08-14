@@ -125,6 +125,17 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("MAX_ATTEMPTS", bridge)
 		self.assertNotIn("CoreEdge", bridge)
 
+	def test_route_bridge_recovers_from_frappe_v16_desk_content_root(self):
+		bridge = (APP_ROOT / "public" / "js" / "retailedge_business_hub_route_bridge.js").read_text()
+		self.assertIn("resolveDeskContentRoot", bridge)
+		self.assertIn('"#body .main-section"', bridge)
+		self.assertIn('".main-section"', bridge)
+		self.assertIn('".layout-main-section-wrapper"', bridge)
+		self.assertIn('".layout-main-section"', bridge)
+		self.assertIn("Frappe v16 Desk content root", bridge)
+		self.assertIn("return resolveDeskContentRoot()", bridge)
+		self.assertIn("state.booted = false", bridge)
+
 	def test_product_bundle_and_vue_use_canonical_runtime_only(self):
 		bundle = (APP_ROOT / "public" / "js" / "retailedge_business_hub.bundle.js").read_text()
 		component = (
