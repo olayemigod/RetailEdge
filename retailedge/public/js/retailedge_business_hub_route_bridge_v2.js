@@ -79,6 +79,8 @@
 		if (!isActiveRoute()) {
 			state.attempts = 0;
 			state.booted = false;
+			state.lastWrapperSource = "";
+			global.retailedgeTeardownBusinessHubPage?.();
 			return false;
 		}
 
