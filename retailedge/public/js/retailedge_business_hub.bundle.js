@@ -7,7 +7,13 @@ function mountRetailEdgeBusinessHub(target) {
 	if (typeof window.EdgeSuiteUI.createEdgeApp !== "function") {
 		throw new Error("EdgeSuite UI createEdgeApp API is unavailable.");
 	}
-	return window.EdgeSuiteUI.createEdgeApp(RetailEdgeBusinessHub, target);
+	if (!target) {
+		throw new Error("RetailEdge Business Hub mount target is unavailable.");
+	}
+
+	const app = window.EdgeSuiteUI.createEdgeApp(RetailEdgeBusinessHub);
+	app.mount(target);
+	return app;
 }
 
 if (typeof window !== "undefined") {
