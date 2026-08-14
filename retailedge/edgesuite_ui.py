@@ -14,7 +14,6 @@ from retailedge.pos_runtime import (
 	get_pos_runtime_capabilities,
 )
 
-
 PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 	{
 		"key": "navigate",
@@ -60,8 +59,16 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"label": "Home",
 		"items": (
 			{"label": "RetailEdge Business Hub", "target_type": "Page", "target": "retailedge-business-hub"},
-			{"label": "Salesperson Performance", "target_type": "Page", "target": "salesperson-performance-dashboard"},
-			{"label": "Branch Performance", "target_type": "Report", "target": "RetailEdge Branch Performance Summary"},
+			{
+				"label": "Salesperson Performance",
+				"target_type": "Page",
+				"target": "salesperson-performance-dashboard",
+			},
+			{
+				"label": "Branch Performance",
+				"target_type": "Report",
+				"target": "RetailEdge Branch Performance Summary",
+			},
 		),
 	},
 	{
@@ -96,7 +103,11 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"items": (
 			{"label": "Items", "target_type": "DocType", "target": "Item"},
 			{"label": "Warehouses", "target_type": "DocType", "target": "Warehouse"},
-			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History"},
+			{
+				"label": "Stock Movement History",
+				"target_type": "Report",
+				"target": "RetailEdge Stock Movement History",
+			},
 			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance"},
 			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry"},
 			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation"},
@@ -108,8 +119,16 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"items": (
 			{"label": "Payment Entries", "target_type": "DocType", "target": "Payment Entry"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction"},
-			{"label": "Bank Matching", "target_type": "Report", "target": "RetailEdge Bank Transaction Matching"},
-			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match"},
+			{
+				"label": "Bank Matching",
+				"target_type": "Report",
+				"target": "RetailEdge Bank Transaction Matching",
+			},
+			{
+				"label": "Bank Match Reviews",
+				"target_type": "DocType",
+				"target": "RetailEdge Bank Transaction Match",
+			},
 			{
 				"label": "POS Opening",
 				"target_type": "DocType",
@@ -130,8 +149,16 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"items": (
 			{"label": "Cashier Expenses", "target_type": "DocType", "target": "RetailEdge Cashier Expense"},
 			{"label": "Expense Claims", "target_type": "DocType", "target": "Expense Claim"},
-			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category"},
-			{"label": "Cashier Expense Review", "target_type": "Report", "target": "RetailEdge Cashier Expense Review"},
+			{
+				"label": "Expense Categories",
+				"target_type": "DocType",
+				"target": "RetailEdge Expense Category",
+			},
+			{
+				"label": "Cashier Expense Review",
+				"target_type": "Report",
+				"target": "RetailEdge Cashier Expense Review",
+			},
 		),
 	},
 	{
@@ -148,11 +175,31 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "reports-insights",
 		"label": "Reports & Insights",
 		"items": (
-			{"label": "Branch Performance", "target_type": "Report", "target": "RetailEdge Branch Performance Summary"},
-			{"label": "Salesperson Performance", "target_type": "Page", "target": "salesperson-performance-dashboard"},
-			{"label": "Daily Sales Audit Register", "target_type": "Report", "target": "RetailEdge Daily Sales Audit Register"},
-			{"label": "Invoice Payment Audit", "target_type": "Report", "target": "RetailEdge Invoice Payment Audit"},
-			{"label": "POS Closing Variance vs Expenses", "target_type": "Report", "target": "POS Closing Variance vs Expenses"},
+			{
+				"label": "Branch Performance",
+				"target_type": "Report",
+				"target": "RetailEdge Branch Performance Summary",
+			},
+			{
+				"label": "Salesperson Performance",
+				"target_type": "Page",
+				"target": "salesperson-performance-dashboard",
+			},
+			{
+				"label": "Daily Sales Audit Register",
+				"target_type": "Report",
+				"target": "RetailEdge Daily Sales Audit Register",
+			},
+			{
+				"label": "Invoice Payment Audit",
+				"target_type": "Report",
+				"target": "RetailEdge Invoice Payment Audit",
+			},
+			{
+				"label": "POS Closing Variance vs Expenses",
+				"target_type": "Report",
+				"target": "POS Closing Variance vs Expenses",
+			},
 		),
 	},
 	{
@@ -170,7 +217,11 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"label": "Administration",
 		"required_roles": ("System Manager",),
 		"items": (
-			{"label": "Bank Match Batch Jobs", "target_type": "DocType", "target": "RetailEdge Bank Match Batch Job"},
+			{
+				"label": "Bank Match Batch Jobs",
+				"target_type": "DocType",
+				"target": "RetailEdge Bank Match Batch Job",
+			},
 			{"label": "Error Log", "target_type": "DocType", "target": "Error Log"},
 		),
 	},
@@ -252,7 +303,9 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 			"user": frappe.session.user,
 			"user_name": frappe.utils.get_fullname(frappe.session.user),
 			"company": frappe.defaults.get_user_default("Company") or "",
-			"branch": frappe.defaults.get_user_default("RetailEdge Branch") or frappe.defaults.get_user_default("Branch") or "",
+			"branch": frappe.defaults.get_user_default("RetailEdge Branch")
+			or frappe.defaults.get_user_default("Branch")
+			or "",
 		},
 		"feature_flags": {
 			"product_switcher_enabled": False,

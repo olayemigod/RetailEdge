@@ -6,7 +6,6 @@ from pathlib import Path
 
 from retailedge.edgesuite_ui import NAVIGATION_GROUPS, PROGRAMME_EXPERIENCES, QUICK_ACTIONS
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 

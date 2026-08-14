@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -160,11 +158,14 @@ class TestEdgePayHandoffConsumer(FrappeTestCase):
 		self.assertTrue(result["ok"])
 
 	def test_failure_ack_redacts_before_remote_service_call(self):
-		with patch.object(consumer, "redact_edgepay_error", return_value="safe-error"), patch.object(
-			consumer,
-			"mark_payment_handoff_failed",
-			return_value={"ok": True, "status": "success"},
-		) as remote_ack:
+		with (
+			patch.object(consumer, "redact_edgepay_error", return_value="safe-error"),
+			patch.object(
+				consumer,
+				"mark_payment_handoff_failed",
+				return_value={"ok": True, "status": "success"},
+			) as remote_ack,
+		):
 			consumer.mark_edgepay_handoff_failed("EP-SHE-0002", "unsafe-error")
 		remote_ack.assert_called_once_with("EP-SHE-0002", error_message="safe-error")
 

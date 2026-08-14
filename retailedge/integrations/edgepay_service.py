@@ -6,7 +6,6 @@ from urllib.parse import urljoin
 import frappe
 import requests
 
-
 DEFAULT_TIMEOUT_SECONDS = 10
 EDGE_PAY_API_PREFIX = "api/method/edgepayv1.edgepay.services.api."
 
@@ -51,8 +50,7 @@ def get_edgepay_service_config() -> dict[str, Any]:
 def is_edgepay_service_configured() -> bool:
 	config = get_edgepay_service_config()
 	return bool(
-		config["base_url"]
-		and (config["bearer_token"] or (config["api_key"] and config["api_secret"]))
+		config["base_url"] and (config["bearer_token"] or (config["api_key"] and config["api_secret"]))
 	)
 
 
@@ -108,7 +106,9 @@ def _normalize_response(response: requests.Response) -> dict[str, Any]:
 	return payload
 
 
-def _request(method_name: str, *, http_method: str = "POST", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+def _request(
+	method_name: str, *, http_method: str = "POST", payload: dict[str, Any] | None = None
+) -> dict[str, Any]:
 	config = get_edgepay_service_config()
 	endpoint = _get_endpoint(method_name, config)
 	headers = {
@@ -127,9 +127,7 @@ def _request(method_name: str, *, http_method: str = "POST", payload: dict[str, 
 			verify=config["verify_ssl"],
 		)
 	except requests.RequestException as exc:
-		raise EdgePayServiceError(
-			redact_edgepay_error(f"Unable to reach EdgePay service: {exc}")
-		) from exc
+		raise EdgePayServiceError(redact_edgepay_error(f"Unable to reach EdgePay service: {exc}")) from exc
 
 	return _normalize_response(response)
 

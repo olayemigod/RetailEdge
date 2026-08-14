@@ -60,7 +60,11 @@ frappe.query_reports["RetailEdge Invoice Payment Audit"] = {
 		report.refresh = function () {
 			const fromDate = report.get_filter_value("from_date");
 			const toDate = report.get_filter_value("to_date");
-			if (fromDate && toDate && frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)) {
+			if (
+				fromDate &&
+				toDate &&
+				frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)
+			) {
 				frappe.throw(__("From Date cannot be after To Date."));
 			}
 			if (fromDate && toDate) {
@@ -68,7 +72,7 @@ frappe.query_reports["RetailEdge Invoice Payment Audit"] = {
 				if (days > 60) {
 					frappe.show_alert({
 						message: __("Large date ranges may take longer to load."),
-						indicator: "orange"
+						indicator: "orange",
 					});
 				}
 			}
@@ -169,7 +173,7 @@ frappe.query_reports["RetailEdge Invoice Payment Audit"] = {
 				"Last Quarter",
 				"Last Year",
 				"Custom Period",
-				"Full History"
+				"Full History",
 			].join("\n"),
 			default: "This Month",
 		},

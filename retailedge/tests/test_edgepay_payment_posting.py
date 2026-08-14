@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import unittest
 from unittest.mock import patch
 
@@ -10,10 +9,18 @@ try:
 except (ImportError, ModuleNotFoundError):
 	DatabaseStateBackup = None
 
+EDGEPAY_INTEGRATION_AVAILABLE = DatabaseStateBackup is not None and "edgepayv1" in frappe.get_installed_apps()
+
 from retailedge.api import (
 	get_edgepay_evidence_posting_preflight as api_get_preflight,
+)
+from retailedge.api import (
 	get_edgepay_payment_entry_submission_preflight as api_get_sub_preflight,
+)
+from retailedge.api import (
 	prepare_edgepay_payment_entry_draft as api_prepare_draft,
+)
+from retailedge.api import (
 	submit_edgepay_payment_entry as api_submit_entry,
 )
 from retailedge.services.edgepay_payment_posting import (
@@ -27,12 +34,15 @@ from retailedge.services.edgepay_payment_posting import (
 )
 
 
-@unittest.skipUnless(DatabaseStateBackup is not None, "EdgePay integration test requires edgepayv1")
+@unittest.skipUnless(
+	EDGEPAY_INTEGRATION_AVAILABLE,
+	"EdgePay integration test requires edgepayv1 installed on the test site",
+)
 class TestEdgePayPaymentPosting(FrappeTestCase):
 	def setUp(self):
 		self.db_backup = DatabaseStateBackup()
 		self.db_backup.backup()
-		super(TestEdgePayPaymentPosting, self).setUp()
+		super().setUp()
 		self.original_exists = frappe.db.exists
 		self.original_get_doc = frappe.get_doc
 		self.original_get_value = frappe.db.get_value
@@ -95,7 +105,7 @@ class TestEdgePayPaymentPosting(FrappeTestCase):
 		frappe.db.commit()
 		frappe.set_user("Administrator")
 		self.db_backup.restore()
-		super(TestEdgePayPaymentPosting, self).tearDown()
+		super().tearDown()
 
 	def mock_exists(self, *args, **kwargs):
 		if args:
@@ -161,7 +171,12 @@ class TestEdgePayPaymentPosting(FrappeTestCase):
 			dt = kwargs.get("doctype")
 			name = kwargs.get("name")
 
-		if isinstance(dt, str) and dt == "Sales Invoice" and isinstance(name, str) and name.startswith("SINV-RE-"):
+		if (
+			isinstance(dt, str)
+			and dt == "Sales Invoice"
+			and isinstance(name, str)
+			and name.startswith("SINV-RE-")
+		):
 			return frappe._dict(
 				{
 					"doctype": "Sales Invoice",

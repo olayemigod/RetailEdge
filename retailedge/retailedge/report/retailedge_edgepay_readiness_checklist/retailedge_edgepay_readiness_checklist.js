@@ -8,7 +8,7 @@ frappe.query_reports["RetailEdge EdgePay Readiness Checklist"] = {
 		report.prepared_report = false;
 		report.prepared_report_name = null;
 		report.prepared_report_document = null;
-		
+
 		if (report.page && typeof report.page.set_primary_action === "function") {
 			report.page.set_primary_action(__("Refresh Checklist"), () => {
 				report.refresh();
@@ -21,5 +21,5 @@ frappe.query_reports["RetailEdge EdgePay Readiness Checklist"] = {
 				report.refresh();
 			});
 		}
-	}
+	},
 };

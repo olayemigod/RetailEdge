@@ -27,7 +27,11 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 				Blocked: "orange",
 				"Already Handled": "gray",
 			};
-			return [__(executionStatus), executionIndicators[executionStatus] || "gray", `execution_status,=,${executionStatus}`];
+			return [
+				__(executionStatus),
+				executionIndicators[executionStatus] || "gray",
+				`execution_status,=,${executionStatus}`,
+			];
 		}
 		const status = doc.review_status || doc.decision_status || "Pending Review";
 		const indicators = {
@@ -43,26 +47,40 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 	},
 
 	onload(listview) {
-		listview.page.add_inner_button(__("Review Queue Summary"), function () {
-			show_bank_match_queue_summary(listview);
-		}, __("Review Actions"));
+		listview.page.add_inner_button(
+			__("Review Queue Summary"),
+			function () {
+				show_bank_match_queue_summary(listview);
+			},
+			__("Review Actions")
+		);
 
-		listview.page.add_inner_button(__("View Batch jobs"), function () {
-			frappe.set_route("List", "RetailEdge Bank Match Batch Job");
-		}, __("Review Actions"));
-
-
+		listview.page.add_inner_button(
+			__("View Batch jobs"),
+			function () {
+				frappe.set_route("List", "RetailEdge Bank Match Batch Job");
+			},
+			__("Review Actions")
+		);
 
 		listview.page.add_actions_menu_item(__("Check Execution Readiness"), function () {
 			const rows = listview.get_checked_items() || [];
 			const names = rows.map((row) => row.name).filter(Boolean);
 			if (!names.length) {
-				frappe.msgprint(__("Select one or more confirmed Bank Match Review records first."));
+				frappe.msgprint(
+					__("Select one or more confirmed Bank Match Review records first.")
+				);
 				return;
 			}
-			const unconfirmed = rows.filter((row) => (row.decision_status || row.review_status) !== "Confirmed");
+			const unconfirmed = rows.filter(
+				(row) => (row.decision_status || row.review_status) !== "Confirmed"
+			);
 			if (unconfirmed.length) {
-				frappe.msgprint(__("Execution readiness can only be checked for confirmed Bank Match Review records."));
+				frappe.msgprint(
+					__(
+						"Execution readiness can only be checked for confirmed Bank Match Review records."
+					)
+				);
 				return;
 			}
 			frappe.call({
@@ -80,12 +98,20 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 			const rows = listview.get_checked_items() || [];
 			const names = rows.map((row) => row.name).filter(Boolean);
 			if (!names.length) {
-				frappe.msgprint(__("Select one or more confirmed Bank Match Review records first."));
+				frappe.msgprint(
+					__("Select one or more confirmed Bank Match Review records first.")
+				);
 				return;
 			}
-			const unconfirmed = rows.filter((row) => (row.decision_status || row.review_status) !== "Confirmed");
+			const unconfirmed = rows.filter(
+				(row) => (row.decision_status || row.review_status) !== "Confirmed"
+			);
 			if (unconfirmed.length) {
-				frappe.msgprint(__("Dry Run Selected is only available for confirmed Bank Match Review records."));
+				frappe.msgprint(
+					__(
+						"Dry Run Selected is only available for confirmed Bank Match Review records."
+					)
+				);
 				return;
 			}
 			frappe.call({
@@ -141,7 +167,10 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 						freeze: true,
 						freeze_message: __("Marking selected matches for review..."),
 						callback: function (r) {
-							show_bulk_bank_match_result(r.message, __("Bulk Needs Review Summary"));
+							show_bulk_bank_match_result(
+								r.message,
+								__("Bulk Needs Review Summary")
+							);
 							listview.refresh();
 						},
 					});
@@ -153,13 +182,20 @@ frappe.listview_settings["RetailEdge Bank Transaction Match"] = {
 	},
 };
 
-
 function show_bank_match_batch_job_queued(result) {
 	frappe.msgprint({
 		title: __("Bank Match Batch Job Queued"),
 		indicator: "blue",
-		message: `<p>${frappe.utils.escape_html((result && result.message) || __("Bank Match Batch Job has been queued."))}</p>
-			${result && result.batch_job ? `<p><a href="/app/retailedge-bank-match-batch-job/${encodeURIComponent(result.batch_job)}">${frappe.utils.escape_html(result.batch_job)}</a></p>` : ""}`,
+		message: `<p>${frappe.utils.escape_html(
+			(result && result.message) || __("Bank Match Batch Job has been queued.")
+		)}</p>
+			${
+				result && result.batch_job
+					? `<p><a href="/app/retailedge-bank-match-batch-job/${encodeURIComponent(
+							result.batch_job
+					  )}">${frappe.utils.escape_html(result.batch_job)}</a></p>`
+					: ""
+			}`,
 	});
 }
 
@@ -227,10 +263,16 @@ function preview_bulk_confirm_bank_matches(names, confirmAfterPreview, listview)
 									freeze_message: __("Confirming eligible matches..."),
 									callback: function (confirmResponse) {
 										const confirmResult = confirmResponse.message || {};
-										if (confirmResult.status === "queued" || confirmResult.batch_job) {
+										if (
+											confirmResult.status === "queued" ||
+											confirmResult.batch_job
+										) {
 											show_bank_match_batch_job_queued(confirmResult);
 										} else {
-											show_bulk_bank_match_result(confirmResult, __("Bulk Confirm Summary"));
+											show_bulk_bank_match_result(
+												confirmResult,
+												__("Bulk Confirm Summary")
+											);
 											listview.refresh();
 										}
 									},
@@ -284,41 +326,65 @@ function show_bulk_bank_match_result(result, title) {
 								badge: result.confirmed_count ? __("Matched") : __("Needs Review"),
 								tone: result.confirmed_count ? "success" : "warning",
 								meta: [
-									`${__("Eligible")}: ${result.eligible_count || result.confirmed_count || 0}`,
+									`${__("Eligible")}: ${
+										result.eligible_count || result.confirmed_count || 0
+									}`,
 									`${__("Created")}: ${result.created_count || 0}`,
 									`${__("Updated")}: ${result.updated_count || 0}`,
-									`${__("Blocked / Skipped")}: ${result.blocked_count || result.skipped_count || 0}`,
+									`${__("Blocked / Skipped")}: ${
+										result.blocked_count || result.skipped_count || 0
+									}`,
 								],
-								footer: __("RetailEdge updates only review decisions here and does not run auto-match."),
+								footer: __(
+									"RetailEdge updates only review decisions here and does not run auto-match."
+								),
 							},
 							{
 								title: __("Risk Signals"),
-								value: String((result.unsafe_count || 0) + (result.duplicate_blocked_count || 0) + (result.weak_needs_review_count || 0)),
+								value: String(
+									(result.unsafe_count || 0) +
+										(result.duplicate_blocked_count || 0) +
+										(result.weak_needs_review_count || 0)
+								),
 								badge: result.unsafe_count ? __("High Risk") : __("Needs Review"),
 								tone: result.unsafe_count ? "danger" : "warning",
 								meta: [
 									`${__("Unsafe")}: ${result.unsafe_count || 0}`,
-									`${__("Duplicate Blocked")}: ${result.duplicate_blocked_count || 0}`,
-									`${__("Weak / Needs Review")}: ${result.weak_needs_review_count || 0}`,
+									`${__("Duplicate Blocked")}: ${
+										result.duplicate_blocked_count || 0
+									}`,
+									`${__("Weak / Needs Review")}: ${
+										result.weak_needs_review_count || 0
+									}`,
 								],
-								footer: __("Duplicate candidate records are informational and remain outside automatic confirmation."),
+								footer: __(
+									"Duplicate candidate records are informational and remain outside automatic confirmation."
+								),
 							},
 							{
 								title: __("Warnings"),
 								value: String(result.warning_count || 0),
 								badge: result.warning_count ? __("Needs Review") : __("Clear"),
 								tone: result.warning_count ? "warning" : "success",
-								meta: [`${__("Already Confirmed")}: ${result.already_confirmed_count || 0}`],
-								footer: __("No Bank Reconciliation, Payment Entry, Sales Invoice accounting field, or GL mutation occurred."),
+								meta: [
+									`${__("Already Confirmed")}: ${
+										result.already_confirmed_count || 0
+									}`,
+								],
+								footer: __(
+									"No Bank Reconciliation, Payment Entry, Sales Invoice accounting field, or GL mutation occurred."
+								),
 							},
 						])}
-						${blocked.length
-							? ui.renderListCard(__("Blocked"), blocked, {
-									value: `${blocked.length}`,
-									badge: __("Blocked"),
-									tone: "danger",
-							  })
-							: ""}
+						${
+							blocked.length
+								? ui.renderListCard(__("Blocked"), blocked, {
+										value: `${blocked.length}`,
+										badge: __("Blocked"),
+										tone: "danger",
+								  })
+								: ""
+						}
 					</div>`
 				: "",
 		indicator: result.blocked_count || result.skipped_count ? "orange" : "green",
@@ -360,14 +426,26 @@ function show_bank_match_queue_summary(listview) {
 									{
 										title: __("Review Queue"),
 										value: String(result.total || 0),
-										badge: result.pending_review || result.needs_review ? __("Needs Review") : __("Ready"),
-										tone: result.pending_review || result.needs_review ? "warning" : "success",
+										badge:
+											result.pending_review || result.needs_review
+												? __("Needs Review")
+												: __("Ready"),
+										tone:
+											result.pending_review || result.needs_review
+												? "warning"
+												: "success",
 										meta: [
-											`${__("Pending Review")}: ${result.pending_review || 0}`,
+											`${__("Pending Review")}: ${
+												result.pending_review || 0
+											}`,
 											`${__("Needs Review")}: ${result.needs_review || 0}`,
-											`${__("Ready to Confirm")}: ${result.ready_to_confirm || 0}`,
+											`${__("Ready to Confirm")}: ${
+												result.ready_to_confirm || 0
+											}`,
 										],
-										footer: __("Counts are operational only and do not change accounting records."),
+										footer: __(
+											"Counts are operational only and do not change accounting records."
+										),
 									},
 									{
 										title: __("Confirmed Flow"),
@@ -375,30 +453,52 @@ function show_bank_match_queue_summary(listview) {
 										badge: __("Matched"),
 										tone: "success",
 										meta: [
-											`${__("Confirmed Today")}: ${result.confirmed_today || 0}`,
-											`${__("High-confidence Matches")}: ${result.high_confidence || 0}`,
+											`${__("Confirmed Today")}: ${
+												result.confirmed_today || 0
+											}`,
+											`${__("High-confidence Matches")}: ${
+												result.high_confidence || 0
+											}`,
 										],
 										footer: __("Confirmed records are already reviewed."),
 									},
 									{
 										title: __("Exceptions"),
-										value: String((result.rejected || 0) + (result.reopened || 0) + (result.cancelled || 0) + (result.duplicate_blocked || 0)),
-										badge: result.duplicate_blocked ? __("Possible Match") : __("Needs Review"),
-										tone: result.rejected || result.cancelled ? "danger" : "warning",
+										value: String(
+											(result.rejected || 0) +
+												(result.reopened || 0) +
+												(result.cancelled || 0) +
+												(result.duplicate_blocked || 0)
+										),
+										badge: result.duplicate_blocked
+											? __("Possible Match")
+											: __("Needs Review"),
+										tone:
+											result.rejected || result.cancelled
+												? "danger"
+												: "warning",
 										meta: [
 											`${__("Rejected")}: ${result.rejected || 0}`,
 											`${__("Reopened")}: ${result.reopened || 0}`,
 											`${__("Cancelled")}: ${result.cancelled || 0}`,
-											`${__("Duplicate / Blocked")}: ${result.duplicate_blocked || 0}`,
+											`${__("Duplicate / Blocked")}: ${
+												result.duplicate_blocked || 0
+											}`,
 										],
-										footer: __("These counts are read-only and do not reconcile Bank Transactions or mutate accounting records."),
+										footer: __(
+											"These counts are read-only and do not reconcile Bank Transactions or mutate accounting records."
+										),
 									},
 								])}
 							</div>`
 						: rows
 								.map(
 									([label, value]) =>
-										`<p><strong>${frappe.utils.escape_html(label)}</strong>: ${frappe.utils.escape_html(String(value))}</p>`
+										`<p><strong>${frappe.utils.escape_html(
+											label
+										)}</strong>: ${frappe.utils.escape_html(
+											String(value)
+										)}</p>`
 								)
 								.join(""),
 				indicator: "blue",
@@ -420,10 +520,13 @@ function get_bank_match_list_filters(listview) {
 	return filters;
 }
 
-
 function show_reconciliation_dry_run_summary(result) {
 	if (!result) {
-		frappe.msgprint({ title: __("Reconciliation Dry Run"), indicator: "orange", message: __("No dry-run summary returned.") });
+		frappe.msgprint({
+			title: __("Reconciliation Dry Run"),
+			indicator: "orange",
+			message: __("No dry-run summary returned."),
+		});
 		return;
 	}
 	const blocked = (result.groups && result.groups.Blocked ? result.groups.Blocked : [])
@@ -439,15 +542,27 @@ function show_reconciliation_dry_run_summary(result) {
 	frappe.msgprint({
 		title: __("Reconciliation Dry Run Summary"),
 		indicator: result.blocked_count ? "orange" : "green",
-		message: `${frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 180px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows })}
-			${blocked.length ? `<p><b>${frappe.utils.escape_html(__("Blocked Items"))}</b></p><ul>${blocked.map((line) => `<li>${frappe.utils.escape_html(line)}</li>`).join("")}</ul>` : ""}`,
+		message: `${frappe.render_template(
+			"<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 180px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>",
+			{ rows }
+		)}
+			${
+				blocked.length
+					? `<p><b>${frappe.utils.escape_html(__("Blocked Items"))}</b></p><ul>${blocked
+							.map((line) => `<li>${frappe.utils.escape_html(line)}</li>`)
+							.join("")}</ul>`
+					: ""
+			}`,
 	});
 }
 
-
 function show_reconciliation_gate_summary(result) {
 	if (!result) {
-		frappe.msgprint({ title: __("Reconciliation Execution Gate"), indicator: "orange", message: __("No gate summary returned.") });
+		frappe.msgprint({
+			title: __("Reconciliation Execution Gate"),
+			indicator: "orange",
+			message: __("No gate summary returned."),
+		});
 		return;
 	}
 	const rows = [
@@ -461,12 +576,28 @@ function show_reconciliation_gate_summary(result) {
 	const blocked = (result.results || [])
 		.filter((row) => !row.can_execute)
 		.slice(0, 10)
-		.map((row) => `${row.status || ""}: ${(row.block_reasons || [row.safe_next_step || ""])[0] || ""}`);
+		.map(
+			(row) =>
+				`${row.status || ""}: ${
+					(row.block_reasons || [row.safe_next_step || ""])[0] || ""
+				}`
+		);
 	frappe.msgprint({
 		title: __("Reconciliation Execution Gate Summary"),
 		indicator: result.allowed_count ? "green" : "orange",
-		message: `${frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 200px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows })}
-			<p>${frappe.utils.escape_html(__("R5.8 checks the execution gate only. No reconciliation was executed."))}</p>
-			${blocked.length ? `<ul>${blocked.map((line) => `<li>${frappe.utils.escape_html(line)}</li>`).join("")}</ul>` : ""}`,
+		message: `${frappe.render_template(
+			"<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 200px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>",
+			{ rows }
+		)}
+			<p>${frappe.utils.escape_html(
+				__("R5.8 checks the execution gate only. No reconciliation was executed.")
+			)}</p>
+			${
+				blocked.length
+					? `<ul>${blocked
+							.map((line) => `<li>${frappe.utils.escape_html(line)}</li>`)
+							.join("")}</ul>`
+					: ""
+			}`,
 	});
 }

@@ -13,6 +13,7 @@ def execute(filters=None):
 	preset = filters.get("date_range_preset")
 	if preset and preset != "Custom Period":
 		from retailedge.reporting.date_ranges import get_preset_dates
+
 		preset_from, preset_to = get_preset_dates(preset)
 		if preset_from and preset_to:
 			filters["from_date"] = str(preset_from)
@@ -33,28 +34,112 @@ def validate_filters(filters):
 
 def get_columns():
 	return [
-		{"label": _("Expense"), "fieldname": "name", "fieldtype": "Link", "options": "RetailEdge Cashier Expense", "width": 190},
+		{
+			"label": _("Expense"),
+			"fieldname": "name",
+			"fieldtype": "Link",
+			"options": "RetailEdge Cashier Expense",
+			"width": 190,
+		},
 		{"label": _("Expense Date"), "fieldname": "expense_date", "fieldtype": "Date", "width": 110},
-		{"label": _("Company"), "fieldname": "company", "fieldtype": "Link", "options": "Company", "width": 170},
+		{
+			"label": _("Company"),
+			"fieldname": "company",
+			"fieldtype": "Link",
+			"options": "Company",
+			"width": 170,
+		},
 		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 150},
-		{"label": _("POS Profile"), "fieldname": "pos_profile", "fieldtype": "Link", "options": "POS Profile", "width": 160},
+		{
+			"label": _("POS Profile"),
+			"fieldname": "pos_profile",
+			"fieldtype": "Link",
+			"options": "POS Profile",
+			"width": 160,
+		},
 		{"label": _("Cashier"), "fieldname": "cashier", "fieldtype": "Link", "options": "User", "width": 170},
-		{"label": _("Opening Shift"), "fieldname": "linked_pos_opening_shift", "fieldtype": "Link", "options": "POS Opening Shift", "width": 180},
-		{"label": _("Closing Shift"), "fieldname": "linked_pos_closing_shift", "fieldtype": "Link", "options": "POS Closing Shift", "width": 180},
-		{"label": _("Expense Category"), "fieldname": "expense_category", "fieldtype": "Link", "options": "RetailEdge Expense Category", "width": 170},
+		{
+			"label": _("Opening Shift"),
+			"fieldname": "linked_pos_opening_shift",
+			"fieldtype": "Link",
+			"options": "POS Opening Shift",
+			"width": 180,
+		},
+		{
+			"label": _("Closing Shift"),
+			"fieldname": "linked_pos_closing_shift",
+			"fieldtype": "Link",
+			"options": "POS Closing Shift",
+			"width": 180,
+		},
+		{
+			"label": _("Expense Category"),
+			"fieldname": "expense_category",
+			"fieldtype": "Link",
+			"options": "RetailEdge Expense Category",
+			"width": 170,
+		},
 		{"label": _("Amount"), "fieldname": "amount", "fieldtype": "Currency", "width": 120},
 		{"label": _("Expense Status"), "fieldname": "expense_status", "fieldtype": "Data", "width": 130},
 		{"label": _("Ledger Status"), "fieldname": "ledger_status", "fieldtype": "Data", "width": 130},
 		{"label": _("Posting Ready"), "fieldname": "posting_ready", "fieldtype": "Check", "width": 105},
-		{"label": _("Posting Block Reason"), "fieldname": "posting_block_reason", "fieldtype": "Small Text", "width": 220},
-		{"label": _("Daily Audit Include"), "fieldname": "include_in_daily_audit", "fieldtype": "Check", "width": 115},
-		{"label": _("Daily Audit Inclusion Status"), "fieldname": "daily_audit_inclusion_status", "fieldtype": "Data", "width": 170},
-		{"label": _("Daily Audit Classification"), "fieldname": "daily_audit_classification", "fieldtype": "Data", "width": 170},
-		{"label": _("Daily Audit Note"), "fieldname": "daily_audit_note", "fieldtype": "Small Text", "width": 220},
-		{"label": _("Daily Audit Exclusion Reason"), "fieldname": "daily_audit_exclusion_reason", "fieldtype": "Small Text", "width": 220},
-		{"label": _("Payment Account"), "fieldname": "payment_account", "fieldtype": "Link", "options": "Account", "width": 180},
-		{"label": _("Expense Account"), "fieldname": "expense_account", "fieldtype": "Link", "options": "Account", "width": 180},
-		{"label": _("Cost Center"), "fieldname": "cost_center", "fieldtype": "Link", "options": "Cost Center", "width": 170},
+		{
+			"label": _("Posting Block Reason"),
+			"fieldname": "posting_block_reason",
+			"fieldtype": "Small Text",
+			"width": 220,
+		},
+		{
+			"label": _("Daily Audit Include"),
+			"fieldname": "include_in_daily_audit",
+			"fieldtype": "Check",
+			"width": 115,
+		},
+		{
+			"label": _("Daily Audit Inclusion Status"),
+			"fieldname": "daily_audit_inclusion_status",
+			"fieldtype": "Data",
+			"width": 170,
+		},
+		{
+			"label": _("Daily Audit Classification"),
+			"fieldname": "daily_audit_classification",
+			"fieldtype": "Data",
+			"width": 170,
+		},
+		{
+			"label": _("Daily Audit Note"),
+			"fieldname": "daily_audit_note",
+			"fieldtype": "Small Text",
+			"width": 220,
+		},
+		{
+			"label": _("Daily Audit Exclusion Reason"),
+			"fieldname": "daily_audit_exclusion_reason",
+			"fieldtype": "Small Text",
+			"width": 220,
+		},
+		{
+			"label": _("Payment Account"),
+			"fieldname": "payment_account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"width": 180,
+		},
+		{
+			"label": _("Expense Account"),
+			"fieldname": "expense_account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"width": 180,
+		},
+		{
+			"label": _("Cost Center"),
+			"fieldname": "cost_center",
+			"fieldtype": "Link",
+			"options": "Cost Center",
+			"width": 170,
+		},
 		{"label": _("Description"), "fieldname": "description", "fieldtype": "Small Text", "width": 240},
 	]
 
@@ -194,13 +279,17 @@ def append_totals_row(rows):
 			summary["posting_ready_count"], summary["posting_blocked_count"]
 		),
 		"daily_audit_inclusion_status": _("Pending Review: {0}").format(summary["pending_review_count"]),
-		"daily_audit_classification": _("Needs Clarification: {0}").format(summary["needs_clarification_count"]),
-		"daily_audit_note": _("Included Amount: {0}").format(frappe.format_value(summary["included_amount"], {"fieldtype": "Currency"})),
+		"daily_audit_classification": _("Needs Clarification: {0}").format(
+			summary["needs_clarification_count"]
+		),
+		"daily_audit_note": _("Included Amount: {0}").format(
+			frappe.format_value(summary["included_amount"], {"fieldtype": "Currency"})
+		),
 		"daily_audit_exclusion_reason": _("Excluded Amount: {0}").format(
 			frappe.format_value(summary["excluded_amount"], {"fieldtype": "Currency"})
 		),
 	}
-	return rows + [totals_row]
+	return [*rows, totals_row]
 
 
 def get_chart_data(rows):

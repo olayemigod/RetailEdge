@@ -37,19 +37,51 @@
 		"valuation_rate",
 	]);
 	const DOCTYPE_FIELD_EXCLUSIONS = {
-		"Sales Invoice": new Set(["base_net_rate", "net_rate", "base_rate", "basic_rate", "base_price_list_rate", "price_list_rate"]),
-		"Delivery Note": new Set(["base_net_rate", "net_rate", "base_rate", "basic_rate", "base_price_list_rate", "price_list_rate"]),
-		"Quotation": new Set(["rate", "amount", "base_amount", "base_rate", "basic_rate", "price_list_rate", "base_price_list_rate"]),
-		"Sales Order": new Set(["rate", "amount", "base_amount", "base_rate", "basic_rate", "price_list_rate", "base_price_list_rate"]),
+		"Sales Invoice": new Set([
+			"base_net_rate",
+			"net_rate",
+			"base_rate",
+			"basic_rate",
+			"base_price_list_rate",
+			"price_list_rate",
+		]),
+		"Delivery Note": new Set([
+			"base_net_rate",
+			"net_rate",
+			"base_rate",
+			"basic_rate",
+			"base_price_list_rate",
+			"price_list_rate",
+		]),
+		Quotation: new Set([
+			"rate",
+			"amount",
+			"base_amount",
+			"base_rate",
+			"basic_rate",
+			"price_list_rate",
+			"base_price_list_rate",
+		]),
+		"Sales Order": new Set([
+			"rate",
+			"amount",
+			"base_amount",
+			"base_rate",
+			"basic_rate",
+			"price_list_rate",
+			"base_price_list_rate",
+		]),
 	};
 	window.retailedge.getCostPriceVisibilityContext = function () {
 		if (typeof frappe === "undefined" || !frappe.call) {
 			return Promise.resolve(null);
 		}
 
-		return frappe.call("retailedge.api.get_cost_price_visibility_context").then(function (response) {
-			return response.message || null;
-		});
+		return frappe
+			.call("retailedge.api.get_cost_price_visibility_context")
+			.then(function (response) {
+				return response.message || null;
+			});
 	};
 	window.retailedge.getPostingDateContext = async function () {
 		if (typeof frappe === "undefined" || !frappe.call) {
@@ -93,7 +125,9 @@
 			return {
 				hide_cost_price: normalized.hide_cost_price ? 1 : 0,
 				fieldnames: Array.isArray(normalized.fieldnames) ? normalized.fieldnames : [],
-				label_keywords: Array.isArray(normalized.label_keywords) ? normalized.label_keywords : [],
+				label_keywords: Array.isArray(normalized.label_keywords)
+					? normalized.label_keywords
+					: [],
 			};
 		},
 		loadRules: async function () {
@@ -188,7 +222,9 @@
 
 			try {
 				const control = element.closest
-					? element.closest(".frappe-control, .form-group, .grid-static-col, .control-input, .fields_order")
+					? element.closest(
+							".frappe-control, .form-group, .grid-static-col, .control-input, .fields_order"
+					  )
 					: element;
 				if (control) {
 					control.classList.add("retailedge-hidden-cost-field");
@@ -247,8 +283,7 @@
 				const field = frm.get_field(fieldname);
 				if (field) {
 					const wrapper = field.wrapper || field.$wrapper;
-					const element =
-						wrapper && wrapper.jquery ? wrapper.get(0) : wrapper;
+					const element = wrapper && wrapper.jquery ? wrapper.get(0) : wrapper;
 					this.hideControlElement(element);
 				}
 			} catch (error) {
@@ -287,7 +322,11 @@
 					return !this.isRestrictedField(frm, df);
 				});
 
-				if (filtered.length !== configured.length && frappe.model && frappe.model.user_settings) {
+				if (
+					filtered.length !== configured.length &&
+					frappe.model &&
+					frappe.model.user_settings
+				) {
 					if (!frappe.model.user_settings[frm.doctype]) {
 						frappe.model.user_settings[frm.doctype] = {};
 					}
@@ -340,15 +379,21 @@
 			});
 
 			try {
-				$gridWrapper.find(".grid-row, .grid-heading-row, .grid-body, .form-grid").each((_, node) => {
-					(grid.docfields || []).forEach((childDf) => {
-						if (!this.isRestrictedField(frm, childDf)) {
-							return;
-						}
+				$gridWrapper
+					.find(".grid-row, .grid-heading-row, .grid-body, .form-grid")
+					.each((_, node) => {
+						(grid.docfields || []).forEach((childDf) => {
+							if (!this.isRestrictedField(frm, childDf)) {
+								return;
+							}
 
-						this.hideMatchingControlsInWrapper($(node), childDf.fieldname, childDf.label);
+							this.hideMatchingControlsInWrapper(
+								$(node),
+								childDf.fieldname,
+								childDf.label
+							);
+						});
 					});
-				});
 			} catch (error) {
 				// Ignore repeated grid DOM hide errors.
 			}
@@ -409,7 +454,12 @@
 			});
 		},
 		hideStockEntryGrid: function (frm) {
-			if (!frm || frm.doctype !== "Stock Entry" || !frm.fields_dict || !frm.fields_dict.items) {
+			if (
+				!frm ||
+				frm.doctype !== "Stock Entry" ||
+				!frm.fields_dict ||
+				!frm.fields_dict.items
+			) {
 				return;
 			}
 
@@ -431,27 +481,29 @@
 				// Ignore Stock Entry user-defined column filtering errors.
 			}
 
-				try {
-					(grid.docfields || []).forEach((df) => {
-						if (!df || !STOCK_ENTRY_ITEM_FIELDS.has(df.fieldname)) {
-							return;
-						}
+			try {
+				(grid.docfields || []).forEach((df) => {
+					if (!df || !STOCK_ENTRY_ITEM_FIELDS.has(df.fieldname)) {
+						return;
+					}
 
-						df.hidden = 1;
-						if (grid.toggle_display) {
-							grid.toggle_display(df.fieldname, false);
-						}
-						if (grid.update_docfield_property) {
-							grid.update_docfield_property(df.fieldname, "hidden", 1);
-						}
-					});
+					df.hidden = 1;
+					if (grid.toggle_display) {
+						grid.toggle_display(df.fieldname, false);
+					}
+					if (grid.update_docfield_property) {
+						grid.update_docfield_property(df.fieldname, "hidden", 1);
+					}
+				});
 			} catch (error) {
 				// Ignore Stock Entry docfield property errors.
 			}
 
 			try {
 				grid.visible_columns = (grid.visible_columns || []).filter((column) => {
-					return !STOCK_ENTRY_ITEM_FIELDS.has(column && column[0] && column[0].fieldname);
+					return !STOCK_ENTRY_ITEM_FIELDS.has(
+						column && column[0] && column[0].fieldname
+					);
 				});
 			} catch (error) {
 				// Ignore Stock Entry visible column filtering errors.
@@ -464,7 +516,8 @@
 			}
 
 			try {
-				const $gridWrapper = grid.wrapper && grid.wrapper.jquery ? grid.wrapper : $(grid.wrapper);
+				const $gridWrapper =
+					grid.wrapper && grid.wrapper.jquery ? grid.wrapper : $(grid.wrapper);
 				STOCK_ENTRY_ITEM_FIELDS.forEach((fieldname) => {
 					this.hideMatchingControlsInWrapper($gridWrapper, fieldname);
 				});
@@ -550,7 +603,10 @@
 					return;
 				}
 
-				const grid = frm.fields_dict && frm.fields_dict[df.fieldname] && frm.fields_dict[df.fieldname].grid;
+				const grid =
+					frm.fields_dict &&
+					frm.fields_dict[df.fieldname] &&
+					frm.fields_dict[df.fieldname].grid;
 				if (!grid) {
 					return;
 				}
@@ -601,7 +657,13 @@
 			});
 		},
 		hideGridRowFormCostFields: function (frm, grid, gridRow) {
-			if (!frm || !grid || !gridRow || !gridRow.grid_form || !gridRow.grid_form.fields_dict) {
+			if (
+				!frm ||
+				!grid ||
+				!gridRow ||
+				!gridRow.grid_form ||
+				!gridRow.grid_form.fields_dict
+			) {
 				return;
 			}
 
@@ -652,8 +714,7 @@
 				try {
 					if (field.wrapper) {
 						const wrapper = field.wrapper || field.$wrapper;
-						const element =
-							wrapper && wrapper.jquery ? wrapper.get(0) : wrapper;
+						const element = wrapper && wrapper.jquery ? wrapper.get(0) : wrapper;
 						this.hideControlElement(element);
 					}
 				} catch (error) {
@@ -736,12 +797,7 @@
 	};
 
 	function registerRetailEdgeFormHandlers(attempt) {
-		if (
-			typeof frappe === "undefined" ||
-			!frappe.ui ||
-			!frappe.ui.form ||
-			!frappe.ui.form.on
-		) {
+		if (typeof frappe === "undefined" || !frappe.ui || !frappe.ui.form || !frappe.ui.form.on) {
 			if ((attempt || 0) < 20) {
 				setTimeout(function () {
 					registerRetailEdgeFormHandlers((attempt || 0) + 1);
@@ -790,19 +846,17 @@
 			// Ignore Stock Entry parent event registration errors.
 		}
 
-	try {
-		frappe.ui.form.on("Stock Entry Detail", {
-			form_render(frm) {
-				const targetFrm = frm && frm.doctype === "Stock Entry" ? frm : cur_frm;
-				window.retailedge.costVisibility.applyStockEntryProtection(targetFrm);
-			},
-		});
-	} catch (error) {
-		// Ignore Stock Entry Detail event registration errors.
+		try {
+			frappe.ui.form.on("Stock Entry Detail", {
+				form_render(frm) {
+					const targetFrm = frm && frm.doctype === "Stock Entry" ? frm : cur_frm;
+					window.retailedge.costVisibility.applyStockEntryProtection(targetFrm);
+				},
+			});
+		} catch (error) {
+			// Ignore Stock Entry Detail event registration errors.
+		}
 	}
-
-	}
-
 
 	function escapeHtml(value) {
 		return frappe.utils.escape_html(String(value == null ? "" : value));
@@ -830,10 +884,31 @@
 		if (["green", "success", "matched", "confirmed", "ready", "low"].includes(tone)) {
 			return "success";
 		}
-		if (["orange", "amber", "yellow", "warning", "needs review", "possible", "medium"].includes(tone)) {
+		if (
+			[
+				"orange",
+				"amber",
+				"yellow",
+				"warning",
+				"needs review",
+				"possible",
+				"medium",
+			].includes(tone)
+		) {
 			return "warning";
 		}
-		if (["red", "danger", "high", "blocked", "unsafe", "unmatched", "rejected", "failed"].includes(tone)) {
+		if (
+			[
+				"red",
+				"danger",
+				"high",
+				"blocked",
+				"unsafe",
+				"unmatched",
+				"rejected",
+				"failed",
+			].includes(tone)
+		) {
 			return "danger";
 		}
 		if (["grey", "gray", "neutral"].includes(tone)) {
@@ -882,7 +957,9 @@
 		if (!text) {
 			return "";
 		}
-		return `<span class="retailedge-status-badge retailedge-tone-${escapeHtml(tone)}">${escapeHtml(text)}</span>`;
+		return `<span class="retailedge-status-badge retailedge-tone-${escapeHtml(
+			tone
+		)}">${escapeHtml(text)}</span>`;
 	}
 
 	function renderEmptyState(message) {
@@ -895,14 +972,19 @@
 			tone === "danger"
 				? "retailedge-risk-high"
 				: tone === "warning"
-					? "retailedge-risk-medium"
-					: tone === "success"
-						? "retailedge-risk-low"
-						: "";
+				? "retailedge-risk-medium"
+				: tone === "success"
+				? "retailedge-risk-low"
+				: "";
 		const meta = Array.isArray(config.meta)
-			? config.meta.filter(Boolean).map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+			? config.meta
+					.filter(Boolean)
+					.map((item) => `<span>${escapeHtml(item)}</span>`)
+					.join("")
 			: "";
-		const footer = config.footer ? `<div class="retailedge-card-footer">${escapeHtml(config.footer)}</div>` : "";
+		const footer = config.footer
+			? `<div class="retailedge-card-footer">${escapeHtml(config.footer)}</div>`
+			: "";
 		const content = config.content || "";
 
 		return `
@@ -928,7 +1010,9 @@
 
 	function renderKeyValueSection(title, rows, options) {
 		const config = options || {};
-		const visibleRows = (rows || []).filter((row) => row && row[1] !== undefined && row[1] !== null && row[1] !== "");
+		const visibleRows = (rows || []).filter(
+			(row) => row && row[1] !== undefined && row[1] !== null && row[1] !== ""
+		);
 		if (!visibleRows.length) {
 			return "";
 		}
@@ -974,7 +1058,9 @@
 			badge: config.badge || "",
 			tone: config.tone || "neutral",
 			footer: config.footer || "",
-			content: `<ul class="retailedge-card-list">${visibleItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`,
+			content: `<ul class="retailedge-card-list">${visibleItems
+				.map((item) => `<li>${escapeHtml(item)}</li>`)
+				.join("")}</ul>`,
 		});
 	}
 
@@ -984,11 +1070,15 @@
 			return "";
 		}
 
-		const headerHtml = (headers || []).map((header) => `<th>${escapeHtml(header)}</th>`).join("");
+		const headerHtml = (headers || [])
+			.map((header) => `<th>${escapeHtml(header)}</th>`)
+			.join("");
 		const bodyHtml = rows
 			.map(
 				(row) =>
-					`<tr>${(row || []).map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`
+					`<tr>${(row || [])
+						.map((cell) => `<td>${escapeHtml(cell)}</td>`)
+						.join("")}</tr>`
 			)
 			.join("");
 
@@ -1008,7 +1098,6 @@
 			`,
 		});
 	}
-
 
 	function patchQueryReportSummaryReset() {
 		if (
@@ -1069,8 +1158,7 @@
 
 		const route = frappe.get_route() || [];
 		const isRetailEdgeWorkspace =
-			route[0] === "workspace" &&
-			String(route[1] || "").toLowerCase() === "retailedge";
+			route[0] === "workspace" && String(route[1] || "").toLowerCase() === "retailedge";
 
 		$(".layout-main-section").each(function () {
 			const $section = $(this);
@@ -1094,7 +1182,6 @@
 		renderTableCard,
 		decorateWorkspaceCards,
 	});
-
 
 	let workspaceDecorationQueued = false;
 	function scheduleWorkspaceDecoration() {
@@ -1120,32 +1207,35 @@
 				from_date = today;
 				to_date = today;
 				break;
-			case "Yesterday":
+			case "Yesterday": {
 				let yesterday = new Date(today);
 				yesterday.setDate(yesterday.getDate() - 1);
 				from_date = yesterday;
 				to_date = yesterday;
 				break;
-			case "This Week":
+			}
+			case "This Week": {
 				let day = today.getDay();
 				let diff = today.getDate() - day + (day === 0 ? -6 : 1);
 				from_date = new Date(today.setDate(diff));
 				to_date = frappe.datetime.str_to_obj(frappe.datetime.get_today());
 				break;
+			}
 			case "This Month":
 				from_date = frappe.datetime.str_to_obj(frappe.datetime.month_start());
 				to_date = frappe.datetime.str_to_obj(frappe.datetime.get_today());
 				break;
-			case "This Quarter":
+			case "This Quarter": {
 				let currentQuarterMonth = Math.floor(today.getMonth() / 3) * 3;
 				from_date = new Date(today.getFullYear(), currentQuarterMonth, 1);
 				to_date = frappe.datetime.str_to_obj(frappe.datetime.get_today());
 				break;
+			}
 			case "This Year":
 				from_date = new Date(today.getFullYear(), 0, 1);
 				to_date = frappe.datetime.str_to_obj(frappe.datetime.get_today());
 				break;
-			case "Last Week":
+			case "Last Week": {
 				let lastWeekStart = new Date(today);
 				let day2 = lastWeekStart.getDay();
 				let diff2 = lastWeekStart.getDate() - day2 + (day2 === 0 ? -6 : 1) - 7;
@@ -1153,21 +1243,28 @@
 				to_date = new Date(from_date);
 				to_date.setDate(to_date.getDate() + 6);
 				break;
-			case "Last Month":
+			}
+			case "Last Month": {
 				let firstOfThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 				let lastOfLastMonth = new Date(firstOfThisMonth);
 				lastOfLastMonth.setDate(lastOfLastMonth.getDate() - 1);
 				from_date = new Date(lastOfLastMonth.getFullYear(), lastOfLastMonth.getMonth(), 1);
 				to_date = lastOfLastMonth;
 				break;
-			case "Last Quarter":
+			}
+			case "Last Quarter": {
 				let currentQuarterStartMonth = Math.floor(today.getMonth() / 3) * 3;
-				let firstOfThisQuarter = new Date(today.getFullYear(), currentQuarterStartMonth, 1);
+				let firstOfThisQuarter = new Date(
+					today.getFullYear(),
+					currentQuarterStartMonth,
+					1
+				);
 				to_date = new Date(firstOfThisQuarter);
 				to_date.setDate(to_date.getDate() - 1);
 				let lastQuarterStartMonth = Math.floor(to_date.getMonth() / 3) * 3;
 				from_date = new Date(to_date.getFullYear(), lastQuarterStartMonth, 1);
 				break;
+			}
 			case "Last Year":
 				from_date = new Date(today.getFullYear() - 1, 0, 1);
 				to_date = new Date(today.getFullYear() - 1, 11, 31);
@@ -1176,7 +1273,7 @@
 			case "Full Branch History":
 				return {
 					from_date: "",
-					to_date: ""
+					to_date: "",
 				};
 			default:
 				return null;
@@ -1184,11 +1281,16 @@
 
 		return {
 			from_date: frappe.datetime.obj_to_str(from_date),
-			to_date: frappe.datetime.obj_to_str(to_date)
+			to_date: frappe.datetime.obj_to_str(to_date),
 		};
 	};
 
-	window.retailedge.setupDateRangePresets = function (report, presetField = "date_range_preset", fromField = "from_date", toField = "to_date") {
+	window.retailedge.setupDateRangePresets = function (
+		report,
+		presetField = "date_range_preset",
+		fromField = "from_date",
+		toField = "to_date"
+	) {
 		if (!report || report.__retailedgePresetsBound) {
 			return;
 		}
@@ -1212,7 +1314,7 @@
 					return filter;
 				}
 			}
-			return filters.find(f => getFieldname(f) === fieldname);
+			return filters.find((f) => getFieldname(f) === fieldname);
 		};
 		const getFilterValue = function (fieldname) {
 			if (report.get_filter_value) {
@@ -1307,7 +1409,11 @@
 
 	scheduleWorkspaceDecoration();
 
-	if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.body) {
+	if (
+		typeof MutationObserver !== "undefined" &&
+		typeof document !== "undefined" &&
+		document.body
+	) {
 		const observer = new MutationObserver(function () {
 			scheduleWorkspaceDecoration();
 		});

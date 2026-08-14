@@ -5,11 +5,20 @@ from pathlib import Path
 
 import frappe
 
-
 WORKSPACE_NAME = "RetailEdge"
 STOCK_MOVEMENT_REPORT = "RetailEdge Stock Movement History"
 REPORTS_SECTION_LABEL = "Reports & Insights"
-VALID_SHORTCUT_VIEWS = {"", "List", "Report Builder", "Dashboard", "Tree", "New", "Calendar", "Kanban", "Image"}
+VALID_SHORTCUT_VIEWS = {
+	"",
+	"List",
+	"Report Builder",
+	"Dashboard",
+	"Tree",
+	"New",
+	"Calendar",
+	"Kanban",
+	"Image",
+}
 
 
 def execute():
@@ -202,7 +211,7 @@ def _normalise_content(content: str | None, shortcuts: list[dict]) -> str | None
 		if block.get("type") != "shortcut":
 			filtered_blocks.append(block)
 			continue
-		shortcut_name = ((block.get("data") or {}).get("shortcut_name"))
+		shortcut_name = (block.get("data") or {}).get("shortcut_name")
 		if shortcut_name in valid_shortcut_names:
 			filtered_blocks.append(block)
 

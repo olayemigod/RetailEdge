@@ -1,13 +1,14 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from datetime import timedelta
+
 import frappe
 from frappe.utils import add_days, get_first_day, getdate, nowdate
 
+
 def get_preset_dates(preset: str) -> tuple[getdate | None, getdate | None]:
 	today = getdate(nowdate())
-	
+
 	if preset == "Today":
 		from_date = today
 		to_date = today
@@ -51,8 +52,11 @@ def get_preset_dates(preset: str) -> tuple[getdate | None, getdate | None]:
 	elif preset in ("Full History", "Full Branch History"):
 		earliest = None
 		from retailedge.branch_context import has_doctype
+
 		if has_doctype("Sales Invoice"):
-			earliest = frappe.db.get_value("Sales Invoice", filters={}, fieldname="posting_date", order_by="posting_date asc")
+			earliest = frappe.db.get_value(
+				"Sales Invoice", filters={}, fieldname="posting_date", order_by="posting_date asc"
+			)
 		if not earliest:
 			earliest = "2020-01-01"
 		from_date = getdate(earliest)

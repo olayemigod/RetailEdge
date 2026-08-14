@@ -1,5 +1,7 @@
 function getPresetDates(preset) {
-	return window.retailedge && window.retailedge.getPresetDates ? window.retailedge.getPresetDates(preset) : null;
+	return window.retailedge && window.retailedge.getPresetDates
+		? window.retailedge.getPresetDates(preset)
+		: null;
 }
 
 function applyRetailEdgeSummaryCardDesign() {
@@ -97,7 +99,7 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 				"Last Quarter",
 				"Last Year",
 				"Custom Period",
-				"Full Branch History"
+				"Full Branch History",
 			].join("\n"),
 			default: "This Month",
 		},
@@ -148,7 +150,11 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 		report.refresh = function () {
 			const fromDate = report.get_filter_value("from_date");
 			const toDate = report.get_filter_value("to_date");
-			if (fromDate && toDate && frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)) {
+			if (
+				fromDate &&
+				toDate &&
+				frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)
+			) {
 				frappe.throw(__("From Date cannot be after To Date."));
 			}
 			if (fromDate && toDate) {
@@ -156,7 +162,7 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 				if (days > 60) {
 					frappe.show_alert({
 						message: __("Large date ranges may take longer to load."),
-						indicator: "orange"
+						indicator: "orange",
 					});
 				}
 			}

@@ -154,7 +154,10 @@
 				return global.retailedgeBusinessHubRouteBridge.boot();
 			})
 			.catch((bridgeError) => {
-				console.error("[RetailEdge Business Hub] route bridge failed to load", bridgeError);
+				console.error(
+					"[RetailEdge Business Hub] route bridge failed to load",
+					bridgeError
+				);
 				return null;
 			})
 			.finally(() => {

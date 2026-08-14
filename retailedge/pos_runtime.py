@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import frappe
-
 
 START_POS_LABEL = "Start POS"
 POSNEXT_POS_URL = "/pos/"

@@ -38,19 +38,29 @@ def _base_sidebar(start_row: dict) -> list[dict]:
 
 
 def test_sidebar_uses_native_erpnext_pos_without_posnext():
-	items = _base_sidebar({"type": "Link", "label": START_POS_LABEL, "link_type": "Page", "link_to": ERPNEXT_POS_PAGE})
+	items = _base_sidebar(
+		{"type": "Link", "label": START_POS_LABEL, "link_type": "Page", "link_to": ERPNEXT_POS_PAGE}
+	)
 	with patch("retailedge.patches.sync_retailedge_workspace.frappe.db.exists", side_effect=_erpnext_exists):
 		items = _ensure_sidebar_start_pos_link(items)
 		items = _ensure_sidebar_pos_shift_links(items)
 
 	labels = [row.get("label") for row in items]
-	assert labels[:5] == ["Sales & POS", START_POS_LABEL, ERPNEXT_POS_OPENING_ENTRY, ERPNEXT_POS_CLOSING_ENTRY, "Sales Invoice"]
+	assert labels[:5] == [
+		"Sales & POS",
+		START_POS_LABEL,
+		ERPNEXT_POS_OPENING_ENTRY,
+		ERPNEXT_POS_CLOSING_ENTRY,
+		"Sales Invoice",
+	]
 	assert POSNEXT_OPENING_SHIFT not in labels
 	assert POSNEXT_CLOSING_SHIFT not in labels
 
 
 def test_sidebar_uses_posnext_when_shift_doctypes_are_installed():
-	items = _base_sidebar({"type": "Link", "label": START_POS_LABEL, "link_type": "Page", "link_to": ERPNEXT_POS_PAGE})
+	items = _base_sidebar(
+		{"type": "Link", "label": START_POS_LABEL, "link_type": "Page", "link_to": ERPNEXT_POS_PAGE}
+	)
 	with patch("retailedge.patches.sync_retailedge_workspace.frappe.db.exists", side_effect=_posnext_exists):
 		items = _ensure_sidebar_start_pos_link(items)
 		items = _ensure_sidebar_pos_shift_links(items)

@@ -1,12 +1,14 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import os
 import unittest
-import frappe
-from frappe.utils import getdate, nowdate, get_first_day, add_days
 from datetime import timedelta
+
+import frappe
+from frappe.utils import add_days, get_first_day, getdate, nowdate
+
 from retailedge.reporting.date_ranges import get_preset_dates
+
 
 class TestReportingDateRanges(unittest.TestCase):
 	def test_preset_dates_calculation(self):
@@ -88,7 +90,7 @@ class TestReportingDateRanges(unittest.TestCase):
 	def test_frontend_preset_helper_uses_stable_filter_shape(self):
 		retailedge_path = frappe.get_app_path("retailedge")
 		js_path = os.path.join(retailedge_path, "public", "js", "retailedge.js")
-		with open(js_path, "r") as f:
+		with open(js_path) as f:
 			content = f.read()
 
 		self.assertIn("window.retailedge.getPresetDates", content)
@@ -102,7 +104,7 @@ class TestReportingDateRanges(unittest.TestCase):
 	def test_frontend_preset_binder_updates_visible_controls_before_refresh(self):
 		retailedge_path = frappe.get_app_path("retailedge")
 		js_path = os.path.join(retailedge_path, "public", "js", "retailedge.js")
-		with open(js_path, "r") as f:
+		with open(js_path) as f:
 			content = f.read()
 
 		self.assertIn("window.retailedge.setupDateRangePresets", content)

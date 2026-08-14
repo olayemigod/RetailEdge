@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import frappe
@@ -39,9 +38,7 @@ def get_edgepay_retail_readiness_summary():
 			"evidence_doctype_exists": bool(
 				frappe.db.exists("DocType", "RetailEdge EdgePay Payment Evidence")
 			),
-			"handoff_log_doctype_exists": bool(
-				frappe.db.exists("DocType", "RetailEdge EdgePay Handoff Log")
-			),
+			"handoff_log_doctype_exists": bool(frappe.db.exists("DocType", "RetailEdge EdgePay Handoff Log")),
 		},
 		"reports": {
 			"readiness_report_exists": bool(

@@ -3,7 +3,6 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 THEME_CSS = APP_ROOT / "public" / "css" / "retailedge_edgeui_theme_compat.css"
 WORKSPACE_CSS = APP_ROOT / "public" / "css" / "retailedge_workspace_home.css"

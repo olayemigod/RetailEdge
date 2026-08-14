@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 import frappe
 
-from retailedge.retailedge.report.retailedge_stock_movement_history import retailedge_stock_movement_history as report
+from retailedge.retailedge.report.retailedge_stock_movement_history import (
+	retailedge_stock_movement_history as report,
+)
 
 
 class TestStockMovementHistory(unittest.TestCase):
@@ -201,11 +203,19 @@ class TestStockMovementHistory(unittest.TestCase):
 
 	def test_zero_and_negative_running_balances_are_preserved(self):
 		zero = report.apply_running_balances(
-			[report.make_output_row(in_quantity=None, out_quantity=5, balance=None, compare_uom=None, conversion_factor=None)],
+			[
+				report.make_output_row(
+					in_quantity=None, out_quantity=5, balance=None, compare_uom=None, conversion_factor=None
+				)
+			],
 			opening_balance=5,
 		)
 		negative = report.apply_running_balances(
-			[report.make_output_row(in_quantity=None, out_quantity=10, balance=None, compare_uom=None, conversion_factor=None)],
+			[
+				report.make_output_row(
+					in_quantity=None, out_quantity=10, balance=None, compare_uom=None, conversion_factor=None
+				)
+			],
 			opening_balance=5,
 		)
 		self.assertEqual(zero[0]["balance"], 0)

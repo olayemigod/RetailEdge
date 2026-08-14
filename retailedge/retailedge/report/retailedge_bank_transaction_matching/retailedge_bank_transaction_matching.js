@@ -56,7 +56,11 @@ function refreshOperationalReportView(report) {
 	if (activeReport) {
 		if (typeof activeReport.clear_checked_items === "function") {
 			activeReport.clear_checked_items();
-		} else if (activeReport.datatable && activeReport.datatable.rowmanager && typeof activeReport.datatable.rowmanager.checkAll === "function") {
+		} else if (
+			activeReport.datatable &&
+			activeReport.datatable.rowmanager &&
+			typeof activeReport.datatable.rowmanager.checkAll === "function"
+		) {
 			activeReport.datatable.rowmanager.checkAll(false);
 		}
 		activeReport.refresh();
@@ -64,7 +68,10 @@ function refreshOperationalReportView(report) {
 }
 
 function get_active_bank_match_report(report) {
-	if (frappe.query_report && frappe.query_report.report_name === "RetailEdge Bank Transaction Matching") {
+	if (
+		frappe.query_report &&
+		frappe.query_report.report_name === "RetailEdge Bank Transaction Matching"
+	) {
 		return frappe.query_report;
 	}
 	return report && report.page ? report : frappe.query_report;
@@ -72,7 +79,10 @@ function get_active_bank_match_report(report) {
 
 function get_selected_report_row_indexes(report) {
 	const activeReport = get_active_bank_match_report(report);
-	console.log("[RetailEdge Bank Match] get_selected_report_row_indexes checking sources for report:", activeReport);
+	console.log(
+		"[RetailEdge Bank Match] get_selected_report_row_indexes checking sources for report:",
+		activeReport
+	);
 	if (!activeReport) {
 		console.log("[RetailEdge Bank Match] activeReport not found");
 		return [];
@@ -87,10 +97,16 @@ function get_selected_report_row_indexes(report) {
 		if (rowmanager) {
 			if (typeof rowmanager.getCheckedRowIndices === "function") {
 				checkedIndices = rowmanager.getCheckedRowIndices() || [];
-				console.log("[RetailEdge Bank Match] rowmanager.getCheckedRowIndices() returned:", checkedIndices);
+				console.log(
+					"[RetailEdge Bank Match] rowmanager.getCheckedRowIndices() returned:",
+					checkedIndices
+				);
 			} else if (typeof rowmanager.getCheckedRows === "function") {
 				const checked = rowmanager.getCheckedRows() || [];
-				console.log("[RetailEdge Bank Match] rowmanager.getCheckedRows() returned:", checked);
+				console.log(
+					"[RetailEdge Bank Match] rowmanager.getCheckedRows() returned:",
+					checked
+				);
 				checked.forEach((row) => {
 					let idx = -1;
 					if (typeof row === "number") {
@@ -116,7 +132,10 @@ function get_selected_report_row_indexes(report) {
 						checkedIndices.push(r.idx);
 					}
 				});
-				console.log("[RetailEdge Bank Match] datamanager.rows checked indices:", checkedIndices);
+				console.log(
+					"[RetailEdge Bank Match] datamanager.rows checked indices:",
+					checkedIndices
+				);
 			}
 		}
 	}
@@ -131,7 +150,10 @@ function get_selected_report_row_indexes(report) {
 				checkedIndices.push(idx);
 			}
 		});
-		console.log("[RetailEdge Bank Match] mapped get_checked_items() to indices:", checkedIndices);
+		console.log(
+			"[RetailEdge Bank Match] mapped get_checked_items() to indices:",
+			checkedIndices
+		);
 	}
 
 	console.log("[RetailEdge Bank Match] selected indexes:", checkedIndices);
@@ -165,40 +187,58 @@ function setup_report_menu_actions(report) {
 		__("Create Review Records"),
 		__("Run Auto-Match"),
 		__("View Recent Batch Jobs"),
-		__("Refresh Report")
+		__("Refresh Report"),
 	];
 	labels.forEach((label) => {
 		try {
 			activeReport.page.remove_inner_button(label, group);
-		} catch (e) {}
+		} catch {
+			// The button may not exist during the report's first setup.
+		}
 	});
 
-	activeReport.page.add_inner_button(__("Create Review Records"), function () {
-		console.log("[RetailEdge Bank Match] action fired: Create Review Records");
-		const targetReport = get_active_bank_match_report(report);
-		console.log("[RetailEdge Bank Match] target report:", targetReport);
-		open_create_review_records_dialog(targetReport);
-	}, group);
+	activeReport.page.add_inner_button(
+		__("Create Review Records"),
+		function () {
+			console.log("[RetailEdge Bank Match] action fired: Create Review Records");
+			const targetReport = get_active_bank_match_report(report);
+			console.log("[RetailEdge Bank Match] target report:", targetReport);
+			open_create_review_records_dialog(targetReport);
+		},
+		group
+	);
 
-	activeReport.page.add_inner_button(__("Run Auto-Match"), function () {
-		console.log("[RetailEdge Bank Match] action fired: Run Auto-Match");
-		const targetReport = get_active_bank_match_report(report);
-		console.log("[RetailEdge Bank Match] target report:", targetReport);
-		open_run_auto_match_dialog(targetReport);
-	}, group);
+	activeReport.page.add_inner_button(
+		__("Run Auto-Match"),
+		function () {
+			console.log("[RetailEdge Bank Match] action fired: Run Auto-Match");
+			const targetReport = get_active_bank_match_report(report);
+			console.log("[RetailEdge Bank Match] target report:", targetReport);
+			open_run_auto_match_dialog(targetReport);
+		},
+		group
+	);
 
-	activeReport.page.add_inner_button(__("View Recent Batch Jobs"), function () {
-		console.log("[RetailEdge Bank Match] action fired: View Recent Batch Jobs");
-		frappe.set_route("List", "RetailEdge Bank Match Batch Job");
-	}, group);
+	activeReport.page.add_inner_button(
+		__("View Recent Batch Jobs"),
+		function () {
+			console.log("[RetailEdge Bank Match] action fired: View Recent Batch Jobs");
+			frappe.set_route("List", "RetailEdge Bank Match Batch Job");
+		},
+		group
+	);
 
-	activeReport.page.add_inner_button(__("Refresh Report"), function () {
-		console.log("[RetailEdge Bank Match] action fired: Refresh Report");
-		const refreshReport = get_active_bank_match_report(report);
-		if (refreshReport && refreshReport.refresh) {
-			refreshReport.refresh();
-		}
-	}, group);
+	activeReport.page.add_inner_button(
+		__("Refresh Report"),
+		function () {
+			console.log("[RetailEdge Bank Match] action fired: Refresh Report");
+			const refreshReport = get_active_bank_match_report(report);
+			if (refreshReport && refreshReport.refresh) {
+				refreshReport.refresh();
+			}
+		},
+		group
+	);
 }
 
 frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
@@ -212,7 +252,11 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 		report.refresh = function () {
 			const fromDate = report.get_filter_value("from_date");
 			const toDate = report.get_filter_value("to_date");
-			if (fromDate && toDate && frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)) {
+			if (
+				fromDate &&
+				toDate &&
+				frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)
+			) {
 				frappe.throw(__("From Date cannot be after To Date."));
 			}
 			if (fromDate && toDate) {
@@ -220,7 +264,7 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				if (days > 60) {
 					frappe.show_alert({
 						message: __("Large date ranges may take longer to load."),
-						indicator: "orange"
+						indicator: "orange",
 					});
 				}
 			}
@@ -340,7 +384,9 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				action: "needs_review",
 				method: "retailedge.api.mark_bank_transaction_match_needs_review",
 				require_remarks: false,
-				success_message: __("Candidate marked as Needs Review. No source records were changed."),
+				success_message: __(
+					"Candidate marked as Needs Review. No source records were changed."
+				),
 				freeze_message: __("Marking candidate for review..."),
 			});
 		});
@@ -386,31 +432,55 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				data-reference="${frappe.utils.escape_html(String(data.reference || ""))}"
 				data-narration="${frappe.utils.escape_html(String(data.narration || ""))}"
 				data-branch="${frappe.utils.escape_html(String(data.branch || ""))}"
-				data-candidate-doctype="${frappe.utils.escape_html(String(data.candidate_doctype || data.suggested_document_type || ""))}"
-				data-candidate-name="${frappe.utils.escape_html(String(data.candidate_name || data.suggested_document || ""))}"
-				data-suggested-document-type="${frappe.utils.escape_html(String(data.suggested_document_type || ""))}"
+				data-candidate-doctype="${frappe.utils.escape_html(
+					String(data.candidate_doctype || data.suggested_document_type || "")
+				)}"
+				data-candidate-name="${frappe.utils.escape_html(
+					String(data.candidate_name || data.suggested_document || "")
+				)}"
+				data-suggested-document-type="${frappe.utils.escape_html(
+					String(data.suggested_document_type || "")
+				)}"
 				data-suggested-document="${frappe.utils.escape_html(String(data.suggested_document || ""))}"
 				data-sales-invoice="${frappe.utils.escape_html(String(data.suggested_sales_invoice || ""))}"
 				data-candidate-amount="${frappe.utils.escape_html(String(data.candidate_amount || ""))}"
 				data-amount-difference="${frappe.utils.escape_html(String(data.amount_difference || ""))}"
 				data-amount-scenario="${frappe.utils.escape_html(String(data.amount_scenario || ""))}"
-				data-amount-scenario-label="${frappe.utils.escape_html(String(data.amount_scenario_label || data.amount_scenario || ""))}"
-				data-sales-invoice-outstanding-amount="${frappe.utils.escape_html(String(data.sales_invoice_outstanding_amount || ""))}"
-				data-sales-invoice-grand-total="${frappe.utils.escape_html(String(data.sales_invoice_grand_total || ""))}"
-				data-payment-entry-paid-amount="${frappe.utils.escape_html(String(data.payment_entry_paid_amount || ""))}"
-				data-payment-entry-allocated-amount="${frappe.utils.escape_html(String(data.payment_entry_allocated_amount || ""))}"
-				data-payment-entry-invoice-context="${frappe.utils.escape_html(String(data.payment_entry_invoice_context || ""))}"
+				data-amount-scenario-label="${frappe.utils.escape_html(
+					String(data.amount_scenario_label || data.amount_scenario || "")
+				)}"
+				data-sales-invoice-outstanding-amount="${frappe.utils.escape_html(
+					String(data.sales_invoice_outstanding_amount || "")
+				)}"
+				data-sales-invoice-grand-total="${frappe.utils.escape_html(
+					String(data.sales_invoice_grand_total || "")
+				)}"
+				data-payment-entry-paid-amount="${frappe.utils.escape_html(
+					String(data.payment_entry_paid_amount || "")
+				)}"
+				data-payment-entry-allocated-amount="${frappe.utils.escape_html(
+					String(data.payment_entry_allocated_amount || "")
+				)}"
+				data-payment-entry-invoice-context="${frappe.utils.escape_html(
+					String(data.payment_entry_invoice_context || "")
+				)}"
 				data-payment-event-found="${frappe.utils.escape_html(String(data.payment_event_found || ""))}"
 				data-payment-event-source="${frappe.utils.escape_html(String(data.payment_event_source || ""))}"
 				data-payment-reference="${frappe.utils.escape_html(String(data.payment_reference || ""))}"
 				data-payment-row-index="${frappe.utils.escape_html(String(data.payment_row_index || ""))}"
 				data-payment-row-amount="${frappe.utils.escape_html(String(data.payment_row_amount || ""))}"
-				data-payment-mode="${frappe.utils.escape_html(String(data.payment_mode || data.mode_of_payment || ""))}"
-				data-mode-of-payment="${frappe.utils.escape_html(String(data.mode_of_payment || data.payment_mode || ""))}"
+				data-payment-mode="${frappe.utils.escape_html(
+					String(data.payment_mode || data.mode_of_payment || "")
+				)}"
+				data-mode-of-payment="${frappe.utils.escape_html(
+					String(data.mode_of_payment || data.payment_mode || "")
+				)}"
 				data-payment-account="${frappe.utils.escape_html(String(data.payment_account || ""))}"
 				data-payment-category="${frappe.utils.escape_html(String(data.payment_category || ""))}"
 				data-candidate-category="${frappe.utils.escape_html(String(data.candidate_category || ""))}"
-				data-multi-invoice-references="${frappe.utils.escape_html(String(data.multi_invoice_references || ""))}"
+				data-multi-invoice-references="${frappe.utils.escape_html(
+					String(data.multi_invoice_references || "")
+				)}"
 				data-match-confidence="${frappe.utils.escape_html(String(data.match_confidence || ""))}"
 				data-match-score="${frappe.utils.escape_html(String(data.match_score || ""))}"
 				data-match-reason="${frappe.utils.escape_html(String(data.match_reason || ""))}"
@@ -457,7 +527,7 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 				"Last Quarter",
 				"Last Year",
 				"Custom Period",
-				"Full History"
+				"Full History",
 			].join("\n"),
 			default: "This Month",
 		},
@@ -479,7 +549,9 @@ frappe.query_reports["RetailEdge Bank Transaction Matching"] = {
 			fieldname: "reference_search",
 			label: __("Reference / Keyword"),
 			fieldtype: "Data",
-			description: __("Search Bank Transaction reference, narration, transaction id, party, or name."),
+			description: __(
+				"Search Bank Transaction reference, narration, transaction id, party, or name."
+			),
 		},
 		{
 			fieldname: "result_limit",
@@ -611,11 +683,11 @@ function format_match_label(amount, label, suffix) {
 function amount_scenario_label(value) {
 	const labels = {
 		"Exact Outstanding Amount": __("Exact Outstanding Match"),
-		"exact_outstanding_match": __("Exact Outstanding Match"),
+		exact_outstanding_match: __("Exact Outstanding Match"),
 		"Partial Payment": __("Partial Payment"),
-		"partial_payment": __("Partial Payment"),
+		partial_payment: __("Partial Payment"),
 		"Overpayment / Advance": __("Overpayment / Advance"),
-		"overpayment": __("Overpayment / Advance"),
+		overpayment: __("Overpayment / Advance"),
 		"Amount Variance": __("Amount Variance"),
 		"Payment Entry Amount Variance": __("Amount Variance"),
 		"Multi-Invoice Payment": __("Multi-Invoice Payment"),
@@ -627,7 +699,9 @@ function amount_scenario_label(value) {
 
 function add_summary_section(title, rows) {
 	const ui = window.retailedge && window.retailedge.ui;
-	const visibleRows = rows.filter((row) => row[1] !== undefined && row[1] !== null && row[1] !== "");
+	const visibleRows = rows.filter(
+		(row) => row[1] !== undefined && row[1] !== null && row[1] !== ""
+	);
 	if (!visibleRows.length) {
 		return "";
 	}
@@ -641,18 +715,26 @@ function add_summary_section(title, rows) {
 }
 
 function render_bank_match_review_summary(dialog, args) {
-	const scenarioLabel = args.amount_scenario_label || amount_scenario_label(args.amount_scenario);
+	const scenarioLabel =
+		args.amount_scenario_label || amount_scenario_label(args.amount_scenario);
 	const suggestedLabel = args.suggested_document
 		? build_readable_suggested_document_label(args)
 		: __("No suggestion available");
 	const matchRecordLabel = args.match_record
-		? `${args.match_record} (${__("Bank Amount")}: ${format_currency_value(args.bank_amount)} | ${__("Suggested Amount")}: ${format_currency_value(
-				args.candidate_amount
-		  )})${args.match_decision ? " — " + args.match_decision : ""}`
+		? `${args.match_record} (${__("Bank Amount")}: ${format_currency_value(
+				args.bank_amount
+		  )} | ${__("Suggested Amount")}: ${format_currency_value(args.candidate_amount)})${
+				args.match_decision ? " — " + args.match_decision : ""
+		  }`
 		: __("Not yet created");
 	const context = build_match_context_summary(args);
 	const ui = window.retailedge && window.retailedge.ui;
-	const tone = ui ? ui.inferTone(args.match_confidence || args.match_decision || args.action_status, args.match_reason) : "info";
+	const tone = ui
+		? ui.inferTone(
+				args.match_confidence || args.match_decision || args.action_status,
+				args.match_reason
+		  )
+		: "info";
 	const sections = [
 		add_summary_section(__("Bank Transaction"), [
 			[__("Bank Transaction ID"), args.bank_transaction || ""],
@@ -673,10 +755,30 @@ function render_bank_match_review_summary(dialog, args) {
 		add_summary_section(__("Amount Breakdown"), [
 			[__("Bank Amount"), format_currency_value(args.bank_amount)],
 			[__("Suggested Match Amount"), format_currency_value(args.candidate_amount)],
-			[__("Sales Invoice Outstanding"), args.sales_invoice_outstanding_amount ? format_currency_value(args.sales_invoice_outstanding_amount) : ""],
-			[__("Sales Invoice Total"), args.sales_invoice_grand_total ? format_currency_value(args.sales_invoice_grand_total) : ""],
-			[__("Payment Entry Paid Amount"), args.payment_entry_paid_amount ? format_currency_value(args.payment_entry_paid_amount) : ""],
-			[__("Payment Entry Allocated Amount"), args.payment_entry_allocated_amount ? format_currency_value(args.payment_entry_allocated_amount) : ""],
+			[
+				__("Sales Invoice Outstanding"),
+				args.sales_invoice_outstanding_amount
+					? format_currency_value(args.sales_invoice_outstanding_amount)
+					: "",
+			],
+			[
+				__("Sales Invoice Total"),
+				args.sales_invoice_grand_total
+					? format_currency_value(args.sales_invoice_grand_total)
+					: "",
+			],
+			[
+				__("Payment Entry Paid Amount"),
+				args.payment_entry_paid_amount
+					? format_currency_value(args.payment_entry_paid_amount)
+					: "",
+			],
+			[
+				__("Payment Entry Allocated Amount"),
+				args.payment_entry_allocated_amount
+					? format_currency_value(args.payment_entry_allocated_amount)
+					: "",
+			],
 			[__("Difference / Variance"), format_currency_value(args.amount_difference)],
 			[__("Scenario"), scenarioLabel],
 			[__("Match Confidence"), args.match_confidence || ""],
@@ -687,20 +789,22 @@ function render_bank_match_review_summary(dialog, args) {
 	].filter(Boolean);
 
 	dialog.get_field("review_summary").$wrapper.html(
-		`<div class="retailedge-dialog-content">${ui && ui.renderCard
-			? ui.renderCard({
-					title: __("RetailEdge Match Review"),
-					value: suggestedLabel,
-					badge: args.match_confidence || args.match_decision || __("Needs Review"),
-					tone,
-					meta: [
-						args.branch || "",
-						args.bank_account || "",
-						scenarioLabel || "",
-					].filter(Boolean),
-					footer: __("This review changes only the RetailEdge decision state."),
-				})
-			: ""}${sections.join("")}</div>`
+		`<div class="retailedge-dialog-content">${
+			ui && ui.renderCard
+				? ui.renderCard({
+						title: __("RetailEdge Match Review"),
+						value: suggestedLabel,
+						badge: args.match_confidence || args.match_decision || __("Needs Review"),
+						tone,
+						meta: [
+							args.branch || "",
+							args.bank_account || "",
+							scenarioLabel || "",
+						].filter(Boolean),
+						footer: __("This review changes only the RetailEdge decision state."),
+				  })
+				: ""
+		}${sections.join("")}</div>`
 	);
 }
 
@@ -708,24 +812,36 @@ function build_readable_suggested_document_label(args) {
 	if (args.suggested_document_type === "Sales Invoice") {
 		const amounts = [];
 		if (args.sales_invoice_outstanding_amount) {
-			amounts.push(`${__("Outstanding")}: ${format_currency_value(args.sales_invoice_outstanding_amount)}`);
+			amounts.push(
+				`${__("Outstanding")}: ${format_currency_value(
+					args.sales_invoice_outstanding_amount
+				)}`
+			);
 		}
 		if (args.sales_invoice_grand_total) {
-			amounts.push(`${__("Invoice Total")}: ${format_currency_value(args.sales_invoice_grand_total)}`);
+			amounts.push(
+				`${__("Invoice Total")}: ${format_currency_value(args.sales_invoice_grand_total)}`
+			);
 		}
-		return `${args.suggested_document}${args.customer ? " — " + args.customer : ""}${amounts.length ? " (" + amounts.join(" | ") + ")" : ""}`;
+		return `${args.suggested_document}${args.customer ? " — " + args.customer : ""}${
+			amounts.length ? " (" + amounts.join(" | ") + ")" : ""
+		}`;
 	}
 	if (args.suggested_document_type === "Payment Entry") {
 		const amounts = [];
 		if (args.payment_entry_paid_amount) {
-			amounts.push(`${__("Paid")}: ${format_currency_value(args.payment_entry_paid_amount)}`);
+			amounts.push(
+				`${__("Paid")}: ${format_currency_value(args.payment_entry_paid_amount)}`
+			);
 		}
 		if (args.payment_entry_allocated_amount) {
-			amounts.push(`${__("Allocated")}: ${format_currency_value(args.payment_entry_allocated_amount)}`);
+			amounts.push(
+				`${__("Allocated")}: ${format_currency_value(args.payment_entry_allocated_amount)}`
+			);
 		}
-		return `${__("Payment Entry")} ${args.suggested_document}${args.customer ? " — " + args.customer : ""}${
-			amounts.length ? " (" + amounts.join(" | ") + ")" : ""
-		}`;
+		return `${__("Payment Entry")} ${args.suggested_document}${
+			args.customer ? " — " + args.customer : ""
+		}${amounts.length ? " (" + amounts.join(" | ") + ")" : ""}`;
 	}
 	return format_match_label(args.candidate_amount, args.suggested_document, args.customer || "");
 }
@@ -788,8 +904,10 @@ function ensure_bank_match_record(args, callback) {
 		callback: function (r) {
 			const result = (r && r.message) || {};
 			const created = (result.created || [])[0];
-			const duplicate = (result.duplicates || [])[0] || (result.review_record_exists || [])[0];
-			const matchRecord = (created && created.match_record) || (duplicate && duplicate.match_record);
+			const duplicate =
+				(result.duplicates || [])[0] || (result.review_record_exists || [])[0];
+			const matchRecord =
+				(created && created.match_record) || (duplicate && duplicate.match_record);
 			if (!matchRecord) {
 				show_create_review_records_summary(result);
 				return;
@@ -799,7 +917,6 @@ function ensure_bank_match_record(args, callback) {
 		},
 	});
 }
-
 
 function confirm_large_bank_match_action(selection, actionLabel, callback) {
 	const limit = 200;
@@ -829,7 +946,9 @@ function show_bank_match_batch_job_queued(result) {
 		title: __("Bank Match Batch Job Queued"),
 		indicator: "blue",
 		message: `<p>${frappe.utils.escape_html(result.message || "")}</p>
-			<p><a href="/app/retailedge-bank-match-batch-job/${encodeURIComponent(result.batch_job)}">${frappe.utils.escape_html(result.batch_job)}</a></p>`,
+			<p><a href="/app/retailedge-bank-match-batch-job/${encodeURIComponent(
+				result.batch_job
+			)}">${frappe.utils.escape_html(result.batch_job)}</a></p>`,
 	});
 }
 
@@ -837,7 +956,10 @@ function open_create_review_records_dialog(report) {
 	console.log("[RetailEdge Bank Match] open_create_review_records_dialog fired");
 	const activeReport = get_active_bank_match_report(report);
 	const selection = get_report_suggestion_rows(activeReport, { eligibleOnly: true });
-	console.log("[RetailEdge Bank Match] suggestion selection rows length:", selection.rows.length);
+	console.log(
+		"[RetailEdge Bank Match] suggestion selection rows length:",
+		selection.rows.length
+	);
 
 	if (!selection.rows.length) {
 		console.log("[RetailEdge Bank Match] No eligible selection found, showing msgprint");
@@ -860,7 +982,9 @@ function open_create_review_records_dialog(report) {
 			selection.used_selection
 				? ""
 				: `<p class="text-muted">${frappe.utils.escape_html(
-						__("No selected rows were detected, so RetailEdge will use the currently visible eligible rows.")
+						__(
+							"No selected rows were detected, so RetailEdge will use the currently visible eligible rows."
+						)
 				  )}</p>`
 		}
 	`;
@@ -868,34 +992,42 @@ function open_create_review_records_dialog(report) {
 	console.log("[RetailEdge Bank Match] opening confirm dialog");
 	frappe.confirm(message, function () {
 		console.log("[RetailEdge Bank Match] confirmation accepted");
-		confirm_large_bank_match_action(selection, __("Create Review Records"), function (runBackground) {
-			const finalReport = get_active_bank_match_report(report);
-			console.log("[RetailEdge Bank Match] preparing frappe.call with filters and payload");
-			const reqArgs = {
-				filters: JSON.stringify(finalReport.get_filter_values()),
-				rows: JSON.stringify(selection.rows),
-				run_background: runBackground ? 1 : 0,
-			};
-			console.log("[RetailEdge Bank Match] method called: retailedge.api.create_bank_match_reviews_from_suggestions");
-			console.log("[RetailEdge Bank Match] args payload:", reqArgs);
+		confirm_large_bank_match_action(
+			selection,
+			__("Create Review Records"),
+			function (runBackground) {
+				const finalReport = get_active_bank_match_report(report);
+				console.log(
+					"[RetailEdge Bank Match] preparing frappe.call with filters and payload"
+				);
+				const reqArgs = {
+					filters: JSON.stringify(finalReport.get_filter_values()),
+					rows: JSON.stringify(selection.rows),
+					run_background: runBackground ? 1 : 0,
+				};
+				console.log(
+					"[RetailEdge Bank Match] method called: retailedge.api.create_bank_match_reviews_from_suggestions"
+				);
+				console.log("[RetailEdge Bank Match] args payload:", reqArgs);
 
-			frappe.call({
-				method: "retailedge.api.create_bank_match_reviews_from_suggestions",
-				args: reqArgs,
-				freeze: !runBackground,
-				freeze_message: __("Creating RetailEdge match review records..."),
-				callback: function (r) {
-					console.log("[RetailEdge Bank Match] server response:", r);
-					const result = (r && r.message) || {};
-					if (result.status === "queued" || result.batch_job) {
-						show_bank_match_batch_job_queued(result);
-					} else {
-						show_create_review_records_summary(result);
-						refreshOperationalReportView(report);
-					}
-				},
-			});
-		});
+				frappe.call({
+					method: "retailedge.api.create_bank_match_reviews_from_suggestions",
+					args: reqArgs,
+					freeze: !runBackground,
+					freeze_message: __("Creating RetailEdge match review records..."),
+					callback: function (r) {
+						console.log("[RetailEdge Bank Match] server response:", r);
+						const result = (r && r.message) || {};
+						if (result.status === "queued" || result.batch_job) {
+							show_bank_match_batch_job_queued(result);
+						} else {
+							show_create_review_records_summary(result);
+							refreshOperationalReportView(report);
+						}
+					},
+				});
+			}
+		);
 	});
 }
 
@@ -903,7 +1035,10 @@ function open_run_auto_match_dialog(report) {
 	console.log("[RetailEdge Bank Match] open_run_auto_match_dialog fired");
 	const activeReport = get_active_bank_match_report(report);
 	const selection = get_report_suggestion_rows(activeReport, { eligibleOnly: false });
-	console.log("[RetailEdge Bank Match] suggestion selection rows length:", selection.rows.length);
+	console.log(
+		"[RetailEdge Bank Match] suggestion selection rows length:",
+		selection.rows.length
+	);
 
 	if (!selection.rows.length) {
 		console.log("[RetailEdge Bank Match] No eligible selection found, showing msgprint");
@@ -932,7 +1067,9 @@ function open_run_auto_match_dialog(report) {
 			selection.used_selection
 				? ""
 				: `<p class="text-muted">${frappe.utils.escape_html(
-						__("No selected rows were detected, so RetailEdge will use only the currently visible filtered rows.")
+						__(
+							"No selected rows were detected, so RetailEdge will use only the currently visible filtered rows."
+						)
 				  )}</p>`
 		}
 	`;
@@ -948,7 +1085,9 @@ function open_run_auto_match_dialog(report) {
 				rows: JSON.stringify(selection.rows),
 				run_background: runBackground ? 1 : 0,
 			};
-			console.log("[RetailEdge Bank Match] method called: retailedge.api.run_bank_transaction_auto_match");
+			console.log(
+				"[RetailEdge Bank Match] method called: retailedge.api.run_bank_transaction_auto_match"
+			);
 			console.log("[RetailEdge Bank Match] args payload:", reqArgs);
 
 			frappe.call({
@@ -976,11 +1115,16 @@ function get_report_suggestion_rows(report, options) {
 	const config = options || {};
 	const activeReport = get_active_bank_match_report(report);
 	const rawData = (activeReport && activeReport.data) || [];
-	const rowFilter = config.eligibleOnly ? is_eligible_report_suggestion_row : is_report_candidate_row;
+	const rowFilter = config.eligibleOnly
+		? is_eligible_report_suggestion_row
+		: is_report_candidate_row;
 	const data = rawData.filter(rowFilter);
 	const selectedRows = get_report_selected_rows(activeReport).filter(rowFilter);
 	console.log("[RetailEdge Bank Match] visible matching candidates count:", data.length);
-	console.log("[RetailEdge Bank Match] selected matching candidates count:", selectedRows.length);
+	console.log(
+		"[RetailEdge Bank Match] selected matching candidates count:",
+		selectedRows.length
+	);
 
 	if (selectedRows.length) {
 		const cleaned = selectedRows.map(clean_report_suggestion_row);
@@ -1000,7 +1144,14 @@ function is_eligible_report_suggestion_row(row) {
 	if (row.decision_status === "Confirmed" || row.action_status === "Already Confirmed") {
 		return false;
 	}
-	if (["No Match", "Outflow / Not Sales Receipt", "Duplicate Candidate", "Exception Only"].includes(row.action_status)) {
+	if (
+		[
+			"No Match",
+			"Outflow / Not Sales Receipt",
+			"Duplicate Candidate",
+			"Exception Only",
+		].includes(row.action_status)
+	) {
 		return false;
 	}
 	if (row.suggested_document_type === "Sales Invoice" && !Number(row.payment_event_found || 0)) {
@@ -1010,21 +1161,37 @@ function is_eligible_report_suggestion_row(row) {
 }
 
 function is_report_candidate_row(row) {
-	const res = (function() {
-		if (!row || !row.bank_transaction || !row.suggested_document || !row.suggested_document_type) {
+	const res = (function () {
+		if (
+			!row ||
+			!row.bank_transaction ||
+			!row.suggested_document ||
+			!row.suggested_document_type
+		) {
 			return false;
 		}
-		if (row.suggested_document_type === "Sales Invoice" && !Number(row.payment_event_found || 0)) {
+		if (
+			row.suggested_document_type === "Sales Invoice" &&
+			!Number(row.payment_event_found || 0)
+		) {
 			return false;
 		}
 		return ["Sales Invoice", "Payment Entry"].includes(row.suggested_document_type);
 	})();
-	console.log("[RetailEdge Bank Match] is_report_candidate_row result for BTN: " + (row && row.bank_transaction) + ":", res);
+	console.log(
+		"[RetailEdge Bank Match] is_report_candidate_row result for BTN: " +
+			(row && row.bank_transaction) +
+			":",
+		res
+	);
 	return res;
 }
 
 function clean_report_suggestion_row(row) {
-	console.log("[RetailEdge Bank Match] clean_report_suggestion_row fired for BTN:", row && row.bank_transaction);
+	console.log(
+		"[RetailEdge Bank Match] clean_report_suggestion_row fired for BTN:",
+		row && row.bank_transaction
+	);
 	const res = {
 		bank_transaction: row.bank_transaction,
 		transaction_date: row.transaction_date,
@@ -1098,7 +1265,12 @@ function show_create_review_records_summary(result) {
 	];
 	const reasonList = (result.reasons || [])
 		.slice(0, 8)
-		.map((row) => `<li>${frappe.utils.escape_html(row.reason || "")}: ${frappe.utils.escape_html(String(row.count || 0))}</li>`)
+		.map(
+			(row) =>
+				`<li>${frappe.utils.escape_html(row.reason || "")}: ${frappe.utils.escape_html(
+					String(row.count || 0)
+				)}</li>`
+		)
 		.join("");
 	const created = result.created || [];
 	const createdList = created
@@ -1123,15 +1295,23 @@ function show_create_review_records_summary(result) {
 					},
 					{
 						title: __("Duplicates & Unsafe"),
-						value: String((result.duplicate_candidate_skipped_count || 0) + (result.duplicate_count || 0) + (result.unsafe_count || 0)),
+						value: String(
+							(result.duplicate_candidate_skipped_count || 0) +
+								(result.duplicate_count || 0) +
+								(result.unsafe_count || 0)
+						),
 						badge: result.unsafe_count ? __("Blocked") : __("Possible Match"),
 						tone: result.unsafe_count ? "danger" : "warning",
 						meta: [
-							`${__("Duplicate Candidate Suggestions")}: ${result.duplicate_candidate_skipped_count || 0}`,
+							`${__("Duplicate Candidate Suggestions")}: ${
+								result.duplicate_candidate_skipped_count || 0
+							}`,
 							`${__("Duplicates")}: ${result.duplicate_count || 0}`,
 							`${__("Unsafe / Skipped")}: ${result.unsafe_count || 0}`,
 						],
-						footer: __("Duplicate candidate rows remain informational until a reviewer confirms the safe path."),
+						footer: __(
+							"Duplicate candidate rows remain informational until a reviewer confirms the safe path."
+						),
 					},
 					{
 						title: __("Errors"),
@@ -1142,24 +1322,32 @@ function show_create_review_records_summary(result) {
 						footer: __("No accounting entries were posted."),
 					},
 				])}
-				${createdList.length
-					? ui.renderListCard(__("Created Records"), createdList, {
-							value: `${createdList.length}`,
-							badge: __("Matched"),
-							tone: "success",
-					  })
-					: ""}
-				${(result.reasons || []).length
-					? ui.renderListCard(
-							__("Grouped Reasons"),
-							(result.reasons || []).slice(0, 8).map((row) => `${row.reason || ""}: ${String(row.count || 0)}`),
-							{
-								value: `${(result.reasons || []).length}`,
-								badge: __("Needs Review"),
-								tone: "warning",
-							}
-					  )
-					: ""}
+				${
+					createdList.length
+						? ui.renderListCard(__("Created Records"), createdList, {
+								value: `${createdList.length}`,
+								badge: __("Matched"),
+								tone: "success",
+						  })
+						: ""
+				}
+				${
+					(result.reasons || []).length
+						? ui.renderListCard(
+								__("Grouped Reasons"),
+								(result.reasons || [])
+									.slice(0, 8)
+									.map(
+										(row) => `${row.reason || ""}: ${String(row.count || 0)}`
+									),
+								{
+									value: `${(result.reasons || []).length}`,
+									badge: __("Needs Review"),
+									tone: "warning",
+								}
+						  )
+						: ""
+				}
 			</div>`
 		: "";
 
@@ -1168,7 +1356,12 @@ function show_create_review_records_summary(result) {
 		message:
 			message ||
 			`${rows
-				.map(([label, value]) => `<p><strong>${frappe.utils.escape_html(label)}</strong>: ${frappe.utils.escape_html(String(value))}</p>`)
+				.map(
+					([label, value]) =>
+						`<p><strong>${frappe.utils.escape_html(
+							label
+						)}</strong>: ${frappe.utils.escape_html(String(value))}</p>`
+				)
 				.join("")}${reasonList ? `<ul>${reasonList}</ul>` : ""}`,
 		primary_action: {
 			label: __("Open Bank Match Review"),
@@ -1183,7 +1376,12 @@ function show_auto_match_summary(result) {
 	const ui = window.retailedge && window.retailedge.ui;
 	const reasonList = (result.reasons || [])
 		.slice(0, 10)
-		.map((row) => `<li>${frappe.utils.escape_html(row.reason || "")}: ${frappe.utils.escape_html(String(row.count || 0))}</li>`)
+		.map(
+			(row) =>
+				`<li>${frappe.utils.escape_html(row.reason || "")}: ${frappe.utils.escape_html(
+					String(row.count || 0)
+				)}</li>`
+		)
 		.join("");
 	const message = ui
 		? `<div class="retailedge-dialog-content">
@@ -1199,7 +1397,9 @@ function show_auto_match_summary(result) {
 							`${__("Auto Prepared")}: ${result.auto_prepared_count || 0}`,
 							`${__("Auto Confirmed")}: ${result.auto_confirmed_count || 0}`,
 						],
-						footer: __("Auto Prepared means the RetailEdge review record was created automatically only."),
+						footer: __(
+							"Auto Prepared means the RetailEdge review record was created automatically only."
+						),
 					},
 					{
 						title: __("Blocked / Manual Review"),
@@ -1208,8 +1408,12 @@ function show_auto_match_summary(result) {
 						tone: "warning",
 						meta: [
 							`${__("Already Confirmed")}: ${result.already_confirmed_count || 0}`,
-							`${__("Duplicate Candidates")}: ${result.duplicate_candidate_skipped_count || 0}`,
-							`${__("Existing Review Records")}: ${result.review_record_exists_count || 0}`,
+							`${__("Duplicate Candidates")}: ${
+								result.duplicate_candidate_skipped_count || 0
+							}`,
+							`${__("Existing Review Records")}: ${
+								result.review_record_exists_count || 0
+							}`,
 						],
 						footer: __("Unsafe scenarios remain manual and are not auto-confirmed."),
 					},
@@ -1219,20 +1423,28 @@ function show_auto_match_summary(result) {
 						badge: result.auto_confirmed_count ? __("Confirmed") : __("Disabled"),
 						tone: result.auto_confirmed_count ? "success" : "info",
 						meta: [`${__("Errors")}: ${result.error_count || 0}`],
-						footer: __("Auto Confirmed means the RetailEdge review record was confirmed automatically only. It is still not ERPNext bank reconciliation."),
+						footer: __(
+							"Auto Confirmed means the RetailEdge review record was confirmed automatically only. It is still not ERPNext bank reconciliation."
+						),
 					},
 				])}
-				${(result.reasons || []).length
-					? ui.renderListCard(
-							__("Grouped Reasons"),
-							(result.reasons || []).slice(0, 10).map((row) => `${row.reason || ""}: ${String(row.count || 0)}`),
-							{
-								value: `${(result.reasons || []).length}`,
-								badge: __("Needs Review"),
-								tone: "warning",
-							}
-					  )
-					: ""}
+				${
+					(result.reasons || []).length
+						? ui.renderListCard(
+								__("Grouped Reasons"),
+								(result.reasons || [])
+									.slice(0, 10)
+									.map(
+										(row) => `${row.reason || ""}: ${String(row.count || 0)}`
+									),
+								{
+									value: `${(result.reasons || []).length}`,
+									badge: __("Needs Review"),
+									tone: "warning",
+								}
+						  )
+						: ""
+				}
 			</div>`
 		: "";
 
@@ -1240,7 +1452,9 @@ function show_auto_match_summary(result) {
 		title: __("RetailEdge Auto-Match Summary"),
 		message:
 			message ||
-			`<p>${frappe.utils.escape_html(result.message || "")}</p>${reasonList ? `<ul>${reasonList}</ul>` : ""}`,
+			`<p>${frappe.utils.escape_html(result.message || "")}</p>${
+				reasonList ? `<ul>${reasonList}</ul>` : ""
+			}`,
 		primary_action: {
 			label: __("Open Bank Match Review"),
 			action: function () {

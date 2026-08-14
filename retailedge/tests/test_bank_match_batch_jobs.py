@@ -11,16 +11,15 @@ from retailedge.bank_match_batch_jobs import (
 	MAX_SYNC_ROWS,
 	_job_summary,
 	_process_job_row,
-	refresh_bank_match_batch_job_progress,
-	retry_bank_match_batch_job_rows,
-	cancel_bank_match_batch_job,
 	background_required_response,
+	cancel_bank_match_batch_job,
 	create_bank_match_batch_job,
 	process_bank_match_batch_job,
+	refresh_bank_match_batch_job_progress,
+	retry_bank_match_batch_job_rows,
 	should_run_background,
 )
 from retailedge.tests.test_bank_transaction_match_workflow import _FakeMatchDoc
-
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 

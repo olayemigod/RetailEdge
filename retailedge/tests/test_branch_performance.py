@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import json
 import pathlib
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import frappe
 
 from retailedge.branch_performance import (
 	debug_branch_performance_cashier_filter,
-	get_branch_performance_debug_summary,
 	get_branch_payment_breakdown,
+	get_branch_performance_debug_summary,
 	get_branch_performance_rows,
 	get_branch_performance_summary,
 	get_branch_sales_summary,
@@ -20,10 +19,11 @@ from retailedge.branch_performance import (
 )
 from retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary import (
 	execute as execute_branch_performance_report,
+)
+from retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary import (
 	get_report_summary,
 	validate_filters,
 )
-
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -86,9 +86,11 @@ class BranchPerformanceTests(unittest.TestCase):
 			self.fail(f"validate_filters raised an unexpected exception for a wide range: {e}")
 
 	def test_date_range_presets_calculation(self):
-		from retailedge.branch_performance import get_preset_dates
-		from frappe.utils import getdate, nowdate, get_first_day, add_days
 		from datetime import timedelta
+
+		from frappe.utils import add_days, get_first_day, getdate, nowdate
+
+		from retailedge.branch_performance import get_preset_dates
 
 		today = getdate(nowdate())
 
@@ -590,6 +592,7 @@ class BranchPerformanceTests(unittest.TestCase):
 				"Ledger Expenses",
 				"Expected Cash",
 				"Actual Cash",
+				"Audit Variance",
 				"Absolute Audit Variance",
 				"Payment Issues",
 			],
@@ -631,6 +634,7 @@ class BranchPerformanceTests(unittest.TestCase):
 				"Cashier Expenses",
 				"Expected Cash",
 				"Actual Cash",
+				"Audit Variance",
 				"Absolute Audit Variance",
 				"Payment Issues",
 			],

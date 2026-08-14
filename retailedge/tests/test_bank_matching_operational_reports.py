@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import json
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -24,7 +23,6 @@ from retailedge.retailedge.report.retailedge_unmatched_bank_payment_events.retai
 from retailedge.retailedge.report.retailedge_unmatched_bank_transactions.retailedge_unmatched_bank_transactions import (
 	execute as execute_unmatched_bank_transactions_report,
 )
-
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -408,6 +406,10 @@ class BankMatchingOperationalReportFilterTests(unittest.TestCase):
 		self.assertEqual(rows[0]["payment_account"], "Demo Bank Account - PED")
 
 	@patch(
+		"retailedge.bank_matching_operational_reports._r531_resolve_mode_of_payment_default_account",
+		return_value="Demo Bank Account - PED",
+	)
+	@patch(
 		"retailedge.bank_matching_operational_reports._get_candidate_review_state",
 		return_value=({}, {}, set()),
 	)
@@ -415,7 +417,12 @@ class BankMatchingOperationalReportFilterTests(unittest.TestCase):
 	@patch("retailedge.bank_matching_operational_reports._payment_entry_event_rows", return_value=[])
 	@patch("retailedge.bank_matching_operational_reports.has_doctype", return_value=True)
 	def test_invoice_payment_event_rows_filter_mode_of_payment_and_resolved_account(
-		self, _mock_doctype, _mock_payment_entry_rows, mock_invoice_rows, _mock_review_state
+		self,
+		_mock_doctype,
+		_mock_payment_entry_rows,
+		mock_invoice_rows,
+		_mock_review_state,
+		_mock_default_account,
 	):
 		mock_invoice_rows.return_value = [
 			{

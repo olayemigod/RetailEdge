@@ -10,7 +10,6 @@ from retailedge.patches.sync_retailedge_workspace import (
 	_sync_workspace_sidebar,
 )
 
-
 WORKSPACE_NAME = "RetailEdge"
 
 
@@ -21,9 +20,7 @@ def execute():
 		return
 
 	workspace = frappe.get_doc("Workspace", WORKSPACE_NAME)
-	links = _normalise_links(
-		[row.as_dict(no_nulls=True) for row in workspace.links or []]
-	)
+	links = _normalise_links([row.as_dict(no_nulls=True) for row in workspace.links or []])
 	links = _ensure_report_menu_link(
 		links,
 		report_name=STOCK_MOVEMENT_REPORT,

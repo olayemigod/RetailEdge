@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import traceback
 
 import frappe
@@ -95,7 +95,9 @@ def _payload_identity(action_type, payload):
 	)
 
 
-def build_selection_fingerprint(action_type, filters_payload=None, payload_rows=None, selected_keys_payload=None):
+def build_selection_fingerprint(
+	action_type, filters_payload=None, payload_rows=None, selected_keys_payload=None
+):
 	row_identities = []
 	for payload in payload_rows or []:
 		row_payload = payload if isinstance(payload, dict) else {"name": payload}
@@ -106,7 +108,9 @@ def build_selection_fingerprint(action_type, filters_payload=None, payload_rows=
 		"action_type": action_type,
 		"filters": filters_payload or {},
 		"rows": sorted(row_identities),
-		"selected_keys": sorted(cstr(key).strip() for key in (selected_keys_payload or []) if cstr(key).strip()),
+		"selected_keys": sorted(
+			cstr(key).strip() for key in (selected_keys_payload or []) if cstr(key).strip()
+		),
 	}
 	return hashlib.sha256(_safe_json_dumps(scope).encode()).hexdigest()
 
@@ -142,7 +146,9 @@ def create_bank_match_batch_job(
 	if action_type not in ALLOWED_ACTIONS:
 		frappe.throw(f"Unsupported bank match batch action: {action_type}")
 
-	payload_rows = coerce_json(match_names, []) if action_type == "Bulk Confirm Selected" else coerce_json(rows, [])
+	payload_rows = (
+		coerce_json(match_names, []) if action_type == "Bulk Confirm Selected" else coerce_json(rows, [])
+	)
 	filters_payload = coerce_json(filters, {})
 	selected_keys_payload = coerce_json(selected_keys, [])
 	chunk_size = cint(chunk_size or DEFAULT_CHUNK_SIZE) or DEFAULT_CHUNK_SIZE
@@ -163,7 +169,9 @@ def create_bank_match_batch_job(
 
 	job = frappe.new_doc("RetailEdge Bank Match Batch Job")
 	job.action_type = action_type
-	job.source_report = "Bank Transaction Matching" if action_type != "Bulk Confirm Selected" else "Bank Match Review"
+	job.source_report = (
+		"Bank Transaction Matching" if action_type != "Bulk Confirm Selected" else "Bank Match Review"
+	)
 	job.filters_json = json.dumps(filters_payload, default=str)
 	job.selected_keys_json = json.dumps(selected_keys_payload, default=str)
 	job.selected_rows_json = json.dumps(payload_rows, default=str)
@@ -226,7 +234,9 @@ def retry_bank_match_batch_job_rows(batch_job_name, retry_statuses=None, retry_r
 	if not statuses:
 		frappe.throw("Only failed rows are retryable in this phase.")
 	if job.status not in TERMINAL_JOB_STATUSES:
-		frappe.throw(f"Only completed, failed, or cancelled batch jobs can be retried. Current status: {job.status}.")
+		frappe.throw(
+			f"Only completed, failed, or cancelled batch jobs can be retried. Current status: {job.status}."
+		)
 	rows = []
 	for row in job.rows:
 		if row.result_status in statuses:
@@ -273,7 +283,18 @@ def get_recent_bank_match_batch_jobs(action_type=None, limit=20):
 	return frappe.get_all(
 		"RetailEdge Bank Match Batch Job",
 		filters=filters,
-		fields=["name", "status", "action_type", "progress_percent", "total_rows", "processed_rows", "failed_count", "started_by", "started_on", "completed_on"],
+		fields=[
+			"name",
+			"status",
+			"action_type",
+			"progress_percent",
+			"total_rows",
+			"processed_rows",
+			"failed_count",
+			"started_by",
+			"started_on",
+			"completed_on",
+		],
 		order_by="modified desc",
 		limit_page_length=cint(limit or 20),
 	)
@@ -282,7 +303,9 @@ def get_recent_bank_match_batch_jobs(action_type=None, limit=20):
 def _build_job_row(idx, payload, action_type):
 	row = {
 		"row_index": idx,
-		"candidate_key": payload.get("candidate_key") or payload.get("name") or payload.get("bank_transaction"),
+		"candidate_key": payload.get("candidate_key")
+		or payload.get("name")
+		or payload.get("bank_transaction"),
 		"bank_transaction": payload.get("bank_transaction"),
 		"suggested_document_type": payload.get("suggested_document_type"),
 		"suggested_document": payload.get("suggested_document"),
@@ -393,7 +416,9 @@ def _process_job_row(job, row):
 	payload = coerce_json(row.input_payload_json, {})
 	try:
 		if job.action_type == "Create Review Records":
-			result = create_bank_match_reviews_from_suggestions(filters=job.filters_json, rows=json.dumps([payload]))
+			result = create_bank_match_reviews_from_suggestions(
+				filters=job.filters_json, rows=json.dumps([payload])
+			)
 			_apply_create_result(row, result)
 		elif job.action_type == "Run Auto-Match":
 			result = run_bank_transaction_auto_match(filters=job.filters_json, rows=json.dumps([payload]))
@@ -454,9 +479,17 @@ def _apply_auto_match_result(row, result):
 		row.result_status = "Already Exists"
 		row.review_record = (result.get("review_record_exists") or [{}])[0].get("match_record")
 		row.result_message = _first_reason(result, "review_record_exists")
-	elif result.get("already_confirmed_count") or result.get("manual_review_count") or result.get("duplicate_candidate_skipped_count"):
+	elif (
+		result.get("already_confirmed_count")
+		or result.get("manual_review_count")
+		or result.get("duplicate_candidate_skipped_count")
+	):
 		row.result_status = "Blocked"
-		row.result_message = _first_reason(result, "already_confirmed") or _first_reason(result, "manual_review") or _first_reason(result, "duplicate_candidates")
+		row.result_message = (
+			_first_reason(result, "already_confirmed")
+			or _first_reason(result, "manual_review")
+			or _first_reason(result, "duplicate_candidates")
+		)
 	elif result.get("error_count"):
 		row.result_status = "Failed"
 		row.result_message = _first_reason(result, "errors")
@@ -471,12 +504,18 @@ def _apply_bulk_confirm_result(row, result):
 		row.result_message = (result.get("confirmed") or [{}])[0].get("message")
 	else:
 		row.result_status = "Blocked"
-		row.result_message = (result.get("blocked") or [{}])[0].get("reason") or "Not eligible for bulk confirmation."
+		row.result_message = (result.get("blocked") or [{}])[0].get(
+			"reason"
+		) or "Not eligible for bulk confirmation."
 
 
 def _is_locked_candidate_validation_failure(reason):
 	reason = cstr(reason).strip()
-	return reason.startswith("Locked candidate") or "Locked Payment Entry candidate" in reason or "Locked Sales Invoice" in reason
+	return (
+		reason.startswith("Locked candidate")
+		or "Locked Payment Entry candidate" in reason
+		or "Locked Sales Invoice" in reason
+	)
 
 
 def _first_reason(result, bucket):
@@ -496,7 +535,9 @@ def _recount_job(job):
 	job.blocked_count = sum(1 for row in job.rows if row.result_status == "Blocked")
 	job.failed_count = sum(1 for row in job.rows if row.result_status == "Failed")
 	job.already_exists_count = sum(1 for row in job.rows if row.result_status == "Already Exists")
-	job.progress_percent = round((flt(job.processed_rows) / flt(job.total_rows)) * 100, 2) if cint(job.total_rows or 0) else 100
+	job.progress_percent = (
+		round((flt(job.processed_rows) / flt(job.total_rows)) * 100, 2) if cint(job.total_rows or 0) else 100
+	)
 
 
 def _job_summary(job):
@@ -511,7 +552,9 @@ def _job_summary(job):
 	can_read = bool(job.has_permission("read")) if getattr(job, "name", None) else False
 	can_write = bool(job.has_permission("write")) if getattr(job, "name", None) else False
 	can_cancel = can_write and status in ACTIVE_JOB_STATUSES
-	can_retry_failed = can_write and status in TERMINAL_JOB_STATUSES and cint(getattr(job, "failed_count", 0)) > 0
+	can_retry_failed = (
+		can_write and status in TERMINAL_JOB_STATUSES and cint(getattr(job, "failed_count", 0)) > 0
+	)
 	message = f"{status}: {processed_rows} of {total_rows} rows processed."
 	if can_retry_failed:
 		message += " Failed rows can be retried as a new batch job."

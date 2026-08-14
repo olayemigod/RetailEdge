@@ -12,7 +12,7 @@ try {
 					"</div>"
 			).appendTo(wrapper);
 
-			function requireAsync(assetName) {
+			const requireAsync = (assetName) => {
 				return new Promise((resolve, reject) => {
 					let completed = false;
 					const finish = () => {
@@ -44,7 +44,7 @@ try {
 						}
 					}, 5000);
 				});
-			}
+			};
 
 			const page = frappe.ui.make_app_page({
 				parent: wrapper,
@@ -91,7 +91,9 @@ try {
 					wrapper._bootLoading.remove();
 					wrapper._bootLoading = null;
 				}
-				const root = $('<div class="retailedge-dashboard-root"></div>').appendTo(page.body);
+				const root = $('<div class="retailedge-dashboard-root"></div>').appendTo(
+					page.body
+				);
 				console.log("Mounting Vue under target:", root[0]);
 
 				await window.mountSalespersonPerformanceDashboard(root[0]);

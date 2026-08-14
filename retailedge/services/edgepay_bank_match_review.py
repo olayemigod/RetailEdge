@@ -92,8 +92,7 @@ def get_edgepay_bank_match_review_preflight(evidence_name, bank_transaction_name
 				return {
 					"ok": True,
 					"message": (
-						"A confirmed match review already exists for this bank transaction "
-						"and payment entry."
+						"A confirmed match review already exists for this bank transaction and payment entry."
 					),
 					"review_name": confirmed_pe_match,
 				}

@@ -52,7 +52,11 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 		report.refresh = function () {
 			const fromDate = report.get_filter_value("from_date");
 			const toDate = report.get_filter_value("to_date");
-			if (fromDate && toDate && frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)) {
+			if (
+				fromDate &&
+				toDate &&
+				frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)
+			) {
 				frappe.throw(__("From Date cannot be after To Date."));
 			}
 			if (fromDate && toDate) {
@@ -60,7 +64,7 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 				if (days > 60) {
 					frappe.show_alert({
 						message: __("Large date ranges may take longer to load."),
-						indicator: "orange"
+						indicator: "orange",
 					});
 				}
 			}
@@ -88,7 +92,7 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 				"Last Quarter",
 				"Last Year",
 				"Custom Period",
-				"Full History"
+				"Full History",
 			].join("\n"),
 			default: "This Month",
 		},
@@ -123,7 +127,9 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 			label: __("Branch"),
 			fieldtype: "Link",
 			options: "Branch",
-			description: __("Filters report rows using RetailEdge branch resolution from the shift/profile context."),
+			description: __(
+				"Filters report rows using RetailEdge branch resolution from the shift/profile context."
+			),
 		},
 		{
 			fieldname: "cashier",
@@ -137,14 +143,18 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 			label: __("Expense Cost Center"),
 			fieldtype: "Link",
 			options: "Cost Center",
-			description: __("Optional. If blank, the report uses the POS Profile cost center when available."),
+			description: __(
+				"Optional. If blank, the report uses the POS Profile cost center when available."
+			),
 		},
 		{
 			fieldname: "include_cogs",
 			label: __("Include COGS / Stock Expense"),
 			fieldtype: "Check",
 			default: 0,
-			description: __("Enable only if you want stock valuation or cost-of-goods entries included as expenses."),
+			description: __(
+				"Enable only if you want stock valuation or cost-of-goods entries included as expenses."
+			),
 		},
 	],
 };

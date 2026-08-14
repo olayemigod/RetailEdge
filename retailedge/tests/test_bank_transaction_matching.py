@@ -1,50 +1,50 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import json
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
 
+from retailedge.bank_transaction_match_workflow import create_or_get_bank_transaction_match
 from retailedge.bank_transaction_matching import (
+	_apply_exception_classification,
+	_build_matching_row,
+	_build_payment_entry_candidate,
+	_build_sales_invoice_candidates,
+	_get_bank_transaction_rows,
+	_resolve_account_match_payload,
+	_select_candidate_for_queue,
+	_validate_prefetched_candidate_identity,
+	build_matching_report_context,
 	candidate_document_has_active_confirmed_bank_match,
 	find_payment_entry_candidates_for_bank_transaction,
 	find_sales_invoice_candidates_for_bank_transaction,
-	get_auto_match_status_for_row,
 	get_amount_scenario_label,
+	get_auto_match_status_for_row,
 	get_bank_transaction_field_map,
 	get_bank_transaction_matching_rows,
 	get_bank_transaction_matching_settings,
+	get_review_creation_block_reason,
+	is_payment_basis_review_candidate,
 	normalize_bank_transaction,
 	payment_entry_has_active_confirmed_bank_match,
 	sales_invoice_has_active_confirmed_bank_match,
 	score_bank_transaction_candidate,
 	suppress_duplicate_candidate_suggestions,
-	_apply_exception_classification,
-	_build_payment_entry_candidate,
-	_build_matching_row,
-	build_matching_report_context,
-	_build_sales_invoice_candidates,
-	_resolve_account_match_payload,
-	_select_candidate_for_queue,
-	_get_bank_transaction_rows,
-	_validate_prefetched_candidate_identity,
-	is_payment_basis_review_candidate,
-	get_review_creation_block_reason,
 )
-from retailedge.bank_transaction_match_workflow import create_or_get_bank_transaction_match
 from retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching import (
 	DEFAULT_RESULT_LIMIT,
 	MAX_RESULT_LIMIT,
 	build_suggested_match_label,
-	execute as execute_bank_transaction_matching_report,
 	get_columns,
 	normalize_result_limit,
 )
-
+from retailedge.retailedge.report.retailedge_bank_transaction_matching.retailedge_bank_transaction_matching import (
+	execute as execute_bank_transaction_matching_report,
+)
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -1832,7 +1832,7 @@ class BankTransactionMatchingTests(unittest.TestCase):
 			],
 			mark_duplicates=True,
 		)
-		duplicate = [row for row in rows if row.get("action_status") == "Duplicate Candidate"][0]
+		duplicate = next(row for row in rows if row.get("action_status") == "Duplicate Candidate")
 		self.assertEqual(duplicate["duplicate_candidate_winner_bank_transaction"], "BT-BEST")
 		self.assertIn("BT-BEST", duplicate["match_reason"])
 
@@ -3208,7 +3208,7 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"payment_account": "Bank Account 1",
 		}
 
-		result = create_bank_match_reviews_from_suggestions(rows=[selected_row])
+		create_bank_match_reviews_from_suggestions(rows=[selected_row])
 
 		mock_find_si.assert_not_called()
 		mock_find_pe.assert_not_called()
@@ -3404,7 +3404,7 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 			"payment_account": "Bank Account 1",
 		}
 
-		result = create_bank_match_reviews_from_suggestions(rows=[selected_row])
+		create_bank_match_reviews_from_suggestions(rows=[selected_row])
 
 		mock_find_si.assert_not_called()
 		mock_find_pe.assert_not_called()
@@ -3614,7 +3614,7 @@ class BankTransactionCorrectnessHotfixTests(BankTransactionMatchingTests):
 				"match_confidence": "Strong Match",
 			}
 
-			result = run_bank_transaction_auto_match(rows=[selected_row])
+			run_bank_transaction_auto_match(rows=[selected_row])
 
 			mock_find_si.assert_not_called()
 			mock_find_pe.assert_not_called()

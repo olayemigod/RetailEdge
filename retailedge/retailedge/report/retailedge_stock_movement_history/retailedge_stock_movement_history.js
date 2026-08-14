@@ -142,7 +142,11 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 		report.refresh = function () {
 			const fromDate = report.get_filter_value("from_date");
 			const toDate = report.get_filter_value("to_date");
-			if (fromDate && toDate && frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)) {
+			if (
+				fromDate &&
+				toDate &&
+				frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)
+			) {
 				frappe.throw(__("From Date cannot be after To Date."));
 			}
 			return originalRefresh();

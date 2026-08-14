@@ -33,51 +33,87 @@ function refresh_batch_job_summary(frm, reloadAfter) {
 
 function render_batch_job_action_buttons(frm, summary) {
 	if (summary.can_retry_failed) {
-		frm.add_custom_button(__("Retry Failed Rows"), () => {
-			frappe.prompt(
-				[{ fieldname: "retry_reason", fieldtype: "Small Text", label: __("Retry Reason") }],
-				(values) => {
-					frappe.call({
-						method: "retailedge.api.retry_bank_match_batch_job_rows",
-						args: { batch_job_name: frm.doc.name, retry_reason: values.retry_reason || "Retry failed rows" },
-						freeze: true,
-						freeze_message: __("Queueing retry job..."),
-						callback(r) {
-							const result = r.message || {};
-							if (result.batch_job) {
-								frappe.show_alert({ message: result.message || __("Retry job queued."), indicator: "blue" });
-								frappe.set_route("Form", "RetailEdge Bank Match Batch Job", result.batch_job);
-							}
+		frm.add_custom_button(
+			__("Retry Failed Rows"),
+			() => {
+				frappe.prompt(
+					[
+						{
+							fieldname: "retry_reason",
+							fieldtype: "Small Text",
+							label: __("Retry Reason"),
 						},
-					});
-				},
-				__("Retry Failed Rows"),
-				__("Queue Retry")
-			);
-		}, __("Actions"));
+					],
+					(values) => {
+						frappe.call({
+							method: "retailedge.api.retry_bank_match_batch_job_rows",
+							args: {
+								batch_job_name: frm.doc.name,
+								retry_reason: values.retry_reason || "Retry failed rows",
+							},
+							freeze: true,
+							freeze_message: __("Queueing retry job..."),
+							callback(r) {
+								const result = r.message || {};
+								if (result.batch_job) {
+									frappe.show_alert({
+										message: result.message || __("Retry job queued."),
+										indicator: "blue",
+									});
+									frappe.set_route(
+										"Form",
+										"RetailEdge Bank Match Batch Job",
+										result.batch_job
+									);
+								}
+							},
+						});
+					},
+					__("Retry Failed Rows"),
+					__("Queue Retry")
+				);
+			},
+			__("Actions")
+		);
 	}
 
 	if (summary.can_cancel) {
-		frm.add_custom_button(__("Cancel Job"), () => {
-			frappe.prompt(
-				[{ fieldname: "reason", fieldtype: "Small Text", label: __("Cancellation Reason") }],
-				(values) => {
-					frappe.call({
-						method: "retailedge.api.cancel_bank_match_batch_job",
-						args: { batch_job_name: frm.doc.name, reason: values.reason || "Cancelled by user" },
-						freeze: true,
-						freeze_message: __("Cancelling job..."),
-						callback(r) {
-							const result = r.message || {};
-							frappe.show_alert({ message: result.message || __("Batch job cancelled."), indicator: "gray" });
-							frm.reload_doc();
+		frm.add_custom_button(
+			__("Cancel Job"),
+			() => {
+				frappe.prompt(
+					[
+						{
+							fieldname: "reason",
+							fieldtype: "Small Text",
+							label: __("Cancellation Reason"),
 						},
-					});
-				},
-				__("Cancel Batch Job"),
-				__("Cancel Job")
-			);
-		}, __("Actions"));
+					],
+					(values) => {
+						frappe.call({
+							method: "retailedge.api.cancel_bank_match_batch_job",
+							args: {
+								batch_job_name: frm.doc.name,
+								reason: values.reason || "Cancelled by user",
+							},
+							freeze: true,
+							freeze_message: __("Cancelling job..."),
+							callback(r) {
+								const result = r.message || {};
+								frappe.show_alert({
+									message: result.message || __("Batch job cancelled."),
+									indicator: "gray",
+								});
+								frm.reload_doc();
+							},
+						});
+					},
+					__("Cancel Batch Job"),
+					__("Cancel Job")
+				);
+			},
+			__("Actions")
+		);
 	}
 }
 

@@ -49,12 +49,44 @@ function forceOperationalPrimaryAction(report) {
 frappe.query_reports["RetailEdge EdgePay Payment Evidence Summary"] = {
 	filters: [
 		{ fieldname: "company", label: __("Company"), fieldtype: "Link", options: "Company" },
-		{ fieldname: "from_date", label: __("Date From"), fieldtype: "Date", default: frappe.datetime.month_start(), reqd: 1 },
-		{ fieldname: "to_date", label: __("Date To"), fieldtype: "Date", default: frappe.datetime.get_today(), reqd: 1 },
-		{ fieldname: "review_status", label: __("Review Status"), fieldtype: "Select", options: "\nPending Review\nReviewed\nRejected\nException" },
-		{ fieldname: "reconciliation_status", label: __("Reconciliation Status"), fieldtype: "Select", options: "\nNot Ready\nReady\nMatched\nReconciled\nBlocked\nException" },
-		{ fieldname: "posting_status", label: __("Posting Status"), fieldtype: "Select", options: "\nNot Prepared\nReady\nDraft Created\nSubmitted\nBlocked\nFailed\nCancelled" },
-		{ fieldname: "submission_status", label: __("Submission Status"), fieldtype: "Select", options: "\nNot Submitted\nSubmitted\nFailed\nBlocked" }
+		{
+			fieldname: "from_date",
+			label: __("Date From"),
+			fieldtype: "Date",
+			default: frappe.datetime.month_start(),
+			reqd: 1,
+		},
+		{
+			fieldname: "to_date",
+			label: __("Date To"),
+			fieldtype: "Date",
+			default: frappe.datetime.get_today(),
+			reqd: 1,
+		},
+		{
+			fieldname: "review_status",
+			label: __("Review Status"),
+			fieldtype: "Select",
+			options: "\nPending Review\nReviewed\nRejected\nException",
+		},
+		{
+			fieldname: "reconciliation_status",
+			label: __("Reconciliation Status"),
+			fieldtype: "Select",
+			options: "\nNot Ready\nReady\nMatched\nReconciled\nBlocked\nException",
+		},
+		{
+			fieldname: "posting_status",
+			label: __("Posting Status"),
+			fieldtype: "Select",
+			options: "\nNot Prepared\nReady\nDraft Created\nSubmitted\nBlocked\nFailed\nCancelled",
+		},
+		{
+			fieldname: "submission_status",
+			label: __("Submission Status"),
+			fieldtype: "Select",
+			options: "\nNot Submitted\nSubmitted\nFailed\nBlocked",
+		},
 	],
 	onload(report) {
 		configureOperationalReportRefresh(report);
@@ -62,5 +94,5 @@ frappe.query_reports["RetailEdge EdgePay Payment Evidence Summary"] = {
 	},
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
-	}
+	},
 };

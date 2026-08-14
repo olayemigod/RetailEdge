@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
@@ -18,7 +18,6 @@ from retailedge.branch_context import (
 	resolve_retailedge_branch_context,
 	resolve_retailedge_operational_defaults,
 )
-
 
 TARGET_DOCTYPE_ORDER = [
 	"Sales Invoice",
@@ -83,7 +82,9 @@ def get_branch_attribution_target_doctypes():
 def ensure_transaction_branch_custom_fields():
 	# Clean up the old hidden Section Break so it doesn't group and hide native ERPNext fields
 	for doctype in get_branch_attribution_target_doctypes():
-		cf_name = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": "retailedge_branch_attribution_section"}, "name")
+		cf_name = frappe.db.get_value(
+			"Custom Field", {"dt": doctype, "fieldname": "retailedge_branch_attribution_section"}, "name"
+		)
 		if cf_name:
 			frappe.delete_doc("Custom Field", cf_name, ignore_permissions=True, force=True)
 
@@ -138,7 +139,9 @@ def resolve_transaction_branch(doc):
 
 def apply_transaction_branch_attribution(doc, method=None, overwrite=False):
 	if getattr(doc, "doctype", None) not in TARGET_DOCTYPE_ORDER:
-		return _new_resolution(note="RetailEdge transaction branch attribution is not enabled for this DocType.")
+		return _new_resolution(
+			note="RetailEdge transaction branch attribution is not enabled for this DocType."
+		)
 
 	if not has_field(doc.doctype, "retailedge_branch"):
 		return _new_resolution(note="RetailEdge attribution fields are not available on this DocType.")
@@ -227,9 +230,19 @@ def run_transaction_branch_backfill(
 			doctype_summary["checked"] += 1
 			try:
 				doc = frappe.get_doc(target_doctype, row.name)
-				existing_branch = getattr(doc, "retailedge_branch", None) if has_field(target_doctype, "retailedge_branch") else None
+				existing_branch = (
+					getattr(doc, "retailedge_branch", None)
+					if has_field(target_doctype, "retailedge_branch")
+					else None
+				)
 				if existing_branch and not overwrite:
-					item = _build_backfill_item(target_doctype, row.name, _new_resolution(), action="skipped", note="Existing RetailEdge branch preserved.")
+					item = _build_backfill_item(
+						target_doctype,
+						row.name,
+						_new_resolution(),
+						action="skipped",
+						note="Existing RetailEdge branch preserved.",
+					)
 					summary["skipped"] += 1
 					doctype_summary["skipped"] += 1
 					summary["items"].append(item)
@@ -265,7 +278,9 @@ def run_transaction_branch_backfill(
 					doctype_summary["skipped"] += 1
 					action = "skipped"
 
-				summary["items"].append(_build_backfill_item(target_doctype, row.name, resolution, action=action))
+				summary["items"].append(
+					_build_backfill_item(target_doctype, row.name, resolution, action=action)
+				)
 			except Exception as exc:
 				summary["errors"] += 1
 				doctype_summary["errors"] += 1
@@ -400,7 +415,12 @@ def _get_backfill_target_doctypes(doctype=None):
 
 
 def _classify_resolution(resolution):
-	if resolution.get("branch") or resolution.get("source_branch") or resolution.get("target_branch") or resolution.get("warehouse_branch"):
+	if (
+		resolution.get("branch")
+		or resolution.get("source_branch")
+		or resolution.get("target_branch")
+		or resolution.get("warehouse_branch")
+	):
 		if _is_ambiguous_resolution(resolution) and not resolution.get("branch"):
 			return "ambiguous"
 		return "resolved"
@@ -527,12 +547,8 @@ def _resolve_material_request_branch(doc, resolution):
 
 
 def _resolve_stock_entry_branch(doc, resolution):
-	source_branch, source_note = _resolve_single_branch_from_warehouses(
-		_collect_source_warehouses(doc)
-	)
-	target_branch, target_note = _resolve_single_branch_from_warehouses(
-		_collect_target_warehouses(doc)
-	)
+	source_branch, source_note = _resolve_single_branch_from_warehouses(_collect_source_warehouses(doc))
+	target_branch, target_note = _resolve_single_branch_from_warehouses(_collect_target_warehouses(doc))
 	resolution["source_branch"] = source_branch
 	resolution["target_branch"] = target_branch
 	if source_branch and target_branch and source_branch == target_branch:
@@ -791,7 +807,9 @@ def _get_explicit_transaction_branch(doc):
 
 
 def _get_opening_shift_value(doc):
-	return _get_doc_value(doc, ["posa_pos_opening_shift", "linked_pos_opening_shift", *OPENING_SHIFT_LINK_CANDIDATES])
+	return _get_doc_value(
+		doc, ["posa_pos_opening_shift", "linked_pos_opening_shift", *OPENING_SHIFT_LINK_CANDIDATES]
+	)
 
 
 def _get_closing_shift_value(doc):

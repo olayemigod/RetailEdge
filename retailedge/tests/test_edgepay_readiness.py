@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from pathlib import Path
 from unittest.mock import patch
 
@@ -96,9 +94,7 @@ class TestEdgePayReadiness(FrappeTestCase):
 		)
 
 		payment_entry_count = frappe.db.count("Payment Entry", {"docstatus": 1})
-		review_count = frappe.db.count(
-			"RetailEdge Bank Transaction Match", {"decision_status": "Confirmed"}
-		)
+		review_count = frappe.db.count("RetailEdge Bank Transaction Match", {"decision_status": "Confirmed"})
 
 		execute_readiness()
 		execute_checklist()

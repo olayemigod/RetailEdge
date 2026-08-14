@@ -53,8 +53,8 @@ frappe.query_reports["RetailEdge EdgePay Rollout Monitor"] = {
 			label: __("Stale Threshold (Days)"),
 			fieldtype: "Int",
 			default: 3,
-			reqd: 1
-		}
+			reqd: 1,
+		},
 	],
 	onload(report) {
 		configureOperationalReportRefresh(report);
@@ -62,5 +62,5 @@ frappe.query_reports["RetailEdge EdgePay Rollout Monitor"] = {
 	},
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
-	}
+	},
 };

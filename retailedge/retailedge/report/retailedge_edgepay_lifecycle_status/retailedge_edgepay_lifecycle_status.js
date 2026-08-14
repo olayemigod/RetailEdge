@@ -49,8 +49,20 @@ function forceOperationalPrimaryAction(report) {
 frappe.query_reports["RetailEdge EdgePay Lifecycle Status"] = {
 	filters: [
 		{ fieldname: "company", label: __("Company"), fieldtype: "Link", options: "Company" },
-		{ fieldname: "from_date", label: __("Date From"), fieldtype: "Date", default: frappe.datetime.month_start(), reqd: 1 },
-		{ fieldname: "to_date", label: __("Date To"), fieldtype: "Date", default: frappe.datetime.get_today(), reqd: 1 }
+		{
+			fieldname: "from_date",
+			label: __("Date From"),
+			fieldtype: "Date",
+			default: frappe.datetime.month_start(),
+			reqd: 1,
+		},
+		{
+			fieldname: "to_date",
+			label: __("Date To"),
+			fieldtype: "Date",
+			default: frappe.datetime.get_today(),
+			reqd: 1,
+		},
 	],
 	onload(report) {
 		configureOperationalReportRefresh(report);
@@ -58,5 +70,5 @@ frappe.query_reports["RetailEdge EdgePay Lifecycle Status"] = {
 	},
 	after_refresh(report) {
 		forceOperationalPrimaryAction(report);
-	}
+	},
 };

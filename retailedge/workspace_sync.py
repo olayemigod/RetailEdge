@@ -24,7 +24,6 @@ from retailedge.workspace_home import (
 	build_home_workspace_shortcuts,
 )
 
-
 BUSINESS_HUB_PAGE = "retailedge-business-hub"
 BUSINESS_HUB_LABEL = "RetailEdge Business Hub"
 DASHBOARD_SECTION_LABEL = "Dashboard"
@@ -59,9 +58,7 @@ def sync_retailedge_workspace_layout():
 		workspace_shortcuts,
 	)
 	workspace_links = _normalise_links(build_home_workspace_links(workspace_data))
-	workspace_links = _ensure_workspace_business_hub_link(
-		_ensure_workspace_report_link(workspace_links)
-	)
+	workspace_links = _ensure_workspace_business_hub_link(_ensure_workspace_report_link(workspace_links))
 	workspace.links = []
 	for row in workspace_links:
 		workspace.append("links", row)
@@ -79,9 +76,7 @@ def sync_retailedge_workspace_layout():
 	sidebar_items = _normalise_sidebar_items(list(sidebar_data.get("items", []) or []))
 	sidebar_items = _ensure_sidebar_start_pos_link(sidebar_items)
 	sidebar_items = _ensure_sidebar_pos_shift_links(sidebar_items)
-	sidebar_items = _ensure_sidebar_business_hub_link(
-		_ensure_sidebar_report_link(sidebar_items)
-	)
+	sidebar_items = _ensure_sidebar_business_hub_link(_ensure_sidebar_report_link(sidebar_items))
 	for row in sidebar_items:
 		sidebar.append("items", row)
 	sidebar.save(ignore_permissions=True)
@@ -112,7 +107,7 @@ def _filter_workspace_content(content: str | None, shortcuts: list[dict]) -> str
 		if block.get("type") != "shortcut":
 			filtered.append(block)
 			continue
-		shortcut_name = ((block.get("data") or {}).get("shortcut_name"))
+		shortcut_name = (block.get("data") or {}).get("shortcut_name")
 		if shortcut_name in valid_shortcut_names:
 			filtered.append(block)
 	return json.dumps(filtered, separators=(",", ":"))
@@ -179,11 +174,7 @@ def _start_pos_sidebar_row() -> dict | None:
 
 
 def _ensure_sidebar_start_pos_link(items: list[dict]) -> list[dict]:
-	items = [
-		row
-		for row in items
-		if not (row.get("type") == "Link" and row.get("label") == START_POS_LABEL)
-	]
+	items = [row for row in items if not (row.get("type") == "Link" and row.get("label") == START_POS_LABEL)]
 	row = _start_pos_sidebar_row()
 	if row is None:
 		return items
@@ -226,9 +217,7 @@ def _ensure_sidebar_pos_shift_links(items: list[dict]) -> list[dict]:
 	]
 	capabilities = get_pos_runtime_capabilities(_target_exists)
 	shift_doctypes = [
-		doctype
-		for doctype in (capabilities.opening_doctype, capabilities.closing_doctype)
-		if doctype
+		doctype for doctype in (capabilities.opening_doctype, capabilities.closing_doctype) if doctype
 	]
 	if not shift_doctypes:
 		return items

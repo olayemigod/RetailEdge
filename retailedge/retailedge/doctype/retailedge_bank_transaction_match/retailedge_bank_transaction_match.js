@@ -88,13 +88,13 @@ function refreshBankTransactionMatchContext(frm, options = {}) {
 		return;
 	}
 	const suggestedDocumentType = frm.doc.suggested_document_type;
-	const suggestedDocument = frm.doc.suggested_document || frm.doc.sales_invoice || frm.doc.payment_entry;
+	const suggestedDocument =
+		frm.doc.suggested_document || frm.doc.sales_invoice || frm.doc.payment_entry;
 	if (!frm.doc.bank_transaction && !(suggestedDocumentType && suggestedDocument)) {
 		return;
 	}
 	frappe.call({
-		method:
-			"retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.get_bank_transaction_match_form_context",
+		method: "retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match.get_bank_transaction_match_form_context",
 		args: {
 			bank_transaction: frm.doc.bank_transaction,
 			suggested_document_type: suggestedDocumentType,
@@ -151,7 +151,15 @@ function applyBankTransactionMatchContext(frm, context, options = {}) {
 	];
 	fields.forEach((fieldname) => {
 		if (Object.prototype.hasOwnProperty.call(context, fieldname)) {
-			if (options.preserveCandidate && ["suggested_document_type", "suggested_document", "sales_invoice", "payment_entry"].includes(fieldname)) {
+			if (
+				options.preserveCandidate &&
+				[
+					"suggested_document_type",
+					"suggested_document",
+					"sales_invoice",
+					"payment_entry",
+				].includes(fieldname)
+			) {
 				return;
 			}
 			values[fieldname] = context[fieldname];
@@ -169,28 +177,55 @@ function add_bank_transaction_match_action_buttons(frm) {
 
 	// Add Navigation / Evidence links
 	if (frm.doc.bank_transaction) {
-		frm.add_custom_button(__("Open Bank Transaction"), function () {
-			frappe.set_route("Form", "Bank Transaction", frm.doc.bank_transaction);
-		}, __("Navigation / Evidence"));
+		frm.add_custom_button(
+			__("Open Bank Transaction"),
+			function () {
+				frappe.set_route("Form", "Bank Transaction", frm.doc.bank_transaction);
+			},
+			__("Navigation / Evidence")
+		);
 	}
 	if (frm.doc.suggested_document_type && frm.doc.suggested_document) {
-		frm.add_custom_button(__("Open Candidate Document"), function () {
-			frappe.set_route("Form", frm.doc.suggested_document_type, frm.doc.suggested_document);
-		}, __("Navigation / Evidence"));
+		frm.add_custom_button(
+			__("Open Candidate Document"),
+			function () {
+				frappe.set_route(
+					"Form",
+					frm.doc.suggested_document_type,
+					frm.doc.suggested_document
+				);
+			},
+			__("Navigation / Evidence")
+		);
 	}
 	if (frm.doc.sales_invoice) {
-		frm.add_custom_button(__("View Linked Sales Invoice"), function () {
-			frappe.set_route("Form", "Sales Invoice", frm.doc.sales_invoice);
-		}, __("Navigation / Evidence"));
+		frm.add_custom_button(
+			__("View Linked Sales Invoice"),
+			function () {
+				frappe.set_route("Form", "Sales Invoice", frm.doc.sales_invoice);
+			},
+			__("Navigation / Evidence")
+		);
 	}
 	if (frm.doc.payment_entry) {
-		frm.add_custom_button(__("View Linked Payment Entry"), function () {
-			frappe.set_route("Form", "Payment Entry", frm.doc.payment_entry);
-		}, __("Navigation / Evidence"));
+		frm.add_custom_button(
+			__("View Linked Payment Entry"),
+			function () {
+				frappe.set_route("Form", "Payment Entry", frm.doc.payment_entry);
+			},
+			__("Navigation / Evidence")
+		);
 	}
 
 	if (["Suggested", "Reopened"].includes(status)) {
-		addBankTransactionMatchButton(frm, __("Confirm Match"), "retailedge.api.confirm_bank_transaction_match", __("Confirming candidate..."), __("Confirmed"), __("Review Actions"));
+		addBankTransactionMatchButton(
+			frm,
+			__("Confirm Match"),
+			"retailedge.api.confirm_bank_transaction_match",
+			__("Confirming candidate..."),
+			__("Confirmed"),
+			__("Review Actions")
+		);
 		addBankTransactionMatchButton(
 			frm,
 			__("Mark Needs Review"),
@@ -199,75 +234,132 @@ function add_bank_transaction_match_action_buttons(frm) {
 			__("Needs Review"),
 			__("Review Actions")
 		);
-		addBankTransactionMatchButton(frm, __("Reject Match"), "retailedge.api.reject_bank_transaction_match", __("Rejecting candidate..."), __("Rejected"), __("Review Actions"));
+		addBankTransactionMatchButton(
+			frm,
+			__("Reject Match"),
+			"retailedge.api.reject_bank_transaction_match",
+			__("Rejecting candidate..."),
+			__("Rejected"),
+			__("Review Actions")
+		);
 	}
 
 	if (status === "Needs Review") {
-		addBankTransactionMatchButton(frm, __("Confirm Match"), "retailedge.api.confirm_bank_transaction_match", __("Confirming candidate..."), __("Confirmed"), __("Review Actions"));
-		addBankTransactionMatchButton(frm, __("Reject Match"), "retailedge.api.reject_bank_transaction_match", __("Rejecting candidate..."), __("Rejected"), __("Review Actions"));
+		addBankTransactionMatchButton(
+			frm,
+			__("Confirm Match"),
+			"retailedge.api.confirm_bank_transaction_match",
+			__("Confirming candidate..."),
+			__("Confirmed"),
+			__("Review Actions")
+		);
+		addBankTransactionMatchButton(
+			frm,
+			__("Reject Match"),
+			"retailedge.api.reject_bank_transaction_match",
+			__("Rejecting candidate..."),
+			__("Rejected"),
+			__("Review Actions")
+		);
 	}
 
 	if (status === "Confirmed") {
 		add_reconciliation_execution_status_buttons(frm);
 		maybe_add_execute_reconciliation_button(frm);
 
-		frm.add_custom_button(__("Check Reconciliation Gate"), function () {
-			frappe.call({
-				method: "retailedge.api.check_reconciliation_execution_gate",
-				args: { match_name: frm.doc.name },
-				freeze: true,
-				freeze_message: __("Checking execution gate..."),
-				callback: function (r) {
-					show_reconciliation_gate_result(r.message);
-				},
-			});
-		}, __("Reconciliation Actions"));
+		frm.add_custom_button(
+			__("Check Reconciliation Gate"),
+			function () {
+				frappe.call({
+					method: "retailedge.api.check_reconciliation_execution_gate",
+					args: { match_name: frm.doc.name },
+					freeze: true,
+					freeze_message: __("Checking execution gate..."),
+					callback: function (r) {
+						show_reconciliation_gate_result(r.message);
+					},
+				});
+			},
+			__("Reconciliation Actions")
+		);
 
-		frm.add_custom_button(__("Dry Run Reconciliation"), function () {
-			frappe.call({
-				method: "retailedge.api.dry_run_reconciliation_for_match",
-				args: { match_name: frm.doc.name },
-				freeze: true,
-				freeze_message: __("Checking reconciliation readiness..."),
-				callback: function (r) {
-					show_reconciliation_dry_run_result(r.message);
-				},
-			});
-		}, __("Reconciliation Actions"));
-		addBankTransactionMatchButton(frm, __("Reopen Review"), "retailedge.api.reopen_bank_transaction_match", __("Reopening candidate..."), __("Reopened"), __("Review Actions"));
-		addBankTransactionMatchButton(frm, __("Cancel Review"), "retailedge.api.cancel_bank_transaction_match", __("Cancelling candidate..."), __("Cancelled"), __("Review Actions"));
+		frm.add_custom_button(
+			__("Dry Run Reconciliation"),
+			function () {
+				frappe.call({
+					method: "retailedge.api.dry_run_reconciliation_for_match",
+					args: { match_name: frm.doc.name },
+					freeze: true,
+					freeze_message: __("Checking reconciliation readiness..."),
+					callback: function (r) {
+						show_reconciliation_dry_run_result(r.message);
+					},
+				});
+			},
+			__("Reconciliation Actions")
+		);
+		addBankTransactionMatchButton(
+			frm,
+			__("Reopen Review"),
+			"retailedge.api.reopen_bank_transaction_match",
+			__("Reopening candidate..."),
+			__("Reopened"),
+			__("Review Actions")
+		);
+		addBankTransactionMatchButton(
+			frm,
+			__("Cancel Review"),
+			"retailedge.api.cancel_bank_transaction_match",
+			__("Cancelling candidate..."),
+			__("Cancelled"),
+			__("Review Actions")
+		);
 	}
 
 	if (["Rejected", "Cancelled"].includes(status)) {
-		addBankTransactionMatchButton(frm, __("Reopen Review"), "retailedge.api.reopen_bank_transaction_match", __("Reopening candidate..."), __("Reopened"), __("Review Actions"));
+		addBankTransactionMatchButton(
+			frm,
+			__("Reopen Review"),
+			"retailedge.api.reopen_bank_transaction_match",
+			__("Reopening candidate..."),
+			__("Reopened"),
+			__("Review Actions")
+		);
 	}
 
-	frm.add_custom_button(__("Refresh Candidate Context"), function () {
-		refreshBankTransactionMatchContext(frm, { preserveCandidate: true });
-	}, __("Review Actions"));
+	frm.add_custom_button(
+		__("Refresh Candidate Context"),
+		function () {
+			refreshBankTransactionMatchContext(frm, { preserveCandidate: true });
+		},
+		__("Review Actions")
+	);
 
 	if (frm.page && frm.page.set_inner_btn_group_as_primary) {
 		frm.page.set_inner_btn_group_as_primary(__("Review Actions"));
 	}
 }
 
-
 function add_reconciliation_execution_status_buttons(frm) {
 	if (!frm.doc.name || frm.is_new() || frm.doc.decision_status !== "Confirmed") {
 		return;
 	}
-	frm.add_custom_button(__("Refresh Execution Status"), function () {
-		frappe.call({
-			method: "retailedge.api.get_reconciliation_execution_summary",
-			args: { match_name: frm.doc.name },
-			freeze: true,
-			freeze_message: __("Refreshing execution status..."),
-			callback: function (r) {
-				show_reconciliation_execution_result(r.message);
-				frm.reload_doc();
-			},
-		});
-	}, __("Reconciliation Actions"));
+	frm.add_custom_button(
+		__("Refresh Execution Status"),
+		function () {
+			frappe.call({
+				method: "retailedge.api.get_reconciliation_execution_summary",
+				args: { match_name: frm.doc.name },
+				freeze: true,
+				freeze_message: __("Refreshing execution status..."),
+				callback: function (r) {
+					show_reconciliation_execution_result(r.message);
+					frm.reload_doc();
+				},
+			});
+		},
+		__("Reconciliation Actions")
+	);
 
 	frappe.call({
 		method: "retailedge.api.get_reconciliation_execution_summary",
@@ -278,29 +370,32 @@ function add_reconciliation_execution_status_buttons(frm) {
 			if (!result.retryable) {
 				return;
 			}
-			frm.add_custom_button(__("Retry Reconciliation Execution"), function () {
-				frappe.confirm(
-					__(
-						"This will retry reconciliation using the stored reviewed candidate only. RetailEdge will re-run dry-run and execution gates before calling ERPNext. Continue?"
-					),
-					function () {
-						frappe.call({
-							method: "retailedge.api.retry_reconciliation_execution_for_match",
-							args: { match_name: frm.doc.name, confirm: true },
-							freeze: true,
-							freeze_message: __("Retrying reconciliation execution..."),
-							callback: function (response) {
-								show_reconciliation_execution_result(response.message);
-								frm.reload_doc();
-							},
-						});
-					}
-				);
-			}, __("Reconciliation Actions"));
+			frm.add_custom_button(
+				__("Retry Reconciliation Execution"),
+				function () {
+					frappe.confirm(
+						__(
+							"This will retry reconciliation using the stored reviewed candidate only. RetailEdge will re-run dry-run and execution gates before calling ERPNext. Continue?"
+						),
+						function () {
+							frappe.call({
+								method: "retailedge.api.retry_reconciliation_execution_for_match",
+								args: { match_name: frm.doc.name, confirm: true },
+								freeze: true,
+								freeze_message: __("Retrying reconciliation execution..."),
+								callback: function (response) {
+									show_reconciliation_execution_result(response.message);
+									frm.reload_doc();
+								},
+							});
+						}
+					);
+				},
+				__("Reconciliation Actions")
+			);
 		},
 	});
 }
-
 
 function maybe_add_execute_reconciliation_button(frm) {
 	if (!frm.doc.name || frm.is_new() || frm.doc.decision_status !== "Confirmed") {
@@ -315,81 +410,103 @@ function maybe_add_execute_reconciliation_button(frm) {
 			if (!result.can_execute) {
 				return;
 			}
-			frm.add_custom_button(__("Execute Reconciliation"), function () {
-				frappe.confirm(
-					__(
-						"This will reconcile the selected Bank Transaction using the confirmed reviewed candidate only. This action is controlled by RetailEdge gates and cannot choose another candidate. Continue?"
-					),
-					function () {
-						frappe.call({
-							method: "retailedge.api.execute_reconciliation_for_match",
-							args: { match_name: frm.doc.name, confirm: true },
-							freeze: true,
-							freeze_message: __("Executing reconciliation..."),
-							callback: function (response) {
-								show_reconciliation_execution_result(response.message);
-								frm.reload_doc();
-							},
-						});
-					}
-				);
-			}, __("Reconciliation Actions"));
+			frm.add_custom_button(
+				__("Execute Reconciliation"),
+				function () {
+					frappe.confirm(
+						__(
+							"This will reconcile the selected Bank Transaction using the confirmed reviewed candidate only. This action is controlled by RetailEdge gates and cannot choose another candidate. Continue?"
+						),
+						function () {
+							frappe.call({
+								method: "retailedge.api.execute_reconciliation_for_match",
+								args: { match_name: frm.doc.name, confirm: true },
+								freeze: true,
+								freeze_message: __("Executing reconciliation..."),
+								callback: function (response) {
+									show_reconciliation_execution_result(response.message);
+									frm.reload_doc();
+								},
+							});
+						}
+					);
+				},
+				__("Reconciliation Actions")
+			);
 		},
 	});
 }
 
 function addBankTransactionMatchButton(frm, label, method, freezeMessage, title, group) {
-	frm.add_custom_button(label, function () {
-		frappe.prompt(
-			[
-				{
-					fieldname: "decision_note",
-					fieldtype: "Small Text",
-					label: __("Decision Note"),
+	frm.add_custom_button(
+		label,
+		function () {
+			frappe.prompt(
+				[
+					{
+						fieldname: "decision_note",
+						fieldtype: "Small Text",
+						label: __("Decision Note"),
+					},
+				],
+				function (values) {
+					frappe.call({
+						method,
+						args: {
+							match_name: frm.doc.name,
+							decision_note: values.decision_note || "",
+						},
+						freeze: true,
+						freeze_message: freezeMessage,
+						callback: function (r) {
+							const message =
+								(r && r.message && r.message.message) || __("Decision updated.");
+							frappe.msgprint({
+								title,
+								message: `${frappe.utils.escape_html(
+									message
+								)}<br><br>${frappe.utils.escape_html(
+									__(
+										"This action updates only the RetailEdge match decision record. It does not reconcile Bank Transaction, create Payment Entry, post GL, or update Sales Invoice accounting fields."
+									)
+								)}`,
+								indicator: "green",
+							});
+							frm.reload_doc();
+						},
+					});
 				},
-			],
-			function (values) {
-				frappe.call({
-					method,
-					args: {
-						match_name: frm.doc.name,
-						decision_note: values.decision_note || "",
-					},
-					freeze: true,
-					freeze_message: freezeMessage,
-					callback: function (r) {
-						const message = (r && r.message && r.message.message) || __("Decision updated.");
-						frappe.msgprint({
-							title,
-							message: `${frappe.utils.escape_html(message)}<br><br>${frappe.utils.escape_html(
-								__(
-									"This action updates only the RetailEdge match decision record. It does not reconcile Bank Transaction, create Payment Entry, post GL, or update Sales Invoice accounting fields."
-								)
-							)}`,
-							indicator: "green",
-						});
-						frm.reload_doc();
-					},
-				});
-			},
-			title,
-			__("Apply")
-		);
-	}, group);
+				title,
+				__("Apply")
+			);
+		},
+		group
+	);
 }
-
 
 function show_reconciliation_dry_run_result(result) {
 	if (!result) {
-		frappe.msgprint({ title: __("Reconciliation Dry Run"), indicator: "orange", message: __("No dry-run result returned.") });
+		frappe.msgprint({
+			title: __("Reconciliation Dry Run"),
+			indicator: "orange",
+			message: __("No dry-run result returned."),
+		});
 		return;
 	}
-	const indicator = result.readiness_group === "Ready" ? "green" : result.readiness_group === "Already Handled" ? "gray" : "orange";
+	const indicator =
+		result.readiness_group === "Ready"
+			? "green"
+			: result.readiness_group === "Already Handled"
+			? "gray"
+			: "orange";
 	const rows = [
 		[__("Status"), result.readiness_group || result.eligibility_status || ""],
 		[__("Review"), result.review_name || ""],
 		[__("Bank Transaction"), result.bank_transaction || ""],
-		[__("Candidate"), `${result.candidate_doctype || ""} ${result.candidate_name || ""}`.trim()],
+		[
+			__("Candidate"),
+			`${result.candidate_doctype || ""} ${result.candidate_name || ""}`.trim(),
+		],
 		[__("Payment Event"), result.payment_event_identity || ""],
 		[__("Bank Amount"), result.bank_amount || 0],
 		[__("Candidate Amount"), result.candidate_amount || 0],
@@ -399,46 +516,87 @@ function show_reconciliation_dry_run_result(result) {
 	frappe.msgprint({
 		title: __("Reconciliation Dry Run"),
 		indicator,
-		message: frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 180px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows }),
+		message: frappe.render_template(
+			"<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 180px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>",
+			{ rows }
+		),
 	});
 }
 
-
 function show_reconciliation_gate_result(result) {
 	if (!result) {
-		frappe.msgprint({ title: __("Reconciliation Execution Gate"), indicator: "orange", message: __("No gate result returned.") });
+		frappe.msgprint({
+			title: __("Reconciliation Execution Gate"),
+			indicator: "orange",
+			message: __("No gate result returned."),
+		});
 		return;
 	}
-	const indicator = result.can_execute ? "green" : result.status === "Settings Disabled" ? "gray" : "orange";
-	const reasons = (result.block_reasons || []).map((reason) => `<li>${frappe.utils.escape_html(reason)}</li>`).join("");
+	const indicator = result.can_execute
+		? "green"
+		: result.status === "Settings Disabled"
+		? "gray"
+		: "orange";
+	const reasons = (result.block_reasons || [])
+		.map((reason) => `<li>${frappe.utils.escape_html(reason)}</li>`)
+		.join("");
 	const rows = [
 		[__("Gate Status"), result.status || ""],
 		[__("Can Execute Later"), result.can_execute ? __("Yes") : __("No")],
 		[__("Dry Run Status"), result.dry_run_status || ""],
-		[__("Final Confirmation Required"), result.final_confirmation_required ? __("Yes") : __("No")],
-		[__("Execution in R5.9"), result.execution_available_in_r59 ? __("Available after confirmation") : __("Not Available")],
+		[
+			__("Final Confirmation Required"),
+			result.final_confirmation_required ? __("Yes") : __("No"),
+		],
+		[
+			__("Execution in R5.9"),
+			result.execution_available_in_r59
+				? __("Available after confirmation")
+				: __("Not Available"),
+		],
 		[__("Safe Next Step"), result.safe_next_step || ""],
 	];
 	frappe.msgprint({
 		title: __("Reconciliation Execution Gate"),
 		indicator,
-		message: `${frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 220px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows })}
-			${reasons ? `<p><b>${frappe.utils.escape_html(__("Gate Reasons"))}</b></p><ul>${reasons}</ul>` : ""}`,
+		message: `${frappe.render_template(
+			"<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 220px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>",
+			{ rows }
+		)}
+			${
+				reasons
+					? `<p><b>${frappe.utils.escape_html(
+							__("Gate Reasons")
+					  )}</b></p><ul>${reasons}</ul>`
+					: ""
+			}`,
 	});
 }
 
 function show_reconciliation_execution_result(result) {
 	if (!result) {
-		frappe.msgprint({ title: __("Reconciliation Execution"), indicator: "orange", message: __("No execution result returned.") });
+		frappe.msgprint({
+			title: __("Reconciliation Execution"),
+			indicator: "orange",
+			message: __("No execution result returned."),
+		});
 		return;
 	}
-	const indicator = result.execution_status === "Executed" ? "green" : result.execution_status === "Already Handled" ? "gray" : "orange";
+	const indicator =
+		result.execution_status === "Executed"
+			? "green"
+			: result.execution_status === "Already Handled"
+			? "gray"
+			: "orange";
 	const rows = [
 		[__("Execution Status"), result.execution_status || result.status || ""],
 		[__("Review"), result.match_name || ""],
 		[__("Match Status"), result.match_status || ""],
 		[__("Bank Transaction"), result.bank_transaction || ""],
-		[__("Candidate"), `${result.candidate_doctype || ""} ${result.candidate_name || ""}`.trim()],
+		[
+			__("Candidate"),
+			`${result.candidate_doctype || ""} ${result.candidate_name || ""}`.trim(),
+		],
 		[__("Payment Event"), result.payment_event_identity || ""],
 		[__("Dry Run at Execution"), result.dry_run_status_at_execution || ""],
 		[__("Gate at Execution"), result.gate_status_at_execution || ""],
@@ -455,6 +613,9 @@ function show_reconciliation_execution_result(result) {
 	frappe.msgprint({
 		title: __("Reconciliation Execution"),
 		indicator,
-		message: frappe.render_template("<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 220px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>", { rows }),
+		message: frappe.render_template(
+			"<table class='table table-bordered'><tbody>{% for row in rows %}<tr><th style='width: 220px'>{{ row[0] }}</th><td>{{ row[1] }}</td></tr>{% endfor %}</tbody></table>",
+			{ rows }
+		),
 	});
 }

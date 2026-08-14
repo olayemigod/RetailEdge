@@ -9,8 +9,8 @@ import frappe
 
 from retailedge.bank_transaction_match_workflow import (
 	_candidate_from_revalidated_row,
-	_revalidate_suggestion_row,
 	_resolve_matching_candidate,
+	_revalidate_suggestion_row,
 	bulk_confirm_bank_transaction_matches,
 	bulk_mark_bank_transaction_matches_needs_review,
 	cancel_bank_transaction_match,
@@ -26,7 +26,6 @@ from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_
 	RetailEdgeBankTransactionMatch,
 )
 from retailedge.retailedge.doctype.retailedge_settings.retailedge_settings import RetailEdgeSettings
-
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 

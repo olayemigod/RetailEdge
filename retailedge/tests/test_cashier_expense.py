@@ -1,14 +1,45 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from datetime import datetime
-from types import SimpleNamespace
 import unittest
+from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
+from typing import ClassVar
 from unittest.mock import Mock, patch
 
 import frappe
 
+from retailedge.branch_context import (
+	apply_branch_context_to_doc,
+	backfill_retailedge_branch_context,
+	get_branch_query_filters,
+	resolve_branch_from_opening_shift,
+	resolve_branch_from_pos_profile,
+	resolve_retailedge_branch_context,
+	resolve_retailedge_operational_defaults,
+	user_has_global_branch_access,
+	validate_user_branch_access,
+)
+from retailedge.branch_context import (
+	get_user_allowed_branches as get_branch_context_allowed_branches,
+)
+from retailedge.branch_context import (
+	has_doctype as branch_context_has_doctype,
+)
+from retailedge.branch_context import (
+	has_field as branch_context_has_field,
+)
+from retailedge.branch_defaults_application import (
+	apply_branch_profile_defaults_to_doc,
+	get_branch_default_application_settings,
+)
+from retailedge.branch_profile import (
+	get_branch_profile,
+	get_branch_profile_defaults,
+	get_default_branch_for_user,
+	get_user_branch_profiles,
+	validate_branch_profile,
+)
 from retailedge.cashier_context import (
 	debug_shift_cash_sales,
 	get_current_cashier_context,
@@ -19,14 +50,14 @@ from retailedge.cashier_context import (
 	resolve_cost_center,
 )
 from retailedge.cashier_expense import (
-	approve_cashier_expense,
 	append_cashier_expense_action_log,
-	get_effective_expense_status,
-	get_cashier_roles,
-	get_cashier_expenses_for_variance,
+	approve_cashier_expense,
+	get_cashier_expense_summary,
 	get_cashier_expense_totals,
 	get_cashier_expense_totals_for_variance,
-	get_cashier_expense_summary,
+	get_cashier_expenses_for_variance,
+	get_cashier_roles,
+	get_effective_expense_status,
 	get_reviewer_roles,
 	reject_cashier_expense,
 	reopen_cashier_expense,
@@ -47,31 +78,6 @@ from retailedge.cashier_expense_dashboard import (
 	assert_can_access_cashier_expense_dashboard,
 	get_cashier_expense_dashboard_summary,
 )
-from retailedge.branch_context import (
-	apply_branch_context_to_doc,
-	backfill_retailedge_branch_context,
-	get_branch_query_filters,
-	get_user_allowed_branches as get_branch_context_allowed_branches,
-	has_field as branch_context_has_field,
-	has_doctype as branch_context_has_doctype,
-	resolve_branch_from_opening_shift,
-	resolve_branch_from_pos_profile,
-	resolve_retailedge_operational_defaults,
-	resolve_retailedge_branch_context,
-	user_has_global_branch_access,
-	validate_user_branch_access,
-)
-from retailedge.branch_profile import (
-	get_branch_profile,
-	get_branch_profile_defaults,
-	get_default_branch_for_user,
-	get_user_branch_profiles,
-	validate_branch_profile,
-)
-from retailedge.branch_defaults_application import (
-	apply_branch_profile_defaults_to_doc,
-	get_branch_default_application_settings,
-)
 from retailedge.cashier_expense_posting import (
 	get_cashier_expense_posting_preview,
 	refresh_cashier_expense_posting_readiness,
@@ -88,18 +94,39 @@ from retailedge.daily_sales_audit import (
 	get_daily_sales_audit_settings,
 	mark_daily_sales_audit_balanced,
 	mark_daily_sales_audit_variance_found,
-	refresh_daily_sales_audit_review_summary,
 	refresh_daily_sales_audit_preview,
+	refresh_daily_sales_audit_review_summary,
 	reject_daily_sales_audit,
 	reopen_daily_sales_audit,
 	request_daily_sales_audit_clarification,
-	resolve_daily_sales_audit_context_from_selection,
 	resolve_daily_sales_audit_clarification,
+	resolve_daily_sales_audit_context_from_selection,
 	search_daily_sales_audit_opening_shifts,
 	start_daily_sales_audit_review,
 	submit_daily_sales_audit_for_review,
 	update_daily_sales_audit_invoice_line_status,
 	user_is_daily_sales_audit_reviewer,
+)
+from retailedge.events.pos_closing_shift import update_cashier_expenses_with_closing_shift
+from retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense import (
+	RetailEdgeCashierExpense,
+)
+from retailedge.retailedge.doctype.retailedge_daily_sales_audit.retailedge_daily_sales_audit import (
+	RetailEdgeDailySalesAudit,
+)
+from retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses import (
+	_build_retailedge_expense_totals,
+	_deduplicate_retailedge_expenses,
+	get_retailedge_cashier_expense_context,
+)
+from retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses import (
+	execute as execute_variance_report,
+)
+from retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review import (
+	execute as execute_cashier_expense_review_report,
+)
+from retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register import (
+	execute as execute_daily_sales_audit_register_report,
 )
 from retailedge.transaction_branch_attribution import (
 	apply_transaction_branch_attribution,
@@ -109,26 +136,6 @@ from retailedge.transaction_branch_attribution import (
 	resolve_transaction_branch,
 	run_transaction_branch_backfill,
 )
-from retailedge.events.pos_closing_shift import update_cashier_expenses_with_closing_shift
-from retailedge.retailedge.doctype.retailedge_daily_sales_audit.retailedge_daily_sales_audit import (
-	RetailEdgeDailySalesAudit,
-)
-from retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register import (
-	execute as execute_daily_sales_audit_register_report,
-)
-from retailedge.retailedge.report.pos_closing_variance_vs_expenses.pos_closing_variance_vs_expenses import (
-	_build_retailedge_expense_totals,
-	_deduplicate_retailedge_expenses,
-	get_retailedge_cashier_expense_context,
-	execute as execute_variance_report,
-)
-from retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review import (
-	execute as execute_cashier_expense_review_report,
-)
-from retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense import (
-	RetailEdgeCashierExpense,
-)
-
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -156,7 +163,7 @@ class _Settings(SimpleNamespace):
 	include_cashier_expenses_in_daily_sales_audit_preview = 1
 	include_rejected_cashier_expenses_in_daily_sales_audit_preview = 1
 	daily_sales_audit_variance_tolerance = 0
-	daily_sales_audit_reviewer_roles = []
+	daily_sales_audit_reviewer_roles: ClassVar[list] = []
 	allow_self_review_daily_sales_audit = 0
 	enable_branch_default_application = 1
 	apply_branch_default_warehouse = 1
@@ -2690,7 +2697,9 @@ class BranchContextTests(unittest.TestCase):
 	)
 	@patch("retailedge.branch_context.resolve_retailedge_branch_context")
 	@patch("retailedge.branch_context.has_field", return_value=True)
-	def test_apply_branch_context_to_doc_sets_branch_when_empty(self, _mock_has_field, mock_resolve, _mock_access):
+	def test_apply_branch_context_to_doc_sets_branch_when_empty(
+		self, _mock_has_field, mock_resolve, _mock_access
+	):
 		mock_resolve.return_value = {
 			"branch": "HQ",
 			"source": "POS Opening Shift.branch",

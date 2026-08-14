@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-import json
 import importlib
+import json
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from retailedge.bank_transaction_bridge import (
 	accept_possible_duplicate_statement_row,
 	build_statement_row_fingerprint,
-	find_existing_statement_row_duplicate,
 	create_or_link_bank_transaction_from_statement_row,
 	find_existing_bank_transaction_duplicate,
+	find_existing_statement_row_duplicate,
 	get_bank_transaction_meta_fields,
 	get_possible_duplicate_statement_rows,
 	import_statement_rows_to_bank_transactions,
@@ -22,7 +21,6 @@ from retailedge.bank_transaction_bridge import (
 	normalize_statement_row_for_bank_transaction,
 	preview_bank_transaction_import,
 )
-
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
