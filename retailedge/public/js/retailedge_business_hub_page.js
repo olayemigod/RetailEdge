@@ -9,6 +9,12 @@
 	const LOAD_TIMEOUT_MS = 15000;
 	let productMenuBootPromise = null;
 	let routeBridgeBootPromise = null;
+	let activeWrapper = null;
+
+	function isBusinessHubRoute() {
+		const route = global.frappe?.get_route?.();
+		return Array.isArray(route) && route[0] === PAGE_NAME;
+	}
 
 	function registerPage() {
 		if (!global.frappe || !frappe.pages) {
@@ -59,6 +65,7 @@
 	}
 
 	function bootBusinessHub(wrapper) {
+		activeWrapper = wrapper;
 		if (wrapper._retailedgeBusinessHubBootPromise) {
 			return wrapper._retailedgeBusinessHubBootPromise;
 		}
@@ -94,6 +101,11 @@
 				);
 			}
 
+			if (!isBusinessHubRoute() || activeWrapper !== wrapper) {
+				loading.remove();
+				return null;
+			}
+
 			loading.remove();
 			const root = $('<div class="retailedge-business-hub-root"></div>').appendTo(target);
 			wrapper._retailedgeBusinessHubRoot = root;
@@ -102,10 +114,28 @@
 			return wrapper._retailedgeBusinessHub;
 		} catch (mountError) {
 			loading.remove();
+			if (!isBusinessHubRoute()) return null;
 			console.error("[RetailEdge Business Hub] mount failed", mountError);
 			renderFailure(target, mountError);
 			return null;
 		}
+	}
+
+	function teardownBusinessHub() {
+		const wrapper = activeWrapper;
+		activeWrapper = null;
+		if (wrapper) {
+			const target =
+				wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
+			clearPreviousMount(wrapper, target);
+			wrapper._retailedgeBusinessHubBootPromise = null;
+		}
+		$(global.document)
+			.find(
+				".retailedge-business-hub-root, .retailedge-business-hub-error, .edge-boot-loading"
+			)
+			.remove();
+		return true;
 	}
 
 	function bootProductMenu() {
@@ -285,6 +315,7 @@
 
 	global.retailedgeRegisterBusinessHubPage = registerPage;
 	global.retailedgeBootBusinessHubPage = bootBusinessHub;
+	global.retailedgeTeardownBusinessHubPage = teardownBusinessHub;
 	global.retailedgeBootProductMenu = bootProductMenu;
 	global.retailedgeBootBusinessHubRouteBridge = bootRouteBridge;
 	if (!initialiseDeskFeatures() && global.document) {
