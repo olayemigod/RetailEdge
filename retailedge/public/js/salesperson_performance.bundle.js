@@ -4,15 +4,21 @@ import SalespersonPerformanceDashboard from "./salesperson_performance_dashboard
 function mountSalespersonPerformanceDashboard(target) {
 	if (typeof window === "undefined") return null;
 
-	if (!window.EdgeUI) {
-		throw new Error("EdgeSuite UI runtime not loaded: window.EdgeUI is undefined");
+	const edgeUI = window.EdgeSuiteUI || window.EdgeUI;
+	if (!edgeUI) {
+		throw new Error("EdgeSuite UI runtime not loaded: window.EdgeSuiteUI is undefined");
 	}
-	if (!window.EdgeUI.createEdgeApp) {
+	if (typeof edgeUI.createEdgeApp !== "function") {
 		throw new Error("EdgeSuite UI runtime compatibility error: createEdgeApp is missing");
 	}
+	if (!target) {
+		throw new Error("Salesperson Performance Dashboard mount target is required");
+	}
 
-	console.log("EdgeUI version:", window.EdgeUI.version);
-	return window.EdgeUI.createEdgeApp(SalespersonPerformanceDashboard, target);
+	console.log("EdgeSuite UI version:", edgeUI.version);
+	const app = edgeUI.createEdgeApp(SalespersonPerformanceDashboard);
+	app.mount(target);
+	return app;
 }
 
 if (typeof window !== "undefined") {
