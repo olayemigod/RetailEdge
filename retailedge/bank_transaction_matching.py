@@ -344,7 +344,7 @@ def normalize_bank_transaction(bank_transaction_name_or_row):
 	allocated_amount = flt(_get_value(row, field_map.get("allocated_amount")))
 	unallocated_amount = flt(_get_value(row, field_map.get("unallocated_amount")))
 	is_reconciled = False
-	if status and "reconcil" in status.lower():
+	if status.strip().lower() == "reconciled":
 		is_reconciled = True
 	elif amount > 0 and allocated_amount >= amount and abs(unallocated_amount) <= 0.01:
 		is_reconciled = True

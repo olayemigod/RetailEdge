@@ -90,6 +90,33 @@ class BankTransactionMatchingTests(unittest.TestCase):
 		self.assertEqual(field_map["transaction_date"], "date")
 		self.assertEqual(field_map["deposit"], "deposit")
 
+	@patch("retailedge.bank_transaction_matching.get_bank_transaction_field_map")
+	def test_unreconciled_bank_transaction_status_is_not_reconciled(self, mock_field_map):
+		mock_field_map.return_value = {
+			"bank_account": "bank_account",
+			"ledger_account": None,
+			"company": "company",
+			"transaction_date": "date",
+			"deposit": "deposit",
+			"withdrawal": "withdrawal",
+			"currency": "currency",
+			"description": "description",
+			"reference_number": "reference_number",
+			"transaction_id": "transaction_id",
+			"party_type": "party_type",
+			"party": "party",
+			"status": "status",
+			"allocated_amount": "allocated_amount",
+			"unallocated_amount": "unallocated_amount",
+			"retailedge_branch": "retailedge_branch",
+		}
+
+		result = normalize_bank_transaction(
+			self._bank_transaction(status="Unreconciled", allocated_amount=0, unallocated_amount=10000)
+		)
+
+		self.assertFalse(result["is_reconciled"])
+
 	@patch("retailedge.bank_transaction_matching.get_retailedge_settings", return_value=None)
 	def test_auto_match_settings_default_to_safe_disabled_mode(self, _mock_settings):
 		settings = get_bank_transaction_matching_settings()
