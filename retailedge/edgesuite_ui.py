@@ -55,174 +55,252 @@ PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 
 NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
-		"key": "home",
-		"label": "Home",
+		"key": "dashboard",
+		"label": "Dashboard",
+		"icon": "chart",
 		"items": (
-			{"label": "RetailEdge Business Hub", "target_type": "Page", "target": "retailedge-business-hub"},
 			{
-				"label": "Salesperson Performance",
+				"label": "RetailEdge Business Hub",
 				"target_type": "Page",
-				"target": "salesperson-performance-dashboard",
+				"target": "retailedge-business-hub",
+				"icon": "home",
 			},
 			{
 				"label": "Branch Performance",
 				"target_type": "Report",
 				"target": "RetailEdge Branch Performance Summary",
+				"icon": "chart",
+			},
+			{
+				"label": "Salesperson Performance",
+				"target_type": "Page",
+				"target": "salesperson-performance-dashboard",
+				"icon": "user",
 			},
 		),
 	},
 	{
 		"key": "sales",
 		"label": "Sales",
+		"icon": "activity",
 		"items": (
 			{
 				"label": START_POS_LABEL,
 				"target_type": "URL",
 				"target": POSNEXT_POS_URL,
 				"runtime_target": "pos",
+				"icon": "grid",
 			},
-			{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice"},
-			{"label": "Customers", "target_type": "DocType", "target": "Customer"},
-			{"label": "Sales Orders", "target_type": "DocType", "target": "Sales Order"},
-			{"label": "Delivery Notes", "target_type": "DocType", "target": "Delivery Note"},
-		),
-	},
-	{
-		"key": "purchases",
-		"label": "Purchases",
-		"items": (
-			{"label": "Purchase Invoices", "target_type": "DocType", "target": "Purchase Invoice"},
-			{"label": "Purchase Orders", "target_type": "DocType", "target": "Purchase Order"},
-			{"label": "Purchase Receipts", "target_type": "DocType", "target": "Purchase Receipt"},
-			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier"},
-		),
-	},
-	{
-		"key": "inventory",
-		"label": "Inventory",
-		"items": (
-			{"label": "Items", "target_type": "DocType", "target": "Item"},
-			{"label": "Warehouses", "target_type": "DocType", "target": "Warehouse"},
-			{
-				"label": "Stock Movement History",
-				"target_type": "Report",
-				"target": "RetailEdge Stock Movement History",
-			},
-			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance"},
-			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry"},
-			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation"},
-		),
-	},
-	{
-		"key": "cash-banking",
-		"label": "Cash & Banking",
-		"items": (
-			{"label": "Payment Entries", "target_type": "DocType", "target": "Payment Entry"},
-			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction"},
-			{
-				"label": "Bank Matching",
-				"target_type": "Report",
-				"target": "RetailEdge Bank Transaction Matching",
-			},
-			{
-				"label": "Bank Match Reviews",
-				"target_type": "DocType",
-				"target": "RetailEdge Bank Transaction Match",
-			},
+			{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice", "icon": "clipboard"},
+			{"label": "Sales Orders", "target_type": "DocType", "target": "Sales Order", "icon": "clipboard"},
+			{"label": "Delivery Notes", "target_type": "DocType", "target": "Delivery Note", "icon": "clipboard"},
 			{
 				"label": "POS Opening",
 				"target_type": "DocType",
 				"target": ERPNEXT_POS_OPENING_ENTRY,
 				"runtime_target": "pos_opening",
+				"icon": "calendar",
 			},
 			{
 				"label": "POS Closing",
 				"target_type": "DocType",
 				"target": ERPNEXT_POS_CLOSING_ENTRY,
 				"runtime_target": "pos_closing",
+				"icon": "calendar",
+			},
+		),
+	},
+	{
+		"key": "purchases",
+		"label": "Purchases",
+		"icon": "clipboard",
+		"items": (
+			{"label": "Purchase Invoices", "target_type": "DocType", "target": "Purchase Invoice", "icon": "clipboard"},
+			{"label": "Purchase Orders", "target_type": "DocType", "target": "Purchase Order", "icon": "clipboard"},
+			{"label": "Purchase Receipts", "target_type": "DocType", "target": "Purchase Receipt", "icon": "clipboard"},
+		),
+	},
+	{
+		"key": "inventory",
+		"label": "Inventory",
+		"icon": "layers",
+		"items": (
+			{"label": "Items", "target_type": "DocType", "target": "Item", "icon": "layers"},
+			{"label": "Warehouses", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
+			{
+				"label": "Stock Movement History",
+				"target_type": "Report",
+				"target": "RetailEdge Stock Movement History",
+				"icon": "report",
+			},
+			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance", "icon": "report"},
+			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry", "icon": "layers"},
+			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation", "icon": "clipboard"},
+			{"label": "Material Requests", "target_type": "DocType", "target": "Material Request", "icon": "clipboard"},
+		),
+	},
+	{
+		"key": "cash-banking",
+		"label": "Cash & Banking",
+		"icon": "wallet",
+		"items": (
+			{"label": "Payment Entries", "target_type": "DocType", "target": "Payment Entry", "icon": "wallet"},
+			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet"},
+			{
+				"label": "Import Bank Statement",
+				"target_type": "DocType",
+				"target": "RetailEdge Payment Statement Import",
+				"icon": "clipboard",
+			},
+			{
+				"label": "Bank Matching",
+				"target_type": "Report",
+				"target": "RetailEdge Bank Transaction Matching",
+				"icon": "report",
 			},
 		),
 	},
 	{
 		"key": "expenses",
 		"label": "Expenses",
+		"icon": "report",
 		"items": (
-			{"label": "Cashier Expenses", "target_type": "DocType", "target": "RetailEdge Cashier Expense"},
-			{"label": "Expense Claims", "target_type": "DocType", "target": "Expense Claim"},
 			{
-				"label": "Expense Categories",
+				"label": "Cashier Expenses",
 				"target_type": "DocType",
-				"target": "RetailEdge Expense Category",
+				"target": "RetailEdge Cashier Expense",
+				"icon": "wallet",
 			},
-			{
-				"label": "Cashier Expense Review",
-				"target_type": "Report",
-				"target": "RetailEdge Cashier Expense Review",
-			},
+			{"label": "Expense Claims", "target_type": "DocType", "target": "Expense Claim", "icon": "clipboard"},
 		),
 	},
 	{
 		"key": "customers-suppliers",
 		"label": "Customers & Suppliers",
+		"icon": "user",
 		"items": (
-			{"label": "Customers", "target_type": "DocType", "target": "Customer"},
-			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier"},
-			{"label": "Accounts Receivable", "target_type": "Report", "target": "Accounts Receivable"},
-			{"label": "Accounts Payable", "target_type": "Report", "target": "Accounts Payable"},
+			{"label": "Customers", "target_type": "DocType", "target": "Customer", "icon": "user"},
+			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier", "icon": "user"},
+			{"label": "Accounts Receivable", "target_type": "Report", "target": "Accounts Receivable", "icon": "report"},
+			{"label": "Accounts Payable", "target_type": "Report", "target": "Accounts Payable", "icon": "report"},
 		),
 	},
 	{
-		"key": "reports-insights",
-		"label": "Reports & Insights",
+		"key": "reviews-controls",
+		"label": "Reviews & Controls",
+		"icon": "shield",
 		"items": (
 			{
-				"label": "Branch Performance",
-				"target_type": "Report",
-				"target": "RetailEdge Branch Performance Summary",
+				"label": "Bank Match Reviews",
+				"target_type": "DocType",
+				"target": "RetailEdge Bank Transaction Match",
+				"icon": "shield",
 			},
 			{
-				"label": "Salesperson Performance",
-				"target_type": "Page",
-				"target": "salesperson-performance-dashboard",
+				"label": "Daily Sales Audit",
+				"target_type": "DocType",
+				"target": "RetailEdge Daily Sales Audit",
+				"icon": "shield",
 			},
 			{
-				"label": "Daily Sales Audit Register",
+				"label": "Cashier Expense Review",
 				"target_type": "Report",
-				"target": "RetailEdge Daily Sales Audit Register",
+				"target": "RetailEdge Cashier Expense Review",
+				"icon": "report",
+			},
+			{
+				"label": "Cash Shift Verification",
+				"target_type": "Report",
+				"target": "RetailEdge Cash Shift Verification",
+				"icon": "report",
 			},
 			{
 				"label": "Invoice Payment Audit",
 				"target_type": "Report",
 				"target": "RetailEdge Invoice Payment Audit",
+				"icon": "report",
 			},
 			{
 				"label": "POS Closing Variance vs Expenses",
 				"target_type": "Report",
 				"target": "POS Closing Variance vs Expenses",
+				"icon": "report",
+			},
+			{
+				"label": "Unmatched Bank Transactions",
+				"target_type": "Report",
+				"target": "RetailEdge Unmatched Bank Transactions",
+				"icon": "report",
+			},
+			{
+				"label": "Unmatched Bank Payments",
+				"target_type": "Report",
+				"target": "RetailEdge Unmatched Bank Payment Events",
+				"icon": "report",
+			},
+			{
+				"label": "Reconciliation Readiness",
+				"target_type": "Report",
+				"target": "RetailEdge Bank Match Reconciliation Readiness",
+				"icon": "shield",
+			},
+			{
+				"label": "Reconciliation Handoff",
+				"target_type": "Report",
+				"target": "RetailEdge Reconciliation Handoff",
+				"icon": "report",
+			},
+		),
+	},
+	{
+		"key": "reports-insights",
+		"label": "Reports & Insights",
+		"icon": "chart",
+		"items": (
+			{
+				"label": "Daily Sales Audit Register",
+				"target_type": "Report",
+				"target": "RetailEdge Daily Sales Audit Register",
+				"icon": "report",
+			},
+			{"label": "Stock Ledger", "target_type": "Report", "target": "Stock Ledger", "icon": "report"},
+			{"label": "Stock Projected Qty", "target_type": "Report", "target": "Stock Projected Qty", "icon": "report"},
+			{"label": "Stock Ageing", "target_type": "Report", "target": "Stock Ageing", "icon": "report"},
+			{
+				"label": "Batch-Wise Balance History",
+				"target_type": "Report",
+				"target": "Batch-Wise Balance History",
+				"icon": "report",
+			},
+			{
+				"label": "Serial No and Batch Traceability",
+				"target_type": "Report",
+				"target": "Serial No and Batch Traceability",
+				"icon": "report",
 			},
 		),
 	},
 	{
 		"key": "setup",
 		"label": "Setup",
+		"icon": "settings",
 		"items": (
-			{"label": "RetailEdge Settings", "target_type": "DocType", "target": "RetailEdge Settings"},
-			{"label": "Branch Profiles", "target_type": "DocType", "target": "RetailEdge Branch Profile"},
-			{"label": "Modes of Payment", "target_type": "DocType", "target": "Mode of Payment"},
-			{"label": "Bank Accounts", "target_type": "DocType", "target": "Bank Account"},
-		),
-	},
-	{
-		"key": "administration",
-		"label": "Administration",
-		"required_roles": ("System Manager",),
-		"items": (
+			{"label": "RetailEdge Settings", "target_type": "DocType", "target": "RetailEdge Settings", "icon": "settings"},
+			{"label": "Branch Profiles", "target_type": "DocType", "target": "RetailEdge Branch Profile", "icon": "building"},
 			{
-				"label": "Bank Match Batch Jobs",
+				"label": "Expense Categories",
 				"target_type": "DocType",
-				"target": "RetailEdge Bank Match Batch Job",
+				"target": "RetailEdge Expense Category",
+				"icon": "layers",
 			},
-			{"label": "Error Log", "target_type": "DocType", "target": "Error Log"},
+			{"label": "Bank Accounts", "target_type": "DocType", "target": "Bank Account", "icon": "wallet"},
+			{"label": "Modes of Payment", "target_type": "DocType", "target": "Mode of Payment", "icon": "wallet"},
+			{
+				"label": "Bank Statement Mapping",
+				"target_type": "DocType",
+				"target": "RetailEdge Statement Mapping Template",
+				"icon": "settings",
+			},
 		),
 	},
 )
@@ -329,7 +407,14 @@ def _get_permitted_navigation_groups(roles: set[str]) -> list[dict[str, Any]]:
 				items.append(resolved)
 		if not items:
 			continue
-		groups.append({"key": group["key"], "label": _(group["label"]), "items": items})
+		groups.append(
+			{
+				"key": group["key"],
+				"label": _(group["label"]),
+				"icon": group.get("icon") or "",
+				"items": items,
+			}
+		)
 	return groups
 
 

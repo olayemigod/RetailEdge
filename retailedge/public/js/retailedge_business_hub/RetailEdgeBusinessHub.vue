@@ -7,6 +7,7 @@
 		:tenantName="context.company"
 		:branchName="context.branch"
 		:userName="context.user_name"
+		:hideNativeSidebar="true"
 		@navigate="navigateFromShell"
 	>
 		<EdgePageLayout>
@@ -187,14 +188,22 @@ export default {
 		},
 		shellMenuItems() {
 			return this.navigationGroups
-				.flatMap((group) => group.items.slice(0, 2))
-				.slice(0, 8)
-				.map((item) => ({
-					label: item.label,
-					route: this.routeForTarget(item),
-					icon: "•",
-					source: item,
-				}));
+				.map((group) => ({
+					key: group.key,
+					label: group.label,
+					icon: group.icon || "layers",
+					defaultCollapsed: group.key !== "dashboard",
+					items: (group.items || [])
+						.map((item) => ({
+							label: item.label,
+							description: item.description || "",
+							route: this.routeForTarget(item),
+							icon: item.icon || "list",
+							source: item,
+						}))
+						.filter((item) => item.route),
+				}))
+				.filter((group) => group.items.length);
 		},
 	},
 	mounted() {
@@ -229,7 +238,9 @@ export default {
 			frappe.new_doc(action.doctype);
 		},
 		navigateFromShell(route) {
-			const item = this.shellMenuItems.find((entry) => entry.route === route);
+			const item = this.shellMenuItems
+				.flatMap((group) => group.items || [])
+				.find((entry) => entry.route === route);
 			if (item && item.source) {
 				this.openTarget(item.source);
 				return;

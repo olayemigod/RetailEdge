@@ -52,8 +52,18 @@
 		return true;
 	}
 
+	function suppressNativePageChrome(wrapper) {
+		if (!wrapper) return;
+		$(wrapper).addClass("retailedge-edge-shell-page");
+		const pageHead = $(wrapper).find(".page-head").first();
+		if (!pageHead.length) return;
+		pageHead.attr("data-retailedge-shell-suppressed", "1");
+		pageHead.hide();
+	}
+
 	function ensurePage(wrapper) {
 		if (wrapper.page && wrapper._retailedgeBusinessHubTarget) {
+			suppressNativePageChrome(wrapper);
 			return wrapper.page;
 		}
 
@@ -64,6 +74,7 @@
 		});
 		wrapper.page = page;
 		wrapper._retailedgeBusinessHubTarget = resolvePageBody(page, wrapper);
+		suppressNativePageChrome(wrapper);
 		return page;
 	}
 

@@ -4,8 +4,8 @@ const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_cont
 const MAX_INSTALL_ATTEMPTS = 6;
 
 const GROUP_PRESENTATION = Object.freeze({
-	home: { icon: "home", description: "Business overview and performance." },
-	sales: { icon: "shopping-cart", description: "Sell, serve customers, and review sales." },
+	dashboard: { icon: "dashboard", description: "Business overview and performance." },
+	sales: { icon: "shopping-cart", description: "Sell, fulfil orders, and run point of sale." },
 	purchases: {
 		icon: "shopping-bag",
 		description: "Buy stock, services, and operating supplies.",
@@ -13,19 +13,22 @@ const GROUP_PRESENTATION = Object.freeze({
 	inventory: { icon: "stock", description: "Control items, warehouses, movements, and counts." },
 	"cash-banking": {
 		icon: "credit-card",
-		description: "Manage collections, payments, shifts, and reconciliation.",
+		description: "Manage collections, payments, statements, and bank reconciliation.",
 	},
-	expenses: { icon: "file-text", description: "Record and review operating expenses." },
+	expenses: { icon: "file-text", description: "Record day-to-day operating expenses." },
 	"customers-suppliers": {
 		icon: "users",
-		description: "Manage business relationships and balances.",
+		description: "Manage business relationships and outstanding balances.",
+	},
+	"reviews-controls": {
+		icon: "shield",
+		description: "Review exceptions, audits, controls, and reconciliation readiness.",
 	},
 	"reports-insights": {
 		icon: "chart",
-		description: "Understand sales, stock, cash, and branch performance.",
+		description: "Understand sales, stock, cash, and operating performance.",
 	},
 	setup: { icon: "settings", description: "Configure RetailEdge business rules and defaults." },
-	administration: { icon: "shield", description: "Restricted technical and governance tools." },
 });
 
 const ITEM_ICONS = Object.freeze({
@@ -128,7 +131,7 @@ function buildSections(groups) {
 			return {
 				label: group.label,
 				description: presentation.description,
-				icon: presentation.icon,
+				icon: group.icon || presentation.icon,
 				items,
 			};
 		})

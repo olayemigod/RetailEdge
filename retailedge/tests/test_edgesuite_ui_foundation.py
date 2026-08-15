@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from retailedge.edgesuite_ui import NAVIGATION_GROUPS, PROGRAMME_EXPERIENCES, QUICK_ACTIONS
+from retailedge.workspace_home import HOME_SECTIONS, HOME_WORKSPACE_ITEMS
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,22 +22,134 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertEqual(
 			labels,
 			[
-				"Home",
+				"Dashboard",
 				"Sales",
 				"Purchases",
 				"Inventory",
 				"Cash & Banking",
 				"Expenses",
 				"Customers & Suppliers",
+				"Reviews & Controls",
 				"Reports & Insights",
 				"Setup",
-				"Administration",
 			],
 		)
 
-	def test_administration_group_is_role_restricted(self):
-		administration = next(group for group in NAVIGATION_GROUPS if group["key"] == "administration")
-		self.assertEqual(administration["required_roles"], ("System Manager",))
+	def test_navigation_targets_are_not_duplicated_across_business_groups(self):
+		targets = [
+			(item["target_type"], item["target"])
+			for group in NAVIGATION_GROUPS
+			for item in group["items"]
+		]
+		self.assertEqual(len(targets), len(set(targets)))
+
+	def test_navigation_classifies_relationships_reviews_and_expenses_once(self):
+		groups = {group["key"]: group for group in NAVIGATION_GROUPS}
+
+		self.assertNotIn(
+			"Customer",
+			{item["target"] for item in groups["sales"]["items"]},
+		)
+		self.assertNotIn(
+			"Supplier",
+			{item["target"] for item in groups["purchases"]["items"]},
+		)
+		self.assertIn(
+			"Customer",
+			{item["target"] for item in groups["customers-suppliers"]["items"]},
+		)
+		self.assertIn(
+			"Supplier",
+			{item["target"] for item in groups["customers-suppliers"]["items"]},
+		)
+		self.assertIn(
+			"RetailEdge Bank Transaction Match",
+			{item["target"] for item in groups["reviews-controls"]["items"]},
+		)
+		self.assertNotIn(
+			"RetailEdge Bank Transaction Match",
+			{item["target"] for item in groups["cash-banking"]["items"]},
+		)
+		self.assertIn(
+			"RetailEdge Cashier Expense",
+			{item["target"] for item in groups["expenses"]["items"]},
+		)
+		self.assertNotIn(
+			"RetailEdge Cashier Expense",
+			{item["target"] for item in groups["cash-banking"]["items"]},
+		)
+
+	def test_business_navigation_excludes_technical_administration(self):
+		keys = {group["key"] for group in NAVIGATION_GROUPS}
+		targets = {
+			item["target"]
+			for group in NAVIGATION_GROUPS
+			for item in group["items"]
+		}
+		self.assertNotIn("administration", keys)
+		self.assertNotIn("RetailEdge Bank Match Batch Job", targets)
+		self.assertNotIn("Error Log", targets)
+
+	def test_workspace_home_uses_matching_business_taxonomy(self):
+		self.assertEqual(
+			HOME_SECTIONS,
+			(
+				"Dashboard",
+				"Sales & POS",
+				"Purchases",
+				"Inventory",
+				"Cash & Banking",
+				"Expenses",
+				"Customers & Suppliers",
+				"Reviews & Controls",
+				"Reports & Insights",
+				"Setup",
+			),
+		)
+		targets = {item.link_to for item in HOME_WORKSPACE_ITEMS}
+		self.assertNotIn("RetailEdge Bank Match Batch Job", targets)
+		self.assertNotIn("Error Log", targets)
+		self.assertNotIn("Journal Entry", targets)
+
+	def test_sidebar_fixture_uses_same_business_classification(self):
+		path = (
+			APP_ROOT
+			/ "retailedge"
+			/ "workspace_sidebar"
+			/ "retailedge"
+			/ "retailedge.json"
+		)
+		data = json.loads(path.read_text())
+		sections = [
+			row["label"]
+			for row in data["items"]
+			if row.get("type") == "Section Break"
+		]
+		self.assertEqual(
+			sections,
+			[
+				"Dashboard",
+				"Sales & POS",
+				"Purchases",
+				"Inventory",
+				"Cash & Banking",
+				"Expenses",
+				"Customers & Suppliers",
+				"Reviews & Controls",
+				"Reports & Insights",
+				"Setup",
+			],
+		)
+		targets = [
+			row.get("link_to")
+			for row in data["items"]
+			if row.get("type") == "Link"
+		]
+		self.assertEqual(targets.count("Customer"), 1)
+		self.assertEqual(targets.count("Supplier"), 1)
+		self.assertNotIn("RetailEdge Bank Match Batch Job", targets)
+		self.assertNotIn("Error Log", targets)
+		self.assertNotIn("Journal Entry", targets)
 
 	def test_quick_actions_are_unique_and_create_native_documents(self):
 		keys = [action["key"] for action in QUICK_ACTIONS]
@@ -68,6 +181,24 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("__retailedge_business_hub_registered", controller)
 		self.assertIn("Loading RetailEdge Business Hub", controller)
 		self.assertIn("RetailEdge Business Hub failed to load", controller)
+
+	def test_business_hub_uses_single_edgesuite_shell(self):
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "RetailEdgeBusinessHub.vue"
+		).read_text()
+		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
+
+		self.assertIn(':hideNativeSidebar="true"', component)
+		self.assertIn(".map((group) => ({", component)
+		self.assertIn("items: (group.items || [])", component)
+		self.assertNotIn(".slice(0, 8)", component)
+		self.assertIn("suppressNativePageChrome", controller)
+		self.assertIn('data-retailedge-shell-suppressed', controller)
+		self.assertIn('pageHead.hide()', controller)
 
 	def test_global_controller_does_not_preempt_frappe_page_container_creation(self):
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
@@ -113,6 +244,8 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("get_retailedge_business_hub_context", menu)
 		self.assertIn("data.navigation_groups", menu)
 		self.assertIn("product: PRODUCT", menu)
+		self.assertIn('"reviews-controls"', menu)
+		self.assertNotIn("administration:", menu)
 		self.assertNotIn("switch_product_app", menu)
 		self.assertNotIn("CoreEdge", menu)
 
