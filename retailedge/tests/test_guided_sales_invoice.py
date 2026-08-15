@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
@@ -12,9 +13,32 @@ from retailedge.guided_sales_invoice import (
 	_normalise_items,
 	_validate_branch_warehouse,
 	_warehouse_search_filters,
+	create_simple_sales_invoice_draft,
 )
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+
+
+class _DraftSalesInvoice(SimpleNamespace):
+	doctype = "Sales Invoice"
+
+	def __init__(self):
+		super().__init__(
+			name="ACC-SINV-GUIDED-0001",
+			docstatus=0,
+			grand_total=3000.0,
+			currency="NGN",
+			items=[],
+			insert_calls=0,
+		)
+
+	def append(self, table, row):
+		self.items.append(frappe._dict(row))
+		return self.items[-1]
+
+	def insert(self):
+		self.insert_calls += 1
+		return self
 
 
 class TestGuidedSalesInvoice(unittest.TestCase):
@@ -68,6 +92,51 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 				company="Demo Company",
 				user="sales@example.com",
 			)
+
+	@patch("retailedge.guided_sales_invoice._assert_read_permission")
+	@patch("retailedge.guided_sales_invoice.validate_user_branch_access")
+	@patch("retailedge.guided_sales_invoice._assert_can_create_sales_invoice")
+	@patch("retailedge.guided_sales_invoice.frappe.new_doc")
+	def test_create_draft_assembles_standard_sales_invoice_once(
+		self,
+		mock_new_doc,
+		_mock_create_permission,
+		mock_branch_access,
+		mock_read_permission,
+	):
+		doc = _DraftSalesInvoice()
+		mock_new_doc.return_value = doc
+
+		result = create_simple_sales_invoice_draft(
+			{
+				"company": "Demo Company",
+				"branch": "Lagos",
+				"customer": "CUST-001",
+				"posting_date": "2026-08-15",
+				"update_stock": 0,
+				"remarks": "Guided draft",
+				"items": [
+					{"item_code": "ITEM-001", "qty": 2, "rate": ""},
+					{"item_code": "ITEM-002", "qty": 1, "rate": 1500},
+				],
+			}
+		)
+
+		mock_new_doc.assert_called_once_with("Sales Invoice")
+		mock_branch_access.assert_called_once()
+		self.assertGreaterEqual(mock_read_permission.call_count, 4)
+		self.assertEqual(doc.insert_calls, 1)
+		self.assertEqual(doc.company, "Demo Company")
+		self.assertEqual(doc.customer, "CUST-001")
+		self.assertEqual(doc.branch, "Lagos")
+		self.assertEqual(str(doc.posting_date), "2026-08-15")
+		self.assertEqual(doc.remarks, "Guided draft")
+		self.assertEqual(len(doc.items), 2)
+		self.assertNotIn("rate", doc.items[0])
+		self.assertEqual(doc.items[1].rate, 1500.0)
+		self.assertEqual(result["name"], doc.name)
+		self.assertEqual(result["docstatus"], 0)
+		self.assertEqual(result["branch"], "Lagos")
 
 	def test_adapter_uses_permission_aware_bounded_search_and_draft_insert(self):
 		source = (APP_ROOT / "guided_sales_invoice.py").read_text()
