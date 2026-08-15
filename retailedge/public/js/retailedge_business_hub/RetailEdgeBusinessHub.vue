@@ -40,15 +40,26 @@
 						<p class="hub-eyebrow">Retail operations simplified</p>
 						<h2>{{ greeting }}</h2>
 						<p>
-							Use the business menu for daily operations and the actions below for current
-							transactions. Guided RetailEdge entries will progressively replace technical
-							ERPNext fields without creating duplicate accounting documents.
+							Use the business menu for daily operations. The Create action is the common
+							entry point for new business transactions; each guided flow will progressively
+							replace technical ERPNext fields without creating duplicate accounting
+							documents.
 						</p>
 					</div>
-					<div class="hub-context">
-						<span v-if="context.company">{{ context.company }}</span>
-						<span v-if="context.branch">{{ context.branch }}</span>
-						<span>Product switching suspended</span>
+					<div class="hub-banner-side">
+						<div class="hub-context">
+							<span v-if="context.company">{{ context.company }}</span>
+							<span v-if="context.branch">{{ context.branch }}</span>
+							<span>Product switching suspended</span>
+						</div>
+						<button
+							type="button"
+							class="edge-button edge-button--primary hub-create-button"
+							:disabled="!quickActions.length"
+							@click="openCreatePicker"
+						>
+							+ Create
+						</button>
 					</div>
 				</section>
 
@@ -77,39 +88,41 @@
 						</article>
 					</div>
 				</section>
-
-				<section>
-					<div class="section-heading">
-						<div>
-							<p class="section-kicker">Act</p>
-							<h3>Quick business actions</h3>
-						</div>
-						<p>Every action creates a standard ERPNext or RetailEdge document.</p>
-					</div>
-					<div v-if="quickActions.length" class="quick-action-grid">
-						<button
-							v-for="action in quickActions"
-							:key="action.key"
-							type="button"
-							class="quick-action-card"
-							@click="runQuickAction(action)"
-						>
-							<span class="quick-action-icon">{{ iconText(action.icon) }}</span>
-							<span class="quick-action-copy">
-								<strong>{{ action.label }}</strong>
-								<small>{{ action.description }}</small>
-							</span>
-							<span class="quick-action-mode">{{ actionModeLabel(action.mode) }}</span>
-						</button>
-					</div>
-					<EdgeEmptyState
-						v-else
-						title="No permitted quick actions"
-						description="Your current roles do not allow creation of the configured business documents."
-						icon="lock"
-					/>
-				</section>
 			</div>
+
+			<EdgeModal
+				:open="createPickerOpen"
+				title="Create"
+				subtitle="Choose the business entry you want to record. Only entries you can create are shown."
+				size="md"
+				@close="closeCreatePicker"
+			>
+				<div v-if="quickActions.length" class="create-picker-list">
+					<button
+						v-for="action in quickActions"
+						:key="action.key"
+						type="button"
+						class="create-picker-item"
+						@click="runQuickAction(action)"
+					>
+						<span class="create-picker-icon">{{ iconText(action.icon) }}</span>
+						<span class="create-picker-copy">
+							<strong>{{ action.label }}</strong>
+							<small>{{ action.description }}</small>
+						</span>
+						<span class="create-picker-mode">{{ actionModeLabel(action.mode) }}</span>
+					</button>
+				</div>
+				<EdgeEmptyState
+					v-else
+					title="No permitted entries"
+					description="Your current roles do not allow creation of the configured business documents."
+					icon="lock"
+				/>
+				<template #footer>
+					<button type="button" class="edge-button" @click="closeCreatePicker">Cancel</button>
+				</template>
+			</EdgeModal>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
@@ -178,11 +191,13 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
+		EdgeModal: runtimeComponents.EdgeModal,
 	},
 	data() {
 		return {
 			loading: true,
 			error: "",
+			createPickerOpen: false,
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
@@ -249,8 +264,16 @@ export default {
 					this.loading = false;
 				});
 		},
+		openCreatePicker() {
+			if (!this.quickActions.length) return;
+			this.createPickerOpen = true;
+		},
+		closeCreatePicker() {
+			this.createPickerOpen = false;
+		},
 		runQuickAction(action) {
 			if (!action || !action.doctype) return;
+			this.closeCreatePicker();
 			frappe.new_doc(action.doctype);
 		},
 		navigateFromShell(route) {
@@ -285,13 +308,14 @@ export default {
 			if (!item) return "";
 			if (item.target_type === "URL") return item.target;
 			if (item.target_type === "DocType") return `/app/${frappe.router.slug(item.target)}`;
-			if (item.target_type === "Report")
+			if (item.target_type === "Report") {
 				return `/app/query-report/${encodeURIComponent(item.target)}`;
+			}
 			if (item.target_type === "Page") return `/app/${item.target}`;
 			return "";
 		},
 		actionModeLabel(mode) {
-			return mode === "available" ? "RetailEdge flow" : "Native form now";
+			return mode === "available" ? "RetailEdge entry" : "Full form";
 		},
 		iconText(icon) {
 			const icons = {
@@ -348,13 +372,25 @@ export default {
 	font-weight: 700;
 	color: var(--edge-primary, #2563eb);
 }
+.hub-banner-side,
 .hub-context {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-end;
+}
+.hub-banner-side {
+	justify-content: space-between;
+	gap: 18px;
+	min-width: 180px;
+}
+.hub-context {
 	gap: 6px;
 	font-size: 0.82rem;
 	color: var(--edge-text-muted, #667085);
+}
+.hub-create-button {
+	min-width: 120px;
+	justify-content: center;
 }
 .section-heading {
 	display: flex;
@@ -366,30 +402,16 @@ export default {
 .section-heading h3 {
 	margin: 2px 0 0;
 }
-.section-heading > p {
-	margin: 0;
-	color: var(--edge-text-muted, #667085);
-	font-size: 0.88rem;
-}
-.experience-grid,
-.quick-action-grid {
-	display: grid;
-	gap: 14px;
-}
 .experience-grid {
+	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-.quick-action-grid {
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.experience-card,
-.quick-action-card {
-	border: 1px solid var(--edge-border, #dfe3e8);
-	border-radius: 12px;
-	background: var(--edge-surface, #ffffff);
+	gap: 14px;
 }
 .experience-card {
 	padding: 18px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 12px;
+	background: var(--edge-surface, #ffffff);
 }
 .experience-card-top {
 	display: flex;
@@ -407,40 +429,49 @@ export default {
 	line-height: 1.5;
 }
 .experience-icon,
-.quick-action-icon {
+.create-picker-icon {
 	font-size: 1.3rem;
 }
-.quick-action-card {
+.create-picker-list {
 	display: grid;
-	grid-template-columns: auto 1fr auto;
+	gap: 8px;
+}
+.create-picker-item {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
 	gap: 12px;
-	padding: 16px;
+	width: 100%;
+	padding: 13px 14px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 10px;
+	background: var(--edge-surface, #ffffff);
 	text-align: left;
 	cursor: pointer;
 }
-.quick-action-card:hover {
+.create-picker-item:hover,
+.create-picker-item:focus-visible {
 	border-color: var(--edge-primary, #2563eb);
 }
-.quick-action-copy {
+.create-picker-copy {
 	display: grid;
-	gap: 4px;
+	gap: 3px;
+	min-width: 0;
 }
-.quick-action-copy small {
+.create-picker-copy small,
+.create-picker-mode {
 	color: var(--edge-text-muted, #667085);
+}
+.create-picker-copy small {
 	line-height: 1.35;
 }
-.quick-action-mode {
+.create-picker-mode {
 	font-size: 0.72rem;
-	color: var(--edge-text-muted, #667085);
 	white-space: nowrap;
 }
 @media (max-width: 1200px) {
 	.experience-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-	.quick-action-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 @media (max-width: 720px) {
@@ -449,17 +480,20 @@ export default {
 		align-items: flex-start;
 		flex-direction: column;
 	}
+	.hub-banner-side,
 	.hub-context {
 		align-items: flex-start;
 	}
-	.experience-grid,
-	.quick-action-grid {
+	.hub-banner-side {
+		width: 100%;
+	}
+	.experience-grid {
 		grid-template-columns: 1fr;
 	}
-	.quick-action-card {
-		grid-template-columns: auto 1fr;
+	.create-picker-item {
+		grid-template-columns: auto minmax(0, 1fr);
 	}
-	.quick-action-mode {
+	.create-picker-mode {
 		grid-column: 2;
 	}
 }
