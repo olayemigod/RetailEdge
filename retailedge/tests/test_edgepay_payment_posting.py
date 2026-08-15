@@ -6,7 +6,7 @@ from frappe.tests.utils import FrappeTestCase
 
 try:
 	from edgepayv1.edgepay.tests.utils import DatabaseStateBackup
-except (ImportError, ModuleNotFoundError):
+except ImportError, ModuleNotFoundError:
 	DatabaseStateBackup = None
 
 EDGEPAY_INTEGRATION_AVAILABLE = DatabaseStateBackup is not None and "edgepayv1" in frappe.get_installed_apps()
@@ -32,6 +32,7 @@ from retailedge.services.edgepay_payment_posting import (
 	prepare_edgepay_payment_entry_draft,
 	submit_edgepay_payment_entry,
 )
+from retailedge.tests.utils.fixture_cleanup import collect_fixture_names, delete_fixture_records
 
 
 @unittest.skipUnless(
@@ -43,6 +44,7 @@ class TestEdgePayPaymentPosting(FrappeTestCase):
 		self.db_backup = DatabaseStateBackup()
 		self.db_backup.backup()
 		super().setUp()
+		self._cleanup_test_fixtures()
 		self.original_exists = frappe.db.exists
 		self.original_get_doc = frappe.get_doc
 		self.original_get_value = frappe.db.get_value
@@ -63,20 +65,13 @@ class TestEdgePayPaymentPosting(FrappeTestCase):
 		)
 		self.mocked_get_pe = self.get_pe_patcher.start()
 
-		frappe.db.delete("EdgePay Status Handoff Event")
-		frappe.db.delete("RetailEdge EdgePay Handoff Log")
-		frappe.db.delete("EdgePay Payment Request")
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("Payment Entry")
-
-		frappe.db.delete("EdgePay Provider", {"provider_code": "monnify"})
 		# Ensure test role/provider exists
 		if not frappe.db.exists("EdgePay Provider", "Test Posting Provider"):
 			frappe.get_doc(
 				{
 					"doctype": "EdgePay Provider",
 					"provider_name": "Test Posting Provider",
-					"provider_code": "monnify",
+					"provider_code": "test-posting-monnify",
 					"enabled": 1,
 					"sandbox_mode": 1,
 					"provider_type": "Monnify",
@@ -95,17 +90,51 @@ class TestEdgePayPaymentPosting(FrappeTestCase):
 		self.get_doc_patcher.stop()
 		self.exists_patcher.stop()
 
-		frappe.db.delete("EdgePay Status Handoff Event")
-		frappe.db.delete("RetailEdge EdgePay Handoff Log")
-		frappe.db.delete("EdgePay Payment Request")
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("Payment Entry")
-		if frappe.db.exists("EdgePay Provider", "Test Posting Provider"):
-			frappe.db.delete("EdgePay Provider", "Test Posting Provider")
+		self._cleanup_test_fixtures()
 		frappe.db.commit()
 		frappe.set_user("Administrator")
 		self.db_backup.restore()
 		super().tearDown()
+
+	def _cleanup_test_fixtures(self):
+		evidence_names = collect_fixture_names(
+			"RetailEdge EdgePay Payment Evidence",
+			prefixes=("EPE-TEST-", "EPE-SUB-"),
+		)
+		payment_entry_names = set()
+		if evidence_names:
+			payment_entry_names.update(
+				frappe.get_all(
+					"RetailEdge EdgePay Payment Evidence",
+					filters={"name": ["in", sorted(evidence_names)]},
+					pluck="payment_entry",
+					limit=0,
+				)
+			)
+		payment_entry_names.update(
+			collect_fixture_names(
+				"Payment Entry",
+				filters=(
+					{"reference_no": ["like", "test-prov-ref-%"]},
+					{"reference_no": ["like", "prov-sub-%"]},
+				),
+			)
+		)
+		handoff_log_names = collect_fixture_names(
+			"RetailEdge EdgePay Handoff Log",
+			filters=(
+				{"edgepay_event": "EV-TEST-123"},
+				{"provider_reference": ["like", "test-prov-ref-%"]},
+				{"provider_reference": ["like", "prov-sub-%"]},
+			),
+		)
+
+		delete_fixture_records("RetailEdge EdgePay Payment Evidence", evidence_names)
+		delete_fixture_records("RetailEdge EdgePay Handoff Log", handoff_log_names)
+		delete_fixture_records("Payment Entry", payment_entry_names)
+		delete_fixture_records("EdgePay Status Handoff Event", ("EV-TEST-123",))
+		delete_fixture_records("EdgePay Payment Request", ("EP-PRQ-123",))
+		delete_fixture_records("EdgePay Provider", ("Test Posting Provider",))
 
 	def mock_exists(self, *args, **kwargs):
 		if args:

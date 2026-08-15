@@ -9,11 +9,13 @@ from retailedge.services.edgepay_reconciliation_readiness import (
 	mark_edgepay_evidence_reconciliation_blocked,
 	mark_edgepay_evidence_reconciliation_ready,
 )
+from retailedge.tests.utils.fixture_cleanup import collect_fixture_names, delete_fixture_records
 
 
 class TestEdgePayReconciliationReadiness(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
+		self._cleanup_test_fixtures()
 		self.original_exists = frappe.db.exists
 		self.original_get_doc = frappe.get_doc
 		self.original_get_value = frappe.db.get_value
@@ -28,11 +30,6 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.get_value_patcher = patch("frappe.db.get_value", side_effect=self.mock_get_value)
 		self.mocked_get_value = self.get_value_patcher.start()
 
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("Payment Entry")
-		frappe.db.delete("Bank Transaction")
-		frappe.db.delete("RetailEdge Bank Transaction Match")
-
 		frappe.set_user("Administrator")
 
 	def tearDown(self):
@@ -40,13 +37,40 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.get_doc_patcher.stop()
 		self.exists_patcher.stop()
 
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("Payment Entry")
-		frappe.db.delete("Bank Transaction")
-		frappe.db.delete("RetailEdge Bank Transaction Match")
+		self._cleanup_test_fixtures()
 		frappe.db.commit()
 		frappe.set_user("Administrator")
 		super().tearDown()
+
+	def _cleanup_test_fixtures(self):
+		evidence_names = collect_fixture_names("RetailEdge EdgePay Payment Evidence", prefixes=("EPE-REC-",))
+		payment_entry_names = collect_fixture_names("Payment Entry", prefixes=("ACC-PAY-REC-",))
+		bank_transaction_names = collect_fixture_names("Bank Transaction", prefixes=("BT-REC-",))
+		match_names = set()
+		if bank_transaction_names:
+			match_names.update(
+				collect_fixture_names(
+					"RetailEdge Bank Transaction Match",
+					filters=({"bank_transaction": ["in", sorted(bank_transaction_names)]},),
+				)
+			)
+		if payment_entry_names:
+			match_names.update(
+				collect_fixture_names(
+					"RetailEdge Bank Transaction Match",
+					filters=({"payment_entry": ["in", sorted(payment_entry_names)]},),
+				)
+			)
+
+		delete_fixture_records("RetailEdge EdgePay Payment Evidence", evidence_names)
+		delete_fixture_records("RetailEdge Bank Transaction Match", match_names)
+		delete_fixture_records("Bank Transaction", bank_transaction_names)
+		delete_fixture_records("Payment Entry", payment_entry_names)
+
+	@staticmethod
+	def _fixture_reference(name):
+		suffix = name.split("REC-", 1)[1] if "REC-" in name else name
+		return f"RE-TEST-REC-{suffix}"
 
 	def mock_exists(self, *args, **kwargs):
 		if args:
@@ -141,8 +165,9 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		submission_status="Submitted",
 		amount=1500.0,
 		currency="NGN",
-		provider_ref="test-prov-ref-123",
+		provider_ref=None,
 	):
+		provider_ref = provider_ref or self._fixture_reference(name)
 		doc = frappe.get_doc(
 			{
 				"doctype": "RetailEdge EdgePay Payment Evidence",
@@ -168,9 +193,8 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		doc.flags.name_set = True
 		return doc.insert(ignore_permissions=True, ignore_links=True)
 
-	def create_payment_entry(
-		self, name, docstatus=1, amount=1500.0, currency="NGN", reference_no="test-prov-ref-123"
-	):
+	def create_payment_entry(self, name, docstatus=1, amount=1500.0, currency="NGN", reference_no=None):
+		reference_no = reference_no or self._fixture_reference(name)
 		pe = frappe.new_doc("Payment Entry")
 		pe.name = name
 		pe.payment_type = "Receive"
@@ -214,10 +238,11 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		name,
 		deposit=1500.0,
 		currency="NGN",
-		ref_no="test-prov-ref-123",
+		ref_no=None,
 		status="Unreconciled",
 		payment_entries=None,
 	):
+		ref_no = ref_no or self._fixture_reference(name)
 		bt = frappe.new_doc("Bank Transaction")
 		bt.name = name
 		bt.date = "2026-06-13"
@@ -245,8 +270,8 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertEqual(res["status"], "Not Ready")
 
 	def test_submitted_evidence_with_submitted_payment_entry_passes_readiness(self):
-		ev = self.create_evidence("EPE-REC-002", provider_ref="ref-rec-2")
-		pe = self.create_payment_entry("ACC-PAY-REC-2", docstatus=1, reference_no="ref-rec-2")
+		ev = self.create_evidence("EPE-REC-002", provider_ref="RE-TEST-REC-2")
+		pe = self.create_payment_entry("ACC-PAY-REC-2", docstatus=1, reference_no="RE-TEST-REC-2")
 		ev.db_set("payment_entry", pe.name)
 
 		res = get_edgepay_reconciliation_readiness("EPE-REC-002")
@@ -261,8 +286,8 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertIn("No linked Payment Entry", res["message"])
 
 	def test_draft_payment_entry_blocks_readiness(self):
-		ev = self.create_evidence("EPE-REC-004", provider_ref="ref-rec-4")
-		pe = self.create_payment_entry("ACC-PAY-REC-4", docstatus=0, reference_no="ref-rec-4")
+		ev = self.create_evidence("EPE-REC-004", provider_ref="RE-TEST-REC-4")
+		pe = self.create_payment_entry("ACC-PAY-REC-4", docstatus=0, reference_no="RE-TEST-REC-4")
 		ev.db_set("payment_entry", pe.name)
 
 		res = get_edgepay_reconciliation_readiness("EPE-REC-004")
@@ -271,8 +296,8 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertIn("is not submitted", res["message"])
 
 	def test_cancelled_payment_entry_blocks_readiness(self):
-		ev = self.create_evidence("EPE-REC-005", provider_ref="ref-rec-5")
-		pe = self.create_payment_entry("ACC-PAY-REC-5", docstatus=2, reference_no="ref-rec-5")
+		ev = self.create_evidence("EPE-REC-005", provider_ref="RE-TEST-REC-5")
+		pe = self.create_payment_entry("ACC-PAY-REC-5", docstatus=2, reference_no="RE-TEST-REC-5")
 		ev.db_set("payment_entry", pe.name)
 
 		res = get_edgepay_reconciliation_readiness("EPE-REC-005")
@@ -281,8 +306,10 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertIn("is cancelled", res["message"])
 
 	def test_amount_mismatch_blocks_readiness(self):
-		ev = self.create_evidence("EPE-REC-006", provider_ref="ref-rec-6", amount=1500.0)
-		pe = self.create_payment_entry("ACC-PAY-REC-6", docstatus=1, amount=2000.0, reference_no="ref-rec-6")
+		ev = self.create_evidence("EPE-REC-006", provider_ref="RE-TEST-REC-6", amount=1500.0)
+		pe = self.create_payment_entry(
+			"ACC-PAY-REC-6", docstatus=1, amount=2000.0, reference_no="RE-TEST-REC-6"
+		)
 		ev.db_set("payment_entry", pe.name)
 
 		res = get_edgepay_reconciliation_readiness("EPE-REC-006")
@@ -291,8 +318,10 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertIn("Amount mismatch", res["message"])
 
 	def test_currency_mismatch_blocks_readiness(self):
-		ev = self.create_evidence("EPE-REC-007", provider_ref="ref-rec-7", currency="USD")
-		pe = self.create_payment_entry("ACC-PAY-REC-7", docstatus=1, reference_no="ref-rec-7", currency="NGN")
+		ev = self.create_evidence("EPE-REC-007", provider_ref="RE-TEST-REC-7", currency="USD")
+		pe = self.create_payment_entry(
+			"ACC-PAY-REC-7", docstatus=1, reference_no="RE-TEST-REC-7", currency="NGN"
+		)
 		ev.db_set("payment_entry", pe.name)
 
 		res = get_edgepay_reconciliation_readiness("EPE-REC-007")
@@ -301,12 +330,12 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertIn("Currency mismatch", res["message"])
 
 	def test_conflicting_payment_entry_blocks_readiness(self):
-		ev = self.create_evidence("EPE-REC-008", provider_ref="ref-rec-8")
-		pe = self.create_payment_entry("ACC-PAY-REC-8", docstatus=1, reference_no="ref-rec-8")
+		ev = self.create_evidence("EPE-REC-008", provider_ref="RE-TEST-REC-8")
+		pe = self.create_payment_entry("ACC-PAY-REC-8", docstatus=1, reference_no="RE-TEST-REC-8")
 		ev.db_set("payment_entry", pe.name)
 
 		# Create another submitted Payment Entry with same reference number
-		self.create_payment_entry("ACC-PAY-REC-8-DUP", docstatus=1, reference_no="ref-rec-8")
+		self.create_payment_entry("ACC-PAY-REC-8-DUP", docstatus=1, reference_no="RE-TEST-REC-8")
 
 		res = get_edgepay_reconciliation_readiness("EPE-REC-008")
 		self.assertFalse(res["ok"])
@@ -314,8 +343,8 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertIn("Conflicting submitted Payment Entry", res["message"])
 
 	def test_readiness_marking_is_idempotent(self):
-		ev = self.create_evidence("EPE-REC-009", provider_ref="ref-rec-9")
-		pe = self.create_payment_entry("ACC-PAY-REC-9", docstatus=1, reference_no="ref-rec-9")
+		ev = self.create_evidence("EPE-REC-009", provider_ref="RE-TEST-REC-9")
+		pe = self.create_payment_entry("ACC-PAY-REC-9", docstatus=1, reference_no="RE-TEST-REC-9")
 		ev.db_set("payment_entry", pe.name)
 
 		# First marking
@@ -329,14 +358,14 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertEqual(res2["status"], "Ready")
 
 	def test_completed_reconciliation_updates_status(self):
-		ev = self.create_evidence("EPE-REC-010", provider_ref="ref-rec-10")
-		pe = self.create_payment_entry("ACC-PAY-REC-10", docstatus=1, reference_no="ref-rec-10")
+		ev = self.create_evidence("EPE-REC-010", provider_ref="RE-TEST-REC-10")
+		pe = self.create_payment_entry("ACC-PAY-REC-10", docstatus=1, reference_no="RE-TEST-REC-10")
 		ev.db_set("payment_entry", pe.name)
 
 		# Create reconciled Bank Transaction with child entries
 		bt = self.create_bank_transaction(
 			"BT-REC-10",
-			ref_no="ref-rec-10",
+			ref_no="RE-TEST-REC-10",
 			status="Reconciled",
 			payment_entries=[
 				{
@@ -355,12 +384,12 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertEqual(res["linked_bank_transaction"], bt.name)
 
 	def test_confirmed_match_review_updates_status(self):
-		ev = self.create_evidence("EPE-REC-011", provider_ref="ref-rec-11")
-		pe = self.create_payment_entry("ACC-PAY-REC-11", docstatus=1, reference_no="ref-rec-11")
+		ev = self.create_evidence("EPE-REC-011", provider_ref="RE-TEST-REC-11")
+		pe = self.create_payment_entry("ACC-PAY-REC-11", docstatus=1, reference_no="RE-TEST-REC-11")
 		ev.db_set("payment_entry", pe.name)
 
 		# Create confirmed RetailEdge Bank Transaction Match doc
-		bt = self.create_bank_transaction("BT-REC-11", ref_no="ref-rec-11")
+		bt = self.create_bank_transaction("BT-REC-11", ref_no="RE-TEST-REC-11")
 		match_doc = frappe.get_doc(
 			{
 				"doctype": "RetailEdge Bank Transaction Match",
@@ -381,11 +410,11 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertEqual(res["linked_bank_match_review"], match_doc.name)
 
 	def test_candidate_search_is_read_only(self):
-		ev = self.create_evidence("EPE-REC-012", provider_ref="ref-rec-12")
-		pe = self.create_payment_entry("ACC-PAY-REC-12", docstatus=1, reference_no="ref-rec-12")
+		ev = self.create_evidence("EPE-REC-012", provider_ref="RE-TEST-REC-12")
+		pe = self.create_payment_entry("ACC-PAY-REC-12", docstatus=1, reference_no="RE-TEST-REC-12")
 		ev.db_set("payment_entry", pe.name)
 
-		self.create_bank_transaction("BT-REC-12-CAND", ref_no="ref-rec-12")
+		self.create_bank_transaction("BT-REC-12-CAND", ref_no="RE-TEST-REC-12")
 
 		bt_count_before = frappe.db.count("Bank Transaction")
 		pe_count_before = frappe.db.count("Payment Entry")
@@ -403,8 +432,8 @@ class TestEdgePayReconciliationReadiness(FrappeTestCase):
 		self.assertEqual(candidates[0]["confidence"], "High")
 
 	def test_no_bank_transaction_is_created_or_mutated(self):
-		ev = self.create_evidence("EPE-REC-013", provider_ref="ref-rec-13")
-		pe = self.create_payment_entry("ACC-PAY-REC-13", docstatus=1, reference_no="ref-rec-13")
+		ev = self.create_evidence("EPE-REC-013", provider_ref="RE-TEST-REC-13")
+		pe = self.create_payment_entry("ACC-PAY-REC-13", docstatus=1, reference_no="RE-TEST-REC-13")
 		ev.db_set("payment_entry", pe.name)
 
 		bt_count_before = frappe.db.count("Bank Transaction")

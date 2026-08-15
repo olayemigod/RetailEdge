@@ -10,11 +10,13 @@ from retailedge.services.edgepay_bank_match_confirmation import (
 	mark_edgepay_evidence_reconciliation_matched,
 )
 from retailedge.services.edgepay_bank_match_review import create_edgepay_bank_match_review
+from retailedge.tests.utils.fixture_cleanup import collect_fixture_names, delete_fixture_records
 
 
 class TestEdgePayBankMatchConfirmation(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
+		self._cleanup_test_fixtures()
 		self.original_exists = frappe.db.exists
 		self.original_get_doc = frappe.get_doc
 		self.original_get_value = frappe.db.get_value
@@ -29,12 +31,6 @@ class TestEdgePayBankMatchConfirmation(FrappeTestCase):
 		self.get_value_patcher = patch("frappe.db.get_value", side_effect=self.mock_get_value)
 		self.mocked_get_value = self.get_value_patcher.start()
 
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("Payment Entry")
-		frappe.db.delete("Bank Transaction")
-		frappe.db.delete("RetailEdge Bank Transaction Match")
-		frappe.db.delete("RetailEdge Bank Transaction Match Action Log")
-
 		frappe.set_user("Administrator")
 
 	def tearDown(self):
@@ -42,14 +38,44 @@ class TestEdgePayBankMatchConfirmation(FrappeTestCase):
 		self.get_doc_patcher.stop()
 		self.exists_patcher.stop()
 
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("Payment Entry")
-		frappe.db.delete("Bank Transaction")
-		frappe.db.delete("RetailEdge Bank Transaction Match")
-		frappe.db.delete("RetailEdge Bank Transaction Match Action Log")
+		self._cleanup_test_fixtures()
 		frappe.db.commit()
 		frappe.set_user("Administrator")
 		super().tearDown()
+
+	def _cleanup_test_fixtures(self):
+		evidence_names = collect_fixture_names("RetailEdge EdgePay Payment Evidence", prefixes=("EPE-MTC-",))
+		payment_entry_names = collect_fixture_names("Payment Entry", prefixes=("ACC-PAY-MTC-",))
+		bank_transaction_names = collect_fixture_names(
+			"Bank Transaction",
+			prefixes=("BT-MTC-",),
+			names=("BT-OTHER-123",),
+		)
+		match_names = set()
+		if bank_transaction_names:
+			match_names.update(
+				collect_fixture_names(
+					"RetailEdge Bank Transaction Match",
+					filters=({"bank_transaction": ["in", sorted(bank_transaction_names)]},),
+				)
+			)
+		if payment_entry_names:
+			match_names.update(
+				collect_fixture_names(
+					"RetailEdge Bank Transaction Match",
+					filters=({"payment_entry": ["in", sorted(payment_entry_names)]},),
+				)
+			)
+
+		delete_fixture_records("RetailEdge EdgePay Payment Evidence", evidence_names)
+		delete_fixture_records("RetailEdge Bank Transaction Match", match_names)
+		delete_fixture_records("Bank Transaction", bank_transaction_names)
+		delete_fixture_records("Payment Entry", payment_entry_names)
+
+	@staticmethod
+	def _fixture_reference(name):
+		suffix = name.split("MTC-", 1)[1] if "MTC-" in name else name
+		return f"RE-TEST-MTC-{suffix}"
 
 	def mock_exists(self, *args, **kwargs):
 		if args:
@@ -152,8 +178,9 @@ class TestEdgePayBankMatchConfirmation(FrappeTestCase):
 		submission_status="Submitted",
 		amount=1500.0,
 		currency="NGN",
-		provider_ref="test-prov-ref-123",
+		provider_ref=None,
 	):
+		provider_ref = provider_ref or self._fixture_reference(name)
 		doc = frappe.get_doc(
 			{
 				"doctype": "RetailEdge EdgePay Payment Evidence",
@@ -179,9 +206,8 @@ class TestEdgePayBankMatchConfirmation(FrappeTestCase):
 		doc.flags.name_set = True
 		return doc.insert(ignore_permissions=True, ignore_links=True)
 
-	def create_payment_entry(
-		self, name, docstatus=1, amount=1500.0, currency="NGN", reference_no="test-prov-ref-123"
-	):
+	def create_payment_entry(self, name, docstatus=1, amount=1500.0, currency="NGN", reference_no=None):
+		reference_no = reference_no or self._fixture_reference(name)
 		pe = frappe.new_doc("Payment Entry")
 		pe.name = name
 		pe.payment_type = "Receive"
@@ -225,10 +251,11 @@ class TestEdgePayBankMatchConfirmation(FrappeTestCase):
 		name,
 		deposit=1500.0,
 		currency="NGN",
-		ref_no="test-prov-ref-123",
+		ref_no=None,
 		status="Unreconciled",
 		docstatus=1,
 	):
+		ref_no = ref_no or self._fixture_reference(name)
 		bt = frappe.new_doc("Bank Transaction")
 		bt.name = name
 		bt.date = "2026-06-13"
@@ -244,6 +271,23 @@ class TestEdgePayBankMatchConfirmation(FrappeTestCase):
 		bt.flags.ignore_validate = True
 		bt.flags.name_set = True
 		return bt.insert(ignore_permissions=True, ignore_links=True)
+
+	def test_fixture_cleanup_preserves_preexisting_bank_transaction(self):
+		preexisting_name = "BT-PREEXISTING-R1-ISOLATION"
+		delete_fixture_records("Bank Transaction", (preexisting_name,))
+		try:
+			self.create_bank_transaction(
+				preexisting_name,
+				ref_no="RE-PREEXISTING-R1-ISOLATION",
+			)
+			self.create_bank_transaction("BT-MTC-ISOLATION")
+
+			self._cleanup_test_fixtures()
+
+			self.assertTrue(frappe.db.exists("Bank Transaction", preexisting_name))
+			self.assertFalse(frappe.db.exists("Bank Transaction", "BT-MTC-ISOLATION"))
+		finally:
+			delete_fixture_records("Bank Transaction", (preexisting_name,))
 
 	def test_evidence_not_reviewed_blocks_confirmation(self):
 		ev = self.create_evidence("EPE-MTC-001", review_status="Pending Review")

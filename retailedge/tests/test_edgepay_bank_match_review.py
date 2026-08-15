@@ -9,11 +9,13 @@ from retailedge.services.edgepay_bank_match_review import (
 	get_edgepay_bank_match_review_preflight,
 	mark_edgepay_evidence_match_review_created,
 )
+from retailedge.tests.utils.fixture_cleanup import collect_fixture_names, delete_fixture_records
 
 
 class TestEdgePayBankMatchReview(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
+		self._cleanup_test_fixtures()
 		self.original_exists = frappe.db.exists
 		self.original_get_doc = frappe.get_doc
 		self.original_get_value = frappe.db.get_value
@@ -28,12 +30,6 @@ class TestEdgePayBankMatchReview(FrappeTestCase):
 		self.get_value_patcher = patch("frappe.db.get_value", side_effect=self.mock_get_value)
 		self.mocked_get_value = self.get_value_patcher.start()
 
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("Payment Entry")
-		frappe.db.delete("Bank Transaction")
-		frappe.db.delete("RetailEdge Bank Transaction Match")
-		frappe.db.delete("RetailEdge Bank Transaction Match Action Log")
-
 		frappe.set_user("Administrator")
 
 	def tearDown(self):
@@ -41,14 +37,40 @@ class TestEdgePayBankMatchReview(FrappeTestCase):
 		self.get_doc_patcher.stop()
 		self.exists_patcher.stop()
 
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("Payment Entry")
-		frappe.db.delete("Bank Transaction")
-		frappe.db.delete("RetailEdge Bank Transaction Match")
-		frappe.db.delete("RetailEdge Bank Transaction Match Action Log")
+		self._cleanup_test_fixtures()
 		frappe.db.commit()
 		frappe.set_user("Administrator")
 		super().tearDown()
+
+	def _cleanup_test_fixtures(self):
+		evidence_names = collect_fixture_names("RetailEdge EdgePay Payment Evidence", prefixes=("EPE-MTR-",))
+		payment_entry_names = collect_fixture_names("Payment Entry", prefixes=("ACC-PAY-MTR-",))
+		bank_transaction_names = collect_fixture_names("Bank Transaction", prefixes=("BT-MTR-",))
+		match_names = set()
+		if bank_transaction_names:
+			match_names.update(
+				collect_fixture_names(
+					"RetailEdge Bank Transaction Match",
+					filters=({"bank_transaction": ["in", sorted(bank_transaction_names)]},),
+				)
+			)
+		if payment_entry_names:
+			match_names.update(
+				collect_fixture_names(
+					"RetailEdge Bank Transaction Match",
+					filters=({"payment_entry": ["in", sorted(payment_entry_names)]},),
+				)
+			)
+
+		delete_fixture_records("RetailEdge EdgePay Payment Evidence", evidence_names)
+		delete_fixture_records("RetailEdge Bank Transaction Match", match_names)
+		delete_fixture_records("Bank Transaction", bank_transaction_names)
+		delete_fixture_records("Payment Entry", payment_entry_names)
+
+	@staticmethod
+	def _fixture_reference(name):
+		suffix = name.split("MTR-", 1)[1] if "MTR-" in name else name
+		return f"RE-TEST-MTR-{suffix}"
 
 	def mock_exists(self, *args, **kwargs):
 		if args:
@@ -151,8 +173,9 @@ class TestEdgePayBankMatchReview(FrappeTestCase):
 		submission_status="Submitted",
 		amount=1500.0,
 		currency="NGN",
-		provider_ref="test-prov-ref-123",
+		provider_ref=None,
 	):
+		provider_ref = provider_ref or self._fixture_reference(name)
 		doc = frappe.get_doc(
 			{
 				"doctype": "RetailEdge EdgePay Payment Evidence",
@@ -178,9 +201,8 @@ class TestEdgePayBankMatchReview(FrappeTestCase):
 		doc.flags.name_set = True
 		return doc.insert(ignore_permissions=True, ignore_links=True)
 
-	def create_payment_entry(
-		self, name, docstatus=1, amount=1500.0, currency="NGN", reference_no="test-prov-ref-123"
-	):
+	def create_payment_entry(self, name, docstatus=1, amount=1500.0, currency="NGN", reference_no=None):
+		reference_no = reference_no or self._fixture_reference(name)
 		pe = frappe.new_doc("Payment Entry")
 		pe.name = name
 		pe.payment_type = "Receive"
@@ -224,10 +246,11 @@ class TestEdgePayBankMatchReview(FrappeTestCase):
 		name,
 		deposit=1500.0,
 		currency="NGN",
-		ref_no="test-prov-ref-123",
+		ref_no=None,
 		status="Unreconciled",
 		docstatus=1,
 	):
+		ref_no = ref_no or self._fixture_reference(name)
 		bt = frappe.new_doc("Bank Transaction")
 		bt.name = name
 		bt.date = "2026-06-13"

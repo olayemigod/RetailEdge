@@ -3,22 +3,28 @@ import json
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from retailedge.tests.utils.fixture_cleanup import collect_fixture_names, delete_fixture_records
 from retailedge.workspace_home import HOME_SECTIONS, HOME_WORKSPACE_ITEMS
 
 
 class TestEdgePayReporting(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
-		# Clean setup
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("RetailEdge EdgePay Handoff Log")
+		self._cleanup_test_fixtures()
 		frappe.db.commit()
 
 	def tearDown(self):
-		frappe.db.delete("RetailEdge EdgePay Payment Evidence")
-		frappe.db.delete("RetailEdge EdgePay Handoff Log")
+		self._cleanup_test_fixtures()
 		frappe.db.commit()
 		super().tearDown()
+
+	def _cleanup_test_fixtures(self):
+		evidence_names = collect_fixture_names("RetailEdge EdgePay Payment Evidence", prefixes=("EPE-REP-",))
+		handoff_log_names = collect_fixture_names(
+			"RetailEdge EdgePay Handoff Log", filters=({"edgepay_event": "EV-REP-123"},)
+		)
+		delete_fixture_records("RetailEdge EdgePay Payment Evidence", evidence_names)
+		delete_fixture_records("RetailEdge EdgePay Handoff Log", handoff_log_names)
 
 	def create_evidence(
 		self,
@@ -67,19 +73,20 @@ class TestEdgePayReporting(FrappeTestCase):
 		# Import execute method of report
 		from retailedge.retailedge.report.retailedge_edgepay_payment_evidence_summary.retailedge_edgepay_payment_evidence_summary import (
 			execute,
+			get_report_summary,
 		)
 
-		columns, data, _message, _chart, report_summary = execute(
+		columns, data, _message, _chart, _report_summary = execute(
 			filters={"from_date": created_date, "to_date": created_date}
 		)
 
 		# Ensure columns exist
 		self.assertTrue(len(columns) > 0)
-		# Ensure records are found
-		self.assertEqual(len(data), 4)
+		fixture_rows = [row for row in data if row.get("evidence", "").startswith("EPE-REP-")]
+		self.assertEqual(len(fixture_rows), 4)
 
 		# Verify report summary counts
-		summary_dict = {item["label"]: item["value"] for item in report_summary}
+		summary_dict = {item["label"]: item["value"] for item in get_report_summary(fixture_rows)}
 		self.assertEqual(summary_dict.get("Total Evidence"), 4)
 		self.assertEqual(summary_dict.get("Pending Review"), 1)
 		self.assertEqual(summary_dict.get("Reviewed / Ready"), 3)
@@ -100,16 +107,18 @@ class TestEdgePayReporting(FrappeTestCase):
 
 		from retailedge.retailedge.report.retailedge_edgepay_lifecycle_status.retailedge_edgepay_lifecycle_status import (
 			execute,
+			get_report_summary,
 		)
 
-		columns, data, _message, _chart, report_summary = execute(
+		columns, data, _message, _chart, _report_summary = execute(
 			filters={"from_date": created_date, "to_date": created_date}
 		)
 
 		self.assertTrue(len(columns) > 0)
-		self.assertEqual(len(data), 1)
+		fixture_rows = [row for row in data if row.get("evidence", "").startswith("EPE-REP-")]
+		self.assertEqual(len(fixture_rows), 1)
 
-		summary_dict = {item["label"]: item["value"] for item in report_summary}
+		summary_dict = {item["label"]: item["value"] for item in get_report_summary(fixture_rows)}
 		self.assertEqual(summary_dict.get("Total Requests"), 1)
 		self.assertEqual(summary_dict.get("Evidence Reviewed"), 1)
 		self.assertEqual(summary_dict.get("Payment Entries Submitted"), 1)
