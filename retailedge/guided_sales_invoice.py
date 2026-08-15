@@ -192,7 +192,11 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 	if values.get("remarks"):
 		doc.remarks = str(values.get("remarks")).strip()
 	if branch:
-		doc.flags.retailedge_explicit_branch = branch
+		# The existing attribution hook treats a normal `branch` attribute as an
+		# explicit context input, then stores the canonical retailedge_branch field.
+		# Frappe ignores non-meta attributes during DB insert on sites where Sales
+		# Invoice has no native/custom branch field.
+		doc.branch = branch
 
 	for item in items:
 		_assert_read_permission("Item", item["item_code"])
