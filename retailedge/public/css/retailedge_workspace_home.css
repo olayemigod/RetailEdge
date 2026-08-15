@@ -1,3 +1,5 @@
+@import url("/assets/retailedge/css/retailedge_edgeui_theme_compat.css");
+
 /* Scoped RetailEdge Workspace polish. Do not target global Frappe cards. */
 body[data-route="Workspaces/RetailEdge"] .layout-main-section,
 body[data-route="Workspaces/RetailEdge"] .workspace-body,

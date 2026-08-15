@@ -1,0 +1,101 @@
+/* RetailEdge compatibility with EdgeSuite Theme System V1.
+   Keep RetailEdge's business-card language while deriving palette, neutral,
+   status and surface colors from the user's selected EdgeSuite theme. */
+
+:root[data-edge-palette] {
+	--pe-blue-900: var(--edge-color-brand-700);
+	--pe-blue-800: var(--edge-color-brand-700);
+	--pe-blue-700: var(--edge-color-brand-600);
+	--pe-blue-600: var(--edge-color-brand-500);
+	--pe-blue-100: var(--edge-color-brand-100);
+	--pe-blue-50: var(--edge-color-brand-50);
+	--pe-green-800: color-mix(in srgb, var(--edge-color-success) 78%, var(--edge-color-ink-950));
+	--pe-green-700: var(--edge-color-success);
+	--pe-green-600: var(--edge-color-success);
+	--pe-green-100: color-mix(in srgb, var(--edge-color-success) 16%, var(--edge-color-surface));
+	--pe-green-50: color-mix(in srgb, var(--edge-color-success) 8%, var(--edge-color-surface));
+	--pe-grey-950: var(--edge-color-ink-950);
+	--pe-grey-800: var(--edge-color-ink-800);
+	--pe-grey-700: var(--edge-color-ink-700);
+	--pe-grey-600: var(--edge-color-ink-700);
+	--pe-grey-500: var(--edge-color-ink-500);
+	--pe-grey-300: var(--edge-color-border-strong);
+	--pe-grey-200: var(--edge-color-border);
+	--pe-grey-100: var(--edge-color-surface-muted);
+	--pe-grey-50: var(--edge-color-surface-soft);
+	--pe-white: var(--edge-color-surface);
+	--pe-success: var(--edge-color-success);
+	--pe-success-bg: color-mix(in srgb, var(--edge-color-success) 12%, var(--edge-color-surface));
+	--pe-warning: var(--edge-color-warning);
+	--pe-warning-bg: color-mix(in srgb, var(--edge-color-warning) 12%, var(--edge-color-surface));
+	--pe-danger: var(--edge-color-danger);
+	--pe-danger-bg: color-mix(in srgb, var(--edge-color-danger) 12%, var(--edge-color-surface));
+	--pe-info: var(--edge-color-info);
+	--pe-info-bg: color-mix(in srgb, var(--edge-color-info) 12%, var(--edge-color-surface));
+	--retailedge-shadow: var(--edge-shadow-sm, 0 4px 14px rgb(18 32 51 / 7%));
+}
+
+:root[data-edge-palette] .retailedge-report-page .retailedge-number-card,
+:root[data-edge-palette] .retailedge-query-report .report-summary .summary-item,
+:root[data-edge-palette] .report-summary.retailedge-report-summary-grid .summary-item,
+:root[data-edge-palette] .retailedge-card,
+:root[data-edge-palette] .retailedge-workspace .shortcut-widget-box,
+:root[data-edge-palette] .retailedge-workspace .links-widget-box,
+:root[data-edge-palette] .retailedge-workspace .number-widget-box,
+:root[data-edge-palette] .retailedge-workspace .widget.shortcut-widget-box,
+:root[data-edge-palette] .retailedge-workspace .widget.links-widget-box,
+:root[data-edge-palette] .retailedge-workspace .widget.number-widget-box {
+	background: linear-gradient(
+		180deg,
+		var(--edge-color-surface) 0%,
+		var(--edge-color-surface-muted) 100%
+	);
+	border-color: var(--edge-color-border);
+	color: var(--edge-color-ink-950);
+}
+
+:root[data-edge-palette] .retailedge-report-page .retailedge-number-card::before,
+:root[data-edge-palette] .retailedge-query-report .report-summary .summary-item::before,
+:root[data-edge-palette] .report-summary.retailedge-report-summary-grid .summary-item::before,
+:root[data-edge-palette] .retailedge-card::before,
+:root[data-edge-palette] .retailedge-workspace .shortcut-widget-box::before,
+:root[data-edge-palette] .retailedge-workspace .links-widget-box::before,
+:root[data-edge-palette] .retailedge-workspace .number-widget-box::before {
+	background: linear-gradient(90deg, var(--edge-color-brand-600), var(--edge-color-success));
+}
+
+:root[data-edge-palette] .retailedge-report-page .retailedge-number-card::after,
+:root[data-edge-palette] .retailedge-query-report .report-summary .summary-item::after,
+:root[data-edge-palette] .report-summary.retailedge-report-summary-grid .summary-item::after {
+	background: radial-gradient(
+		circle,
+		color-mix(in srgb, var(--edge-color-brand-600) 10%, transparent),
+		transparent
+	);
+}
+
+:root[data-edge-palette] body[data-route="Workspaces/RetailEdge"] .layout-main-section,
+:root[data-edge-palette] body[data-route="Workspaces/RetailEdge"] .workspace-body,
+:root[data-edge-palette] .page-container[data-page-route="Workspaces/RetailEdge"] .layout-main-section,
+:root[data-edge-palette] .page-container[data-page-route="Workspaces/RetailEdge"] .workspace-body {
+	--retailedge-home-accent: var(--edge-color-brand-600);
+	--retailedge-home-card-bg: var(--edge-color-surface);
+	--retailedge-home-border: var(--edge-color-border);
+	--retailedge-home-shadow: var(--edge-shadow-sm, 0 4px 14px rgb(18 32 51 / 7%));
+}
+
+:root[data-edge-palette] body[data-route="Workspaces/RetailEdge"] .retailedge-home-title small,
+:root[data-edge-palette] .page-container[data-page-route="Workspaces/RetailEdge"] .retailedge-home-title small {
+	color: var(--edge-color-ink-500);
+}
+
+:root[data-edge-palette] body[data-route="Workspaces/RetailEdge"] .links-widget-box .link-item,
+:root[data-edge-palette] .page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box .link-item {
+	background: color-mix(in srgb, var(--edge-color-surface) 88%, var(--edge-color-surface-muted));
+	color: var(--edge-color-ink-950);
+}
+
+:root[data-edge-palette] body[data-route="Workspaces/RetailEdge"] .links-widget-box .link-item:hover,
+:root[data-edge-palette] .page-container[data-page-route="Workspaces/RetailEdge"] .links-widget-box .link-item:hover {
+	background: color-mix(in srgb, var(--edge-color-brand-600) 8%, var(--edge-color-surface-muted));
+}

@@ -64,6 +64,19 @@
   "sales_invoice_sync_ready",
   "sync_blocked_reason",
   "synced_to_sales_invoice",
+  "reconciliation_execution_section",
+  "execution_status",
+  "executed_by",
+  "executed_on",
+  "execution_reference",
+  "execution_message",
+  "execution_error_summary",
+  "dry_run_status_at_execution",
+  "gate_status_at_execution",
+  "execution_bank_transaction",
+  "execution_candidate_doctype",
+  "execution_candidate_name",
+  "execution_payment_event_identity",
   "technical_section",
   "source_report",
   "details_json",
@@ -473,6 +486,89 @@
    "fieldname": "account_resolution_status",
    "fieldtype": "Data",
    "label": "Account Resolution Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_execution_section",
+   "fieldtype": "Section Break",
+   "label": "Reconciliation Execution"
+  },
+  {
+   "default": "Not Executed",
+   "fieldname": "execution_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Execution Status",
+   "options": "Not Executed\nExecuted\nBlocked\nFailed\nAlready Handled",
+   "read_only": 1
+  },
+  {
+   "fieldname": "executed_by",
+   "fieldtype": "Link",
+   "label": "Executed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "executed_on",
+   "fieldtype": "Datetime",
+   "label": "Executed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_reference",
+   "fieldtype": "Data",
+   "label": "Execution Reference",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_message",
+   "fieldtype": "Small Text",
+   "label": "Execution Message",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_error_summary",
+   "fieldtype": "Small Text",
+   "label": "Execution Error Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "dry_run_status_at_execution",
+   "fieldtype": "Data",
+   "label": "Dry Run Status at Execution",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gate_status_at_execution",
+   "fieldtype": "Data",
+   "label": "Gate Status at Execution",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_bank_transaction",
+   "fieldtype": "Link",
+   "label": "Execution Bank Transaction",
+   "options": "Bank Transaction",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_candidate_doctype",
+   "fieldtype": "Data",
+   "label": "Execution Candidate DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_candidate_name",
+   "fieldtype": "Data",
+   "label": "Execution Candidate Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "execution_payment_event_identity",
+   "fieldtype": "Data",
+   "label": "Execution Payment Event Identity",
    "read_only": 1
   }
  ],

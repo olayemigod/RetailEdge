@@ -1,0 +1,275 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-06-13 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "edgepay_handoff_event",
+  "edgepay_payment_request",
+  "edgepay_payment_transaction",
+  "source_app",
+  "source_doctype",
+  "source_name",
+  "provider",
+  "provider_reference",
+  "transaction_reference",
+  "amount",
+  "currency",
+  "request_status",
+  "transaction_status",
+  "paid_on",
+  "processing_status",
+  "review_status",
+  "error_message",
+  "created_from_edgepay_handoff",
+  "idempotency_key",
+  "posting_status",
+  "payment_entry",
+  "posting_preflight_message",
+  "posting_prepared_on",
+  "posting_prepared_by",
+  "submitted_on",
+  "submitted_by",
+  "submission_status",
+  "submission_message",
+  "reconciliation_status",
+  "reconciliation_message",
+  "linked_bank_transaction",
+  "linked_bank_match_review",
+  "reconciliation_checked_on",
+  "reconciliation_checked_by"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Naming Series",
+   "options": "RE-EPE-.YYYY.-"
+  },
+  {
+   "description": "Remote EdgePay handoff event identifier. EdgePay is a service and is not installed on this site.",
+   "fieldname": "edgepay_handoff_event",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "EdgePay Handoff Event"
+  },
+  {
+   "description": "Remote EdgePay payment request identifier.",
+   "fieldname": "edgepay_payment_request",
+   "fieldtype": "Data",
+   "label": "EdgePay Payment Request"
+  },
+  {
+   "description": "Remote EdgePay payment transaction identifier.",
+   "fieldname": "edgepay_payment_transaction",
+   "fieldtype": "Data",
+   "label": "EdgePay Payment Transaction"
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App"
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Data",
+   "label": "Source DocType"
+  },
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source Name"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider"
+  },
+  {
+   "fieldname": "provider_reference",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Provider Reference"
+  },
+  {
+   "fieldname": "transaction_reference",
+   "fieldtype": "Data",
+   "label": "Transaction Reference"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Data",
+   "label": "Currency"
+  },
+  {
+   "fieldname": "request_status",
+   "fieldtype": "Data",
+   "label": "Request Status"
+  },
+  {
+   "fieldname": "transaction_status",
+   "fieldtype": "Data",
+   "label": "Transaction Status"
+  },
+  {
+   "fieldname": "paid_on",
+   "fieldtype": "Datetime",
+   "label": "Paid On"
+  },
+  {
+   "fieldname": "processing_status",
+   "fieldtype": "Select",
+   "label": "Processing Status",
+   "options": "Pending\nEvidence Created\nEvidence Updated\nFailed\nIgnored"
+  },
+  {
+   "fieldname": "review_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Review Status",
+   "options": "Pending Review\nReviewed\nRejected\nException"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Text",
+   "label": "Error Message"
+  },
+  {
+   "default": "0",
+   "fieldname": "created_from_edgepay_handoff",
+   "fieldtype": "Check",
+   "label": "Created From EdgePay Handoff"
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "unique": 1
+  },
+  {
+   "default": "Not Prepared",
+   "fieldname": "posting_status",
+   "fieldtype": "Select",
+   "label": "Posting Status",
+   "options": "Not Prepared\nReady\nDraft Created\nSubmitted\nBlocked\nFailed\nCancelled"
+  },
+  {
+   "fieldname": "payment_entry",
+   "fieldtype": "Link",
+   "label": "Payment Entry",
+   "options": "Payment Entry"
+  },
+  {
+   "fieldname": "posting_preflight_message",
+   "fieldtype": "Small Text",
+   "label": "Posting Preflight Message"
+  },
+  {
+   "fieldname": "posting_prepared_on",
+   "fieldtype": "Datetime",
+   "label": "Posting Prepared On"
+  },
+  {
+   "fieldname": "posting_prepared_by",
+   "fieldtype": "Data",
+   "label": "Posting Prepared By"
+  },
+  {
+   "fieldname": "submitted_on",
+   "fieldtype": "Datetime",
+   "label": "Submitted On"
+  },
+  {
+   "fieldname": "submitted_by",
+   "fieldtype": "Data",
+   "label": "Submitted By"
+  },
+  {
+   "default": "Not Submitted",
+   "fieldname": "submission_status",
+   "fieldtype": "Select",
+   "label": "Submission Status",
+   "options": "Not Submitted\nSubmitted\nFailed\nBlocked"
+  },
+  {
+   "fieldname": "submission_message",
+   "fieldtype": "Small Text",
+   "label": "Submission Message"
+  },
+  {
+   "default": "Not Ready",
+   "fieldname": "reconciliation_status",
+   "fieldtype": "Select",
+   "label": "Reconciliation Status",
+   "options": "Not Ready\nReady\nMatched\nReconciled\nBlocked\nException"
+  },
+  {
+   "fieldname": "reconciliation_message",
+   "fieldtype": "Small Text",
+   "label": "Reconciliation Message"
+  },
+  {
+   "fieldname": "linked_bank_transaction",
+   "fieldtype": "Link",
+   "label": "Linked Bank Transaction",
+   "options": "Bank Transaction"
+  },
+  {
+   "fieldname": "linked_bank_match_review",
+   "fieldtype": "Link",
+   "label": "Linked Bank Match Review",
+   "options": "RetailEdge Bank Transaction Match"
+  },
+  {
+   "fieldname": "reconciliation_checked_on",
+   "fieldtype": "Datetime",
+   "label": "Reconciliation Checked On"
+  },
+  {
+   "fieldname": "reconciliation_checked_by",
+   "fieldtype": "Data",
+   "label": "Reconciliation Checked By"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-06-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge EdgePay Payment Evidence",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "RetailEdge Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

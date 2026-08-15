@@ -5,10 +5,13 @@ app_description = "Retail operations, POS control, sales audit, payment verifica
 app_email = "support@processedge.com.ng"
 app_license = "MIT"
 
+# The standalone ProcessEdge EdgeSuite UI app is the only supported shared
+# frontend runtime for new RetailEdge product pages. RetailEdge must not depend
+# on CoreEdge for Vue components, bundles, or browser UI runtime objects.
+required_apps = ["edgesuite_ui"]
+
 # Apps
 # ------------------
-
-# required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -27,8 +30,12 @@ app_license = "MIT"
 # include js, css files in header of desk.html
 app_include_css = [
 	"/assets/retailedge/css/retailedge_cards.css",
+	"/assets/retailedge/css/retailedge_workspace_home.css",
 ]
-app_include_js = "/assets/retailedge/js/retailedge.js"
+app_include_js = [
+	"/assets/retailedge/js/retailedge.js",
+	"/assets/retailedge/js/retailedge_business_hub_page.js",
+]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/retailedge/css/retailedge.css"
@@ -266,7 +273,7 @@ boot_session = "retailedge.boot.boot_session"
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
-# along with any modifications made in other Frappe apps
+# along with any modifications made in other apps
 # override_doctype_dashboards = {
 # 	"Task": "retailedge.task.get_dashboard_data"
 # }

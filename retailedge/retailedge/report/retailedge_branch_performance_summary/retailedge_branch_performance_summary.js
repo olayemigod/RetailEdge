@@ -1,3 +1,9 @@
+function getPresetDates(preset) {
+	return window.retailedge && window.retailedge.getPresetDates
+		? window.retailedge.getPresetDates(preset)
+		: null;
+}
+
 function applyRetailEdgeSummaryCardDesign() {
 	// Report summary cards are styled through native Frappe DOM selectors in CSS.
 }
@@ -78,6 +84,26 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 			options: "User",
 		},
 		{
+			fieldname: "date_range_preset",
+			label: __("Date Range Preset"),
+			fieldtype: "Select",
+			options: [
+				"This Month",
+				"Today",
+				"Yesterday",
+				"This Week",
+				"This Quarter",
+				"This Year",
+				"Last Week",
+				"Last Month",
+				"Last Quarter",
+				"Last Year",
+				"Custom Period",
+				"Full Branch History",
+			].join("\n"),
+			default: "This Month",
+		},
+		{
 			fieldname: "from_date",
 			label: __("From Date"),
 			fieldtype: "Date",
@@ -119,12 +145,26 @@ frappe.query_reports["RetailEdge Branch Performance Summary"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		window.retailedge.setupDateRangePresets(report);
 		const originalRefresh = report.refresh.bind(report);
 		report.refresh = function () {
 			const fromDate = report.get_filter_value("from_date");
 			const toDate = report.get_filter_value("to_date");
-			if (fromDate && toDate && frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)) {
+			if (
+				fromDate &&
+				toDate &&
+				frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)
+			) {
 				frappe.throw(__("From Date cannot be after To Date."));
+			}
+			if (fromDate && toDate) {
+				const days = frappe.datetime.get_day_diff(toDate, fromDate) + 1;
+				if (days > 60) {
+					frappe.show_alert({
+						message: __("Large date ranges may take longer to load."),
+						indicator: "orange",
+					});
+				}
 			}
 			return originalRefresh();
 		};

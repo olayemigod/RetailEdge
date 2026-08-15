@@ -17,7 +17,6 @@ from retailedge.branch_context import (
 )
 from retailedge.cashier_expense import user_has_any_role
 
-
 BRANCH_PERFORMANCE_ROLES = {
 	"System Manager",
 	"Accounts Manager",
@@ -30,6 +29,7 @@ BRANCH_PERFORMANCE_ROLES = {
 	"RetailEdgeAuditor",
 }
 PAYMENT_CATEGORY_ORDER = ("Cash", "Bank Transfer", "Card / POS", "Mobile Money", "Other")
+BANK_SALES_PAYMENT_CATEGORIES = ("Bank Transfer", "Card / POS", "Mobile Money")
 MAX_BRANCH_PERFORMANCE_RANGE_DAYS = 60
 
 
@@ -80,6 +80,8 @@ def get_branch_performance_rows(filters=None):
 
 	for row in row_map.values():
 		row["cash_sales"] = flt(row.get("Cash"))
+		row["bank_sales"] = get_bank_sales_total(row)
+		row["bank_card_mobile_sales"] = row["bank_sales"]
 		row["net_cash_expected"] = flt(row.get("cash_sales")) - flt(row.get("cashier_expenses"))
 		row["payment_issues"] = (
 			int(row.get("outstanding_invoice_count") or 0)
@@ -110,7 +112,9 @@ def debug_branch_performance_cashier_filter(filters=None, **kwargs):
 		payload.update(kwargs)
 		filters = payload
 	filters = _coerce_filters(filters)
-	query_parts = _sales_invoice_query_parts(filters, alias="si", include_branch_filter=True, need_cashier=True)
+	query_parts = _sales_invoice_query_parts(
+		filters, alias="si", include_branch_filter=True, need_cashier=True
+	)
 	cashier_source_expr = _sales_invoice_cashier_source_expression("si")
 	cashier_expr = query_parts["cashier_expr"]
 	available_cashier_fields = _available_sales_invoice_cashier_sources()
@@ -139,11 +143,11 @@ def debug_branch_performance_cashier_filter(filters=None, **kwargs):
 			si.posting_date,
 			COALESCE(si.grand_total, 0) AS grand_total,
 			si.owner,
-			{_sales_invoice_optional_field('si', 'pos_profile')} AS pos_profile,
+			{_sales_invoice_optional_field("si", "pos_profile")} AS pos_profile,
 			COALESCE(si.is_pos, 0) AS is_pos,
-			{_sales_invoice_optional_field('si', 'posa_pos_opening_shift')} AS posa_pos_opening_shift,
-			{_sales_invoice_optional_field('si', 'pos_opening_shift')} AS pos_opening_shift,
-			{_sales_invoice_optional_field('si', 'retailedge_branch')} AS retailedge_branch,
+			{_sales_invoice_optional_field("si", "posa_pos_opening_shift")} AS posa_pos_opening_shift,
+			{_sales_invoice_optional_field("si", "pos_opening_shift")} AS pos_opening_shift,
+			{_sales_invoice_optional_field("si", "retailedge_branch")} AS retailedge_branch,
 			{cashier_expr} AS resolved_cashier,
 			{cashier_source_expr} AS resolved_cashier_source
 		FROM `tabSales Invoice` si
@@ -189,7 +193,9 @@ def get_branch_payment_breakdown(filters=None):
 		messages.append("Sales Invoice Payment has no supported amount field.")
 		return {"by_branch": {}, "messages": messages}
 
-	query_parts = _sales_invoice_query_parts(filters, alias="si", include_branch_filter=True, need_cashier=bool(filters.get("cashier")))
+	query_parts = _sales_invoice_query_parts(
+		filters, alias="si", include_branch_filter=True, need_cashier=bool(filters.get("cashier"))
+	)
 	branch_expr = query_parts["branch_expr"]
 	where_sql, params = query_parts["where_sql"], query_parts["params"]
 	payment_case = _payment_category_sql("sip")
@@ -244,7 +250,9 @@ def get_branch_sales_summary(filters=None):
 	if not has_doctype("Sales Invoice"):
 		return {"by_branch": {}, "messages": ["Sales Invoice is not available on this site."]}
 
-	query_parts = _sales_invoice_query_parts(filters, alias="si", include_branch_filter=True, need_cashier=bool(filters.get("cashier")))
+	query_parts = _sales_invoice_query_parts(
+		filters, alias="si", include_branch_filter=True, need_cashier=bool(filters.get("cashier"))
+	)
 	branch_expr = query_parts["branch_expr"]
 	where_sql, params = query_parts["where_sql"], query_parts["params"]
 	net_total_expr = _sales_invoice_net_total_expression("si")
@@ -323,7 +331,9 @@ def get_branch_sales_summary(filters=None):
 			payload["outstanding_invoice_count"] += 1
 
 	if unattributed_invoice_count and not filters.get("include_unattributed"):
-		messages.append(f"{unattributed_invoice_count} unattributed invoice(s) were excluded. Enable fallback branch resolution to include them.")
+		messages.append(
+			f"{unattributed_invoice_count} unattributed invoice(s) were excluded. Enable fallback branch resolution to include them."
+		)
 
 	return {"by_branch": dict(by_branch), "messages": messages}
 
@@ -339,7 +349,13 @@ def get_branch_expense_summary(filters=None):
 	branch_expr = _doctype_branch_expression(doctype, "ce")
 	status_field = "expense_status" if has_field(doctype, "expense_status") else None
 	docstatus_sql = " AND COALESCE(ce.docstatus, 0) != 2" if has_field(doctype, "docstatus") else ""
-	where_sql, params = _doctype_where_sql(doctype, filters, alias="ce", date_candidates=("expense_date", "posting_date"), include_branch_filter=True)
+	where_sql, params = _doctype_where_sql(
+		doctype,
+		filters,
+		alias="ce",
+		date_candidates=("expense_date", "posting_date"),
+		include_branch_filter=True,
+	)
 	status_case = f"LOWER(COALESCE(ce.`{status_field}`, ''))" if status_field else "''"
 	rows = frappe.db.sql(
 		f"""
@@ -382,10 +398,24 @@ def get_branch_variance_summary(filters=None):
 	branch_expr = _doctype_branch_expression(doctype, "dsa")
 	status_expr = "LOWER(COALESCE(dsa.audit_status, ''))" if has_field(doctype, "audit_status") else "''"
 	result_expr = "LOWER(COALESCE(dsa.audit_result, ''))" if has_field(doctype, "audit_result") else "''"
-	expected_expr = "COALESCE(dsa.expected_cash_amount, 0)" if has_field(doctype, "expected_cash_amount") else "0"
-	actual_expr = "COALESCE(dsa.actual_closing_cash_amount, 0)" if has_field(doctype, "actual_closing_cash_amount") else "0"
-	variance_expr = "COALESCE(dsa.cash_variance_amount, 0)" if has_field(doctype, "cash_variance_amount") else "0"
-	where_sql, params = _doctype_where_sql(doctype, filters, alias="dsa", date_candidates=("audit_date", "posting_date"), include_branch_filter=True)
+	expected_expr = (
+		"COALESCE(dsa.expected_cash_amount, 0)" if has_field(doctype, "expected_cash_amount") else "0"
+	)
+	actual_expr = (
+		"COALESCE(dsa.actual_closing_cash_amount, 0)"
+		if has_field(doctype, "actual_closing_cash_amount")
+		else "0"
+	)
+	variance_expr = (
+		"COALESCE(dsa.cash_variance_amount, 0)" if has_field(doctype, "cash_variance_amount") else "0"
+	)
+	where_sql, params = _doctype_where_sql(
+		doctype,
+		filters,
+		alias="dsa",
+		date_candidates=("audit_date", "posting_date"),
+		include_branch_filter=True,
+	)
 	rows = frappe.db.sql(
 		f"""
 		SELECT
@@ -431,7 +461,13 @@ def get_branch_stock_activity_summary(filters=None):
 		if not has_doctype(doctype):
 			continue
 		branch_expr = _doctype_branch_expression(doctype, "doc")
-		where_sql, params = _doctype_where_sql(doctype, filters, alias="doc", date_candidates=("posting_date", "transaction_date", "schedule_date"), include_branch_filter=True)
+		where_sql, params = _doctype_where_sql(
+			doctype,
+			filters,
+			alias="doc",
+			date_candidates=("posting_date", "transaction_date", "schedule_date"),
+			include_branch_filter=True,
+		)
 		docstatus_sql = " AND COALESCE(doc.docstatus, 0) != 2" if has_field(doctype, "docstatus") else ""
 		rows = frappe.db.sql(
 			f"""
@@ -463,7 +499,11 @@ def _resolve_branch_scope(filters):
 	effective = dict(filters)
 	if not effective.get("branch") and scope.get("branch"):
 		effective["branch"] = scope.get("branch")
-	return {"filters": frappe._dict(effective), "messages": scope.get("messages") or [], "allowed_branches": scope.get("allowed_branches") or []}
+	return {
+		"filters": frappe._dict(effective),
+		"messages": scope.get("messages") or [],
+		"allowed_branches": scope.get("allowed_branches") or [],
+	}
 
 
 def get_candidate_branches(filters=None):
@@ -481,20 +521,41 @@ def get_candidate_branches(filters=None):
 	return frappe.get_all("Branch", filters=query_filters, pluck="name", limit_page_length=0) or []
 
 
+from retailedge.reporting.date_ranges import get_preset_dates
+
+
 def _coerce_filters(filters):
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	if isinstance(filters, frappe._dict):
 		filters = dict(filters)
 	normalised = frappe._dict(filters)
+
+	preset = normalised.get("date_range_preset")
+	if preset and preset != "Custom Period":
+		preset_from, preset_to = get_preset_dates(preset)
+		if preset_from and preset_to:
+			normalised["from_date"] = str(preset_from)
+			normalised["to_date"] = str(preset_to)
+
 	normalised["from_date"] = str(getdate(normalised.get("from_date") or get_first_day(nowdate())))
 	normalised["to_date"] = str(getdate(normalised.get("to_date") or nowdate()))
-	normalised["include_fallback_branch_resolution"] = _truthy(normalised.get("include_fallback_branch_resolution"))
-	normalised["include_unattributed"] = 1 if normalised.get("include_unattributed") in (None, "") else _truthy(normalised.get("include_unattributed"))
-	normalised["only_pos_invoices"] = 0 if normalised.get("only_pos_invoices") in (None, "") else _truthy(normalised.get("only_pos_invoices"))
+	normalised["include_fallback_branch_resolution"] = _truthy(
+		normalised.get("include_fallback_branch_resolution")
+	)
+	normalised["include_unattributed"] = (
+		1
+		if normalised.get("include_unattributed") in (None, "")
+		else _truthy(normalised.get("include_unattributed"))
+	)
+	normalised["only_pos_invoices"] = (
+		0
+		if normalised.get("only_pos_invoices") in (None, "")
+		else _truthy(normalised.get("only_pos_invoices"))
+	)
 	if getdate(normalised.from_date) > getdate(normalised.to_date):
 		frappe.throw("From Date cannot be after To Date.")
-	if (getdate(normalised.to_date) - getdate(normalised.from_date)).days > MAX_BRANCH_PERFORMANCE_RANGE_DAYS:
-		frappe.throw("Date range too wide for live report. Please use 60 days or less.")
+	if (getdate(normalised.to_date) - getdate(normalised.from_date)).days + 1 > 60:
+		frappe.msgprint(frappe._("Large date ranges may take longer to load."), alert=True)
 	return normalised
 
 
@@ -523,8 +584,12 @@ def get_branch_performance_debug_summary(filters=None, **kwargs):
 				sales_params,
 			)[0][0]
 
-	expense_count = _doctype_debug_count("RetailEdge Cashier Expense", filters, ("expense_date", "posting_date"))
-	daily_sales_audit_count = _doctype_debug_count("RetailEdge Daily Sales Audit", filters, ("audit_date", "posting_date"))
+	expense_count = _doctype_debug_count(
+		"RetailEdge Cashier Expense", filters, ("expense_date", "posting_date")
+	)
+	daily_sales_audit_count = _doctype_debug_count(
+		"RetailEdge Daily Sales Audit", filters, ("audit_date", "posting_date")
+	)
 	return {
 		"submitted_sales_invoice_count": int(submitted_sales_invoice_count or 0),
 		"sales_invoice_with_retailedge_branch_count": int(sales_invoice_with_retailedge_branch_count or 0),
@@ -548,19 +613,35 @@ def resolve_sales_invoice_cashier(invoice_row_or_doc):
 	if posa_shift:
 		shift_result = resolve_branch_from_opening_shift(posa_shift, company=getattr(doc, "company", None))
 		if shift_result.get("cashier"):
-			return {"cashier": shift_result.get("cashier"), "source": "POS Opening Shift.user", "messages": shift_result.get("messages") or []}
+			return {
+				"cashier": shift_result.get("cashier"),
+				"source": "POS Opening Shift.user",
+				"messages": shift_result.get("messages") or [],
+			}
 
 	pos_opening_shift = getattr(doc, "pos_opening_shift", None)
 	if pos_opening_shift:
-		shift_result = resolve_branch_from_opening_shift(pos_opening_shift, company=getattr(doc, "company", None))
+		shift_result = resolve_branch_from_opening_shift(
+			pos_opening_shift, company=getattr(doc, "company", None)
+		)
 		if shift_result.get("cashier"):
-			return {"cashier": shift_result.get("cashier"), "source": "POS Opening Shift.user", "messages": shift_result.get("messages") or []}
+			return {
+				"cashier": shift_result.get("cashier"),
+				"source": "POS Opening Shift.user",
+				"messages": shift_result.get("messages") or [],
+			}
 
 	pos_closing_shift = getattr(doc, "pos_closing_shift", None)
 	if pos_closing_shift:
-		closing_result = resolve_branch_from_closing_shift(pos_closing_shift, company=getattr(doc, "company", None))
+		closing_result = resolve_branch_from_closing_shift(
+			pos_closing_shift, company=getattr(doc, "company", None)
+		)
 		if closing_result.get("cashier"):
-			return {"cashier": closing_result.get("cashier"), "source": "POS Closing Shift.user", "messages": closing_result.get("messages") or []}
+			return {
+				"cashier": closing_result.get("cashier"),
+				"source": "POS Closing Shift.user",
+				"messages": closing_result.get("messages") or [],
+			}
 
 	owner = getattr(doc, "owner", None)
 	if owner:
@@ -571,12 +652,19 @@ def resolve_sales_invoice_cashier(invoice_row_or_doc):
 def _doctype_debug_count(doctype, filters, date_candidates):
 	if not has_doctype(doctype):
 		return 0
-	where_sql, params = _doctype_where_sql(doctype, filters, alias="doc", date_candidates=date_candidates, include_branch_filter=False)
+	where_sql, params = _doctype_where_sql(
+		doctype, filters, alias="doc", date_candidates=date_candidates, include_branch_filter=False
+	)
 	return frappe.db.sql(f"SELECT COUNT(doc.name) FROM `tab{doctype}` doc WHERE {where_sql}", params)[0][0]
 
 
 def _sales_invoice_where_sql(filters, alias="si", include_branch_filter=True):
-	query_parts = _sales_invoice_query_parts(filters, alias=alias, include_branch_filter=include_branch_filter, need_cashier=bool(filters.get("cashier")))
+	query_parts = _sales_invoice_query_parts(
+		filters,
+		alias=alias,
+		include_branch_filter=include_branch_filter,
+		need_cashier=bool(filters.get("cashier")),
+	)
 	return query_parts["where_sql"], query_parts["params"]
 
 
@@ -627,7 +715,9 @@ def _sales_invoice_query_parts(filters, alias="si", include_branch_filter=True, 
 	}
 
 
-def _doctype_where_sql(doctype, filters, alias="doc", date_candidates=("posting_date",), include_branch_filter=True):
+def _doctype_where_sql(
+	doctype, filters, alias="doc", date_candidates=("posting_date",), include_branch_filter=True
+):
 	conditions = ["1=1"]
 	params = []
 	if filters.get("company") and has_field(doctype, "company"):
@@ -675,13 +765,17 @@ def _sales_invoice_cashier_sql_parts(alias="si", need_cashier=False):
 
 	if need_cashier and has_doctype("POS Opening Shift"):
 		if has_field("Sales Invoice", "posa_pos_opening_shift"):
-			joins.append(f"LEFT JOIN `tabPOS Opening Shift` {alias}_posa_opening_shift ON {alias}_posa_opening_shift.name = {alias}.posa_pos_opening_shift")
+			joins.append(
+				f"LEFT JOIN `tabPOS Opening Shift` {alias}_posa_opening_shift ON {alias}_posa_opening_shift.name = {alias}.posa_pos_opening_shift"
+			)
 			if has_field("POS Opening Shift", "user"):
 				expressions.append(f"NULLIF({alias}_posa_opening_shift.user, '')")
 			elif has_field("POS Opening Shift", "cashier"):
 				expressions.append(f"NULLIF({alias}_posa_opening_shift.cashier, '')")
 		if has_field("Sales Invoice", "pos_opening_shift"):
-			joins.append(f"LEFT JOIN `tabPOS Opening Shift` {alias}_pos_opening_shift ON {alias}_pos_opening_shift.name = {alias}.pos_opening_shift")
+			joins.append(
+				f"LEFT JOIN `tabPOS Opening Shift` {alias}_pos_opening_shift ON {alias}_pos_opening_shift.name = {alias}.pos_opening_shift"
+			)
 			if has_field("POS Opening Shift", "user"):
 				expressions.append(f"NULLIF({alias}_pos_opening_shift.user, '')")
 			elif has_field("POS Opening Shift", "cashier"):
@@ -702,14 +796,22 @@ def _sales_invoice_cashier_source_expression(alias="si"):
 		source_parts.append(f"WHEN NULLIF({alias}.`user`, '') IS NOT NULL THEN 'Sales Invoice.user'")
 	if has_doctype("POS Opening Shift") and has_field("Sales Invoice", "posa_pos_opening_shift"):
 		if has_field("POS Opening Shift", "user"):
-			source_parts.append(f"WHEN NULLIF({alias}_posa_opening_shift.user, '') IS NOT NULL THEN 'POS Opening Shift.user'")
+			source_parts.append(
+				f"WHEN NULLIF({alias}_posa_opening_shift.user, '') IS NOT NULL THEN 'POS Opening Shift.user'"
+			)
 		elif has_field("POS Opening Shift", "cashier"):
-			source_parts.append(f"WHEN NULLIF({alias}_posa_opening_shift.cashier, '') IS NOT NULL THEN 'POS Opening Shift.cashier'")
+			source_parts.append(
+				f"WHEN NULLIF({alias}_posa_opening_shift.cashier, '') IS NOT NULL THEN 'POS Opening Shift.cashier'"
+			)
 	if has_doctype("POS Opening Shift") and has_field("Sales Invoice", "pos_opening_shift"):
 		if has_field("POS Opening Shift", "user"):
-			source_parts.append(f"WHEN NULLIF({alias}_pos_opening_shift.user, '') IS NOT NULL THEN 'POS Opening Shift.user'")
+			source_parts.append(
+				f"WHEN NULLIF({alias}_pos_opening_shift.user, '') IS NOT NULL THEN 'POS Opening Shift.user'"
+			)
 		elif has_field("POS Opening Shift", "cashier"):
-			source_parts.append(f"WHEN NULLIF({alias}_pos_opening_shift.cashier, '') IS NOT NULL THEN 'POS Opening Shift.cashier'")
+			source_parts.append(
+				f"WHEN NULLIF({alias}_pos_opening_shift.cashier, '') IS NOT NULL THEN 'POS Opening Shift.cashier'"
+			)
 	source_parts.append(f"WHEN NULLIF({alias}.owner, '') IS NOT NULL THEN 'Sales Invoice.owner'")
 	return f"CASE {' '.join(source_parts)} ELSE 'None' END"
 
@@ -720,9 +822,17 @@ def _available_sales_invoice_cashier_sources():
 		sources.append("Sales Invoice.cashier")
 	if has_field("Sales Invoice", "user"):
 		sources.append("Sales Invoice.user")
-	if has_doctype("POS Opening Shift") and has_field("Sales Invoice", "posa_pos_opening_shift") and has_field("POS Opening Shift", "user"):
+	if (
+		has_doctype("POS Opening Shift")
+		and has_field("Sales Invoice", "posa_pos_opening_shift")
+		and has_field("POS Opening Shift", "user")
+	):
 		sources.append("POS Opening Shift.user")
-	if has_doctype("POS Opening Shift") and has_field("Sales Invoice", "pos_opening_shift") and has_field("POS Opening Shift", "user"):
+	if (
+		has_doctype("POS Opening Shift")
+		and has_field("Sales Invoice", "pos_opening_shift")
+		and has_field("POS Opening Shift", "user")
+	):
 		sources.append("POS Opening Shift.user")
 	sources.append("Sales Invoice.owner")
 	return list(dict.fromkeys(sources))
@@ -759,13 +869,23 @@ def _sales_invoice_payment_amount_expression(alias="sip"):
 	return None
 
 
+def get_bank_sales_total(row):
+	return sum(flt(row.get(category)) for category in BANK_SALES_PAYMENT_CATEGORIES)
+
+
 def _payment_category_sql(alias="sip"):
-	mode_expr = f"LOWER(COALESCE({alias}.mode_of_payment, ''))" if has_field("Sales Invoice Payment", "mode_of_payment") else "''"
-	account_expr = f"LOWER(COALESCE({alias}.account, ''))" if has_field("Sales Invoice Payment", "account") else "''"
+	mode_expr = (
+		f"LOWER(COALESCE({alias}.mode_of_payment, ''))"
+		if has_field("Sales Invoice Payment", "mode_of_payment")
+		else "''"
+	)
+	account_expr = (
+		f"LOWER(COALESCE({alias}.account, ''))" if has_field("Sales Invoice Payment", "account") else "''"
+	)
 	return (
 		f"CASE "
 		f"WHEN {mode_expr} LIKE '%%cash%%' OR {account_expr} LIKE '%%cash%%' THEN 'Cash' "
-		f"WHEN {mode_expr} LIKE '%%bank%%' OR {mode_expr} LIKE '%%transfer%%' OR {account_expr} LIKE '%%bank%%' THEN 'Bank Transfer' "
+		f"WHEN {mode_expr} LIKE '%%bank%%' OR {mode_expr} LIKE '%%transfer%%' OR {mode_expr} LIKE '%%monnify%%' OR {mode_expr} LIKE '%%moniepoint%%' OR {account_expr} LIKE '%%bank%%' THEN 'Bank Transfer' "
 		f"WHEN {mode_expr} LIKE '%%card%%' OR {mode_expr} LIKE '%%pos%%' OR {mode_expr} LIKE '%%terminal%%' THEN 'Card / POS' "
 		f"WHEN {mode_expr} LIKE '%%mobile%%' OR {mode_expr} LIKE '%%wallet%%' OR {mode_expr} LIKE '%%money%%' THEN 'Mobile Money' "
 		f"ELSE 'Other' END"
@@ -781,15 +901,15 @@ def _get_unattributed_sales_invoice_rows(filters, only_with_payments=False):
 		SELECT
 			si.name,
 			si.company,
-			{_sales_invoice_optional_field('si', 'pos_profile')} AS pos_profile,
-			{_sales_invoice_optional_field('si', 'owner')} AS owner,
+			{_sales_invoice_optional_field("si", "pos_profile")} AS pos_profile,
+			{_sales_invoice_optional_field("si", "owner")} AS owner,
 			si.grand_total,
-			{_sales_invoice_net_total_expression('si')} AS net_total,
+			{_sales_invoice_net_total_expression("si")} AS net_total,
 			COALESCE(si.outstanding_amount, 0) AS outstanding_amount,
-			{_sales_invoice_paid_amount_expression('si')} AS paid_amount
+			{_sales_invoice_paid_amount_expression("si")} AS paid_amount
 		FROM `tabSales Invoice` si
 		WHERE {where_sql}
-		AND {_sales_invoice_branch_expression('si')} IS NULL
+		AND {_sales_invoice_branch_expression("si")} IS NULL
 		""",
 		params,
 		as_dict=True,
@@ -870,6 +990,7 @@ def _build_empty_row(filters, branch=None, messages=None):
 		"paid_amount": 0.0,
 		"cash_sales": 0.0,
 		"Cash": 0.0,
+		"bank_sales": 0.0,
 		"bank_card_mobile_sales": 0.0,
 		"cashier_expenses": 0.0,
 		"net_cash_expected": 0.0,
@@ -906,6 +1027,7 @@ def _aggregate_branch_performance_rows(rows, filters):
 		"paid_amount",
 		"cash_sales",
 		"Cash",
+		"bank_sales",
 		"bank_card_mobile_sales",
 		"cashier_expenses",
 		"net_cash_expected",

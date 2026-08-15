@@ -11,6 +11,15 @@ from retailedge.cashier_expense import (
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
+	preset = filters.get("date_range_preset")
+	if preset and preset != "Custom Period":
+		from retailedge.reporting.date_ranges import get_preset_dates
+
+		preset_from, preset_to = get_preset_dates(preset)
+		if preset_from and preset_to:
+			filters["from_date"] = str(preset_from)
+			filters["to_date"] = str(preset_to)
+
 	validate_filters(filters)
 
 	columns = get_columns()
@@ -27,6 +36,8 @@ def validate_filters(filters):
 		frappe.throw(_("To Date is required."))
 	if getdate(filters.from_date) > getdate(filters.to_date):
 		frappe.throw(_("From Date cannot be after To Date."))
+	if (getdate(filters.to_date) - getdate(filters.from_date)).days + 1 > 60:
+		frappe.msgprint(_("Large date ranges may take longer to load."), alert=True)
 
 
 def get_columns():
@@ -38,33 +49,142 @@ def get_columns():
 		{"label": _("Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 110},
 		{"label": _("Shift Start"), "fieldname": "shift_start", "fieldtype": "Datetime", "width": 160},
 		{"label": _("Shift End"), "fieldname": "shift_end", "fieldtype": "Datetime", "width": 160},
-		{"label": _("POS Closing Shift"), "fieldname": "pos_closing_shift", "fieldtype": "Link", "options": "POS Closing Shift", "width": 190},
-		{"label": _("POS Profile"), "fieldname": "pos_profile", "fieldtype": "Link", "options": "POS Profile", "width": 170},
+		{
+			"label": _("POS Closing Shift"),
+			"fieldname": "pos_closing_shift",
+			"fieldtype": "Link",
+			"options": "POS Closing Shift",
+			"width": 190,
+		},
+		{
+			"label": _("POS Profile"),
+			"fieldname": "pos_profile",
+			"fieldtype": "Link",
+			"options": "POS Profile",
+			"width": 170,
+		},
 		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 150},
-		{"label": _("Business Location"), "fieldname": "business_location", "fieldtype": "Data", "width": 170},
-		{"label": _("Company"), "fieldname": "company", "fieldtype": "Link", "options": "Company", "width": 170},
-		{"label": _("Closed By"), "fieldname": "closed_by", "fieldtype": "Link", "options": "User", "width": 160},
-		{"label": _("Expected Amount"), "fieldname": "expected_amount", "fieldtype": "Currency", "width": 145},
+		{
+			"label": _("Business Location"),
+			"fieldname": "business_location",
+			"fieldtype": "Data",
+			"width": 170,
+		},
+		{
+			"label": _("Company"),
+			"fieldname": "company",
+			"fieldtype": "Link",
+			"options": "Company",
+			"width": 170,
+		},
+		{
+			"label": _("Closed By"),
+			"fieldname": "closed_by",
+			"fieldtype": "Link",
+			"options": "User",
+			"width": 160,
+		},
+		{
+			"label": _("Expected Amount"),
+			"fieldname": "expected_amount",
+			"fieldtype": "Currency",
+			"width": 145,
+		},
 		{"label": _("Closing Amount"), "fieldname": "closing_amount", "fieldtype": "Currency", "width": 145},
 		{"label": _("Variance"), "fieldname": "variance", "fieldtype": "Currency", "width": 125},
 		{"label": _("Shortage"), "fieldname": "shortage", "fieldtype": "Currency", "width": 125},
 		{"label": _("Expenses"), "fieldname": "expenses", "fieldtype": "Currency", "width": 125},
-		{"label": _("RetailEdge Expense Total"), "fieldname": "retail_cashier_expense_total", "fieldtype": "Currency", "width": 160},
-		{"label": _("RetailEdge Expense Count"), "fieldname": "retail_cashier_expense_count", "fieldtype": "Int", "width": 155},
-		{"label": _("RetailEdge Expense Status Summary"), "fieldname": "retail_cashier_expense_status_summary", "fieldtype": "Data", "width": 240},
-		{"label": _("Opening Cash"), "fieldname": "opening_cash_amount", "fieldtype": "Currency", "width": 135},
+		{
+			"label": _("RetailEdge Expense Total"),
+			"fieldname": "retail_cashier_expense_total",
+			"fieldtype": "Currency",
+			"width": 160,
+		},
+		{
+			"label": _("RetailEdge Expense Count"),
+			"fieldname": "retail_cashier_expense_count",
+			"fieldtype": "Int",
+			"width": 155,
+		},
+		{
+			"label": _("RetailEdge Expense Status Summary"),
+			"fieldname": "retail_cashier_expense_status_summary",
+			"fieldtype": "Data",
+			"width": 240,
+		},
+		{
+			"label": _("Opening Cash"),
+			"fieldname": "opening_cash_amount",
+			"fieldtype": "Currency",
+			"width": 135,
+		},
 		{"label": _("Cash Sales"), "fieldname": "cash_sales_amount", "fieldtype": "Currency", "width": 125},
-		{"label": _("Expected Cash After RetailEdge Expenses"), "fieldname": "expected_cash_after_retailedge_expenses", "fieldtype": "Currency", "width": 220},
-		{"label": _("Variance After RetailEdge Expenses"), "fieldname": "variance_after_retailedge_expenses", "fieldtype": "Currency", "width": 210},
-		{"label": _("Unmatched Shortage"), "fieldname": "unmatched_shortage", "fieldtype": "Currency", "width": 155},
-		{"label": _("Excess Expenses"), "fieldname": "excess_expenses", "fieldtype": "Currency", "width": 145},
-		{"label": _("Expense Cost Center"), "fieldname": "expense_cost_center", "fieldtype": "Link", "options": "Cost Center", "width": 190},
-		{"label": _("Opening Shift"), "fieldname": "pos_opening_shift", "fieldtype": "Link", "options": "POS Opening Shift", "width": 190},
-		{"label": _("Mode of Payment"), "fieldname": "mode_of_payment", "fieldtype": "Link", "options": "Mode of Payment", "width": 170},
+		{
+			"label": _("Expected Cash After RetailEdge Expenses"),
+			"fieldname": "expected_cash_after_retailedge_expenses",
+			"fieldtype": "Currency",
+			"width": 220,
+		},
+		{
+			"label": _("Variance After RetailEdge Expenses"),
+			"fieldname": "variance_after_retailedge_expenses",
+			"fieldtype": "Currency",
+			"width": 210,
+		},
+		{
+			"label": _("Unmatched Shortage"),
+			"fieldname": "unmatched_shortage",
+			"fieldtype": "Currency",
+			"width": 155,
+		},
+		{
+			"label": _("Excess Expenses"),
+			"fieldname": "excess_expenses",
+			"fieldtype": "Currency",
+			"width": 145,
+		},
+		{
+			"label": _("Expense Cost Center"),
+			"fieldname": "expense_cost_center",
+			"fieldtype": "Link",
+			"options": "Cost Center",
+			"width": 190,
+		},
+		{
+			"label": _("Opening Shift"),
+			"fieldname": "pos_opening_shift",
+			"fieldtype": "Link",
+			"options": "POS Opening Shift",
+			"width": 190,
+		},
+		{
+			"label": _("Mode of Payment"),
+			"fieldname": "mode_of_payment",
+			"fieldtype": "Link",
+			"options": "Mode of Payment",
+			"width": 170,
+		},
 		{"label": _("Voucher Type"), "fieldname": "voucher_type", "fieldtype": "Data", "width": 150},
-		{"label": _("Voucher"), "fieldname": "voucher_no", "fieldtype": "Dynamic Link", "options": "voucher_type", "width": 190},
-		{"label": _("Expense Account"), "fieldname": "expense_account", "fieldtype": "Link", "options": "Account", "width": 220},
-		{"label": _("Expense Created At"), "fieldname": "expense_created_at", "fieldtype": "Datetime", "width": 170},
+		{
+			"label": _("Voucher"),
+			"fieldname": "voucher_no",
+			"fieldtype": "Dynamic Link",
+			"options": "voucher_type",
+			"width": 190,
+		},
+		{
+			"label": _("Expense Account"),
+			"fieldname": "expense_account",
+			"fieldtype": "Link",
+			"options": "Account",
+			"width": 220,
+		},
+		{
+			"label": _("Expense Created At"),
+			"fieldname": "expense_created_at",
+			"fieldtype": "Datetime",
+			"width": 170,
+		},
 	]
 
 
@@ -84,7 +204,9 @@ def get_data(filters):
 		cost_center = filters.get("cost_center") or get_pos_profile_cost_center(entry.pos_profile)
 		entry_expenses = expense_details_by_entry.get(entry.name, [])
 		expenses = sum(flt(expense.get("amount")) for expense in entry_expenses)
-		retailedge_context = get_retailedge_cashier_expense_context(entry, exclude_expense_names=used_retailedge_expense_names)
+		retailedge_context = get_retailedge_cashier_expense_context(
+			entry, exclude_expense_names=used_retailedge_expense_names
+		)
 		used_retailedge_expense_names.update(
 			expense.get("name") for expense in retailedge_context["expenses"] if expense.get("name")
 		)
@@ -117,7 +239,9 @@ def get_data(filters):
 			"expenses": expenses,
 			"retail_cashier_expense_total": retailedge_total,
 			"retail_cashier_expense_count": retailedge_context["totals"].get("count", 0),
-			"retail_cashier_expense_status_summary": format_status_summary(retailedge_context["totals"].get("by_status", {})),
+			"retail_cashier_expense_status_summary": format_status_summary(
+				retailedge_context["totals"].get("by_status", {})
+			),
 			"opening_cash_amount": opening_cash_amount,
 			"cash_sales_amount": cash_sales_amount,
 			"expected_cash_after_retailedge_expenses": expected_after_retailedge,
@@ -471,7 +595,9 @@ def get_business_location(pos_profile, cost_center):
 
 def get_entry_branch(entry):
 	if frappe.db.has_column("POS Closing Shift", "retailedge_branch"):
-		stored_branch = frappe.db.get_value("POS Closing Shift", getattr(entry, "name", None), "retailedge_branch")
+		stored_branch = frappe.db.get_value(
+			"POS Closing Shift", getattr(entry, "name", None), "retailedge_branch"
+		)
 		if stored_branch:
 			return stored_branch
 	branch_context = resolve_branch(
@@ -579,6 +705,7 @@ def get_existing_column(doctype, candidates):
 
 def get_retailedge_cashier_expense_context(entry, exclude_expense_names=None):
 	exclude_expense_names = set(exclude_expense_names or [])
+
 	def _value(fieldname):
 		if isinstance(entry, dict):
 			return entry.get(fieldname)
@@ -627,12 +754,16 @@ def get_retailedge_cashier_expense_context(entry, exclude_expense_names=None):
 			exclude_expense_names=exclude_expense_names,
 		)
 
-	totals = _build_retailedge_expense_totals(expenses) if expenses else {
-		"total_expense_amount": 0.0,
-		"count": 0,
-		"by_status": {},
-		"by_category": {},
-	}
+	totals = (
+		_build_retailedge_expense_totals(expenses)
+		if expenses
+		else {
+			"total_expense_amount": 0.0,
+			"count": 0,
+			"by_status": {},
+			"by_category": {},
+		}
+	)
 	snapshot = get_shift_cash_snapshot(
 		opening_shift=_value("pos_opening_shift"),
 		company=_value("company"),

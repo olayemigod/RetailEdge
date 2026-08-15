@@ -55,6 +55,29 @@ frappe.query_reports["RetailEdge Cashier Expense Review"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		window.retailedge.setupDateRangePresets(report);
+		const originalRefresh = report.refresh.bind(report);
+		report.refresh = function () {
+			const fromDate = report.get_filter_value("from_date");
+			const toDate = report.get_filter_value("to_date");
+			if (
+				fromDate &&
+				toDate &&
+				frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)
+			) {
+				frappe.throw(__("From Date cannot be after To Date."));
+			}
+			if (fromDate && toDate) {
+				const days = frappe.datetime.get_day_diff(toDate, fromDate) + 1;
+				if (days > 60) {
+					frappe.show_alert({
+						message: __("Large date ranges may take longer to load."),
+						indicator: "orange",
+					});
+				}
+			}
+			return originalRefresh();
+		};
 	},
 
 	after_refresh(report) {
@@ -127,12 +150,33 @@ frappe.query_reports["RetailEdge Cashier Expense Review"] = {
 			fieldname: "daily_audit_classification",
 			label: __("Daily Audit Classification"),
 			fieldtype: "Select",
-			options: "\nCash Expense\nCash Shortage Explanation\nCash Overage Explanation\nReimbursement Pending\nInvalid / Duplicate\nOther",
+			options:
+				"\nCash Expense\nCash Shortage Explanation\nCash Overage Explanation\nReimbursement Pending\nInvalid / Duplicate\nOther",
 		},
 		{
 			fieldname: "posting_ready",
 			label: __("Posting Ready"),
 			fieldtype: "Check",
+		},
+		{
+			fieldname: "date_range_preset",
+			label: __("Date Range Preset"),
+			fieldtype: "Select",
+			options: [
+				"This Month",
+				"Today",
+				"Yesterday",
+				"This Week",
+				"This Quarter",
+				"This Year",
+				"Last Week",
+				"Last Month",
+				"Last Quarter",
+				"Last Year",
+				"Custom Period",
+				"Full History",
+			].join("\n"),
+			default: "This Month",
 		},
 		{
 			fieldname: "from_date",

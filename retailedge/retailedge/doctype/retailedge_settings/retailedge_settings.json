@@ -75,7 +75,13 @@
   "allow_auto_match_payment_entry",
   "allow_auto_match_sales_invoice",
   "require_no_duplicate_candidate_for_auto_match",
-  "require_no_active_review_for_auto_match"
+  "require_no_active_review_for_auto_match",
+  "bank_reconciliation_execution_section",
+  "enable_bank_reconciliation_execution",
+  "require_reconciliation_dry_run_before_execution",
+  "minimum_reconciliation_readiness_status",
+  "allowed_reconciliation_execution_roles",
+  "require_second_approval_for_reconciliation_execution"
  ],
  "fields": [
   {
@@ -563,6 +569,47 @@
    "fieldname": "require_no_active_review_for_auto_match",
    "fieldtype": "Check",
    "label": "Require No Active Review for Auto-Match"
+  },
+  {
+   "fieldname": "bank_reconciliation_execution_section",
+   "fieldtype": "Section Break",
+   "label": "Reconciliation Execution Gate"
+  },
+  {
+   "default": "0",
+   "description": "Master gate for future live bank reconciliation execution. Keep disabled unless a controlled execution phase explicitly enables it. R5.8 only evaluates the gate and never executes reconciliation.",
+   "fieldname": "enable_bank_reconciliation_execution",
+   "fieldtype": "Check",
+   "label": "Enable Bank Reconciliation Execution"
+  },
+  {
+   "default": "1",
+   "description": "Requires the execution gate to run the current dry-run readiness evaluator and block anything that is not Ready.",
+   "fieldname": "require_reconciliation_dry_run_before_execution",
+   "fieldtype": "Check",
+   "label": "Require Dry Run Before Reconciliation Execution"
+  },
+  {
+   "default": "Ready",
+   "description": "Minimum readiness status required before a future execution phase can proceed. R5.8 supports Ready only.",
+   "fieldname": "minimum_reconciliation_readiness_status",
+   "fieldtype": "Select",
+   "label": "Minimum Reconciliation Readiness Status",
+   "options": "Ready\nBlocked\nAlready Handled\nNeeds Review"
+  },
+  {
+   "default": "System Manager\nAccounts Manager\nRetailEdge Manager\nRetailEdgeManager",
+   "description": "Roles allowed to pass the future reconciliation execution gate. This does not grant live execution in R5.8.",
+   "fieldname": "allowed_reconciliation_execution_roles",
+   "fieldtype": "Small Text",
+   "label": "Allowed Reconciliation Execution Roles"
+  },
+  {
+   "default": "1",
+   "description": "Future gate flag for requiring second approval before live reconciliation execution. R5.8 records the requirement only; it does not implement an approval workflow.",
+   "fieldname": "require_second_approval_for_reconciliation_execution",
+   "fieldtype": "Check",
+   "label": "Require Second Approval for Reconciliation Execution"
   }
  ],
  "issingle": 1,

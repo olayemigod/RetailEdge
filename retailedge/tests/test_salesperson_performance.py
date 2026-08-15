@@ -4,6 +4,7 @@
 import json
 import os
 import py_compile
+import re
 from collections import Counter
 from unittest.mock import patch
 
@@ -68,17 +69,20 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(js_path) as f:
 			content = f.read()
 
-		edgeui_idx = content.find('requireAsync("edgeui.bundle.js")')
-		product_idx = content.find('requireAsync("salesperson_performance.bundle.js")')
+		edgeui_match = re.search(r"requireAsync\([\"']edgeui\.bundle\.js[\"']\)", content)
+		product_match = re.search(r"requireAsync\([\"']salesperson_performance\.bundle\.js[\"']\)", content)
+		edgeui_idx = edgeui_match.start() if edgeui_match else -1
+		product_idx = product_match.start() if product_match else -1
 		self.assertNotEqual(edgeui_idx, -1)
 		self.assertNotEqual(product_idx, -1)
 		self.assertLess(edgeui_idx, product_idx)
-		self.assertIn("const requireAsync", content)
-		self.assertIn("frappe.require(asset", content)
-		self.assertIn("Timed out loading", content)
+		self.assertIn("frappe.require(assetName", content)
+		self.assertIn("Timed out loading asset", content)
+		self.assertIn("Failed to request asset", content)
 		self.assertIn("window.EdgeUI", content)
-		self.assertIn("wrapper.appendChild", content)
-		self.assertIn("if (!page)", content)
+		self.assertIn("window.mountSalespersonPerformanceDashboard", content)
+		self.assertIn("retailedge-dashboard-load-error", content)
+		self.assertIn("EdgeSuite page controller failed", content)
 
 	def test_edgeui_not_copied(self):
 		"""Assert that shared EdgeUI Vue components are not cloned or copied into RetailEdge."""
@@ -181,10 +185,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn("localEdgeUIComponents", content)
 		self.assertIn("resolveEdgeUIComponents", content)
 		self.assertIn("window.EdgeUI", content)
-		self.assertTrue(
-			'import { h } from "vue"' in content or "import { h } from 'vue'" in content,
-			"Vue render helper import is missing",
-		)
+		self.assertRegex(content, r'import\s+\{\s*h\s*\}\s+from\s+["\']vue["\']')
 		self.assertNotIn("coreedge/coreedge/public/js/edgeui", content)
 		self.assertNotIn("../../../../../coreedge", content)
 
@@ -217,11 +218,15 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertTrue(os.path.exists(js_path))
 		with open(js_path) as f:
 			content = f.read()
+		self.assertNotIn("edgeui.bundle.css", content)
+		self.assertNotIn("salesperson_performance.bundle.css", content)
+		self.assertIn("edgeui.bundle.js", content)
+		self.assertIn("salesperson_performance.bundle.js", content)
 
 		self.assertIn("edgeui.bundle.js", content)
 		self.assertIn("salesperson_performance.bundle.js", content)
 		self.assertIn("requireAsync", content)
-		self.assertIn("wrapper.appendChild", content)
+		self.assertIn("retailedge-dashboard-load-error", content)
 
 	def test_frontend_filter_bar_structure_and_labels(self):
 		"""Verify that SalespersonPerformanceDashboard.vue has EdgeFilterBar, the correct filter labels, fields, and buttons."""
@@ -297,7 +302,11 @@ class TestSalespersonPerformance(FrappeTestCase):
 		)
 		self.assertTrue(os.path.exists(js_path))
 		with open(js_path) as f:
-			f.read()
+			content = f.read()
+		self.assertNotIn("edgeui.bundle.css", content)
+		self.assertNotIn("salesperson_performance.bundle.css", content)
+		self.assertIn("edgeui.bundle.js", content)
+		self.assertIn("salesperson_performance.bundle.js", content)
 
 	def test_required_components_resolution_does_not_fallback(self):
 		"""Verify SalespersonPerformanceDashboard.vue has local shell components with no CoreEdge private import."""
@@ -340,12 +349,23 @@ class TestSalespersonPerformance(FrappeTestCase):
 		with open(sidebar_path) as f:
 			sidebar = json.load(f)
 
+		expected_groups = [
+			"Dashboard",
+			"Sales & POS",
+			"Cash, Bank & Reconciliation",
+			"Inventory & Purchasing",
+			"Expenses, Payables & Receivables",
+			"Reviews & Exceptions",
+			"Reports & Insights",
+			"Setup & Configuration",
+			"Admin & Maintenance",
+		]
 		workspace_groups = [row["label"] for row in workspace["links"] if row.get("type") == "Card Break"]
 		sidebar_groups = [row["label"] for row in sidebar["items"] if row.get("type") == "Section Break"]
-		self.assertIn("Reports & Analytics", workspace_groups)
-		self.assertIn("Reports & Analytics", sidebar_groups)
+		self.assertEqual(workspace_groups, expected_groups)
+		self.assertEqual(sidebar_groups, expected_groups)
 
-		for rows, _group_type in ((workspace["links"], "Card Break"), (sidebar["items"], "Section Break")):
+		for rows in (workspace["links"], sidebar["items"]):
 			links = {row["label"]: row for row in rows if row.get("type") == "Link"}
 			self.assertIn("Salesperson Performance Dashboard", links)
 			self.assertEqual(links["Salesperson Performance Dashboard"]["link_type"], "Page")
@@ -357,7 +377,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 				for row in rows
 				if row.get("type") == "Link"
 			)
-			self.assertEqual(counts[("Page", "salesperson-performance-dashboard")], 1)
+			self.assertFalse([key for key, count in counts.items() if key[1] and count > 1])
 
 	@patch("retailedge.salesperson_performance.frappe.db.sql", return_value=[])
 	def test_salesperson_performance_api_date_presets(self, mock_sql):
@@ -409,10 +429,8 @@ class TestSalespersonPerformance(FrappeTestCase):
 		content = self._read_page_js()
 		# The try block must appear before the frappe.pages registration
 		try_idx = content.find("try {")
-		pages_idx = max(
-			content.find("frappe.pages['salesperson-performance-dashboard']"),
-			content.find('frappe.pages["salesperson-performance-dashboard"]'),
-		)
+		pages_match = re.search(r"frappe\.pages\[[\"']salesperson-performance-dashboard[\"']\]", content)
+		pages_idx = pages_match.start() if pages_match else -1
 		self.assertNotEqual(pages_idx, -1, "Page registration is missing")
 		self.assertNotEqual(try_idx, -1, "Top-level try block is missing")
 		self.assertLess(

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
+
+import frappe
 
 from retailedge.invoice_payment_audit import (
 	audit_sales_invoice_payment,
@@ -68,7 +70,9 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 	@patch("retailedge.invoice_payment_audit.get_retailedge_settings", return_value=SimpleNamespace())
 	@patch("retailedge.invoice_payment_audit.frappe.get_doc")
 	def test_partially_paid_invoice_is_classified_as_partial(self, mock_get_doc, _mock_settings):
-		mock_get_doc.return_value = self._invoice(paid_amount=400.0, outstanding_amount=600.0, status="Partly Paid")
+		mock_get_doc.return_value = self._invoice(
+			paid_amount=400.0, outstanding_amount=600.0, status="Partly Paid"
+		)
 		result = audit_sales_invoice_payment("SINV-0001")
 		self.assertEqual(result["payment_audit_status"], "Partially Paid")
 		self.assertEqual(result["payment_risk_level"], "Medium")
@@ -80,16 +84,23 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 			paid_amount=1000.0,
 			outstanding_amount=0.0,
 			status="Paid",
-			payments=[_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=1000.0, base_amount=1000.0)],
+			payments=[
+				_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=1000.0, base_amount=1000.0)
+			],
 		)
-		with patch("retailedge.invoice_payment_audit.get_branch_profile_defaults", return_value={"default_cash_account": "Cash - PED"}):
+		with patch(
+			"retailedge.invoice_payment_audit.get_branch_profile_defaults",
+			return_value={"default_cash_account": "Cash - PED"},
+		):
 			result = audit_sales_invoice_payment("SINV-0001")
 		self.assertIn(result["payment_audit_status"], {"Ready for Verification", "Fully Paid Pending Audit"})
 
 	@patch("retailedge.invoice_payment_audit.get_retailedge_settings", return_value=SimpleNamespace())
 	@patch("retailedge.invoice_payment_audit.frappe.get_doc")
 	def test_missing_payment_rows_are_detected(self, mock_get_doc, _mock_settings):
-		mock_get_doc.return_value = self._invoice(paid_amount=1000.0, outstanding_amount=0.0, status="Paid", payments=[])
+		mock_get_doc.return_value = self._invoice(
+			paid_amount=1000.0, outstanding_amount=0.0, status="Paid", payments=[]
+		)
 		with patch("retailedge.invoice_payment_audit.get_payment_entries_for_sales_invoice", return_value=[]):
 			result = audit_sales_invoice_payment("SINV-0001")
 		self.assertEqual(result["payment_audit_status"], "Payment Rows Missing")
@@ -101,15 +112,28 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 			paid_amount=1000.0,
 			outstanding_amount=0.0,
 			status="Paid",
-			payments=[_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=700.0, base_amount=700.0)],
+			payments=[
+				_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=700.0, base_amount=700.0)
+			],
 		)
 		result = audit_sales_invoice_payment("SINV-0001")
 		self.assertEqual(result["payment_audit_status"], "Payment Amount Mismatch")
 
-	@patch("retailedge.invoice_payment_audit.get_branch_profile_defaults", return_value={"default_cash_account": "Cash - PED"})
+	@patch(
+		"retailedge.invoice_payment_audit.get_branch_profile_defaults",
+		return_value={"default_cash_account": "Cash - PED"},
+	)
 	def test_payment_account_mismatch_is_detected(self, _mock_defaults):
 		rows = get_sales_invoice_payment_rows(
-			self._invoice(paid_amount=1000.0, outstanding_amount=0.0, payments=[_PaymentRow(mode_of_payment="Cash", account="Cash - OTHER", amount=1000.0, base_amount=1000.0)])
+			self._invoice(
+				paid_amount=1000.0,
+				outstanding_amount=0.0,
+				payments=[
+					_PaymentRow(
+						mode_of_payment="Cash", account="Cash - OTHER", amount=1000.0, base_amount=1000.0
+					)
+				],
+			)
 		)
 		self.assertFalse(rows[0]["account_matches_expected"])
 
@@ -122,7 +146,9 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 			status="Paid",
 			payments=[
 				_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=400.0, base_amount=400.0),
-				_PaymentRow(mode_of_payment="Bank Transfer", account="Bank - PED", amount=600.0, base_amount=600.0),
+				_PaymentRow(
+					mode_of_payment="Bank Transfer", account="Bank - PED", amount=600.0, base_amount=600.0
+				),
 			],
 		)
 		result = audit_sales_invoice_payment("SINV-0001")
@@ -135,7 +161,9 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 			paid_amount=1200.0,
 			outstanding_amount=0.0,
 			status="Paid",
-			payments=[_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=1200.0, base_amount=1200.0)],
+			payments=[
+				_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=1200.0, base_amount=1200.0)
+			],
 		)
 		result = audit_sales_invoice_payment("SINV-0001")
 		self.assertEqual(result["payment_audit_status"], "Overpaid")
@@ -147,12 +175,17 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 			paid_amount=300.0,
 			outstanding_amount=700.0,
 			status="Partly Paid",
-			payments=[_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=300.0, base_amount=300.0)],
+			payments=[
+				_PaymentRow(mode_of_payment="Cash", account="Cash - PED", amount=300.0, base_amount=300.0)
+			],
 		)
 		result = audit_sales_invoice_payment("SINV-0001")
 		self.assertEqual(result["payment_audit_status"], "Partially Paid")
 
-	@patch("retailedge.invoice_payment_audit.has_doctype", side_effect=lambda doctype: doctype in {"Payment Entry", "Payment Entry Reference"})
+	@patch(
+		"retailedge.invoice_payment_audit.has_doctype",
+		side_effect=lambda doctype: doctype in {"Payment Entry", "Payment Entry Reference"},
+	)
 	@patch("retailedge.invoice_payment_audit.frappe.get_all")
 	def test_payment_entry_references_are_read_without_mutation(self, mock_get_all, _mock_has_doctype):
 		def _fake_get_all(doctype, filters=None, fields=None, **kwargs):
@@ -184,7 +217,10 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 		self.assertEqual(classify_payment_method(account="Bank Transfer - PED")["category"], "Bank Transfer")
 		self.assertEqual(classify_payment_method(mode_of_payment="POS Terminal")["category"], "Card / POS")
 
-	@patch("retailedge.invoice_payment_audit.get_branch_profile_defaults", return_value={"default_bank_account": "Bank - PED"})
+	@patch(
+		"retailedge.invoice_payment_audit.get_branch_profile_defaults",
+		return_value={"default_bank_account": "Bank - PED"},
+	)
 	def test_branch_profile_expected_accounts_are_used(self, _mock_defaults):
 		result = get_expected_payment_account_for_invoice(self._invoice(), payment_category="Bank Transfer")
 		self.assertEqual(result["account"], "Bank - PED")
@@ -192,8 +228,18 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 	@patch("retailedge.invoice_payment_audit.get_invoice_payment_audit_list")
 	def test_invoice_payment_audit_summary_counts_statuses(self, mock_list):
 		mock_list.return_value = [
-			{"grand_total": 1000.0, "payment_audit_status": "Credit", "payment_classification": "Credit", "payment_risk_level": "Low"},
-			{"grand_total": 1000.0, "payment_audit_status": "Payment Amount Mismatch", "payment_classification": "Variance Found", "payment_risk_level": "High"},
+			{
+				"grand_total": 1000.0,
+				"payment_audit_status": "Credit",
+				"payment_classification": "Credit",
+				"payment_risk_level": "Low",
+			},
+			{
+				"grand_total": 1000.0,
+				"payment_audit_status": "Payment Amount Mismatch",
+				"payment_classification": "Variance Found",
+				"payment_risk_level": "High",
+			},
 		]
 		summary = get_invoice_payment_audit_summary({"company": "Process Edge (Demo)"})
 		self.assertEqual(summary["total_invoice_count"], 2)
@@ -209,7 +255,9 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 	def test_invoice_payment_audit_list_respects_branch_filter(
 		self, _mock_has_doctype, _mock_has_field, mock_get_all, _mock_settings, mock_audit
 	):
-		mock_get_all.return_value = [{"name": "SINV-0001", "company": "Process Edge (Demo)", "retailedge_branch": "HQ"}]
+		mock_get_all.return_value = [
+			{"name": "SINV-0001", "company": "Process Edge (Demo)", "retailedge_branch": "HQ"}
+		]
 		mock_audit.return_value = {
 			"invoice": "SINV-0001",
 			"branch": "HQ",
@@ -235,8 +283,12 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 		self.assertEqual(len(rows), 1)
 		self.assertEqual(rows[0]["branch"], "HQ")
 
-	@patch("retailedge.retailedge.report.retailedge_invoice_payment_audit.retailedge_invoice_payment_audit.get_invoice_payment_audit_summary")
-	@patch("retailedge.retailedge.report.retailedge_invoice_payment_audit.retailedge_invoice_payment_audit.get_invoice_payment_audit_list")
+	@patch(
+		"retailedge.retailedge.report.retailedge_invoice_payment_audit.retailedge_invoice_payment_audit.get_invoice_payment_audit_summary"
+	)
+	@patch(
+		"retailedge.retailedge.report.retailedge_invoice_payment_audit.retailedge_invoice_payment_audit.get_invoice_payment_audit_list"
+	)
 	def test_invoice_payment_audit_report_executes(self, mock_list, mock_summary):
 		mock_list.return_value = [
 			{
@@ -272,3 +324,34 @@ class InvoicePaymentAuditTests(unittest.TestCase):
 		self.assertTrue(columns)
 		self.assertEqual(len(data), 1)
 		self.assertTrue(summary)
+
+	@patch(
+		"retailedge.retailedge.report.retailedge_invoice_payment_audit.retailedge_invoice_payment_audit.get_invoice_payment_audit_list",
+		return_value=[],
+	)
+	def test_invoice_payment_audit_report_date_presets(self, mock_list):
+		# 1. Preset is accepted by backend
+		execute_invoice_payment_audit_report({"date_range_preset": "This Month"})
+		mock_list.assert_called()
+		args, kwargs = mock_list.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertIsNotNone(filters.get("from_date"))
+		self.assertIsNotNone(filters.get("to_date"))
+
+		# 2. Custom Period respects user-selected from_date/to_date
+		execute_invoice_payment_audit_report(
+			{"date_range_preset": "Custom Period", "from_date": "2026-01-01", "to_date": "2026-01-10"}
+		)
+		args, kwargs = mock_list.call_args
+		filters = kwargs.get("filters") or args[0]
+		self.assertEqual(filters.get("from_date"), "2026-01-01")
+		self.assertEqual(filters.get("to_date"), "2026-01-10")
+
+		# 3. Manual date range over 60 days is accepted
+		execute_invoice_payment_audit_report(
+			{"date_range_preset": "Custom Period", "from_date": "2026-01-01", "to_date": "2026-04-01"}
+		)
+
+		# 4. Invalid date order is still blocked
+		with self.assertRaises(frappe.ValidationError):
+			execute_invoice_payment_audit_report({"from_date": "2026-05-18", "to_date": "2026-05-10"})

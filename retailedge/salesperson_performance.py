@@ -3,55 +3,18 @@
 
 import frappe
 from frappe.utils import flt, get_first_day, getdate, nowdate
-from retailedge.branch_context import (
-	get_user_allowed_branches,
-	has_field,
-	user_has_global_branch_access,
-)
+
+from retailedge.branch_context import get_branch_query_filters, has_field
 from retailedge.branch_performance import assert_can_access_branch_performance
-
-
-def _resolve_dashboard_branch_access(filters):
-	user = frappe.session.user
-	company = filters.get("company")
-	requested_branch = filters.get("branch")
-	global_access = user_has_global_branch_access(user=user)
-
-	if global_access:
-		return {
-			"global_access": True,
-			"requested_branch": requested_branch,
-			"allowed_branches": [],
-		}
-
-	allowed_info = get_user_allowed_branches(user=user, company=company)
-	allowed_branches = [branch for branch in allowed_info.get("branches") or [] if branch]
-	allowed_branches = list(dict.fromkeys(allowed_branches))
-
-	if not allowed_branches:
-		frappe.throw(
-			"No RetailEdge branch access is assigned to your user account.",
-			frappe.PermissionError,
-		)
-
-	if requested_branch and requested_branch not in allowed_branches:
-		frappe.throw(
-			f"You do not have access to Branch {requested_branch}.",
-			frappe.PermissionError,
-		)
-
-	return {
-		"global_access": False,
-		"requested_branch": requested_branch,
-		"allowed_branches": allowed_branches,
-	}
 
 
 @frappe.whitelist()
 def get_salesperson_performance(filters=None):
 	"""Aggregates salesperson sales performance metrics from submitted invoices."""
+	# Assert page security permissions
 	assert_can_access_branch_performance(frappe.session.user)
 
+	# Parse filters
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 
 	preset = filters.get("date_range_preset")
@@ -63,9 +26,11 @@ def get_salesperson_performance(filters=None):
 			filters["from_date"] = str(preset_from)
 			filters["to_date"] = str(preset_to)
 
+	# Coerce dates
 	from_date = filters.get("from_date") or get_first_day(nowdate())
 	to_date = filters.get("to_date") or nowdate()
 
+	# Only fetch submitted Sales Invoices (docstatus = 1)
 	conditions = ["si.docstatus = 1"]
 	params = []
 
@@ -84,28 +49,26 @@ def get_salesperson_performance(filters=None):
 		conditions.append("si.customer = %s")
 		params.append(filters.get("customer"))
 
-	branch_access = _resolve_dashboard_branch_access(filters)
+	# Branch context enforcement
+	scope = get_branch_query_filters("Sales Invoice", user=frappe.session.user, branch=filters.get("branch"))
+
 	branch_field = (
 		"retailedge_branch"
 		if has_field("Sales Invoice", "retailedge_branch")
 		else ("branch" if has_field("Sales Invoice", "branch") else None)
 	)
 
-	if not branch_field and not branch_access["global_access"]:
-		frappe.throw(
-			"Sales Invoice has no supported branch field, so branch-restricted dashboard access cannot be enforced.",
-			frappe.PermissionError,
-		)
-
-	requested_branch = branch_access["requested_branch"]
-	allowed_branches = branch_access["allowed_branches"]
-	if branch_field and requested_branch:
+	effective_branch = filters.get("branch") or scope.get("branch")
+	if branch_field and effective_branch:
 		conditions.append(f"si.{branch_field} = %s")
-		params.append(requested_branch)
-	elif branch_field and not branch_access["global_access"]:
-		conditions.append(f"si.{branch_field} in ({', '.join(['%s'] * len(allowed_branches))})")
-		params.extend(allowed_branches)
+		params.append(effective_branch)
+	elif branch_field and scope.get("allowed_branches"):
+		allowed = [b for b in scope.get("allowed_branches") if b]
+		if allowed:
+			conditions.append(f"si.{branch_field} in ({', '.join(['%s'] * len(allowed))})")
+			params.extend(allowed)
 
+	# Item level EXIST checks
 	if filters.get("item"):
 		conditions.append("""EXISTS (
 			SELECT 1 FROM `tabSales Invoice Item` sii_filter
@@ -122,6 +85,7 @@ def get_salesperson_performance(filters=None):
 
 	where_sql = " AND ".join(conditions)
 
+	# 1. Summary aggregations (allocated proportional split)
 	summary_query = f"""
 		SELECT
 			SUM(COALESCE(si.grand_total, 0) * (COALESCE(st.allocated_percentage, 100) / 100)) AS gross_sales,
@@ -140,6 +104,7 @@ def get_salesperson_performance(filters=None):
 	gross_sales = flt(summary.get("gross_sales") or 0)
 	summary["avg_invoice_value"] = gross_sales / total_invoices if total_invoices > 0 else 0.0
 
+	# 2. Main table query (allocated proportional split)
 	limit = min(int(filters.get("limit") or 50), 500)
 	offset = int(filters.get("offset") or 0)
 
@@ -173,22 +138,15 @@ def get_salesperson_performance(filters=None):
 @frappe.whitelist()
 def get_salesperson_dashboard_options():
 	"""Fetches filter options and user default context for the salesperson performance dashboard."""
+	# Assert page security permissions
 	assert_can_access_branch_performance(frappe.session.user)
 
-	company = (
-		frappe.defaults.get_user_default("Company")
-		or frappe.db.get_single_value("Global Defaults", "default_company")
-		or "RetailEdge Tenant"
-	)
-	branch_access = _resolve_dashboard_branch_access({"company": company})
+	# Fetch candidate branches using the internal helper
+	from retailedge.branch_performance import get_candidate_branches
 
-	if branch_access["global_access"]:
-		from retailedge.branch_performance import get_candidate_branches
+	branches = get_candidate_branches()
 
-		branches = get_candidate_branches({"company": company})
-	else:
-		branches = branch_access["allowed_branches"]
-
+	# Fetch active salespeople
 	salespeople = (
 		frappe.get_all(
 			"Sales Person", filters={"enabled": 1}, fields=["name"], pluck="name", limit_page_length=500
@@ -208,14 +166,21 @@ def get_salesperson_dashboard_options():
 		"offset": 0,
 	}
 
+	# Resolve user fullname and company details
 	user_fullname = frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user
+	company = (
+		frappe.defaults.get_user_default("Company")
+		or frappe.db.get_single_value("Global Defaults", "default_company")
+		or "RetailEdge Tenant"
+	)
 
+	# Resolve active branch from user context
 	active_branch = ""
 	try:
 		from retailedge.branch_context import resolve_retailedge_branch_context
 
-		branch_ctx = resolve_retailedge_branch_context(user=frappe.session.user, company=company)
-		if branch_ctx and branch_ctx.get("branch") in branches:
+		branch_ctx = resolve_retailedge_branch_context(user=frappe.session.user)
+		if branch_ctx and branch_ctx.get("branch"):
 			active_branch = branch_ctx.get("branch")
 	except Exception:
 		pass

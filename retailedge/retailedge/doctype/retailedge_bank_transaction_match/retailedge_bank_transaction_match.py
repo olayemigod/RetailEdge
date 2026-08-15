@@ -7,7 +7,10 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, cstr, flt, fmt_money
 
-from retailedge.bank_transaction_match_workflow import _resolve_matching_candidate
+from retailedge.bank_transaction_match_workflow import (
+	_resolve_matching_candidate,
+	resolve_bank_match_party_link,
+)
 from retailedge.bank_transaction_matching import (
 	_get_sales_invoice_doc,
 	_invoice_payment_row_is_bank_matchable,
@@ -22,15 +25,19 @@ from retailedge.invoice_payment_audit import get_sales_invoice_payment_rows
 
 class RetailEdgeBankTransactionMatch(Document):
 	def validate(self):
-		self._hydrate_bank_transaction_context()
-		self._hydrate_candidate_context()
-		self._validate_candidate_fields()
-		self._validate_party_fields()
-		self._sync_sales_invoice_party_fields()
-		self._set_amount_difference()
-		self._set_review_classification()
-		self._set_readable_summaries()
-		self._refresh_sync_readiness()
+		frappe.flags.retailedge_active_match_doc = self
+		try:
+			self._hydrate_bank_transaction_context()
+			self._hydrate_candidate_context()
+			self._validate_candidate_fields()
+			self._validate_party_fields()
+			self._sync_sales_invoice_party_fields()
+			self._set_amount_difference()
+			self._set_review_classification()
+			self._set_readable_summaries()
+			self._refresh_sync_readiness()
+		finally:
+			frappe.flags.retailedge_active_match_doc = None
 
 	def _hydrate_bank_transaction_context(self):
 		bank_transaction = getattr(self, "bank_transaction", None)
@@ -99,6 +106,14 @@ class RetailEdgeBankTransactionMatch(Document):
 		customer = frappe.db.get_value("Sales Invoice", sales_invoice, "customer")
 		if not customer:
 			frappe.throw(f"Sales Invoice {sales_invoice} does not have a customer.")
+		if not frappe.db.exists("Customer", customer):
+			self.party_type = "Customer"
+			self.party = None
+			self.customer = None
+			diagnostic = f"Party not found: Customer {customer}"
+			if diagnostic not in cstr(getattr(self, "match_reason", "")):
+				self.match_reason = "; ".join(filter(None, [getattr(self, "match_reason", None), diagnostic]))
+			return
 		self.party_type = "Customer"
 		self.party = customer
 		self.customer = customer
@@ -130,12 +145,18 @@ class RetailEdgeBankTransactionMatch(Document):
 			self.review_status = "Reopened"
 		elif status == "Needs Review":
 			self.review_status = "Needs Review"
-		elif getattr(self, "match_confidence", None) == "Strong Match" and abs(flt(self.amount_difference)) <= 0.01:
+		elif (
+			getattr(self, "match_confidence", None) == "Strong Match"
+			and abs(flt(self.amount_difference)) <= 0.01
+		):
 			self.review_status = "Ready to Confirm"
 		else:
 			self.review_status = "Pending Review"
 
-		if getattr(self, "match_confidence", None) == "Strong Match" and abs(flt(self.amount_difference)) <= 0.01:
+		if (
+			getattr(self, "match_confidence", None) == "Strong Match"
+			and abs(flt(self.amount_difference)) <= 0.01
+		):
 			self.risk_level = "Low"
 		elif getattr(self, "match_confidence", None) == "Possible Match":
 			self.risk_level = "Medium"
@@ -150,7 +171,9 @@ class RetailEdgeBankTransactionMatch(Document):
 		party_text = f" for {party}" if party else ""
 		candidate_context = getattr(self, "_retailedge_candidate_context", None) or {}
 		candidate_details = candidate_context.get("details", {})
-		category_label = get_candidate_category_label(candidate_details.get("candidate_category")) or "Not specified"
+		category_label = (
+			get_candidate_category_label(candidate_details.get("candidate_category")) or "Not specified"
+		)
 		self.match_summary = (
 			f"Bank amount {fmt_money(getattr(self, 'bank_amount', 0))} matched to {document_label}{party_text}. "
 			f"Candidate amount: {fmt_money(getattr(self, 'candidate_amount', 0))}. "
@@ -259,9 +282,16 @@ def _resolve_manual_candidate_context(
 			bank_transaction_name=bank_transaction,
 			suggested_document_type=suggested_document_type,
 			suggested_document=suggested_document,
-			sales_invoice=sales_invoice or (suggested_document if suggested_document_type == "Sales Invoice" else None),
-			payment_entry=payment_entry or (suggested_document if suggested_document_type == "Payment Entry" else None),
+			sales_invoice=sales_invoice
+			or (suggested_document if suggested_document_type == "Sales Invoice" else None),
+			payment_entry=payment_entry
+			or (suggested_document if suggested_document_type == "Payment Entry" else None),
 		)
+		if candidate and (
+			cstr(candidate.get("document_type")).strip() != suggested_document_type
+			or cstr(candidate.get("document_name")).strip() != suggested_document
+		):
+			candidate = None
 	if not candidate:
 		candidate = _build_source_candidate_context(suggested_document_type, suggested_document)
 	if not candidate:
@@ -286,7 +316,9 @@ def _resolve_manual_candidate_context(
 		"payment_row_index": candidate.get("payment_row_index"),
 		"payment_mode": candidate.get("payment_mode"),
 		"payment_account": candidate.get("payment_account"),
-		"resolved_payment_account": account_payload.get("candidate_canonical_account") or candidate.get("account") or candidate.get("payment_account"),
+		"resolved_payment_account": account_payload.get("candidate_canonical_account")
+		or candidate.get("account")
+		or candidate.get("payment_account"),
 		"posting_date": candidate.get("posting_date"),
 		"reference": candidate.get("reference"),
 		"account_resolution_status": account_payload.get("status"),
@@ -304,13 +336,14 @@ def _resolve_manual_candidate_context(
 		"payment_entry": candidate.get("document_name")
 		if (candidate.get("document_type") or suggested_document_type) == "Payment Entry"
 		else payment_entry,
-		"customer": candidate.get("customer"),
-		"party_type": candidate.get("party_type") or "Customer",
-		"party": candidate.get("party") or candidate.get("customer"),
+		"customer": None,
+		"party_type": "Customer",
+		"party": None,
 		"candidate_amount": flt(candidate.get("candidate_amount")),
 		"match_confidence": candidate.get("confidence") or "No Match",
 		"match_score": cint(candidate.get("score") or 0),
-		"amount_scenario": get_amount_scenario_label(candidate.get("amount_scenario")) or candidate.get("amount_scenario"),
+		"amount_scenario": get_amount_scenario_label(candidate.get("amount_scenario"))
+		or candidate.get("amount_scenario"),
 		"match_reason": _build_candidate_reason_summary(candidate, details, account_payload),
 		"candidate_posting_date": candidate.get("posting_date"),
 		"payment_event_source": details.get("payment_event_source"),
@@ -322,7 +355,26 @@ def _resolve_manual_candidate_context(
 	}
 	if bank_context:
 		doc_values.update(bank_context)
-		doc_values["amount_difference"] = flt(bank_context.get("bank_amount")) - flt(doc_values.get("candidate_amount"))
+		doc_values["amount_difference"] = flt(bank_context.get("bank_amount")) - flt(
+			doc_values.get("candidate_amount")
+		)
+	party_resolution = resolve_bank_match_party_link(
+		party_type=candidate.get("party_type"),
+		party=candidate.get("party"),
+		customer=candidate.get("customer"),
+	)
+	doc_values.update(
+		{
+			"customer": party_resolution.customer,
+			"party_type": party_resolution.party_type,
+			"party": party_resolution.party,
+		}
+	)
+	if party_resolution.get("diagnostic_message"):
+		details["missing_party_link"] = 1
+		details["party_diagnostic"] = party_resolution.diagnostic_message
+		details["party_display"] = party_resolution.display_party
+		details["party_type_display"] = party_resolution.display_party_type
 	return {"doc_values": doc_values, "details": details, "candidate": candidate, "block_reason": None}
 
 
@@ -394,8 +446,14 @@ def _build_sales_invoice_source_candidate(invoice_name):
 	bank_rows = [row for row in payment_rows if _invoice_payment_row_is_bank_matchable(row)]
 	if not bank_rows:
 		return None
-	best_row = sorted(bank_rows, key=lambda row: flt(row.get("base_amount") or row.get("amount")), reverse=True)[0]
-	category = "pos_payment_match" if cstr(best_row.get("payment_category")).strip() == "Card / POS" else "invoice_payment_row_match"
+	best_row = sorted(
+		bank_rows, key=lambda row: flt(row.get("base_amount") or row.get("amount")), reverse=True
+	)[0]
+	category = (
+		"pos_payment_match"
+		if cstr(best_row.get("payment_category")).strip() == "Card / POS"
+		else "invoice_payment_row_match"
+	)
 	return {
 		"document_type": "Sales Invoice",
 		"document_name": invoice_name,
@@ -408,7 +466,9 @@ def _build_sales_invoice_source_candidate(invoice_name):
 		"party_type": "Customer",
 		"candidate_amount": flt(best_row.get("base_amount") or best_row.get("amount")),
 		"candidate_category": category,
-		"payment_event_source": "POS Payment Row" if category == "pos_payment_match" else "Invoice Payment Row",
+		"payment_event_source": "POS Payment Row"
+		if category == "pos_payment_match"
+		else "Invoice Payment Row",
 		"payment_row_index": best_row.get("payment_row_index"),
 		"payment_mode": best_row.get("mode_of_payment"),
 		"payment_account": best_row.get("account") or best_row.get("expected_account"),

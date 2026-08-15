@@ -34,6 +34,8 @@ The following targets should remain roadmap/documentation items until implemente
 
 RetailEdge must not duplicate ERPNext source-of-truth modules. Bank Transaction, stock ledger documents, accounting entries, Sales Invoice, and Payment Entry remain ERPNext/POSNext sources. RetailEdge should expose intelligence, review queues, operational controls, and safety overlays only where implemented.
 
+Product frontend bundles must be build-safe without CoreEdge private source files. RetailEdge dashboards may use EdgeSuite-compatible local presentation wrappers, but must not statically import Vue files from `apps/coreedge/coreedge/public/js/edgeui/components/` or relative private CoreEdge paths such as `../../../../../coreedge`. The Salesperson Performance Dashboard loader uses the public runtime contract instead: load `edgeui.bundle.js`, validate `window.EdgeUI.components`, then load `salesperson_performance.bundle.js`. If the shared EdgeSuite shell cannot be resolved, the page must show an explicit failure block instead of rendering an unstyled success UI.
+
 ## Home Workspace UX
 
 The RetailEdge Home workspace is a compact operational launchpad. The sidebar keeps the six functional sections, while the Home page uses a dense, sequential shortcut grid so role and permission filtering does not leave scattered section blocks or empty headings.

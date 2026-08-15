@@ -47,12 +47,55 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 	onload(report) {
 		configureOperationalReportRefresh(report);
 		forceOperationalPrimaryAction(report);
+		window.retailedge.setupDateRangePresets(report);
+		const originalRefresh = report.refresh.bind(report);
+		report.refresh = function () {
+			const fromDate = report.get_filter_value("from_date");
+			const toDate = report.get_filter_value("to_date");
+			if (
+				fromDate &&
+				toDate &&
+				frappe.datetime.str_to_obj(fromDate) > frappe.datetime.str_to_obj(toDate)
+			) {
+				frappe.throw(__("From Date cannot be after To Date."));
+			}
+			if (fromDate && toDate) {
+				const days = frappe.datetime.get_day_diff(toDate, fromDate) + 1;
+				if (days > 60) {
+					frappe.show_alert({
+						message: __("Large date ranges may take longer to load."),
+						indicator: "orange",
+					});
+				}
+			}
+			return originalRefresh();
+		};
 	},
 	tree: true,
 	name_field: "row_id",
 	parent_field: "parent_row",
 	initial_depth: 1,
 	filters: [
+		{
+			fieldname: "date_range_preset",
+			label: __("Date Range Preset"),
+			fieldtype: "Select",
+			options: [
+				"This Month",
+				"Today",
+				"Yesterday",
+				"This Week",
+				"This Quarter",
+				"This Year",
+				"Last Week",
+				"Last Month",
+				"Last Quarter",
+				"Last Year",
+				"Custom Period",
+				"Full History",
+			].join("\n"),
+			default: "This Month",
+		},
 		{
 			fieldname: "from_date",
 			label: __("From Date"),
@@ -84,7 +127,9 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 			label: __("Branch"),
 			fieldtype: "Link",
 			options: "Branch",
-			description: __("Filters report rows using RetailEdge branch resolution from the shift/profile context."),
+			description: __(
+				"Filters report rows using RetailEdge branch resolution from the shift/profile context."
+			),
 		},
 		{
 			fieldname: "cashier",
@@ -98,14 +143,18 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
 			label: __("Expense Cost Center"),
 			fieldtype: "Link",
 			options: "Cost Center",
-			description: __("Optional. If blank, the report uses the POS Profile cost center when available."),
+			description: __(
+				"Optional. If blank, the report uses the POS Profile cost center when available."
+			),
 		},
 		{
 			fieldname: "include_cogs",
 			label: __("Include COGS / Stock Expense"),
 			fieldtype: "Check",
 			default: 0,
-			description: __("Enable only if you want stock valuation or cost-of-goods entries included as expenses."),
+			description: __(
+				"Enable only if you want stock valuation or cost-of-goods entries included as expenses."
+			),
 		},
 	],
 };

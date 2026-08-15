@@ -1,0 +1,25 @@
+name: RetailEdge Theme Compatibility
+
+on:
+  pull_request:
+    paths:
+      - "retailedge/public/css/**"
+      - "retailedge/tests/test_edgesuite_theme_compatibility.py"
+      - ".github/workflows/theme-compatibility.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  theme-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out RetailEdge
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Validate EdgeSuite theme compatibility contract
+        run: python retailedge/tests/test_edgesuite_theme_compatibility.py
