@@ -16,37 +16,11 @@
 		return Array.isArray(route) && route[0] === PAGE_NAME;
 	}
 
-	function isVisible(node) {
-		if (!node || !node.isConnected) return false;
-		const style = global.getComputedStyle?.(node);
-		return style?.display !== "none" && style?.visibility !== "hidden";
-	}
-
-	function resolveDeskContentRoot() {
-		const selectors = [
-			"#body .main-section",
-			"#body .layout-main-section-wrapper",
-			"#body .layout-main-section",
-			".main-section",
-			".layout-main-section-wrapper",
-			".layout-main-section",
-		];
-		for (const selector of selectors) {
-			const nodes = Array.from(global.document?.querySelectorAll?.(selector) || []);
-			const matchedNode = nodes.find(isVisible);
-			if (matchedNode) {
-				state.lastWrapperSource = `Frappe v16 Desk content root ${selector}`;
-				return matchedNode;
-			}
-		}
-		return null;
-	}
-
 	function resolveWrapper() {
 		const definition = global.frappe?.pages?.[PAGE_NAME];
-		if (definition?.wrapper) {
-			state.lastWrapperSource = "frappe.pages wrapper";
-			return definition.wrapper;
+		if (definition instanceof global.HTMLElement && definition.isConnected) {
+			state.lastWrapperSource = "frappe.pages page container";
+			return definition;
 		}
 
 		const selectors = [
@@ -58,21 +32,12 @@
 		];
 		for (const selector of selectors) {
 			const matchedNode = global.document?.querySelector(selector);
-			if (isVisible(matchedNode)) {
+			if (matchedNode?.isConnected) {
 				state.lastWrapperSource = selector;
 				return matchedNode;
 			}
 		}
-
-		const visiblePages = Array.from(
-			global.document?.querySelectorAll?.(".page-container") || []
-		).filter(isVisible);
-		if (visiblePages.length === 1) {
-			state.lastWrapperSource = "single visible .page-container";
-			return visiblePages[0];
-		}
-
-		return resolveDeskContentRoot();
+		return null;
 	}
 
 	function bootActiveRoute() {

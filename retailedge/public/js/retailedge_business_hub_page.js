@@ -5,7 +5,7 @@
 	const RUNTIME_ASSET = "edgeui.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
-	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge_v2.js";
+	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge.js";
 	const LOAD_TIMEOUT_MS = 15000;
 	let productMenuBootPromise = null;
 	let routeBridgeBootPromise = null;
@@ -21,25 +21,28 @@
 			return false;
 		}
 
-		const definition = (frappe.pages[PAGE_NAME] = frappe.pages[PAGE_NAME] || {});
-		if (definition.__retailedge_business_hub_registered) {
+		const wrapper = frappe.pages[PAGE_NAME];
+		if (!(wrapper instanceof global.HTMLElement)) {
+			return false;
+		}
+		if (wrapper.__retailedge_business_hub_registered) {
 			return true;
 		}
-		definition.__retailedge_business_hub_registered = true;
+		wrapper.__retailedge_business_hub_registered = true;
 
-		definition.on_page_load = function onPageLoad(wrapper) {
-			ensurePage(wrapper);
-			return bootBusinessHub(wrapper);
+		wrapper.on_page_load = function onPageLoad(currentWrapper) {
+			ensurePage(currentWrapper);
+			return bootBusinessHub(currentWrapper);
 		};
 
-		definition.on_page_show = function onPageShow(wrapper) {
-			ensurePage(wrapper);
+		wrapper.on_page_show = function onPageShow(currentWrapper) {
+			ensurePage(currentWrapper);
 			bootProductMenu();
-			if (!wrapper._retailedgeBusinessHub) {
-				return bootBusinessHub(wrapper);
+			if (!currentWrapper._retailedgeBusinessHub) {
+				return bootBusinessHub(currentWrapper);
 			}
 
-			const component = getMountedComponent(wrapper);
+			const component = getMountedComponent(currentWrapper);
 			if (component && typeof component.refreshContext === "function") {
 				return component.refreshContext();
 			}
@@ -306,10 +309,8 @@
 
 	function initialiseDeskFeatures() {
 		const pageRegistered = registerPage();
-		if (pageRegistered) {
-			bootProductMenu();
-			bootRouteBridge();
-		}
+		bootProductMenu();
+		bootRouteBridge();
 		return pageRegistered;
 	}
 

@@ -13,7 +13,7 @@
 		}
 
 		window.retailedgeRegisterBusinessHubPage();
-		const wrapper = window.frappe?.pages?.[PAGE_NAME]?.wrapper;
+		const wrapper = window.frappe?.pages?.[PAGE_NAME];
 		if (!wrapper || typeof window.retailedgeBootBusinessHubPage !== "function") {
 			return false;
 		}

@@ -69,6 +69,15 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("Loading RetailEdge Business Hub", controller)
 		self.assertIn("RetailEdge Business Hub failed to load", controller)
 
+	def test_global_controller_does_not_preempt_frappe_page_container_creation(self):
+		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
+		self.assertNotIn(
+			"frappe.pages[PAGE_NAME] = frappe.pages[PAGE_NAME] || {}",
+			controller,
+		)
+		self.assertIn("const wrapper = frappe.pages[PAGE_NAME]", controller)
+		self.assertIn("wrapper instanceof global.HTMLElement", controller)
+
 	def test_global_controller_uses_canonical_runtime_and_product_bundles(self):
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
 		self.assertLess(
@@ -84,8 +93,8 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("const pending = frappe.require(asset, finish)", controller)
 		self.assertIn('typeof pending.then === "function"', controller)
 		self.assertIn("pending.then(finish).catch(fail)", controller)
-		self.assertIn("if (!wrapper._retailedgeBusinessHub)", controller)
-		self.assertIn("return bootBusinessHub(wrapper)", controller)
+		self.assertIn("if (!currentWrapper._retailedgeBusinessHub)", controller)
+		self.assertIn("return bootBusinessHub(currentWrapper)", controller)
 
 	def test_edge_suite_waffle_is_booted_across_desk(self):
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
@@ -114,6 +123,8 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("window.retailedgeBootBusinessHubPage", source)
 		self.assertIn("retailedge_business_hub_route_bridge.js", source)
 		self.assertNotIn("frappe.ui.make_app_page", source)
+		self.assertIn("const wrapper = window.frappe?.pages?.[PAGE_NAME]", source)
+		self.assertNotIn("?.wrapper", source)
 
 	def test_route_bridge_recovers_when_page_was_open_before_controller_registration(self):
 		bridge = (APP_ROOT / "public" / "js" / "retailedge_business_hub_route_bridge.js").read_text()
@@ -125,16 +136,18 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("MAX_ATTEMPTS", bridge)
 		self.assertNotIn("CoreEdge", bridge)
 
-	def test_route_bridge_recovers_from_frappe_v16_desk_content_root(self):
-		bridge = (APP_ROOT / "public" / "js" / "retailedge_business_hub_route_bridge.js").read_text()
-		self.assertIn("resolveDeskContentRoot", bridge)
-		self.assertIn('"#body .main-section"', bridge)
-		self.assertIn('".main-section"', bridge)
-		self.assertIn('".layout-main-section-wrapper"', bridge)
-		self.assertIn('".layout-main-section"', bridge)
-		self.assertIn("Frappe v16 Desk content root", bridge)
-		self.assertIn("return resolveDeskContentRoot()", bridge)
-		self.assertIn("state.booted = false", bridge)
+	def test_route_bridge_never_mounts_into_an_unrelated_visible_desk_page(self):
+		for filename in (
+			"retailedge_business_hub_route_bridge.js",
+			"retailedge_business_hub_route_bridge_v2.js",
+		):
+			with self.subTest(filename=filename):
+				bridge = (APP_ROOT / "public" / "js" / filename).read_text()
+				self.assertNotIn("resolveDeskContentRoot", bridge)
+				self.assertNotIn('"single visible .page-container"', bridge)
+				self.assertNotIn('querySelectorAll?.(".page-container")', bridge)
+				self.assertIn("definition instanceof global.HTMLElement", bridge)
+				self.assertIn("state.booted = false", bridge)
 
 	def test_product_bundle_and_vue_use_canonical_runtime_only(self):
 		bundle = (APP_ROOT / "public" / "js" / "retailedge_business_hub.bundle.js").read_text()
