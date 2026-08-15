@@ -110,7 +110,7 @@
 							<strong>{{ action.label }}</strong>
 							<small>{{ action.description }}</small>
 						</span>
-						<span class="create-picker-mode">{{ actionModeLabel(action.mode) }}</span>
+						<span class="create-picker-mode">{{ actionModeLabel(action) }}</span>
 					</button>
 				</div>
 				<EdgeEmptyState
@@ -123,11 +123,20 @@
 					<button type="button" class="edge-button" @click="closeCreatePicker">Cancel</button>
 				</template>
 			</EdgeModal>
+
+			<SimpleSalesInvoiceDialog
+				:open="simpleSalesInvoiceOpen"
+				@close="closeSimpleSalesInvoice"
+				@saved="handleSimpleSalesInvoiceSaved"
+				@open-native="openNativeSalesInvoice"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
+import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
+
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const runtimeComponents =
@@ -192,12 +201,14 @@ export default {
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
+		SimpleSalesInvoiceDialog,
 	},
 	data() {
 		return {
 			loading: true,
 			error: "",
 			createPickerOpen: false,
+			simpleSalesInvoiceOpen: false,
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
@@ -274,7 +285,27 @@ export default {
 		runQuickAction(action) {
 			if (!action || !action.doctype) return;
 			this.closeCreatePicker();
+			if (action.key === "new-sales-invoice") {
+				this.simpleSalesInvoiceOpen = true;
+				return;
+			}
 			frappe.new_doc(action.doctype);
+		},
+		closeSimpleSalesInvoice() {
+			this.simpleSalesInvoiceOpen = false;
+		},
+		handleSimpleSalesInvoiceSaved(result) {
+			this.simpleSalesInvoiceOpen = false;
+			if (!result?.name) return;
+			frappe.show_alert?.({
+				message: `Sales Invoice ${result.name} saved as Draft`,
+				indicator: "green",
+			});
+			frappe.set_route("Form", result.doctype || "Sales Invoice", result.name);
+		},
+		openNativeSalesInvoice(doctype = "Sales Invoice") {
+			this.simpleSalesInvoiceOpen = false;
+			frappe.new_doc(doctype);
 		},
 		navigateFromShell(route) {
 			const item = this.shellMenuItems
@@ -314,8 +345,9 @@ export default {
 			if (item.target_type === "Page") return `/app/${item.target}`;
 			return "";
 		},
-		actionModeLabel(mode) {
-			return mode === "available" ? "RetailEdge entry" : "Full form";
+		actionModeLabel(action) {
+			if (action?.key === "new-sales-invoice") return "RetailEdge entry";
+			return action?.mode === "available" ? "RetailEdge entry" : "Full form";
 		},
 		iconText(icon) {
 			const icons = {
