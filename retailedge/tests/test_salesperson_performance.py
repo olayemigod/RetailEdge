@@ -336,7 +336,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertNotIn("../../../../../coreedge", content)
 
 	def test_salesperson_dashboard_is_discoverable_from_standard_navigation(self):
-		"""Verify R2 exposes the dashboard through the shared business taxonomy."""
+		"""Verify Phase 2F navigation exposes the dashboard with the standard label and route."""
 		retailedge_path = frappe.get_app_path("retailedge")
 		workspace_path = os.path.join(
 			retailedge_path, "retailedge", "workspace", "retailedge", "retailedge.json"
@@ -352,14 +352,13 @@ class TestSalespersonPerformance(FrappeTestCase):
 		expected_groups = [
 			"Dashboard",
 			"Sales & POS",
-			"Purchases",
-			"Inventory",
-			"Cash & Banking",
-			"Expenses",
-			"Customers & Suppliers",
-			"Reviews & Controls",
+			"Cash, Bank & Reconciliation",
+			"Inventory & Purchasing",
+			"Expenses, Payables & Receivables",
+			"Reviews & Exceptions",
 			"Reports & Insights",
-			"Setup",
+			"Setup & Configuration",
+			"Admin & Maintenance",
 		]
 		workspace_groups = [row["label"] for row in workspace["links"] if row.get("type") == "Card Break"]
 		sidebar_groups = [row["label"] for row in sidebar["items"] if row.get("type") == "Section Break"]
@@ -368,10 +367,10 @@ class TestSalespersonPerformance(FrappeTestCase):
 
 		for rows in (workspace["links"], sidebar["items"]):
 			links = {row["label"]: row for row in rows if row.get("type") == "Link"}
-			self.assertIn("Salesperson Performance", links)
-			self.assertEqual(links["Salesperson Performance"]["link_type"], "Page")
+			self.assertIn("Salesperson Performance Dashboard", links)
+			self.assertEqual(links["Salesperson Performance Dashboard"]["link_type"], "Page")
 			self.assertEqual(
-				links["Salesperson Performance"]["link_to"], "salesperson-performance-dashboard"
+				links["Salesperson Performance Dashboard"]["link_to"], "salesperson-performance-dashboard"
 			)
 			counts = Counter(
 				(row.get("link_type"), row.get("link_to") or row.get("url"))
