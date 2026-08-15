@@ -52,12 +52,11 @@ PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 	},
 )
 
-
 NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
-		"key": "dashboard",
-		"label": "Dashboard",
-		"icon": "chart",
+		"key": "home",
+		"label": "Home",
+		"icon": "home",
 		"items": (
 			{
 				"label": "RetailEdge Business Hub",
@@ -65,24 +64,12 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 				"target": "retailedge-business-hub",
 				"icon": "home",
 			},
-			{
-				"label": "Branch Performance",
-				"target_type": "Report",
-				"target": "RetailEdge Branch Performance Summary",
-				"icon": "chart",
-			},
-			{
-				"label": "Salesperson Performance",
-				"target_type": "Page",
-				"target": "salesperson-performance-dashboard",
-				"icon": "user",
-			},
 		),
 	},
 	{
-		"key": "sales",
-		"label": "Sales",
-		"icon": "activity",
+		"key": "sell",
+		"label": "Sell",
+		"icon": "shopping-cart",
 		"items": (
 			{
 				"label": START_POS_LABEL,
@@ -93,7 +80,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			},
 			{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice", "icon": "clipboard"},
 			{"label": "Sales Orders", "target_type": "DocType", "target": "Sales Order", "icon": "clipboard"},
-			{"label": "Delivery Notes", "target_type": "DocType", "target": "Delivery Note", "icon": "clipboard"},
+			{"label": "Delivery Notes", "target_type": "DocType", "target": "Delivery Note", "icon": "truck"},
 			{
 				"label": "POS Opening",
 				"target_type": "DocType",
@@ -111,200 +98,125 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		),
 	},
 	{
-		"key": "purchases",
-		"label": "Purchases",
-		"icon": "clipboard",
+		"key": "buy",
+		"label": "Buy",
+		"icon": "shopping-bag",
 		"items": (
 			{"label": "Purchase Invoices", "target_type": "DocType", "target": "Purchase Invoice", "icon": "clipboard"},
 			{"label": "Purchase Orders", "target_type": "DocType", "target": "Purchase Order", "icon": "clipboard"},
-			{"label": "Purchase Receipts", "target_type": "DocType", "target": "Purchase Receipt", "icon": "clipboard"},
+			{"label": "Purchase Receipts", "target_type": "DocType", "target": "Purchase Receipt", "icon": "truck"},
 		),
 	},
 	{
-		"key": "inventory",
-		"label": "Inventory",
+		"key": "stock",
+		"label": "Stock",
 		"icon": "layers",
 		"items": (
-			{"label": "Items", "target_type": "DocType", "target": "Item", "icon": "layers"},
+			{"label": "Products", "target_type": "DocType", "target": "Item", "icon": "layers"},
 			{"label": "Warehouses", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
-			{
-				"label": "Stock Movement History",
-				"target_type": "Report",
-				"target": "RetailEdge Stock Movement History",
-				"icon": "report",
-			},
+			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History", "icon": "report"},
 			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance", "icon": "report"},
-			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry", "icon": "layers"},
+			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry", "icon": "repeat"},
 			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation", "icon": "clipboard"},
-			{"label": "Material Requests", "target_type": "DocType", "target": "Material Request", "icon": "clipboard"},
+			{"label": "Reorder Requests", "target_type": "DocType", "target": "Material Request", "icon": "clipboard"},
+			{"label": "Stock Ledger", "target_type": "Report", "target": "Stock Ledger", "icon": "report"},
+			{"label": "Projected Stock", "target_type": "Report", "target": "Stock Projected Qty", "icon": "report"},
+			{"label": "Stock Ageing", "target_type": "Report", "target": "Stock Ageing", "icon": "report"},
 		),
 	},
 	{
-		"key": "cash-banking",
-		"label": "Cash & Banking",
+		"key": "money",
+		"label": "Money",
 		"icon": "wallet",
 		"items": (
-			{"label": "Payment Entries", "target_type": "DocType", "target": "Payment Entry", "icon": "wallet"},
+			{"label": "Payments", "target_type": "DocType", "target": "Payment Entry", "icon": "wallet"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet"},
-			{
-				"label": "Import Bank Statement",
-				"target_type": "DocType",
-				"target": "RetailEdge Payment Statement Import",
-				"icon": "clipboard",
-			},
-			{
-				"label": "Bank Matching",
-				"target_type": "Report",
-				"target": "RetailEdge Bank Transaction Matching",
-				"icon": "report",
-			},
+			{"label": "Import Bank Statement", "target_type": "DocType", "target": "RetailEdge Payment Statement Import", "icon": "upload"},
+			{"label": "Bank Matching", "target_type": "Report", "target": "RetailEdge Bank Transaction Matching", "icon": "report"},
 		),
 	},
 	{
 		"key": "expenses",
 		"label": "Expenses",
-		"icon": "report",
+		"icon": "file-text",
 		"items": (
-			{
-				"label": "Cashier Expenses",
-				"target_type": "DocType",
-				"target": "RetailEdge Cashier Expense",
-				"icon": "wallet",
-			},
-			{"label": "Expense Claims", "target_type": "DocType", "target": "Expense Claim", "icon": "clipboard"},
+			{"label": "Cashier Expenses", "target_type": "DocType", "target": "RetailEdge Cashier Expense", "icon": "wallet"},
 		),
 	},
 	{
-		"key": "customers-suppliers",
-		"label": "Customers & Suppliers",
-		"icon": "user",
+		"key": "customers",
+		"label": "Customers",
+		"icon": "users",
 		"items": (
 			{"label": "Customers", "target_type": "DocType", "target": "Customer", "icon": "user"},
-			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier", "icon": "user"},
-			{"label": "Accounts Receivable", "target_type": "Report", "target": "Accounts Receivable", "icon": "report"},
-			{"label": "Accounts Payable", "target_type": "Report", "target": "Accounts Payable", "icon": "report"},
+			{"label": "Receivables", "target_type": "Report", "target": "Accounts Receivable", "icon": "report"},
 		),
 	},
 	{
-		"key": "reviews-controls",
-		"label": "Reviews & Controls",
-		"icon": "shield",
+		"key": "suppliers-payables",
+		"label": "Suppliers & Payables",
+		"icon": "users",
 		"items": (
-			{
-				"label": "Bank Match Reviews",
-				"target_type": "DocType",
-				"target": "RetailEdge Bank Transaction Match",
-				"icon": "shield",
-			},
-			{
-				"label": "Daily Sales Audit",
-				"target_type": "DocType",
-				"target": "RetailEdge Daily Sales Audit",
-				"icon": "shield",
-			},
-			{
-				"label": "Cashier Expense Review",
-				"target_type": "Report",
-				"target": "RetailEdge Cashier Expense Review",
-				"icon": "report",
-			},
-			{
-				"label": "Cash Shift Verification",
-				"target_type": "Report",
-				"target": "RetailEdge Cash Shift Verification",
-				"icon": "report",
-			},
-			{
-				"label": "Invoice Payment Audit",
-				"target_type": "Report",
-				"target": "RetailEdge Invoice Payment Audit",
-				"icon": "report",
-			},
-			{
-				"label": "POS Closing Variance vs Expenses",
-				"target_type": "Report",
-				"target": "POS Closing Variance vs Expenses",
-				"icon": "report",
-			},
-			{
-				"label": "Unmatched Bank Transactions",
-				"target_type": "Report",
-				"target": "RetailEdge Unmatched Bank Transactions",
-				"icon": "report",
-			},
-			{
-				"label": "Unmatched Bank Payments",
-				"target_type": "Report",
-				"target": "RetailEdge Unmatched Bank Payment Events",
-				"icon": "report",
-			},
-			{
-				"label": "Reconciliation Readiness",
-				"target_type": "Report",
-				"target": "RetailEdge Bank Match Reconciliation Readiness",
-				"icon": "shield",
-			},
-			{
-				"label": "Reconciliation Handoff",
-				"target_type": "Report",
-				"target": "RetailEdge Reconciliation Handoff",
-				"icon": "report",
-			},
+			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier", "icon": "user"},
+			{"label": "Payables", "target_type": "Report", "target": "Accounts Payable", "icon": "report"},
 		),
 	},
 	{
-		"key": "reports-insights",
-		"label": "Reports & Insights",
+		"key": "insights",
+		"label": "Insights",
 		"icon": "chart",
 		"items": (
-			{
-				"label": "Daily Sales Audit Register",
-				"target_type": "Report",
-				"target": "RetailEdge Daily Sales Audit Register",
-				"icon": "report",
-			},
-			{"label": "Stock Ledger", "target_type": "Report", "target": "Stock Ledger", "icon": "report"},
-			{"label": "Stock Projected Qty", "target_type": "Report", "target": "Stock Projected Qty", "icon": "report"},
-			{"label": "Stock Ageing", "target_type": "Report", "target": "Stock Ageing", "icon": "report"},
-			{
-				"label": "Batch-Wise Balance History",
-				"target_type": "Report",
-				"target": "Batch-Wise Balance History",
-				"icon": "report",
-			},
-			{
-				"label": "Serial No and Batch Traceability",
-				"target_type": "Report",
-				"target": "Serial No and Batch Traceability",
-				"icon": "report",
-			},
+			{"label": "Branch Performance", "target_type": "Report", "target": "RetailEdge Branch Performance Summary", "icon": "chart"},
+			{"label": "Salesperson Performance", "target_type": "Page", "target": "salesperson-performance-dashboard", "icon": "user"},
+		),
+	},
+	{
+		"key": "review-approvals",
+		"label": "Review & Approvals",
+		"icon": "shield",
+		"items": (
+			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match", "icon": "shield"},
+			{"label": "Daily Sales Audit", "target_type": "DocType", "target": "RetailEdge Daily Sales Audit", "icon": "shield"},
+			{"label": "Cashier Expense Review", "target_type": "Report", "target": "RetailEdge Cashier Expense Review", "icon": "report"},
+			{"label": "Cash Shift Verification", "target_type": "Report", "target": "RetailEdge Cash Shift Verification", "icon": "report"},
+			{"label": "Invoice Payment Audit", "target_type": "Report", "target": "RetailEdge Invoice Payment Audit", "icon": "report"},
+			{"label": "POS Closing Variance vs Expenses", "target_type": "Report", "target": "POS Closing Variance vs Expenses", "icon": "report"},
+			{"label": "Unmatched Bank Transactions", "target_type": "Report", "target": "RetailEdge Unmatched Bank Transactions", "icon": "report"},
+			{"label": "Unmatched Bank Payments", "target_type": "Report", "target": "RetailEdge Unmatched Bank Payment Events", "icon": "report"},
+			{"label": "Reconciliation Readiness", "target_type": "Report", "target": "RetailEdge Bank Match Reconciliation Readiness", "icon": "shield"},
+			{"label": "Reconciliation Handoff", "target_type": "Report", "target": "RetailEdge Reconciliation Handoff", "icon": "report"},
+			{"label": "Daily Sales Audit Register", "target_type": "Report", "target": "RetailEdge Daily Sales Audit Register", "icon": "report"},
+		),
+	},
+	{
+		"key": "accounting",
+		"label": "Accounting",
+		"icon": "book-open",
+		"required_roles": ("Accounts User", "Accounts Manager", "System Manager"),
+		"items": (
+			{"label": "General Ledger", "target_type": "Report", "target": "General Ledger", "icon": "report"},
+			{"label": "Trial Balance", "target_type": "Report", "target": "Trial Balance", "icon": "report"},
+			{"label": "Profit & Loss", "target_type": "Report", "target": "Profit and Loss Statement", "icon": "report"},
+			{"label": "Balance Sheet", "target_type": "Report", "target": "Balance Sheet", "icon": "report"},
+			{"label": "Cash Flow Statement", "target_type": "Report", "target": "Cash Flow", "icon": "report"},
+			{"label": "Journal Entries", "target_type": "DocType", "target": "Journal Entry", "icon": "clipboard"},
 		),
 	},
 	{
 		"key": "setup",
 		"label": "Setup",
 		"icon": "settings",
+		"required_roles": ("System Manager",),
 		"items": (
 			{"label": "RetailEdge Settings", "target_type": "DocType", "target": "RetailEdge Settings", "icon": "settings"},
 			{"label": "Branch Profiles", "target_type": "DocType", "target": "RetailEdge Branch Profile", "icon": "building"},
-			{
-				"label": "Expense Categories",
-				"target_type": "DocType",
-				"target": "RetailEdge Expense Category",
-				"icon": "layers",
-			},
+			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category", "icon": "layers"},
 			{"label": "Bank Accounts", "target_type": "DocType", "target": "Bank Account", "icon": "wallet"},
 			{"label": "Modes of Payment", "target_type": "DocType", "target": "Mode of Payment", "icon": "wallet"},
-			{
-				"label": "Bank Statement Mapping",
-				"target_type": "DocType",
-				"target": "RetailEdge Statement Mapping Template",
-				"icon": "settings",
-			},
+			{"label": "Bank Statement Mapping", "target_type": "DocType", "target": "RetailEdge Statement Mapping Template", "icon": "settings"},
 		),
 	},
 )
-
 
 QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	{
@@ -366,17 +278,31 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
-	"""Return permission-aware metadata for the RetailEdge EdgeSuite Business Hub.
+	"""Return compact, permission-aware metadata for the RetailEdge Business Hub.
 
-	This endpoint intentionally excludes product-switcher data. Product switching is
-	suspended while the RetailEdge navigation, guided-entry, report, and dashboard
-	foundations are migrated.
+	Target existence, permission checks, and POS capability resolution are cached for
+	this request so the navigation payload does not issue repeated metadata queries.
 	"""
 	roles = set(frappe.get_roles(frappe.session.user))
+	target_cache: dict[tuple[str, str], bool] = {}
+	permission_cache: dict[tuple[str, str], bool] = {}
+	pos_capabilities = get_pos_runtime_capabilities(
+		lambda target_type, target: _target_exists_cached(target_type, target, target_cache)
+	)
+	navigation_groups = _get_permitted_navigation_groups(
+		roles,
+		target_cache=target_cache,
+		permission_cache=permission_cache,
+		pos_capabilities=pos_capabilities,
+	)
+	quick_actions = _get_permitted_quick_actions(
+		target_cache=target_cache,
+		permission_cache=permission_cache,
+	)
 	return {
 		"programme_experiences": deepcopy(PROGRAMME_EXPERIENCES),
-		"navigation_groups": _get_permitted_navigation_groups(roles),
-		"quick_actions": _get_permitted_quick_actions(),
+		"navigation_groups": navigation_groups,
+		"quick_actions": quick_actions,
 		"context": {
 			"user": frappe.session.user,
 			"user_name": frappe.utils.get_fullname(frappe.session.user),
@@ -389,11 +315,25 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 			"product_switcher_enabled": False,
 			"guided_entries_stage": "foundation",
 			"native_document_fallback_enabled": True,
+			"performance_profile": "r2_request_cached",
 		},
 	}
 
 
-def _get_permitted_navigation_groups(roles: set[str]) -> list[dict[str, Any]]:
+def _get_permitted_navigation_groups(
+	roles: set[str],
+	*,
+	target_cache: dict[tuple[str, str], bool] | None = None,
+	permission_cache: dict[tuple[str, str], bool] | None = None,
+	pos_capabilities=None,
+) -> list[dict[str, Any]]:
+	target_cache = target_cache if target_cache is not None else {}
+	permission_cache = permission_cache if permission_cache is not None else {}
+	if pos_capabilities is None:
+		pos_capabilities = get_pos_runtime_capabilities(
+			lambda target_type, target: _target_exists_cached(target_type, target, target_cache)
+		)
+
 	groups: list[dict[str, Any]] = []
 	for group in NAVIGATION_GROUPS:
 		required_roles = set(group.get("required_roles") or ())
@@ -402,8 +342,12 @@ def _get_permitted_navigation_groups(roles: set[str]) -> list[dict[str, Any]]:
 
 		items: list[dict[str, Any]] = []
 		for item in group["items"]:
-			resolved = _resolve_navigation_item(item)
-			if resolved is not None and _can_open_target(resolved):
+			resolved = _resolve_navigation_item(item, pos_capabilities=pos_capabilities)
+			if resolved is not None and _can_open_target(
+				resolved,
+				target_cache=target_cache,
+				permission_cache=permission_cache,
+			):
 				items.append(resolved)
 		if not items:
 			continue
@@ -418,56 +362,100 @@ def _get_permitted_navigation_groups(roles: set[str]) -> list[dict[str, Any]]:
 	return groups
 
 
-def _resolve_navigation_item(item: dict[str, Any]) -> dict[str, Any] | None:
+def _resolve_navigation_item(item: dict[str, Any], *, pos_capabilities=None) -> dict[str, Any] | None:
 	resolved = deepcopy(item)
 	runtime_target = resolved.pop("runtime_target", None)
 	if runtime_target is None:
 		return resolved
 
-	capabilities = get_pos_runtime_capabilities(_target_exists)
+	if pos_capabilities is None:
+		pos_capabilities = get_pos_runtime_capabilities(_target_exists)
 	if runtime_target == "pos":
-		if not capabilities.start_link_type or not capabilities.start_target:
+		if not pos_capabilities.start_link_type or not pos_capabilities.start_target:
 			return None
-		resolved["target_type"] = capabilities.start_link_type
-		resolved["target"] = capabilities.start_target
+		resolved["target_type"] = pos_capabilities.start_link_type
+		resolved["target"] = pos_capabilities.start_target
 		return resolved
 	if runtime_target == "pos_opening":
-		if not capabilities.opening_doctype:
+		if not pos_capabilities.opening_doctype:
 			return None
-		resolved["label"] = capabilities.opening_doctype
+		resolved["label"] = pos_capabilities.opening_doctype
 		resolved["target_type"] = "DocType"
-		resolved["target"] = capabilities.opening_doctype
+		resolved["target"] = pos_capabilities.opening_doctype
 		return resolved
 	if runtime_target == "pos_closing":
-		if not capabilities.closing_doctype:
+		if not pos_capabilities.closing_doctype:
 			return None
-		resolved["label"] = capabilities.closing_doctype
+		resolved["label"] = pos_capabilities.closing_doctype
 		resolved["target_type"] = "DocType"
-		resolved["target"] = capabilities.closing_doctype
+		resolved["target"] = pos_capabilities.closing_doctype
 		return resolved
 	return resolved
 
 
-def _get_permitted_quick_actions() -> list[dict[str, Any]]:
+def _get_permitted_quick_actions(
+	*,
+	target_cache: dict[tuple[str, str], bool] | None = None,
+	permission_cache: dict[tuple[str, str], bool] | None = None,
+) -> list[dict[str, Any]]:
+	target_cache = target_cache if target_cache is not None else {}
+	permission_cache = permission_cache if permission_cache is not None else {}
 	actions: list[dict[str, Any]] = []
 	for action in QUICK_ACTIONS:
 		doctype = action["doctype"]
-		if not _doctype_exists(doctype) or not _has_permission(doctype, "create"):
+		if not _doctype_exists_cached(doctype, target_cache) or not _has_permission_cached(
+			doctype, "create", permission_cache
+		):
 			continue
 		actions.append(deepcopy(action))
 	return actions
 
 
-def _can_open_target(item: dict[str, Any]) -> bool:
+def _can_open_target(
+	item: dict[str, Any],
+	*,
+	target_cache: dict[tuple[str, str], bool] | None = None,
+	permission_cache: dict[tuple[str, str], bool] | None = None,
+) -> bool:
+	target_cache = target_cache if target_cache is not None else {}
+	permission_cache = permission_cache if permission_cache is not None else {}
 	target_type = item["target_type"]
 	target = item["target"]
 	if target_type == "URL":
 		return True
 	if target_type == "DocType":
-		return _doctype_exists(target) and _has_permission(target, "read")
+		return _doctype_exists_cached(target, target_cache) and _has_permission_cached(
+			target, "read", permission_cache
+		)
 	if target_type in {"Page", "Report"}:
-		return _target_exists(target_type, target)
+		return _target_exists_cached(target_type, target, target_cache)
 	return False
+
+
+def _target_exists_cached(
+	target_type: str,
+	target: str,
+	cache: dict[tuple[str, str], bool],
+) -> bool:
+	key = (target_type, target)
+	if key not in cache:
+		cache[key] = _target_exists(target_type, target)
+	return cache[key]
+
+
+def _doctype_exists_cached(doctype: str, cache: dict[tuple[str, str], bool]) -> bool:
+	return _target_exists_cached("DocType", doctype, cache)
+
+
+def _has_permission_cached(
+	doctype: str,
+	permission_type: str,
+	cache: dict[tuple[str, str], bool],
+) -> bool:
+	key = (doctype, permission_type)
+	if key not in cache:
+		cache[key] = _has_permission(doctype, permission_type)
+	return cache[key]
 
 
 def _target_exists(target_type: str, target: str) -> bool:
