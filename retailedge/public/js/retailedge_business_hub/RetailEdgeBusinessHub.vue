@@ -145,11 +145,19 @@
 				@saved="handleSimplePurchaseInvoiceSaved"
 				@open-native="openNativePurchaseInvoice"
 			/>
+
+			<SimpleCashierExpenseDialog
+				:open="simpleCashierExpenseOpen"
+				@close="closeSimpleCashierExpense"
+				@saved="handleSimpleCashierExpenseSaved"
+				@open-native="openNativeCashierExpense"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
+import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
 import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
@@ -158,6 +166,7 @@ const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_cont
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
 const GUIDED_PURCHASE_ACTION = "record-purchase";
+const GUIDED_EXPENSE_ACTION = "record-expense";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -220,6 +229,7 @@ export default {
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
+		SimpleCashierExpenseDialog,
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
 		SimpleSalesInvoiceDialog,
@@ -233,6 +243,7 @@ export default {
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
 			simplePurchaseInvoiceOpen: false,
+			simpleCashierExpenseOpen: false,
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
@@ -322,6 +333,10 @@ export default {
 				this.simplePurchaseInvoiceOpen = true;
 				return;
 			}
+			if (action.key === GUIDED_EXPENSE_ACTION) {
+				this.simpleCashierExpenseOpen = true;
+				return;
+			}
 			frappe.new_doc(action.doctype);
 		},
 		closeSimpleSalesInvoice() {
@@ -375,6 +390,22 @@ export default {
 			this.simplePurchaseInvoiceOpen = false;
 			frappe.new_doc(doctype);
 		},
+		closeSimpleCashierExpense() {
+			this.simpleCashierExpenseOpen = false;
+		},
+		handleSimpleCashierExpenseSaved(result) {
+			this.simpleCashierExpenseOpen = false;
+			if (!result?.name) return;
+			frappe.show_alert?.({
+				message: `Cashier Expense ${result.name} saved as Draft`,
+				indicator: "green",
+			});
+			frappe.set_route("Form", result.doctype || "RetailEdge Cashier Expense", result.name);
+		},
+		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
+			this.simpleCashierExpenseOpen = false;
+			frappe.new_doc(doctype);
+		},
 		navigateFromShell(route) {
 			const item = this.shellMenuItems
 				.flatMap((group) => group.items || [])
@@ -417,7 +448,8 @@ export default {
 			if (
 				action?.key === "new-sales-invoice" ||
 				GUIDED_PAYMENT_ACTIONS.has(action?.key) ||
-				action?.key === GUIDED_PURCHASE_ACTION
+				action?.key === GUIDED_PURCHASE_ACTION ||
+				action?.key === GUIDED_EXPENSE_ACTION
 			) {
 				return "RetailEdge entry";
 			}
