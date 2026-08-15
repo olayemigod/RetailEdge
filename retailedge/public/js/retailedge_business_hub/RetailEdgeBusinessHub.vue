@@ -130,15 +130,25 @@
 				@saved="handleSimpleSalesInvoiceSaved"
 				@open-native="openNativeSalesInvoice"
 			/>
+
+			<SimplePaymentDialog
+				:open="simplePaymentOpen"
+				:intent="simplePaymentIntent"
+				@close="closeSimplePayment"
+				@saved="handleSimplePaymentSaved"
+				@open-native="openNativePayment"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
+import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
 const CONTEXT_CACHE_TTL_MS = 30_000;
+const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -201,6 +211,7 @@ export default {
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
+		SimplePaymentDialog,
 		SimpleSalesInvoiceDialog,
 	},
 	data() {
@@ -209,6 +220,8 @@ export default {
 			error: "",
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
+			simplePaymentOpen: false,
+			simplePaymentIntent: "",
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
@@ -289,6 +302,11 @@ export default {
 				this.simpleSalesInvoiceOpen = true;
 				return;
 			}
+			if (GUIDED_PAYMENT_ACTIONS.has(action.key)) {
+				this.simplePaymentIntent = action.key;
+				this.simplePaymentOpen = true;
+				return;
+			}
 			frappe.new_doc(action.doctype);
 		},
 		closeSimpleSalesInvoice() {
@@ -305,6 +323,25 @@ export default {
 		},
 		openNativeSalesInvoice(doctype = "Sales Invoice") {
 			this.simpleSalesInvoiceOpen = false;
+			frappe.new_doc(doctype);
+		},
+		closeSimplePayment() {
+			this.simplePaymentOpen = false;
+			this.simplePaymentIntent = "";
+		},
+		handleSimplePaymentSaved(result) {
+			this.simplePaymentOpen = false;
+			this.simplePaymentIntent = "";
+			if (!result?.name) return;
+			frappe.show_alert?.({
+				message: `Payment Entry ${result.name} saved as Draft`,
+				indicator: "green",
+			});
+			frappe.set_route("Form", result.doctype || "Payment Entry", result.name);
+		},
+		openNativePayment(doctype = "Payment Entry") {
+			this.simplePaymentOpen = false;
+			this.simplePaymentIntent = "";
 			frappe.new_doc(doctype);
 		},
 		navigateFromShell(route) {
@@ -346,7 +383,9 @@ export default {
 			return "";
 		},
 		actionModeLabel(action) {
-			if (action?.key === "new-sales-invoice") return "RetailEdge entry";
+			if (action?.key === "new-sales-invoice" || GUIDED_PAYMENT_ACTIONS.has(action?.key)) {
+				return "RetailEdge entry";
+			}
 			return action?.mode === "available" ? "RetailEdge entry" : "Full form";
 		},
 		iconText(icon) {
