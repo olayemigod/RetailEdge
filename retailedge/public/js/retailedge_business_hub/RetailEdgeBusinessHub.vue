@@ -41,9 +41,9 @@
 						<h2>{{ greeting }}</h2>
 						<p>
 							Use the business menu for daily operations. The Create action is the common
-							entry point for new business transactions; each guided flow progressively
-							replaces technical ERPNext fields without creating duplicate accounting or
-							stock documents.
+							entry point for new business transactions; each guided flow will progressively
+							replace technical ERPNext fields without creating duplicate accounting
+							documents.
 						</p>
 					</div>
 					<div class="hub-banner-side">
@@ -412,7 +412,7 @@ export default {
 			this.simpleCashierExpenseOpen = false;
 			if (!result?.name) return;
 			frappe.show_alert?.({
-				message: `Cashier Expense ${result.name} saved`,
+				message: `Cashier Expense ${result.name} saved as Draft`,
 				indicator: "green",
 			});
 			frappe.set_route("Form", result.doctype || "RetailEdge Cashier Expense", result.name);
@@ -437,34 +437,234 @@ export default {
 			this.simpleStockTransferOpen = false;
 			frappe.new_doc(doctype, { stock_entry_type: "Material Transfer" });
 		},
-		navigateFromShell(item) {
-			if (!item?.route) return;
-			if (item.route.startsWith("/app/")) {
-				frappe.set_route(item.route.replace(/^\/app\//, ""));
+		navigateFromShell(route) {
+			const item = this.shellMenuItems
+				.flatMap((group) => group.items || [])
+				.find((entry) => entry.route === route);
+			if (item && item.source) {
+				this.openTarget(item.source);
 				return;
 			}
-			window.location.href = item.route;
+			if (route) frappe.set_route(route);
+		},
+		openTarget(item) {
+			if (!item) return;
+			if (item.target_type === "URL") {
+				window.location.assign(item.target);
+				return;
+			}
+			if (item.target_type === "DocType") {
+				frappe.set_route("List", item.target);
+				return;
+			}
+			if (item.target_type === "Report") {
+				frappe.set_route("query-report", item.target);
+				return;
+			}
+			if (item.target_type === "Page") {
+				frappe.set_route(item.target);
+			}
 		},
 		routeForTarget(item) {
 			if (!item) return "";
-			if (item.route) return item.route;
-			if (!item.target) return "";
-			if (item.type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
-			if (item.type === "Page") return `/app/${frappe.router.slug(item.target)}`;
-			if (item.type === "DocType") return `/app/${frappe.router.slug(item.target)}`;
+			if (item.target_type === "URL") return item.target;
+			if (item.target_type === "DocType") return `/app/${frappe.router.slug(item.target)}`;
+			if (item.target_type === "Report") {
+				return `/app/query-report/${encodeURIComponent(item.target)}`;
+			}
+			if (item.target_type === "Page") return `/app/${item.target}`;
 			return "";
 		},
-		iconText(icon) {
-			return (icon || "•")
-				.split("-")
-				.map((part) => part.charAt(0).toUpperCase())
-				.join("")
-				.slice(0, 2);
-		},
 		actionModeLabel(action) {
-			if (action?.mode === "available") return "RetailEdge entry";
+			if (
+				action?.key === "new-sales-invoice" ||
+				GUIDED_PAYMENT_ACTIONS.has(action?.key) ||
+				action?.key === GUIDED_PURCHASE_ACTION ||
+				action?.key === GUIDED_EXPENSE_ACTION ||
+				action?.key === GUIDED_STOCK_TRANSFER_ACTION
+			) {
+				return "RetailEdge entry";
+			}
 			return action?.mode === "available" ? "RetailEdge entry" : "Full form";
+		},
+		iconText(icon) {
+			const icons = {
+				grid: "▦",
+				zap: "⚡",
+				briefcase: "▣",
+				"bar-chart-2": "▥",
+				bell: "◉",
+				"file-text": "▤",
+				download: "↓",
+				upload: "↑",
+				"credit-card": "▭",
+				"shopping-bag": "▰",
+				repeat: "⇄",
+			};
+			return icons[icon] || "•";
 		},
 	},
 };
 </script>
+
+<style scoped>
+.retailedge-business-hub {
+	display: grid;
+	gap: 28px;
+	padding-bottom: 32px;
+}
+.hub-state {
+	padding: 24px;
+}
+.hub-banner {
+	display: flex;
+	justify-content: space-between;
+	gap: 24px;
+	padding: 24px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 14px;
+	background: var(--edge-surface, #ffffff);
+}
+.hub-banner h2 {
+	margin: 4px 0 8px;
+	font-size: 1.55rem;
+}
+.hub-banner p {
+	margin: 0;
+	color: var(--edge-text-muted, #667085);
+	max-width: 760px;
+}
+.hub-eyebrow,
+.section-kicker {
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	font-size: 0.72rem;
+	font-weight: 700;
+	color: var(--edge-primary, #2563eb);
+}
+.hub-banner-side,
+.hub-context {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+}
+.hub-banner-side {
+	justify-content: space-between;
+	gap: 18px;
+	min-width: 180px;
+}
+.hub-context {
+	gap: 6px;
+	font-size: 0.82rem;
+	color: var(--edge-text-muted, #667085);
+}
+.hub-create-button {
+	min-width: 120px;
+	justify-content: center;
+}
+.section-heading {
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: 18px;
+	margin-bottom: 14px;
+}
+.section-heading h3 {
+	margin: 2px 0 0;
+}
+.experience-grid {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 14px;
+}
+.experience-card {
+	padding: 18px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 12px;
+	background: var(--edge-surface, #ffffff);
+}
+.experience-card-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+.experience-card h4 {
+	margin: 14px 0 8px;
+}
+.experience-card p {
+	margin: 0;
+	color: var(--edge-text-muted, #667085);
+	font-size: 0.88rem;
+	line-height: 1.5;
+}
+.experience-icon,
+.create-picker-icon {
+	font-size: 1.3rem;
+}
+.create-picker-list {
+	display: grid;
+	gap: 8px;
+}
+.create-picker-item {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	padding: 13px 14px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 10px;
+	background: var(--edge-surface, #ffffff);
+	text-align: left;
+	cursor: pointer;
+}
+.create-picker-item:hover,
+.create-picker-item:focus-visible {
+	border-color: var(--edge-primary, #2563eb);
+}
+.create-picker-copy {
+	display: grid;
+	gap: 3px;
+	min-width: 0;
+}
+.create-picker-copy small,
+.create-picker-mode {
+	color: var(--edge-text-muted, #667085);
+}
+.create-picker-copy small {
+	line-height: 1.35;
+}
+.create-picker-mode {
+	font-size: 0.72rem;
+	white-space: nowrap;
+}
+@media (max-width: 1200px) {
+	.experience-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+@media (max-width: 720px) {
+	.hub-banner,
+	.section-heading {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+	.hub-banner-side,
+	.hub-context {
+		align-items: flex-start;
+	}
+	.hub-banner-side {
+		width: 100%;
+	}
+	.experience-grid {
+		grid-template-columns: 1fr;
+	}
+	.create-picker-item {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+	.create-picker-mode {
+		grid-column: 2;
+	}
+}
+</style>
