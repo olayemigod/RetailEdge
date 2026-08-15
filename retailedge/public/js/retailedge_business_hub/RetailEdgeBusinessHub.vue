@@ -30,7 +30,7 @@
 				<EdgeErrorState
 					title="Business Hub unavailable"
 					:message="error"
-					@retry="refreshContext"
+					@retry="refreshContext({ force: true })"
 				/>
 			</div>
 
@@ -40,9 +40,9 @@
 						<p class="hub-eyebrow">Retail operations simplified</p>
 						<h2>{{ greeting }}</h2>
 						<p>
-							Use the actions below for current native transactions. Guided
-							RetailEdge entries will replace technical ERPNext fields progressively
-							without creating duplicate accounting documents.
+							Use the business menu for daily operations and the actions below for current
+							transactions. Guided RetailEdge entries will progressively replace technical
+							ERPNext fields without creating duplicate accounting documents.
 						</p>
 					</div>
 					<div class="hub-context">
@@ -66,9 +66,7 @@
 							class="experience-card"
 						>
 							<div class="experience-card-top">
-								<span class="experience-icon">{{
-									iconText(experience.icon)
-								}}</span>
+								<span class="experience-icon">{{ iconText(experience.icon) }}</span>
 								<EdgeStatusBadge
 									:label="experience.status"
 									:status="experience.status"
@@ -101,9 +99,7 @@
 								<strong>{{ action.label }}</strong>
 								<small>{{ action.description }}</small>
 							</span>
-							<span class="quick-action-mode">{{
-								actionModeLabel(action.mode)
-							}}</span>
+							<span class="quick-action-mode">{{ actionModeLabel(action.mode) }}</span>
 						</button>
 					</div>
 					<EdgeEmptyState
@@ -113,45 +109,64 @@
 						icon="lock"
 					/>
 				</section>
-
-				<section>
-					<div class="section-heading">
-						<div>
-							<p class="section-kicker">Navigate</p>
-							<h3>Professional business menu</h3>
-						</div>
-						<p>Only existing and permitted destinations are shown.</p>
-					</div>
-					<div class="navigation-grid">
-						<article
-							v-for="group in navigationGroups"
-							:key="group.key"
-							class="navigation-card"
-						>
-							<h4>{{ group.label }}</h4>
-							<button
-								v-for="item in group.items"
-								:key="`${group.key}-${item.target_type}-${item.target}`"
-								type="button"
-								class="navigation-link"
-								@click="openTarget(item)"
-							>
-								<span>{{ item.label }}</span>
-								<span aria-hidden="true">→</span>
-							</button>
-						</article>
-					</div>
-				</section>
 			</div>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
+const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const CONTEXT_CACHE_TTL_MS = 30_000;
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
 		: {};
+
+function readSharedContext() {
+	const cache = window.__retailedgeBusinessHubContextCache;
+	if (!cache || !cache.data || !cache.fetchedAt) return null;
+	if (Date.now() - cache.fetchedAt > CONTEXT_CACHE_TTL_MS) return null;
+	return cache.data;
+}
+
+function cacheSharedContext(data) {
+	if (typeof window.retailedgeCacheBusinessHubContext === "function") {
+		return window.retailedgeCacheBusinessHubContext(data);
+	}
+	const normalized = data || {};
+	window.__retailedgeBusinessHubContextCache = {
+		data: normalized,
+		fetchedAt: Date.now(),
+	};
+	return normalized;
+}
+
+function fetchSharedContext({ force = false } = {}) {
+	if (typeof window.retailedgeGetBusinessHubContext === "function") {
+		return window.retailedgeGetBusinessHubContext({ force });
+	}
+	if (!force) {
+		const cached = readSharedContext();
+		if (cached) return Promise.resolve(cached);
+	}
+	if (window.__retailedgeBusinessHubContextRequest) {
+		return window.__retailedgeBusinessHubContextRequest;
+	}
+	const request = new Promise((resolve, reject) => {
+		frappe.call({
+			method: CONTEXT_METHOD,
+			callback: (response) => resolve(cacheSharedContext(response.message || {})),
+			error: (error) => reject(error),
+		});
+	});
+	window.__retailedgeBusinessHubContextRequest = request;
+	request.finally(() => {
+		if (window.__retailedgeBusinessHubContextRequest === request) {
+			window.__retailedgeBusinessHubContextRequest = null;
+		}
+	});
+	return request;
+}
 
 export default {
 	name: "RetailEdgeBusinessHub",
@@ -192,7 +207,7 @@ export default {
 					key: group.key,
 					label: group.label,
 					icon: group.icon || "layers",
-					defaultCollapsed: group.key !== "dashboard",
+					defaultCollapsed: group.key !== "home",
 					items: (group.items || [])
 						.map((item) => ({
 							label: item.label,
@@ -210,28 +225,29 @@ export default {
 		this.refreshContext();
 	},
 	methods: {
-		refreshContext() {
+		applyContext(data) {
+			this.programmeExperiences = data.programme_experiences || [];
+			this.navigationGroups = data.navigation_groups || [];
+			this.quickActions = data.quick_actions || [];
+			this.context = { ...this.context, ...(data.context || {}) };
+			this.featureFlags = data.feature_flags || {};
+		},
+		refreshContext({ force = false } = {}) {
 			this.loading = true;
 			this.error = "";
-			return frappe.call({
-				method: "retailedge.edgesuite_ui.get_retailedge_business_hub_context",
-				callback: (response) => {
-					const data = response.message || {};
-					this.programmeExperiences = data.programme_experiences || [];
-					this.navigationGroups = data.navigation_groups || [];
-					this.quickActions = data.quick_actions || [];
-					this.context = { ...this.context, ...(data.context || {}) };
-					this.featureFlags = data.feature_flags || {};
-					this.loading = false;
-				},
-				error: (error) => {
+			return fetchSharedContext({ force })
+				.then((data) => {
+					this.applyContext(data || {});
+				})
+				.catch((error) => {
 					this.error =
 						error && error.message
 							? error.message
 							: "Unable to load RetailEdge Business Hub context.";
+				})
+				.finally(() => {
 					this.loading = false;
-				},
-			});
+				});
 		},
 		runQuickAction(action) {
 			if (!action || !action.doctype) return;
@@ -356,8 +372,7 @@ export default {
 	font-size: 0.88rem;
 }
 .experience-grid,
-.quick-action-grid,
-.navigation-grid {
+.quick-action-grid {
 	display: grid;
 	gap: 14px;
 }
@@ -367,18 +382,13 @@ export default {
 .quick-action-grid {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.navigation-grid {
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-}
 .experience-card,
-.navigation-card,
 .quick-action-card {
 	border: 1px solid var(--edge-border, #dfe3e8);
 	border-radius: 12px;
 	background: var(--edge-surface, #ffffff);
 }
-.experience-card,
-.navigation-card {
+.experience-card {
 	padding: 18px;
 }
 .experience-card-top {
@@ -387,8 +397,7 @@ export default {
 	justify-content: space-between;
 	gap: 8px;
 }
-.experience-card h4,
-.navigation-card h4 {
+.experience-card h4 {
 	margin: 14px 0 8px;
 }
 .experience-card p {
@@ -410,8 +419,7 @@ export default {
 	text-align: left;
 	cursor: pointer;
 }
-.quick-action-card:hover,
-.navigation-link:hover {
+.quick-action-card:hover {
 	border-color: var(--edge-primary, #2563eb);
 }
 .quick-action-copy {
@@ -427,32 +435,11 @@ export default {
 	color: var(--edge-text-muted, #667085);
 	white-space: nowrap;
 }
-.navigation-card {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-.navigation-card h4 {
-	margin-top: 0;
-}
-.navigation-link {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 9px 0;
-	border: 0;
-	border-bottom: 1px solid var(--edge-border, #eef0f2);
-	background: transparent;
-	text-align: left;
-	cursor: pointer;
-}
 @media (max-width: 1200px) {
 	.experience-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
-	.quick-action-grid,
-	.navigation-grid {
+	.quick-action-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
@@ -466,8 +453,7 @@ export default {
 		align-items: flex-start;
 	}
 	.experience-grid,
-	.quick-action-grid,
-	.navigation-grid {
+	.quick-action-grid {
 		grid-template-columns: 1fr;
 	}
 	.quick-action-card {
