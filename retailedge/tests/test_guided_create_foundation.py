@@ -47,7 +47,7 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertIn("frappe.new_doc(action.doctype)", component)
 		self.assertNotIn("quick-action-grid", component)
 
-	def test_create_picker_routes_invoice_payment_and_purchase_to_guided_adapters(self):
+	def test_create_picker_routes_all_registered_actions_to_guided_adapters(self):
 		component = (
 			APP_ROOT
 			/ "public"
@@ -68,13 +68,21 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertIn("action.key === GUIDED_PURCHASE_ACTION", component)
 		self.assertIn("this.simplePurchaseInvoiceOpen = true", component)
 		self.assertIn("SimplePurchaseInvoiceDialog", component)
+		self.assertIn('const GUIDED_EXPENSE_ACTION = "record-expense";', component)
+		self.assertIn("action.key === GUIDED_EXPENSE_ACTION", component)
+		self.assertIn("this.simpleCashierExpenseOpen = true", component)
+		self.assertIn("SimpleCashierExpenseDialog", component)
+		self.assertIn('const GUIDED_STOCK_TRANSFER_ACTION = "transfer-stock";', component)
+		self.assertIn("action.key === GUIDED_STOCK_TRANSFER_ACTION", component)
+		self.assertIn("this.simpleStockTransferOpen = true", component)
+		self.assertIn("SimpleStockTransferDialog", component)
 		self.assertIn('return "RetailEdge entry";', component)
 		self.assertIn('return action?.mode === "available" ? "RetailEdge entry" : "Full form";', component)
 		self.assertIn("this.closeCreatePicker();", component)
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.db.insert", component)
 
-	def test_stock_action_keeps_native_fallback_until_its_adapter_exists(self):
+	def test_stock_transfer_keeps_explicit_full_form_fallback(self):
 		component = (
 			APP_ROOT
 			/ "public"
@@ -82,8 +90,9 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 			/ "retailedge_business_hub"
 			/ "RetailEdgeBusinessHub.vue"
 		).read_text()
-		self.assertIn("frappe.new_doc(action.doctype)", component)
-		self.assertNotIn("SimpleStock", component)
+		self.assertIn("SimpleStockTransferDialog", component)
+		self.assertIn("openNativeStockTransfer", component)
+		self.assertIn('frappe.new_doc(doctype, { stock_entry_type: "Material Transfer" })', component)
 
 
 if __name__ == "__main__":
