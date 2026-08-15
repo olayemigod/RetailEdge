@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unittest
 from pathlib import Path
 
 from retailedge.edgesuite_ui import QUICK_ACTIONS
@@ -7,7 +8,7 @@ from retailedge.edgesuite_ui import QUICK_ACTIONS
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
-class TestGuidedCreateFoundation:
+class TestGuidedCreateFoundation(unittest.TestCase):
 	def test_create_action_registry_has_stable_unique_keys(self):
 		keys = [action["key"] for action in QUICK_ACTIONS]
 		self.assertEqual(len(keys), len(set(keys)))
@@ -59,3 +60,7 @@ class TestGuidedCreateFoundation:
 		self.assertIn("this.closeCreatePicker();", component)
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.db.insert", component)
+
+
+if __name__ == "__main__":
+	unittest.main()
