@@ -47,7 +47,7 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertIn("frappe.new_doc(action.doctype)", component)
 		self.assertNotIn("quick-action-grid", component)
 
-	def test_create_picker_routes_only_sales_invoice_to_guided_adapter(self):
+	def test_create_picker_routes_invoice_and_payment_actions_to_guided_adapters(self):
 		component = (
 			APP_ROOT
 			/ "public"
@@ -59,11 +59,28 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertIn('if (action.key === "new-sales-invoice")', component)
 		self.assertIn("this.simpleSalesInvoiceOpen = true", component)
 		self.assertIn("SimpleSalesInvoiceDialog", component)
-		self.assertIn('if (action?.key === "new-sales-invoice") return "RetailEdge entry";', component)
+		self.assertIn('new Set(["receive-customer-payment", "pay-supplier"])', component)
+		self.assertIn("GUIDED_PAYMENT_ACTIONS.has(action.key)", component)
+		self.assertIn("this.simplePaymentIntent = action.key", component)
+		self.assertIn("this.simplePaymentOpen = true", component)
+		self.assertIn("SimplePaymentDialog", component)
+		self.assertIn('return "RetailEdge entry";', component)
 		self.assertIn('return action?.mode === "available" ? "RetailEdge entry" : "Full form";', component)
 		self.assertIn("this.closeCreatePicker();", component)
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.db.insert", component)
+
+	def test_purchase_and_stock_actions_keep_native_fallback_until_their_adapter_exists(self):
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "RetailEdgeBusinessHub.vue"
+		).read_text()
+		self.assertIn("frappe.new_doc(action.doctype)", component)
+		self.assertNotIn("SimplePurchase", component)
+		self.assertNotIn("SimpleStock", component)
 
 
 if __name__ == "__main__":
