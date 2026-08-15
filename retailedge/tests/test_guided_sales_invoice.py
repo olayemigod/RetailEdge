@@ -92,6 +92,55 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertNotIn("payment_schedule", source)
 		self.assertIn("pricing rules, taxes, totals, due date/payment schedule, and accounts", source)
 
+	def test_guided_dialog_uses_shared_edgesuite_components_and_multiple_item_rows(self):
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text()
+		self.assertIn("EdgeModal: runtimeComponents.EdgeModal", component)
+		self.assertIn("EdgeLinkField: runtimeComponents.EdgeLinkField", component)
+		self.assertIn("EdgeChildTable: runtimeComponents.EdgeChildTable", component)
+		self.assertIn('fieldname: "item_code"', component)
+		self.assertIn('fieldname: "qty"', component)
+		self.assertIn('fieldname: "rate"', component)
+		self.assertIn("Add Item", component)
+		self.assertIn("searchLineLink", component)
+		self.assertNotIn("frappe.get_list", component)
+		self.assertNotIn("frappe.client.get_list", component)
+
+	def test_guided_dialog_cascades_customer_and_branch_changes(self):
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text()
+		self.assertIn("setCustomer(next)", component)
+		self.assertIn('item_code: ""', component)
+		self.assertIn("setBranch(next)", component)
+		self.assertIn('this.values.warehouse = "";', component)
+		self.assertIn("customer: this.values.customer", component)
+		self.assertIn("branch: this.values.branch", component)
+
+	def test_guided_dialog_saves_draft_via_server_adapter_and_keeps_full_form_fallback(self):
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text()
+		self.assertIn("retailedge.guided_sales_invoice.create_simple_sales_invoice_draft", component)
+		self.assertIn("retailedge.guided_sales_invoice.search_simple_sales_invoice_options", component)
+		self.assertIn("Open Full Form", component)
+		self.assertIn('this.$emit("open-native", "Sales Invoice")', component)
+		self.assertNotIn("frappe.new_doc", component)
+		self.assertNotIn("frappe.db.insert", component)
+
 	def test_limits_are_deliberately_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
 		self.assertEqual(MAX_ITEMS, 50)
