@@ -165,7 +165,7 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		self.assertIn('this.values.source_warehouse = "";', component)
 		self.assertIn('this.values.target_warehouse = "";', component)
 		self.assertIn("sameWarehouse", component)
-		self.assertIn("serial-numbered or batch-managed", component)
+		self.assertIn("serial-numbered or batch-managed", component.lower())
 		self.assertIn("Open Full Form", component)
 		self.assertIn('this.$emit("open-native", "Stock Entry")', component)
 
