@@ -19,6 +19,7 @@ from retailedge.branch_context import (
 	validate_user_branch_access,
 )
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
+from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 
 ACTION_KEY = "new-sales-invoice"
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
@@ -58,12 +59,17 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 	if warehouse and branch:
 		_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
 
+	pricing = resolve_price_list_context(
+		mode="selling", company=company, branch=branch or "", user=user
+	)
+
 	return {
 		"action_key": ACTION_KEY,
 		"title": _("Simple Sales Invoice"),
 		"subtitle": _("Create a standard ERPNext Sales Invoice draft with only the business fields you need."),
 		"submit_label": _("Save Draft"),
 		"full_form_doctype": SALES_INVOICE_DOCTYPE,
+		"pricing": pricing,
 		"defaults": {
 			"company": company,
 			"branch": branch or "",
@@ -80,6 +86,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 				has_doctype("Customer") and frappe.has_permission("Customer", "create")
 			),
 			"can_create_item": bool(has_doctype("Item") and frappe.has_permission("Item", "create")),
+			"can_override_rate": bool(pricing.get("allow_rate_change", True)),
 			"native_form_fallback": True,
 		},
 		"limits": {"link_results": MAX_LINK_RESULTS, "max_items": MAX_ITEMS},
@@ -149,30 +156,41 @@ def search_simple_sales_invoice_options(
 	return []
 
 
+@frappe.whitelist()
+def get_simple_sales_invoice_item_pricing(
+	item_code: str,
+	values: dict | str | None = None,
+) -> dict[str, Any]:
+	_assert_can_create_sales_invoice()
+	values = _coerce_values(values)
+	user = frappe.session.user
+	company, branch, warehouse = _validate_transaction_context(values, user=user)
+	customer = str(values.get("customer") or "").strip()
+	if not customer:
+		frappe.throw(_("Select a Customer before pricing items."))
+	_assert_read_permission("Customer", customer)
+	item_code = str(item_code or "").strip()
+	_assert_read_permission("Item", item_code)
+	return resolve_sales_item_pricing(
+		item_code=item_code,
+		company=company,
+		customer=customer,
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=values.get("posting_date") or nowdate(),
+		qty=flt(values.get("qty") or 1),
+		user=user,
+	)
+
+
 @frappe.whitelist(methods=["POST"])
 def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[str, Any]:
 	_assert_can_create_sales_invoice()
 	values = _coerce_values(values)
 	user = frappe.session.user
-	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
-	if not company:
-		frappe.throw(_("Company is required."))
-	_assert_read_permission("Company", company)
+	company, branch, warehouse = _validate_transaction_context(values, user=user)
 
-	branch = values.get("branch") or ""
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
-
-	warehouse = values.get("warehouse") or ""
-	if warehouse:
-		_assert_read_permission("Warehouse", warehouse)
-		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
-		if warehouse_company and warehouse_company != company:
-			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
-		if branch:
-			_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
-
-	customer = (values.get("customer") or "").strip()
+	customer = str(values.get("customer") or "").strip()
 	if not customer:
 		frappe.throw(_("Customer is required."))
 	_assert_read_permission("Customer", customer)
@@ -182,36 +200,63 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 	if update_stock and not warehouse:
 		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
 
+	pricing_context = resolve_price_list_context(
+		mode="selling", company=company, branch=branch, party=customer, user=user
+	)
+
 	doc = frappe.new_doc(SALES_INVOICE_DOCTYPE)
 	doc.company = company
 	doc.customer = customer
 	doc.posting_date = getdate(values.get("posting_date") or nowdate())
 	doc.update_stock = update_stock
+	if pricing_context.get("price_list"):
+		doc.selling_price_list = pricing_context["price_list"]
 	if warehouse:
 		doc.set_warehouse = warehouse
 	if values.get("remarks"):
 		doc.remarks = str(values.get("remarks")).strip()
 	if branch:
-		# The existing attribution hook treats a normal `branch` attribute as an
-		# explicit context input, then stores the canonical retailedge_branch field.
-		# Frappe ignores non-meta attributes during DB insert on sites where Sales
-		# Invoice has no native/custom branch field.
 		doc.branch = branch
 
 	for item in items:
 		_assert_read_permission("Item", item["item_code"])
+		resolved = resolve_sales_item_pricing(
+			item_code=item["item_code"],
+			company=company,
+			customer=customer,
+			branch=branch,
+			warehouse=warehouse,
+			posting_date=str(doc.posting_date),
+			qty=item["qty"],
+			user=user,
+		)
+		resolved_rate = resolved.get("rate")
+		manual_rate = item.get("rate")
+		if resolved_rate is None and manual_rate is None:
+			frappe.throw(
+				_(
+					"No selling price could be resolved for Item {0}. Set an Item Price or Item Standard Rate before saving."
+				).format(item["item_code"])
+			)
+		if resolved.get("source") == "pos_profile" and not resolved.get("allow_rate_change", True):
+			effective_rate = resolved_rate
+		else:
+			effective_rate = manual_rate if manual_rate is not None else resolved_rate
+		if effective_rate is None:
+			frappe.throw(_("Selling Rate is required for Item {0}.").format(item["item_code"]))
+
 		row = {
 			"item_code": item["item_code"],
 			"qty": item["qty"],
+			"rate": effective_rate,
 		}
 		if warehouse:
 			row["warehouse"] = warehouse
-		if item["rate"] is not None:
-			row["rate"] = item["rate"]
 		doc.append("items", row)
 
-	# Insert as the current user. ERPNext's normal validate path owns customer/item
-	# defaults, pricing rules, taxes, totals, due date/payment schedule, and accounts.
+	# The effective Price List and rates are resolved on the server from the
+	# authenticated user's defaults/POS profile and ERPNext pricing engine. The
+	# browser cannot choose a different Price List or bypass a POS rate lock.
 	doc.insert()
 	return {
 		"doctype": doc.doctype,
@@ -220,6 +265,7 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 		"customer": doc.customer,
 		"company": doc.company,
 		"branch": getattr(doc, "retailedge_branch", None) or branch,
+		"selling_price_list": getattr(doc, "selling_price_list", None) or pricing_context.get("price_list"),
 		"grand_total": doc.grand_total,
 		"currency": doc.currency,
 		"route": f"/app/sales-invoice/{doc.name}",
@@ -252,6 +298,27 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 			frappe.throw(_("Selling Rate on row {0} cannot be negative.").format(index))
 		normalised.append({"item_code": item_code, "qty": qty, "rate": rate})
 	return normalised
+
+
+def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple[str, str, str]:
+	company = str(values.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	if not company:
+		frappe.throw(_("Company is required."))
+	_assert_read_permission("Company", company)
+
+	branch = str(values.get("branch") or "").strip()
+	if branch:
+		validate_user_branch_access(branch, user=user, company=company, throw=True)
+
+	warehouse = str(values.get("warehouse") or "").strip()
+	if warehouse:
+		_assert_read_permission("Warehouse", warehouse)
+		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
+		if warehouse_company and warehouse_company != company:
+			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
+		if branch:
+			_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
+	return company, branch, warehouse
 
 
 def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str, Any] | None:
