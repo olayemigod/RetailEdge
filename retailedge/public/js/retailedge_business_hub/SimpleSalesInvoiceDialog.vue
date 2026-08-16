@@ -28,6 +28,11 @@
 					<span>Branch</span>
 					<strong>{{ values.branch }}</strong>
 				</div>
+				<div>
+					<span>Selling Price List</span>
+					<strong>{{ pricingLabel }}</strong>
+					<small>{{ pricingSourceLabel }}</small>
+				</div>
 			</div>
 
 			<div v-if="saveError" class="guided-invoice-error" role="alert">
@@ -99,8 +104,10 @@
 			/>
 
 			<p class="guided-invoice-hint">
-				Selling Rate is optional. Leave it blank to let ERPNext apply the configured price list and
-				pricing rules when the draft is saved.
+				Rates are pulled on demand from the authenticated user's assigned Price List or POS Profile,
+				then ERPNext pricing rules. If no assigned Price List exists, RetailEdge falls back through
+				ERPNext's default selling list and finally the Item Standard Rate. The server resolves pricing
+				again when the draft is saved.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -148,6 +155,7 @@ import {
 
 const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
+const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
@@ -165,6 +173,18 @@ function emptyValues() {
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
+}
+
+function sourceLabel(source) {
+	return {
+		user_default: "User default",
+		user_permission: "User-assigned Price List",
+		pos_profile: "Assigned POS Profile",
+		party_default: "Customer default",
+		erpnext_default: "ERPNext default",
+		standard_price_list: "Standard Selling",
+		item_fallback: "Item fallback",
+	}[source] || "ERPNext pricing";
 }
 
 export default {
@@ -187,6 +207,8 @@ export default {
 			loadError: "",
 			saveError: "",
 			cascadeToken: 0,
+			pricingTokens: {},
+			pricingCache: new Map(),
 			formContext: {},
 			values: emptyValues(),
 			itemTableField: {
@@ -205,7 +227,7 @@ export default {
 					fieldname: "rate",
 					label: "Selling Rate",
 					fieldtype: "Currency",
-					placeholder: "ERPNext default",
+					placeholder: "Auto price",
 				},
 			],
 		};
@@ -219,6 +241,12 @@ export default {
 		},
 		canCreateItem() {
 			return Boolean(this.formContext.capabilities?.can_create_item);
+		},
+		pricingLabel() {
+			return this.formContext.pricing?.price_list || "Item default";
+		},
+		pricingSourceLabel() {
+			return sourceLabel(this.formContext.pricing?.source);
 		},
 		searchContext() {
 			return {
@@ -242,6 +270,7 @@ export default {
 			this.loading = true;
 			this.loadError = "";
 			this.saveError = "";
+			this.pricingCache.clear();
 			try {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
@@ -250,6 +279,11 @@ export default {
 					...(data.defaults || {}),
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
+				if (this.formContext.capabilities?.can_override_rate === false) {
+					this.itemColumns = this.itemColumns.map((column) =>
+						column.fieldname === "rate" ? { ...column, read_only: 1 } : column
+					);
+				}
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Simple Sales Invoice.");
 			} finally {
@@ -306,18 +340,17 @@ export default {
 		setCustomer(next) {
 			const changed = Boolean(this.values.customer && this.values.customer !== next);
 			this.values.customer = next || "";
+			this.pricingCache.clear();
 			if (changed) {
-				this.values.items = this.values.items.map((row) => ({
-					...row,
-					item_code: "",
-					rate: "",
-				}));
+				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+				this.refreshAllItemPricing();
 			}
 		},
 		async setBranch(next) {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
+			this.pricingCache.clear();
 			if (!branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -329,6 +362,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
+				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
 					this.saveError = errorMessage(error, "Unable to resolve the Branch warehouse.");
@@ -338,6 +372,7 @@ export default {
 		async setWarehouse(next) {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
+			this.pricingCache.clear();
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -350,6 +385,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || this.values.branch;
 				this.values.warehouse = resolved.warehouse || warehouse;
+				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
 					this.values.warehouse = "";
@@ -359,12 +395,72 @@ export default {
 		},
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
+			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
 				const prior = previous[index] || {};
-				if (prior.item_code && prior.item_code !== row.item_code) {
+				if (row.item_code && row.item_code !== prior.item_code) {
+					changed.push(index);
 					return { ...row, rate: "" };
 				}
 				return { ...row };
+			});
+			for (const index of changed) this.loadItemPricing(index);
+		},
+		pricingCacheKey(row) {
+			return [
+				this.values.company,
+				this.values.branch,
+				this.values.warehouse,
+				this.values.customer,
+				this.values.posting_date,
+				row.item_code,
+				row.qty || 1,
+			].join("|");
+		},
+		async loadItemPricing(index) {
+			const row = this.values.items[index];
+			if (!row?.item_code || !this.values.customer) return;
+			const key = this.pricingCacheKey(row);
+			const token = `${row.item_code}:${Date.now()}:${Math.random()}`;
+			this.pricingTokens[index] = token;
+			try {
+				let result = this.pricingCache.get(key);
+				if (!result) {
+					result = await callMethod(PRICING_METHOD, {
+						item_code: row.item_code,
+						values: {
+							company: this.values.company,
+							branch: this.values.branch,
+							warehouse: this.values.warehouse,
+							customer: this.values.customer,
+							posting_date: this.values.posting_date,
+							qty: row.qty || 1,
+						},
+					});
+					this.pricingCache.set(key, result);
+				}
+				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
+				if (result?.rate !== null && result?.rate !== undefined) {
+					this.values.items[index] = { ...this.values.items[index], rate: result.rate };
+				}
+				this.formContext.pricing = {
+					...(this.formContext.pricing || {}),
+					price_list: result?.price_list || this.formContext.pricing?.price_list || "",
+					source: result?.source || this.formContext.pricing?.source || "item_fallback",
+				};
+			} catch (error) {
+				if (this.pricingTokens[index] === token) {
+					this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+				}
+			}
+		},
+		refreshAllItemPricing() {
+			if (!this.values.customer) return;
+			this.values.items.forEach((row, index) => {
+				if (row.item_code) {
+					this.values.items[index] = { ...row, rate: "" };
+					this.loadItemPricing(index);
+				}
 			});
 		},
 		async saveDraft() {
@@ -410,6 +506,10 @@ export default {
 .guided-invoice-context span,
 .guided-field > span {
 	font-size: 0.78rem;
+	color: var(--edge-text-muted, #667085);
+}
+.guided-invoice-context small {
+	font-size: 0.72rem;
 	color: var(--edge-text-muted, #667085);
 }
 .guided-invoice-grid {
