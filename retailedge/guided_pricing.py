@@ -56,7 +56,7 @@ def resolve_price_list_context(
 
 	for key in USER_DEFAULT_KEYS[mode]:
 		candidate = str(frappe.defaults.get_user_default(key) or "").strip()
-		if _valid_price_list(candidate, mode=mode, user=user):
+		if candidate and _valid_price_list(candidate, mode=mode, user=user):
 			return _price_context(candidate, mode=mode, source="user_default")
 
 	permission_candidate = _default_user_permission_price_list(user=user, mode=mode)
@@ -65,10 +65,9 @@ def resolve_price_list_context(
 
 	if mode == "selling":
 		pos = _resolve_user_pos_profile(company=company, branch=branch, user=user)
-		if pos and _valid_price_list(pos.get("selling_price_list"), mode="selling", user=user):
-			context = _price_context(
-				pos.get("selling_price_list"), mode="selling", source="pos_profile"
-			)
+		pos_price_list = str(pos.get("selling_price_list") or "").strip() if pos else ""
+		if pos and pos_price_list and _valid_price_list(pos_price_list, mode="selling", user=user):
+			context = _price_context(pos_price_list, mode="selling", source="pos_profile")
 			context.update(
 				{
 					"pos_profile": pos.get("name") or "",
@@ -78,12 +77,12 @@ def resolve_price_list_context(
 			return context
 
 	party_price_list = _party_price_list(mode=mode, party=party)
-	if _valid_price_list(party_price_list, mode=mode, user=user):
+	if party_price_list and _valid_price_list(party_price_list, mode=mode, user=user):
 		return _price_context(party_price_list, mode=mode, source="party_default")
 
 	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
 	candidate = str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip()
-	if _valid_price_list(candidate, mode=mode, user=user):
+	if candidate and _valid_price_list(candidate, mode=mode, user=user):
 		return _price_context(candidate, mode=mode, source="erpnext_default")
 
 	candidate = STANDARD_PRICE_LIST[mode]
