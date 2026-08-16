@@ -12,21 +12,21 @@
 
 		<div v-else-if="loadError" class="guided-stock-state">
 			<EdgeErrorState
-				title="Stock Transfer unavailable"
+				title="Stock Transfer entry unavailable"
 				:message="loadError"
 				@retry="loadContext"
 			/>
 		</div>
 
 		<form v-else class="guided-stock-form" @submit.prevent="saveDraft">
-			<div class="guided-stock-context">
+			<div class="guided-stock-context" aria-label="Transfer context">
 				<div>
 					<span>Company</span>
 					<strong>{{ values.company || 'Not set' }}</strong>
 				</div>
 				<div>
-					<span>Transfer Type</span>
-					<strong>Material Transfer</strong>
+					<span>Purpose</span>
+					<strong>{{ formContext.purpose || 'Material Transfer' }}</strong>
 				</div>
 			</div>
 
@@ -45,6 +45,7 @@
 					:modelValue="values.source_branch"
 					label="Source Branch"
 					placeholder="Search source branch"
+					description="Loads the branch's assigned source warehouse when available."
 					:searcher="searchSourceBranch"
 					:context="searchContext"
 					@update:modelValue="setSourceBranch"
@@ -54,6 +55,7 @@
 					:modelValue="values.source_warehouse"
 					label="Source Warehouse"
 					placeholder="Search source warehouse"
+					description="Selecting an assigned Warehouse resolves its Branch automatically."
 					:required="true"
 					:searcher="searchSourceWarehouse"
 					:context="searchContext"
@@ -65,6 +67,7 @@
 					:modelValue="values.target_branch"
 					label="Target Branch"
 					placeholder="Search target branch"
+					description="Loads the branch's assigned target warehouse when available."
 					:searcher="searchTargetBranch"
 					:context="searchContext"
 					@update:modelValue="setTargetBranch"
@@ -74,6 +77,7 @@
 					:modelValue="values.target_warehouse"
 					label="Target Warehouse"
 					placeholder="Search target warehouse"
+					description="Selecting an assigned Warehouse resolves its Branch automatically."
 					:required="true"
 					:searcher="searchTargetWarehouse"
 					:context="searchContext"
@@ -81,8 +85,8 @@
 				/>
 			</div>
 
-			<div v-if="sameWarehouse" class="guided-stock-error" role="alert">
-				Source Warehouse and Target Warehouse must be different.
+			<div v-if="sameWarehouse" class="guided-stock-warning" role="alert">
+				Source and Target Warehouse must be different.
 			</div>
 
 			<EdgeChildTable
@@ -91,12 +95,17 @@
 				:columns="itemColumns"
 				:addLabel="'Add Item'"
 				:linkSearcher="searchLineLink"
+				:linkCanCreate="canCreateItemLink"
+				:linkCreator="createItemLink"
+				:linkCreateLabel="itemCreateLabel"
+				:newRowsFirst="true"
 				@update:rows="updateItems"
 			/>
 
 			<p class="guided-stock-hint">
-				This fast flow is for ordinary stock items. Serial-numbered or batch-managed items require the
-				full ERPNext Stock Entry so the correct serial/batch allocations can be selected.
+				Serial-numbered or batch-managed items require the full Stock Entry form so ERPNext can
+				capture the exact Serial No or Batch allocations. Item creation remains native ERPNext
+				Quick Entry and is shown only when your session can create Items.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -134,6 +143,13 @@
 </template>
 
 <script>
+import {
+	callMethod,
+	errorMessage,
+	quickCreateItem,
+	resolveBranchWarehouse,
+} from "./guidedEntryUtils";
+
 const CONTEXT_METHOD = "retailedge.guided_stock_transfer.get_simple_stock_transfer_context";
 const SEARCH_METHOD = "retailedge.guided_stock_transfer.search_simple_stock_transfer_options";
 const CREATE_METHOD = "retailedge.guided_stock_transfer.create_simple_stock_transfer_draft";
@@ -155,23 +171,6 @@ function emptyValues() {
 	};
 }
 
-function callMethod(method, args = {}) {
-	return new Promise((resolve, reject) => {
-		frappe.call({
-			method,
-			args,
-			callback: (response) => resolve(response.message || {}),
-			error: (error) => reject(error),
-		});
-	});
-}
-
-function errorMessage(error, fallback) {
-	if (error?.message) return error.message;
-	if (error?.exc_type) return error.exc_type;
-	return fallback;
-}
-
 export default {
 	name: "SimpleStockTransferDialog",
 	components: {
@@ -191,11 +190,13 @@ export default {
 			saving: false,
 			loadError: "",
 			saveError: "",
+			sourceCascadeToken: 0,
+			targetCascadeToken: 0,
 			formContext: {},
 			values: emptyValues(),
 			itemTableField: {
 				label: "Items",
-				description: "Add the stock items and quantities to move.",
+				description: "Newest item rows stay at the top for faster multi-item entry.",
 			},
 			itemColumns: [
 				{
@@ -212,11 +213,16 @@ export default {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
+		canCreateItem() {
+			return Boolean(window.frappe?.model?.can_create?.("Item"));
+		},
 		searchContext() {
 			return {
 				company: this.values.company,
 				source_branch: this.values.source_branch,
 				target_branch: this.values.target_branch,
+				source_warehouse: this.values.source_warehouse,
+				target_warehouse: this.values.target_warehouse,
 			};
 		},
 		sameWarehouse() {
@@ -266,7 +272,7 @@ export default {
 			const results = await callMethod(SEARCH_METHOD, {
 				fieldname,
 				txt: query || "",
-				values: this.searchContext,
+				values: { ...this.values, items: undefined },
 			});
 			return Array.isArray(results) ? results : [];
 		},
@@ -286,23 +292,111 @@ export default {
 			if (column?.fieldname !== "item_code") return Promise.resolve([]);
 			return this.searchOptions("item_code", query);
 		},
-		setSourceBranch(next) {
-			if (this.values.source_branch !== (next || "")) {
-				this.values.source_branch = next || "";
-				this.values.source_warehouse = "";
+		canCreateItemLink(column) {
+			return this.canCreateItem && column?.fieldname === "item_code";
+		},
+		createItemLink(column, query) {
+			if (column?.fieldname !== "item_code") return Promise.resolve(null);
+			return quickCreateItem(query, { stockItem: true });
+		},
+		itemCreateLabel(column) {
+			return column?.fieldname === "item_code" ? "Create Stock Item" : "Create new";
+		},
+		async setSourceBranch(next) {
+			const branch = next || "";
+			this.values.source_branch = branch;
+			this.values.source_warehouse = "";
+			if (!branch || !this.values.company) return;
+			const token = ++this.sourceCascadeToken;
+			try {
+				const resolved = await resolveBranchWarehouse({
+					company: this.values.company,
+					branch,
+					preference: "source",
+				});
+				if (token !== this.sourceCascadeToken) return;
+				this.values.source_branch = resolved.branch || branch;
+				this.values.source_warehouse = resolved.warehouse || "";
+				if (this.sameWarehouse) this.values.target_warehouse = "";
+			} catch (error) {
+				if (token === this.sourceCascadeToken) {
+					this.saveError = errorMessage(error, "Unable to resolve the Source Branch warehouse.");
+				}
 			}
 		},
-		setTargetBranch(next) {
-			if (this.values.target_branch !== (next || "")) {
-				this.values.target_branch = next || "";
+		async setTargetBranch(next) {
+			const branch = next || "";
+			this.values.target_branch = branch;
+			this.values.target_warehouse = "";
+			if (!branch || !this.values.company) return;
+			const token = ++this.targetCascadeToken;
+			try {
+				const resolved = await resolveBranchWarehouse({
+					company: this.values.company,
+					branch,
+					preference: "target",
+				});
+				if (token !== this.targetCascadeToken) return;
+				this.values.target_branch = resolved.branch || branch;
+				this.values.target_warehouse =
+					resolved.warehouse && resolved.warehouse !== this.values.source_warehouse
+						? resolved.warehouse
+						: "";
+			} catch (error) {
+				if (token === this.targetCascadeToken) {
+					this.saveError = errorMessage(error, "Unable to resolve the Target Branch warehouse.");
+				}
+			}
+		},
+		async setSourceWarehouse(next) {
+			const warehouse = next || "";
+			this.values.source_warehouse = warehouse;
+			if (!warehouse || !this.values.company) return;
+			const token = ++this.sourceCascadeToken;
+			try {
+				const resolved = await resolveBranchWarehouse({
+					company: this.values.company,
+					branch: this.values.source_branch,
+					warehouse,
+					preference: "source",
+				});
+				if (token !== this.sourceCascadeToken) return;
+				this.values.source_branch = resolved.branch || this.values.source_branch;
+				this.values.source_warehouse = resolved.warehouse || warehouse;
+				if (this.sameWarehouse) this.values.target_warehouse = "";
+			} catch (error) {
+				if (token === this.sourceCascadeToken) {
+					this.values.source_warehouse = "";
+					this.saveError = errorMessage(error, "Unable to use the selected Source Warehouse.");
+				}
+			}
+		},
+		async setTargetWarehouse(next) {
+			const warehouse = next || "";
+			this.values.target_warehouse = warehouse;
+			if (!warehouse || !this.values.company) return;
+			if (warehouse === this.values.source_warehouse) {
 				this.values.target_warehouse = "";
+				this.saveError = "Source and Target Warehouse must be different.";
+				return;
 			}
-		},
-		setSourceWarehouse(next) {
-			this.values.source_warehouse = next || "";
-		},
-		setTargetWarehouse(next) {
-			this.values.target_warehouse = next || "";
+			const token = ++this.targetCascadeToken;
+			try {
+				const resolved = await resolveBranchWarehouse({
+					company: this.values.company,
+					branch: this.values.target_branch,
+					warehouse,
+					preference: "target",
+				});
+				if (token !== this.targetCascadeToken) return;
+				this.values.target_branch = resolved.branch || this.values.target_branch;
+				this.values.target_warehouse = resolved.warehouse || warehouse;
+			} catch (error) {
+				if (token === this.targetCascadeToken) {
+					this.values.target_warehouse = "";
+					this.saveError = errorMessage(error, "Unable to use the selected Target Warehouse.");
+				}
+			}
 		},
 		updateItems(nextRows) {
 			this.values.items = (nextRows || []).map((row) => ({ ...row }));
@@ -340,7 +434,7 @@ export default {
 }
 .guided-stock-context > div {
 	display: grid;
-	gap: 3px;
+	gap: 2px;
 	min-width: 180px;
 	padding: 9px 12px;
 	border: 1px solid var(--edge-border, #e5e7eb);
@@ -368,17 +462,25 @@ export default {
 .guided-field--wide {
 	grid-column: 1 / -1;
 }
-.guided-stock-error {
-	padding: 10px 12px;
-	border: 1px solid var(--edge-danger, #d92d20);
-	border-radius: 8px;
-	color: var(--edge-danger, #b42318);
-	background: var(--edge-danger-subtle, #fef3f2);
-}
 .guided-stock-hint {
 	margin: -8px 0 0;
 	font-size: 0.8rem;
 	color: var(--edge-text-muted, #667085);
+}
+.guided-stock-error,
+.guided-stock-warning {
+	padding: 10px 12px;
+	border-radius: 8px;
+}
+.guided-stock-error {
+	border: 1px solid var(--edge-danger, #d92d20);
+	color: var(--edge-danger, #b42318);
+	background: var(--edge-danger-subtle, #fef3f2);
+}
+.guided-stock-warning {
+	border: 1px solid var(--edge-warning, #f79009);
+	color: var(--edge-warning-text, #7a2e0e);
+	background: var(--edge-warning-subtle, #fffaeb);
 }
 .guided-stock-footer,
 .guided-stock-footer-actions {
