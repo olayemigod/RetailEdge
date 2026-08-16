@@ -156,6 +156,7 @@ jobs:
           grep -Eq 'retailedge_product_menu\.bundle' sites/assets/assets.json
           grep -Eq 'salesperson_performance\.bundle' sites/assets/assets.json
           grep -Eq 'stock_movement_history\.bundle' sites/assets/assets.json
+          grep -Eq 'sales_reporting\.bundle' sites/assets/assets.json
 
       - name: Run RetailEdge tests
         working-directory: frappe-bench
