@@ -105,7 +105,7 @@
 			<p class="guided-stock-hint">
 				Serial-numbered or batch-managed items require the full Stock Entry form so ERPNext can
 				capture the exact Serial No or Batch allocations. Item creation remains native ERPNext
-				Quick Entry and is shown only when your session can create Items.
+				Quick Entry and is shown only when the server confirms your session can create Items.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -214,7 +214,7 @@ export default {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
 		canCreateItem() {
-			return Boolean(window.frappe?.model?.can_create?.("Item"));
+			return Boolean(this.formContext.capabilities?.can_create_item);
 		},
 		searchContext() {
 			return {
