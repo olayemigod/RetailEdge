@@ -157,7 +157,18 @@ jobs:
 
       - name: Run RetailEdge tests
         working-directory: frappe-bench
+        shell: bash
         run: |
-          bench --site retail-ci.localhost run-tests --app retailedge
+          set -o pipefail
+          if ! bench --site retail-ci.localhost run-tests --app retailedge 2>&1 | tee /tmp/retailedge-tests.log; then
+            {
+              echo "## RetailEdge test failure tail"
+              echo
+              echo '```text'
+              tail -n 180 /tmp/retailedge-tests.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
         env:
           CI: "Yes"
