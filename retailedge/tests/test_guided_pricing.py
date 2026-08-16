@@ -15,6 +15,10 @@ from retailedge.guided_pricing import (
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
+def uncached_price_list_resolver():
+	return getattr(resolve_price_list_context, "__wrapped__", resolve_price_list_context)
+
+
 class TestGuidedPricing(unittest.TestCase):
 	@patch("retailedge.guided_pricing._valid_price_list")
 	@patch("retailedge.guided_pricing.frappe.defaults.get_user_default")
@@ -26,7 +30,7 @@ class TestGuidedPricing(unittest.TestCase):
 				"price_list": "User Retail",
 				"source": "user_default",
 			}
-			result = resolve_price_list_context(
+			result = uncached_price_list_resolver()(
 				mode="selling",
 				company="Demo Company",
 				user="sales@example.com",
@@ -63,10 +67,7 @@ class TestGuidedPricing(unittest.TestCase):
 				"mode": "selling",
 			}
 		)
-		# Bypass Frappe's request cache so this unit test exercises the resolver's
-		# POS-profile enrichment rather than any value cached earlier in the test request.
-		resolver = getattr(resolve_price_list_context, "__wrapped__", resolve_price_list_context)
-		result = resolver(
+		result = uncached_price_list_resolver()(
 			mode="selling",
 			company="Demo Company",
 			branch="Lagos",
