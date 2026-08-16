@@ -110,7 +110,8 @@ def _normalise_pricing_rows(
 		item_code = str(item.get("item_code") or "").strip()
 		if not item_code:
 			continue
-		qty = flt(item.get("qty") or 1)
+		qty_value = item.get("qty")
+		qty = flt(1 if qty_value in (None, "") else qty_value)
 		if qty <= 0:
 			frappe.throw(_("Quantity for Item {0} must be greater than zero.").format(item_code))
 		index = item.get("index")
