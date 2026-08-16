@@ -47,15 +47,17 @@ class TestGuidedPricing(unittest.TestCase):
 		mock_valid,
 		mock_context,
 	):
-		mock_pos.return_value = frappe._dict(
-			name="POS-LAGOS",
-			selling_price_list="POS Retail",
-			allow_rate_change=0,
-		)
+		mock_pos.return_value = {
+			"name": "POS-LAGOS",
+			"selling_price_list": "POS Retail",
+			"allow_rate_change": 0,
+		}
 		mock_valid.return_value = True
 		mock_context.return_value = {
 			"price_list": "POS Retail",
 			"source": "pos_profile",
+			"currency": "NGN",
+			"mode": "selling",
 			"pos_profile": "",
 			"allow_rate_change": True,
 		}
@@ -68,6 +70,7 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["price_list"], "POS Retail")
 		self.assertEqual(result["pos_profile"], "POS-LAGOS")
 		self.assertFalse(result["allow_rate_change"])
+		mock_context.assert_called_once_with("POS Retail", mode="selling", source="pos_profile")
 
 	@patch("retailedge.guided_pricing.frappe.get_cached_value")
 	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
