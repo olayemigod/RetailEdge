@@ -5,7 +5,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, month_start, nowdate
+from frappe.utils import cint, flt, nowdate
 
 from retailedge.branch_context import (
 	get_user_allowed_branches,
@@ -113,11 +113,12 @@ def get_stock_movement_page_context() -> dict[str, Any]:
 			warehouse = str(resolved.get("warehouse") or "").strip()
 
 	user_name = frappe.db.get_value("User", user, "full_name") or user
+	today = nowdate()
 	return {
 		"default_filters": {
 			"company": company,
-			"from_date": month_start(nowdate()),
-			"to_date": nowdate(),
+			"from_date": f"{today[:7]}-01",
+			"to_date": today,
 			"item_code": "",
 			"branch": branch,
 			"warehouse": warehouse,
