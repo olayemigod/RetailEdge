@@ -22,7 +22,16 @@
 				<EdgePageHeader
 					title="Stock Movement History"
 					subtitle="Trace item movement, stock balance and source documents without loading the full ledger into the browser."
-				/>
+				>
+					<template #actions>
+						<EdgeExportMenu
+							:dataset="exportDataset"
+							:loadDataset="loadExportDataset"
+							:disabled="metadataLoading || loading || !requiredReady"
+							@export-error="handleExportError"
+						/>
+					</template>
+				</EdgePageHeader>
 			</template>
 
 			<EdgeFilterBar title="Movement Filters">
@@ -145,9 +154,9 @@
 				/>
 			</div>
 			<div v-else>
-				<div v-if="summary.length" class="summary-grid">
+				<div v-if="visibleSummary.length" class="summary-grid">
 					<EdgeStatCard
-						v-for="card in summary"
+						v-for="card in visibleSummary"
 						:key="card.label"
 						:label="card.label"
 						:value="formatQuantity(card.value)"
@@ -248,7 +257,10 @@ const REQUIRED_COMPONENTS = [
 	"EdgeEmptyState",
 	"EdgeErrorState",
 	"EdgeLinkField",
+	"EdgeExportMenu",
 ];
+
+const HIDDEN_SUMMARY_LABELS = new Set(["Distinct Items", "Distinct Warehouses"]);
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -344,6 +356,23 @@ export default {
 					this.filters.item_code &&
 					this.filters.warehouse
 			);
+		},
+		visibleSummary() {
+			return this.filterSummary(this.summary);
+		},
+		exportDataset() {
+			const item = this.itemLabel || this.filters.item_code || "Item";
+			return {
+				title: "Stock Movement History",
+				filename: ["Stock Movement History", item, this.filters.from_date, this.filters.to_date].filter(Boolean).join(" - "),
+				rows: this.rows,
+				filters: this.exportFilters(),
+				summary: this.visibleSummary,
+				metadata: [
+					{ label: "Item", value: item },
+					{ label: "Warehouse", value: this.filters.warehouse },
+				],
+			};
 		},
 	},
 	created() {
@@ -521,6 +550,43 @@ export default {
 				this.loading = false;
 			}
 		},
+		async loadExportDataset() {
+			const result = await callMethod("retailedge.stock_movement_page.get_stock_movement_export", {
+				filters: { ...this.filters },
+			});
+			return {
+				columns: result.columns || [],
+				rows: result.rows || [],
+				summary: this.filterSummary(result.summary || []),
+				metadata: [
+					{ label: "Item", value: this.itemLabel || this.filters.item_code },
+					{ label: "Warehouse", value: this.filters.warehouse },
+					{ label: "Ledger Rows Processed", value: result.scan?.ledger_rows || 0 },
+				],
+			};
+		},
+		exportFilters() {
+			return [
+				{ label: "Company", value: this.filters.company },
+				{ label: "From Date", value: this.filters.from_date },
+				{ label: "To Date", value: this.filters.to_date },
+				{ label: "Branch", value: this.filters.branch },
+				{ label: "Warehouse", value: this.filters.warehouse },
+				{ label: "Compare UOM", value: this.filters.compare_uom },
+				{ label: "Movement Type", value: this.filters.movement_type },
+				{ label: "Voucher Type", value: this.filters.voucher_type },
+				{ label: "Voucher Number", value: this.filters.voucher_no },
+				{ label: "Batch Number", value: this.filters.batch_no },
+			];
+		},
+		filterSummary(summary) {
+			return (summary || []).filter((card) => !HIDDEN_SUMMARY_LABELS.has(card.label));
+		},
+		handleExportError(payload) {
+			const message = errorMessage(payload?.error, "Unable to prepare Stock Movement export.");
+			if (frappe.show_alert) frappe.show_alert({ message, indicator: "red" }, 7);
+			else frappe.msgprint(message);
+		},
 		changePage(direction) {
 			const next = this.currentPage + direction;
 			if (next < 1) return;
@@ -570,15 +636,19 @@ export default {
 
 .stock-filter-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	flex: 1 1 100%;
+	grid-template-columns: repeat(4, minmax(180px, 1fr));
 	gap: var(--edge-space-md, 16px);
 	align-items: end;
+	min-width: 0;
+	width: 100%;
 }
 
 .edge-field {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+	min-width: 0;
 }
 
 .edge-field-label {
@@ -596,11 +666,14 @@ export default {
 	background: var(--edge-surface, #fff);
 	color: var(--edge-text, #101828);
 	padding: 8px 10px;
+	min-width: 0;
+	width: 100%;
 }
 
 .filter-action {
 	display: flex;
 	align-items: end;
+	min-width: 0;
 }
 
 .edge-primary-button {
@@ -621,9 +694,12 @@ export default {
 }
 
 .advanced-filters {
+	flex: 1 1 100%;
 	margin-top: var(--edge-space-md, 16px);
 	border-top: 1px solid var(--edge-border, #e4e7ec);
 	padding-top: 12px;
+	min-width: 0;
+	width: 100%;
 }
 
 .advanced-filters summary {
@@ -742,10 +818,23 @@ export default {
 .page-button {
 	min-height: 34px;
 	padding: 6px 10px;
+	width: auto;
 }
 
 .page-button {
 	cursor: pointer;
+}
+
+@media (max-width: 1200px) {
+	.stock-filter-grid {
+		grid-template-columns: repeat(3, minmax(180px, 1fr));
+	}
+}
+
+@media (max-width: 900px) {
+	.stock-filter-grid {
+		grid-template-columns: repeat(2, minmax(180px, 1fr));
+	}
 }
 
 @media (max-width: 768px) {
