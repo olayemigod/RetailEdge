@@ -8,6 +8,7 @@ import frappe
 from retailedge.guided_pricing_api import _normalise_pricing_rows
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+HUB_ROOT = APP_ROOT / "public" / "js" / "retailedge_business_hub"
 
 
 class TestGuidedPricingBatch(unittest.TestCase):
@@ -46,6 +47,20 @@ class TestGuidedPricingBatch(unittest.TestCase):
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("frappe.get_all(", source)
 		self.assertNotIn("frappe.db.commit()", source)
+
+	def test_guided_utility_coalesces_repricing_calls_into_one_batch_request(self):
+		source = (HUB_ROOT / "guidedEntryUtils.js").read_text(encoding="utf-8")
+		for contract in (
+			"PRICING_BATCH_METHODS",
+			"pricingQueues = new Map()",
+			"queuePricingCall",
+			"flushPricingQueue",
+			"get_sales_item_pricing_batch",
+			"get_purchase_item_pricing_batch",
+			"setTimeout(() => flushPricingQueue(key), 0)",
+		):
+			self.assertIn(contract, source)
+		self.assertIn("return rawCall(method, args)", source)
 
 
 if __name__ == "__main__":
