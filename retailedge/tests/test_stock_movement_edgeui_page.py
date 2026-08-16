@@ -57,8 +57,16 @@ class TestStockMovementEdgeUIPage(unittest.TestCase):
 		self.assertLess(cap_check, zero_quantity_filter)
 		self.assertNotIn("limit_page_length=0", source)
 
-	def test_page_api_reuses_existing_accounting_engine(self):
+	def test_page_and_export_reuse_one_bounded_accounting_dataset_builder(self):
 		source = self.read(PAGE_API)
+		for contract in (
+			"def get_stock_movement_export(",
+			"def _build_stock_movement_dataset(",
+			'result = _build_stock_movement_dataset(_coerce_filters(filters))',
+			'"rows": [_public_row(row) for row in result["data"]]',
+		):
+			self.assertIn(contract, source)
+
 		for helper in (
 			"validate_filters",
 			"resolve_warehouse_scope",
@@ -117,7 +125,7 @@ class TestStockMovementEdgeUIPage(unittest.TestCase):
 		self.assertIn("createEdgeApp", bundle)
 		self.assertNotIn("window.EdgeUI ||", bundle)
 
-	def test_component_uses_smart_links_cascades_and_pagination(self):
+	def test_component_uses_smart_links_cascades_pagination_and_full_width_filters(self):
 		component = self.read(COMPONENT)
 		for contract in (
 			"EdgeLinkField",
@@ -132,10 +140,32 @@ class TestStockMovementEdgeUIPage(unittest.TestCase):
 			"50 / page",
 			"100 / page",
 			":hideNativeSidebar=\"true\"",
+			"flex: 1 1 100%",
+			"grid-template-columns: repeat(4, minmax(180px, 1fr))",
 		):
 			self.assertIn(contract, component)
 		self.assertNotIn("frappe.get_list", component)
 		self.assertNotIn("frappe.get_all", component)
+
+	def test_component_uses_shared_edgesuite_export_without_product_format_logic(self):
+		component = self.read(COMPONENT)
+		for contract in (
+			"EdgeExportMenu",
+			':loadDataset="loadExportDataset"',
+			"get_stock_movement_export",
+			"HIDDEN_SUMMARY_LABELS",
+			'"Distinct Items"',
+			'"Distinct Warehouses"',
+		):
+			self.assertIn(contract, component)
+		for product_specific_export_implementation in (
+			"new Blob(",
+			"createObjectURL",
+			"application/vnd.ms-excel",
+			"text/csv",
+			"window.print(",
+		):
+			self.assertNotIn(product_specific_export_implementation, component)
 
 	def test_legacy_query_report_is_retained_as_fallback(self):
 		self.assertTrue(LEGACY_REPORT.exists())
