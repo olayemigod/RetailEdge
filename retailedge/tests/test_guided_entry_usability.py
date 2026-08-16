@@ -25,10 +25,24 @@ class TestGuidedEntryUsability(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
-		# Smart cascading must use targeted context/profile lookups. It must not
-		# introduce an all-warehouse or all-branch preload.
 		self.assertNotIn("frappe.get_all(", source)
 		self.assertNotIn("frappe.db.get_all(", source)
+
+	def test_initial_guided_context_normalises_default_warehouse_and_branch_both_ways(self):
+		utils = self.read(HUB_ROOT / "guidedEntryUtils.js")
+		for contract in (
+			"GUIDED_CONTEXT_METHODS",
+			"normaliseGuidedContext",
+			"get_simple_sales_invoice_context",
+			"get_simple_purchase_invoice_context",
+			"get_simple_stock_transfer_context",
+			'{ branch: "branch", warehouse: "warehouse", preference: "sales" }',
+			'{ branch: "branch", warehouse: "warehouse", preference: "purchase" }',
+			'{ branch: "source_branch", warehouse: "source_warehouse", preference: "source" }',
+			'{ branch: "target_branch", warehouse: "target_warehouse", preference: "target" }',
+			"BRANCH_WAREHOUSE_METHOD",
+		):
+			self.assertIn(contract, utils)
 
 	def test_sales_purchase_and_stock_use_two_way_branch_warehouse_cascades(self):
 		contracts = {
