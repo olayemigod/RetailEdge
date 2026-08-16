@@ -38,7 +38,7 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["price_list"], "User Retail")
 		mock_context.assert_called_once_with("User Retail", mode="selling", source="user_default")
 
-	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing.frappe.db.get_value", return_value="NGN")
 	@patch("retailedge.guided_pricing._valid_price_list")
 	@patch("retailedge.guided_pricing._resolve_user_pos_profile")
 	@patch("retailedge.guided_pricing._default_user_permission_price_list", return_value="")
@@ -49,7 +49,7 @@ class TestGuidedPricing(unittest.TestCase):
 		_mock_permission_price,
 		mock_pos,
 		mock_valid,
-		mock_context,
+		_mock_get_value,
 	):
 		mock_pos.return_value = frappe._dict(
 			{
@@ -59,14 +59,6 @@ class TestGuidedPricing(unittest.TestCase):
 			}
 		)
 		mock_valid.return_value = True
-		mock_context.side_effect = lambda *_args, **_kwargs: frappe._dict(
-			{
-				"price_list": "POS Retail",
-				"source": "pos_profile",
-				"currency": "NGN",
-				"mode": "selling",
-			}
-		)
 		result = uncached_price_list_resolver()(
 			mode="selling",
 			company="Demo Company",
@@ -74,9 +66,9 @@ class TestGuidedPricing(unittest.TestCase):
 			user="sales@example.com",
 		)
 		self.assertEqual(result["price_list"], "POS Retail")
+		self.assertEqual(result["source"], "pos_profile")
 		self.assertEqual(result["pos_profile"], "POS-LAGOS")
 		self.assertFalse(result["allow_rate_change"])
-		mock_context.assert_called_once_with("POS Retail", mode="selling", source="pos_profile")
 
 	@patch("retailedge.guided_pricing.frappe.get_cached_value")
 	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
