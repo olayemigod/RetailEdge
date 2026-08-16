@@ -41,7 +41,7 @@ class _DraftPurchaseInvoice(SimpleNamespace):
 
 
 class TestGuidedPurchaseInvoice(unittest.TestCase):
-	def test_normalise_items_keeps_buying_rate_optional(self):
+	def test_normalise_items_keeps_buying_rate_optional_until_server_pricing(self):
 		rows = _normalise_items(
 			[
 				{"item_code": "ITEM-001", "qty": 2, "rate": ""},
@@ -79,13 +79,15 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertEqual(filters["is_group"], 0)
 		mock_validate_access.assert_called_once()
 
+	@patch("retailedge.guided_purchase_invoice.resolve_purchase_item_pricing")
+	@patch("retailedge.guided_purchase_invoice.resolve_price_list_context")
 	@patch("retailedge.guided_purchase_invoice.frappe.db.get_value")
 	@patch("retailedge.guided_purchase_invoice._validate_branch_warehouse")
 	@patch("retailedge.guided_purchase_invoice._assert_read_permission")
 	@patch("retailedge.guided_purchase_invoice.validate_user_branch_access")
 	@patch("retailedge.guided_purchase_invoice._assert_can_create_purchase_invoice")
 	@patch("retailedge.guided_purchase_invoice.frappe.new_doc")
-	def test_create_draft_assembles_standard_purchase_invoice_once(
+	def test_create_draft_resolves_blank_buying_rate_before_insert(
 		self,
 		mock_new_doc,
 		_mock_create_permission,
@@ -93,10 +95,20 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		_mock_read_permission,
 		mock_validate_warehouse,
 		mock_db_value,
+		mock_price_context,
+		mock_item_pricing,
 	):
 		doc = _DraftPurchaseInvoice()
 		mock_new_doc.return_value = doc
 		mock_db_value.return_value = "Demo Company"
+		mock_price_context.return_value = {
+			"price_list": "Retail Buying",
+			"source": "user_default",
+		}
+		mock_item_pricing.side_effect = [
+			{"rate": 1800.0, "source": "user_default"},
+			{"rate": 2400.0, "source": "user_default"},
+		]
 
 		result = create_simple_purchase_invoice_draft(
 			{
@@ -124,14 +136,41 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertEqual(doc.supplier, "SUP-001")
 		self.assertEqual(doc.branch, "Lagos")
 		self.assertEqual(doc.set_warehouse, "Lagos Stores - DC")
+		self.assertEqual(doc.buying_price_list, "Retail Buying")
 		self.assertEqual(doc.update_stock, 1)
 		self.assertEqual(doc.bill_no, "VENDOR-123")
 		self.assertEqual(str(doc.bill_date), "2026-08-14")
 		self.assertEqual(len(doc.items), 2)
-		self.assertNotIn("rate", doc.items[0])
+		self.assertEqual(doc.items[0].rate, 1800.0)
 		self.assertEqual(doc.items[1].rate, 2500.0)
 		self.assertEqual(result["docstatus"], 0)
 		self.assertEqual(result["name"], doc.name)
+		self.assertEqual(result["buying_price_list"], "Retail Buying")
+
+	@patch("retailedge.guided_purchase_invoice.resolve_purchase_item_pricing")
+	@patch("retailedge.guided_purchase_invoice.resolve_price_list_context")
+	@patch("retailedge.guided_purchase_invoice._assert_read_permission")
+	@patch("retailedge.guided_purchase_invoice._assert_can_create_purchase_invoice")
+	@patch("retailedge.guided_purchase_invoice.frappe.new_doc")
+	def test_blank_purchase_rate_is_blocked_when_no_price_can_be_resolved(
+		self,
+		mock_new_doc,
+		_mock_create_permission,
+		_mock_read_permission,
+		mock_price_context,
+		mock_item_pricing,
+	):
+		mock_new_doc.return_value = _DraftPurchaseInvoice()
+		mock_price_context.return_value = {"price_list": "", "source": "item_fallback"}
+		mock_item_pricing.return_value = {"rate": None, "source": "item_fallback"}
+		with self.assertRaises(frappe.ValidationError):
+			create_simple_purchase_invoice_draft(
+				{
+					"company": "Demo Company",
+					"supplier": "SUP-001",
+					"items": [{"item_code": "ITEM-001", "qty": 1, "rate": ""}],
+				}
+			)
 
 	def test_adapter_uses_permission_aware_bounded_search_and_native_draft_insert(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
@@ -142,20 +181,28 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertIn('filters: dict[str, Any] = {"is_purchase_item": 1}', source)
 		self.assertIn('@frappe.whitelist(methods=["POST"])', source)
 		self.assertIn("doc.insert()", source)
+		self.assertIn("resolve_purchase_item_pricing", source)
+		self.assertIn("doc.buying_price_list", source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("doc.submit()", source)
 		self.assertNotIn("frappe.db.commit()", source)
 
-	def test_adapter_leaves_buying_pricing_and_accounting_to_erpnext(self):
+	def test_browser_cannot_supply_the_effective_buying_price_list(self):
+		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
+		self.assertIn("resolve_price_list_context", source)
+		self.assertNotIn('values.get("buying_price_list")', source)
+		self.assertNotIn('values.get("price_list")', source)
+
+	def test_adapter_leaves_accounting_and_pricing_rules_to_erpnext(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
 		self.assertNotIn("calculate_taxes_and_totals()", source)
 		self.assertNotIn("credit_to =", source)
 		self.assertNotIn("expense_account", source)
 		self.assertNotIn("taxes_and_charges =", source)
 		self.assertNotIn("payment_schedule", source)
-		self.assertIn("buying prices, taxes, totals, due date/payment schedule and accounting fields", source)
+		self.assertIn("ERPNext's item-pricing service", source)
 
-	def test_dialog_uses_shared_edgesuite_components_and_cascades_supplier_branch(self):
+	def test_dialog_uses_shared_edgesuite_components_and_resolves_buying_price(self):
 		component = (
 			APP_ROOT
 			/ "public"
@@ -168,8 +215,10 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertIn("EdgeChildTable: runtimeComponents.EdgeChildTable", component)
 		self.assertIn("setSupplier(next)", component)
 		self.assertIn("setBranch(next)", component)
-		self.assertIn('this.values.warehouse = "";', component)
-		self.assertIn('item_code: ""', component)
+		self.assertIn("setWarehouse(next)", component)
+		self.assertIn("get_simple_purchase_invoice_item_pricing", component)
+		self.assertIn("pricingCache: new Map()", component)
+		self.assertIn("Buying Price List", component)
 		self.assertIn("Buying Rate", component)
 		self.assertIn("Supplier Bill No", component)
 		self.assertIn("Open Full Form", component)
