@@ -39,10 +39,13 @@
 					:modelValue="values.customer"
 					label="Customer"
 					placeholder="Search customer"
-					description="Only customers you can access are shown."
+					description="Only customers you can access are shown. Create a new Customer here when permitted."
 					:required="true"
 					:searcher="searchCustomer"
 					:context="searchContext"
+					:canCreate="canCreateCustomer"
+					:creator="createCustomer"
+					createLabel="Create Customer"
 					@update:modelValue="setCustomer"
 				/>
 
@@ -56,7 +59,7 @@
 					:modelValue="values.branch"
 					label="Branch"
 					placeholder="Search branch"
-					description="Changing branch clears the selected warehouse."
+					description="Selecting a Branch loads its preferred assigned warehouse when available."
 					:searcher="searchBranch"
 					:context="searchContext"
 					@update:modelValue="setBranch"
@@ -66,7 +69,7 @@
 					:modelValue="values.warehouse"
 					label="Warehouse"
 					placeholder="Search warehouse"
-					description="Required when Update Stock is enabled; otherwise optional."
+					description="Selecting an assigned Warehouse resolves its Branch automatically."
 					:required="Boolean(values.update_stock)"
 					:searcher="searchWarehouse"
 					:context="searchContext"
@@ -88,6 +91,10 @@
 				:columns="itemColumns"
 				:addLabel="'Add Item'"
 				:linkSearcher="searchLineLink"
+				:linkCanCreate="canCreateItemLink"
+				:linkCreator="createItemLink"
+				:linkCreateLabel="itemCreateLabel"
+				:newRowsFirst="true"
 				@update:rows="updateItems"
 			/>
 
@@ -131,6 +138,14 @@
 </template>
 
 <script>
+import {
+	callMethod,
+	errorMessage,
+	quickCreateCustomer,
+	quickCreateItem,
+	resolveBranchWarehouse,
+} from "./guidedEntryUtils";
+
 const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
@@ -152,23 +167,6 @@ function emptyValues() {
 	};
 }
 
-function callMethod(method, args = {}) {
-	return new Promise((resolve, reject) => {
-		frappe.call({
-			method,
-			args,
-			callback: (response) => resolve(response.message || {}),
-			error: (error) => reject(error),
-		});
-	});
-}
-
-function errorMessage(error, fallback) {
-	if (error?.message) return error.message;
-	if (error?.exc_type) return error.exc_type;
-	return fallback;
-}
-
 export default {
 	name: "SimpleSalesInvoiceDialog",
 	components: {
@@ -188,11 +186,12 @@ export default {
 			saving: false,
 			loadError: "",
 			saveError: "",
+			cascadeToken: 0,
 			formContext: {},
 			values: emptyValues(),
 			itemTableField: {
 				label: "Items",
-				description: "Add the products or services being sold.",
+				description: "Newest item rows stay at the top for faster multi-item entry.",
 			},
 			itemColumns: [
 				{
@@ -215,10 +214,17 @@ export default {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
+		canCreateCustomer() {
+			return Boolean(this.formContext.capabilities?.can_create_customer);
+		},
+		canCreateItem() {
+			return Boolean(this.formContext.capabilities?.can_create_item);
+		},
 		searchContext() {
 			return {
 				company: this.values.company,
 				branch: this.values.branch,
+				warehouse: this.values.warehouse,
 				customer: this.values.customer,
 			};
 		},
@@ -265,6 +271,7 @@ export default {
 				values: {
 					company: this.values.company,
 					branch: this.values.branch,
+					warehouse: this.values.warehouse,
 					customer: this.values.customer,
 				},
 			});
@@ -283,6 +290,19 @@ export default {
 			if (column?.fieldname !== "item_code") return Promise.resolve([]);
 			return this.searchOptions("item_code", query);
 		},
+		createCustomer(query) {
+			return quickCreateCustomer(query);
+		},
+		canCreateItemLink(column) {
+			return this.canCreateItem && column?.fieldname === "item_code";
+		},
+		createItemLink(column, query) {
+			if (column?.fieldname !== "item_code") return Promise.resolve(null);
+			return quickCreateItem(query);
+		},
+		itemCreateLabel(column) {
+			return column?.fieldname === "item_code" ? "Create Item" : "Create new";
+		},
 		setCustomer(next) {
 			const changed = Boolean(this.values.customer && this.values.customer !== next);
 			this.values.customer = next || "";
@@ -294,14 +314,48 @@ export default {
 				}));
 			}
 		},
-		setBranch(next) {
-			if (this.values.branch !== (next || "")) {
-				this.values.branch = next || "";
-				this.values.warehouse = "";
+		async setBranch(next) {
+			const branch = next || "";
+			this.values.branch = branch;
+			this.values.warehouse = "";
+			if (!branch || !this.values.company) return;
+			const token = ++this.cascadeToken;
+			try {
+				const resolved = await resolveBranchWarehouse({
+					company: this.values.company,
+					branch,
+					preference: "sales",
+				});
+				if (token !== this.cascadeToken) return;
+				this.values.branch = resolved.branch || branch;
+				this.values.warehouse = resolved.warehouse || "";
+			} catch (error) {
+				if (token === this.cascadeToken) {
+					this.saveError = errorMessage(error, "Unable to resolve the Branch warehouse.");
+				}
 			}
 		},
-		setWarehouse(next) {
-			this.values.warehouse = next || "";
+		async setWarehouse(next) {
+			const warehouse = next || "";
+			this.values.warehouse = warehouse;
+			if (!warehouse || !this.values.company) return;
+			const token = ++this.cascadeToken;
+			try {
+				const resolved = await resolveBranchWarehouse({
+					company: this.values.company,
+					branch: this.values.branch,
+					warehouse,
+					preference: "sales",
+				});
+				if (token !== this.cascadeToken) return;
+				this.values.branch = resolved.branch || this.values.branch;
+				this.values.warehouse = resolved.warehouse || warehouse;
+			} catch (error) {
+				if (token === this.cascadeToken) {
+					this.values.warehouse = "";
+					this.saveError = errorMessage(error, "Unable to use the selected Warehouse.");
+				}
+			}
 		},
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
