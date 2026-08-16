@@ -18,6 +18,7 @@ from retailedge.branch_context import (
 	validate_user_branch_access,
 )
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
+from retailedge.guided_pricing import resolve_price_list_context, resolve_purchase_item_pricing
 
 ACTION_KEY = "record-purchase"
 PURCHASE_INVOICE_DOCTYPE = "Purchase Invoice"
@@ -57,12 +58,17 @@ def get_simple_purchase_invoice_context() -> dict[str, Any]:
 	if warehouse and branch:
 		_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
 
+	pricing = resolve_price_list_context(
+		mode="buying", company=company, branch=branch or "", user=user
+	)
+
 	return {
 		"action_key": ACTION_KEY,
 		"title": _("Simple Purchase Invoice"),
 		"subtitle": _("Create a standard ERPNext Purchase Invoice draft with the essential buying fields."),
 		"submit_label": _("Save Draft"),
 		"full_form_doctype": PURCHASE_INVOICE_DOCTYPE,
+		"pricing": pricing,
 		"defaults": {
 			"company": company,
 			"branch": branch or "",
@@ -149,28 +155,39 @@ def search_simple_purchase_invoice_options(
 	return []
 
 
+@frappe.whitelist()
+def get_simple_purchase_invoice_item_pricing(
+	item_code: str,
+	values: dict | str | None = None,
+) -> dict[str, Any]:
+	_assert_can_create_purchase_invoice()
+	values = _coerce_values(values)
+	user = frappe.session.user
+	company, branch, warehouse = _validate_transaction_context(values, user=user)
+	supplier = str(values.get("supplier") or "").strip()
+	if not supplier:
+		frappe.throw(_("Select a Supplier before pricing items."))
+	_assert_read_permission("Supplier", supplier)
+	item_code = str(item_code or "").strip()
+	_assert_read_permission("Item", item_code)
+	return resolve_purchase_item_pricing(
+		item_code=item_code,
+		company=company,
+		supplier=supplier,
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=values.get("posting_date") or nowdate(),
+		qty=flt(values.get("qty") or 1),
+		user=user,
+	)
+
+
 @frappe.whitelist(methods=["POST"])
 def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> dict[str, Any]:
 	_assert_can_create_purchase_invoice()
 	values = _coerce_values(values)
 	user = frappe.session.user
-	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
-	if not company:
-		frappe.throw(_("Company is required."))
-	_assert_read_permission("Company", company)
-
-	branch = values.get("branch") or ""
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
-
-	warehouse = values.get("warehouse") or ""
-	if warehouse:
-		_assert_read_permission("Warehouse", warehouse)
-		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
-		if warehouse_company and warehouse_company != company:
-			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
-		if branch:
-			_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
+	company, branch, warehouse = _validate_transaction_context(values, user=user)
 
 	supplier = str(values.get("supplier") or "").strip()
 	if not supplier:
@@ -182,11 +199,17 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 	if update_stock and not warehouse:
 		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
 
+	pricing_context = resolve_price_list_context(
+		mode="buying", company=company, branch=branch, party=supplier, user=user
+	)
+
 	doc = frappe.new_doc(PURCHASE_INVOICE_DOCTYPE)
 	doc.company = company
 	doc.supplier = supplier
 	doc.posting_date = getdate(values.get("posting_date") or nowdate())
 	doc.update_stock = update_stock
+	if pricing_context.get("price_list"):
+		doc.buying_price_list = pricing_context["price_list"]
 	bill_no = str(values.get("bill_no") or "").strip()
 	if bill_no:
 		doc.bill_no = bill_no
@@ -200,18 +223,37 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 
 	for item in items:
 		_assert_read_permission("Item", item["item_code"])
+		resolved = resolve_purchase_item_pricing(
+			item_code=item["item_code"],
+			company=company,
+			supplier=supplier,
+			branch=branch,
+			warehouse=warehouse,
+			posting_date=str(doc.posting_date),
+			qty=item["qty"],
+			user=user,
+		)
+		manual_rate = item.get("rate")
+		resolved_rate = resolved.get("rate")
+		effective_rate = manual_rate if manual_rate is not None else resolved_rate
+		if effective_rate is None:
+			frappe.throw(
+				_(
+					"No buying price could be resolved for Item {0}. Set a Buying Item Price or enter the agreed buying rate before saving."
+				).format(item["item_code"])
+			)
+
 		row = {
 			"item_code": item["item_code"],
 			"qty": item["qty"],
+			"rate": effective_rate,
 		}
 		if warehouse:
 			row["warehouse"] = warehouse
-		if item["rate"] is not None:
-			row["rate"] = item["rate"]
 		doc.append("items", row)
 
-	# Insert as the current user. ERPNext's PurchaseInvoice validation owns supplier/item
-	# defaults, buying prices, taxes, totals, due date/payment schedule and accounting fields.
+	# Buying Price List selection and fallback pricing are resolved server-side
+	# from the authenticated user's setup and ERPNext's item-pricing service.
 	doc.insert()
 	return {
 		"doctype": doc.doctype,
@@ -220,6 +262,7 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 		"supplier": doc.supplier,
 		"company": doc.company,
 		"branch": getattr(doc, "retailedge_branch", None) or branch,
+		"buying_price_list": getattr(doc, "buying_price_list", None) or pricing_context.get("price_list"),
 		"grand_total": doc.grand_total,
 		"currency": doc.currency,
 		"route": f"/app/purchase-invoice/{doc.name}",
@@ -250,6 +293,27 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 			frappe.throw(_("Buying Rate on row {0} cannot be negative.").format(index))
 		result.append({"item_code": item_code, "qty": qty, "rate": rate})
 	return result
+
+
+def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple[str, str, str]:
+	company = str(values.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	if not company:
+		frappe.throw(_("Company is required."))
+	_assert_read_permission("Company", company)
+
+	branch = str(values.get("branch") or "").strip()
+	if branch:
+		validate_user_branch_access(branch, user=user, company=company, throw=True)
+
+	warehouse = str(values.get("warehouse") or "").strip()
+	if warehouse:
+		_assert_read_permission("Warehouse", warehouse)
+		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
+		if warehouse_company and warehouse_company != company:
+			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
+		if branch:
+			_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
+	return company, branch, warehouse
 
 
 def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str, Any] | None:
