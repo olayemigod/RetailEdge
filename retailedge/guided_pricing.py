@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.core.doctype.user_permission.user_permission import get_user_permissions
 from frappe.utils import flt, getdate, nowdate
+from frappe.utils.caching import request_cache
 
 from erpnext.stock.get_item_details import get_item_details, get_pos_profile
 
@@ -28,6 +29,7 @@ STANDARD_PRICE_LIST: dict[PriceMode, str] = {
 }
 
 
+@request_cache
 def resolve_price_list_context(
 	*,
 	mode: PriceMode,
@@ -40,6 +42,8 @@ def resolve_price_list_context(
 
 	The client never supplies or authorises its own Price List. Selection is made
 	from current-user defaults/permissions and trusted ERPNext/RetailEdge setup.
+	The result is request-cached so a multi-line invoice resolves user/POS/default
+	context once instead of repeating the same setup queries for every item.
 	"""
 	user = user or frappe.session.user
 	company = str(company or "").strip()
@@ -73,9 +77,9 @@ def resolve_price_list_context(
 			)
 			return context
 
-		party_price_list = _party_price_list(mode=mode, party=party)
-		if _valid_price_list(party_price_list, mode=mode, user=user):
-			return _price_context(party_price_list, mode=mode, source="party_default")
+	party_price_list = _party_price_list(mode=mode, party=party)
+	if _valid_price_list(party_price_list, mode=mode, user=user):
+		return _price_context(party_price_list, mode=mode, source="party_default")
 
 	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
 	candidate = str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip()
@@ -272,8 +276,17 @@ def _default_user_permission_price_list(*, user: str, mode: PriceMode) -> str:
 	]
 	if not valid:
 		return ""
-	if ordered and int(ordered[0].get("is_default") or 0) and valid[0]:
-		return valid[0]
+	default_valid = next(
+		(
+			str(row.get("doc") or "").strip()
+			for row in ordered
+			if int(row.get("is_default") or 0)
+			and _valid_price_list(str(row.get("doc") or "").strip(), mode=mode, user=user)
+		),
+		"",
+	)
+	if default_valid:
+		return default_valid
 	return valid[0] if len(valid) == 1 else ""
 
 
