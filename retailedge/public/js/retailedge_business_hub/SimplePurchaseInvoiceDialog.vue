@@ -28,6 +28,11 @@
 					<span>Branch</span>
 					<strong>{{ values.branch }}</strong>
 				</div>
+				<div>
+					<span>Buying Price List</span>
+					<strong>{{ pricingLabel }}</strong>
+					<small>{{ pricingSourceLabel }}</small>
+				</div>
 			</div>
 
 			<div v-if="saveError" class="guided-purchase-error" role="alert">
@@ -114,8 +119,9 @@
 			/>
 
 			<p class="guided-purchase-hint">
-				Buying Rate is optional. Leave it blank to let ERPNext apply supplier/item defaults and
-				configured buying prices when the draft is saved.
+				Buying Rate is resolved on demand through the user's Buying Price List, ERPNext Buying
+				Settings and Item Price/last-purchase logic. A blank unresolved buying rate is not accepted
+				at save; enter the agreed supplier rate or configure the buying price first.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -163,6 +169,7 @@ import {
 
 const CONTEXT_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
+const PRICING_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_item_pricing";
 const CREATE_METHOD = "retailedge.guided_purchase_invoice.create_simple_purchase_invoice_draft";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
@@ -182,6 +189,17 @@ function emptyValues() {
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
+}
+
+function sourceLabel(source) {
+	return {
+		user_default: "User default",
+		user_permission: "User-assigned Price List",
+		party_default: "Supplier default",
+		erpnext_default: "ERPNext default",
+		standard_price_list: "Standard Buying",
+		item_fallback: "Item fallback",
+	}[source] || "ERPNext pricing";
 }
 
 export default {
@@ -204,6 +222,8 @@ export default {
 			loadError: "",
 			saveError: "",
 			cascadeToken: 0,
+			pricingTokens: {},
+			pricingCache: new Map(),
 			formContext: {},
 			values: emptyValues(),
 			itemTableField: {
@@ -222,7 +242,7 @@ export default {
 					fieldname: "rate",
 					label: "Buying Rate",
 					fieldtype: "Currency",
-					placeholder: "ERPNext default",
+					placeholder: "Auto buying price",
 				},
 			],
 		};
@@ -236,6 +256,12 @@ export default {
 		},
 		canCreateItem() {
 			return Boolean(this.formContext.capabilities?.can_create_item);
+		},
+		pricingLabel() {
+			return this.formContext.pricing?.price_list || "Item buying fallback";
+		},
+		pricingSourceLabel() {
+			return sourceLabel(this.formContext.pricing?.source);
 		},
 		searchContext() {
 			return {
@@ -259,6 +285,7 @@ export default {
 			this.loading = true;
 			this.loadError = "";
 			this.saveError = "";
+			this.pricingCache.clear();
 			try {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
@@ -323,18 +350,17 @@ export default {
 		setSupplier(next) {
 			const changed = Boolean(this.values.supplier && this.values.supplier !== next);
 			this.values.supplier = next || "";
+			this.pricingCache.clear();
 			if (changed) {
-				this.values.items = this.values.items.map((row) => ({
-					...row,
-					item_code: "",
-					rate: "",
-				}));
+				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+				this.refreshAllItemPricing();
 			}
 		},
 		async setBranch(next) {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
+			this.pricingCache.clear();
 			if (!branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -346,6 +372,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
+				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
 					this.saveError = errorMessage(error, "Unable to resolve the Branch warehouse.");
@@ -355,6 +382,7 @@ export default {
 		async setWarehouse(next) {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
+			this.pricingCache.clear();
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -367,6 +395,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || this.values.branch;
 				this.values.warehouse = resolved.warehouse || warehouse;
+				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
 					this.values.warehouse = "";
@@ -376,12 +405,74 @@ export default {
 		},
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
+			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
 				const prior = previous[index] || {};
-				if (prior.item_code && prior.item_code !== row.item_code) {
+				if (row.item_code && row.item_code !== prior.item_code) {
+					changed.push(index);
 					return { ...row, rate: "" };
 				}
 				return { ...row };
+			});
+			for (const index of changed) this.loadItemPricing(index);
+		},
+		pricingCacheKey(row) {
+			return [
+				this.values.company,
+				this.values.branch,
+				this.values.warehouse,
+				this.values.supplier,
+				this.values.posting_date,
+				row.item_code,
+				row.qty || 1,
+			].join("|");
+		},
+		async loadItemPricing(index) {
+			const row = this.values.items[index];
+			if (!row?.item_code || !this.values.supplier) return;
+			const key = this.pricingCacheKey(row);
+			const token = `${row.item_code}:${Date.now()}:${Math.random()}`;
+			this.pricingTokens[index] = token;
+			try {
+				let result = this.pricingCache.get(key);
+				if (!result) {
+					result = await callMethod(PRICING_METHOD, {
+						item_code: row.item_code,
+						values: {
+							company: this.values.company,
+							branch: this.values.branch,
+							warehouse: this.values.warehouse,
+							supplier: this.values.supplier,
+							posting_date: this.values.posting_date,
+							qty: row.qty || 1,
+						},
+					});
+					this.pricingCache.set(key, result);
+				}
+				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
+				if (result?.rate !== null && result?.rate !== undefined) {
+					this.values.items[index] = { ...this.values.items[index], rate: result.rate };
+				} else {
+					this.saveError = `No buying price is configured for ${row.item_code}. Enter the agreed buying rate or configure Item Price.`;
+				}
+				this.formContext.pricing = {
+					...(this.formContext.pricing || {}),
+					price_list: result?.price_list || this.formContext.pricing?.price_list || "",
+					source: result?.source || this.formContext.pricing?.source || "item_fallback",
+				};
+			} catch (error) {
+				if (this.pricingTokens[index] === token) {
+					this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
+				}
+			}
+		},
+		refreshAllItemPricing() {
+			if (!this.values.supplier) return;
+			this.values.items.forEach((row, index) => {
+				if (row.item_code) {
+					this.values.items[index] = { ...row, rate: "" };
+					this.loadItemPricing(index);
+				}
 			});
 		},
 		async saveDraft() {
@@ -427,6 +518,10 @@ export default {
 .guided-purchase-context span,
 .guided-field > span {
 	font-size: 0.78rem;
+	color: var(--edge-text-muted, #667085);
+}
+.guided-purchase-context small {
+	font-size: 0.72rem;
 	color: var(--edge-text-muted, #667085);
 }
 .guided-purchase-grid {
