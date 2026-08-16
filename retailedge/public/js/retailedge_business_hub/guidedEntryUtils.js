@@ -7,14 +7,51 @@ const PRICING_BATCH_METHODS = {
 	"retailedge.guided_purchase_invoice.get_simple_purchase_invoice_item_pricing":
 		"retailedge.guided_pricing_api.get_purchase_item_pricing_batch",
 };
+const GUIDED_CONTEXT_METHODS = {
+	"retailedge.guided_sales_invoice.get_simple_sales_invoice_context": [
+		{ branch: "branch", warehouse: "warehouse", preference: "sales" },
+	],
+	"retailedge.guided_purchase_invoice.get_simple_purchase_invoice_context": [
+		{ branch: "branch", warehouse: "warehouse", preference: "purchase" },
+	],
+	"retailedge.guided_stock_transfer.get_simple_stock_transfer_context": [
+		{ branch: "source_branch", warehouse: "source_warehouse", preference: "source" },
+		{ branch: "target_branch", warehouse: "target_warehouse", preference: "target" },
+	],
+};
 const pricingQueues = new Map();
+
+async function normaliseGuidedContext(method, message) {
+	const pairs = GUIDED_CONTEXT_METHODS[method];
+	if (!pairs || !message?.defaults?.company) return message;
+	const defaults = { ...message.defaults };
+
+	for (const pair of pairs) {
+		const branch = defaults[pair.branch] || "";
+		const warehouse = defaults[pair.warehouse] || "";
+		if (!branch && !warehouse) continue;
+		const resolved = await rawCall(BRANCH_WAREHOUSE_METHOD, {
+			company: defaults.company,
+			branch,
+			warehouse,
+			preference: pair.preference,
+		});
+		if (resolved?.branch) defaults[pair.branch] = resolved.branch;
+		if (resolved?.warehouse) defaults[pair.warehouse] = resolved.warehouse;
+	}
+
+	return { ...message, defaults };
+}
 
 function rawCall(method, args = {}) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method,
 			args,
-			callback: (response) => resolve(response.message || {}),
+			callback: (response) => {
+				const message = response.message || {};
+				Promise.resolve(normaliseGuidedContext(method, message)).then(resolve).catch(reject);
+			},
 			error: (error) => reject(error),
 		});
 	});
