@@ -3,7 +3,6 @@
 
 import json
 import os
-import re
 from collections import Counter
 from unittest.mock import patch
 
@@ -76,13 +75,13 @@ class TestSalespersonPerformance(FrappeTestCase):
 
 	def test_loader_uses_current_edgesuite_runtime_before_product_bundle(self):
 		content = self._read_page_js()
-		edgeui_match = re.search(r"requireAsync\([\"']edgeui\.bundle\.js[\"']\)", content)
-		product_match = re.search(
-			r"requireAsync\([\"']salesperson_performance\.bundle\.js[\"']\)", content
-		)
-		self.assertIsNotNone(edgeui_match)
-		self.assertIsNotNone(product_match)
-		self.assertLess(edgeui_match.start(), product_match.start())
+		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', content)
+		self.assertIn('const DASHBOARD_ASSET = "salesperson_performance.bundle.js"', content)
+		edgeui_call = content.find("await requireAsync(EDGEUI_ASSET)")
+		product_call = content.find("await requireAsync(DASHBOARD_ASSET)")
+		self.assertNotEqual(edgeui_call, -1)
+		self.assertNotEqual(product_call, -1)
+		self.assertLess(edgeui_call, product_call)
 		self.assertIn("frappe.require(assetName", content)
 		self.assertIn("window.EdgeSuiteUI?.components", content)
 		self.assertIn("window.mountSalespersonPerformanceDashboard", content)
@@ -101,7 +100,6 @@ class TestSalespersonPerformance(FrappeTestCase):
 			"on_page_show",
 		):
 			self.assertIn(contract, content)
-		# Do not hide the global navbar/product-menu host.
 		self.assertNotIn(".navbar", content)
 		self.assertNotIn(".desk-navbar", content)
 
@@ -110,10 +108,11 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn("renderLoadError", content)
 		self.assertIn("wrapper.appendChild(errorDiv)", content)
 		self.assertIn("Salesperson Performance Dashboard failed to load", content)
-		catch_idx = content.find("} catch (error)")
-		self.assertNotEqual(catch_idx, -1)
-		catch_block = content[catch_idx : catch_idx + 500]
+		page_catch = content.find("\n\t} catch (error) {", content.find("frappe.pages[PAGE_ROUTE].on_page_load"))
+		self.assertNotEqual(page_catch, -1)
+		catch_block = content[page_catch : page_catch + 300]
 		self.assertNotIn("frappe.require", catch_block)
+		self.assertIn("renderLoadError(wrapper, error)", catch_block)
 
 	def test_loader_does_not_request_bare_css_assets(self):
 		content = self._read_page_js()
@@ -212,7 +211,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 		):
 			self.assertIn(label, content)
 		for label in (
-			'﻿label="Gross Sales"'.lstrip("﻿"),
+			'label="Gross Sales"',
 			'label="Net Sales"',
 			'label="Number of Sales Invoices"',
 			'label="Average Invoice Value"',
