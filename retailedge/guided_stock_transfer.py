@@ -92,6 +92,9 @@ def get_simple_stock_transfer_context() -> dict[str, Any]:
 		},
 		"capabilities": {
 			"branch_enabled": bool(has_doctype("Branch")),
+			"can_create_item": bool(
+				has_doctype("Item") and frappe.has_permission("Item", "create")
+			),
 			"native_form_fallback": True,
 			"serial_batch_requires_full_form": True,
 		},
@@ -345,7 +348,10 @@ def _assert_read_permission(doctype: str, name: str) -> None:
 	if not name or not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
 	if not frappe.has_permission(doctype, "read", doc=name):
-		frappe.throw(_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use {0} {1}.").format(doctype, name),
+			frappe.PermissionError,
+		)
 
 
 def _coerce_values(values: dict | str | None) -> dict[str, Any]:
