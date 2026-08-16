@@ -58,7 +58,7 @@ class TestGuidedPricing(unittest.TestCase):
 				"allow_rate_change": 0,
 			}
 		)
-		mock_valid.return_value = True
+		mock_valid.side_effect = lambda name, **_kwargs: bool(str(name or "").strip())
 		result = uncached_price_list_resolver()(
 			mode="selling",
 			company="Demo Company",
