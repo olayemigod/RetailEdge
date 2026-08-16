@@ -42,7 +42,7 @@ class _DraftSalesInvoice(SimpleNamespace):
 
 
 class TestGuidedSalesInvoice(unittest.TestCase):
-	def test_normalise_items_keeps_rate_optional(self):
+	def test_normalise_items_keeps_rate_optional_until_server_pricing(self):
 		rows = _normalise_items(
 			[
 				{"item_code": "ITEM-001", "qty": 2, "rate": ""},
@@ -93,19 +93,32 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 				user="sales@example.com",
 			)
 
+	@patch("retailedge.guided_sales_invoice.resolve_sales_item_pricing")
+	@patch("retailedge.guided_sales_invoice.resolve_price_list_context")
 	@patch("retailedge.guided_sales_invoice._assert_read_permission")
 	@patch("retailedge.guided_sales_invoice.validate_user_branch_access")
 	@patch("retailedge.guided_sales_invoice._assert_can_create_sales_invoice")
 	@patch("retailedge.guided_sales_invoice.frappe.new_doc")
-	def test_create_draft_assembles_standard_sales_invoice_once(
+	def test_create_draft_resolves_blank_rate_from_server_price_list(
 		self,
 		mock_new_doc,
 		_mock_create_permission,
 		mock_branch_access,
 		mock_read_permission,
+		mock_price_context,
+		mock_item_pricing,
 	):
 		doc = _DraftSalesInvoice()
 		mock_new_doc.return_value = doc
+		mock_price_context.return_value = {
+			"price_list": "Retail Selling",
+			"source": "user_default",
+			"allow_rate_change": True,
+		}
+		mock_item_pricing.side_effect = [
+			{"rate": 900.0, "source": "user_default", "allow_rate_change": True},
+			{"rate": 1400.0, "source": "user_default", "allow_rate_change": True},
+		]
 
 		result = create_simple_sales_invoice_draft(
 			{
@@ -129,14 +142,50 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertEqual(doc.company, "Demo Company")
 		self.assertEqual(doc.customer, "CUST-001")
 		self.assertEqual(doc.branch, "Lagos")
+		self.assertEqual(doc.selling_price_list, "Retail Selling")
 		self.assertEqual(str(doc.posting_date), "2026-08-15")
 		self.assertEqual(doc.remarks, "Guided draft")
 		self.assertEqual(len(doc.items), 2)
-		self.assertNotIn("rate", doc.items[0])
+		self.assertEqual(doc.items[0].rate, 900.0)
 		self.assertEqual(doc.items[1].rate, 1500.0)
 		self.assertEqual(result["name"], doc.name)
 		self.assertEqual(result["docstatus"], 0)
-		self.assertEqual(result["branch"], "Lagos")
+		self.assertEqual(result["selling_price_list"], "Retail Selling")
+
+	@patch("retailedge.guided_sales_invoice.resolve_sales_item_pricing")
+	@patch("retailedge.guided_sales_invoice.resolve_price_list_context")
+	@patch("retailedge.guided_sales_invoice._assert_read_permission")
+	@patch("retailedge.guided_sales_invoice._assert_can_create_sales_invoice")
+	@patch("retailedge.guided_sales_invoice.frappe.new_doc")
+	def test_pos_profile_rate_lock_ignores_browser_rate_override(
+		self,
+		mock_new_doc,
+		_mock_create_permission,
+		_mock_read_permission,
+		mock_price_context,
+		mock_item_pricing,
+	):
+		doc = _DraftSalesInvoice()
+		mock_new_doc.return_value = doc
+		mock_price_context.return_value = {
+			"price_list": "POS Retail",
+			"source": "pos_profile",
+			"allow_rate_change": False,
+		}
+		mock_item_pricing.return_value = {
+			"rate": 1200.0,
+			"source": "pos_profile",
+			"allow_rate_change": False,
+		}
+
+		create_simple_sales_invoice_draft(
+			{
+				"company": "Demo Company",
+				"customer": "CUST-001",
+				"items": [{"item_code": "ITEM-001", "qty": 1, "rate": 1}],
+			}
+		)
+		self.assertEqual(doc.items[0].rate, 1200.0)
 
 	def test_adapter_uses_permission_aware_bounded_search_and_draft_insert(self):
 		source = (APP_ROOT / "guided_sales_invoice.py").read_text()
@@ -148,18 +197,26 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertIn('@frappe.whitelist(methods=["POST"])', source)
 		self.assertIn("doc.insert()", source)
 		self.assertIn("doc.branch = branch", source)
+		self.assertIn("resolve_sales_item_pricing", source)
+		self.assertIn("doc.selling_price_list", source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("doc.submit()", source)
 		self.assertNotIn("frappe.db.commit()", source)
 
-	def test_adapter_leaves_erpnext_in_charge_of_pricing_and_accounting(self):
+	def test_browser_cannot_supply_the_effective_price_list(self):
+		source = (APP_ROOT / "guided_sales_invoice.py").read_text()
+		self.assertIn("resolve_price_list_context", source)
+		self.assertNotIn('values.get("selling_price_list")', source)
+		self.assertNotIn('values.get("price_list")', source)
+
+	def test_adapter_leaves_accounting_and_pricing_rules_to_erpnext(self):
 		source = (APP_ROOT / "guided_sales_invoice.py").read_text()
 		self.assertNotIn("calculate_taxes_and_totals()", source)
 		self.assertNotIn("debit_to =", source)
 		self.assertNotIn("income_account", source)
 		self.assertNotIn("taxes_and_charges =", source)
 		self.assertNotIn("payment_schedule", source)
-		self.assertIn("pricing rules, taxes, totals, due date/payment schedule, and accounts", source)
+		self.assertIn("ERPNext pricing engine", source)
 
 	def test_guided_dialog_uses_shared_edgesuite_components_and_multiple_item_rows(self):
 		component = (
@@ -177,10 +234,13 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertIn('fieldname: "rate"', component)
 		self.assertIn("Add Item", component)
 		self.assertIn("searchLineLink", component)
+		self.assertIn("get_simple_sales_invoice_item_pricing", component)
+		self.assertIn("pricingCache: new Map()", component)
+		self.assertIn("Selling Price List", component)
 		self.assertNotIn("frappe.get_list", component)
 		self.assertNotIn("frappe.client.get_list", component)
 
-	def test_guided_dialog_cascades_customer_and_branch_changes(self):
+	def test_guided_dialog_cascades_customer_branch_and_pricing_changes(self):
 		component = (
 			APP_ROOT
 			/ "public"
@@ -189,8 +249,10 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 			/ "SimpleSalesInvoiceDialog.vue"
 		).read_text()
 		self.assertIn("setCustomer(next)", component)
-		self.assertIn('item_code: ""', component)
 		self.assertIn("setBranch(next)", component)
+		self.assertIn("setWarehouse(next)", component)
+		self.assertIn("refreshAllItemPricing", component)
+		self.assertIn("loadItemPricing(index)", component)
 		self.assertIn('this.values.warehouse = "";', component)
 		self.assertIn("customer: this.values.customer", component)
 		self.assertIn("branch: this.values.branch", component)
