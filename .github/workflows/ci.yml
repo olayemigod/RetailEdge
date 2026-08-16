@@ -168,6 +168,14 @@ jobs:
               tail -n 180 /tmp/retailedge-tests.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            grep -E '^(FAIL|ERROR):|Traceback|AssertionError|ImportError|TypeError|AttributeError|ModuleNotFoundError|FAILED|Ran [0-9]+ tests' /tmp/retailedge-tests.log \
+              | tail -n 80 \
+              | while IFS= read -r line; do
+                  line="${line//'%'/'%25'}"
+                  line="${line//$'\r'/'%0D'}"
+                  line="${line//$'\n'/'%0A'}"
+                  echo "::error title=RetailEdge test failure::${line}"
+                done
             exit 1
           fi
         env:
