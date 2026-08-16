@@ -86,7 +86,11 @@ def get_stock_movement_page_context() -> dict[str, Any]:
 	warehouse = ""
 
 	if company and frappe.has_permission("Company", "read", doc=company):
-		candidate = str(frappe.defaults.get_user_default("Branch") or "").strip()
+		candidate = str(
+			frappe.defaults.get_user_default("RetailEdge Branch")
+			or frappe.defaults.get_user_default("Branch")
+			or ""
+		).strip()
 		if candidate:
 			try:
 				validate_user_branch_access(candidate, user=user, company=company, throw=True)
@@ -147,18 +151,13 @@ def get_stock_movement_page(
 	"""
 	filters = _coerce_filters(filters)
 	validate_filters(filters)
+	_assert_report_access(filters)
 	warehouse_scope = resolve_warehouse_scope(filters)
 
 	item = get_item_details(filters.item_code)
 	conversion_map = get_conversion_map([filters.item_code], filters.get("compare_uom"))
 	opening_balance = get_opening_balance(filters, warehouse_scope)
 	stock_ledger_rows = _get_bounded_stock_ledger_rows(filters)
-	if len(stock_ledger_rows) > MAX_SCAN_ROWS:
-		frappe.throw(
-			_(
-				"More than {0} stock ledger rows match these filters. Narrow the date range before loading Stock Movement History."
-			).format(MAX_SCAN_ROWS)
-		)
 
 	opening_balance, stock_ledger_rows, opening_context = split_opening_stock_reconciliations(
 		filters,
@@ -280,7 +279,7 @@ def search_stock_movement_options(
 
 
 def _get_bounded_stock_ledger_rows(filters: frappe._dict) -> list[frappe._dict]:
-	rows = frappe.get_list(
+	raw_rows = frappe.get_list(
 		"Stock Ledger Entry",
 		filters={
 			"company": filters.company,
@@ -296,7 +295,38 @@ def _get_bounded_stock_ledger_rows(filters: frappe._dict) -> list[frappe._dict]:
 		order_by="posting_datetime asc, creation asc, name asc",
 		limit=MAX_SCAN_ROWS + 1,
 	)
-	return [row for row in rows if flt(row.actual_qty) or row.voucher_type == "Stock Reconciliation"]
+	if len(raw_rows) > MAX_SCAN_ROWS:
+		frappe.throw(
+			_(
+				"More than {0} stock ledger rows match these filters. "
+				"Narrow the date range before loading Stock Movement History."
+			).format(MAX_SCAN_ROWS)
+		)
+	return [
+		row
+		for row in raw_rows
+		if flt(row.actual_qty) or row.voucher_type == "Stock Reconciliation"
+	]
+
+
+def _assert_report_access(filters: frappe._dict) -> None:
+	for doctype, name in (
+		("Company", filters.company),
+		("Item", filters.item_code),
+		("Warehouse", filters.warehouse),
+	):
+		if not frappe.db.exists(doctype, name):
+			frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
+		if not frappe.has_permission(doctype, "read", doc=name):
+			frappe.throw(
+				_("You do not have permission to use {0} {1}.").format(doctype, name),
+				frappe.PermissionError,
+			)
+	if not frappe.has_permission("Stock Ledger Entry", "read"):
+		frappe.throw(
+			_("You do not have permission to view stock ledger movements."),
+			frappe.PermissionError,
+		)
 
 
 def _search_named_doctype(doctype: str, txt: str) -> list[dict[str, str]]:
