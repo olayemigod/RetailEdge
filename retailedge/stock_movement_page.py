@@ -143,48 +143,9 @@ def get_stock_movement_page(
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
 ) -> dict[str, Any]:
-	"""Return an accounting-safe, bounded and paginated stock movement slice.
-
-	The established RetailEdge report functions remain the calculation source of
-	truth. This API only bounds the Stock Ledger scan and slices the final payload.
-	If the selected period exceeds the safe scan cap, the user must narrow filters;
-	we never return a silently incomplete stock history.
-	"""
-	filters = _coerce_filters(filters)
-	validate_filters(filters)
-	_assert_report_access(filters)
-	warehouse_scope = resolve_warehouse_scope(filters)
-
-	item = get_item_details(filters.item_code)
-	conversion_map = get_conversion_map([filters.item_code], filters.get("compare_uom"))
-	opening_balance = get_opening_balance(filters, warehouse_scope)
-	stock_ledger_rows = _get_bounded_stock_ledger_rows(filters)
-
-	opening_balance, stock_ledger_rows, opening_context = split_opening_stock_reconciliations(
-		filters,
-		stock_ledger_rows,
-		opening_balance,
-	)
-	movement_rows = build_movement_rows(
-		stock_ledger_rows,
-		filters,
-		warehouse_scope,
-		item=item,
-		conversion_map=conversion_map,
-		opening_balance=opening_balance,
-	)
-	movement_rows = apply_display_filters(movement_rows, filters)
-	data = [
-		build_opening_balance_row(
-			filters,
-			item=item,
-			conversion_map=conversion_map,
-			opening_balance=opening_balance,
-			opening_context=opening_context,
-		),
-		*movement_rows,
-	]
-
+	"""Return an accounting-safe, bounded and paginated stock movement slice."""
+	result = _build_stock_movement_dataset(_coerce_filters(filters))
+	data = result["data"]
 	resolved_page_size = _page_size(page_size)
 	resolved_page = max(cint(page), 1)
 	total_rows = len(data)
@@ -194,9 +155,9 @@ def get_stock_movement_page(
 	end = start + resolved_page_size
 
 	return {
-		"columns": get_columns(filters),
+		"columns": result["columns"],
 		"rows": [_public_row(row) for row in data[start:end]],
-		"summary": get_report_summary(data),
+		"summary": result["summary"],
 		"pagination": {
 			"page": resolved_page,
 			"page_size": resolved_page_size,
@@ -205,10 +166,24 @@ def get_stock_movement_page(
 			"has_previous": resolved_page > 1,
 			"has_next": resolved_page < total_pages,
 		},
-		"scan": {
-			"ledger_rows": len(stock_ledger_rows),
-			"limit": MAX_SCAN_ROWS,
-		},
+		"scan": result["scan"],
+	}
+
+
+@frappe.whitelist()
+def get_stock_movement_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return the complete filtered page dataset for the shared EdgeSuite export runtime.
+
+	The same 1,000-row raw Stock Ledger safety cap used by the interactive page is
+	retained. Export therefore performs one bounded server calculation and never
+	loops through paginated browser requests or silently exports partial history.
+	"""
+	result = _build_stock_movement_dataset(_coerce_filters(filters))
+	return {
+		"columns": result["columns"],
+		"rows": [_public_row(row) for row in result["data"]],
+		"summary": result["summary"],
+		"scan": result["scan"],
 	}
 
 
@@ -277,6 +252,51 @@ def search_stock_movement_options(
 			for row in rows
 		]
 	frappe.throw(_("Unsupported Stock Movement search type."))
+
+
+def _build_stock_movement_dataset(filters: frappe._dict) -> dict[str, Any]:
+	validate_filters(filters)
+	_assert_report_access(filters)
+	warehouse_scope = resolve_warehouse_scope(filters)
+
+	item = get_item_details(filters.item_code)
+	conversion_map = get_conversion_map([filters.item_code], filters.get("compare_uom"))
+	opening_balance = get_opening_balance(filters, warehouse_scope)
+	stock_ledger_rows = _get_bounded_stock_ledger_rows(filters)
+
+	opening_balance, stock_ledger_rows, opening_context = split_opening_stock_reconciliations(
+		filters,
+		stock_ledger_rows,
+		opening_balance,
+	)
+	movement_rows = build_movement_rows(
+		stock_ledger_rows,
+		filters,
+		warehouse_scope,
+		item=item,
+		conversion_map=conversion_map,
+		opening_balance=opening_balance,
+	)
+	movement_rows = apply_display_filters(movement_rows, filters)
+	data = [
+		build_opening_balance_row(
+			filters,
+			item=item,
+			conversion_map=conversion_map,
+			opening_balance=opening_balance,
+			opening_context=opening_context,
+		),
+		*movement_rows,
+	]
+	return {
+		"columns": get_columns(filters),
+		"data": data,
+		"summary": get_report_summary(data),
+		"scan": {
+			"ledger_rows": len(stock_ledger_rows),
+			"limit": MAX_SCAN_ROWS,
+		},
+	}
 
 
 def _get_bounded_stock_ledger_rows(filters: frappe._dict) -> list[frappe._dict]:
