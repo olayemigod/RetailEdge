@@ -1,7 +1,15 @@
 export const BRANCH_WAREHOUSE_METHOD =
 	"retailedge.guided_entry_context.resolve_branch_warehouse_selection";
 
-export function callMethod(method, args = {}) {
+const PRICING_BATCH_METHODS = {
+	"retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing":
+		"retailedge.guided_pricing_api.get_sales_item_pricing_batch",
+	"retailedge.guided_purchase_invoice.get_simple_purchase_invoice_item_pricing":
+		"retailedge.guided_pricing_api.get_purchase_item_pricing_batch",
+};
+const pricingQueues = new Map();
+
+function rawCall(method, args = {}) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method,
@@ -10,6 +18,59 @@ export function callMethod(method, args = {}) {
 			error: (error) => reject(error),
 		});
 	});
+}
+
+function pricingContext(args = {}) {
+	if (!args.values || typeof args.values !== "object" || Array.isArray(args.values)) return null;
+	const values = { ...args.values };
+	delete values.qty;
+	return values;
+}
+
+function pricingQueueKey(method, values) {
+	return `${method}:${JSON.stringify(values)}`;
+}
+
+function flushPricingQueue(key) {
+	const queue = pricingQueues.get(key);
+	if (!queue) return;
+	pricingQueues.delete(key);
+	queue.timer = null;
+
+	const items = queue.entries.map((entry, index) => ({
+		index,
+		item_code: entry.args.item_code,
+		qty: entry.args.values?.qty || 1,
+	}));
+	rawCall(queue.batchMethod, { items, values: queue.values })
+		.then((result) => {
+			const rows = Array.isArray(result?.rows) ? result.rows : [];
+			const byIndex = new Map(rows.map((row) => [Number(row.index), row]));
+			queue.entries.forEach((entry, index) => entry.resolve(byIndex.get(index) || {}));
+		})
+		.catch((error) => queue.entries.forEach((entry) => entry.reject(error)));
+}
+
+function queuePricingCall(method, args, batchMethod, values) {
+	const key = pricingQueueKey(method, values);
+	return new Promise((resolve, reject) => {
+		let queue = pricingQueues.get(key);
+		if (!queue) {
+			queue = { method, batchMethod, values, entries: [], timer: null };
+			pricingQueues.set(key, queue);
+		}
+		queue.entries.push({ args, resolve, reject });
+		if (!queue.timer) queue.timer = setTimeout(() => flushPricingQueue(key), 0);
+	});
+}
+
+export function callMethod(method, args = {}) {
+	const batchMethod = PRICING_BATCH_METHODS[method];
+	const values = batchMethod ? pricingContext(args) : null;
+	if (batchMethod && values && args.item_code) {
+		return queuePricingCall(method, args, batchMethod, values);
+	}
+	return rawCall(method, args);
 }
 
 export function errorMessage(error, fallback) {
