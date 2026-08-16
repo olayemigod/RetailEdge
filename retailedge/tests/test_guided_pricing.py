@@ -47,21 +47,26 @@ class TestGuidedPricing(unittest.TestCase):
 		mock_valid,
 		mock_context,
 	):
-		mock_pos.return_value = {
-			"name": "POS-LAGOS",
-			"selling_price_list": "POS Retail",
-			"allow_rate_change": 0,
-		}
+		mock_pos.return_value = frappe._dict(
+			{
+				"name": "POS-LAGOS",
+				"selling_price_list": "POS Retail",
+				"allow_rate_change": 0,
+			}
+		)
 		mock_valid.return_value = True
-		mock_context.return_value = {
-			"price_list": "POS Retail",
-			"source": "pos_profile",
-			"currency": "NGN",
-			"mode": "selling",
-			"pos_profile": "",
-			"allow_rate_change": True,
-		}
-		result = resolve_price_list_context(
+		mock_context.side_effect = lambda *_args, **_kwargs: frappe._dict(
+			{
+				"price_list": "POS Retail",
+				"source": "pos_profile",
+				"currency": "NGN",
+				"mode": "selling",
+			}
+		)
+		# Bypass Frappe's request cache so this unit test exercises the resolver's
+		# POS-profile enrichment rather than any value cached earlier in the test request.
+		resolver = getattr(resolve_price_list_context, "__wrapped__", resolve_price_list_context)
+		result = resolver(
 			mode="selling",
 			company="Demo Company",
 			branch="Lagos",
