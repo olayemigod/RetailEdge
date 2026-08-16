@@ -85,7 +85,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: fix/edgeui-frappe-v16-menu-host
+          ref: agent/edgeui-theme-foundation
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
