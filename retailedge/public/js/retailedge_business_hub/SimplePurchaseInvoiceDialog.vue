@@ -39,10 +39,13 @@
 					:modelValue="values.supplier"
 					label="Supplier"
 					placeholder="Search supplier"
-					description="Only suppliers you can access are shown."
+					description="Only suppliers you can access are shown. Create a new Supplier here when permitted."
 					:required="true"
 					:searcher="searchSupplier"
 					:context="searchContext"
+					:canCreate="canCreateSupplier"
+					:creator="createSupplier"
+					createLabel="Create Supplier"
 					@update:modelValue="setSupplier"
 				/>
 
@@ -56,7 +59,7 @@
 					:modelValue="values.branch"
 					label="Branch"
 					placeholder="Search branch"
-					description="Changing branch clears the selected warehouse."
+					description="Selecting a Branch loads its preferred receiving warehouse when available."
 					:searcher="searchBranch"
 					:context="searchContext"
 					@update:modelValue="setBranch"
@@ -66,7 +69,7 @@
 					:modelValue="values.warehouse"
 					label="Warehouse"
 					placeholder="Search warehouse"
-					description="Required when Update Stock is enabled; otherwise optional."
+					description="Selecting an assigned Warehouse resolves its Branch automatically."
 					:required="Boolean(values.update_stock)"
 					:searcher="searchWarehouse"
 					:context="searchContext"
@@ -103,6 +106,10 @@
 				:columns="itemColumns"
 				:addLabel="'Add Item'"
 				:linkSearcher="searchLineLink"
+				:linkCanCreate="canCreateItemLink"
+				:linkCreator="createItemLink"
+				:linkCreateLabel="itemCreateLabel"
+				:newRowsFirst="true"
 				@update:rows="updateItems"
 			/>
 
@@ -146,6 +153,14 @@
 </template>
 
 <script>
+import {
+	callMethod,
+	errorMessage,
+	quickCreateItem,
+	quickCreateSupplier,
+	resolveBranchWarehouse,
+} from "./guidedEntryUtils";
+
 const CONTEXT_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
 const CREATE_METHOD = "retailedge.guided_purchase_invoice.create_simple_purchase_invoice_draft";
@@ -169,23 +184,6 @@ function emptyValues() {
 	};
 }
 
-function callMethod(method, args = {}) {
-	return new Promise((resolve, reject) => {
-		frappe.call({
-			method,
-			args,
-			callback: (response) => resolve(response.message || {}),
-			error: (error) => reject(error),
-		});
-	});
-}
-
-function errorMessage(error, fallback) {
-	if (error?.message) return error.message;
-	if (error?.exc_type) return error.exc_type;
-	return fallback;
-}
-
 export default {
 	name: "SimplePurchaseInvoiceDialog",
 	components: {
@@ -205,11 +203,12 @@ export default {
 			saving: false,
 			loadError: "",
 			saveError: "",
+			cascadeToken: 0,
 			formContext: {},
 			values: emptyValues(),
 			itemTableField: {
 				label: "Items",
-				description: "Add the products or services being purchased.",
+				description: "Newest item rows stay at the top for faster multi-item entry.",
 			},
 			itemColumns: [
 				{
@@ -232,10 +231,17 @@ export default {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
+		canCreateSupplier() {
+			return Boolean(this.formContext.capabilities?.can_create_supplier);
+		},
+		canCreateItem() {
+			return Boolean(this.formContext.capabilities?.can_create_item);
+		},
 		searchContext() {
 			return {
 				company: this.values.company,
 				branch: this.values.branch,
+				warehouse: this.values.warehouse,
 				supplier: this.values.supplier,
 			};
 		},
@@ -282,6 +288,7 @@ export default {
 				values: {
 					company: this.values.company,
 					branch: this.values.branch,
+					warehouse: this.values.warehouse,
 					supplier: this.values.supplier,
 				},
 			});
@@ -300,6 +307,19 @@ export default {
 			if (column?.fieldname !== "item_code") return Promise.resolve([]);
 			return this.searchOptions("item_code", query);
 		},
+		createSupplier(query) {
+			return quickCreateSupplier(query);
+		},
+		canCreateItemLink(column) {
+			return this.canCreateItem && column?.fieldname === "item_code";
+		},
+		createItemLink(column, query) {
+			if (column?.fieldname !== "item_code") return Promise.resolve(null);
+			return quickCreateItem(query);
+		},
+		itemCreateLabel(column) {
+			return column?.fieldname === "item_code" ? "Create Item" : "Create new";
+		},
 		setSupplier(next) {
 			const changed = Boolean(this.values.supplier && this.values.supplier !== next);
 			this.values.supplier = next || "";
@@ -311,14 +331,48 @@ export default {
 				}));
 			}
 		},
-		setBranch(next) {
-			if (this.values.branch !== (next || "")) {
-				this.values.branch = next || "";
-				this.values.warehouse = "";
+		async setBranch(next) {
+			const branch = next || "";
+			this.values.branch = branch;
+			this.values.warehouse = "";
+			if (!branch || !this.values.company) return;
+			const token = ++this.cascadeToken;
+			try {
+				const resolved = await resolveBranchWarehouse({
+					company: this.values.company,
+					branch,
+					preference: "purchase",
+				});
+				if (token !== this.cascadeToken) return;
+				this.values.branch = resolved.branch || branch;
+				this.values.warehouse = resolved.warehouse || "";
+			} catch (error) {
+				if (token === this.cascadeToken) {
+					this.saveError = errorMessage(error, "Unable to resolve the Branch warehouse.");
+				}
 			}
 		},
-		setWarehouse(next) {
-			this.values.warehouse = next || "";
+		async setWarehouse(next) {
+			const warehouse = next || "";
+			this.values.warehouse = warehouse;
+			if (!warehouse || !this.values.company) return;
+			const token = ++this.cascadeToken;
+			try {
+				const resolved = await resolveBranchWarehouse({
+					company: this.values.company,
+					branch: this.values.branch,
+					warehouse,
+					preference: "purchase",
+				});
+				if (token !== this.cascadeToken) return;
+				this.values.branch = resolved.branch || this.values.branch;
+				this.values.warehouse = resolved.warehouse || warehouse;
+			} catch (error) {
+				if (token === this.cascadeToken) {
+					this.values.warehouse = "";
+					this.saveError = errorMessage(error, "Unable to use the selected Warehouse.");
+				}
+			}
 		},
 		updateItems(nextRows) {
 			const previous = this.values.items || [];
