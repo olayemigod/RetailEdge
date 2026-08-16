@@ -32,6 +32,13 @@ class TestStockMovementEdgeUIPage(unittest.TestCase):
 		):
 			self.assertTrue(path.exists(), path)
 
+	def test_page_api_avoids_unavailable_month_start_helper(self):
+		source = self.read(PAGE_API)
+		self.assertNotIn("month_start", source)
+		self.assertIn("today = nowdate()", source)
+		self.assertIn('"from_date": f"{today[:7]}-01"', source)
+		self.assertIn('"to_date": today', source)
+
 	def test_page_api_is_hard_bounded_before_display_filtering(self):
 		source = self.read(PAGE_API)
 		for contract in (
