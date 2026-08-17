@@ -12,8 +12,8 @@ from frappe.utils import cint
 from frappe.utils.pdf import get_pdf
 from frappe.utils.xlsxutils import make_xlsx
 
-from retailedge.reporting_actions import get_report_export_data
-from retailedge.reporting_capabilities import require_reporting_action
+from retailedge.reporting_actions import get_report_dataset
+from retailedge.reporting_capabilities import require_report_action
 
 MIME_TYPES = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -222,8 +222,8 @@ def download_report(
 ):
     filters = _json_dict(filters)
     options = _normalize_options(options)
-    require_reporting_action(report_key, action="export", company=filters.get("company"), branch=filters.get("branch"))
-    dataset = get_report_export_data(report_key, filters)
+    require_report_action(report_key, action="export", company=filters.get("company"), branch=filters.get("branch"))
+    dataset = get_report_dataset(report_key, filters)
     columns, rows, summary = _normalise_dataset(dataset)
     columns = _select_columns(columns, options["columns"])
     rows = _slice_rows(rows, options, cint(start), cint(page_length))
@@ -248,8 +248,8 @@ def get_report_print_html(
     page_length: int | str = 50,
 ) -> dict:
     filters = _json_dict(filters)
-    require_reporting_action(report_key, action="print", company=filters.get("company"), branch=filters.get("branch"))
-    dataset = get_report_export_data(report_key, filters)
+    require_report_action(report_key, action="print", company=filters.get("company"), branch=filters.get("branch"))
+    dataset = get_report_dataset(report_key, filters)
     columns, rows, summary = _normalise_dataset(dataset)
     options = {
         "include_title": True,
@@ -259,6 +259,5 @@ def get_report_print_html(
         "include_letterhead": True,
         "repeat_table_headings": True,
     }
-    rows = _slice_rows(rows, {"scope": "all_filtered"}, cint(start), cint(page_length))
     title = str(dataset.get("title") or report_key.replace("-", " ").title())
     return {"html": _report_html(title, filters, _select_columns(columns, []), rows, summary, options), "title": title}
