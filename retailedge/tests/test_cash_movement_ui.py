@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
+COMPONENT = APP_ROOT / "public" / "js" / "cash_movement" / "CashMovementReport.vue"
 
 
 class TestCashMovementUI(unittest.TestCase):
@@ -22,23 +23,26 @@ class TestCashMovementUI(unittest.TestCase):
 		page = (
 			APP_ROOT / "retailedge" / "page" / "cash_movement" / "cash_movement.js"
 		).read_text()
+		bundle = (APP_ROOT / "public" / "js" / "cash_movement.bundle.js").read_text()
 		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page)
 		self.assertIn('const CASH_MOVEMENT_ASSET = "cash_movement.bundle.js"', page)
 		self.assertIn("hideNativePageSidebar", page)
 		self.assertIn("window.mountCashMovement", page)
+		self.assertIn('import CashMovement from "./cash_movement/CashMovementReport.vue"', bundle)
 
-	def test_frontend_uses_server_search_pagination_and_no_transaction_cache(self):
-		component = (APP_ROOT / "public" / "js" / "cash_movement" / "CashMovement.vue").read_text()
+	def test_frontend_uses_shared_report_shell_provider_and_server_search(self):
+		component = COMPONENT.read_text()
 		self.assertIn("EdgeAppShell", component)
+		self.assertIn("EdgeReportShell", component)
 		self.assertIn("EdgeLinkField", component)
 		self.assertIn("EdgeExportMenu", component)
 		self.assertIn("search_cash_movement_options", component)
-		self.assertIn("25 / page", component)
-		self.assertIn("50 / page", component)
-		self.assertIn("100 / page", component)
+		self.assertIn(':pageSizes="[25, 50, 100]"', component)
 		self.assertIn("Posted accounting entries only", component)
+		self.assertIn("this.reportProvider.load", component)
 		self.assertIn("this.filters.branch = \"\"", component)
 		self.assertIn("this.filters.account = \"\"", component)
+		self.assertNotIn("<table", component)
 		self.assertNotIn("localStorage", component)
 		self.assertNotIn("sessionStorage", component)
 
@@ -56,13 +60,16 @@ class TestCashMovementUI(unittest.TestCase):
 		self.assertNotIn("for (let page", bundle)
 		self.assertNotIn("setInterval(", bundle)
 
-	def test_frontend_exposes_no_party_or_staff_filters(self):
-		component = (APP_ROOT / "public" / "js" / "cash_movement" / "CashMovement.vue").read_text()
+	def test_frontend_preserves_accounting_scope_and_drilldown(self):
+		component = COMPONENT.read_text()
 		self.assertNotIn("Party Name", component)
 		self.assertNotIn("Cashier", component)
 		self.assertNotIn("Employee", component)
 		self.assertIn("Cash / Bank Account", component)
 		self.assertIn("Movement Type", component)
+		self.assertIn("Posted ERPNext General Ledger Cash/Bank entries", component)
+		self.assertIn('column.fieldname === "voucher_no"', component)
+		self.assertIn('frappe.set_route("Form", row.voucher_type, row.voucher_no)', component)
 
 
 if __name__ == "__main__":
