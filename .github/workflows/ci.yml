@@ -160,6 +160,7 @@ jobs:
           grep -Eq 'stock_position\.bundle' sites/assets/assets.json
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
           grep -Eq 'createPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
+          grep -Eq 'createBoundedPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
 
       - name: Run RetailEdge tests
         working-directory: frappe-bench
