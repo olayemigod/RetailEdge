@@ -31,12 +31,12 @@ _ALLOWED_ROLES = {
 	"RetailEdgeAuditor",
 }
 _ACCOUNT_TYPES = ("Cash", "Bank")
-_MOVEMENT_TYPES = ("Money In", "Money Out", "Transfer", "Adjustment", "Other")
-_BRANCH_VOUCHER_DOCTYPES = (
-	"Payment Entry",
-	"Sales Invoice",
-	"POS Invoice",
-	"Purchase Invoice",
+_MOVEMENT_TYPES = ("Money In", "Money Out", "Transfer", "Adjustment")
+_BRANCH_VOUCHER_SPECS = (
+	("Payment Entry", "pe"),
+	("Sales Invoice", "si"),
+	("POS Invoice", "posi"),
+	("Purchase Invoice", "pi"),
 )
 
 
@@ -168,9 +168,10 @@ def get_cash_movement_export(filters: dict[str, Any] | str | None = None) -> dic
 	rows = _query_rows(query, limit=MAX_EXPORT_ROWS + 1, offset=0)
 	if len(rows) > MAX_EXPORT_ROWS:
 		frappe.throw(
-			_("More than {0} cash movements match this export. Narrow the date, Branch, Account, or Movement Type filters first.").format(
-				MAX_EXPORT_ROWS
-			)
+			_(
+				"More than {0} cash movements match this export. "
+				"Narrow the date, Branch, Account, or Movement Type filters first."
+			).format(MAX_EXPORT_ROWS)
 		)
 	summary = _query_summary(query)
 	return {
@@ -214,7 +215,7 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 
 	requested_branch = str(filters.get("branch") or "").strip()
 	branch_scope = _resolve_branch_scope(company=company, requested_branch=requested_branch)
-	sql_context = _build_sql_context()
+	sql_context = _get_sql_context()
 	where_sql, values = _build_where_sql(
 		company=company,
 		from_date=from_date,
@@ -244,7 +245,6 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 def _query_rows(query: dict[str, Any], *, limit: int, offset: int) -> list[dict[str, Any]]:
 	sql = f"""
 		SELECT
-			gle.name AS gl_entry,
 			gle.posting_date,
 			gle.account,
 			gle.voucher_type,
@@ -262,14 +262,17 @@ def _query_rows(query: dict[str, Any], *, limit: int, offset: int) -> list[dict[
 		ORDER BY gle.posting_date DESC, gle.creation DESC, gle.name DESC
 		LIMIT %s OFFSET %s
 	"""
-	values = [*query["values"], cint(limit), cint(offset)]
-	rows = frappe.db.sql(sql, values=values, as_dict=True)
+	rows = frappe.db.sql(
+		sql,
+		values=[*query["values"], cint(limit), cint(offset)],
+		as_dict=True,
+	)
 	return [
 		{
 			"posting_date": row.posting_date,
 			"account": row.account,
 			"branch": row.branch or "",
-			"movement_type": row.movement_type or "Other",
+			"movement_type": row.movement_type or "",
 			"payment_method": row.payment_method or "",
 			"money_in": flt(row.money_in),
 			"money_out": flt(row.money_out),
@@ -295,70 +298,67 @@ def _query_summary(query: dict[str, Any]) -> dict[str, Any]:
 		WHERE {query['where_sql']}
 	"""
 	rows = frappe.db.sql(sql, values=query["values"], as_dict=True)
-	return dict(rows[0]) if rows else {
-		"movement_count": 0,
-		"money_in": 0,
-		"money_out": 0,
-		"net_change": 0,
-		"account_count": 0,
-	}
+	return (
+		dict(rows[0])
+		if rows
+		else {
+			"movement_count": 0,
+			"money_in": 0,
+			"money_out": 0,
+			"net_change": 0,
+			"account_count": 0,
+		}
+	)
+
+
+def _get_sql_context() -> dict[str, str]:
+	cached = getattr(frappe.local, "retailedge_cash_movement_sql_context", None)
+	if cached is None:
+		cached = _build_sql_context()
+		frappe.local.retailedge_cash_movement_sql_context = cached
+	return cached
 
 
 def _build_sql_context() -> dict[str, str]:
 	joins: list[str] = []
 	branch_parts: list[str] = []
-	payment_method_expression = "''"
-	payment_type_expression = "''"
+	joined_aliases: set[str] = set()
 
-	for doctype in _BRANCH_VOUCHER_DOCTYPES:
-		if not _doctype_has_branch_field(doctype):
+	for doctype, alias in _BRANCH_VOUCHER_SPECS:
+		if not _doctype_has_field(doctype, "retailedge_branch"):
 			continue
-		alias = {
-			"Payment Entry": "pe",
-			"Sales Invoice": "si",
-			"POS Invoice": "posi",
-			"Purchase Invoice": "pi",
-		}[doctype]
-		table = frappe.db.escape(doctype, percent=False)
 		joins.append(
-			f"LEFT JOIN `tab{table}` {alias} ON gle.voucher_type = %s AND gle.voucher_no = {alias}.name"
+			f"LEFT JOIN `tab{doctype}` {alias} "
+			f"ON gle.voucher_type = '{doctype}' AND gle.voucher_no = {alias}.name"
 		)
+		joined_aliases.add(alias)
 		branch_parts.append(f"NULLIF({alias}.retailedge_branch, '')")
 
+	payment_type_expression = "''"
+	payment_method_expression = "''"
 	if _doctype_has_field("Payment Entry", "payment_type"):
-		if not any(" pe " in f" {join} " for join in joins):
-			table = frappe.db.escape("Payment Entry", percent=False)
+		if "pe" not in joined_aliases:
 			joins.append(
-				f"LEFT JOIN `tab{table}` pe ON gle.voucher_type = %s AND gle.voucher_no = pe.name"
+				"LEFT JOIN `tabPayment Entry` pe "
+				"ON gle.voucher_type = 'Payment Entry' AND gle.voucher_no = pe.name"
 			)
 		payment_type_expression = "COALESCE(pe.payment_type, '')"
 		if _doctype_has_field("Payment Entry", "mode_of_payment"):
 			payment_method_expression = "COALESCE(pe.mode_of_payment, '')"
 
-	# The voucher type placeholders are constant trusted values and are interpolated
-	# below before execution so branch/account/user inputs always remain bound values.
-	joined = "\n".join(joins)
-	join_values: list[str] = []
-	for doctype in _BRANCH_VOUCHER_DOCTYPES:
-		if _doctype_has_branch_field(doctype):
-			join_values.append(doctype)
-	if _doctype_has_field("Payment Entry", "payment_type") and "Payment Entry" not in join_values:
-		join_values.append("Payment Entry")
-	for value in join_values:
-		joined = joined.replace("%s", frappe.db.escape(value), 1)
-
 	branch_expression = f"COALESCE({', '.join(branch_parts)}, '')" if branch_parts else "''"
 	movement_expression = f"""
 		CASE
-			WHEN gle.voucher_type = 'Payment Entry' AND {payment_type_expression} = 'Internal Transfer' THEN 'Transfer'
+			WHEN gle.voucher_type = 'Payment Entry'
+				AND {payment_type_expression} = 'Internal Transfer' THEN 'Transfer'
 			WHEN gle.voucher_type = 'Journal Entry' THEN 'Adjustment'
 			WHEN (gle.debit - gle.credit) > 0 THEN 'Money In'
 			WHEN (gle.debit - gle.credit) < 0 THEN 'Money Out'
-			ELSE 'Other'
+			ELSE ''
 		END
 	""".strip()
 	return {
-		"joins": joined,
+		"joins": "\n".join(joins),
 		"branch_expression": branch_expression,
 		"movement_expression": movement_expression,
 		"payment_method_expression": payment_method_expression,
@@ -517,8 +517,6 @@ def _search_cash_accounts(*, txt: str, company: str) -> list[dict[str, Any]]:
 
 
 def _assert_cash_account(*, account: str, company: str) -> None:
-	if not frappe.has_permission("Account", "read", doc=account):
-		frappe.throw(_("You do not have permission to use Account {0}.").format(account), frappe.PermissionError)
 	row = frappe.db.get_value(
 		"Account",
 		account,
@@ -527,8 +525,16 @@ def _assert_cash_account(*, account: str, company: str) -> None:
 	)
 	if not row:
 		frappe.throw(_("Account {0} does not exist.").format(account))
+	if not frappe.has_permission("Account", "read", doc=account):
+		frappe.throw(
+			_("You do not have permission to use Account {0}.").format(account),
+			frappe.PermissionError,
+		)
 	if row.company != company:
-		frappe.throw(_("Account {0} is outside Company {1}.").format(account, company), frappe.PermissionError)
+		frappe.throw(
+			_("Account {0} is outside Company {1}.").format(account, company),
+			frappe.PermissionError,
+		)
 	if row.account_type not in _ACCOUNT_TYPES or cint(row.is_group) or cint(row.disabled):
 		frappe.throw(_("Account {0} is not an active Cash or Bank ledger account.").format(account))
 
@@ -544,28 +550,54 @@ def _columns() -> list[dict[str, Any]]:
 		{"label": _("Money Out"), "fieldname": "money_out", "type": "Currency"},
 		{"label": _("Net Change"), "fieldname": "net_change", "type": "Currency"},
 		{"label": _("Source Type"), "fieldname": "voucher_type", "type": "Data"},
-		{"label": _("Source"), "fieldname": "voucher_no", "type": "Dynamic Link", "options": "voucher_type"},
+		{
+			"label": _("Source"),
+			"fieldname": "voucher_no",
+			"type": "Dynamic Link",
+			"options": "voucher_type",
+		},
 	]
 
 
 def _summary_cards(summary: dict[str, Any], *, currency: str) -> list[dict[str, Any]]:
 	return [
-		{"label": _("Money In"), "value": flt(summary.get("money_in")), "type": "Currency", "currency": currency},
-		{"label": _("Money Out"), "value": flt(summary.get("money_out")), "type": "Currency", "currency": currency},
-		{"label": _("Net Change"), "value": flt(summary.get("net_change")), "type": "Currency", "currency": currency},
+		{
+			"label": _("Money In"),
+			"value": flt(summary.get("money_in")),
+			"type": "Currency",
+			"currency": currency,
+		},
+		{
+			"label": _("Money Out"),
+			"value": flt(summary.get("money_out")),
+			"type": "Currency",
+			"currency": currency,
+		},
+		{
+			"label": _("Net Change"),
+			"value": flt(summary.get("net_change")),
+			"type": "Currency",
+			"currency": currency,
+		},
 		{"label": _("Movements"), "value": cint(summary.get("movement_count")), "type": "Int"},
 	]
 
 
-def _doctype_has_branch_field(doctype: str) -> bool:
-	return _doctype_has_field(doctype, "retailedge_branch")
-
-
 def _doctype_has_field(doctype: str, fieldname: str) -> bool:
-	try:
-		return bool(frappe.db.exists("DocType", doctype) and frappe.get_meta(doctype).has_field(fieldname))
-	except Exception:
-		return False
+	cache = getattr(frappe.local, "retailedge_cash_movement_meta_cache", None)
+	if cache is None:
+		cache = {}
+		frappe.local.retailedge_cash_movement_meta_cache = cache
+	key = (doctype, fieldname)
+	if key not in cache:
+		try:
+			cache[key] = bool(
+				frappe.db.exists("DocType", doctype)
+				and frappe.get_meta(doctype).has_field(fieldname)
+			)
+		except Exception:
+			cache[key] = False
+	return cache[key]
 
 
 def _assert_cash_movement_access() -> None:
@@ -578,7 +610,10 @@ def _assert_company_read_access(company: str) -> None:
 	if not frappe.db.exists("Company", company):
 		frappe.throw(_("Company {0} does not exist.").format(company))
 	if not frappe.has_permission("Company", "read", doc=company):
-		frappe.throw(_("You do not have permission to use Company {0}.").format(company), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use Company {0}.").format(company),
+			frappe.PermissionError,
+		)
 
 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
