@@ -45,17 +45,27 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 	frappe.throw(_("Unsupported RetailEdge report export scope."))
 
 
+def get_report_dataset(
+	report_key: str,
+	filters: dict[str, Any] | str | None = None,
+) -> dict[str, Any]:
+	"""Return the existing report-owned bounded dataset after caller authorization.
+
+	This function intentionally performs no action authorization of its own. Callers
+	must first enforce View, Print or Export as appropriate. The underlying report
+	backend still reapplies company, branch, role, cost-visibility and row permissions.
+	"""
+	resolved_filters = _coerce_filters(filters)
+	handler = _export_handler(report_key)
+	return handler(filters=resolved_filters)
+
+
 @frappe.whitelist()
 def get_report_export_data(
 	report_key: str,
 	filters: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
-	"""Return a permission-checked bounded export dataset for one RetailEdge report.
-
-	The report's existing backend remains authoritative for row-level permissions,
-	company/branch scoping, cost visibility and safety caps. This wrapper adds the
-	independent bulk-export authorization required by the EdgeSuite shell contract.
-	"""
+	"""Return a permission-checked bounded export dataset for one RetailEdge report."""
 	resolved_filters = _coerce_filters(filters)
 	company = cstr(resolved_filters.get("company") or "").strip()
 	branch = cstr(resolved_filters.get("branch") or "").strip()
@@ -65,8 +75,7 @@ def get_report_export_data(
 		company=company,
 		branch=branch,
 	)
-	handler = _export_handler(report_key)
-	return handler(filters=resolved_filters)
+	return get_report_dataset(report_key, resolved_filters)
 
 
 @frappe.whitelist()
