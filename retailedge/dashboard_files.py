@@ -22,15 +22,17 @@ from retailedge.reporting_files import (
 )
 from retailedge.salesperson_performance_dashboard import _build_salesperson_dashboard_dataset
 
-DashboardHandler = Callable[[dict], dict]
+DashboardHandler = Callable[[dict, bool], dict]
 
 
 def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	handlers: dict[str, DashboardHandler] = {
-		"branch-performance": lambda filters: get_branch_performance_dashboard_data(filters=filters),
-		"salesperson-performance": lambda filters: _build_salesperson_dashboard_dataset(
+		"branch-performance": lambda filters, _all_filtered: get_branch_performance_dashboard_data(
+			filters=filters
+		),
+		"salesperson-performance": lambda filters, all_filtered: _build_salesperson_dashboard_dataset(
 			filters,
-			export_mode=True,
+			export_mode=all_filtered,
 		),
 	}
 	handler = handlers.get(scope_key)
@@ -39,8 +41,8 @@ def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	return handler
 
 
-def get_dashboard_dataset(scope_key: str, filters: dict) -> dict:
-	return _dashboard_handler(scope_key)(filters)
+def get_dashboard_dataset(scope_key: str, filters: dict, *, all_filtered: bool = True) -> dict:
+	return _dashboard_handler(scope_key)(filters, all_filtered)
 
 
 @frappe.whitelist()
@@ -53,7 +55,11 @@ def download_dashboard(scope_key: str, filters=None, options=None):
 		company=filters.get("company"),
 		branch=filters.get("branch"),
 	)
-	dataset = get_dashboard_dataset(scope_key, filters)
+	dataset = get_dashboard_dataset(
+		scope_key,
+		filters,
+		all_filtered=options["scope"] == "all_filtered",
+	)
 	columns, rows, summary = _normalise_dataset(dataset)
 	columns = _select_columns(columns, options["columns"])
 	title = str(dataset.get("title") or scope_key.replace("-", " ").title())
@@ -80,7 +86,7 @@ def get_dashboard_print_html(scope_key: str, filters=None) -> dict:
 		company=filters.get("company"),
 		branch=filters.get("branch"),
 	)
-	dataset = get_dashboard_dataset(scope_key, filters)
+	dataset = get_dashboard_dataset(scope_key, filters, all_filtered=True)
 	columns, rows, summary = _normalise_dataset(dataset)
 	options = {
 		"include_title": True,
