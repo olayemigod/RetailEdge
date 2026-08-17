@@ -130,6 +130,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"label": "Money",
 		"icon": "wallet",
 		"items": (
+			{"label": "Cash Movement", "target_type": "Page", "target": "cash-movement", "icon": "report"},
 			{"label": "Payments", "target_type": "DocType", "target": "Payment Entry", "icon": "wallet"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet"},
 			{"label": "Import Bank Statement", "target_type": "DocType", "target": "RetailEdge Payment Statement Import", "icon": "upload"},
