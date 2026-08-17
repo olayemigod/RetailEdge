@@ -3,7 +3,7 @@ import ExpenseRegisterReport from "./expense_register/ExpenseRegisterReport.vue"
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "expense-register";
 const PAGE_METHOD = "retailedge.expense_register.get_expense_register";
-const EXPORT_METHOD = "retailedge.expense_register.get_expense_register_export";
+const EXPORT_METHOD = "retailedge.reporting_actions.get_report_export_data";
 
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => {
@@ -48,7 +48,7 @@ function registerExpenseRegisterProvider(target = window) {
 			};
 		},
 		exportReport: async ({ filters = {} } = {}) =>
-			callMethod(EXPORT_METHOD, { filters: { ...filters } }),
+			callMethod(EXPORT_METHOD, { report_key: REPORT_KEY, filters: { ...filters } }),
 	});
 
 	reports.registerProvider(REPORT_PRODUCT, REPORT_KEY, provider);
