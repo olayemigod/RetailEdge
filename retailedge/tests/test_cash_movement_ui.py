@@ -56,7 +56,8 @@ class TestCashMovementUI(unittest.TestCase):
 		self.assertIn("maxPageLength: 100", bundle)
 		self.assertIn("Math.floor", bundle)
 		self.assertIn("get_cash_movement", bundle)
-		self.assertIn("get_cash_movement_export", bundle)
+		self.assertIn("retailedge.reporting_actions.get_report_export_data", bundle)
+		self.assertNotIn('EXPORT_METHOD = "retailedge.cash_movement.get_cash_movement_export"', bundle)
 		self.assertNotIn("for (let page", bundle)
 		self.assertNotIn("setInterval(", bundle)
 
