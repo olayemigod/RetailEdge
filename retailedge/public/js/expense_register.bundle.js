@@ -1,4 +1,4 @@
-import ExpenseRegister from "./expense_register/ExpenseRegister.vue";
+import ExpenseRegisterReport from "./expense_register/ExpenseRegisterReport.vue";
 
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "expense-register";
@@ -63,17 +63,17 @@ function mountExpenseRegister(target) {
 	}
 	if (!target) throw new Error("Expense Register mount target is required.");
 	registerExpenseRegisterProvider(window);
-	const app = edgeUI.createEdgeApp(ExpenseRegister);
+	const app = edgeUI.createEdgeApp(ExpenseRegisterReport);
 	app.mount(target);
 	return app;
 }
 
 if (typeof window !== "undefined") {
 	registerExpenseRegisterProvider(window);
-	window.ExpenseRegister = ExpenseRegister;
+	window.ExpenseRegister = ExpenseRegisterReport;
 	window.mountExpenseRegister = mountExpenseRegister;
 	window.registerExpenseRegisterProvider = registerExpenseRegisterProvider;
 }
 
 export { mountExpenseRegister, registerExpenseRegisterProvider };
-export default ExpenseRegister;
+export default ExpenseRegisterReport;
