@@ -24,6 +24,8 @@ _SALES_MANAGER_ROLES = {"Sales Manager"}
 _STOCK_MANAGER_ROLES = {"Stock Manager"}
 _ACCOUNTS_MANAGER_ROLES = {"Accounts Manager"}
 _ACCOUNTS_USER_ROLES = {"Accounts User"}
+_PURCHASE_MANAGER_ROLES = {"Purchase Manager"}
+_PURCHASE_USER_ROLES = {"Purchase User"}
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,22 @@ _REPORT_SPECS = {
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES),
 		ref_doctype="Sales Invoice",
+	),
+	"purchase-register": ReportCapabilitySpec(
+		key="purchase-register",
+		label="Purchase Register",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _PURCHASE_USER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Purchase Invoice",
+	),
+	"supplier-payables": ReportCapabilitySpec(
+		key="supplier-payables",
+		label="Supplier Payables",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _PURCHASE_USER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Purchase Invoice",
 	),
 	"stock-position": ReportCapabilitySpec(
 		key="stock-position",
