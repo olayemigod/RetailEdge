@@ -22,8 +22,15 @@
 			:summary="summary"
 			:loading="loading || metadataLoading"
 			:error="error"
+			:exportEnabled="rows.length > 0 && capabilities.can_export"
+			:printEnabled="rows.length > 0 && capabilities.can_print"
+			:exportBusy="exportBusy"
+			:printBusy="printBusy"
+			:exportInitialOptions="exportOptions"
 			loadingMessage="Building branch performance view…"
 			@retry="fetchData"
+			@export="handleExport"
+			@print="handlePrint"
 		>
 			<template #actions>
 				<button type="button" class="edge-button edge-button--secondary" @click="openDetailReport">
@@ -80,7 +87,15 @@
 </template>
 
 <script>
+import {
+	defaultDashboardExportOptions,
+	exportDashboard,
+	getDashboardCapabilities,
+	printDashboard,
+} from "../retailedge_dashboard_actions";
+
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField"];
+const DASHBOARD_KEY = "branch-performance";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
@@ -94,6 +109,9 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
+			exportBusy: false, printBusy: false,
+			capabilities: { can_view: true, can_print: false, can_export: false },
+			exportOptions: defaultDashboardExportOptions(),
 			rows: [], columns: [], summary: [], messages: [], menuItems: [], tenantName: "", userName: "", paymentMethods: [],
 			datePresets: ["This Month", "Today", "Yesterday", "This Week", "This Quarter", "This Year", "Last Week", "Last Month", "Last Quarter", "Last Year", "Custom Period", "Full Branch History"],
 			filters: { company: "", branch: "", pos_profile: "", cashier: "", date_range_preset: "This Month", from_date: "", to_date: "", payment_method: "", only_pos_invoices: 0, include_unattributed: 1, include_fallback_branch_resolution: 0 },
@@ -121,6 +139,7 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.branch_performance_dashboard.get_branch_performance_dashboard_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.paymentMethods = context.payment_methods || [];
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
@@ -134,7 +153,20 @@ export default {
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, posProfileSearch(txt) { return this.searchOptions("pos_profile", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); },
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.pos_profile = ""; }, onBranchSelected(option) { this.filters.branch = option.value; }, clearBranch() { this.filters.branch = ""; }, onPosProfileSelected(option) { this.filters.pos_profile = option.value; }, clearPosProfile() { this.filters.pos_profile = ""; }, onCashierSelected(option) { this.filters.cashier = option.value; }, clearCashier() { this.filters.cashier = ""; },
 		onPresetChange() { if (this.filters.date_range_preset === "Custom Period") return; const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset); if (dates) { this.filters.from_date = dates.from_date || ""; this.filters.to_date = dates.to_date || ""; } },
-		async fetchData() { if (!this.filters.company) return; this.loading = true; this.error = ""; try { const result = await callMethod("retailedge.branch_performance_dashboard.get_branch_performance_dashboard_data", { filters: this.filters }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.messages = result.messages || []; } catch (error) { this.rows = []; this.summary = []; this.error = errorMessage(error, "Branch Performance failed to load."); } finally { this.loading = false; } },
+		async fetchData() {
+			if (!this.filters.company) return;
+			this.loading = true; this.error = "";
+			try {
+				const [result, capabilities] = await Promise.all([
+					callMethod("retailedge.branch_performance_dashboard.get_branch_performance_dashboard_data", { filters: this.filters }),
+					getDashboardCapabilities(DASHBOARD_KEY, this.filters),
+				]);
+				this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.messages = result.messages || []; this.capabilities = capabilities || this.capabilities;
+			} catch (error) { this.rows = []; this.summary = []; this.error = errorMessage(error, "Branch Performance failed to load."); }
+			finally { this.loading = false; }
+		},
+		async handleExport(options) { if (!this.capabilities.can_export) return; this.exportBusy = true; try { await exportDashboard(DASHBOARD_KEY, this.filters, options); } catch (error) { frappe.msgprint({ title: __("Dashboard Export Failed"), message: errorMessage(error, "The dashboard could not be exported."), indicator: "red" }); } finally { this.exportBusy = false; } },
+		async handlePrint() { if (!this.capabilities.can_print) return; this.printBusy = true; try { await printDashboard(DASHBOARD_KEY, this.filters); } catch (error) { frappe.msgprint({ title: __("Dashboard Print Failed"), message: errorMessage(error, "The dashboard print view could not be prepared."), indicator: "red" }); } finally { this.printBusy = false; } },
 		focusBranch(branch) { this.filters.branch = branch === "Unattributed" ? "" : branch; this.fetchData(); },
 		openCell(payload) { if (payload?.column?.fieldname === "branch") this.focusBranch(payload.value); },
 		openDetailReport() { frappe.set_route("query-report", "RetailEdge Branch Performance Summary"); },
