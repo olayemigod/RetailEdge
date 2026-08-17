@@ -3,7 +3,7 @@ import StockPositionReport from "./stock_position/StockPositionReport.vue";
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "stock-position";
 const PAGE_METHOD = "retailedge.stock_position.get_stock_position";
-const EXPORT_METHOD = "retailedge.stock_position.get_stock_position_export";
+const EXPORT_METHOD = "retailedge.reporting_actions.get_report_export_data";
 
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => {
@@ -52,7 +52,7 @@ function registerStockPositionProvider(target = window) {
 			};
 		},
 		exportReport: async ({ filters = {} } = {}) =>
-			callMethod(EXPORT_METHOD, { filters: { ...filters } }),
+			callMethod(EXPORT_METHOD, { report_key: REPORT_KEY, filters: { ...filters } }),
 	});
 
 	reports.registerProvider(REPORT_PRODUCT, REPORT_KEY, provider);
