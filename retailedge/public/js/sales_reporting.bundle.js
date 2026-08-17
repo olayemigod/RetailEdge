@@ -1,4 +1,4 @@
-import SalesReportingPage from "./sales_reporting/SalesReportingPage.vue";
+import SalesReportingReport from "./sales_reporting/SalesReportingReport.vue";
 
 const REPORT_PRODUCT = "RetailEdge";
 const SALES_REPORT_PROVIDERS = Object.freeze({
@@ -78,7 +78,7 @@ function mountSalesReportingPage(target, options = {}) {
 	}
 	if (!target) throw new Error("Sales reporting mount target is required.");
 	registerSalesReportingProviders(window);
-	const app = edgeUI.createEdgeApp(SalesReportingPage, {
+	const app = edgeUI.createEdgeApp(SalesReportingReport, {
 		reportType: options.reportType || "sales_by_item",
 	});
 	app.mount(target);
@@ -87,10 +87,10 @@ function mountSalesReportingPage(target, options = {}) {
 
 if (typeof window !== "undefined") {
 	registerSalesReportingProviders(window);
-	window.SalesReportingPage = SalesReportingPage;
+	window.SalesReportingPage = SalesReportingReport;
 	window.mountSalesReportingPage = mountSalesReportingPage;
 	window.registerSalesReportingProviders = registerSalesReportingProviders;
 }
 
 export { mountSalesReportingPage, registerSalesReportingProviders };
-export default SalesReportingPage;
+export default SalesReportingReport;
