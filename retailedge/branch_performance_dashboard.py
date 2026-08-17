@@ -5,16 +5,11 @@ from frappe import _
 from frappe.utils import cstr
 
 from retailedge.branch_context import get_branch_query_filters
-from retailedge.branch_performance import (
-	_coerce_filters,
-	assert_can_access_branch_performance,
-	get_branch_performance_rows,
-)
+from retailedge.branch_performance import _coerce_filters, assert_can_access_branch_performance
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.reporting.date_ranges import get_preset_dates
 from retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary import (
-	get_columns,
-	get_report_summary,
+	execute as execute_branch_performance_report,
 )
 
 DASHBOARD_KEY = "branch-performance"
@@ -41,12 +36,9 @@ def _assert_company(company: str) -> None:
 		frappe.throw(_("You do not have access to this Company."), frappe.PermissionError)
 
 
-def _format_summary(rows: list[dict]) -> list[dict]:
+def _format_summary(summary: list[dict]) -> list[dict]:
 	tones = {"Red": "danger", "Orange": "warning", "Green": "success", "Blue": "info"}
-	return [
-		{**card, "tone": tones.get(card.get("indicator"), "neutral")}
-		for card in get_report_summary(rows)
-	]
+	return [{**card, "tone": tones.get(card.get("indicator"), "neutral")} for card in summary]
 
 
 @frappe.whitelist()
@@ -89,21 +81,23 @@ def get_branch_performance_dashboard_data(filters=None) -> dict:
 		company=filters.get("company"),
 		branch=filters.get("branch"),
 	)
-	rows = get_branch_performance_rows(filters)
+	columns, rows, message, _chart, summary = execute_branch_performance_report(filters)
 	messages = []
+	if message:
+		messages.append(message)
 	for row in rows:
-		for message in row.get("messages") or []:
-			if message and message not in messages:
-				messages.append(message)
+		for row_message in row.get("messages") or []:
+			if row_message and row_message not in messages:
+				messages.append(row_message)
 	return {
 		"title": _("Branch Performance"),
-		"columns": get_columns(),
+		"columns": columns,
 		"rows": rows,
-		"summary": _format_summary(rows),
+		"summary": _format_summary(summary),
 		"messages": messages,
 		"filters": dict(filters),
 		"metadata": {
-			"source": "RetailEdge Branch Performance engine",
+			"source": "RetailEdge Branch Performance Summary",
 			"detail_report": "RetailEdge Branch Performance Summary",
 			"accounting_truth": "Submitted ERPNext sales and posted RetailEdge control records",
 		},
