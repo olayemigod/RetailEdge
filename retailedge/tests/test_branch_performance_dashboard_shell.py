@@ -19,18 +19,31 @@ LEGACY_REPORT = (
 )
 
 
-def test_dashboard_reuses_existing_branch_performance_engine():
+def test_dashboard_reuses_native_branch_performance_report_execute_contract():
 	source = DASHBOARD_API.read_text()
-	assert "get_branch_performance_rows" in source
-	assert "get_report_summary" in source
-	assert "get_columns" in source
+	assert "execute as execute_branch_performance_report" in source
+	assert "columns, rows, message, _chart, summary = execute_branch_performance_report(filters)" in source
+	assert '"columns": columns' in source
+	assert '"rows": rows' in source
+	assert '"summary": _format_summary(summary)' in source
+	assert "get_branch_performance_rows" not in source
+	assert "get_report_summary" not in source
+	assert "get_columns" not in source
 	assert "assert_can_access_branch_performance()" in source
-	assert 'require_dashboard_action(DASHBOARD_KEY, "view"' in source
+	assert 'require_dashboard_action(\n\t\tDASHBOARD_KEY,\n\t\t"view"' in source
 	assert "frappe.get_list" in source
 	assert "MAX_LINK_RESULTS = 20" in source
 	assert "frappe.get_all" not in source
 	assert "ignore_permissions" not in source
 	assert "frappe.db.commit()" not in source
+
+
+def test_native_report_derives_bank_sales_before_dashboard_consumes_rows():
+	legacy = LEGACY_REPORT.read_text()
+	assert "def execute(filters=None):" in legacy
+	assert "data = get_data(filters)" in legacy
+	assert 'row["bank_sales"] = get_bank_sales_total(row)' in legacy
+	assert "return get_columns(), data, message, None, get_report_summary(data, message=message)" in legacy
 
 
 def test_dashboard_uses_edgesuite_dashboard_shell_without_reimplementing_business_math():
