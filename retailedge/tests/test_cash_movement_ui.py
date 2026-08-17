@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+
+APP_ROOT = Path(__file__).resolve().parents[1]
+
+
+class TestCashMovementUI(unittest.TestCase):
+	def test_page_is_role_restricted_and_excludes_cashier_only_roles(self):
+		path = APP_ROOT / "retailedge" / "page" / "cash_movement" / "cash_movement.json"
+		data = json.loads(path.read_text())
+		roles = {row["role"] for row in data["roles"]}
+		self.assertIn("RetailEdge Branch Manager", roles)
+		self.assertIn("RetailEdge Auditor", roles)
+		self.assertIn("Accounts Manager", roles)
+		self.assertNotIn("RetailEdge Cashier", roles)
+		self.assertNotIn("RetailEdgeCashier", roles)
+
+	def test_page_mounts_only_one_edgesuite_shell(self):
+		page = (
+			APP_ROOT / "retailedge" / "page" / "cash_movement" / "cash_movement.js"
+		).read_text()
+		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page)
+		self.assertIn('const CASH_MOVEMENT_ASSET = "cash_movement.bundle.js"', page)
+		self.assertIn("hideNativePageSidebar", page)
+		self.assertIn("window.mountCashMovement", page)
+
+	def test_frontend_uses_server_search_pagination_and_no_transaction_cache(self):
+		component = (APP_ROOT / "public" / "js" / "cash_movement" / "CashMovement.vue").read_text()
+		self.assertIn("EdgeAppShell", component)
+		self.assertIn("EdgeLinkField", component)
+		self.assertIn("EdgeExportMenu", component)
+		self.assertIn("search_cash_movement_options", component)
+		self.assertIn("25 / page", component)
+		self.assertIn("50 / page", component)
+		self.assertIn("100 / page", component)
+		self.assertIn("Posted accounting entries only", component)
+		self.assertIn("this.filters.branch = \"\"", component)
+		self.assertIn("this.filters.account = \"\"", component)
+		self.assertNotIn("localStorage", component)
+		self.assertNotIn("sessionStorage", component)
+
+	def test_frontend_exposes_no_party_or_staff_filters(self):
+		component = (APP_ROOT / "public" / "js" / "cash_movement" / "CashMovement.vue").read_text()
+		self.assertNotIn("Party Name", component)
+		self.assertNotIn("Cashier", component)
+		self.assertNotIn("Employee", component)
+		self.assertIn("Cash / Bank Account", component)
+		self.assertIn("Movement Type", component)
+
+
+if __name__ == "__main__":
+	unittest.main()
