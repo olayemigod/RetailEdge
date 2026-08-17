@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +11,9 @@ DASHBOARD_ACTIONS = APP_ROOT / "public" / "js" / "retailedge_dashboard_actions.j
 COMPONENT = APP_ROOT / "public" / "js" / "branch_performance_dashboard" / "BranchPerformanceDashboard.vue"
 BUNDLE = APP_ROOT / "public" / "js" / "branch_performance_dashboard.bundle.js"
 PAGE = APP_ROOT / "retailedge" / "page" / "branch_performance_dashboard" / "branch_performance_dashboard.js"
+EDGE_NAVIGATION = APP_ROOT / "edgesuite_ui.py"
+WORKSPACE = APP_ROOT / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
+WORKSPACE_SIDEBAR = APP_ROOT / "retailedge" / "workspace_sidebar" / "retailedge" / "retailedge.json"
 LEGACY_REPORT = (
 	APP_ROOT
 	/ "retailedge"
@@ -111,6 +115,34 @@ def test_dashboard_browser_actions_use_edgesuite_verified_download():
 	assert "retailedge.dashboard_files.get_dashboard_print_html" in source
 	assert "downloadVerified" in source
 	assert "X-Frappe-CSRF-Token" in source
+
+
+def test_primary_navigation_routes_branch_performance_to_dashboard_page():
+	edge_navigation = EDGE_NAVIGATION.read_text()
+	assert (
+		'{"label": "Branch Performance", "target_type": "Page", '
+		'"target": "branch-performance-dashboard", "icon": "chart"}'
+		in edge_navigation
+	)
+
+	workspace = json.loads(WORKSPACE.read_text())
+	workspace_link = next(row for row in workspace["links"] if row.get("label") == "Branch Performance")
+	assert workspace_link["link_type"] == "Page"
+	assert workspace_link["link_to"] == "branch-performance-dashboard"
+	assert workspace_link["is_query_report"] == 0
+	workspace_shortcut = next(
+		row for row in workspace["shortcuts"] if row.get("label") == "Branch Performance"
+	)
+	assert workspace_shortcut["type"] == "Page"
+	assert workspace_shortcut["link_to"] == "branch-performance-dashboard"
+
+	sidebar = json.loads(WORKSPACE_SIDEBAR.read_text())
+	sidebar_link = next(row for row in sidebar["items"] if row.get("label") == "Branch Performance")
+	assert sidebar_link["link_type"] == "Page"
+	assert sidebar_link["link_to"] == "branch-performance-dashboard"
+
+	for source in (edge_navigation, WORKSPACE.read_text(), WORKSPACE_SIDEBAR.read_text()):
+		assert '"Branch Performance","link_to":"RetailEdge Branch Performance Summary"' not in source
 
 
 def test_native_branch_performance_report_is_retained_as_detail_fallback():
