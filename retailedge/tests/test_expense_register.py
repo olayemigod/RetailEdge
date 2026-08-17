@@ -147,24 +147,31 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertNotIn('"payment_account"', source)
 		self.assertNotIn('"approved_by"', source)
 
-	def test_frontend_is_paginated_and_server_search_only(self):
+	def test_frontend_uses_shared_report_shell_with_server_search_and_provider_pagination(self):
 		component = (
-			APP_ROOT / "public" / "js" / "expense_register" / "ExpenseRegister.vue"
+			APP_ROOT / "public" / "js" / "expense_register" / "ExpenseRegisterReport.vue"
 		).read_text()
 		self.assertIn("EdgeAppShell", component)
+		self.assertIn("EdgeReportShell", component)
 		self.assertIn("EdgeLinkField", component)
 		self.assertIn("EdgeExportMenu", component)
 		self.assertIn("search_expense_register_options", component)
-		self.assertIn("25 / page", component)
-		self.assertIn("50 / page", component)
-		self.assertIn("100 / page", component)
+		self.assertIn('const REPORT_KEY = "expense-register"', component)
+		self.assertIn("reportProvider.load", component)
+		self.assertIn(':pageSizes="[25, 50, 100]"', component)
 		self.assertIn("Expense Category", component)
+		self.assertIn("Cashier view is limited to your own expenses", component)
 		self.assertIn("this.filters.expense_category = \"\"", component)
+		self.assertIn('frappe.new_doc("RetailEdge Cashier Expense")', component)
+		self.assertIn('frappe.set_route("Form", "RetailEdge Cashier Expense", name)', component)
+		self.assertNotIn("<table", component)
+		self.assertNotIn("pagination-footer", component)
 		self.assertNotIn("localStorage", component)
 		self.assertNotIn("sessionStorage", component)
 
-	def test_expense_register_registers_edgesuite_paginated_provider(self):
+	def test_expense_register_registers_edgesuite_paginated_provider_and_mounts_report_consumer(self):
 		bundle = (APP_ROOT / "public" / "js" / "expense_register.bundle.js").read_text()
+		self.assertIn('ExpenseRegisterReport from "./expense_register/ExpenseRegisterReport.vue"', bundle)
 		self.assertIn('const REPORT_PRODUCT = "RetailEdge"', bundle)
 		self.assertIn('const REPORT_KEY = "expense-register"', bundle)
 		self.assertIn("createPaginatedReportProvider", bundle)
@@ -173,6 +180,7 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertIn("maxPageLength: 100", bundle)
 		self.assertIn("get_expense_register", bundle)
 		self.assertIn("get_expense_register_export", bundle)
+		self.assertIn("createEdgeApp(ExpenseRegisterReport)", bundle)
 		self.assertNotIn("for (let page", bundle)
 		self.assertNotIn("setInterval(", bundle)
 
