@@ -5,6 +5,8 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[1]
 CAPABILITIES = APP_ROOT / "reporting_capabilities.py"
 ACTIONS = APP_ROOT / "reporting_actions.py"
+FILES = APP_ROOT / "reporting_files.py"
+BROWSER_ACTIONS = APP_ROOT / "public" / "js" / "retailedge_reporting_actions.js"
 PATCH = APP_ROOT / "patches" / "add_reporting_action_settings.py"
 PATCHES = APP_ROOT / "patches.txt"
 
@@ -67,6 +69,7 @@ def test_export_wrapper_rechecks_action_before_existing_bounded_report_backend()
 	source = _read(ACTIONS)
 	assert 'action="export"' in source
 	assert "require_report_action(" in source
+	assert "get_report_dataset" in source
 	assert "handler = _export_handler(report_key)" in source
 	assert "return handler(filters=resolved_filters)" in source
 	for backend in (
@@ -81,8 +84,46 @@ def test_export_wrapper_rechecks_action_before_existing_bounded_report_backend()
 	assert "ignore_permissions" not in source
 
 
+def test_report_file_service_keeps_print_and_export_permissions_independent():
+	source = _read(FILES)
+	assert 'require_report_action(report_key, action="export"' in source
+	assert 'require_report_action(report_key, action="print"' in source
+	assert "get_report_dataset(report_key, filters)" in source
+	assert "get_report_export_data" not in source
+	for expected in (
+		'"xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"',
+		'"csv": "text/csv; charset=utf-8"',
+		'"pdf": "application/pdf"',
+		"make_xlsx",
+		"get_pdf",
+		"frappe.local.response.filecontent",
+		"get_report_print_html",
+		"_report_html",
+	):
+		assert expected in source
+	assert "ignore_permissions" not in source
+
+
 def test_all_registered_retailedge_report_providers_use_governed_export_route():
 	for bundle in BUNDLES:
 		source = _read(bundle)
 		assert "retailedge.reporting_actions.get_report_export_data" in source
 		assert "report_key:" in source
+
+
+def test_browser_reporting_actions_use_native_shell_builder_and_verified_download():
+	source = _read(BROWSER_ACTIONS)
+	for expected in (
+		"retailedge.reporting_capabilities.get_shell_capabilities",
+		"retailedge.reporting_files.download_report",
+		"retailedge.reporting_files.get_report_print_html",
+		"EdgeSuiteReportExport",
+		"downloadVerified",
+		'registerComponent("EdgeReportShell", GovernedReportShell, { replace: true })',
+		'registerComponent("EdgeExportMenu", GovernedLegacyExportMenu, { replace: true })',
+		"exportEnabled",
+		"printEnabled",
+		"exportInitialOptions",
+	):
+		assert expected in source
+	assert "ignore_permissions" not in source
