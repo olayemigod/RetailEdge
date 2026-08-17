@@ -159,6 +159,19 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertNotIn("localStorage", component)
 		self.assertNotIn("sessionStorage", component)
 
+	def test_expense_register_registers_edgesuite_paginated_provider(self):
+		bundle = (APP_ROOT / "public" / "js" / "expense_register.bundle.js").read_text()
+		self.assertIn('const REPORT_PRODUCT = "RetailEdge"', bundle)
+		self.assertIn('const REPORT_KEY = "expense-register"', bundle)
+		self.assertIn("createPaginatedReportProvider", bundle)
+		self.assertIn("registerProvider(REPORT_PRODUCT, REPORT_KEY", bundle)
+		self.assertIn("defaultPageLength: 50", bundle)
+		self.assertIn("maxPageLength: 100", bundle)
+		self.assertIn("get_expense_register", bundle)
+		self.assertIn("get_expense_register_export", bundle)
+		self.assertNotIn("for (let page", bundle)
+		self.assertNotIn("setInterval(", bundle)
+
 	def test_page_uses_single_edgesuite_shell(self):
 		page = (
 			APP_ROOT
