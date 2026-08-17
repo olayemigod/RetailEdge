@@ -51,7 +51,7 @@
   {"hidden":0,"is_query_report":0,"label":"Suppliers","link_count":0,"link_to":"Supplier","link_type":"DocType","onboard":0,"type":"Link"},
   {"hidden":0,"is_query_report":1,"label":"Payables","link_count":0,"link_to":"Accounts Payable","link_type":"Report","onboard":0,"type":"Link"},
   {"close":1,"hidden":0,"is_query_report":0,"label":"Insights","link_count":2,"link_type":"Report","onboard":0,"type":"Card Break"},
-  {"hidden":0,"is_query_report":1,"label":"Branch Performance","link_count":0,"link_to":"RetailEdge Branch Performance Summary","link_type":"Report","onboard":0,"type":"Link"},
+  {"hidden":0,"is_query_report":0,"label":"Branch Performance","link_count":0,"link_to":"branch-performance-dashboard","link_type":"Page","onboard":0,"type":"Link"},
   {"hidden":0,"is_query_report":0,"label":"Salesperson Performance","link_count":0,"link_to":"salesperson-performance-dashboard","link_type":"Page","onboard":0,"type":"Link"},
   {"close":1,"hidden":0,"is_query_report":0,"label":"Review & Approvals","link_count":11,"link_type":"DocType","onboard":0,"type":"Card Break"},
   {"hidden":0,"is_query_report":0,"label":"Bank Match Reviews","link_count":0,"link_to":"RetailEdge Bank Transaction Match","link_type":"DocType","onboard":0,"type":"Link"},
@@ -90,7 +90,7 @@
   {"color":"Grey","doc_view":"List","label":"Payments","link_to":"Payment Entry","stats_filter":"[]","type":"DocType"},
   {"color":"Green","doc_view":"List","label":"Cashier Expenses","link_to":"RetailEdge Cashier Expense","stats_filter":"[]","type":"DocType"},
   {"color":"Blue","doc_view":"","label":"Stock Movement History","link_to":"RetailEdge Stock Movement History","stats_filter":"[]","type":"Report"},
-  {"color":"Blue","doc_view":"","label":"Branch Performance","link_to":"RetailEdge Branch Performance Summary","stats_filter":"[]","type":"Report"},
+  {"color":"Blue","doc_view":"","label":"Branch Performance","link_to":"branch-performance-dashboard","stats_filter":"[]","type":"Page"},
   {"color":"Green","doc_view":"List","label":"Daily Sales Audit","link_to":"RetailEdge Daily Sales Audit","stats_filter":"[]","type":"DocType"}
  ],
  "title": "RetailEdge"

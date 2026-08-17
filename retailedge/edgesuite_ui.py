@@ -173,7 +173,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Sales by Item", "target_type": "Page", "target": "sales-by-item", "icon": "report"},
 			{"label": "Sales Invoice Register", "target_type": "Page", "target": "sales-invoice-register", "icon": "report"},
 			{"label": "Salesperson Performance", "target_type": "Page", "target": "salesperson-performance-dashboard", "icon": "user"},
-			{"label": "Branch Performance", "target_type": "Report", "target": "RetailEdge Branch Performance Summary", "icon": "chart"},
+			{"label": "Branch Performance", "target_type": "Page", "target": "branch-performance-dashboard", "icon": "chart"},
 		),
 	},
 	{
