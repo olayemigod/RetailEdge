@@ -93,7 +93,8 @@ def test_governed_dashboard_file_service_has_salesperson_export_adapter():
 	source = DASHBOARD_FILES.read_text()
 	assert '"salesperson-performance"' in source
 	assert "_build_salesperson_dashboard_dataset" in source
-	assert "export_mode=True" in source
+	assert "export_mode=all_filtered" in source
+	assert 'all_filtered=options["scope"] == "all_filtered"' in source
 	assert "require_dashboard_action(" in source
 	assert '"export"' in source
 	assert '"print"' in source
