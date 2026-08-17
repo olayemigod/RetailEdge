@@ -75,7 +75,7 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Receivables", "Report", "Accounts Receivable", "Customers", 20, "accounts", "ERPNext Link"),
 	WorkspaceHomeItem("Suppliers", "DocType", "Supplier", "Suppliers & Payables", 10, "operations", "ERPNext Link"),
 	WorkspaceHomeItem("Payables", "Report", "Accounts Payable", "Suppliers & Payables", 20, "accounts", "ERPNext Link"),
-	WorkspaceHomeItem("Branch Performance", "Report", "RetailEdge Branch Performance Summary", "Insights", 10, "manager", "RetailEdge Native", "Blue"),
+	WorkspaceHomeItem("Branch Performance", "Page", "branch-performance-dashboard", "Insights", 10, "manager", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("Salesperson Performance", "Page", "salesperson-performance-dashboard", "Insights", 20, "manager", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("Bank Match Reviews", "DocType", "RetailEdge Bank Transaction Match", "Review & Approvals", 10, "reviewer", "RetailEdge Overlay", "Blue"),
 	WorkspaceHomeItem("Daily Sales Audit", "DocType", "RetailEdge Daily Sales Audit", "Review & Approvals", 20, "operations", "RetailEdge Native", "Green"),
