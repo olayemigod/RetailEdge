@@ -1,17 +1,16 @@
 import SalesReportingReport from "./sales_reporting/SalesReportingReport.vue";
 
 const REPORT_PRODUCT = "RetailEdge";
+const GOVERNED_EXPORT_METHOD = "retailedge.reporting_actions.get_report_export_data";
 const SALES_REPORT_PROVIDERS = Object.freeze({
 	sales_by_item: {
 		key: "sales-by-item",
 		pageMethod: "retailedge.sales_reporting.get_sales_by_item",
-		exportMethod: "retailedge.sales_reporting.get_sales_by_item_export",
 		maxDatasetRows: 10000,
 	},
 	sales_invoice_register: {
 		key: "sales-invoice-register",
 		pageMethod: "retailedge.sales_reporting.get_sales_invoice_register",
-		exportMethod: "retailedge.sales_reporting.get_sales_invoice_register_export",
 		maxDatasetRows: 2000,
 	},
 });
@@ -63,7 +62,7 @@ function registerSalesReportingProviders(target = window) {
 				};
 			},
 			exportReport: async ({ filters = {} } = {}) =>
-				callMethod(config.exportMethod, { filters: { ...filters } }),
+				callMethod(GOVERNED_EXPORT_METHOD, { report_key: config.key, filters: { ...filters } }),
 		});
 		reports.registerProvider(REPORT_PRODUCT, config.key, provider);
 		return provider;
