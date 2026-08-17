@@ -85,7 +85,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: agent/edgeui-theme-foundation
+          ref: agent/reporting-standard-v1
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -158,6 +158,8 @@ jobs:
           grep -Eq 'stock_movement_history\.bundle' sites/assets/assets.json
           grep -Eq 'sales_reporting\.bundle' sites/assets/assets.json
           grep -Eq 'stock_position\.bundle' sites/assets/assets.json
+          grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
+          grep -Eq 'createPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
 
       - name: Run RetailEdge tests
         working-directory: frappe-bench
