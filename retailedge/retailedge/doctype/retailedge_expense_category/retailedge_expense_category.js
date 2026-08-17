@@ -1,5 +1,7 @@
 frappe.ui.form.on("RetailEdge Expense Category", {
 	refresh(frm) {
+		frm.__retailedge_expense_category_company = frm.doc.company || "";
+
 		frm.set_query("expense_account", function () {
 			return {
 				filters: {
@@ -22,14 +24,10 @@ frappe.ui.form.on("RetailEdge Expense Category", {
 	},
 
 	company(frm) {
-		if (frm.__retailedge_expense_category_company === undefined) {
-			frm.__retailedge_expense_category_company = frm.doc.company || "";
-			return;
-		}
 		const previousCompany = frm.__retailedge_expense_category_company;
 		const nextCompany = frm.doc.company || "";
 		frm.__retailedge_expense_category_company = nextCompany;
-		if (previousCompany === nextCompany) {
+		if (previousCompany === undefined || previousCompany === nextCompany) {
 			return;
 		}
 		frm.set_value("expense_account", null);
