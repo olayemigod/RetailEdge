@@ -141,7 +141,9 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"label": "Expenses",
 		"icon": "file-text",
 		"items": (
+			{"label": "Expense Register", "target_type": "Page", "target": "expense-register", "icon": "report"},
 			{"label": "Cashier Expenses", "target_type": "DocType", "target": "RetailEdge Cashier Expense", "icon": "wallet"},
+			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category", "icon": "layers"},
 		),
 	},
 	{
@@ -213,7 +215,6 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"items": (
 			{"label": "RetailEdge Settings", "target_type": "DocType", "target": "RetailEdge Settings", "icon": "settings"},
 			{"label": "Branch Profiles", "target_type": "DocType", "target": "RetailEdge Branch Profile", "icon": "building"},
-			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category", "icon": "layers"},
 			{"label": "Bank Accounts", "target_type": "DocType", "target": "Bank Account", "icon": "wallet"},
 			{"label": "Modes of Payment", "target_type": "DocType", "target": "Mode of Payment", "icon": "wallet"},
 			{"label": "Bank Statement Mapping", "target_type": "DocType", "target": "RetailEdge Statement Mapping Template", "icon": "settings"},
