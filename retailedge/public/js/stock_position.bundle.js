@@ -1,4 +1,4 @@
-import StockPosition from "./stock_position/StockPosition.vue";
+import StockPositionReport from "./stock_position/StockPositionReport.vue";
 
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "stock-position";
@@ -67,17 +67,17 @@ function mountStockPosition(target) {
 	}
 	if (!target) throw new Error("Stock Position mount target is required.");
 	registerStockPositionProvider(window);
-	const app = edgeUI.createEdgeApp(StockPosition);
+	const app = edgeUI.createEdgeApp(StockPositionReport);
 	app.mount(target);
 	return app;
 }
 
 if (typeof window !== "undefined") {
 	registerStockPositionProvider(window);
-	window.StockPosition = StockPosition;
+	window.StockPosition = StockPositionReport;
 	window.mountStockPosition = mountStockPosition;
 	window.registerStockPositionProvider = registerStockPositionProvider;
 }
 
 export { mountStockPosition, registerStockPositionProvider };
-export default StockPosition;
+export default StockPositionReport;
