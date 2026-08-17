@@ -11,6 +11,10 @@ from retailedge.guided_cashier_expense import (
 	MAX_LINK_RESULTS,
 	create_guided_cashier_expense_draft,
 	get_guided_cashier_expense_context,
+	search_guided_expense_categories,
+)
+from retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense import (
+	RetailEdgeCashierExpense,
 )
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -87,6 +91,42 @@ class TestGuidedCashierExpense(unittest.TestCase):
 		self.assertFalse(result["ready"])
 		self.assertEqual(len(result["blocking_reasons"]), 2)
 
+	@patch("retailedge.guided_cashier_expense._assert_company_read_access")
+	@patch("retailedge.guided_cashier_expense._assert_can_create_expense")
+	@patch("retailedge.guided_cashier_expense.frappe.get_list")
+	def test_category_search_is_bounded_and_company_permission_checked(
+		self,
+		mock_get_list,
+		_mock_create_permission,
+		mock_company_permission,
+	):
+		mock_get_list.return_value = [
+			frappe._dict(
+				name="Fuel",
+				category_name="Fuel",
+				category_code="FUEL",
+				description="Fuel and transport",
+			)
+		]
+
+		result = search_guided_expense_categories(
+			txt="fu",
+			company="Demo Company",
+			limit=500,
+		)
+
+		mock_company_permission.assert_called_once_with("Demo Company")
+		self.assertEqual(mock_get_list.call_args.kwargs["limit_page_length"], MAX_LINK_RESULTS)
+		self.assertEqual(
+			mock_get_list.call_args.kwargs["fields"],
+			["name", "category_name", "category_code", "description"],
+		)
+		self.assertIn(
+			["RetailEdge Expense Category", "company", "=", "Demo Company"],
+			mock_get_list.call_args.kwargs["or_filters"],
+		)
+		self.assertEqual(result[0]["value"], "Fuel")
+
 	@patch("retailedge.guided_cashier_expense._assert_active_category")
 	@patch("retailedge.guided_cashier_expense._assert_can_create_expense")
 	@patch("retailedge.guided_cashier_expense.frappe.new_doc")
@@ -122,11 +162,60 @@ class TestGuidedCashierExpense(unittest.TestCase):
 		self.assertFalse(hasattr(doc, "cost_center"))
 		self.assertEqual(result["available_cash_after"], 750.0)
 
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.frappe.has_permission",
+		return_value=True,
+	)
+	def test_controller_rejects_category_account_from_other_company(self, _mock_permission):
+		doc = SimpleNamespace(
+			expense_category="Fuel",
+			company="Demo Company",
+			_get_expense_category_context=lambda: {
+				"is_active": 1,
+				"company": "Demo Company",
+				"expense_account": "Fuel Expense - OC",
+				"expense_account_exists": True,
+				"expense_account_company": "Other Company",
+				"expense_account_root_type": "Expense",
+				"expense_account_is_group": 0,
+				"expense_account_disabled": 0,
+				"default_cost_center": None,
+			},
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			RetailEdgeCashierExpense.validate_expense_category(doc)
+
+	@patch(
+		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.frappe.has_permission",
+		return_value=True,
+	)
+	def test_controller_rejects_inactive_category(self, _mock_permission):
+		doc = SimpleNamespace(
+			expense_category="Fuel",
+			company="Demo Company",
+			_get_expense_category_context=lambda: {
+				"is_active": 0,
+				"company": "Demo Company",
+				"expense_account": "Fuel Expense - DC",
+				"expense_account_exists": True,
+				"expense_account_company": "Demo Company",
+				"expense_account_root_type": "Expense",
+				"expense_account_is_group": 0,
+				"expense_account_disabled": 0,
+				"default_cost_center": None,
+			},
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			RetailEdgeCashierExpense.validate_expense_category(doc)
+
 	def test_adapter_is_bounded_permission_aware_and_draft_only(self):
 		source = (APP_ROOT / "guided_cashier_expense.py").read_text()
 		self.assertIn("MAX_LINK_RESULTS = 20", source)
 		self.assertIn("limit_page_length=limit", source)
 		self.assertIn("frappe.get_list(", source)
+		self.assertIn("_assert_company_read_access(company)", source)
 		self.assertIn('@frappe.whitelist(methods=["POST"])', source)
 		self.assertIn("doc.insert()", source)
 		self.assertNotIn("ignore_permissions=True", source)
