@@ -42,6 +42,20 @@ class TestCashMovementUI(unittest.TestCase):
 		self.assertNotIn("localStorage", component)
 		self.assertNotIn("sessionStorage", component)
 
+	def test_cash_movement_registers_edgesuite_paginated_provider(self):
+		bundle = (APP_ROOT / "public" / "js" / "cash_movement.bundle.js").read_text()
+		self.assertIn('const REPORT_PRODUCT = "RetailEdge"', bundle)
+		self.assertIn('const REPORT_KEY = "cash-movement"', bundle)
+		self.assertIn("createPaginatedReportProvider", bundle)
+		self.assertIn("registerProvider(REPORT_PRODUCT, REPORT_KEY", bundle)
+		self.assertIn("defaultPageLength: 50", bundle)
+		self.assertIn("maxPageLength: 100", bundle)
+		self.assertIn("Math.floor", bundle)
+		self.assertIn("get_cash_movement", bundle)
+		self.assertIn("get_cash_movement_export", bundle)
+		self.assertNotIn("for (let page", bundle)
+		self.assertNotIn("setInterval(", bundle)
+
 	def test_frontend_exposes_no_party_or_staff_filters(self):
 		component = (APP_ROOT / "public" / "js" / "cash_movement" / "CashMovement.vue").read_text()
 		self.assertNotIn("Party Name", component)
