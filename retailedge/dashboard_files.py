@@ -20,6 +20,7 @@ from retailedge.reporting_files import (
 	_table_matrix,
 	_xlsx_bytes,
 )
+from retailedge.salesperson_performance_dashboard import _build_salesperson_dashboard_dataset
 
 DashboardHandler = Callable[[dict], dict]
 
@@ -27,6 +28,10 @@ DashboardHandler = Callable[[dict], dict]
 def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	handlers: dict[str, DashboardHandler] = {
 		"branch-performance": lambda filters: get_branch_performance_dashboard_data(filters=filters),
+		"salesperson-performance": lambda filters: _build_salesperson_dashboard_dataset(
+			filters,
+			export_mode=True,
+		),
 	}
 	handler = handlers.get(scope_key)
 	if not handler:
