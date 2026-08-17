@@ -37,7 +37,9 @@ class TestExpenseRegister(unittest.TestCase):
 	):
 		mock_default.return_value = "Demo Company"
 		mock_branch_scope.return_value = {"filters": {"branch": "Lagos"}}
-		with patch.object(frappe.session, "user", "cashier@example.com"):
+		original_user = frappe.session.user
+		try:
+			frappe.session.user = "cashier@example.com"
 			filters = _build_query_filters(
 				frappe._dict(
 					company="Demo Company",
@@ -46,6 +48,8 @@ class TestExpenseRegister(unittest.TestCase):
 					to_date="2026-08-17",
 				)
 			)
+		finally:
+			frappe.session.user = original_user
 		self.assertEqual(filters["cashier"], "cashier@example.com")
 		self.assertEqual(filters["branch"], "Lagos")
 		self.assertEqual(filters["company"], "Demo Company")
