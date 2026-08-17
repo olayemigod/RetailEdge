@@ -76,6 +76,9 @@ def search_guided_expense_categories(
 	_assert_can_create_expense()
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
 	company = company or frappe.defaults.get_user_default("Company") or ""
+	if company:
+		_assert_company_read_access(company)
+
 	filters: list[list[Any]] = [[CATEGORY_DOCTYPE, "is_active", "=", 1]]
 	if txt:
 		filters.append([CATEGORY_DOCTYPE, "category_name", "like", f"%{txt}%"])
@@ -90,7 +93,7 @@ def search_guided_expense_categories(
 		CATEGORY_DOCTYPE,
 		filters=filters,
 		or_filters=or_filters or None,
-		fields=["name", "category_name", "category_code", "description", "company"],
+		fields=["name", "category_name", "category_code", "description"],
 		order_by="category_name asc",
 		limit_page_length=limit,
 	)
@@ -127,8 +130,9 @@ def create_guided_cashier_expense_draft(values: dict | str | None = None) -> dic
 		doc.expense_date = getdate(values.get("expense_date"))
 
 	# The existing RetailEdge Cashier Expense controller resolves cashier/company/
-	# branch/POS/accounting context, refreshes shift cash, validates available cash,
-	# derives the expense account and posting readiness, and remains authoritative.
+	# branch/POS/accounting context, refreshes shift cash, validates the selected
+	# category against the resolved company, validates available cash, derives the
+	# expense account and posting readiness, and remains authoritative.
 	doc.insert()
 	return {
 		"doctype": doc.doctype,
@@ -156,17 +160,20 @@ def _assert_active_category(category: str) -> None:
 	row = frappe.db.get_value(
 		CATEGORY_DOCTYPE,
 		category,
-		["is_active", "company"],
+		["is_active"],
 		as_dict=True,
 	)
 	if not row or not cint(row.is_active):
 		frappe.throw(_("Expense Category {0} is inactive.").format(category))
-	context_company = frappe.defaults.get_user_default("Company") or ""
-	if row.company and context_company and row.company != context_company:
+
+
+def _assert_company_read_access(company: str) -> None:
+	if not frappe.db.exists("Company", company):
+		frappe.throw(_("Company {0} does not exist.").format(company))
+	if not frappe.has_permission("Company", "read", doc=company):
 		frappe.throw(
-			_("Expense Category {0} belongs to Company {1}, not Company {2}.").format(
-				category, row.company, context_company
-			)
+			_("You do not have permission to use Company {0}.").format(company),
+			frappe.PermissionError,
 		)
 
 
