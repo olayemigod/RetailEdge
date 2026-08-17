@@ -18,7 +18,6 @@ _MANAGER_ROLES = {
 	"RetailEdgeAuditor",
 }
 _BRANCH_MANAGER_ROLES = {"RetailEdge Branch Manager", "RetailEdgeBranchManager"}
-_SALES_MANAGER_ROLES = {"Sales Manager"}
 _ACCOUNTS_MANAGER_ROLES = {"Accounts Manager"}
 _ACCOUNTS_USER_ROLES = {"Accounts User"}
 
@@ -52,9 +51,9 @@ _DASHBOARD_SPECS = {
 	"salesperson-performance": DashboardCapabilitySpec(
 		key="salesperson-performance",
 		label="Salesperson Performance",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
-		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
-		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES),
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		ref_doctype="Sales Invoice",
 	),
 }
