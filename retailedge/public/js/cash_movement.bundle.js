@@ -1,4 +1,4 @@
-import CashMovement from "./cash_movement/CashMovement.vue";
+import CashMovement from "./cash_movement/CashMovementReport.vue";
 
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "cash-movement";
