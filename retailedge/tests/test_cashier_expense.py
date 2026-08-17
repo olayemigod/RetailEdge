@@ -37,7 +37,7 @@ R2_REQUIRED_LINKS = {
 	"Cashier Expenses": ("DocType", "RetailEdge Cashier Expense"),
 	"Customers": ("DocType", "Customer"),
 	"Suppliers": ("DocType", "Supplier"),
-	"Branch Performance": ("Report", "RetailEdge Branch Performance Summary"),
+	"Branch Performance": ("Page", "branch-performance-dashboard"),
 	"Salesperson Performance": ("Page", "salesperson-performance-dashboard"),
 	"Daily Sales Audit": ("DocType", "RetailEdge Daily Sales Audit"),
 	"Bank Matching": ("Report", "RetailEdge Bank Transaction Matching"),
