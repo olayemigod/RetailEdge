@@ -71,8 +71,12 @@ class TestCashMovement(unittest.TestCase):
 	@patch("retailedge.cash_movement.user_has_global_branch_access", return_value=False)
 	def test_non_global_scope_uses_only_permitted_branches(self, _mock_global, mock_allowed):
 		mock_allowed.return_value = {"branches": ["Lagos", "Abuja"]}
-		with patch.object(frappe.session, "user", "manager@example.com"):
+		original_user = frappe.session.user
+		try:
+			frappe.session.user = "manager@example.com"
 			scope = _resolve_branch_scope(company="Demo Company", requested_branch="")
+		finally:
+			frappe.session.user = original_user
 		self.assertFalse(scope["global_access"])
 		self.assertEqual(scope["effective_branches"], ["Abuja", "Lagos"])
 
