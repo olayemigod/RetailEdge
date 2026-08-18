@@ -22,10 +22,14 @@ class TestCreateVisibilityPermissions(unittest.TestCase):
 		self.assertTrue(all(call.args[1] == "create" for call in permission.call_args_list))
 
 	def test_business_hub_hides_create_control_when_no_actions_are_permitted(self):
-		source = (HUB_ROOT / "RetailEdgeBusinessHub.vue").read_text(encoding="utf-8")
-		self.assertIn('v-if="quickActions.length"', source)
-		self.assertNotIn(':disabled="!quickActions.length"', source)
-		self.assertIn('v-for="action in quickActions"', source)
+		component = (HUB_ROOT / "RetailEdgeBusinessHub.vue").read_text(encoding="utf-8")
+		host = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text(encoding="utf-8")
+		self.assertIn(':disabled="!quickActions.length"', component)
+		self.assertIn('v-for="action in quickActions"', component)
+		self.assertIn("enforceCreateVisibility", host)
+		self.assertIn('root.querySelectorAll(".hub-create-button")', host)
+		self.assertIn("button.hidden = unavailable", host)
+		self.assertIn("installCreateVisibilityGuard", host)
 
 	def test_inline_master_create_controls_remain_permission_gated(self):
 		contracts = {
