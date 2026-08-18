@@ -148,22 +148,60 @@ frappe.pages["bank-matching-reconciliation"].on_page_load = function (wrapper) {
 			dialog.show();
 			return;
 		}
-		const body = rows.map((row) => `
+		const body = rows.map((row) => {
+			const reviewSupported = Number(row.review_supported) !== 0;
+			const action = reviewSupported
+				? `<button class='btn btn-xs btn-primary' data-retailedge-candidate-action='review' data-document-type='${frappe.utils.escape_html(row.document_type || "")}' data-document-name='${frappe.utils.escape_html(row.document_name || "")}'>${__("Review Match")}</button>`
+				: `<span class='text-muted' title='${frappe.utils.escape_html(row.review_block_reason || "")}'>${__("Bridge Review Pending")}</span>`;
+			return `
 			<tr>
 				<td>${frappe.utils.escape_html(row.document_type || "")}</td>
 				<td>${frappe.utils.escape_html(row.document_name || "")}</td>
+				<td>${frappe.utils.escape_html(row.transaction_category || row.candidate_category || "")}</td>
 				<td>${frappe.utils.escape_html(row.candidate_category || "")}</td>
 				<td class='text-right'>${frappe.utils.escape_html(String(row.match_score || 0))}</td>
 				<td class='text-right'>${frappe.utils.escape_html(String(row.fuzzy_score || 0))}</td>
 				<td>${frappe.utils.escape_html(row.fuzzy_confidence || "")}</td>
-			</tr>`).join("");
+				<td>${action}</td>
+			</tr>`;
+		}).join("");
 		dialog.fields_dict.candidate_html.$wrapper.html(`
 			<div class='mb-2 text-muted'>${__("Direction: {0}. Fuzzy similarity only ranks candidates that already passed hard accounting checks.", [payload.direction || ""])}</div>
 			<div class='table-responsive'><table class='table table-bordered table-hover'>
-				<thead><tr><th>${__("Type")}</th><th>${__("Document")}</th><th>${__("Category")}</th><th>${__("Score")}</th><th>${__("Fuzzy")}</th><th>${__("Confidence")}</th></tr></thead>
+				<thead><tr><th>${__("Type")}</th><th>${__("Document")}</th><th>${__("Business Category")}</th><th>${__("Match Basis")}</th><th>${__("Score")}</th><th>${__("Fuzzy")}</th><th>${__("Confidence")}</th><th>${__("Action")}</th></tr></thead>
 				<tbody>${body}</tbody>
 			</table></div>`);
+		dialog.fields_dict.candidate_html.$wrapper.find("[data-retailedge-candidate-action='review']").on("click", function () {
+			prepare_candidate_review(
+				bankTransaction,
+				$(this).data("document-type"),
+				$(this).data("document-name"),
+				dialog,
+			);
+		});
 		dialog.show();
+	}
+
+	function prepare_candidate_review(bankTransaction, documentType, documentName, dialog) {
+		frappe.call({
+			method: "retailedge.bank_candidate_engine.prepare_direction_aware_bank_candidate",
+			args: {
+				bank_transaction_name: bankTransaction,
+				document_type: documentType,
+				document_name: documentName,
+			},
+			freeze: true,
+			freeze_message: __("Revalidating candidate..."),
+			callback(r) {
+				const result = (r && r.message) || {};
+				if (!result.match_name) {
+					frappe.msgprint(result.message || __("This candidate cannot enter review yet."));
+					return;
+				}
+				dialog.hide();
+				frappe.set_route("Form", "RetailEdge Bank Transaction Match", result.match_name);
+			},
+		});
 	}
 
 	function confirm_and_reconcile(matchName) {
