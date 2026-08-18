@@ -10,6 +10,7 @@ from retailedge.bank_candidate_engine import (
 	CATEGORY_SUPPLIER_PAYMENT,
 	_payment_entry_business_category,
 	get_direction_aware_bank_candidates,
+	prepare_direction_aware_bank_candidate,
 )
 
 
@@ -129,6 +130,7 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 				"candidate_category": "Deposit to Bank",
 				"transaction_category": CATEGORY_BANK_DEPOSIT,
 				"candidate_amount": 450000,
+				"review_supported": 0,
 			}
 		]
 		enrich.return_value = journal.return_value
@@ -138,6 +140,41 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 		self.assertEqual(result["count"], 1)
 		self.assertEqual(result["candidates"][0]["candidate_category"], "Deposit to Bank")
 		enrich.assert_called_once()
+
+	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
+	def test_journal_candidate_review_is_blocked_until_bridge_is_safe(self, _assert_access):
+		result = prepare_direction_aware_bank_candidate("BT-1", "Journal Entry", "JV-1")
+
+		self.assertEqual(result["status"], "Review Support Pending")
+		self.assertFalse(result["created"])
+		self.assertIn("direction-safe", result["message"])
+
+	@patch("retailedge.bank_candidate_engine.create_or_get_bank_transaction_match")
+	@patch("retailedge.bank_candidate_engine.get_direction_aware_bank_candidates")
+	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
+	def test_payment_entry_candidate_is_revalidated_before_review_creation(
+		self, _assert_access, candidates, create_review
+	):
+		candidate = {
+			"document_type": "Payment Entry",
+			"document_name": "PE-1",
+			"candidate_amount": 1000,
+			"review_supported": 1,
+		}
+		candidates.return_value = {"direction": "Inflow", "candidates": [candidate], "count": 1}
+		create_review.return_value = {
+			"name": "MATCH-1",
+			"created": True,
+			"decision_status": "Suggested",
+		}
+
+		result = prepare_direction_aware_bank_candidate("BT-1", "Payment Entry", "PE-1")
+
+		self.assertEqual(result["status"], "Review Ready")
+		self.assertEqual(result["match_name"], "MATCH-1")
+		create_review.assert_called_once()
+		self.assertEqual(create_review.call_args.kwargs["locked_candidate"], candidate)
+		self.assertFalse(create_review.call_args.kwargs["allow_fallback"])
 
 	@patch(
 		"retailedge.bank_candidate_engine.normalize_bank_transaction",
