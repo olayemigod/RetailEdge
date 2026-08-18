@@ -62,6 +62,14 @@ _REPORT_SPECS = {
 		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES),
 		ref_doctype="Sales Invoice",
 	),
+	"customer-receivables": ReportCapabilitySpec(
+		key="customer-receivables",
+		label="Customer Receivables",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Sales Invoice",
+	),
 	"purchase-register": ReportCapabilitySpec(
 		key="purchase-register",
 		label="Purchase Register",
