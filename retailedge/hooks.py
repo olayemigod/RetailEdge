@@ -85,7 +85,7 @@ doctype_js = {
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
-	"Purchase Order": "public/js/purchase_documents_list.js",
+	"Purchase Order": "public/js/purchase_order.js",
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
@@ -169,6 +169,7 @@ doc_events = {
 	},
 	"Payment Entry": {
 		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+		"before_submit": "retailedge.cash_custody.validate_cash_deposit_before_submit",
 	},
 	"Payment Request": {
 		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
@@ -217,6 +218,7 @@ doc_events = {
 after_migrate = [
 	"retailedge.setup_roles.ensure_retailedge_roles",
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
+	"retailedge.cash_custody.ensure_cash_custody_custom_fields",
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
 ]
