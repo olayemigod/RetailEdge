@@ -41,6 +41,7 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 			CATEGORY_EXPENSE,
 		)
 
+	@patch("retailedge.bank_candidate_engine._can_read_candidate", return_value=True)
 	@patch("retailedge.bank_candidate_engine._hydrate_payment_entry_metadata", return_value={})
 	@patch("retailedge.bank_candidate_engine.enrich_ranked_candidates", side_effect=lambda _bt, rows: rows)
 	@patch("retailedge.bank_candidate_engine._journal_entry_candidates", return_value=[])
@@ -49,14 +50,7 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 	@patch("retailedge.bank_candidate_engine.normalize_bank_transaction")
 	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
 	def test_inflow_searches_payment_and_sales_candidates(
-		self,
-		_assert_access,
-		normalize,
-		payment_candidates,
-		sales_candidates,
-		_journal,
-		_enrich,
-		_metadata,
+		self, _assert_access, normalize, payment_candidates, sales_candidates, _journal, _enrich, _metadata, _can_read
 	):
 		normalize.return_value = {"direction": "Inflow", "amount": 1000}
 		payment_candidates.return_value = [
@@ -65,13 +59,12 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 		sales_candidates.return_value = [
 			{"document_type": "Sales Invoice", "document_name": "SI-1", "candidate_amount": 1000}
 		]
-
 		result = get_direction_aware_bank_candidates("BT-1")
-
 		self.assertEqual(result["direction"], "Inflow")
 		self.assertEqual(result["count"], 2)
 		sales_candidates.assert_called_once()
 
+	@patch("retailedge.bank_candidate_engine._can_read_candidate", return_value=True)
 	@patch("retailedge.bank_candidate_engine._hydrate_payment_entry_metadata")
 	@patch("retailedge.bank_candidate_engine.enrich_ranked_candidates", side_effect=lambda _bt, rows: rows)
 	@patch("retailedge.bank_candidate_engine._journal_entry_candidates", return_value=[])
@@ -80,14 +73,7 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 	@patch("retailedge.bank_candidate_engine.normalize_bank_transaction")
 	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
 	def test_outflow_does_not_search_sales_invoice_receipts(
-		self,
-		_assert_access,
-		normalize,
-		payment_candidates,
-		sales_candidates,
-		_journal,
-		_enrich,
-		metadata,
+		self, _assert_access, normalize, payment_candidates, sales_candidates, _journal, _enrich, metadata, _can_read
 	):
 		normalize.return_value = {"direction": "Outflow", "amount": 75000}
 		payment_candidates.return_value = [
@@ -96,14 +82,13 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 		metadata.return_value = {
 			"PE-SUP-1": {"payment_type": "Pay", "party_type": "Supplier", "party": "SUP-1"}
 		}
-
 		result = get_direction_aware_bank_candidates("BT-OUT")
-
 		self.assertEqual(result["direction"], "Outflow")
 		self.assertEqual(result["count"], 1)
 		self.assertEqual(result["candidates"][0]["transaction_category"], CATEGORY_SUPPLIER_PAYMENT)
 		sales_candidates.assert_not_called()
 
+	@patch("retailedge.bank_candidate_engine._can_read_candidate", return_value=True)
 	@patch("retailedge.bank_candidate_engine._hydrate_payment_entry_metadata", return_value={})
 	@patch("retailedge.bank_candidate_engine.enrich_ranked_candidates")
 	@patch("retailedge.bank_candidate_engine._journal_entry_candidates")
@@ -112,14 +97,7 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 	@patch("retailedge.bank_candidate_engine.normalize_bank_transaction")
 	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
 	def test_journal_candidates_enter_same_fuzzy_ranking_path(
-		self,
-		_assert_access,
-		normalize,
-		_payment,
-		_sales,
-		journal,
-		enrich,
-		_metadata,
+		self, _assert_access, normalize, _payment, _sales, journal, enrich, _metadata, _can_read
 	):
 		bank = {"direction": "Inflow", "amount": 450000, "description": "cash deposit"}
 		normalize.return_value = bank
@@ -134,18 +112,17 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 			}
 		]
 		enrich.return_value = journal.return_value
-
 		result = get_direction_aware_bank_candidates("BT-DEP")
-
 		self.assertEqual(result["count"], 1)
 		self.assertEqual(result["candidates"][0]["candidate_category"], "Deposit to Bank")
 		enrich.assert_called_once()
 
+	@patch("retailedge.bank_candidate_engine._can_read_candidate", return_value=True)
 	@patch("retailedge.bank_candidate_engine._prepare_journal_entry_review")
 	@patch("retailedge.bank_candidate_engine.get_direction_aware_bank_candidates")
 	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
 	def test_journal_candidate_is_revalidated_before_manual_review_creation(
-		self, _assert_access, candidates, create_review
+		self, _assert_access, candidates, create_review, _can_read
 	):
 		candidate = {
 			"document_type": "Journal Entry",
@@ -161,18 +138,17 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 			"status": "Review Ready",
 			"match_name": "MATCH-JV-1",
 		}
-
 		result = prepare_direction_aware_bank_candidate("BT-1", "Journal Entry", "JV-1")
-
 		self.assertEqual(result["status"], "Review Ready")
 		self.assertEqual(result["match_name"], "MATCH-JV-1")
 		create_review.assert_called_once_with("BT-1", "JV-1")
 
+	@patch("retailedge.bank_candidate_engine._can_read_candidate", return_value=True)
 	@patch("retailedge.bank_candidate_engine.create_or_get_bank_transaction_match")
 	@patch("retailedge.bank_candidate_engine.get_direction_aware_bank_candidates")
 	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
 	def test_payment_entry_candidate_is_revalidated_before_review_creation(
-		self, _assert_access, candidates, create_review
+		self, _assert_access, candidates, create_review, _can_read
 	):
 		candidate = {
 			"document_type": "Payment Entry",
@@ -186,14 +162,18 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 			"created": True,
 			"decision_status": "Suggested",
 		}
-
 		result = prepare_direction_aware_bank_candidate("BT-1", "Payment Entry", "PE-1")
-
 		self.assertEqual(result["status"], "Review Ready")
 		self.assertEqual(result["match_name"], "MATCH-1")
 		create_review.assert_called_once()
 		self.assertEqual(create_review.call_args.kwargs["locked_candidate"], candidate)
 		self.assertFalse(create_review.call_args.kwargs["allow_fallback"])
+
+	@patch("retailedge.bank_candidate_engine._can_read_candidate", return_value=False)
+	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
+	def test_review_creation_fails_closed_without_candidate_read_permission(self, _assert_access, _can_read):
+		with self.assertRaises(Exception):
+			prepare_direction_aware_bank_candidate("BT-1", "Payment Entry", "PE-PRIVATE")
 
 	@patch(
 		"retailedge.bank_candidate_engine.normalize_bank_transaction",
