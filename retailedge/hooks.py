@@ -54,6 +54,7 @@ app_include_js = [
 
 # include js in doctype views
 doctype_js = {
+	"Bank Account": "public/js/bank_account.js",
 	"Item": "public/js/inventory_documents.js",
 	"Material Request": "public/js/material_request.js",
 	"Purchase Invoice": "public/js/purchase_documents.js",
