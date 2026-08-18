@@ -237,6 +237,8 @@ def _review_db_filters(queue: str, filters: frappe._dict) -> dict[str, Any]:
         db_filters["decision_status"] = "Confirmed"
     elif queue == QUEUE_TO_MATCH:
         db_filters["decision_status"] = ["in", ["Draft", "Suggested"]]
+    elif queue == QUEUE_EXCEPTIONS:
+        db_filters["decision_status"] = ["in", ["Needs Review", "Reopened", "Confirmed"]]
     return db_filters
 
 
@@ -272,6 +274,50 @@ def _bulk_bank_context(bank_transaction_names: list[str]) -> dict[str, dict[str,
     return output
 
 
+def _cheap_operational(row, bank: dict[str, Any], queue: str) -> dict[str, Any] | None:
+    """Resolve states that do not require reconciliation preflight.
+
+    Suggested/unreviewed rows, explicit review states, failed execution, and RetailEdge-recorded
+    terminal execution can be placed in their queues from stored state plus the normalized Bank
+    Transaction. Confirmed readiness still goes through the canonical reconciliation bridge.
+    """
+    direction = cstr(bank.get("direction")).strip()
+    if direction not in {"Inflow", "Outflow"}:
+        return None
+    decision_status = cstr(row.decision_status).strip()
+    execution_status = cstr(getattr(row, "execution_status", None)).strip()
+
+    if queue == QUEUE_TO_MATCH and decision_status in {"Draft", "Suggested"}:
+        return {
+            "direction": direction,
+            "transaction_category": CATEGORY_UNCLASSIFIED,
+            "operational_status": STATUS_SUGGESTED if row.suggested_document else STATUS_UNMATCHED,
+            "recommended_action": "Review the prepared suggestion." if row.suggested_document else "Find and review a valid accounting match.",
+        }
+    if queue == QUEUE_EXCEPTIONS and decision_status in {"Needs Review", "Reopened"}:
+        return {
+            "direction": direction,
+            "transaction_category": CATEGORY_UNCLASSIFIED,
+            "operational_status": STATUS_NEEDS_REVIEW,
+            "recommended_action": "Review and resolve the match exception.",
+        }
+    if queue == QUEUE_EXCEPTIONS and execution_status == "Failed":
+        return {
+            "direction": direction,
+            "transaction_category": CATEGORY_UNCLASSIFIED,
+            "operational_status": STATUS_RECONCILIATION_FAILED,
+            "recommended_action": "Review the reconciliation failure before retrying.",
+        }
+    if queue == QUEUE_RECONCILED and execution_status in {"Executed", "Already Handled"}:
+        return {
+            "direction": direction,
+            "transaction_category": CATEGORY_UNCLASSIFIED,
+            "operational_status": STATUS_RECONCILED,
+            "recommended_action": "No action required.",
+        }
+    return None
+
+
 def _get_review_queue_rows(
     direction: str, queue: str, limit: int, filters: frappe._dict
 ) -> tuple[list[dict[str, Any]], int]:
@@ -301,6 +347,7 @@ def _get_review_queue_rows(
                 "company",
                 "branch",
                 "bank_account",
+                "execution_status",
                 "modified",
             ],
             order_by="transaction_date desc, modified desc",
@@ -314,17 +361,19 @@ def _get_review_queue_rows(
         bank_contexts = _bulk_bank_context([row.bank_transaction for row in rows])
 
         for row in rows:
-            try:
-                operational = get_bank_match_operational_status(row.name, include_gate=False)
-            except Exception:
-                skipped += 1
-                continue
+            bank = bank_contexts.get(row.bank_transaction, {})
+            operational = _cheap_operational(row, bank, queue)
+            if operational is None:
+                try:
+                    operational = get_bank_match_operational_status(row.name, include_gate=False)
+                except Exception:
+                    skipped += 1
+                    continue
             if direction != DIRECTION_ALL and operational.get("direction") != direction:
                 continue
             if not _status_belongs_to_queue(operational.get("operational_status"), queue):
                 continue
 
-            bank = bank_contexts.get(row.bank_transaction, {})
             item = {
                 "match_name": row.name,
                 "bank_transaction": row.bank_transaction,
