@@ -42,7 +42,7 @@ def get_columns():
 	]
 
 
-def get_data(filters):
+def get_data(filters, limit_page_length=0):
 	if not has_doctype("RetailEdge Daily Sales Audit"):
 		return []
 
@@ -88,7 +88,7 @@ def get_data(filters):
 			"cash_variance_amount",
 			"audit_status",
 		],
-		limit_page_length=0,
+		limit_page_length=limit_page_length,
 		order_by="audit_date desc, creation desc",
 	)
 
