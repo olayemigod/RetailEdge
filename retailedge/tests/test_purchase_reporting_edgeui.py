@@ -89,8 +89,17 @@ class TestPurchaseReportingEdgeUI(unittest.TestCase):
 		self.assertIn("retailedge.reporting_actions.get_report_export_data", bundle)
 		self.assertIn('key: "purchase-register"', bundle)
 		self.assertIn('key: "supplier-payables"', bundle)
+		self.assertIn("retailedge.supplier_payables.get_supplier_payables", bundle)
 		for forbidden in ("new Blob", "createObjectURL", "window.print"):
 			self.assertNotIn(forbidden, component)
+
+	def test_supplier_payables_ui_does_not_claim_historical_balance_reconstruction(self):
+		component = self.read(COMPONENT)
+		self.assertIn("Balance Basis", component)
+		self.assertIn("Current outstanding", component)
+		self.assertIn("Current ERPNext outstanding balances aged at", component)
+		self.assertIn("current unpaid supplier bills", component)
+		self.assertNotIn('>As of Date<', component)
 
 	def test_loaders_use_canonical_edgesuite_runtime(self):
 		for path in (
