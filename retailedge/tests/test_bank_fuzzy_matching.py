@@ -49,24 +49,25 @@ class BankFuzzyMatchingTests(unittest.TestCase):
         self.assertEqual(evidence["fuzzy_confidence"], "Strong Match")
         self.assertTrue(evidence["exact_reference"])
 
-    def test_direction_mismatch_blocks_before_fuzzy_text(self):
+    def test_direction_difference_removes_fuzzy_boost_without_rejecting_accounting_candidate(self):
         evidence = build_fuzzy_match_evidence(self._bank(), self._candidate(direction="Outflow"))
-        self.assertFalse(evidence["eligible"])
-        self.assertEqual(evidence["reason"], "Direction mismatch")
+        self.assertTrue(evidence["eligible"])
+        self.assertEqual(evidence["fuzzy_score"], 0)
+        self.assertEqual(evidence["fuzzy_confidence"], "No Match")
 
-    def test_bank_account_mismatch_blocks_before_fuzzy_text(self):
+    def test_raw_bank_account_identifier_difference_does_not_block_fuzzy_evidence(self):
         evidence = build_fuzzy_match_evidence(
             self._bank(), self._candidate(payment_account="GTBank - PED")
         )
-        self.assertFalse(evidence["eligible"])
-        self.assertEqual(evidence["reason"], "Bank account mismatch")
+        self.assertTrue(evidence["eligible"])
+        self.assertGreater(evidence["fuzzy_score"], 0)
 
-    def test_amount_mismatch_blocks_before_fuzzy_text(self):
+    def test_amount_difference_removes_amount_boost_but_preserves_candidate(self):
         evidence = build_fuzzy_match_evidence(
             self._bank(), self._candidate(candidate_amount=90000)
         )
-        self.assertFalse(evidence["eligible"])
-        self.assertEqual(evidence["reason"], "Amount mismatch")
+        self.assertTrue(evidence["eligible"])
+        self.assertFalse(evidence["amount_compatible"])
 
     def test_fuzzy_party_match_can_surface_possible_match_without_exact_reference(self):
         evidence = build_fuzzy_match_evidence(
@@ -77,17 +78,17 @@ class BankFuzzyMatchingTests(unittest.TestCase):
         self.assertIn(evidence["fuzzy_confidence"], {"Strong Match", "Possible Match"})
         self.assertFalse(evidence["exact_reference"])
 
-    def test_rank_candidates_excludes_hard_conflicts_and_orders_best_first(self):
+    def test_rank_candidates_preserves_manual_candidates_and_orders_best_text_first(self):
         ranked = rank_fuzzy_candidates(
             self._bank(),
             [
                 self._candidate(document_name="PE-WEAK", reference_no="OTHER", party="Unknown Person"),
                 self._candidate(document_name="PE-BEST"),
-                self._candidate(document_name="PE-BLOCKED", candidate_amount=1000),
+                self._candidate(document_name="PE-PARTIAL", candidate_amount=1000),
             ],
         )
         self.assertEqual(ranked[0]["document_name"], "PE-BEST")
-        self.assertNotIn("PE-BLOCKED", [row["document_name"] for row in ranked])
+        self.assertIn("PE-PARTIAL", [row["document_name"] for row in ranked])
 
 
 if __name__ == "__main__":
