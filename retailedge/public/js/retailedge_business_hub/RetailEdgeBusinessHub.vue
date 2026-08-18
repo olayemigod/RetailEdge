@@ -188,6 +188,7 @@ import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
 const GUIDED_CASH_DEPOSIT_ACTION = "deposit-cash";
@@ -380,14 +381,40 @@ export default {
 			}
 			frappe.new_doc(action.doctype);
 		},
+		notifyGuidedDraftSaved(result, fallbackDoctype, label) {
+			if (!result?.name) return;
+			const doctype = result.doctype || fallbackDoctype;
+			frappe.set_route("Form", doctype, result.name);
+			frappe.call({
+				method: WORKFLOW_READINESS_METHOD,
+				args: { doctype, name: result.name },
+				callback: (response) => {
+					const readiness = response.message || {};
+					if (!readiness.enabled) {
+						frappe.show_alert?.({ message: `${label} ${result.name} saved as Draft`, indicator: "green" });
+						return;
+					}
+					const state = readiness.current_state ? ` Current state: ${readiness.current_state}.` : "";
+					const actions = (readiness.available_actions || []).map((item) => item.action).filter(Boolean);
+					const next = actions.length
+						? ` Available workflow action${actions.length === 1 ? "" : "s"}: ${actions.join(", ")}.`
+						: " No workflow action is currently available to you; another authorised user may be required.";
+					frappe.show_alert?.({
+						message: `${label} ${result.name} saved as Draft. Workflow approval is still required.${state}${next}`,
+						indicator: "orange",
+					}, 10);
+				},
+				error: () => {
+					frappe.show_alert?.({ message: `${label} ${result.name} saved as Draft`, indicator: "green" });
+				},
+			});
+		},
 		closeSimpleSalesInvoice() {
 			this.simpleSalesInvoiceOpen = false;
 		},
 		handleSimpleSalesInvoiceSaved(result) {
 			this.simpleSalesInvoiceOpen = false;
-			if (!result?.name) return;
-			frappe.show_alert?.({ message: `Sales Invoice ${result.name} saved as Draft`, indicator: "green" });
-			frappe.set_route("Form", result.doctype || "Sales Invoice", result.name);
+			this.notifyGuidedDraftSaved(result, "Sales Invoice", "Sales Invoice");
 		},
 		openNativeSalesInvoice(doctype = "Sales Invoice") {
 			this.simpleSalesInvoiceOpen = false;
@@ -395,14 +422,11 @@ export default {
 		},
 		closeSimplePayment() {
 			this.simplePaymentOpen = false;
-			this.simplePaymentIntent = "";
 		},
 		handleSimplePaymentSaved(result) {
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
-			if (!result?.name) return;
-			frappe.show_alert?.({ message: `Payment Entry ${result.name} saved as Draft`, indicator: "green" });
-			frappe.set_route("Form", result.doctype || "Payment Entry", result.name);
+			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
 		},
 		openNativePayment(doctype = "Payment Entry") {
 			this.simplePaymentOpen = false;
@@ -414,9 +438,7 @@ export default {
 		},
 		handleSimpleCashDepositSaved(result) {
 			this.simpleCashDepositOpen = false;
-			if (!result?.name) return;
-			frappe.show_alert?.({ message: `Cash Deposit ${result.name} saved as Draft`, indicator: "green" });
-			frappe.set_route("Form", result.doctype || "Payment Entry", result.name);
+			this.notifyGuidedDraftSaved(result, "Payment Entry", "Cash Deposit");
 		},
 		openNativeCashDeposit(doctype = "Payment Entry") {
 			this.simpleCashDepositOpen = false;
@@ -427,9 +449,7 @@ export default {
 		},
 		handleSimpleCashTransferSaved(result) {
 			this.simpleCashTransferOpen = false;
-			if (!result?.name) return;
-			frappe.show_alert?.({ message: `Payment Entry ${result.name} saved as Draft`, indicator: "green" });
-			frappe.set_route("Form", result.doctype || "Payment Entry", result.name);
+			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
 		},
 		openNativeCashTransfer(doctype = "Payment Entry") {
 			this.simpleCashTransferOpen = false;
@@ -440,9 +460,7 @@ export default {
 		},
 		handleSimplePurchaseInvoiceSaved(result) {
 			this.simplePurchaseInvoiceOpen = false;
-			if (!result?.name) return;
-			frappe.show_alert?.({ message: `Purchase Invoice ${result.name} saved as Draft`, indicator: "green" });
-			frappe.set_route("Form", result.doctype || "Purchase Invoice", result.name);
+			this.notifyGuidedDraftSaved(result, "Purchase Invoice", "Purchase Invoice");
 		},
 		openNativePurchaseInvoice(doctype = "Purchase Invoice") {
 			this.simplePurchaseInvoiceOpen = false;
@@ -453,9 +471,7 @@ export default {
 		},
 		handleSimpleCashierExpenseSaved(result) {
 			this.simpleCashierExpenseOpen = false;
-			if (!result?.name) return;
-			frappe.show_alert?.({ message: `Cashier Expense ${result.name} saved as Draft`, indicator: "green" });
-			frappe.set_route("Form", result.doctype || "RetailEdge Cashier Expense", result.name);
+			this.notifyGuidedDraftSaved(result, "RetailEdge Cashier Expense", "Cashier Expense");
 		},
 		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
 			this.simpleCashierExpenseOpen = false;
@@ -466,9 +482,7 @@ export default {
 		},
 		handleSimpleStockTransferSaved(result) {
 			this.simpleStockTransferOpen = false;
-			if (!result?.name) return;
-			frappe.show_alert?.({ message: `Stock Transfer ${result.name} saved as Draft`, indicator: "green" });
-			frappe.set_route("Form", result.doctype || "Stock Entry", result.name);
+			this.notifyGuidedDraftSaved(result, "Stock Entry", "Stock Transfer");
 		},
 		openNativeStockTransfer(doctype = "Stock Entry") {
 			this.simpleStockTransferOpen = false;
@@ -479,9 +493,7 @@ export default {
 		},
 		handleSimpleStockAdjustmentSaved(result) {
 			this.simpleStockAdjustmentOpen = false;
-			if (!result?.name) return;
-			frappe.show_alert?.({ message: `Stock Reconciliation ${result.name} saved as Draft`, indicator: "green" });
-			frappe.set_route("Form", result.doctype || "Stock Reconciliation", result.name);
+			this.notifyGuidedDraftSaved(result, "Stock Reconciliation", "Stock Reconciliation");
 		},
 		openNativeStockAdjustment(doctype = "Stock Reconciliation") {
 			this.simpleStockAdjustmentOpen = false;
