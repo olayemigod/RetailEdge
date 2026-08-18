@@ -46,14 +46,15 @@
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
 					<label class="edge-field"><span class="edge-field-label">Review Status</span><select v-model="filters.daily_audit_inclusion_status" class="edge-input"><option value="">All</option><option value="Pending Review">Pending Review</option><option value="Included">Included</option><option value="Excluded">Excluded</option><option value="Needs Clarification">Needs Clarification</option></select></label>
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
-			</div>
-			<details class="advanced-filters">
-				<summary>More filters</summary>
-				<div class="review-filter-grid advanced-grid">
-					<label class="edge-field"><span class="edge-field-label">Expense Status</span><select v-model="filters.expense_status" class="edge-input"><option value="">All</option><option v-for="status in expenseStatuses" :key="status" :value="status">{{ status }}</option></select></label>
-					<label class="edge-field"><span class="edge-field-label">Posting Ready</span><select v-model="filters.posting_ready" class="edge-input"><option value="">All</option><option value="1">Ready</option><option value="0">Blocked</option></select></label>
 				</div>
-			</details>
+				<details class="advanced-filters">
+					<summary>More filters</summary>
+					<div class="review-filter-grid advanced-grid">
+						<label class="edge-field"><span class="edge-field-label">Expense Status</span><select v-model="filters.expense_status" class="edge-input"><option value="">All</option><option v-for="status in expenseStatuses" :key="status" :value="status">{{ status }}</option></select></label>
+						<label class="edge-field"><span class="edge-field-label">Posting Ready</span><select v-model="filters.posting_ready" class="edge-input"><option value="">All</option><option value="1">Ready</option><option value="0">Blocked</option></select></label>
+					</div>
+				</details>
+			</template>
 			<template #resultMeta>
 				<span>{{ scan.rows || 0 }} matching expense{{ Number(scan.rows || 0) === 1 ? "" : "s" }}</span>
 				<span>Bounded review dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
