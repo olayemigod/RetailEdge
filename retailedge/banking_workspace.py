@@ -17,6 +17,7 @@ from retailedge.banking_operations import (
     get_bank_match_operational_status,
     normalize_direction,
 )
+from retailedge.bank_transaction_matching import assert_can_access_bank_transaction_matching
 
 QUEUE_TO_MATCH = "To Match"
 QUEUE_TO_RECONCILE = "To Reconcile"
@@ -61,11 +62,12 @@ def get_banking_workspace_rows(
     queue: str | None = QUEUE_TO_MATCH,
     limit: int | str | None = 100,
 ) -> dict[str, Any]:
+    assert_can_access_bank_transaction_matching()
     direction = normalize_direction(direction)
     queue = _normalize_queue(queue)
     limit = max(1, min(cint(limit or 100), 500))
 
-    rows = frappe.get_all(
+    rows = frappe.get_list(
         "RetailEdge Bank Transaction Match",
         fields=[
             "name",
@@ -91,7 +93,7 @@ def get_banking_workspace_rows(
     skipped = 0
     for row in rows:
         try:
-            operational = get_bank_match_operational_status(row.name)
+            operational = get_bank_match_operational_status(row.name, include_gate=False)
         except Exception:
             skipped += 1
             continue
@@ -118,7 +120,7 @@ def get_banking_workspace_rows(
                 "company": row.company,
                 "branch": row.branch,
                 "bank_account": row.bank_account,
-                "can_execute": operational.get("can_execute"),
+                "can_execute": None,
                 "recommended_action": operational.get("recommended_action"),
             }
         )
