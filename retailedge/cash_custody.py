@@ -7,6 +7,12 @@ from frappe import _
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.utils import cint, flt, getdate, nowdate
 
+from retailedge.bank_account_policy import (
+	ensure_bank_account_branch_custom_field,
+	resolve_retailedge_bank_account,
+	search_retailedge_bank_accounts,
+	validate_cash_deposit_bank_destination,
+)
 from retailedge.branch_context import has_doctype, has_field, validate_user_branch_access
 from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
 
@@ -39,7 +45,8 @@ CUSTODY_FIELD_DEFS = {
 
 
 def ensure_cash_custody_custom_fields():
-	"""Idempotently add the minimal Payment Entry metadata needed for cash custody."""
+	"""Idempotently add the minimal Payment Entry and Bank Account metadata needed for cash custody."""
+	ensure_bank_account_branch_custom_field()
 	if not has_doctype(PAYMENT_ENTRY_DOCTYPE):
 		return {}
 	insert_after = "retailedge_branch" if has_field(PAYMENT_ENTRY_DOCTYPE, "retailedge_branch") else "remarks"
@@ -75,7 +82,7 @@ def get_cash_deposit_context() -> dict[str, Any]:
 	)
 	return {
 		"title": _("Deposit Cash"),
-		"subtitle": _("Move accountable cashier cash to a bank account using a standard ERPNext Payment Entry."),
+		"subtitle": _("Move accountable cashier cash to an approved company Bank Account using a standard ERPNext Payment Entry."),
 		"submit_label": _("Save Draft"),
 		"full_form_doctype": PAYMENT_ENTRY_DOCTYPE,
 		"defaults": {
@@ -85,7 +92,7 @@ def get_cash_deposit_context() -> dict[str, Any]:
 			"pos_opening_shift": shift,
 			"posting_date": nowdate(),
 			"from_account": cash_account,
-			"to_account": "",
+			"to_bank_account": "",
 			"amount": "",
 			"reference_no": "",
 			"reference_date": nowdate(),
@@ -107,30 +114,12 @@ def search_cash_deposit_options(
 	values = _coerce_values(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
 	company = str(values.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
-	if fieldname != "to_account":
+	branch = str(values.get("branch") or "").strip()
+	if fieldname not in {"to_bank_account", "to_account"}:
 		frappe.throw(_("Unsupported Deposit Cash search field: {0}").format(fieldname))
 	if not company:
 		return []
-	filters: dict[str, Any] = {"company": company, "is_group": 0, "account_type": "Bank"}
-	if has_field("Account", "disabled"):
-		filters["disabled"] = 0
-	if txt:
-		filters["name"] = ["like", f"%{txt}%"]
-	rows = frappe.get_list(
-		"Account",
-		filters=filters,
-		fields=["name", "account_name", "account_currency"],
-		order_by="account_name asc, name asc",
-		limit_page_length=limit,
-	)
-	return [
-		{
-			"value": row.name,
-			"label": row.account_name or row.name,
-			"description": row.account_currency or "",
-		}
-		for row in rows
-	]
+	return search_retailedge_bank_accounts(company=company, branch=branch, txt=txt or "", limit=limit)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -153,9 +142,25 @@ def create_cash_deposit_draft(values: dict | str | None = None) -> dict[str, Any
 		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
 
 	from_details = _get_account(company, from_account, expected_type="Cash")
-	to_account = str(values.get("to_account") or "").strip()
-	if not to_account:
+	bank_account = str(values.get("to_bank_account") or "").strip()
+	if not bank_account and values.get("to_account"):
+		bank_account = str(
+			frappe.db.get_value(
+				"Bank Account",
+				{
+					"company": company,
+					"is_company_account": 1,
+					"disabled": 0,
+					"account": str(values.get("to_account") or "").strip(),
+				},
+				"name",
+			)
+			or ""
+		).strip()
+	if not bank_account:
 		frappe.throw(_("Bank Account is required."))
+	bank_details = resolve_retailedge_bank_account(company=company, branch=branch, bank_account=bank_account)
+	to_account = bank_details["account"]
 	to_details = _get_account(company, to_account, expected_type="Bank")
 	company_currency = frappe.db.get_value("Company", company, "default_currency")
 	if not company_currency:
@@ -189,6 +194,7 @@ def create_cash_deposit_draft(values: dict | str | None = None) -> dict[str, Any
 	doc.paid_to = to_account
 	doc.paid_amount = amount
 	doc.received_amount = amount
+	_set_if_field(doc, "bank_account", bank_account)
 	_set_if_field(doc, "retailedge_branch", branch)
 	_set_if_field(doc, "retailedge_cash_custody_type", CASH_DEPOSIT_TYPE)
 	_set_if_field(doc, "retailedge_cashier", frappe.session.user)
@@ -216,6 +222,7 @@ def create_cash_deposit_draft(values: dict | str | None = None) -> dict[str, Any
 		"cashier": frappe.session.user,
 		"pos_opening_shift": opening_shift,
 		"from_account": doc.paid_from,
+		"to_bank_account": bank_account,
 		"to_account": doc.paid_to,
 		"amount": doc.paid_amount,
 		"available_cash_before_draft": custody.get("available_cash"),
@@ -295,7 +302,7 @@ def get_submitted_cash_deposits(
 
 
 def validate_cash_deposit_before_submit(doc, method=None):
-	"""Re-check custody at submit time; drafts intentionally do not reduce custody."""
+	"""Re-check custody and Bank Account scope at submit time; drafts intentionally do not reduce custody."""
 	if getattr(doc, "doctype", None) != PAYMENT_ENTRY_DOCTYPE:
 		return
 	if getattr(doc, "retailedge_cash_custody_type", None) != CASH_DEPOSIT_TYPE:
@@ -315,6 +322,7 @@ def validate_cash_deposit_before_submit(doc, method=None):
 		frappe.throw(_("A RetailEdge cash deposit must remain an Internal Transfer."))
 	_get_account(company, getattr(doc, "paid_from", None), expected_type="Cash")
 	_get_account(company, getattr(doc, "paid_to", None), expected_type="Bank")
+	validate_cash_deposit_bank_destination(doc)
 	amount = flt(getattr(doc, "paid_amount", None))
 	if amount <= 0 or flt(getattr(doc, "received_amount", None)) != amount:
 		frappe.throw(_("Cash deposit paid and received amounts must match and be greater than zero."))
