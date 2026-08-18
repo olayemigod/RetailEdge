@@ -1,0 +1,12 @@
+.retailedge-bank-reconciliation {
+	padding: 12px 0 24px;
+}
+
+.retailedge-bank-reconciliation .btn-group {
+	margin-bottom: 8px;
+}
+
+.retailedge-bank-reconciliation table td,
+.retailedge-bank-reconciliation table th {
+	vertical-align: middle;
+}
