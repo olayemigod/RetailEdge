@@ -16,6 +16,10 @@ def test_guided_searches_route_through_shared_adapter():
 		'"retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options": '
 		'"retailedge.guided_link_search.search_simple_purchase_invoice_options"'
 	) in hooks
+	assert (
+		'"retailedge.guided_payment.search_simple_payment_options": '
+		'"retailedge.guided_link_search.search_simple_payment_options"'
+	) in hooks
 
 
 def test_guided_adapter_uses_shared_edgesuite_ranker_with_rollback_fallback():
@@ -23,6 +27,7 @@ def test_guided_adapter_uses_shared_edgesuite_ranker_with_rollback_fallback():
 	assert "from edgesuite_ui.search_ranking import rank_search_records" in source
 	assert "guided_sales_invoice.search_simple_sales_invoice_options" in source
 	assert "guided_purchase_invoice.search_simple_purchase_invoice_options" in source
+	assert "guided_payment.search_simple_payment_options" in source
 	assert "CANDIDATE_LIMIT = 100" in source
 	assert 'exact_fields=("value",)' in source
 	assert 'search_fields=("label", "description")' in source
@@ -46,6 +51,16 @@ def test_purchase_candidate_search_preserves_business_filters():
 	assert 'reference_doctype="Purchase Invoice Item"' in source
 
 
+def test_payment_candidate_search_preserves_financial_scope():
+	source = (ROOT / "retailedge" / "guided_link_search.py").read_text()
+	assert "guided_payment._get_intent(intent)" in source
+	assert "guided_payment._assert_can_create_payment_entry()" in source
+	assert "guided_payment._branch_search_filters" in source
+	assert "guided_payment._search_outstanding_references" in source
+	assert 'txt=""' in source
+	assert "limit=CANDIDATE_LIMIT" in source
+
+
 def test_existing_guided_ui_still_uses_edgesuite_link_fields():
 	sales = (
 		ROOT
@@ -63,7 +78,17 @@ def test_existing_guided_ui_still_uses_edgesuite_link_fields():
 		/ "retailedge_business_hub"
 		/ "SimplePurchaseInvoiceDialog.vue"
 	).read_text()
+	payment = (
+		ROOT
+		/ "retailedge"
+		/ "public"
+		/ "js"
+		/ "retailedge_business_hub"
+		/ "SimplePaymentDialog.vue"
+	).read_text()
 	assert "<EdgeLinkField" in sales
 	assert "<EdgeLinkField" in purchase
+	assert "<EdgeLinkField" in payment
 	assert "search_simple_sales_invoice_options" in sales
 	assert "search_simple_purchase_invoice_options" in purchase
+	assert "search_simple_payment_options" in payment
