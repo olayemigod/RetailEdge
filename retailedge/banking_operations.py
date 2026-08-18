@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
-from frappe.utils import cstr, flt
+from frappe.utils import cstr
 
 from retailedge.bank_transaction_match_workflow import (
     assert_can_manage_bank_transaction_match,
@@ -56,6 +56,14 @@ CATEGORY_UNCLASSIFIED = "Unclassified"
 INACTIVE_DECISION_STATUSES = {"Rejected", "Cancelled"}
 
 
+def _bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
+    return bool(value)
+
+
 def normalize_direction(value: str | None) -> str:
     value = cstr(value).strip().lower()
     if value in {"inflow", "credit", "deposit", "receive", "received"}:
@@ -69,15 +77,10 @@ def normalize_direction(value: str | None) -> str:
 
 def get_bank_transaction_direction(bank_transaction: str | dict[str, Any]) -> str:
     normalized = normalize_bank_transaction(bank_transaction)
-    explicit = normalize_direction(normalized.get("direction"))
-    if explicit in {DIRECTION_INFLOW, DIRECTION_OUTFLOW}:
-        return explicit
-
-    deposit = flt(normalized.get("deposit"))
-    withdrawal = flt(normalized.get("withdrawal"))
-    if deposit > 0 and withdrawal <= 0:
+    direction = cstr(normalized.get("direction")).strip()
+    if direction == DIRECTION_INFLOW:
         return DIRECTION_INFLOW
-    if withdrawal > 0 and deposit <= 0:
+    if direction == DIRECTION_OUTFLOW:
         return DIRECTION_OUTFLOW
     frappe.throw("Bank Transaction direction could not be determined safely.")
 
@@ -201,6 +204,7 @@ def derive_operational_status(
 @frappe.whitelist()
 def get_bank_match_operational_status(match_name: str, include_gate: bool = True) -> dict[str, Any]:
     assert_can_access_bank_transaction_matching()
+    include_gate = _bool(include_gate, True)
     match_doc = _load_match(match_name)
     bank_transaction = match_doc.get("bank_transaction")
     direction = get_bank_transaction_direction(bank_transaction)
@@ -222,7 +226,7 @@ def get_bank_match_operational_status(match_name: str, include_gate: bool = True
         or preflight.get("eligibility_status"),
         "execution_status": match_doc.get("execution_status"),
         "can_execute": bool(gate.get("can_execute")) if include_gate else None,
-        "blocking_reasons": gate.get("block_reasons") or [] if include_gate else [],
+        "blocking_reasons": (gate.get("block_reasons") or []) if include_gate else [],
         "recommended_action": preflight.get("recommended_action"),
         "erpnext_target_doctype": preflight.get("erpnext_target_doctype"),
         "erpnext_target_name": preflight.get("erpnext_target_name"),
@@ -239,6 +243,8 @@ def match_and_reconcile(match_name: str, confirm_match: bool = False, confirm_re
     """
     assert_can_manage_bank_transaction_match()
     assert_can_access_bank_transaction_matching()
+    confirm_match = _bool(confirm_match)
+    confirm_reconciliation = _bool(confirm_reconciliation)
     match_doc = _load_match(match_name)
     decision_status = cstr(match_doc.get("decision_status")).strip()
 
