@@ -39,7 +39,7 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertIn("openCreatePicker()", component)
 		self.assertIn("closeCreatePicker()", component)
 		self.assertIn('v-for="action in quickActions"', component)
-		self.assertIn("frappe.new_doc(action.doctype)", component)
+		self.assertNotIn("frappe.new_doc(action.doctype)", component)
 		self.assertNotIn("quick-action-grid", component)
 
 	def test_create_picker_routes_all_registered_actions_to_guided_adapters(self):
