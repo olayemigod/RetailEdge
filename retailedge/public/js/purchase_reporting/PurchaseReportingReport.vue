@@ -43,7 +43,10 @@
 						<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
 						<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
 					</template>
-					<label v-else class="edge-field"><span class="edge-field-label">As of Date</span><input v-model="filters.as_of_date" type="date" class="edge-input" /></label>
+					<div v-else class="edge-field">
+						<span class="edge-field-label">Balance Basis</span>
+						<div class="edge-input edge-input--readonly">Current outstanding · {{ filters.as_of_date || "Today" }}</div>
+					</div>
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.supplier" :selectedLabel="supplierLabel" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
 					<label v-if="reportType === 'supplier_payables'" class="edge-field">
@@ -68,6 +71,7 @@
 			</template>
 			<template #resultMeta>
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
+				<span v-if="reportType === 'supplier_payables'">Current ERPNext outstanding balances aged at {{ payablesAgeingDate || filters.as_of_date || "today" }}</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
 			</template>
@@ -87,7 +91,7 @@ const REPORT_CONFIG = {
 	},
 	supplier_payables: {
 		title: "Supplier Payables",
-		subtitle: "See unpaid supplier bills, overdue exposure, due dates, and ageing without changing ERPNext accounting truth.",
+		subtitle: "See current unpaid supplier bills, overdue exposure, due dates, and ageing from ERPNext's live outstanding balances.",
 		providerKey: "supplier-payables",
 		route: "/app/supplier-payables",
 	},
@@ -107,7 +111,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			rows: [], columns: [], summary: [], pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", companyCurrency: "",
-			supplierLabel: "", itemLabel: "",
+			supplierLabel: "", itemLabel: "", payablesAgeingDate: "",
 			filters: { company: "", from_date: "", to_date: "", as_of_date: "", branch: "", supplier: "", supplier_group: "", item_code: "", item_group: "", warehouse: "", status: "", invoice_kind: "All", ageing_bucket: "All", page_size: 50 },
 			currentPage: 1,
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
@@ -117,7 +121,7 @@ export default {
 	computed: {
 		config() { return REPORT_CONFIG[this.reportType] || REPORT_CONFIG.purchase_register; },
 		activeRoute() { return this.config.route; },
-		requiredReady() { return Boolean(this.filters.company && (this.reportType === "supplier_payables" ? this.filters.as_of_date : this.filters.from_date && this.filters.to_date)); },
+		requiredReady() { return Boolean(this.filters.company && (this.reportType === "supplier_payables" || this.filters.from_date && this.filters.to_date)); },
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 0); },
 		reportColumns() { return (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: ["invoice", "supplier", "return_against"].includes(column.fieldname) })); },
@@ -161,7 +165,7 @@ export default {
 			try {
 				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize);
 				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
-				this.rows = result.rows || []; this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency;
+				this.rows = result.rows || []; this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || this.payablesAgeingDate;
 				const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); if (this.currentPage > totalPages) this.currentPage = totalPages;
 				this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
 			} catch (error) { this.rows = []; this.columns = []; this.summary = []; this.error = errorMessage(error, `${this.config.title} failed to load.`); }
@@ -186,6 +190,7 @@ export default {
 .edge-field { display:flex; flex-direction:column; gap:6px; min-width:0; }
 .edge-field-label { font-size:.78rem; font-weight:600; color:var(--edge-text-muted,#667085); }
 .edge-input,.edge-primary-button { min-height:38px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); background:var(--edge-surface,#fff); color:var(--edge-text,#101828); padding:0 10px; }
+.edge-input--readonly { display:flex; align-items:center; color:var(--edge-text-muted,#667085); background:var(--edge-surface-subtle,#f8fafc); }
 .edge-primary-button { background:var(--edge-primary,#0f766e); color:#fff; border-color:var(--edge-primary,#0f766e); font-weight:600; cursor:pointer; }
 .edge-primary-button:disabled { opacity:.55; cursor:not-allowed; }
 @media (max-width:1180px) { .purchase-filter-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
