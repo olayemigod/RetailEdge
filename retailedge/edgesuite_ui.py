@@ -198,6 +198,9 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted warehouses using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
 	},
+	{
+		"key": "adjust-stock", "label": "Stock Adjustment", "description": "Record a physical stock count using a native Stock Reconciliation draft.", "doctype": "Stock Reconciliation", "icon": "clipboard", "experience": "act", "mode": "available",
+	},
 )
 
 
