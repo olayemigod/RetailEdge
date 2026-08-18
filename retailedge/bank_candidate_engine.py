@@ -17,6 +17,15 @@ from retailedge.branch_context import has_doctype, has_field
 DIRECTION_INFLOW = "Inflow"
 DIRECTION_OUTFLOW = "Outflow"
 
+CATEGORY_CUSTOMER_RECEIPT = "Customer Receipt"
+CATEGORY_POS_SALE = "POS Sale"
+CATEGORY_BANK_DEPOSIT = "Deposit to Bank"
+CATEGORY_SUPPLIER_PAYMENT = "Supplier Payment"
+CATEGORY_EXPENSE = "Expense"
+CATEGORY_BANK_TRANSFER = "Bank Transfer"
+CATEGORY_OTHER_INCOME = "Other Income"
+CATEGORY_OTHER_OUTFLOW = "Other Outflow"
+
 
 def _date_distance(bank_date, candidate_date):
 	if not bank_date or not candidate_date:
@@ -109,16 +118,20 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 		voucher_type = cstr(entry.get("voucher_type")).strip()
 		remarks = cstr(entry.get("user_remark") or entry.get("remark")).strip()
 		category = "Journal Entry Match"
+		business_category = CATEGORY_OTHER_INCOME if direction == DIRECTION_INFLOW else CATEGORY_OTHER_OUTFLOW
 		lower_text = f"{voucher_type} {remarks}".lower()
 		if "bank entry" in lower_text or "transfer" in lower_text:
 			category = "Deposit to Bank" if direction == DIRECTION_INFLOW else "Bank Transfer"
+			business_category = CATEGORY_BANK_DEPOSIT if direction == DIRECTION_INFLOW else CATEGORY_BANK_TRANSFER
 		elif any(token in lower_text for token in ("expense", "charge", "fee")):
 			category = "Expense Payment" if direction == DIRECTION_OUTFLOW else "Other Income"
+			business_category = CATEGORY_EXPENSE if direction == DIRECTION_OUTFLOW else CATEGORY_OTHER_INCOME
 
 		candidate = {
 			"document_type": "Journal Entry",
 			"document_name": entry.get("name"),
 			"candidate_category": category,
+			"transaction_category": business_category,
 			"candidate_amount": candidate_amount,
 			"amount_difference": amount_diff,
 			"posting_date": entry.get("posting_date"),
@@ -139,6 +152,77 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 	return candidates[:limit]
 
 
+def _hydrate_payment_entry_metadata(candidates):
+	names = [
+		cstr(row.get("document_name")).strip()
+		for row in candidates or []
+		if cstr(row.get("document_type")).strip() == "Payment Entry"
+		and cstr(row.get("document_name")).strip()
+	]
+	if not names or not has_doctype("Payment Entry"):
+		return {}
+	fields = ["name", "payment_type", "party_type", "party", "paid_from", "paid_to"]
+	for fieldname in ("mode_of_payment", "remarks", "reference_no"):
+		if has_field("Payment Entry", fieldname):
+			fields.append(fieldname)
+	return {
+		row.get("name"): row
+		for row in frappe.get_all(
+			"Payment Entry",
+			filters={"name": ["in", list(dict.fromkeys(names))], "docstatus": 1},
+			fields=fields,
+			limit_page_length=len(set(names)) or 1,
+		)
+	}
+
+
+def _payment_entry_business_category(metadata, direction):
+	payment_type = cstr(metadata.get("payment_type")).strip()
+	party_type = cstr(metadata.get("party_type")).strip()
+	remarks = cstr(metadata.get("remarks")).strip().lower()
+
+	if payment_type == "Internal Transfer":
+		return CATEGORY_BANK_DEPOSIT if direction == DIRECTION_INFLOW else CATEGORY_BANK_TRANSFER
+	if direction == DIRECTION_INFLOW:
+		return CATEGORY_CUSTOMER_RECEIPT if party_type == "Customer" else CATEGORY_OTHER_INCOME
+	if party_type == "Supplier":
+		return CATEGORY_SUPPLIER_PAYMENT
+	if any(token in remarks for token in ("expense", "charge", "fee", "rent", "utility")):
+		return CATEGORY_EXPENSE
+	return CATEGORY_OTHER_OUTFLOW
+
+
+def _annotate_candidate_business_context(candidate, bank_transaction, payment_metadata):
+	row = dict(candidate or {})
+	direction = cstr(bank_transaction.get("direction")).strip()
+	doctype = cstr(row.get("document_type")).strip()
+	category = cstr(row.get("candidate_category")).lower()
+	payment_source = cstr(row.get("payment_event_source")).lower()
+
+	if row.get("transaction_category"):
+		return row
+	if doctype == "Payment Entry":
+		metadata = payment_metadata.get(cstr(row.get("document_name")).strip()) or {}
+		row["transaction_category"] = _payment_entry_business_category(metadata, direction)
+		row.setdefault("party_type", metadata.get("party_type"))
+		row.setdefault("party", metadata.get("party"))
+		row.setdefault("remarks", metadata.get("remarks"))
+		row.setdefault("reference", metadata.get("reference_no"))
+		row["payment_type"] = metadata.get("payment_type")
+		return row
+	if doctype == "Sales Invoice":
+		row["transaction_category"] = (
+			CATEGORY_POS_SALE
+			if "pos" in category or "pos payment" in payment_source
+			else CATEGORY_CUSTOMER_RECEIPT
+		)
+		return row
+	row["transaction_category"] = (
+		CATEGORY_OTHER_INCOME if direction == DIRECTION_INFLOW else CATEGORY_OTHER_OUTFLOW
+	)
+	return row
+
+
 def _prepare_candidate_for_fuzzy(candidate, bank_transaction):
 	row = dict(candidate or {})
 	row.setdefault("direction", bank_transaction.get("direction"))
@@ -152,7 +236,7 @@ def _prepare_candidate_for_fuzzy(candidate, bank_transaction):
 
 
 def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, limit=40):
-	"""Return the existing RetailEdge candidates plus direction-specific ERPNext bank events.
+	"""Return existing RetailEdge candidates plus direction-specific ERPNext bank events.
 
 	Fuzzy similarity is applied only after the existing candidate builders and hard accounting
 	guards have produced candidates. This service does not reconcile or mutate accounting docs.
@@ -183,7 +267,12 @@ def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, lim
 		)
 
 	base_candidates.extend(_journal_entry_candidates(bank_transaction, limit=limit))
-	prepared = [_prepare_candidate_for_fuzzy(candidate, bank_transaction) for candidate in base_candidates]
+	payment_metadata = _hydrate_payment_entry_metadata(base_candidates)
+	annotated = [
+		_annotate_candidate_business_context(candidate, bank_transaction, payment_metadata)
+		for candidate in base_candidates
+	]
+	prepared = [_prepare_candidate_for_fuzzy(candidate, bank_transaction) for candidate in annotated]
 	prepared = enrich_ranked_candidates(bank_transaction, prepared)
 
 	seen = set()
