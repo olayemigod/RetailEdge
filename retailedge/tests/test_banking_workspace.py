@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from retailedge.banking_workspace import (
@@ -20,6 +19,7 @@ from retailedge.banking_operations import (
     STATUS_RECONCILED,
     STATUS_RECONCILIATION_FAILED,
     STATUS_RECONCILIATION_PENDING,
+    STATUS_SUGGESTED,
     STATUS_UNMATCHED,
 )
 
@@ -27,6 +27,7 @@ from retailedge.banking_operations import (
 class BankingWorkspaceTests(unittest.TestCase):
     def test_queue_mapping_keeps_matching_and_reconciliation_separate(self):
         self.assertTrue(_status_belongs_to_queue(STATUS_UNMATCHED, QUEUE_TO_MATCH))
+        self.assertTrue(_status_belongs_to_queue(STATUS_SUGGESTED, QUEUE_TO_MATCH))
         self.assertTrue(_status_belongs_to_queue(STATUS_READY_TO_RECONCILE, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILIATION_PENDING, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILED, QUEUE_RECONCILED))
@@ -41,106 +42,101 @@ class BankingWorkspaceTests(unittest.TestCase):
             self.assertTrue(_status_belongs_to_queue(status, QUEUE_EXCEPTIONS))
 
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
-    @patch("retailedge.banking_workspace.get_bank_match_operational_status")
-    @patch("retailedge.banking_workspace.frappe.get_list")
-    def test_workspace_direction_filters_review_queue_rows(
-        self, get_list, operational, _assert_access
-    ):
-        get_list.return_value = [
-            SimpleNamespace(
-                name="MATCH-IN",
-                bank_transaction="BT-IN",
-                transaction_date="2026-08-18",
-                bank_amount=100000,
-                suggested_document_type="Payment Entry",
-                suggested_document="PE-IN",
-                decision_status="Confirmed",
-                review_status="Confirmed",
-                match_confidence="Strong Match",
-                match_score=100,
-                company="Demo",
-                branch="HQ",
-                bank_account="Bank",
-            ),
-            SimpleNamespace(
-                name="MATCH-OUT",
-                bank_transaction="BT-OUT",
-                transaction_date="2026-08-18",
-                bank_amount=75000,
-                suggested_document_type="Expense Claim",
-                suggested_document="EXP-1",
-                decision_status="Confirmed",
-                review_status="Confirmed",
-                match_confidence="Strong Match",
-                match_score=100,
-                company="Demo",
-                branch="HQ",
-                bank_account="Bank",
-            ),
-        ]
-        operational.side_effect = [
-            {
-                "direction": "Inflow",
-                "transaction_category": "Customer Receipt",
-                "operational_status": STATUS_READY_TO_RECONCILE,
-                "can_execute": None,
-            },
-            {
-                "direction": "Outflow",
-                "transaction_category": "Expense",
-                "operational_status": STATUS_READY_TO_RECONCILE,
-                "can_execute": None,
-            },
-        ]
-
-        payload = get_banking_workspace_rows(direction="Outflow", queue=QUEUE_TO_RECONCILE)
-
+    @patch("retailedge.banking_workspace._get_review_queue_rows")
+    def test_review_queue_receives_direction_and_user_filters(self, review_rows, _assert_access):
+        review_rows.return_value = (
+            [
+                {
+                    "bank_transaction": "BT-OUT",
+                    "direction": "Outflow",
+                    "operational_status": STATUS_READY_TO_RECONCILE,
+                }
+            ],
+            0,
+        )
+        payload = get_banking_workspace_rows(
+            direction="Outflow",
+            queue=QUEUE_TO_RECONCILE,
+            company="Demo",
+            bank_account="BANK-1",
+            from_date="2026-08-01",
+            to_date="2026-08-31",
+            search="supplier",
+        )
         self.assertEqual(payload["count"], 1)
-        self.assertEqual(payload["rows"][0]["bank_transaction"], "BT-OUT")
-        self.assertEqual(payload["rows"][0]["direction"], "Outflow")
-        operational.assert_any_call("MATCH-IN", include_gate=False)
-        operational.assert_any_call("MATCH-OUT", include_gate=False)
+        args = review_rows.call_args.args
+        filters = args[3]
+        self.assertEqual(args[0], "Outflow")
+        self.assertEqual(args[1], QUEUE_TO_RECONCILE)
+        self.assertEqual(filters.company, "Demo")
+        self.assertEqual(filters.bank_account, "BANK-1")
+        self.assertEqual(filters.search, "supplier")
 
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
-    @patch("retailedge.banking_workspace.normalize_bank_transaction")
-    @patch("retailedge.banking_workspace.frappe.get_list")
-    def test_to_match_queue_comes_from_unreconciled_bank_transactions(
-        self, get_list, normalize, _assert_access
+    @patch("retailedge.banking_workspace._get_review_queue_rows")
+    @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
+    def test_to_match_combines_unmatched_and_suggested_without_losing_suggestions(
+        self, unmatched_rows, review_rows, _assert_access
     ):
-        bank_rows = [
-            SimpleNamespace(name="BT-IN"),
-            SimpleNamespace(name="BT-OUT"),
-        ]
-        get_list.side_effect = [bank_rows, []]
-        normalize.side_effect = [
-            {
-                "bank_transaction": "BT-IN",
-                "transaction_date": "2026-08-18",
-                "amount": 100000,
-                "direction": "Inflow",
-                "company": "Demo",
-                "bank_account": "Bank",
-                "branch": "HQ",
-                "is_reconciled": False,
-            },
-            {
-                "bank_transaction": "BT-OUT",
-                "transaction_date": "2026-08-18",
-                "amount": 75000,
-                "direction": "Outflow",
-                "company": "Demo",
-                "bank_account": "Bank",
-                "branch": "HQ",
-                "is_reconciled": False,
-            },
-        ]
-
+        unmatched_rows.return_value = (
+            [
+                {
+                    "bank_transaction": "BT-NEW",
+                    "transaction_date": "2026-08-18",
+                    "direction": "Inflow",
+                    "operational_status": STATUS_UNMATCHED,
+                }
+            ],
+            0,
+        )
+        review_rows.return_value = (
+            [
+                {
+                    "bank_transaction": "BT-SUGGESTED",
+                    "transaction_date": "2026-08-17",
+                    "direction": "Inflow",
+                    "operational_status": STATUS_SUGGESTED,
+                    "match_name": "MATCH-1",
+                }
+            ],
+            0,
+        )
         payload = get_banking_workspace_rows(direction="Inflow", queue=QUEUE_TO_MATCH)
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(
+            {row["operational_status"] for row in payload["rows"]},
+            {STATUS_UNMATCHED, STATUS_SUGGESTED},
+        )
 
-        self.assertEqual(payload["count"], 1)
-        self.assertEqual(payload["rows"][0]["bank_transaction"], "BT-IN")
-        self.assertEqual(payload["rows"][0]["operational_status"], STATUS_UNMATCHED)
-        self.assertEqual(payload["rows"][0]["direction"], "Inflow")
+    @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_workspace._get_review_queue_rows")
+    @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
+    def test_to_match_respects_requested_result_limit_after_combining_sources(
+        self, unmatched_rows, review_rows, _assert_access
+    ):
+        unmatched_rows.return_value = (
+            [
+                {
+                    "bank_transaction": f"BT-{index}",
+                    "transaction_date": f"2026-08-{18-index:02d}",
+                    "operational_status": STATUS_UNMATCHED,
+                }
+                for index in range(4)
+            ],
+            0,
+        )
+        review_rows.return_value = (
+            [
+                {
+                    "bank_transaction": "BT-SUGGESTED",
+                    "transaction_date": "2026-08-19",
+                    "operational_status": STATUS_SUGGESTED,
+                }
+            ],
+            0,
+        )
+        payload = get_banking_workspace_rows(direction="All", queue=QUEUE_TO_MATCH, limit=3)
+        self.assertEqual(payload["count"], 3)
 
 
 if __name__ == "__main__":
