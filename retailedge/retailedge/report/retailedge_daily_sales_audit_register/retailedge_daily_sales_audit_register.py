@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import getdate
+from frappe.utils import flt, getdate
 
 from retailedge.branch_context import get_branch_query_filters
+from retailedge.cash_deposit_audit import get_submitted_deposit_totals
 
 
 def execute(filters=None):
@@ -43,6 +44,7 @@ def get_columns():
 		{"label": _("Opening Cash"), "fieldname": "opening_cash_amount", "fieldtype": "Currency", "width": 120},
 		{"label": _("Cash Sales"), "fieldname": "cash_sales_amount", "fieldtype": "Currency", "width": 120},
 		{"label": _("Cashier Expenses"), "fieldname": "cashier_expense_amount", "fieldtype": "Currency", "width": 130},
+		{"label": _("Cash Deposits"), "fieldname": "cash_deposit_amount", "fieldtype": "Currency", "width": 125},
 		{"label": _("Expected Cash"), "fieldname": "expected_cash_amount", "fieldtype": "Currency", "width": 120},
 		{"label": _("Actual Closing Cash"), "fieldname": "actual_closing_cash_amount", "fieldtype": "Currency", "width": 150},
 		{"label": _("Cash Variance"), "fieldname": "cash_variance_amount", "fieldtype": "Currency", "width": 120},
@@ -81,7 +83,7 @@ def get_data(filters, limit_page_length=0):
 		query_filters["audit_date"] = [">=", filters["from_date"]]
 	elif filters.get("to_date"):
 		query_filters["audit_date"] = ["<=", filters["to_date"]]
-	return frappe.get_all(
+	rows = frappe.get_all(
 		"RetailEdge Daily Sales Audit",
 		filters=query_filters,
 		fields=[
@@ -95,3 +97,19 @@ def get_data(filters, limit_page_length=0):
 		limit_page_length=limit_page_length,
 		order_by="audit_date desc, creation desc",
 	)
+	deposit_totals = get_submitted_deposit_totals(
+		[row.get("pos_opening_shift") for row in rows],
+		company=filters.get("company"),
+	)
+	for row in rows:
+		deposit_amount = flt(deposit_totals.get(row.get("pos_opening_shift")))
+		row["cash_deposit_amount"] = deposit_amount
+		row["expected_cash_amount"] = (
+			flt(row.get("opening_cash_amount"))
+			+ flt(row.get("cash_sales_amount"))
+			- flt(row.get("cashier_expense_amount"))
+			- deposit_amount
+		)
+		row["cash_variance_amount"] = flt(row.get("actual_closing_cash_amount")) - flt(row.get("expected_cash_amount"))
+		row["net_variance_amount"] = flt(row.get("cash_variance_amount"))
+	return rows
