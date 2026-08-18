@@ -8,6 +8,10 @@ from frappe.utils import cstr, flt, now_datetime
 
 from retailedge.bank_matching_operational_reports import (
 	READINESS_ALREADY_RECONCILED,
+	READINESS_EXCEPTION,
+	READINESS_NEEDS_REVIEW,
+	READINESS_NOT_READY,
+	READINESS_READY,
 	_bulk_hydrate_match_candidate_contexts,
 	_readiness_for_match_row,
 	_safe_load_json,
@@ -79,6 +83,8 @@ EXECUTION_STATUS_EXECUTED = "Executed"
 EXECUTION_STATUS_BLOCKED = "Blocked"
 EXECUTION_STATUS_FAILED = "Failed"
 EXECUTION_STATUS_ALREADY_HANDLED = "Already Handled"
+
+NATIVE_EXECUTION_DOCTYPES = {"Payment Entry", "Journal Entry"}
 
 DEFAULT_RECONCILIATION_EXECUTION_ROLES = (
 	"System Manager",
@@ -156,6 +162,103 @@ def cint_or_zero(value):
 		return int(value or 0)
 	except Exception:
 		return 0
+
+
+def _journal_entry_reconciliation_context(match_doc):
+	match_doc = frappe._dict(match_doc or {})
+	if cstr(match_doc.get("suggested_document_type")).strip() != "Journal Entry":
+		return {}
+	name = cstr(match_doc.get("suggested_document")).strip()
+	if not name or not has_doctype("Journal Entry") or not has_doctype("Journal Entry Account"):
+		return {}
+	entry = frappe.db.get_value(
+		"Journal Entry",
+		name,
+		["name", "posting_date", "company", "docstatus", "cheque_no", "user_remark"],
+		as_dict=True,
+	) or {}
+	if not entry:
+		return {"candidate_missing": True}
+
+	bank_account = cstr(match_doc.get("resolved_bank_account") or match_doc.get("payment_account")).strip()
+	direction = cstr(match_doc.get("direction") or match_doc.get("bank_direction")).strip()
+	if not bank_account or direction not in {"Inflow", "Outflow"}:
+		return {
+			"candidate_doctype": "Journal Entry",
+			"candidate_name": name,
+			"candidate_docstatus": entry.get("docstatus"),
+			"candidate_account": bank_account,
+			"candidate_amount": 0,
+			"candidate_date": entry.get("posting_date"),
+			"payment_event_source": "Journal Entry",
+			"journal_entry_validation_error": "Bank account or direction could not be resolved safely.",
+		}
+
+	rows = frappe.get_all(
+		"Journal Entry Account",
+		filters={"parent": name, "account": bank_account},
+		fields=["account", "debit_in_account_currency", "credit_in_account_currency"],
+		limit_page_length=5,
+	)
+	if len(rows) != 1:
+		return {
+			"candidate_doctype": "Journal Entry",
+			"candidate_name": name,
+			"candidate_docstatus": entry.get("docstatus"),
+			"candidate_account": bank_account,
+			"candidate_amount": 0,
+			"candidate_date": entry.get("posting_date"),
+			"payment_event_source": "Journal Entry",
+			"journal_entry_validation_error": "Journal Entry must contain exactly one matching row for the selected bank ledger.",
+		}
+	row = frappe._dict(rows[0])
+	amount = flt(
+		row.get("debit_in_account_currency")
+		if direction == "Inflow"
+		else row.get("credit_in_account_currency")
+	)
+	return {
+		"candidate_doctype": "Journal Entry",
+		"candidate_name": name,
+		"candidate_docstatus": entry.get("docstatus"),
+		"candidate_account": bank_account,
+		"payment_account": bank_account,
+		"candidate_amount": amount,
+		"payment_event_amount": amount,
+		"candidate_date": entry.get("posting_date"),
+		"candidate_posting_date": entry.get("posting_date"),
+		"candidate_reference": entry.get("cheque_no") or name,
+		"payment_event_source": "Journal Entry",
+		"amount_scenario": "Submitted Journal Entry Bank Ledger Amount",
+		"candidate_exists": True,
+	}
+
+
+def _journal_entry_readiness(match_doc):
+	match_doc = frappe._dict(match_doc or {})
+	decision = cstr(match_doc.get("decision_status") or match_doc.get("review_status")).strip()
+	if decision in {"Rejected", "Cancelled"}:
+		return READINESS_NOT_READY, "Previously rejected or cancelled match."
+	if decision not in {"Confirmed", "Auto Confirmed"}:
+		return READINESS_NEEDS_REVIEW, "Decision is not confirmed yet."
+	if match_doc.get("is_reconciled"):
+		return READINESS_ALREADY_RECONCILED, "Bank Transaction already appears reconciled/settled."
+	if match_doc.get("candidate_missing") or match_doc.get("candidate_exists") is False:
+		return READINESS_NOT_READY, "Journal Entry candidate is missing."
+	if cint_or_zero(match_doc.get("candidate_docstatus")) != 1:
+		return READINESS_NOT_READY, "Journal Entry is not submitted."
+	if match_doc.get("journal_entry_validation_error"):
+		return READINESS_EXCEPTION, cstr(match_doc.get("journal_entry_validation_error"))
+	if abs(flt(match_doc.get("amount_difference"))) > 0.01:
+		return READINESS_NOT_READY, "Amount variance requires review."
+	account_status = cstr(match_doc.get("account_resolution_status")).strip().lower()
+	if account_status == "unresolved":
+		return READINESS_EXCEPTION, "Account unresolved."
+	if account_status == "mismatch":
+		return READINESS_EXCEPTION, "Account mismatch."
+	if cint_or_zero(match_doc.get("branch_match_available")) and not cint_or_zero(match_doc.get("branch_match")):
+		return READINESS_EXCEPTION, "Branch mismatch."
+	return READINESS_READY, "Submitted Journal Entry is ready for reconciliation review."
 
 
 def _load_match_for_preflight(match_name):
@@ -269,10 +372,6 @@ def _load_match_for_preflight(match_name):
 	combined["party"] = context.get("party") or row.get("party") or row.get("customer")
 	combined["branch"] = context.get("branch") or row.get("branch")
 
-	readiness_status, readiness_reason = _readiness_for_match_row(combined)
-	combined["reconciliation_readiness_status"] = readiness_status
-	combined["exception_reason"] = readiness_reason
-
 	combined.update(get_bank_transaction_reconciliation_context(row.get("bank_transaction")))
 	combined["direction"] = bank_direction
 	combined["bank_direction"] = bank_direction
@@ -284,6 +383,34 @@ def _load_match_for_preflight(match_name):
 	for key, value in payment_context.items():
 		if value not in (None, ""):
 			combined[key] = value
+
+	journal_context = _journal_entry_reconciliation_context(combined)
+	for key, value in journal_context.items():
+		if value not in (None, ""):
+			combined[key] = value
+
+	# Re-resolve accounts after Journal Entry hydration so the exact bank-ledger row is authoritative.
+	if cstr(combined.get("suggested_document_type")).strip() == "Journal Entry":
+		candidate.update(
+			{
+				"payment_account": combined.get("payment_account"),
+				"account": combined.get("candidate_account") or combined.get("payment_account"),
+			}
+		)
+		account_payload = _resolve_account_match_payload(bank_transaction, candidate)
+		combined["account_resolution_status"] = account_payload.get("status")
+		combined["resolved_bank_account"] = account_payload.get("bank_canonical_account")
+		combined["resolved_payment_account"] = account_payload.get("candidate_canonical_account")
+		combined["amount_difference"] = flt(combined.get("bank_transaction_amount") or combined.get("bank_amount")) - flt(
+			combined.get("candidate_amount")
+		)
+
+	if cstr(combined.get("suggested_document_type")).strip() == "Journal Entry":
+		readiness_status, readiness_reason = _journal_entry_readiness(combined)
+	else:
+		readiness_status, readiness_reason = _readiness_for_match_row(combined)
+	combined["reconciliation_readiness_status"] = readiness_status
+	combined["exception_reason"] = readiness_reason
 
 	conflict_counts = _active_conflict_counts(combined)
 	handoff_status, handoff_priority, handoff_reason = classify_reconciliation_handoff(
@@ -328,11 +455,43 @@ def resolve_reconciliation_target(match_doc):
 			"target_status": TARGET_AVAILABLE,
 			"erpnext_target_doctype": "Payment Entry",
 			"erpnext_target_name": candidate_name,
-			"recommended_action": f"Open ERPNext Bank Reconciliation and reconcile Bank Transaction {match_doc.get('bank_transaction')} against Payment Entry {candidate_name}.",
+			"recommended_action": f"Reconcile Bank Transaction {match_doc.get('bank_transaction')} against Payment Entry {candidate_name} through ERPNext Bank Reconciliation.",
 			"blocking_reason": "",
 			"notes": (
 				"ERPNext's native bank reconciliation hook supports Payment Entry, and "
 				f"`{ERPNext_NATIVE_RECONCILIATION_METHOD}` accepts Payment Entry vouchers."
+			),
+		}
+
+	if candidate_doctype == "Journal Entry":
+		docstatus = cint_or_zero(match_doc.get("candidate_docstatus"))
+		if docstatus != 1:
+			return {
+				"target_status": TARGET_MANUAL_REVIEW,
+				"erpnext_target_doctype": "Journal Entry",
+				"erpnext_target_name": candidate_name,
+				"recommended_action": "Review or submit the Journal Entry before reconciliation.",
+				"blocking_reason": "Journal Entry is not submitted.",
+				"notes": "ERPNext native bank reconciliation requires the accounting voucher to be submitted.",
+			}
+		if payment_event_source != "Journal Entry":
+			return {
+				"target_status": TARGET_MANUAL_REVIEW,
+				"erpnext_target_doctype": "Journal Entry",
+				"erpnext_target_name": candidate_name,
+				"recommended_action": "Review this Journal Entry match before reconciliation.",
+				"blocking_reason": "Journal Entry bank-ledger evidence could not be revalidated.",
+				"notes": "RetailEdge requires an exact submitted Journal Entry bank-ledger row before native reconciliation.",
+			}
+		return {
+			"target_status": TARGET_AVAILABLE,
+			"erpnext_target_doctype": "Journal Entry",
+			"erpnext_target_name": candidate_name,
+			"recommended_action": f"Reconcile Bank Transaction {match_doc.get('bank_transaction')} against Journal Entry {candidate_name} through ERPNext Bank Reconciliation.",
+			"blocking_reason": "",
+			"notes": (
+				"ERPNext's native Bank Reconciliation Tool accepts Journal Entry vouchers through "
+				f"`{ERPNext_NATIVE_RECONCILIATION_METHOD}`. RetailEdge revalidated the exact bank-ledger row first."
 			),
 		}
 
@@ -395,7 +554,7 @@ def resolve_reconciliation_target(match_doc):
 		"erpnext_target_name": candidate_name,
 		"recommended_action": "Review this voucher type manually in ERPNext before reconciliation.",
 		"blocking_reason": f"{candidate_doctype} is not a supported RetailEdge reconciliation bridge target yet.",
-		"notes": "RetailEdge R6.0 only resolves Payment Entry targets directly. Other voucher types remain manual handoff items.",
+		"notes": "RetailEdge resolves only explicitly supported native ERPNext reconciliation voucher types.",
 	}
 
 
@@ -495,7 +654,7 @@ def build_reconciliation_preflight(match_doc):
 		"notes": target.get("notes"),
 		"native_reconciliation_method": ERPNext_NATIVE_RECONCILIATION_METHOD,
 		"native_execution_supported": target.get("target_status") == TARGET_AVAILABLE
-		and target.get("erpnext_target_doctype") == "Payment Entry",
+		and target.get("erpnext_target_doctype") in NATIVE_EXECUTION_DOCTYPES,
 	}
 
 
@@ -517,7 +676,7 @@ def reconcile_confirmed_bank_match(match_name, dry_run=True):
 	)
 	result["notes"] = (
 		(preflight.get("notes") or "")
-		+ " RetailEdge execution is deferred in R6.0 because the native ERPNext method mutates Bank Transaction status and linked voucher clearance fields; only read-only preflight is enabled in this phase."
+		+ " Live execution remains controlled by the RetailEdge execution gate and explicit final confirmation."
 	).strip()
 	return result
 
@@ -550,12 +709,12 @@ def _payment_event_identity(match_doc, preflight):
 	).strip()
 	if source and row_reference:
 		return f"{source}:{row_reference}"
-	if source == "Payment Entry" and candidate_doctype == "Payment Entry" and candidate_name:
-		return f"Payment Entry:{candidate_name}"
+	if source in NATIVE_EXECUTION_DOCTYPES and candidate_doctype == source and candidate_name:
+		return f"{source}:{candidate_name}"
 	if source and candidate_name:
 		return f"{source}:{candidate_name}"
-	if candidate_doctype == "Payment Entry" and candidate_name:
-		return f"Payment Entry:{candidate_name}"
+	if candidate_doctype in NATIVE_EXECUTION_DOCTYPES and candidate_name:
+		return f"{candidate_doctype}:{candidate_name}"
 	return ""
 
 
@@ -601,7 +760,7 @@ def _block_code_for_preflight(preflight, match_doc):
 		or match_doc.get("candidate_exists") is False
 	):
 		return BLOCK_MISSING_SOURCE_DOCUMENT
-	if candidate_doctype not in {"Payment Entry", "Sales Invoice"}:
+	if candidate_doctype not in {"Payment Entry", "Sales Invoice", "Journal Entry"}:
 		return BLOCK_UNSUPPORTED_CANDIDATE_TYPE
 	if candidate_docstatus not in (None, 1):
 		return BLOCK_CANDIDATE_INVALID
@@ -614,6 +773,8 @@ def _block_code_for_preflight(preflight, match_doc):
 	if status == PREFLIGHT_READY:
 		return BLOCK_NONE
 	if candidate_doctype == "Sales Invoice" and not payment_identity:
+		return BLOCK_MISSING_PAYMENT_EVENT_IDENTITY
+	if candidate_doctype == "Journal Entry" and not payment_identity:
 		return BLOCK_MISSING_PAYMENT_EVENT_IDENTITY
 	if "duplicate" in blocking_reason or "conflict" in blocking_reason or "active" in blocking_reason:
 		return BLOCK_DUPLICATE_ACTIVE_CONFLICT
@@ -714,7 +875,7 @@ def _default_block_reason(block_code):
 
 def _operator_message_for_readiness(group, block_reason):
 	if group == READINESS_GROUP_READY:
-		return "This confirmed Bank Match Review is ready for future controlled reconciliation. No execution was performed."
+		return "This confirmed Bank Match Review is ready for controlled ERPNext reconciliation. No execution was performed."
 	if group == READINESS_GROUP_ALREADY_HANDLED:
 		return "This item already appears handled or reconciled. No action is required."
 	if group == READINESS_GROUP_NEEDS_REVIEW:
@@ -854,12 +1015,12 @@ def _execution_gate_result(
 	block_reasons = [reason for reason in block_reasons if reason]
 	warnings = [warning for warning in warnings if warning]
 	if can_execute:
-		safe_next_step = "Future execution phase may proceed only after final operator confirmation. R5.8 did not execute reconciliation."
+		safe_next_step = "Execution may proceed only after final operator confirmation."
 	else:
 		safe_next_step = (
 			block_reasons[0]
 			if block_reasons
-			else "Resolve the listed gate requirements before future reconciliation execution."
+			else "Resolve the listed gate requirements before reconciliation execution."
 		)
 	return {
 		"can_execute": bool(can_execute),
@@ -882,19 +1043,13 @@ def _execution_gate_result(
 
 def _execution_gate_message(status, can_execute, block_reasons):
 	if can_execute:
-		return (
-			"Execution gate passed. Final operator confirmation is required before reconciliation execution."
-		)
+		return "Execution gate passed. Final operator confirmation is required before reconciliation execution."
 	if status == EXECUTION_GATE_SETTINGS_DISABLED:
 		return "Reconciliation execution is disabled in RetailEdge Settings. No execution was performed."
 	if status == EXECUTION_GATE_PERMISSION_DENIED:
-		return (
-			"You do not have an allowed role for future reconciliation execution. No execution was performed."
-		)
+		return "You do not have an allowed role for reconciliation execution. No execution was performed."
 	if status == EXECUTION_GATE_NEEDS_APPROVAL:
-		return (
-			"Second approval is required before future reconciliation execution. No execution was performed."
-		)
+		return "Second approval is required before reconciliation execution. No execution was performed."
 	return (block_reasons or ["Reconciliation execution gate is blocked. No execution was performed."])[0]
 
 
@@ -959,7 +1114,7 @@ def check_reconciliation_execution_gate(match_name, user=None, settings=None, dr
 	minimum_status = settings_snapshot["minimum_reconciliation_readiness_status"]
 	if minimum_status != READINESS_GROUP_READY:
 		warnings.append(
-			"R5.8 only treats Ready as execution-eligible, even if settings name another minimum status."
+			"RetailEdge only treats Ready as execution-eligible, even if settings name another minimum status."
 		)
 	if dry_run_status != READINESS_GROUP_READY:
 		block_reasons.append(
@@ -1168,7 +1323,7 @@ def _bank_transaction_link_state(match_doc, target_doctype, target_name):
 	if same_links:
 		return {
 			"state": "already_handled",
-			"message": "Already handled: this Bank Transaction is already reconciled to the reviewed Payment Entry.",
+			"message": f"Already handled: this Bank Transaction is already reconciled to the reviewed {target_doctype}.",
 			"doc": doc,
 			"links": links,
 		}
@@ -1209,16 +1364,16 @@ def _assert_execution_target_matches_reviewed_candidate(match_doc, dry_run_resul
 	return bool(candidate_doctype and candidate_name)
 
 
-def _execute_native_payment_entry_reconciliation(match_doc, dry_run_result):
+def _execute_native_reconciliation(match_doc, dry_run_result):
 	bank_transaction = cstr(
 		match_doc.get("bank_transaction") or dry_run_result.get("bank_transaction")
 	).strip()
 	target_doctype = cstr(dry_run_result.get("erpnext_target_doctype")).strip()
 	target_name = cstr(dry_run_result.get("erpnext_target_name")).strip()
-	if target_doctype != "Payment Entry":
+	if target_doctype not in NATIVE_EXECUTION_DOCTYPES:
 		return _execution_result(
 			EXECUTION_STATUS_BLOCKED,
-			"RetailEdge R5.9 can execute only exact Payment Entry reconciliation targets.",
+			f"RetailEdge cannot execute native reconciliation for {target_doctype or 'this target type'}.",
 			match_doc=match_doc,
 			dry_run_result=dry_run_result,
 		)
@@ -1238,11 +1393,11 @@ def _execute_native_payment_entry_reconciliation(match_doc, dry_run_result):
 			match_doc=match_doc,
 			dry_run_result=dry_run_result,
 		)
+	voucher = {"payment_doctype": target_doctype, "payment_name": target_name}
+	if target_doctype == "Journal Entry":
+		voucher["amount"] = flt(dry_run_result.get("candidate_amount") or dry_run_result.get("bank_amount"))
 	method = frappe.get_attr(ERPNext_NATIVE_RECONCILIATION_METHOD)
-	method(
-		bank_transaction,
-		json.dumps([{"payment_doctype": target_doctype, "payment_name": target_name}]),
-	)
+	method(bank_transaction, json.dumps([voucher]))
 	post_state = _bank_transaction_link_state(match_doc, target_doctype, target_name)
 	if post_state.get("state") not in {"already_handled", "ready"}:
 		return _execution_result(
@@ -1266,7 +1421,7 @@ def _execute_native_payment_entry_reconciliation(match_doc, dry_run_result):
 			)
 	return _execution_result(
 		EXECUTION_STATUS_EXECUTED,
-		"Reconciliation executed through ERPNext Bank Reconciliation for the confirmed Payment Entry candidate.",
+		f"Reconciliation executed through ERPNext Bank Reconciliation for the confirmed {target_doctype} candidate.",
 		match_doc=match_doc,
 		dry_run_result=dry_run_result,
 		execution_reference=f"Bank Transaction {bank_transaction} -> {target_doctype} {target_name}",
@@ -1490,7 +1645,7 @@ def execute_reconciliation_for_match(match_name, confirm=False):
 		_update_execution_audit(match_doc.get("name") or match_name, result, user=user)
 		return result
 	try:
-		result = _execute_native_payment_entry_reconciliation(match_doc, dry_run_result)
+		result = _execute_native_reconciliation(match_doc, dry_run_result)
 		result["gate_status_at_execution"] = gate_result.get("status")
 		_update_execution_audit(match_doc.get("name") or match_name, result, user=user)
 		return result
