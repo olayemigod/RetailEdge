@@ -25,9 +25,9 @@ PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 	{
 		"key": "act",
 		"label": "Act",
-		"description": "Quick business actions today, followed by guided entries that create native ERPNext documents.",
+		"description": "Quick, permission-aware guided entries that create native ERPNext documents while keeping full-form fallbacks available.",
 		"icon": "zap",
-		"status": "Foundation",
+		"status": "In Progress",
 	},
 	{
 		"key": "operate",
@@ -173,22 +173,25 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 
 QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	{
-		"key": "new-sales-invoice", "label": "New Sales Invoice", "description": "Create a formal cash, credit, wholesale, or account-customer invoice.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "native_fallback",
+		"key": "new-sales-invoice", "label": "New Sales Invoice", "description": "Create a formal cash, credit, wholesale, or account-customer invoice.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record and allocate money received from a customer.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "native_fallback",
+		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record and allocate money received from a customer.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record a supplier payment and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "native_fallback",
+		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record a supplier payment and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
+	},
+	{
+		"key": "cash-transfer", "label": "Cash / Bank Transfer", "description": "Move money between permitted Cash and Bank accounts using an ERPNext internal-transfer draft.", "doctype": "Payment Entry", "icon": "repeat", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "record-expense", "label": "Record Cashier Expense", "description": "Record a controlled expense arising during an open cashier shift.", "doctype": "RetailEdge Cashier Expense", "icon": "credit-card", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "record-purchase", "label": "Record Purchase", "description": "Create a purchase invoice for stock, services, or operating expenses.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "native_fallback",
+		"key": "record-purchase", "label": "Record Purchase", "description": "Create a purchase invoice for stock, services, or operating expenses.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted warehouses using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "native_fallback",
+		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted warehouses using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
 	},
 )
 
@@ -230,7 +233,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		},
 		"feature_flags": {
 			"product_switcher_enabled": False,
-			"guided_entries_stage": "foundation",
+			"guided_entries_stage": "active",
 			"native_document_fallback_enabled": True,
 			"performance_profile": "r2_request_cached",
 		},
@@ -324,7 +327,7 @@ def _target_exists_cached(target_type: str, target: str, cache: dict[tuple[str, 
 
 
 def _doctype_exists_cached(doctype: str, cache: dict[tuple[str, str], bool]) -> bool:
-	return _target_exists_cached("DocType", doctype, cache)
+	return _target_exists_cached("DocType", doctype)
 
 
 def _has_permission_cached(doctype: str, permission_type: str, cache: dict[tuple[str, str], bool]) -> bool:
