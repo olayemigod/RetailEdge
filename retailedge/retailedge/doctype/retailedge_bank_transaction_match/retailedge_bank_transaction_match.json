@@ -160,7 +160,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "Suggested Document Type",
-   "options": "Sales Invoice\nPayment Entry"
+   "options": "Sales Invoice\nPayment Entry\nJournal Entry"
   },
   {
    "fieldname": "suggested_document",
@@ -206,7 +206,7 @@
    "fieldname": "candidate_amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "SI/PE Amount"
+   "label": "Candidate Amount"
   },
   {
    "fieldname": "amount_difference",
