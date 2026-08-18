@@ -107,14 +107,22 @@ class BankingOperationsTests(unittest.TestCase):
     def test_confirmed_ready_match_becomes_ready_to_reconcile(self):
         status = derive_operational_status(
             {"decision_status": "Confirmed", "execution_status": "Not Executed"},
-            {"status": "Ready", "readiness_group": "Ready", "erpnext_target_status": "Reconciliation Target Available"},
+            {
+                "status": "Ready",
+                "readiness_group": "Ready",
+                "erpnext_target_status": "Reconciliation Target Available",
+            },
         )
         self.assertEqual(status, STATUS_READY_TO_RECONCILE)
 
     def test_missing_payment_voucher_is_not_treated_as_reconciled(self):
         status = derive_operational_status(
             {"decision_status": "Confirmed", "execution_status": "Not Executed"},
-            {"status": "Not Ready", "readiness_group": "Blocked", "erpnext_target_status": "Payment Voucher Missing"},
+            {
+                "status": "Not Ready",
+                "readiness_group": "Blocked",
+                "erpnext_target_status": "Payment Voucher Missing",
+            },
         )
         self.assertEqual(status, STATUS_PAYMENT_EVIDENCE_REQUIRED)
 
@@ -155,11 +163,18 @@ class BankingOperationsTests(unittest.TestCase):
             STATUS_RECONCILIATION_FAILED,
         )
 
+    @patch("retailedge.banking_operations.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_operations.assert_can_manage_bank_transaction_match")
     @patch("retailedge.banking_operations.get_bank_match_operational_status")
     @patch("retailedge.banking_operations.execute_reconciliation_for_match")
     @patch("retailedge.banking_operations._load_match")
     def test_match_and_reconcile_requires_final_confirmation(
-        self, load_match, execute, operational
+        self,
+        load_match,
+        execute,
+        operational,
+        _assert_manage,
+        _assert_access,
     ):
         load_match.return_value = frappe._dict(
             {"name": "MATCH-1", "decision_status": "Confirmed", "bank_transaction": "BT-1"}
@@ -174,11 +189,18 @@ class BankingOperationsTests(unittest.TestCase):
         self.assertEqual(result["status"], "Reconciliation Confirmation Required")
         execute.assert_not_called()
 
+    @patch("retailedge.banking_operations.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_operations.assert_can_manage_bank_transaction_match")
     @patch("retailedge.banking_operations.get_bank_match_operational_status")
     @patch("retailedge.banking_operations.execute_reconciliation_for_match")
     @patch("retailedge.banking_operations._load_match")
     def test_match_and_reconcile_delegates_execution_to_existing_bridge(
-        self, load_match, execute, operational
+        self,
+        load_match,
+        execute,
+        operational,
+        _assert_manage,
+        _assert_access,
     ):
         load_match.return_value = frappe._dict(
             {"name": "MATCH-1", "decision_status": "Confirmed", "bank_transaction": "BT-1"}
