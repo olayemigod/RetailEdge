@@ -96,7 +96,6 @@ doctype_list_js = {
 # Svg Icons
 # ------------------
 # include app icons in desk
-# app_include_icons = "retailedge/public/icons.svg"
 
 # Home Pages
 # ----------
@@ -234,7 +233,10 @@ boot_session = "retailedge.boot.boot_session"
 
 # Overriding Methods
 # ------------------------------
-# override_whitelisted_methods = {}
+override_whitelisted_methods = {
+	"retailedge.guided_sales_invoice.search_simple_sales_invoice_options": "retailedge.guided_link_search.search_simple_sales_invoice_options",
+	"retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options": "retailedge.guided_link_search.search_simple_purchase_invoice_options",
+}
 
 # Request Events
 # ------------------
