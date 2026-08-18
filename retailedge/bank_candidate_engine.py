@@ -6,7 +6,10 @@ import frappe
 from frappe.utils import cstr, flt, getdate
 
 from retailedge.bank_fuzzy_discovery import enrich_ranked_candidates
-from retailedge.bank_transaction_match_workflow import create_or_get_bank_transaction_match
+from retailedge.bank_transaction_match_workflow import (
+	assert_can_manage_bank_transaction_match,
+	create_or_get_bank_transaction_match,
+)
 from retailedge.bank_transaction_matching import (
 	assert_can_access_bank_transaction_matching,
 	find_payment_entry_candidates_for_bank_transaction,
@@ -14,6 +17,9 @@ from retailedge.bank_transaction_matching import (
 	normalize_bank_transaction,
 )
 from retailedge.branch_context import has_doctype, has_field
+from retailedge.retailedge.doctype.retailedge_bank_transaction_match.retailedge_bank_transaction_match import (
+	_resolve_manual_candidate_context,
+)
 
 DIRECTION_INFLOW = "Inflow"
 DIRECTION_OUTFLOW = "Outflow"
@@ -27,7 +33,7 @@ CATEGORY_BANK_TRANSFER = "Bank Transfer"
 CATEGORY_OTHER_INCOME = "Other Income"
 CATEGORY_OTHER_OUTFLOW = "Other Outflow"
 
-REVIEW_SUPPORTED_DOCTYPES = {"Sales Invoice", "Payment Entry"}
+REVIEW_SUPPORTED_DOCTYPES = {"Sales Invoice", "Payment Entry", "Journal Entry"}
 
 
 def _date_distance(bank_date, candidate_date):
@@ -150,8 +156,8 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 			"reasons": ["Submitted Journal Entry impacts the selected bank ledger with a compatible amount."],
 			"payment_event_found": 1,
 			"payment_event_source": "Journal Entry",
-			"review_supported": 0,
-			"review_block_reason": "Journal Entry review/reconciliation support is not enabled until the existing bridge is direction-safe.",
+			"review_supported": 1,
+			"review_block_reason": "",
 		}
 		candidates.append(candidate)
 	return candidates[:limit]
@@ -299,13 +305,59 @@ def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, lim
 	}
 
 
+def _prepare_journal_entry_review(bank_transaction_name, document_name):
+	assert_can_manage_bank_transaction_match()
+	candidate_context = _resolve_manual_candidate_context(
+		bank_transaction=bank_transaction_name,
+		suggested_document_type="Journal Entry",
+		suggested_document=document_name,
+	)
+	if candidate_context.get("block_reason"):
+		frappe.throw(candidate_context.get("block_reason"))
+
+	existing = frappe.db.get_value(
+		"RetailEdge Bank Transaction Match",
+		{
+			"bank_transaction": bank_transaction_name,
+			"suggested_document_type": "Journal Entry",
+			"suggested_document": document_name,
+		},
+		"name",
+	)
+	if existing:
+		return {
+			"status": "Review Ready",
+			"created": False,
+			"match_name": existing,
+			"decision_status": frappe.db.get_value(
+				"RetailEdge Bank Transaction Match", existing, "decision_status"
+			),
+			"message": "Existing Journal Entry Bank Match Review opened.",
+		}
+
+	doc = frappe.get_doc({"doctype": "RetailEdge Bank Transaction Match"})
+	for fieldname, value in (candidate_context.get("doc_values") or {}).items():
+		if value is not None:
+			doc.set(fieldname, value)
+	doc.bank_transaction = bank_transaction_name
+	doc.suggested_document_type = "Journal Entry"
+	doc.suggested_document = document_name
+	doc.source_report = "Bank Matching & Reconciliation"
+	doc.decision_status = "Needs Review"
+	doc.decision_note = "Journal Entry candidate requires explicit manual review before confirmation."
+	doc.insert(ignore_permissions=True)
+	return {
+		"status": "Review Ready",
+		"created": True,
+		"match_name": doc.name,
+		"decision_status": doc.decision_status,
+		"message": "Journal Entry candidate was revalidated and prepared for explicit manual review.",
+	}
+
+
 @frappe.whitelist()
 def prepare_direction_aware_bank_candidate(bank_transaction_name, document_type, document_name):
-	"""Create/open the existing RetailEdge review record for a freshly revalidated candidate.
-
-	Only the candidate types already supported by the mature review DocType are allowed here.
-	Journal Entry remains discovery-only until its reconciliation bridge path is direction-safe.
-	"""
+	"""Create/open the common RetailEdge Bank Match Review for a freshly revalidated candidate."""
 	assert_can_access_bank_transaction_matching()
 	document_type = cstr(document_type).strip()
 	document_name = cstr(document_name).strip()
@@ -313,7 +365,7 @@ def prepare_direction_aware_bank_candidate(bank_transaction_name, document_type,
 		return {
 			"status": "Review Support Pending",
 			"created": False,
-			"message": f"{document_type} is a valid candidate for review, but RetailEdge will not create a match record until its native reconciliation bridge is direction-safe.",
+			"message": f"{document_type} is not enabled for RetailEdge Bank Match Review.",
 		}
 
 	payload = get_direction_aware_bank_candidates(bank_transaction_name, limit=100)
@@ -328,6 +380,9 @@ def prepare_direction_aware_bank_candidate(bank_transaction_name, document_type,
 	)
 	if not candidate:
 		frappe.throw("Selected candidate is no longer eligible. Refresh candidates and review again.")
+
+	if document_type == "Journal Entry":
+		return _prepare_journal_entry_review(bank_transaction_name, document_name)
 
 	result = create_or_get_bank_transaction_match(
 		bank_transaction_name=bank_transaction_name,
