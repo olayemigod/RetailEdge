@@ -54,6 +54,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.expense_review import get_expense_review_export
 
 		return get_expense_review_export
+	if key == "cash-shift-verification":
+		from retailedge.cash_shift_verification import get_cash_shift_verification_export
+
+		return get_cash_shift_verification_export
 	if key == "cash-movement":
 		from retailedge.cash_movement import get_cash_movement_export
 
