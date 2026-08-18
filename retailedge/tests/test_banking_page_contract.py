@@ -38,8 +38,11 @@ class BankingPageContractTests(unittest.TestCase):
 
 	def test_filters_and_accounting_evidence_are_visible_contracts(self):
 		asset_js = ASSET_JS.read_text()
-		for fieldname in ("company", "bank_account", "from_date", "to_date", "search"):
+		for fieldname in ("company", "branch", "bank_account", "from_date", "to_date", "search"):
 			self.assertIn(fieldname, asset_js)
+		self.assertIn('options: "Branch"', asset_js)
+		self.assertIn('options: "Bank Account"', asset_js)
+		self.assertIn("companyFilter", asset_js)
 		for label in (
 			"Narration / Reference",
 			"Bank Amount",
@@ -50,6 +53,11 @@ class BankingPageContractTests(unittest.TestCase):
 			"Find Match",
 		):
 			self.assertIn(label, asset_js)
+
+	def test_candidate_select_uses_frappe_string_options_not_object_options(self):
+		asset_js = ASSET_JS.read_text()
+		self.assertIn('options: optionLabels.join("\\n")', asset_js)
+		self.assertNotIn("options: candidates.map((row, index) => ({", asset_js)
 
 
 if __name__ == "__main__":
