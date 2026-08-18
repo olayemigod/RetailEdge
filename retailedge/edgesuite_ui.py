@@ -327,7 +327,7 @@ def _target_exists_cached(target_type: str, target: str, cache: dict[tuple[str, 
 
 
 def _doctype_exists_cached(doctype: str, cache: dict[tuple[str, str], bool]) -> bool:
-	return _target_exists_cached("DocType", doctype)
+	return _target_exists_cached("DocType", doctype, cache)
 
 
 def _has_permission_cached(doctype: str, permission_type: str, cache: dict[tuple[str, str], bool]) -> bool:
