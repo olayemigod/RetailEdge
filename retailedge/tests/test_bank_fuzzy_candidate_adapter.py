@@ -6,7 +6,7 @@ from retailedge.bank_fuzzy_candidate_adapter import apply_fuzzy_score_boost
 
 
 class BankFuzzyCandidateAdapterTests(unittest.TestCase):
-    def test_strong_fuzzy_evidence_boosts_existing_score_without_exceeding_100(self):
+    def test_strong_fuzzy_evidence_changes_ranking_not_hard_score(self):
         row = apply_fuzzy_score_boost(
             {
                 "match_score": 85,
@@ -15,9 +15,11 @@ class BankFuzzyCandidateAdapterTests(unittest.TestCase):
                 "fuzzy_exact_reference": True,
             }
         )
-        self.assertEqual(row["match_score"], 100)
+        self.assertEqual(row["match_score"], 85)
+        self.assertEqual(row["hard_match_score"], 85)
+        self.assertEqual(row["ranking_score"], 100)
 
-    def test_weak_fuzzy_evidence_only_adds_small_supporting_weight(self):
+    def test_weak_fuzzy_evidence_only_adds_small_ranking_weight(self):
         row = apply_fuzzy_score_boost(
             {
                 "match_score": 60,
@@ -26,9 +28,10 @@ class BankFuzzyCandidateAdapterTests(unittest.TestCase):
                 "fuzzy_exact_reference": False,
             }
         )
-        self.assertEqual(row["match_score"], 63)
+        self.assertEqual(row["match_score"], 60)
+        self.assertEqual(row["ranking_score"], 63)
 
-    def test_no_match_does_not_inflate_score(self):
+    def test_no_match_does_not_inflate_ranking(self):
         row = apply_fuzzy_score_boost(
             {
                 "match_score": 40,
@@ -37,6 +40,7 @@ class BankFuzzyCandidateAdapterTests(unittest.TestCase):
             }
         )
         self.assertEqual(row["match_score"], 40)
+        self.assertEqual(row["ranking_score"], 40)
 
 
 if __name__ == "__main__":
