@@ -10,6 +10,7 @@ from frappe.utils import cint
 from retailedge import guided_payment, guided_purchase_invoice, guided_sales_invoice
 
 CANDIDATE_LIMIT = 100
+MAX_ANCHORS = 4
 
 
 def _shared_ranker() -> Callable[..., list] | None:
@@ -39,31 +40,75 @@ def _bounded_limit(limit: int, maximum: int) -> int:
 	return max(1, min(cint(limit) or maximum, maximum))
 
 
-def _sales_candidates(fieldname: str, values: dict[str, Any]) -> list[dict[str, Any]]:
+def _query_anchors(query: str) -> tuple[str, ...]:
+	term = " ".join(str(query or "").strip().casefold().split())
+	if not term:
+		return ("",)
+	anchors = [term]
+	for token in term.split():
+		if len(token) >= 3:
+			anchors.append(token[:3])
+		if len(token) >= 2:
+			anchors.append(token[-2:])
+	unique: list[str] = []
+	for anchor in anchors:
+		if anchor not in unique:
+			unique.append(anchor)
+		if len(unique) >= MAX_ANCHORS:
+			break
+	return tuple(unique)
+
+
+def _collect_candidates(searcher: Callable[[str, int], list], query: str) -> list[dict[str, Any]]:
+	rows: list[dict[str, Any]] = []
+	seen: set[str] = set()
+	for anchor in _query_anchors(query):
+		remaining = CANDIDATE_LIMIT - len(rows)
+		if remaining <= 0:
+			break
+		for source in searcher(anchor, remaining):
+			row = dict(source)
+			key = str(row.get("value") or row.get("name") or row.get("label") or "")
+			if not key or key in seen:
+				continue
+			seen.add(key)
+			rows.append(row)
+			if len(rows) >= CANDIDATE_LIMIT:
+				break
+	return rows
+
+
+def _sales_candidates(fieldname: str, values: dict[str, Any], query: str) -> list[dict[str, Any]]:
 	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
 	branch = values.get("branch") or ""
 	customer = values.get("customer") or ""
 
 	if fieldname == "customer":
-		return search_link(
-			"Customer",
-			"",
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_sales_invoice.SALES_INVOICE_DOCTYPE,
-			link_fieldname="customer",
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Customer",
+				txt,
+				page_length=page_length,
+				reference_doctype=guided_sales_invoice.SALES_INVOICE_DOCTYPE,
+				link_fieldname="customer",
+			),
+			query,
 		)
 	if fieldname == "item_code":
 		filters: dict[str, Any] = {"is_sales_item": 1}
 		if customer:
 			filters["customer"] = customer
-		return search_link(
-			"Item",
-			"",
-			query="erpnext.controllers.queries.item_query",
-			filters=filters,
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype="Sales Invoice Item",
-			link_fieldname="item_code",
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Item",
+				txt,
+				query="erpnext.controllers.queries.item_query",
+				filters=filters,
+				page_length=page_length,
+				reference_doctype="Sales Invoice Item",
+				link_fieldname="item_code",
+			),
+			query,
 		)
 	if fieldname == "warehouse":
 		filters = guided_sales_invoice._warehouse_search_filters(
@@ -73,57 +118,69 @@ def _sales_candidates(fieldname: str, values: dict[str, Any]) -> list[dict[str, 
 		)
 		if filters is None:
 			return []
-		return search_link(
-			"Warehouse",
-			"",
-			filters=filters,
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_sales_invoice.SALES_INVOICE_DOCTYPE,
-			link_fieldname="set_warehouse",
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Warehouse",
+				txt,
+				filters=filters,
+				page_length=page_length,
+				reference_doctype=guided_sales_invoice.SALES_INVOICE_DOCTYPE,
+				link_fieldname="set_warehouse",
+			),
+			query,
 		)
 	if fieldname == "branch":
 		if not guided_sales_invoice.has_doctype("Branch"):
 			return []
-		return search_link(
-			"Branch",
-			"",
-			filters=guided_sales_invoice._branch_search_filters(
-				company=company,
-				user=frappe.session.user,
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Branch",
+				txt,
+				filters=guided_sales_invoice._branch_search_filters(
+					company=company,
+					user=frappe.session.user,
+				),
+				page_length=page_length,
+				reference_doctype=guided_sales_invoice.SALES_INVOICE_DOCTYPE,
+				link_fieldname="retailedge_branch",
 			),
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_sales_invoice.SALES_INVOICE_DOCTYPE,
-			link_fieldname="retailedge_branch",
+			query,
 		)
 	frappe.throw(_("Unsupported Simple Sales Invoice search field: {0}").format(fieldname))
 	return []
 
 
-def _purchase_candidates(fieldname: str, values: dict[str, Any]) -> list[dict[str, Any]]:
+def _purchase_candidates(fieldname: str, values: dict[str, Any], query: str) -> list[dict[str, Any]]:
 	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
 	branch = values.get("branch") or ""
 	supplier = values.get("supplier") or ""
 
 	if fieldname == "supplier":
-		return search_link(
-			"Supplier",
-			"",
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_purchase_invoice.PURCHASE_INVOICE_DOCTYPE,
-			link_fieldname="supplier",
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Supplier",
+				txt,
+				page_length=page_length,
+				reference_doctype=guided_purchase_invoice.PURCHASE_INVOICE_DOCTYPE,
+				link_fieldname="supplier",
+			),
+			query,
 		)
 	if fieldname == "item_code":
 		filters: dict[str, Any] = {"is_purchase_item": 1}
 		if supplier:
 			filters["supplier"] = supplier
-		return search_link(
-			"Item",
-			"",
-			query="erpnext.controllers.queries.item_query",
-			filters=filters,
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype="Purchase Invoice Item",
-			link_fieldname="item_code",
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Item",
+				txt,
+				query="erpnext.controllers.queries.item_query",
+				filters=filters,
+				page_length=page_length,
+				reference_doctype="Purchase Invoice Item",
+				link_fieldname="item_code",
+			),
+			query,
 		)
 	if fieldname == "warehouse":
 		filters = guided_purchase_invoice._warehouse_search_filters(
@@ -133,27 +190,33 @@ def _purchase_candidates(fieldname: str, values: dict[str, Any]) -> list[dict[st
 		)
 		if filters is None:
 			return []
-		return search_link(
-			"Warehouse",
-			"",
-			filters=filters,
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_purchase_invoice.PURCHASE_INVOICE_DOCTYPE,
-			link_fieldname="set_warehouse",
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Warehouse",
+				txt,
+				filters=filters,
+				page_length=page_length,
+				reference_doctype=guided_purchase_invoice.PURCHASE_INVOICE_DOCTYPE,
+				link_fieldname="set_warehouse",
+			),
+			query,
 		)
 	if fieldname == "branch":
 		if not guided_purchase_invoice.has_doctype("Branch"):
 			return []
-		return search_link(
-			"Branch",
-			"",
-			filters=guided_purchase_invoice._branch_search_filters(
-				company=company,
-				user=frappe.session.user,
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Branch",
+				txt,
+				filters=guided_purchase_invoice._branch_search_filters(
+					company=company,
+					user=frappe.session.user,
+				),
+				page_length=page_length,
+				reference_doctype=guided_purchase_invoice.PURCHASE_INVOICE_DOCTYPE,
+				link_fieldname="retailedge_branch",
 			),
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_purchase_invoice.PURCHASE_INVOICE_DOCTYPE,
-			link_fieldname="retailedge_branch",
+			query,
 		)
 	frappe.throw(_("Unsupported Simple Purchase Invoice search field: {0}").format(fieldname))
 	return []
@@ -163,6 +226,7 @@ def _payment_candidates(
 	intent: str,
 	fieldname: str,
 	values: dict[str, Any],
+	query: str,
 ) -> list[dict[str, Any]]:
 	config = guided_payment._get_intent(intent)
 	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
@@ -170,45 +234,57 @@ def _payment_candidates(
 	party = values.get("party") or ""
 
 	if fieldname == "party":
-		return search_link(
-			config["party_type"],
-			"",
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_payment.PAYMENT_ENTRY_DOCTYPE,
-			link_fieldname="party",
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				config["party_type"],
+				txt,
+				page_length=page_length,
+				reference_doctype=guided_payment.PAYMENT_ENTRY_DOCTYPE,
+				link_fieldname="party",
+			),
+			query,
 		)
 	if fieldname == "mode_of_payment":
-		return search_link(
-			"Mode of Payment",
-			"",
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_payment.PAYMENT_ENTRY_DOCTYPE,
-			link_fieldname="mode_of_payment",
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Mode of Payment",
+				txt,
+				page_length=page_length,
+				reference_doctype=guided_payment.PAYMENT_ENTRY_DOCTYPE,
+				link_fieldname="mode_of_payment",
+			),
+			query,
 		)
 	if fieldname == "branch":
 		if not guided_payment.has_doctype("Branch"):
 			return []
-		return search_link(
-			"Branch",
-			"",
-			filters=guided_payment._branch_search_filters(
-				company=company,
-				user=frappe.session.user,
+		return _collect_candidates(
+			lambda txt, page_length: search_link(
+				"Branch",
+				txt,
+				filters=guided_payment._branch_search_filters(
+					company=company,
+					user=frappe.session.user,
+				),
+				page_length=page_length,
+				reference_doctype=guided_payment.PAYMENT_ENTRY_DOCTYPE,
+				link_fieldname="retailedge_branch",
 			),
-			page_length=CANDIDATE_LIMIT,
-			reference_doctype=guided_payment.PAYMENT_ENTRY_DOCTYPE,
-			link_fieldname="retailedge_branch",
+			query,
 		)
 	if fieldname == "reference_name":
 		if not party:
 			return []
-		return guided_payment._search_outstanding_references(
-			config=config,
-			company=company,
-			branch=branch,
-			party=party,
-			txt="",
-			limit=CANDIDATE_LIMIT,
+		return _collect_candidates(
+			lambda txt, page_length: guided_payment._search_outstanding_references(
+				config=config,
+				company=company,
+				branch=branch,
+				party=party,
+				txt=txt,
+				limit=page_length,
+			),
+			query,
 		)
 	frappe.throw(_("Unsupported Simple Payment search field: {0}").format(fieldname))
 	return []
@@ -226,7 +302,7 @@ def search_simple_sales_invoice_options(
 	guided_sales_invoice._assert_can_create_sales_invoice()
 	values = guided_sales_invoice._coerce_values(values)
 	limit = _bounded_limit(limit, guided_sales_invoice.MAX_LINK_RESULTS)
-	return _rank_options(_sales_candidates(fieldname, values), txt or "", limit)
+	return _rank_options(_sales_candidates(fieldname, values, txt), txt or "", limit)
 
 
 @frappe.whitelist()
@@ -241,7 +317,7 @@ def search_simple_purchase_invoice_options(
 	guided_purchase_invoice._assert_can_create_purchase_invoice()
 	values = guided_purchase_invoice._coerce_values(values)
 	limit = _bounded_limit(limit, guided_purchase_invoice.MAX_LINK_RESULTS)
-	return _rank_options(_purchase_candidates(fieldname, values), txt or "", limit)
+	return _rank_options(_purchase_candidates(fieldname, values, txt), txt or "", limit)
 
 
 @frappe.whitelist()
@@ -258,4 +334,4 @@ def search_simple_payment_options(
 	guided_payment._assert_can_create_payment_entry()
 	values = guided_payment._coerce_values(values)
 	limit = _bounded_limit(limit, guided_payment.MAX_LINK_RESULTS)
-	return _rank_options(_payment_candidates(intent, fieldname, values), txt or "", limit)
+	return _rank_options(_payment_candidates(intent, fieldname, values, txt), txt or "", limit)
