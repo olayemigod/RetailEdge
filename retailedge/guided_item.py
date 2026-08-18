@@ -96,11 +96,10 @@ def create_simple_item(values: dict | str | None = None) -> dict[str, Any]:
 	description = str(values.get("description") or "").strip()
 	if description and meta.has_field("description"):
 		doc.description = description
-	doc.insert()
-
 	barcode = str(values.get("barcode") or "").strip()
-	if barcode:
-		_add_barcode_if_supported(doc, barcode)
+	if barcode and meta.has_field("barcodes"):
+		doc.append("barcodes", {"barcode": barcode})
+	doc.insert()
 
 	return {
 		"doctype": doc.doctype,
@@ -112,16 +111,6 @@ def create_simple_item(values: dict | str | None = None) -> dict[str, Any]:
 		"stock_uom": doc.stock_uom,
 		"route": f"/app/item/{doc.name}",
 	}
-
-
-def _add_barcode_if_supported(doc, barcode: str) -> None:
-	meta = frappe.get_meta(ITEM_DOCTYPE)
-	if not meta.has_field("barcodes"):
-		return
-	# Barcode is supporting master data, not valuation/pricing data. Append only after
-	# the Item has a valid native document model; normal ERPNext validation remains authoritative.
-	doc.append("barcodes", {"barcode": barcode})
-	doc.save()
 
 
 def _default_item_group() -> str:
