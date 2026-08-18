@@ -77,6 +77,35 @@ def get_owner_dashboard_data(filters: dict[str, Any] | str | None = None) -> dic
 	}
 
 
+def build_owner_dashboard_export_dataset(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Flatten source summaries for the shared EdgeSuite dashboard export/print service."""
+	result = get_owner_dashboard_data(filters)
+	rows: list[dict[str, Any]] = []
+	for key, section in (result.get("sections") or {}).items():
+		if not section.get("available"):
+			continue
+		for card in section.get("summary") or []:
+			rows.append(
+				{
+					"section": section.get("label") or key,
+					"metric": card.get("label") or "",
+					"value": card.get("value"),
+					"datatype": card.get("datatype") or "Data",
+				}
+			)
+	return {
+		"title": _("Owner Dashboard"),
+		"columns": [
+			{"fieldname": "section", "label": _("Section"), "fieldtype": "Data", "width": 180},
+			{"fieldname": "metric", "label": _("Metric"), "fieldtype": "Data", "width": 220},
+			{"fieldname": "value", "label": _("Value"), "fieldtype": "Data", "width": 160},
+		],
+		"rows": rows,
+		"summary": [],
+		"filters": result.get("filters") or {},
+	}
+
+
 def _safe_section(label: str, loader: Callable[[], dict[str, Any]], route: str) -> dict[str, Any]:
 	try:
 		payload = loader() or {}
