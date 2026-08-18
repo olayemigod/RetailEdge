@@ -38,6 +38,16 @@ def test_extended_adapter_uses_shared_ranker_and_bounded_candidates():
 	assert "if _shared_ranker() is None:" in source
 
 
+def test_non_empty_search_anchors_permission_scoped_provider_queries():
+	source = (ROOT / "retailedge" / "guided_link_search_extended.py").read_text()
+	assert "_query_anchors" in source
+	assert "MAX_ANCHORS = 4" in source
+	assert "_collect_candidates" in source
+	assert "remaining = CANDIDATE_LIMIT - len(rows)" in source
+	assert "txt=txt" in source or "txt=query" in source
+	assert 'search_link(\n\t\t\t\t"Item",\n\t\t\t\ttxt,' in source
+
+
 def test_stock_search_preserves_erpnext_and_branch_filters():
 	source = (ROOT / "retailedge" / "guided_link_search_extended.py").read_text()
 	assert 'filters={"is_stock_item": 1, "disabled": 0}' in source
