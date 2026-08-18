@@ -14,6 +14,8 @@ from retailedge.pos_runtime import (
 	get_pos_runtime_capabilities,
 )
 
+FINANCE_TRANSFER_ROLES = {"Accounts User", "Accounts Manager", "System Manager"}
+
 PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 	{
 		"key": "navigate",
@@ -182,7 +184,10 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record a supplier payment and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "cash-transfer", "label": "Cash / Bank Transfer", "description": "Move money between permitted Cash and Bank accounts using an ERPNext internal-transfer draft.", "doctype": "Payment Entry", "icon": "repeat", "experience": "act", "mode": "available",
+		"key": "deposit-cash", "label": "Deposit Cash", "description": "Deposit available cashier shift cash to an approved company bank account.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available", "cashier_deposit": True,
+	},
+	{
+		"key": "cash-transfer", "label": "Cash / Bank Transfer", "description": "Move money between permitted Cash and Bank accounts using an ERPNext internal-transfer draft.", "doctype": "Payment Entry", "icon": "repeat", "experience": "act", "mode": "available", "required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES)),
 	},
 	{
 		"key": "record-expense", "label": "Record Cashier Expense", "description": "Record a controlled expense arising during an open cashier shift.", "doctype": "RetailEdge Cashier Expense", "icon": "credit-card", "experience": "act", "mode": "available",
@@ -216,6 +221,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		pos_capabilities=pos_capabilities,
 	)
 	quick_actions = _get_permitted_quick_actions(
+		roles=roles,
 		target_cache=target_cache,
 		permission_cache=permission_cache,
 	)
@@ -293,7 +299,8 @@ def _resolve_navigation_item(item: dict[str, Any], *, pos_capabilities=None) -> 
 	return resolved
 
 
-def _get_permitted_quick_actions(*, target_cache=None, permission_cache=None) -> list[dict[str, Any]]:
+def _get_permitted_quick_actions(*, roles=None, target_cache=None, permission_cache=None) -> list[dict[str, Any]]:
+	roles = set(roles if roles is not None else frappe.get_roles(frappe.session.user))
 	target_cache = target_cache if target_cache is not None else {}
 	permission_cache = permission_cache if permission_cache is not None else {}
 	actions: list[dict[str, Any]] = []
@@ -301,8 +308,23 @@ def _get_permitted_quick_actions(*, target_cache=None, permission_cache=None) ->
 		doctype = action["doctype"]
 		if not _doctype_exists_cached(doctype, target_cache) or not _has_permission_cached(doctype, "create", permission_cache):
 			continue
+		required_roles = set(action.get("required_roles") or ())
+		if required_roles and not roles.intersection(required_roles):
+			continue
+		if action.get("cashier_deposit") and not _cashier_deposit_available():
+			continue
 		actions.append(deepcopy(action))
 	return actions
+
+
+def _cashier_deposit_available() -> bool:
+	try:
+		from retailedge.cashier_context import get_current_cashier_context
+
+		context = get_current_cashier_context(user=frappe.session.user) or {}
+		return bool(context.get("linked_pos_opening_shift") and context.get("payment_account"))
+	 except Exception:
+		return False
 
 
 def _can_open_target(item: dict[str, Any], *, target_cache=None, permission_cache=None) -> bool:
