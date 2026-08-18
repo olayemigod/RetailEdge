@@ -36,11 +36,11 @@ class TestCreateVisibilityPermissions(unittest.TestCase):
 		contracts = {
 			"SimpleSalesInvoiceDialog.vue": (
 				':canCreate="canCreateCustomer"',
-				':canCreate="canCreateItem"',
+				':linkCanCreate="canCreateItemLink"',
 			),
 			"SimplePurchaseInvoiceDialog.vue": (
 				':canCreate="canCreateSupplier"',
-				':canCreate="canCreateItem"',
+				':linkCanCreate="canCreateItemLink"',
 			),
 			"SimpleStockTransferDialog.vue": (
 				"canCreateItemLink",
