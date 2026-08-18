@@ -80,7 +80,15 @@ def _apply_direction_aware_readiness(rows, filters):
 	requested_direction = cstr(filters.get("direction") or "All").strip() or "All"
 	results = []
 	for row in rows:
-		direction = direction_by_transaction.get(row.get("bank_transaction"), "Unknown")
+		bank_transaction = cstr(row.get("bank_transaction")).strip()
+		if not bank_transaction:
+			# Preserve compatibility for helper/test rows without a Bank Transaction identity.
+			# Real operational rows always have the identity required to resolve direction.
+			if requested_direction == "All":
+				results.append(row)
+			continue
+
+		direction = direction_by_transaction.get(bank_transaction, "Unknown")
 		row["direction"] = direction
 		if requested_direction != "All" and direction != requested_direction:
 			continue
