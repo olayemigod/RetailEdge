@@ -60,7 +60,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		)
 		self.assertEqual(
 			{item["target"] for item in groups["suppliers-payables"]["items"]},
-			{"Supplier", "Accounts Payable"},
+			{"Supplier", "supplier-payables", "Accounts Payable"},
 		)
 		self.assertIn(
 			"RetailEdge Stock Movement History",
