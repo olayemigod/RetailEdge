@@ -10,7 +10,7 @@ const PURCHASE_REPORT_PROVIDERS = Object.freeze({
 	},
 	supplier_payables: {
 		key: "supplier-payables",
-		pageMethod: "retailedge.purchase_reporting.get_supplier_payables",
+		pageMethod: "retailedge.supplier_payables.get_supplier_payables",
 		maxDatasetRows: 2000,
 	},
 });
@@ -57,6 +57,9 @@ function registerPurchaseReportingProviders(target = window) {
 						...(result.metadata || {}),
 						scan: result.scan || {},
 						company_currency: result.company_currency || "",
+						balance_basis: result.balance_basis || "",
+						ageing_date: result.ageing_date || "",
+						historical_balance_supported: Boolean(result.historical_balance_supported),
 					},
 				};
 			},
