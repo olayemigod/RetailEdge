@@ -27,7 +27,6 @@ class TestCreateVisibilityPermissions(unittest.TestCase):
 		self.assertIn('v-if="quickActions.length"', component)
 		self.assertNotIn(':disabled="!quickActions.length"', component)
 		self.assertIn('v-for="action in quickActions"', component)
-		# Host-level guard remains as defense in depth if a future component regresses to disabled-only UI.
 		self.assertIn("enforceCreateVisibility", host)
 		self.assertIn('root.querySelectorAll(".hub-create-button")', host)
 		self.assertIn("button.hidden = unavailable", host)
@@ -74,8 +73,54 @@ class TestCreateVisibilityPermissions(unittest.TestCase):
 	def test_cash_transfer_inherits_payment_entry_create_permission(self):
 		action = next(action for action in QUICK_ACTIONS if action["key"] == "cash-transfer")
 		self.assertEqual(action["doctype"], "Payment Entry")
+		self.assertIn("Accounts User", action.get("required_roles") or ())
 		source = (APP_ROOT / "guided_cash_transfer.py").read_text(encoding="utf-8")
 		self.assertIn('frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "create")', source)
+
+	def test_cashier_deposit_requires_payment_entry_create_permission_and_active_shift(self):
+		action = next(action for action in QUICK_ACTIONS if action["key"] == "deposit-cash")
+		self.assertEqual(action["doctype"], "Payment Entry")
+		self.assertTrue(action.get("cashier_deposit"))
+		with (
+			patch("retailedge.edgesuite_ui._doctype_exists_cached", return_value=True),
+			patch("retailedge.edgesuite_ui._has_permission_cached", return_value=True),
+			patch("retailedge.edgesuite_ui._cashier_deposit_available", return_value=True),
+		):
+			actions = _get_permitted_quick_actions(
+				roles={"RetailEdge Cashier"},
+				target_cache={},
+				permission_cache={},
+			)
+		keys = {row["key"] for row in actions}
+		self.assertIn("deposit-cash", keys)
+		self.assertNotIn("cash-transfer", keys)
+
+	def test_finance_user_gets_general_transfer_without_cashier_deposit_when_no_open_shift(self):
+		with (
+			patch("retailedge.edgesuite_ui._doctype_exists_cached", return_value=True),
+			patch("retailedge.edgesuite_ui._has_permission_cached", return_value=True),
+			patch("retailedge.edgesuite_ui._cashier_deposit_available", return_value=False),
+		):
+			actions = _get_permitted_quick_actions(
+				roles={"Accounts User"},
+				target_cache={},
+				permission_cache={},
+			)
+		keys = {row["key"] for row in actions}
+		self.assertIn("cash-transfer", keys)
+		self.assertNotIn("deposit-cash", keys)
+
+	def test_cash_deposit_dialog_uses_branch_aware_bank_account_and_custody_endpoints(self):
+		source = (HUB_ROOT / "SimpleCashDepositDialog.vue").read_text(encoding="utf-8")
+		for contract in (
+			"retailedge.cash_custody.get_cash_deposit_context",
+			"retailedge.cash_custody.search_cash_deposit_options",
+			"retailedge.cash_custody.create_cash_deposit_draft",
+			"to_bank_account",
+			"custody.available_cash",
+			"Deposit / Teller Reference",
+		):
+			self.assertIn(contract, source)
 
 
 if __name__ == "__main__":
