@@ -50,6 +50,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.expense_register import get_expense_register_export
 
 		return get_expense_register_export
+	if key == "expense-review":
+		from retailedge.expense_review import get_expense_review_export
+
+		return get_expense_review_export
 	if key == "cash-movement":
 		from retailedge.cash_movement import get_cash_movement_export
 
@@ -57,49 +61,24 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 	frappe.throw(_("Unsupported RetailEdge report export scope."))
 
 
-def get_report_dataset(
-	report_key: str,
-	filters: dict[str, Any] | str | None = None,
-) -> dict[str, Any]:
-	"""Return the existing report-owned bounded dataset after caller authorization.
-
-	This function intentionally performs no action authorization of its own. Callers
-	must first enforce View, Print or Export as appropriate. The underlying report
-	backend still reapplies company, branch, role, cost-visibility and row permissions.
-	"""
+def get_report_dataset(report_key: str, filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return the existing report-owned bounded dataset after caller authorization."""
 	resolved_filters = _coerce_filters(filters)
 	handler = _export_handler(report_key)
 	return handler(filters=resolved_filters)
 
 
 @frappe.whitelist()
-def get_report_export_data(
-	report_key: str,
-	filters: dict[str, Any] | str | None = None,
-) -> dict[str, Any]:
+def get_report_export_data(report_key: str, filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	"""Return a permission-checked bounded export dataset for one RetailEdge report."""
 	resolved_filters = _coerce_filters(filters)
 	company = cstr(resolved_filters.get("company") or "").strip()
 	branch = cstr(resolved_filters.get("branch") or "").strip()
-	require_report_action(
-		report_key,
-		action="export",
-		company=company,
-		branch=branch,
-	)
+	require_report_action(report_key, action="export", company=company, branch=branch)
 	return get_report_dataset(report_key, resolved_filters)
 
 
 @frappe.whitelist()
-def get_report_print_capabilities(
-	report_key: str,
-	company: str = "",
-	branch: str = "",
-) -> dict[str, object]:
+def get_report_print_capabilities(report_key: str, company: str = "", branch: str = "") -> dict[str, object]:
 	"""Revalidate print authorization immediately before a print workflow starts."""
-	return require_report_action(
-		report_key,
-		action="print",
-		company=company,
-		branch=branch,
-	)
+	return require_report_action(report_key, action="print", company=company, branch=branch)
