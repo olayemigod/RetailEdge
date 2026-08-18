@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import frappe
@@ -45,6 +46,17 @@ def _date_distance(bank_date, candidate_date):
 		return None
 
 
+def _can_read_candidate(doctype, name):
+	doctype = cstr(doctype).strip()
+	name = cstr(name).strip()
+	if not doctype or not name:
+		return False
+	try:
+		return bool(frappe.has_permission(doctype, "read", doc=name))
+	except Exception:
+		return False
+
+
 def _resolve_bank_ledger_account(bank_transaction):
 	ledger_account = cstr(bank_transaction.get("ledger_account")).strip()
 	if ledger_account:
@@ -69,11 +81,34 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 	if bank_amount <= 0 or direction not in {DIRECTION_INFLOW, DIRECTION_OUTFLOW}:
 		return []
 
-	filters = {"account": bank_ledger, "docstatus": 1}
+	je_fields = ["name", "posting_date", "company", "voucher_type", "user_remark"]
+	for fieldname in ("cheque_no", "cheque_date", "title", "remark"):
+		if has_field("Journal Entry", fieldname) and fieldname not in je_fields:
+			je_fields.append(fieldname)
+	je_filters: dict[str, Any] = {"docstatus": 1}
+	if company and has_field("Journal Entry", "company"):
+		je_filters["company"] = company
+	if bank_date and has_field("Journal Entry", "posting_date"):
+		center = getdate(bank_date)
+		je_filters["posting_date"] = ["between", [center - timedelta(days=7), center + timedelta(days=7)]]
+
+	# Parent Journal Entries are permission-aware. Child rows are queried only for those allowed parents.
+	entry_rows = frappe.get_list(
+		"Journal Entry",
+		filters=je_filters,
+		fields=je_fields,
+		order_by="posting_date desc, modified desc",
+		limit_page_length=min(max(limit * 8, 160), 1000),
+	)
+	entries = {row.get("name"): row for row in entry_rows if row.get("name")}
+	entry_names = list(entries)
+	if not entry_names:
+		return []
+
+	filters = {"parent": ["in", entry_names], "account": bank_ledger, "docstatus": 1}
 	amount_field = "debit_in_account_currency" if direction == DIRECTION_INFLOW else "credit_in_account_currency"
 	if has_field("Journal Entry Account", amount_field):
 		filters[amount_field] = [">", 0]
-
 	fields = ["parent", "account", "debit_in_account_currency", "credit_in_account_currency"]
 	for fieldname in ("reference_type", "reference_name", "party_type", "party"):
 		if has_field("Journal Entry Account", fieldname):
@@ -82,33 +117,13 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 		"Journal Entry Account",
 		filters=filters,
 		fields=fields,
-		limit_page_length=max(limit * 4, 80),
+		limit_page_length=min(max(limit * 8, 160), 1000),
 	)
-	entry_names = list(dict.fromkeys(row.get("parent") for row in account_rows if row.get("parent")))
-	if not entry_names:
-		return []
-
-	je_fields = ["name", "posting_date", "company", "voucher_type", "user_remark"]
-	for fieldname in ("cheque_no", "cheque_date", "title", "remark"):
-		if has_field("Journal Entry", fieldname) and fieldname not in je_fields:
-			je_fields.append(fieldname)
-	je_filters = {"name": ["in", entry_names], "docstatus": 1}
-	if company and has_field("Journal Entry", "company"):
-		je_filters["company"] = company
-	entries = {
-		row.get("name"): row
-		for row in frappe.get_all(
-			"Journal Entry",
-			filters=je_filters,
-			fields=je_fields,
-			limit_page_length=max(limit * 4, 80),
-		)
-	}
 
 	candidates = []
 	for account_row in account_rows:
 		entry = entries.get(account_row.get("parent"))
-		if not entry:
+		if not entry or not _can_read_candidate("Journal Entry", entry.get("name")):
 			continue
 		candidate_amount = flt(
 			account_row.get("debit_in_account_currency")
@@ -136,30 +151,31 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 			category = "Expense Payment" if direction == DIRECTION_OUTFLOW else "Other Income"
 			business_category = CATEGORY_EXPENSE if direction == DIRECTION_OUTFLOW else CATEGORY_OTHER_INCOME
 
-		candidate = {
-			"document_type": "Journal Entry",
-			"document_name": entry.get("name"),
-			"candidate_category": category,
-			"transaction_category": business_category,
-			"candidate_amount": candidate_amount,
-			"amount_difference": amount_diff,
-			"posting_date": entry.get("posting_date"),
-			"direction": direction,
-			"payment_account": bank_ledger,
-			"account": bank_ledger,
-			"reference": entry.get("cheque_no"),
-			"party_type": account_row.get("party_type"),
-			"party": account_row.get("party"),
-			"remarks": remarks,
-			"description": remarks,
-			"match_score": 72 if days in {None, 0} else 68,
-			"reasons": ["Submitted Journal Entry impacts the selected bank ledger with a compatible amount."],
-			"payment_event_found": 1,
-			"payment_event_source": "Journal Entry",
-			"review_supported": 1,
-			"review_block_reason": "",
-		}
-		candidates.append(candidate)
+		candidates.append(
+			{
+				"document_type": "Journal Entry",
+				"document_name": entry.get("name"),
+				"candidate_category": category,
+				"transaction_category": business_category,
+				"candidate_amount": candidate_amount,
+				"amount_difference": amount_diff,
+				"posting_date": entry.get("posting_date"),
+				"direction": direction,
+				"payment_account": bank_ledger,
+				"account": bank_ledger,
+				"reference": entry.get("cheque_no"),
+				"party_type": account_row.get("party_type"),
+				"party": account_row.get("party"),
+				"remarks": remarks,
+				"description": remarks,
+				"match_score": 72 if days in {None, 0} else 68,
+				"reasons": ["Submitted Journal Entry impacts the selected bank ledger with a compatible amount."],
+				"payment_event_found": 1,
+				"payment_event_source": "Journal Entry",
+				"review_supported": 1,
+				"review_block_reason": "",
+			}
+		)
 	return candidates[:limit]
 
 
@@ -176,15 +192,13 @@ def _hydrate_payment_entry_metadata(candidates):
 	for fieldname in ("mode_of_payment", "remarks", "reference_no"):
 		if has_field("Payment Entry", fieldname):
 			fields.append(fieldname)
-	return {
-		row.get("name"): row
-		for row in frappe.get_all(
-			"Payment Entry",
-			filters={"name": ["in", list(dict.fromkeys(names))], "docstatus": 1},
-			fields=fields,
-			limit_page_length=len(set(names)) or 1,
-		)
-	}
+	rows = frappe.get_list(
+		"Payment Entry",
+		filters={"name": ["in", list(dict.fromkeys(names))], "docstatus": 1},
+		fields=fields,
+		limit_page_length=len(set(names)) or 1,
+	)
+	return {row.get("name"): row for row in rows if row.get("name")}
 
 
 def _payment_entry_business_category(metadata, direction):
@@ -229,9 +243,7 @@ def _annotate_candidate_business_context(candidate, bank_transaction, payment_me
 			else CATEGORY_CUSTOMER_RECEIPT
 		)
 		return row
-	row["transaction_category"] = (
-		CATEGORY_OTHER_INCOME if direction == DIRECTION_INFLOW else CATEGORY_OTHER_OUTFLOW
-	)
+	row["transaction_category"] = CATEGORY_OTHER_INCOME if direction == DIRECTION_INFLOW else CATEGORY_OTHER_OUTFLOW
 	return row
 
 
@@ -248,11 +260,7 @@ def _prepare_candidate_for_fuzzy(candidate, bank_transaction):
 
 
 def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, limit=40):
-	"""Return existing RetailEdge candidates plus direction-specific ERPNext bank events.
-
-	Fuzzy similarity is applied only after the existing candidate builders and hard accounting
-	guards have produced candidates. This service does not reconcile or mutate accounting docs.
-	"""
+	"""Return direction-safe existing candidates plus permission-aware ERPNext bank events."""
 	assert_can_access_bank_transaction_matching()
 	bank_transaction = normalize_bank_transaction(bank_transaction_name)
 	direction = cstr(bank_transaction.get("direction")).strip()
@@ -279,6 +287,11 @@ def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, lim
 		)
 
 	base_candidates.extend(_journal_entry_candidates(bank_transaction, limit=limit))
+	base_candidates = [
+		row
+		for row in base_candidates
+		if _can_read_candidate(row.get("document_type"), row.get("document_name"))
+	]
 	payment_metadata = _hydrate_payment_entry_metadata(base_candidates)
 	annotated = [
 		_annotate_candidate_business_context(candidate, bank_transaction, payment_metadata)
@@ -307,6 +320,8 @@ def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, lim
 
 def _prepare_journal_entry_review(bank_transaction_name, document_name):
 	assert_can_manage_bank_transaction_match()
+	if not _can_read_candidate("Journal Entry", document_name):
+		frappe.throw("You do not have permission to review this Journal Entry.", frappe.PermissionError)
 	candidate_context = _resolve_manual_candidate_context(
 		bank_transaction=bank_transaction_name,
 		suggested_document_type="Journal Entry",
@@ -367,6 +382,8 @@ def prepare_direction_aware_bank_candidate(bank_transaction_name, document_type,
 			"created": False,
 			"message": f"{document_type} is not enabled for RetailEdge Bank Match Review.",
 		}
+	if not _can_read_candidate(document_type, document_name):
+		frappe.throw(f"You do not have permission to review this {document_type}.", frappe.PermissionError)
 
 	payload = get_direction_aware_bank_candidates(bank_transaction_name, limit=100)
 	candidate = next(
