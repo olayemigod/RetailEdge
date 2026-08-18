@@ -26,6 +26,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.sales_reporting import get_sales_invoice_register_export
 
 		return get_sales_invoice_register_export
+	if key == "customer-receivables":
+		from retailedge.customer_receivables import get_customer_receivables_export
+
+		return get_customer_receivables_export
 	if key == "purchase-register":
 		from retailedge.purchase_reporting import get_purchase_register_export
 
