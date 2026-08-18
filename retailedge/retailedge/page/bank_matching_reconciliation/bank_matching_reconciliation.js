@@ -57,7 +57,7 @@ frappe.pages["bank-matching-reconciliation"].on_page_load = function (wrapper) {
 		set_active_buttons();
 		$content.html(`<div class='text-muted'>${__("Loading bank matching and reconciliation queue...")}</div>`);
 		frappe.call({
-			method: "retailedge.banking_operations.get_banking_workspace_rows",
+			method: "retailedge.banking_workspace.get_banking_workspace_rows",
 			args: {
 				direction: state.direction,
 				queue: state.queue,
