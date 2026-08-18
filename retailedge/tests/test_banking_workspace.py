@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from retailedge.banking_workspace import (
@@ -8,6 +9,7 @@ from retailedge.banking_workspace import (
     QUEUE_RECONCILED,
     QUEUE_TO_MATCH,
     QUEUE_TO_RECONCILE,
+    _cheap_operational,
     _status_belongs_to_queue,
     get_banking_workspace_rows,
 )
@@ -40,6 +42,38 @@ class BankingWorkspaceTests(unittest.TestCase):
             STATUS_RECONCILIATION_FAILED,
         ):
             self.assertTrue(_status_belongs_to_queue(status, QUEUE_EXCEPTIONS))
+
+    def test_suggested_match_does_not_need_reconciliation_preflight_to_enter_to_match(self):
+        row = SimpleNamespace(
+            decision_status="Suggested",
+            suggested_document="PE-1",
+            execution_status="Not Executed",
+        )
+        operational = _cheap_operational(row, {"direction": "Inflow"}, QUEUE_TO_MATCH)
+        self.assertEqual(operational["operational_status"], STATUS_SUGGESTED)
+        self.assertEqual(operational["direction"], "Inflow")
+
+    def test_known_review_and_terminal_states_can_be_placed_without_preflight(self):
+        review = _cheap_operational(
+            SimpleNamespace(
+                decision_status="Needs Review",
+                suggested_document="JV-1",
+                execution_status="Not Executed",
+            ),
+            {"direction": "Outflow"},
+            QUEUE_EXCEPTIONS,
+        )
+        terminal = _cheap_operational(
+            SimpleNamespace(
+                decision_status="Confirmed",
+                suggested_document="PE-1",
+                execution_status="Executed",
+            ),
+            {"direction": "Inflow"},
+            QUEUE_RECONCILED,
+        )
+        self.assertEqual(review["operational_status"], STATUS_NEEDS_REVIEW)
+        self.assertEqual(terminal["operational_status"], STATUS_RECONCILED)
 
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
     @patch("retailedge.banking_workspace._get_review_queue_rows")
