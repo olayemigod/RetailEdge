@@ -15,11 +15,9 @@ def enrich_ranked_candidates(
     candidates: list[dict[str, Any]],
     hard_eligibility: Callable[[dict[str, Any]], bool] | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply fuzzy evidence only after the caller's existing hard eligibility checks.
+    """Add fuzzy evidence after the existing hard matcher has decided eligibility.
 
-    This is designed to be called from the existing matching engine, not as a replacement
-    discovery path. Candidates blocked by existing accounting, direction, or duplicate rules
-    should never reach this function.
+    `match_score` remains the hard accounting score. `ranking_score` is presentation-only.
     """
     output = []
     for candidate in candidates or []:
@@ -27,14 +25,13 @@ def enrich_ranked_candidates(
         if hard_eligibility and not hard_eligibility(row):
             continue
         row = enrich_candidate_with_fuzzy_evidence(bank_transaction, row)
-        if row.get("fuzzy_block_reason"):
-            continue
         row = apply_fuzzy_score_boost(row)
         output.append(row)
 
     output.sort(
         key=lambda row: (
-            -int(row.get("match_score") or 0),
+            -int(row.get("ranking_score") or row.get("match_score") or 0),
+            -int(row.get("hard_match_score") or row.get("match_score") or 0),
             -int(row.get("fuzzy_score") or 0),
             cstr(row.get("document_name") or row.get("suggested_document")),
         )
