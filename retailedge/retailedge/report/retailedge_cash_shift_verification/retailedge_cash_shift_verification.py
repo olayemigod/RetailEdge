@@ -5,6 +5,7 @@ from frappe import _
 from frappe.utils import cint, flt, getdate
 
 from retailedge.branch_context import get_branch_query_filters, has_doctype
+from retailedge.cash_deposit_audit import get_submitted_deposit_totals
 
 
 def execute(filters=None):
@@ -31,6 +32,7 @@ def get_columns():
 		{"label": _("Opening Cash"), "fieldname": "opening_cash", "fieldtype": "Currency", "width": 110},
 		{"label": _("Cash Sales"), "fieldname": "cash_sales", "fieldtype": "Currency", "width": 110},
 		{"label": _("Included Cashier Expenses"), "fieldname": "included_cashier_expenses", "fieldtype": "Currency", "width": 165},
+		{"label": _("Cash Deposits"), "fieldname": "cash_deposits", "fieldtype": "Currency", "width": 120},
 		{"label": _("Expected Cash"), "fieldname": "expected_cash", "fieldtype": "Currency", "width": 115},
 		{"label": _("Actual Closing Cash"), "fieldname": "actual_closing_cash", "fieldtype": "Currency", "width": 145},
 		{"label": _("Cash Variance"), "fieldname": "cash_variance", "fieldtype": "Currency", "width": 110},
@@ -91,9 +93,21 @@ def get_data(filters, limit_page_length=0):
 		limit_page_length=limit_page_length,
 		order_by="audit_date desc, creation desc",
 	)
+	deposit_totals = get_submitted_deposit_totals(
+		[row.get("pos_opening_shift") for row in rows],
+		company=filters.get("company"),
+	)
 
 	result = []
 	for row in rows:
+		cash_deposits = flt(deposit_totals.get(row.get("pos_opening_shift")))
+		expected_cash = (
+			flt(row.get("opening_cash_amount"))
+			+ flt(row.get("cash_sales_amount"))
+			- flt(row.get("cashier_expense_amount"))
+			- cash_deposits
+		)
+		cash_variance = flt(row.get("actual_closing_cash_amount")) - expected_cash
 		report_row = {
 			"company": row.get("company"),
 			"branch": row.get("branch"),
@@ -105,9 +119,10 @@ def get_data(filters, limit_page_length=0):
 			"opening_cash": flt(row.get("opening_cash_amount")),
 			"cash_sales": flt(row.get("cash_sales_amount")),
 			"included_cashier_expenses": flt(row.get("cashier_expense_amount")),
-			"expected_cash": flt(row.get("expected_cash_amount")),
+			"cash_deposits": cash_deposits,
+			"expected_cash": expected_cash,
 			"actual_closing_cash": flt(row.get("actual_closing_cash_amount")),
-			"cash_variance": flt(row.get("cash_variance_amount")),
+			"cash_variance": cash_variance,
 			"daily_sales_audit": row.get("name"),
 			"review_status": row.get("audit_status"),
 		}
@@ -145,6 +160,12 @@ def get_report_summary(rows):
 		{
 			"value": sum(flt(row.get("expected_cash")) for row in rows),
 			"label": _("Expected Cash"),
+			"datatype": "Currency",
+			"indicator": "Blue",
+		},
+		{
+			"value": sum(flt(row.get("cash_deposits")) for row in rows),
+			"label": _("Cash Deposits"),
 			"datatype": "Currency",
 			"indicator": "Blue",
 		},
