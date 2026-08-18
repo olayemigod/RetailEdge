@@ -42,6 +42,30 @@
 
 			<EdgeDashboardGrid minColumnWidth="20rem">
 				<EdgeDashboardSection
+					v-if="attention.length"
+					title="Attention Required"
+					description="Operational exceptions surfaced from the same RetailEdge reports behind this dashboard."
+					span="2"
+				>
+					<div class="owner-attention-list">
+						<button
+							v-for="item in attention"
+							:key="`${item.section}-${item.metric}`"
+							type="button"
+							class="owner-attention-item"
+							:class="`owner-attention-item--${item.tone || 'warning'}`"
+							@click="openRoute(item.route)"
+						>
+							<span class="owner-attention-copy">
+								<strong>{{ item.label }}</strong>
+								<small>{{ item.metric }}</small>
+							</span>
+							<strong class="owner-attention-value">{{ formatCard(item) }}</strong>
+						</button>
+					</div>
+				</EdgeDashboardSection>
+
+				<EdgeDashboardSection
 					v-for="section in availableSections"
 					:key="section.key"
 					:title="section.label"
@@ -86,7 +110,7 @@ export default {
 			exportBusy: false, printBusy: false,
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
-			sections: {}, menuItems: [], tenantName: "", userName: "",
+			sections: {}, headlineSummary: [], attention: [], menuItems: [], tenantName: "", userName: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
 	},
@@ -94,20 +118,6 @@ export default {
 		sectionList() { return Object.entries(this.sections || {}).map(([key, value]) => ({ key, ...(value || {}) })); },
 		availableSections() { return this.sectionList.filter((section) => section.available); },
 		unavailableSections() { return this.sectionList.filter((section) => !section.available); },
-		headlineSummary() {
-			const preferred = [
-				["sales", ["Net Sales", "Gross Sales", "Total Sales"]],
-				["expenses", ["Total Expenses", "Expenses"]],
-				["receivables", ["Total Receivables"]],
-				["payables", ["Total Payables"]],
-			];
-			return preferred.flatMap(([key, labels]) => {
-				const section = this.sections?.[key];
-				if (!section?.available) return [];
-				const card = (section.summary || []).find((item) => labels.includes(item.label));
-				return card ? [{ ...card, label: card.label }] : [];
-			});
-		},
 	},
 	created() {
 		const components = runtimeComponents();
@@ -139,8 +149,15 @@ export default {
 					getDashboardCapabilities(DASHBOARD_KEY, this.filters),
 				]);
 				this.sections = result.sections || {};
+				this.headlineSummary = result.headline_summary || [];
+				this.attention = result.attention || [];
 				this.capabilities = capabilities || this.capabilities;
-			} catch (error) { this.sections = {}; this.error = errorMessage(error, "Owner Dashboard failed to load."); }
+			} catch (error) {
+				this.sections = {};
+				this.headlineSummary = [];
+				this.attention = [];
+				this.error = errorMessage(error, "Owner Dashboard failed to load.");
+			}
 			finally { this.loading = false; }
 		},
 		async handleExport(options) {
@@ -160,9 +177,10 @@ export default {
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
-		openSection(section) { if (section?.route) window.location.assign(section.route); },
+		openRoute(route) { if (route) window.location.assign(route); },
+		openSection(section) { this.openRoute(section?.route); },
 		sectionDescription(section) { return section.key === "stock" && section.show_costs === false ? "Stock quantities are shown using your permitted cost-visibility policy; valuation remains hidden." : "Summary from the existing RetailEdge source report."; },
-		formatCard(card) { try { return frappe.format(card.value, { fieldtype: card.datatype || "Data" }); } catch (_error) { return card.value ?? "—"; } },
+		formatCard(card) { try { return frappe.format(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
 	},
 };
 </script>
@@ -173,7 +191,14 @@ export default {
 .owner-metric { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
 .owner-metric span { color: var(--edge-text-muted); font-size: 12px; }
 .owner-metric strong { font-size: 1.05rem; }
+.owner-attention-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.owner-attention-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); text-align: left; cursor: pointer; }
+.owner-attention-item--danger { border-color: var(--edge-danger, var(--edge-border)); }
+.owner-attention-item--warning { border-color: var(--edge-warning, var(--edge-border)); }
+.owner-attention-copy { display: grid; gap: 3px; }
+.owner-attention-copy small { color: var(--edge-text-muted); }
+.owner-attention-value { white-space: nowrap; }
 .owner-open { margin-top: 14px; }
 .owner-restricted { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
-@media (max-width: 720px) { .owner-dashboard-filters, .owner-section-cards { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .owner-dashboard-filters, .owner-section-cards, .owner-attention-list { grid-template-columns: 1fr; } }
 </style>
