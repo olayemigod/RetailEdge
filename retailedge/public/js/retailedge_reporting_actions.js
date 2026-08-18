@@ -6,6 +6,7 @@
 		"/app/expense-register": "expense-register",
 		"/app/sales-by-item": "sales-by-item",
 		"/app/sales-invoice-register": "sales-invoice-register",
+		"/app/customer-receivables": "customer-receivables",
 		"/app/purchase-register": "purchase-register",
 		"/app/supplier-payables": "supplier-payables",
 		"/app/stock-position": "stock-position",
