@@ -66,39 +66,29 @@ def build_fuzzy_match_evidence(
     bank_transaction: dict[str, Any],
     candidate: dict[str, Any],
 ) -> dict[str, Any]:
+    """Return supplemental text/date evidence for an already-eligible accounting candidate.
+
+    Candidate eligibility belongs to the mature RetailEdge matching engine. This helper never
+    rejects a candidate for raw bank-account-string or amount differences because those values
+    may represent Bank Account links vs GL Accounts, or legitimate partial/variance scenarios.
+    """
     bank_direction = cstr(bank_transaction.get("direction")).strip()
     candidate_direction = cstr(candidate.get("direction") or candidate.get("expected_direction")).strip()
     if candidate_direction and bank_direction and candidate_direction != bank_direction:
         return {
-            "eligible": False,
-            "reason": "Direction mismatch",
+            "eligible": True,
+            "reason": "Direction differs; no fuzzy boost applied. Accounting eligibility remains authoritative.",
             "fuzzy_score": 0,
-            "fuzzy_confidence": "Blocked",
-        }
-
-    bank_account = cstr(bank_transaction.get("ledger_account") or bank_transaction.get("bank_account")).strip()
-    candidate_account = cstr(
-        candidate.get("payment_account")
-        or candidate.get("account")
-        or candidate.get("expected_bank_account")
-    ).strip()
-    if bank_account and candidate_account and bank_account != candidate_account:
-        return {
-            "eligible": False,
-            "reason": "Bank account mismatch",
-            "fuzzy_score": 0,
-            "fuzzy_confidence": "Blocked",
+            "fuzzy_confidence": "No Match",
+            "reference_similarity": 0,
+            "narration_similarity": 0,
+            "date_score": 0,
+            "exact_reference": False,
         }
 
     bank_amount = bank_transaction.get("amount")
     candidate_amount = candidate.get("candidate_amount") or candidate.get("amount")
-    if not _amount_compatible(bank_amount, candidate_amount):
-        return {
-            "eligible": False,
-            "reason": "Amount mismatch",
-            "fuzzy_score": 0,
-            "fuzzy_confidence": "Blocked",
-        }
+    amount_compatible = _amount_compatible(bank_amount, candidate_amount)
 
     bank_reference = bank_transaction.get("reference") or bank_transaction.get("transaction_id")
     candidate_reference = (
@@ -123,12 +113,26 @@ def build_fuzzy_match_evidence(
     )
     narration_similarity = fuzzy_text_similarity(bank_narration, candidate_text)
 
-    days = _days_apart(bank_transaction.get("transaction_date"), candidate.get("posting_date") or candidate.get("date"))
-    date_score = 1.0 if days == 0 else 0.8 if days == 1 else 0.6 if days is not None and days <= 3 else 0.3 if days is not None and days <= 7 else 0.0
+    days = _days_apart(
+        bank_transaction.get("transaction_date"),
+        candidate.get("posting_date") or candidate.get("date"),
+    )
+    date_score = (
+        1.0
+        if days == 0
+        else 0.8
+        if days == 1
+        else 0.6
+        if days is not None and days <= 3
+        else 0.3
+        if days is not None and days <= 7
+        else 0.0
+    )
 
     exact_reference = bool(reference_similarity == 1.0 and bank_reference and candidate_reference)
     text_score = max(reference_similarity, narration_similarity)
-    score = 0.55 + (0.20 * date_score) + (0.20 * text_score) + (0.05 if exact_reference else 0.0)
+    amount_component = 0.20 if amount_compatible else 0.0
+    score = amount_component + (0.25 * date_score) + (0.45 * text_score) + (0.10 if exact_reference else 0.0)
     score = min(score, 1.0)
 
     if score >= FUZZY_STRONG:
@@ -140,28 +144,35 @@ def build_fuzzy_match_evidence(
     else:
         confidence = "No Match"
 
+    note = "Supplemental fuzzy evidence only; accounting eligibility and hard match score were not changed."
+    if not amount_compatible:
+        note += " Amount differs, so no amount similarity boost was applied."
+
     return {
-        "eligible": confidence != "No Match",
-        "reason": "Fuzzy evidence evaluated after direction, account, and amount guards.",
+        "eligible": True,
+        "reason": note,
         "fuzzy_score": round(score * 100),
         "fuzzy_confidence": confidence,
         "reference_similarity": round(reference_similarity, 4),
         "narration_similarity": round(narration_similarity, 4),
         "date_score": round(date_score, 4),
+        "amount_compatible": amount_compatible,
         "exact_reference": exact_reference,
     }
 
 
-def rank_fuzzy_candidates(bank_transaction: dict[str, Any], candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def rank_fuzzy_candidates(
+    bank_transaction: dict[str, Any], candidates: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     ranked = []
     for candidate in candidates or []:
         evidence = build_fuzzy_match_evidence(bank_transaction, candidate)
-        if not evidence.get("eligible"):
-            continue
         row = dict(candidate)
         row["fuzzy_evidence"] = evidence
         row["fuzzy_score"] = evidence.get("fuzzy_score")
         row["fuzzy_confidence"] = evidence.get("fuzzy_confidence")
         ranked.append(row)
-    ranked.sort(key=lambda row: (-int(row.get("fuzzy_score") or 0), cstr(row.get("document_name"))))
+    ranked.sort(
+        key=lambda row: (-int(row.get("fuzzy_score") or 0), cstr(row.get("document_name")))
+    )
     return ranked
