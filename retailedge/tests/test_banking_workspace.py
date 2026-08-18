@@ -20,13 +20,13 @@ from retailedge.banking_operations import (
     STATUS_RECONCILED,
     STATUS_RECONCILIATION_FAILED,
     STATUS_RECONCILIATION_PENDING,
-    STATUS_SUGGESTED,
+    STATUS_UNMATCHED,
 )
 
 
 class BankingWorkspaceTests(unittest.TestCase):
     def test_queue_mapping_keeps_matching_and_reconciliation_separate(self):
-        self.assertTrue(_status_belongs_to_queue(STATUS_SUGGESTED, QUEUE_TO_MATCH))
+        self.assertTrue(_status_belongs_to_queue(STATUS_UNMATCHED, QUEUE_TO_MATCH))
         self.assertTrue(_status_belongs_to_queue(STATUS_READY_TO_RECONCILE, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILIATION_PENDING, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILED, QUEUE_RECONCILED))
@@ -43,7 +43,7 @@ class BankingWorkspaceTests(unittest.TestCase):
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
     @patch("retailedge.banking_workspace.get_bank_match_operational_status")
     @patch("retailedge.banking_workspace.frappe.get_list")
-    def test_workspace_direction_filters_before_returning_rows(
+    def test_workspace_direction_filters_review_queue_rows(
         self, get_list, operational, _assert_access
     ):
         get_list.return_value = [
@@ -100,6 +100,47 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(payload["rows"][0]["direction"], "Outflow")
         operational.assert_any_call("MATCH-IN", include_gate=False)
         operational.assert_any_call("MATCH-OUT", include_gate=False)
+
+    @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_workspace.normalize_bank_transaction")
+    @patch("retailedge.banking_workspace.frappe.get_list")
+    def test_to_match_queue_comes_from_unreconciled_bank_transactions(
+        self, get_list, normalize, _assert_access
+    ):
+        bank_rows = [
+            SimpleNamespace(name="BT-IN"),
+            SimpleNamespace(name="BT-OUT"),
+        ]
+        get_list.side_effect = [bank_rows, []]
+        normalize.side_effect = [
+            {
+                "bank_transaction": "BT-IN",
+                "transaction_date": "2026-08-18",
+                "amount": 100000,
+                "direction": "Inflow",
+                "company": "Demo",
+                "bank_account": "Bank",
+                "branch": "HQ",
+                "is_reconciled": False,
+            },
+            {
+                "bank_transaction": "BT-OUT",
+                "transaction_date": "2026-08-18",
+                "amount": 75000,
+                "direction": "Outflow",
+                "company": "Demo",
+                "bank_account": "Bank",
+                "branch": "HQ",
+                "is_reconciled": False,
+            },
+        ]
+
+        payload = get_banking_workspace_rows(direction="Inflow", queue=QUEUE_TO_MATCH)
+
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["rows"][0]["bank_transaction"], "BT-IN")
+        self.assertEqual(payload["rows"][0]["operational_status"], STATUS_UNMATCHED)
+        self.assertEqual(payload["rows"][0]["direction"], "Inflow")
 
 
 if __name__ == "__main__":
