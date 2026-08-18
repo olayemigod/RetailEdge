@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import frappe
 
-from retailedge.owner_dashboard import _safe_section, get_owner_dashboard_data
+from retailedge.owner_dashboard import _attention_items, _headline_summary, _safe_section, get_owner_dashboard_data
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,6 +29,37 @@ class TestOwnerDashboard(unittest.TestCase):
 		payload = _safe_section("Cash Movement", denied, "/app/cash-movement")
 		self.assertFalse(payload["available"])
 		self.assertIn("permissions", payload["reason"])
+
+	def test_headline_summary_uses_source_cards_and_respects_hidden_stock_value(self):
+		sections = {
+			"sales": {"available": True, "summary": [{"label": "Net Invoiced", "value": 5000, "datatype": "Currency"}]},
+			"expenses": {"available": True, "summary": [{"label": "Total Expenses", "value": 900, "type": "Currency"}]},
+			"receivables": {"available": True, "summary": [{"label": "Total Receivables", "value": 1200, "datatype": "Currency"}]},
+			"payables": {"available": True, "summary": [{"label": "Total Payables", "value": 700, "datatype": "Currency"}]},
+			"stock": {"available": True, "show_costs": False, "summary": [{"label": "Items in Scope", "value": 15, "datatype": "Int"}]},
+		}
+		cards = _headline_summary(sections)
+		self.assertEqual([card["label"] for card in cards], ["Sales", "Expenses", "Receivables", "Payables"])
+		self.assertNotIn("Stock Value", [card["label"] for card in cards])
+
+	def test_attention_only_surfaces_positive_existing_exception_metrics(self):
+		sections = {
+			"expenses": {"available": True, "summary": [
+				{"label": "Posting Blocked", "value": 2, "type": "Int"},
+				{"label": "Submitted for Review", "value": 0, "type": "Int"},
+			]},
+			"receivables": {"available": True, "summary": [
+				{"label": "Overdue", "value": 2500, "datatype": "Currency"},
+				{"label": "Over 90 Days", "value": 0, "datatype": "Currency"},
+			]},
+			"stock": {"available": True, "summary": [
+				{"label": "Negative Stock", "value": 1, "datatype": "Int"},
+				{"label": "Out of Stock", "value": 0, "datatype": "Int"},
+			]},
+		}
+		items = _attention_items(sections)
+		self.assertEqual({item["metric"] for item in items}, {"Posting Blocked", "Overdue", "Negative Stock"})
+		self.assertEqual(next(item for item in items if item["metric"] == "Negative Stock")["tone"], "danger")
 
 	@patch("retailedge.owner_dashboard.require_dashboard_action", return_value={"can_view": True})
 	@patch("retailedge.owner_dashboard.get_branch_performance_dashboard_data", return_value={"summary": []})
@@ -57,6 +88,8 @@ class TestOwnerDashboard(unittest.TestCase):
 			{"sales", "expenses", "cash", "receivables", "payables", "stock", "branches"},
 		)
 		self.assertFalse(result["sections"]["stock"]["show_costs"])
+		self.assertIn("headline_summary", result)
+		self.assertIn("attention", result)
 		for mock in (sales, expenses, cash, receivables, payables, stock, branches):
 			self.assertEqual(mock.call_count, 1)
 		capability.assert_called_once_with("owner-dashboard", "view", company="Demo Company", branch="Aba")
