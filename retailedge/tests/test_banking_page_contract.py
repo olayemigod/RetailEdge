@@ -3,12 +3,13 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+APP_ROOT = Path(__file__).resolve().parents[1]
+PAGE_JS = APP_ROOT / "retailedge/page/bank_matching_reconciliation/bank_matching_reconciliation.js"
+
 
 class BankingPageContractTests(unittest.TestCase):
 	def test_banking_page_calls_workspace_service(self):
-		page_js = Path(
-			"retailedge/retailedge/page/bank_matching_reconciliation/bank_matching_reconciliation.js"
-		).read_text()
+		page_js = PAGE_JS.read_text()
 		self.assertIn(
 			"retailedge.banking_workspace.get_banking_workspace_rows",
 			page_js,
@@ -22,9 +23,7 @@ class BankingPageContractTests(unittest.TestCase):
 		self.assertIn("Reconciled", page_js)
 
 	def test_to_match_uses_direction_aware_candidate_engine(self):
-		page_js = Path(
-			"retailedge/retailedge/page/bank_matching_reconciliation/bank_matching_reconciliation.js"
-		).read_text()
+		page_js = PAGE_JS.read_text()
 		self.assertIn("Find Candidates", page_js)
 		self.assertIn(
 			"retailedge.bank_candidate_engine.get_direction_aware_bank_candidates",
