@@ -5,8 +5,14 @@ from typing import Any
 import frappe
 from frappe.utils import cstr, flt
 
-from retailedge.bank_transaction_match_workflow import confirm_bank_transaction_match
-from retailedge.bank_transaction_matching import normalize_bank_transaction
+from retailedge.bank_transaction_match_workflow import (
+    assert_can_manage_bank_transaction_match,
+    confirm_bank_transaction_match,
+)
+from retailedge.bank_transaction_matching import (
+    assert_can_access_bank_transaction_matching,
+    normalize_bank_transaction,
+)
 from retailedge.reconciliation_bridge import (
     EXECUTION_STATUS_ALREADY_HANDLED,
     EXECUTION_STATUS_EXECUTED,
@@ -193,12 +199,13 @@ def derive_operational_status(
 
 
 @frappe.whitelist()
-def get_bank_match_operational_status(match_name: str) -> dict[str, Any]:
+def get_bank_match_operational_status(match_name: str, include_gate: bool = True) -> dict[str, Any]:
+    assert_can_access_bank_transaction_matching()
     match_doc = _load_match(match_name)
     bank_transaction = match_doc.get("bank_transaction")
     direction = get_bank_transaction_direction(bank_transaction)
     preflight = get_reconciliation_preflight(match_name)
-    gate = check_reconciliation_execution_gate(match_name)
+    gate = check_reconciliation_execution_gate(match_name) if include_gate else frappe._dict()
     status = derive_operational_status(match_doc, preflight=preflight, gate=gate)
 
     context = frappe._dict(preflight or {})
@@ -214,8 +221,8 @@ def get_bank_match_operational_status(match_name: str) -> dict[str, Any]:
         "reconciliation_readiness": preflight.get("readiness_group")
         or preflight.get("eligibility_status"),
         "execution_status": match_doc.get("execution_status"),
-        "can_execute": bool(gate.get("can_execute")),
-        "blocking_reasons": gate.get("block_reasons") or [],
+        "can_execute": bool(gate.get("can_execute")) if include_gate else None,
+        "blocking_reasons": gate.get("block_reasons") or [] if include_gate else [],
         "recommended_action": preflight.get("recommended_action"),
         "erpnext_target_doctype": preflight.get("erpnext_target_doctype"),
         "erpnext_target_name": preflight.get("erpnext_target_name"),
@@ -230,6 +237,8 @@ def match_and_reconcile(match_name: str, confirm_match: bool = False, confirm_re
     which in turn uses ERPNext's native Bank Reconciliation Tool. It never mutates submitted
     Sales Invoice, Payment Entry, Journal Entry, or GL Entry documents directly.
     """
+    assert_can_manage_bank_transaction_match()
+    assert_can_access_bank_transaction_matching()
     match_doc = _load_match(match_name)
     decision_status = cstr(match_doc.get("decision_status")).strip()
 
