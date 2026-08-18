@@ -1,12 +1,23 @@
-.retailedge-bank-reconciliation {
-	padding: 12px 0 24px;
+.retailedge-bank-table-wrap {
+	overflow-x: auto;
 }
 
-.retailedge-bank-reconciliation .btn-group {
-	margin-bottom: 8px;
+.retailedge-bank-table th {
+	white-space: nowrap;
 }
 
-.retailedge-bank-reconciliation table td,
-.retailedge-bank-reconciliation table th {
+.retailedge-bank-table td,
+.retailedge-bank-table th {
 	vertical-align: middle;
+}
+
+.edge-link-button {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	text-align: left;
+	text-decoration: underline;
+	cursor: pointer;
+	padding: 0;
 }
