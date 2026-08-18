@@ -85,7 +85,7 @@ doctype_js = {
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
-	"Purchase Order": "public/js/purchase_order.js",
+	"Purchase Order": "public/js/purchase_documents_list.js",
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
@@ -95,7 +95,15 @@ doctype_list_js = {
 # Svg Icons
 # ------------------
 # include app icons in desk
-# app_include_icons = "retailedge/public/icons.svg"
+# add_to_apps_screen = [
+# 	{
+# 		"name": "retailedge",
+# 		"logo": "/assets/retailedge/logo.png",
+# 		"title": "RetailEdge",
+# 		"route": "/retailedge",
+# 		"has_permission": "retailedge.api.permission.has_app_permission"
+# 	}
+# ]
 
 # Home Pages
 # ----------
