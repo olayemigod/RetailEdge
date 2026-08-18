@@ -95,6 +95,12 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 		self.assertEqual(result["candidates"][0]["candidate_category"], "Deposit to Bank")
 		enrich.assert_called_once()
 
+	@patch("retailedge.bank_candidate_engine.normalize_bank_transaction", return_value={"direction": "Unknown", "amount": 1000})
+	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
+	def test_unknown_direction_fails_closed(self, _assert_access, _normalize):
+		with self.assertRaises(Exception):
+			get_direction_aware_bank_candidates("BT-UNKNOWN")
+
 
 if __name__ == "__main__":
 	unittest.main()
