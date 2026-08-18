@@ -138,7 +138,7 @@ doctype_list_js = {
 # Integration Setup
 # -------------------
 # To set up dependencies/integrations with other apps
-# Name of the app being installed is passed as an argument
+# Name of app being installed is passed as an argument
 
 # before_app_install = "retailedge.utils.before_app_install"
 # after_app_install = "retailedge.utils.after_app_install"
@@ -155,6 +155,9 @@ doctype_list_js = {
 # Document Events
 # ---------------
 doc_events = {
+	"Bank Account": {
+		"validate": "retailedge.bank_account_policy.validate_bank_account_branch",
+	},
 	"Sales Invoice": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
 	},
