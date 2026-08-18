@@ -4,7 +4,7 @@ from typing import Any, Callable
 
 import frappe
 from frappe import _
-from frappe.utils import get_first_day, today
+from frappe.utils import flt, get_first_day, today
 
 from retailedge.branch_performance_dashboard import get_branch_performance_dashboard_data
 from retailedge.cash_movement import get_cash_movement
@@ -68,6 +68,8 @@ def get_owner_dashboard_data(filters: dict[str, Any] | str | None = None) -> dic
 	return {
 		"title": _("Owner Dashboard"),
 		"filters": common,
+		"headline_summary": _headline_summary(sections),
+		"attention": _attention_items(sections),
 		"sections": sections,
 		"metadata": {
 			"composition": "existing_retailedge_reporting_engines",
@@ -90,7 +92,7 @@ def build_owner_dashboard_export_dataset(filters: dict[str, Any] | str | None = 
 					"section": section.get("label") or key,
 					"metric": card.get("label") or "",
 					"value": card.get("value"),
-					"datatype": card.get("datatype") or "Data",
+					"datatype": card.get("datatype") or card.get("type") or "Data",
 				}
 			)
 	return {
@@ -101,9 +103,71 @@ def build_owner_dashboard_export_dataset(filters: dict[str, Any] | str | None = 
 			{"fieldname": "value", "label": _("Value"), "fieldtype": "Data", "width": 160},
 		],
 		"rows": rows,
-		"summary": [],
+		"summary": result.get("headline_summary") or [],
 		"filters": result.get("filters") or {},
 	}
+
+
+def _headline_summary(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+	preferred = (
+		("sales", "Net Invoiced", "Sales"),
+		("expenses", "Total Expenses", "Expenses"),
+		("receivables", "Total Receivables", "Receivables"),
+		("payables", "Total Payables", "Payables"),
+		("stock", "Stock Value", "Stock Value"),
+	)
+	cards: list[dict[str, Any]] = []
+	for section_key, metric_label, display_label in preferred:
+		card = _summary_card(sections.get(section_key), metric_label)
+		if not card:
+			continue
+		cards.append({**card, "label": _(display_label), "source_label": card.get("label")})
+	return cards
+
+
+def _attention_items(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+	items: list[dict[str, Any]] = []
+	_rules = (
+		("expenses", "Posting Blocked", "danger", "Expense posting is blocked", "/app/expense-register"),
+		("expenses", "Submitted for Review", "warning", "Expenses are awaiting review", "/app/expense-register"),
+		("receivables", "Over 90 Days", "danger", "Receivables are over 90 days overdue", "/app/customer-receivables"),
+		("receivables", "Overdue", "warning", "Customer balances are overdue", "/app/customer-receivables"),
+		("payables", "Over 90 Days", "danger", "Supplier balances are over 90 days overdue", "/app/supplier-payables"),
+		("payables", "Overdue", "warning", "Supplier balances are overdue", "/app/supplier-payables"),
+		("stock", "Negative Stock", "danger", "Items have negative stock", "/app/stock-position"),
+		("stock", "Out of Stock", "warning", "Items are out of stock", "/app/stock-position"),
+		("stock", "Fully Reserved", "warning", "Stock is fully reserved", "/app/stock-position"),
+	)
+	seen: set[tuple[str, str]] = set()
+	for section_key, metric_label, tone, message, route in _rules:
+		card = _summary_card(sections.get(section_key), metric_label)
+		if not card or flt(card.get("value")) <= 0:
+			continue
+		key = (section_key, metric_label)
+		if key in seen:
+			continue
+		seen.add(key)
+		items.append(
+			{
+				"section": section_key,
+				"label": _(message),
+				"metric": card.get("label") or metric_label,
+				"value": card.get("value"),
+				"datatype": card.get("datatype") or card.get("type") or "Data",
+				"tone": tone,
+				"route": route,
+			}
+		)
+	return items
+
+
+def _summary_card(section: dict[str, Any] | None, label: str) -> dict[str, Any] | None:
+	if not section or not section.get("available"):
+		return None
+	for card in section.get("summary") or []:
+		if str(card.get("label") or "").strip() == label:
+			return dict(card)
+	return None
 
 
 def _safe_section(label: str, loader: Callable[[], dict[str, Any]], route: str) -> dict[str, Any]:
