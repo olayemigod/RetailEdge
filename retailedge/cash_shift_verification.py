@@ -5,7 +5,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, getdate, nowdate
+from frappe.utils import cint, nowdate
 
 from retailedge.retailedge.report.retailedge_cash_shift_verification.retailedge_cash_shift_verification import (
 	get_columns,
@@ -50,11 +50,7 @@ def get_cash_shift_verification_context() -> dict[str, Any]:
 
 
 @frappe.whitelist()
-def search_cash_shift_verification_options(
-	kind: str,
-	txt: str = "",
-	company: str = "",
-) -> list[dict[str, str]]:
+def search_cash_shift_verification_options(kind: str, txt: str = "", company: str = "") -> list[dict[str, str]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
@@ -77,23 +73,13 @@ def search_cash_shift_verification_options(
 		filters: dict[str, Any] = {"name": ["like", f"%{txt}%"]}
 		if company:
 			filters["company"] = company
-		rows = frappe.get_list(
-			"POS Profile",
-			filters=filters,
-			fields=["name"],
-			order_by="name asc",
-			limit=MAX_LINK_RESULTS,
-		)
+		rows = frappe.get_list("POS Profile", filters=filters, fields=["name"], order_by="name asc", limit=MAX_LINK_RESULTS)
 		return [{"value": row.name, "label": row.name} for row in rows]
 	frappe.throw(_("Unsupported Cash Shift Verification search type."))
 
 
 @frappe.whitelist()
-def get_cash_shift_verification(
-	filters: dict[str, Any] | str | None = None,
-	page: int | str = 1,
-	page_size: int | str = DEFAULT_PAGE_SIZE,
-) -> dict[str, Any]:
+def get_cash_shift_verification(filters: dict[str, Any] | str | None = None, page: int | str = 1, page_size: int | str = DEFAULT_PAGE_SIZE) -> dict[str, Any]:
 	dataset = _build_dataset(_coerce_filters(filters))
 	return _page_response(dataset, page=page, page_size=page_size)
 
@@ -101,13 +87,7 @@ def get_cash_shift_verification(
 @frappe.whitelist()
 def get_cash_shift_verification_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	dataset = _build_dataset(_coerce_filters(filters))
-	return {
-		"title": dataset["title"],
-		"columns": dataset["columns"],
-		"rows": dataset["rows"],
-		"summary": dataset["summary"],
-		"scan": dataset["scan"],
-	}
+	return {"title": dataset["title"], "columns": dataset["columns"], "rows": dataset["rows"], "summary": dataset["summary"], "scan": dataset["scan"]}
 
 
 def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
@@ -118,16 +98,8 @@ def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
 		frappe.throw(_("You do not have permission to view Daily Sales Audit records."), frappe.PermissionError)
 	rows = get_data(filters, limit_page_length=MAX_SHIFT_ROWS + 1)
 	if len(rows) > MAX_SHIFT_ROWS:
-		frappe.throw(
-			_("More than {0} cash shifts match these filters. Narrow the date range or business scope before loading Cash Shift Verification.").format(MAX_SHIFT_ROWS)
-		)
-	return {
-		"title": _("Cash Shift Verification"),
-		"columns": get_columns(),
-		"rows": rows,
-		"summary": get_report_summary(rows),
-		"scan": {"rows": len(rows), "row_limit": MAX_SHIFT_ROWS},
-	}
+		frappe.throw(_("More than {0} cash shifts match these filters. Narrow the date range or business scope before loading Cash Shift Verification.").format(MAX_SHIFT_ROWS))
+	return {"title": _("Cash Shift Verification"), "columns": get_columns(), "rows": rows, "summary": get_report_summary(rows), "scan": {"rows": len(rows), "row_limit": MAX_SHIFT_ROWS}}
 
 
 def _page_response(dataset: dict[str, Any], *, page: int | str, page_size: int | str) -> dict[str, Any]:
@@ -138,28 +110,11 @@ def _page_response(dataset: dict[str, Any], *, page: int | str, page_size: int |
 	total_pages = max(1, ceil(total_rows / resolved_page_size))
 	resolved_page = min(resolved_page, total_pages)
 	start = (resolved_page - 1) * resolved_page_size
-	return {
-		**dataset,
-		"rows": rows[start : start + resolved_page_size],
-		"pagination": {
-			"page": resolved_page,
-			"page_size": resolved_page_size,
-			"total_rows": total_rows,
-			"total_pages": total_pages,
-			"has_previous": resolved_page > 1,
-			"has_next": resolved_page < total_pages,
-		},
-	}
+	return {**dataset, "rows": rows[start : start + resolved_page_size], "pagination": {"page": resolved_page, "page_size": resolved_page_size, "total_rows": total_rows, "total_pages": total_pages, "has_previous": resolved_page > 1, "has_next": resolved_page < total_pages}}
 
 
 def _search_named(doctype: str, txt: str) -> list[dict[str, str]]:
-	rows = frappe.get_list(
-		doctype,
-		filters={"name": ["like", f"%{txt}%"]},
-		fields=["name"],
-		order_by="name asc",
-		limit=MAX_LINK_RESULTS,
-	)
+	rows = frappe.get_list(doctype, filters={"name": ["like", f"%{txt}%"]}, fields=["name"], order_by="name asc", limit=MAX_LINK_RESULTS)
 	return [{"value": row.name, "label": row.name} for row in rows]
 
 
