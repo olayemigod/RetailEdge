@@ -141,7 +141,7 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 		self.assertEqual(result["candidates"][0]["candidate_category"], "Deposit to Bank")
 		enrich.assert_called_once()
 
-	@patch("retailedge.bank_candidate_engine.create_journal_entry_match_review")
+	@patch("retailedge.bank_candidate_engine._prepare_journal_entry_review")
 	@patch("retailedge.bank_candidate_engine.get_direction_aware_bank_candidates")
 	@patch("retailedge.bank_candidate_engine.assert_can_access_bank_transaction_matching")
 	def test_journal_candidate_is_revalidated_before_manual_review_creation(
@@ -158,13 +158,15 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 			"name": "MATCH-JV-1",
 			"created": True,
 			"decision_status": "Needs Review",
+			"status": "Review Ready",
+			"match_name": "MATCH-JV-1",
 		}
 
 		result = prepare_direction_aware_bank_candidate("BT-1", "Journal Entry", "JV-1")
 
 		self.assertEqual(result["status"], "Review Ready")
 		self.assertEqual(result["match_name"], "MATCH-JV-1")
-		create_review.assert_called_once()
+		create_review.assert_called_once_with("BT-1", "JV-1")
 
 	@patch("retailedge.bank_candidate_engine.create_or_get_bank_transaction_match")
 	@patch("retailedge.bank_candidate_engine.get_direction_aware_bank_candidates")
