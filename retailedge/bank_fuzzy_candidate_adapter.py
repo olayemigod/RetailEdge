@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from frappe.utils import cstr
-
 from retailedge.bank_fuzzy_matching import build_fuzzy_match_evidence
 
 
@@ -11,6 +9,7 @@ def enrich_candidate_with_fuzzy_evidence(
     bank_transaction: dict[str, Any], candidate: dict[str, Any]
 ) -> dict[str, Any]:
     row = dict(candidate or {})
+    row.setdefault("hard_match_score", int(row.get("match_score") or 0))
     evidence = build_fuzzy_match_evidence(bank_transaction, row)
     row["fuzzy_evidence"] = evidence
     row["fuzzy_score"] = evidence.get("fuzzy_score", 0)
@@ -18,29 +17,34 @@ def enrich_candidate_with_fuzzy_evidence(
     row["fuzzy_reference_similarity"] = evidence.get("reference_similarity", 0)
     row["fuzzy_narration_similarity"] = evidence.get("narration_similarity", 0)
     row["fuzzy_exact_reference"] = evidence.get("exact_reference", False)
-    if not evidence.get("eligible"):
-        row["fuzzy_block_reason"] = cstr(evidence.get("reason")).strip()
+    row["fuzzy_note"] = evidence.get("reason")
     return row
 
 
 def apply_fuzzy_score_boost(candidate: dict[str, Any]) -> dict[str, Any]:
+    """Build a display/ranking score without changing the accounting match score.
+
+    `match_score` remains the existing hard accounting score used by RetailEdge safety and
+    auto-match rules. Fuzzy evidence can reorder candidates for an operator, but can never
+    make a candidate auto-confirmable.
+    """
     row = dict(candidate or {})
-    score = int(row.get("match_score") or 0)
+    hard_score = int(row.get("hard_match_score") or row.get("match_score") or 0)
     fuzzy_score = int(row.get("fuzzy_score") or 0)
-    confidence = cstr(row.get("fuzzy_confidence")).strip()
+    confidence = str(row.get("fuzzy_confidence") or "")
 
+    boost = 0
     if confidence == "Strong Match":
-        score += 12
+        boost = 12
     elif confidence == "Possible Match":
-        score += 7
+        boost = 7
     elif confidence == "Weak Match":
-        score += 3
-
-    # Exact reference remains stronger than fuzzy narration, but never alone creates
-    # eligibility because hard direction/account/amount guards ran first.
+        boost = 3
     if row.get("fuzzy_exact_reference"):
-        score += 8
+        boost += 8
 
-    row["match_score"] = min(score, 100)
+    row["hard_match_score"] = hard_score
+    row["match_score"] = hard_score
+    row["ranking_score"] = min(hard_score + boost, 100)
     row["fuzzy_score_applied"] = fuzzy_score
     return row
