@@ -99,10 +99,10 @@ def classify_transaction_category(match_doc: dict[str, Any] | None, direction: s
     payment_event_source = cstr(match_doc.get("payment_event_source")).strip().lower()
     party_type = cstr(match_doc.get("party_type")).strip()
 
-    if "pos" in candidate_category or "pos payment" in payment_event_source:
-        return CATEGORY_POS_SALE
     if "deposit" in candidate_category or "deposit to bank" in payment_event_source:
         return CATEGORY_BANK_DEPOSIT
+    if "pos" in candidate_category.split() or "pos payment" in payment_event_source:
+        return CATEGORY_POS_SALE
     if "transfer" in candidate_category or "transfer" in payment_event_source:
         return CATEGORY_TRANSFER
     if "bank charge" in candidate_category or "bank charge" in payment_event_source:
