@@ -60,9 +60,24 @@ def get_owner_dashboard_data(filters: dict[str, Any] | str | None = None) -> dic
 		"sales": _safe_section("Sales", lambda: get_sales_invoice_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/sales-invoice-register"),
 		"expenses": _safe_section("Expenses", lambda: get_expense_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/expense-register"),
 		"cash": _safe_section("Cash Movement", lambda: get_cash_movement(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/cash-movement"),
-		"receivables": _safe_section("Receivables", lambda: get_customer_receivables(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/customer-receivables"),
-		"payables": _safe_section("Payables", lambda: get_supplier_payables(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/supplier-payables"),
-		"stock": _safe_section("Stock Position", lambda: get_stock_position(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/stock-position"),
+		"receivables": _safe_section(
+			"Receivables",
+			lambda: get_customer_receivables(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE),
+			"/app/customer-receivables",
+			time_basis="current",
+		),
+		"payables": _safe_section(
+			"Payables",
+			lambda: get_supplier_payables(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE),
+			"/app/supplier-payables",
+			time_basis="current",
+		),
+		"stock": _safe_section(
+			"Stock Position",
+			lambda: get_stock_position(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE),
+			"/app/stock-position",
+			time_basis="current",
+		),
 		"branches": _safe_section("Branch Performance", lambda: get_branch_performance_dashboard_data(filters=common), "/app/branch-performance-dashboard"),
 	}
 	return {
@@ -74,6 +89,8 @@ def get_owner_dashboard_data(filters: dict[str, Any] | str | None = None) -> dic
 		"metadata": {
 			"composition": "existing_retailedge_reporting_engines",
 			"accounting_truth": "ERPNext submitted/posted documents and existing RetailEdge control records",
+			"period_sections": ["sales", "expenses", "cash", "branches"],
+			"current_sections": ["receivables", "payables", "stock"],
 			"generated_for": frappe.session.user,
 		},
 	}
@@ -91,6 +108,7 @@ def build_owner_dashboard_export_dataset(filters: dict[str, Any] | str | None = 
 				{
 					"section": section.get("label") or key,
 					"metric": card.get("label") or "",
+					"basis": _("Current") if section.get("time_basis") == "current" else _("Selected Period"),
 					"value": card.get("value"),
 					"datatype": card.get("datatype") or card.get("type") or "Data",
 				}
@@ -100,6 +118,7 @@ def build_owner_dashboard_export_dataset(filters: dict[str, Any] | str | None = 
 		"columns": [
 			{"fieldname": "section", "label": _("Section"), "fieldtype": "Data", "width": 180},
 			{"fieldname": "metric", "label": _("Metric"), "fieldtype": "Data", "width": 220},
+			{"fieldname": "basis", "label": _("Time Basis"), "fieldtype": "Data", "width": 150},
 			{"fieldname": "value", "label": _("Value"), "fieldtype": "Data", "width": 160},
 		],
 		"rows": rows,
@@ -121,7 +140,15 @@ def _headline_summary(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any
 		card = _summary_card(sections.get(section_key), metric_label)
 		if not card:
 			continue
-		cards.append({**card, "label": _(display_label), "source_label": card.get("label")})
+		section = sections.get(section_key) or {}
+		cards.append(
+			{
+				**card,
+				"label": _(display_label),
+				"source_label": card.get("label"),
+				"time_basis": section.get("time_basis") or "period",
+			}
+		)
 	return cards
 
 
@@ -147,6 +174,7 @@ def _attention_items(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]
 		if key in seen:
 			continue
 		seen.add(key)
+		section = sections.get(section_key) or {}
 		items.append(
 			{
 				"section": section_key,
@@ -154,6 +182,7 @@ def _attention_items(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]
 				"metric": card.get("label") or metric_label,
 				"value": card.get("value"),
 				"datatype": card.get("datatype") or card.get("type") or "Data",
+				"time_basis": section.get("time_basis") or "period",
 				"tone": tone,
 				"route": route,
 			}
@@ -170,16 +199,25 @@ def _summary_card(section: dict[str, Any] | None, label: str) -> dict[str, Any] 
 	return None
 
 
-def _safe_section(label: str, loader: Callable[[], dict[str, Any]], route: str) -> dict[str, Any]:
+def _safe_section(
+	label: str,
+	loader: Callable[[], dict[str, Any]],
+	route: str,
+	*,
+	time_basis: str = "period",
+) -> dict[str, Any]:
 	try:
 		payload = loader() or {}
 		return {
 			"available": True,
 			"label": _(label),
 			"route": route,
+			"time_basis": time_basis,
 			"summary": payload.get("summary") or [],
 			"scope": payload.get("scope") or {},
 			"show_costs": payload.get("show_costs"),
+			"balance_basis": payload.get("balance_basis"),
+			"ageing_date": payload.get("ageing_date") or payload.get("current_balance_date"),
 			"messages": payload.get("messages") or [],
 		}
 	except frappe.PermissionError:
@@ -187,6 +225,7 @@ def _safe_section(label: str, loader: Callable[[], dict[str, Any]], route: str) 
 			"available": False,
 			"label": _(label),
 			"route": route,
+			"time_basis": time_basis,
 			"reason": _("Your current permissions do not allow this dashboard section."),
 		}
 
