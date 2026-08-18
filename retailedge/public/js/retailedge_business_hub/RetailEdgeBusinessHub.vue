@@ -132,6 +132,13 @@
 				@open-native="openNativePayment"
 			/>
 
+			<SimpleCashDepositDialog
+				:open="simpleCashDepositOpen"
+				@close="closeSimpleCashDeposit"
+				@saved="handleSimpleCashDepositSaved"
+				@open-native="openNativeCashDeposit"
+			/>
+
 			<SimpleCashTransferDialog
 				:open="simpleCashTransferOpen"
 				@close="closeSimpleCashTransfer"
@@ -164,6 +171,7 @@
 </template>
 
 <script>
+import SimpleCashDepositDialog from "./SimpleCashDepositDialog.vue";
 import SimpleCashTransferDialog from "./SimpleCashTransferDialog.vue";
 import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
@@ -174,6 +182,7 @@ import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
+const GUIDED_CASH_DEPOSIT_ACTION = "deposit-cash";
 const GUIDED_CASH_TRANSFER_ACTION = "cash-transfer";
 const GUIDED_PURCHASE_ACTION = "record-purchase";
 const GUIDED_EXPENSE_ACTION = "record-expense";
@@ -237,6 +246,7 @@ export default {
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
+		SimpleCashDepositDialog,
 		SimpleCashTransferDialog,
 		SimpleCashierExpenseDialog,
 		SimplePaymentDialog,
@@ -252,6 +262,7 @@ export default {
 			simpleSalesInvoiceOpen: false,
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
+			simpleCashDepositOpen: false,
 			simpleCashTransferOpen: false,
 			simplePurchaseInvoiceOpen: false,
 			simpleCashierExpenseOpen: false,
@@ -332,6 +343,10 @@ export default {
 				this.simplePaymentOpen = true;
 				return;
 			}
+			if (action.key === GUIDED_CASH_DEPOSIT_ACTION) {
+				this.simpleCashDepositOpen = true;
+				return;
+			}
 			if (action.key === GUIDED_CASH_TRANSFER_ACTION) {
 				this.simpleCashTransferOpen = true;
 				return;
@@ -378,6 +393,19 @@ export default {
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
 			frappe.new_doc(doctype);
+		},
+		closeSimpleCashDeposit() {
+			this.simpleCashDepositOpen = false;
+		},
+		handleSimpleCashDepositSaved(result) {
+			this.simpleCashDepositOpen = false;
+			if (!result?.name) return;
+			frappe.show_alert?.({ message: `Cash Deposit ${result.name} saved as Draft`, indicator: "green" });
+			frappe.set_route("Form", result.doctype || "Payment Entry", result.name);
+		},
+		openNativeCashDeposit(doctype = "Payment Entry") {
+			this.simpleCashDepositOpen = false;
+			frappe.new_doc(doctype, { payment_type: "Internal Transfer" });
 		},
 		closeSimpleCashTransfer() {
 			this.simpleCashTransferOpen = false;
