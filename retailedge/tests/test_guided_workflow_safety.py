@@ -28,13 +28,25 @@ class TestGuidedWorkflowSafety(unittest.TestCase):
 				self.assertNotIn("docstatus = 1", source)
 				self.assertNotIn("docstatus=1", source)
 
-	def test_business_hub_describes_guided_results_as_drafts(self):
+	def test_business_hub_describes_guided_results_as_drafts_and_checks_workflow(self):
 		component = (
 			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 		).read_text(encoding="utf-8")
 		self.assertIn("saved as Draft", component)
+		self.assertIn("WORKFLOW_READINESS_METHOD", component)
+		self.assertIn("get_document_workflow_readiness", component)
+		self.assertIn("Workflow approval is still required", component)
+		self.assertIn("available_actions", component)
+		self.assertIn("another authorised user may be required", component)
 		self.assertNotIn("transaction completed", component.lower())
 		self.assertNotIn("workflow completed", component.lower())
+
+	def test_workflow_readiness_service_is_read_only(self):
+		source = (APP_ROOT / "workflow_readiness.py").read_text(encoding="utf-8")
+		self.assertIn("get_transitions", source)
+		self.assertNotIn("apply_workflow(", source)
+		self.assertNotIn(".submit()", source)
+		self.assertNotIn("frappe.db.commit()", source)
 
 	def test_stock_adjustment_is_permission_owned_by_stock_reconciliation(self):
 		from retailedge.edgesuite_ui import QUICK_ACTIONS
