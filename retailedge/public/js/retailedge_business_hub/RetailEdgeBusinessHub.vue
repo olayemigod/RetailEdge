@@ -20,10 +20,7 @@
 			</template>
 
 			<div v-if="loading" class="hub-state">
-				<EdgeLoadingState
-					message="Loading your permitted RetailEdge tools..."
-					:skeleton="true"
-				/>
+				<EdgeLoadingState message="Loading your permitted RetailEdge tools..." :skeleton="true" />
 			</div>
 
 			<div v-else-if="error" class="hub-state">
@@ -40,10 +37,9 @@
 						<p class="hub-eyebrow">Retail operations simplified</p>
 						<h2>{{ greeting }}</h2>
 						<p>
-							Use the business menu for daily operations. The Create action is the common
-							entry point for new business transactions; each guided flow will progressively
-							replace technical ERPNext fields without creating duplicate accounting
-							documents.
+							Use the business menu for daily operations. The Create action shows only business
+							entries your current permissions allow, while guided flows keep ERPNext documents
+							and accounting truth underneath.
 						</p>
 					</div>
 					<div class="hub-banner-side">
@@ -53,9 +49,9 @@
 							<span>Product switching suspended</span>
 						</div>
 						<button
+							v-if="quickActions.length"
 							type="button"
 							class="edge-button edge-button--primary hub-create-button"
-							:disabled="!quickActions.length"
 							@click="openCreatePicker"
 						>
 							+ Create
@@ -78,10 +74,7 @@
 						>
 							<div class="experience-card-top">
 								<span class="experience-icon">{{ iconText(experience.icon) }}</span>
-								<EdgeStatusBadge
-									:label="experience.status"
-									:status="experience.status"
-								/>
+								<EdgeStatusBadge :label="experience.status" :status="experience.status" />
 							</div>
 							<h4>{{ experience.label }}</h4>
 							<p>{{ experience.description }}</p>
@@ -139,6 +132,13 @@
 				@open-native="openNativePayment"
 			/>
 
+			<SimpleCashTransferDialog
+				:open="simpleCashTransferOpen"
+				@close="closeSimpleCashTransfer"
+				@saved="handleSimpleCashTransferSaved"
+				@open-native="openNativeCashTransfer"
+			/>
+
 			<SimplePurchaseInvoiceDialog
 				:open="simplePurchaseInvoiceOpen"
 				@close="closeSimplePurchaseInvoice"
@@ -164,6 +164,7 @@
 </template>
 
 <script>
+import SimpleCashTransferDialog from "./SimpleCashTransferDialog.vue";
 import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
@@ -173,6 +174,7 @@ import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
+const GUIDED_CASH_TRANSFER_ACTION = "cash-transfer";
 const GUIDED_PURCHASE_ACTION = "record-purchase";
 const GUIDED_EXPENSE_ACTION = "record-expense";
 const GUIDED_STOCK_TRANSFER_ACTION = "transfer-stock";
@@ -193,10 +195,7 @@ function cacheSharedContext(data) {
 		return window.retailedgeCacheBusinessHubContext(data);
 	}
 	const normalized = data || {};
-	window.__retailedgeBusinessHubContextCache = {
-		data: normalized,
-		fetchedAt: Date.now(),
-	};
+	window.__retailedgeBusinessHubContextCache = { data: normalized, fetchedAt: Date.now() };
 	return normalized;
 }
 
@@ -238,6 +237,7 @@ export default {
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
+		SimpleCashTransferDialog,
 		SimpleCashierExpenseDialog,
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
@@ -252,18 +252,14 @@ export default {
 			simpleSalesInvoiceOpen: false,
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
+			simpleCashTransferOpen: false,
 			simplePurchaseInvoiceOpen: false,
 			simpleCashierExpenseOpen: false,
 			simpleStockTransferOpen: false,
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
-			context: {
-				user: "",
-				user_name: "",
-				company: "",
-				branch: "",
-			},
+			context: { user: "", user_name: "", company: "", branch: "" },
 			featureFlags: {},
 		};
 	},
@@ -303,19 +299,15 @@ export default {
 			this.quickActions = data.quick_actions || [];
 			this.context = { ...this.context, ...(data.context || {}) };
 			this.featureFlags = data.feature_flags || {};
+			if (!this.quickActions.length) this.createPickerOpen = false;
 		},
 		refreshContext({ force = false } = {}) {
 			this.loading = true;
 			this.error = "";
 			return fetchSharedContext({ force })
-				.then((data) => {
-					this.applyContext(data || {});
-				})
+				.then((data) => this.applyContext(data || {}))
 				.catch((error) => {
-					this.error =
-						error && error.message
-							? error.message
-							: "Unable to load RetailEdge Business Hub context.";
+					this.error = error?.message || "Unable to load RetailEdge Business Hub context.";
 				})
 				.finally(() => {
 					this.loading = false;
@@ -340,6 +332,10 @@ export default {
 				this.simplePaymentOpen = true;
 				return;
 			}
+			if (action.key === GUIDED_CASH_TRANSFER_ACTION) {
+				this.simpleCashTransferOpen = true;
+				return;
+			}
 			if (action.key === GUIDED_PURCHASE_ACTION) {
 				this.simplePurchaseInvoiceOpen = true;
 				return;
@@ -360,10 +356,7 @@ export default {
 		handleSimpleSalesInvoiceSaved(result) {
 			this.simpleSalesInvoiceOpen = false;
 			if (!result?.name) return;
-			frappe.show_alert?.({
-				message: `Sales Invoice ${result.name} saved as Draft`,
-				indicator: "green",
-			});
+			frappe.show_alert?.({ message: `Sales Invoice ${result.name} saved as Draft`, indicator: "green" });
 			frappe.set_route("Form", result.doctype || "Sales Invoice", result.name);
 		},
 		openNativeSalesInvoice(doctype = "Sales Invoice") {
@@ -378,10 +371,7 @@ export default {
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
 			if (!result?.name) return;
-			frappe.show_alert?.({
-				message: `Payment Entry ${result.name} saved as Draft`,
-				indicator: "green",
-			});
+			frappe.show_alert?.({ message: `Payment Entry ${result.name} saved as Draft`, indicator: "green" });
 			frappe.set_route("Form", result.doctype || "Payment Entry", result.name);
 		},
 		openNativePayment(doctype = "Payment Entry") {
@@ -389,16 +379,26 @@ export default {
 			this.simplePaymentIntent = "";
 			frappe.new_doc(doctype);
 		},
+		closeSimpleCashTransfer() {
+			this.simpleCashTransferOpen = false;
+		},
+		handleSimpleCashTransferSaved(result) {
+			this.simpleCashTransferOpen = false;
+			if (!result?.name) return;
+			frappe.show_alert?.({ message: `Payment Entry ${result.name} saved as Draft`, indicator: "green" });
+			frappe.set_route("Form", result.doctype || "Payment Entry", result.name);
+		},
+		openNativeCashTransfer(doctype = "Payment Entry") {
+			this.simpleCashTransferOpen = false;
+			frappe.new_doc(doctype, { payment_type: "Internal Transfer" });
+		},
 		closeSimplePurchaseInvoice() {
 			this.simplePurchaseInvoiceOpen = false;
 		},
 		handleSimplePurchaseInvoiceSaved(result) {
 			this.simplePurchaseInvoiceOpen = false;
 			if (!result?.name) return;
-			frappe.show_alert?.({
-				message: `Purchase Invoice ${result.name} saved as Draft`,
-				indicator: "green",
-			});
+			frappe.show_alert?.({ message: `Purchase Invoice ${result.name} saved as Draft`, indicator: "green" });
 			frappe.set_route("Form", result.doctype || "Purchase Invoice", result.name);
 		},
 		openNativePurchaseInvoice(doctype = "Purchase Invoice") {
@@ -411,10 +411,7 @@ export default {
 		handleSimpleCashierExpenseSaved(result) {
 			this.simpleCashierExpenseOpen = false;
 			if (!result?.name) return;
-			frappe.show_alert?.({
-				message: `Cashier Expense ${result.name} saved as Draft`,
-				indicator: "green",
-			});
+			frappe.show_alert?.({ message: `Cashier Expense ${result.name} saved as Draft`, indicator: "green" });
 			frappe.set_route("Form", result.doctype || "RetailEdge Cashier Expense", result.name);
 		},
 		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
@@ -427,10 +424,7 @@ export default {
 		handleSimpleStockTransferSaved(result) {
 			this.simpleStockTransferOpen = false;
 			if (!result?.name) return;
-			frappe.show_alert?.({
-				message: `Stock Transfer ${result.name} saved as Draft`,
-				indicator: "green",
-			});
+			frappe.show_alert?.({ message: `Stock Transfer ${result.name} saved as Draft`, indicator: "green" });
 			frappe.set_route("Form", result.doctype || "Stock Entry", result.name);
 		},
 		openNativeStockTransfer(doctype = "Stock Entry") {
@@ -461,30 +455,17 @@ export default {
 				frappe.set_route("query-report", item.target);
 				return;
 			}
-			if (item.target_type === "Page") {
-				frappe.set_route(item.target);
-			}
+			if (item.target_type === "Page") frappe.set_route(item.target);
 		},
 		routeForTarget(item) {
 			if (!item) return "";
 			if (item.target_type === "URL") return item.target;
 			if (item.target_type === "DocType") return `/app/${frappe.router.slug(item.target)}`;
-			if (item.target_type === "Report") {
-				return `/app/query-report/${encodeURIComponent(item.target)}`;
-			}
+			if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
 			if (item.target_type === "Page") return `/app/${item.target}`;
 			return "";
 		},
 		actionModeLabel(action) {
-			if (
-				action?.key === "new-sales-invoice" ||
-				GUIDED_PAYMENT_ACTIONS.has(action?.key) ||
-				action?.key === GUIDED_PURCHASE_ACTION ||
-				action?.key === GUIDED_EXPENSE_ACTION ||
-				action?.key === GUIDED_STOCK_TRANSFER_ACTION
-			) {
-				return "RetailEdge entry";
-			}
 			return action?.mode === "available" ? "RetailEdge entry" : "Full form";
 		},
 		iconText(icon) {
