@@ -40,10 +40,13 @@ class BankingWorkspaceTests(unittest.TestCase):
         ):
             self.assertTrue(_status_belongs_to_queue(status, QUEUE_EXCEPTIONS))
 
+    @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
     @patch("retailedge.banking_workspace.get_bank_match_operational_status")
-    @patch("retailedge.banking_workspace.frappe.get_all")
-    def test_workspace_direction_filters_before_returning_rows(self, get_all, operational):
-        get_all.return_value = [
+    @patch("retailedge.banking_workspace.frappe.get_list")
+    def test_workspace_direction_filters_before_returning_rows(
+        self, get_list, operational, _assert_access
+    ):
+        get_list.return_value = [
             SimpleNamespace(
                 name="MATCH-IN",
                 bank_transaction="BT-IN",
@@ -80,13 +83,13 @@ class BankingWorkspaceTests(unittest.TestCase):
                 "direction": "Inflow",
                 "transaction_category": "Customer Receipt",
                 "operational_status": STATUS_READY_TO_RECONCILE,
-                "can_execute": True,
+                "can_execute": None,
             },
             {
                 "direction": "Outflow",
                 "transaction_category": "Expense",
                 "operational_status": STATUS_READY_TO_RECONCILE,
-                "can_execute": True,
+                "can_execute": None,
             },
         ]
 
@@ -95,6 +98,8 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["rows"][0]["bank_transaction"], "BT-OUT")
         self.assertEqual(payload["rows"][0]["direction"], "Outflow")
+        operational.assert_any_call("MATCH-IN", include_gate=False)
+        operational.assert_any_call("MATCH-OUT", include_gate=False)
 
 
 if __name__ == "__main__":
