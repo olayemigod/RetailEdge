@@ -14,6 +14,7 @@ BUNDLES = (
 	APP_ROOT / "public" / "js" / "cash_movement.bundle.js",
 	APP_ROOT / "public" / "js" / "expense_register.bundle.js",
 	APP_ROOT / "public" / "js" / "sales_reporting.bundle.js",
+	APP_ROOT / "public" / "js" / "customer_receivables.bundle.js",
 	APP_ROOT / "public" / "js" / "purchase_reporting.bundle.js",
 	APP_ROOT / "public" / "js" / "stock_position.bundle.js",
 	APP_ROOT / "public" / "js" / "stock_movement_history.bundle.js",
@@ -42,6 +43,7 @@ def test_reporting_capabilities_use_settings_scope_roles_and_document_read_permi
 	for report_key in (
 		"sales-by-item",
 		"sales-invoice-register",
+		"customer-receivables",
 		"purchase-register",
 		"supplier-payables",
 		"stock-position",
@@ -78,6 +80,7 @@ def test_export_wrapper_rechecks_action_before_existing_bounded_report_backend()
 	for backend in (
 		"get_sales_by_item_export",
 		"get_sales_invoice_register_export",
+		"get_customer_receivables_export",
 		"get_purchase_register_export",
 		"get_supplier_payables_export",
 		"get_stock_position_export",
@@ -126,6 +129,7 @@ def test_browser_reporting_actions_use_native_shell_builder_and_verified_downloa
 		"downloadVerified",
 		'registerComponent("EdgeReportShell", GovernedReportShell, { replace: true })',
 		'registerComponent("EdgeExportMenu", GovernedLegacyExportMenu, { replace: true })',
+		'"/app/customer-receivables": "customer-receivables"',
 		'"/app/purchase-register": "purchase-register"',
 		'"/app/supplier-payables": "supplier-payables"',
 		"exportEnabled",
