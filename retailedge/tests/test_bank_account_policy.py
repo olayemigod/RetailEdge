@@ -87,6 +87,8 @@ class TestBankAccountPolicy(unittest.TestCase):
 	def test_bank_account_branch_contract_is_migration_safe_and_searchable(self):
 		policy = (APP_ROOT / "bank_account_policy.py").read_text(encoding="utf-8")
 		custody = (APP_ROOT / "cash_custody.py").read_text(encoding="utf-8")
+		hooks = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
+		client = (APP_ROOT / "public" / "js" / "bank_account.js").read_text(encoding="utf-8")
 		self.assertEqual(MAX_LINK_RESULTS, 20)
 		self.assertIn('"fieldname": BRANCH_FIELD', policy)
 		self.assertIn('"fieldtype": "Link"', policy)
@@ -97,8 +99,12 @@ class TestBankAccountPolicy(unittest.TestCase):
 		self.assertIn('or_filters[BRANCH_FIELD] = ["like", pattern]', policy)
 		self.assertIn('"to_bank_account": ""', custody)
 		self.assertIn("resolve_retailedge_bank_account", custody)
-		self.assertIn('doc.paid_to = to_account', custody)
-		self.assertIn('validate_cash_deposit_bank_destination(doc)', custody)
+		self.assertIn("doc.paid_to = to_account", custody)
+		self.assertIn("validate_cash_deposit_bank_destination(doc)", custody)
+		self.assertIn('"Bank Account": "public/js/bank_account.js"', hooks)
+		self.assertIn('"validate": "retailedge.bank_account_policy.validate_bank_account_branch"', hooks)
+		self.assertIn('frm.set_query("retailedge_branch"', client)
+		self.assertIn('{ company: frm.doc.company }', client)
 
 
 if __name__ == "__main__":
