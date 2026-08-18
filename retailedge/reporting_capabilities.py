@@ -106,6 +106,12 @@ _REPORT_SPECS = {
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="RetailEdge Daily Sales Audit",
 	),
+	"daily-sales-audit": ReportCapabilitySpec(
+		key="daily-sales-audit", label="Daily Sales Audit",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="RetailEdge Daily Sales Audit",
+	),
 	"cash-movement": ReportCapabilitySpec(
 		key="cash-movement", label="Cash Movement",
 		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
