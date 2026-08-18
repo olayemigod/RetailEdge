@@ -22,68 +22,15 @@ class ReportingSurface:
 
 
 REPORTING_SURFACES = (
-	ReportingSurface(
-		key="cash-movement",
-		route="cash-movement",
-		bundle="cash_movement.bundle.js",
-		component="cash_movement/CashMovementReport.vue",
-		provider_factory="createPaginatedReportProvider",
-	),
-	ReportingSurface(
-		key="expense-register",
-		route="expense-register",
-		bundle="expense_register.bundle.js",
-		component="expense_register/ExpenseRegisterReport.vue",
-		provider_factory="createPaginatedReportProvider",
-	),
-	ReportingSurface(
-		key="sales-by-item",
-		route="sales-by-item",
-		bundle="sales_reporting.bundle.js",
-		component="sales_reporting/SalesReportingReport.vue",
-		provider_factory="createBoundedPaginatedReportProvider",
-		max_dataset_rows=10000,
-	),
-	ReportingSurface(
-		key="sales-invoice-register",
-		route="sales-invoice-register",
-		bundle="sales_reporting.bundle.js",
-		component="sales_reporting/SalesReportingReport.vue",
-		provider_factory="createBoundedPaginatedReportProvider",
-		max_dataset_rows=2000,
-	),
-	ReportingSurface(
-		key="stock-position",
-		route="stock-position",
-		bundle="stock_position.bundle.js",
-		component="stock_position/StockPositionReport.vue",
-		provider_factory="createBoundedPaginatedReportProvider",
-		max_dataset_rows=10000,
-	),
-	ReportingSurface(
-		key="purchase-register",
-		route="purchase-register",
-		bundle="purchase_reporting.bundle.js",
-		component="purchase_reporting/PurchaseReportingReport.vue",
-		provider_factory="createBoundedPaginatedReportProvider",
-		max_dataset_rows=2000,
-	),
-	ReportingSurface(
-		key="supplier-payables",
-		route="supplier-payables",
-		bundle="purchase_reporting.bundle.js",
-		component="purchase_reporting/PurchaseReportingReport.vue",
-		provider_factory="createBoundedPaginatedReportProvider",
-		max_dataset_rows=2000,
-	),
-	ReportingSurface(
-		key="customer-receivables",
-		route="customer-receivables",
-		bundle="customer_receivables.bundle.js",
-		component="customer_receivables/CustomerReceivablesReport.vue",
-		provider_factory="createBoundedPaginatedReportProvider",
-		max_dataset_rows=2000,
-	),
+	ReportingSurface("cash-movement", "cash-movement", "cash_movement.bundle.js", "cash_movement/CashMovementReport.vue", "createPaginatedReportProvider"),
+	ReportingSurface("expense-register", "expense-register", "expense_register.bundle.js", "expense_register/ExpenseRegisterReport.vue", "createPaginatedReportProvider"),
+	ReportingSurface("expense-review", "expense-review", "expense_review.bundle.js", "expense_review/ExpenseReviewReport.vue", "createBoundedPaginatedReportProvider", 5000),
+	ReportingSurface("sales-by-item", "sales-by-item", "sales_reporting.bundle.js", "sales_reporting/SalesReportingReport.vue", "createBoundedPaginatedReportProvider", 10000),
+	ReportingSurface("sales-invoice-register", "sales-invoice-register", "sales_reporting.bundle.js", "sales_reporting/SalesReportingReport.vue", "createBoundedPaginatedReportProvider", 2000),
+	ReportingSurface("stock-position", "stock-position", "stock_position.bundle.js", "stock_position/StockPositionReport.vue", "createBoundedPaginatedReportProvider", 10000),
+	ReportingSurface("purchase-register", "purchase-register", "purchase_reporting.bundle.js", "purchase_reporting/PurchaseReportingReport.vue", "createBoundedPaginatedReportProvider", 2000),
+	ReportingSurface("supplier-payables", "supplier-payables", "purchase_reporting.bundle.js", "purchase_reporting/PurchaseReportingReport.vue", "createBoundedPaginatedReportProvider", 2000),
+	ReportingSurface("customer-receivables", "customer-receivables", "customer_receivables.bundle.js", "customer_receivables/CustomerReceivablesReport.vue", "createBoundedPaginatedReportProvider", 2000),
 )
 
 
@@ -105,9 +52,10 @@ def test_owner_facing_reporting_pages_use_shared_edgesuite_shell_and_no_manual_t
 
 def test_reporting_page_loaders_keep_edgesuite_as_the_single_shell():
 	for surface in REPORTING_SURFACES:
-		page_dir = PAGE_ROOT / surface.route.replace("-", "_")
-		loader = _read(page_dir / f'{surface.route.replace("-", "_")}.js')
-		page_json = _read(page_dir / f'{surface.route.replace("-", "_")}.json')
+		page_name = surface.route.replace("-", "_")
+		page_dir = PAGE_ROOT / page_name
+		loader = _read(page_dir / f"{page_name}.js")
+		page_json = _read(page_dir / f"{page_name}.json")
 		assert 'edgeui.bundle.js' in loader
 		assert surface.bundle in loader
 		assert "hideNativePageSidebar" in loader
@@ -145,10 +93,7 @@ def test_current_balance_reports_do_not_offer_fake_historical_as_of_semantics():
 	):
 		source = _read(PUBLIC_JS / relative_path)
 		assert 'type="date"' not in source or "As of Date" not in source
-	for backend in (
-		APP_ROOT / "customer_receivables.py",
-		APP_ROOT / "supplier_payables.py",
-	):
+	for backend in (APP_ROOT / "customer_receivables.py", APP_ROOT / "supplier_payables.py"):
 		source = _read(backend)
 		assert "historical_balance_supported" in source
 		assert "outstanding_amount" in source
