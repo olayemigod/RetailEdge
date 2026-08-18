@@ -62,6 +62,25 @@ def _amount_compatible(bank_amount: Any, candidate_amount: Any, tolerance: float
     return abs(bank_amount - candidate_amount) <= max(tolerance, abs(bank_amount) * 0.001)
 
 
+def _fuzzy_confidence_from_percentage(score_percentage: int) -> str:
+    """Return the operator-facing confidence label for the displayed fuzzy score.
+
+    Confidence intentionally uses the same rounded percentage shown in the UI so a visible
+    score of 72 cannot be labelled Weak while the published Possible threshold is 72%.
+    This remains supplemental evidence only and never changes accounting eligibility.
+    """
+    strong_threshold = round(FUZZY_STRONG * 100)
+    possible_threshold = round(FUZZY_POSSIBLE * 100)
+    weak_threshold = round(FUZZY_WEAK * 100)
+    if score_percentage >= strong_threshold:
+        return "Strong Match"
+    if score_percentage >= possible_threshold:
+        return "Possible Match"
+    if score_percentage >= weak_threshold:
+        return "Weak Match"
+    return "No Match"
+
+
 def build_fuzzy_match_evidence(
     bank_transaction: dict[str, Any],
     candidate: dict[str, Any],
@@ -134,15 +153,8 @@ def build_fuzzy_match_evidence(
     amount_component = 0.20 if amount_compatible else 0.0
     score = amount_component + (0.25 * date_score) + (0.45 * text_score) + (0.10 if exact_reference else 0.0)
     score = min(score, 1.0)
-
-    if score >= FUZZY_STRONG:
-        confidence = "Strong Match"
-    elif score >= FUZZY_POSSIBLE:
-        confidence = "Possible Match"
-    elif score >= FUZZY_WEAK:
-        confidence = "Weak Match"
-    else:
-        confidence = "No Match"
+    score_percentage = round(score * 100)
+    confidence = _fuzzy_confidence_from_percentage(score_percentage)
 
     note = "Supplemental fuzzy evidence only; accounting eligibility and hard match score were not changed."
     if not amount_compatible:
@@ -151,7 +163,7 @@ def build_fuzzy_match_evidence(
     return {
         "eligible": True,
         "reason": note,
-        "fuzzy_score": round(score * 100),
+        "fuzzy_score": score_percentage,
         "fuzzy_confidence": confidence,
         "reference_similarity": round(reference_similarity, 4),
         "narration_similarity": round(narration_similarity, 4),
