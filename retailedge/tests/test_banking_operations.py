@@ -37,18 +37,15 @@ class BankingOperationsTests(unittest.TestCase):
 
     @patch("retailedge.banking_operations.normalize_bank_transaction")
     def test_bank_transaction_direction_prefers_canonical_inflow(self, normalize):
-        normalize.return_value = {"direction": "Inflow", "deposit": 250000, "withdrawal": 0}
+        normalize.return_value = {"direction": "Inflow"}
         self.assertEqual(get_bank_transaction_direction("BT-1"), DIRECTION_INFLOW)
 
+    @patch("retailedge.banking_operations.frappe.throw", side_effect=ValueError("unknown direction"))
     @patch("retailedge.banking_operations.normalize_bank_transaction")
-    def test_bank_transaction_direction_uses_deposit_when_direction_missing(self, normalize):
-        normalize.return_value = {"direction": "", "deposit": 450000, "withdrawal": 0}
-        self.assertEqual(get_bank_transaction_direction("BT-1"), DIRECTION_INFLOW)
-
-    @patch("retailedge.banking_operations.normalize_bank_transaction")
-    def test_bank_transaction_direction_uses_withdrawal_when_direction_missing(self, normalize):
-        normalize.return_value = {"direction": "", "deposit": 0, "withdrawal": 75000}
-        self.assertEqual(get_bank_transaction_direction("BT-2"), DIRECTION_OUTFLOW)
+    def test_bank_transaction_direction_fails_closed_when_unknown(self, normalize, _throw):
+        normalize.return_value = {"direction": "Unknown"}
+        with self.assertRaises(ValueError):
+            get_bank_transaction_direction("BT-1")
 
     @patch("retailedge.banking_operations.get_bank_transaction_direction", return_value=DIRECTION_OUTFLOW)
     def test_direction_filter_allows_all_or_matching_direction(self, _direction):
