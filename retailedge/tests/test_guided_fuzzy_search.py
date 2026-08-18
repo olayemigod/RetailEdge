@@ -31,6 +31,10 @@ def test_guided_adapter_uses_shared_edgesuite_ranker_with_rollback_fallback():
 	assert "CANDIDATE_LIMIT = 100" in source
 	assert 'exact_fields=("value",)' in source
 	assert 'search_fields=("label", "description")' in source
+	assert "_query_anchors" in source
+	assert "MAX_ANCHORS = 4" in source
+	assert "_collect_candidates" in source
+	assert "remaining = CANDIDATE_LIMIT - len(rows)" in source
 
 
 def test_sales_candidate_search_preserves_business_filters():
@@ -57,8 +61,9 @@ def test_payment_candidate_search_preserves_financial_scope():
 	assert "guided_payment._assert_can_create_payment_entry()" in source
 	assert "guided_payment._branch_search_filters" in source
 	assert "guided_payment._search_outstanding_references" in source
-	assert 'txt=""' in source
-	assert "limit=CANDIDATE_LIMIT" in source
+	assert "txt=txt" in source
+	assert "limit=page_length" in source
+	assert 'txt=""' not in source
 
 
 def test_existing_guided_ui_still_uses_edgesuite_link_fields():
