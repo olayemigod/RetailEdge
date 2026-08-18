@@ -10,6 +10,24 @@ app_license = "MIT"
 # on CoreEdge for Vue components, bundles, or browser UI runtime objects.
 required_apps = ["edgesuite_ui"]
 
+# Apps
+# ------------------
+
+# Each item in the list will be shown as an app in the apps page
+# add_to_apps_screen = [
+# 	{
+# 		"name": "retailedge",
+# 		"logo": "/assets/retailedge/logo.png",
+# 		"title": "RetailEdge",
+# 		"route": "/retailedge",
+# 		"has_permission": "retailedge.api.permission.has_app_permission"
+# 	}
+# ]
+
+# Includes in <head>
+# ------------------
+
+# include js, css files in header of desk.html
 app_include_css = [
 	"/assets/retailedge/css/retailedge_cards.css",
 	"/assets/retailedge/css/retailedge_workspace_home.css",
@@ -20,6 +38,21 @@ app_include_js = [
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
 ]
 
+# include js, css files in header of web template
+# web_include_css = "/assets/retailedge/css/retailedge.css"
+# web_include_js = "/assets/retailedge/js/retailedge.js"
+
+# include custom scss in every website theme (without file extension ".scss")
+# website_theme_scss = "retailedge/public/scss/website"
+
+# include js in web form
+# webform_include_js = {"doctype": "public/js/doctype.js"}
+# webform_include_css = {"doctype": "public/css/doctype.css"}
+
+# include custom js in page
+# Report summary cards are styled via native Frappe DOM selectors in CSS.
+
+# include js in doctype views
 doctype_js = {
 	"Bank Account": "public/js/bank_account.js",
 	"Item": "public/js/inventory_documents.js",
@@ -50,7 +83,6 @@ doctype_js = {
 	"Packed Item": "public/js/cost_visibility_child_table.js",
 	"Item Default": "public/js/inventory_documents.js",
 }
-
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
 	"Purchase Invoice": "public/js/purchase_documents_list.js",
@@ -58,7 +90,70 @@ doctype_list_js = {
 	"RetailEdge Cashier Expense": "public/js/retailedge_cashier_expense_list.js",
 	"RetailEdge Payment Statement Import": "public/js/payment_statement_import_list.js",
 }
+# doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
+# doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
+# Svg Icons
+# ------------------
+# include app icons in desk
+
+# Home Pages
+# ----------
+
+# application home page (will override Website Settings)
+# home_page = "login"
+
+# website user home page (by Role)
+# role_home_page = {
+# 	"Role": "home_page"
+# }
+
+# Generators
+# ----------
+
+# automatically load and sync documents from downstream apps
+# importable_doctypes = [doctype_1]
+
+# Jinja
+# ----------
+
+# add methods and filters to jinja environment
+# jinja = {
+# 	"methods": "retailedge.utils.jinja_methods",
+# 	"filters": "retailedge.utils.jinja_filters"
+# }
+
+# Installation
+# ------------
+
+# before_install = "retailedge.install.before_install"
+# after_install = "retailedge.install.after_install"
+
+# Uninstallation
+# ------------
+
+# before_uninstall = "retailedge.uninstall.before_uninstall"
+# after_uninstall = "retailedge.uninstall.after_uninstall"
+
+# Integration Setup
+# -------------------
+# To set up dependencies/integrations with other apps
+# Name of app being installed is passed as an argument
+
+# before_app_install = "retailedge.utils.before_app_install"
+# after_app_install = "retailedge.utils.after_app_install"
+
+# Integration Cleanup
+# -------------------
+# before_app_uninstall = "retailedge.utils.before_app_uninstall"
+# after_app_uninstall = "retailedge.utils.after_app_uninstall"
+
+# Desk Notifications
+# ------------------
+# notification_config = "retailedge.notifications.get_notification_config"
+
+# Document Events
+# ---------------
 doc_events = {
 	"Bank Account": {
 		"validate": "retailedge.bank_account_policy.validate_bank_account_branch",
@@ -116,6 +211,13 @@ doc_events = {
 	},
 }
 
+# Scheduled Tasks
+# ---------------
+# scheduler_events = {}
+
+# Testing
+# -------
+# before_tests = "retailedge.install.before_tests"
 after_migrate = [
 	"retailedge.setup_roles.ensure_retailedge_roles",
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
@@ -125,6 +227,12 @@ after_migrate = [
 ]
 boot_session = "retailedge.boot.boot_session"
 
+# Extend DocType Class
+# ------------------------------
+# extend_doctype_class = {}
+
+# Overriding Methods
+# ------------------------------
 override_whitelisted_methods = {
 	"retailedge.guided_sales_invoice.search_simple_sales_invoice_options": "retailedge.guided_link_search.search_simple_sales_invoice_options",
 	"retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options": "retailedge.guided_link_search.search_simple_purchase_invoice_options",
@@ -134,3 +242,17 @@ override_whitelisted_methods = {
 	"retailedge.guided_cash_transfer.search_simple_cash_transfer_options": "retailedge.guided_link_search_extended.search_simple_cash_transfer_options",
 	"retailedge.cash_custody.search_cash_deposit_options": "retailedge.guided_link_search_extended.search_cash_deposit_options",
 }
+
+# Request Events
+# ------------------
+# before_request = []
+# after_request = []
+
+# Job Events
+# ----------
+# before_job = []
+# after_job = []
+
+# Authentication and authorization
+# --------------------------------
+# auth_hooks = []
