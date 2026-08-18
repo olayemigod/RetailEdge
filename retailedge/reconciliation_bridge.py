@@ -17,6 +17,7 @@ from retailedge.bank_transaction_matching import (
 	_invoice_payment_row_is_bank_matchable,
 	_resolve_account_match_payload,
 	assert_can_access_bank_transaction_matching,
+	normalize_bank_transaction,
 )
 from retailedge.branch_context import has_doctype, has_field
 from retailedge.invoice_payment_audit import (
@@ -214,6 +215,10 @@ def _load_match_for_preflight(match_name):
 	row = frappe._dict(row)
 	context = _bulk_hydrate_match_candidate_contexts([row]).get(match_name, {})
 	details = _safe_load_json(row.get("details_json"))
+	normalized_bank_transaction = normalize_bank_transaction(row.get("bank_transaction"))
+	bank_direction = cstr(normalized_bank_transaction.get("direction")).strip()
+	if bank_direction not in {"Inflow", "Outflow"}:
+		frappe.throw("Bank Transaction direction could not be determined safely for reconciliation preflight.")
 	candidate = {
 		"document_type": row.get("suggested_document_type"),
 		"document_name": row.get("suggested_document"),
@@ -235,11 +240,13 @@ def _load_match_for_preflight(match_name):
 		"amount": row.get("bank_amount"),
 		"branch": row.get("branch"),
 		"company": row.get("company"),
-		"direction": "Inflow",
+		"direction": bank_direction,
 		"is_reconciled": _bool(details.get("is_reconciled"), 0),
 	}
 	account_payload = _resolve_account_match_payload(bank_transaction, candidate)
 	combined = frappe._dict(dict(row))
+	combined["direction"] = bank_direction
+	combined["bank_direction"] = bank_direction
 	combined["candidate_category"] = context.get("candidate_category") or details.get("candidate_category")
 	combined["payment_event_source"] = context.get("payment_event_source") or details.get(
 		"payment_event_source"
@@ -267,6 +274,8 @@ def _load_match_for_preflight(match_name):
 	combined["exception_reason"] = readiness_reason
 
 	combined.update(get_bank_transaction_reconciliation_context(row.get("bank_transaction")))
+	combined["direction"] = bank_direction
+	combined["bank_direction"] = bank_direction
 	payment_context = get_payment_event_reconciliation_context(
 		row.get("suggested_document_type"),
 		row.get("suggested_document"),
@@ -1244,7 +1253,6 @@ def _execute_native_payment_entry_reconciliation(match_doc, dry_run_result):
 			error_summary=post_state.get("message"),
 		)
 	if post_state.get("state") == "ready":
-		# Defensive fallback for tests or unexpected ERPNext behavior where no child link remains.
 		_, links = _bank_transaction_payment_links(bank_transaction)
 		if not any(
 			row.get("payment_document") == target_doctype and row.get("payment_entry") == target_name
