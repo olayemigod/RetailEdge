@@ -7,7 +7,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 GUIDED_BACKENDS = (
 	"guided_sales_invoice.py",
-	"guided_payment_entry.py",
+	"guided_payment.py",
 	"guided_cash_transfer.py",
 	"cash_custody.py",
 	"guided_purchase_invoice.py",
