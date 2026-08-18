@@ -40,6 +40,14 @@ def _roles(*groups: set[str]) -> frozenset[str]:
 
 
 _DASHBOARD_SPECS = {
+	"owner-dashboard": DashboardCapabilitySpec(
+		key="owner-dashboard",
+		label="Owner Dashboard",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Company",
+	),
 	"branch-performance": DashboardCapabilitySpec(
 		key="branch-performance",
 		label="Branch Performance",
