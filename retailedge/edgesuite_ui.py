@@ -203,11 +203,6 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
-	"""Return compact, permission-aware metadata for the RetailEdge Business Hub.
-
-	Target existence, permission checks, and POS capability resolution are cached for
-	this request so the navigation payload does not issue repeated metadata queries.
-	"""
 	roles = set(frappe.get_roles(frappe.session.user))
 	target_cache: dict[tuple[str, str], bool] = {}
 	permission_cache: dict[tuple[str, str], bool] = {}
@@ -323,7 +318,7 @@ def _cashier_deposit_available() -> bool:
 
 		context = get_current_cashier_context(user=frappe.session.user) or {}
 		return bool(context.get("linked_pos_opening_shift") and context.get("payment_account"))
-	 except Exception:
+	except Exception:
 		return False
 
 
