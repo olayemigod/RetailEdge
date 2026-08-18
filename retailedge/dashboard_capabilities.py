@@ -48,6 +48,14 @@ _DASHBOARD_SPECS = {
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		ref_doctype="Company",
 	),
+	"sales-overview": DashboardCapabilitySpec(
+		key="sales-overview",
+		label="Sales Overview",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Sales Invoice",
+	),
 	"branch-performance": DashboardCapabilitySpec(
 		key="branch-performance",
 		label="Branch Performance",
