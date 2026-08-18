@@ -26,6 +26,7 @@ REPORTING_SURFACES = (
 	ReportingSurface("expense-register", "expense-register", "expense_register.bundle.js", "expense_register/ExpenseRegisterReport.vue", "createPaginatedReportProvider"),
 	ReportingSurface("expense-review", "expense-review", "expense_review.bundle.js", "expense_review/ExpenseReviewReport.vue", "createBoundedPaginatedReportProvider", 5000),
 	ReportingSurface("cash-shift-verification", "cash-shift-verification", "cash_shift_verification.bundle.js", "cash_shift_verification/CashShiftVerificationReport.vue", "createBoundedPaginatedReportProvider", 1000),
+	ReportingSurface("daily-sales-audit", "daily-sales-audit", "daily_sales_audit.bundle.js", "daily_sales_audit/DailySalesAuditReport.vue", "createBoundedPaginatedReportProvider", 1000),
 	ReportingSurface("sales-by-item", "sales-by-item", "sales_reporting.bundle.js", "sales_reporting/SalesReportingReport.vue", "createBoundedPaginatedReportProvider", 10000),
 	ReportingSurface("sales-invoice-register", "sales-invoice-register", "sales_reporting.bundle.js", "sales_reporting/SalesReportingReport.vue", "createBoundedPaginatedReportProvider", 2000),
 	ReportingSurface("stock-position", "stock-position", "stock_position.bundle.js", "stock_position/StockPositionReport.vue", "createBoundedPaginatedReportProvider", 10000),
@@ -105,5 +106,5 @@ def test_preview_surfaces_do_not_replace_their_legacy_navigation_before_qa():
 	assert preview_page.exists()
 	browser_actions = _read(BROWSER_ACTIONS)
 	assert '"/app/stock-movement-history": "stock-movement-history"' not in browser_actions
-	for preview_route in ("expense-review", "cash-shift-verification"):
+	for preview_route in ("expense-review", "cash-shift-verification", "daily-sales-audit"):
 		assert (PAGE_ROOT / preview_route.replace("-", "_")).exists()
