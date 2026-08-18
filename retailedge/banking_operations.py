@@ -90,10 +90,40 @@ def direction_matches(bank_transaction: str | dict[str, Any], direction: str | N
     return wanted == DIRECTION_ALL or get_bank_transaction_direction(bank_transaction) == wanted
 
 
+def _payment_entry_category(name: str, direction: str) -> str:
+    name = cstr(name).strip()
+    if not name:
+        return CATEGORY_CUSTOMER_RECEIPT if direction == DIRECTION_INFLOW else CATEGORY_OTHER_OUTFLOW
+    rows = frappe.get_list(
+        "Payment Entry",
+        filters={"name": name, "docstatus": 1},
+        fields=["payment_type", "party_type", "remarks"],
+        limit_page_length=1,
+    )
+    if not rows:
+        return CATEGORY_UNCLASSIFIED
+    row = frappe._dict(rows[0])
+    payment_type = cstr(row.get("payment_type")).strip()
+    party_type = cstr(row.get("party_type")).strip()
+    remarks = cstr(row.get("remarks")).lower()
+    if payment_type == "Internal Transfer":
+        return CATEGORY_BANK_DEPOSIT if direction == DIRECTION_INFLOW else CATEGORY_TRANSFER
+    if direction == DIRECTION_INFLOW:
+        return CATEGORY_CUSTOMER_RECEIPT if party_type == "Customer" else CATEGORY_OTHER_INCOME
+    if party_type == "Supplier":
+        return CATEGORY_SUPPLIER_PAYMENT
+    if any(token in remarks for token in ("expense", "charge", "fee", "rent", "utility")):
+        return CATEGORY_EXPENSE
+    return CATEGORY_OTHER_OUTFLOW
+
+
 def classify_transaction_category(match_doc: dict[str, Any] | None, direction: str) -> str:
     match_doc = frappe._dict(match_doc or {})
     candidate_doctype = cstr(
         match_doc.get("suggested_document_type") or match_doc.get("candidate_doctype")
+    ).strip()
+    candidate_name = cstr(
+        match_doc.get("suggested_document") or match_doc.get("candidate_name")
     ).strip()
     candidate_category = cstr(match_doc.get("candidate_category")).strip().lower()
     payment_event_source = cstr(match_doc.get("payment_event_source")).strip().lower()
@@ -117,9 +147,7 @@ def classify_transaction_category(match_doc: dict[str, Any] | None, direction: s
     if candidate_doctype == "Sales Invoice" or party_type == "Customer":
         return CATEGORY_CUSTOMER_RECEIPT if direction == DIRECTION_INFLOW else CATEGORY_REFUND
     if candidate_doctype == "Payment Entry":
-        if direction == DIRECTION_INFLOW:
-            return CATEGORY_CUSTOMER_RECEIPT
-        return CATEGORY_SUPPLIER_PAYMENT
+        return _payment_entry_category(candidate_name, direction)
     if candidate_doctype == "Journal Entry":
         return CATEGORY_OTHER_INCOME if direction == DIRECTION_INFLOW else CATEGORY_OTHER_OUTFLOW
 
@@ -255,7 +283,10 @@ def match_and_reconcile(match_name: str, confirm_match: bool = False, confirm_re
                 "message": "Confirm the proposed match before reconciliation.",
                 "operational": get_bank_match_operational_status(match_name),
             }
-        confirm_bank_transaction_match(match_name, decision_note="Confirmed from Bank Matching & Reconciliation.")
+        confirm_bank_transaction_match(
+            match_name,
+            decision_note="Confirmed from Bank Matching & Reconciliation.",
+        )
 
     operational = get_bank_match_operational_status(match_name)
     if operational.get("operational_status") == STATUS_RECONCILED:
