@@ -18,6 +18,7 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 				"new-sales-invoice",
 				"receive-customer-payment",
 				"pay-supplier",
+				"deposit-cash",
 				"cash-transfer",
 				"record-expense",
 				"record-purchase",
@@ -53,6 +54,10 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertIn("GUIDED_PAYMENT_ACTIONS.has(action.key)", component)
 		self.assertIn("this.simplePaymentOpen = true", component)
 		self.assertIn("SimplePaymentDialog", component)
+		self.assertIn('const GUIDED_CASH_DEPOSIT_ACTION = "deposit-cash";', component)
+		self.assertIn("action.key === GUIDED_CASH_DEPOSIT_ACTION", component)
+		self.assertIn("this.simpleCashDepositOpen = true", component)
+		self.assertIn("SimpleCashDepositDialog", component)
 		self.assertIn('const GUIDED_CASH_TRANSFER_ACTION = "cash-transfer";', component)
 		self.assertIn("action.key === GUIDED_CASH_TRANSFER_ACTION", component)
 		self.assertIn("this.simpleCashTransferOpen = true", component)
@@ -71,14 +76,18 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.db.insert", component)
 
-	def test_stock_and_cash_transfer_keep_explicit_full_form_fallbacks(self):
+	def test_stock_cash_deposit_and_cash_transfer_keep_explicit_full_form_fallbacks(self):
 		component = (
 			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 		).read_text(encoding="utf-8")
 		self.assertIn("openNativeStockTransfer", component)
 		self.assertIn('frappe.new_doc(doctype, { stock_entry_type: "Material Transfer" })', component)
+		self.assertIn("openNativeCashDeposit", component)
 		self.assertIn("openNativeCashTransfer", component)
-		self.assertIn('frappe.new_doc(doctype, { payment_type: "Internal Transfer" })', component)
+		self.assertGreaterEqual(
+			component.count('frappe.new_doc(doctype, { payment_type: "Internal Transfer" })'),
+			2,
+		)
 
 
 if __name__ == "__main__":
