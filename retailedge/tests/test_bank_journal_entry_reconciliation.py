@@ -70,8 +70,8 @@ class JournalEntryReconciliationBridgeTests(unittest.TestCase):
 		self.assertIn("amount", reason.lower())
 
 	def test_journal_entry_target_requires_submitted_revalidated_source(self):
-	blocked = resolve_reconciliation_target(
-		{
+		blocked = resolve_reconciliation_target(
+			{
 				"suggested_document_type": "Journal Entry",
 				"suggested_document": "JV-1",
 				"candidate_docstatus": 0,
