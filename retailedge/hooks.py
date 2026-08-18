@@ -95,15 +95,7 @@ doctype_list_js = {
 # Svg Icons
 # ------------------
 # include app icons in desk
-# add_to_apps_screen = [
-# 	{
-# 		"name": "retailedge",
-# 		"logo": "/assets/retailedge/logo.png",
-# 		"title": "RetailEdge",
-# 		"route": "/retailedge",
-# 		"has_permission": "retailedge.api.permission.has_app_permission"
-# 	}
-# ]
+# app_include_icons = "retailedge/public/icons.svg"
 
 # Home Pages
 # ----------
