@@ -29,7 +29,18 @@ SUPPLIER_ACTION: dict[str, Any] = {
 	"master_entry": True,
 }
 
-MASTER_ACTIONS: tuple[dict[str, Any], ...] = (CUSTOMER_ACTION, SUPPLIER_ACTION)
+ITEM_ACTION: dict[str, Any] = {
+	"key": "new-item",
+	"label": "New Product",
+	"description": "Create an ERPNext Item without exposing buying cost or valuation fields.",
+	"doctype": "Item",
+	"icon": "layers",
+	"experience": "act",
+	"mode": "quick_entry",
+	"master_entry": True,
+}
+
+MASTER_ACTIONS: tuple[dict[str, Any], ...] = (CUSTOMER_ACTION, SUPPLIER_ACTION, ITEM_ACTION)
 
 
 @frappe.whitelist()
@@ -45,7 +56,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		existing_keys.add(action["key"])
 	context["quick_actions"] = quick_actions
 	feature_flags = dict(context.get("feature_flags") or {})
-	feature_flags["simple_master_data_stage"] = "customer_supplier"
+	feature_flags["simple_master_data_stage"] = "customer_supplier_item"
 	context["feature_flags"] = feature_flags
 	return context
 
@@ -63,3 +74,7 @@ def _can_create_customer() -> bool:
 
 def _can_create_supplier() -> bool:
 	return _can_create_master("Supplier")
+
+
+def _can_create_item() -> bool:
+	return _can_create_master("Item")
