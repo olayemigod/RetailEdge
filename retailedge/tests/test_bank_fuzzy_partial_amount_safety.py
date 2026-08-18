@@ -6,7 +6,7 @@ from retailedge.bank_fuzzy_matching import build_fuzzy_match_evidence
 
 
 class BankFuzzyPartialAmountSafetyTests(unittest.TestCase):
-    def test_material_amount_difference_blocks_even_when_text_is_identical(self):
+    def test_material_amount_difference_does_not_remove_existing_manual_candidate(self):
         evidence = build_fuzzy_match_evidence(
             {
                 "direction": "Inflow",
@@ -25,8 +25,9 @@ class BankFuzzyPartialAmountSafetyTests(unittest.TestCase):
                 "reference_no": "REF22",
             },
         )
-        self.assertFalse(evidence["eligible"])
-        self.assertEqual(evidence["reason"], "Amount mismatch")
+        self.assertTrue(evidence["eligible"])
+        self.assertFalse(evidence["amount_compatible"])
+        self.assertIn("no amount similarity boost", evidence["reason"].lower())
 
 
 if __name__ == "__main__":
