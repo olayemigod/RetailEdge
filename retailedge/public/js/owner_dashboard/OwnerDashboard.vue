@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Owner Dashboard"
 			eyebrow="Business Overview"
-			subtitle="A concise management view composed from RetailEdge's existing sales, stock, cash, expense, receivable, payable and branch engines."
+			subtitle="Period performance plus current balances and stock, composed from RetailEdge's existing reporting engines."
 			:summary="headlineSummary"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -58,7 +58,7 @@
 						>
 							<span class="owner-attention-copy">
 								<strong>{{ item.label }}</strong>
-								<small>{{ item.metric }}</small>
+								<small>{{ item.metric }} · {{ timeBasisLabel(item.time_basis) }}</small>
 							</span>
 							<strong class="owner-attention-value">{{ formatCard(item) }}</strong>
 						</button>
@@ -179,7 +179,12 @@ export default {
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		openRoute(route) { if (route) window.location.assign(route); },
 		openSection(section) { this.openRoute(section?.route); },
-		sectionDescription(section) { return section.key === "stock" && section.show_costs === false ? "Stock quantities are shown using your permitted cost-visibility policy; valuation remains hidden." : "Summary from the existing RetailEdge source report."; },
+		timeBasisLabel(value) { return value === "current" ? "Current position" : "Selected period"; },
+		sectionDescription(section) {
+			if (section.key === "stock" && section.show_costs === false) return "Current stock quantities; valuation remains hidden by your cost-visibility policy.";
+			if (section.time_basis === "current") return "Current position as of today; the selected date range does not reconstruct a historical balance.";
+			return "Performance for the selected date range from the existing RetailEdge source report.";
+		},
 		formatCard(card) { try { return frappe.format(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
 	},
 };
