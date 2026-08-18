@@ -24,6 +24,7 @@
 	function getFilters(page) {
 		return {
 			company: page.fields_dict?.company?.get_value?.() || "",
+			branch: page.fields_dict?.branch?.get_value?.() || "",
 			bank_account: page.fields_dict?.bank_account?.get_value?.() || "",
 			from_date: page.fields_dict?.from_date?.get_value?.() || "",
 			to_date: page.fields_dict?.to_date?.get_value?.() || "",
@@ -32,15 +33,47 @@
 	}
 
 	function installPageFilters(page, refresh) {
-		[
-			{ fieldname: "company", label: __("Company"), fieldtype: "Link", options: "Company" },
-			{ fieldname: "bank_account", label: __("Bank Account"), fieldtype: "Link", options: "Bank Account" },
-			{ fieldname: "from_date", label: __("From Date"), fieldtype: "Date" },
-			{ fieldname: "to_date", label: __("To Date"), fieldtype: "Date" },
-			{ fieldname: "search", label: __("Search"), fieldtype: "Data", placeholder: __("Narration, reference, party, document or amount") },
-		].forEach((definition) => {
-			page.add_field({ ...definition, change: refresh });
+		const company = page.add_field({
+			fieldname: "company",
+			label: __("Company"),
+			fieldtype: "Link",
+			options: "Company",
+			change: () => {
+				page.fields_dict?.branch?.set_value?.("");
+				page.fields_dict?.bank_account?.set_value?.("");
+				refresh();
+			},
 		});
+		const branch = page.add_field({
+			fieldname: "branch",
+			label: __("Branch"),
+			fieldtype: "Link",
+			options: "Branch",
+			change: refresh,
+		});
+		const bankAccount = page.add_field({
+			fieldname: "bank_account",
+			label: __("Bank Account"),
+			fieldtype: "Link",
+			options: "Bank Account",
+			change: refresh,
+		});
+		page.add_field({ fieldname: "from_date", label: __("From Date"), fieldtype: "Date", change: refresh });
+		page.add_field({ fieldname: "to_date", label: __("To Date"), fieldtype: "Date", change: refresh });
+		page.add_field({
+			fieldname: "search",
+			label: __("Search"),
+			fieldtype: "Data",
+			placeholder: __("Narration, reference, party, document or amount"),
+			change: refresh,
+		});
+
+		const companyFilter = () => {
+			const selectedCompany = company?.get_value?.() || "";
+			return selectedCompany ? { filters: { company: selectedCompany } } : {};
+		};
+		if (branch) branch.get_query = companyFilter;
+		if (bankAccount) bankAccount.get_query = companyFilter;
 	}
 
 	function createWorkspaceComponent(runtime, page) {
@@ -156,12 +189,22 @@
 					return [...reasons, fuzzy].filter(Boolean).join(" · ");
 				}
 
+				function candidateOption(row, index) {
+					return `${index} · ${row.document_type} ${row.document_name} · ${row.transaction_category || row.candidate_category || ""} · ${formatMoney(row.candidate_amount, row.currency)} · ${__("Hard")}: ${row.hard_match_score ?? row.match_score ?? 0} · ${__("Fuzzy")}: ${row.fuzzy_score ?? 0}`;
+				}
+
+				function selectedCandidate(candidates, value) {
+					const index = Number(String(value || "0").split("·", 1)[0].trim());
+					return Number.isInteger(index) ? candidates[index] : null;
+				}
+
 				function showCandidateDialog(bankTransaction, payload) {
 					const candidates = payload.candidates || [];
 					if (!candidates.length) {
 						frappe.msgprint(__("No safe accounting candidate was found for this bank transaction."));
 						return;
 					}
+					const optionLabels = candidates.map(candidateOption);
 					const dialog = new frappe.ui.Dialog({
 						title: __("Matching Candidates for {0}", [bankTransaction]),
 						fields: [
@@ -169,17 +212,19 @@
 								fieldname: "candidate",
 								label: __("Candidate"),
 								fieldtype: "Select",
-								options: candidates.map((row, index) => ({
-									label: `${row.document_type} ${row.document_name} · ${row.transaction_category || row.candidate_category || ""} · ${formatMoney(row.candidate_amount, row.currency)} · ${__("Hard")}: ${row.hard_match_score ?? row.match_score ?? 0} · ${__("Fuzzy")}: ${row.fuzzy_score ?? 0}`,
-									value: String(index),
-								})),
+								options: optionLabels.join("\n"),
 								reqd: 1,
 							},
-							{ fieldname: "evidence", label: __("Why this matches"), fieldtype: "Small Text", read_only: 1 },
+							{
+								fieldname: "evidence",
+								label: __("Why this matches"),
+								fieldtype: "Small Text",
+								read_only: 1,
+							},
 						],
 						primary_action_label: __("Review Match"),
 						primary_action: async (values) => {
-							const row = candidates[Number(values.candidate || 0)];
+							const row = selectedCandidate(candidates, values.candidate);
 							if (!row || Number(row.review_supported) === 0) {
 								frappe.msgprint(row?.review_block_reason || __("This candidate cannot enter review yet."));
 								return;
@@ -205,11 +250,11 @@
 					});
 
 					function syncEvidence() {
-						const row = candidates[Number(dialog.get_value("candidate") || 0)];
+						const row = selectedCandidate(candidates, dialog.get_value("candidate"));
 						dialog.set_value("evidence", row ? candidateReason(row) : "");
 					}
 					dialog.fields_dict.candidate.df.change = syncEvidence;
-					dialog.set_value("candidate", "0");
+					dialog.set_value("candidate", optionLabels[0]);
 					syncEvidence();
 					dialog.show();
 				}
@@ -256,34 +301,62 @@
 									headerCell("Action"),
 								]),
 							]),
-							h("tbody", state.rows.map((row) =>
+							h(
+							"tbody",
+							state.rows.map((row) =>
 								h("tr", { key: row.match_name || row.bank_transaction }, [
 									h("td", row.transaction_date || ""),
 									h("td", row.bank_account || ""),
 									h("td", [
-										h("button", {
+										h(
+										"button",
+										{
 											type: "button",
 											class: "edge-link-button",
 											onClick: () => routeToDocument("Bank Transaction", row.bank_transaction),
-										}, row.description || row.reference || row.bank_transaction || ""),
-										row.reference && row.description ? h("small", { class: "text-muted d-block" }, row.reference) : null,
+										},
+										row.description || row.reference || row.bank_transaction || "",
+									),
+										row.reference && row.description
+											? h("small", { class: "text-muted d-block" }, row.reference)
+											: null,
 									]),
 									h("td", row.direction || ""),
 									h("td", row.transaction_category || ""),
 									h("td", { class: "text-right" }, formatMoney(row.bank_amount, row.currency)),
-									h("td", row.suggested_document
-										? h("button", {
-											type: "button",
-											class: "edge-link-button",
-											onClick: () => routeToDocument(row.suggested_document_type, row.suggested_document),
-										}, `${row.suggested_document_type || ""} ${row.suggested_document}`)
-										: "—"),
-									h("td", { class: "text-right" }, row.candidate_amount == null ? "—" : formatMoney(row.candidate_amount, row.currency)),
-									h("td", { class: "text-right" }, row.amount_difference == null ? "—" : formatMoney(row.amount_difference, row.currency)),
-									h("td", [h(EdgeStatusBadge, { label: row.operational_status || "", status: row.operational_status || "" })]),
+									h(
+									"td",
+									row.suggested_document
+										? h(
+											"button",
+											{
+												type: "button",
+												class: "edge-link-button",
+												onClick: () => routeToDocument(row.suggested_document_type, row.suggested_document),
+											},
+											`${row.suggested_document_type || ""} ${row.suggested_document}`,
+										)
+										: "—",
+								),
+									h(
+									"td",
+									{ class: "text-right" },
+									row.candidate_amount == null ? "—" : formatMoney(row.candidate_amount, row.currency),
+								),
+									h(
+									"td",
+									{ class: "text-right" },
+									row.amount_difference == null ? "—" : formatMoney(row.amount_difference, row.currency),
+								),
+									h("td", [
+										h(EdgeStatusBadge, {
+											label: row.operational_status || "",
+											status: row.operational_status || "",
+										}),
+									]),
 									h("td", [rowAction(row)]),
 								]),
-							)),
+							),
 						]),
 					]);
 				}
@@ -293,37 +366,94 @@
 				installPageFilters(page, refresh);
 				global.retailedgeBankingWorkspaceRefresh = refresh;
 
-				return () => h(EdgePageLayout, null, {
-					header: () => h(EdgePageHeader, {
-						eyebrow: __("RetailEdge Banking"),
-						title: __("Bank Matching & Reconciliation"),
-						subtitle: __("Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking."),
-					}),
-					default: () => [
-						h(EdgeActionBar, { label: __("Direction and workflow queue") }, {
-							actions: () => [
-								...DIRECTIONS.map((item) => h("button", {
-									type: "button",
-									class: ["edge-button", state.direction === item.value ? "edge-button--primary" : "edge-button--secondary"],
-									onClick: () => { state.direction = item.value; refresh(); },
-								}, __(item.label))),
-								...QUEUES.map((queue) => h("button", {
-									type: "button",
-									class: ["edge-button", state.queue === queue ? "edge-button--primary" : "edge-button--secondary"],
-									onClick: () => { state.queue = queue; refresh(); },
-								}, __(queue))),
-							],
-						}),
-						state.loading ? h(EdgeLoadingState, { message: __("Loading banking queue...") }) : null,
-						state.error ? h(EdgeErrorState, { message: state.error, actionLabel: __("Try again"), onRetry: refresh }) : null,
-						!state.loading && !state.error && !state.rows.length ? h(EdgeEmptyState, {
-							title: __("No transactions in this queue"),
-							description: __("Adjust the direction or filters, or refresh after new bank transactions are imported."),
-						}) : null,
-						!state.loading && !state.error && state.rows.length ? renderTable() : null,
-						state.skippedCount ? h("p", { class: "text-muted small" }, __("{0} row(s) were skipped because their banking context could not be resolved safely.", [state.skippedCount])) : null,
-					],
-				});
+				return () =>
+					h(EdgePageLayout, null, {
+						header: () =>
+							h(EdgePageHeader, {
+								eyebrow: __("RetailEdge Banking"),
+								title: __("Bank Matching & Reconciliation"),
+								subtitle: __(
+									"Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking.",
+								),
+							}),
+						default: () => [
+							h(
+								EdgeActionBar,
+								{ label: __("Direction and workflow queue") },
+								{
+									actions: () => [
+										...DIRECTIONS.map((item) =>
+											h(
+												"button",
+												{
+													type: "button",
+													class: [
+														"edge-button",
+														state.direction === item.value
+															? "edge-button--primary"
+															: "edge-button--secondary",
+													],
+													onClick: () => {
+														state.direction = item.value;
+														refresh();
+													},
+												},
+												__(item.label),
+											),
+										),
+										...QUEUES.map((queue) =>
+											h(
+												"button",
+												{
+													type: "button",
+													class: [
+														"edge-button",
+														state.queue === queue
+															? "edge-button--primary"
+															: "edge-button--secondary",
+													],
+													onClick: () => {
+														state.queue = queue;
+														refresh();
+													},
+												},
+												__(queue),
+											),
+										),
+									],
+								},
+							),
+							state.loading
+								? h(EdgeLoadingState, { message: __("Loading banking queue...") })
+								: null,
+							state.error
+								? h(EdgeErrorState, {
+										message: state.error,
+										actionLabel: __("Try again"),
+										onRetry: refresh,
+									})
+								: null,
+							!state.loading && !state.error && !state.rows.length
+								? h(EdgeEmptyState, {
+										title: __("No transactions in this queue"),
+										description: __(
+											"Adjust the direction or filters, or refresh after new bank transactions are imported.",
+										),
+									})
+								: null,
+							!state.loading && !state.error && state.rows.length ? renderTable() : null,
+							state.skippedCount
+								? h(
+										"p",
+										{ class: "text-muted small" },
+										__(
+											"{0} row(s) were skipped because their banking context could not be resolved safely.",
+											[state.skippedCount],
+										),
+									)
+								: null,
+						],
+					});
 			},
 		});
 	}
@@ -338,8 +468,12 @@
 			title: __("Bank Matching & Reconciliation"),
 			single_column: true,
 		});
-		page.add_menu_item(__("Open Matching Report"), () => frappe.set_route("query-report", "RetailEdge Bank Transaction Matching"));
-		page.add_menu_item(__("Open Reconciliation Readiness"), () => frappe.set_route("query-report", "RetailEdge Bank Match Reconciliation Readiness"));
+		page.add_menu_item(__("Open Matching Report"), () =>
+			frappe.set_route("query-report", "RetailEdge Bank Transaction Matching"),
+		);
+		page.add_menu_item(__("Open Reconciliation Readiness"), () =>
+			frappe.set_route("query-report", "RetailEdge Bank Match Reconciliation Readiness"),
+		);
 		const component = createWorkspaceComponent(runtime, page);
 		const app = runtime.createEdgeApp(component);
 		app.mount(page.main[0]);
