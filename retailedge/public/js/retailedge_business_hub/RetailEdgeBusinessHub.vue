@@ -166,6 +166,13 @@
 				@saved="handleSimpleStockTransferSaved"
 				@open-native="openNativeStockTransfer"
 			/>
+
+			<SimpleStockAdjustmentDialog
+				:open="simpleStockAdjustmentOpen"
+				@close="closeSimpleStockAdjustment"
+				@saved="handleSimpleStockAdjustmentSaved"
+				@open-native="openNativeStockAdjustment"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
@@ -177,6 +184,7 @@ import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
 import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
+import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
@@ -187,6 +195,7 @@ const GUIDED_CASH_TRANSFER_ACTION = "cash-transfer";
 const GUIDED_PURCHASE_ACTION = "record-purchase";
 const GUIDED_EXPENSE_ACTION = "record-expense";
 const GUIDED_STOCK_TRANSFER_ACTION = "transfer-stock";
+const GUIDED_STOCK_ADJUSTMENT_ACTION = "adjust-stock";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -252,6 +261,7 @@ export default {
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
 		SimpleSalesInvoiceDialog,
+		SimpleStockAdjustmentDialog,
 		SimpleStockTransferDialog,
 	},
 	data() {
@@ -267,6 +277,7 @@ export default {
 			simplePurchaseInvoiceOpen: false,
 			simpleCashierExpenseOpen: false,
 			simpleStockTransferOpen: false,
+			simpleStockAdjustmentOpen: false,
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
@@ -361,6 +372,10 @@ export default {
 			}
 			if (action.key === GUIDED_STOCK_TRANSFER_ACTION) {
 				this.simpleStockTransferOpen = true;
+				return;
+			}
+			if (action.key === GUIDED_STOCK_ADJUSTMENT_ACTION) {
+				this.simpleStockAdjustmentOpen = true;
 				return;
 			}
 			frappe.new_doc(action.doctype);
@@ -458,6 +473,19 @@ export default {
 		openNativeStockTransfer(doctype = "Stock Entry") {
 			this.simpleStockTransferOpen = false;
 			frappe.new_doc(doctype, { stock_entry_type: "Material Transfer" });
+		},
+		closeSimpleStockAdjustment() {
+			this.simpleStockAdjustmentOpen = false;
+		},
+		handleSimpleStockAdjustmentSaved(result) {
+			this.simpleStockAdjustmentOpen = false;
+			if (!result?.name) return;
+			frappe.show_alert?.({ message: `Stock Reconciliation ${result.name} saved as Draft`, indicator: "green" });
+			frappe.set_route("Form", result.doctype || "Stock Reconciliation", result.name);
+		},
+		openNativeStockAdjustment(doctype = "Stock Reconciliation") {
+			this.simpleStockAdjustmentOpen = false;
+			frappe.new_doc(doctype, { purpose: "Stock Reconciliation" });
 		},
 		navigateFromShell(route) {
 			const item = this.shellMenuItems
