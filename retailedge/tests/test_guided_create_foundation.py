@@ -23,6 +23,7 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 				"record-expense",
 				"record-purchase",
 				"transfer-stock",
+				"adjust-stock",
 			],
 		)
 		self.assertTrue(all(action.get("doctype") for action in QUICK_ACTIONS))
@@ -71,6 +72,10 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertIn('const GUIDED_STOCK_TRANSFER_ACTION = "transfer-stock";', component)
 		self.assertIn("this.simpleStockTransferOpen = true", component)
 		self.assertIn("SimpleStockTransferDialog", component)
+		self.assertIn('const GUIDED_STOCK_ADJUSTMENT_ACTION = "adjust-stock";', component)
+		self.assertIn("action.key === GUIDED_STOCK_ADJUSTMENT_ACTION", component)
+		self.assertIn("this.simpleStockAdjustmentOpen = true", component)
+		self.assertIn("SimpleStockAdjustmentDialog", component)
 		self.assertIn('return action?.mode === "available" ? "RetailEdge entry" : "Full form";', component)
 		self.assertIn("this.closeCreatePicker();", component)
 		self.assertNotIn("frappe.client.insert", component)
@@ -82,6 +87,8 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		).read_text(encoding="utf-8")
 		self.assertIn("openNativeStockTransfer", component)
 		self.assertIn('frappe.new_doc(doctype, { stock_entry_type: "Material Transfer" })', component)
+		self.assertIn("openNativeStockAdjustment", component)
+		self.assertIn('frappe.new_doc(doctype, { purpose: "Stock Reconciliation" })', component)
 		self.assertIn("openNativeCashDeposit", component)
 		self.assertIn("openNativeCashTransfer", component)
 		self.assertGreaterEqual(
