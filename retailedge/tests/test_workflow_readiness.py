@@ -9,6 +9,11 @@ import frappe
 from retailedge.workflow_readiness import get_workflow_readiness
 
 
+class _ExpenseDoc(SimpleNamespace):
+	def has_permission(self, permission_type):
+		return permission_type == "submit"
+
+
 class TestWorkflowReadiness(unittest.TestCase):
 	@patch("retailedge.workflow_readiness._get_active_workflow", return_value=None)
 	def test_no_active_workflow_uses_normal_document_rules(self, _mock_workflow):
@@ -34,6 +39,7 @@ class TestWorkflowReadiness(unittest.TestCase):
 		result = get_workflow_readiness(doctype="Sales Invoice", doc=doc)
 
 		self.assertTrue(result["enabled"])
+		self.assertEqual(result["source"], "frappe")
 		self.assertTrue(result["requires_action"])
 		self.assertEqual(result["workflow"], "Sales Invoice Approval")
 		self.assertEqual(result["current_state"], "Draft")
@@ -54,6 +60,28 @@ class TestWorkflowReadiness(unittest.TestCase):
 		self.assertTrue(result["requires_action"])
 		self.assertEqual(result["available_actions"], [])
 		self.assertIn("authorised user", result["message"])
+
+	@patch("retailedge.workflow_readiness._get_active_workflow", return_value=None)
+	def test_cashier_expense_draft_exposes_retailedge_submit_lifecycle(self, _mock_workflow):
+		doc = _ExpenseDoc(docstatus=0, expense_status="Draft", ledger_status="Not Applicable")
+		result = get_workflow_readiness(doctype="RetailEdge Cashier Expense", doc=doc)
+
+		self.assertTrue(result["enabled"])
+		self.assertEqual(result["source"], "retailedge")
+		self.assertTrue(result["requires_action"])
+		self.assertEqual(result["current_state"], "Draft")
+		self.assertEqual(result["available_actions"][0]["action"], "Submit")
+		self.assertIn("review and ledger posting", result["message"])
+
+	@patch("retailedge.workflow_readiness._get_active_workflow", return_value=None)
+	@patch("retailedge.cashier_expense.user_is_reviewer", return_value=True)
+	def test_submitted_cashier_expense_exposes_review_actions(self, _mock_reviewer, _mock_workflow):
+		doc = _ExpenseDoc(docstatus=1, expense_status="Submitted", ledger_status="Not Applicable")
+		result = get_workflow_readiness(doctype="RetailEdge Cashier Expense", doc=doc)
+
+		self.assertEqual([row["action"] for row in result["available_actions"]], ["Approve", "Reject"])
+		self.assertTrue(result["requires_action"])
+		self.assertIn("requires RetailEdge review", result["message"])
 
 	@patch("retailedge.workflow_readiness.frappe.get_all")
 	@patch("retailedge.workflow_readiness.frappe.db.exists", return_value=True)
