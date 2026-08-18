@@ -9,6 +9,7 @@ from frappe.utils.pdf import get_pdf
 
 from retailedge.branch_performance_dashboard import get_branch_performance_dashboard_data
 from retailedge.dashboard_capabilities import require_dashboard_action
+from retailedge.owner_dashboard import build_owner_dashboard_export_dataset
 from retailedge.reporting_files import (
 	MIME_TYPES,
 	_csv_bytes,
@@ -27,6 +28,7 @@ DashboardHandler = Callable[[dict, bool], dict]
 
 def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	handlers: dict[str, DashboardHandler] = {
+		"owner-dashboard": lambda filters, _all_filtered: build_owner_dashboard_export_dataset(filters),
 		"branch-performance": lambda filters, _all_filtered: get_branch_performance_dashboard_data(
 			filters=filters
 		),
