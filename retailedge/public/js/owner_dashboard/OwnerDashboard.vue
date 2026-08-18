@@ -19,13 +19,18 @@
 			title="Owner Dashboard"
 			eyebrow="Business Overview"
 			subtitle="A concise management view composed from RetailEdge's existing sales, stock, cash, expense, receivable, payable and branch engines."
-		:summary="headlineSummary"
+			:summary="headlineSummary"
 			:loading="loading || metadataLoading"
 			:error="error"
-			:exportEnabled="false"
-			:printEnabled="false"
+			:exportEnabled="availableSections.length > 0 && capabilities.can_export"
+			:printEnabled="availableSections.length > 0 && capabilities.can_print"
+			:exportBusy="exportBusy"
+			:printBusy="printBusy"
+			:exportInitialOptions="exportOptions"
 			loadingMessage="Building owner overview…"
 			@retry="fetchData"
+			@export="handleExport"
+			@print="handlePrint"
 		>
 			<template #filters>
 				<div class="owner-dashboard-filters">
@@ -59,7 +64,15 @@
 </template>
 
 <script>
+import {
+	defaultDashboardExportOptions,
+	exportDashboard,
+	getDashboardCapabilities,
+	printDashboard,
+} from "../retailedge_dashboard_actions";
+
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
+const DASHBOARD_KEY = "owner-dashboard";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -70,6 +83,9 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
+			exportBusy: false, printBusy: false,
+			capabilities: { can_view: true, can_print: false, can_export: false },
+			exportOptions: defaultDashboardExportOptions(),
 			sections: {}, menuItems: [], tenantName: "", userName: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
@@ -106,6 +122,7 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.owner_dashboard.get_owner_dashboard_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -116,9 +133,29 @@ export default {
 		async fetchData() {
 			if (!this.filters.company) return;
 			this.loading = true; this.error = "";
-			try { const result = await callMethod("retailedge.owner_dashboard.get_owner_dashboard_data", { filters: this.filters }); this.sections = result.sections || {}; }
-			catch (error) { this.sections = {}; this.error = errorMessage(error, "Owner Dashboard failed to load."); }
+			try {
+				const [result, capabilities] = await Promise.all([
+					callMethod("retailedge.owner_dashboard.get_owner_dashboard_data", { filters: this.filters }),
+					getDashboardCapabilities(DASHBOARD_KEY, this.filters),
+				]);
+				this.sections = result.sections || {};
+				this.capabilities = capabilities || this.capabilities;
+			} catch (error) { this.sections = {}; this.error = errorMessage(error, "Owner Dashboard failed to load."); }
 			finally { this.loading = false; }
+		},
+		async handleExport(options) {
+			if (!this.capabilities.can_export) return;
+			this.exportBusy = true;
+			try { await exportDashboard(DASHBOARD_KEY, this.filters, options); }
+			catch (error) { frappe.msgprint({ title: __("Dashboard Export Failed"), message: errorMessage(error, "The Owner Dashboard could not be exported."), indicator: "red" }); }
+			finally { this.exportBusy = false; }
+		},
+		async handlePrint() {
+			if (!this.capabilities.can_print) return;
+			this.printBusy = true;
+			try { await printDashboard(DASHBOARD_KEY, this.filters); }
+			catch (error) { frappe.msgprint({ title: __("Dashboard Print Failed"), message: errorMessage(error, "The Owner Dashboard print view could not be prepared."), indicator: "red" }); }
+			finally { this.printBusy = false; }
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
