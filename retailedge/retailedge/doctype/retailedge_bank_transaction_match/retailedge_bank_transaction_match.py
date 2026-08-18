@@ -149,7 +149,7 @@ class RetailEdgeBankTransactionMatch(Document):
 			self.review_status = "Reopened"
 		elif status == "Needs Review":
 			self.review_status = "Needs Review"
-		elif self.suggested_document_type == "Journal Entry":
+		elif getattr(self, "suggested_document_type", None) == "Journal Entry":
 			# Journal Entry matching is manual-review-first even when the score is strong.
 			self.review_status = "Needs Review"
 		elif (
@@ -160,7 +160,7 @@ class RetailEdgeBankTransactionMatch(Document):
 		else:
 			self.review_status = "Pending Review"
 
-		if self.suggested_document_type == "Journal Entry":
+		if getattr(self, "suggested_document_type", None) == "Journal Entry":
 			self.risk_level = "Medium"
 		elif (
 			getattr(self, "match_confidence", None) == "Strong Match"
