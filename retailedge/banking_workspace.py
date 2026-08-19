@@ -8,6 +8,7 @@ from frappe.utils import cint, cstr, getdate
 from retailedge.banking_operations import (
     CATEGORY_UNCLASSIFIED,
     DIRECTION_ALL,
+    STATUS_AWAITING_APPROVAL,
     STATUS_EXCEPTION,
     STATUS_NEEDS_REVIEW,
     STATUS_PAYMENT_EVIDENCE_REQUIRED,
@@ -47,7 +48,11 @@ def _status_belongs_to_queue(status: str, queue: str) -> bool:
     if queue == QUEUE_TO_MATCH:
         return status in {STATUS_UNMATCHED, STATUS_SUGGESTED}
     if queue == QUEUE_TO_RECONCILE:
-        return status in {STATUS_READY_TO_RECONCILE, STATUS_RECONCILIATION_PENDING}
+        return status in {
+            STATUS_AWAITING_APPROVAL,
+            STATUS_READY_TO_RECONCILE,
+            STATUS_RECONCILIATION_PENDING,
+        }
     if queue == QUEUE_EXCEPTIONS:
         return status in {
             STATUS_NEEDS_REVIEW,
@@ -397,6 +402,12 @@ def _get_review_queue_rows(
                 "company": row.company,
                 "branch": row.branch,
                 "bank_account": row.bank_account or bank.get("bank_account"),
+                "approval_required": operational.get("approval_required"),
+                "approval_status": operational.get("approval_status"),
+                "approval_reason": operational.get("approval_reason"),
+                "approval_can_approve": operational.get("approval_can_approve"),
+                "approved_by": operational.get("approved_by"),
+                "approved_on": operational.get("approved_on"),
                 "can_execute": None,
                 "recommended_action": operational.get("recommended_action"),
             }
