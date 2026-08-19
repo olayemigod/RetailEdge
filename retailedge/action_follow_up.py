@@ -5,9 +5,10 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 DOCTYPE = "RetailEdge Action Follow Up"
+MANAGEMENT_FILTER_KEYS = {"follow_up_status", "assignment_scope", "due_scope"}
 
 
 def action_fingerprint(*, company: str, branch: str, source: str, kind: str, label: str, route: str) -> str:
@@ -26,6 +27,8 @@ def decorate_action_items(items: list[dict[str, Any]], *, company: str, branch: 
 			route=str(item.get("route") or ""),
 		)
 	if not items or not frappe.db.exists("DocType", DOCTYPE):
+		for item in items:
+			item["follow_up"] = effective_follow_up_state({"status": "Open"})
 		return items
 	fingerprints = [item["fingerprint"] for item in items]
 	states = frappe.get_list(
@@ -36,8 +39,38 @@ def decorate_action_items(items: list[dict[str, Any]], *, company: str, branch: 
 	)
 	state_by_key = {row.fingerprint: dict(row) for row in states}
 	for item in items:
-		item["follow_up"] = state_by_key.get(item["fingerprint"]) or {"status": "Open"}
+		item["follow_up"] = effective_follow_up_state(
+			state_by_key.get(item["fingerprint"]) or {"status": "Open"}
+		)
 	return items
+
+
+def effective_follow_up_state(state: dict[str, Any] | None, *, now=None) -> dict[str, Any]:
+	result = dict(state or {})
+	stored_status = str(result.get("status") or "Open")
+	current = get_datetime(now) if now else now_datetime()
+	snoozed_until = _as_datetime(result.get("snoozed_until"))
+	follow_up_on = _as_datetime(result.get("follow_up_on"))
+	snooze_expired = stored_status == "Snoozed" and bool(snoozed_until and snoozed_until <= current)
+	effective_status = "Open" if snooze_expired else stored_status
+	result["status"] = stored_status
+	result["effective_status"] = effective_status
+	result["snooze_expired"] = snooze_expired
+	result["is_due"] = bool(follow_up_on and follow_up_on <= current and effective_status != "Snoozed")
+	return result
+
+
+def _as_datetime(value):
+	if not value:
+		return None
+	try:
+		return get_datetime(value)
+	except (TypeError, ValueError):
+		return None
+
+
+def _visibility_filters(filters: dict[str, Any]) -> dict[str, Any]:
+	return {key: value for key, value in filters.items() if key not in MANAGEMENT_FILTER_KEYS}
 
 
 @frappe.whitelist()
@@ -53,7 +86,7 @@ def update_action_follow_up(
 	from retailedge.action_center import get_action_center_data
 
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
-	payload = get_action_center_data(filters)
+	payload = get_action_center_data(_visibility_filters(filters))
 	visible = next((row for row in payload.get("items") or [] if row.get("fingerprint") == fingerprint), None)
 	if not visible:
 		frappe.throw(_("This Action Centre item is no longer available in your current scope."), frappe.PermissionError)
@@ -107,13 +140,15 @@ def update_action_follow_up(
 		doc.insert()
 	else:
 		doc.save()
-	return {
-		"fingerprint": doc.fingerprint,
-		"status": doc.status,
-		"assigned_to": doc.assigned_to,
-		"follow_up_on": doc.follow_up_on,
-		"snoozed_until": doc.snoozed_until,
-		"acknowledged_by": doc.acknowledged_by,
-		"acknowledged_on": doc.acknowledged_on,
-		"notes": doc.notes,
-	}
+	return effective_follow_up_state(
+		{
+			"fingerprint": doc.fingerprint,
+			"status": doc.status,
+			"assigned_to": doc.assigned_to,
+			"follow_up_on": doc.follow_up_on,
+			"snoozed_until": doc.snoozed_until,
+			"acknowledged_by": doc.acknowledged_by,
+			"acknowledged_on": doc.acknowledged_on,
+			"notes": doc.notes,
+		}
+	)
