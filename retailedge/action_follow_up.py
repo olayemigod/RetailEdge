@@ -59,10 +59,14 @@ def update_action_follow_up(
 		frappe.throw(_("This Action Centre item is no longer available in your current scope."), frappe.PermissionError)
 
 	action = str(action or "").strip().lower()
-	if action not in {"acknowledge", "snooze", "assign", "reopen"}:
+	if action not in {"acknowledge", "snooze", "assign", "schedule", "reopen"}:
 		frappe.throw(_("Unsupported follow-up action."))
 	if not frappe.db.exists("DocType", DOCTYPE):
 		frappe.throw(_("Action follow-up storage is not installed yet. Run migrate first."))
+	if action == "snooze" and not snoozed_until:
+		frappe.throw(_("Snoozed Until is required."))
+	if action == "schedule" and not follow_up_on:
+		frappe.throw(_("Follow Up On is required."))
 
 	doc = frappe.db.exists(DOCTYPE, fingerprint)
 	doc = frappe.get_doc(DOCTYPE, fingerprint) if doc else frappe.new_doc(DOCTYPE)
@@ -85,8 +89,6 @@ def update_action_follow_up(
 		doc.acknowledged_on = now
 		doc.snoozed_until = None
 	elif action == "snooze":
-		if not snoozed_until:
-			frappe.throw(_("Snoozed Until is required."))
 		doc.status = "Snoozed"
 		doc.snoozed_until = snoozed_until
 	elif action == "reopen":
@@ -105,4 +107,13 @@ def update_action_follow_up(
 		doc.insert()
 	else:
 		doc.save()
-	return {"fingerprint": doc.fingerprint, "status": doc.status, "assigned_to": doc.assigned_to, "follow_up_on": doc.follow_up_on, "snoozed_until": doc.snoozed_until, "acknowledged_by": doc.acknowledged_by, "acknowledged_on": doc.acknowledged_on, "notes": doc.notes}
+	return {
+		"fingerprint": doc.fingerprint,
+		"status": doc.status,
+		"assigned_to": doc.assigned_to,
+		"follow_up_on": doc.follow_up_on,
+		"snoozed_until": doc.snoozed_until,
+		"acknowledged_by": doc.acknowledged_by,
+		"acknowledged_on": doc.acknowledged_on,
+		"notes": doc.notes,
+	}
