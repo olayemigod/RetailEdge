@@ -133,7 +133,8 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "customers", "label": "Customers", "icon": "users", "items": (
 			{"label": "Customers", "target_type": "DocType", "target": "Customer", "icon": "user"},
-			{"label": "Receivables", "target_type": "Report", "target": "Accounts Receivable", "icon": "report"},
+			{"label": "Customer Receivables", "target_type": "Page", "target": "customer-receivables", "icon": "report"},
+			{"label": "Accounts Receivable (Detailed)", "target_type": "Report", "target": "Accounts Receivable", "icon": "report"},
 		),
 	},
 	{
