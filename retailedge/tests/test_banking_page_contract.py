@@ -86,6 +86,25 @@ class BankingPageContractTests(unittest.TestCase):
 		asset_js = ASSET_JS.read_text()
 		self.assertIn('options: optionLabels.join("\\n")', asset_js)
 		self.assertNotIn("options: candidates.map((row, index) => ({", asset_js)
+		self.assertNotIn("`${index} ·", asset_js)
+
+	def test_review_match_stays_in_banking_workspace_and_uses_existing_workflow_actions(self):
+		asset_js = ASSET_JS.read_text()
+		self.assertIn("showReviewMatchDialog", asset_js)
+		self.assertIn('method: "frappe.client.get"', asset_js)
+		self.assertIn('"retailedge.api.confirm_bank_transaction_match"', asset_js)
+		self.assertIn('"retailedge.api.reject_bank_transaction_match"', asset_js)
+		self.assertIn('"retailedge.api.mark_bank_transaction_match_needs_review"', asset_js)
+		for label in (
+			"Accounting / Hard Score",
+			"Supplemental Fuzzy Evidence",
+			"Confirm Match",
+			"Reject Match",
+			"Keep for Review",
+			"Open Audit Record",
+		):
+			self.assertIn(label, asset_js)
+		self.assertIn("Match confirmed. Reconciliation is still required.", asset_js)
 
 
 if __name__ == "__main__":
