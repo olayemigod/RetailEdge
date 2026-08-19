@@ -72,7 +72,7 @@
 		return header;
 	}
 
-	function evidenceItems(raw, tone) {
+	function evidenceItems(raw) {
 		const source = String(raw || "").trim();
 		if (!source) return [__("No evidence detail recorded.")];
 		const separators = source.includes(" · ") ? " · " : source.includes(";") ? ";" : "\n";
@@ -87,13 +87,36 @@
 		if (badgeText) header.appendChild(badge(badgeText, tone === "accounting" ? "success" : "info"));
 		panel.appendChild(header);
 		const list = make("div", "retailedge-review-evidence-list");
-		evidenceItems(raw, tone).slice(0, 8).forEach((item) => {
+		evidenceItems(raw).slice(0, 8).forEach((item) => {
 			const line = make("div", "retailedge-review-evidence-item");
 			line.appendChild(make("span", "retailedge-review-check", "✓"));
 			line.appendChild(make("span", "", item));
 			list.appendChild(line);
 		});
 		panel.appendChild(list);
+		return panel;
+	}
+
+	function approvalTone(status) {
+		if (status === "Approved" || status === "Not Required") return "success";
+		if (status === "Declined") return "danger";
+		return "warning";
+	}
+
+	function approvalPanel(modal) {
+		const status = fieldValue(modal, "approval_status");
+		if (!status) return null;
+		const reason = fieldValue(modal, "approval_reason");
+		const actor = fieldValue(modal, "approval_actor");
+		const panel = make("section", "retailedge-review-approval");
+		const header = make("div", "retailedge-review-card-header");
+		header.appendChild(make("h3", "retailedge-review-card-title", __("Reconciliation Approval")));
+		header.appendChild(badge(status, approvalTone(status)));
+		panel.appendChild(header);
+		const content = make("div", "retailedge-review-approval-content");
+		if (reason) content.appendChild(make("p", "retailedge-review-approval-guidance", reason));
+		if (actor) content.appendChild(make("p", "retailedge-review-approval-actor", __("Approved by {0}", [actor])));
+		panel.appendChild(content);
 		return panel;
 	}
 
@@ -104,6 +127,7 @@
 			"suggested_document_type", "suggested_document", "candidate_amount", "amount_difference",
 			"party", "payment_event_source", "payment_mode", "evidence_section", "match_confidence",
 			"match_score", "risk_level", "accounting_evidence", "fuzzy_review_evidence",
+			"approval_section", "approval_status", "approval_reason", "approval_actor",
 			"decision_status", "open_bank_transaction", "open_candidate_document"
 		];
 		hiddenFields.forEach((fieldname) => {
@@ -114,9 +138,25 @@
 
 	function moveDecisionControls(modal, root) {
 		const decisionArea = make("div", "retailedge-review-decision-area");
+		const approvalNote = modal.querySelector('.frappe-control[data-fieldname="approval_note"]');
+		const requestApproval = modal.querySelector('.frappe-control[data-fieldname="request_approval"]');
+		const approve = modal.querySelector('.frappe-control[data-fieldname="approve_reconciliation"]');
+		const decline = modal.querySelector('.frappe-control[data-fieldname="decline_reconciliation"]');
 		const note = modal.querySelector('.frappe-control[data-fieldname="decision_note"]');
 		const keep = modal.querySelector('.frappe-control[data-fieldname="mark_needs_review"]');
 		const audit = modal.querySelector('.frappe-control[data-fieldname="open_audit_record"]');
+
+		if (approvalNote && !approvalNote.classList.contains("hide-control")) {
+			const approvalWrap = make("div", "retailedge-review-note retailedge-review-approval-note");
+			approvalWrap.appendChild(approvalNote);
+			decisionArea.appendChild(approvalWrap);
+		}
+		const approvalActions = make("div", "retailedge-review-approval-actions");
+		[requestApproval, decline, approve].forEach((control) => {
+			if (control && !control.classList.contains("hide-control")) approvalActions.appendChild(control);
+		});
+		if (approvalActions.children.length) decisionArea.appendChild(approvalActions);
+
 		if (note) {
 			const noteWrap = make("div", "retailedge-review-note");
 			noteWrap.appendChild(note);
@@ -242,9 +282,12 @@
 		);
 		root.appendChild(evidenceGrid);
 
+		const approval = approvalPanel(modal);
+		if (approval) root.appendChild(approval);
+
 		const info = make("div", "retailedge-review-info-banner");
 		info.appendChild(make("span", "retailedge-review-info", "i"));
-		info.appendChild(make("span", "", __("Matching does not reconcile the bank transaction. After confirmation, this item moves to To Reconcile, where ERPNext Banking reconciliation is performed after a fresh safety check.")));
+		info.appendChild(make("span", "", __("Matching and approval do not reconcile the bank transaction. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check.")));
 		root.appendChild(info);
 
 		hideOriginalReviewFields(modal);
