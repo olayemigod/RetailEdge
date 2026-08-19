@@ -15,6 +15,20 @@ from retailedge.pos_runtime import (
 )
 
 FINANCE_TRANSFER_ROLES = {"Accounts User", "Accounts Manager", "System Manager"}
+ACTION_CENTER_ROLES = {
+	"System Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Branch Manager",
+	"RetailEdgeBranchManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+	"Accounts Manager",
+	"Accounts User",
+	"Stock Manager",
+	"Sales Manager",
+	"Purchase Manager",
+}
 
 PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 	{
@@ -139,6 +153,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "review-approvals", "label": "Review & Approvals", "icon": "shield", "items": (
+			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match", "icon": "shield"},
 			{"label": "Daily Sales Audit", "target_type": "DocType", "target": "RetailEdge Daily Sales Audit", "icon": "shield"},
 			{"label": "Cashier Expense Review", "target_type": "Report", "target": "RetailEdge Cashier Expense Review", "icon": "report"},
@@ -259,8 +274,12 @@ def _get_permitted_navigation_groups(
 			continue
 		items: list[dict[str, Any]] = []
 		for item in group["items"]:
+			item_required_roles = set(item.get("required_roles") or ())
+			if item_required_roles and not roles.intersection(item_required_roles):
+				continue
 			resolved = _resolve_navigation_item(item, pos_capabilities=pos_capabilities)
 			if resolved is not None and _can_open_target(resolved, target_cache=target_cache, permission_cache=permission_cache):
+				resolved.pop("required_roles", None)
 				items.append(resolved)
 		if items:
 			groups.append({"key": group["key"], "label": _(group["label"]), "icon": group.get("icon") or "", "items": items})
