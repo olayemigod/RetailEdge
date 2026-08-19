@@ -190,13 +190,13 @@ def _sales_invoice_native_reconciliation_safety(match_doc, invoice_name):
 			return {
 				"safe": False,
 				"status": TARGET_AMBIGUOUS,
-				"reason": "Sales Invoice payment rows could not be revalidated and a submitted Payment Entry is linked to the invoice.",
+				"reason": "Sales Invoice payment rows could not be revalidated and a submitted Payment Entry is linked, so the parent-invoice reconciliation target is ambiguous.",
 				"notes": f"Linked Payment Entries: {payment_entry_names or 'unknown'}. Review the explicit Payment Entry target instead of choosing an unverifiable parent Sales Invoice.",
 			}
 		return {
 			"safe": False,
 			"status": TARGET_MISSING,
-			"reason": "Sales Invoice payment rows could not be revalidated and no submitted Payment Entry voucher was found.",
+			"reason": "Payment voucher missing: Sales Invoice payment rows could not be revalidated and no submitted Payment Entry voucher was found.",
 			"notes": "RetailEdge could not establish a safe native reconciliation target from the available payment evidence.",
 		}
 	if cint_or_zero(getattr(invoice_doc, "docstatus", None)) != 1:
@@ -1060,7 +1060,7 @@ def _execution_gate_message(status, can_execute, block_reasons):
 	if status == EXECUTION_GATE_PERMISSION_DENIED:
 		return "You do not have an allowed role for reconciliation execution. No execution was performed."
 	if status == EXECUTION_GATE_NEEDS_APPROVAL:
-		return "Second approval is required before live reconciliation execution. No execution was performed."
+		return "Second approval is required before reconciliation execution. No execution was performed."
 	return (block_reasons or ["Reconciliation execution gate is blocked. No execution was performed."])[0]
 
 
@@ -1102,7 +1102,7 @@ def check_reconciliation_execution_gate(match_name, user=None, settings=None, dr
 	if block_reasons:
 		return _execution_gate_result(EXECUTION_GATE_BLOCKED, list(dict.fromkeys(block_reasons)), warnings, dry_run_result, settings_snapshot, user)
 	if settings_snapshot["require_second_approval_for_reconciliation_execution"]:
-		return _execution_gate_result(EXECUTION_GATE_NEEDS_APPROVAL, ["Second approval is required before live reconciliation execution."], warnings, dry_run_result, settings_snapshot, user)
+		return _execution_gate_result(EXECUTION_GATE_NEEDS_APPROVAL, ["Second approval is required before reconciliation execution."], warnings, dry_run_result, settings_snapshot, user)
 	return _execution_gate_result(EXECUTION_GATE_ALLOWED, [], warnings, dry_run_result, settings_snapshot, user, can_execute=True)
 
 
