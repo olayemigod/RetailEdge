@@ -27,8 +27,6 @@ def decorate_action_items(items: list[dict[str, Any]], *, company: str, branch: 
 			route=str(item.get("route") or ""),
 		)
 	if not items or not frappe.db.exists("DocType", DOCTYPE):
-		for item in items:
-			item["follow_up"] = effective_follow_up_state({"status": "Open"})
 		return items
 	fingerprints = [item["fingerprint"] for item in items]
 	states = frappe.get_list(
