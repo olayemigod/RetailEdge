@@ -16,6 +16,13 @@ class BankingPageContractTests(unittest.TestCase):
 		for raw_tag in ("<table", "<tr", "<td", "<div", "<button", "<a "):
 			self.assertNotIn(raw_tag, page_js)
 
+	def test_page_controller_uses_promise_based_frappe_require(self):
+		page_js = PAGE_JS.read_text()
+		self.assertIn("Promise.resolve(frappe.require(ASSET))", page_js)
+		self.assertIn(".then(() => startWorkspace(wrapper))", page_js)
+		self.assertIn(".catch((error) =>", page_js)
+		self.assertNotIn("frappe.require(ASSET,", page_js)
+
 	def test_banking_asset_calls_workspace_and_direction_aware_candidate_services(self):
 		asset_js = ASSET_JS.read_text()
 		self.assertIn("retailedge.banking_workspace.get_banking_workspace_rows", asset_js)
