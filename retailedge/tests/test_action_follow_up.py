@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import frappe
 
@@ -22,7 +22,7 @@ class TestActionFollowUp(unittest.TestCase):
 		self.assertNotEqual(first, other_branch)
 
 	@patch("retailedge.action_follow_up.frappe.db.exists")
-	def test_decorate_adds_open_state_when_storage_is_not_installed(self, exists):
+	def test_decorate_adds_fingerprint_when_storage_is_not_installed(self, exists):
 		exists.return_value = False
 		items = [{"source": "stock", "kind": "management_exception", "label": "Out of stock", "route": "/app/stock-position"}]
 		result = action_follow_up.decorate_action_items(items, company="Test Company", branch="Main")
@@ -43,7 +43,8 @@ class TestActionFollowUp(unittest.TestCase):
 			self.assertNotIn(forbidden, source)
 
 	def test_doctype_is_follow_up_state_not_resolution(self):
-		doc = (Path(action_follow_up.__file__).resolve().parent / "retailedge/doctype/retailedge_action_follow_up/retailedge_action_follow_up.json").read_text(encoding="utf-8")
+		doc_path = Path(action_follow_up.__file__).resolve().parent / "retailedge/doctype/retailedge_action_follow_up/retailedge_action_follow_up.json"
+		doc = doc_path.read_text(encoding="utf-8")
 		self.assertIn('"Acknowledged\\nSnoozed"', doc)
 		self.assertNotIn("Resolved", doc)
 		self.assertNotIn("Closed", doc)
