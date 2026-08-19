@@ -1,0 +1,192 @@
+from __future__ import annotations
+
+from typing import Any, Callable
+
+import frappe
+from frappe import _
+from frappe.utils import flt, get_first_day, today
+
+from retailedge.cash_shift_verification import get_cash_shift_verification
+from retailedge.expense_register import get_expense_register
+from retailedge.owner_dashboard import get_owner_dashboard_data
+
+DEFAULT_PAGE_SIZE = 1
+
+
+@frappe.whitelist()
+def get_action_center_context() -> dict[str, Any]:
+	company = str(frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(
+		frappe.defaults.get_user_default("RetailEdge Branch")
+		or frappe.defaults.get_user_default("Branch")
+		or ""
+	).strip()
+	return {
+		"default_filters": {
+			"company": company,
+			"branch": branch,
+			"from_date": str(get_first_day(today())),
+			"to_date": today(),
+		},
+		"tenant_name": company,
+		"branch_name": branch,
+		"user_name": frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user,
+	}
+
+
+@frappe.whitelist()
+def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	filters = _coerce_filters(filters)
+	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	if not company:
+		frappe.throw(_("Company is required."))
+	branch = str(filters.get("branch") or "").strip()
+	from_date = str(filters.get("from_date") or get_first_day(today()))
+	to_date = str(filters.get("to_date") or today())
+	common = {"company": company, "branch": branch, "from_date": from_date, "to_date": to_date}
+
+	items: list[dict[str, Any]] = []
+	sources: dict[str, dict[str, Any]] = {}
+
+	owner = _safe_source("owner", lambda: get_owner_dashboard_data(common))
+	sources["owner"] = owner
+	if owner.get("available"):
+		for item in owner.get("payload", {}).get("attention") or []:
+			items.append(
+				_action(
+					source=str(item.get("section") or "management"),
+					label=str(item.get("label") or item.get("metric") or _("Management exception")),
+					value=item.get("value"),
+					datatype=str(item.get("datatype") or "Data"),
+					severity=str(item.get("tone") or "warning"),
+					route=str(item.get("route") or "/app/owner-dashboard"),
+					time_basis=str(item.get("time_basis") or "period"),
+					kind="management_exception",
+				)
+			)
+
+	expenses = _safe_source(
+		"expenses",
+		lambda: get_expense_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE),
+	)
+	sources["expenses"] = expenses
+	if expenses.get("available"):
+		for label, severity, message in (
+			("Posting Blocked", "danger", _("Expenses are blocked from ledger posting")),
+			("Submitted for Review", "warning", _("Expenses are awaiting review")),
+		):
+			card = _summary_card(expenses["payload"], label)
+			if card and flt(card.get("value")) > 0:
+				items.append(
+					_action(
+						source="expenses",
+						label=message,
+						value=card.get("value"),
+						datatype=str(card.get("datatype") or card.get("type") or "Int"),
+						severity=severity,
+						route="/app/expense-review",
+						time_basis="period",
+						kind="review_or_posting",
+					)
+				)
+
+	cash = _safe_source(
+		"cash_shift",
+		lambda: get_cash_shift_verification(common, page=1, page_size=DEFAULT_PAGE_SIZE),
+	)
+	sources["cash_shift"] = cash
+	if cash.get("available"):
+		exceptions = _summary_card(cash["payload"], "Exceptions")
+		if exceptions and flt(exceptions.get("value")) > 0:
+			items.append(
+				_action(
+					source="cash_shift",
+					label=_("Cash shifts have shortages, overages, missing shifts or review exceptions"),
+					value=exceptions.get("value"),
+					datatype="Int",
+					severity="danger",
+					route="/app/cash-shift-verification",
+					time_basis="period",
+					kind="cash_control",
+				)
+			)
+
+	items = _dedupe_and_sort(items)
+	return {
+		"title": _("Action Centre"),
+		"filters": common,
+		"summary": _summary(items),
+		"items": items,
+		"sources": {key: {k: v for k, v in value.items() if k != "payload"} for key, value in sources.items()},
+		"metadata": {
+			"read_only": True,
+			"resolution_model": "drill_through_to_existing_workflow_or_report",
+			"accounting_truth": "existing ERPNext/RetailEdge documents and reporting engines",
+			"generated_for": frappe.session.user,
+		},
+	}
+
+
+def _safe_source(key: str, loader: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+	try:
+		return {"available": True, "key": key, "payload": loader() or {}}
+	except frappe.PermissionError:
+		return {"available": False, "key": key, "reason": _("Your permissions do not allow this action source.")}
+
+
+def _summary_card(payload: dict[str, Any], label: str) -> dict[str, Any] | None:
+	for card in payload.get("summary") or []:
+		if str(card.get("label") or "").strip() == label:
+			return dict(card)
+	return None
+
+
+def _action(
+	*,
+	source: str,
+	label: str,
+	value: Any,
+	datatype: str,
+	severity: str,
+	route: str,
+	time_basis: str,
+	kind: str,
+) -> dict[str, Any]:
+	return {
+		"source": source,
+		"label": label,
+		"value": value,
+		"datatype": datatype,
+		"severity": severity if severity in {"danger", "warning", "info"} else "warning",
+		"route": route,
+		"time_basis": time_basis,
+		"kind": kind,
+	}
+
+
+def _dedupe_and_sort(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+	severity_rank = {"danger": 0, "warning": 1, "info": 2}
+	seen: set[tuple[str, str, str]] = set()
+	result: list[dict[str, Any]] = []
+	for item in items:
+		key = (str(item.get("source")), str(item.get("label")), str(item.get("route")))
+		if key in seen:
+			continue
+		seen.add(key)
+		result.append(item)
+	result.sort(key=lambda row: (severity_rank.get(str(row.get("severity")), 9), str(row.get("source")), str(row.get("label"))))
+	return result
+
+
+def _summary(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+	return [
+		{"label": _("Critical"), "value": len([row for row in items if row.get("severity") == "danger"]), "datatype": "Int"},
+		{"label": _("Needs Attention"), "value": len([row for row in items if row.get("severity") == "warning"]), "datatype": "Int"},
+		{"label": _("Open Actions"), "value": len(items), "datatype": "Int"},
+	]
+
+
+def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
+	if isinstance(filters, str):
+		filters = frappe.parse_json(filters)
+	return frappe._dict(filters or {})
