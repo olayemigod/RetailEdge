@@ -8,8 +8,10 @@ from frappe.utils import flt, get_first_day, today
 
 from retailedge.action_follow_up import decorate_action_items
 from retailedge.cash_shift_verification import get_cash_shift_verification
+from retailedge.customer_receivables import get_customer_receivables
 from retailedge.expense_register import get_expense_register
 from retailedge.owner_dashboard import get_owner_dashboard_data
+from retailedge.supplier_payables import get_supplier_payables
 
 DEFAULT_PAGE_SIZE = 1
 FOLLOW_UP_STATUSES = {"All", "Open", "Acknowledged", "Snoozed"}
@@ -121,6 +123,44 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 				)
 			)
 
+	receivables = _safe_source(
+		"receivables",
+		lambda: get_customer_receivables(
+			filters={"company": company, "branch": branch, "ageing_bucket": "All"},
+			page=1,
+			page_size=DEFAULT_PAGE_SIZE,
+		),
+	)
+	sources["receivables"] = receivables
+	if receivables.get("available"):
+		_action_from_financial_exposure(
+			items,
+			payload=receivables["payload"],
+			source="receivables",
+			label=_("Customer receivables are overdue"),
+			route="/app/customer-receivables",
+			kind="overdue_receivables",
+		)
+
+	payables = _safe_source(
+		"payables",
+		lambda: get_supplier_payables(
+			filters={"company": company, "branch": branch},
+			page=1,
+			page_size=DEFAULT_PAGE_SIZE,
+		),
+	)
+	sources["payables"] = payables
+	if payables.get("available"):
+		_action_from_financial_exposure(
+			items,
+			payload=payables["payload"],
+			source="payables",
+			label=_("Supplier payables are overdue"),
+			route="/app/supplier-payables",
+			kind="overdue_payables",
+		)
+
 	all_items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
 	items = _apply_follow_up_filters(
 		all_items,
@@ -156,6 +196,12 @@ def _safe_source(key: str, loader: Callable[[], dict[str, Any]]) -> dict[str, An
 		return {"available": True, "key": key, "payload": loader() or {}}
 	except frappe.PermissionError:
 		return {"available": False, "key": key, "reason": _("Your permissions do not allow this action source.")}
+	except frappe.ValidationError:
+		return {
+			"available": False,
+			"key": key,
+			"reason": _("This action source could not be evaluated safely for the current scope."),
+		}
 
 
 def _summary_card(payload: dict[str, Any], label: str) -> dict[str, Any] | None:
@@ -163,6 +209,40 @@ def _summary_card(payload: dict[str, Any], label: str) -> dict[str, Any] | None:
 		if str(card.get("label") or "").strip() == label:
 			return dict(card)
 	return None
+
+
+def _action_from_financial_exposure(
+	items: list[dict[str, Any]],
+	*,
+	payload: dict[str, Any],
+	source: str,
+	label: str,
+	route: str,
+	kind: str,
+) -> None:
+	overdue = _summary_card(payload, "Overdue")
+	if not overdue or flt(overdue.get("value")) <= 0:
+		return
+	over_90 = _summary_card(payload, "Over 90 Days")
+	aged_exposure = flt((over_90 or {}).get("value"))
+	rows = payload.get("rows") or []
+	oldest_days = max((int(row.get("overdue_days") or 0) for row in rows), default=0)
+	exposure = flt(overdue.get("value"))
+	items.append(
+		_action(
+			source=source,
+			label=label,
+			value=exposure,
+			datatype=str(overdue.get("datatype") or "Currency"),
+			severity="danger" if aged_exposure > 0 else "warning",
+			route=route,
+			time_basis="current",
+			kind=kind,
+			exposure=exposure,
+			aged_exposure=aged_exposure,
+			age_days=oldest_days,
+		)
+	)
 
 
 def _action(
@@ -175,8 +255,11 @@ def _action(
 	route: str,
 	time_basis: str,
 	kind: str,
+	exposure: float | None = None,
+	aged_exposure: float | None = None,
+	age_days: int | None = None,
 ) -> dict[str, Any]:
-	return {
+	row = {
 		"source": source,
 		"label": label,
 		"value": value,
@@ -186,6 +269,13 @@ def _action(
 		"time_basis": time_basis,
 		"kind": kind,
 	}
+	if exposure is not None:
+		row["exposure"] = exposure
+	if aged_exposure is not None:
+		row["aged_exposure"] = aged_exposure
+	if age_days is not None:
+		row["age_days"] = age_days
+	return row
 
 
 def _dedupe_and_sort(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
