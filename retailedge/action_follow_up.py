@@ -48,7 +48,7 @@ def update_action_follow_up(
 	assigned_to: str = "",
 	follow_up_on: str = "",
 	snoozed_until: str = "",
-	notes: str = "",
+	notes: str | None = None,
 ) -> dict[str, Any]:
 	from retailedge.action_center import get_action_center_data
 
