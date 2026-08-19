@@ -259,6 +259,7 @@ def _prepare_candidate_for_fuzzy(candidate, bank_transaction):
 	return row
 
 
+@frappe.whitelist()
 def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, limit=40):
 	"""Return direction-safe existing candidates plus permission-aware ERPNext bank events."""
 	assert_can_access_bank_transaction_matching()
