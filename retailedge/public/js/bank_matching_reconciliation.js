@@ -137,7 +137,7 @@
 						return h("button", {
 							type: "button",
 							class: "edge-button edge-button--secondary",
-							onClick: () => routeToDocument("RetailEdge Bank Transaction Match", row.match_name),
+							onClick: () => showReviewMatchDialog(row.match_name),
 						}, __("Review Suggestion"));
 					}
 					if (!row.match_name && state.queue === "To Match") {
@@ -151,7 +151,7 @@
 						return h("button", {
 							type: "button",
 							class: "edge-button edge-button--secondary",
-							onClick: () => routeToDocument("RetailEdge Bank Transaction Match", row.match_name),
+							onClick: () => showReviewMatchDialog(row.match_name),
 						}, __("Review"));
 					}
 					return null;
@@ -169,17 +169,20 @@
 
 				function candidateReason(row) {
 					const reasons = Array.isArray(row.reasons) ? row.reasons.filter(Boolean) : [];
-					const fuzzy = row.fuzzy_note || row.fuzzy_evidence?.reason;
-					return [...reasons, fuzzy].filter(Boolean).join(" · ");
+					return reasons.join(" · ");
 				}
 
-				function candidateOption(row, index) {
-					return `${index} · ${row.document_type} ${row.document_name} · ${row.transaction_category || row.candidate_category || ""} · ${formatMoney(row.candidate_amount, row.currency)} · ${__("Hard")}: ${row.hard_match_score ?? row.match_score ?? 0} · ${__("Fuzzy")}: ${row.fuzzy_score ?? 0}`;
+				function fuzzyReason(row) {
+					return row?.fuzzy_note || row?.fuzzy_evidence?.reason || __("No supplemental fuzzy evidence recorded.");
 				}
 
-				function selectedCandidate(candidates, value) {
-					const index = Number(String(value || "0").split("·", 1)[0].trim());
-					return Number.isInteger(index) ? candidates[index] : null;
+				function candidateOption(row) {
+					return `${row.document_type} ${row.document_name} · ${row.transaction_category || row.candidate_category || ""} · ${formatMoney(row.candidate_amount, row.currency)} · ${__("Hard")}: ${row.hard_match_score ?? row.match_score ?? 0} · ${__("Fuzzy")}: ${row.fuzzy_score ?? 0}`;
+				}
+
+				function selectedCandidate(candidates, optionLabels, value) {
+					const index = optionLabels.indexOf(String(value || ""));
+					return index >= 0 ? candidates[index] : null;
 				}
 
 				function showCandidateDialog(bankTransaction, payload) {
@@ -201,14 +204,20 @@
 							},
 							{
 								fieldname: "evidence",
-								label: __("Why this matches"),
+								label: __("Accounting evidence"),
+								fieldtype: "Small Text",
+								read_only: 1,
+							},
+							{
+								fieldname: "fuzzy_evidence",
+								label: __("Supplemental fuzzy evidence"),
 								fieldtype: "Small Text",
 								read_only: 1,
 							},
 						],
 						primary_action_label: __("Review Match"),
 						primary_action: async (values) => {
-							const row = selectedCandidate(candidates, values.candidate);
+							const row = selectedCandidate(candidates, optionLabels, values.candidate);
 							if (!row || Number(row.review_supported) === 0) {
 								frappe.msgprint(row?.review_block_reason || __("This candidate cannot enter review yet."));
 								return;
@@ -229,17 +238,147 @@
 								return;
 							}
 							dialog.hide();
-							routeToDocument("RetailEdge Bank Transaction Match", result.match_name);
+							showReviewMatchDialog(result.match_name, row);
 						},
 					});
 
 					function syncEvidence() {
-						const row = selectedCandidate(candidates, dialog.get_value("candidate"));
+						const row = selectedCandidate(candidates, optionLabels, dialog.get_value("candidate"));
 						dialog.set_value("evidence", row ? candidateReason(row) : "");
+						dialog.set_value("fuzzy_evidence", row ? fuzzyReason(row) : "");
 					}
 					dialog.fields_dict.candidate.df.change = syncEvidence;
 					dialog.set_value("candidate", optionLabels[0]);
 					syncEvidence();
+					dialog.show();
+				}
+
+				async function getMatchDocument(matchName) {
+					const response = await frappe.call({
+						method: "frappe.client.get",
+						args: { doctype: "RetailEdge Bank Transaction Match", name: matchName },
+					});
+					return response?.message || {};
+				}
+
+				async function applyReviewDecision(method, matchName, decisionNote, dialog, successMessage) {
+					const response = await frappe.call({
+						method,
+						args: { match_name: matchName, decision_note: decisionNote || "" },
+						freeze: true,
+						freeze_message: __("Applying review decision..."),
+					});
+					const result = response?.message || {};
+					dialog.hide();
+					frappe.show_alert({ message: result.message || successMessage, indicator: "green" });
+					refresh();
+				}
+
+				async function showReviewMatchDialog(matchName, candidateSnapshot = null) {
+					const doc = await getMatchDocument(matchName);
+					const canDecide = ["Suggested", "Reopened", "Needs Review"].includes(doc.decision_status || "Suggested");
+					const dialog = new frappe.ui.Dialog({
+						title: __("Review Match · {0}", [matchName]),
+						size: "extra-large",
+						fields: [
+							{ fieldname: "bank_section", fieldtype: "Section Break", label: __("Bank Transaction") },
+							{ fieldname: "bank_direction", label: __("Direction"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "bank_amount", label: __("Bank Amount"), fieldtype: "Currency", read_only: 1 },
+							{ fieldname: "transaction_date", label: __("Transaction Date"), fieldtype: "Date", read_only: 1 },
+							{ fieldname: "bank_account", label: __("Bank Account"), fieldtype: "Link", options: "Bank Account", read_only: 1 },
+							{ fieldname: "bank_reference", label: __("Reference"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "bank_narration", label: __("Narration"), fieldtype: "Small Text", read_only: 1 },
+							{ fieldname: "candidate_column", fieldtype: "Column Break" },
+							{ fieldname: "transaction_category", label: __("Category"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "suggested_document_type", label: __("Document Type"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "suggested_document", label: __("Candidate Document"), fieldtype: "Dynamic Link", options: "suggested_document_type", read_only: 1 },
+							{ fieldname: "candidate_amount", label: __("Candidate Amount"), fieldtype: "Currency", read_only: 1 },
+							{ fieldname: "amount_difference", label: __("Difference"), fieldtype: "Currency", read_only: 1 },
+							{ fieldname: "party", label: __("Party"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "payment_event_source", label: __("Payment Evidence"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "payment_mode", label: __("Mode of Payment"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "evidence_section", fieldtype: "Section Break", label: __("Why this matches") },
+							{ fieldname: "match_confidence", label: __("Match Confidence"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "match_score", label: __("Accounting / Hard Score"), fieldtype: "Int", read_only: 1 },
+							{ fieldname: "risk_level", label: __("Risk"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "accounting_evidence", label: __("Accounting Evidence"), fieldtype: "Small Text", read_only: 1 },
+							{ fieldname: "fuzzy_review_evidence", label: __("Supplemental Fuzzy Evidence"), fieldtype: "Small Text", read_only: 1 },
+							{ fieldname: "decision_section", fieldtype: "Section Break", label: __("Review Decision") },
+							{ fieldname: "decision_status", label: __("Current Status"), fieldtype: "Data", read_only: 1 },
+							{ fieldname: "decision_note", label: __("Decision Note"), fieldtype: "Small Text", read_only: !canDecide },
+							{ fieldname: "mark_needs_review", label: __("Keep for Review"), fieldtype: "Button", hidden: !canDecide },
+							{ fieldname: "open_audit_record", label: __("Open Audit Record"), fieldtype: "Button" },
+							{ fieldname: "open_bank_transaction", label: __("Open Bank Transaction"), fieldtype: "Button" },
+							{ fieldname: "open_candidate_document", label: __("Open Candidate Document"), fieldtype: "Button" },
+						],
+						primary_action_label: canDecide ? __("Confirm Match") : __("Close"),
+						primary_action: async (values) => {
+							if (!canDecide) {
+								dialog.hide();
+								return;
+							}
+							await applyReviewDecision(
+								"retailedge.api.confirm_bank_transaction_match",
+								matchName,
+								values.decision_note,
+								dialog,
+								__("Match confirmed. Reconciliation is still required."),
+							);
+						},
+						secondary_action_label: canDecide ? __("Reject Match") : null,
+						secondary_action: canDecide
+							? async () => {
+									await applyReviewDecision(
+										"retailedge.api.reject_bank_transaction_match",
+										matchName,
+										dialog.get_value("decision_note"),
+										dialog,
+										__("Match rejected."),
+									);
+								}
+							: null,
+					});
+
+					const category = candidateSnapshot?.transaction_category || candidateSnapshot?.candidate_category || "";
+					dialog.set_values({
+						bank_direction: doc.bank_direction || candidateSnapshot?.direction || "",
+						bank_amount: doc.bank_amount,
+						transaction_date: doc.transaction_date,
+						bank_account: doc.bank_account,
+						bank_reference: doc.bank_reference,
+						bank_narration: doc.bank_narration,
+						transaction_category: category,
+						suggested_document_type: doc.suggested_document_type,
+						suggested_document: doc.suggested_document,
+						candidate_amount: doc.candidate_amount,
+						amount_difference: doc.amount_difference,
+						party: doc.customer || doc.party || candidateSnapshot?.party || "",
+						payment_event_source: doc.payment_event_source || candidateSnapshot?.payment_event_source || "",
+						payment_mode: doc.payment_mode || candidateSnapshot?.payment_mode || "",
+						match_confidence: doc.match_confidence,
+						match_score: doc.match_score,
+						risk_level: doc.risk_level,
+						accounting_evidence: doc.match_reason_summary || doc.match_reason || candidateReason(candidateSnapshot || {}),
+						fuzzy_review_evidence: candidateSnapshot ? fuzzyReason(candidateSnapshot) : __("Fuzzy evidence is supplemental only. Open the audit record for persisted detail."),
+						decision_status: doc.decision_status || "Suggested",
+						decision_note: doc.decision_note || "",
+					});
+
+					dialog.fields_dict.mark_needs_review.df.click = async () => {
+						await applyReviewDecision(
+							"retailedge.api.mark_bank_transaction_match_needs_review",
+							matchName,
+							dialog.get_value("decision_note"),
+							dialog,
+							__("Match kept for review."),
+						);
+					};
+					dialog.fields_dict.open_audit_record.df.click = () => {
+						dialog.hide();
+						routeToDocument("RetailEdge Bank Transaction Match", matchName);
+					};
+					dialog.fields_dict.open_bank_transaction.df.click = () => routeToDocument("Bank Transaction", doc.bank_transaction);
+					dialog.fields_dict.open_candidate_document.df.click = () => routeToDocument(doc.suggested_document_type, doc.suggested_document);
 					dialog.show();
 				}
 
