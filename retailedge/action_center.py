@@ -12,6 +12,9 @@ from retailedge.expense_register import get_expense_register
 from retailedge.owner_dashboard import get_owner_dashboard_data
 
 DEFAULT_PAGE_SIZE = 1
+FOLLOW_UP_STATUSES = {"All", "Open", "Acknowledged", "Snoozed"}
+ASSIGNMENT_SCOPES = {"all", "mine"}
+DUE_SCOPES = {"all", "due"}
 
 
 @frappe.whitelist()
@@ -28,6 +31,9 @@ def get_action_center_context() -> dict[str, Any]:
 			"branch": branch,
 			"from_date": str(get_first_day(today())),
 			"to_date": today(),
+			"follow_up_status": "All",
+			"assignment_scope": "all",
+			"due_scope": "all",
 		},
 		"tenant_name": company,
 		"branch_name": branch,
@@ -44,6 +50,9 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 	branch = str(filters.get("branch") or "").strip()
 	from_date = str(filters.get("from_date") or get_first_day(today()))
 	to_date = str(filters.get("to_date") or today())
+	follow_up_status = _choice(filters.get("follow_up_status"), FOLLOW_UP_STATUSES, "All")
+	assignment_scope = _choice(filters.get("assignment_scope"), ASSIGNMENT_SCOPES, "all")
+	due_scope = _choice(filters.get("due_scope"), DUE_SCOPES, "all")
 	common = {"company": company, "branch": branch, "from_date": from_date, "to_date": to_date}
 
 	items: list[dict[str, Any]] = []
@@ -112,10 +121,21 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 				)
 			)
 
-	items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
+	all_items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
+	items = _apply_follow_up_filters(
+		all_items,
+		follow_up_status=follow_up_status,
+		assignment_scope=assignment_scope,
+		due_scope=due_scope,
+	)
 	return {
 		"title": _("Action Centre"),
-		"filters": common,
+		"filters": {
+			**common,
+			"follow_up_status": follow_up_status,
+			"assignment_scope": assignment_scope,
+			"due_scope": due_scope,
+		},
 		"summary": _summary(items),
 		"items": items,
 		"sources": {key: {k: v for k, v in value.items() if k != "payload"} for key, value in sources.items()},
@@ -125,6 +145,8 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			"resolution_model": "drill_through_to_existing_workflow_or_report",
 			"accounting_truth": "existing ERPNext/RetailEdge documents and reporting engines",
 			"generated_for": frappe.session.user,
+			"unfiltered_action_count": len(all_items),
+			"visible_action_count": len(items),
 		},
 	}
 
@@ -180,12 +202,38 @@ def _dedupe_and_sort(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	return result
 
 
+def _apply_follow_up_filters(
+	items: list[dict[str, Any]],
+	*,
+	follow_up_status: str,
+	assignment_scope: str,
+	due_scope: str,
+) -> list[dict[str, Any]]:
+	result = []
+	for item in items:
+		state = item.get("follow_up") or {}
+		if follow_up_status != "All" and state.get("effective_status", "Open") != follow_up_status:
+			continue
+		if assignment_scope == "mine" and state.get("assigned_to") != frappe.session.user:
+			continue
+		if due_scope == "due" and not state.get("is_due"):
+			continue
+		result.append(item)
+	return result
+
+
 def _summary(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	return [
 		{"label": _("Critical"), "value": len([row for row in items if row.get("severity") == "danger"]), "datatype": "Int"},
 		{"label": _("Needs Attention"), "value": len([row for row in items if row.get("severity") == "warning"]), "datatype": "Int"},
+		{"label": _("Due Follow-ups"), "value": len([row for row in items if (row.get("follow_up") or {}).get("is_due")]), "datatype": "Int"},
 		{"label": _("Open Actions"), "value": len(items), "datatype": "Int"},
 	]
+
+
+def _choice(value: Any, allowed: set[str], default: str) -> str:
+	candidate = str(value or default).strip()
+	return candidate if candidate in allowed else default
 
 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
