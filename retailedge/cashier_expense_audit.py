@@ -55,7 +55,7 @@ def should_include_cashier_expense_in_daily_audit(expense, settings=None):
 	return {"include": True, "reason": f"{status} expenses are included in Daily Audit readiness.", "status": status}
 
 
-def get_cashier_expenses_for_daily_audit(filters=None):
+def get_cashier_expenses_for_daily_audit(filters=None, limit_page_length=0):
 	filters = frappe.parse_json(filters) if filters else {}
 	settings = get_cashier_expense_daily_audit_settings()
 	query_filters = _build_daily_audit_filters(filters, settings)
@@ -88,7 +88,7 @@ def get_cashier_expenses_for_daily_audit(filters=None):
 			"description",
 			"docstatus",
 		],
-		limit_page_length=0,
+		limit_page_length=limit_page_length,
 		order_by="expense_date asc, creation asc",
 	)
 	for row in rows:

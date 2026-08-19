@@ -7,6 +7,7 @@
 		:tenantName="context.company"
 		:branchName="context.branch"
 		:userName="context.user_name"
+		:hideNativeSidebar="true"
 		@navigate="navigateFromShell"
 	>
 		<EdgePageLayout>
@@ -19,17 +20,14 @@
 			</template>
 
 			<div v-if="loading" class="hub-state">
-				<EdgeLoadingState
-					message="Loading your permitted RetailEdge tools..."
-					:skeleton="true"
-				/>
+				<EdgeLoadingState message="Loading your permitted RetailEdge tools..." :skeleton="true" />
 			</div>
 
 			<div v-else-if="error" class="hub-state">
 				<EdgeErrorState
 					title="Business Hub unavailable"
 					:message="error"
-					@retry="refreshContext"
+					@retry="refreshContext({ force: true })"
 				/>
 			</div>
 
@@ -39,15 +37,25 @@
 						<p class="hub-eyebrow">Retail operations simplified</p>
 						<h2>{{ greeting }}</h2>
 						<p>
-							Use the actions below for current native transactions. Guided
-							RetailEdge entries will replace technical ERPNext fields progressively
-							without creating duplicate accounting documents.
+							Use the business menu for daily operations. The Create action shows only business
+							entries your current permissions allow, while guided flows keep ERPNext documents
+							and accounting truth underneath.
 						</p>
 					</div>
-					<div class="hub-context">
-						<span v-if="context.company">{{ context.company }}</span>
-						<span v-if="context.branch">{{ context.branch }}</span>
-						<span>Product switching suspended</span>
+					<div class="hub-banner-side">
+						<div class="hub-context">
+							<span v-if="context.company">{{ context.company }}</span>
+							<span v-if="context.branch">{{ context.branch }}</span>
+							<span>Product switching suspended</span>
+						</div>
+						<button
+							v-if="quickActions.length"
+							type="button"
+							class="edge-button edge-button--primary hub-create-button"
+							@click="openCreatePicker"
+						>
+							+ Create
+						</button>
 					</div>
 				</section>
 
@@ -65,92 +73,177 @@
 							class="experience-card"
 						>
 							<div class="experience-card-top">
-								<span class="experience-icon">{{
-									iconText(experience.icon)
-								}}</span>
-								<EdgeStatusBadge
-									:label="experience.status"
-									:status="experience.status"
-								/>
+								<span class="experience-icon">{{ iconText(experience.icon) }}</span>
+								<EdgeStatusBadge :label="experience.status" :status="experience.status" />
 							</div>
 							<h4>{{ experience.label }}</h4>
 							<p>{{ experience.description }}</p>
 						</article>
 					</div>
 				</section>
-
-				<section>
-					<div class="section-heading">
-						<div>
-							<p class="section-kicker">Act</p>
-							<h3>Quick business actions</h3>
-						</div>
-						<p>Every action creates a standard ERPNext or RetailEdge document.</p>
-					</div>
-					<div v-if="quickActions.length" class="quick-action-grid">
-						<button
-							v-for="action in quickActions"
-							:key="action.key"
-							type="button"
-							class="quick-action-card"
-							@click="runQuickAction(action)"
-						>
-							<span class="quick-action-icon">{{ iconText(action.icon) }}</span>
-							<span class="quick-action-copy">
-								<strong>{{ action.label }}</strong>
-								<small>{{ action.description }}</small>
-							</span>
-							<span class="quick-action-mode">{{
-								actionModeLabel(action.mode)
-							}}</span>
-						</button>
-					</div>
-					<EdgeEmptyState
-						v-else
-						title="No permitted quick actions"
-						description="Your current roles do not allow creation of the configured business documents."
-						icon="lock"
-					/>
-				</section>
-
-				<section>
-					<div class="section-heading">
-						<div>
-							<p class="section-kicker">Navigate</p>
-							<h3>Professional business menu</h3>
-						</div>
-						<p>Only existing and permitted destinations are shown.</p>
-					</div>
-					<div class="navigation-grid">
-						<article
-							v-for="group in navigationGroups"
-							:key="group.key"
-							class="navigation-card"
-						>
-							<h4>{{ group.label }}</h4>
-							<button
-								v-for="item in group.items"
-								:key="`${group.key}-${item.target_type}-${item.target}`"
-								type="button"
-								class="navigation-link"
-								@click="openTarget(item)"
-							>
-								<span>{{ item.label }}</span>
-								<span aria-hidden="true">→</span>
-							</button>
-						</article>
-					</div>
-				</section>
 			</div>
+
+			<EdgeModal
+				:open="createPickerOpen"
+				title="Create"
+				subtitle="Choose the business entry you want to record. Only entries you can create are shown."
+				size="md"
+				@close="closeCreatePicker"
+			>
+				<div v-if="quickActions.length" class="create-picker-list">
+					<button
+						v-for="action in quickActions"
+						:key="action.key"
+						type="button"
+						class="create-picker-item"
+						@click="runQuickAction(action)"
+					>
+						<span class="create-picker-icon">{{ iconText(action.icon) }}</span>
+						<span class="create-picker-copy">
+							<strong>{{ action.label }}</strong>
+							<small>{{ action.description }}</small>
+						</span>
+						<span class="create-picker-mode">{{ actionModeLabel(action) }}</span>
+					</button>
+				</div>
+				<EdgeEmptyState
+					v-else
+					title="No permitted entries"
+					description="Your current roles do not allow creation of the configured business documents."
+					icon="lock"
+				/>
+				<template #footer>
+					<button type="button" class="edge-button" @click="closeCreatePicker">Cancel</button>
+				</template>
+			</EdgeModal>
+
+			<SimpleSalesInvoiceDialog
+				:open="simpleSalesInvoiceOpen"
+				@close="closeSimpleSalesInvoice"
+				@saved="handleSimpleSalesInvoiceSaved"
+				@open-native="openNativeSalesInvoice"
+			/>
+
+			<SimplePaymentDialog
+				:open="simplePaymentOpen"
+				:intent="simplePaymentIntent"
+				@close="closeSimplePayment"
+				@saved="handleSimplePaymentSaved"
+				@open-native="openNativePayment"
+			/>
+
+			<SimpleCashDepositDialog
+				:open="simpleCashDepositOpen"
+				@close="closeSimpleCashDeposit"
+				@saved="handleSimpleCashDepositSaved"
+				@open-native="openNativeCashDeposit"
+			/>
+
+			<SimpleCashTransferDialog
+				:open="simpleCashTransferOpen"
+				@close="closeSimpleCashTransfer"
+				@saved="handleSimpleCashTransferSaved"
+				@open-native="openNativeCashTransfer"
+			/>
+
+			<SimplePurchaseInvoiceDialog
+				:open="simplePurchaseInvoiceOpen"
+				@close="closeSimplePurchaseInvoice"
+				@saved="handleSimplePurchaseInvoiceSaved"
+				@open-native="openNativePurchaseInvoice"
+			/>
+
+			<SimpleCashierExpenseDialog
+				:open="simpleCashierExpenseOpen"
+				@close="closeSimpleCashierExpense"
+				@saved="handleSimpleCashierExpenseSaved"
+				@open-native="openNativeCashierExpense"
+			/>
+
+			<SimpleStockTransferDialog
+				:open="simpleStockTransferOpen"
+				@close="closeSimpleStockTransfer"
+				@saved="handleSimpleStockTransferSaved"
+				@open-native="openNativeStockTransfer"
+			/>
+
+			<SimpleStockAdjustmentDialog
+				:open="simpleStockAdjustmentOpen"
+				@close="closeSimpleStockAdjustment"
+				@saved="handleSimpleStockAdjustmentSaved"
+				@open-native="openNativeStockAdjustment"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
+import SimpleCashDepositDialog from "./SimpleCashDepositDialog.vue";
+import SimpleCashTransferDialog from "./SimpleCashTransferDialog.vue";
+import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
+import SimplePaymentDialog from "./SimplePaymentDialog.vue";
+import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
+import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
+import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
+import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
+
+const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
+const CONTEXT_CACHE_TTL_MS = 30_000;
+const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
+const GUIDED_CASH_DEPOSIT_ACTION = "deposit-cash";
+const GUIDED_CASH_TRANSFER_ACTION = "cash-transfer";
+const GUIDED_PURCHASE_ACTION = "record-purchase";
+const GUIDED_EXPENSE_ACTION = "record-expense";
+const GUIDED_STOCK_TRANSFER_ACTION = "transfer-stock";
+const GUIDED_STOCK_ADJUSTMENT_ACTION = "adjust-stock";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
 		: {};
+
+function readSharedContext() {
+	const cache = window.__retailedgeBusinessHubContextCache;
+	if (!cache || !cache.data || !cache.fetchedAt) return null;
+	if (Date.now() - cache.fetchedAt > CONTEXT_CACHE_TTL_MS) return null;
+	return cache.data;
+}
+
+function cacheSharedContext(data) {
+	if (typeof window.retailedgeCacheBusinessHubContext === "function") {
+		return window.retailedgeCacheBusinessHubContext(data);
+	}
+	const normalized = data || {};
+	window.__retailedgeBusinessHubContextCache = { data: normalized, fetchedAt: Date.now() };
+	return normalized;
+}
+
+function fetchSharedContext({ force = false } = {}) {
+	if (typeof window.retailedgeGetBusinessHubContext === "function") {
+		return window.retailedgeGetBusinessHubContext({ force });
+	}
+	if (!force) {
+		const cached = readSharedContext();
+		if (cached) return Promise.resolve(cached);
+	}
+	if (window.__retailedgeBusinessHubContextRequest) {
+		return window.__retailedgeBusinessHubContextRequest;
+	}
+	const request = new Promise((resolve, reject) => {
+		frappe.call({
+			method: CONTEXT_METHOD,
+			callback: (response) => resolve(cacheSharedContext(response.message || {})),
+			error: (error) => reject(error),
+		});
+	});
+	window.__retailedgeBusinessHubContextRequest = request;
+	request.finally(() => {
+		if (window.__retailedgeBusinessHubContextRequest === request) {
+			window.__retailedgeBusinessHubContextRequest = null;
+		}
+	});
+	return request;
+}
 
 export default {
 	name: "RetailEdgeBusinessHub",
@@ -162,20 +255,34 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
+		EdgeModal: runtimeComponents.EdgeModal,
+		SimpleCashDepositDialog,
+		SimpleCashTransferDialog,
+		SimpleCashierExpenseDialog,
+		SimplePaymentDialog,
+		SimplePurchaseInvoiceDialog,
+		SimpleSalesInvoiceDialog,
+		SimpleStockAdjustmentDialog,
+		SimpleStockTransferDialog,
 	},
 	data() {
 		return {
 			loading: true,
 			error: "",
+			createPickerOpen: false,
+			simpleSalesInvoiceOpen: false,
+			simplePaymentOpen: false,
+			simplePaymentIntent: "",
+			simpleCashDepositOpen: false,
+			simpleCashTransferOpen: false,
+			simplePurchaseInvoiceOpen: false,
+			simpleCashierExpenseOpen: false,
+			simpleStockTransferOpen: false,
+			simpleStockAdjustmentOpen: false,
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
-			context: {
-				user: "",
-				user_name: "",
-				company: "",
-				branch: "",
-			},
+			context: { user: "", user_name: "", company: "", branch: "" },
 			featureFlags: {},
 		};
 	},
@@ -187,49 +294,215 @@ export default {
 		},
 		shellMenuItems() {
 			return this.navigationGroups
-				.flatMap((group) => group.items.slice(0, 2))
-				.slice(0, 8)
-				.map((item) => ({
-					label: item.label,
-					route: this.routeForTarget(item),
-					icon: "•",
-					source: item,
-				}));
+				.map((group) => ({
+					key: group.key,
+					label: group.label,
+					icon: group.icon || "layers",
+					defaultCollapsed: group.key !== "home",
+					items: (group.items || [])
+						.map((item) => ({
+							label: item.label,
+							description: item.description || "",
+							route: this.routeForTarget(item),
+							icon: item.icon || "list",
+							source: item,
+						}))
+						.filter((item) => item.route),
+				}))
+				.filter((group) => group.items.length);
 		},
 	},
 	mounted() {
 		this.refreshContext();
 	},
 	methods: {
-		refreshContext() {
+		applyContext(data) {
+			this.programmeExperiences = data.programme_experiences || [];
+			this.navigationGroups = data.navigation_groups || [];
+			this.quickActions = data.quick_actions || [];
+			this.context = { ...this.context, ...(data.context || {}) };
+			this.featureFlags = data.feature_flags || {};
+			if (!this.quickActions.length) this.createPickerOpen = false;
+		},
+		refreshContext({ force = false } = {}) {
 			this.loading = true;
 			this.error = "";
-			return frappe.call({
-				method: "retailedge.edgesuite_ui.get_retailedge_business_hub_context",
-				callback: (response) => {
-					const data = response.message || {};
-					this.programmeExperiences = data.programme_experiences || [];
-					this.navigationGroups = data.navigation_groups || [];
-					this.quickActions = data.quick_actions || [];
-					this.context = { ...this.context, ...(data.context || {}) };
-					this.featureFlags = data.feature_flags || {};
+			return fetchSharedContext({ force })
+				.then((data) => this.applyContext(data || {}))
+				.catch((error) => {
+					this.error = error?.message || "Unable to load RetailEdge Business Hub context.";
+				})
+				.finally(() => {
 					this.loading = false;
-				},
-				error: (error) => {
-					this.error =
-						error && error.message
-							? error.message
-							: "Unable to load RetailEdge Business Hub context.";
-					this.loading = false;
-				},
-			});
+				});
+		},
+		openCreatePicker() {
+			if (!this.quickActions.length) return;
+			this.createPickerOpen = true;
+		},
+		closeCreatePicker() {
+			this.createPickerOpen = false;
 		},
 		runQuickAction(action) {
 			if (!action || !action.doctype) return;
+			this.closeCreatePicker();
+			if (action.key === "new-sales-invoice") {
+				this.simpleSalesInvoiceOpen = true;
+				return;
+			}
+			if (GUIDED_PAYMENT_ACTIONS.has(action.key)) {
+				this.simplePaymentIntent = action.key;
+				this.simplePaymentOpen = true;
+				return;
+			}
+			if (action.key === GUIDED_CASH_DEPOSIT_ACTION) {
+				this.simpleCashDepositOpen = true;
+				return;
+			}
+			if (action.key === GUIDED_CASH_TRANSFER_ACTION) {
+				this.simpleCashTransferOpen = true;
+				return;
+			}
+			if (action.key === GUIDED_PURCHASE_ACTION) {
+				this.simplePurchaseInvoiceOpen = true;
+				return;
+			}
+			if (action.key === GUIDED_EXPENSE_ACTION) {
+				this.simpleCashierExpenseOpen = true;
+				return;
+			}
+			if (action.key === GUIDED_STOCK_TRANSFER_ACTION) {
+				this.simpleStockTransferOpen = true;
+				return;
+			}
+			if (action.key === GUIDED_STOCK_ADJUSTMENT_ACTION) {
+				this.simpleStockAdjustmentOpen = true;
+				return;
+			}
 			frappe.new_doc(action.doctype);
 		},
+		notifyGuidedDraftSaved(result, fallbackDoctype, label) {
+			if (!result?.name) return;
+			const doctype = result.doctype || fallbackDoctype;
+			frappe.set_route("Form", doctype, result.name);
+			frappe.call({
+				method: WORKFLOW_READINESS_METHOD,
+				args: { doctype, name: result.name },
+				callback: (response) => {
+					const readiness = response.message || {};
+					if (!readiness.enabled) {
+						frappe.show_alert?.({ message: `${label} ${result.name} saved as Draft`, indicator: "green" });
+						return;
+					}
+					const state = readiness.current_state ? ` Current state: ${readiness.current_state}.` : "";
+					const actions = (readiness.available_actions || []).map((item) => item.action).filter(Boolean);
+					const next = actions.length
+						? ` Available workflow action${actions.length === 1 ? "" : "s"}: ${actions.join(", ")}.`
+						: " No workflow action is currently available to you; another authorised user may be required.";
+					frappe.show_alert?.({
+						message: `${label} ${result.name} saved as Draft. Workflow approval is still required.${state}${next}`,
+						indicator: "orange",
+					}, 10);
+				},
+				error: () => {
+					frappe.show_alert?.({ message: `${label} ${result.name} saved as Draft`, indicator: "green" });
+				},
+			});
+		},
+		closeSimpleSalesInvoice() {
+			this.simpleSalesInvoiceOpen = false;
+		},
+		handleSimpleSalesInvoiceSaved(result) {
+			this.simpleSalesInvoiceOpen = false;
+			this.notifyGuidedDraftSaved(result, "Sales Invoice", "Sales Invoice");
+		},
+		openNativeSalesInvoice(doctype = "Sales Invoice") {
+			this.simpleSalesInvoiceOpen = false;
+			frappe.new_doc(doctype);
+		},
+		closeSimplePayment() {
+			this.simplePaymentOpen = false;
+		},
+		handleSimplePaymentSaved(result) {
+			this.simplePaymentOpen = false;
+			this.simplePaymentIntent = "";
+			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
+		},
+		openNativePayment(doctype = "Payment Entry") {
+			this.simplePaymentOpen = false;
+			this.simplePaymentIntent = "";
+			frappe.new_doc(doctype);
+		},
+		closeSimpleCashDeposit() {
+			this.simpleCashDepositOpen = false;
+		},
+		handleSimpleCashDepositSaved(result) {
+			this.simpleCashDepositOpen = false;
+			this.notifyGuidedDraftSaved(result, "Payment Entry", "Cash Deposit");
+		},
+		openNativeCashDeposit(doctype = "Payment Entry") {
+			this.simpleCashDepositOpen = false;
+			frappe.new_doc(doctype, { payment_type: "Internal Transfer" });
+		},
+		closeSimpleCashTransfer() {
+			this.simpleCashTransferOpen = false;
+		},
+		handleSimpleCashTransferSaved(result) {
+			this.simpleCashTransferOpen = false;
+			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
+		},
+		openNativeCashTransfer(doctype = "Payment Entry") {
+			this.simpleCashTransferOpen = false;
+			frappe.new_doc(doctype, { payment_type: "Internal Transfer" });
+		},
+		closeSimplePurchaseInvoice() {
+			this.simplePurchaseInvoiceOpen = false;
+		},
+		handleSimplePurchaseInvoiceSaved(result) {
+			this.simplePurchaseInvoiceOpen = false;
+			this.notifyGuidedDraftSaved(result, "Purchase Invoice", "Purchase Invoice");
+		},
+		openNativePurchaseInvoice(doctype = "Purchase Invoice") {
+			this.simplePurchaseInvoiceOpen = false;
+			frappe.new_doc(doctype);
+		},
+		closeSimpleCashierExpense() {
+			this.simpleCashierExpenseOpen = false;
+		},
+		handleSimpleCashierExpenseSaved(result) {
+			this.simpleCashierExpenseOpen = false;
+			this.notifyGuidedDraftSaved(result, "RetailEdge Cashier Expense", "Cashier Expense");
+		},
+		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
+			this.simpleCashierExpenseOpen = false;
+			frappe.new_doc(doctype);
+		},
+		closeSimpleStockTransfer() {
+			this.simpleStockTransferOpen = false;
+		},
+		handleSimpleStockTransferSaved(result) {
+			this.simpleStockTransferOpen = false;
+			this.notifyGuidedDraftSaved(result, "Stock Entry", "Stock Transfer");
+		},
+		openNativeStockTransfer(doctype = "Stock Entry") {
+			this.simpleStockTransferOpen = false;
+			frappe.new_doc(doctype, { stock_entry_type: "Material Transfer" });
+		},
+		closeSimpleStockAdjustment() {
+			this.simpleStockAdjustmentOpen = false;
+		},
+		handleSimpleStockAdjustmentSaved(result) {
+			this.simpleStockAdjustmentOpen = false;
+			this.notifyGuidedDraftSaved(result, "Stock Reconciliation", "Stock Reconciliation");
+		},
+		openNativeStockAdjustment(doctype = "Stock Reconciliation") {
+			this.simpleStockAdjustmentOpen = false;
+			frappe.new_doc(doctype, { purpose: "Stock Reconciliation" });
+		},
 		navigateFromShell(route) {
-			const item = this.shellMenuItems.find((entry) => entry.route === route);
+			const item = this.shellMenuItems
+				.flatMap((group) => group.items || [])
+				.find((entry) => entry.route === route);
 			if (item && item.source) {
 				this.openTarget(item.source);
 				return;
@@ -250,21 +523,18 @@ export default {
 				frappe.set_route("query-report", item.target);
 				return;
 			}
-			if (item.target_type === "Page") {
-				frappe.set_route(item.target);
-			}
+			if (item.target_type === "Page") frappe.set_route(item.target);
 		},
 		routeForTarget(item) {
 			if (!item) return "";
 			if (item.target_type === "URL") return item.target;
 			if (item.target_type === "DocType") return `/app/${frappe.router.slug(item.target)}`;
-			if (item.target_type === "Report")
-				return `/app/query-report/${encodeURIComponent(item.target)}`;
+			if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
 			if (item.target_type === "Page") return `/app/${item.target}`;
 			return "";
 		},
-		actionModeLabel(mode) {
-			return mode === "available" ? "RetailEdge flow" : "Native form now";
+		actionModeLabel(action) {
+			return action?.mode === "available" ? "RetailEdge entry" : "Full form";
 		},
 		iconText(icon) {
 			const icons = {
@@ -321,13 +591,25 @@ export default {
 	font-weight: 700;
 	color: var(--edge-primary, #2563eb);
 }
+.hub-banner-side,
 .hub-context {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-end;
+}
+.hub-banner-side {
+	justify-content: space-between;
+	gap: 18px;
+	min-width: 180px;
+}
+.hub-context {
 	gap: 6px;
 	font-size: 0.82rem;
 	color: var(--edge-text-muted, #667085);
+}
+.hub-create-button {
+	min-width: 120px;
+	justify-content: center;
 }
 .section-heading {
 	display: flex;
@@ -339,36 +621,16 @@ export default {
 .section-heading h3 {
 	margin: 2px 0 0;
 }
-.section-heading > p {
-	margin: 0;
-	color: var(--edge-text-muted, #667085);
-	font-size: 0.88rem;
-}
-.experience-grid,
-.quick-action-grid,
-.navigation-grid {
+.experience-grid {
 	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 14px;
 }
-.experience-grid {
-	grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-.quick-action-grid {
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.navigation-grid {
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.experience-card,
-.navigation-card,
-.quick-action-card {
+.experience-card {
+	padding: 18px;
 	border: 1px solid var(--edge-border, #dfe3e8);
 	border-radius: 12px;
 	background: var(--edge-surface, #ffffff);
-}
-.experience-card,
-.navigation-card {
-	padding: 18px;
 }
 .experience-card-top {
 	display: flex;
@@ -376,8 +638,7 @@ export default {
 	justify-content: space-between;
 	gap: 8px;
 }
-.experience-card h4,
-.navigation-card h4 {
+.experience-card h4 {
 	margin: 14px 0 8px;
 }
 .experience-card p {
@@ -387,62 +648,49 @@ export default {
 	line-height: 1.5;
 }
 .experience-icon,
-.quick-action-icon {
+.create-picker-icon {
 	font-size: 1.3rem;
 }
-.quick-action-card {
+.create-picker-list {
 	display: grid;
-	grid-template-columns: auto 1fr auto;
+	gap: 8px;
+}
+.create-picker-item {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
 	gap: 12px;
-	padding: 16px;
+	width: 100%;
+	padding: 13px 14px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 10px;
+	background: var(--edge-surface, #ffffff);
 	text-align: left;
 	cursor: pointer;
 }
-.quick-action-card:hover,
-.navigation-link:hover {
+.create-picker-item:hover,
+.create-picker-item:focus-visible {
 	border-color: var(--edge-primary, #2563eb);
 }
-.quick-action-copy {
+.create-picker-copy {
 	display: grid;
-	gap: 4px;
+	gap: 3px;
+	min-width: 0;
 }
-.quick-action-copy small {
+.create-picker-copy small,
+.create-picker-mode {
 	color: var(--edge-text-muted, #667085);
+}
+.create-picker-copy small {
 	line-height: 1.35;
 }
-.quick-action-mode {
+.create-picker-mode {
 	font-size: 0.72rem;
-	color: var(--edge-text-muted, #667085);
 	white-space: nowrap;
-}
-.navigation-card {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-.navigation-card h4 {
-	margin-top: 0;
-}
-.navigation-link {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 9px 0;
-	border: 0;
-	border-bottom: 1px solid var(--edge-border, #eef0f2);
-	background: transparent;
-	text-align: left;
-	cursor: pointer;
 }
 @media (max-width: 1200px) {
 	.experience-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-	.quick-action-grid,
-	.navigation-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 @media (max-width: 720px) {
@@ -451,18 +699,20 @@ export default {
 		align-items: flex-start;
 		flex-direction: column;
 	}
+	.hub-banner-side,
 	.hub-context {
 		align-items: flex-start;
 	}
-	.experience-grid,
-	.quick-action-grid,
-	.navigation-grid {
+	.hub-banner-side {
+		width: 100%;
+	}
+	.experience-grid {
 		grid-template-columns: 1fr;
 	}
-	.quick-action-card {
-		grid-template-columns: auto 1fr;
+	.create-picker-item {
+		grid-template-columns: auto minmax(0, 1fr);
 	}
-	.quick-action-mode {
+	.create-picker-mode {
 		grid-column: 2;
 	}
 }
