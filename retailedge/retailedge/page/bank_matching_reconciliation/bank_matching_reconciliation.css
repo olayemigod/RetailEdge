@@ -1,5 +1,12 @@
 .retailedge-bank-table-wrap {
 	overflow-x: auto;
+	border-radius: 12px;
+}
+
+.retailedge-bank-table {
+	width: 100%;
+	min-width: 1040px;
+	table-layout: fixed;
 }
 
 .retailedge-bank-table th {
@@ -9,6 +16,64 @@
 .retailedge-bank-table td,
 .retailedge-bank-table th {
 	vertical-align: middle;
+	padding-left: 12px;
+	padding-right: 12px;
+}
+
+.retailedge-col-date {
+	width: 100px;
+}
+
+.retailedge-col-transaction {
+	width: 320px;
+}
+
+.retailedge-col-direction {
+	width: 90px;
+}
+
+.retailedge-col-amount {
+	width: 140px;
+}
+
+.retailedge-col-candidate {
+	width: 220px;
+}
+
+.retailedge-col-status {
+	width: 150px;
+}
+
+.retailedge-col-action {
+	width: 130px;
+}
+
+.retailedge-bank-transaction-cell,
+.retailedge-bank-candidate-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.retailedge-bank-narration {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	max-width: 100%;
+	line-height: 1.35;
+	text-decoration: none;
+	font-weight: 600;
+}
+
+.retailedge-bank-meta {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
 }
 
 .edge-link-button {
@@ -20,4 +85,18 @@
 	text-decoration: underline;
 	cursor: pointer;
 	padding: 0;
+}
+
+@media (max-width: 992px) {
+	.retailedge-bank-table {
+		min-width: 920px;
+	}
+
+	.retailedge-col-transaction {
+		width: 260px;
+	}
+
+	.retailedge-col-candidate {
+		width: 190px;
+	}
 }
