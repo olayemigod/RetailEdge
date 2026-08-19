@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_first_day, today
 
+from retailedge.action_follow_up import decorate_action_items
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.expense_register import get_expense_register
 from retailedge.owner_dashboard import get_owner_dashboard_data
@@ -111,7 +112,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 				)
 			)
 
-	items = _dedupe_and_sort(items)
+	items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
 	return {
 		"title": _("Action Centre"),
 		"filters": common,
@@ -120,6 +121,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 		"sources": {key: {k: v for k, v in value.items() if k != "payload"} for key, value in sources.items()},
 		"metadata": {
 			"read_only": True,
+			"follow_up_state_only": True,
 			"resolution_model": "drill_through_to_existing_workflow_or_report",
 			"accounting_truth": "existing ERPNext/RetailEdge documents and reporting engines",
 			"generated_for": frappe.session.user,
