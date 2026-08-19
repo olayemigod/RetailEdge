@@ -29,6 +29,37 @@ class TestActionFollowUp(unittest.TestCase):
 		self.assertTrue(result[0]["fingerprint"])
 		self.assertNotIn("follow_up", result[0])
 
+	def test_expired_snooze_is_effectively_open_and_due(self):
+		state = action_follow_up.effective_follow_up_state(
+			{"status": "Snoozed", "snoozed_until": "2026-08-19 09:00:00", "follow_up_on": "2026-08-19 08:00:00"},
+			now="2026-08-19 10:00:00",
+		)
+		self.assertEqual(state["status"], "Snoozed")
+		self.assertEqual(state["effective_status"], "Open")
+		self.assertTrue(state["snooze_expired"])
+		self.assertTrue(state["is_due"])
+
+	def test_active_snooze_is_not_due_until_visible_again(self):
+		state = action_follow_up.effective_follow_up_state(
+			{"status": "Snoozed", "snoozed_until": "2026-08-19 12:00:00", "follow_up_on": "2026-08-19 08:00:00"},
+			now="2026-08-19 10:00:00",
+		)
+		self.assertEqual(state["effective_status"], "Snoozed")
+		self.assertFalse(state["snooze_expired"])
+		self.assertFalse(state["is_due"])
+
+	def test_visibility_filters_remove_management_only_filters(self):
+		filters = action_follow_up._visibility_filters(
+			{
+				"company": "Test Company",
+				"branch": "Main",
+				"follow_up_status": "Open",
+				"assignment_scope": "mine",
+				"due_scope": "due",
+			}
+		)
+		self.assertEqual(filters, {"company": "Test Company", "branch": "Main"})
+
 	@patch("retailedge.action_center.get_action_center_data")
 	@patch("retailedge.action_follow_up.frappe.db.exists")
 	def test_update_rejects_non_visible_fingerprint(self, exists, get_actions):
