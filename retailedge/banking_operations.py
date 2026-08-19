@@ -13,6 +13,7 @@ from retailedge.bank_transaction_matching import (
     assert_can_access_bank_transaction_matching,
     normalize_bank_transaction,
 )
+from retailedge.reconciliation_approval import build_reconciliation_approval_state
 from retailedge.reconciliation_bridge import (
     EXECUTION_STATUS_ALREADY_HANDLED,
     EXECUTION_STATUS_EXECUTED,
@@ -35,6 +36,7 @@ STATUS_SUGGESTED = "Suggested Match"
 STATUS_NEEDS_REVIEW = "Needs Review"
 STATUS_MATCH_CONFIRMED = "Match Confirmed"
 STATUS_RECONCILIATION_PENDING = "Reconciliation Pending"
+STATUS_AWAITING_APPROVAL = "Awaiting Approval"
 STATUS_READY_TO_RECONCILE = "Ready to Reconcile"
 STATUS_PAYMENT_EVIDENCE_REQUIRED = "Payment Evidence Required"
 STATUS_EXCEPTION = "Exception"
@@ -160,8 +162,20 @@ def _load_match(match_name: str) -> frappe._dict:
         "bank_transaction",
         "suggested_document_type",
         "suggested_document",
+        "payment_row_index",
+        "payment_account",
+        "resolved_payment_account",
         "decision_status",
         "review_status",
+        "confirmed_by",
+        "confirmed_on",
+        "approval_status",
+        "approval_requested_by",
+        "approval_requested_on",
+        "approved_by",
+        "approved_on",
+        "approval_note",
+        "approval_candidate_identity",
         "match_confidence",
         "match_score",
         "candidate_amount",
@@ -188,10 +202,12 @@ def derive_operational_status(
     match_doc: dict[str, Any] | None,
     preflight: dict[str, Any] | None = None,
     gate: dict[str, Any] | None = None,
+    approval: dict[str, Any] | None = None,
 ) -> str:
     match_doc = frappe._dict(match_doc or {})
     preflight = frappe._dict(preflight or {})
     gate = frappe._dict(gate or {})
+    approval = frappe._dict(approval or {})
 
     decision_status = cstr(match_doc.get("decision_status")).strip()
     execution_status = cstr(match_doc.get("execution_status")).strip()
@@ -223,6 +239,8 @@ def derive_operational_status(
     if readiness_group == READINESS_GROUP_BLOCKED or preflight_status in {"Exception", "Target Ambiguous"}:
         return STATUS_EXCEPTION
     if readiness_group == READINESS_GROUP_READY or preflight_status == "Ready":
+        if approval.get("required") and not approval.get("is_satisfied"):
+            return STATUS_AWAITING_APPROVAL
         return STATUS_READY_TO_RECONCILE
     if gate and gate.get("can_execute") is False:
         return STATUS_RECONCILIATION_PENDING
@@ -237,11 +255,20 @@ def get_bank_match_operational_status(match_name: str, include_gate: bool = True
     bank_transaction = match_doc.get("bank_transaction")
     direction = get_bank_transaction_direction(bank_transaction)
     preflight = get_reconciliation_preflight(match_name)
+    approval = build_reconciliation_approval_state(match_doc)
     gate = check_reconciliation_execution_gate(match_name) if include_gate else frappe._dict()
-    status = derive_operational_status(match_doc, preflight=preflight, gate=gate)
+    status = derive_operational_status(
+        match_doc,
+        preflight=preflight,
+        gate=gate,
+        approval=approval,
+    )
 
     context = frappe._dict(preflight or {})
     context.update(match_doc)
+    recommended_action = preflight.get("recommended_action")
+    if status == STATUS_AWAITING_APPROVAL:
+        recommended_action = approval.get("reason") or "A different authorised user must approve this reconciliation."
     return {
         "match_name": match_name,
         "bank_transaction": bank_transaction,
@@ -252,10 +279,16 @@ def get_bank_match_operational_status(match_name: str, include_gate: bool = True
         "reconciliation_status": preflight.get("status"),
         "reconciliation_readiness": preflight.get("readiness_group")
         or preflight.get("eligibility_status"),
+        "approval_required": bool(approval.get("required")),
+        "approval_status": approval.get("status"),
+        "approval_reason": approval.get("reason"),
+        "approval_can_approve": bool(approval.get("can_approve")),
+        "approved_by": approval.get("approved_by"),
+        "approved_on": approval.get("approved_on"),
         "execution_status": match_doc.get("execution_status"),
         "can_execute": bool(gate.get("can_execute")) if include_gate else None,
         "blocking_reasons": (gate.get("block_reasons") or []) if include_gate else [],
-        "recommended_action": preflight.get("recommended_action"),
+        "recommended_action": recommended_action,
         "erpnext_target_doctype": preflight.get("erpnext_target_doctype"),
         "erpnext_target_name": preflight.get("erpnext_target_name"),
     }
