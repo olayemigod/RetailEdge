@@ -31,12 +31,21 @@ class TestExpenseDashboardShell(unittest.TestCase):
 			text = (APP_ROOT / relative).read_text(encoding="utf-8")
 			self.assertNotIn('"expense-overview"', text)
 
-	def test_dashboard_explains_budget_limit_and_account_permission(self):
+	def test_dashboard_explains_account_permissions_and_budget_source(self):
 		backend = (APP_ROOT / "expense_dashboard.py").read_text(encoding="utf-8")
+		budget = (APP_ROOT / "expense_budget.py").read_text(encoding="utf-8")
+		budget_api = (APP_ROOT / "expense_budget_api.py").read_text(encoding="utf-8")
 		vue = (APP_ROOT / "public/js/expense_dashboard/ExpenseDashboard.vue").read_text(encoding="utf-8")
 		self.assertIn("Budget compliance is not inferred", backend)
 		self.assertIn('frappe.has_permission("Account", "read")', backend)
 		self.assertIn("Payment accounts used to fund expenses", vue)
+		self.assertIn("Budget & Burn Rate", vue)
+		self.assertIn("projected_over_budget", vue)
+		self.assertIn("ambiguous_category_count", vue)
+		self.assertIn("retailedge.expense_budget_api.get_expense_budget_insight", vue)
+		self.assertIn('BUDGET_DOCTYPE = "Budget"', budget)
+		self.assertIn('frappe.has_permission(BUDGET_DOCTYPE, "read")', budget)
+		self.assertIn("get_expense_register_export", budget_api)
 
 
 if __name__ == "__main__":
