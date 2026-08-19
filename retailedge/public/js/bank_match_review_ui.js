@@ -287,7 +287,7 @@
 
 		const info = make("div", "retailedge-review-info-banner");
 		info.appendChild(make("span", "retailedge-review-info", "i"));
-		info.appendChild(make("span", "", __("Matching and approval do not reconcile the bank transaction. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check.")));
+		info.appendChild(make("span", "", __("Matching does not reconcile the bank transaction. Approval also does not reconcile it. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check.")));
 		root.appendChild(info);
 
 		hideOriginalReviewFields(modal);
