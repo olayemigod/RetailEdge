@@ -58,8 +58,19 @@ def _settings_snapshot(settings=None):
 	}
 
 
+def _as_match_dict(match_doc):
+	if not match_doc:
+		return frappe._dict()
+	if isinstance(match_doc, dict):
+		return frappe._dict(match_doc)
+	as_dict = getattr(match_doc, "as_dict", None)
+	if callable(as_dict):
+		return frappe._dict(as_dict())
+	return frappe._dict(match_doc)
+
+
 def _candidate_identity(match_doc):
-	match_doc = frappe._dict(match_doc or {})
+	match_doc = _as_match_dict(match_doc)
 	identity = {
 		"bank_transaction": cstr(match_doc.get("bank_transaction")).strip(),
 		"candidate_doctype": cstr(
@@ -94,7 +105,7 @@ def _has_allowed_role(user, allowed_roles):
 
 
 def build_reconciliation_approval_state(match_doc, user=None, settings=None):
-	match_doc = frappe._dict(match_doc or {})
+	match_doc = _as_match_dict(match_doc)
 	user = user or frappe.session.user
 	snapshot = _settings_snapshot(settings)
 	current_identity = _candidate_identity(match_doc)
