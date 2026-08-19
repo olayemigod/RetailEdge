@@ -56,6 +56,26 @@ class TestActionCenter(unittest.TestCase):
 		self.assertEqual(len(result), 2)
 		self.assertEqual(result[0]["severity"], "danger")
 
+	def test_follow_up_filters_use_effective_status_assignment_and_due_state(self):
+		items = [
+			{"label": "Mine due", "follow_up": {"effective_status": "Open", "assigned_to": "Administrator", "is_due": True}},
+			{"label": "Other due", "follow_up": {"effective_status": "Open", "assigned_to": "other@example.com", "is_due": True}},
+			{"label": "Mine acknowledged", "follow_up": {"effective_status": "Acknowledged", "assigned_to": "Administrator", "is_due": False}},
+			{"label": "Mine snoozed", "follow_up": {"effective_status": "Snoozed", "assigned_to": "Administrator", "is_due": False}},
+		]
+		result = action_center._apply_follow_up_filters(
+			items,
+			follow_up_status="Open",
+			assignment_scope="mine",
+			due_scope="due",
+		)
+		self.assertEqual([row["label"] for row in result], ["Mine due"])
+
+	def test_invalid_management_filter_values_fall_back_safely(self):
+		self.assertEqual(action_center._choice("Resolved", action_center.FOLLOW_UP_STATUSES, "All"), "All")
+		self.assertEqual(action_center._choice("everyone", action_center.ASSIGNMENT_SCOPES, "all"), "all")
+		self.assertEqual(action_center._choice("tomorrow", action_center.DUE_SCOPES, "all"), "all")
+
 	@patch("retailedge.action_center.get_owner_dashboard_data", side_effect=frappe.PermissionError)
 	@patch("retailedge.action_center.get_expense_register", side_effect=frappe.PermissionError)
 	@patch("retailedge.action_center.get_cash_shift_verification", side_effect=frappe.PermissionError)
