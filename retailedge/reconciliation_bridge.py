@@ -28,6 +28,7 @@ from retailedge.invoice_payment_audit import (
 	get_payment_entries_for_sales_invoice,
 	get_sales_invoice_payment_rows,
 )
+from retailedge.reconciliation_approval import build_reconciliation_approval_state
 from retailedge.reconciliation_handoff import (
 	HANDOFF_ALREADY_RECONCILED,
 	HANDOFF_EXCEPTION,
@@ -375,6 +376,13 @@ def _load_match_for_preflight(match_name):
 				"decision_status",
 				"confirmed_by",
 				"confirmed_on",
+				"approval_status",
+				"approval_requested_by",
+				"approval_requested_on",
+				"approved_by",
+				"approved_on",
+				"approval_note",
+				"approval_candidate_identity",
 				"branch",
 				"company",
 				"party",
@@ -1060,7 +1068,7 @@ def _execution_gate_message(status, can_execute, block_reasons):
 	if status == EXECUTION_GATE_PERMISSION_DENIED:
 		return "You do not have an allowed role for reconciliation execution. No execution was performed."
 	if status == EXECUTION_GATE_NEEDS_APPROVAL:
-		return "Second approval is required before reconciliation execution. No execution was performed."
+		return (block_reasons or ["Second approval is required before reconciliation execution. No execution was performed."])[0]
 	return (block_reasons or ["Reconciliation execution gate is blocked. No execution was performed."])[0]
 
 
@@ -1102,7 +1110,16 @@ def check_reconciliation_execution_gate(match_name, user=None, settings=None, dr
 	if block_reasons:
 		return _execution_gate_result(EXECUTION_GATE_BLOCKED, list(dict.fromkeys(block_reasons)), warnings, dry_run_result, settings_snapshot, user)
 	if settings_snapshot["require_second_approval_for_reconciliation_execution"]:
-		return _execution_gate_result(EXECUTION_GATE_NEEDS_APPROVAL, ["Second approval is required before reconciliation execution."], warnings, dry_run_result, settings_snapshot, user)
+		approval = build_reconciliation_approval_state(match_doc, user=user, settings=settings_snapshot)
+		if not approval.get("is_satisfied"):
+			return _execution_gate_result(
+				EXECUTION_GATE_NEEDS_APPROVAL,
+				[approval.get("reason") or "Second approval is required before reconciliation execution."],
+				warnings,
+				dry_run_result,
+				settings_snapshot,
+				user,
+			)
 	return _execution_gate_result(EXECUTION_GATE_ALLOWED, [], warnings, dry_run_result, settings_snapshot, user, can_execute=True)
 
 
