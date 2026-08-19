@@ -138,7 +138,8 @@
 
 .retailedge-review-card,
 .retailedge-review-why,
-.retailedge-review-evidence {
+.retailedge-review-evidence,
+.retailedge-review-approval {
 	border: 1px solid var(--border-color, #e3e8ef);
 	border-radius: 14px;
 	background: var(--card-bg, #fff);
@@ -235,6 +236,11 @@
 	color: #c05a00;
 }
 
+.retailedge-review-badge--danger {
+	background: #fff0f0;
+	color: #c62828;
+}
+
 .retailedge-review-badge--neutral {
 	background: #f1f3f7;
 	color: #475467;
@@ -319,6 +325,23 @@
 	color: #0969da;
 }
 
+.retailedge-review-approval-content {
+	padding: 14px 16px 16px;
+}
+
+.retailedge-review-approval-guidance,
+.retailedge-review-approval-actor {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--text-color, #344054);
+}
+
+.retailedge-review-approval-actor {
+	margin-top: 6px;
+	font-weight: 600;
+}
+
 .retailedge-review-info-banner {
 	display: flex;
 	align-items: center;
@@ -344,6 +367,11 @@
 	margin-bottom: 0;
 }
 
+.retailedge-review-approval-note {
+	grid-column: 1 / -1;
+}
+
+.retailedge-review-approval-actions,
 .retailedge-review-aux-actions {
 	display: flex;
 	align-items: center;
@@ -351,6 +379,12 @@
 	flex-wrap: wrap;
 }
 
+.retailedge-review-approval-actions {
+	grid-column: 1 / -1;
+	justify-content: flex-end;
+}
+
+.retailedge-review-approval-actions .frappe-control,
 .retailedge-review-aux-actions .frappe-control {
 	margin: 0;
 }
@@ -407,6 +441,10 @@
 
 	.retailedge-review-decision-area {
 		grid-template-columns: 1fr;
+	}
+
+	.retailedge-review-approval-actions {
+		justify-content: flex-start;
 	}
 }
 
