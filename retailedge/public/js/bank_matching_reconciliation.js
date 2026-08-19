@@ -127,48 +127,32 @@
 
 				function rowAction(row) {
 					if (row.operational_status === "Ready to Reconcile") {
-						return h(
-							"button",
-							{
-								type: "button",
-								class: "edge-button edge-button--primary",
-								onClick: () => reconcile(row.match_name),
-							},
-							__("Reconcile"),
-						);
+						return h("button", {
+							type: "button",
+							class: "edge-button edge-button--primary",
+							onClick: () => reconcile(row.match_name),
+						}, __("Reconcile"));
 					}
 					if (row.operational_status === "Suggested Match" && row.match_name) {
-						return h(
-							"button",
-							{
-								type: "button",
-								class: "edge-button edge-button--secondary",
-								onClick: () => routeToDocument("RetailEdge Bank Transaction Match", row.match_name),
-							},
-							__("Review Suggestion"),
-						);
+						return h("button", {
+							type: "button",
+							class: "edge-button edge-button--secondary",
+							onClick: () => routeToDocument("RetailEdge Bank Transaction Match", row.match_name),
+						}, __("Review Suggestion"));
 					}
 					if (!row.match_name && state.queue === "To Match") {
-						return h(
-							"button",
-							{
-								type: "button",
-								class: "edge-button edge-button--primary",
-								onClick: () => findCandidates(row.bank_transaction),
-							},
-							__("Find Match"),
-						);
+						return h("button", {
+							type: "button",
+							class: "edge-button edge-button--primary",
+							onClick: () => findCandidates(row.bank_transaction),
+						}, __("Find Match"));
 					}
 					if (row.match_name) {
-						return h(
-							"button",
-							{
-								type: "button",
-								class: "edge-button edge-button--secondary",
-								onClick: () => routeToDocument("RetailEdge Bank Transaction Match", row.match_name),
-							},
-							__("Review"),
-						);
+						return h("button", {
+							type: "button",
+							class: "edge-button edge-button--secondary",
+							onClick: () => routeToDocument("RetailEdge Bank Transaction Match", row.match_name),
+						}, __("Review"));
 					}
 					return null;
 				}
@@ -279,8 +263,39 @@
 					);
 				}
 
-				function headerCell(label) {
-					return h("th", { scope: "col" }, __(label));
+				function headerCell(label, className) {
+					return h("th", { scope: "col", class: className || "" }, __(label));
+				}
+
+				function renderNarration(row) {
+					const narration = row.description || row.reference || row.bank_transaction || "";
+					return h("div", { class: "retailedge-bank-transaction-cell" }, [
+						h("button", {
+							type: "button",
+							class: "edge-link-button retailedge-bank-narration",
+							title: narration,
+							onClick: () => routeToDocument("Bank Transaction", row.bank_transaction),
+						}, narration),
+						h("small", { class: "text-muted retailedge-bank-meta" },
+							[row.bank_account, row.reference, row.transaction_category].filter(Boolean).join(" · "),
+						),
+					]);
+				}
+
+				function renderCandidate(row) {
+					if (!row.suggested_document) return "—";
+					const detail = [
+						row.candidate_amount == null ? null : formatMoney(row.candidate_amount, row.currency),
+						row.amount_difference == null ? null : `${__("Difference")}: ${formatMoney(row.amount_difference, row.currency)}`,
+					].filter(Boolean).join(" · ");
+					return h("div", { class: "retailedge-bank-candidate-cell" }, [
+						h("button", {
+							type: "button",
+							class: "edge-link-button",
+							onClick: () => routeToDocument(row.suggested_document_type, row.suggested_document),
+						}, `${row.suggested_document_type || ""} ${row.suggested_document}`),
+						detail ? h("small", { class: "text-muted retailedge-bank-meta" }, detail) : null,
+					]);
 				}
 
 				function renderTable() {
@@ -288,74 +303,33 @@
 						h("table", { class: "edge-table retailedge-bank-table" }, [
 							h("thead", [
 								h("tr", [
-									headerCell("Date"),
-									headerCell("Bank Account"),
-									headerCell("Narration / Reference"),
-									headerCell("Direction"),
-									headerCell("Category"),
-									headerCell("Bank Amount"),
-									headerCell("Candidate"),
-									headerCell("Candidate Amount"),
-									headerCell("Difference"),
-									headerCell("Status"),
-									headerCell("Action"),
+									headerCell("Date", "retailedge-col-date"),
+									headerCell("Bank Transaction", "retailedge-col-transaction"),
+									headerCell("Direction", "retailedge-col-direction"),
+									headerCell("Bank Amount", "retailedge-col-amount text-right"),
+									headerCell("Candidate", "retailedge-col-candidate"),
+									headerCell("Status", "retailedge-col-status"),
+									headerCell("Action", "retailedge-col-action"),
 								]),
 							]),
 							h(
-							"tbody",
-							state.rows.map((row) =>
-								h("tr", { key: row.match_name || row.bank_transaction }, [
-									h("td", row.transaction_date || ""),
-									h("td", row.bank_account || ""),
-									h("td", [
-										h(
-										"button",
-										{
-											type: "button",
-											class: "edge-link-button",
-											onClick: () => routeToDocument("Bank Transaction", row.bank_transaction),
-										},
-										row.description || row.reference || row.bank_transaction || "",
-									),
-										row.reference && row.description
-											? h("small", { class: "text-muted d-block" }, row.reference)
-											: null,
+								"tbody",
+								state.rows.map((row) =>
+									h("tr", { key: row.match_name || row.bank_transaction }, [
+										h("td", { class: "retailedge-col-date" }, row.transaction_date || ""),
+										h("td", { class: "retailedge-col-transaction" }, [renderNarration(row)]),
+										h("td", { class: "retailedge-col-direction" }, row.direction || ""),
+										h("td", { class: "retailedge-col-amount text-right" }, formatMoney(row.bank_amount, row.currency)),
+										h("td", { class: "retailedge-col-candidate" }, [renderCandidate(row)]),
+										h("td", { class: "retailedge-col-status" }, [
+											h(EdgeStatusBadge, {
+												label: row.operational_status || "",
+												status: row.operational_status || "",
+											}),
+										]),
+										h("td", { class: "retailedge-col-action" }, [rowAction(row)]),
 									]),
-									h("td", row.direction || ""),
-									h("td", row.transaction_category || ""),
-									h("td", { class: "text-right" }, formatMoney(row.bank_amount, row.currency)),
-									h(
-									"td",
-									row.suggested_document
-										? h(
-											"button",
-											{
-												type: "button",
-												class: "edge-link-button",
-												onClick: () => routeToDocument(row.suggested_document_type, row.suggested_document),
-											},
-											`${row.suggested_document_type || ""} ${row.suggested_document}`,
-										)
-										: "—",
 								),
-									h(
-									"td",
-									{ class: "text-right" },
-									row.candidate_amount == null ? "—" : formatMoney(row.candidate_amount, row.currency),
-								),
-									h(
-									"td",
-									{ class: "text-right" },
-									row.amount_difference == null ? "—" : formatMoney(row.amount_difference, row.currency),
-								),
-									h("td", [
-										h(EdgeStatusBadge, {
-											label: row.operational_status || "",
-											status: row.operational_status || "",
-										}),
-									]),
-									h("td", [rowAction(row)]),
-								]),
 							),
 						]),
 					]);
@@ -365,6 +339,27 @@
 				page.set_primary_action(__("Refresh"), refresh);
 				installPageFilters(page, refresh);
 				global.retailedgeBankingWorkspaceRefresh = refresh;
+
+				function selectorBar(label, values, currentValue, onSelect) {
+					return h(
+						EdgeActionBar,
+						{ label: __(label) },
+						{
+							actions: () => values.map((item) => {
+								const value = typeof item === "string" ? item : item.value;
+								const text = typeof item === "string" ? item : item.label;
+								return h("button", {
+									type: "button",
+									class: [
+										"edge-button",
+										currentValue === value ? "edge-button--primary" : "edge-button--secondary",
+									],
+									onClick: () => onSelect(value),
+								}, __(text));
+							}),
+						},
+					);
+				}
 
 				return () =>
 					h(EdgePageLayout, null, {
@@ -377,52 +372,14 @@
 								),
 							}),
 						default: () => [
-							h(
-								EdgeActionBar,
-								{ label: __("Direction and workflow queue") },
-								{
-									actions: () => [
-										...DIRECTIONS.map((item) =>
-											h(
-												"button",
-												{
-													type: "button",
-													class: [
-														"edge-button",
-														state.direction === item.value
-															? "edge-button--primary"
-															: "edge-button--secondary",
-													],
-													onClick: () => {
-														state.direction = item.value;
-														refresh();
-													},
-												},
-												__(item.label),
-											),
-										),
-										...QUEUES.map((queue) =>
-											h(
-												"button",
-												{
-													type: "button",
-													class: [
-														"edge-button",
-														state.queue === queue
-															? "edge-button--primary"
-															: "edge-button--secondary",
-													],
-													onClick: () => {
-														state.queue = queue;
-														refresh();
-													},
-												},
-												__(queue),
-											),
-										),
-									],
-								},
-							),
+							selectorBar("Direction", DIRECTIONS, state.direction, (value) => {
+								state.direction = value;
+								refresh();
+							}),
+							selectorBar("Workflow Status", QUEUES, state.queue, (value) => {
+								state.queue = value;
+								refresh();
+							}),
 							state.loading
 								? h(EdgeLoadingState, { message: __("Loading banking queue...") })
 								: null,
