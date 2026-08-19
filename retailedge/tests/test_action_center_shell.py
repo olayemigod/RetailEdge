@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
@@ -32,6 +33,20 @@ class TestActionCenterShell(unittest.TestCase):
 		self.assertNotIn("approve", vue.lower())
 		self.assertIn("createEdgeApp", bundle)
 		self.assertIn("action_center.bundle.js", page)
+
+	def test_preview_page_is_restricted_to_management_and_control_roles(self):
+		page_path = APP_ROOT / "retailedge/page/action_center/action_center.json"
+		page = json.loads(page_path.read_text(encoding="utf-8"))
+		roles = {row["role"] for row in page.get("roles") or []}
+		self.assertIn("System Manager", roles)
+		self.assertIn("RetailEdge Manager", roles)
+		self.assertIn("RetailEdge Branch Manager", roles)
+		self.assertIn("RetailEdge Auditor", roles)
+		self.assertIn("Accounts Manager", roles)
+		self.assertIn("Stock Manager", roles)
+		self.assertNotIn("Sales User", roles)
+		self.assertNotIn("Stock User", roles)
+		self.assertNotIn("Purchase User", roles)
 
 	def test_preview_is_not_promoted_to_normal_navigation_yet(self):
 		for relative in (
