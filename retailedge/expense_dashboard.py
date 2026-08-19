@@ -9,6 +9,8 @@ from frappe import _
 from frappe.utils import date_diff, flt, getdate
 
 from retailedge.dashboard_capabilities import require_dashboard_action
+from retailedge.expense_budget_api import get_expense_budget_insight
+from retailedge.expense_period_context import get_expense_period_context
 from retailedge.expense_register import get_expense_register_context, get_expense_register_export
 
 DASHBOARD_KEY = "expense-overview"
@@ -77,7 +79,10 @@ def get_expense_dashboard_data(filters: dict[str, Any] | str | None = None) -> d
 
 
 def build_expense_dashboard_export_dataset(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	filters = _coerce_filters(filters)
 	result = get_expense_dashboard_data(filters)
+	budget = get_expense_budget_insight(filters)
+	period_context = get_expense_period_context(filters)
 	rows: list[dict[str, Any]] = []
 	for card in result.get("headline_summary") or []:
 		rows.append({"section": _("Headline"), "dimension": "", "metric": card.get("label"), "value": card.get("value")})
@@ -91,13 +96,45 @@ def build_expense_dashboard_export_dataset(filters: dict[str, Any] | str | None 
 					"value": row.get("amount"),
 				}
 			)
+	for period_key in ("mtd", "ytd"):
+		period = period_context.get(period_key) or {}
+		label = period.get("label") or period_key.upper()
+		for metric, value in (
+			(_("Total Expenses"), period.get("total_expenses")),
+			(_("Expense Count"), period.get("expense_count")),
+			(_("Average Expense"), period.get("average_expense")),
+		):
+			rows.append({"section": _("Period Context"), "dimension": label, "metric": metric, "value": value})
+	for metric, value in (
+		(_("Budget for Period"), budget.get("target_amount")),
+		(_("Actual Spend"), budget.get("actual_amount")),
+		(_("Budget Used %"), budget.get("used_pct")),
+		(_("Remaining Budget"), budget.get("remaining_amount")),
+		(_("Projected Period Spend"), budget.get("projected_period_spend")),
+		(_("Projected Variance"), budget.get("projected_variance")),
+	):
+		if value is not None:
+			rows.append({"section": _("Budget & Burn Rate"), "dimension": "", "metric": metric, "value": value})
+	for row in budget.get("category_targets") or []:
+		if row.get("ambiguous") or row.get("target") is None:
+			continue
+		rows.append(
+			{
+				"section": _("Category Budget"),
+				"dimension": row.get("category"),
+				"metric": _("Actual / Budget"),
+				"value": row.get("actual"),
+				"target": row.get("target"),
+			}
+		)
 	return {
 		"title": _("Expenses Dashboard"),
 		"columns": [
 			{"fieldname": "section", "label": _("Section"), "fieldtype": "Data", "width": 160},
-			{"fieldname": "dimension", "label": _("Dimension"), "fieldtype": "Data", "width": 160},
+			{"fieldname": "dimension", "label": _("Dimension"), "fieldtype": "Data", "width": 180},
 			{"fieldname": "metric", "label": _("Metric"), "fieldtype": "Data", "width": 220},
 			{"fieldname": "value", "label": _("Value"), "fieldtype": "Currency", "width": 160},
+			{"fieldname": "target", "label": _("Target"), "fieldtype": "Currency", "width": 160},
 		],
 		"rows": rows,
 		"summary": result.get("headline_summary") or [],
