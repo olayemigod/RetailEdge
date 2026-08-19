@@ -64,6 +64,14 @@ _DASHBOARD_SPECS = {
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		ref_doctype="Account",
 	),
+	"expense-overview": DashboardCapabilitySpec(
+		key="expense-overview",
+		label="Expenses Dashboard",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="RetailEdge Cashier Expense",
+	),
 	"branch-performance": DashboardCapabilitySpec(
 		key="branch-performance",
 		label="Branch Performance",
