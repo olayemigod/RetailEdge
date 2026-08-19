@@ -133,6 +133,13 @@
 							onClick: () => reconcile(row.match_name),
 						}, __("Reconcile"));
 					}
+					if (row.operational_status === "Awaiting Approval" && row.match_name) {
+						return h("button", {
+							type: "button",
+							class: "edge-button edge-button--secondary",
+							onClick: () => showReviewMatchDialog(row.match_name),
+						}, row.approval_can_approve ? __("Approve") : __("Review Approval"));
+					}
 					if (row.operational_status === "Suggested Match" && row.match_name) {
 						return h("button", {
 							type: "button",
@@ -261,6 +268,14 @@
 					return response?.message || {};
 				}
 
+				async function getApprovalState(matchName) {
+					const response = await frappe.call({
+						method: "retailedge.reconciliation_approval.get_reconciliation_approval_state",
+						args: { match_name: matchName },
+					});
+					return response?.message || {};
+				}
+
 				async function applyReviewDecision(method, matchName, decisionNote, dialog, successMessage) {
 					const response = await frappe.call({
 						method,
@@ -274,9 +289,33 @@
 					refresh();
 				}
 
+				async function applyApprovalAction(method, matchName, approvalNote, dialog, indicator = "green") {
+					const response = await frappe.call({
+						method,
+						args: { match_name: matchName, approval_note: approvalNote || "" },
+						freeze: true,
+						freeze_message: __("Updating reconciliation approval..."),
+					});
+					const result = response?.message || {};
+					dialog.hide();
+					frappe.show_alert({
+						message: result.message || __("Reconciliation approval updated."),
+						indicator,
+					});
+					refresh();
+				}
+
 				async function showReviewMatchDialog(matchName, candidateSnapshot = null) {
-					const doc = await getMatchDocument(matchName);
+					const [doc, approval] = await Promise.all([
+						getMatchDocument(matchName),
+						getApprovalState(matchName),
+					]);
 					const canDecide = ["Suggested", "Reopened", "Needs Review"].includes(doc.decision_status || "Suggested");
+					const confirmed = doc.decision_status === "Confirmed";
+					const approvalRequired = Boolean(approval.required);
+					const approvalSatisfied = Boolean(approval.is_satisfied);
+					const canApprove = Boolean(approval.can_approve);
+					const canRequestApproval = confirmed && approvalRequired && !approvalSatisfied && !canApprove;
 					const dialog = new frappe.ui.Dialog({
 						title: __("Review Match · {0}", [matchName]),
 						size: "extra-large",
@@ -303,6 +342,14 @@
 							{ fieldname: "risk_level", label: __("Risk"), fieldtype: "Data", read_only: 1 },
 							{ fieldname: "accounting_evidence", label: __("Accounting Evidence"), fieldtype: "Small Text", read_only: 1 },
 							{ fieldname: "fuzzy_review_evidence", label: __("Supplemental Fuzzy Evidence"), fieldtype: "Small Text", read_only: 1 },
+							{ fieldname: "approval_section", fieldtype: "Section Break", label: __("Reconciliation Approval"), hidden: !confirmed },
+							{ fieldname: "approval_status", label: __("Approval Status"), fieldtype: "Data", read_only: 1, hidden: !confirmed },
+							{ fieldname: "approval_reason", label: __("Approval Guidance"), fieldtype: "Small Text", read_only: 1, hidden: !confirmed },
+							{ fieldname: "approval_actor", label: __("Approved By"), fieldtype: "Data", read_only: 1, hidden: !confirmed },
+							{ fieldname: "approval_note", label: __("Approval Note"), fieldtype: "Small Text", read_only: !confirmed || approvalSatisfied },
+							{ fieldname: "request_approval", label: __("Request Approval"), fieldtype: "Button", hidden: !canRequestApproval },
+							{ fieldname: "approve_reconciliation", label: __("Approve Reconciliation"), fieldtype: "Button", hidden: !canApprove },
+							{ fieldname: "decline_reconciliation", label: __("Decline Approval"), fieldtype: "Button", hidden: !canApprove },
 							{ fieldname: "decision_section", fieldtype: "Section Break", label: __("Review Decision") },
 							{ fieldname: "decision_status", label: __("Current Status"), fieldtype: "Data", read_only: 1 },
 							{ fieldname: "decision_note", label: __("Decision Note"), fieldtype: "Small Text", read_only: !canDecide },
@@ -360,6 +407,10 @@
 						risk_level: doc.risk_level,
 						accounting_evidence: doc.match_reason_summary || doc.match_reason || candidateReason(candidateSnapshot || {}),
 						fuzzy_review_evidence: candidateSnapshot ? fuzzyReason(candidateSnapshot) : __("Fuzzy evidence is supplemental only. Open the audit record for persisted detail."),
+						approval_status: approval.status || "",
+						approval_reason: approval.reason || "",
+						approval_actor: approval.approved_by || "",
+						approval_note: approval.approval_note || "",
 						decision_status: doc.decision_status || "Suggested",
 						decision_note: doc.decision_note || "",
 					});
@@ -373,6 +424,37 @@
 							__("Match kept for review."),
 						);
 					};
+					if (dialog.fields_dict.request_approval) {
+						dialog.fields_dict.request_approval.df.click = async () => {
+							await applyApprovalAction(
+								"retailedge.reconciliation_approval.request_reconciliation_approval",
+								matchName,
+								dialog.get_value("approval_note"),
+								dialog,
+							);
+						};
+					}
+					if (dialog.fields_dict.approve_reconciliation) {
+						dialog.fields_dict.approve_reconciliation.df.click = async () => {
+							await applyApprovalAction(
+								"retailedge.reconciliation_approval.approve_reconciliation_for_match",
+								matchName,
+								dialog.get_value("approval_note"),
+								dialog,
+							);
+						};
+					}
+					if (dialog.fields_dict.decline_reconciliation) {
+						dialog.fields_dict.decline_reconciliation.df.click = async () => {
+							await applyApprovalAction(
+								"retailedge.reconciliation_approval.decline_reconciliation_for_match",
+								matchName,
+								dialog.get_value("approval_note"),
+								dialog,
+								"orange",
+							);
+						};
+					}
 					dialog.fields_dict.open_audit_record.df.click = () => {
 						dialog.hide();
 						routeToDocument("RetailEdge Bank Transaction Match", matchName);
@@ -384,7 +466,7 @@
 
 				function reconcile(matchName) {
 					frappe.confirm(
-						__("This match is already confirmed. Reconcile it through ERPNext after a fresh safety check?"),
+						__("This match is confirmed and approved. Reconcile it through ERPNext after a fresh safety check?"),
 						async () => {
 							const response = await frappe.call({
 								method: "retailedge.banking_operations.match_and_reconcile",
