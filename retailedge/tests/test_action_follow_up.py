@@ -45,7 +45,7 @@ class TestActionFollowUp(unittest.TestCase):
 	def test_doctype_is_follow_up_state_not_resolution(self):
 		doc_path = Path(action_follow_up.__file__).resolve().parent / "retailedge/doctype/retailedge_action_follow_up/retailedge_action_follow_up.json"
 		doc = doc_path.read_text(encoding="utf-8")
-		self.assertIn('"Acknowledged\\nSnoozed"', doc)
+		self.assertIn('"Open\\nAcknowledged\\nSnoozed"', doc)
 		self.assertNotIn("Resolved", doc)
 		self.assertNotIn("Closed", doc)
 
