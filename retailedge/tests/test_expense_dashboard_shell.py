@@ -47,6 +47,19 @@ class TestExpenseDashboardShell(unittest.TestCase):
 		self.assertIn('frappe.has_permission(BUDGET_DOCTYPE, "read")', budget)
 		self.assertIn("get_expense_register_export", budget_api)
 
+	def test_mtd_ytd_and_export_use_the_same_canonical_services(self):
+		backend = (APP_ROOT / "expense_dashboard.py").read_text(encoding="utf-8")
+		period = (APP_ROOT / "expense_period_context.py").read_text(encoding="utf-8")
+		vue = (APP_ROOT / "public/js/expense_dashboard/ExpenseDashboard.vue").read_text(encoding="utf-8")
+		self.assertIn("MTD & Calendar YTD", vue)
+		self.assertIn("retailedge.expense_period_context.get_expense_period_context", vue)
+		self.assertIn("get_expense_period_context(filters)", backend)
+		self.assertIn("get_expense_budget_insight(filters)", backend)
+		self.assertIn('_("Period Context")', backend)
+		self.assertIn('_("Budget & Burn Rate")', backend)
+		self.assertIn('"ytd_basis": "calendar_year"', period)
+		self.assertIn("get_expense_register_export", period)
+
 
 if __name__ == "__main__":
 	unittest.main()
