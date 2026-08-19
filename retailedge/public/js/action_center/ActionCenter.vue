@@ -31,6 +31,9 @@
 				<div class="action-center-filters">
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<label class="edge-field"><span class="edge-field-label">Follow-up Status</span><select v-model="filters.follow_up_status" class="edge-input"><option>All</option><option>Open</option><option>Acknowledged</option><option>Snoozed</option></select></label>
+					<label class="edge-field"><span class="edge-field-label">Assignment</span><select v-model="filters.assignment_scope" class="edge-input"><option value="all">All Actions</option><option value="mine">My Actions</option></select></label>
+					<label class="edge-field"><span class="edge-field-label">Follow-up Timing</span><select v-model="filters.due_scope" class="edge-input"><option value="all">All Timing</option><option value="due">Due / Overdue</option></select></label>
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="fetchData">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
 			</template>
@@ -44,22 +47,24 @@
 								<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 							</div>
 							<div class="follow-up-summary">
-								<span class="follow-up-status">{{ followUp(item).status || "Open" }}</span>
+								<span class="follow-up-status">{{ followUpStatus(item) }}</span>
+								<span v-if="followUp(item).is_due" class="follow-up-due">Due / overdue</span>
+								<span v-if="followUp(item).snooze_expired">Snooze expired</span>
 								<span v-if="followUp(item).assigned_to">Assigned: {{ followUp(item).assigned_to }}</span>
 								<span v-if="followUp(item).follow_up_on">Follow up: {{ formatDateTime(followUp(item).follow_up_on) }}</span>
-								<span v-if="followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
+								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
 								<button class="edge-button edge-button--primary" type="button" @click="openRoute(item.route)">Open workflow</button>
-								<button v-if="followUp(item).status !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
+								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
-								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSnooze(item)">Snooze</button>
-								<button v-if="followUp(item).status !== 'Open'" class="edge-button" type="button" :disabled="isMutating(item)" @click="reopen(item)">Reopen</button>
+								<button v-if="followUpStatus(item) !== 'Snoozed'" class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSnooze(item)">Snooze</button>
+								<button v-if="followUpStatus(item) !== 'Open'" class="edge-button" type="button" :disabled="isMutating(item)" @click="reopen(item)">Reopen</button>
 							</div>
 						</div>
 					</div>
-					<div v-else class="action-empty">No critical exceptions are visible in your current scope.</div>
+					<div v-else class="action-empty">No critical exceptions match the current Action Centre filters.</div>
 				</EdgeDashboardSection>
 
 				<EdgeDashboardSection title="Needs Attention" description="Items requiring review, follow-up, or management attention.">
@@ -70,22 +75,24 @@
 								<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 							</div>
 							<div class="follow-up-summary">
-								<span class="follow-up-status">{{ followUp(item).status || "Open" }}</span>
+								<span class="follow-up-status">{{ followUpStatus(item) }}</span>
+								<span v-if="followUp(item).is_due" class="follow-up-due">Due / overdue</span>
+								<span v-if="followUp(item).snooze_expired">Snooze expired</span>
 								<span v-if="followUp(item).assigned_to">Assigned: {{ followUp(item).assigned_to }}</span>
 								<span v-if="followUp(item).follow_up_on">Follow up: {{ formatDateTime(followUp(item).follow_up_on) }}</span>
-								<span v-if="followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
+								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
 								<button class="edge-button edge-button--primary" type="button" @click="openRoute(item.route)">Open workflow</button>
-								<button v-if="followUp(item).status !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
+								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
-								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSnooze(item)">Snooze</button>
-								<button v-if="followUp(item).status !== 'Open'" class="edge-button" type="button" :disabled="isMutating(item)" @click="reopen(item)">Reopen</button>
+								<button v-if="followUpStatus(item) !== 'Snoozed'" class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSnooze(item)">Snooze</button>
+								<button v-if="followUpStatus(item) !== 'Open'" class="edge-button" type="button" :disabled="isMutating(item)" @click="reopen(item)">Reopen</button>
 							</div>
 						</div>
 					</div>
-					<div v-else class="action-empty">No attention items are visible in your current scope.</div>
+					<div v-else class="action-empty">No attention items match the current Action Centre filters.</div>
 				</EdgeDashboardSection>
 
 				<EdgeDashboardSection v-if="unavailableSources.length" title="Unavailable Sources" description="These sources were excluded because your current permissions do not allow them.">
@@ -118,7 +125,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "", mutatingFingerprint: "",
 			summary: [], items: [], sources: {}, metadata: {}, menuItems: [], tenantName: "", userName: "",
-			filters: { company: "", branch: "", from_date: "", to_date: "" },
+			filters: { company: "", branch: "", from_date: "", to_date: "", follow_up_status: "All", assignment_scope: "all", due_scope: "all" },
 		};
 	},
 	computed: {
@@ -151,9 +158,8 @@ export default {
 			if (!item?.fingerprint || this.mutatingFingerprint) return;
 			this.mutatingFingerprint = item.fingerprint;
 			try {
-				const result = await callMethod("retailedge.action_follow_up.update_action_follow_up", { fingerprint: item.fingerprint, action, filters: this.filters, ...values });
-				item.follow_up = { ...(item.follow_up || {}), ...result };
-				this.items = [...this.items];
+				await callMethod("retailedge.action_follow_up.update_action_follow_up", { fingerprint: item.fingerprint, action, filters: this.filters, ...values });
+				await this.fetchData();
 			} catch (error) {
 				frappe.msgprint({ title: "Follow-up was not updated", message: errorMessage(error, "RetailEdge could not update this follow-up record."), indicator: "red" });
 			} finally { this.mutatingFingerprint = ""; }
@@ -163,7 +169,7 @@ export default {
 		promptAssignment(item) {
 			const current = this.followUp(item);
 			frappe.prompt([
-				{ fieldname: "assigned_to", fieldtype: "Link", options: "User", label: "Assigned To", reqd: 1, default: current.assigned_to || frappe.session.user },
+				{ fieldname: "assigned_to", fieldtype: "Link", options: "User", label: "Assigned To", reqd: 1, default: current.assigned_to || frappe.session.user, get_query: () => ({ filters: { enabled: 1 } }) },
 				{ fieldname: "follow_up_on", fieldtype: "Datetime", label: "Follow Up On", default: current.follow_up_on || "" },
 				{ fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: current.notes || "" },
 			], (values) => this.updateFollowUp(item, "assign", values), "Assign follow-up", "Assign");
@@ -182,7 +188,8 @@ export default {
 				{ fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: current.notes || "" },
 			], (values) => this.updateFollowUp(item, "snooze", values), "Snooze action", "Snooze");
 		},
-		followUp(item) { return item.follow_up || { status: "Open" }; },
+		followUp(item) { return item.follow_up || { status: "Open", effective_status: "Open" }; },
+		followUpStatus(item) { const state = this.followUp(item); return state.effective_status || state.status || "Open"; },
 		isMutating(item) { return this.mutatingFingerprint === item.fingerprint; },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
@@ -207,8 +214,10 @@ export default {
 .action-copy, .source-row, .action-note { display: grid; gap: 4px; }
 .action-copy small, .source-row small, .action-note span, .action-empty, .follow-up-summary { color: var(--edge-text-muted); font-size: 12px; }
 .follow-up-summary { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
-.follow-up-status { padding: 2px 7px; border: 1px solid var(--edge-border); border-radius: 999px; background: var(--edge-surface-soft, var(--edge-surface)); color: var(--edge-text); font-weight: 600; }
+.follow-up-status, .follow-up-due { padding: 2px 7px; border: 1px solid var(--edge-border); border-radius: 999px; background: var(--edge-surface-soft, var(--edge-surface)); color: var(--edge-text); font-weight: 600; }
+.follow-up-due { border-color: var(--orange-300, var(--edge-border)); }
 .action-controls { display: flex; flex-wrap: wrap; gap: 7px; }
 .source-row, .action-note { padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
+@media (max-width: 900px) { .action-center-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .action-center-filters { grid-template-columns: 1fr; } .action-row-main { align-items: flex-start; } .action-controls .edge-button { flex: 1 1 auto; } }
 </style>
