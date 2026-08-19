@@ -50,6 +50,23 @@
 					</div>
 				</EdgeDashboardSection>
 
+				<EdgeDashboardSection title="MTD & Calendar YTD" :description="periodContextDescription">
+					<div class="expense-period-grid">
+						<div class="expense-period-card">
+							<span>{{ periodContext.mtd?.label || "Month to Date" }}</span>
+							<strong>{{ money(periodContext.mtd?.total_expenses) }}</strong>
+							<small>{{ periodContext.mtd?.expense_count || 0 }} expenses · avg {{ money(periodContext.mtd?.average_expense) }}</small>
+							<small>{{ periodContext.mtd?.from_date || "—" }} to {{ periodContext.mtd?.to_date || "—" }}</small>
+						</div>
+						<div class="expense-period-card">
+							<span>{{ periodContext.ytd?.label || "Calendar Year to Date" }}</span>
+							<strong>{{ money(periodContext.ytd?.total_expenses) }}</strong>
+							<small>{{ periodContext.ytd?.expense_count || 0 }} expenses · avg {{ money(periodContext.ytd?.average_expense) }}</small>
+							<small>{{ periodContext.ytd?.from_date || "—" }} to {{ periodContext.ytd?.to_date || "—" }}</small>
+						</div>
+					</div>
+				</EdgeDashboardSection>
+
 				<EdgeDashboardSection title="Budget & Burn Rate" :description="budgetDescription">
 					<div v-if="budgetInsight.available" class="expense-budget-grid">
 						<div class="expense-metric"><span>Budget for period</span><strong>{{ money(budgetInsight.target_amount) }}</strong></div>
@@ -141,7 +158,7 @@ export default {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			exportBusy: false, printBusy: false, capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(), headlineSummary: [], attention: [], breakdowns: {}, comparison: {}, recentExpenses: [], metadata: {},
-			budgetInsight: { available: false, reason: "", category_targets: [] }, menuItems: [], tenantName: "", userName: "",
+			budgetInsight: { available: false, reason: "", category_targets: [] }, periodContext: { mtd: {}, ytd: {}, metadata: {} }, menuItems: [], tenantName: "", userName: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "" },
 		};
 	},
@@ -158,6 +175,10 @@ export default {
 			return defs.map(([key, title, description]) => ({ key, title, description, rows: this.breakdowns[key] || [] })).filter((item) => item.rows.length);
 		},
 		budgetedCategories() { return (this.budgetInsight.category_targets || []).filter((row) => row.actual || row.target || row.ambiguous).slice(0, 10); },
+		periodContextDescription() {
+			const anchor = this.periodContext.anchor_date || this.filters.to_date || "the selected To Date";
+			return `Month-to-date and calendar-year-to-date spend as of ${anchor}, using the same branch/category/status permissions as Expense Register.`;
+		},
 		budgetDescription() {
 			if (!this.budgetInsight.available) return "Native ERPNext Budget targets are shown only when your permissions and account/cost-centre mappings allow a reliable comparison.";
 			return `${this.budgetInsight.budget_count || 0} submitted ERPNext budget${this.budgetInsight.budget_count === 1 ? "" : "s"} matched this period. Projection uses current daily burn rate across the selected period.`;
@@ -201,14 +222,16 @@ export default {
 		async fetchData() {
 			if (!this.filters.company) return; this.loading = true; this.error = "";
 			try {
-				const [result, budgetInsight, capabilities] = await Promise.all([
+				const [result, budgetInsight, periodContext, capabilities] = await Promise.all([
 					callMethod("retailedge.expense_dashboard.get_expense_dashboard_data", { filters: this.filters }),
 					callMethod("retailedge.expense_budget_api.get_expense_budget_insight", { filters: this.filters }),
+					callMethod("retailedge.expense_period_context.get_expense_period_context", { filters: this.filters }),
 					getDashboardCapabilities(DASHBOARD_KEY, this.filters),
 				]);
 				this.headlineSummary = result.headline_summary || []; this.attention = result.attention || []; this.breakdowns = result.breakdowns || {};
 				this.comparison = result.comparison || {}; this.recentExpenses = result.recent_expenses || []; this.metadata = result.metadata || {};
-				this.budgetInsight = budgetInsight || { available: false, reason: "Budget insight unavailable.", category_targets: [] }; this.capabilities = capabilities || this.capabilities;
+				this.budgetInsight = budgetInsight || { available: false, reason: "Budget insight unavailable.", category_targets: [] };
+				this.periodContext = periodContext || { mtd: {}, ytd: {}, metadata: {} }; this.capabilities = capabilities || this.capabilities;
 			} catch (error) { this.error = errorMessage(error, "Expenses Dashboard failed to load."); }
 			finally { this.loading = false; }
 		},
@@ -228,9 +251,9 @@ export default {
 
 <style scoped>
 .expense-dashboard-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
-.expense-trend-grid, .expense-budget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.expense-metric { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
-.expense-metric span, .expense-ranking-row small, .expense-recent-row small, .expense-attention-item small, .expense-budget-empty span { color: var(--edge-text-muted); font-size: 12px; }
+.expense-trend-grid, .expense-budget-grid, .expense-period-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.expense-metric, .expense-period-card { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
+.expense-metric span, .expense-period-card span, .expense-period-card small, .expense-ranking-row small, .expense-recent-row small, .expense-attention-item small, .expense-budget-empty span { color: var(--edge-text-muted); font-size: 12px; }
 .expense-attention-list, .expense-ranking, .expense-recent-list { display: grid; gap: 8px; }
 .expense-attention-item, .expense-recent-row { display: flex; justify-content: space-between; gap: 14px; padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); text-align: left; cursor: pointer; }
 .expense-attention-item--static { cursor: default; }
@@ -245,5 +268,5 @@ export default {
 .expense-budget-status--ok { border-color: var(--green-300, var(--edge-border)); }
 .expense-budget-warning { font-size: 12px; color: var(--edge-text-muted); }
 .expense-budget-note { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; color: var(--edge-text-muted); background: var(--edge-surface); font-size: 13px; }
-@media (max-width: 720px) { .expense-dashboard-filters, .expense-trend-grid, .expense-budget-grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .expense-dashboard-filters, .expense-trend-grid, .expense-budget-grid, .expense-period-grid { grid-template-columns: 1fr; } }
 </style>
