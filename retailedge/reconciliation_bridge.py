@@ -180,11 +180,24 @@ def _sales_invoice_native_reconciliation_safety(match_doc, invoice_name):
 	try:
 		invoice_doc, payment_rows = _sales_invoice_payment_rows(invoice_name)
 	except Exception:
+		linked_payment_entries = get_payment_entries_for_sales_invoice(invoice_name) or []
+		if linked_payment_entries:
+			payment_entry_names = ", ".join(
+				cstr(row.get("payment_entry")).strip()
+				for row in linked_payment_entries
+				if cstr(row.get("payment_entry")).strip()
+			)
+			return {
+				"safe": False,
+				"status": TARGET_AMBIGUOUS,
+				"reason": "Sales Invoice payment rows could not be revalidated and a submitted Payment Entry is linked to the invoice.",
+				"notes": f"Linked Payment Entries: {payment_entry_names or 'unknown'}. Review the explicit Payment Entry target instead of choosing an unverifiable parent Sales Invoice.",
+			}
 		return {
 			"safe": False,
-			"status": TARGET_MANUAL_REVIEW,
-			"reason": "Sales Invoice payment rows could not be revalidated.",
-			"notes": "RetailEdge could not read the submitted Sales Invoice payment evidence safely.",
+			"status": TARGET_MISSING,
+			"reason": "Sales Invoice payment rows could not be revalidated and no submitted Payment Entry voucher was found.",
+			"notes": "RetailEdge could not establish a safe native reconciliation target from the available payment evidence.",
 		}
 	if cint_or_zero(getattr(invoice_doc, "docstatus", None)) != 1:
 		return {
@@ -1047,7 +1060,7 @@ def _execution_gate_message(status, can_execute, block_reasons):
 	if status == EXECUTION_GATE_PERMISSION_DENIED:
 		return "You do not have an allowed role for reconciliation execution. No execution was performed."
 	if status == EXECUTION_GATE_NEEDS_APPROVAL:
-		return "Second approval is required before reconciliation execution. No execution was performed."
+		return "Second approval is required before live reconciliation execution. No execution was performed."
 	return (block_reasons or ["Reconciliation execution gate is blocked. No execution was performed."])[0]
 
 
