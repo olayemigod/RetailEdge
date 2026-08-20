@@ -201,7 +201,19 @@ export default {
 		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
 		basisLabel(value) { return value === "current" ? "Current position" : "Selected period"; },
 		formatDateTime(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(value); } catch (_error) { return value; } },
-		formatValue(value, datatype) { try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
+		formatValue(value, datatype) {
+			if (value === null || value === undefined || value === "") return "—";
+			const fieldtype = String(datatype || "Data");
+			try {
+				if (fieldtype === "Int") return String(Math.trunc(Number(value)));
+				if (fieldtype === "Float") return String(Number(value));
+				if (fieldtype === "Currency") return format_currency(Number(value));
+				if (fieldtype === "Percent") return `${Number(value)}%`;
+				return String(value);
+			} catch (_error) {
+				return String(value);
+			}
+		},
 	},
 };
 </script>
