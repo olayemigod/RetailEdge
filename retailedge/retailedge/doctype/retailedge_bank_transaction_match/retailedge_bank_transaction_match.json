@@ -60,6 +60,14 @@
   "last_action",
   "last_action_by",
   "last_action_on",
+  "reconciliation_approval_section",
+  "approval_status",
+  "approval_requested_by",
+  "approval_requested_on",
+  "approved_by",
+  "approved_on",
+  "approval_note",
+  "approval_candidate_identity",
   "sync_readiness_section",
   "sales_invoice_sync_ready",
   "sync_blocked_reason",
@@ -372,6 +380,60 @@
    "fieldname": "last_action_on",
    "fieldtype": "Datetime",
    "label": "Last Action On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reconciliation_approval_section",
+   "fieldtype": "Section Break",
+   "label": "Reconciliation Approval"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "approval_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Approval Status",
+   "options": "Pending\nApproved\nDeclined\nInvalidated\nNot Required",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_requested_by",
+   "fieldtype": "Link",
+   "label": "Approval Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_requested_on",
+   "fieldtype": "Datetime",
+   "label": "Approval Requested On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_note",
+   "fieldtype": "Small Text",
+   "label": "Approval Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_candidate_identity",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Approval Candidate Identity",
+   "no_copy": 1,
    "read_only": 1
   },
   {

@@ -92,7 +92,6 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 		center = getdate(bank_date)
 		je_filters["posting_date"] = ["between", [center - timedelta(days=7), center + timedelta(days=7)]]
 
-	# Parent Journal Entries are permission-aware. Child rows are queried only for those allowed parents.
 	entry_rows = frappe.get_list(
 		"Journal Entry",
 		filters=je_filters,
@@ -259,9 +258,19 @@ def _prepare_candidate_for_fuzzy(candidate, bank_transaction):
 	return row
 
 
+def _normalize_candidate_limit(limit):
+	try:
+		value = int(limit or 40)
+	except (TypeError, ValueError):
+		value = 40
+	return min(max(value, 1), 100)
+
+
+@frappe.whitelist()
 def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, limit=40):
 	"""Return direction-safe existing candidates plus permission-aware ERPNext bank events."""
 	assert_can_access_bank_transaction_matching()
+	limit = _normalize_candidate_limit(limit)
 	bank_transaction = normalize_bank_transaction(bank_transaction_name)
 	direction = cstr(bank_transaction.get("direction")).strip()
 	if direction not in {DIRECTION_INFLOW, DIRECTION_OUTFLOW}:
@@ -308,7 +317,7 @@ def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, lim
 			continue
 		seen.add(key)
 		output.append(row)
-		if len(output) >= int(limit or 40):
+		if len(output) >= limit:
 			break
 	return {
 		"bank_transaction": bank_transaction_name,
