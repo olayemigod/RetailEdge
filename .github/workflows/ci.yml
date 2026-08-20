@@ -158,6 +158,10 @@ jobs:
           grep -Eq 'stock_movement_history\.bundle' sites/assets/assets.json
           grep -Eq 'sales_reporting\.bundle' sites/assets/assets.json
           grep -Eq 'stock_position\.bundle' sites/assets/assets.json
+          grep -Eq 'action_center\.bundle' sites/assets/assets.json
+          grep -Eq 'expense_review\.bundle' sites/assets/assets.json
+          grep -Eq 'cash_shift_verification\.bundle' sites/assets/assets.json
+          grep -Eq 'daily_sales_audit\.bundle' sites/assets/assets.json
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
           grep -Eq 'createPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
           grep -Eq 'createBoundedPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
