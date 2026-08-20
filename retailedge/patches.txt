@@ -10,3 +10,4 @@ retailedge.patches.add_report_performance_indexes
 retailedge.patches.add_stock_movement_history_report_link
 retailedge.patches.ensure_stock_movement_history_menu_v2
 retailedge.patches.ensure_stock_movement_history_menu_v3
+retailedge.patches.add_reporting_action_settings

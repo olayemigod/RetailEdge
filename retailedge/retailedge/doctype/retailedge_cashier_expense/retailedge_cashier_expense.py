@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import frappe
+from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt, today
+from frappe.utils import cint, flt, today
 
 from retailedge.branch_context import apply_branch_context_to_doc
 from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
@@ -23,6 +24,7 @@ class RetailEdgeCashierExpense(Document):
 
 	def validate(self):
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=True)
+		self.validate_expense_category()
 		self.validate_open_shift_requirement()
 		self.validate_cash_account_requirement()
 		self.validate_required_values()
@@ -109,20 +111,144 @@ class RetailEdgeCashierExpense(Document):
 		if not self.expense_category:
 			return
 
-		category = frappe.db.get_value(
-			"RetailEdge Expense Category",
-			self.expense_category,
-			["company", "expense_account", "default_cost_center"],
-			as_dict=True,
-		)
+		category = self._get_expense_category_context()
 		if not category:
 			return
 
-		if not self.company and category.get("company"):
-			self.company = category["company"]
+		if not self.company:
+			self.company = category.get("company") or category.get("expense_account_company") or None
 		self.expense_account = category.get("expense_account")
 		if category.get("default_cost_center") and self._should_use_category_cost_center(category.get("default_cost_center")):
 			self.cost_center = category["default_cost_center"]
+
+	def validate_expense_category(self):
+		if not self.expense_category:
+			return
+
+		category = self._get_expense_category_context()
+		if not category:
+			frappe.throw(_("Expense Category {0} does not exist.").format(self.expense_category))
+		if not frappe.has_permission("RetailEdge Expense Category", "read", doc=self.expense_category):
+			frappe.throw(
+				_("You do not have permission to use Expense Category {0}.").format(self.expense_category),
+				frappe.PermissionError,
+			)
+		if not cint(category.get("is_active")):
+			frappe.throw(_("Expense Category {0} is inactive.").format(self.expense_category))
+
+		category_company = category.get("company")
+		account_company = category.get("expense_account_company")
+		cost_center_company = category.get("cost_center_company")
+		for source_label, linked_company in (
+			(_("Expense Category"), category_company),
+			(_("Expense Account"), account_company),
+			(_("Default Cost Center"), cost_center_company),
+		):
+			if self.company and linked_company and linked_company != self.company:
+				frappe.throw(
+					_("{0} for {1} belongs to Company {2}, not the current Company {3}.").format(
+						source_label,
+						self.expense_category,
+						linked_company,
+						self.company,
+					)
+				)
+
+		if category.get("expense_account"):
+			if not category.get("expense_account_exists"):
+				frappe.throw(
+					_("Expense Account {0} configured on Expense Category {1} does not exist.").format(
+						category.get("expense_account"), self.expense_category
+					)
+				)
+			if cint(category.get("expense_account_is_group")):
+				frappe.throw(
+					_("Expense Account {0} configured on Expense Category {1} must be a ledger account, not a group.").format(
+						category.get("expense_account"), self.expense_category
+					)
+				)
+			if cint(category.get("expense_account_disabled")):
+				frappe.throw(
+					_("Expense Account {0} configured on Expense Category {1} is disabled.").format(
+						category.get("expense_account"), self.expense_category
+					)
+				)
+			if category.get("expense_account_root_type") and category.get("expense_account_root_type") != "Expense":
+				frappe.throw(
+					_("Expense Account {0} configured on Expense Category {1} must belong to the Expense root type.").format(
+						category.get("expense_account"), self.expense_category
+					)
+				)
+
+		if category.get("default_cost_center"):
+			if not category.get("cost_center_exists"):
+				frappe.throw(
+					_("Default Cost Center {0} configured on Expense Category {1} does not exist.").format(
+						category.get("default_cost_center"), self.expense_category
+					)
+				)
+			if cint(category.get("cost_center_is_group")):
+				frappe.throw(
+					_("Default Cost Center {0} configured on Expense Category {1} must be a leaf cost center, not a group.").format(
+						category.get("default_cost_center"), self.expense_category
+					)
+				)
+
+	def _get_expense_category_context(self):
+		if not self.expense_category:
+			return None
+		if getattr(self, "_expense_category_context_name", None) == self.expense_category:
+			return getattr(self, "_expense_category_context", None)
+
+		category = frappe.db.get_value(
+			"RetailEdge Expense Category",
+			self.expense_category,
+			["is_active", "company", "expense_account", "default_cost_center"],
+			as_dict=True,
+		)
+		if not category:
+			self._expense_category_context_name = self.expense_category
+			self._expense_category_context = None
+			return None
+
+		context = dict(category)
+		account_name = context.get("expense_account")
+		if account_name:
+			account = frappe.db.get_value(
+				"Account",
+				account_name,
+				["company", "root_type", "is_group", "disabled"],
+				as_dict=True,
+			)
+			context.update(
+				{
+					"expense_account_exists": bool(account),
+					"expense_account_company": (account or {}).get("company"),
+					"expense_account_root_type": (account or {}).get("root_type"),
+					"expense_account_is_group": (account or {}).get("is_group"),
+					"expense_account_disabled": (account or {}).get("disabled"),
+				}
+			)
+
+		cost_center_name = context.get("default_cost_center")
+		if cost_center_name:
+			cost_center = frappe.db.get_value(
+				"Cost Center",
+				cost_center_name,
+				["company", "is_group"],
+				as_dict=True,
+			)
+			context.update(
+				{
+					"cost_center_exists": bool(cost_center),
+					"cost_center_company": (cost_center or {}).get("company"),
+					"cost_center_is_group": (cost_center or {}).get("is_group"),
+				}
+			)
+
+		self._expense_category_context_name = self.expense_category
+		self._expense_category_context = context
+		return context
 
 	def apply_shift_cash_snapshot(self):
 		settings = get_retailedge_settings()

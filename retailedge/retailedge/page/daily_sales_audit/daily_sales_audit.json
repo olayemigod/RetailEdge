@@ -1,0 +1,20 @@
+{
+  "doctype": "Page",
+  "name": "daily-sales-audit",
+  "page_name": "daily-sales-audit",
+  "module": "RetailEdge",
+  "title": "Daily Sales Audit",
+  "standard": "Yes",
+  "system_page": 0,
+  "roles": [
+    {"role": "System Manager"},
+    {"role": "Accounts User"},
+    {"role": "Accounts Manager"},
+    {"role": "RetailEdge Manager"},
+    {"role": "RetailEdgeManager"},
+    {"role": "RetailEdge Branch Manager"},
+    {"role": "RetailEdgeBranchManager"},
+    {"role": "RetailEdge Auditor"},
+    {"role": "RetailEdgeAuditor"}
+  ]
+}

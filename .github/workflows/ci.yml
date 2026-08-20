@@ -85,7 +85,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: fix/edgeui-frappe-v16-menu-host
+          ref: agent/reporting-standard-v1
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -154,10 +154,40 @@ jobs:
           grep -Eq 'edgeui\.bundle' sites/assets/assets.json
           grep -Eq 'retailedge_business_hub\.bundle' sites/assets/assets.json
           grep -Eq 'retailedge_product_menu\.bundle' sites/assets/assets.json
+          grep -Eq 'salesperson_performance\.bundle' sites/assets/assets.json
+          grep -Eq 'stock_movement_history\.bundle' sites/assets/assets.json
+          grep -Eq 'sales_reporting\.bundle' sites/assets/assets.json
+          grep -Eq 'stock_position\.bundle' sites/assets/assets.json
+          grep -Eq 'action_center\.bundle' sites/assets/assets.json
+          grep -Eq 'expense_review\.bundle' sites/assets/assets.json
+          grep -Eq 'cash_shift_verification\.bundle' sites/assets/assets.json
+          grep -Eq 'daily_sales_audit\.bundle' sites/assets/assets.json
+          grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
+          grep -Eq 'createPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
+          grep -Eq 'createBoundedPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
 
       - name: Run RetailEdge tests
         working-directory: frappe-bench
+        shell: bash
         run: |
-          bench --site retail-ci.localhost run-tests --app retailedge
+          set -o pipefail
+          if ! bench --site retail-ci.localhost run-tests --app retailedge 2>&1 | tee /tmp/retailedge-tests.log; then
+            {
+              echo "## RetailEdge test failure tail"
+              echo
+              echo '```text'
+              tail -n 180 /tmp/retailedge-tests.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            grep -E '^(FAIL|ERROR):|Traceback|AssertionError|ImportError|TypeError|AttributeError|ModuleNotFoundError|FAILED|Ran [0-9]+ tests' /tmp/retailedge-tests.log \
+              | tail -n 80 \
+              | while IFS= read -r line; do
+                  line="${line//'%'/'%25'}"
+                  line="${line//$'\r'/'%0D'}"
+                  line="${line//$'\n'/'%0A'}"
+                  echo "::error title=RetailEdge test failure::${line}"
+                done
+            exit 1
+          fi
         env:
           CI: "Yes"

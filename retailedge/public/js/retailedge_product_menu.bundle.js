@@ -1,31 +1,22 @@
 const PRODUCT = "RetailEdge";
 const SHARED_RUNTIME_ASSET = "edgeui.bundle.js";
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const CONTEXT_CACHE_TTL_MS = 30_000;
 const MAX_INSTALL_ATTEMPTS = 6;
 
 const GROUP_PRESENTATION = Object.freeze({
-	home: { icon: "home", description: "Business overview and performance." },
-	sales: { icon: "shopping-cart", description: "Sell, serve customers, and review sales." },
-	purchases: {
-		icon: "shopping-bag",
-		description: "Buy stock, services, and operating supplies.",
-	},
-	inventory: { icon: "stock", description: "Control items, warehouses, movements, and counts." },
-	"cash-banking": {
-		icon: "credit-card",
-		description: "Manage collections, payments, shifts, and reconciliation.",
-	},
-	expenses: { icon: "file-text", description: "Record and review operating expenses." },
-	"customers-suppliers": {
-		icon: "users",
-		description: "Manage business relationships and balances.",
-	},
-	"reports-insights": {
-		icon: "chart",
-		description: "Understand sales, stock, cash, and branch performance.",
-	},
+	home: { icon: "home", description: "Business home and command centre." },
+	sell: { icon: "shopping-cart", description: "Sell, fulfil orders, invoice, and run point of sale." },
+	buy: { icon: "shopping-bag", description: "Buy stock, services, and operating supplies." },
+	stock: { icon: "stock", description: "Control products, warehouses, movement, counts, and stock health." },
+	money: { icon: "credit-card", description: "Manage collections, payments, statements, and bank reconciliation." },
+	expenses: { icon: "file-text", description: "Record and control day-to-day business expenses." },
+	customers: { icon: "users", description: "Manage customers, receivables, statements, and collections." },
+	"suppliers-payables": { icon: "users", description: "Manage suppliers, bills, payables, and payment obligations." },
+	insights: { icon: "chart", description: "Understand business, branch, sales, stock, and cash performance." },
+	"review-approvals": { icon: "shield", description: "Review approvals, exceptions, audits, and control issues." },
+	accounting: { icon: "book-open", description: "Professional accounting reports and finance records." },
 	setup: { icon: "settings", description: "Configure RetailEdge business rules and defaults." },
-	administration: { icon: "shield", description: "Restricted technical and governance tools." },
 });
 
 const ITEM_ICONS = Object.freeze({
@@ -83,12 +74,36 @@ async function ensureRuntime() {
 	return edgeUI;
 }
 
-function fetchContext() {
-	return new Promise((resolve, reject) => {
+function readContextCache() {
+	const cache = window.__retailedgeBusinessHubContextCache;
+	if (!cache || !cache.data || !cache.fetchedAt) return null;
+	if (Date.now() - cache.fetchedAt > CONTEXT_CACHE_TTL_MS) return null;
+	return cache.data;
+}
+
+function cacheContext(data) {
+	const normalized = data || {};
+	window.__retailedgeBusinessHubContextCache = {
+		data: normalized,
+		fetchedAt: Date.now(),
+	};
+	return normalized;
+}
+
+function fetchContext({ force = false } = {}) {
+	if (!force) {
+		const cached = readContextCache();
+		if (cached) return Promise.resolve(cached);
+	}
+	if (window.__retailedgeBusinessHubContextRequest) {
+		return window.__retailedgeBusinessHubContextRequest;
+	}
+
+	const request = new Promise((resolve, reject) => {
 		frappe.call({
 			method: CONTEXT_METHOD,
 			callback(response) {
-				resolve(response.message || {});
+				resolve(cacheContext(response.message || {}));
 			},
 			error(error) {
 				reject(
@@ -99,6 +114,13 @@ function fetchContext() {
 			},
 		});
 	});
+	window.__retailedgeBusinessHubContextRequest = request;
+	request.finally(() => {
+		if (window.__retailedgeBusinessHubContextRequest === request) {
+			window.__retailedgeBusinessHubContextRequest = null;
+		}
+	});
+	return request;
 }
 
 function itemDescription(item) {
@@ -128,7 +150,7 @@ function buildSections(groups) {
 			return {
 				label: group.label,
 				description: presentation.description,
-				icon: presentation.icon,
+				icon: group.icon || presentation.icon,
 				items,
 			};
 		})
@@ -231,6 +253,8 @@ function scheduleRefresh() {
 });
 window.frappe?.router?.on?.("change", scheduleRefresh);
 
+window.retailedgeGetBusinessHubContext = fetchContext;
+window.retailedgeCacheBusinessHubContext = cacheContext;
 window.retailedgeInstallProductMenu = installProductMenu;
 window.retailedgeRefreshProductMenu = refreshProductMenu;
 window.retailedgeProductMenuState = state;
