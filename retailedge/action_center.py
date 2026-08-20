@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import flt, get_first_day, today
 
 from retailedge.action_follow_up import decorate_action_items
+from retailedge.bank_exception_summary import get_bank_exception_summary
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
 from retailedge.expense_register import get_expense_register
@@ -174,6 +175,11 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			kind="overdue_payables",
 		)
 
+	bank = _safe_source("bank_controls", lambda: get_bank_exception_summary(common))
+	sources["bank_controls"] = bank
+	if bank.get("available"):
+		_append_bank_exceptions(items, bank["payload"])
+
 	all_items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
 	items = _apply_follow_up_filters(
 		all_items,
@@ -254,6 +260,52 @@ def _stock_fallback_allowed() -> bool:
 	return "Stock Manager" in set(frappe.get_roles(user))
 
 
+def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]) -> None:
+	oldest = payload.get("oldest_days") or {}
+	for metric, severity, label, kind, route, age_key in (
+		(
+			"Reconciliation Exceptions",
+			"danger",
+			_("Bank reconciliation has blocked or failed items"),
+			"bank_reconciliation_exception",
+			"/app/query-report/RetailEdge Reconciliation Handoff",
+			"exceptions",
+		),
+		(
+			"Bank Matches Need Review",
+			"warning",
+			_("Bank matches are waiting for review"),
+			"bank_match_review",
+			"/app/retail-edge-bank-transaction-match",
+			"needs_review",
+		),
+		(
+			"Ready for Reconciliation",
+			"warning",
+			_("Confirmed bank matches are ready for reconciliation"),
+			"bank_ready_for_reconciliation",
+			"/app/query-report/RetailEdge Bank Match Reconciliation Readiness",
+			"ready",
+		),
+	):
+		card = _summary_card(payload, metric)
+		if not card or flt(card.get("value")) <= 0:
+			continue
+		items.append(
+			_action(
+				source="bank_controls",
+				label=label,
+				value=card.get("value"),
+				datatype=str(card.get("datatype") or "Int"),
+				severity=severity,
+				route=route,
+				time_basis="period",
+				kind=kind,
+				age_days=int(oldest.get(age_key) or 0),
+			)
+		)
+
+
 def _action_from_financial_exposure(
 	items: list[dict[str, Any]],
 	*,
@@ -331,7 +383,13 @@ def _dedupe_and_sort(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 			continue
 		seen.add(key)
 		result.append(item)
-	result.sort(key=lambda row: (severity_rank.get(str(row.get("severity")), 9), str(row.get("source")), str(row.get("label"))))
+	result.sort(
+		key=lambda row: (
+			severity_rank.get(str(row.get("severity")), 9),
+			str(row.get("source")),
+			str(row.get("label")),
+		)
+	)
 	return result
 
 
@@ -357,9 +415,21 @@ def _apply_follow_up_filters(
 
 def _summary(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	return [
-		{"label": _("Critical"), "value": len([row for row in items if row.get("severity") == "danger"]), "datatype": "Int"},
-		{"label": _("Needs Attention"), "value": len([row for row in items if row.get("severity") == "warning"]), "datatype": "Int"},
-		{"label": _("Due Follow-ups"), "value": len([row for row in items if (row.get("follow_up") or {}).get("is_due")]), "datatype": "Int"},
+		{
+			"label": _("Critical"),
+			"value": len([row for row in items if row.get("severity") == "danger"]),
+			"datatype": "Int",
+		},
+		{
+			"label": _("Needs Attention"),
+			"value": len([row for row in items if row.get("severity") == "warning"]),
+			"datatype": "Int",
+		},
+		{
+			"label": _("Due Follow-ups"),
+			"value": len([row for row in items if (row.get("follow_up") or {}).get("is_due")]),
+			"datatype": "Int",
+		},
 		{"label": _("Open Actions"), "value": len(items), "datatype": "Int"},
 	]
 
