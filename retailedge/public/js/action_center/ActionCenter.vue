@@ -46,6 +46,7 @@
 								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ sourceLabel(item.source) }} · {{ basisLabel(item.time_basis) }}</small></span>
 								<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 							</div>
+							<div v-if="item.priority_reason" class="priority-reason">Why this is prioritised: {{ item.priority_reason }}</div>
 							<div class="follow-up-summary">
 								<span class="follow-up-status">{{ followUpStatus(item) }}</span>
 								<span v-if="followUp(item).is_due" class="follow-up-due">Due / overdue</span>
@@ -74,6 +75,7 @@
 								<span class="action-copy"><strong>{{ item.label }}</strong><small>{{ sourceLabel(item.source) }} · {{ basisLabel(item.time_basis) }}</small></span>
 								<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 							</div>
+							<div v-if="item.priority_reason" class="priority-reason">Why this is prioritised: {{ item.priority_reason }}</div>
 							<div class="follow-up-summary">
 								<span class="follow-up-status">{{ followUpStatus(item) }}</span>
 								<span v-if="followUp(item).is_due" class="follow-up-due">Due / overdue</span>
@@ -212,7 +214,8 @@ export default {
 .action-row--warning { border-color: var(--orange-300, var(--edge-border)); }
 .action-row-main { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
 .action-copy, .source-row, .action-note { display: grid; gap: 4px; }
-.action-copy small, .source-row small, .action-note span, .action-empty, .follow-up-summary { color: var(--edge-text-muted); font-size: 12px; }
+.action-copy small, .source-row small, .action-note span, .action-empty, .follow-up-summary, .priority-reason { color: var(--edge-text-muted); font-size: 12px; }
+.priority-reason { line-height: 1.45; }
 .follow-up-summary { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 .follow-up-status, .follow-up-due { padding: 2px 7px; border: 1px solid var(--edge-border); border-radius: 999px; background: var(--edge-surface-soft, var(--edge-surface)); color: var(--edge-text); font-weight: 600; }
 .follow-up-due { border-color: var(--orange-300, var(--edge-border)); }
