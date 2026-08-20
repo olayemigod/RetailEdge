@@ -28,6 +28,7 @@ def test_stock_manager_gets_stock_exceptions_when_owner_dashboard_is_not_permitt
 		patch("retailedge.action_center.get_cash_shift_verification", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_customer_receivables", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_supplier_payables", return_value=_empty_summary()),
+		patch("retailedge.action_center.get_bank_exception_summary", return_value=_empty_summary()),
 		patch("retailedge.action_center.decorate_action_items", side_effect=lambda items, **kwargs: items),
 		patch("retailedge.action_center.frappe.get_roles", return_value=["Stock Manager"]),
 	):
@@ -77,6 +78,7 @@ def test_owner_dashboard_stock_source_does_not_trigger_duplicate_stock_scan():
 		patch("retailedge.action_center.get_cash_shift_verification", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_customer_receivables", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_supplier_payables", return_value=_empty_summary()),
+		patch("retailedge.action_center.get_bank_exception_summary", return_value=_empty_summary()),
 		patch("retailedge.action_center.decorate_action_items", side_effect=lambda items, **kwargs: items),
 	):
 		result = action_center.get_action_center_data(
