@@ -11,6 +11,7 @@ from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
 from retailedge.expense_register import get_expense_register
 from retailedge.owner_dashboard import get_owner_dashboard_data
+from retailedge.stock_position import get_stock_position
 from retailedge.supplier_payables import get_supplier_payables
 
 DEFAULT_PAGE_SIZE = 1
@@ -76,6 +77,18 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 					kind="management_exception",
 				)
 			)
+	elif _stock_fallback_allowed():
+		stock = _safe_source(
+			"stock_position",
+			lambda: get_stock_position(
+				filters={"company": company, "branch": branch},
+				page=1,
+				page_size=DEFAULT_PAGE_SIZE,
+			),
+		)
+		sources["stock_position"] = stock
+		if stock.get("available"):
+			_append_stock_exceptions(items, stock["payload"])
 
 	expenses = _safe_source(
 		"expenses",
@@ -209,6 +222,36 @@ def _summary_card(payload: dict[str, Any], label: str) -> dict[str, Any] | None:
 		if str(card.get("label") or "").strip() == label:
 			return dict(card)
 	return None
+
+
+def _append_stock_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]) -> None:
+	for metric, severity, label, kind in (
+		("Negative Stock", "danger", _("Items have negative stock"), "negative_stock"),
+		("Out of Stock", "warning", _("Items are out of stock"), "out_of_stock"),
+		("Fully Reserved", "warning", _("Stock is fully reserved"), "fully_reserved_stock"),
+	):
+		card = _summary_card(payload, metric)
+		if not card or flt(card.get("value")) <= 0:
+			continue
+		items.append(
+			_action(
+				source="stock",
+				label=label,
+				value=card.get("value"),
+				datatype=str(card.get("datatype") or card.get("type") or "Int"),
+				severity=severity,
+				route="/app/stock-position",
+				time_basis="current",
+				kind=kind,
+			)
+		)
+
+
+def _stock_fallback_allowed() -> bool:
+	user = frappe.session.user
+	if user in {"Guest", ""}:
+		return False
+	return "Stock Manager" in set(frappe.get_roles(user))
 
 
 def _action_from_financial_exposure(
