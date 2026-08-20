@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import flt, get_first_day, today
 
 from retailedge.action_follow_up import decorate_action_items
+from retailedge.action_prioritization import prioritise_action_items
 from retailedge.bank_exception_summary import get_bank_exception_summary
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
@@ -180,7 +181,8 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 	if bank.get("available"):
 		_append_bank_exceptions(items, bank["payload"])
 
-	all_items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
+	decorated_items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
+	all_items = prioritise_action_items(decorated_items)
 	items = _apply_follow_up_filters(
 		all_items,
 		follow_up_status=follow_up_status,
@@ -201,6 +203,8 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 		"metadata": {
 			"read_only": True,
 			"follow_up_state_only": True,
+			"prioritization_model": "severity_then_due_follow_up_then_age_then_comparable_financial_exposure",
+			"priority_score": None,
 			"resolution_model": "drill_through_to_existing_workflow_or_report",
 			"accounting_truth": "existing ERPNext/RetailEdge documents and reporting engines",
 			"generated_for": frappe.session.user,
