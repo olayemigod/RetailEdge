@@ -1,6 +1,8 @@
 # RetailEdge Action Centre Browser QA
 
-Use this checklist on `retail.local` before promoting `/app/action-center` into normal RetailEdge navigation.
+Use this checklist on `retail.local` to complete the visual and interaction QA for the already role-gated EdgeSuite Action Centre navigation.
+
+Action Centre is intentionally available in EdgeSuite `Review & Approvals` only to approved management/control roles. The purpose of this checklist is to validate that promoted experience before R4 is closed; it is not permission to broaden access or to promote the remaining QA-gated review pages.
 
 ## Preconditions
 
@@ -8,22 +10,33 @@ Use this checklist on `retail.local` before promoting `/app/action-center` into 
 - Build assets and migrate the site.
 - Confirm the `RetailEdge Action Follow Up` DocType exists.
 - Use test users representing System Manager, RetailEdge Manager/Branch Manager/Auditor, Accounts Manager, Stock Manager, and at least one ordinary operational user without an Action Centre page role.
-- Ensure the site contains at least one visible critical or warning exception from an existing RetailEdge/ERPNext source.
+- Ensure the site contains at least one visible critical or warning exception from existing RetailEdge/ERPNext sources, including financial, stock or banking exceptions where practical.
 
 ## Shell and access
 
 1. Open `/app/action-center` as System Manager and confirm the EdgeSuite shell loads with no competing native sidebar.
 2. Repeat with RetailEdge Manager, RetailEdge Branch Manager, RetailEdge Auditor, Accounts Manager and Stock Manager as applicable.
-3. Confirm an ordinary user without an allowed Page role cannot open the Action Centre route.
+3. Confirm an ordinary user without an allowed Page role cannot open the Action Centre route and does not receive the navigation item.
 4. Confirm inaccessible exception sources are excluded rather than leaking counts, labels or data.
 5. Confirm company and branch scope match the signed-in user's permitted context.
 
 ## Exception truth and drill-through
 
 1. Compare every visible exception against its owning report/workflow and confirm count/value parity.
-2. Use **Open workflow** and confirm it opens the authoritative RetailEdge/ERPNext process.
-3. Confirm Action Centre itself does not submit, approve, cancel, reconcile, post, mutate stock, create accounting entries or otherwise resolve the underlying exception.
-4. Resolve one underlying exception in its owning workflow, refresh Action Centre, and confirm the exception disappears or changes only according to the source-of-truth report.
+2. Confirm Receivables/Payables exposure and ageing agree with their EdgeSuite reports.
+3. Confirm stock exception counts agree with Stock Position for the same Company/Branch scope.
+4. Confirm banking actions agree with persisted Bank Transaction Match review/reconciliation state and do not trigger candidate discovery merely by loading Action Centre.
+5. Use **Open workflow** and confirm it opens the authoritative RetailEdge/ERPNext process.
+6. Confirm Action Centre itself does not submit, approve, cancel, reconcile, post, mutate stock, create accounting entries or otherwise resolve the underlying exception.
+7. Resolve one underlying exception in its owning workflow, refresh Action Centre, and confirm the exception disappears or changes only according to the source-of-truth report.
+
+## Prioritisation
+
+1. Confirm Critical actions appear before Needs Attention actions.
+2. Within the same severity, confirm due/overdue follow-ups appear ahead of otherwise comparable non-due actions.
+3. Confirm older unresolved conditions can rise above newer conditions within the same severity/follow-up state.
+4. Confirm the visible **Why this is prioritised** explanation matches the server ordering reason.
+5. Confirm no numeric priority score is displayed or implied.
 
 ## Follow-up persistence
 
@@ -49,20 +62,30 @@ For one visible exception:
 
 ## UX and responsive QA
 
-1. Check Light and Dark appearance modes for readable text, borders, status pills, dialogs and buttons.
+1. Check Light and Dark appearance modes for readable text, borders, status pills, dialogs, priority reason and buttons.
 2. Check desktop, tablet and narrow mobile widths.
 3. Confirm action buttons wrap cleanly and remain usable without horizontal overflow.
 4. Confirm Frappe assignment, schedule and snooze dialogs appear above the Action Centre shell and are keyboard usable.
-5. Confirm long exception labels, usernames and notes do not break card layout.
+5. Confirm long exception labels, usernames, priority reasons and notes do not break card layout.
 6. Confirm loading, empty, partial-permission and backend-error states are understandable.
 
-## Promotion gate
+## R4 closure gate
 
-Do not add Action Centre to normal RetailEdge navigation until:
+R4 Action Centre visual QA can be marked complete only when:
 
-- CI and Linters are green on the exact promotion head.
+- CI and Linters are green on the exact head being tested.
 - This browser QA passes for management/control roles and a denied ordinary user.
 - Exception values are verified against their owning reports/workflows.
 - Follow-up persistence survives browser refresh and does not mutate business truth.
+- Priority ordering/reasons are visibly correct.
 - Dark mode and mobile layout are acceptable.
-- Navigation uses a reusable item-level role/permission gate rather than exposing the Page to the whole Review & Approvals group.
+- Navigation remains behind the reusable item-level role gate.
+
+The following EdgeSuite pages remain separately QA-gated and must **not** be promoted as a side effect of Action Centre QA:
+
+- `/app/stock-movement-history`
+- `/app/expense-review`
+- `/app/cash-shift-verification`
+- `/app/daily-sales-audit`
+
+Their existing legacy/native primary routes remain in force until each page completes its own source-parity and local browser QA.
