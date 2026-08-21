@@ -77,17 +77,30 @@ def _normalise_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 
 def _build_period(filters: frappe._dict) -> dict[str, Any]:
 	headers = _get_permitted_invoice_headers(filters)
-	header_map = {row.name: row for row in headers}
-	items = _get_costed_items(list(header_map))
+	invoice_names = [row.name for row in headers]
+	header_map = _get_invoice_dimension_metadata(invoice_names)
+	items = _get_costed_items(invoice_names)
 	item_rows = _aggregate_items(items)
 	totals = _totals(item_rows)
 	return {
 		"totals": totals,
 		"item_rows": item_rows,
 		"dimensions": _build_dimensions(items, header_map),
-		"invoice_count": len(header_map),
+		"invoice_count": len(invoice_names),
 		"item_row_count": len(items),
 	}
+
+
+def _get_invoice_dimension_metadata(invoice_names: list[str]) -> dict[str, frappe._dict]:
+	if not invoice_names:
+		return {}
+	rows = frappe.get_list(
+		"Sales Invoice",
+		filters={"name": ["in", invoice_names], "docstatus": 1},
+		fields=["name", "customer", "customer_name", "branch"],
+		limit=max(len(invoice_names), 1),
+	)
+	return {row.name: row for row in rows}
 
 
 def _previous_period_filters(filters: frappe._dict) -> frappe._dict:
