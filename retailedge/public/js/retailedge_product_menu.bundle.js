@@ -3,6 +3,8 @@ const SHARED_RUNTIME_ASSET = "edgeui.bundle.js";
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const MAX_INSTALL_ATTEMPTS = 6;
+const GUIDED_CREATE_ACTION = "guided-create";
+const BUSINESS_HUB_ROUTE = "retailedge-business-hub";
 
 const GROUP_PRESENTATION = Object.freeze({
 	home: { icon: "home", description: "Business home and command centre." },
@@ -24,6 +26,7 @@ const ITEM_ICONS = Object.freeze({
 	Report: "chart",
 	DocType: "list",
 	URL: "external-link",
+	Action: "plus",
 });
 
 const state = {
@@ -131,8 +134,29 @@ function itemDescription(item) {
 	return "Open";
 }
 
-function buildSections(groups) {
-	return (Array.isArray(groups) ? groups : [])
+function guidedCreateSection(quickActions) {
+	const actions = Array.isArray(quickActions) ? quickActions : [];
+	if (!actions.length) return null;
+	return {
+		label: "Create",
+		description: "Start a permission-aware guided business entry.",
+		icon: "plus",
+		items: [
+			{
+				label: "+ Create",
+				description: `${actions.length} permitted guided entr${actions.length === 1 ? "y" : "ies"}`,
+				icon: "plus",
+				link_type: "Action",
+				link_to: GUIDED_CREATE_ACTION,
+				route: "",
+				visible: true,
+			},
+		],
+	};
+}
+
+function buildSections(groups, quickActions = []) {
+	const sections = (Array.isArray(groups) ? groups : [])
 		.map((group) => {
 			const presentation = GROUP_PRESENTATION[group.key] || {
 				icon: "layers",
@@ -155,10 +179,26 @@ function buildSections(groups) {
 			};
 		})
 		.filter((section) => section.items.length);
+	const createSection = guidedCreateSection(quickActions);
+	return createSection ? [createSection, ...sections] : sections;
+}
+
+function requestGuidedCreate() {
+	window.__retailedgeOpenGuidedCreate = true;
+	const route = frappe.get_route?.() || [];
+	if (route[0] === BUSINESS_HUB_ROUTE) {
+		document.dispatchEvent(new CustomEvent("retailedge-open-guided-create"));
+		return;
+	}
+	frappe.set_route(BUSINESS_HUB_ROUTE);
 }
 
 function navigate(item) {
 	if (!item) return;
+	if (item.link_type === "Action" && item.link_to === GUIDED_CREATE_ACTION) {
+		requestGuidedCreate();
+		return;
+	}
 	if (item.link_type === "URL") {
 		window.location.assign(item.route || item.link_to);
 		return;
@@ -195,7 +235,7 @@ async function installProductMenu({ force = false } = {}) {
 		state.attempts += 1;
 		const edgeUI = await ensureRuntime();
 		const data = await fetchContext();
-		const sections = buildSections(data.navigation_groups);
+		const sections = buildSections(data.navigation_groups, data.quick_actions);
 		if (!sections.length) {
 			throw new Error("No permitted RetailEdge product-menu sections are available.");
 		}
