@@ -9,10 +9,15 @@ from frappe.utils import flt, get_first_day, today
 from retailedge.action_follow_up import decorate_action_items
 from retailedge.action_prioritization import prioritise_action_items
 from retailedge.bank_exception_summary import get_bank_exception_summary
+from retailedge.branch_context import (
+	get_user_allowed_branches,
+	user_has_global_branch_access,
+)
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
 from retailedge.expense_register import get_expense_register
 from retailedge.owner_dashboard import get_owner_dashboard_data
+from retailedge.reporting_capabilities import _validate_scope as _validate_operational_scope
 from retailedge.stock_position import get_stock_position
 from retailedge.supplier_payables import get_supplier_payables
 
@@ -46,13 +51,33 @@ def get_action_center_context() -> dict[str, Any]:
 	}
 
 
+def _resolve_action_center_branch(company: str, branch: str, *, user: str) -> str:
+	branch = str(branch or "").strip()
+	_validate_operational_scope(company=company, branch=branch, user=user)
+	if branch or user_has_global_branch_access(user=user):
+		return branch
+	allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
+	if len(allowed) == 1:
+		return str(allowed[0])
+	if len(allowed) > 1:
+		frappe.throw(
+			_("Select a Branch before loading the Action Centre for this multi-branch access scope."),
+			frappe.PermissionError,
+		)
+	return ""
+
+
 @frappe.whitelist()
 def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	filters = _coerce_filters(filters)
 	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."))
-	branch = str(filters.get("branch") or "").strip()
+	branch = _resolve_action_center_branch(
+		company,
+		str(filters.get("branch") or "").strip(),
+		user=frappe.session.user,
+	)
 	from_date = str(filters.get("from_date") or get_first_day(today()))
 	to_date = str(filters.get("to_date") or today())
 	follow_up_status = _choice(filters.get("follow_up_status"), FOLLOW_UP_STATUSES, "All")
