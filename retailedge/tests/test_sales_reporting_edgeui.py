@@ -10,7 +10,7 @@ from retailedge import sales_reporting
 APP_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = APP_ROOT / "sales_reporting.py"
 BUNDLE = APP_ROOT / "public" / "js" / "sales_reporting.bundle.js"
-COMPONENT = APP_ROOT / "public" / "js" / "sales_reporting" / "SalesReportingPage.vue"
+COMPONENT = APP_ROOT / "public" / "js" / "sales_reporting" / "SalesReportingReport.vue"
 SALES_BY_ITEM_PAGE = APP_ROOT / "retailedge" / "page" / "sales_by_item"
 INVOICE_REGISTER_PAGE = APP_ROOT / "retailedge" / "page" / "sales_invoice_register"
 
