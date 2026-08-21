@@ -71,6 +71,34 @@ def _visibility_filters(filters: dict[str, Any]) -> dict[str, Any]:
 	return {key: value for key, value in filters.items() if key not in MANAGEMENT_FILTER_KEYS}
 
 
+def _assert_action_center_role(user: str | None = None) -> None:
+	from retailedge.edgesuite_ui import ACTION_CENTER_ROLES
+
+	user = user or frappe.session.user
+	if user == "Administrator":
+		return
+	roles = set(frappe.get_roles(user))
+	if not roles.intersection(ACTION_CENTER_ROLES):
+		frappe.throw(_("You do not have permission to manage Action Centre follow-ups."), frappe.PermissionError)
+
+
+def _validate_assignment_user(user: str, *, company: str, branch: str) -> None:
+	from retailedge.branch_context import validate_user_branch_access
+	from retailedge.edgesuite_ui import ACTION_CENTER_ROLES
+
+	user = str(user or "").strip()
+	if not user:
+		return
+	if not frappe.db.get_value("User", user, "enabled"):
+		frappe.throw(_("Assigned user must be enabled."))
+	if user != "Administrator" and not set(frappe.get_roles(user)).intersection(ACTION_CENTER_ROLES):
+		frappe.throw(_("Assigned user must have access to the RetailEdge Action Centre."), frappe.PermissionError)
+	if branch:
+		allowed = validate_user_branch_access(branch, user=user, company=company, throw=False)
+		if not allowed.get("allowed"):
+			frappe.throw(_("Assigned user does not have access to this Branch."), frappe.PermissionError)
+
+
 @frappe.whitelist()
 def update_action_follow_up(
 	fingerprint: str,
@@ -83,6 +111,7 @@ def update_action_follow_up(
 ) -> dict[str, Any]:
 	from retailedge.action_center import get_action_center_data
 
+	_assert_action_center_role()
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	payload = get_action_center_data(_visibility_filters(filters))
 	visible = next((row for row in payload.get("items") or [] if row.get("fingerprint") == fingerprint), None)
@@ -128,16 +157,27 @@ def update_action_follow_up(
 		doc.acknowledged_by = None
 		doc.acknowledged_on = None
 	if action == "assign" or assigned_to:
-		doc.assigned_to = assigned_to or frappe.session.user
+		resolved_assignee = assigned_to or frappe.session.user
+		_validate_assignment_user(
+			resolved_assignee,
+			company=str(payload["filters"].get("company") or ""),
+			branch=str(payload["filters"].get("branch") or ""),
+		)
+		doc.assigned_to = resolved_assignee
 	if follow_up_on:
 		doc.follow_up_on = follow_up_on
 	if notes is not None:
 		doc.notes = notes
 
-	if doc.is_new():
-		doc.insert()
-	else:
-		doc.save()
+	previous_api_write = getattr(frappe.flags, "retailedge_action_follow_up_api_write", False)
+	frappe.flags.retailedge_action_follow_up_api_write = True
+	try:
+		if doc.is_new():
+			doc.insert()
+		else:
+			doc.save()
+	finally:
+		frappe.flags.retailedge_action_follow_up_api_write = previous_api_write
 	return effective_follow_up_state(
 		{
 			"fingerprint": doc.fingerprint,
