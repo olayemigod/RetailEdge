@@ -55,3 +55,14 @@ def test_product_menu_opens_native_desk_targets_in_new_tabs():
     assert 'window.open(url, "_blank", "noopener,noreferrer")' in source
     assert "window.retailedgeOpenNativeTarget = openNativeDeskTarget" in source
     assert 'if (item.link_type === "Report" || item.link_type === "DocType")' in source
+
+
+def test_edgesuite_sidebar_native_links_use_same_new_tab_policy():
+    source = PRODUCT_MENU.read_text(encoding="utf-8")
+    assert "function nativeSidebarTarget(label)" in source
+    assert "if (matches.length !== 1) return null" in source
+    assert "function handleNativeSidebarClick(event)" in source
+    assert 'event.target?.closest?.(".edge-app-shell .edge-sidebar-item")' in source
+    assert "event.stopImmediatePropagation()" in source
+    assert "openNativeDeskTarget(item.link_type, item.link_to)" in source
+    assert 'document.addEventListener("click", handleNativeSidebarClick, true)' in source
