@@ -12,6 +12,7 @@ from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_dashboard_export import build_expense_dashboard_export_with_budget
 from retailedge.money_dashboard import build_money_dashboard_export_dataset
 from retailedge.owner_dashboard import build_owner_dashboard_export_dataset
+from retailedge.profitability_export import build_profitability_export_dataset
 from retailedge.reporting_files import (
 	MIME_TYPES,
 	_csv_bytes,
@@ -32,6 +33,7 @@ DashboardHandler = Callable[[dict, bool], dict]
 def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	handlers: dict[str, DashboardHandler] = {
 		"owner-dashboard": lambda filters, _all_filtered: build_owner_dashboard_export_dataset(filters),
+		"profitability-intelligence": lambda filters, _all_filtered: build_profitability_export_dataset(filters),
 		"sales-overview": lambda filters, _all_filtered: build_sales_dashboard_export_dataset(filters),
 		"money-overview": lambda filters, _all_filtered: build_money_dashboard_export_dataset(filters),
 		"expense-overview": lambda filters, _all_filtered: build_expense_dashboard_export_with_budget(filters),
