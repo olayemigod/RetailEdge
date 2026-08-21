@@ -38,7 +38,7 @@ app_include_js = [
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
 ]
 
-# include js, css files in header of web template
+# include js, css files in web template
 # web_include_css = "/assets/retailedge/css/retailedge.css"
 # web_include_js = "/assets/retailedge/js/retailedge.js"
 
@@ -226,6 +226,15 @@ after_migrate = [
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
 ]
 boot_session = "retailedge.boot.boot_session"
+
+# Permission scope
+# ------------------------------
+permission_query_conditions = {
+	"RetailEdge Action Follow Up": "retailedge.action_follow_up.get_permission_query_conditions",
+}
+has_permission = {
+	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
+}
 
 # Extend DocType Class
 # ------------------------------
