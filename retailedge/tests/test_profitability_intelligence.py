@@ -20,24 +20,8 @@ class TestProfitabilityIntelligence(FrappeTestCase):
 	def test_aggregate_uses_recorded_incoming_rate_and_net_sales(self):
 		rows = _aggregate_items(
 			[
-				frappe._dict(
-					parent="SINV-0001",
-					item_code="ITEM-A",
-					item_name="Item A",
-					item_group="Products",
-					stock_qty=2,
-					base_net_amount=200,
-					incoming_rate=60,
-				),
-				frappe._dict(
-					parent="SINV-0002",
-					item_code="ITEM-A",
-					item_name="Item A",
-					item_group="Products",
-					stock_qty=1,
-					base_net_amount=120,
-					incoming_rate=70,
-				),
+				frappe._dict(parent="SINV-0001", item_code="ITEM-A", item_name="Item A", item_group="Products", stock_qty=2, base_net_amount=200, incoming_rate=60),
+				frappe._dict(parent="SINV-0002", item_code="ITEM-A", item_name="Item A", item_group="Products", stock_qty=1, base_net_amount=120, incoming_rate=70),
 			]
 		)
 		self.assertEqual(len(rows), 1)
@@ -88,10 +72,20 @@ class TestProfitabilityIntelligence(FrappeTestCase):
 		self.assertEqual({row["key"] for row in dimensions["item_group"]}, {"Batteries", "Inverters"})
 		self.assertEqual({row["key"] for row in dimensions["customer"]}, {"Alpha Stores", "Beta Stores"})
 
+	def test_salesperson_dimension_allocates_without_double_counting(self):
+		items = [frappe._dict(parent="SINV-1", item_code="A", item_group="Products", stock_qty=1, base_net_amount=200, incoming_rate=100)]
+		headers = {"SINV-1": frappe._dict(name="SINV-1", branch="Lagos", customer_name="Alpha")}
+		dimensions = _build_dimensions(items, headers, {"SINV-1": [("Ada", 0.75), ("Bola", 0.25)]})
+		rows = {row["key"]: row for row in dimensions["salesperson"]}
+		self.assertEqual(rows["Ada"]["net_sales"], 150)
+		self.assertEqual(rows["Ada"]["gross_profit"], 75)
+		self.assertEqual(rows["Bola"]["net_sales"], 50)
+		self.assertEqual(rows["Bola"]["gross_profit"], 25)
+		self.assertEqual(sum(row["net_sales"] for row in rows.values()), 200)
+		self.assertEqual(sum(row["gross_profit"] for row in rows.values()), 100)
+
 	def test_previous_period_is_equal_length_and_immediately_precedes_current(self):
-		previous = _previous_period_filters(
-			frappe._dict(company="Test", branch="", from_date="2026-08-11", to_date="2026-08-20")
-		)
+		previous = _previous_period_filters(frappe._dict(company="Test", branch="", from_date="2026-08-11", to_date="2026-08-20"))
 		self.assertEqual(previous.from_date, "2026-08-01")
 		self.assertEqual(previous.to_date, "2026-08-10")
 
