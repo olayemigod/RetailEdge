@@ -84,6 +84,33 @@ class TestActionFollowUp(unittest.TestCase):
 				branch="",
 			)
 
+	@patch("retailedge.action_follow_up._has_action_center_role", return_value=False)
+	def test_direct_query_denies_users_without_action_center_role(self, _has_role):
+		self.assertEqual(action_follow_up.get_permission_query_conditions("sales@example.com"), "1=0")
+
+	@patch("retailedge.action_follow_up.frappe.db.escape", return_value="'Main'")
+	@patch("retailedge.branch_context.get_user_allowed_branches", return_value={"branches": ["Main"]})
+	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=False)
+	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
+	def test_direct_query_is_restricted_to_permitted_branches(
+		self, _has_role, _global_access, _allowed_branches, _escape
+	):
+		condition = action_follow_up.get_permission_query_conditions("manager@example.com")
+		self.assertIn("`branch` in ('Main')", condition)
+		self.assertIn("RetailEdge Action Follow Up", condition)
+
+	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=True)
+	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
+	def test_global_action_center_role_has_no_extra_branch_query_condition(self, _has_role, _global_access):
+		self.assertEqual(action_follow_up.get_permission_query_conditions("manager@example.com"), "")
+
+	def test_permission_hooks_are_registered(self):
+		hooks_path = Path(action_follow_up.__file__).resolve().parent / "hooks.py"
+		source = hooks_path.read_text(encoding="utf-8")
+		self.assertIn("permission_query_conditions", source)
+		self.assertIn("retailedge.action_follow_up.get_permission_query_conditions", source)
+		self.assertIn("retailedge.action_follow_up.has_permission", source)
+
 	def test_follow_up_source_contains_no_business_resolution_calls(self):
 		source = Path(action_follow_up.__file__).read_text(encoding="utf-8")
 		for forbidden in (".submit(", "apply_workflow(", "ignore_permissions=True", "frappe.db.commit("):
