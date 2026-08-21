@@ -33,7 +33,7 @@ def test_reporting_capabilities_use_settings_scope_roles_and_document_read_permi
 		'"can_view": can_view',
 		'"can_print": can_print',
 		'"can_export": can_export',
-		'"authorization_model": "settings_scope_role_and_document_permission"',
+		'"authorization_model": "settings_scope_role_document_and_branch_permission"',
 		'frappe.has_permission(spec.ref_doctype, ptype="read", user=user)',
 		"validate_user_branch_access",
 		"require_report_action",
@@ -55,6 +55,19 @@ def test_reporting_capabilities_use_settings_scope_roles_and_document_read_permi
 
 	for forbidden in ("ignore_permissions", "frappe.db.commit()"):
 		assert forbidden not in source
+
+
+def test_reporting_scope_fails_closed_when_multi_branch_access_is_unresolved():
+	source = _read(CAPABILITIES)
+	for expected in (
+		"get_user_allowed_branches",
+		"user_has_global_branch_access",
+		"_company_branch_count(company) <= 1",
+		'frappe.db.count("Branch", filters={"company": company})',
+		'_("Your Branch access is not configured for this multi-branch Company.")',
+		"frappe.PermissionError",
+	):
+		assert expected in source
 
 
 def test_reporting_action_settings_are_idempotent_and_registered():
