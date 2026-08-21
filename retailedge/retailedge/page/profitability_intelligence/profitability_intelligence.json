@@ -1,0 +1,26 @@
+{
+  "content": null,
+  "creation": "2026-08-21 00:00:00.000000",
+  "docstatus": 0,
+  "doctype": "Page",
+  "idx": 0,
+  "modified": "2026-08-21 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "RetailEdge",
+  "name": "profitability-intelligence",
+  "owner": "Administrator",
+  "page_name": "profitability-intelligence",
+  "roles": [
+    {"role": "System Manager"},
+    {"role": "Accounts Manager"},
+    {"role": "RetailEdge Manager"},
+    {"role": "RetailEdgeManager"},
+    {"role": "RetailEdge Auditor"},
+    {"role": "RetailEdgeAuditor"}
+  ],
+  "script": null,
+  "standard": "Yes",
+  "style": null,
+  "system_page": 0,
+  "title": "Profitability Intelligence"
+}
