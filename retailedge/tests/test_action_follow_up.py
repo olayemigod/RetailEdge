@@ -68,6 +68,22 @@ class TestActionFollowUp(unittest.TestCase):
 		with self.assertRaises(frappe.PermissionError):
 			action_follow_up.update_action_follow_up("not-visible", "acknowledge", {"company": "Test Company"})
 
+	@patch("retailedge.action_follow_up.frappe.get_roles", return_value=["Sales User"])
+	def test_non_action_center_role_cannot_manage_follow_up(self, _roles):
+		frappe.session.user = "sales@example.com"
+		with self.assertRaises(frappe.PermissionError):
+			action_follow_up._assert_action_center_role()
+
+	@patch("retailedge.action_follow_up.frappe.get_roles", return_value=["Sales User"])
+	@patch("retailedge.action_follow_up.frappe.db.get_value", return_value=1)
+	def test_assignment_target_must_have_action_center_role(self, _enabled, _roles):
+		with self.assertRaises(frappe.PermissionError):
+			action_follow_up._validate_assignment_user(
+				"sales@example.com",
+				company="Test Company",
+				branch="",
+			)
+
 	def test_follow_up_source_contains_no_business_resolution_calls(self):
 		source = Path(action_follow_up.__file__).read_text(encoding="utf-8")
 		for forbidden in (".submit(", "apply_workflow(", "ignore_permissions=True", "frappe.db.commit("):
@@ -79,6 +95,16 @@ class TestActionFollowUp(unittest.TestCase):
 		self.assertIn('"Open\\nAcknowledged\\nSnoozed"', doc)
 		self.assertNotIn("Resolved", doc)
 		self.assertNotIn("Closed", doc)
+
+	def test_doctype_controller_blocks_direct_non_admin_writes(self):
+		controller_path = (
+			Path(action_follow_up.__file__).resolve().parent
+			/ "retailedge/doctype/retailedge_action_follow_up/retailedge_action_follow_up.py"
+		)
+		source = controller_path.read_text(encoding="utf-8")
+		self.assertIn("retailedge_action_follow_up_api_write", source)
+		self.assertIn("can only be changed from the Action Centre", source)
+		self.assertIn("frappe.PermissionError", source)
 
 
 if __name__ == "__main__":
