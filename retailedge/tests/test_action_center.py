@@ -177,12 +177,63 @@ class TestActionCenter(unittest.TestCase):
 		self.assertFalse(result["available"])
 		self.assertNotIn("scope too broad", result["reason"])
 
+	@patch("retailedge.action_center._validate_operational_scope")
+	def test_explicit_branch_is_validated_before_composition(self, validate_scope):
+		resolved = action_center._resolve_action_center_branch(
+			"Test Company", "Main", user="branch@example.com"
+		)
+		self.assertEqual(resolved, "Main")
+		validate_scope.assert_called_once_with(
+			company="Test Company", branch="Main", user="branch@example.com"
+		)
+
+	@patch("retailedge.action_center.get_user_allowed_branches")
+	@patch("retailedge.action_center.user_has_global_branch_access", return_value=False)
+	@patch("retailedge.action_center._validate_operational_scope")
+	def test_blank_branch_auto_narrows_to_sole_permitted_branch(
+		self, validate_scope, global_access, allowed_branches
+	):
+		allowed_branches.return_value = {"branches": ["Main"]}
+		resolved = action_center._resolve_action_center_branch(
+			"Test Company", "", user="branch@example.com"
+		)
+		self.assertEqual(resolved, "Main")
+		validate_scope.assert_called_once_with(
+			company="Test Company", branch="", user="branch@example.com"
+		)
+		global_access.assert_called_once_with(user="branch@example.com")
+
+	@patch("retailedge.action_center.get_user_allowed_branches")
+	@patch("retailedge.action_center.user_has_global_branch_access", return_value=False)
+	@patch("retailedge.action_center._validate_operational_scope")
+	def test_blank_branch_rejects_ambiguous_multi_branch_access(
+		self, validate_scope, global_access, allowed_branches
+	):
+		allowed_branches.return_value = {"branches": ["Main", "North"]}
+		with self.assertRaises(frappe.PermissionError):
+			action_center._resolve_action_center_branch(
+				"Test Company", "", user="branch@example.com"
+			)
+
+	@patch(
+		"retailedge.action_center._validate_operational_scope",
+		side_effect=frappe.PermissionError,
+	)
+	def test_scope_denial_stops_action_center_before_source_loading(self, validate_scope):
+		with self.assertRaises(frappe.PermissionError):
+			action_center._resolve_action_center_branch(
+				"Other Company", "", user="branch@example.com"
+			)
+		validate_scope.assert_called_once()
+
 	def test_source_contains_no_transaction_completion_calls(self):
 		from pathlib import Path
 
 		source = Path(action_center.__file__).read_text(encoding="utf-8")
 		for forbidden in (".submit(", "apply_workflow(", "ignore_permissions=True", "frappe.db.commit("):
 			self.assertNotIn(forbidden, source)
+		self.assertIn("_resolve_action_center_branch(", source)
+		self.assertIn("_validate_operational_scope", source)
 
 
 if __name__ == "__main__":
