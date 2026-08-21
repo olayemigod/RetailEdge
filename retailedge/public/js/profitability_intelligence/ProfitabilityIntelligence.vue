@@ -118,6 +118,7 @@ export default {
 				{ key: "branch", label: "Profitability by Branch", entityLabel: "Branch", description: "Gross-profit contribution by permitted branch.", rows: this.dimensions.branch || [] },
 				{ key: "item_group", label: "Profitability by Item Group", entityLabel: "Item Group", description: "Product-category contribution and margin.", rows: this.dimensions.item_group || [] },
 				{ key: "customer", label: "Profitability by Customer", entityLabel: "Customer", description: "Customer contribution ranked by gross profit.", rows: this.dimensions.customer || [] },
+				{ key: "salesperson", label: "Profitability by Salesperson", entityLabel: "Salesperson", description: "Gross profit allocated using ERPNext Sales Team percentages without double-counting invoice contribution.", rows: this.dimensions.salesperson || [] },
 			];
 		},
 	},
