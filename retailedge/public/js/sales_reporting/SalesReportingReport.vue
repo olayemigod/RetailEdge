@@ -57,7 +57,7 @@
 					<EdgeSmartDateRange
 						v-model="smartDate"
 						label="Smart Date Range"
-						:referenceDate="filters.to_date || null"
+						:referenceDate="smartDateReference || null"
 						dateOrder="DMY"
 						@resolved="onSmartDateResolved"
 					/>
@@ -225,6 +225,7 @@ export default {
 			customerLabel: "",
 			itemLabel: "",
 			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				date_range_preset: "This Month",
@@ -313,6 +314,7 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
