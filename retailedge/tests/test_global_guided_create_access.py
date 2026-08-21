@@ -49,6 +49,21 @@ def test_global_create_reuses_canonical_business_hub_guided_host():
         assert component in hub
 
 
+def test_guided_create_picker_is_fuzzy_searchable_from_both_entry_points():
+    source = ROUTE_BRIDGE.read_text(encoding="utf-8")
+    assert "function fuzzyActionScore(query, action)" in source
+    assert "function editDistance(left, right)" in source
+    assert "function isSubsequence(needle, haystack)" in source
+    assert "function installGuidedCreateSearch(wrapper)" in source
+    assert 'class="edge-input guided-create-search-input"' in source
+    assert 'placeholder="Search sales, payment, stock, customer…"' in source
+    assert "applyGuidedCreateSearch(list, proxy, input.value)" in source
+    assert "visible.length === 1" in source
+    assert "visible[0].click()" in source
+    assert "installGuidedCreateSearch(wrapper);" in source
+    assert "proxy.openCreatePicker();" in source
+
+
 def test_product_menu_opens_native_desk_targets_in_new_tabs():
     source = PRODUCT_MENU.read_text(encoding="utf-8")
     assert "function openNativeDeskTarget(linkType, linkTo)" in source
