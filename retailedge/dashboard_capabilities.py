@@ -52,6 +52,14 @@ _DASHBOARD_SPECS = {
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		ref_doctype="Company",
 	),
+	"profitability-intelligence": DashboardCapabilitySpec(
+		key="profitability-intelligence",
+		label="Profitability Intelligence",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		ref_doctype="Sales Invoice",
+	),
 	"sales-overview": DashboardCapabilitySpec(
 		key="sales-overview",
 		label="Sales Overview",
