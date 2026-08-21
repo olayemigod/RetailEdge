@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Profitability Intelligence"
 			eyebrow="Owner Intelligence"
-			subtitle="Gross profit, margin contribution and margin leakage from submitted ERPNext sales and recorded item cost."
+			subtitle="Gross profit, contribution, period movement and margin leakage from submitted ERPNext sales and recorded item cost."
 			:summary="summary"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +34,16 @@
 			</template>
 
 			<EdgeDashboardGrid minColumnWidth="24rem">
+				<EdgeDashboardSection title="Previous Period" :description="comparisonDescription">
+					<div class="comparison-grid">
+						<div v-for="metric in comparison.metrics || []" :key="metric.key" class="comparison-card">
+							<span>{{ metric.label }}</span>
+							<strong>{{ formatMetric(metric.current, metric.datatype) }}</strong>
+							<small>{{ formatChange(metric) }} vs previous period</small>
+						</div>
+					</div>
+				</EdgeDashboardSection>
+
 				<EdgeDashboardSection title="Top Profit Contributors" description="Items ranked by gross-profit contribution in the selected period.">
 					<div class="profit-table-wrap">
 						<table class="profit-table">
@@ -63,6 +73,20 @@
 						</table>
 					</div>
 				</EdgeDashboardSection>
+
+				<EdgeDashboardSection v-for="dimension in dimensionSections" :key="dimension.key" :title="dimension.label" :description="dimension.description">
+					<div class="profit-table-wrap">
+						<table class="profit-table">
+							<thead><tr><th>{{ dimension.entityLabel }}</th><th>Net Sales</th><th>Gross Profit</th><th>Margin</th></tr></thead>
+							<tbody>
+								<tr v-for="row in dimension.rows" :key="row.key">
+									<td><strong>{{ row.key }}</strong></td><td>{{ money(row.net_sales) }}</td><td>{{ money(row.gross_profit) }}</td><td>{{ percent(row.gross_margin_percent) }}</td>
+								</tr>
+								<tr v-if="!dimension.rows.length"><td colspan="4" class="empty-cell">No data for this dimension.</td></tr>
+							</tbody>
+						</table>
+					</div>
+				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
 		</EdgeDashboardShell>
 	</EdgeAppShell>
@@ -80,9 +104,22 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			summary: [], topContributors: [], marginLeakage: [], menuItems: [], tenantName: "", userName: "", companyCurrency: "",
+			summary: [], topContributors: [], marginLeakage: [], dimensions: {}, comparison: {}, menuItems: [], tenantName: "", userName: "", companyCurrency: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
+	},
+	computed: {
+		comparisonDescription() {
+			if (!this.comparison.previous_from_date) return "Selected period compared with the immediately preceding equal-length period.";
+			return `${this.comparison.previous_from_date} to ${this.comparison.previous_to_date}`;
+		},
+		dimensionSections() {
+			return [
+				{ key: "branch", label: "Profitability by Branch", entityLabel: "Branch", description: "Gross-profit contribution by permitted branch.", rows: this.dimensions.branch || [] },
+				{ key: "item_group", label: "Profitability by Item Group", entityLabel: "Item Group", description: "Product-category contribution and margin.", rows: this.dimensions.item_group || [] },
+				{ key: "customer", label: "Profitability by Customer", entityLabel: "Customer", description: "Customer contribution ranked by gross profit.", rows: this.dimensions.customer || [] },
+			];
+		},
 	},
 	created() {
 		const components = runtimeComponents();
@@ -112,9 +149,11 @@ export default {
 				this.summary = result.summary || [];
 				this.topContributors = result.top_contributors || [];
 				this.marginLeakage = result.margin_leakage || [];
+				this.dimensions = result.dimensions || {};
+				this.comparison = result.comparison || {};
 				this.companyCurrency = result.company_currency || "";
 			} catch (error) {
-				this.summary = []; this.topContributors = []; this.marginLeakage = [];
+				this.summary = []; this.topContributors = []; this.marginLeakage = []; this.dimensions = {}; this.comparison = {};
 				this.error = errorMessage(error, "Profitability Intelligence failed to load.");
 			} finally { this.loading = false; }
 		},
@@ -123,17 +162,26 @@ export default {
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		money(value) { try { return frappe.format(value, { fieldtype: "Currency", options: this.companyCurrency }); } catch (_error) { return value ?? "—"; } },
 		percent(value) { return `${Number(value || 0).toFixed(1)}%`; },
+		formatMetric(value, datatype) { return datatype === "Percent" ? this.percent(value) : this.money(value); },
+		formatChange(metric) {
+			if (metric.change_percent === null || metric.change_percent === undefined) return "No comparable base";
+			const sign = Number(metric.change_percent) > 0 ? "+" : "";
+			return `${sign}${Number(metric.change_percent).toFixed(1)}%`;
+		},
 	},
 };
 </script>
 
 <style scoped>
 .profitability-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.comparison-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.comparison-card { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
+.comparison-card span, .comparison-card small { color: var(--edge-text-muted); }
 .profit-table-wrap { overflow-x: auto; }
 .profit-table { width: 100%; border-collapse: collapse; min-width: 620px; }
 .profit-table th, .profit-table td { padding: 10px 12px; border-bottom: 1px solid var(--edge-border); text-align: right; vertical-align: top; }
 .profit-table th:first-child, .profit-table td:first-child { text-align: left; }
 .profit-table td small { display: block; color: var(--edge-text-muted); margin-top: 2px; }
 .empty-cell { color: var(--edge-text-muted); text-align: center !important; padding: 18px !important; }
-@media (max-width: 720px) { .profitability-filters { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .profitability-filters, .comparison-grid { grid-template-columns: 1fr; } }
 </style>
