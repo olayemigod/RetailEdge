@@ -4,6 +4,7 @@
 	const PAGE_NAME = "retailedge-business-hub";
 	const MAX_ATTEMPTS = 40;
 	const RETRY_MS = 150;
+	const GUIDED_CREATE_EVENT = "retailedge-open-guided-create";
 	const SIMPLE_MASTER_DOCTYPES = new Set(["Customer", "Supplier", "Item"]);
 	const state = {
 		attempts: 0,
@@ -92,6 +93,28 @@
 		return true;
 	}
 
+	function openPendingGuidedCreate(wrapper, attempt = 0) {
+		if (!global.__retailedgeOpenGuidedCreate || !isActiveRoute()) return false;
+		const proxy = getMountedProxy(wrapper);
+		if (proxy && typeof proxy.openCreatePicker === "function") {
+			global.__retailedgeOpenGuidedCreate = false;
+			proxy.openCreatePicker();
+			return true;
+		}
+		if (attempt < MAX_ATTEMPTS) {
+			global.setTimeout(() => openPendingGuidedCreate(wrapper, attempt + 1), RETRY_MS);
+		}
+		return false;
+	}
+
+	function requestGuidedCreate() {
+		global.__retailedgeOpenGuidedCreate = true;
+		if (!isActiveRoute()) return false;
+		const wrapper = resolveWrapper();
+		if (!wrapper) return false;
+		return openPendingGuidedCreate(wrapper);
+	}
+
 	function bootActiveRoute() {
 		if (!isActiveRoute()) {
 			state.attempts = 0;
@@ -114,7 +137,10 @@
 
 			global.retailedgeBootProductMenu?.();
 			const pending = global.retailedgeBootBusinessHubPage?.(wrapper);
-			Promise.resolve(pending).finally(() => installMasterQuickEntryBridge(wrapper));
+			Promise.resolve(pending).finally(() => {
+				installMasterQuickEntryBridge(wrapper);
+				openPendingGuidedCreate(wrapper);
+			});
 			state.booted = true;
 			state.lastError = null;
 			return pending || true;
@@ -136,10 +162,12 @@
 	["DOMContentLoaded", "page-change", "desktop_screen", "sidebar_setup"].forEach((eventName) => {
 		global.document?.addEventListener(eventName, scheduleBoot);
 	});
+	global.document?.addEventListener(GUIDED_CREATE_EVENT, requestGuidedCreate);
 	global.frappe?.router?.on?.("change", scheduleBoot);
 
 	global.retailedgeBusinessHubRouteBridge = {
 		boot: bootActiveRoute,
+		openGuidedCreate: requestGuidedCreate,
 		state,
 	};
 
