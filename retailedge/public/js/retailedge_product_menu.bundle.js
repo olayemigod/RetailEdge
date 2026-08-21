@@ -216,6 +216,29 @@ function openNativeDeskTarget(linkType, linkTo) {
 	return true;
 }
 
+function nativeSidebarTarget(label) {
+	const normalized = String(label || "").trim();
+	if (!normalized) return null;
+	const matches = (state.lastConfig?.sections || [])
+		.flatMap((section) => section.items || [])
+		.filter((item) => item.label === normalized);
+	if (matches.length !== 1) return null;
+	const item = matches[0];
+	return item.link_type === "Report" || item.link_type === "DocType" ? item : null;
+}
+
+function handleNativeSidebarClick(event) {
+	const button = event.target?.closest?.(".edge-app-shell .edge-sidebar-item");
+	if (!button) return;
+	const labelNode = button.querySelector?.(".edge-sidebar-item__label");
+	const item = nativeSidebarTarget(labelNode?.textContent || button.textContent);
+	if (!item) return;
+	event.preventDefault();
+	event.stopPropagation();
+	event.stopImmediatePropagation();
+	openNativeDeskTarget(item.link_type, item.link_to);
+}
+
 function navigate(item) {
 	if (!item) return;
 	if (item.link_type === "Action" && item.link_to === GUIDED_CREATE_ACTION) {
@@ -310,6 +333,7 @@ function scheduleRefresh() {
 ["toolbar_setup", "page-change", "desktop_screen", "sidebar_setup"].forEach((eventName) => {
 	document.addEventListener(eventName, scheduleRefresh);
 });
+document.addEventListener("click", handleNativeSidebarClick, true);
 window.frappe?.router?.on?.("change", scheduleRefresh);
 
 window.retailedgeGetBusinessHubContext = fetchContext;
