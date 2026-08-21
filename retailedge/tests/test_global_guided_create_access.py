@@ -45,3 +45,13 @@ def test_global_create_reuses_canonical_business_hub_guided_host():
         "SimpleStockAdjustmentDialog",
     ):
         assert component in hub
+
+
+def test_product_menu_opens_native_desk_targets_in_new_tabs():
+    source = PRODUCT_MENU.read_text(encoding="utf-8")
+    assert "function openNativeDeskTarget(linkType, linkTo)" in source
+    assert 'if (linkType === "Report")' in source
+    assert 'else if (linkType === "DocType")' in source
+    assert 'window.open(url, "_blank", "noopener,noreferrer")' in source
+    assert "window.retailedgeOpenNativeTarget = openNativeDeskTarget" in source
+    assert 'if (item.link_type === "Report" || item.link_type === "DocType")' in source
