@@ -22,8 +22,15 @@
 			:summary="summary"
 			:loading="loading || metadataLoading"
 			:error="error"
+			:exportEnabled="summary.length > 0 && capabilities.can_export"
+			:printEnabled="summary.length > 0 && capabilities.can_print"
+			:exportBusy="exportBusy"
+			:printBusy="printBusy"
+			:exportInitialOptions="exportOptions"
 			loadingMessage="Calculating profitability…"
 			@retry="fetchData"
+			@export="handleExport"
+			@print="handlePrint"
 		>
 			<template #filters>
 				<div class="profitability-filters">
@@ -59,16 +66,17 @@
 					</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection title="Margin Leakage" description="Negative and low-margin items requiring owner review.">
+				<EdgeDashboardSection title="Margin Leakage" description="Negative and low-margin items requiring owner review. Evidence opens only for the selected item.">
 					<div class="profit-table-wrap">
 						<table class="profit-table">
-							<thead><tr><th>Item</th><th>Net Sales</th><th>Cost</th><th>Profit</th><th>Margin</th></tr></thead>
+							<thead><tr><th>Item</th><th>Net Sales</th><th>Cost</th><th>Profit</th><th>Margin</th><th></th></tr></thead>
 							<tbody>
 								<tr v-for="row in marginLeakage" :key="row.item_code">
 									<td><strong>{{ row.item_name || row.item_code }}</strong><small>{{ row.item_code }}</small></td>
 									<td>{{ money(row.net_sales) }}</td><td>{{ money(row.cost_of_sales) }}</td><td>{{ money(row.gross_profit) }}</td><td>{{ percent(row.gross_margin_percent) }}</td>
+									<td><button type="button" class="edge-button edge-button--secondary" :disabled="evidenceBusy === row.item_code" @click="reviewLeakage(row)">{{ evidenceBusy === row.item_code ? "Loading…" : "Review Evidence" }}</button></td>
 								</tr>
-								<tr v-if="!marginLeakage.length"><td colspan="5" class="empty-cell">No low-margin leakage detected in this period.</td></tr>
+								<tr v-if="!marginLeakage.length"><td colspan="6" class="empty-cell">No low-margin leakage detected in this period.</td></tr>
 							</tbody>
 						</table>
 					</div>
@@ -93,7 +101,15 @@
 </template>
 
 <script>
+import {
+	defaultDashboardExportOptions,
+	exportDashboard,
+	getDashboardCapabilities,
+	printDashboard,
+} from "../retailedge_dashboard_actions";
+
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
+const DASHBOARD_KEY = "profitability-intelligence";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -104,6 +120,9 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
+			exportBusy: false, printBusy: false, evidenceBusy: "",
+			capabilities: { can_view: true, can_print: false, can_export: false },
+			exportOptions: defaultDashboardExportOptions(),
 			summary: [], topContributors: [], marginLeakage: [], dimensions: {}, comparison: {}, menuItems: [], tenantName: "", userName: "", companyCurrency: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
@@ -118,7 +137,7 @@ export default {
 				{ key: "branch", label: "Profitability by Branch", entityLabel: "Branch", description: "Gross-profit contribution by permitted branch.", rows: this.dimensions.branch || [] },
 				{ key: "item_group", label: "Profitability by Item Group", entityLabel: "Item Group", description: "Product-category contribution and margin.", rows: this.dimensions.item_group || [] },
 				{ key: "customer", label: "Profitability by Customer", entityLabel: "Customer", description: "Customer contribution ranked by gross profit.", rows: this.dimensions.customer || [] },
-				{ key: "salesperson", label: "Profitability by Salesperson", entityLabel: "Salesperson", description: "Gross profit allocated using ERPNext Sales Team percentages without double-counting invoice contribution.", rows: this.dimensions.salesperson || [] },
+				{ key: "salesperson", label: "Profitability by Salesperson", entityLabel: "Salesperson", description: "Profit contribution allocated using ERPNext Sales Team percentages.", rows: this.dimensions.salesperson || [] },
 			];
 		},
 	},
@@ -146,17 +165,75 @@ export default {
 			if (!this.filters.company) return;
 			this.loading = true; this.error = "";
 			try {
-				const result = await callMethod("retailedge.profitability_intelligence.get_profitability_intelligence", { filters: this.filters });
+				const [result, capabilities] = await Promise.all([
+					callMethod("retailedge.profitability_intelligence.get_profitability_intelligence", { filters: this.filters }),
+					getDashboardCapabilities(DASHBOARD_KEY, this.filters),
+				]);
 				this.summary = result.summary || [];
 				this.topContributors = result.top_contributors || [];
 				this.marginLeakage = result.margin_leakage || [];
 				this.dimensions = result.dimensions || {};
 				this.comparison = result.comparison || {};
 				this.companyCurrency = result.company_currency || "";
+				this.capabilities = capabilities || this.capabilities;
 			} catch (error) {
 				this.summary = []; this.topContributors = []; this.marginLeakage = []; this.dimensions = {}; this.comparison = {};
 				this.error = errorMessage(error, "Profitability Intelligence failed to load.");
 			} finally { this.loading = false; }
+		},
+		async handleExport(options) {
+			if (!this.capabilities.can_export) return;
+			this.exportBusy = true;
+			try { await exportDashboard(DASHBOARD_KEY, this.filters, options); }
+			catch (error) { frappe.msgprint({ title: __("Profitability Export Failed"), message: errorMessage(error, "Profitability Intelligence could not be exported."), indicator: "red" }); }
+			finally { this.exportBusy = false; }
+		},
+		async handlePrint() {
+			if (!this.capabilities.can_print) return;
+			this.printBusy = true;
+			try { await printDashboard(DASHBOARD_KEY, this.filters); }
+			catch (error) { frappe.msgprint({ title: __("Profitability Print Failed"), message: errorMessage(error, "The profitability print view could not be prepared."), indicator: "red" }); }
+			finally { this.printBusy = false; }
+		},
+		async reviewLeakage(row) {
+			if (!row?.item_code) return;
+			this.evidenceBusy = row.item_code;
+			try {
+				const evidence = await callMethod("retailedge.profitability_leakage.get_margin_leakage_evidence", { item_code: row.item_code, filters: this.filters });
+				this.showEvidenceDialog(evidence);
+			} catch (error) { frappe.msgprint({ title: __("Margin Evidence Failed"), message: errorMessage(error, "Margin evidence could not be loaded."), indicator: "red" }); }
+			finally { this.evidenceBusy = ""; }
+		},
+		showEvidenceDialog(evidence) {
+			const rows = evidence?.rows || [];
+			if (!rows.length) { frappe.msgprint(__("No submitted invoice evidence was found for this item in the selected scope.")); return; }
+			const options = rows.map((row) => row.invoice).join("\n");
+			const dialog = new frappe.ui.Dialog({
+				title: __(`Margin Evidence — ${evidence.item_name || evidence.item_code}`),
+				fields: [
+					{ fieldtype: "Select", fieldname: "invoice", label: __("Sales Invoice"), options, default: rows[0].invoice, reqd: 1 },
+					{ fieldtype: "Data", fieldname: "customer", label: __("Customer"), read_only: 1 },
+					{ fieldtype: "Date", fieldname: "posting_date", label: __("Posting Date"), read_only: 1 },
+					{ fieldtype: "Currency", fieldname: "net_sales", label: __("Net Sales"), read_only: 1 },
+					{ fieldtype: "Currency", fieldname: "cost_of_sales", label: __("Cost of Sales"), read_only: 1 },
+					{ fieldtype: "Currency", fieldname: "gross_profit", label: __("Gross Profit"), read_only: 1 },
+					{ fieldtype: "Percent", fieldname: "gross_margin_percent", label: __("Gross Margin"), read_only: 1 },
+					{ fieldtype: "Percent", fieldname: "discount_percentage", label: __("Discount"), read_only: 1 },
+				],
+				primary_action_label: __("Open Sales Invoice"),
+				primary_action: (values) => {
+					const selected = rows.find((candidate) => candidate.invoice === values.invoice);
+					if (selected?.route) window.open(selected.route, "_blank", "noopener,noreferrer");
+				},
+			});
+			const sync = () => {
+				const invoice = dialog.get_value("invoice");
+				const selected = rows.find((candidate) => candidate.invoice === invoice) || rows[0];
+				for (const field of ["customer", "posting_date", "net_sales", "cost_of_sales", "gross_profit", "gross_margin_percent", "discount_percentage"]) dialog.set_value(field, selected[field] ?? "");
+			};
+			dialog.fields_dict.invoice.df.onchange = sync;
+			dialog.show();
+			sync();
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
@@ -179,7 +256,7 @@ export default {
 .comparison-card { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
 .comparison-card span, .comparison-card small { color: var(--edge-text-muted); }
 .profit-table-wrap { overflow-x: auto; }
-.profit-table { width: 100%; border-collapse: collapse; min-width: 620px; }
+.profit-table { width: 100%; border-collapse: collapse; min-width: 700px; }
 .profit-table th, .profit-table td { padding: 10px 12px; border-bottom: 1px solid var(--edge-border); text-align: right; vertical-align: top; }
 .profit-table th:first-child, .profit-table td:first-child { text-align: left; }
 .profit-table td small { display: block; color: var(--edge-text-muted); margin-top: 2px; }
