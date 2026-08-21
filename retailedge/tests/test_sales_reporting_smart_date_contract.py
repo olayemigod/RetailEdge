@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "retailedge" / "public" / "js" / "sales_reporting" / "SalesReportingReport.vue"
 
@@ -10,6 +9,14 @@ def test_sales_reports_require_shared_smart_date_component():
 	assert '"EdgeSmartDateRange"' in text
 	assert "<EdgeSmartDateRange" in text
 	assert '@resolved="onSmartDateResolved"' in text
+
+
+def test_smart_date_uses_stable_server_reference_date():
+	text = SOURCE.read_text()
+	assert 'smartDateReference: ""' in text
+	assert ':referenceDate="smartDateReference || null"' in text
+	assert 'this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || ""' in text
+	assert ':referenceDate="filters.to_date || null"' not in text
 
 
 def test_smart_date_resolution_only_updates_exact_report_dates():
