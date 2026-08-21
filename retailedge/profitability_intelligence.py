@@ -5,7 +5,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt, get_first_day, today
+from frappe.utils import add_days, date_diff, flt, get_first_day, getdate, today
 
 from retailedge.cost_visibility import should_hide_cost_price
 from retailedge.sales_reporting import (
@@ -23,44 +23,30 @@ DEFAULT_LOW_MARGIN_PERCENT = 10.0
 
 @frappe.whitelist()
 def get_profitability_intelligence(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
-	"""Return permission-aware owner profitability metrics from submitted Sales Invoices.
-
-	Sales Invoice remains the revenue truth. Cost is the ERPNext incoming rate recorded on
-	the submitted Sales Invoice Item, so this layer does not invent or maintain a parallel
-	cost model.
-	"""
-	filters = _coerce_filters(filters)
-	if not filters.get("company"):
-		filters.company = str(frappe.defaults.get_user_default("Company") or "").strip()
-	filters.from_date = str(filters.get("from_date") or get_first_day(today()))
-	filters.to_date = str(filters.get("to_date") or today())
-
+	"""Return owner profitability intelligence from permission-aware submitted Sales Invoices."""
+	filters = _normalise_filters(filters)
 	_validate_filters(filters)
 	_assert_report_access(filters)
 	_assert_cost_visibility()
 
-	headers = _get_permitted_invoice_headers(filters)
-	header_map = {row.name: row for row in headers}
-	items = _get_costed_items(list(header_map))
-	rows = _aggregate_items(items)
+	current = _build_period(filters)
+	previous_filters = _previous_period_filters(filters)
+	previous = _build_period(previous_filters)
+	comparison = _build_comparison(current["totals"], previous["totals"], previous_filters)
 	currency = _company_currency(filters.company)
 
-	totals = _totals(rows)
 	return {
-		"summary": [
-			{"label": _("Net Sales"), "value": totals["net_sales"], "datatype": "Currency"},
-			{"label": _("Cost of Sales"), "value": totals["cost_of_sales"], "datatype": "Currency"},
-			{"label": _("Gross Profit"), "value": totals["gross_profit"], "datatype": "Currency"},
-			{"label": _("Gross Margin"), "value": totals["gross_margin_percent"], "datatype": "Percent"},
-			{"label": _("Negative Margin Items"), "value": totals["negative_margin_items"], "datatype": "Int"},
-			{"label": _("Low Margin Items"), "value": totals["low_margin_items"], "datatype": "Int"},
-		],
-		"rows": rows,
-		"top_contributors": sorted(rows, key=lambda row: (-flt(row["gross_profit"]), row["item_code"]))[:10],
+		"summary": _summary_cards(current["totals"]),
+		"rows": current["item_rows"],
+		"dimensions": current["dimensions"],
+		"top_contributors": sorted(
+			current["item_rows"], key=lambda row: (-flt(row["gross_profit"]), row["item_code"])
+		)[:10],
 		"margin_leakage": sorted(
-			[row for row in rows if flt(row["gross_margin_percent"]) < DEFAULT_LOW_MARGIN_PERCENT],
+			[row for row in current["item_rows"] if flt(row["gross_margin_percent"]) < DEFAULT_LOW_MARGIN_PERCENT],
 			key=lambda row: (flt(row["gross_margin_percent"]), -abs(flt(row["net_sales"]))),
 		)[:25],
+		"comparison": comparison,
 		"company_currency": currency,
 		"show_costs": 1,
 		"scope": {
@@ -73,15 +59,93 @@ def get_profitability_intelligence(filters: dict[str, Any] | str | None = None) 
 			"revenue_truth": "Submitted Sales Invoice / Sales Invoice Item",
 			"cost_truth": "Sales Invoice Item incoming_rate × stock_qty",
 			"low_margin_threshold_percent": DEFAULT_LOW_MARGIN_PERCENT,
-			"invoice_count": len(header_map),
-			"item_row_count": len(items),
+			"invoice_count": current["invoice_count"],
+			"item_row_count": current["item_row_count"],
+			"comparison_basis": "immediately preceding equal-length period",
 		},
 	}
 
 
+def _normalise_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
+	filters = _coerce_filters(filters)
+	if not filters.get("company"):
+		filters.company = str(frappe.defaults.get_user_default("Company") or "").strip()
+	filters.from_date = str(filters.get("from_date") or get_first_day(today()))
+	filters.to_date = str(filters.get("to_date") or today())
+	return filters
+
+
+def _build_period(filters: frappe._dict) -> dict[str, Any]:
+	headers = _get_permitted_invoice_headers(filters)
+	header_map = {row.name: row for row in headers}
+	items = _get_costed_items(list(header_map))
+	item_rows = _aggregate_items(items)
+	totals = _totals(item_rows)
+	return {
+		"totals": totals,
+		"item_rows": item_rows,
+		"dimensions": _build_dimensions(items, header_map),
+		"invoice_count": len(header_map),
+		"item_row_count": len(items),
+	}
+
+
+def _previous_period_filters(filters: frappe._dict) -> frappe._dict:
+	from_date = getdate(filters.from_date)
+	to_date = getdate(filters.to_date)
+	period_days = max(date_diff(to_date, from_date) + 1, 1)
+	previous_to = add_days(from_date, -1)
+	previous_from = add_days(previous_to, -(period_days - 1))
+	return frappe._dict({**dict(filters), "from_date": str(previous_from), "to_date": str(previous_to)})
+
+
+def _build_comparison(
+	current: dict[str, Any], previous: dict[str, Any], previous_filters: frappe._dict
+) -> dict[str, Any]:
+	metrics = []
+	for key, label, datatype in (
+		("net_sales", "Net Sales", "Currency"),
+		("gross_profit", "Gross Profit", "Currency"),
+		("gross_margin_percent", "Gross Margin", "Percent"),
+	):
+		current_value = flt(current.get(key))
+		previous_value = flt(previous.get(key))
+		change = current_value - previous_value
+		change_percent = (change / abs(previous_value) * 100.0) if previous_value else None
+		metrics.append(
+			{
+				"key": key,
+				"label": _(label),
+				"datatype": datatype,
+				"current": current_value,
+				"previous": previous_value,
+				"change": change,
+				"change_percent": change_percent,
+			}
+		)
+	return {
+		"previous_from_date": previous_filters.from_date,
+		"previous_to_date": previous_filters.to_date,
+		"metrics": metrics,
+	}
+
+
+def _summary_cards(totals: dict[str, Any]) -> list[dict[str, Any]]:
+	return [
+		{"label": _("Net Sales"), "value": totals["net_sales"], "datatype": "Currency"},
+		{"label": _("Cost of Sales"), "value": totals["cost_of_sales"], "datatype": "Currency"},
+		{"label": _("Gross Profit"), "value": totals["gross_profit"], "datatype": "Currency"},
+		{"label": _("Gross Margin"), "value": totals["gross_margin_percent"], "datatype": "Percent"},
+		{"label": _("Negative Margin Items"), "value": totals["negative_margin_items"], "datatype": "Int"},
+		{"label": _("Low Margin Items"), "value": totals["low_margin_items"], "datatype": "Int"},
+	]
+
+
 def _assert_cost_visibility() -> None:
 	if should_hide_cost_price():
-		raise frappe.PermissionError(_("Your current RetailEdge cost-visibility policy does not allow profitability intelligence."))
+		raise frappe.PermissionError(
+			_("Your current RetailEdge cost-visibility policy does not allow profitability intelligence.")
+		)
 
 
 def _get_costed_items(invoice_names: list[str]) -> list[frappe._dict]:
@@ -104,9 +168,9 @@ def _get_costed_items(invoice_names: list[str]) -> list[frappe._dict]:
 	)
 	if len(rows) > MAX_PROFITABILITY_ROWS:
 		frappe.throw(
-			_("More than {0} sales item rows match this profitability scope. Narrow the date range or Branch before loading profitability intelligence.").format(
-				MAX_PROFITABILITY_ROWS
-			)
+			_(
+				"More than {0} sales item rows match this profitability scope. Narrow the date range or Branch before loading profitability intelligence."
+			).format(MAX_PROFITABILITY_ROWS)
 		)
 	return rows
 
@@ -117,36 +181,82 @@ def _aggregate_items(items: list[frappe._dict]) -> list[dict[str, Any]]:
 		item_code = str(row.get("item_code") or "").strip() or _("Unspecified Item")
 		bucket = aggregated.get(item_code)
 		if not bucket:
-			bucket = {
-				"item_code": item_code,
-				"item_name": row.get("item_name") or item_code,
-				"item_group": row.get("item_group") or "",
-				"net_qty": 0.0,
-				"net_sales": 0.0,
-				"cost_of_sales": 0.0,
-				"gross_profit": 0.0,
-				"gross_margin_percent": 0.0,
-				"invoice_count": 0,
-				"_invoices": set(),
-			}
+			bucket = _new_bucket(
+				item_code,
+				item_name=row.get("item_name") or item_code,
+				item_group=row.get("item_group") or "",
+			)
 			aggregated[item_code] = bucket
+		_add_to_bucket(bucket, row, row.get("parent"))
 
-		stock_qty = flt(row.get("stock_qty"))
-		net_sales = flt(row.get("base_net_amount"))
-		cost_of_sales = flt(row.get("incoming_rate")) * stock_qty
-		bucket["net_qty"] += stock_qty
-		bucket["net_sales"] += net_sales
-		bucket["cost_of_sales"] += cost_of_sales
-		bucket["gross_profit"] += net_sales - cost_of_sales
-		bucket["_invoices"].add(row.get("parent"))
-
-	rows: list[dict[str, Any]] = []
-	for bucket in aggregated.values():
-		bucket["invoice_count"] = len(bucket.pop("_invoices"))
-		bucket["gross_margin_percent"] = _margin_percent(bucket["gross_profit"], bucket["net_sales"])
-		rows.append(bucket)
+	rows = [_finalise_bucket(bucket) for bucket in aggregated.values()]
 	rows.sort(key=lambda row: (-flt(row["net_sales"]), row["item_code"]))
 	return rows
+
+
+def _build_dimensions(
+	items: list[frappe._dict], header_map: dict[str, frappe._dict]
+) -> dict[str, list[dict[str, Any]]]:
+	branch_buckets: dict[str, dict[str, Any]] = {}
+	group_buckets: dict[str, dict[str, Any]] = {}
+	customer_buckets: dict[str, dict[str, Any]] = {}
+	for row in items:
+		header = header_map.get(row.get("parent")) or frappe._dict()
+		branch = str(header.get("branch") or _("Unassigned Branch"))
+		customer = str(header.get("customer_name") or header.get("customer") or _("Unspecified Customer"))
+		item_group = str(row.get("item_group") or _("Unspecified Item Group"))
+		for buckets, key in (
+			(branch_buckets, branch),
+			(group_buckets, item_group),
+			(customer_buckets, customer),
+		):
+			bucket = buckets.setdefault(key, _new_bucket(key))
+			_add_to_bucket(bucket, row, row.get("parent"))
+
+	return {
+		"branch": _dimension_rows(branch_buckets),
+		"item_group": _dimension_rows(group_buckets),
+		"customer": _dimension_rows(customer_buckets),
+	}
+
+
+def _new_bucket(key: str, **extra: Any) -> dict[str, Any]:
+	return {
+		"key": key,
+		"item_code": key,
+		"net_qty": 0.0,
+		"net_sales": 0.0,
+		"cost_of_sales": 0.0,
+		"gross_profit": 0.0,
+		"gross_margin_percent": 0.0,
+		"invoice_count": 0,
+		"_invoices": set(),
+		**extra,
+	}
+
+
+def _add_to_bucket(bucket: dict[str, Any], row: frappe._dict, invoice: str | None) -> None:
+	stock_qty = flt(row.get("stock_qty"))
+	net_sales = flt(row.get("base_net_amount"))
+	cost_of_sales = flt(row.get("incoming_rate")) * stock_qty
+	bucket["net_qty"] += stock_qty
+	bucket["net_sales"] += net_sales
+	bucket["cost_of_sales"] += cost_of_sales
+	bucket["gross_profit"] += net_sales - cost_of_sales
+	if invoice:
+		bucket["_invoices"].add(invoice)
+
+
+def _finalise_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
+	bucket["invoice_count"] = len(bucket.pop("_invoices", set()))
+	bucket["gross_margin_percent"] = _margin_percent(bucket["gross_profit"], bucket["net_sales"])
+	return bucket
+
+
+def _dimension_rows(buckets: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+	rows = [_finalise_bucket(bucket) for bucket in buckets.values()]
+	rows.sort(key=lambda row: (-flt(row["gross_profit"]), str(row.get("key") or "")))
+	return rows[:25]
 
 
 def _totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -159,7 +269,9 @@ def _totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
 		"gross_profit": gross_profit,
 		"gross_margin_percent": _margin_percent(gross_profit, net_sales),
 		"negative_margin_items": sum(1 for row in rows if flt(row.get("gross_profit")) < 0),
-		"low_margin_items": sum(1 for row in rows if flt(row.get("gross_margin_percent")) < DEFAULT_LOW_MARGIN_PERCENT),
+		"low_margin_items": sum(
+			1 for row in rows if flt(row.get("gross_margin_percent")) < DEFAULT_LOW_MARGIN_PERCENT
+		),
 	}
 
 
