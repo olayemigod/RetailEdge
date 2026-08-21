@@ -11,6 +11,7 @@ from retailedge.cash_movement import get_cash_movement
 from retailedge.customer_receivables import get_customer_receivables
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_register import get_expense_register
+from retailedge.profitability_intelligence import get_profitability_intelligence
 from retailedge.sales_reporting import get_sales_invoice_register
 from retailedge.stock_position import get_stock_position
 from retailedge.supplier_payables import get_supplier_payables
@@ -40,7 +41,16 @@ def get_owner_dashboard_context() -> dict[str, Any]:
 		"branch_name": branch,
 		"user_name": frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user,
 		"capabilities": capabilities,
-		"sections": ["sales", "expenses", "cash", "receivables", "payables", "stock", "branches"],
+		"sections": [
+			"sales",
+			"profitability",
+			"expenses",
+			"cash",
+			"receivables",
+			"payables",
+			"stock",
+			"branches",
+		],
 	}
 
 
@@ -57,28 +67,55 @@ def get_owner_dashboard_data(filters: dict[str, Any] | str | None = None) -> dic
 	common = {"company": company, "branch": branch, "from_date": from_date, "to_date": to_date}
 
 	sections = {
-		"sales": _safe_section("Sales", lambda: get_sales_invoice_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/sales-invoice-register"),
-		"expenses": _safe_section("Expenses", lambda: get_expense_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/expense-register"),
-		"cash": _safe_section("Cash Movement", lambda: get_cash_movement(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE), "/app/cash-movement"),
+		"sales": _safe_section(
+			"Sales",
+			lambda: get_sales_invoice_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE),
+			"/app/sales-invoice-register",
+		),
+		"profitability": _safe_section(
+			"Profitability",
+			lambda: get_profitability_intelligence(filters=common),
+			"/app/profitability-intelligence",
+		),
+		"expenses": _safe_section(
+			"Expenses",
+			lambda: get_expense_register(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE),
+			"/app/expense-register",
+		),
+		"cash": _safe_section(
+			"Cash Movement",
+			lambda: get_cash_movement(filters=common, page=1, page_size=DEFAULT_PAGE_SIZE),
+			"/app/cash-movement",
+		),
 		"receivables": _safe_section(
 			"Receivables",
-			lambda: get_customer_receivables(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE),
+			lambda: get_customer_receivables(
+				filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE
+			),
 			"/app/customer-receivables",
 			time_basis="current",
 		),
 		"payables": _safe_section(
 			"Payables",
-			lambda: get_supplier_payables(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE),
+			lambda: get_supplier_payables(
+				filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE
+			),
 			"/app/supplier-payables",
 			time_basis="current",
 		),
 		"stock": _safe_section(
 			"Stock Position",
-			lambda: get_stock_position(filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE),
+			lambda: get_stock_position(
+				filters={"company": company, "branch": branch}, page=1, page_size=DEFAULT_PAGE_SIZE
+			),
 			"/app/stock-position",
 			time_basis="current",
 		),
-		"branches": _safe_section("Branch Performance", lambda: get_branch_performance_dashboard_data(filters=common), "/app/branch-performance-dashboard"),
+		"branches": _safe_section(
+			"Branch Performance",
+			lambda: get_branch_performance_dashboard_data(filters=common),
+			"/app/branch-performance-dashboard",
+		),
 	}
 	return {
 		"title": _("Owner Dashboard"),
@@ -87,9 +124,9 @@ def get_owner_dashboard_data(filters: dict[str, Any] | str | None = None) -> dic
 		"attention": _attention_items(sections),
 		"sections": sections,
 		"metadata": {
-			"composition": "existing_retailedge_reporting_engines",
+			"composition": "existing_retailedge_reporting_engines_plus_profitability_intelligence",
 			"accounting_truth": "ERPNext submitted/posted documents and existing RetailEdge control records",
-			"period_sections": ["sales", "expenses", "cash", "branches"],
+			"period_sections": ["sales", "profitability", "expenses", "cash", "branches"],
 			"current_sections": ["receivables", "payables", "stock"],
 			"generated_for": frappe.session.user,
 		},
@@ -130,6 +167,8 @@ def build_owner_dashboard_export_dataset(filters: dict[str, Any] | str | None = 
 def _headline_summary(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 	preferred = (
 		("sales", "Net Invoiced", "Sales"),
+		("profitability", "Gross Profit", "Gross Profit"),
+		("profitability", "Gross Margin", "Gross Margin"),
 		("expenses", "Total Expenses", "Expenses"),
 		("receivables", "Total Receivables", "Receivables"),
 		("payables", "Total Payables", "Payables"),
@@ -155,6 +194,8 @@ def _headline_summary(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any
 def _attention_items(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 	items: list[dict[str, Any]] = []
 	_rules = (
+		("profitability", "Negative Margin Items", "danger", "Items are selling at negative margin", "/app/profitability-intelligence"),
+		("profitability", "Low Margin Items", "warning", "Items are below the margin threshold", "/app/profitability-intelligence"),
 		("expenses", "Posting Blocked", "danger", "Expense posting is blocked", "/app/expense-register"),
 		("expenses", "Submitted for Review", "warning", "Expenses are awaiting review", "/app/expense-register"),
 		("receivables", "Over 90 Days", "danger", "Receivables are over 90 days overdue", "/app/customer-receivables"),
