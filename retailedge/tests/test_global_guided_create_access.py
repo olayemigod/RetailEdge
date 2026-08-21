@@ -4,6 +4,8 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 CONTEXT = APP_ROOT / "edgesuite_ui.py"
+HOOKS = APP_ROOT / "hooks.py"
+BOOTSTRAP = APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js"
 PRODUCT_MENU = APP_ROOT / "public" / "js" / "retailedge_product_menu.bundle.js"
 ROUTE_BRIDGE = APP_ROOT / "public" / "js" / "retailedge_business_hub_route_bridge.js"
 BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
@@ -66,3 +68,13 @@ def test_edgesuite_sidebar_native_links_use_same_new_tab_policy():
     assert "event.stopImmediatePropagation()" in source
     assert "openNativeDeskTarget(item.link_type, item.link_to)" in source
     assert 'document.addEventListener("click", handleNativeSidebarClick, true)' in source
+
+
+def test_product_menu_and_guided_route_bridge_boot_globally_on_retailedge_desk():
+    hooks = HOOKS.read_text(encoding="utf-8")
+    bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+    assert '"/assets/retailedge/js/retailedge_business_hub_page.js"' in hooks
+    assert 'const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js"' in bootstrap
+    assert "bootProductMenu();" in bootstrap
+    assert "bootRouteBridge();" in bootstrap
+    assert "initialiseDeskFeatures()" in bootstrap
