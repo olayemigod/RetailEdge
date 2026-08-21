@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from retailedge import edgesuite_ui
+from copy import deepcopy
+
+from retailedge import edgesuite_ui, master_experience
 
 
-QA_GATED_PAGE_TARGETS = {
-	"stock-movement-history",
-	"expense-review",
-	"cash-shift-verification",
-	"daily-sales-audit",
+PROMOTED_PAGE_TARGETS = {
+	"Cashier Expense Review": "expense-review",
+	"Cash Shift Verification": "cash-shift-verification",
+	"Daily Sales Audit": "daily-sales-audit",
 }
 
 
-def _navigation_items() -> list[dict]:
+def _base_navigation_items() -> list[dict]:
 	return [
 		item
 		for group in edgesuite_ui.NAVIGATION_GROUPS
@@ -19,26 +20,39 @@ def _navigation_items() -> list[dict]:
 	]
 
 
+def _promoted_navigation_items() -> list[dict]:
+	groups = deepcopy(list(edgesuite_ui.NAVIGATION_GROUPS))
+	master_experience._promote_browser_approved_r4_pages(groups)
+	return [item for group in groups for item in group.get("items") or ()]
+
+
 def test_action_center_is_role_gated_edge_suite_navigation():
-	items = _navigation_items()
+	items = _base_navigation_items()
 	action_center = next(item for item in items if item.get("target") == "action-center")
 	assert action_center["target_type"] == "Page"
 	assert set(action_center.get("required_roles") or ()) == set(edgesuite_ui.ACTION_CENTER_ROLES)
 	assert action_center.get("required_roles")
 
 
-def test_r4_preview_pages_remain_unpromoted_until_browser_qa():
-	items = _navigation_items()
-	page_targets = {
-		item.get("target")
-		for item in items
-		if item.get("target_type") == "Page"
-	}
-	assert QA_GATED_PAGE_TARGETS.isdisjoint(page_targets)
+def test_browser_approved_r4_pages_are_promoted_in_live_context():
+	items = _promoted_navigation_items()
+	by_label = {item.get("label"): item for item in items}
+	for label, target in PROMOTED_PAGE_TARGETS.items():
+		item = by_label[label]
+		assert item["target_type"] == "Page"
+		assert item["target"] == target
 
 
-def test_r4_preview_fallbacks_remain_explicit():
-	items = _navigation_items()
+def test_stock_movement_remains_qa_gated_on_native_report():
+	items = _promoted_navigation_items()
+	stock = next(item for item in items if item.get("label") == "Stock Movement History")
+	assert stock["target_type"] == "Report"
+	assert stock["target"] == "RetailEdge Stock Movement History"
+	assert "Stock Movement History" not in master_experience.PROMOTED_R4_PAGE_TARGETS
+
+
+def test_base_registry_keeps_native_fallbacks_available():
+	items = _base_navigation_items()
 	by_label = {item.get("label"): item for item in items}
 
 	stock = by_label["Stock Movement History"]
