@@ -10,7 +10,7 @@ from retailedge import stock_position
 APP_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = APP_ROOT / "stock_position.py"
 BUNDLE = APP_ROOT / "public" / "js" / "stock_position.bundle.js"
-COMPONENT = APP_ROOT / "public" / "js" / "stock_position" / "StockPosition.vue"
+COMPONENT = APP_ROOT / "public" / "js" / "stock_position" / "StockPositionReport.vue"
 PAGE_ROOT = APP_ROOT / "retailedge" / "page" / "stock_position"
 
 
