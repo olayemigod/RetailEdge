@@ -9,6 +9,9 @@ from retailedge.profitability_intelligence import (
 	DEFAULT_LOW_MARGIN_PERCENT,
 	_aggregate_items,
 	_assert_cost_visibility,
+	_build_comparison,
+	_build_dimensions,
+	_previous_period_filters,
 	_totals,
 )
 
@@ -69,6 +72,39 @@ class TestProfitabilityIntelligence(FrappeTestCase):
 		self.assertEqual(totals["negative_margin_items"], 1)
 		self.assertEqual(totals["low_margin_items"], 2)
 		self.assertEqual(DEFAULT_LOW_MARGIN_PERCENT, 10.0)
+
+	def test_dimensions_use_authorized_invoice_metadata(self):
+		items = [
+			frappe._dict(parent="SINV-1", item_code="A", item_group="Batteries", stock_qty=1, base_net_amount=150, incoming_rate=100),
+			frappe._dict(parent="SINV-2", item_code="B", item_group="Inverters", stock_qty=1, base_net_amount=300, incoming_rate=200),
+		]
+		headers = {
+			"SINV-1": frappe._dict(name="SINV-1", branch="Lagos", customer="CUST-1", customer_name="Alpha Stores"),
+			"SINV-2": frappe._dict(name="SINV-2", branch="Abuja", customer="CUST-2", customer_name="Beta Stores"),
+		}
+		dimensions = _build_dimensions(items, headers)
+		self.assertEqual(dimensions["branch"][0]["gross_profit"], 100)
+		self.assertEqual({row["key"] for row in dimensions["branch"]}, {"Lagos", "Abuja"})
+		self.assertEqual({row["key"] for row in dimensions["item_group"]}, {"Batteries", "Inverters"})
+		self.assertEqual({row["key"] for row in dimensions["customer"]}, {"Alpha Stores", "Beta Stores"})
+
+	def test_previous_period_is_equal_length_and_immediately_precedes_current(self):
+		previous = _previous_period_filters(
+			frappe._dict(company="Test", branch="", from_date="2026-08-11", to_date="2026-08-20")
+		)
+		self.assertEqual(previous.from_date, "2026-08-01")
+		self.assertEqual(previous.to_date, "2026-08-10")
+
+	def test_comparison_reports_absolute_and_percentage_change(self):
+		comparison = _build_comparison(
+			{"net_sales": 120, "gross_profit": 30, "gross_margin_percent": 25},
+			{"net_sales": 100, "gross_profit": 20, "gross_margin_percent": 20},
+			frappe._dict(from_date="2026-08-01", to_date="2026-08-10"),
+		)
+		net_sales = next(row for row in comparison["metrics"] if row["key"] == "net_sales")
+		self.assertEqual(net_sales["change"], 20)
+		self.assertEqual(net_sales["change_percent"], 20)
+		self.assertEqual(comparison["previous_from_date"], "2026-08-01")
 
 	@patch("retailedge.profitability_intelligence.should_hide_cost_price", return_value=True)
 	def test_cost_visibility_policy_fails_closed(self, _mock_hide):
