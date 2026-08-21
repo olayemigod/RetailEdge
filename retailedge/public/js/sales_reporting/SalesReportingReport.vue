@@ -54,6 +54,13 @@
 						:searcher="companySearch"
 						@select="onCompanySelected"
 					/>
+					<EdgeSmartDateRange
+						v-model="smartDate"
+						label="Smart Date Range"
+						:referenceDate="filters.to_date || null"
+						dateOrder="DMY"
+						@resolved="onSmartDateResolved"
+					/>
 					<label class="edge-field">
 						<span class="edge-field-label">Date Range</span>
 						<select v-model="filters.date_range_preset" class="edge-input" @change="onPresetChange">
@@ -156,7 +163,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
 	sales_by_item: {
@@ -217,6 +224,7 @@ export default {
 			companyCurrency: "",
 			customerLabel: "",
 			itemLabel: "",
+			smartDate: {},
 			filters: {
 				company: "",
 				date_range_preset: "This Month",
@@ -414,6 +422,13 @@ export default {
 				this.filters.warehouse = "";
 				this.error = errorMessage(error, "The selected Warehouse is not valid for this sales context.");
 			}
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.filters.date_range_preset = "Custom Period";
+			this.currentPage = 1;
 		},
 		async onPresetChange() {
 			if (this.filters.date_range_preset === "Custom Period") return;
