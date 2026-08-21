@@ -9,6 +9,7 @@ def test_profitability_backend_uses_submitted_sales_cost_truth_and_cost_policy()
 	assert "should_hide_cost_price" in text
 	assert "MAX_PROFITABILITY_ROWS" in text
 	assert "allocated_percentage" in text
+	assert "total_percent" in text
 	assert "ignore_permissions" not in text
 	assert "frappe.db.commit" not in text
 
