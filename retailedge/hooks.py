@@ -31,6 +31,7 @@ required_apps = ["edgesuite_ui"]
 app_include_css = [
 	"/assets/retailedge/css/retailedge_cards.css",
 	"/assets/retailedge/css/retailedge_workspace_home.css",
+	"/assets/retailedge/css/retailedge_guided_create_menu.css",
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
@@ -131,7 +132,6 @@ doctype_list_js = {
 
 # Uninstallation
 # ------------
-
 # before_uninstall = "retailedge.uninstall.before_uninstall"
 # after_uninstall = "retailedge.uninstall.after_uninstall"
 
