@@ -9,6 +9,7 @@ BOOTSTRAP = APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js"
 PRODUCT_MENU = APP_ROOT / "public" / "js" / "retailedge_product_menu.bundle.js"
 ROUTE_BRIDGE = APP_ROOT / "public" / "js" / "retailedge_business_hub_route_bridge.js"
 BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
+GUIDED_CREATE_CSS = APP_ROOT / "public" / "css" / "retailedge_guided_create_menu.css"
 
 
 def test_business_hub_context_exposes_only_permitted_quick_actions():
@@ -62,6 +63,25 @@ def test_guided_create_picker_is_fuzzy_searchable_from_both_entry_points():
     assert "visible[0].click()" in source
     assert "installGuidedCreateSearch(wrapper);" in source
     assert "proxy.openCreatePicker();" in source
+
+
+def test_guided_create_picker_matches_waffle_theme_and_is_responsive():
+    hooks = HOOKS.read_text(encoding="utf-8")
+    css = GUIDED_CREATE_CSS.read_text(encoding="utf-8")
+    assert '"/assets/retailedge/css/retailedge_guided_create_menu.css"' in hooks
+    assert ".edge-modal:has(.create-picker-list)" in css
+    assert "--edge-color-surface" in css
+    assert "--edge-color-surface-muted" in css
+    assert "--edge-color-border" in css
+    assert "--edge-color-ink-950" in css
+    assert "--edge-color-ink-500" in css
+    assert "--edge-color-brand-500" in css
+    assert "--edge-color-brand-600" in css
+    assert ".guided-create-search" in css
+    assert ".create-picker-item:hover" in css
+    assert "@media (max-width: 36rem)" in css
+    assert "100dvh" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css
 
 
 def test_product_menu_opens_native_desk_targets_in_new_tabs():
