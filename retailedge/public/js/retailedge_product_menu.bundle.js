@@ -193,6 +193,29 @@ function requestGuidedCreate() {
 	frappe.set_route(BUSINESS_HUB_ROUTE);
 }
 
+function deskSlug(value) {
+	return String(value || "")
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+function openNativeDeskTarget(linkType, linkTo) {
+	const target = String(linkTo || "").trim();
+	if (!target) return false;
+	let url = "";
+	if (linkType === "Report") {
+		url = `/app/query-report/${encodeURIComponent(target)}`;
+	} else if (linkType === "DocType") {
+		url = `/app/${deskSlug(target)}`;
+	} else {
+		return false;
+	}
+	window.open(url, "_blank", "noopener,noreferrer");
+	return true;
+}
+
 function navigate(item) {
 	if (!item) return;
 	if (item.link_type === "Action" && item.link_to === GUIDED_CREATE_ACTION) {
@@ -203,15 +226,11 @@ function navigate(item) {
 		window.location.assign(item.route || item.link_to);
 		return;
 	}
+	if (item.link_type === "Report" || item.link_type === "DocType") {
+		openNativeDeskTarget(item.link_type, item.link_to);
+		return;
+	}
 	if (!window.frappe?.set_route) return;
-	if (item.link_type === "Report") {
-		frappe.set_route("query-report", item.link_to);
-		return;
-	}
-	if (item.link_type === "DocType") {
-		frappe.set_route("List", item.link_to);
-		return;
-	}
 	frappe.set_route(item.link_to);
 }
 
@@ -297,6 +316,7 @@ window.retailedgeGetBusinessHubContext = fetchContext;
 window.retailedgeCacheBusinessHubContext = cacheContext;
 window.retailedgeInstallProductMenu = installProductMenu;
 window.retailedgeRefreshProductMenu = refreshProductMenu;
+window.retailedgeOpenNativeTarget = openNativeDeskTarget;
 window.retailedgeProductMenuState = state;
 
 installProductMenu();
