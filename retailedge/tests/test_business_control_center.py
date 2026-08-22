@@ -41,15 +41,17 @@ class RetailEdgeBusinessControlCenterTests(unittest.TestCase):
 		profit = next(row for row in r9 if row.get("family") == "Profitability")
 		self.assertEqual(profit["open_mode"], "new_tab")
 
-	def test_service_preserves_existing_action_center_and_does_not_mutate_business_documents(self):
+	def test_service_preserves_existing_action_center_and_uses_shared_follow_up_store(self):
 		source = (APP_ROOT / "business_control_center.py").read_text()
 		self.assertIn("get_action_center_data", source)
 		self.assertIn("get_control_early_warning", source)
+		self.assertIn("decorate_action_items", source)
 		self.assertNotIn("ignore_permissions", source)
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertNotIn("save(", source)
 		self.assertIn("do not create a ledger", source)
-		self.assertIn("follow-up validator", source)
+		self.assertIn("existing RetailEdge Action Follow Up store", source)
+		self.assertIn("same permission-aware Business Control Centre scope", source)
 
 
 if __name__ == "__main__":
