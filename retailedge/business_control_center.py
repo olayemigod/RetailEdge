@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 
 from retailedge.action_center import get_action_center_data
+from retailedge.action_follow_up import decorate_action_items
 from retailedge.control_early_warning import get_control_early_warning
 
 _DUPLICATE_WARNING_FAMILIES = {"Collections", "Supplier Obligations"}
@@ -16,7 +17,22 @@ def get_business_control_center(filters: dict[str, Any] | str | None = None) -> 
 	resolved = _coerce_filters(filters)
 	action_center = get_action_center_data(resolved)
 	warnings = get_control_early_warning(resolved)
-	return _build_business_control_center(action_center=action_center, warnings=warnings)
+	payload = _build_business_control_center(action_center=action_center, warnings=warnings)
+	filters_out = payload.get("filters") or {}
+	items = decorate_action_items(
+		payload.get("items") or [],
+		company=str(filters_out.get("company") or ""),
+		branch=str(filters_out.get("branch") or ""),
+	)
+	for item in items:
+		item["follow_up_supported"] = True
+	items.sort(key=_business_control_sort_key)
+	payload["items"] = items
+	payload["metadata"]["follow_up_contract"] = (
+		"All visible Business Control Centre items use the existing RetailEdge Action Follow Up store. "
+		"Writes must re-resolve the fingerprint against this same permission-aware Business Control Centre scope before persistence."
+	)
+	return payload
 
 
 def _build_business_control_center(
@@ -56,7 +72,7 @@ def _build_business_control_center(
 		"metadata": {
 			"composition": "existing_action_center_plus_r9_early_warning",
 			"duplicate_domains": "Collections and Supplier Obligations remain owned by the existing Action Centre receivables/payables sources and are not duplicated from R9 early warning.",
-			"follow_up_contract": "Existing Action Centre items retain acknowledgement, snooze, assignment and follow-up support. R9-only warning items remain read-only until the Action Centre follow-up validator can re-resolve those fingerprints safely.",
+			"follow_up_contract": "R9-only warnings are read-only in the pure composition helper; the runtime endpoint decorates all visible items through the existing Action Follow Up store after permission-aware resolution.",
 			"accounting_truth": "Business Control Centre composes existing ERPNext/RetailEdge reporting and control engines; it does not create a ledger or mutate accounting documents.",
 		},
 	}
