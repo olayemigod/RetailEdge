@@ -60,11 +60,11 @@ class TestActionFollowUp(unittest.TestCase):
 		)
 		self.assertEqual(filters, {"company": "Test Company", "branch": "Main"})
 
-	@patch("retailedge.action_center.get_action_center_data")
+	@patch("retailedge.business_control_center.get_business_control_center")
 	@patch("retailedge.action_follow_up.frappe.db.exists")
-	def test_update_rejects_non_visible_fingerprint(self, exists, get_actions):
+	def test_update_rejects_non_visible_fingerprint(self, exists, get_controls):
 		exists.return_value = True
-		get_actions.return_value = {"filters": {"company": "Test Company", "branch": ""}, "items": []}
+		get_controls.return_value = {"filters": {"company": "Test Company", "branch": ""}, "items": []}
 		with self.assertRaises(frappe.PermissionError):
 			action_follow_up.update_action_follow_up("not-visible", "acknowledge", {"company": "Test Company"})
 
@@ -115,6 +115,7 @@ class TestActionFollowUp(unittest.TestCase):
 		source = Path(action_follow_up.__file__).read_text(encoding="utf-8")
 		for forbidden in (".submit(", "apply_workflow(", "ignore_permissions=True", "frappe.db.commit("):
 			self.assertNotIn(forbidden, source)
+		self.assertIn("get_business_control_center", source)
 
 	def test_doctype_is_follow_up_state_not_resolution(self):
 		doc_path = Path(action_follow_up.__file__).resolve().parent / "retailedge/doctype/retailedge_action_follow_up/retailedge_action_follow_up.json"
