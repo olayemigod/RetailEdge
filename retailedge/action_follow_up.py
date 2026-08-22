@@ -153,14 +153,14 @@ def update_action_follow_up(
 	snoozed_until: str = "",
 	notes: str | None = None,
 ) -> dict[str, Any]:
-	from retailedge.action_center import get_action_center_data
+	from retailedge.business_control_center import get_business_control_center
 
 	_assert_action_center_role()
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
-	payload = get_action_center_data(_visibility_filters(filters))
+	payload = get_business_control_center(_visibility_filters(filters))
 	visible = next((row for row in payload.get("items") or [] if row.get("fingerprint") == fingerprint), None)
 	if not visible:
-		frappe.throw(_("This Action Centre item is no longer available in your current scope."), frappe.PermissionError)
+		frappe.throw(_("This Business Control Centre item is no longer available in your current scope."), frappe.PermissionError)
 
 	action = str(action or "").strip().lower()
 	if action not in {"acknowledge", "snooze", "assign", "schedule", "reopen"}:
