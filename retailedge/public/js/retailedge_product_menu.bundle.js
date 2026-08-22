@@ -6,6 +6,52 @@ const MAX_INSTALL_ATTEMPTS = 6;
 const GUIDED_CREATE_ACTION = "guided-create";
 const BUSINESS_HUB_ROUTE = "retailedge-business-hub";
 
+const ROUTE_REPLACEMENTS = Object.freeze({
+	"Report:RetailEdge Cashier Expense Review": Object.freeze({
+		label: "Expense Review",
+		target_type: "Page",
+		target: "expense-review",
+		icon: "report",
+	}),
+	"Report:RetailEdge Cash Shift Verification": Object.freeze({
+		label: "Cash Shift Verification",
+		target_type: "Page",
+		target: "cash-shift-verification",
+		icon: "report",
+	}),
+	"DocType:RetailEdge Daily Sales Audit": Object.freeze({
+		label: "Daily Sales Audit",
+		target_type: "Page",
+		target: "daily-sales-audit",
+		icon: "shield",
+	}),
+	"Report:RetailEdge Daily Sales Audit Register": null,
+	"DocType:RetailEdge Settings": Object.freeze({
+		label: "RetailEdge Setup",
+		target_type: "Page",
+		target: "retailedge-setup",
+		icon: "settings",
+	}),
+	"DocType:RetailEdge Branch Profile": Object.freeze({
+		label: "RetailEdge Setup",
+		target_type: "Page",
+		target: "retailedge-setup",
+		icon: "settings",
+	}),
+	"DocType:RetailEdge Expense Category": Object.freeze({
+		label: "RetailEdge Setup",
+		target_type: "Page",
+		target: "retailedge-setup",
+		icon: "settings",
+	}),
+	"DocType:RetailEdge Statement Mapping Template": Object.freeze({
+		label: "RetailEdge Setup",
+		target_type: "Page",
+		target: "retailedge-setup",
+		icon: "settings",
+	}),
+});
+
 const GROUP_PRESENTATION = Object.freeze({
 	home: { icon: "home", description: "Business home and command centre." },
 	sell: { icon: "shopping-cart", description: "Sell, fulfil orders, invoice, and run point of sale." },
@@ -72,7 +118,7 @@ async function ensureRuntime() {
 	}
 	const edgeUI = runtime();
 	if (!edgeUI || typeof edgeUI.registerProductMenu !== "function") {
-		throw new Error("Standalone EdgeSuite UI product-menu runtime is unavailable.");
+		throw new Error("RetailEdge product-menu runtime is unavailable.");
 	}
 	return edgeUI;
 }
@@ -84,8 +130,50 @@ function readContextCache() {
 	return cache.data;
 }
 
+function routeReplacementKey(item) {
+	return `${item?.target_type || ""}:${item?.target || ""}`;
+}
+
+function resolveConsolidatedItem(item) {
+	if (!item) return null;
+	const key = routeReplacementKey(item);
+	if (!Object.prototype.hasOwnProperty.call(ROUTE_REPLACEMENTS, key)) {
+		return { ...item };
+	}
+	const replacement = ROUTE_REPLACEMENTS[key];
+	return replacement ? { ...item, ...replacement } : null;
+}
+
+function consolidateNavigationGroups(groups) {
+	return (Array.isArray(groups) ? groups : [])
+		.map((group) => {
+			const seen = new Set();
+			const items = (Array.isArray(group.items) ? group.items : [])
+				.map(resolveConsolidatedItem)
+				.filter(Boolean)
+				.filter((item) => {
+					const key = `${item.target_type}:${item.target}`;
+					if (seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
+			return { ...group, items };
+		})
+		.filter((group) => group.items.length);
+}
+
+function consolidateContext(data) {
+	const normalized = { ...(data || {}) };
+	normalized.navigation_groups = consolidateNavigationGroups(normalized.navigation_groups);
+	normalized.feature_flags = {
+		...(normalized.feature_flags || {}),
+		route_consolidation_stage: "r7",
+	};
+	return normalized;
+}
+
 function cacheContext(data) {
-	const normalized = data || {};
+	const normalized = consolidateContext(data);
 	window.__retailedgeBusinessHubContextCache = {
 		data: normalized,
 		fetchedAt: Date.now(),

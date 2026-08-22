@@ -16,6 +16,35 @@
 		return Array.isArray(route) && route[0] === PAGE_NAME;
 	}
 
+	function createPickerRequested() {
+		try {
+			return new URL(global.location.href).searchParams.get("create") === "1";
+		} catch (error) {
+			return false;
+		}
+	}
+
+	function clearCreatePickerRequest() {
+		try {
+			const url = new URL(global.location.href);
+			if (!url.searchParams.has("create")) return;
+			url.searchParams.delete("create");
+			global.history.replaceState(global.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+		} catch (error) {
+			// A failed URL cleanup must not block the guided entry itself.
+		}
+	}
+
+	function openRequestedCreatePicker(wrapper) {
+		if (!createPickerRequested()) return false;
+		const component = getMountedComponent(wrapper);
+		if (!component || typeof component.openCreatePicker !== "function") return false;
+		if (!Array.isArray(component.quickActions) || !component.quickActions.length) return false;
+		component.openCreatePicker();
+		clearCreatePickerRequest();
+		return true;
+	}
+
 	function registerPage() {
 		if (!global.frappe || !frappe.pages) {
 			return false;
@@ -46,6 +75,7 @@
 			if (component && typeof component.refreshContext === "function") {
 				return component.refreshContext().finally(() => {
 					enforceCreateVisibility(currentWrapper._retailedgeBusinessHubRoot?.[0]);
+					openRequestedCreatePicker(currentWrapper);
 				});
 			}
 			return undefined;
@@ -102,7 +132,7 @@
 			if (!global.EdgeSuiteUI) {
 				await requireAsset(RUNTIME_ASSET);
 			}
-			assertEdgeSuiteUIRuntime();
+			assertRetailEdgeRuntime();
 
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
 				await requireAsset(PRODUCT_ASSET);
@@ -122,6 +152,13 @@
 			wrapper._retailedgeBusinessHub = global.mountRetailEdgeBusinessHub(root[0]);
 			installCreateVisibilityGuard(root[0]);
 			global.retailedgeRefreshProductMenu?.();
+
+			const component = getMountedComponent(wrapper);
+			if (component && typeof component.refreshContext === "function") {
+				await component.refreshContext();
+			}
+			enforceCreateVisibility(root[0]);
+			openRequestedCreatePicker(wrapper);
 			return wrapper._retailedgeBusinessHub;
 		} catch (mountError) {
 			loading.remove();
@@ -269,17 +306,17 @@
 		});
 	}
 
-	function assertEdgeSuiteUIRuntime() {
+	function assertRetailEdgeRuntime() {
 		const runtime = global.EdgeSuiteUI;
 		if (!runtime || typeof runtime.createEdgeApp !== "function") {
-			throw new Error(__("Standalone EdgeSuite UI runtime is unavailable or incompatible."));
+			throw new Error(__("RetailEdge interface runtime is unavailable or incompatible."));
 		}
 
 		const components = runtime.components || runtime;
 		const required = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
 		const missing = required.filter((name) => !components[name]);
 		if (missing.length) {
-			throw new Error(__("EdgeSuite UI is missing required components: {0}", [missing.join(", ")]));
+			throw new Error(__("RetailEdge interface is missing required components: {0}", [missing.join(", ")]));
 		}
 	}
 
