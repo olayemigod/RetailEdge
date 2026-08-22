@@ -3,7 +3,12 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from retailedge.accounting_profitability import build_profit_reconciliation, get_accounting_profitability
+from retailedge.accounting_profitability import (
+	_named_total,
+	_summary_value,
+	build_profit_reconciliation,
+	get_accounting_profitability,
+)
 from retailedge.profitability_leakage import _aggregate_invoice_evidence
 
 
@@ -24,7 +29,7 @@ class TestProfitabilityR8Regressions(FrappeTestCase):
 		self.assertAlmostEqual(evidence[0]["effective_discount_percent"], 10.0)
 
 	def test_missing_cost_survives_invoice_evidence_aggregation(self):
-	rows = [
+		rows = [
 			frappe._dict(parent="SINV-1", stock_qty=1, base_net_amount=100, incoming_rate=0, base_price_list_rate=100),
 			frappe._dict(parent="SINV-1", stock_qty=1, base_net_amount=100, incoming_rate=70, base_price_list_rate=100),
 		]
@@ -32,12 +37,12 @@ class TestProfitabilityR8Regressions(FrappeTestCase):
 		self.assertTrue(evidence[0]["missing_recorded_cost"])
 
 	def test_branch_scope_does_not_claim_company_pl_reconciliation(self):
-	accounting = get_accounting_profitability(
-		frappe._dict(company="Test Company", branch="Lagos", from_date="2026-08-01", to_date="2026-08-31")
-	)
-	self.assertFalse(accounting["available"])
-	self.assertEqual(accounting["scope"], "company")
-	self.assertIn("accounting dimension", accounting["reason"])
+		accounting = get_accounting_profitability(
+			frappe._dict(company="Test Company", branch="Lagos", from_date="2026-08-01", to_date="2026-08-31")
+		)
+		self.assertFalse(accounting["available"])
+		self.assertEqual(accounting["scope"], "company")
+		self.assertIn("accounting dimension", accounting["reason"])
 
 	@patch("retailedge.accounting_profitability.frappe.has_permission", return_value=False)
 	def test_company_pl_reconciliation_fails_closed_on_company_permission(self, _mock_permission):
@@ -56,3 +61,21 @@ class TestProfitabilityR8Regressions(FrappeTestCase):
 		self.assertEqual(reconciliation["accounting_gross_profit"], 95)
 		self.assertEqual(reconciliation["difference"], 5)
 		self.assertFalse(reconciliation["matches"])
+
+	@patch(
+		"retailedge.accounting_profitability._",
+		side_effect=lambda value: {
+			"Total Income": "Ingresos Totales",
+			"Total Income This Year": "Ingresos Totales Este Año",
+			"Gross Profit": "Beneficio Bruto",
+		}.get(value, value),
+	)
+	def test_accounting_report_totals_match_translated_erpnext_labels(self, _mock_translate):
+		self.assertEqual(
+			_summary_value([{"label": "Ingresos Totales", "value": 250}], ("Total Income", "Total Income This Year")),
+			250,
+		)
+		self.assertEqual(
+			_named_total([{"account_name": "'Beneficio Bruto'", "total": 75}], "Gross Profit"),
+			75,
+		)
