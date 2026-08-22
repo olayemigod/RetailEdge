@@ -68,10 +68,12 @@ class TestOwnerDashboard(unittest.TestCase):
 	@patch("retailedge.owner_dashboard.get_customer_receivables", return_value={"summary": []})
 	@patch("retailedge.owner_dashboard.get_cash_movement", return_value={"summary": []})
 	@patch("retailedge.owner_dashboard.get_expense_register", return_value={"summary": []})
+	@patch("retailedge.owner_dashboard.get_profitability_summary", return_value={"summary": []})
 	@patch("retailedge.owner_dashboard.get_sales_invoice_register", return_value={"summary": []})
 	def test_dashboard_composes_existing_report_services(
 		self,
 		sales,
+		profitability,
 		expenses,
 		cash,
 		receivables,
@@ -85,15 +87,15 @@ class TestOwnerDashboard(unittest.TestCase):
 		)
 		self.assertEqual(
 			set(result["sections"]),
-			{"sales", "expenses", "cash", "receivables", "payables", "stock", "branches"},
+			{"sales", "profitability", "expenses", "cash", "receivables", "payables", "stock", "branches"},
 		)
 		self.assertFalse(result["sections"]["stock"]["show_costs"])
 		self.assertIn("headline_summary", result)
 		self.assertIn("attention", result)
-		for mock in (sales, expenses, cash, receivables, payables, stock, branches):
+		for mock in (sales, profitability, expenses, cash, receivables, payables, stock, branches):
 			self.assertEqual(mock.call_count, 1)
 		capability.assert_called_once_with("owner-dashboard", "view", company="Demo Company", branch="Aba")
-		self.assertEqual(result["metadata"]["composition"], "existing_retailedge_reporting_engines")
+		self.assertEqual(result["metadata"]["composition"], "existing_retailedge_reporting_engines_plus_profitability_intelligence")
 
 	def test_source_contract_does_not_query_business_tables_directly(self):
 		source = (APP_ROOT / "owner_dashboard.py").read_text(encoding="utf-8")
@@ -101,6 +103,7 @@ class TestOwnerDashboard(unittest.TestCase):
 		self.assertNotIn("frappe.get_list", source)
 		self.assertIn("require_dashboard_action", source)
 		self.assertIn("get_sales_invoice_register", source)
+		self.assertIn("get_profitability_summary", source)
 		self.assertIn("get_expense_register", source)
 		self.assertIn("get_cash_movement", source)
 		self.assertIn("get_customer_receivables", source)
