@@ -33,7 +33,10 @@ DashboardHandler = Callable[[dict, bool], dict]
 def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	handlers: dict[str, DashboardHandler] = {
 		"owner-dashboard": lambda filters, _all_filtered: build_owner_dashboard_export_dataset(filters),
-		"profitability-intelligence": lambda filters, _all_filtered: build_profitability_export_dataset(filters),
+		"profitability-intelligence": lambda filters, all_filtered: build_profitability_export_dataset(
+			filters,
+			all_filtered=all_filtered,
+		),
 		"sales-overview": lambda filters, _all_filtered: build_sales_dashboard_export_dataset(filters),
 		"money-overview": lambda filters, _all_filtered: build_money_dashboard_export_dataset(filters),
 		"expense-overview": lambda filters, _all_filtered: build_expense_dashboard_export_with_budget(filters),
