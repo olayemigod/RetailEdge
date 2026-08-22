@@ -48,25 +48,38 @@ ERPNext and RetailEdge DocTypes that remain necessary for full/advanced operatio
 
 This includes full ERPNext documents such as Sales Invoice, Sales Order, Delivery Note, Purchase Invoice, Purchase Order, Purchase Receipt, Stock Entry, Stock Reconciliation, Material Request, Payment Entry, Bank Transaction, Customer, Supplier, Item, Warehouse, Bank Account, and Mode of Payment.
 
-### Retain RetailEdge setup masters as admin fallbacks
+### RetailEdge Setup
 
-No dedicated RetailEdge setup page currently exists on this branch for the following masters, so they remain native admin/configuration records rather than being falsely promoted to a replacement page:
+R7 now provides a dedicated **RetailEdge Setup** page at `retailedge-setup`. It is the primary RetailEdge setup destination for these existing configuration DocTypes:
 
 - **RetailEdge Settings**.
 - **RetailEdge Branch Profile**.
 - **RetailEdge Expense Category**.
 - **RetailEdge Statement Mapping Template**.
 
-These should remain permission-controlled and open as native fallback destinations. A future setup redesign may group them into a dedicated RetailEdge setup experience, but R7 must not invent that surface without real parity and workflow coverage.
+The Setup page does not create replacement configuration models. The existing DocTypes and their controllers remain the source of truth. The page provides managed business-facing editing for normal configuration, including Branch Profile operational users and non-banking RetailEdge Settings role tables. Company-dependent fields use contextual filtering and server-side validation. Native forms remain available through **Open Full Form** as advanced fallbacks and open in a new tab.
+
+R6 bank matching/reconciliation settings and reconciliation execution roles are deliberately not managed by this R7 page. Platform integration controls also remain advanced configuration.
 
 ### Legacy Frappe Workspace
 
-The committed `RetailEdge` Frappe Workspace still contains many direct DocType and Query Report links. It is retained for backward compatibility while the Business Hub/product menu becomes authoritative. R7 must not patch Frappe routing globally or install brittle DOM click interception merely to change workspace behavior. Instead:
+The committed `RetailEdge` Frappe Workspace still contains direct DocType and Query Report links. It is retained for backward compatibility while the Business Hub/product menu becomes authoritative. R7 must not patch Frappe routing globally or install brittle DOM click interception merely to change workspace behavior. Instead:
 
 - new primary navigation changes belong in the Business Hub/product menu;
 - direct native destinations reached through RetailEdge's authoritative navigation use the new-tab fallback policy;
 - the legacy workspace should not receive new operational shortcuts;
 - once PR #23 stabilizes, workspace fixture cleanup can be done in one deliberate sync-safe pass so migration does not restore obsolete primary routes.
+
+## Audit hardening
+
+The post-implementation R7 audit hardened the setup layer so that:
+
+- Branch Profile company-dependent Branch, POS Profile, Warehouse, Cost Centre, and Account defaults are validated server-side rather than relying only on frontend filters;
+- setup counts are permission-filtered;
+- Branch Profile detail reads enforce document-level read permission;
+- Branch Profile detail responses match the UI contract and preserve existing record state;
+- setup list rows expose write capability so the UI can avoid presenting write actions to read-only users;
+- no `ignore_permissions` bypass is used.
 
 ## Migration constraints
 
@@ -79,8 +92,8 @@ The committed `RetailEdge` Frappe Workspace still contains many direct DocType a
 ## Current slice
 
 1. PR #23 owns global permission-aware **+ Create** access and new-tab handling for native DocType/Query Report destinations.
-2. R7 promotes only verified operational replacements and removes the duplicate Daily Sales Audit Register destination.
-3. R7 preserves Stock Movement and R6 banking boundaries instead of creating competing routes.
-4. User-visible failure messages use RetailEdge/business terminology rather than the internal framework name.
-5. Setup masters and the legacy Frappe Workspace are explicitly classified so future work does not mistake native/admin fallbacks for incomplete page migration.
-6. Static regression coverage locks route promotion, new-tab inheritance, global Guided Create inheritance, naming, and no-business-write contracts.
+2. R7 promotes verified operational replacements and removes the duplicate Daily Sales Audit Register destination.
+3. R7 provides the primary RetailEdge Setup page over existing RetailEdge configuration DocTypes.
+4. R7 preserves Stock Movement and R6 banking boundaries instead of creating competing routes.
+5. User-visible failure messages use RetailEdge/business terminology rather than the internal framework name.
+6. Regression coverage locks route promotion, setup permissions and source-of-truth rules, new-tab inheritance, global Guided Create inheritance, naming, and no-business-write contracts.
