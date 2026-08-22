@@ -16,7 +16,6 @@ from retailedge.branch_context import (
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
 from retailedge.expense_register import get_expense_register
-from retailedge.owner_dashboard import get_owner_dashboard_data
 from retailedge.reporting_capabilities import _validate_scope as _validate_operational_scope
 from retailedge.stock_position import get_stock_position
 from retailedge.supplier_payables import get_supplier_payables
@@ -88,34 +87,17 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 	items: list[dict[str, Any]] = []
 	sources: dict[str, dict[str, Any]] = {}
 
-	owner = _safe_source("owner", lambda: get_owner_dashboard_data(common))
-	sources["owner"] = owner
-	if owner.get("available"):
-		for item in owner.get("payload", {}).get("attention") or []:
-			items.append(
-				_action(
-					source=str(item.get("section") or "management"),
-					label=str(item.get("label") or item.get("metric") or _("Management exception")),
-					value=item.get("value"),
-					datatype=str(item.get("datatype") or "Data"),
-					severity=str(item.get("tone") or "warning"),
-					route=str(item.get("route") or "/app/owner-dashboard"),
-					time_basis=str(item.get("time_basis") or "period"),
-					kind="management_exception",
-				)
-			)
-	elif _stock_fallback_allowed():
-		stock = _safe_source(
-			"stock_position",
-			lambda: get_stock_position(
-				filters={"company": company, "branch": branch},
-				page=1,
-				page_size=DEFAULT_PAGE_SIZE,
-			),
-		)
-		sources["stock_position"] = stock
-		if stock.get("available"):
-			_append_stock_exceptions(items, stock["payload"])
+	stock = _safe_source(
+		"stock_position",
+		lambda: get_stock_position(
+			filters={"company": company, "branch": branch},
+			page=1,
+			page_size=DEFAULT_PAGE_SIZE,
+		),
+	)
+	sources["stock_position"] = stock
+	if stock.get("available"):
+		_append_stock_exceptions(items, stock["payload"])
 
 	expenses = _safe_source(
 		"expenses",
@@ -123,9 +105,9 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 	)
 	sources["expenses"] = expenses
 	if expenses.get("available"):
-		for label, severity, message in (
-			("Posting Blocked", "danger", _("Expenses are blocked from ledger posting")),
-			("Submitted for Review", "warning", _("Expenses are awaiting review")),
+		for label, severity, message, semantic_key in (
+			("Posting Blocked", "danger", _("Expenses are blocked from ledger posting"), "posting_blocked"),
+			("Submitted for Review", "warning", _("Expenses are awaiting review"), "submitted_for_review"),
 		):
 			card = _summary_card(expenses["payload"], label)
 			if card and flt(card.get("value")) > 0:
@@ -139,6 +121,9 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 						route="/app/expense-review",
 						time_basis="period",
 						kind="review_or_posting",
+						semantic_key=semantic_key,
+						target_type="Page",
+						target="expense-review",
 					)
 				)
 
@@ -160,6 +145,9 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 					route="/app/cash-shift-verification",
 					time_basis="period",
 					kind="cash_control",
+					semantic_key="cash_shift_exceptions",
+					target_type="Page",
+					target="cash-shift-verification",
 				)
 			)
 
@@ -180,6 +168,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			label=_("Customer receivables are overdue"),
 			route="/app/customer-receivables",
 			kind="overdue_receivables",
+			target="customer-receivables",
 		)
 
 	payables = _safe_source(
@@ -199,6 +188,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			label=_("Supplier payables are overdue"),
 			route="/app/supplier-payables",
 			kind="overdue_payables",
+			target="supplier-payables",
 		)
 
 	bank = _safe_source("bank_controls", lambda: get_bank_exception_summary(common))
@@ -232,6 +222,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			"priority_score": None,
 			"resolution_model": "drill_through_to_existing_workflow_or_report",
 			"accounting_truth": "existing ERPNext/RetailEdge documents and reporting engines",
+			"source_model": "one_authoritative_provider_per_exception_domain",
 			"generated_for": frappe.session.user,
 			"unfiltered_action_count": len(all_items),
 			"visible_action_count": len(items),
@@ -278,26 +269,24 @@ def _append_stock_exceptions(items: list[dict[str, Any]], payload: dict[str, Any
 				route="/app/stock-position",
 				time_basis="current",
 				kind=kind,
+				semantic_key=kind,
+				target_type="Page",
+				target="stock-position",
 			)
 		)
 
 
-def _stock_fallback_allowed() -> bool:
-	user = frappe.session.user
-	if user in {"Guest", ""}:
-		return False
-	return "Stock Manager" in set(frappe.get_roles(user))
-
-
 def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]) -> None:
 	oldest = payload.get("oldest_days") or {}
-	for metric, severity, label, kind, route, age_key in (
+	for metric, severity, label, kind, route, target_type, target, age_key in (
 		(
 			"Reconciliation Exceptions",
 			"danger",
 			_("Bank reconciliation has blocked or failed items"),
 			"bank_reconciliation_exception",
 			"/app/query-report/RetailEdge Reconciliation Handoff",
+			"Report",
+			"RetailEdge Reconciliation Handoff",
 			"exceptions",
 		),
 		(
@@ -306,6 +295,8 @@ def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]
 			_("Bank matches are waiting for review"),
 			"bank_match_review",
 			"/app/retail-edge-bank-transaction-match",
+			"DocType",
+			"RetailEdge Bank Transaction Match",
 			"needs_review",
 		),
 		(
@@ -314,6 +305,8 @@ def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]
 			_("Confirmed bank matches are ready for reconciliation"),
 			"bank_ready_for_reconciliation",
 			"/app/query-report/RetailEdge Bank Match Reconciliation Readiness",
+			"Report",
+			"RetailEdge Bank Match Reconciliation Readiness",
 			"ready",
 		),
 	):
@@ -330,6 +323,10 @@ def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]
 				route=route,
 				time_basis="period",
 				kind=kind,
+				semantic_key=kind,
+				target_type=target_type,
+				target=target,
+				open_mode="new_tab",
 				age_days=int(oldest.get(age_key) or 0),
 			)
 		)
@@ -343,6 +340,7 @@ def _action_from_financial_exposure(
 	label: str,
 	route: str,
 	kind: str,
+	target: str,
 ) -> None:
 	overdue = _summary_card(payload, "Overdue")
 	if not overdue or flt(overdue.get("value")) <= 0:
@@ -362,6 +360,9 @@ def _action_from_financial_exposure(
 			route=route,
 			time_basis="current",
 			kind=kind,
+			semantic_key=kind,
+			target_type="Page",
+			target=target,
 			exposure=exposure,
 			aged_exposure=aged_exposure,
 			age_days=oldest_days,
@@ -379,6 +380,10 @@ def _action(
 	route: str,
 	time_basis: str,
 	kind: str,
+	semantic_key: str | None = None,
+	target_type: str = "Page",
+	target: str | None = None,
+	open_mode: str = "same_tab",
 	exposure: float | None = None,
 	aged_exposure: float | None = None,
 	age_days: int | None = None,
@@ -392,6 +397,10 @@ def _action(
 		"route": route,
 		"time_basis": time_basis,
 		"kind": kind,
+		"semantic_key": semantic_key or kind,
+		"target_type": target_type,
+		"target": target or route,
+		"open_mode": "new_tab" if open_mode == "new_tab" else "same_tab",
 	}
 	if exposure is not None:
 		row["exposure"] = exposure
@@ -404,10 +413,13 @@ def _action(
 
 def _dedupe_and_sort(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	severity_rank = {"danger": 0, "warning": 1, "info": 2}
-	seen: set[tuple[str, str, str]] = set()
+	seen: set[tuple[str, str]] = set()
 	result: list[dict[str, Any]] = []
 	for item in items:
-		key = (str(item.get("source")), str(item.get("label")), str(item.get("route")))
+		key = (
+			str(item.get("source") or ""),
+			str(item.get("semantic_key") or item.get("kind") or item.get("label") or ""),
+		)
 		if key in seen:
 			continue
 		seen.add(key)
