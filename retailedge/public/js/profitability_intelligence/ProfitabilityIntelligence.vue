@@ -34,6 +34,22 @@
 		>
 			<template #filters>
 				<div class="profitability-filters">
+					<EdgeLinkField
+						v-model="filters.company"
+						label="Company"
+						required
+						placeholder="Search company"
+						:searcher="companySearch"
+						@select="onCompanySelected"
+					/>
+					<EdgeLinkField
+						v-model="filters.branch"
+						label="Branch"
+						placeholder="All permitted branches"
+						:searcher="branchSearch"
+						@select="onBranchSelected"
+						@clear="clearBranch"
+					/>
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="fetchData">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
@@ -49,6 +65,15 @@
 							<small>{{ formatChange(metric) }} vs previous period</small>
 						</div>
 					</div>
+				</EdgeDashboardSection>
+
+				<EdgeDashboardSection title="ERPNext Accounting Reconciliation" :description="reconciliationDescription">
+					<div v-if="reconciliation.available" class="comparison-grid">
+						<div class="comparison-card"><span>Transactional Gross Profit</span><strong>{{ money(reconciliation.transaction_gross_profit) }}</strong><small>Submitted invoice item margin</small></div>
+						<div class="comparison-card"><span>ERPNext Accounting Gross Profit</span><strong>{{ money(reconciliation.accounting_gross_profit) }}</strong><small>ERPNext Gross and Net Profit report</small></div>
+						<div class="comparison-card"><span>Difference</span><strong>{{ money(reconciliation.difference) }}</strong><small>{{ reconciliation.matches ? "Reconciled within ₦0.01-equivalent tolerance" : "Review accounting adjustments and valuation differences" }}</small></div>
+					</div>
+					<div v-else class="reconciliation-note">{{ reconciliation.reason || "Accounting reconciliation is unavailable for this scope." }}</div>
 				</EdgeDashboardSection>
 
 				<EdgeDashboardSection title="Top Profit Contributors" description="Items ranked by gross-profit contribution in the selected period.">
@@ -82,6 +107,22 @@
 					</div>
 				</EdgeDashboardSection>
 
+				<EdgeDashboardSection title="Missing Recorded Cost" description="Sold items with positive net sales but no recorded incoming cost. Treat their transactional margin as incomplete until cost is corrected.">
+					<div class="profit-table-wrap">
+						<table class="profit-table">
+							<thead><tr><th>Item</th><th>Net Sales</th><th>Recorded Cost</th><th></th></tr></thead>
+							<tbody>
+								<tr v-for="row in missingCostRows" :key="row.item_code">
+									<td><strong>{{ row.item_name || row.item_code }}</strong><small>{{ row.item_code }}</small></td>
+									<td>{{ money(row.net_sales) }}</td><td>{{ money(row.cost_of_sales) }}</td>
+									<td><button type="button" class="edge-button edge-button--secondary" :disabled="evidenceBusy === row.item_code" @click="reviewLeakage(row)">{{ evidenceBusy === row.item_code ? "Loading…" : "Review Evidence" }}</button></td>
+								</tr>
+								<tr v-if="!missingCostRows.length"><td colspan="4" class="empty-cell">No sold items with missing recorded cost were detected.</td></tr>
+							</tbody>
+						</table>
+					</div>
+				</EdgeDashboardSection>
+
 				<EdgeDashboardSection v-for="dimension in dimensionSections" :key="dimension.key" :title="dimension.label" :description="dimension.description">
 					<div class="profit-table-wrap">
 						<table class="profit-table">
@@ -108,7 +149,7 @@ import {
 	printDashboard,
 } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeLinkField"];
 const DASHBOARD_KEY = "profitability-intelligence";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
@@ -123,7 +164,7 @@ export default {
 			exportBusy: false, printBusy: false, evidenceBusy: "",
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
-			summary: [], topContributors: [], marginLeakage: [], dimensions: {}, comparison: {}, menuItems: [], tenantName: "", userName: "", companyCurrency: "",
+			summary: [], topContributors: [], marginLeakage: [], missingCostRows: [], dimensions: {}, comparison: {}, reconciliation: {}, menuItems: [], tenantName: "", userName: "", companyCurrency: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
 	},
@@ -131,6 +172,10 @@ export default {
 		comparisonDescription() {
 			if (!this.comparison.previous_from_date) return "Selected period compared with the immediately preceding equal-length period.";
 			return `${this.comparison.previous_from_date} to ${this.comparison.previous_to_date}`;
+		},
+		reconciliationDescription() {
+			if (!this.reconciliation.available) return this.reconciliation.reason || "ERPNext accounting reconciliation is unavailable for this scope.";
+			return this.reconciliation.explanation || "Transactional item margin compared with ERPNext accounting gross profit for the same Company and period.";
 		},
 		dimensionSections() {
 			return [
@@ -172,15 +217,31 @@ export default {
 				this.summary = result.summary || [];
 				this.topContributors = result.top_contributors || [];
 				this.marginLeakage = result.margin_leakage || [];
+				this.missingCostRows = (result.rows || []).filter((row) => row.missing_recorded_cost).slice(0, 25);
 				this.dimensions = result.dimensions || {};
 				this.comparison = result.comparison || {};
+				this.reconciliation = result.reconciliation || {};
 				this.companyCurrency = result.company_currency || "";
 				this.capabilities = capabilities || this.capabilities;
 			} catch (error) {
-				this.summary = []; this.topContributors = []; this.marginLeakage = []; this.dimensions = {}; this.comparison = {};
+				this.summary = []; this.topContributors = []; this.marginLeakage = []; this.missingCostRows = []; this.dimensions = {}; this.comparison = {}; this.reconciliation = {};
 				this.error = errorMessage(error, "Profitability Intelligence failed to load.");
 			} finally { this.loading = false; }
 		},
+		companySearch(txt) {
+			return callMethod("retailedge.sales_reporting.search_sales_reporting_options", { kind: "company", txt: txt || "", company: this.filters.company });
+		},
+		branchSearch(txt) {
+			return callMethod("retailedge.sales_reporting.search_sales_reporting_options", { kind: "branch", txt: txt || "", company: this.filters.company });
+		},
+		onCompanySelected(option) {
+			const company = option?.value || "";
+			if (company !== this.filters.company) this.filters.branch = "";
+			this.filters.company = company;
+			this.tenantName = company;
+		},
+		onBranchSelected(option) { this.filters.branch = option?.value || ""; },
+		clearBranch() { this.filters.branch = ""; },
 		async handleExport(options) {
 			if (!this.capabilities.can_export) return;
 			this.exportBusy = true;
@@ -214,11 +275,13 @@ export default {
 					{ fieldtype: "Select", fieldname: "invoice", label: __("Sales Invoice"), options, default: rows[0].invoice, reqd: 1 },
 					{ fieldtype: "Data", fieldname: "customer", label: __("Customer"), read_only: 1 },
 					{ fieldtype: "Date", fieldname: "posting_date", label: __("Posting Date"), read_only: 1 },
+					{ fieldtype: "Int", fieldname: "line_count", label: __("Matching Item Lines"), read_only: 1 },
 					{ fieldtype: "Currency", fieldname: "net_sales", label: __("Net Sales"), read_only: 1 },
-					{ fieldtype: "Currency", fieldname: "cost_of_sales", label: __("Cost of Sales"), read_only: 1 },
-					{ fieldtype: "Currency", fieldname: "gross_profit", label: __("Gross Profit"), read_only: 1 },
-					{ fieldtype: "Percent", fieldname: "gross_margin_percent", label: __("Gross Margin"), read_only: 1 },
-					{ fieldtype: "Percent", fieldname: "discount_percentage", label: __("Discount"), read_only: 1 },
+					{ fieldtype: "Currency", fieldname: "cost_of_sales", label: __("Recorded Cost"), read_only: 1 },
+					{ fieldtype: "Currency", fieldname: "gross_profit", label: __("Transactional Gross Profit"), read_only: 1 },
+					{ fieldtype: "Percent", fieldname: "gross_margin_percent", label: __("Transactional Gross Margin"), read_only: 1 },
+					{ fieldtype: "Percent", fieldname: "effective_discount_percent", label: __("Effective Discount vs Price List"), read_only: 1 },
+					{ fieldtype: "Check", fieldname: "missing_recorded_cost", label: __("Missing Recorded Cost"), read_only: 1 },
 				],
 				primary_action_label: __("Open Sales Invoice"),
 				primary_action: (values) => {
@@ -229,7 +292,7 @@ export default {
 			const sync = () => {
 				const invoice = dialog.get_value("invoice");
 				const selected = rows.find((candidate) => candidate.invoice === invoice) || rows[0];
-				for (const field of ["customer", "posting_date", "net_sales", "cost_of_sales", "gross_profit", "gross_margin_percent", "discount_percentage"]) dialog.set_value(field, selected[field] ?? "");
+				for (const field of ["customer", "posting_date", "line_count", "net_sales", "cost_of_sales", "gross_profit", "gross_margin_percent", "effective_discount_percent", "missing_recorded_cost"]) dialog.set_value(field, selected[field] ?? "");
 			};
 			dialog.fields_dict.invoice.df.onchange = sync;
 			dialog.show();
@@ -251,15 +314,16 @@ export default {
 </script>
 
 <style scoped>
-.profitability-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
+.profitability-filters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: end; }
 .comparison-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .comparison-card { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
-.comparison-card span, .comparison-card small { color: var(--edge-text-muted); }
+.comparison-card span, .comparison-card small, .reconciliation-note { color: var(--edge-text-muted); }
 .profit-table-wrap { overflow-x: auto; }
 .profit-table { width: 100%; border-collapse: collapse; min-width: 700px; }
 .profit-table th, .profit-table td { padding: 10px 12px; border-bottom: 1px solid var(--edge-border); text-align: right; vertical-align: top; }
 .profit-table th:first-child, .profit-table td:first-child { text-align: left; }
 .profit-table td small { display: block; color: var(--edge-text-muted); margin-top: 2px; }
 .empty-cell { color: var(--edge-text-muted); text-align: center !important; padding: 18px !important; }
+@media (max-width: 900px) { .profitability-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .profitability-filters, .comparison-grid { grid-template-columns: 1fr; } }
 </style>
