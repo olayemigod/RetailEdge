@@ -15,6 +15,7 @@ from retailedge.sales_reporting import (
 )
 
 MAX_LEAKAGE_EVIDENCE_ROWS = 100
+MAX_LEAKAGE_SOURCE_ROWS = 2000
 
 
 @frappe.whitelist()
@@ -41,10 +42,27 @@ def get_margin_leakage_evidence(
 	if not invoice_names:
 		return _empty_response(item_code, filters)
 
-	rows = frappe.get_all(
+	invoice_rows = frappe.get_all(
 		"Sales Invoice Item",
 		filters={
 			"parent": ["in", invoice_names],
+			"parenttype": "Sales Invoice",
+			"item_code": item_code,
+		},
+		fields=["parent"],
+		group_by="parent",
+		order_by="parent desc",
+		limit=MAX_LEAKAGE_EVIDENCE_ROWS + 1,
+	)
+	truncated = len(invoice_rows) > MAX_LEAKAGE_EVIDENCE_ROWS
+	evidence_invoice_names = [str(row.parent) for row in invoice_rows[:MAX_LEAKAGE_EVIDENCE_ROWS]]
+	if not evidence_invoice_names:
+		return _empty_response(item_code, filters)
+
+	rows = frappe.get_all(
+		"Sales Invoice Item",
+		filters={
+			"parent": ["in", evidence_invoice_names],
 			"parenttype": "Sales Invoice",
 			"item_code": item_code,
 		},
@@ -55,40 +73,19 @@ def get_margin_leakage_evidence(
 			"stock_qty",
 			"base_net_amount",
 			"incoming_rate",
-			"discount_percentage",
 			"base_price_list_rate",
 		],
 		order_by="parent desc, idx asc",
-		limit=MAX_LEAKAGE_EVIDENCE_ROWS + 1,
+		limit=MAX_LEAKAGE_SOURCE_ROWS + 1,
 	)
-	truncated = len(rows) > MAX_LEAKAGE_EVIDENCE_ROWS
-	rows = rows[:MAX_LEAKAGE_EVIDENCE_ROWS]
-	header_map = _header_metadata([row.parent for row in rows])
-
-	evidence = []
-	for row in rows:
-		header = header_map.get(row.parent) or frappe._dict()
-		stock_qty = flt(row.stock_qty)
-		net_sales = flt(row.base_net_amount)
-		cost = flt(row.incoming_rate) * stock_qty
-		profit = net_sales - cost
-		margin = (profit / net_sales * 100.0) if net_sales else 0.0
-		evidence.append(
-			{
-				"invoice": row.parent,
-				"posting_date": header.get("posting_date"),
-				"customer": header.get("customer_name") or header.get("customer") or "",
-				"branch": header.get("branch") or "",
-				"qty": stock_qty,
-				"net_sales": net_sales,
-				"cost_of_sales": cost,
-				"gross_profit": profit,
-				"gross_margin_percent": margin,
-				"discount_percentage": flt(row.discount_percentage),
-				"price_list_rate": flt(row.base_price_list_rate),
-				"route": f"/app/sales-invoice/{row.parent}",
-			}
+	if len(rows) > MAX_LEAKAGE_SOURCE_ROWS:
+		frappe.throw(
+			_("More than {0} invoice lines match this margin-evidence scope. Narrow the date range or Branch.").format(
+				MAX_LEAKAGE_SOURCE_ROWS
+			)
 		)
+	header_map = _header_metadata(evidence_invoice_names)
+	evidence = _aggregate_invoice_evidence(rows, header_map)
 
 	return {
 		"item_code": item_code,
@@ -104,6 +101,57 @@ def get_margin_leakage_evidence(
 			"to_date": filters.to_date,
 		},
 	}
+
+
+def _aggregate_invoice_evidence(
+	rows: list[frappe._dict],
+	header_map: dict[str, frappe._dict],
+) -> list[dict[str, Any]]:
+	buckets: dict[str, dict[str, Any]] = {}
+	for row in rows:
+		invoice = str(row.parent)
+		header = header_map.get(invoice) or frappe._dict()
+		bucket = buckets.setdefault(
+			invoice,
+			{
+				"invoice": invoice,
+				"posting_date": header.get("posting_date"),
+				"customer": header.get("customer_name") or header.get("customer") or "",
+				"branch": header.get("branch") or "",
+				"qty": 0.0,
+				"net_sales": 0.0,
+				"cost_of_sales": 0.0,
+				"price_list_value": 0.0,
+				"line_count": 0,
+				"missing_recorded_cost": False,
+				"route": f"/app/sales-invoice/{invoice}",
+			},
+		)
+		qty = flt(row.stock_qty)
+		net_sales = flt(row.base_net_amount)
+		incoming_rate = flt(row.incoming_rate)
+		bucket["qty"] += qty
+		bucket["net_sales"] += net_sales
+		bucket["cost_of_sales"] += incoming_rate * qty
+		bucket["price_list_value"] += flt(row.base_price_list_rate) * qty
+		bucket["line_count"] += 1
+		if net_sales > 0 and incoming_rate <= 0:
+			bucket["missing_recorded_cost"] = True
+
+	evidence: list[dict[str, Any]] = []
+	for bucket in buckets.values():
+		net_sales = flt(bucket["net_sales"])
+		profit = net_sales - flt(bucket["cost_of_sales"])
+		price_list_value = flt(bucket["price_list_value"])
+		bucket["gross_profit"] = profit
+		bucket["gross_margin_percent"] = (profit / net_sales * 100.0) if net_sales > 0 else 0.0
+		bucket["effective_discount_percent"] = (
+			(price_list_value - net_sales) / abs(price_list_value) * 100.0
+			if price_list_value > 0
+			else None
+		)
+		evidence.append(bucket)
+	return evidence
 
 
 def _header_metadata(invoice_names: list[str]) -> dict[str, frappe._dict]:
