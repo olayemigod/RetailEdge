@@ -161,8 +161,8 @@ SETUP_RESOURCES = (
 )
 
 
-def _has_read_permission(doctype: str) -> bool:
-    return bool(frappe.has_permission(doctype, ptype="read"))
+def _has_read_permission(doctype: str, doc=None) -> bool:
+    return bool(frappe.has_permission(doctype, ptype="read", doc=doc))
 
 
 def _has_create_permission(doctype: str) -> bool:
@@ -171,6 +171,10 @@ def _has_create_permission(doctype: str) -> bool:
 
 def _has_write_permission(doc) -> bool:
     return bool(frappe.has_permission(doc.doctype, ptype="write", doc=doc))
+
+
+def _permission_filtered_count(doctype: str) -> int:
+    return len(frappe.get_list(doctype, fields=["name"], limit_page_length=0))
 
 
 def _parse_payload(values) -> dict:
@@ -203,7 +207,7 @@ def get_setup_context() -> dict:
             continue
         resource = dict(definition)
         resource["can_create"] = _has_create_permission(doctype)
-        resource["count"] = None if definition["singleton"] else frappe.db.count(doctype)
+        resource["count"] = None if definition["singleton"] else _permission_filtered_count(doctype)
         resources.append(resource)
     return {"resources": resources, "user": frappe.session.user}
 
@@ -213,6 +217,8 @@ def get_retailedge_settings() -> dict:
     if not _has_read_permission(RETAILEDGE_SETTINGS_DOCTYPE):
         frappe.throw(_("You do not have permission to view RetailEdge Settings."), frappe.PermissionError)
     doc = frappe.get_single(RETAILEDGE_SETTINGS_DOCTYPE)
+    if not _has_read_permission(RETAILEDGE_SETTINGS_DOCTYPE, doc=doc):
+        frappe.throw(_("You do not have permission to view RetailEdge Settings."), frappe.PermissionError)
     values = {fieldname: doc.get(fieldname) for fieldname in SETTINGS_MANAGED_FIELDS}
     for table_field in SETTINGS_ROLE_TABLES:
         values[table_field] = [{"role": row.role} for row in doc.get(table_field) or []]
@@ -243,6 +249,9 @@ def get_expense_categories() -> dict:
     if not _has_read_permission(EXPENSE_CATEGORY_DOCTYPE):
         frappe.throw(_("You do not have permission to view Expense Categories."), frappe.PermissionError)
     rows = frappe.get_list(EXPENSE_CATEGORY_DOCTYPE, fields=["name", *EXPENSE_CATEGORY_FIELDS, "modified"], order_by="is_active desc, category_name asc", limit_page_length=200)
+    for row in rows:
+        doc = frappe.get_doc(EXPENSE_CATEGORY_DOCTYPE, row.name)
+        row["can_write"] = _has_write_permission(doc)
     return {"rows": rows, "can_create": _has_create_permission(EXPENSE_CATEGORY_DOCTYPE)}
 
 
@@ -282,6 +291,9 @@ def get_branch_profiles() -> dict:
     if not _has_read_permission(BRANCH_PROFILE_DOCTYPE):
         frappe.throw(_("You do not have permission to view Branch Profiles."), frappe.PermissionError)
     rows = frappe.get_list(BRANCH_PROFILE_DOCTYPE, fields=["name", *BRANCH_PROFILE_FIELDS, "modified"], order_by="enabled desc, is_default_for_company desc, company asc, branch asc", limit_page_length=200)
+    for row in rows:
+        doc = frappe.get_doc(BRANCH_PROFILE_DOCTYPE, row.name)
+        row["can_write"] = _has_write_permission(doc)
     return {"rows": rows, "can_create": _has_create_permission(BRANCH_PROFILE_DOCTYPE)}
 
 
@@ -290,13 +302,16 @@ def get_branch_profile_details(name: str) -> dict:
     if not _has_read_permission(BRANCH_PROFILE_DOCTYPE):
         frappe.throw(_("You do not have permission to view Branch Profiles."), frappe.PermissionError)
     doc = frappe.get_doc(BRANCH_PROFILE_DOCTYPE, name)
-    values = {fieldname: doc.get(fieldname) for fieldname in BRANCH_PROFILE_FIELDS}
+    if not _has_read_permission(BRANCH_PROFILE_DOCTYPE, doc=doc):
+        frappe.throw(_("You do not have permission to view this Branch Profile."), frappe.PermissionError)
+    values = {"name": doc.name, **{fieldname: doc.get(fieldname) for fieldname in BRANCH_PROFILE_FIELDS}}
     for table_field in BRANCH_PROFILE_USER_TABLES:
         values[table_field] = [
             {"user": row.user, "is_default": cint(row.is_default), "notes": row.notes or ""}
             for row in doc.get(table_field) or []
         ]
-    return {"values": values, "can_write": _has_write_permission(doc)}
+    values["can_write"] = _has_write_permission(doc)
+    return values
 
 
 def _normalize_operational_users(rows, role_type: str) -> list[dict]:
@@ -368,6 +383,9 @@ def get_statement_mappings() -> dict:
     if not _has_read_permission(STATEMENT_MAPPING_DOCTYPE):
         frappe.throw(_("You do not have permission to view Bank Statement Mapping templates."), frappe.PermissionError)
     rows = frappe.get_list(STATEMENT_MAPPING_DOCTYPE, fields=["name", *STATEMENT_MAPPING_FIELDS, "modified"], order_by="enabled desc, template_name asc", limit_page_length=200)
+    for row in rows:
+        doc = frappe.get_doc(STATEMENT_MAPPING_DOCTYPE, row.name)
+        row["can_write"] = _has_write_permission(doc)
     return {"rows": rows, "can_create": _has_create_permission(STATEMENT_MAPPING_DOCTYPE)}
 
 
