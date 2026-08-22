@@ -71,7 +71,7 @@
 					<div v-if="reconciliation.available" class="comparison-grid">
 						<div class="comparison-card"><span>Transactional Gross Profit</span><strong>{{ money(reconciliation.transaction_gross_profit) }}</strong><small>Submitted invoice item margin</small></div>
 						<div class="comparison-card"><span>ERPNext Accounting Gross Profit</span><strong>{{ money(reconciliation.accounting_gross_profit) }}</strong><small>ERPNext Gross and Net Profit report</small></div>
-						<div class="comparison-card"><span>Difference</span><strong>{{ money(reconciliation.difference) }}</strong><small>{{ reconciliation.matches ? "Reconciled within ₦0.01-equivalent tolerance" : "Review accounting adjustments and valuation differences" }}</small></div>
+						<div class="comparison-card"><span>Difference</span><strong>{{ money(reconciliation.difference) }}</strong><small>{{ reconciliation.matches ? "Reconciled within 0.01 currency-unit tolerance" : "Review accounting adjustments and valuation differences" }}</small></div>
 					</div>
 					<div v-else class="reconciliation-note">{{ reconciliation.reason || "Accounting reconciliation is unavailable for this scope." }}</div>
 				</EdgeDashboardSection>
@@ -228,19 +228,23 @@ export default {
 				this.error = errorMessage(error, "Profitability Intelligence failed to load.");
 			} finally { this.loading = false; }
 		},
-		companySearch(txt) {
-			return callMethod("retailedge.sales_reporting.search_sales_reporting_options", { kind: "company", txt: txt || "", company: this.filters.company });
+		async searchOptions(kind, txt) {
+			const result = await callMethod("retailedge.sales_reporting.search_sales_reporting_options", {
+				kind,
+				txt: txt || "",
+				company: this.filters.company,
+				branch: this.filters.branch,
+			});
+			return Array.isArray(result) ? result : [];
 		},
-		branchSearch(txt) {
-			return callMethod("retailedge.sales_reporting.search_sales_reporting_options", { kind: "branch", txt: txt || "", company: this.filters.company });
-		},
+		companySearch(txt) { return this.searchOptions("company", txt); },
+		branchSearch(txt) { return this.searchOptions("branch", txt); },
 		onCompanySelected(option) {
-			const company = option?.value || "";
-			if (company !== this.filters.company) this.filters.branch = "";
-			this.filters.company = company;
-			this.tenantName = company;
+			this.filters.company = option.value;
+			this.filters.branch = "";
+			this.tenantName = option.label || option.value;
 		},
-		onBranchSelected(option) { this.filters.branch = option?.value || ""; },
+		onBranchSelected(option) { this.filters.branch = option.value; },
 		clearBranch() { this.filters.branch = ""; },
 		async handleExport(options) {
 			if (!this.capabilities.can_export) return;
