@@ -97,9 +97,7 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 			"this.reportProvider?.export",
 			"search_sales_reporting_options",
 			"resolve_branch_warehouse_selection",
-			"25 / page",
-			"50 / page",
-			"100 / page",
+			':pageSizes="[25, 50, 100]"',
 			":hideNativeSidebar=\"true\"",
 		):
 			self.assertIn(contract, component)
