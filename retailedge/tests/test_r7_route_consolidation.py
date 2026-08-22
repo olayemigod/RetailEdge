@@ -55,7 +55,7 @@ def test_stock_movement_and_r6_banking_routes_are_not_prematurely_promoted():
     assert "RetailEdge Reconciliation Handoff" not in source
 
 
-def test_setup_masters_remain_explicit_native_admin_fallbacks():
+def test_setup_masters_promote_to_managed_retailedge_setup_with_native_fallbacks():
     documentation = _source(R7_DOC)
 
     for doctype in (
@@ -66,9 +66,11 @@ def test_setup_masters_remain_explicit_native_admin_fallbacks():
     ):
         assert f"**{doctype}**" in documentation
 
-    assert "No dedicated RetailEdge setup page currently exists" in documentation
-    assert "remain native admin/configuration records" in documentation
-    assert "must not invent that surface" in documentation
+    assert "dedicated **RetailEdge Setup** page" in documentation
+    assert "existing DocTypes and their controllers remain the source of truth" in documentation
+    assert "Open Full Form" in documentation
+    assert "No dedicated RetailEdge setup page currently exists" not in documentation
+    assert "must not invent that surface" not in documentation
 
 
 def test_legacy_frappe_workspace_is_not_extended_as_primary_navigation():
