@@ -97,16 +97,18 @@ def build_profit_reconciliation(accounting: dict[str, Any], transactional: dict[
 
 
 def _summary_value(summary: list[dict[str, Any]] | None, labels: tuple[str, ...]) -> float:
+	accepted = set(labels) | {_(label) for label in labels}
 	for row in summary or []:
-		if str(row.get("label") or "") in labels:
+		if str(row.get("label") or "") in accepted:
 			return flt(row.get("value"))
 	return 0.0
 
 
 def _named_total(rows: list[dict[str, Any]] | None, name: str) -> float:
+	accepted = {name, _(name)}
 	for row in reversed(rows or []):
 		account_name = str(row.get("account_name") or "").strip("'")
 		account = str(row.get("account") or "").strip("'")
-		if account_name == name or account == name:
+		if account_name in accepted or account in accepted:
 			return flt(row.get("total"))
 	return 0.0
