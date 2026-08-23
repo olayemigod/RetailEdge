@@ -28,14 +28,16 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 	profit_filters = {
 		"company": filters.company,
 		"branch": filters.get("branch") or "",
-		"from_date": inventory.get("scope", {}).get("from_date"),
-		"to_date": inventory.get("scope", {}).get("to_date"),
 	}
+	for fieldname in ("from_date", "to_date"):
+		if filters.get(fieldname):
+			profit_filters[fieldname] = str(filters.get(fieldname))
 	try:
 		profitability = get_profitability_intelligence(profit_filters)
 	except frappe.PermissionError:
 		return _unavailable_payload(
 			inventory,
+			profit_filters=profit_filters,
 			reason="RetailEdge cost visibility does not allow profitability intelligence for this user.",
 		)
 
@@ -99,6 +101,7 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 			row["kind"],
 		)
 	)
+	profit_scope = dict(profitability.get("scope") or {})
 	return {
 		"available": True,
 		"rows": rows,
@@ -106,13 +109,16 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 		"scope": {
 			"company": filters.company,
 			"branch": filters.get("branch") or "",
-			"from_date": profit_filters.get("from_date"),
-			"to_date": profit_filters.get("to_date"),
+			"from_date": profit_scope.get("from_date") or profit_filters.get("from_date"),
+			"to_date": profit_scope.get("to_date") or profit_filters.get("to_date"),
 			"inventory_item_count": len(inventory_rows),
+			"inventory_evidence_from_date": inventory.get("scope", {}).get("from_date"),
+			"inventory_evidence_to_date": inventory.get("scope", {}).get("to_date"),
 		},
 		"metadata": {
 			"profitability_contract": "R8 get_profitability_intelligence",
 			"profitability_truth": profitability.get("metadata", {}).get("financial_truth"),
+			"profitability_period_contract": "Visible From Date / To Date are passed to R8 independently of the R10 inventory movement evidence window.",
 			"top_contributor_contract": "R8 top_contributors; R10 does not recalculate contribution ranking",
 			"low_margin_contract": "R8 margin_leakage; R10 does not own the low-margin threshold",
 			"inventory_contract": "R10 Inventory Health / ERPNext Bin + bounded demand + ERPNext reorder rules",
@@ -170,12 +176,24 @@ def _summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	]
 
 
-def _unavailable_payload(inventory: dict[str, Any], *, reason: str) -> dict[str, Any]:
+def _unavailable_payload(
+	inventory: dict[str, Any],
+	*,
+	profit_filters: dict[str, Any],
+	reason: str,
+) -> dict[str, Any]:
 	return {
 		"available": False,
 		"rows": [],
 		"summary": _summary([]),
-		"scope": dict(inventory.get("scope") or {}),
+		"scope": {
+			"company": profit_filters.get("company") or inventory.get("scope", {}).get("company"),
+			"branch": profit_filters.get("branch") or inventory.get("scope", {}).get("branch") or "",
+			"from_date": profit_filters.get("from_date"),
+			"to_date": profit_filters.get("to_date"),
+			"inventory_evidence_from_date": inventory.get("scope", {}).get("from_date"),
+			"inventory_evidence_to_date": inventory.get("scope", {}).get("to_date"),
+		},
 		"metadata": {
 			"profitability_contract": "R8 get_profitability_intelligence",
 			"inventory_contract": "R10 Inventory Health",
