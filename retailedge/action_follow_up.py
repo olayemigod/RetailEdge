@@ -127,8 +127,14 @@ def _assert_action_center_role(user: str | None = None) -> None:
 		frappe.throw(_("You do not have permission to manage Action Centre follow-ups."), frappe.PermissionError)
 
 
-def _validate_assignment_user(user: str, *, company: str, branch: str) -> None:
-	from retailedge.branch_context import validate_user_branch_access
+def _validate_assignment_user(
+	user: str,
+	*,
+	company: str,
+	branch: str,
+	require_global_scope: bool = False,
+) -> None:
+	from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
 
 	user = str(user or "").strip()
 	if not user:
@@ -137,6 +143,11 @@ def _validate_assignment_user(user: str, *, company: str, branch: str) -> None:
 		frappe.throw(_("Assigned user must be enabled."))
 	if not _has_action_center_role(user):
 		frappe.throw(_("Assigned user must have access to the RetailEdge Action Centre."), frappe.PermissionError)
+	if require_global_scope and not user_has_global_branch_access(user=user):
+		frappe.throw(
+			_("Company-level Business Control warnings can only be assigned to users with global Branch access."),
+			frappe.PermissionError,
+		)
 	if branch:
 		allowed = validate_user_branch_access(branch, user=user, company=company, throw=False)
 		if not allowed.get("allowed"):
@@ -202,10 +213,12 @@ def update_action_follow_up(
 		doc.acknowledged_on = None
 	if action == "assign" or assigned_to:
 		resolved_assignee = assigned_to or frappe.session.user
+		resolved_branch = str(payload["filters"].get("branch") or "")
 		_validate_assignment_user(
 			resolved_assignee,
 			company=str(payload["filters"].get("company") or ""),
-			branch=str(payload["filters"].get("branch") or ""),
+			branch=resolved_branch,
+			require_global_scope=(str(visible.get("source") or "") == "r9_early_warning" and not resolved_branch),
 		)
 		doc.assigned_to = resolved_assignee
 	if follow_up_on:
