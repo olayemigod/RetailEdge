@@ -69,7 +69,7 @@ class RetailEdgeBusinessControlCenterTests(unittest.TestCase):
 		self.assertNotIn("ignore_permissions", source)
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertNotIn("save(", source)
-		self.assertIn("do not create a ledger", source)
+		self.assertIn("does not create a ledger", source)
 		self.assertIn("existing RetailEdge Action Follow Up store", source)
 		self.assertIn("same permission-aware scope", source)
 		self.assertIn("except frappe.ValidationError", source)
