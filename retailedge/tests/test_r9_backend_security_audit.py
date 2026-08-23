@@ -36,6 +36,12 @@ class RetailEdgeR9BackendSecurityAuditTests(unittest.TestCase):
 			self.assertIn("require_dashboard_action", source, filename)
 			self.assertIn('DASHBOARD_KEY = "owner-dashboard"', source, filename)
 
+	def test_business_control_file_generation_uses_stricter_owner_capability(self):
+		source = (APP_ROOT / "dashboard_files.py").read_text(encoding="utf-8")
+		self.assertIn('"business-control-center": lambda filters', source)
+		self.assertIn('return "owner-dashboard" if scope_key == "business-control-center"', source)
+		self.assertIn("_capability_scope(scope_key)", source)
+
 	def test_business_control_center_reuses_action_center_resolved_scope_for_r9_warnings(self):
 		source = (APP_ROOT / "business_control_center.py").read_text(encoding="utf-8")
 		self.assertIn('warning_filters = frappe._dict(action_center.get("filters") or resolved)', source)
