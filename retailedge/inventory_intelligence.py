@@ -46,13 +46,21 @@ def classify_movement(
 	days_since_demand: int | None,
 	thresholds: MovementThresholds,
 ) -> str:
-	"""Classify observed demand without treating internal transfers as demand.
+	"""Classify observed demand without overstating what the history window proves.
 
 	The caller supplies demand_qty after applying the agreed voucher semantics.
-	Threshold values are explicit inputs so R10 does not hide policy constants.
+	A missing demand event is only "Non-moving" when the observed window is at
+	least as long as the configured non-moving threshold; otherwise the evidence is
+	labelled "No demand in window" rather than making a stronger claim.
 	"""
 	daily_demand = average_daily_demand(demand_qty, lookback_days)
-	if days_since_demand is None or days_since_demand >= thresholds.non_moving_days:
+	if days_since_demand is None:
+		return (
+			"Non-moving"
+			if lookback_days >= thresholds.non_moving_days
+			else "No demand in window"
+		)
+	if days_since_demand >= thresholds.non_moving_days:
 		return "Non-moving"
 	if days_since_demand >= thresholds.slow_days or daily_demand <= 0:
 		return "Slow"
