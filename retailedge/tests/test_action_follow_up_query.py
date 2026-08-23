@@ -15,6 +15,7 @@ class RetailEdgeActionFollowUpQueryTests(unittest.TestCase):
 				company="Example Co",
 				branch="Lagos",
 				require_global_scope=False,
+				require_owner_scope=False,
 			)
 		)
 
@@ -27,6 +28,7 @@ class RetailEdgeActionFollowUpQueryTests(unittest.TestCase):
 				company="Example Co",
 				branch="",
 				require_global_scope=True,
+				require_owner_scope=False,
 			)
 		)
 
@@ -39,6 +41,7 @@ class RetailEdgeActionFollowUpQueryTests(unittest.TestCase):
 				company="Example Co",
 				branch="Abuja",
 				require_global_scope=False,
+				require_owner_scope=False,
 			)
 		)
 
@@ -51,6 +54,7 @@ class RetailEdgeActionFollowUpQueryTests(unittest.TestCase):
 				company="Example Co",
 				branch="Lagos",
 				require_global_scope=False,
+				require_owner_scope=False,
 			)
 		)
 
