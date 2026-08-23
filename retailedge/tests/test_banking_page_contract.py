@@ -106,8 +106,11 @@ class BankingPageContractTests(unittest.TestCase):
 		review_js = REVIEW_ASSET_JS.read_text()
 		page_css = PAGE_CSS.read_text()
 		for label in (
-			"Bank Transaction",
-			"Proposed Match (Accounting)",
+			"Bank Statement",
+			"Accounting Record",
+			"Bank Identity & Accounting Safety",
+			"Bank Account",
+			"GL Account",
 			"Bank Amount",
 			"Candidate Amount",
 			"Transaction Date",
@@ -118,6 +121,7 @@ class BankingPageContractTests(unittest.TestCase):
 			"Matching does not reconcile the bank transaction",
 		):
 			self.assertIn(label, review_js)
+		self.assertNotIn("Proposed Match (Accounting)", review_js)
 		for class_name in (
 			"retailedge-review-compare",
 			"retailedge-review-card",
