@@ -39,6 +39,27 @@ def stock_cover_days(available_qty: Any, daily_demand: Any) -> float | None:
 	return available / demand
 
 
+def classify_stock_cover_review(
+	*,
+	cover_days: float | None,
+	daily_demand: Any,
+	evidence_window_days: int,
+) -> str:
+	"""Classify demand-backed stock cover without asserting that stock is overstocked.
+
+	A high-cover review is raised only when the calculated cover is longer than
+	the same historical evidence window used to derive observed daily demand.
+	The result remains advisory and is not a demand forecast or maximum-stock rule.
+	"""
+	if int(evidence_window_days or 0) <= 0:
+		raise ValueError("evidence_window_days must be greater than zero")
+	if flt(daily_demand) <= 0 or cover_days is None:
+		return "No Demand Evidence"
+	if flt(cover_days) > int(evidence_window_days):
+		return "High Cover Review"
+	return "Within Evidence Window"
+
+
 def classify_movement(
 	*,
 	demand_qty: Any,
