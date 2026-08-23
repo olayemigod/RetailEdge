@@ -117,7 +117,6 @@ class TestInventoryHealth(unittest.TestCase):
 			},
 			replenishment_by_item={},
 			show_costs=False,
-			stock_status="All",
 		)
 		self.assertEqual(added, 1)
 		self.assertEqual(rows[0]["item_code"], "SOLD-OUT")
@@ -127,16 +126,53 @@ class TestInventoryHealth(unittest.TestCase):
 		self.assertNotIn("stock_value", rows[0])
 		self.assertNotIn("valuation_rate", rows[0])
 
-	def test_zero_balance_item_respects_canonical_stock_status_filter(self):
-		rows, added = inventory_health._with_zero_balance_intelligence_rows(
-			[],
-			demand_by_item={"SOLD-OUT": {"item_code": "SOLD-OUT"}},
-			replenishment_by_item={},
-			show_costs=True,
-			stock_status="Available",
+	@patch("retailedge.inventory_health.get_inventory_replenishment", return_value={"items": [], "scan": {}, "metadata": {}})
+	@patch("retailedge.inventory_health.get_historical_inventory_demand")
+	@patch("retailedge.inventory_health._build_stock_position_dataset")
+	def test_stock_status_filter_cannot_turn_in_stock_demand_item_into_synthetic_stockout(
+		self, stock, demand, _replenishment
+	):
+		stock.return_value = {
+			"columns": [{"fieldname": "item_code", "label": "Item", "fieldtype": "Link"}],
+			"rows": [
+				{
+					"item_code": "IN-STOCK",
+					"item_name": "In Stock Item",
+					"actual_qty": 10,
+					"reserved_qty": 0,
+					"available_qty": 10,
+					"stock_status": "Available",
+				}
+			],
+			"company_currency": "",
+			"show_costs": 0,
+			"scope": {"company": "Test Company", "warehouse_count": 1},
+			"scan": {"bin_rows": 1},
+		}
+		demand.return_value = {
+			"rows": [
+				{
+					"item_code": "IN-STOCK",
+					"item_name": "In Stock Item",
+					"demand_qty": 10,
+					"average_daily_demand": 1,
+					"last_demand_on": today(),
+					"days_since_demand": 0,
+				}
+			],
+			"scope": {"lookback_days": 30, "from_date": "2026-07-25", "to_date": today()},
+			"scan": {},
+			"metadata": {},
+		}
+
+		result = inventory_health.get_inventory_health(
+			{"company": "Test Company", "stock_status": "Out of Stock", "include_zero": 1}
 		)
-		self.assertEqual(rows, [])
-		self.assertEqual(added, 0)
+
+		self.assertEqual(result["rows"], [])
+		self.assertEqual(result["scan"]["synthetic_zero_items"], 0)
+		self.assertEqual(stock.call_args.args[0].stock_status, "All")
+		self.assertEqual(result["scope"]["stock_status"], "Out of Stock")
 
 	@patch("retailedge.inventory_health.get_inventory_replenishment")
 	@patch("retailedge.inventory_health.get_historical_inventory_demand")
