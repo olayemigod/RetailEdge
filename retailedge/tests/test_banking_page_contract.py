@@ -111,16 +111,45 @@ class BankingPageContractTests(unittest.TestCase):
 			"Bank Identity & Accounting Safety",
 			"Bank Account",
 			"GL Account",
+			"Additional Context",
 			"Why this matches",
 			"Accounting / Hard Match Evidence",
 			"Fuzzy / Supplemental Evidence",
 			"Matching does not reconcile the bank transaction",
 		):
 			self.assertIn(label, review_js)
-		self.assertIn('valueRow("Amount", money(statement.amount ?? doc.bank_amount', review_js)
-		self.assertIn('valueRow("Amount", money(accounting.amount ?? doc.candidate_amount', review_js)
-		self.assertIn('valueRow("Date", statement.date || doc.transaction_date)', review_js)
-		self.assertIn('valueRow("Date", accounting.date)', review_js)
+
+		statement_rows = (
+			'valueRow("Bank Transaction", statementRecord)',
+			'valueRow("Bank", statement.bank)',
+			'valueRow("Bank Account", statement.bank_account',
+			'valueRow("GL Account", statement.gl_account)',
+			'valueRow("Company", statement.company',
+			'valueRow("Branch", statement.branch',
+			'valueRow("Direction", direction',
+			'valueRow("Amount", money(statement.amount ?? doc.bank_amount',
+			'valueRow("Date", statement.date || doc.transaction_date)',
+			'valueRow("Reference", statement.reference',
+		)
+		accounting_rows = (
+			'valueRow("Accounting Document", accountingRecord',
+			'valueRow("Bank", accounting.bank)',
+			'valueRow("Bank Account", accounting.bank_account',
+			'valueRow(accounting.gl_account_label || "Bank-side Account", accounting.gl_account)',
+			'valueRow("Company", accounting.company)',
+			'valueRow("Branch", accounting.branch)',
+			'valueRow("Direction", direction',
+			'valueRow("Amount", money(accounting.amount ?? doc.candidate_amount',
+			'valueRow("Date", accounting.date)',
+			'valueRow("Reference", accounting.reference)',
+		)
+		for rows in (statement_rows, accounting_rows):
+			positions = [review_js.index(snippet) for snippet in rows]
+			self.assertEqual(positions, sorted(positions))
+
+		self.assertIn('valueRow(accounting.gl_account_label || "Bank-side Account", accounting.gl_account)', review_js)
+		self.assertIn('[__("Bank Narration"), doc.bank_narration || bank.description]', review_js)
+		self.assertIn('[__("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode]', review_js)
 		self.assertNotIn("Proposed Match (Accounting)", review_js)
 		for class_name in (
 			"retailedge-review-compare",
