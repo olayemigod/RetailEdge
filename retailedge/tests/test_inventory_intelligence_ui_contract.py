@@ -1,3 +1,4 @@
+import unittest
 from pathlib import Path
 
 from retailedge import inventory_health
@@ -6,85 +7,91 @@ from retailedge import inventory_health
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_inventory_health_export_reuses_stock_position_entitlement_and_bounded_dataset():
-	text = Path(inventory_health.__file__).read_text(encoding="utf-8")
-	assert 'require_report_action(\n\t\t"stock-position"' in text
-	assert 'action="export"' in text
-	assert "_build_stock_position_dataset" in text
-	assert "get_historical_inventory_demand" in text
-	assert "get_inventory_replenishment" in text
-	assert "persistent_derived_truth" in text
-	assert "zero_balance_contract" in text
-	assert "_apply_sort" in text
-	assert "frappe.db.commit" not in text
-	assert "ignore_permissions=True" not in text
-	assert ".submit(" not in text
+class TestInventoryIntelligenceUIContract(unittest.TestCase):
+	def test_inventory_health_export_reuses_stock_position_entitlement_and_bounded_dataset(self):
+		text = Path(inventory_health.__file__).read_text(encoding="utf-8")
+		self.assertIn('require_report_action(\n\t\t"stock-position"', text)
+		self.assertIn('action="export"', text)
+		self.assertIn("_build_stock_position_dataset", text)
+		self.assertIn("get_historical_inventory_demand", text)
+		self.assertIn("get_inventory_replenishment", text)
+		self.assertIn("persistent_derived_truth", text)
+		self.assertIn("zero_balance_contract", text)
+		self.assertIn("_apply_sort", text)
+		self.assertNotIn("frappe.db.commit", text)
+		self.assertNotIn("ignore_permissions=True", text)
+		self.assertNotIn(".submit(", text)
+
+	def test_inventory_intelligence_page_uses_edgesuite_shell_and_shared_stock_searches(self):
+		page = (
+			APP_ROOT
+			/ "retailedge"
+			/ "page"
+			/ "inventory_intelligence"
+			/ "inventory_intelligence.js"
+		).read_text(encoding="utf-8")
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "inventory_intelligence"
+			/ "InventoryIntelligenceCentre.vue"
+		).read_text(encoding="utf-8")
+		bundle = (APP_ROOT / "public" / "js" / "inventory_intelligence.bundle.js").read_text(encoding="utf-8")
+
+		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page)
+		self.assertIn('const INVENTORY_INTELLIGENCE_ASSET = "inventory_intelligence.bundle.js"', page)
+		self.assertIn("mountInventoryIntelligence", page)
+		self.assertIn("EdgeAppShell", component)
+		self.assertIn("EdgeReportShell", component)
+		self.assertIn("EdgeLinkField", component)
+		self.assertIn("EdgeExportMenu", component)
+		self.assertIn("retailedge.stock_position.search_stock_position_options", component)
+		self.assertIn("resolve_branch_warehouse_selection", component)
+		self.assertIn('movement_class: "All"', component)
+		self.assertIn('replenishment_status: "All"', component)
+		self.assertIn("Replenishment Status", component)
+		self.assertIn("Reorder Now", component)
+		self.assertIn("Review warehouse group", component)
+		self.assertIn("ERPNext Item Reorder configuration", component)
+		self.assertIn("lookback_days: 90", component)
+		self.assertIn("include_zero: 1", component)
+		self.assertIn("Include zero-stock items", component)
+		self.assertIn("synthetic_zero_items", component)
+		self.assertIn("Last {{ days }} days", component)
+		self.assertIn("historical estimation, not a forecast", component)
+		self.assertIn('window.open(`/app/item/${encodeURIComponent(payload.value)}`', component)
+		self.assertIn("sortable: true", component)
+		self.assertIn(':sort="sort"', component)
+		self.assertIn('@sort-change="changeSort"', component)
+		self.assertIn('sort_field: this.sort?.field || ""', component)
+		self.assertIn('sort_direction: this.sort?.direction || ""', component)
+		self.assertIn(
+			'movementClasses: ["All", "Normal", "Slow", "Non-moving", "No demand in window"]',
+			component,
+		)
+		self.assertIn("get_inventory_health_export", bundle)
+		self.assertNotIn("innerHTML", page)
+		self.assertNotIn("insertAdjacentHTML", page)
+
+	def test_inventory_intelligence_page_roles_match_stock_operational_scope(self):
+		page_json = (
+			APP_ROOT
+			/ "retailedge"
+			/ "page"
+			/ "inventory_intelligence"
+			/ "inventory_intelligence.json"
+		).read_text(encoding="utf-8")
+		for role in (
+			"System Manager",
+			"Stock User",
+			"Stock Manager",
+			"RetailEdge Manager",
+			"RetailEdge Branch Manager",
+			"RetailEdge Auditor",
+		):
+			self.assertIn(role, page_json)
 
 
-def test_inventory_intelligence_page_uses_edgesuite_shell_and_shared_stock_searches():
-	page = (
-		APP_ROOT
-		/ "retailedge"
-		/ "page"
-		/ "inventory_intelligence"
-		/ "inventory_intelligence.js"
-	).read_text(encoding="utf-8")
-	component = (
-		APP_ROOT
-		/ "public"
-		/ "js"
-		/ "inventory_intelligence"
-		/ "InventoryIntelligenceCentre.vue"
-	).read_text(encoding="utf-8")
-	bundle = (APP_ROOT / "public" / "js" / "inventory_intelligence.bundle.js").read_text(encoding="utf-8")
-
-	assert 'const EDGEUI_ASSET = "edgeui.bundle.js"' in page
-	assert 'const INVENTORY_INTELLIGENCE_ASSET = "inventory_intelligence.bundle.js"' in page
-	assert "mountInventoryIntelligence" in page
-	assert "EdgeAppShell" in component
-	assert "EdgeReportShell" in component
-	assert "EdgeLinkField" in component
-	assert "EdgeExportMenu" in component
-	assert "retailedge.stock_position.search_stock_position_options" in component
-	assert "resolve_branch_warehouse_selection" in component
-	assert 'movement_class: "All"' in component
-	assert 'replenishment_status: "All"' in component
-	assert "Replenishment Status" in component
-	assert "Reorder Now" in component
-	assert "Review warehouse group" in component
-	assert "ERPNext Item Reorder configuration" in component
-	assert "lookback_days: 90" in component
-	assert "include_zero: 1" in component
-	assert "Include zero-stock items" in component
-	assert "synthetic_zero_items" in component
-	assert "Last {{ days }} days" in component
-	assert "historical estimation, not a forecast" in component
-	assert 'window.open(`/app/item/${encodeURIComponent(payload.value)}`' in component
-	assert "sortable: true" in component
-	assert ':sort="sort"' in component
-	assert '@sort-change="changeSort"' in component
-	assert 'sort_field: this.sort?.field || ""' in component
-	assert 'sort_direction: this.sort?.direction || ""' in component
-	assert 'movementClasses: ["All", "Normal", "Slow", "Non-moving", "No demand in window"]' in component
-	assert "get_inventory_health_export" in bundle
-	assert "innerHTML" not in page
-	assert "insertAdjacentHTML" not in page
-
-
-def test_inventory_intelligence_page_roles_match_stock_operational_scope():
-	page_json = (
-		APP_ROOT
-		/ "retailedge"
-		/ "page"
-		/ "inventory_intelligence"
-		/ "inventory_intelligence.json"
-	).read_text(encoding="utf-8")
-	for role in (
-		"System Manager",
-		"Stock User",
-		"Stock Manager",
-		"RetailEdge Manager",
-		"RetailEdge Branch Manager",
-		"RetailEdge Auditor",
-	):
-		assert role in page_json
+if __name__ == "__main__":
+	unittest.main()
