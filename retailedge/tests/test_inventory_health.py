@@ -84,6 +84,41 @@ class TestInventoryHealth(unittest.TestCase):
 		self.assertEqual(filters.as_of_date, today())
 		self.assertEqual(filters.lookback_days, inventory_health.DEFAULT_LOOKBACK_DAYS)
 		self.assertEqual(filters.replenishment_status, "All")
+		self.assertEqual(filters.include_zero, 1)
+
+	def test_zero_balance_demand_item_is_kept_as_out_of_stock_without_cost_leakage(self):
+		rows, added = inventory_health._with_zero_balance_intelligence_rows(
+			[],
+			demand_by_item={
+				"SOLD-OUT": {
+					"item_code": "SOLD-OUT",
+					"item_name": "Sold Out Item",
+					"item_group": "Products",
+					"stock_uom": "Nos",
+				}
+			},
+			replenishment_by_item={},
+			show_costs=False,
+			stock_status="All",
+		)
+		self.assertEqual(added, 1)
+		self.assertEqual(rows[0]["item_code"], "SOLD-OUT")
+		self.assertEqual(rows[0]["actual_qty"], 0)
+		self.assertEqual(rows[0]["available_qty"], 0)
+		self.assertEqual(rows[0]["stock_status"], "Out of Stock")
+		self.assertNotIn("stock_value", rows[0])
+		self.assertNotIn("valuation_rate", rows[0])
+
+	def test_zero_balance_item_respects_canonical_stock_status_filter(self):
+		rows, added = inventory_health._with_zero_balance_intelligence_rows(
+			[],
+			demand_by_item={"SOLD-OUT": {"item_code": "SOLD-OUT"}},
+			replenishment_by_item={},
+			show_costs=True,
+			stock_status="Available",
+		)
+		self.assertEqual(rows, [])
+		self.assertEqual(added, 0)
 
 	@patch("retailedge.inventory_health.get_inventory_replenishment")
 	@patch("retailedge.inventory_health.get_historical_inventory_demand")
