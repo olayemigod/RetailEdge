@@ -131,12 +131,16 @@ def get_historical_inventory_demand(filters: dict[str, Any] | str | None = None)
 def _normalise_filters(filters: frappe._dict) -> None:
 	if not filters.get("company"):
 		filters.company = str(frappe.defaults.get_user_default("Company") or "").strip()
-	filters.lookback_days = cint(filters.get("lookback_days")) or DEFAULT_LOOKBACK_DAYS
+	if "lookback_days" not in filters or filters.get("lookback_days") in (None, ""):
+		filters.lookback_days = DEFAULT_LOOKBACK_DAYS
+	else:
+		filters.lookback_days = cint(filters.get("lookback_days"))
 	filters.as_of_date = str(filters.get("as_of_date") or today())
 
 
 def _resolve_window(filters: frappe._dict):
-	lookback_days = cint(filters.get("lookback_days")) or DEFAULT_LOOKBACK_DAYS
+	raw_lookback = filters.get("lookback_days")
+	lookback_days = DEFAULT_LOOKBACK_DAYS if raw_lookback in (None, "") else cint(raw_lookback)
 	if lookback_days < 1 or lookback_days > MAX_LOOKBACK_DAYS:
 		frappe.throw(
 			_("Inventory demand lookback must be between 1 and {0} days.").format(MAX_LOOKBACK_DAYS)
