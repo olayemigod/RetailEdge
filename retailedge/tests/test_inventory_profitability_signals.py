@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unittest
 from pathlib import Path
 from unittest.mock import patch
 
@@ -91,108 +92,117 @@ def _profitability_payload():
 	}
 
 
-@patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
-@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
-def test_top_r8_profit_contributor_stockout_is_flagged_without_reorder_rule(inventory, profitability):
-	inventory.return_value = _inventory_payload()
-	profitability.return_value = _profitability_payload()
+class TestInventoryProfitabilitySignals(unittest.TestCase):
+	@patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
+	@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
+	def test_top_r8_profit_contributor_stockout_is_flagged_without_reorder_rule(
+		self, inventory, profitability
+	):
+		inventory.return_value = _inventory_payload()
+		profitability.return_value = _profitability_payload()
 
-	result = signals.get_inventory_profitability_signals(
-		{
-			"company": "Test Company",
-			"branch": "Main",
-			"lookback_days": 90,
-			"from_date": "2026-08-01",
-			"to_date": "2026-08-23",
-		}
+		result = signals.get_inventory_profitability_signals(
+			{
+				"company": "Test Company",
+				"branch": "Main",
+				"lookback_days": 90,
+				"from_date": "2026-08-01",
+				"to_date": "2026-08-23",
+			}
+		)
+
+		risk = next(row for row in result["rows"] if row["kind"] == "top_profit_contributor_stockout")
+		self.assertEqual(risk["item_code"], "FAST-PROFIT")
+		self.assertEqual(risk["severity"], "danger")
+		self.assertEqual(risk["gross_profit"], 150000)
+		self.assertEqual(risk["replenishment_status"], "No reorder rule")
+		self.assertEqual(risk["recommended_reorder_qty"], 0)
+		profitability.assert_called_once_with(
+			{
+				"company": "Test Company",
+				"branch": "Main",
+				"from_date": "2026-08-01",
+				"to_date": "2026-08-23",
+			}
+		)
+		self.assertEqual(result["scope"]["from_date"], "2026-08-01")
+		self.assertEqual(result["scope"]["to_date"], "2026-08-23")
+		self.assertEqual(result["scope"]["inventory_evidence_from_date"], "2026-05-26")
+		self.assertEqual(result["scope"]["inventory_evidence_to_date"], "2026-08-23")
+		self.assertIn("independently", result["metadata"]["profitability_period_contract"])
+		self.assertIn("even when no ERPNext reorder rule", result["metadata"]["stockout_contract"])
+
+	@patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
+	@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
+	def test_top_r8_profit_contributor_reorder_signal_remains_when_stock_is_available(
+		self, inventory, profitability
+	):
+		inventory.return_value = _inventory_payload()
+		profitability.return_value = _profitability_payload()
+
+		result = signals.get_inventory_profitability_signals({"company": "Test Company"})
+
+		risk = next(row for row in result["rows"] if row["kind"] == "top_profit_contributor_reorder")
+		self.assertEqual(risk["item_code"], "PROFIT-REORDER")
+		self.assertEqual(risk["severity"], "warning")
+		self.assertEqual(risk["recommended_reorder_qty"], 20)
+
+	@patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
+	@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
+	def test_r8_margin_leakage_combines_with_r10_slow_stock_classification(
+		self, inventory, profitability
+	):
+		inventory.return_value = _inventory_payload()
+		profitability.return_value = _profitability_payload()
+
+		result = signals.get_inventory_profitability_signals({"company": "Test Company"})
+
+		risk = next(row for row in result["rows"] if row["kind"] == "low_margin_slow_stock")
+		self.assertEqual(risk["item_code"], "LOW-SLOW")
+		self.assertEqual(risk["gross_margin_percent"], 5)
+		self.assertEqual(risk["movement_class"], "Slow")
+		self.assertEqual(risk["severity"], "warning")
+		profitability.assert_called_once_with({"company": "Test Company", "branch": ""})
+
+	@patch(
+		"retailedge.inventory_profitability_signals.get_profitability_intelligence",
+		side_effect=frappe.PermissionError,
 	)
+	@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
+	def test_cost_visibility_failure_returns_unavailable_without_profitability_rows(
+		self, inventory, profitability
+	):
+		inventory.return_value = _inventory_payload()
 
-	risk = next(row for row in result["rows"] if row["kind"] == "top_profit_contributor_stockout")
-	assert risk["item_code"] == "FAST-PROFIT"
-	assert risk["severity"] == "danger"
-	assert risk["gross_profit"] == 150000
-	assert risk["replenishment_status"] == "No reorder rule"
-	assert risk["recommended_reorder_qty"] == 0
-	profitability.assert_called_once_with(
-		{
-			"company": "Test Company",
-			"branch": "Main",
-			"from_date": "2026-08-01",
-			"to_date": "2026-08-23",
-		}
-	)
-	assert result["scope"]["from_date"] == "2026-08-01"
-	assert result["scope"]["to_date"] == "2026-08-23"
-	assert result["scope"]["inventory_evidence_from_date"] == "2026-05-26"
-	assert result["scope"]["inventory_evidence_to_date"] == "2026-08-23"
-	assert "independently" in result["metadata"]["profitability_period_contract"]
-	assert "even when no ERPNext reorder rule" in result["metadata"]["stockout_contract"]
+		result = signals.get_inventory_profitability_signals(
+			{
+				"company": "Test Company",
+				"from_date": "2026-08-01",
+				"to_date": "2026-08-23",
+			}
+		)
 
+		self.assertFalse(result["available"])
+		self.assertEqual(result["rows"], [])
+		self.assertEqual(result["summary"][0]["value"], 0)
+		self.assertEqual(result["scope"]["from_date"], "2026-08-01")
+		self.assertEqual(result["scope"]["to_date"], "2026-08-23")
+		self.assertIn("cost visibility", result["metadata"]["reason"].lower())
 
-@patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
-@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
-def test_top_r8_profit_contributor_reorder_signal_remains_when_stock_is_available(inventory, profitability):
-	inventory.return_value = _inventory_payload()
-	profitability.return_value = _profitability_payload()
-
-	result = signals.get_inventory_profitability_signals({"company": "Test Company"})
-
-	risk = next(row for row in result["rows"] if row["kind"] == "top_profit_contributor_reorder")
-	assert risk["item_code"] == "PROFIT-REORDER"
-	assert risk["severity"] == "warning"
-	assert risk["recommended_reorder_qty"] == 20
-
-
-@patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
-@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
-def test_r8_margin_leakage_combines_with_r10_slow_stock_classification(inventory, profitability):
-	inventory.return_value = _inventory_payload()
-	profitability.return_value = _profitability_payload()
-
-	result = signals.get_inventory_profitability_signals({"company": "Test Company"})
-
-	risk = next(row for row in result["rows"] if row["kind"] == "low_margin_slow_stock")
-	assert risk["item_code"] == "LOW-SLOW"
-	assert risk["gross_margin_percent"] == 5
-	assert risk["movement_class"] == "Slow"
-	assert risk["severity"] == "warning"
-	profitability.assert_called_once_with({"company": "Test Company", "branch": ""})
+	def test_source_contract_reuses_r8_and_r10_without_parallel_profit_math(self):
+		text = Path(signals.__file__).read_text(encoding="utf-8")
+		self.assertIn("get_profitability_intelligence", text)
+		self.assertIn("_build_inventory_health_dataset", text)
+		self.assertIn("R8 top_contributors", text)
+		self.assertIn("R8 margin_leakage", text)
+		self.assertNotIn("DEFAULT_LOW_MARGIN_PERCENT", text)
+		self.assertNotIn("incoming_rate", text)
+		self.assertNotIn("Sales Invoice Item", text)
+		self.assertNotIn("frappe.get_all", text)
+		self.assertNotIn("frappe.db.commit", text)
+		self.assertNotIn(".submit(", text)
+		self.assertNotIn(".insert(", text)
 
 
-@patch(
-	"retailedge.inventory_profitability_signals.get_profitability_intelligence",
-	side_effect=frappe.PermissionError,
-)
-@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
-def test_cost_visibility_failure_returns_unavailable_without_profitability_rows(inventory, profitability):
-	inventory.return_value = _inventory_payload()
-
-	result = signals.get_inventory_profitability_signals(
-		{
-			"company": "Test Company",
-			"from_date": "2026-08-01",
-			"to_date": "2026-08-23",
-		}
-	)
-
-	assert result["available"] is False
-	assert result["rows"] == []
-	assert result["summary"][0]["value"] == 0
-	assert result["scope"]["from_date"] == "2026-08-01"
-	assert result["scope"]["to_date"] == "2026-08-23"
-	assert "cost visibility" in result["metadata"]["reason"].lower()
-
-
-def test_source_contract_reuses_r8_and_r10_without_parallel_profit_math():
-	text = Path(signals.__file__).read_text(encoding="utf-8")
-	assert "get_profitability_intelligence" in text
-	assert "_build_inventory_health_dataset" in text
-	assert "R8 top_contributors" in text
-	assert "R8 margin_leakage" in text
-	assert "DEFAULT_LOW_MARGIN_PERCENT" not in text
-	assert "incoming_rate" not in text
-	assert "Sales Invoice Item" not in text
-	assert "frappe.get_all" not in text
-	assert "frappe.db.commit" not in text
-	assert ".submit(" not in text
-	assert ".insert(" not in text
+if __name__ == "__main__":
+	unittest.main()
