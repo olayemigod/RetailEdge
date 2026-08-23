@@ -53,6 +53,21 @@
 				@load-position="loadFinancialPosition"
 			/>
 
+			<OwnerControlDetails
+				v-if="earlyWarning.available !== false"
+				:receivables="receivablesControl"
+				:receivablesLoaded="receivablesControlLoaded"
+				:receivablesLoading="receivablesControlLoading"
+				:receivablesError="receivablesControlError"
+				:supplier="supplierControl"
+				:supplierLoaded="supplierControlLoaded"
+				:supplierLoading="supplierControlLoading"
+				:supplierError="supplierControlError"
+				:budget="earlyWarning.budget_spend || {}"
+				@load-receivables="loadReceivablesControl"
+				@load-suppliers="loadSupplierControl"
+			/>
+
 			<EdgeDashboardGrid minColumnWidth="23rem">
 				<EdgeDashboardSection title="Critical Controls" description="Highest-priority operational or financial conditions requiring management attention.">
 					<div v-if="critical.length" class="control-list">
@@ -98,6 +113,7 @@
 <script>
 import BusinessControlRow from "./BusinessControlRow.vue";
 import FinancialOverview from "./FinancialOverview.vue";
+import OwnerControlDetails from "./OwnerControlDetails.vue";
 
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -106,7 +122,7 @@ function errorMessage(error, fallback) { return error?.message || error?.exc || 
 
 export default {
 	name: "RetailEdgeBusinessControlCenter",
-	components: { ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])), BusinessControlRow, FinancialOverview },
+	components: { ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])), BusinessControlRow, FinancialOverview, OwnerControlDetails },
 	data() {
 		return {
 			edgeUIValid: true,
@@ -123,6 +139,14 @@ export default {
 			financialPositionLoaded: false,
 			financialPositionLoading: false,
 			financialPositionError: "",
+			receivablesControl: {},
+			receivablesControlLoaded: false,
+			receivablesControlLoading: false,
+			receivablesControlError: "",
+			supplierControl: {},
+			supplierControlLoaded: false,
+			supplierControlLoading: false,
+			supplierControlError: "",
 			menuItems: [],
 			tenantName: "",
 			userName: "",
@@ -163,6 +187,17 @@ export default {
 			} catch (error) { this.error = errorMessage(error, "Failed to load Business Control Centre controls."); }
 			finally { this.metadataLoading = false; }
 		},
+		resetLazyDetails() {
+			this.financialPosition = {};
+			this.financialPositionLoaded = false;
+			this.financialPositionError = "";
+			this.receivablesControl = {};
+			this.receivablesControlLoaded = false;
+			this.receivablesControlError = "";
+			this.supplierControl = {};
+			this.supplierControlLoaded = false;
+			this.supplierControlError = "";
+		},
 		async fetchData() {
 			if (!this.filters.company) return;
 			this.loading = true;
@@ -174,9 +209,7 @@ export default {
 				this.items = result.items || [];
 				this.actionCenter = result.action_center || { sources: {}, metadata: {} };
 				this.earlyWarning = result.early_warning || { available: true, metadata: {} };
-				this.financialPosition = {};
-				this.financialPositionLoaded = false;
-				this.financialPositionError = "";
+				this.resetLazyDetails();
 			} catch (error) { this.error = errorMessage(error, "Business Control Centre failed to load."); }
 			finally { this.loading = false; }
 		},
@@ -192,6 +225,32 @@ export default {
 				this.financialPositionLoaded = false;
 				this.financialPositionError = errorMessage(error, "Financial Position Snapshot could not be loaded for this scope.");
 			} finally { this.financialPositionLoading = false; }
+		},
+		async loadReceivablesControl() {
+			if (!this.filters.company || this.receivablesControlLoading) return;
+			this.receivablesControlLoading = true;
+			this.receivablesControlError = "";
+			try {
+				this.receivablesControl = await callMethod("retailedge.receivables_control.get_receivables_control_data", { filters: this.filters });
+				this.receivablesControlLoaded = true;
+			} catch (error) {
+				this.receivablesControl = {};
+				this.receivablesControlLoaded = false;
+				this.receivablesControlError = errorMessage(error, "Receivables & Collections details could not be loaded for this scope.");
+			} finally { this.receivablesControlLoading = false; }
+		},
+		async loadSupplierControl() {
+			if (!this.filters.company || this.supplierControlLoading) return;
+			this.supplierControlLoading = true;
+			this.supplierControlError = "";
+			try {
+				this.supplierControl = await callMethod("retailedge.supplier_obligations_control.get_supplier_obligations_control", { filters: this.filters });
+				this.supplierControlLoaded = true;
+			} catch (error) {
+				this.supplierControl = {};
+				this.supplierControlLoaded = false;
+				this.supplierControlError = errorMessage(error, "Supplier Obligations details could not be loaded for this scope.");
+			} finally { this.supplierControlLoading = false; }
 		},
 		async updateFollowUp(item, action, values = {}) {
 			if (!item?.fingerprint || item.follow_up_supported === false || this.mutatingFingerprint) return;
