@@ -19,6 +19,14 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		self.assertIn("business_control_center.bundle.js", script)
 		self.assertIn("retailedgeMountBusinessControlCenter", script)
 
+	def test_shared_navigation_exposes_business_control_centre_before_action_centre(self):
+		source = (APP_ROOT / "edgesuite_ui.py").read_text()
+		business_control = source.index('"label": "Business Control Centre"')
+		action_center = source.index('"label": "Action Centre"')
+		self.assertLess(business_control, action_center)
+		self.assertIn('"target": "business-control-center"', source)
+		self.assertIn('"required_roles": tuple(sorted(ACTION_CENTER_ROLES))', source[business_control:action_center])
+
 	def test_ui_uses_combined_control_endpoint_and_existing_follow_up_api(self):
 		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
 		self.assertIn("retailedge.business_control_center.get_business_control_center", source)
