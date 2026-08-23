@@ -28,6 +28,14 @@ from retailedge.banking_operations import (
 )
 
 
+_READY_BANKING = {
+    "readiness": "Ready",
+    "issues": [],
+    "warnings": [],
+    "can_reconcile": True,
+}
+
+
 class BankingOperationsTests(unittest.TestCase):
     def test_direction_aliases_normalize_to_canonical_values(self):
         self.assertEqual(normalize_direction("credit"), DIRECTION_INFLOW)
@@ -181,7 +189,11 @@ class BankingOperationsTests(unittest.TestCase):
             "recommended_action": "Reconcile",
         }
 
-        result = match_and_reconcile("MATCH-1", confirm_reconciliation=False)
+        with patch(
+            "retailedge.banking_operations._banking_readiness_for_match",
+            return_value=_READY_BANKING,
+        ):
+            result = match_and_reconcile("MATCH-1", confirm_reconciliation=False)
 
         self.assertEqual(result["status"], "Reconciliation Confirmation Required")
         execute.assert_not_called()
@@ -211,7 +223,11 @@ class BankingOperationsTests(unittest.TestCase):
             "message": "Reconciled through ERPNext.",
         }
 
-        result = match_and_reconcile("MATCH-1", confirm_reconciliation=True)
+        with patch(
+            "retailedge.banking_operations._banking_readiness_for_match",
+            return_value=_READY_BANKING,
+        ):
+            result = match_and_reconcile("MATCH-1", confirm_reconciliation=True)
 
         execute.assert_called_once_with("MATCH-1", confirm=True)
         self.assertEqual(result["status"], "Executed")
