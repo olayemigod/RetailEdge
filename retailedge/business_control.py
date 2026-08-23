@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_first_day, today
 
+from retailedge.branch_context import user_has_global_branch_access
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.owner_dashboard import get_owner_dashboard_data
 
@@ -50,10 +51,15 @@ def get_business_control_data(filters: dict[str, Any] | str | None = None) -> di
 		"to_date": str(filters.get("to_date") or today()),
 	}
 	owner = get_owner_dashboard_data(resolved)
-	return _build_control_snapshot(owner)
+	allow_company_accounting = bool(
+		not branch and user_has_global_branch_access(user=frappe.session.user)
+	)
+	return _build_control_snapshot(owner, allow_company_accounting=allow_company_accounting)
 
 
-def _build_control_snapshot(owner: dict[str, Any]) -> dict[str, Any]:
+def _build_control_snapshot(
+	owner: dict[str, Any], *, allow_company_accounting: bool = True
+) -> dict[str, Any]:
 	sections = owner.get("sections") or {}
 	filters = owner.get("filters") or {}
 
@@ -67,7 +73,11 @@ def _build_control_snapshot(owner: dict[str, Any]) -> dict[str, Any]:
 	money_out = _metric(sections, "cash", "Money Out")
 	net_cash_change = _metric(sections, "cash", "Net Change")
 	expenses = _metric(sections, "expenses", "Total Expenses")
-	accounting_net_profit = _metric(sections, "profitability", "Accounting Net Profit")
+	accounting_net_profit = (
+		_metric(sections, "profitability", "Accounting Net Profit")
+		if allow_company_accounting
+		else None
+	)
 	transactional_gross_profit = _metric(sections, "profitability", "Transactional Gross Profit")
 
 	controls = _control_items(sections)
@@ -82,7 +92,13 @@ def _build_control_snapshot(owner: dict[str, Any]) -> dict[str, Any]:
 			_card("Money Out", money_out, "Currency", "period"),
 			_card("Net Cash Movement", net_cash_change, "Currency", "period"),
 			_card("Expenses", expenses, "Currency", "period"),
-			_card("Accounting Net Profit", accounting_net_profit, "Currency", "period"),
+			_card(
+				"Accounting Net Profit",
+				accounting_net_profit,
+				"Currency",
+				"period",
+				available=accounting_net_profit is not None,
+			),
 			_card("Sales Margin Contribution", transactional_gross_profit, "Currency", "period"),
 		],
 		"pressure": {
@@ -103,7 +119,7 @@ def _build_control_snapshot(owner: dict[str, Any]) -> dict[str, Any]:
 			"accounting_truth": "ERPNext remains authoritative; RetailEdge derives control signals from existing permission-aware reporting engines.",
 			"trade_position_definition": "current receivables minus current payables; not cash, working capital or accounting net assets",
 			"cash_basis": "selected-period posted Cash/Bank GL movement, not closing cash balance",
-			"branch_accounting_limit": "branch accounting conclusions remain limited by valid ERPNext branch/accounting attribution",
+			"branch_accounting_limit": "company accounting profit is withheld unless the user has global Branch scope; branch accounting conclusions remain limited by valid ERPNext branch/accounting attribution",
 		},
 	}
 
@@ -161,8 +177,21 @@ def _percent(numerator: float, denominator: float) -> float | None:
 	return numerator / denominator * 100.0 if denominator else None
 
 
-def _card(label: str, value: float, datatype: str, time_basis: str) -> dict[str, Any]:
-	return {"label": _(label), "value": value, "datatype": datatype, "time_basis": time_basis}
+def _card(
+	label: str,
+	value: float | None,
+	datatype: str,
+	time_basis: str,
+	*,
+	available: bool = True,
+) -> dict[str, Any]:
+	return {
+		"label": _(label),
+		"value": value if available else None,
+		"datatype": datatype,
+		"time_basis": time_basis,
+		"available": available,
+	}
 
 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
