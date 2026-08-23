@@ -105,13 +105,16 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Warehouses", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
 			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History", "icon": "report"},
 			{"label": "Stock Position", "target_type": "Page", "target": "stock-position", "icon": "report"},
+			{"label": "Inventory Intelligence", "target_type": "Page", "target": "inventory-intelligence", "icon": "chart"},
+			{"label": "Transfer Opportunities", "target_type": "Page", "target": "inventory-transfer-opportunities", "icon": "repeat"},
+			{"label": "Inventory Ageing", "target_type": "Page", "target": "inventory-ageing", "icon": "report"},
 			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance", "icon": "report"},
 			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry", "icon": "repeat"},
 			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation", "icon": "clipboard"},
 			{"label": "Reorder Requests", "target_type": "DocType", "target": "Material Request", "icon": "clipboard"},
 			{"label": "Stock Ledger", "target_type": "Report", "target": "Stock Ledger", "icon": "report"},
 			{"label": "Projected Stock", "target_type": "Report", "target": "Stock Projected Qty", "icon": "report"},
-			{"label": "Stock Ageing", "target_type": "Report", "target": "Stock Ageing", "icon": "report"},
+			{"label": "Stock Ageing (Detailed)", "target_type": "Report", "target": "Stock Ageing", "icon": "report"},
 		),
 	},
 	{
@@ -150,6 +153,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Sales Invoice Register", "target_type": "Page", "target": "sales-invoice-register", "icon": "report"},
 			{"label": "Salesperson Performance", "target_type": "Page", "target": "salesperson-performance-dashboard", "icon": "user"},
 			{"label": "Branch Performance", "target_type": "Page", "target": "branch-performance-dashboard", "icon": "chart"},
+			{"label": "Inventory + Profitability", "target_type": "Page", "target": "inventory-profitability", "icon": "chart"},
 		),
 	},
 	{
@@ -368,7 +372,7 @@ def _target_exists_cached(target_type: str, target: str, cache: dict[tuple[str, 
 
 
 def _doctype_exists_cached(doctype: str, cache: dict[tuple[str, str], bool]) -> bool:
-	return _target_exists_cached("DocType", doctype, cache)
+	return _target_exists_cached("DocType", doctype)
 
 
 def _has_permission_cached(doctype: str, permission_type: str, cache: dict[tuple[str, str], bool]) -> bool:
