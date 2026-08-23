@@ -41,6 +41,7 @@ class TestInventoryHealth(unittest.TestCase):
 			thresholds=MovementThresholds(slow_days=30, non_moving_days=90),
 		)
 		self.assertEqual(result["stock_cover_days"], 15)
+		self.assertEqual(result["stock_cover_review"], "Within Evidence Window")
 		self.assertEqual(result["observed_demand_qty"], 30)
 		self.assertEqual(result["movement_class"], "Normal")
 		self.assertEqual(result["replenishment_status"], "Reorder Now")
@@ -48,6 +49,32 @@ class TestInventoryHealth(unittest.TestCase):
 		self.assertEqual(result["recommended_reorder_qty"], 20)
 		self.assertEqual(result["actual_qty"], 20)
 		self.assertEqual(result["projected_qty"], 18)
+
+	def test_high_cover_review_uses_evidence_window_without_claiming_overstock(self):
+		self.assertEqual(
+			inventory_health._stock_cover_review(
+				cover_days=31,
+				daily_demand=1,
+				lookback_days=30,
+			),
+			"High Cover Review",
+		)
+		self.assertEqual(
+			inventory_health._stock_cover_review(
+				cover_days=30,
+				daily_demand=1,
+				lookback_days=30,
+			),
+			"Within Evidence Window",
+		)
+		self.assertEqual(
+			inventory_health._stock_cover_review(
+				cover_days=None,
+				daily_demand=0,
+				lookback_days=30,
+			),
+			"No Demand Evidence",
+		)
 
 	def test_no_demand_in_short_window_is_not_falsely_non_moving(self):
 		result = inventory_health._enrich_stock_row(
@@ -60,6 +87,7 @@ class TestInventoryHealth(unittest.TestCase):
 		self.assertEqual(result["movement_class"], "No demand in window")
 		self.assertEqual(result["replenishment_status"], "No reorder rule")
 		self.assertIsNone(result["stock_cover_days"])
+		self.assertEqual(result["stock_cover_review"], "No Demand Evidence")
 
 	def test_no_demand_in_sufficient_window_can_be_non_moving(self):
 		result = inventory_health._enrich_stock_row(
@@ -193,11 +221,14 @@ class TestInventoryHealth(unittest.TestCase):
 		demand.assert_called_once()
 		replenishment.assert_called_once()
 		self.assertEqual(result["rows"][0]["stock_cover_days"], 15)
+		self.assertEqual(result["rows"][0]["stock_cover_review"], "Within Evidence Window")
 		self.assertEqual(result["rows"][0]["replenishment_status"], "Reorder Now")
 		self.assertEqual(result["rows"][0]["recommended_reorder_qty"], 20)
 		self.assertEqual(result["rows"][0]["stock_value"], 3000)
 		self.assertEqual(result["show_costs"], 1)
 		self.assertFalse(result["metadata"]["stock_cover_is_forecast"])
+		self.assertIn("not an overstock assertion", result["metadata"]["stock_cover_review_contract"])
+		self.assertEqual(result["scope"]["high_cover_review_threshold_days"], 30)
 		self.assertEqual(result["metadata"]["current_stock_truth"], "ERPNext Bin")
 		self.assertEqual(result["pagination"]["total_rows"], 1)
 
@@ -262,6 +293,7 @@ class TestInventoryHealth(unittest.TestCase):
 		self.assertEqual([row["item_code"] for row in result["rows"]], ["ITEM-1"])
 		cards = {card["label"]: card["value"] for card in result["summary"]}
 		self.assertEqual(cards["Items in Scope"], 1)
+		self.assertEqual(cards["High Cover Review"], 0)
 		self.assertEqual(cards["Items Requiring Reorder"], 1)
 
 	def test_source_is_read_only_and_reuses_existing_stock_dataset(self):
