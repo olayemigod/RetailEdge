@@ -4,8 +4,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import frappe
-
 from retailedge.financial_position import _build_snapshot, _get_liquid_position, get_financial_position
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +40,30 @@ class TestFinancialPosition(unittest.TestCase):
 		self.assertEqual(current["Cash & Bank Balance"]["time_basis"], "current")
 		self.assertEqual(period["Net Cash Movement"]["time_basis"], "period")
 
+	def test_snapshot_hides_company_accounting_for_restricted_scope(self):
+		owner = {
+			"filters": {"company": "Demo", "branch": ""},
+			"sections": {
+				"receivables": {"available": True, "summary": []},
+				"payables": {"available": True, "summary": []},
+				"profitability": {"available": True, "summary": [
+					{"label": "Accounting Gross Profit", "value": 900},
+					{"label": "Accounting Net Profit", "value": 650},
+					{"label": "Transactional Gross Profit", "value": 1000},
+				]},
+			},
+		}
+		result = _build_snapshot(
+			owner=owner,
+			liquid={"available": False, "accounts": [], "reason": "restricted"},
+			allow_company_accounting=False,
+		)
+		period = {card["label"]: card for card in result["selected_period"]}
+		self.assertFalse(period["Accounting Gross Profit"]["available"])
+		self.assertFalse(period["Accounting Net Profit"]["available"])
+		self.assertIsNone(period["Accounting Net Profit"]["value"])
+		self.assertEqual(period["Sales Margin Contribution"]["value"], 1000)
+
 	def test_snapshot_hides_stock_value_when_cost_visibility_denies_it(self):
 		owner = {
 			"filters": {},
@@ -60,10 +82,17 @@ class TestFinancialPosition(unittest.TestCase):
 		self.assertIn("company-level", result["reason"])
 		self.assertEqual(result["accounts"], [])
 
+	def test_restricted_blank_branch_scope_cannot_see_company_cash_balance(self):
+		result = _get_liquid_position(company="Demo", branch="", global_branch_scope=False)
+		self.assertFalse(result["available"])
+		self.assertIn("Branch access is restricted", result["reason"])
+		self.assertEqual(result["accounts"], [])
+
+	@patch("retailedge.financial_position.user_has_global_branch_access", return_value=True)
 	@patch("retailedge.financial_position.require_dashboard_action", return_value={"can_view": True})
 	@patch("retailedge.financial_position._get_liquid_position", return_value={"available": True, "balance": 500, "accounts": []})
 	@patch("retailedge.financial_position.get_owner_dashboard_data")
-	def test_service_composes_existing_reporting_services(self, owner_dashboard, liquid, capability):
+	def test_service_composes_existing_reporting_services(self, owner_dashboard, liquid, capability, _global_scope):
 		owner_dashboard.return_value = {
 			"filters": {"company": "Demo", "branch": ""},
 			"sections": {"receivables": {"available": True, "summary": []}, "payables": {"available": True, "summary": []}},
@@ -71,7 +100,7 @@ class TestFinancialPosition(unittest.TestCase):
 		result = get_financial_position({"company": "Demo", "from_date": "2026-08-01", "to_date": "2026-08-22"})
 		self.assertEqual(result["title"], "Financial Position Snapshot")
 		owner_dashboard.assert_called_once()
-		liquid.assert_called_once_with(company="Demo", branch="")
+		liquid.assert_called_once_with(company="Demo", branch="", global_branch_scope=True)
 		capability.assert_called_once_with("owner-dashboard", "view", company="Demo", branch="")
 
 	def test_source_contract_uses_erpnext_balance_helper_without_direct_sql(self):
@@ -80,6 +109,7 @@ class TestFinancialPosition(unittest.TestCase):
 		self.assertNotIn("ignore_permissions", source)
 		self.assertIn("get_balance_on", source)
 		self.assertIn("get_owner_dashboard_data", source)
+		self.assertIn("user_has_global_branch_access", source)
 		self.assertIn("MAX_LIQUID_ACCOUNT_SCAN", source)
 
 
