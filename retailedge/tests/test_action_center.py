@@ -17,7 +17,7 @@ class TestActionCenter(unittest.TestCase):
 	@patch("retailedge.action_center.get_customer_receivables")
 	@patch("retailedge.action_center.get_cash_shift_verification")
 	@patch("retailedge.action_center.get_expense_register")
-	@patch("retailedge.action_center.get_inventory_health")
+	@patch("retailedge.action_center.get_inventory_action_summary")
 	def test_composes_each_authoritative_exception_source_once_without_mutation(
 		self, stock, expenses, cash, receivables, payables, bank
 	):
@@ -188,7 +188,7 @@ class TestActionCenter(unittest.TestCase):
 	@patch("retailedge.action_center.get_customer_receivables", side_effect=frappe.PermissionError)
 	@patch("retailedge.action_center.get_expense_register", side_effect=frappe.PermissionError)
 	@patch("retailedge.action_center.get_cash_shift_verification", side_effect=frappe.PermissionError)
-	@patch("retailedge.action_center.get_inventory_health", side_effect=frappe.PermissionError)
+	@patch("retailedge.action_center.get_inventory_action_summary", side_effect=frappe.PermissionError)
 	def test_permission_denied_sources_are_not_leaked(
 		self, stock, cash, expenses, receivables, payables, bank
 	):
@@ -263,7 +263,7 @@ class TestActionCenter(unittest.TestCase):
 		for forbidden in (".submit(", "apply_workflow(", "ignore_permissions=True", "frappe.db.commit("):
 			self.assertNotIn(forbidden, source)
 		self.assertNotIn("get_owner_dashboard_data", source)
-		self.assertIn("get_inventory_health", source)
+		self.assertIn("get_inventory_action_summary", source)
 		self.assertIn("one_authoritative_provider_per_exception_domain", source)
 		self.assertIn("_resolve_action_center_branch(", source)
 		self.assertIn("_validate_operational_scope", source)
