@@ -16,6 +16,7 @@ from retailedge.inventory_intelligence import (
 	classify_stock_cover_review,
 	stock_cover_days,
 )
+from retailedge.inventory_location_exceptions import get_hidden_inventory_location_exceptions
 from retailedge.inventory_replenishment import get_inventory_replenishment
 from retailedge.reporting_capabilities import require_report_action
 from retailedge.stock_position import (
@@ -90,9 +91,9 @@ def get_inventory_health_export(
 def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	"""Return Action Centre stock alerts with independent optional enrichment layers.
 
-	Current Bin stock is the required foundation. ERPNext reorder and historical
-	movement intelligence are evaluated independently so a bounded/unsupported
-	enrichment cannot suppress Negative Stock, Out of Stock, or Fully Reserved alerts.
+	Current Bin stock is the required foundation. ERPNext reorder, warehouse-location,
+	and historical movement intelligence are evaluated independently so a bounded or
+	unsupported enrichment cannot suppress legacy current-stock alerts.
 	"""
 	filters = _normalise_health_filters(filters)
 	_validate_filters(filters)
@@ -102,6 +103,19 @@ def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) ->
 	stock = _build_stock_position_dataset(stock_filters)
 	stock_rows = list(stock.get("rows") or [])
 	show_costs = bool(stock.get("show_costs"))
+
+	location_exceptions: dict[str, Any] = {}
+	location_status: dict[str, Any] = {"available": True}
+	try:
+		location_exceptions = get_hidden_inventory_location_exceptions(
+			filters,
+			aggregate_rows=stock_rows,
+		)
+	except (frappe.PermissionError, frappe.ValidationError):
+		location_status = {
+			"available": False,
+			"reason": "Warehouse-level stock exceptions could not be evaluated safely for this scope.",
+		}
 
 	replenishment: dict[str, Any] = {}
 	replenishment_status: dict[str, Any] = {"available": True}
@@ -126,6 +140,7 @@ def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) ->
 		)
 
 	summary = _stock_summary(stock_rows, show_costs=False)
+	summary.extend(_location_action_summary(location_exceptions))
 	summary.extend(_replenishment_action_summary(replenishment))
 
 	movement_status: dict[str, Any] = {"available": True}
@@ -156,8 +171,10 @@ def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) ->
 		]
 		# Demand evidence can safely add sold-out items with no current Bin row. Rebuild
 		# the legacy stock cards from that complete current-stock set when available.
-		summary = _stock_summary(movement_rows, show_costs=False) + _replenishment_action_summary(
-			replenishment
+		summary = (
+			_stock_summary(movement_rows, show_costs=False)
+			+ _location_action_summary(location_exceptions)
+			+ _replenishment_action_summary(replenishment)
 		)
 		summary.append(
 			{
@@ -181,15 +198,34 @@ def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) ->
 		"metadata": {
 			"current_stock_truth": "ERPNext Bin",
 			"current_stock_available": True,
+			"location_exceptions": location_status,
 			"replenishment": replenishment_status,
 			"movement": movement_status,
 			"degraded": not (
-				bool(replenishment_status.get("available")) and bool(movement_status.get("available"))
+				bool(location_status.get("available"))
+				and bool(replenishment_status.get("available"))
+				and bool(movement_status.get("available"))
 			),
 			"read_only": True,
 			"persistent_derived_truth": False,
 		},
 	}
+
+
+def _location_action_summary(location_exceptions: dict[str, Any]) -> list[dict[str, Any]]:
+	counts = dict(location_exceptions.get("summary") or {})
+	return [
+		{
+			"label": _("Negative Stock Locations Hidden by Aggregate"),
+			"value": cint(counts.get("hidden_negative_location_count")),
+			"datatype": "Int",
+		},
+		{
+			"label": _("Fully Reserved Locations Hidden by Aggregate"),
+			"value": cint(counts.get("hidden_fully_reserved_location_count")),
+			"datatype": "Int",
+		},
+	]
 
 
 def _replenishment_action_summary(replenishment: dict[str, Any]) -> list[dict[str, Any]]:
