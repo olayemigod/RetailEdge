@@ -61,7 +61,9 @@ def get_assignable_users(
 	company = str(filters.get("company") or "").strip()
 	branch = str(filters.get("branch") or "").strip()
 	require_global_scope = bool(int(filters.get("require_global_scope") or 0))
-	require_owner_scope = bool(int(filters.get("require_owner_scope") or 0))
+	# Existing UI already identifies company-level R9 warnings through the global-scope flag.
+	# Treat that flag as owner-financial scope too, while preserving legacy Action Centre queries.
+	require_owner_scope = bool(int(filters.get("require_owner_scope") or filters.get("require_global_scope") or 0))
 	needle = f"%{str(txt or '').strip()}%"
 
 	query_filters: dict[str, Any] = {"enabled": 1, "user_type": "System User"}
