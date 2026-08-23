@@ -8,6 +8,7 @@ from frappe.utils import cint
 from frappe.utils.pdf import get_pdf
 
 from retailedge.branch_performance_dashboard import get_branch_performance_dashboard_data
+from retailedge.business_control_center import build_business_control_export_dataset
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_dashboard_export import build_expense_dashboard_export_with_budget
 from retailedge.money_dashboard import build_money_dashboard_export_dataset
@@ -33,6 +34,7 @@ DashboardHandler = Callable[[dict, bool], dict]
 def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	handlers: dict[str, DashboardHandler] = {
 		"owner-dashboard": lambda filters, _all_filtered: build_owner_dashboard_export_dataset(filters),
+		"business-control-center": lambda filters, _all_filtered: build_business_control_export_dataset(filters),
 		"profitability-intelligence": lambda filters, all_filtered: build_profitability_export_dataset(
 			filters,
 			all_filtered=all_filtered,
@@ -54,6 +56,13 @@ def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	return handler
 
 
+def _capability_scope(scope_key: str) -> str:
+	# Business Control Centre may remain visible to operational Action Centre users,
+	# but its export/print can contain owner-level financial intelligence. Reuse the
+	# stricter Owner Dashboard capability contract for file generation.
+	return "owner-dashboard" if scope_key == "business-control-center" else scope_key
+
+
 def get_dashboard_dataset(scope_key: str, filters: dict, *, all_filtered: bool = True) -> dict:
 	return _dashboard_handler(scope_key)(filters, all_filtered)
 
@@ -63,7 +72,7 @@ def download_dashboard(scope_key: str, filters=None, options=None):
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else dict(filters or {})
 	options = _normalize_options(options)
 	require_dashboard_action(
-		scope_key,
+		_capability_scope(scope_key),
 		"export",
 		company=filters.get("company"),
 		branch=filters.get("branch"),
@@ -94,7 +103,7 @@ def download_dashboard(scope_key: str, filters=None, options=None):
 def get_dashboard_print_html(scope_key: str, filters=None) -> dict:
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else dict(filters or {})
 	require_dashboard_action(
-		scope_key,
+		_capability_scope(scope_key),
 		"print",
 		company=filters.get("company"),
 		branch=filters.get("branch"),

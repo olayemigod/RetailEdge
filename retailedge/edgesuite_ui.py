@@ -154,6 +154,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "review-approvals", "label": "Review & Approvals", "icon": "shield", "items": (
+			{"label": "Business Control Centre", "target_type": "Page", "target": "business-control-center", "icon": "shield", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match", "icon": "shield"},
 			{"label": "Daily Sales Audit", "target_type": "DocType", "target": "RetailEdge Daily Sales Audit", "icon": "shield"},
