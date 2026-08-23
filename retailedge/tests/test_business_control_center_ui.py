@@ -42,6 +42,7 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		self.assertIn('company: this.filters.company || ""', source)
 		self.assertIn('branch: this.filters.branch || ""', source)
 		self.assertIn('item.source === "r9_early_warning" && !this.filters.branch', source)
+		self.assertIn('require_owner_scope: item.source === "r9_early_warning" ? 1 : 0', source)
 		self.assertNotIn("get_query: () => ({ filters: { enabled: 1 } })", source)
 
 	def test_owner_detail_panels_reuse_budget_and_lazy_load_heavy_ar_ap(self):
