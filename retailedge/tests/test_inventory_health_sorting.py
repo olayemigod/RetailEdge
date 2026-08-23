@@ -3,6 +3,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import frappe
+import pytest
 
 from retailedge import inventory_health
 
@@ -67,5 +68,9 @@ def test_public_service_rejects_unknown_sort_field(build_dataset):
 		"metadata": {},
 	}
 
-	with frappe.exceptions.ValidationError:
-		pass
+	with pytest.raises(frappe.ValidationError):
+		inventory_health.get_inventory_health(
+			{"company": "Test Company"},
+			sort_field="not_a_column",
+			sort_direction="asc",
+		)
