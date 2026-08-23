@@ -36,6 +36,19 @@
 		return make("span", `retailedge-review-badge retailedge-review-badge--${tone || "neutral"}`, label);
 	}
 
+	function evidenceTone(status) {
+		if (status === "Match") return "success";
+		if (status === "Mismatch") return "danger";
+		if (status === "Supporting") return "info";
+		return "neutral";
+	}
+
+	function evidenceLabel(status) {
+		if (status === "Match") return __("Match ✓");
+		if (status === "Mismatch") return __("Mismatch ✕");
+		return __(status || "Not Available");
+	}
+
 	function fieldValue(modal, fieldname) {
 		const field = modal.querySelector(`.frappe-control[data-fieldname="${fieldname}"]`);
 		if (!field) return "";
@@ -92,6 +105,27 @@
 			line.appendChild(make("span", "retailedge-review-check", "✓"));
 			line.appendChild(make("span", "", item));
 			list.appendChild(line);
+		});
+		panel.appendChild(list);
+		return panel;
+	}
+
+	function accountSafetyPanel(accountEvidence) {
+		const evidence = Array.isArray(accountEvidence?.evidence) ? accountEvidence.evidence : [];
+		if (!evidence.length) return null;
+		const panel = make("section", "retailedge-review-why");
+		panel.appendChild(make("h3", "retailedge-review-section-title", __("Bank Identity & Accounting Safety")));
+		const list = make("div", "retailedge-review-why-list");
+		evidence.forEach((item) => {
+			const row = make("div", "retailedge-review-why-item");
+			row.appendChild(make("strong", "", `${__(item.label || item.key)}: `));
+			row.appendChild(badge(evidenceLabel(item.status), evidenceTone(item.status)));
+			const left = text(item.statement, "");
+			const right = text(item.accounting, "");
+			if (left || right) {
+				row.appendChild(make("span", "", ` ${left || "—"} ↔ ${right || "—"}`));
+			}
+			list.appendChild(row);
 		});
 		panel.appendChild(list);
 		return panel;
@@ -180,12 +214,20 @@
 		if (!matchName) return;
 
 		let doc = {};
+		let accountEvidence = {};
 		try {
-			const response = await frappe.call({
-				method: "frappe.client.get",
-				args: { doctype: "RetailEdge Bank Transaction Match", name: matchName },
-			});
-			doc = response?.message || {};
+			const [docResponse, evidenceResponse] = await Promise.all([
+				frappe.call({
+					method: "frappe.client.get",
+					args: { doctype: "RetailEdge Bank Transaction Match", name: matchName },
+				}),
+				frappe.call({
+					method: "retailedge.banking_readiness.get_match_account_evidence",
+					args: { match_name: matchName },
+				}),
+			]);
+			doc = docResponse?.message || {};
+			accountEvidence = evidenceResponse?.message || {};
 		} catch (error) {
 			console.error("Unable to hydrate RetailEdge Bank Match review UI", error);
 			return;
@@ -194,6 +236,8 @@
 		const details = parseDetails(doc);
 		const candidate = details.candidate_context || {};
 		const bank = details.bank_context || {};
+		const statement = accountEvidence.statement || {};
+		const accounting = accountEvidence.accounting || {};
 		const body = modal.querySelector(".modal-body");
 		if (!body) return;
 
@@ -204,9 +248,6 @@
 		const status = text(doc.decision_status, __("Suggested"));
 		const category = candidate.transaction_category || candidate.candidate_category ||
 			(doc.suggested_document_type === "Sales Invoice" ? __("Customer Receipt") : "");
-		const candidateDate = doc.candidate_posting_date || candidate.posting_date || candidate.payment_date || "";
-		const paymentAccount = doc.resolved_payment_account || doc.payment_account || candidate.resolved_payment_account || candidate.payment_account || "";
-		const candidateReference = candidate.reference || candidate.reference_no || doc.suggested_document || "";
 
 		if (titleNode) {
 			titleNode.textContent = __("Review Match: {0}", [doc.bank_transaction || matchName]);
@@ -222,42 +263,48 @@
 		const compare = make("div", "retailedge-review-compare");
 		const bankCard = make("section", "retailedge-review-card");
 		const candidateCard = make("section", "retailedge-review-card");
-		bankCard.appendChild(cardHeader("Bank Transaction", doc.bank_direction || bank.bank_direction || "", "info"));
-		candidateCard.appendChild(cardHeader("Proposed Match (Accounting)", confidence, confidence === "Strong Match" ? "success" : "warning"));
+		bankCard.appendChild(cardHeader("Bank Statement", accountEvidence.direction || doc.bank_direction || bank.bank_direction || "", "info"));
+		candidateCard.appendChild(cardHeader("Accounting Record", confidence, confidence === "Strong Match" ? "success" : "warning"));
 
 		const bankRows = make("div", "retailedge-review-card-rows");
 		const candidateRows = make("div", "retailedge-review-card-rows");
 
 		bankRows.append(
-			valueRow("Direction", doc.bank_direction || bank.bank_direction, { badge: true, tone: "info" }),
-			valueRow("Bank Amount", money(doc.bank_amount, doc.currency), { emphasis: true }),
-			valueRow("Transaction Date", doc.transaction_date),
-			valueRow("Bank Account", doc.bank_account || bank.bank_account),
-			valueRow("Reference", doc.bank_reference || bank.reference),
-			valueRow("Narration", doc.bank_narration || bank.description),
-			valueRow("Company", doc.company || bank.company),
-			valueRow("Branch", doc.branch || bank.branch)
+			valueRow("Bank", statement.bank),
+			valueRow("Bank Account", statement.bank_account || doc.bank_account || bank.bank_account),
+			valueRow("GL Account", statement.gl_account),
+			valueRow("Company", statement.company || doc.company || bank.company),
+			valueRow("Branch", statement.branch || doc.branch || bank.branch),
+			valueRow("Direction", accountEvidence.direction || doc.bank_direction || bank.bank_direction, { badge: true, tone: "info" }),
+			valueRow("Amount", money(statement.amount ?? doc.bank_amount, doc.currency), { emphasis: true }),
+			valueRow("Date", statement.date || doc.transaction_date),
+			valueRow("Reference", statement.reference || doc.bank_reference || bank.reference),
+			valueRow("Narration", doc.bank_narration || bank.description)
 		);
 
 		candidateRows.append(
-			valueRow("Category", category, { badge: true, tone: "neutral" }),
-			valueRow("Candidate Amount", money(doc.candidate_amount, doc.currency), { emphasis: true }),
-			valueRow("Candidate Date", candidateDate),
-			valueRow("Candidate Document", `${text(doc.suggested_document_type, "")} ${text(doc.suggested_document, "")}`.trim(), {
-				link: () => frappe.set_route("Form", doc.suggested_document_type, doc.suggested_document)
+			valueRow("Document", `${text(accounting.doctype || doc.suggested_document_type, "")} ${text(accounting.name || doc.suggested_document, "")}`.trim(), {
+				link: () => frappe.set_route("Form", accounting.doctype || doc.suggested_document_type, accounting.name || doc.suggested_document)
 			}),
-			valueRow("Difference", money(doc.amount_difference, doc.currency), { positive: Math.abs(Number(doc.amount_difference || 0)) <= 0.01 }),
-			valueRow("Payment Account", paymentAccount),
-			valueRow("Candidate Reference", candidateReference),
-			valueRow("Party / Customer", doc.customer || doc.party || candidate.party),
-			valueRow("Payment Evidence", doc.payment_event_source || candidate.payment_event_source),
-			valueRow("Mode of Payment", doc.payment_mode || candidate.payment_mode)
+			valueRow("Category", category, { badge: true, tone: "neutral" }),
+			valueRow("Bank", accounting.bank),
+			valueRow("Bank Account", accounting.bank_account || __("Resolved from GL account")),
+			valueRow(accounting.gl_account_label || "Bank-side Account", accounting.gl_account),
+			valueRow("Company", accounting.company),
+			valueRow("Branch", accounting.branch),
+			valueRow("Amount", money(accounting.amount ?? doc.candidate_amount, doc.currency), { emphasis: true }),
+			valueRow("Date", accounting.date),
+			valueRow("Reference", accounting.reference),
+			valueRow("Mode of Payment", accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode)
 		);
 
 		bankCard.appendChild(bankRows);
 		candidateCard.appendChild(candidateRows);
 		compare.append(bankCard, candidateCard);
 		root.appendChild(compare);
+
+		const safety = accountSafetyPanel(accountEvidence);
+		if (safety) root.appendChild(safety);
 
 		const why = make("section", "retailedge-review-why");
 		why.appendChild(make("h3", "retailedge-review-section-title", __("Why this matches")));
