@@ -86,8 +86,11 @@ def get_historical_inventory_demand(filters: dict[str, Any] | str | None = None)
 	]
 	item_codes = sorted({str(row.item_code) for row in demand_rows if row.item_code})
 	item_map = _get_item_metadata(item_codes)
+	permitted_demand_rows = [
+		row for row in demand_rows if str(row.get("item_code") or "") in item_map
+	]
 	location_rows, item_rows = _aggregate_demand(
-		demand_rows,
+		permitted_demand_rows,
 		item_map=item_map,
 		to_date=to_date,
 		lookback_days=lookback_days,
@@ -110,7 +113,7 @@ def get_historical_inventory_demand(filters: dict[str, Any] | str | None = None)
 		},
 		"scan": {
 			"outward_sle_rows": len(sle_rows),
-			"demand_sle_rows": len(demand_rows),
+			"demand_sle_rows": len(permitted_demand_rows),
 			"sle_limit": MAX_SLE_SCAN_ROWS,
 			"item_limit": MAX_ITEM_SCOPE,
 		},
@@ -122,6 +125,7 @@ def get_historical_inventory_demand(filters: dict[str, Any] | str | None = None)
 				"Internal transfers, manufacture/repack movements, Stock Reconciliation, "
 				"purchase returns and other non-demand outward movements are excluded."
 			),
+			"permission_contract": "Demand rows are returned only for Items visible through permission-aware Item queries.",
 			"forecast": False,
 			"persistent_derived_truth": False,
 		},
@@ -201,9 +205,9 @@ def _aggregate_demand(
 	for row in rows:
 		item_code = str(row.get("item_code") or "").strip()
 		warehouse = str(row.get("warehouse") or "").strip()
-		if not item_code or not warehouse:
+		item = item_map.get(item_code)
+		if not item_code or not warehouse or not item:
 			continue
-		item = item_map.get(item_code) or frappe._dict()
 		qty = abs(flt(row.get("actual_qty")))
 		posting_date = getdate(row.posting_date)
 
