@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_first_day, nowdate, today
 
+from retailedge.branch_context import user_has_global_branch_access
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.owner_dashboard import get_owner_dashboard_data
 
@@ -51,18 +52,32 @@ def get_financial_position(filters: dict[str, Any] | str | None = None) -> dict[
 		"to_date": str(filters.get("to_date") or today()),
 	}
 	owner = get_owner_dashboard_data(resolved)
-	liquid = _get_liquid_position(company=company, branch=branch)
-	return _build_snapshot(owner=owner, liquid=liquid)
+	global_branch_scope = user_has_global_branch_access(user=frappe.session.user)
+	liquid = _get_liquid_position(company=company, branch=branch, global_branch_scope=global_branch_scope)
+	return _build_snapshot(
+		owner=owner,
+		liquid=liquid,
+		allow_company_accounting=bool(not branch and global_branch_scope),
+	)
 
 
-def _build_snapshot(*, owner: dict[str, Any], liquid: dict[str, Any]) -> dict[str, Any]:
+def _build_snapshot(
+	*,
+	owner: dict[str, Any],
+	liquid: dict[str, Any],
+	allow_company_accounting: bool = True,
+) -> dict[str, Any]:
 	sections = owner.get("sections") or {}
 	filters = owner.get("filters") or {}
 	receivables = _metric(sections, "receivables", "Total Receivables")
 	payables = _metric(sections, "payables", "Total Payables")
 	stock_value = _stock_value(sections)
-	accounting_net_profit = _metric_or_none(sections, "profitability", "Accounting Net Profit")
-	accounting_gross_profit = _metric_or_none(sections, "profitability", "Accounting Gross Profit")
+	accounting_net_profit = (
+		_metric_or_none(sections, "profitability", "Accounting Net Profit") if allow_company_accounting else None
+	)
+	accounting_gross_profit = (
+		_metric_or_none(sections, "profitability", "Accounting Gross Profit") if allow_company_accounting else None
+	)
 	transactional_gross_profit = _metric_or_none(sections, "profitability", "Transactional Gross Profit")
 	money_in = _metric_or_none(sections, "cash", "Money In")
 	money_out = _metric_or_none(sections, "cash", "Money Out")
@@ -90,9 +105,26 @@ def _build_snapshot(*, owner: dict[str, Any], liquid: dict[str, Any]) -> dict[st
 	)
 	current_cards.insert(0, liquid_card)
 
+	accounting_reason = ""
+	if not allow_company_accounting:
+		accounting_reason = _(
+			"Company-level accounting profit is hidden because your Branch scope is restricted or a Branch filter is active."
+		)
 	period_cards = [
-		_card("Accounting Gross Profit", accounting_gross_profit, "period", available=accounting_gross_profit is not None),
-		_card("Accounting Net Profit", accounting_net_profit, "period", available=accounting_net_profit is not None),
+		_card(
+			"Accounting Gross Profit",
+			accounting_gross_profit,
+			"period",
+			available=accounting_gross_profit is not None,
+			reason=accounting_reason,
+		),
+		_card(
+			"Accounting Net Profit",
+			accounting_net_profit,
+			"period",
+			available=accounting_net_profit is not None,
+			reason=accounting_reason,
+		),
 		_card(
 			"Sales Margin Contribution",
 			transactional_gross_profit,
@@ -117,17 +149,25 @@ def _build_snapshot(*, owner: dict[str, Any], liquid: dict[str, Any]) -> dict[st
 			"cash_movement_definition": "posted Cash/Bank General Ledger movement for the selected period; not a closing balance",
 			"trade_position_definition": "current receivables minus current payables; not accounting net assets or complete working capital",
 			"stock_value_definition": "ERPNext stock valuation exposed only when RetailEdge cost visibility permits it",
-			"branch_limit": "company accounting balances are not presented as branch balances unless a safe ERPNext accounting attribution exists",
+			"branch_limit": "company accounting balances and company P&L are withheld unless the user has global Branch scope; Branch-filtered accounting remains unavailable until safe ERPNext accounting attribution exists",
 		},
 	}
 
 
-def _get_liquid_position(*, company: str, branch: str) -> dict[str, Any]:
+def _get_liquid_position(*, company: str, branch: str, global_branch_scope: bool = True) -> dict[str, Any]:
 	if branch:
 		return {
 			"available": False,
 			"reason": _(
 				"Cash & Bank closing balance is company-level in this snapshot. Branch balance is hidden until Branch is represented by a safe ERPNext accounting dimension or Cost Center mapping."
+			),
+			"accounts": [],
+		}
+	if not global_branch_scope:
+		return {
+			"available": False,
+			"reason": _(
+				"Company-wide Cash & Bank balance is hidden because your Branch access is restricted. Select a permitted Branch for operational views; a safe Branch accounting balance is not inferred."
 			),
 			"accounts": [],
 		}
