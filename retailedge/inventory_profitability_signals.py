@@ -6,9 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from retailedge.inventory_health import get_inventory_health
+from retailedge.inventory_health import _build_inventory_health_dataset
 from retailedge.profitability_intelligence import get_profitability_intelligence
-from retailedge.stock_position import DEFAULT_PAGE_SIZE, _coerce_filters
+from retailedge.stock_position import _coerce_filters
 
 
 @frappe.whitelist()
@@ -23,19 +23,8 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 	if not filters.get("company"):
 		filters.company = str(frappe.defaults.get_user_default("Company") or "").strip()
 
-	inventory = get_inventory_health(filters, page=1, page_size=100)
+	inventory = _build_inventory_health_dataset(filters)
 	inventory_rows = list(inventory.get("rows") or [])
-	pagination = inventory.get("pagination") or {}
-	if int(pagination.get("total_rows") or len(inventory_rows)) > len(inventory_rows):
-		# The public Inventory Health endpoint is paginated. R10G must not silently
-		# classify only the first page, so require a narrower scope until a dedicated
-		# bounded all-row composition contract is introduced.
-		frappe.throw(
-			_(
-				"Inventory profitability needs a narrower inventory scope so all matching items can be evaluated safely. Select a Branch, Warehouse, Item Group, or Item."
-			)
-		)
-
 	profit_filters = {
 		"company": filters.company,
 		"branch": filters.get("branch") or "",
@@ -45,7 +34,10 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 	try:
 		profitability = get_profitability_intelligence(profit_filters)
 	except frappe.PermissionError:
-		return _unavailable_payload(inventory, reason="RetailEdge cost visibility does not allow profitability intelligence for this user.")
+		return _unavailable_payload(
+			inventory,
+			reason="RetailEdge cost visibility does not allow profitability intelligence for this user.",
+		)
 
 	inventory_by_item = {
 		str(row.get("item_code")): row
@@ -70,7 +62,11 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 			rows.append(
 				_signal(
 					kind="top_profit_contributor_reorder",
-					severity="danger" if inventory_row.get("stock_status") in {"Out of Stock", "Fully Reserved", "Negative"} else "warning",
+					severity=(
+						"danger"
+						if inventory_row.get("stock_status") in {"Out of Stock", "Fully Reserved", "Negative"}
+						else "warning"
+					),
 					label=_("Top profit contributor requires replenishment"),
 					item_code=item_code,
 					inventory=inventory_row,
@@ -95,7 +91,14 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 				)
 			)
 
-	rows.sort(key=lambda row: (0 if row["severity"] == "danger" else 1, -abs(flt(row.get("gross_profit"))), row["item_code"], row["kind"]))
+	rows.sort(
+		key=lambda row: (
+			0 if row["severity"] == "danger" else 1,
+			-abs(flt(row.get("gross_profit"))),
+			row["item_code"],
+			row["kind"],
+		)
+	)
 	return {
 		"available": True,
 		"rows": rows,
