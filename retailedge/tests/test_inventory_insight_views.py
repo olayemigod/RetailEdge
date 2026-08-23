@@ -120,7 +120,40 @@ class TestInventoryInsightViews(unittest.TestCase):
 		self.assertEqual([row["item_code"] for row in result["rows"]], ["A", "C", "B"])
 		self.assertNotIn("pagination", result)
 		self.assertEqual(result["metadata"]["export_authorization_scope"], "stock-position")
+		self.assertEqual(result["metadata"]["export_authorization_action"], "export")
 		self.assertEqual(result["metadata"]["export_dataset_scope"], "all_filtered_bounded")
+
+	@patch("retailedge.inventory_insight_views.require_report_action")
+	@patch("retailedge.inventory_insight_views.get_inventory_ageing")
+	def test_print_uses_print_permission_not_export_permission(self, ageing, require_action):
+		ageing.return_value = {
+			"columns": [{"fieldname": "item_code", "label": "Item", "fieldtype": "Link"}],
+			"rows": [{"item_code": "ITEM-1"}],
+			"summary": [],
+			"metadata": {},
+		}
+
+		result = inventory_insight_views.get_inventory_insight_view_export(
+			"ageing",
+			{"company": "Test Company", "branch": "Main"},
+			action="print",
+		)
+
+		require_action.assert_called_once_with(
+			"stock-position",
+			action="print",
+			company="Test Company",
+			branch="Main",
+		)
+		self.assertEqual(result["metadata"]["export_authorization_action"], "print")
+
+	def test_export_rejects_unknown_authorization_action(self):
+		with self.assertRaises(frappe.ValidationError):
+			inventory_insight_views.get_inventory_insight_view_export(
+				"ageing",
+				{"company": "Test Company"},
+				action="download-anyway",
+			)
 
 	@patch("retailedge.inventory_insight_views.get_inventory_profitability_signals")
 	def test_profitability_view_keeps_unavailable_reason_and_empty_rows(self, profitability):
