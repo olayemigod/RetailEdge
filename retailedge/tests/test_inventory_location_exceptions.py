@@ -78,6 +78,25 @@ class TestInventoryLocationExceptions(unittest.TestCase):
 		self.assertEqual(result["hidden_negative_locations"], [])
 		self.assertEqual(result["hidden_fully_reserved_locations"], [])
 
+	@patch("retailedge.inventory_location_exceptions._resolve_warehouse_scope", return_value=["ONLY"])
+	@patch("retailedge.inventory_location_exceptions._assert_report_access")
+	@patch("retailedge.inventory_location_exceptions._validate_filters")
+	@patch("retailedge.inventory_location_exceptions.frappe.get_list")
+	def test_single_warehouse_scope_skips_second_bin_scan(
+		self, get_list, _validate, _access, _warehouses
+	):
+		result = location_exceptions.get_hidden_inventory_location_exceptions(
+			{"company": "Test Company"},
+			aggregate_rows=[
+				{"item_code": "ITEM-1", "actual_qty": 5, "available_qty": 5, "stock_status": "Available"}
+			],
+		)
+
+		get_list.assert_not_called()
+		self.assertEqual(result["summary"]["hidden_negative_location_count"], 0)
+		self.assertEqual(result["scan"]["warehouse_count"], 1)
+		self.assertEqual(result["scan"]["bin_rows"], 0)
+
 	@patch("retailedge.inventory_location_exceptions._resolve_warehouse_scope", return_value=["A", "B"])
 	@patch("retailedge.inventory_location_exceptions._assert_report_access")
 	@patch("retailedge.inventory_location_exceptions._validate_filters")
