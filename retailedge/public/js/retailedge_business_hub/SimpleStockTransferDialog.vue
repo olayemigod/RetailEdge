@@ -182,6 +182,7 @@ export default {
 	},
 	props: {
 		open: { type: Boolean, default: false },
+		prefill: { type: Object, default: () => ({}) },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {
@@ -247,18 +248,41 @@ export default {
 			this.loadError = "";
 			this.saveError = "";
 			try {
-				const data = await callMethod(CONTEXT_METHOD);
+				const args = {};
+				if (this.prefill?.company) args.company = this.prefill.company;
+				const data = await callMethod(CONTEXT_METHOD, args);
 				this.formContext = data || {};
 				this.values = {
 					...emptyValues(),
 					...(data.defaults || {}),
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
+				await this.applyPrefill();
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Simple Stock Transfer.");
 			} finally {
 				this.loading = false;
 			}
+		},
+		async applyPrefill() {
+			const prefill = this.prefill || {};
+			const sourceWarehouse = String(prefill.source_warehouse || "").trim();
+			const targetWarehouse = String(prefill.target_warehouse || "").trim();
+			const itemCode = String(prefill.item_code || "").trim();
+			const qty = Number(prefill.qty || 0);
+			if (!sourceWarehouse && !targetWarehouse && !itemCode) return;
+
+			// A recommendation is warehouse-specific. Clear generic branch defaults and
+			// let the existing warehouse cascade resolve the permitted branch for each end.
+			this.values.source_branch = "";
+			this.values.target_branch = "";
+			this.values.source_warehouse = "";
+			this.values.target_warehouse = "";
+			if (itemCode && Number.isFinite(qty) && qty > 0) {
+				this.values.items = [{ item_code: itemCode, qty }];
+			}
+			if (sourceWarehouse) await this.setSourceWarehouse(sourceWarehouse);
+			if (targetWarehouse) await this.setTargetWarehouse(targetWarehouse);
 		},
 		requestClose() {
 			if (this.saving) return;
