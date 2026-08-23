@@ -104,7 +104,31 @@ def _has_allowed_role(user, allowed_roles):
 	return bool(set(frappe.get_roles(user) or []).intersection(set(allowed_roles or [])))
 
 
+def _is_execution_preflight_snapshot(match_doc):
+	return bool(
+		isinstance(match_doc, dict)
+		and cstr(match_doc.get("name")).strip()
+		and any(
+			fieldname in match_doc
+			for fieldname in (
+				"execution_bank_transaction",
+				"dry_run_status_at_execution",
+				"gate_status_at_execution",
+			)
+		)
+	)
+
+
 def build_reconciliation_approval_state(match_doc, user=None, settings=None):
+	# Reconciliation execution passes a rich preflight snapshot here. That snapshot
+	# is intentionally rebuilt through a separate safety path and must not become
+	# the source of the second-approval fingerprint. Rehydrate the live review
+	# DocType so approval creation and approval validation compare like-for-like.
+	if _is_execution_preflight_snapshot(match_doc):
+		live_doc = frappe.get_doc("RetailEdge Bank Transaction Match", match_doc.get("name"))
+		_refresh_match_candidate_context(live_doc)
+		match_doc = live_doc
+
 	match_doc = _as_match_dict(match_doc)
 	user = user or frappe.session.user
 	snapshot = _settings_snapshot(settings)
