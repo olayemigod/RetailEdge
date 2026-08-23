@@ -42,6 +42,9 @@ def get_hidden_inventory_location_exceptions(
 		return _empty_payload()
 
 	warehouses = _resolve_warehouse_scope(filters)
+	if len(warehouses) <= 1:
+		return _empty_payload(warehouse_count=len(warehouses))
+
 	rows = frappe.get_list(
 		"Bin",
 		filters={"item_code": ["in", item_codes], "warehouse": ["in", warehouses]},
@@ -127,7 +130,7 @@ def _classify_hidden_location_exceptions(
 	}
 
 
-def _empty_payload() -> dict[str, Any]:
+def _empty_payload(*, warehouse_count: int = 0) -> dict[str, Any]:
 	return {
 		"hidden_negative_locations": [],
 		"hidden_fully_reserved_locations": [],
@@ -135,7 +138,11 @@ def _empty_payload() -> dict[str, Any]:
 			"hidden_negative_location_count": 0,
 			"hidden_fully_reserved_location_count": 0,
 		},
-		"scan": {"bin_rows": 0, "bin_limit": MAX_BIN_SCAN_ROWS, "warehouse_count": 0},
+		"scan": {
+			"bin_rows": 0,
+			"bin_limit": MAX_BIN_SCAN_ROWS,
+			"warehouse_count": warehouse_count,
+		},
 		"metadata": {
 			"stock_truth": "ERPNext Bin",
 			"aggregate_truth": "RetailEdge Stock Position",
