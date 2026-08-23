@@ -20,6 +20,7 @@ from retailedge.stock_position import (
 	_build_stock_position_dataset,
 	_coerce_filters,
 	_page_response,
+	_summary as _stock_summary,
 )
 
 DEFAULT_SLOW_DAYS = 30
@@ -65,12 +66,13 @@ def get_inventory_health(
 	if movement_class != "All":
 		rows = [row for row in rows if row.get("movement_class") == movement_class]
 
+	show_costs = bool(stock.get("show_costs"))
 	dataset = {
 		"columns": _columns(stock.get("columns") or []),
 		"rows": rows,
-		"summary": _summary(rows, stock_summary=stock.get("summary") or []),
+		"summary": _summary(rows, show_costs=show_costs),
 		"company_currency": stock.get("company_currency") or "",
-		"show_costs": stock.get("show_costs") or 0,
+		"show_costs": int(show_costs),
 		"scope": {
 			**dict(stock.get("scope") or {}),
 			"lookback_days": lookback_days,
@@ -197,20 +199,8 @@ def _columns(stock_columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	]
 
 
-def _summary(
-	rows: list[dict[str, Any]],
-	*,
-	stock_summary: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-	stock_labels = {
-		"Items in Scope",
-		"Available Items",
-		"Out of Stock",
-		"Negative Stock",
-		"Fully Reserved",
-		"Stock Value",
-	}
-	cards = [dict(card) for card in stock_summary if card.get("label") in stock_labels]
+def _summary(rows: list[dict[str, Any]], *, show_costs: bool) -> list[dict[str, Any]]:
+	cards = _stock_summary(rows, show_costs=show_costs)
 	for movement_class, label in (
 		("Fast", _("Fast-moving")),
 		("Slow", _("Slow-moving")),
