@@ -58,6 +58,15 @@
 					<EdgeLinkField v-model="filters.warehouse" label="Warehouse" placeholder="All warehouses in scope" :searcher="warehouseSearch" @select="onWarehouseSelected" @clear="clearWarehouse" />
 					<EdgeLinkField v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
 					<EdgeLinkField v-model="filters.item_code" :selectedLabel="itemLabel" label="Item" placeholder="All stock items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
+					<label v-if="isAgeingView" class="edge-field">
+						<span class="edge-field-label">Age Bands (Days)</span>
+						<input v-model.trim="filters.age_ranges" class="edge-input" type="text" placeholder="30,60,90,180" />
+						<small>Comma-separated increasing limits; ERPNext FIFO slots remain the ageing truth.</small>
+					</label>
+					<label v-if="isAgeingView" class="edge-field">
+						<span class="edge-field-label">Aged Stock Threshold (Days)</span>
+						<input v-model.number="filters.aged_threshold_days" class="edge-input" type="number" min="1" max="3650" step="1" />
+					</label>
 					<label v-if="isProfitabilityView" class="edge-field">
 						<span class="edge-field-label">From Date</span>
 						<input v-model="filters.from_date" class="edge-input" type="date" />
@@ -77,8 +86,10 @@
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
 				<span v-if="isAgeingView">Ageing uses ERPNext v16 FIFO stock-ageing semantics</span>
+				<span v-if="isAgeingView && scope.age_ranges">Bands: {{ scope.age_ranges.join ? scope.age_ranges.join(", ") : scope.age_ranges }} days · aged threshold {{ scope.aged_threshold_days }} days</span>
 				<span v-if="isTransferView">Suggestions are advisory and never create or submit Stock Entries automatically</span>
 				<span v-if="isProfitabilityView">Profitability classifications come from R8; R10 does not recalculate margin</span>
+				<span v-if="isProfitabilityView && scope.from_date && scope.to_date">Profitability period: {{ scope.from_date }} to {{ scope.to_date }}</span>
 				<span v-if="isTransferView && selectedRow">Selected: {{ selectedRow.item_code }} · {{ selectedRow.source_warehouse }} → {{ selectedRow.target_warehouse }} · suggested {{ selectedRow.suggested_transfer_qty }}</span>
 			</template>
 		</EdgeReportShell>
@@ -86,6 +97,7 @@
 		<SimpleStockTransferDialog
 			v-if="isTransferView"
 			:open="guidedTransferOpen"
+			:prefill="guidedTransferPrefill"
 			@close="guidedTransferOpen = false"
 			@saved="handleGuidedTransferSaved"
 			@open-native="openNativeStockEntry"
@@ -103,7 +115,7 @@ const VIEW_CONFIG = {
 		route: "inventory-ageing",
 		subtitle: "See how long current stock has remained in inventory using ERPNext's FIFO stock-ageing engine, with value hidden when cost visibility is restricted.",
 		emptyTitle: "No aged inventory found",
-		emptyDescription: "Adjust the inventory scope and try again.",
+		emptyDescription: "Adjust the inventory scope or ageing thresholds and try again.",
 	},
 	"transfer-opportunities": {
 		title: "Transfer Opportunities",
@@ -186,6 +198,8 @@ export default {
 				warehouse: "",
 				item_group: "",
 				item_code: "",
+				age_ranges: "30,60,90,180",
+				aged_threshold_days: 90,
 				from_date: monthStartValue(),
 				to_date: todayValue(),
 				page_size: 50,
@@ -198,6 +212,17 @@ export default {
 		isAgeingView() { return this.view === "ageing"; },
 		isTransferView() { return this.view === "transfer-opportunities"; },
 		isProfitabilityView() { return this.view === "profitability"; },
+		guidedTransferPrefill() {
+			const row = this.selectedRow;
+			if (!this.isTransferView || !row) return {};
+			return {
+				company: this.filters.company,
+				source_warehouse: row.source_warehouse || "",
+				target_warehouse: row.target_warehouse || "",
+				item_code: row.item_code || "",
+				qty: Number(row.suggested_transfer_qty || 0),
+			};
+		},
 		reportColumns() {
 			return (this.columns || []).map((column) => ({
 				...column,
@@ -230,7 +255,14 @@ export default {
 					callMethod("retailedge.stock_position.get_stock_position_context"),
 					navigationPromise,
 				]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}), from_date: this.filters.from_date, to_date: this.filters.to_date };
+				this.filters = {
+					...this.filters,
+					...(context.default_filters || {}),
+					age_ranges: this.filters.age_ranges,
+					aged_threshold_days: this.filters.aged_threshold_days,
+					from_date: this.filters.from_date,
+					to_date: this.filters.to_date,
+				};
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -302,6 +334,7 @@ export default {
 		requestFilters() {
 			const { page_size: _pageSize, ...filters } = this.filters;
 			if (!this.isProfitabilityView) { delete filters.from_date; delete filters.to_date; }
+			if (!this.isAgeingView) { delete filters.age_ranges; delete filters.aged_threshold_days; }
 			return filters;
 		},
 		async fetchData() {
@@ -379,6 +412,7 @@ export default {
 .inventory-insight-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--edge-space-md, 16px); align-items: end; width: 100%; }
 .edge-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .edge-field-label { font-size: 0.78rem; font-weight: 600; color: var(--edge-text-muted, #667085); }
+.edge-field small { color: var(--edge-text-muted, #667085); font-size: 0.7rem; line-height: 1.3; }
 .edge-input, .edge-primary-button { min-height: 38px; border: 1px solid var(--edge-border, #d0d5dd); border-radius: 8px; background: var(--edge-surface, #fff); color: var(--edge-text, #101828); padding: 8px 10px; width: 100%; }
 .edge-primary-button { border: 0; background: var(--edge-primary, #2563eb); color: #fff; font-weight: 600; }
 @media (max-width: 72rem) { .inventory-insight-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
