@@ -122,10 +122,16 @@ class TestActionFollowUp(unittest.TestCase):
 		self.assertIn("`branch` in ('Main')", condition)
 		self.assertIn("RetailEdge Action Follow Up", condition)
 
+	@patch("retailedge.action_follow_up._has_owner_financial_access", return_value=False)
 	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=True)
 	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
-	def test_global_action_center_role_has_no_extra_branch_query_condition(self, _has_role, _global_access):
-		self.assertEqual(action_follow_up.get_permission_query_conditions("manager@example.com"), "")
+	def test_global_action_center_role_without_owner_access_excludes_only_r9_financial_followups(
+		self, _has_role, _global_access, _owner_access
+	):
+		condition = action_follow_up.get_permission_query_conditions("manager@example.com")
+		self.assertIn("source", condition)
+		self.assertIn("r9_early_warning", condition)
+		self.assertNotIn("`branch`", condition)
 
 	def test_permission_hooks_are_registered(self):
 		hooks_path = Path(action_follow_up.__file__).resolve().parent / "hooks.py"
