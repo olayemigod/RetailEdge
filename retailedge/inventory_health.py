@@ -131,6 +131,7 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 			"to_date": demand.get("scope", {}).get("to_date"),
 			"movement_class": movement_class,
 			"replenishment_status": replenishment_status,
+			"high_cover_review_threshold_days": lookback_days,
 			"include_zero": cint(filters.get("include_zero")),
 		},
 		"scan": {
@@ -145,6 +146,9 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 			"replenishment_truth": replenishment.get("metadata") or {},
 			"stock_cover_basis": "current available stock divided by observed average daily demand",
 			"stock_cover_is_forecast": False,
+			"stock_cover_review_contract": (
+				"High Cover Review means demand-backed estimated stock cover exceeds the selected evidence window. It is an advisory review flag, not an overstock assertion or demand forecast."
+			),
 			"zero_balance_contract": (
 				"When zero-stock intelligence is enabled, a permission-visible demand/reorder item with no Bin row in the resolved warehouse scope is represented as current quantity zero. No balance is persisted."
 			),
@@ -248,13 +252,19 @@ def _enrich_stock_row(
 	demand_qty = flt(demand.get("demand_qty"))
 	daily_demand = flt(demand.get("average_daily_demand"))
 	days_since_demand = demand.get("days_since_demand")
+	cover_days = stock_cover_days(result.get("available_qty"), daily_demand)
 	result.update(
 		{
 			"observed_demand_qty": demand_qty,
 			"average_daily_demand": daily_demand,
 			"last_demand_on": demand.get("last_demand_on"),
 			"days_since_demand": days_since_demand,
-			"stock_cover_days": stock_cover_days(result.get("available_qty"), daily_demand),
+			"stock_cover_days": cover_days,
+			"stock_cover_review": _stock_cover_review(
+				cover_days=cover_days,
+				daily_demand=daily_demand,
+				lookback_days=lookback_days,
+			),
 			"movement_class": classify_movement(
 				demand_qty=demand_qty,
 				lookback_days=lookback_days,
@@ -269,6 +279,14 @@ def _enrich_stock_row(
 		}
 	)
 	return result
+
+
+def _stock_cover_review(*, cover_days: float | None, daily_demand: float, lookback_days: int) -> str:
+	if daily_demand <= 0 or cover_days is None:
+		return "No Demand Evidence"
+	if cover_days > lookback_days:
+		return "High Cover Review"
+	return "Within Evidence Window"
 
 
 def _columns(stock_columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -298,6 +316,11 @@ def _columns(stock_columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
 			"fieldname": "stock_cover_days",
 			"label": _("Estimated Stock Cover (Days)"),
 			"fieldtype": "Float",
+		},
+		{
+			"fieldname": "stock_cover_review",
+			"label": _("Stock Cover Review"),
+			"fieldtype": "Data",
 		},
 		{
 			"fieldname": "movement_class",
@@ -339,6 +362,11 @@ def _summary(rows: list[dict[str, Any]], *, show_costs: bool) -> list[dict[str, 
 		)
 	cards.extend(
 		[
+			{
+				"label": _("High Cover Review"),
+				"value": sum(1 for row in rows if row.get("stock_cover_review") == "High Cover Review"),
+				"datatype": "Int",
+			},
 			{
 				"label": _("Items Requiring Reorder"),
 				"value": sum(1 for row in rows if row.get("replenishment_status") == "Reorder Now"),
