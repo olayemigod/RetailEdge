@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from retailedge.control_early_warning import _build_control_early_warning
+from retailedge.control_early_warning import _build_control_early_warning, _profitability_trend
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,11 +43,21 @@ class RetailEdgeControlEarlyWarningTests(unittest.TestCase):
 		)
 		self.assertFalse(any(row["family"] == "Profitability" for row in result["warnings"]))
 
+	@patch("retailedge.control_early_warning.user_has_global_branch_access", return_value=True)
+	@patch("retailedge.control_early_warning.frappe.has_permission", return_value=False)
+	def test_profitability_trend_requires_account_read_permission(self, _permission, _global):
+		result = _profitability_trend(
+			type("Filters", (), {"get": lambda self, key, default=None: {"branch": ""}.get(key, default)})()
+		)
+		self.assertFalse(result["available"])
+		self.assertIn("permission", result["reason"].lower())
+
 	def test_service_composes_existing_engines_and_does_not_invent_historical_ar_ap(self):
 		source = (APP_ROOT / "control_early_warning.py").read_text()
 		self.assertIn("get_budget_spend_control", source)
 		self.assertIn("get_liquidity_control", source)
 		self.assertIn("get_accounting_profitability", source)
+		self.assertIn('frappe.has_permission("Account", "read")', source)
 		self.assertNotIn("frappe.db.sql", source)
 		self.assertNotIn("ignore_permissions", source)
 		self.assertNotIn("frappe.db.commit", source)
