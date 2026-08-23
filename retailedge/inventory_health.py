@@ -71,6 +71,128 @@ def get_inventory_health_export(filters: dict[str, Any] | str | None = None) -> 
 	return _build_inventory_health_dataset(filters)
 
 
+@frappe.whitelist()
+def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return Action Centre stock alerts with independent optional enrichment layers.
+
+	Current Bin stock is the required foundation. ERPNext reorder and historical
+	movement intelligence are evaluated independently so a bounded/unsupported
+	enrichment cannot suppress Negative Stock, Out of Stock, or Fully Reserved alerts.
+	"""
+	filters = _normalise_health_filters(filters)
+	_validate_filters(filters)
+	stock_filters = frappe._dict(dict(filters))
+	stock_filters.stock_status = "All"
+	stock_filters.include_zero = 1
+	stock = _build_stock_position_dataset(stock_filters)
+	stock_rows = list(stock.get("rows") or [])
+	show_costs = bool(stock.get("show_costs"))
+
+	replenishment: dict[str, Any] = {}
+	replenishment_status: dict[str, Any] = {"available": True}
+	try:
+		replenishment = get_inventory_replenishment(filters)
+	except (frappe.PermissionError, frappe.ValidationError):
+		replenishment_status = {
+			"available": False,
+			"reason": "ERPNext reorder intelligence could not be evaluated safely for this scope.",
+		}
+	replenishment_by_item = {
+		str(row.get("item_code")): row
+		for row in replenishment.get("items") or []
+		if row.get("item_code")
+	}
+	if replenishment_by_item:
+		stock_rows, _ = _with_zero_balance_intelligence_rows(
+			stock_rows,
+			demand_by_item={},
+			replenishment_by_item=replenishment_by_item,
+			show_costs=show_costs,
+		)
+
+	summary = _stock_summary(stock_rows, show_costs=False)
+	summary.extend(_replenishment_action_summary(replenishment))
+
+	movement_status: dict[str, Any] = {"available": True}
+	try:
+		demand = get_historical_inventory_demand(filters)
+		demand_by_item = {
+			str(row.get("item_code")): row
+			for row in demand.get("rows") or []
+			if row.get("item_code")
+		}
+		movement_rows, _ = _with_zero_balance_intelligence_rows(
+			stock_rows,
+			demand_by_item=demand_by_item,
+			replenishment_by_item=replenishment_by_item,
+			show_costs=show_costs,
+		)
+		lookback_days = cint(demand.get("scope", {}).get("lookback_days")) or DEFAULT_LOOKBACK_DAYS
+		thresholds = _movement_thresholds(filters)
+		enriched = [
+			_enrich_stock_row(
+				row,
+				demand=demand_by_item.get(str(row.get("item_code") or "")),
+				replenishment=replenishment_by_item.get(str(row.get("item_code") or "")),
+				lookback_days=lookback_days,
+				thresholds=thresholds,
+			)
+			for row in movement_rows
+		]
+		# Demand evidence can safely add sold-out items with no current Bin row. Rebuild
+		# the legacy stock cards from that complete current-stock set when available.
+		summary = _stock_summary(movement_rows, show_costs=False) + _replenishment_action_summary(
+			replenishment
+		)
+		summary.append(
+			{
+				"label": _("Non-moving"),
+				"value": sum(1 for row in enriched if row.get("movement_class") == "Non-moving"),
+				"datatype": "Int",
+			}
+		)
+	except (frappe.PermissionError, frappe.ValidationError):
+		movement_status = {
+			"available": False,
+			"reason": "Historical movement intelligence could not be evaluated safely for this scope.",
+		}
+
+	return {
+		"summary": summary,
+		"scope": {
+			**dict(stock.get("scope") or {}),
+			"lookback_days": cint(filters.get("lookback_days")) or DEFAULT_LOOKBACK_DAYS,
+		},
+		"metadata": {
+			"current_stock_truth": "ERPNext Bin",
+			"current_stock_available": True,
+			"replenishment": replenishment_status,
+			"movement": movement_status,
+			"degraded": not (
+				bool(replenishment_status.get("available")) and bool(movement_status.get("available"))
+			),
+			"read_only": True,
+			"persistent_derived_truth": False,
+		},
+	}
+
+
+def _replenishment_action_summary(replenishment: dict[str, Any]) -> list[dict[str, Any]]:
+	items = list(replenishment.get("items") or [])
+	return [
+		{
+			"label": _("Items Requiring Reorder"),
+			"value": sum(1 for row in items if row.get("replenishment_status") == "Reorder Now"),
+			"datatype": "Int",
+		},
+		{
+			"label": _("Reorder Rules Requiring Review"),
+			"value": sum(1 for row in items if cint(row.get("unavailable_rule_count")) > 0),
+			"datatype": "Int",
+		},
+	]
+
+
 def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	filters = _normalise_health_filters(filters)
 	_validate_filters(filters)
