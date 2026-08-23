@@ -43,6 +43,16 @@
 				<span>{{ earlyWarning.metadata?.reason || "Your operational Action Centre controls remain available." }}</span>
 			</div>
 
+			<FinancialOverview
+				v-if="earlyWarning.available !== false"
+				:earlyWarning="earlyWarning"
+				:position="financialPosition"
+				:positionLoaded="financialPositionLoaded"
+				:loadingPosition="financialPositionLoading"
+				:positionError="financialPositionError"
+				@load-position="loadFinancialPosition"
+			/>
+
 			<EdgeDashboardGrid minColumnWidth="23rem">
 				<EdgeDashboardSection title="Critical Controls" description="Highest-priority operational or financial conditions requiring management attention.">
 					<div v-if="critical.length" class="control-list">
@@ -87,6 +97,7 @@
 
 <script>
 import BusinessControlRow from "./BusinessControlRow.vue";
+import FinancialOverview from "./FinancialOverview.vue";
 
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -95,7 +106,7 @@ function errorMessage(error, fallback) { return error?.message || error?.exc || 
 
 export default {
 	name: "RetailEdgeBusinessControlCenter",
-	components: { ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])), BusinessControlRow },
+	components: { ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])), BusinessControlRow, FinancialOverview },
 	data() {
 		return {
 			edgeUIValid: true,
@@ -108,6 +119,10 @@ export default {
 			items: [],
 			actionCenter: { sources: {}, metadata: {} },
 			earlyWarning: { available: true, metadata: {} },
+			financialPosition: {},
+			financialPositionLoaded: false,
+			financialPositionLoading: false,
+			financialPositionError: "",
 			menuItems: [],
 			tenantName: "",
 			userName: "",
@@ -159,8 +174,24 @@ export default {
 				this.items = result.items || [];
 				this.actionCenter = result.action_center || { sources: {}, metadata: {} };
 				this.earlyWarning = result.early_warning || { available: true, metadata: {} };
+				this.financialPosition = {};
+				this.financialPositionLoaded = false;
+				this.financialPositionError = "";
 			} catch (error) { this.error = errorMessage(error, "Business Control Centre failed to load."); }
 			finally { this.loading = false; }
+		},
+		async loadFinancialPosition() {
+			if (!this.filters.company || this.financialPositionLoading) return;
+			this.financialPositionLoading = true;
+			this.financialPositionError = "";
+			try {
+				this.financialPosition = await callMethod("retailedge.financial_position.get_financial_position", { filters: this.filters });
+				this.financialPositionLoaded = true;
+			} catch (error) {
+				this.financialPosition = {};
+				this.financialPositionLoaded = false;
+				this.financialPositionError = errorMessage(error, "Financial Position Snapshot could not be loaded for this scope.");
+			} finally { this.financialPositionLoading = false; }
 		},
 		async updateFollowUp(item, action, values = {}) {
 			if (!item?.fingerprint || item.follow_up_supported === false || this.mutatingFingerprint) return;
