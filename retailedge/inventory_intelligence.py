@@ -70,22 +70,35 @@ def classify_movement(
 
 
 def reorder_signal(*, projected_qty: Any, reorder_level: Any, reorder_qty: Any = 0) -> dict[str, float | bool]:
-	"""Compare ERPNext-provided reorder configuration with ERPNext projected quantity.
+	"""Mirror ERPNext v16 direct-warehouse reorder threshold semantics.
 
-	This helper does not discover or persist reorder configuration. R10E must first
-	resolve the installed ERPNext v16 Item reorder schema safely.
+	ERPNext considers an Item Reorder row active when either the reorder level or
+	configured reorder quantity is non-zero, and it triggers when projected stock is
+	at or below the reorder level. The eventual requested quantity is at least the
+	configured reorder quantity, but rises to the full deficiency when that is larger.
+
+	This helper does not discover configuration, create Material Requests, or evaluate
+	warehouse-group projected stock. Those concerns remain in the permission-aware
+	R10E adapter.
 	"""
 	projected = flt(projected_qty)
 	level = max(flt(reorder_level), 0.0)
 	configured_qty = max(flt(reorder_qty), 0.0)
-	below_level = projected < level
+	configured = bool(level or configured_qty)
+	at_or_below = projected <= level
+	triggered = configured and at_or_below
 	shortfall = max(level - projected, 0.0)
+	recommended_qty = max(configured_qty, shortfall) if triggered else 0.0
 	return {
-		"below_reorder_level": below_level,
+		"configured": configured,
+		"below_reorder_level": projected < level,
+		"at_or_below_reorder_level": at_or_below,
+		"reorder_triggered": triggered,
 		"projected_qty": projected,
 		"reorder_level": level,
 		"reorder_qty": configured_qty,
 		"shortfall_qty": shortfall,
+		"recommended_reorder_qty": recommended_qty,
 	}
 
 
