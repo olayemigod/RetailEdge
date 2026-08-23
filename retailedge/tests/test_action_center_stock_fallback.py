@@ -61,6 +61,16 @@ class TestActionCenterStockFallback(unittest.TestCase):
 			{
 				"summary": [
 					{"label": "Out of Stock", "value": 2, "datatype": "Int"},
+					{
+						"label": "Negative Stock Locations Hidden by Aggregate",
+						"value": 1,
+						"datatype": "Int",
+					},
+					{
+						"label": "Fully Reserved Locations Hidden by Aggregate",
+						"value": 2,
+						"datatype": "Int",
+					},
 					{"label": "Items Requiring Reorder", "value": 4, "datatype": "Int"},
 					{"label": "Reorder Rules Requiring Review", "value": 1, "datatype": "Int"},
 					{"label": "Non-moving", "value": 7, "datatype": "Int"},
@@ -71,10 +81,22 @@ class TestActionCenterStockFallback(unittest.TestCase):
 		by_kind = {row["kind"]: row for row in items}
 		self.assertEqual(by_kind["out_of_stock"]["semantic_key"], "out_of_stock")
 		self.assertEqual(by_kind["out_of_stock"]["route"], "/app/stock-position")
+		self.assertEqual(
+			by_kind["inventory_hidden_negative_location"]["semantic_key"],
+			"inventory_hidden_negative_location",
+		)
+		self.assertEqual(by_kind["inventory_hidden_negative_location"]["severity"], "danger")
+		self.assertEqual(by_kind["inventory_hidden_negative_location"]["value"], 1)
+		self.assertEqual(
+			by_kind["inventory_hidden_fully_reserved_location"]["semantic_key"],
+			"inventory_hidden_fully_reserved_location",
+		)
+		self.assertEqual(by_kind["inventory_hidden_fully_reserved_location"]["severity"], "warning")
+		self.assertEqual(by_kind["inventory_hidden_fully_reserved_location"]["value"], 2)
 		self.assertEqual(by_kind["inventory_reorder_required"]["route"], "/app/inventory-intelligence")
 		self.assertEqual(by_kind["inventory_reorder_rule_review"]["target"], "inventory-intelligence")
 		self.assertEqual(by_kind["inventory_non_moving"]["value"], 7)
-		self.assertEqual(len(items), 4)
+		self.assertEqual(len(items), 6)
 
 	def test_stock_source_is_loaded_once_and_not_through_owner_dashboard_attention(self):
 		frappe.session.user = "manager@example.com"
