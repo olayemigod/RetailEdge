@@ -6,6 +6,7 @@ from retailedge.inventory_intelligence import (
 	MovementThresholds,
 	average_daily_demand,
 	classify_movement,
+	classify_stock_cover_review,
 	reorder_signal,
 	stock_cover_days,
 	transfer_opportunity_quantity,
@@ -25,6 +26,38 @@ class TestInventoryIntelligenceMetrics(unittest.TestCase):
 		self.assertEqual(stock_cover_days(-4, 3), 0)
 		self.assertIsNone(stock_cover_days(15, 0))
 		self.assertIsNone(stock_cover_days(15, -1))
+
+	def test_stock_cover_review_is_evidence_window_based_and_advisory(self):
+		self.assertEqual(
+			classify_stock_cover_review(
+				cover_days=31,
+				daily_demand=1,
+				evidence_window_days=30,
+			),
+			"High Cover Review",
+		)
+		self.assertEqual(
+			classify_stock_cover_review(
+				cover_days=30,
+				daily_demand=1,
+				evidence_window_days=30,
+			),
+			"Within Evidence Window",
+		)
+		self.assertEqual(
+			classify_stock_cover_review(
+				cover_days=None,
+				daily_demand=0,
+				evidence_window_days=30,
+			),
+			"No Demand Evidence",
+		)
+		with self.assertRaises(ValueError):
+			classify_stock_cover_review(
+				cover_days=10,
+				daily_demand=1,
+				evidence_window_days=0,
+			)
 
 	def test_movement_thresholds_are_explicit_and_validated(self):
 		thresholds = MovementThresholds(slow_days=30, non_moving_days=90, fast_daily_demand=5)
