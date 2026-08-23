@@ -283,6 +283,18 @@ def _append_stock_exceptions(items: list[dict[str, Any]], payload: dict[str, Any
 	# Intelligence Centre, where the underlying evidence can be inspected.
 	for metric, severity, label, kind in (
 		(
+			"Negative Stock Locations Hidden by Aggregate",
+			"danger",
+			_("Some warehouse negative stock is hidden by combined item totals"),
+			"inventory_hidden_negative_location",
+		),
+		(
+			"Fully Reserved Locations Hidden by Aggregate",
+			"warning",
+			_("Some warehouse fully reserved stock is hidden by combined item totals"),
+			"inventory_hidden_fully_reserved_location",
+		),
+		(
 			"Items Requiring Reorder",
 			"warning",
 			_("Items have reached ERPNext reorder thresholds"),
