@@ -50,31 +50,21 @@ class TestInventoryHealth(unittest.TestCase):
 		self.assertEqual(result["actual_qty"], 20)
 		self.assertEqual(result["projected_qty"], 18)
 
-	def test_high_cover_review_uses_evidence_window_without_claiming_overstock(self):
-		self.assertEqual(
-			inventory_health._stock_cover_review(
-				cover_days=31,
-				daily_demand=1,
-				lookback_days=30,
-			),
-			"High Cover Review",
+	def test_enrichment_flags_high_cover_review_from_shared_metric(self):
+		result = inventory_health._enrich_stock_row(
+			{"item_code": "ITEM-1", "available_qty": 31},
+			demand={
+				"demand_qty": 30,
+				"average_daily_demand": 1,
+				"last_demand_on": "2026-08-22",
+				"days_since_demand": 1,
+			},
+			replenishment=None,
+			lookback_days=30,
+			thresholds=MovementThresholds(slow_days=30, non_moving_days=90),
 		)
-		self.assertEqual(
-			inventory_health._stock_cover_review(
-				cover_days=30,
-				daily_demand=1,
-				lookback_days=30,
-			),
-			"Within Evidence Window",
-		)
-		self.assertEqual(
-			inventory_health._stock_cover_review(
-				cover_days=None,
-				daily_demand=0,
-				lookback_days=30,
-			),
-			"No Demand Evidence",
-		)
+		self.assertEqual(result["stock_cover_days"], 31)
+		self.assertEqual(result["stock_cover_review"], "High Cover Review")
 
 	def test_no_demand_in_short_window_is_not_falsely_non_moving(self):
 		result = inventory_health._enrich_stock_row(
