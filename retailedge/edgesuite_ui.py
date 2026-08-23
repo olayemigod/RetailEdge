@@ -202,7 +202,7 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record and allocate money received from a customer.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
+		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record a supplier payment and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "deposit-cash", "label": "Deposit Cash", "description": "Deposit available cashier shift cash to an approved company bank account.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available", "cashier_deposit": True,
