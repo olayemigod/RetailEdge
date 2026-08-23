@@ -15,6 +15,7 @@ from retailedge.inventory_intelligence import (
 	classify_movement,
 	stock_cover_days,
 )
+from retailedge.inventory_replenishment import get_inventory_replenishment
 from retailedge.reporting_capabilities import require_report_action
 from retailedge.stock_position import (
 	DEFAULT_PAGE_SIZE,
@@ -34,6 +35,13 @@ MOVEMENT_CLASSES = {
 	"Non-moving",
 	"No demand in window",
 }
+REPLENISHMENT_STATUSES = {
+	"All",
+	"Reorder Now",
+	"Review warehouse group",
+	"Healthy",
+	"No reorder rule",
+}
 
 
 @frappe.whitelist()
@@ -42,7 +50,7 @@ def get_inventory_health(
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
 ) -> dict[str, Any]:
-	"""Compose current ERPNext Bin position with bounded observed demand evidence."""
+	"""Compose current ERPNext Bin, demand, and reorder intelligence."""
 	dataset = _build_inventory_health_dataset(filters)
 	return _page_response(dataset, page=page, page_size=page_size)
 
@@ -64,16 +72,23 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 	filters = _normalise_health_filters(filters)
 	stock = _build_stock_position_dataset(filters)
 	demand = get_historical_inventory_demand(filters)
+	replenishment = get_inventory_replenishment(filters)
 	thresholds = _movement_thresholds(filters)
 	lookback_days = cint(demand.get("scope", {}).get("lookback_days")) or DEFAULT_LOOKBACK_DAYS
 	demand_by_item = {
 		str(row.get("item_code")): row for row in demand.get("rows") or [] if row.get("item_code")
+	}
+	replenishment_by_item = {
+		str(row.get("item_code")): row
+		for row in replenishment.get("items") or []
+		if row.get("item_code")
 	}
 
 	rows = [
 		_enrich_stock_row(
 			row,
 			demand=demand_by_item.get(str(row.get("item_code") or "")),
+			replenishment=replenishment_by_item.get(str(row.get("item_code") or "")),
 			lookback_days=lookback_days,
 			thresholds=thresholds,
 		)
@@ -84,6 +99,12 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 		frappe.throw(_("Unsupported Movement Class filter."))
 	if movement_class != "All":
 		rows = [row for row in rows if row.get("movement_class") == movement_class]
+
+	replenishment_status = str(filters.get("replenishment_status") or "All").strip()
+	if replenishment_status not in REPLENISHMENT_STATUSES:
+		frappe.throw(_("Unsupported Replenishment Status filter."))
+	if replenishment_status != "All":
+		rows = [row for row in rows if row.get("replenishment_status") == replenishment_status]
 
 	show_costs = bool(stock.get("show_costs"))
 	return {
@@ -98,14 +119,17 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 			"from_date": demand.get("scope", {}).get("from_date"),
 			"to_date": demand.get("scope", {}).get("to_date"),
 			"movement_class": movement_class,
+			"replenishment_status": replenishment_status,
 		},
 		"scan": {
 			"stock": stock.get("scan") or {},
 			"demand": demand.get("scan") or {},
+			"replenishment": replenishment.get("scan") or {},
 		},
 		"metadata": {
 			"current_stock_truth": "ERPNext Bin",
 			"historical_demand_truth": demand.get("metadata") or {},
+			"replenishment_truth": replenishment.get("metadata") or {},
 			"stock_cover_basis": "current available stock divided by observed average daily demand",
 			"stock_cover_is_forecast": False,
 			"movement_thresholds": {
@@ -136,6 +160,8 @@ def _normalise_health_filters(filters: dict[str, Any] | str | None) -> frappe._d
 		filters.slow_days = DEFAULT_SLOW_DAYS
 	if "non_moving_days" not in filters or filters.get("non_moving_days") in (None, ""):
 		filters.non_moving_days = DEFAULT_NON_MOVING_DAYS
+	if "replenishment_status" not in filters or filters.get("replenishment_status") in (None, ""):
+		filters.replenishment_status = "All"
 	return filters
 
 
@@ -156,11 +182,13 @@ def _enrich_stock_row(
 	stock_row: dict[str, Any],
 	*,
 	demand: dict[str, Any] | None,
+	replenishment: dict[str, Any] | None,
 	lookback_days: int,
 	thresholds: MovementThresholds,
 ) -> dict[str, Any]:
 	result = dict(stock_row)
 	demand = demand or {}
+	replenishment = replenishment or {}
 	demand_qty = flt(demand.get("demand_qty"))
 	daily_demand = flt(demand.get("average_daily_demand"))
 	days_since_demand = demand.get("days_since_demand")
@@ -177,6 +205,11 @@ def _enrich_stock_row(
 				days_since_demand=days_since_demand,
 				thresholds=thresholds,
 			),
+			"configured_reorder_locations": cint(replenishment.get("configured_location_count")),
+			"reorder_triggered_locations": cint(replenishment.get("triggered_location_count")),
+			"reorder_rule_review_count": cint(replenishment.get("unavailable_rule_count")),
+			"recommended_reorder_qty": flt(replenishment.get("recommended_reorder_qty")),
+			"replenishment_status": replenishment.get("replenishment_status") or "No reorder rule",
 		}
 	)
 	return result
@@ -215,6 +248,21 @@ def _columns(stock_columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
 			"label": _("Movement Class"),
 			"fieldtype": "Data",
 		},
+		{
+			"fieldname": "replenishment_status",
+			"label": _("Replenishment Status"),
+			"fieldtype": "Data",
+		},
+		{
+			"fieldname": "reorder_triggered_locations",
+			"label": _("Reorder Locations"),
+			"fieldtype": "Int",
+		},
+		{
+			"fieldname": "recommended_reorder_qty",
+			"label": _("Recommended Reorder Qty"),
+			"fieldtype": "Float",
+		},
 	]
 
 
@@ -233,4 +281,18 @@ def _summary(rows: list[dict[str, Any]], *, show_costs: bool) -> list[dict[str, 
 				"datatype": "Int",
 			}
 		)
+	cards.extend(
+		[
+			{
+				"label": _("Items Requiring Reorder"),
+				"value": sum(1 for row in rows if row.get("replenishment_status") == "Reorder Now"),
+				"datatype": "Int",
+			},
+			{
+				"label": _("Reorder Rules Requiring Review"),
+				"value": sum(1 for row in rows if cint(row.get("reorder_rule_review_count")) > 0),
+				"datatype": "Int",
+			},
+		]
+	)
 	return cards
