@@ -62,6 +62,42 @@ def test_transfer_view_adds_standard_columns_without_changing_rows(transfers):
 	assert result["metadata"]["creates_stock_entry"] is False
 
 
+@patch("retailedge.inventory_insight_views.get_inventory_transfer_opportunities")
+def test_sort_is_applied_before_pagination_and_validated_against_columns(transfers):
+	transfers.return_value = {
+		"rows": [
+			{"item_code": "B", "suggested_transfer_qty": 2},
+			{"item_code": "A", "suggested_transfer_qty": 10},
+			{"item_code": "C", "suggested_transfer_qty": 5},
+		],
+		"summary": [],
+		"metadata": {},
+	}
+	result = inventory_insight_views.get_inventory_insight_view(
+		"transfer-opportunities",
+		{"company": "Test Company"},
+		page=1,
+		page_size=25,
+		sort_field="suggested_transfer_qty",
+		sort_direction="desc",
+	)
+	assert [row["item_code"] for row in result["rows"]] == ["A", "C", "B"]
+	assert result["metadata"]["sort"]["field"] == "suggested_transfer_qty"
+	assert result["metadata"]["sort"]["direction"] == "desc"
+
+	try:
+		inventory_insight_views.get_inventory_insight_view(
+			"transfer-opportunities",
+			{"company": "Test Company"},
+			sort_field="not_a_column",
+			sort_direction="asc",
+		)
+	except frappe.ValidationError:
+		pass
+	else:
+		raise AssertionError("Unsupported insight sort field should fail")
+
+
 @patch("retailedge.inventory_insight_views.get_inventory_profitability_signals")
 def test_profitability_view_keeps_unavailable_reason_and_empty_rows(profitability):
 	profitability.return_value = {
