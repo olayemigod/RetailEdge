@@ -42,6 +42,49 @@ def get_business_control_center(filters: dict[str, Any] | str | None = None) -> 
 	return payload
 
 
+def build_business_control_export_dataset(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	result = get_business_control_center(filters)
+	rows: list[dict[str, Any]] = []
+	for item in result.get("items") or []:
+		follow_up = item.get("follow_up") or {}
+		rows.append(
+			{
+				"severity": _("Critical") if item.get("severity") == "danger" else _("Needs Attention"),
+				"family": item.get("family") or item.get("source") or "",
+				"control": item.get("label") or "",
+				"value": item.get("value"),
+				"datatype": item.get("datatype") or "Data",
+				"time_basis": _export_time_basis(item.get("time_basis")),
+				"follow_up_status": follow_up.get("effective_status") or follow_up.get("status") or _("Open"),
+				"assigned_to": follow_up.get("assigned_to") or "",
+				"follow_up_on": follow_up.get("follow_up_on") or "",
+				"route": item.get("route") or "",
+			}
+		)
+	summary = result.get("summary") or {}
+	return {
+		"title": _("Business Control Centre"),
+		"columns": [
+			{"fieldname": "severity", "label": _("Priority"), "fieldtype": "Data", "width": 130},
+			{"fieldname": "family", "label": _("Control Family"), "fieldtype": "Data", "width": 180},
+			{"fieldname": "control", "label": _("Control"), "fieldtype": "Data", "width": 300},
+			{"fieldname": "value", "label": _("Value"), "fieldtype": "Data", "width": 150},
+			{"fieldname": "time_basis", "label": _("Basis"), "fieldtype": "Data", "width": 140},
+			{"fieldname": "follow_up_status", "label": _("Follow-up Status"), "fieldtype": "Data", "width": 150},
+			{"fieldname": "assigned_to", "label": _("Assigned To"), "fieldtype": "Data", "width": 180},
+			{"fieldname": "follow_up_on", "label": _("Follow Up On"), "fieldtype": "Datetime", "width": 170},
+			{"fieldname": "route", "label": _("Workflow Route"), "fieldtype": "Data", "width": 260},
+		],
+		"rows": rows,
+		"summary": [
+			{"label": _("Critical"), "value": summary.get("critical") or 0, "datatype": "Int"},
+			{"label": _("Needs Attention"), "value": summary.get("warning") or 0, "datatype": "Int"},
+			{"label": _("Open Controls"), "value": summary.get("total") or 0, "datatype": "Int"},
+		],
+		"filters": result.get("filters") or {},
+	}
+
+
 def _safe_early_warning(filters: frappe._dict) -> dict[str, Any]:
 	try:
 		return get_control_early_warning(filters)
@@ -173,6 +216,14 @@ def _business_control_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
 		str(item.get("family") or ""),
 		str(item.get("label") or ""),
 	)
+
+
+def _export_time_basis(value: Any) -> str:
+	if value == "current":
+		return _("Current Position")
+	if value == "period":
+		return _("Selected Period")
+	return _("Control Signal")
 
 
 def _slug(value: str) -> str:
