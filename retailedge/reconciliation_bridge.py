@@ -484,20 +484,27 @@ def _load_match_for_preflight(match_name):
 		if value not in (None, ""):
 			combined[key] = value
 
-	if cstr(combined.get("suggested_document_type")).strip() == "Journal Entry":
-		candidate.update(
-			{
-				"payment_account": combined.get("payment_account"),
-				"account": combined.get("candidate_account") or combined.get("payment_account"),
-			}
-		)
-		account_payload = _resolve_account_match_payload(bank_transaction, candidate)
-		combined["account_resolution_status"] = account_payload.get("status")
-		combined["resolved_bank_account"] = account_payload.get("bank_canonical_account")
-		combined["resolved_payment_account"] = account_payload.get("candidate_canonical_account")
-		combined["amount_difference"] = flt(combined.get("bank_transaction_amount") or combined.get("bank_amount")) - flt(
-			combined.get("candidate_amount")
-		)
+	# Re-resolve account equivalence from the live payment-event context.
+	# Do not retain the account result captured when the match was originally
+	# prepared because Payment Entry direction/account evidence may have changed
+	# or may have been normalized differently at match time.
+	live_candidate_account = cstr(
+		combined.get("candidate_account") or combined.get("payment_account")
+	).strip()
+	candidate.update(
+		{
+			"payment_account": live_candidate_account,
+			"account": live_candidate_account,
+			"expected_bank_account": live_candidate_account,
+		}
+	)
+	account_payload = _resolve_account_match_payload(bank_transaction, candidate)
+	combined["account_resolution_status"] = account_payload.get("status")
+	combined["resolved_bank_account"] = account_payload.get("bank_canonical_account")
+	combined["resolved_payment_account"] = account_payload.get("candidate_canonical_account")
+	combined["amount_difference"] = flt(
+		combined.get("bank_transaction_amount") or combined.get("bank_amount")
+	) - flt(combined.get("candidate_amount"))
 
 	if cstr(combined.get("suggested_document_type")).strip() == "Journal Entry":
 		readiness_status, readiness_reason = _journal_entry_readiness(combined)
