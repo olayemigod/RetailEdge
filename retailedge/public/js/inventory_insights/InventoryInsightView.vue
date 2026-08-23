@@ -45,9 +45,9 @@
 					v-if="isTransferView && selectedRow"
 					type="button"
 					class="edge-button edge-button--primary"
-					@click="startSelectedTransfer"
+					@click="openSelectedTransferWorkflow"
 				>
-					{{ selectedRow.requires_full_stock_entry ? "Open Stock Entry" : "Start Stock Transfer" }}
+					{{ selectedRow.requires_full_stock_entry ? "Open Stock Entry" : "Open Guided Transfer" }}
 				</button>
 			</template>
 
@@ -79,13 +79,23 @@
 				<span v-if="isAgeingView">Ageing uses ERPNext v16 FIFO stock-ageing semantics</span>
 				<span v-if="isTransferView">Suggestions are advisory and never create or submit Stock Entries automatically</span>
 				<span v-if="isProfitabilityView">Profitability classifications come from R8; R10 does not recalculate margin</span>
-				<span v-if="isTransferView && selectedRow">Selected: {{ selectedRow.item_code }} · {{ selectedRow.source_warehouse }} → {{ selectedRow.target_warehouse }}</span>
+				<span v-if="isTransferView && selectedRow">Selected: {{ selectedRow.item_code }} · {{ selectedRow.source_warehouse }} → {{ selectedRow.target_warehouse }} · suggested {{ selectedRow.suggested_transfer_qty }}</span>
 			</template>
 		</EdgeReportShell>
+
+		<SimpleStockTransferDialog
+			v-if="isTransferView"
+			:open="guidedTransferOpen"
+			@close="guidedTransferOpen = false"
+			@saved="handleGuidedTransferSaved"
+			@open-native="openNativeStockEntry"
+		/>
 	</EdgeAppShell>
 </template>
 
 <script>
+import SimpleStockTransferDialog from "../retailedge_business_hub/SimpleStockTransferDialog.vue";
+
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField"];
 const VIEW_CONFIG = {
 	ageing: {
@@ -144,7 +154,10 @@ export default {
 		view: { type: String, required: true },
 		pageMethod: { type: String, default: "retailedge.inventory_insight_views.get_inventory_insight_view" },
 	},
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		SimpleStockTransferDialog,
+	},
 	data() {
 		return {
 			edgeUIValid: true,
@@ -165,6 +178,7 @@ export default {
 			userName: "",
 			itemLabel: "",
 			selectedRow: null,
+			guidedTransferOpen: false,
 			sort: null,
 			filters: {
 				company: "",
@@ -325,22 +339,24 @@ export default {
 			if (["source_warehouse", "target_warehouse"].includes(payload.column?.fieldname)) window.open(`/app/warehouse/${encodeURIComponent(payload.value)}`, "_blank", "noopener,noreferrer");
 		},
 		goBackToInventory() { frappe.set_route("inventory-intelligence"); },
-		startSelectedTransfer() {
+		openSelectedTransferWorkflow() {
 			const row = this.selectedRow;
 			if (!row) return;
 			if (row.requires_full_stock_entry) {
-				window.open("/app/stock-entry", "_blank", "noopener,noreferrer");
+				this.openNativeStockEntry();
 				return;
 			}
-			frappe.route_options = {
-				retailedge_guided_action: "transfer-stock",
-				company: this.filters.company,
-				source_warehouse: row.source_warehouse,
-				target_warehouse: row.target_warehouse,
-				item_code: row.item_code,
-				qty: row.suggested_transfer_qty,
-			};
-			frappe.set_route("retailedge-business-hub");
+			this.guidedTransferOpen = true;
+		},
+		handleGuidedTransferSaved(result) {
+			this.guidedTransferOpen = false;
+			if (!result?.name) return;
+			frappe.set_route("Form", result.doctype || "Stock Entry", result.name);
+			frappe.show_alert?.({ message: `Stock Transfer ${result.name} saved as Draft`, indicator: "green" });
+		},
+		openNativeStockEntry() {
+			this.guidedTransferOpen = false;
+			window.open("/app/stock-entry", "_blank", "noopener,noreferrer");
 		},
 		formatCell(value, column) {
 			if (column.fieldtype === "Check") return Number(value) ? "Yes" : "No";
