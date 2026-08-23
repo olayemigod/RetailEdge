@@ -6,7 +6,11 @@ from unittest.mock import patch
 
 import frappe
 
-from retailedge.business_control_center import _build_business_control_center, _safe_early_warning
+from retailedge.business_control_center import (
+	_build_business_control_center,
+	_safe_early_warning,
+	build_business_control_export_dataset,
+)
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -43,6 +47,43 @@ class RetailEdgeBusinessControlCenterTests(unittest.TestCase):
 		self.assertTrue(all(row["follow_up_supported"] is False for row in r9))
 		profit = next(row for row in r9 if row.get("family") == "Profitability")
 		self.assertEqual(profit["open_mode"], "new_tab")
+
+	@patch("retailedge.business_control_center.get_business_control_center")
+	def test_export_dataset_contains_only_permission_resolved_combined_controls(self, center_loader):
+		center_loader.return_value = {
+			"filters": {"company": "Demo Co", "branch": "Main"},
+			"summary": {"critical": 1, "warning": 1, "total": 2},
+			"items": [
+				{
+					"severity": "danger",
+					"family": "Liquidity",
+					"label": "Cash coverage is weak",
+					"value": 0.7,
+					"datatype": "Float",
+					"time_basis": "control",
+					"route": "/app/supplier-payables",
+					"follow_up": {"effective_status": "Acknowledged", "assigned_to": "owner@example.com"},
+				},
+				{
+					"severity": "warning",
+					"family": "Stock",
+					"label": "Negative stock requires attention",
+					"value": 2,
+					"datatype": "Int",
+					"time_basis": "current",
+					"route": "/app/stock-position",
+					"follow_up": {"effective_status": "Open"},
+				},
+			],
+		}
+		dataset = build_business_control_export_dataset({"company": "Demo Co", "branch": "Main"})
+		self.assertEqual(dataset["title"], "Business Control Centre")
+		self.assertEqual(len(dataset["rows"]), 2)
+		self.assertEqual(dataset["rows"][0]["severity"], "Critical")
+		self.assertEqual(dataset["rows"][0]["follow_up_status"], "Acknowledged")
+		self.assertEqual(dataset["rows"][1]["time_basis"], "Current Position")
+		self.assertEqual(dataset["summary"][0]["value"], 1)
+		center_loader.assert_called_once()
 
 	@patch("retailedge.business_control_center.get_control_early_warning")
 	def test_validation_failure_isolated_from_operational_action_center(self, warning_loader):
