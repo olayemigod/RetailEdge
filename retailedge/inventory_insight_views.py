@@ -14,6 +14,7 @@ from retailedge.stock_position import DEFAULT_PAGE_SIZE, _coerce_filters, _page_
 
 INSIGHT_VIEWS = {"ageing", "transfer-opportunities", "profitability"}
 NUMERIC_FIELDTYPES = {"Currency", "Float", "Int", "Percent", "Check"}
+EXPORT_ACTIONS = {"export", "print"}
 
 
 @frappe.whitelist()
@@ -41,15 +42,19 @@ def get_inventory_insight_view_export(
 	filters: dict[str, Any] | str | None = None,
 	sort_field: str = "",
 	sort_direction: str = "",
+	action: str = "export",
 ) -> dict[str, Any]:
 	"""Return the bounded full secondary insight for shared EdgeSuite export/print."""
 	filters = _coerce_filters(filters)
 	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if company:
 		filters.company = company
+	action = str(action or "export").strip().lower()
+	if action not in EXPORT_ACTIONS:
+		frappe.throw(_("Unsupported Inventory Intelligence export action."))
 	require_report_action(
 		"stock-position",
-		action="export",
+		action=action,
 		company=company,
 		branch=str(filters.get("branch") or ""),
 	)
@@ -61,6 +66,7 @@ def get_inventory_insight_view_export(
 	)
 	metadata = dict(dataset.get("metadata") or {})
 	metadata["export_authorization_scope"] = "stock-position"
+	metadata["export_authorization_action"] = action
 	metadata["export_dataset_scope"] = "all_filtered_bounded"
 	dataset["metadata"] = metadata
 	return dataset
