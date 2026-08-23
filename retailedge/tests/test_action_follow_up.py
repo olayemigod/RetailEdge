@@ -84,6 +84,29 @@ class TestActionFollowUp(unittest.TestCase):
 				branch="",
 			)
 
+	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=False)
+	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
+	@patch("retailedge.action_follow_up.frappe.db.get_value", return_value=1)
+	def test_company_level_r9_assignment_requires_global_branch_scope(self, _enabled, _has_role, _global):
+		with self.assertRaises(frappe.PermissionError):
+			action_follow_up._validate_assignment_user(
+				"branch.manager@example.com",
+				company="Test Company",
+				branch="",
+				require_global_scope=True,
+			)
+
+	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=True)
+	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
+	@patch("retailedge.action_follow_up.frappe.db.get_value", return_value=1)
+	def test_company_level_r9_assignment_allows_global_branch_scope(self, _enabled, _has_role, _global):
+		action_follow_up._validate_assignment_user(
+			"owner@example.com",
+			company="Test Company",
+			branch="",
+			require_global_scope=True,
+		)
+
 	@patch("retailedge.action_follow_up._has_action_center_role", return_value=False)
 	def test_direct_query_denies_users_without_action_center_role(self, _has_role):
 		self.assertEqual(action_follow_up.get_permission_query_conditions("sales@example.com"), "1=0")
@@ -116,6 +139,7 @@ class TestActionFollowUp(unittest.TestCase):
 		for forbidden in (".submit(", "apply_workflow(", "ignore_permissions=True", "frappe.db.commit("):
 			self.assertNotIn(forbidden, source)
 		self.assertIn("get_business_control_center", source)
+		self.assertIn("require_global_scope", source)
 
 	def test_doctype_is_follow_up_state_not_resolution(self):
 		doc_path = Path(action_follow_up.__file__).resolve().parent / "retailedge/doctype/retailedge_action_follow_up/retailedge_action_follow_up.json"
