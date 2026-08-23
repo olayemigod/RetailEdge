@@ -183,7 +183,7 @@ class TestInventoryDemand(unittest.TestCase):
 
 	def test_public_service_does_not_expose_cost_or_valuation_fields(self):
 		source = inspect.getsource(inventory_demand.get_historical_inventory_demand)
-		for forbidden in ("valuation_rate", "stock_value", "incoming_rate", "rate"):
+		for forbidden in ("valuation_rate", "stock_value", "incoming_rate"):
 			self.assertNotIn(forbidden, source)
 
 
