@@ -13,6 +13,10 @@ from retailedge.bank_transaction_matching import (
     assert_can_access_bank_transaction_matching,
     normalize_bank_transaction,
 )
+from retailedge.banking_readiness import (
+    READINESS_BLOCKED as BANKING_READINESS_BLOCKED,
+    evaluate_bank_account_readiness,
+)
 from retailedge.reconciliation_approval import build_reconciliation_approval_state
 from retailedge.reconciliation_bridge import (
     EXECUTION_STATUS_ALREADY_HANDLED,
@@ -198,6 +202,35 @@ def _load_match(match_name: str) -> frappe._dict:
     return frappe._dict(row)
 
 
+def _banking_readiness_for_match(match_doc: dict[str, Any] | None) -> frappe._dict:
+    match_doc = frappe._dict(match_doc or {})
+    bank_account = cstr(match_doc.get("bank_account")).strip()
+    company = cstr(match_doc.get("company")).strip()
+    if not bank_account:
+        return frappe._dict(
+            {
+                "readiness": BANKING_READINESS_BLOCKED,
+                "issues": [
+                    {
+                        "code": "missing_bank_account",
+                        "message": "Bank Account is missing from the bank match review.",
+                        "severity": "Blocked",
+                    }
+                ],
+                "warnings": [],
+                "can_reconcile": False,
+            }
+        )
+    return frappe._dict(evaluate_bank_account_readiness(bank_account, company=company))
+
+
+def _readiness_block_message(readiness: dict[str, Any] | None) -> str:
+    readiness = frappe._dict(readiness or {})
+    issues = readiness.get("issues") or []
+    messages = [cstr(issue.get("message")).strip() for issue in issues if issue.get("message")]
+    return " ".join(messages) or "Banking setup is blocked. Correct the Bank Account configuration before reconciliation."
+
+
 def derive_operational_status(
     match_doc: dict[str, Any] | None,
     preflight: dict[str, Any] | None = None,
@@ -257,6 +290,7 @@ def get_bank_match_operational_status(match_name: str, include_gate: bool = True
     preflight = get_reconciliation_preflight(match_name)
     approval = build_reconciliation_approval_state(match_doc)
     gate = check_reconciliation_execution_gate(match_name) if include_gate else frappe._dict()
+    banking_readiness = _banking_readiness_for_match(match_doc)
     status = derive_operational_status(
         match_doc,
         preflight=preflight,
@@ -264,11 +298,19 @@ def get_bank_match_operational_status(match_name: str, include_gate: bool = True
         approval=approval,
     )
 
+    if (
+        status != STATUS_RECONCILED
+        and cstr(banking_readiness.get("readiness")).strip() == BANKING_READINESS_BLOCKED
+    ):
+        status = STATUS_EXCEPTION
+
     context = frappe._dict(preflight or {})
     context.update(match_doc)
     recommended_action = preflight.get("recommended_action")
     if status == STATUS_AWAITING_APPROVAL:
         recommended_action = approval.get("reason") or "A different authorised user must approve this reconciliation."
+    elif status == STATUS_EXCEPTION and banking_readiness.get("readiness") == BANKING_READINESS_BLOCKED:
+        recommended_action = _readiness_block_message(banking_readiness)
     return {
         "match_name": match_name,
         "bank_transaction": bank_transaction,
@@ -279,6 +321,7 @@ def get_bank_match_operational_status(match_name: str, include_gate: bool = True
         "reconciliation_status": preflight.get("status"),
         "reconciliation_readiness": preflight.get("readiness_group")
         or preflight.get("eligibility_status"),
+        "banking_readiness": banking_readiness,
         "approval_required": bool(approval.get("required")),
         "approval_status": approval.get("status"),
         "approval_reason": approval.get("reason"),
@@ -286,12 +329,31 @@ def get_bank_match_operational_status(match_name: str, include_gate: bool = True
         "approved_by": approval.get("approved_by"),
         "approved_on": approval.get("approved_on"),
         "execution_status": match_doc.get("execution_status"),
-        "can_execute": bool(gate.get("can_execute")) if include_gate else None,
-        "blocking_reasons": (gate.get("block_reasons") or []) if include_gate else [],
+        "can_execute": (
+            bool(gate.get("can_execute"))
+            if include_gate and banking_readiness.get("readiness") != BANKING_READINESS_BLOCKED
+            else False if include_gate else None
+        ),
+        "blocking_reasons": (
+            ([*_readiness_block_messages(banking_readiness), *(gate.get("block_reasons") or [])])
+            if include_gate
+            else []
+        ),
         "recommended_action": recommended_action,
         "erpnext_target_doctype": preflight.get("erpnext_target_doctype"),
         "erpnext_target_name": preflight.get("erpnext_target_name"),
     }
+
+
+def _readiness_block_messages(readiness: dict[str, Any] | None) -> list[str]:
+    readiness = frappe._dict(readiness or {})
+    if readiness.get("readiness") != BANKING_READINESS_BLOCKED:
+        return []
+    return [
+        cstr(issue.get("message")).strip()
+        for issue in (readiness.get("issues") or [])
+        if cstr(issue.get("message")).strip()
+    ]
 
 
 @frappe.whitelist()
@@ -320,6 +382,16 @@ def match_and_reconcile(match_name: str, confirm_match: bool = False, confirm_re
             match_name,
             decision_note="Confirmed from Bank Matching & Reconciliation.",
         )
+        match_doc = _load_match(match_name)
+
+    banking_readiness = _banking_readiness_for_match(match_doc)
+    if banking_readiness.get("readiness") == BANKING_READINESS_BLOCKED:
+        return {
+            "status": STATUS_EXCEPTION,
+            "message": _readiness_block_message(banking_readiness),
+            "banking_readiness": banking_readiness,
+            "operational": get_bank_match_operational_status(match_name),
+        }
 
     operational = get_bank_match_operational_status(match_name)
     if operational.get("operational_status") == STATUS_RECONCILED:
