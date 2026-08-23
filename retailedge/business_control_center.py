@@ -49,17 +49,30 @@ def _safe_early_warning(filters: frappe._dict) -> dict[str, Any]:
 		# Business Control Centre extends Action Centre; it must not revoke an
 		# operator's existing Action Centre/follow-up access merely because that
 		# operator is not entitled to owner-level R9 financial intelligence.
-		return {
-			"available": False,
-			"warnings": [],
-			"critical_count": 0,
-			"warning_count": 0,
-			"profitability_trend": {},
-			"metadata": {
-				"reason": _("Your permissions allow operational Action Centre controls but not owner-level financial intelligence."),
-				"permission_isolated": True,
-			},
-		}
+		return _unavailable_early_warning(
+			_("Your permissions allow operational Action Centre controls but not owner-level financial intelligence."),
+			permission_isolated=True,
+		)
+	except frappe.ValidationError as exc:
+		# Bounded scans, unavailable accounting attribution, or a misconfigured
+		# financial-intelligence source must not take down the canonical operational
+		# Action Centre. Keep the source failure visible instead of fabricating data.
+		return _unavailable_early_warning(str(exc) or _("R9 financial intelligence is temporarily unavailable for this scope."))
+
+
+def _unavailable_early_warning(reason: str, *, permission_isolated: bool = False) -> dict[str, Any]:
+	return {
+		"available": False,
+		"warnings": [],
+		"critical_count": 0,
+		"warning_count": 0,
+		"profitability_trend": {},
+		"metadata": {
+			"reason": reason,
+			"permission_isolated": permission_isolated,
+			"failure_isolated": True,
+		},
+	}
 
 
 def _build_business_control_center(
