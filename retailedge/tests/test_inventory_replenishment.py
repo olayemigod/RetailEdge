@@ -9,6 +9,18 @@ import frappe
 from retailedge import inventory_replenishment
 
 
+class _Meta:
+	def __init__(self, fields=(), table_field=None):
+		self.fields = set(fields)
+		self.table_field = table_field
+
+	def has_field(self, fieldname):
+		return fieldname in self.fields
+
+	def get_field(self, fieldname):
+		return self.table_field if fieldname == "reorder_levels" else None
+
+
 class TestInventoryReplenishment(unittest.TestCase):
 	def test_direct_rule_uses_erpnext_projected_qty_and_effective_reorder_quantity(self):
 		item = frappe._dict(item_name="Item One", item_group="Products", stock_uom="Nos")
@@ -72,12 +84,14 @@ class TestInventoryReplenishment(unittest.TestCase):
 	@patch("retailedge.inventory_replenishment._get_permitted_templates")
 	@patch("retailedge.inventory_replenishment._get_permitted_items")
 	@patch("retailedge.inventory_replenishment._resolve_warehouse_scope", return_value=["Lagos - TC"])
+	@patch("retailedge.inventory_replenishment._assert_reorder_runtime_contract")
 	@patch("retailedge.inventory_replenishment._assert_report_access")
 	@patch("retailedge.inventory_replenishment._validate_filters")
 	def test_service_inherits_template_rule_only_when_variant_has_no_direct_rule(
 		self,
 		_validate,
 		_assert_access,
+		_assert_runtime,
 		_resolve_warehouses,
 		get_items,
 		get_templates,
@@ -119,6 +133,38 @@ class TestInventoryReplenishment(unittest.TestCase):
 		self.assertTrue(result["rows"][0]["reorder_triggered"])
 		self.assertEqual(result["items"][0]["replenishment_status"], "Reorder Now")
 		self.assertFalse(result["metadata"]["creates_material_request"])
+		self.assertTrue(result["metadata"]["runtime_contract_validated"])
+		_assert_runtime.assert_called_once()
+
+	def test_runtime_contract_accepts_expected_erpnext_item_reorder_schema(self):
+		setattr(frappe.local, "retailedge_r10_reorder_runtime_contract", False)
+		item_meta = _Meta(table_field=frappe._dict(fieldtype="Table", options="Item Reorder"))
+		reorder_meta = _Meta(fields=inventory_replenishment.REQUIRED_REORDER_FIELDS)
+		with patch(
+			"retailedge.inventory_replenishment.frappe.get_meta",
+			side_effect=[item_meta, reorder_meta],
+		):
+			inventory_replenishment._assert_reorder_runtime_contract()
+		self.assertTrue(getattr(frappe.local, "retailedge_r10_reorder_runtime_contract"))
+
+	def test_runtime_contract_fails_closed_when_required_reorder_field_is_missing(self):
+		setattr(frappe.local, "retailedge_r10_reorder_runtime_contract", False)
+		item_meta = _Meta(table_field=frappe._dict(fieldtype="Table", options="Item Reorder"))
+		reorder_meta = _Meta(
+			fields=[
+				fieldname
+				for fieldname in inventory_replenishment.REQUIRED_REORDER_FIELDS
+				if fieldname != "material_request_type"
+			]
+		)
+		with (
+			patch(
+				"retailedge.inventory_replenishment.frappe.get_meta",
+				side_effect=[item_meta, reorder_meta],
+			),
+			self.assertRaises(frappe.ValidationError),
+		):
+			inventory_replenishment._assert_reorder_runtime_contract()
 
 	def test_item_aggregation_prioritises_triggered_rules_without_mutating_source_truth(self):
 		rows = [
@@ -146,7 +192,7 @@ class TestInventoryReplenishment(unittest.TestCase):
 		self.assertEqual(items[0]["recommended_reorder_qty"], 12)
 		self.assertEqual(items[0]["replenishment_status"], "Reorder Now")
 
-	def test_source_is_read_only_bounded_and_parent_permission_scoped(self):
+	def test_source_is_read_only_bounded_parent_scoped_and_runtime_guarded(self):
 		source = Path(inventory_replenishment.__file__).read_text(encoding="utf-8")
 		for forbidden in (
 			"frappe.get_all(",
@@ -159,7 +205,8 @@ class TestInventoryReplenishment(unittest.TestCase):
 			self.assertNotIn(forbidden, source)
 		self.assertIn('frappe.get_list(\n\t\t"Item"', source)
 		self.assertIn('frappe.get_list(\n\t\t"Bin"', source)
-		self.assertIn('frappe.qb.DocType("Item Reorder")', source)
+		self.assertIn("frappe.qb.DocType(REORDER_CHILD_DOCTYPE)", source)
+		self.assertIn("_assert_reorder_runtime_contract()", source)
 		self.assertIn("reorder.parent.isin(parent_names)", source)
 		self.assertIn("MAX_REORDER_RULES = 20000", source)
 
