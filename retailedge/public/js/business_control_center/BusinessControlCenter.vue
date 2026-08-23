@@ -312,6 +312,7 @@ export default {
 							company: this.filters.company || "",
 							branch: this.filters.branch || "",
 							require_global_scope: item.source === "r9_early_warning" && !this.filters.branch ? 1 : 0,
+							require_owner_scope: item.source === "r9_early_warning" ? 1 : 0,
 						},
 					}),
 				},
