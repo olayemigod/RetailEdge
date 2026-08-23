@@ -39,6 +39,13 @@ def _profitability_trend(filters: frappe._dict) -> dict[str, Any]:
 			"current": {},
 			"previous": {},
 		}
+	if not frappe.has_permission("Account", "read"):
+		return {
+			"available": False,
+			"reason": _("You do not have permission to view company accounting profitability."),
+			"current": {},
+			"previous": {},
+		}
 	current = get_accounting_profitability(filters)
 	if not current.get("available"):
 		return {
@@ -124,7 +131,7 @@ def _build_control_early_warning(
 		"metadata": {
 			"composition": "existing_r8_r9_truth_and_control_engines",
 			"historical_balance_limit": "Receivables and payables are current ERPNext outstanding balances. RetailEdge does not manufacture historical AR/AP balances for trend comparison.",
-			"profit_truth": "Company profitability trend reuses ERPNext Profit and Loss Statement and Gross and Net Profit Report through the R8 accounting profitability engine only for global Branch scope.",
+			"profit_truth": "Company profitability trend reuses ERPNext Profit and Loss Statement and Gross and Net Profit Report through the R8 accounting profitability engine only for global Branch scope with Account read permission.",
 			"liquidity_limit": "Liquidity signals are management indicators, not a cash forecast or payment instruction.",
 			"branch_limit": "Company accounting profitability trend is withheld for Branch-filtered or branch-restricted scope until safe ERPNext accounting-dimension or Cost Center attribution exists.",
 		},
