@@ -6,12 +6,16 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, nowdate
 
+from retailedge.branch_context import user_has_global_branch_access
+from retailedge.cash_movement import get_cash_movement
 from retailedge.customer_receivables import get_customer_receivables_export
-from retailedge.financial_position import get_financial_position
+from retailedge.dashboard_capabilities import require_dashboard_action
+from retailedge.financial_position import _get_liquid_position
 from retailedge.supplier_payables import get_supplier_payables_export
 
 DEFAULT_HORIZON_DAYS = 30
 MAX_HORIZON_DAYS = 90
+DASHBOARD_KEY = "owner-dashboard"
 
 
 @frappe.whitelist()
@@ -21,14 +25,50 @@ def get_liquidity_control(filters: dict[str, Any] | str | None = None, horizon_d
 	company = str(resolved.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."))
+	branch = str(resolved.get("branch") or "").strip()
+	require_dashboard_action(DASHBOARD_KEY, "view", company=company, branch=branch)
 	resolved.company = company
 
-	position = get_financial_position(resolved)
+	liquid = _get_liquid_position(
+		company=company,
+		branch=branch,
+		global_branch_scope=user_has_global_branch_access(user=frappe.session.user),
+	)
+	cash = get_cash_movement(resolved, page=1, page_size=1)
+	position = _lightweight_liquidity_position(liquid=liquid, cash=cash)
 	receivables = get_customer_receivables_export(resolved)
 	payables_filters = frappe._dict(resolved)
 	payables_filters.as_of_date = nowdate()
 	payables = get_supplier_payables_export(payables_filters)
 	return _build_liquidity_control(position, receivables, payables, horizon_days=horizon)
+
+
+def _lightweight_liquidity_position(*, liquid: dict[str, Any], cash: dict[str, Any]) -> dict[str, Any]:
+	period = []
+	for source_label, target_label in (
+		("Money In", "Money In"),
+		("Money Out", "Money Out"),
+		("Net Change", "Net Cash Movement"),
+	):
+		card = _card_by_label(cash.get("summary") or [], source_label)
+		period.append(
+			{
+				"label": target_label,
+				"value": card.get("value") if card else None,
+				"available": bool(card),
+			}
+		)
+	return {
+		"current_position": [
+			{
+				"label": "Cash & Bank Balance",
+				"value": liquid.get("balance") if liquid.get("available") else None,
+				"available": bool(liquid.get("available")),
+				"reason": liquid.get("reason") or "",
+			}
+		],
+		"selected_period": period,
+	}
 
 
 def _build_liquidity_control(
@@ -96,6 +136,7 @@ def _build_liquidity_control(
 			"due_obligations_definition": "Current outstanding supplier invoices whose due date is on or before the horizon date; not a payment instruction.",
 			"coverage_definition": "Indicative management ratio only. It does not model payment timing, disputes, unrecorded obligations, financing facilities or collection probability.",
 			"branch_limit": "If a safe ERPNext branch accounting balance is unavailable, cash-based liquidity ratios are withheld rather than inferred from branch transaction movement.",
+			"composition": "direct canonical cash movement + current AR/AP + ERPNext cash/bank balance; no full Owner Dashboard reload",
 		},
 		"scan": {
 			"receivables": receivables.get("scan") or {},
