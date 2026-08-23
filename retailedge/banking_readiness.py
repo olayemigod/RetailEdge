@@ -1,14 +1,27 @@
 from __future__ import annotations
 
 import frappe
-from frappe.utils import cint, cstr
+from frappe.utils import cint, cstr, flt, getdate
 
-from retailedge.bank_transaction_matching import assert_can_access_bank_transaction_matching
+from retailedge.bank_transaction_matching import (
+	assert_can_access_bank_transaction_matching,
+	normalize_bank_transaction,
+)
 from retailedge.branch_context import has_doctype, has_field
+from retailedge.reconciliation_handoff import (
+	get_bank_transaction_reconciliation_context,
+	get_payment_event_reconciliation_context,
+)
 
 READINESS_READY = "Ready"
 READINESS_WARNING = "Warning"
 READINESS_BLOCKED = "Blocked"
+
+EVIDENCE_MATCH = "Match"
+EVIDENCE_MISMATCH = "Mismatch"
+EVIDENCE_SUPPORTING = "Supporting"
+EVIDENCE_NOT_AVAILABLE = "Not Available"
+EVIDENCE_NOT_APPLICABLE = "Not Applicable"
 
 
 def _fieldnames(doctype):
@@ -88,6 +101,49 @@ def _mode_of_payment_context(company, account):
 		"modes": matching,
 		"conflicts": conflicts,
 	}
+
+
+def _bank_accounts_for_ledger(account, company=None):
+	account = cstr(account).strip()
+	company = cstr(company).strip()
+	if not account or not has_doctype("Bank Account"):
+		return []
+	filters = {"account": account}
+	if company and has_field("Bank Account", "company"):
+		filters["company"] = company
+	if has_field("Bank Account", "disabled"):
+		filters["disabled"] = 0
+	fields = ["name"]
+	for fieldname in ("bank", "account", "company", "branch", "retailedge_branch"):
+		if has_field("Bank Account", fieldname):
+			fields.append(fieldname)
+	return frappe.get_all(
+		"Bank Account",
+		filters=filters,
+		fields=fields,
+		order_by="name asc",
+		limit_page_length=20,
+	)
+
+
+def _status_for_pair(left, right, *, supporting=False, not_applicable=False):
+	left = cstr(left).strip()
+	right = cstr(right).strip()
+	if not_applicable:
+		return EVIDENCE_NOT_APPLICABLE
+	if left and right:
+		return EVIDENCE_SUPPORTING if supporting and left == right else EVIDENCE_MATCH if left == right else EVIDENCE_MISMATCH
+	return EVIDENCE_NOT_AVAILABLE
+
+
+def _date_status(bank_date, candidate_date):
+	if not bank_date or not candidate_date:
+		return EVIDENCE_NOT_AVAILABLE, None
+	try:
+		days = abs((getdate(bank_date) - getdate(candidate_date)).days)
+	except Exception:
+		return EVIDENCE_NOT_AVAILABLE, None
+	return (EVIDENCE_MATCH if days == 0 else EVIDENCE_SUPPORTING), days
 
 
 def evaluate_bank_account_readiness(bank_account_name, company=None):
@@ -271,6 +327,127 @@ def evaluate_bank_account_readiness(bank_account_name, company=None):
 		"can_match": readiness != READINESS_BLOCKED,
 		"can_reconcile": readiness != READINESS_BLOCKED,
 	}
+
+
+def build_match_account_evidence(match_name):
+	"""Return human-readable, server-authoritative bank identity evidence for Review Match."""
+	name = cstr(match_name).strip()
+	fields = [
+		"name", "bank_transaction", "suggested_document_type", "suggested_document",
+		"company", "branch", "bank_account", "bank_amount", "candidate_amount",
+		"transaction_date", "bank_reference", "payment_mode", "bank_direction",
+	]
+	fields = [field for field in fields if field == "name" or has_field("RetailEdge Bank Transaction Match", field)]
+	match = frappe.db.get_value("RetailEdge Bank Transaction Match", name, fields, as_dict=True) or {}
+	if not match:
+		frappe.throw(f"Bank match review {name} was not found.")
+
+	bank_transaction_name = cstr(match.get("bank_transaction")).strip()
+	bank_context = frappe._dict(get_bank_transaction_reconciliation_context(bank_transaction_name))
+	normalized = frappe._dict(normalize_bank_transaction(bank_transaction_name))
+	direction = cstr(normalized.get("direction") or match.get("bank_direction")).strip()
+	bank_account = cstr(bank_context.get("bank_account") or match.get("bank_account")).strip()
+	company = cstr(bank_context.get("company") or match.get("company")).strip()
+	bank_readiness = evaluate_bank_account_readiness(bank_account, company=company) if bank_account else {}
+	bank_gl = cstr(bank_readiness.get("resolved_gl_account")).strip()
+
+	match_for_candidate = frappe._dict(dict(match))
+	match_for_candidate["direction"] = direction
+	match_for_candidate["bank_direction"] = direction
+	candidate_context = frappe._dict(
+		get_payment_event_reconciliation_context(
+			match.get("suggested_document_type"),
+			match.get("suggested_document"),
+			match_doc=match_for_candidate,
+		)
+	)
+	candidate_gl = cstr(candidate_context.get("candidate_account")).strip()
+	candidate_company = cstr(candidate_context.get("candidate_company")).strip()
+	if not candidate_company and match.get("suggested_document_type") and match.get("suggested_document"):
+		if has_field(match.get("suggested_document_type"), "company"):
+			candidate_company = cstr(
+				frappe.db.get_value(match.get("suggested_document_type"), match.get("suggested_document"), "company") or ""
+			).strip()
+	candidate_bank_accounts = _bank_accounts_for_ledger(candidate_gl, company=candidate_company or company)
+	candidate_bank = candidate_bank_accounts[0] if len(candidate_bank_accounts) == 1 else {}
+	candidate_bank_account = cstr(candidate_bank.get("name")).strip()
+	candidate_bank_name = cstr(candidate_bank.get("bank")).strip()
+
+	bank_reference = cstr(bank_context.get("reference") or match.get("bank_reference")).strip()
+	candidate_reference = cstr(candidate_context.get("candidate_reference")).strip()
+	bank_branch = cstr(bank_context.get("branch") or match.get("branch")).strip()
+	candidate_branch = cstr(candidate_context.get("candidate_branch")).strip()
+	mode_of_payment = cstr(candidate_context.get("candidate_mode_of_payment") or match.get("payment_mode")).strip()
+	bank_amount = flt(bank_context.get("bank_transaction_amount") or match.get("bank_amount"))
+	candidate_amount = flt(candidate_context.get("candidate_amount") or match.get("candidate_amount"))
+	amount_status = EVIDENCE_MATCH if abs(bank_amount - candidate_amount) <= 0.01 else EVIDENCE_MISMATCH
+	date_status, date_distance_days = _date_status(
+		bank_context.get("bank_transaction_date") or match.get("transaction_date"),
+		candidate_context.get("candidate_date"),
+	)
+	bank_account_status = EVIDENCE_NOT_AVAILABLE
+	if bank_gl and candidate_gl:
+		bank_account_status = EVIDENCE_MATCH if bank_gl == candidate_gl else EVIDENCE_MISMATCH
+	company_status = _status_for_pair(company, candidate_company)
+	branch_status = _status_for_pair(bank_branch, candidate_branch, supporting=True)
+	if not bank_branch and not candidate_branch:
+		branch_status = EVIDENCE_NOT_APPLICABLE
+	reference_status = EVIDENCE_NOT_AVAILABLE
+	if bank_reference and candidate_reference:
+		reference_status = EVIDENCE_MATCH if bank_reference.lower() == candidate_reference.lower() else EVIDENCE_SUPPORTING
+
+	payment_side_label = "Bank-side Account"
+	if cstr(match.get("suggested_document_type")).strip() == "Payment Entry":
+		payment_side_label = "Paid From" if direction == "Outflow" else "Paid To" if direction == "Inflow" else payment_side_label
+
+	return {
+		"match_name": name,
+		"direction": direction,
+		"statement": {
+			"bank_transaction": bank_transaction_name,
+			"bank_account": bank_account,
+			"bank": bank_readiness.get("bank"),
+			"gl_account": bank_gl,
+			"company": company,
+			"branch": bank_branch,
+			"amount": bank_amount,
+			"date": bank_context.get("bank_transaction_date") or match.get("transaction_date"),
+			"reference": bank_reference,
+		},
+		"accounting": {
+			"doctype": match.get("suggested_document_type"),
+			"name": match.get("suggested_document"),
+			"bank_account": candidate_bank_account,
+			"bank": candidate_bank_name,
+			"bank_account_candidates": [row.get("name") for row in candidate_bank_accounts],
+			"gl_account": candidate_gl,
+			"gl_account_label": payment_side_label,
+			"company": candidate_company,
+			"branch": candidate_branch,
+			"mode_of_payment": mode_of_payment,
+			"amount": candidate_amount,
+			"date": candidate_context.get("candidate_date"),
+			"reference": candidate_reference,
+		},
+		"evidence": [
+			{"key": "bank_account", "label": "Bank Account", "status": bank_account_status, "statement": bank_account, "accounting": candidate_bank_account or candidate_gl},
+			{"key": "gl_account", "label": "GL Account", "status": bank_account_status, "statement": bank_gl, "accounting": candidate_gl},
+			{"key": "company", "label": "Company", "status": company_status, "statement": company, "accounting": candidate_company},
+			{"key": "direction", "label": "Direction", "status": EVIDENCE_MATCH if direction else EVIDENCE_NOT_AVAILABLE, "statement": direction, "accounting": payment_side_label},
+			{"key": "amount", "label": "Amount", "status": amount_status, "statement": bank_amount, "accounting": candidate_amount},
+			{"key": "date", "label": "Date", "status": date_status, "statement": bank_context.get("bank_transaction_date") or match.get("transaction_date"), "accounting": candidate_context.get("candidate_date"), "distance_days": date_distance_days},
+			{"key": "reference", "label": "Reference", "status": reference_status, "statement": bank_reference, "accounting": candidate_reference},
+			{"key": "branch", "label": "Branch", "status": branch_status, "statement": bank_branch, "accounting": candidate_branch},
+			{"key": "mode_of_payment", "label": "Mode of Payment", "status": EVIDENCE_SUPPORTING if mode_of_payment else EVIDENCE_NOT_AVAILABLE, "statement": "", "accounting": mode_of_payment},
+		],
+		"banking_readiness": bank_readiness,
+	}
+
+
+@frappe.whitelist()
+def get_match_account_evidence(match_name):
+	assert_can_access_bank_transaction_matching()
+	return build_match_account_evidence(match_name)
 
 
 @frappe.whitelist()
