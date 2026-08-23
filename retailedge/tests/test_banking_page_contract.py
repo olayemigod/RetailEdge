@@ -111,16 +111,16 @@ class BankingPageContractTests(unittest.TestCase):
 			"Bank Identity & Accounting Safety",
 			"Bank Account",
 			"GL Account",
-			"Bank Amount",
-			"Candidate Amount",
-			"Transaction Date",
-			"Candidate Date",
 			"Why this matches",
 			"Accounting / Hard Match Evidence",
 			"Fuzzy / Supplemental Evidence",
 			"Matching does not reconcile the bank transaction",
 		):
 			self.assertIn(label, review_js)
+		self.assertIn('valueRow("Amount", money(statement.amount ?? doc.bank_amount', review_js)
+		self.assertIn('valueRow("Amount", money(accounting.amount ?? doc.candidate_amount', review_js)
+		self.assertIn('valueRow("Date", statement.date || doc.transaction_date)', review_js)
+		self.assertIn('valueRow("Date", accounting.date)', review_js)
 		self.assertNotIn("Proposed Match (Accounting)", review_js)
 		for class_name in (
 			"retailedge-review-compare",
