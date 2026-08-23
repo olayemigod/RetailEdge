@@ -30,6 +30,7 @@ from retailedge.stock_position import (
 
 DEFAULT_SLOW_DAYS = 30
 DEFAULT_NON_MOVING_DAYS = 90
+NUMERIC_FIELDTYPES = {"Currency", "Float", "Int", "Percent", "Check"}
 MOVEMENT_CLASSES = {
 	"All",
 	"Fast",
@@ -52,14 +53,24 @@ def get_inventory_health(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort_field: str = "",
+	sort_direction: str = "",
 ) -> dict[str, Any]:
 	"""Compose current ERPNext Bin, demand, and reorder intelligence."""
-	dataset = _build_inventory_health_dataset(filters)
+	dataset = _apply_sort(
+		_build_inventory_health_dataset(filters),
+		sort_field=sort_field,
+		sort_direction=sort_direction,
+	)
 	return _page_response(dataset, page=page, page_size=page_size)
 
 
 @frappe.whitelist()
-def get_inventory_health_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+def get_inventory_health_export(
+	filters: dict[str, Any] | str | None = None,
+	sort_field: str = "",
+	sort_direction: str = "",
+) -> dict[str, Any]:
 	"""Return the bounded R10 dataset after reusing Stock Position export entitlement."""
 	filters = _normalise_health_filters(filters)
 	require_report_action(
@@ -68,7 +79,11 @@ def get_inventory_health_export(filters: dict[str, Any] | str | None = None) -> 
 		company=str(filters.get("company") or ""),
 		branch=str(filters.get("branch") or ""),
 	)
-	return _build_inventory_health_dataset(filters)
+	return _apply_sort(
+		_build_inventory_health_dataset(filters),
+		sort_field=sort_field,
+		sort_direction=sort_direction,
+	)
 
 
 @frappe.whitelist()
@@ -191,6 +206,70 @@ def _replenishment_action_summary(replenishment: dict[str, Any]) -> list[dict[st
 			"datatype": "Int",
 		},
 	]
+
+
+def _apply_sort(
+	dataset: dict[str, Any],
+	*,
+	sort_field: str,
+	sort_direction: str,
+) -> dict[str, Any]:
+	result = dict(dataset)
+	columns = list(result.get("columns") or [])
+	resolved_sort = _resolve_sort(
+		columns,
+		sort_field=sort_field,
+		sort_direction=sort_direction,
+	)
+	if resolved_sort:
+		result["rows"] = _sort_rows(list(result.get("rows") or []), resolved_sort)
+	metadata = dict(result.get("metadata") or {})
+	metadata["sort"] = resolved_sort
+	result["metadata"] = metadata
+	return result
+
+
+def _resolve_sort(
+	columns: list[dict[str, Any]],
+	*,
+	sort_field: str,
+	sort_direction: str,
+) -> dict[str, str] | None:
+	field = str(sort_field or "").strip()
+	direction = str(sort_direction or "").strip().lower()
+	if not field and not direction:
+		return None
+	if not field or direction not in {"asc", "desc"}:
+		frappe.throw(_("Invalid Inventory Intelligence sort request."))
+	by_field = {
+		str(column.get("fieldname") or ""): column
+		for column in columns
+		if column.get("fieldname")
+	}
+	column = by_field.get(field)
+	if not column:
+		frappe.throw(_("Unsupported Inventory Intelligence sort field."))
+	return {
+		"field": field,
+		"direction": direction,
+		"fieldtype": str(column.get("fieldtype") or "Data"),
+	}
+
+
+def _sort_rows(rows: list[dict[str, Any]], sort: dict[str, str]) -> list[dict[str, Any]]:
+	field = sort["field"]
+	fieldtype = sort.get("fieldtype") or "Data"
+	reverse = sort.get("direction") == "desc"
+	present = [row for row in rows if row.get(field) not in (None, "")]
+	missing = [row for row in rows if row.get(field) in (None, "")]
+
+	def key(row: dict[str, Any]):
+		value = row.get(field)
+		if fieldtype in NUMERIC_FIELDTYPES:
+			return flt(value)
+		return str(value or "").casefold()
+
+	return [*sorted(present, key=key, reverse=reverse), *missing]
 
 
 def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
