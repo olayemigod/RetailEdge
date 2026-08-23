@@ -77,7 +77,7 @@
 					</label>
 					<label class="include-zero-field">
 						<input v-model="includeZero" type="checkbox" />
-						<span><strong>Include zero rows</strong><small>Include items with no current or projected stock signal.</small></span>
+						<span><strong>Include zero-stock items</strong><small>Recommended so sold-out demand and reorder items remain visible.</small></span>
 					</label>
 					<div class="filter-action">
 						<button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">
@@ -90,6 +90,7 @@
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
 				<span v-if="scope.from_date && scope.to_date">Demand evidence: {{ scope.from_date }} to {{ scope.to_date }}</span>
+				<span v-if="Number(scan.synthetic_zero_items || 0) > 0">{{ Number(scan.synthetic_zero_items) }} zero-balance item(s) retained from demand/reorder evidence</span>
 				<span>Replenishment uses ERPNext Item Reorder configuration</span>
 				<span>Stock cover is historical estimation, not a forecast</span>
 				<span v-if="!showCosts">Cost values hidden by RetailEdge settings</span>
@@ -160,7 +161,7 @@ export default {
 				lookback_days: 90,
 				slow_days: 30,
 				non_moving_days: 90,
-				include_zero: 0,
+				include_zero: 1,
 				page_size: 50,
 			},
 			currentPage: 1,
@@ -214,6 +215,7 @@ export default {
 				{ label: "Current Stock Source", value: "ERPNext Bin" },
 				{ label: "Demand Source", value: "Bounded outward ERPNext Stock Ledger Entry evidence" },
 				{ label: "Replenishment Source", value: "ERPNext Item Reorder configuration" },
+				{ label: "Zero-stock Visibility", value: this.includeZero ? "Included" : "Excluded by filter" },
 				{ label: "Stock Cover", value: "Historical estimate, not forecast" },
 				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by RetailEdge settings" },
 			];
@@ -245,6 +247,7 @@ export default {
 					lookback_days: 90,
 					slow_days: 30,
 					non_moving_days: 90,
+					include_zero: 1,
 				};
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
