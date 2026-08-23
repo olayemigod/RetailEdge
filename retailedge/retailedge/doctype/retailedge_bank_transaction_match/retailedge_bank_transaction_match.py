@@ -397,7 +397,7 @@ def _resolve_manual_candidate_context(
 
 def _build_source_candidate_context(suggested_document_type, suggested_document, bank_context=None):
 	if suggested_document_type == "Payment Entry":
-		return _build_payment_entry_source_candidate(suggested_document)
+		return _build_payment_entry_source_candidate(suggested_document, bank_context=bank_context)
 	if suggested_document_type == "Sales Invoice":
 		return _build_sales_invoice_source_candidate(suggested_document)
 	if suggested_document_type == "Journal Entry":
@@ -405,7 +405,7 @@ def _build_source_candidate_context(suggested_document_type, suggested_document,
 	return None
 
 
-def _build_payment_entry_source_candidate(payment_entry_name):
+def _build_payment_entry_source_candidate(payment_entry_name, bank_context=None):
 	fields = [
 		"name",
 		"posting_date",
@@ -427,9 +427,32 @@ def _build_payment_entry_source_candidate(payment_entry_name):
 	payload = frappe.db.get_value("Payment Entry", payment_entry_name, fields, as_dict=True)
 	if not payload:
 		return None
-	account = cstr(payload.get("paid_to") or payload.get("paid_from")).strip()
 	if cstr(payload.get("mode_of_payment")).strip().lower() == "cash":
 		return None
+
+	bank_context = frappe._dict(bank_context or {})
+	direction = cstr(bank_context.get("bank_direction")).strip()
+	payment_type = cstr(payload.get("payment_type")).strip()
+	paid_from = cstr(payload.get("paid_from")).strip()
+	paid_to = cstr(payload.get("paid_to")).strip()
+	if direction == "Outflow":
+		account = paid_from
+		candidate_amount = flt(payload.get("paid_amount"))
+	elif direction == "Inflow":
+		account = paid_to
+		candidate_amount = flt(payload.get("received_amount"))
+	elif payment_type == "Pay":
+		account = paid_from
+		candidate_amount = flt(payload.get("paid_amount"))
+	elif payment_type == "Receive":
+		account = paid_to
+		candidate_amount = flt(payload.get("received_amount"))
+	else:
+		# Internal Transfer is ambiguous without the Bank Transaction direction.
+		return None
+	if not account or candidate_amount <= 0:
+		return None
+
 	return {
 		"document_type": "Payment Entry",
 		"document_name": payment_entry_name,
@@ -439,14 +462,14 @@ def _build_payment_entry_source_candidate(payment_entry_name):
 		"customer": payload.get("party"),
 		"party": payload.get("party"),
 		"party_type": payload.get("party_type") or "Customer",
-		"candidate_amount": flt(payload.get("received_amount") or payload.get("paid_amount")),
+		"candidate_amount": candidate_amount,
 		"candidate_category": "payment_entry_match",
 		"payment_event_source": "Payment Entry",
 		"payment_mode": payload.get("mode_of_payment"),
 		"payment_account": account,
 		"account": account,
 		"reference": payload.get("reference_no") or payload.get("name"),
-		"payment_entry_paid_amount": flt(payload.get("received_amount") or payload.get("paid_amount")),
+		"payment_entry_paid_amount": candidate_amount,
 		"amount_scenario": "Submitted Payment Entry Amount",
 		"confidence": "Possible Match",
 		"score": 0,
