@@ -1,0 +1,97 @@
+.retailedge-banking-readiness {
+	max-width: 1200px;
+	margin: 0 auto;
+}
+
+.retailedge-readiness-summary {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+	margin: 16px 0;
+}
+
+.retailedge-readiness-summary-card,
+.retailedge-readiness-card {
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	background: var(--card-bg);
+	padding: 16px;
+}
+
+.retailedge-readiness-summary-card {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.retailedge-readiness-summary-label {
+	color: var(--text-muted);
+}
+
+.retailedge-readiness-summary-value {
+	font-size: 1.35rem;
+	margin-left: auto;
+}
+
+.retailedge-readiness-card {
+	margin-bottom: 12px;
+}
+
+.retailedge-readiness-card-header,
+.retailedge-readiness-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.retailedge-readiness-bank-name {
+	font-size: 1rem;
+}
+
+.retailedge-readiness-bank-subtitle,
+.retailedge-readiness-issues {
+	color: var(--text-muted);
+	margin-top: 4px;
+}
+
+.retailedge-readiness-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+	margin: 16px 0;
+}
+
+.retailedge-readiness-grid > div {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.retailedge-readiness-grid span {
+	font-size: 0.78rem;
+	color: var(--text-muted);
+}
+
+.retailedge-readiness-issues {
+	line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+	.retailedge-readiness-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 640px) {
+	.retailedge-readiness-summary,
+	.retailedge-readiness-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.retailedge-readiness-card-header,
+	.retailedge-readiness-actions {
+		align-items: stretch;
+		flex-direction: column;
+	}
+}
