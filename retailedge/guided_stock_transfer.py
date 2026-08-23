@@ -365,7 +365,12 @@ def _coerce_values(values: dict | str | None) -> dict[str, Any]:
 		return {}
 	if isinstance(values, str):
 		values = frappe.parse_json(values)
-	return dict(values)
+	if isinstance(values, frappe._dict):
+		return dict(values)
+	if isinstance(values, dict):
+		return dict(values)
+	frappe.throw(_("Invalid Simple Stock Transfer values."))
+	return {}
 
 
 def _unique(values: list[Any]) -> list[str]:
