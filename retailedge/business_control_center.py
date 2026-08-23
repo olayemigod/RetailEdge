@@ -20,7 +20,7 @@ def get_business_control_center(filters: dict[str, Any] | str | None = None) -> 
 	# Company/Branch/date scope so R9 warnings cannot silently widen a single-branch
 	# user's blank Branch filter back to company scope.
 	warning_filters = frappe._dict(action_center.get("filters") or resolved)
-	warnings = get_control_early_warning(warning_filters)
+	warnings = _safe_early_warning(warning_filters)
 	payload = _build_business_control_center(action_center=action_center, warnings=warnings)
 	filters_out = payload.get("filters") or {}
 	items = decorate_action_items(
@@ -40,6 +40,26 @@ def get_business_control_center(filters: dict[str, Any] | str | None = None) -> 
 		"R9 warnings reuse the Branch scope resolved by Action Centre; a blank client Branch cannot widen a branch-restricted user's scope."
 	)
 	return payload
+
+
+def _safe_early_warning(filters: frappe._dict) -> dict[str, Any]:
+	try:
+		return get_control_early_warning(filters)
+	except frappe.PermissionError:
+		# Business Control Centre extends Action Centre; it must not revoke an
+		# operator's existing Action Centre/follow-up access merely because that
+		# operator is not entitled to owner-level R9 financial intelligence.
+		return {
+			"available": False,
+			"warnings": [],
+			"critical_count": 0,
+			"warning_count": 0,
+			"profitability_trend": {},
+			"metadata": {
+				"reason": _("Your permissions allow operational Action Centre controls but not owner-level financial intelligence."),
+				"permission_isolated": True,
+			},
+		}
 
 
 def _build_business_control_center(
@@ -71,6 +91,7 @@ def _build_business_control_center(
 			"metadata": action_center.get("metadata") or {},
 		},
 		"early_warning": {
+			"available": warnings.get("available", True),
 			"critical_count": warnings.get("critical_count") or 0,
 			"warning_count": warnings.get("warning_count") or 0,
 			"profitability_trend": warnings.get("profitability_trend") or {},
