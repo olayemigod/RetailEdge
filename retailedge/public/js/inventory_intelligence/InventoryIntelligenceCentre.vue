@@ -25,6 +25,7 @@
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
+			:sort="sort"
 			rowKey="item_code"
 			:formatter="formatCell"
 			:pageSizes="[25, 50, 100]"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="changeSort"
 			@cell-click="openReportCell"
 		>
 			<template #actions>
@@ -149,6 +151,7 @@ export default {
 			companyCurrency: "",
 			showCosts: false,
 			itemLabel: "",
+			sort: null,
 			filters: {
 				company: "",
 				branch: "",
@@ -166,7 +169,7 @@ export default {
 			},
 			currentPage: 1,
 			stockStatuses: ["All", "In Stock", "Available", "Out of Stock", "Negative", "Fully Reserved"],
-			movementClasses: ["All", "Fast", "Normal", "Slow", "Non-moving", "No demand in window"],
+			movementClasses: ["All", "Normal", "Slow", "Non-moving", "No demand in window"],
 			replenishmentStatuses: ["All", "Reorder Now", "Review warehouse group", "Healthy", "No reorder rule"],
 			lookbackOptions: [30, 60, 90, 180, 365],
 		};
@@ -350,7 +353,11 @@ export default {
 			this.error = "";
 			try {
 				const result = await callMethod(this.pageMethod, {
-					filters: this.requestFilters(), page: this.currentPage, page_size: Number(this.filters.page_size || 50),
+					filters: this.requestFilters(),
+					page: this.currentPage,
+					page_size: Number(this.filters.page_size || 50),
+					sort_field: this.sort?.field || "",
+					sort_direction: this.sort?.direction || "",
 				});
 				this.rows = result.rows || [];
 				this.columns = result.columns || [];
@@ -370,7 +377,11 @@ export default {
 			}
 		},
 		async loadExportDataset() {
-			const result = await callMethod(this.exportMethod, { filters: this.requestFilters() });
+			const result = await callMethod(this.exportMethod, {
+				filters: this.requestFilters(),
+				sort_field: this.sort?.field || "",
+				sort_direction: this.sort?.direction || "",
+			});
 			return {
 				columns: result.columns || this.columns,
 				rows: result.rows || [],
@@ -378,6 +389,7 @@ export default {
 				metadata: this.exportMetadata,
 			};
 		},
+		changeSort(next) { this.sort = next; this.currentPage = 1; this.fetchData(); },
 		goToPage(page) { this.currentPage = Math.max(1, Number(page || 1)); this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		openReportCell(payload) {
