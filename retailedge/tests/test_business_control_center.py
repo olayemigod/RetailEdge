@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from retailedge.business_control_center import _build_business_control_center
+import frappe
+
+from retailedge.business_control_center import _build_business_control_center, _safe_early_warning
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +44,23 @@ class RetailEdgeBusinessControlCenterTests(unittest.TestCase):
 		profit = next(row for row in r9 if row.get("family") == "Profitability")
 		self.assertEqual(profit["open_mode"], "new_tab")
 
+	@patch("retailedge.business_control_center.get_control_early_warning")
+	def test_validation_failure_isolated_from_operational_action_center(self, warning_loader):
+		warning_loader.side_effect = frappe.ValidationError("Too many invoices in scope")
+		result = _safe_early_warning(frappe._dict(company="Demo Co", branch="Main"))
+		self.assertFalse(result["available"])
+		self.assertEqual(result["warnings"], [])
+		self.assertTrue(result["metadata"]["failure_isolated"])
+		self.assertIn("Too many invoices", result["metadata"]["reason"])
+
+	@patch("retailedge.business_control_center.get_control_early_warning")
+	def test_permission_failure_isolated_from_operational_action_center(self, warning_loader):
+		warning_loader.side_effect = frappe.PermissionError("Owner intelligence denied")
+		result = _safe_early_warning(frappe._dict(company="Demo Co", branch="Main"))
+		self.assertFalse(result["available"])
+		self.assertTrue(result["metadata"]["permission_isolated"])
+		self.assertTrue(result["metadata"]["failure_isolated"])
+
 	def test_service_preserves_existing_action_center_and_uses_shared_follow_up_store(self):
 		source = (APP_ROOT / "business_control_center.py").read_text()
 		self.assertIn("get_action_center_data", source)
@@ -51,7 +71,8 @@ class RetailEdgeBusinessControlCenterTests(unittest.TestCase):
 		self.assertNotIn("save(", source)
 		self.assertIn("do not create a ledger", source)
 		self.assertIn("existing RetailEdge Action Follow Up store", source)
-		self.assertIn("same permission-aware Business Control Centre scope", source)
+		self.assertIn("same permission-aware scope", source)
+		self.assertIn("except frappe.ValidationError", source)
 
 
 if __name__ == "__main__":
