@@ -36,6 +36,14 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		self.assertIn("Financial intelligence is unavailable for this scope", source)
 		self.assertIn("operational Action Centre controls remain available", source)
 
+	def test_assignment_picker_uses_permission_aware_scope_query(self):
+		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
+		self.assertIn("retailedge.action_follow_up_query.get_assignable_users", source)
+		self.assertIn('company: this.filters.company || ""', source)
+		self.assertIn('branch: this.filters.branch || ""', source)
+		self.assertIn('item.source === "r9_early_warning" && !this.filters.branch', source)
+		self.assertNotIn("get_query: () => ({ filters: { enabled: 1 } })", source)
+
 	def test_native_drill_through_obeys_backend_open_mode(self):
 		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
 		self.assertIn('item.open_mode === "new_tab"', source)
