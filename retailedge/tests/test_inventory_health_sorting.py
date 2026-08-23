@@ -3,7 +3,6 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import frappe
-import pytest
 
 from retailedge import inventory_health
 
@@ -68,9 +67,12 @@ def test_public_service_rejects_unknown_sort_field(build_dataset):
 		"metadata": {},
 	}
 
-	with pytest.raises(frappe.ValidationError):
+	try:
 		inventory_health.get_inventory_health(
 			{"company": "Test Company"},
 			sort_field="not_a_column",
 			sort_direction="asc",
 		)
+	except frappe.ValidationError:
+		return
+	raise AssertionError("Unsupported sort fields must raise frappe.ValidationError")
