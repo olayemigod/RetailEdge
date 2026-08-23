@@ -176,7 +176,22 @@ export default {
 			if (action === "acknowledge" || action === "reopen") return this.updateFollowUp(item, action);
 			const state = item.follow_up || {};
 			if (action === "assign") return frappe.prompt([
-				{ fieldname: "assigned_to", fieldtype: "Link", options: "User", label: "Assigned To", reqd: 1, default: state.assigned_to || frappe.session.user, get_query: () => ({ filters: { enabled: 1 } }) },
+				{
+					fieldname: "assigned_to",
+					fieldtype: "Link",
+					options: "User",
+					label: "Assigned To",
+					reqd: 1,
+					default: state.assigned_to || frappe.session.user,
+					get_query: () => ({
+						query: "retailedge.action_follow_up_query.get_assignable_users",
+						filters: {
+							company: this.filters.company || "",
+							branch: this.filters.branch || "",
+							require_global_scope: item.source === "r9_early_warning" && !this.filters.branch ? 1 : 0,
+						},
+					}),
+				},
 				{ fieldname: "follow_up_on", fieldtype: "Datetime", label: "Follow Up On", default: state.follow_up_on || "" },
 				{ fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: state.notes || "" },
 			], (values) => this.updateFollowUp(item, "assign", values), "Assign follow-up", "Assign");
