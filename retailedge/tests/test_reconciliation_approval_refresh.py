@@ -83,7 +83,10 @@ class ReconciliationApprovalRefreshTests(unittest.TestCase):
                 return_value={"required": True, "allowed_roles": ["System Manager"]},
             ),
             patch("retailedge.reconciliation_approval.frappe.get_roles", return_value=["System Manager"]),
-            patch("retailedge.reconciliation_approval.frappe.session.user", "approver@example.com"),
+            patch(
+                "retailedge.reconciliation_approval.frappe.session",
+                frappe._dict(user="approver@example.com"),
+            ),
             patch(
                 "retailedge.reconciliation_bridge._load_match_for_preflight",
                 return_value=frappe._dict({"name": doc.name}),
