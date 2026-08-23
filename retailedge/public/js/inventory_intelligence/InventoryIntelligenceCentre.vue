@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Inventory Intelligence"
 			eyebrow="Inventory Control"
-			subtitle="Use current ERPNext stock with bounded historical demand evidence to identify fast, slow and non-moving inventory and estimate stock cover."
+			subtitle="Use current ERPNext stock, bounded historical demand evidence and native reorder configuration to identify inventory actions."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -29,7 +29,7 @@
 			:formatter="formatCell"
 			:pageSizes="[25, 50, 100]"
 			emptyTitle="No inventory intelligence found"
-			emptyDescription="Adjust the stock, movement, scope or evidence-window filters and try again."
+			emptyDescription="Adjust the stock, movement, replenishment, scope or evidence-window filters and try again."
 			loadingMessage="Loading inventory intelligence…"
 			@retry="fetchData"
 			@page-change="goToPage"
@@ -64,6 +64,12 @@
 						</select>
 					</label>
 					<label class="edge-field">
+						<span class="edge-field-label">Replenishment Status</span>
+						<select v-model="filters.replenishment_status" class="edge-input">
+							<option v-for="status in replenishmentStatuses" :key="status" :value="status">{{ status }}</option>
+						</select>
+					</label>
+					<label class="edge-field">
 						<span class="edge-field-label">Evidence Window</span>
 						<select v-model.number="filters.lookback_days" class="edge-input">
 							<option v-for="days in lookbackOptions" :key="days" :value="days">Last {{ days }} days</option>
@@ -84,6 +90,7 @@
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
 				<span v-if="scope.from_date && scope.to_date">Demand evidence: {{ scope.from_date }} to {{ scope.to_date }}</span>
+				<span>Replenishment uses ERPNext Item Reorder configuration</span>
 				<span>Stock cover is historical estimation, not a forecast</span>
 				<span v-if="!showCosts">Cost values hidden by RetailEdge settings</span>
 				<span v-else-if="companyCurrency">Valuation in {{ companyCurrency }}</span>
@@ -149,6 +156,7 @@ export default {
 				item_code: "",
 				stock_status: "All",
 				movement_class: "All",
+				replenishment_status: "All",
 				lookback_days: 90,
 				slow_days: 30,
 				non_moving_days: 90,
@@ -158,6 +166,7 @@ export default {
 			currentPage: 1,
 			stockStatuses: ["All", "In Stock", "Available", "Out of Stock", "Negative", "Fully Reserved"],
 			movementClasses: ["All", "Fast", "Normal", "Slow", "Non-moving", "No demand in window"],
+			replenishmentStatuses: ["All", "Reorder Now", "Review warehouse group", "Healthy", "No reorder rule"],
 			lookbackOptions: [30, 60, 90, 180, 365],
 		};
 	},
@@ -193,7 +202,8 @@ export default {
 		exportFilters() {
 			const labels = {
 				company: "Company", branch: "Branch", warehouse: "Warehouse", item_group: "Item Group", item_code: "Item",
-				stock_status: "Stock Status", movement_class: "Movement Class", lookback_days: "Evidence Window (Days)",
+				stock_status: "Stock Status", movement_class: "Movement Class", replenishment_status: "Replenishment Status",
+				lookback_days: "Evidence Window (Days)",
 			};
 			return Object.entries(labels)
 				.map(([key, label]) => ({ label, value: this.filters[key] }))
@@ -203,6 +213,7 @@ export default {
 			return [
 				{ label: "Current Stock Source", value: "ERPNext Bin" },
 				{ label: "Demand Source", value: "Bounded outward ERPNext Stock Ledger Entry evidence" },
+				{ label: "Replenishment Source", value: "ERPNext Item Reorder configuration" },
 				{ label: "Stock Cover", value: "Historical estimate, not forecast" },
 				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by RetailEdge settings" },
 			];
@@ -226,7 +237,15 @@ export default {
 					callMethod("retailedge.stock_position.get_stock_position_context"),
 					navigationPromise,
 				]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}), movement_class: "All", lookback_days: 90, slow_days: 30, non_moving_days: 90 };
+				this.filters = {
+					...this.filters,
+					...(context.default_filters || {}),
+					movement_class: "All",
+					replenishment_status: "All",
+					lookback_days: 90,
+					slow_days: 30,
+					non_moving_days: 90,
+				};
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
