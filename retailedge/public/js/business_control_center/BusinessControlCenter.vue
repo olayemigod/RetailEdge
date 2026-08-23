@@ -22,10 +22,15 @@
 			:summary="summaryCards"
 			:loading="loading || metadataLoading"
 			:error="error"
-			:exportEnabled="false"
-			:printEnabled="false"
+			:exportEnabled="items.length > 0 && capabilities.can_export"
+			:printEnabled="items.length > 0 && capabilities.can_print"
+			:exportBusy="exportBusy"
+			:printBusy="printBusy"
+			:exportInitialOptions="exportOptions"
 			loadingMessage="Checking business controls…"
 			@retry="fetchData"
+			@export="handleExport"
+			@print="handlePrint"
 		>
 			<template #filters>
 				<div class="business-control-filters">
@@ -111,11 +116,19 @@
 </template>
 
 <script>
+import {
+	defaultDashboardExportOptions,
+	exportDashboard,
+	getDashboardCapabilities,
+	printDashboard,
+} from "../retailedge_dashboard_actions";
 import BusinessControlRow from "./BusinessControlRow.vue";
 import FinancialOverview from "./FinancialOverview.vue";
 import OwnerControlDetails from "./OwnerControlDetails.vue";
 
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
+const FILE_SCOPE_KEY = "business-control-center";
+const FILE_CAPABILITY_KEY = "owner-dashboard";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -131,6 +144,10 @@ export default {
 			loading: false,
 			error: "",
 			mutatingFingerprint: "",
+			exportBusy: false,
+			printBusy: false,
+			capabilities: { can_view: true, can_print: false, can_export: false },
+			exportOptions: defaultDashboardExportOptions(),
 			summaryRaw: {},
 			items: [],
 			actionCenter: { sources: {}, metadata: {} },
@@ -210,6 +227,8 @@ export default {
 				this.actionCenter = result.action_center || { sources: {}, metadata: {} };
 				this.earlyWarning = result.early_warning || { available: true, metadata: {} };
 				this.resetLazyDetails();
+				try { this.capabilities = await getDashboardCapabilities(FILE_CAPABILITY_KEY, this.filters); }
+				catch (_error) { this.capabilities = { can_view: true, can_print: false, can_export: false }; }
 			} catch (error) { this.error = errorMessage(error, "Business Control Centre failed to load."); }
 			finally { this.loading = false; }
 		},
@@ -251,6 +270,20 @@ export default {
 				this.supplierControlLoaded = false;
 				this.supplierControlError = errorMessage(error, "Supplier Obligations details could not be loaded for this scope.");
 			} finally { this.supplierControlLoading = false; }
+		},
+		async handleExport(options) {
+			if (!this.capabilities.can_export) return;
+			this.exportBusy = true;
+			try { await exportDashboard(FILE_SCOPE_KEY, this.filters, options); }
+			catch (error) { frappe.msgprint({ title: __("Dashboard Export Failed"), message: errorMessage(error, "Business Control Centre could not be exported."), indicator: "red" }); }
+			finally { this.exportBusy = false; }
+		},
+		async handlePrint() {
+			if (!this.capabilities.can_print) return;
+			this.printBusy = true;
+			try { await printDashboard(FILE_SCOPE_KEY, this.filters); }
+			catch (error) { frappe.msgprint({ title: __("Dashboard Print Failed"), message: errorMessage(error, "Business Control Centre print view could not be prepared."), indicator: "red" }); }
+			finally { this.printBusy = false; }
 		},
 		async updateFollowUp(item, action, values = {}) {
 			if (!item?.fingerprint || item.follow_up_supported === false || this.mutatingFingerprint) return;
