@@ -11,7 +11,7 @@ def _empty_summary() -> dict:
 	return {"summary": []}
 
 
-def test_stock_manager_gets_stock_exceptions_from_direct_stock_source():
+def test_stock_manager_gets_stock_exceptions_from_inventory_health_source():
 	frappe.session.user = "stock.manager@example.com"
 	stock_payload = {
 		"summary": [
@@ -22,7 +22,7 @@ def test_stock_manager_gets_stock_exceptions_from_direct_stock_source():
 		]
 	}
 	with (
-		patch("retailedge.action_center.get_stock_position", return_value=stock_payload) as stock,
+		patch("retailedge.action_center.get_inventory_health", return_value=stock_payload) as stock,
 		patch("retailedge.action_center.get_expense_register", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_cash_shift_verification", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_customer_receivables", return_value=_empty_summary()),
@@ -35,7 +35,7 @@ def test_stock_manager_gets_stock_exceptions_from_direct_stock_source():
 		)
 
 	stock.assert_called_once_with(
-		filters={"company": "Test Company", "branch": "HQ"},
+		filters={"company": "Test Company", "branch": "HQ", "include_zero": 1},
 		page=1,
 		page_size=action_center.DEFAULT_PAGE_SIZE,
 	)
@@ -54,7 +54,31 @@ def test_stock_manager_gets_stock_exceptions_from_direct_stock_source():
 	assert all(row["datatype"] == "Int" for row in stock_items)
 	assert not any(row.get("value") == 250000 for row in stock_items)
 	assert result["sources"]["stock_position"]["available"] is True
+	assert result["metadata"]["stock_provider"].startswith("Inventory Health")
 	assert result["metadata"]["read_only"] is True
+
+
+def test_inventory_health_adds_r10_actions_without_changing_legacy_fingerprints():
+	items = []
+	action_center._append_stock_exceptions(
+		items,
+		{
+			"summary": [
+				{"label": "Out of Stock", "value": 2, "datatype": "Int"},
+				{"label": "Items Requiring Reorder", "value": 4, "datatype": "Int"},
+				{"label": "Reorder Rules Requiring Review", "value": 1, "datatype": "Int"},
+				{"label": "Non-moving", "value": 7, "datatype": "Int"},
+			]
+		},
+	)
+
+	by_kind = {row["kind"]: row for row in items}
+	assert by_kind["out_of_stock"]["semantic_key"] == "out_of_stock"
+	assert by_kind["out_of_stock"]["route"] == "/app/stock-position"
+	assert by_kind["inventory_reorder_required"]["route"] == "/app/inventory-intelligence"
+	assert by_kind["inventory_reorder_rule_review"]["target"] == "inventory-intelligence"
+	assert by_kind["inventory_non_moving"]["value"] == 7
+	assert len(items) == 4
 
 
 def test_stock_source_is_loaded_once_and_not_through_owner_dashboard_attention():
@@ -67,7 +91,7 @@ def test_stock_source_is_loaded_once_and_not_through_owner_dashboard_attention()
 		]
 	}
 	with (
-		patch("retailedge.action_center.get_stock_position", return_value=stock_payload) as stock,
+		patch("retailedge.action_center.get_inventory_health", return_value=stock_payload) as stock,
 		patch("retailedge.action_center.get_expense_register", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_cash_shift_verification", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_customer_receivables", return_value=_empty_summary()),
