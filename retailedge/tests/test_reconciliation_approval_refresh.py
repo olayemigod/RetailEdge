@@ -7,7 +7,9 @@ import frappe
 
 from retailedge.reconciliation_approval import (
     APPROVAL_APPROVED,
+    _candidate_identity,
     approve_reconciliation_for_match,
+    build_reconciliation_approval_state,
 )
 
 
@@ -106,6 +108,59 @@ class ReconciliationApprovalRefreshTests(unittest.TestCase):
         self.assertNotIn('"payment_account":"Creditors - RC"', doc.approval_candidate_identity)
         self.assertEqual(result["status"], APPROVAL_APPROVED)
         self.assertTrue(result["is_satisfied"])
+
+    def test_execution_preflight_snapshot_uses_live_doc_for_approval_fingerprint(self):
+        doc = _StaleSupplierMatch()
+        doc.validate()
+        doc.approval_status = APPROVAL_APPROVED
+        doc.approved_by = "approver@example.com"
+        doc.approved_on = "2026-08-23 21:09:05"
+        doc.approval_candidate_identity = _candidate_identity(doc)
+
+        # The execution preflight is a separately hydrated safety snapshot. It
+        # may carry different representation details and must not be used as the
+        # source of the approval fingerprint.
+        preflight = frappe._dict(
+            {
+                "name": doc.name,
+                "bank_transaction": doc.bank_transaction,
+                "suggested_document_type": doc.suggested_document_type,
+                "suggested_document": doc.suggested_document,
+                "bank_amount": doc.bank_amount,
+                "candidate_amount": doc.candidate_amount,
+                "payment_account": "Creditors - RC",
+                "resolved_payment_account": "Creditors - RC",
+                "decision_status": "Confirmed",
+                "confirmed_by": doc.confirmed_by,
+                "confirmed_on": doc.confirmed_on,
+                "approval_status": APPROVAL_APPROVED,
+                "approved_by": doc.approved_by,
+                "approved_on": doc.approved_on,
+                "approval_candidate_identity": doc.approval_candidate_identity,
+                "execution_bank_transaction": doc.bank_transaction,
+                "dry_run_status_at_execution": "Ready",
+                "gate_status_at_execution": "Needs Approval",
+            }
+        )
+        settings = {
+            "require_second_approval_for_reconciliation_execution": True,
+            "allowed_reconciliation_execution_roles": ["System Manager"],
+        }
+
+        with (
+            patch("retailedge.reconciliation_approval.frappe.get_doc", return_value=doc),
+            patch("retailedge.reconciliation_approval.frappe.get_roles", return_value=["System Manager"]),
+        ):
+            state = build_reconciliation_approval_state(
+                preflight,
+                user="executor@example.com",
+                settings=settings,
+            )
+
+        self.assertGreaterEqual(doc.validate_calls, 2)
+        self.assertEqual(state["status"], APPROVAL_APPROVED)
+        self.assertTrue(state["is_satisfied"])
+        self.assertIn('"payment_account":"Bank - RC"', state["candidate_identity"])
 
 
 if __name__ == "__main__":
