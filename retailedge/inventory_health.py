@@ -21,6 +21,7 @@ from retailedge.stock_position import (
 	DEFAULT_PAGE_SIZE,
 	_build_stock_position_dataset,
 	_coerce_filters,
+	_matches_stock_status,
 	_page_response,
 	_summary as _stock_summary,
 )
@@ -83,6 +84,17 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 		for row in replenishment.get("items") or []
 		if row.get("item_code")
 	}
+	show_costs = bool(stock.get("show_costs"))
+	stock_rows = list(stock.get("rows") or [])
+	synthetic_zero_items = 0
+	if cint(filters.get("include_zero")):
+		stock_rows, synthetic_zero_items = _with_zero_balance_intelligence_rows(
+			stock_rows,
+			demand_by_item=demand_by_item,
+			replenishment_by_item=replenishment_by_item,
+			show_costs=show_costs,
+			stock_status=filters.get("stock_status"),
+		)
 
 	rows = [
 		_enrich_stock_row(
@@ -92,7 +104,7 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 			lookback_days=lookback_days,
 			thresholds=thresholds,
 		)
-		for row in stock.get("rows") or []
+		for row in stock_rows
 	]
 	movement_class = str(filters.get("movement_class") or "All").strip()
 	if movement_class not in MOVEMENT_CLASSES:
@@ -106,7 +118,6 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 	if replenishment_status != "All":
 		rows = [row for row in rows if row.get("replenishment_status") == replenishment_status]
 
-	show_costs = bool(stock.get("show_costs"))
 	return {
 		"columns": _columns(stock.get("columns") or []),
 		"rows": rows,
@@ -120,11 +131,13 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 			"to_date": demand.get("scope", {}).get("to_date"),
 			"movement_class": movement_class,
 			"replenishment_status": replenishment_status,
+			"include_zero": cint(filters.get("include_zero")),
 		},
 		"scan": {
 			"stock": stock.get("scan") or {},
 			"demand": demand.get("scan") or {},
 			"replenishment": replenishment.get("scan") or {},
+			"synthetic_zero_items": synthetic_zero_items,
 		},
 		"metadata": {
 			"current_stock_truth": "ERPNext Bin",
@@ -132,6 +145,9 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 			"replenishment_truth": replenishment.get("metadata") or {},
 			"stock_cover_basis": "current available stock divided by observed average daily demand",
 			"stock_cover_is_forecast": False,
+			"zero_balance_contract": (
+				"When zero-stock intelligence is enabled, a permission-visible demand/reorder item with no Bin row in the resolved warehouse scope is represented as current quantity zero. No balance is persisted."
+			),
 			"movement_thresholds": {
 				"slow_days": thresholds.slow_days,
 				"non_moving_days": thresholds.non_moving_days,
@@ -162,6 +178,8 @@ def _normalise_health_filters(filters: dict[str, Any] | str | None) -> frappe._d
 		filters.non_moving_days = DEFAULT_NON_MOVING_DAYS
 	if "replenishment_status" not in filters or filters.get("replenishment_status") in (None, ""):
 		filters.replenishment_status = "All"
+	if "include_zero" not in filters or filters.get("include_zero") in (None, ""):
+		filters.include_zero = 1
 	return filters
 
 
@@ -176,6 +194,44 @@ def _movement_thresholds(filters: frappe._dict) -> MovementThresholds:
 		)
 	except ValueError as exc:
 		frappe.throw(_("Invalid inventory movement thresholds: {0}").format(str(exc)))
+
+
+def _with_zero_balance_intelligence_rows(
+	stock_rows: list[dict[str, Any]],
+	*,
+	demand_by_item: dict[str, dict[str, Any]],
+	replenishment_by_item: dict[str, dict[str, Any]],
+	show_costs: bool,
+	stock_status: Any,
+) -> tuple[list[dict[str, Any]], int]:
+	rows = [dict(row) for row in stock_rows]
+	existing = {str(row.get("item_code") or "") for row in rows if row.get("item_code")}
+	candidate_codes = sorted((set(demand_by_item) | set(replenishment_by_item)) - existing)
+	added = 0
+	for item_code in candidate_codes:
+		evidence = demand_by_item.get(item_code) or replenishment_by_item.get(item_code) or {}
+		row: dict[str, Any] = {
+			"item_code": item_code,
+			"item_name": evidence.get("item_name") or item_code,
+			"item_group": evidence.get("item_group") or "",
+			"stock_uom": evidence.get("stock_uom") or "",
+			"actual_qty": 0.0,
+			"reserved_qty": 0.0,
+			"available_qty": 0.0,
+			"ordered_qty": 0.0,
+			"projected_qty": 0.0,
+			"location_count": 0,
+			"stock_status": "Out of Stock",
+		}
+		if show_costs:
+			row["valuation_rate"] = 0.0
+			row["stock_value"] = 0.0
+		if not _matches_stock_status(row, stock_status):
+			continue
+		rows.append(row)
+		added += 1
+	rows.sort(key=lambda row: (str(row.get("item_group") or ""), str(row.get("item_code") or "")))
+	return rows, added
 
 
 def _enrich_stock_row(
