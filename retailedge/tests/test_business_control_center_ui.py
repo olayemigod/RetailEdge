@@ -65,6 +65,18 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		self.assertIn('window.open(route, "_blank", "noopener,noreferrer")', details)
 		self.assertIn("/app/purchase-invoice/", details)
 
+	def test_business_control_uses_shared_dashboard_export_print_with_stricter_capability(self):
+		page = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
+		files = (APP_ROOT / "dashboard_files.py").read_text()
+		self.assertIn('from "../retailedge_dashboard_actions"', page)
+		self.assertIn('FILE_SCOPE_KEY = "business-control-center"', page)
+		self.assertIn('FILE_CAPABILITY_KEY = "owner-dashboard"', page)
+		self.assertIn("exportDashboard(FILE_SCOPE_KEY", page)
+		self.assertIn("printDashboard(FILE_SCOPE_KEY", page)
+		self.assertIn('"business-control-center": lambda filters', files)
+		self.assertIn('return "owner-dashboard" if scope_key == "business-control-center"', files)
+		self.assertIn("build_business_control_export_dataset", files)
+
 	def test_native_drill_through_obeys_backend_open_mode(self):
 		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
 		self.assertIn('item.open_mode === "new_tab"', source)
