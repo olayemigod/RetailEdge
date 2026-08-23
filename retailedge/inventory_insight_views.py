@@ -4,6 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 from retailedge.inventory_ageing import get_inventory_ageing
 from retailedge.inventory_profitability_signals import get_inventory_profitability_signals
@@ -11,6 +12,7 @@ from retailedge.inventory_transfer_opportunities import get_inventory_transfer_o
 from retailedge.stock_position import DEFAULT_PAGE_SIZE, _coerce_filters, _page_response
 
 INSIGHT_VIEWS = {"ageing", "transfer-opportunities", "profitability"}
+NUMERIC_FIELDTYPES = {"Currency", "Float", "Int", "Percent", "Check"}
 
 
 @frappe.whitelist()
@@ -19,6 +21,8 @@ def get_inventory_insight_view(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort_field: str = "",
+	sort_direction: str = "",
 ) -> dict[str, Any]:
 	"""Return a paginated R10 secondary insight using its existing authoritative service."""
 	view = str(view or "").strip().lower()
@@ -36,10 +40,15 @@ def get_inventory_insight_view(
 		payload = get_inventory_profitability_signals(filters)
 		columns = _profitability_columns()
 
+	rows = list(payload.get("rows") or [])
+	resolved_sort = _resolve_sort(columns, sort_field=sort_field, sort_direction=sort_direction)
+	if resolved_sort:
+		rows = _sort_rows(rows, resolved_sort)
+
 	dataset = {
 		"view": view,
 		"columns": columns,
-		"rows": list(payload.get("rows") or []),
+		"rows": rows,
 		"summary": list(payload.get("summary") or []),
 		"scope": dict(payload.get("scope") or {}),
 		"scan": dict(payload.get("scan") or {}),
@@ -47,11 +56,53 @@ def get_inventory_insight_view(
 			**dict(payload.get("metadata") or {}),
 			"insight_view": view,
 			"lazy_loaded": True,
+			"sort": resolved_sort,
 		},
 		"show_costs": payload.get("show_costs"),
 		"available": payload.get("available", True),
 	}
 	return _page_response(dataset, page=page, page_size=page_size)
+
+
+def _resolve_sort(
+	columns: list[dict[str, Any]], *, sort_field: str, sort_direction: str
+) -> dict[str, str] | None:
+	field = str(sort_field or "").strip()
+	direction = str(sort_direction or "").strip().lower()
+	if not field and not direction:
+		return None
+	if not field or direction not in {"asc", "desc"}:
+		frappe.throw(_("Invalid Inventory Intelligence sort request."))
+	by_field = {
+		str(column.get("fieldname") or ""): column
+		for column in columns
+		if column.get("fieldname")
+	}
+	column = by_field.get(field)
+	if not column:
+		frappe.throw(_("Unsupported Inventory Intelligence sort field."))
+	return {
+		"field": field,
+		"direction": direction,
+		"fieldtype": str(column.get("fieldtype") or "Data"),
+	}
+
+
+def _sort_rows(rows: list[dict[str, Any]], sort: dict[str, str]) -> list[dict[str, Any]]:
+	field = sort["field"]
+	fieldtype = sort.get("fieldtype") or "Data"
+	reverse = sort.get("direction") == "desc"
+
+	def key(row: dict[str, Any]):
+		value = row.get(field)
+		missing = value in (None, "")
+		if fieldtype in NUMERIC_FIELDTYPES:
+			resolved = flt(value)
+		else:
+			resolved = str(value or "").casefold()
+		return (missing, resolved)
+
+	return sorted(rows, key=key, reverse=reverse)
 
 
 def _transfer_columns() -> list[dict[str, Any]]:
