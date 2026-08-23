@@ -14,11 +14,20 @@ def _coerce_filters(filters: dict[str, Any] | str | None) -> dict[str, Any]:
 	return dict(filters or {})
 
 
-def _is_assignable_user(user: str, *, company: str, branch: str, require_global_scope: bool) -> bool:
-	from retailedge.action_follow_up import _has_action_center_role
+def _is_assignable_user(
+	user: str,
+	*,
+	company: str,
+	branch: str,
+	require_global_scope: bool,
+	require_owner_scope: bool,
+) -> bool:
+	from retailedge.action_follow_up import _has_action_center_role, _has_owner_financial_access
 	from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
 
 	if not user or not _has_action_center_role(user):
+		return False
+	if require_owner_scope and not _has_owner_financial_access(user, company=company, branch=branch):
 		return False
 	if require_global_scope:
 		return bool(user_has_global_branch_access(user=user))
@@ -52,6 +61,7 @@ def get_assignable_users(
 	company = str(filters.get("company") or "").strip()
 	branch = str(filters.get("branch") or "").strip()
 	require_global_scope = bool(int(filters.get("require_global_scope") or 0))
+	require_owner_scope = bool(int(filters.get("require_owner_scope") or 0))
 	needle = f"%{str(txt or '').strip()}%"
 
 	query_filters: dict[str, Any] = {"enabled": 1, "user_type": "System User"}
@@ -79,6 +89,7 @@ def get_assignable_users(
 			company=company,
 			branch=branch,
 			require_global_scope=require_global_scope,
+			require_owner_scope=require_owner_scope,
 		)
 	]
 	start = max(int(start or 0), 0)
