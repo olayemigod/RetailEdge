@@ -74,10 +74,22 @@ class TestInventoryIntelligenceMetrics(unittest.TestCase):
 			),
 			"Non-moving",
 		)
+
+	def test_missing_demand_requires_long_enough_history_before_non_moving_label(self):
+		thresholds = MovementThresholds(slow_days=30, non_moving_days=90, fast_daily_demand=5)
 		self.assertEqual(
 			classify_movement(
 				demand_qty=0,
 				lookback_days=30,
+				days_since_demand=None,
+				thresholds=thresholds,
+			),
+			"No demand in window",
+		)
+		self.assertEqual(
+			classify_movement(
+				demand_qty=0,
+				lookback_days=90,
 				days_since_demand=None,
 				thresholds=thresholds,
 			),
