@@ -92,17 +92,16 @@ def _sort_rows(rows: list[dict[str, Any]], sort: dict[str, str]) -> list[dict[st
 	field = sort["field"]
 	fieldtype = sort.get("fieldtype") or "Data"
 	reverse = sort.get("direction") == "desc"
+	present = [row for row in rows if row.get(field) not in (None, "")]
+	missing = [row for row in rows if row.get(field) in (None, "")]
 
 	def key(row: dict[str, Any]):
 		value = row.get(field)
-		missing = value in (None, "")
 		if fieldtype in NUMERIC_FIELDTYPES:
-			resolved = flt(value)
-		else:
-			resolved = str(value or "").casefold()
-		return (missing, resolved)
+			return flt(value)
+		return str(value or "").casefold()
 
-	return sorted(rows, key=key, reverse=reverse)
+	return [*sorted(present, key=key, reverse=reverse), *missing]
 
 
 def _transfer_columns() -> list[dict[str, Any]]:
