@@ -8,6 +8,7 @@ from frappe import _
 from frappe.utils import date_diff, flt, getdate
 
 from retailedge.accounting_profitability import get_accounting_profitability
+from retailedge.branch_context import user_has_global_branch_access
 from retailedge.budget_spend_control import get_budget_spend_control
 from retailedge.liquidity_control import get_liquidity_control
 
@@ -29,6 +30,15 @@ def get_control_early_warning(filters: dict[str, Any] | str | None = None) -> di
 
 
 def _profitability_trend(filters: frappe._dict) -> dict[str, Any]:
+	if filters.get("branch") or not user_has_global_branch_access(user=frappe.session.user):
+		return {
+			"available": False,
+			"reason": _(
+				"Company-level accounting profitability trend is hidden for Branch-filtered or branch-restricted access until safe ERPNext accounting-dimension attribution exists."
+			),
+			"current": {},
+			"previous": {},
+		}
 	current = get_accounting_profitability(filters)
 	if not current.get("available"):
 		return {
@@ -114,9 +124,9 @@ def _build_control_early_warning(
 		"metadata": {
 			"composition": "existing_r8_r9_truth_and_control_engines",
 			"historical_balance_limit": "Receivables and payables are current ERPNext outstanding balances. RetailEdge does not manufacture historical AR/AP balances for trend comparison.",
-			"profit_truth": "Company profitability trend reuses ERPNext Profit and Loss Statement and Gross and Net Profit Report through the R8 accounting profitability engine.",
+			"profit_truth": "Company profitability trend reuses ERPNext Profit and Loss Statement and Gross and Net Profit Report through the R8 accounting profitability engine only for global Branch scope.",
 			"liquidity_limit": "Liquidity signals are management indicators, not a cash forecast or payment instruction.",
-			"branch_limit": "Company accounting profitability trend is withheld for Branch scope until safe ERPNext accounting-dimension or Cost Center attribution exists.",
+			"branch_limit": "Company accounting profitability trend is withheld for Branch-filtered or branch-restricted scope until safe ERPNext accounting-dimension or Cost Center attribution exists.",
 		},
 	}
 
