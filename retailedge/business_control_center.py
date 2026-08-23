@@ -16,7 +16,11 @@ _DUPLICATE_WARNING_FAMILIES = {"Collections", "Supplier Obligations"}
 def get_business_control_center(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	resolved = _coerce_filters(filters)
 	action_center = get_action_center_data(resolved)
-	warnings = get_control_early_warning(resolved)
+	# Action Centre is the canonical operational scope resolver. Reuse its resolved
+	# Company/Branch/date scope so R9 warnings cannot silently widen a single-branch
+	# user's blank Branch filter back to company scope.
+	warning_filters = frappe._dict(action_center.get("filters") or resolved)
+	warnings = get_control_early_warning(warning_filters)
 	payload = _build_business_control_center(action_center=action_center, warnings=warnings)
 	filters_out = payload.get("filters") or {}
 	items = decorate_action_items(
@@ -30,7 +34,10 @@ def get_business_control_center(filters: dict[str, Any] | str | None = None) -> 
 	payload["items"] = items
 	payload["metadata"]["follow_up_contract"] = (
 		"All visible Business Control Centre items use the existing RetailEdge Action Follow Up store. "
-		"Writes must re-resolve the fingerprint against this same permission-aware Business Control Centre scope before persistence."
+		"Writes must re-resolve the fingerprint against the same permission-aware scope before persistence."
+	)
+	payload["metadata"]["scope_contract"] = (
+		"R9 warnings reuse the Branch scope resolved by Action Centre; a blank client Branch cannot widen a branch-restricted user's scope."
 	)
 	return payload
 
