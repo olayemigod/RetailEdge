@@ -44,6 +44,27 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		self.assertIn('item.source === "r9_early_warning" && !this.filters.branch', source)
 		self.assertNotIn("get_query: () => ({ filters: { enabled: 1 } })", source)
 
+	def test_owner_detail_panels_reuse_budget_and_lazy_load_heavy_ar_ap(self):
+		page = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
+		details = (APP_ROOT / "public" / "js" / "business_control_center" / "OwnerControlDetails.vue").read_text()
+		self.assertIn('import OwnerControlDetails from "./OwnerControlDetails.vue"', page)
+		self.assertIn(':budget="earlyWarning.budget_spend || {}"', page)
+		self.assertIn("retailedge.receivables_control.get_receivables_control_data", page)
+		self.assertIn("retailedge.supplier_obligations_control.get_supplier_obligations_control", page)
+		self.assertIn("loadReceivablesControl", page)
+		self.assertIn("loadSupplierControl", page)
+		self.assertNotIn("Promise.all([callMethod(\"retailedge.receivables_control", page)
+		self.assertIn("Load details", details)
+		self.assertIn("not a reconstructed historical receivables balance", details)
+		self.assertIn("ageing-based attention signal only", details)
+		self.assertIn("straight-line burn-rate planning signal", details)
+
+	def test_detail_invoice_drill_through_is_native_new_tab(self):
+		details = (APP_ROOT / "public" / "js" / "business_control_center" / "OwnerControlDetails.vue").read_text()
+		self.assertIn('window.open(`/app/sales-invoice/', details)
+		self.assertIn('window.open(route, "_blank", "noopener,noreferrer")', details)
+		self.assertIn("/app/purchase-invoice/", details)
+
 	def test_native_drill_through_obeys_backend_open_mode(self):
 		source = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
 		self.assertIn('item.open_mode === "new_tab"', source)
@@ -55,9 +76,12 @@ class RetailEdgeBusinessControlCenterUITests(unittest.TestCase):
 		bundle = (APP_ROOT / "public" / "js" / "business_control_center.bundle.js").read_text()
 		page = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlCenter.vue").read_text()
 		row = (APP_ROOT / "public" / "js" / "business_control_center" / "BusinessControlRow.vue").read_text()
+		details = (APP_ROOT / "public" / "js" / "business_control_center" / "OwnerControlDetails.vue").read_text()
 		self.assertIn('import BusinessControlCenter from "./business_control_center/BusinessControlCenter.vue"', bundle)
 		self.assertIn('import BusinessControlRow from "./BusinessControlRow.vue"', page)
+		self.assertIn('import OwnerControlDetails from "./OwnerControlDetails.vue"', page)
 		self.assertIn("<template>", row)
+		self.assertIn("<template>", details)
 		self.assertNotIn("template: `", page)
 
 	def test_ui_does_not_claim_follow_up_resolves_business_truth(self):
