@@ -15,6 +15,7 @@ def test_inventory_health_export_reuses_stock_position_entitlement_and_bounded_d
 	assert "get_inventory_replenishment" in text
 	assert "persistent_derived_truth" in text
 	assert "zero_balance_contract" in text
+	assert "_apply_sort" in text
 	assert "frappe.db.commit" not in text
 	assert "ignore_permissions=True" not in text
 	assert ".submit(" not in text
@@ -60,6 +61,11 @@ def test_inventory_intelligence_page_uses_edgesuite_shell_and_shared_stock_searc
 	assert "historical estimation, not a forecast" in component
 	assert 'window.open(`/app/item/${encodeURIComponent(payload.value)}`' in component
 	assert "sortable: true" in component
+	assert ':sort="sort"' in component
+	assert '@sort-change="changeSort"' in component
+	assert 'sort_field: this.sort?.field || ""' in component
+	assert 'sort_direction: this.sort?.direction || ""' in component
+	assert 'movementClasses: ["All", "Normal", "Slow", "Non-moving", "No demand in window"]' in component
 	assert "get_inventory_health_export" in bundle
 	assert "innerHTML" not in page
 	assert "insertAdjacentHTML" not in page
