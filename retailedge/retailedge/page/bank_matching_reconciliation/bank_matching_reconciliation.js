@@ -10,6 +10,10 @@
 			frappe.throw(__("RetailEdge Banking workspace asset is unavailable. Rebuild assets and clear cache."));
 		}
 		window.retailedgeBootBankingWorkspace(wrapper);
+		const page = wrapper.page;
+		if (page?.add_inner_button) {
+			page.add_inner_button(__("Banking Setup & Readiness"), () => frappe.set_route("banking-readiness"));
+		}
 	}
 
 	function boot(wrapper) {
