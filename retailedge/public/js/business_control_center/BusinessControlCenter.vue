@@ -46,22 +46,22 @@
 			<EdgeDashboardGrid minColumnWidth="23rem">
 				<EdgeDashboardSection title="Critical Controls" description="Highest-priority operational or financial conditions requiring management attention.">
 					<div v-if="critical.length" class="control-list">
-						<ControlRow v-for="item in critical" :key="itemKey(item)" :item="item" :busy="isMutating(item)" @open="openWorkflow" @follow-up="handleFollowUp" />
+						<BusinessControlRow v-for="item in critical" :key="itemKey(item)" :item="item" :busy="isMutating(item)" @open="openWorkflow" @follow-up="handleFollowUp" />
 					</div>
 					<div v-else class="control-empty">No critical controls match the current scope and follow-up filters.</div>
 				</EdgeDashboardSection>
 
 				<EdgeDashboardSection title="Needs Attention" description="Warnings, early signals and operational exceptions that should be reviewed before they become critical.">
 					<div v-if="warnings.length" class="control-list">
-						<ControlRow v-for="item in warnings" :key="itemKey(item)" :item="item" :busy="isMutating(item)" @open="openWorkflow" @follow-up="handleFollowUp" />
+						<BusinessControlRow v-for="item in warnings" :key="itemKey(item)" :item="item" :busy="isMutating(item)" @open="openWorkflow" @follow-up="handleFollowUp" />
 					</div>
 					<div v-else class="control-empty">No warning controls match the current scope and follow-up filters.</div>
 				</EdgeDashboardSection>
 
 				<EdgeDashboardSection title="Financial Signals" description="Net-new R9 liquidity, profitability, budget and spend-governance signals. Receivables and payables remain owned by their existing Action Centre controls.">
-					<div v-if="financialSignals.length" class="control-list compact-list">
+					<div v-if="financialSignals.length" class="control-list">
 						<div v-for="item in financialSignals" :key="itemKey(item)" class="signal-row">
-							<span><strong>{{ item.label }}</strong><small>{{ familyLabel(item) }}</small></span>
+							<span><strong>{{ item.label }}</strong><small>{{ item.family || sourceLabel(item.source) }}</small></span>
 							<strong>{{ formatValue(item.value, item.datatype) }}</strong>
 						</div>
 					</div>
@@ -86,87 +86,120 @@
 </template>
 
 <script>
+import BusinessControlRow from "./BusinessControlRow.vue";
+
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
 
-const ControlRow = {
-	props: { item: { type: Object, required: true }, busy: Boolean },
-	emits: ["open", "follow-up"],
-	methods: {
-		state() { return this.item.follow_up || { status: "Open", effective_status: "Open" }; },
-		status() { return this.state().effective_status || this.state().status || "Open"; },
-		value() { try { return frappe.format(this.item.value, { fieldtype: this.item.datatype || "Data" }); } catch (_error) { return this.item.value ?? "—"; } },
-	},
-	template: `<div class="control-row" :class="item.severity === 'danger' ? 'control-row--danger' : 'control-row--warning'">
-		<div class="control-row-main"><span class="control-copy"><strong>{{ item.label }}</strong><small>{{ item.family || item.source }} · {{ item.time_basis === 'current' ? 'Current position' : 'Selected period' }}</small></span><strong>{{ value() }}</strong></div>
-		<div v-if="item.priority_reason" class="control-reason">Why this is prioritised: {{ item.priority_reason }}</div>
-		<div class="follow-up-summary"><span class="follow-up-status">{{ status() }}</span><span v-if="state().is_due" class="follow-up-due">Due / overdue</span><span v-if="state().assigned_to">Assigned: {{ state().assigned_to }}</span><span v-if="state().follow_up_on">Follow up: {{ state().follow_up_on }}</span></div>
-		<div class="control-actions"><button class="edge-button edge-button--primary" type="button" @click="$emit('open', item)">Open workflow</button><template v-if="item.follow_up_supported !== false && item.fingerprint"><button v-if="status() !== 'Acknowledged'" class="edge-button" type="button" :disabled="busy" @click="$emit('follow-up', item, 'acknowledge')">Acknowledge</button><button class="edge-button" type="button" :disabled="busy" @click="$emit('follow-up', item, 'assign')">Assign</button><button class="edge-button" type="button" :disabled="busy" @click="$emit('follow-up', item, 'schedule')">Follow-up</button><button v-if="status() !== 'Snoozed'" class="edge-button" type="button" :disabled="busy" @click="$emit('follow-up', item, 'snooze')">Snooze</button><button v-if="status() !== 'Open'" class="edge-button" type="button" :disabled="busy" @click="$emit('follow-up', item, 'reopen')">Reopen</button></template></div>
-	</div>`,
-};
-
 export default {
 	name: "RetailEdgeBusinessControlCenter",
-	components: { ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])), ControlRow },
+	components: { ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])), BusinessControlRow },
 	data() {
 		return {
-			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "", mutatingFingerprint: "",
-			summaryRaw: {}, items: [], actionCenter: { sources: {}, metadata: {} }, earlyWarning: { available: true, metadata: {} }, menuItems: [], tenantName: "", userName: "",
+			edgeUIValid: true,
+			missingComponents: [],
+			metadataLoading: true,
+			loading: false,
+			error: "",
+			mutatingFingerprint: "",
+			summaryRaw: {},
+			items: [],
+			actionCenter: { sources: {}, metadata: {} },
+			earlyWarning: { available: true, metadata: {} },
+			menuItems: [],
+			tenantName: "",
+			userName: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", follow_up_status: "All", assignment_scope: "all", due_scope: "all" },
 		};
 	},
 	computed: {
-		summaryCards() { return [
-			{ label: "Critical", value: this.summaryRaw.critical || 0, datatype: "Int" },
-			{ label: "Needs Attention", value: this.summaryRaw.warning || 0, datatype: "Int" },
-			{ label: "Open Controls", value: this.summaryRaw.total || 0, datatype: "Int" },
-		]; },
+		summaryCards() {
+			return [
+				{ label: "Critical", value: this.summaryRaw.critical || 0, datatype: "Int" },
+				{ label: "Needs Attention", value: this.summaryRaw.warning || 0, datatype: "Int" },
+				{ label: "Open Controls", value: this.summaryRaw.total || 0, datatype: "Int" },
+			];
+		},
 		critical() { return this.items.filter((item) => item.severity === "danger"); },
 		warnings() { return this.items.filter((item) => item.severity === "warning"); },
 		financialSignals() { return this.items.filter((item) => item.source === "r9_early_warning"); },
 		unavailableSources() { return Object.values(this.actionCenter.sources || {}).filter((source) => !source.available); },
 	},
-	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
+	created() {
+		const components = runtimeComponents();
+		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
+		this.edgeUIValid = this.missingComponents.length === 0;
+	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
 		async fetchMetadata() {
-			this.metadataLoading = true; this.error = "";
+			this.metadataLoading = true;
+			this.error = "";
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.action_center.get_action_center_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.tenantName = context.tenant_name || this.filters.company || "";
+				this.userName = context.user_name || "";
+				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Business Control Centre controls."); }
 			finally { this.metadataLoading = false; }
 		},
 		async fetchData() {
-			if (!this.filters.company) return; this.loading = true; this.error = "";
+			if (!this.filters.company) return;
+			this.loading = true;
+			this.error = "";
 			try {
 				const result = await callMethod("retailedge.business_control_center.get_business_control_center", { filters: this.filters });
-				this.filters = { ...this.filters, ...(result.filters || {}) }; this.summaryRaw = result.summary || {}; this.items = result.items || []; this.actionCenter = result.action_center || { sources: {}, metadata: {} }; this.earlyWarning = result.early_warning || { available: true, metadata: {} };
+				this.filters = { ...this.filters, ...(result.filters || {}) };
+				this.summaryRaw = result.summary || {};
+				this.items = result.items || [];
+				this.actionCenter = result.action_center || { sources: {}, metadata: {} };
+				this.earlyWarning = result.early_warning || { available: true, metadata: {} };
 			} catch (error) { this.error = errorMessage(error, "Business Control Centre failed to load."); }
 			finally { this.loading = false; }
 		},
 		async updateFollowUp(item, action, values = {}) {
 			if (!item?.fingerprint || item.follow_up_supported === false || this.mutatingFingerprint) return;
 			this.mutatingFingerprint = item.fingerprint;
-			try { await callMethod("retailedge.action_follow_up.update_action_follow_up", { fingerprint: item.fingerprint, action, filters: this.filters, ...values }); await this.fetchData(); }
-			catch (error) { frappe.msgprint({ title: "Follow-up was not updated", message: errorMessage(error, "RetailEdge could not update this follow-up record."), indicator: "red" }); }
-			finally { this.mutatingFingerprint = ""; }
+			try {
+				await callMethod("retailedge.action_follow_up.update_action_follow_up", { fingerprint: item.fingerprint, action, filters: this.filters, ...values });
+				await this.fetchData();
+			} catch (error) {
+				frappe.msgprint({ title: "Follow-up was not updated", message: errorMessage(error, "RetailEdge could not update this follow-up record."), indicator: "red" });
+			} finally { this.mutatingFingerprint = ""; }
 		},
 		handleFollowUp(item, action) {
 			if (action === "acknowledge" || action === "reopen") return this.updateFollowUp(item, action);
 			const state = item.follow_up || {};
-			if (action === "assign") return frappe.prompt([{ fieldname: "assigned_to", fieldtype: "Link", options: "User", label: "Assigned To", reqd: 1, default: state.assigned_to || frappe.session.user, get_query: () => ({ filters: { enabled: 1 } }) }, { fieldname: "follow_up_on", fieldtype: "Datetime", label: "Follow Up On", default: state.follow_up_on || "" }, { fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: state.notes || "" }], (values) => this.updateFollowUp(item, "assign", values), "Assign follow-up", "Assign");
-			if (action === "schedule") return frappe.prompt([{ fieldname: "follow_up_on", fieldtype: "Datetime", label: "Follow Up On", reqd: 1, default: state.follow_up_on || "" }, { fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: state.notes || "" }], (values) => this.updateFollowUp(item, "schedule", values), "Schedule follow-up", "Save");
-			if (action === "snooze") return frappe.prompt([{ fieldname: "snoozed_until", fieldtype: "Datetime", label: "Snoozed Until", reqd: 1, default: state.snoozed_until || "" }, { fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: state.notes || "" }], (values) => this.updateFollowUp(item, "snooze", values), "Snooze action", "Snooze");
+			if (action === "assign") return frappe.prompt([
+				{ fieldname: "assigned_to", fieldtype: "Link", options: "User", label: "Assigned To", reqd: 1, default: state.assigned_to || frappe.session.user, get_query: () => ({ filters: { enabled: 1 } }) },
+				{ fieldname: "follow_up_on", fieldtype: "Datetime", label: "Follow Up On", default: state.follow_up_on || "" },
+				{ fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: state.notes || "" },
+			], (values) => this.updateFollowUp(item, "assign", values), "Assign follow-up", "Assign");
+			if (action === "schedule") return frappe.prompt([
+				{ fieldname: "follow_up_on", fieldtype: "Datetime", label: "Follow Up On", reqd: 1, default: state.follow_up_on || "" },
+				{ fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: state.notes || "" },
+			], (values) => this.updateFollowUp(item, "schedule", values), "Schedule follow-up", "Save");
+			if (action === "snooze") return frappe.prompt([
+				{ fieldname: "snoozed_until", fieldtype: "Datetime", label: "Snoozed Until", reqd: 1, default: state.snoozed_until || "" },
+				{ fieldname: "notes", fieldtype: "Small Text", label: "Follow-up Notes", default: state.notes || "" },
+			], (values) => this.updateFollowUp(item, "snooze", values), "Snooze action", "Snooze");
 		},
 		isMutating(item) { return this.mutatingFingerprint === item.fingerprint; },
-		openWorkflow(item) { const route = item?.route; if (!route) return; if (item.open_mode === "new_tab" || (route.startsWith("/app/") && item.source !== "r9_early_warning" && !route.includes("retailedge"))) { window.open(route, "_blank", "noopener,noreferrer"); return; } window.location.assign(route); },
+		openWorkflow(item) {
+			const route = item?.route;
+			if (!route) return;
+			if (item.open_mode === "new_tab") {
+				window.open(route, "_blank", "noopener,noreferrer");
+				return;
+			}
+			window.location.assign(route);
+		},
 		itemKey(item) { return item.fingerprint || `${item.source}:${item.semantic_key || item.kind}:${item.route}`; },
-		familyLabel(item) { return item.family || this.sourceLabel(item.source); },
 		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
 		formatValue(value, datatype) { try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
@@ -179,16 +212,11 @@ export default {
 <style scoped>
 .business-control-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
 .business-control-notice { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid var(--orange-300, var(--edge-border)); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); }
-.business-control-notice span, .control-empty, .source-row small, .control-note span, .control-copy small, .control-reason, .follow-up-summary, .signal-row small { color: var(--edge-text-muted); font-size: 12px; }
+.business-control-notice span, .control-empty, .source-row small, .control-note span, .signal-row small { color: var(--edge-text-muted); font-size: 12px; }
 .control-list, .source-list { display: grid; gap: 9px; }
-.control-row, .source-row, .control-note, .signal-row { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); }
-.control-row--danger { border-color: var(--red-300, var(--edge-border)); }
-.control-row--warning { border-color: var(--orange-300, var(--edge-border)); }
-.control-row-main, .signal-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
-.control-copy, .source-row, .control-note, .signal-row span { display: grid; gap: 4px; }
-.follow-up-summary, .control-actions { display: flex; flex-wrap: wrap; gap: 7px 12px; align-items: center; }
-.follow-up-status, .follow-up-due { padding: 2px 7px; border: 1px solid var(--edge-border); border-radius: 999px; background: var(--edge-surface-soft, var(--edge-surface)); color: var(--edge-text); font-weight: 600; }
-.follow-up-due { border-color: var(--orange-300, var(--edge-border)); }
+.source-row, .control-note, .signal-row { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); }
+.signal-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+.signal-row span, .source-row, .control-note { display: grid; gap: 4px; }
 @media (max-width: 900px) { .business-control-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 720px) { .business-control-filters { grid-template-columns: 1fr; } .control-row-main, .signal-row { align-items: flex-start; } .control-actions .edge-button { flex: 1 1 auto; } }
+@media (max-width: 720px) { .business-control-filters { grid-template-columns: 1fr; } .signal-row { align-items: flex-start; } }
 </style>
