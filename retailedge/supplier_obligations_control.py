@@ -5,10 +5,12 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import flt, nowdate
 
+from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.supplier_payables import get_supplier_payables_export
 
+DASHBOARD_KEY = "owner-dashboard"
 MAX_PRIORITY_ROWS = 20
 MAX_SUPPLIER_EXPOSURES = 10
 
@@ -19,6 +21,8 @@ def get_supplier_obligations_control(filters: dict[str, Any] | str | None = None
 	company = str(resolved.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."))
+	branch = str(resolved.get("branch") or "").strip()
+	require_dashboard_action(DASHBOARD_KEY, "view", company=company, branch=branch)
 	resolved.company = company
 	resolved.as_of_date = nowdate()
 
@@ -80,6 +84,7 @@ def _build_supplier_control(payables: dict[str, Any], rows: list[dict[str, Any]]
 			"accounting_truth": "Current submitted ERPNext Purchase Invoice outstanding balances remain authoritative.",
 			"priority_definition": "Ageing-based payment attention only; it does not override contractual terms, disputes, cash planning or management approval.",
 			"native_drill_through": "Purchase Invoice routes must open in a new tab from EdgeSuite pages.",
+			"authorization": "Owner Dashboard view capability plus underlying Purchase Invoice, Company and Branch permissions.",
 		},
 	}
 
