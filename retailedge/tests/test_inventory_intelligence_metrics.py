@@ -96,15 +96,31 @@ class TestInventoryIntelligenceMetrics(unittest.TestCase):
 			"Non-moving",
 		)
 
-	def test_reorder_signal_uses_supplied_erpnext_values_without_inventing_order_quantity(self):
+	def test_reorder_signal_matches_erpnext_v16_threshold_and_quantity_rules(self):
 		below = reorder_signal(projected_qty=4, reorder_level=10, reorder_qty=20)
+		self.assertTrue(below["configured"])
 		self.assertTrue(below["below_reorder_level"])
+		self.assertTrue(below["reorder_triggered"])
 		self.assertEqual(below["shortfall_qty"], 6)
-		self.assertEqual(below["reorder_qty"], 20)
+		self.assertEqual(below["recommended_reorder_qty"], 20)
+
+		at_level = reorder_signal(projected_qty=10, reorder_level=10, reorder_qty=20)
+		self.assertFalse(at_level["below_reorder_level"])
+		self.assertTrue(at_level["at_or_below_reorder_level"])
+		self.assertTrue(at_level["reorder_triggered"])
+		self.assertEqual(at_level["recommended_reorder_qty"], 20)
+
+		deficiency_larger = reorder_signal(projected_qty=-5, reorder_level=10, reorder_qty=4)
+		self.assertEqual(deficiency_larger["shortfall_qty"], 15)
+		self.assertEqual(deficiency_larger["recommended_reorder_qty"], 15)
 
 		healthy = reorder_signal(projected_qty=15, reorder_level=10, reorder_qty=20)
-		self.assertFalse(healthy["below_reorder_level"])
-		self.assertEqual(healthy["shortfall_qty"], 0)
+		self.assertFalse(healthy["reorder_triggered"])
+		self.assertEqual(healthy["recommended_reorder_qty"], 0)
+
+		inactive_zero_rule = reorder_signal(projected_qty=0, reorder_level=0, reorder_qty=0)
+		self.assertFalse(inactive_zero_rule["configured"])
+		self.assertFalse(inactive_zero_rule["reorder_triggered"])
 
 	def test_transfer_quantity_protects_source_and_only_fills_target_shortfall(self):
 		self.assertEqual(
