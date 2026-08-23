@@ -25,6 +25,7 @@ from retailedge.stock_position import (
 	_matches_stock_status,
 	_page_response,
 	_summary as _stock_summary,
+	_validate_filters,
 )
 
 DEFAULT_SLOW_DAYS = 30
@@ -72,7 +73,11 @@ def get_inventory_health_export(filters: dict[str, Any] | str | None = None) -> 
 
 def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	filters = _normalise_health_filters(filters)
-	stock = _build_stock_position_dataset(filters)
+	_validate_filters(filters)
+	requested_stock_status = str(filters.get("stock_status") or "All").strip()
+	stock_filters = frappe._dict(dict(filters))
+	stock_filters.stock_status = "All"
+	stock = _build_stock_position_dataset(stock_filters)
 	demand = get_historical_inventory_demand(filters)
 	replenishment = get_inventory_replenishment(filters)
 	thresholds = _movement_thresholds(filters)
@@ -94,7 +99,6 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 			demand_by_item=demand_by_item,
 			replenishment_by_item=replenishment_by_item,
 			show_costs=show_costs,
-			stock_status=filters.get("stock_status"),
 		)
 
 	rows = [
@@ -107,6 +111,9 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 		)
 		for row in stock_rows
 	]
+	if requested_stock_status not in {"", "All"}:
+		rows = [row for row in rows if _matches_stock_status(row, requested_stock_status)]
+
 	movement_class = str(filters.get("movement_class") or "All").strip()
 	if movement_class not in MOVEMENT_CLASSES:
 		frappe.throw(_("Unsupported Movement Class filter."))
@@ -130,6 +137,7 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 			"lookback_days": lookback_days,
 			"from_date": demand.get("scope", {}).get("from_date"),
 			"to_date": demand.get("scope", {}).get("to_date"),
+			"stock_status": requested_stock_status,
 			"movement_class": movement_class,
 			"replenishment_status": replenishment_status,
 			"high_cover_review_threshold_days": lookback_days,
@@ -151,7 +159,7 @@ def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None)
 				"High Cover Review means demand-backed estimated stock cover exceeds the selected evidence window. It is an advisory review flag, not an overstock assertion or demand forecast."
 			),
 			"zero_balance_contract": (
-				"When zero-stock intelligence is enabled, a permission-visible demand/reorder item with no Bin row in the resolved warehouse scope is represented as current quantity zero. No balance is persisted."
+				"When zero-stock intelligence is enabled, a permission-visible demand/reorder item with no current Bin balance in the unfiltered resolved warehouse scope is represented as current quantity zero. Stock Status is applied only after this composition and no balance is persisted."
 			),
 			"movement_thresholds": {
 				"slow_days": thresholds.slow_days,
@@ -207,7 +215,6 @@ def _with_zero_balance_intelligence_rows(
 	demand_by_item: dict[str, dict[str, Any]],
 	replenishment_by_item: dict[str, dict[str, Any]],
 	show_costs: bool,
-	stock_status: Any,
 ) -> tuple[list[dict[str, Any]], int]:
 	rows = [dict(row) for row in stock_rows]
 	existing = {str(row.get("item_code") or "") for row in rows if row.get("item_code")}
@@ -231,8 +238,6 @@ def _with_zero_balance_intelligence_rows(
 		if show_costs:
 			row["valuation_rate"] = 0.0
 			row["stock_value"] = 0.0
-		if not _matches_stock_status(row, stock_status):
-			continue
 		rows.append(row)
 		added += 1
 	rows.sort(key=lambda row: (str(row.get("item_group") or ""), str(row.get("item_code") or "")))
