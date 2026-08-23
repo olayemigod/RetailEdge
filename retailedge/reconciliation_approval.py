@@ -233,6 +233,21 @@ def _assert_writeable(doc):
 		frappe.throw("You do not have permission to update this Bank Match Review.", frappe.PermissionError)
 
 
+def _refresh_match_candidate_context(doc):
+	"""Refresh live candidate evidence before binding an approval identity.
+
+	Older review rows can carry candidate-account context written by an earlier
+	resolver. The DocType validator rehydrates that context from the submitted
+	source document. Approval must fingerprint the same refreshed values that the
+	following save will persist, otherwise a correct save can invalidate the
+	approval that triggered it.
+	"""
+	validator = getattr(doc, "validate", None)
+	if callable(validator):
+		validator()
+	return doc
+
+
 @frappe.whitelist()
 def get_reconciliation_approval_state(match_name, user=None):
 	assert_can_access_bank_transaction_matching(user=user)
@@ -251,6 +266,7 @@ def request_reconciliation_approval(match_name, approval_note=None):
 		frappe.throw("Confirm the Bank Match Review before requesting reconciliation approval.")
 	if cstr(getattr(doc, "execution_status", None)).strip() in {"Executed", "Already Handled"}:
 		frappe.throw("This reconciliation has already been handled.")
+	_refresh_match_candidate_context(doc)
 	state = build_reconciliation_approval_state(doc)
 	if not state["required"]:
 		return {**state, "message": "Second approval is not required by RetailEdge Settings."}
@@ -303,6 +319,8 @@ def approve_reconciliation_for_match(match_name, approval_note=None):
 			frappe.PermissionError,
 		)
 
+	_refresh_match_candidate_context(doc)
+
 	# Import lazily to avoid a module cycle: reconciliation_bridge imports the approval-state builder.
 	from retailedge.reconciliation_bridge import build_reconciliation_readiness_result, _load_match_for_preflight
 
@@ -352,6 +370,7 @@ def decline_reconciliation_for_match(match_name, approval_note=None):
 			frappe.PermissionError,
 		)
 
+	_refresh_match_candidate_context(doc)
 	identity = _candidate_identity(doc)
 	doc.approval_status = APPROVAL_DECLINED
 	doc.approved_by = None
