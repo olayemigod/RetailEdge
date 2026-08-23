@@ -234,13 +234,13 @@ def _assert_writeable(doc):
 
 
 def _refresh_match_candidate_context(doc):
-	"""Refresh live candidate evidence before binding an approval identity.
+	"""Refresh live candidate evidence before binding or checking an approval identity.
 
 	Older review rows can carry candidate-account context written by an earlier
 	resolver. The DocType validator rehydrates that context from the submitted
-	source document. Approval must fingerprint the same refreshed values that the
-	following save will persist, otherwise a correct save can invalidate the
-	approval that triggered it.
+	source document. Approval creation and approval-gate validation must use this
+	same live hydration path; reconciliation preflight remains an independent
+	safety check and must not be used as the approval fingerprint source.
 	"""
 	validator = getattr(doc, "validate", None)
 	if callable(validator):
@@ -248,13 +248,17 @@ def _refresh_match_candidate_context(doc):
 	return doc
 
 
+def build_live_reconciliation_approval_state(match_name, user=None, settings=None):
+	"""Build approval state from the same live DocType context used at approval time."""
+	doc = frappe.get_doc("RetailEdge Bank Transaction Match", match_name)
+	_refresh_match_candidate_context(doc)
+	return build_reconciliation_approval_state(doc, user=user, settings=settings)
+
+
 @frappe.whitelist()
 def get_reconciliation_approval_state(match_name, user=None):
 	assert_can_access_bank_transaction_matching(user=user)
-	match_doc = _load_match(match_name)
-	if not match_doc:
-		frappe.throw(f"Bank Match Review {match_name} was not found.")
-	return build_reconciliation_approval_state(match_doc, user=user)
+	return build_live_reconciliation_approval_state(match_name, user=user)
 
 
 @frappe.whitelist()
@@ -321,7 +325,7 @@ def approve_reconciliation_for_match(match_name, approval_note=None):
 
 	_refresh_match_candidate_context(doc)
 
-	# Import lazily to avoid a module cycle: reconciliation_bridge imports the approval-state builder.
+	# Import lazily to avoid a module cycle: reconciliation_bridge imports approval-state helpers.
 	from retailedge.reconciliation_bridge import build_reconciliation_readiness_result, _load_match_for_preflight
 
 	readiness = build_reconciliation_readiness_result(_load_match_for_preflight(match_name))
