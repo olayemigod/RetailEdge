@@ -56,7 +56,7 @@
 								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
-								<button class="edge-button edge-button--primary" type="button" @click="openRoute(item.route)">Open workflow</button>
+								<button class="edge-button edge-button--primary" type="button" :title="workflowTitle(item)" @click="openWorkflow(item)">Open workflow</button>
 								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
@@ -85,7 +85,7 @@
 								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
-								<button class="edge-button edge-button--primary" type="button" @click="openRoute(item.route)">Open workflow</button>
+								<button class="edge-button edge-button--primary" type="button" :title="workflowTitle(item)" @click="openWorkflow(item)">Open workflow</button>
 								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
@@ -106,7 +106,7 @@
 				<EdgeDashboardSection title="How resolution works" description="Follow-up tracking is separate from business resolution." span="2">
 					<div class="action-note">
 						<strong>RetailEdge does not resolve accounting, stock or workflow exceptions from Action Centre.</strong>
-						<span>Acknowledge, assignment, follow-up date and snooze only update the separate Action Follow Up record. Open workflow takes you to the authoritative Expense Review, Receivables, Payables, Stock Position, Cash Shift Verification, or other owning process where existing ERPNext/RetailEdge permissions, approvals, submissions and accounting controls remain authoritative.</span>
+						<span>Acknowledge, assignment, follow-up date and snooze only update the separate Action Follow Up record. Open workflow keeps RetailEdge pages in this tab and opens retained native ERPNext/Frappe records or reports in a new tab, where existing permissions, approvals, submissions and accounting controls remain authoritative.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
@@ -196,8 +196,17 @@ export default {
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
-		openRoute(route) { if (route) window.location.assign(route); },
-		itemKey(item) { return item.fingerprint || `${item.source}:${item.kind}:${item.label}:${item.route}`; },
+		openWorkflow(item) {
+			const route = item?.route;
+			if (!route) return;
+			if (item.open_mode === "new_tab") {
+				window.open(route, "_blank", "noopener,noreferrer");
+				return;
+			}
+			window.location.assign(route);
+		},
+		workflowTitle(item) { return item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open RetailEdge workflow"; },
+		itemKey(item) { return item.fingerprint || `${item.source}:${item.semantic_key || item.kind}:${item.route}`; },
 		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
 		basisLabel(value) { return value === "current" ? "Current position" : "Selected period"; },
 		formatDateTime(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(value); } catch (_error) { return value; } },

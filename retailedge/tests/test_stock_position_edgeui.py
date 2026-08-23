@@ -10,7 +10,7 @@ from retailedge import stock_position
 APP_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = APP_ROOT / "stock_position.py"
 BUNDLE = APP_ROOT / "public" / "js" / "stock_position.bundle.js"
-COMPONENT = APP_ROOT / "public" / "js" / "stock_position" / "StockPosition.vue"
+COMPONENT = APP_ROOT / "public" / "js" / "stock_position" / "StockPositionReport.vue"
 PAGE_ROOT = APP_ROOT / "retailedge" / "page" / "stock_position"
 
 
@@ -93,12 +93,11 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 			"EdgeLinkField",
 			"EdgeExportMenu",
 			":loadDataset=\"loadExportDataset\"",
+			"window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY)",
+			"this.reportProvider?.export",
 			"search_stock_position_options",
 			"resolve_branch_warehouse_selection",
-			"get_stock_position_export",
-			"25 / page",
-			"50 / page",
-			"100 / page",
+			':pageSizes="[25, 50, 100]"',
 			":hideNativeSidebar=\"true\"",
 			"Cost values hidden by RetailEdge settings",
 		):
@@ -109,11 +108,11 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 	def test_filter_layout_uses_available_width_responsively(self):
 		component = self.read(COMPONENT)
 		for contract in (
+			".stock-position-filter-grid",
 			"grid-template-columns: repeat(4, minmax(0, 1fr))",
 			"grid-template-columns: repeat(3, minmax(0, 1fr))",
 			"grid-template-columns: repeat(2, minmax(0, 1fr))",
 			"grid-template-columns: 1fr",
-			":deep(.edge-filter-bar__fields)",
 			"width: 100%",
 		):
 			self.assertIn(contract, component)

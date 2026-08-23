@@ -20,15 +20,18 @@ Action Centre is intentionally available in EdgeSuite `Review & Approvals` only 
 4. Confirm inaccessible exception sources are excluded rather than leaking counts, labels or data.
 5. Confirm company and branch scope match the signed-in user's permitted context.
 
-## Exception truth and drill-through
+## Exception truth, uniqueness and drill-through
 
 1. Compare every visible exception against its owning report/workflow and confirm count/value parity.
-2. Confirm Receivables/Payables exposure and ageing agree with their EdgeSuite reports.
-3. Confirm stock exception counts agree with Stock Position for the same Company/Branch scope.
-4. Confirm banking actions agree with persisted Bank Transaction Match review/reconciliation state and do not trigger candidate discovery merely by loading Action Centre.
-5. Use **Open workflow** and confirm it opens the authoritative RetailEdge/ERPNext process.
-6. Confirm Action Centre itself does not submit, approve, cancel, reconcile, post, mutate stock, create accounting entries or otherwise resolve the underlying exception.
-7. Resolve one underlying exception in its owning workflow, refresh Action Centre, and confirm the exception disappears or changes only according to the source-of-truth report.
+2. Confirm each underlying business condition appears only once. In particular, verify that Receivables, Payables, Stock and Expense exceptions are not duplicated because the same condition also appears on Owner Dashboard.
+3. Confirm Receivables/Payables exposure and ageing agree with their RetailEdge reports.
+4. Confirm stock exception counts agree with Stock Position for the same Company/Branch scope.
+5. Confirm banking actions agree with persisted Bank Transaction Match review/reconciliation state and do not trigger candidate discovery merely by loading Action Centre.
+6. Use **Open workflow** on a RetailEdge Page target such as Expense Review, Customer Receivables, Supplier Payables, Stock Position or Cash Shift Verification. Confirm it stays in the current tab.
+7. Use **Open workflow** on a retained native DocType or Query Report target such as Bank Transaction Match or a reconciliation report. Confirm it opens a new browser tab and leaves the Action Centre open in the original tab.
+8. Confirm new-tab drill-through uses safe opener isolation and does not replace the current RetailEdge shell.
+9. Confirm Action Centre itself does not submit, approve, cancel, reconcile, post, mutate stock, create accounting entries or otherwise resolve the underlying exception.
+10. Resolve one underlying exception in its owning workflow, refresh Action Centre, and confirm the exception disappears or changes only according to the source-of-truth report.
 
 ## Prioritisation
 
@@ -76,6 +79,8 @@ R4 Action Centre visual QA can be marked complete only when:
 - CI and Linters are green on the exact head being tested.
 - This browser QA passes for management/control roles and a denied ordinary user.
 - Exception values are verified against their owning reports/workflows.
+- No conceptual exception is duplicated across dashboard-derived and direct report sources.
+- RetailEdge Page drill-through stays in the current tab and retained native DocType/Query Report drill-through opens safely in a new tab.
 - Follow-up persistence survives browser refresh and does not mutate business truth.
 - Priority ordering/reasons are visibly correct.
 - Dark mode and mobile layout are acceptable.

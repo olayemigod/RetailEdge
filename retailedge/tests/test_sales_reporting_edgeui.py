@@ -10,7 +10,7 @@ from retailedge import sales_reporting
 APP_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = APP_ROOT / "sales_reporting.py"
 BUNDLE = APP_ROOT / "public" / "js" / "sales_reporting.bundle.js"
-COMPONENT = APP_ROOT / "public" / "js" / "sales_reporting" / "SalesReportingPage.vue"
+COMPONENT = APP_ROOT / "public" / "js" / "sales_reporting" / "SalesReportingReport.vue"
 SALES_BY_ITEM_PAGE = APP_ROOT / "retailedge" / "page" / "sales_by_item"
 INVOICE_REGISTER_PAGE = APP_ROOT / "retailedge" / "page" / "sales_invoice_register"
 
@@ -91,13 +91,13 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 		for contract in (
 			"EdgeExportMenu",
 			":loadDataset=\"loadExportDataset\"",
-			"get_sales_by_item_export",
-			"get_sales_invoice_register_export",
+			'providerKey: "sales-by-item"',
+			'providerKey: "sales-invoice-register"',
+			"window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey)",
+			"this.reportProvider?.export",
 			"search_sales_reporting_options",
 			"resolve_branch_warehouse_selection",
-			"25 / page",
-			"50 / page",
-			"100 / page",
+			':pageSizes="[25, 50, 100]"',
 			":hideNativeSidebar=\"true\"",
 		):
 			self.assertIn(contract, component)
@@ -107,11 +107,11 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 	def test_filter_layout_uses_available_width_responsively(self):
 		component = self.read(COMPONENT)
 		for contract in (
+			".sales-filter-grid",
 			"grid-template-columns: repeat(4, minmax(0, 1fr))",
 			"grid-template-columns: repeat(3, minmax(0, 1fr))",
 			"grid-template-columns: repeat(2, minmax(0, 1fr))",
 			"grid-template-columns: 1fr",
-			":deep(.edge-filter-bar__fields)",
 			"width: 100%",
 		):
 			self.assertIn(contract, component)

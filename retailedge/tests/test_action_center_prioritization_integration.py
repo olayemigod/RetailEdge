@@ -14,17 +14,11 @@ def _empty_summary() -> dict:
 
 def test_action_center_prioritises_after_follow_up_decoration():
 	frappe.session.user = "Administrator"
-	owner_payload = {
-		"attention": [
-			{
-				"section": "stock",
-				"label": "Items are out of stock",
-				"value": 4,
-				"datatype": "Int",
-				"tone": "warning",
-				"route": "/app/stock-position",
-				"time_basis": "current",
-			}
+	stock_payload = {
+		"summary": [
+			{"label": "Negative Stock", "value": 0, "datatype": "Int"},
+			{"label": "Out of Stock", "value": 4, "datatype": "Int"},
+			{"label": "Fully Reserved", "value": 0, "datatype": "Int"},
 		]
 	}
 
@@ -38,7 +32,7 @@ def test_action_center_prioritises_after_follow_up_decoration():
 		return result
 
 	with (
-		patch("retailedge.action_center.get_owner_dashboard_data", return_value=owner_payload),
+		patch("retailedge.action_center.get_stock_position", return_value=stock_payload),
 		patch("retailedge.action_center.get_expense_register", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_cash_shift_verification", return_value=_empty_summary()),
 		patch("retailedge.action_center.get_customer_receivables", return_value=_empty_summary()),

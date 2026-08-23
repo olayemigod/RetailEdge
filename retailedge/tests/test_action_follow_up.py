@@ -68,6 +68,49 @@ class TestActionFollowUp(unittest.TestCase):
 		with self.assertRaises(frappe.PermissionError):
 			action_follow_up.update_action_follow_up("not-visible", "acknowledge", {"company": "Test Company"})
 
+	@patch("retailedge.action_follow_up.frappe.get_roles", return_value=["Sales User"])
+	def test_non_action_center_role_cannot_manage_follow_up(self, _roles):
+		frappe.session.user = "sales@example.com"
+		with self.assertRaises(frappe.PermissionError):
+			action_follow_up._assert_action_center_role()
+
+	@patch("retailedge.action_follow_up.frappe.get_roles", return_value=["Sales User"])
+	@patch("retailedge.action_follow_up.frappe.db.get_value", return_value=1)
+	def test_assignment_target_must_have_action_center_role(self, _enabled, _roles):
+		with self.assertRaises(frappe.PermissionError):
+			action_follow_up._validate_assignment_user(
+				"sales@example.com",
+				company="Test Company",
+				branch="",
+			)
+
+	@patch("retailedge.action_follow_up._has_action_center_role", return_value=False)
+	def test_direct_query_denies_users_without_action_center_role(self, _has_role):
+		self.assertEqual(action_follow_up.get_permission_query_conditions("sales@example.com"), "1=0")
+
+	@patch("retailedge.action_follow_up.frappe.db.escape", return_value="'Main'")
+	@patch("retailedge.branch_context.get_user_allowed_branches", return_value={"branches": ["Main"]})
+	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=False)
+	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
+	def test_direct_query_is_restricted_to_permitted_branches(
+		self, _has_role, _global_access, _allowed_branches, _escape
+	):
+		condition = action_follow_up.get_permission_query_conditions("manager@example.com")
+		self.assertIn("`branch` in ('Main')", condition)
+		self.assertIn("RetailEdge Action Follow Up", condition)
+
+	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=True)
+	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
+	def test_global_action_center_role_has_no_extra_branch_query_condition(self, _has_role, _global_access):
+		self.assertEqual(action_follow_up.get_permission_query_conditions("manager@example.com"), "")
+
+	def test_permission_hooks_are_registered(self):
+		hooks_path = Path(action_follow_up.__file__).resolve().parent / "hooks.py"
+		source = hooks_path.read_text(encoding="utf-8")
+		self.assertIn("permission_query_conditions", source)
+		self.assertIn("retailedge.action_follow_up.get_permission_query_conditions", source)
+		self.assertIn("retailedge.action_follow_up.has_permission", source)
+
 	def test_follow_up_source_contains_no_business_resolution_calls(self):
 		source = Path(action_follow_up.__file__).read_text(encoding="utf-8")
 		for forbidden in (".submit(", "apply_workflow(", "ignore_permissions=True", "frappe.db.commit("):
@@ -79,6 +122,16 @@ class TestActionFollowUp(unittest.TestCase):
 		self.assertIn('"Open\\nAcknowledged\\nSnoozed"', doc)
 		self.assertNotIn("Resolved", doc)
 		self.assertNotIn("Closed", doc)
+
+	def test_doctype_controller_blocks_direct_non_admin_writes(self):
+		controller_path = (
+			Path(action_follow_up.__file__).resolve().parent
+			/ "retailedge/doctype/retailedge_action_follow_up/retailedge_action_follow_up.py"
+		)
+		source = controller_path.read_text(encoding="utf-8")
+		self.assertIn("retailedge_action_follow_up_api_write", source)
+		self.assertIn("can only be changed from the Action Centre", source)
+		self.assertIn("frappe.PermissionError", source)
 
 
 if __name__ == "__main__":
