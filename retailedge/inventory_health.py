@@ -13,6 +13,7 @@ from retailedge.inventory_demand import (
 from retailedge.inventory_intelligence import (
 	MovementThresholds,
 	classify_movement,
+	classify_stock_cover_review,
 	stock_cover_days,
 )
 from retailedge.inventory_replenishment import get_inventory_replenishment
@@ -260,10 +261,10 @@ def _enrich_stock_row(
 			"last_demand_on": demand.get("last_demand_on"),
 			"days_since_demand": days_since_demand,
 			"stock_cover_days": cover_days,
-			"stock_cover_review": _stock_cover_review(
+			"stock_cover_review": classify_stock_cover_review(
 				cover_days=cover_days,
 				daily_demand=daily_demand,
-				lookback_days=lookback_days,
+				evidence_window_days=lookback_days,
 			),
 			"movement_class": classify_movement(
 				demand_qty=demand_qty,
@@ -279,14 +280,6 @@ def _enrich_stock_row(
 		}
 	)
 	return result
-
-
-def _stock_cover_review(*, cover_days: float | None, daily_demand: float, lookback_days: int) -> str:
-	if daily_demand <= 0 or cover_days is None:
-		return "No Demand Evidence"
-	if cover_days > lookback_days:
-		return "High Cover Review"
-	return "Within Evidence Window"
 
 
 def _columns(stock_columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
