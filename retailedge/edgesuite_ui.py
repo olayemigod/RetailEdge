@@ -202,7 +202,7 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record and allocate money received from a customer.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record a supplier payment and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
+		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "deposit-cash", "label": "Deposit Cash", "description": "Deposit available cashier shift cash to an approved company bank account.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available", "cashier_deposit": True,
@@ -372,7 +372,7 @@ def _target_exists_cached(target_type: str, target: str, cache: dict[tuple[str, 
 
 
 def _doctype_exists_cached(doctype: str, cache: dict[tuple[str, str], bool]) -> bool:
-	return _target_exists_cached("DocType", doctype)
+	return _target_exists_cached("DocType", doctype, cache)
 
 
 def _has_permission_cached(doctype: str, permission_type: str, cache: dict[tuple[str, str], bool]) -> bool:
