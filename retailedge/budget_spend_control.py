@@ -6,9 +6,11 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_budget_api import get_expense_budget_insight
 from retailedge.expense_dashboard import get_expense_dashboard_data
 
+DASHBOARD_KEY = "owner-dashboard"
 MAX_CATEGORY_CONTROLS = 20
 
 
@@ -18,6 +20,8 @@ def get_budget_spend_control(filters: dict[str, Any] | str | None = None) -> dic
 	company = str(resolved.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."))
+	branch = str(resolved.get("branch") or "").strip()
+	require_dashboard_action(DASHBOARD_KEY, "view", company=company, branch=branch)
 	resolved.company = company
 	budget = get_expense_budget_insight(resolved)
 	dashboard = get_expense_dashboard_data(resolved)
@@ -82,6 +86,7 @@ def _build_budget_spend_control(*, budget: dict[str, Any], dashboard: dict[str, 
 			"projection_definition": "Straight-line burn-rate projection across the selected period; planning signal only, not an accounting forecast.",
 			"mapping_limit": "Category-level budget pressure is withheld when multiple RetailEdge categories share one Expense Account and Cost Center budget pair.",
 			"enforcement": budget.get("enforcement_note") or "RetailEdge does not change ERPNext Budget enforcement or workflow settings.",
+			"authorization": "Owner Dashboard view capability plus underlying expense and budget permissions.",
 		},
 	}
 
