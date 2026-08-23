@@ -15,6 +15,7 @@ from retailedge.inventory_intelligence import (
 	classify_movement,
 	stock_cover_days,
 )
+from retailedge.reporting_capabilities import require_report_action
 from retailedge.stock_position import (
 	DEFAULT_PAGE_SIZE,
 	_build_stock_position_dataset,
@@ -42,6 +43,24 @@ def get_inventory_health(
 	page_size: int | str = DEFAULT_PAGE_SIZE,
 ) -> dict[str, Any]:
 	"""Compose current ERPNext Bin position with bounded observed demand evidence."""
+	dataset = _build_inventory_health_dataset(filters)
+	return _page_response(dataset, page=page, page_size=page_size)
+
+
+@frappe.whitelist()
+def get_inventory_health_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return the bounded R10 dataset after reusing Stock Position export entitlement."""
+	filters = _normalise_health_filters(filters)
+	require_report_action(
+		"stock-position",
+		action="export",
+		company=str(filters.get("company") or ""),
+		branch=str(filters.get("branch") or ""),
+	)
+	return _build_inventory_health_dataset(filters)
+
+
+def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	filters = _normalise_health_filters(filters)
 	stock = _build_stock_position_dataset(filters)
 	demand = get_historical_inventory_demand(filters)
@@ -67,7 +86,7 @@ def get_inventory_health(
 		rows = [row for row in rows if row.get("movement_class") == movement_class]
 
 	show_costs = bool(stock.get("show_costs"))
-	dataset = {
+	return {
 		"columns": _columns(stock.get("columns") or []),
 		"rows": rows,
 		"summary": _summary(rows, show_costs=show_costs),
@@ -96,9 +115,9 @@ def get_inventory_health(
 			},
 			"read_only": True,
 			"persistent_derived_truth": False,
+			"export_authorization_scope": "stock-position",
 		},
 	}
-	return _page_response(dataset, page=page, page_size=page_size)
 
 
 def _normalise_health_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
