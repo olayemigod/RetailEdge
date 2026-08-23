@@ -26,6 +26,40 @@ PROFILE_DEFAULT_FIELDS = [
 ]
 
 
+COMPANY_LINK_FIELDS = {
+	"branch": ("Branch", "company"),
+	"default_pos_profile": ("POS Profile", "company"),
+	"default_warehouse": ("Warehouse", "company"),
+	"default_source_warehouse": ("Warehouse", "company"),
+	"default_target_warehouse": ("Warehouse", "company"),
+	"default_returns_warehouse": ("Warehouse", "company"),
+	"default_cost_center": ("Cost Center", "company"),
+	"default_sales_cost_center": ("Cost Center", "company"),
+	"default_expense_cost_center": ("Cost Center", "company"),
+	"default_pos_opening_cash_account": ("Account", "company"),
+	"default_cash_account": ("Account", "company"),
+	"default_bank_account": ("Account", "company"),
+	"default_card_pos_account": ("Account", "company"),
+	"default_mobile_money_account": ("Account", "company"),
+}
+
+
+LEAF_FIELDS = {
+	"default_warehouse": "Warehouse",
+	"default_source_warehouse": "Warehouse",
+	"default_target_warehouse": "Warehouse",
+	"default_returns_warehouse": "Warehouse",
+	"default_cost_center": "Cost Center",
+	"default_sales_cost_center": "Cost Center",
+	"default_expense_cost_center": "Cost Center",
+	"default_pos_opening_cash_account": "Account",
+	"default_cash_account": "Account",
+	"default_bank_account": "Account",
+	"default_card_pos_account": "Account",
+	"default_mobile_money_account": "Account",
+}
+
+
 def get_branch_profile(company=None, branch=None, user=None, pos_profile=None, warehouse=None, active_only=True):
 	if not _has_doctype("RetailEdge Branch Profile"):
 		return None
@@ -133,6 +167,8 @@ def validate_branch_profile(doc):
 		frappe.throw("Company is required.")
 	if not getattr(doc, "branch", None):
 		frappe.throw("Branch is required.")
+	_validate_company_links(doc)
+	_validate_leaf_defaults(doc)
 	if getattr(doc, "enabled", 1):
 		duplicate_filters = {
 			"name": ["!=", doc.name or ""],
@@ -151,6 +187,37 @@ def validate_branch_profile(doc):
 			}
 			if frappe.db.exists("RetailEdge Branch Profile", default_filters):
 				frappe.throw("Only one enabled default RetailEdge Branch Profile is allowed per Company.")
+
+
+def _validate_company_links(doc):
+	for fieldname, (doctype, company_field) in COMPANY_LINK_FIELDS.items():
+		value = getattr(doc, fieldname, None)
+		if not value:
+			continue
+		linked_company = frappe.db.get_value(doctype, value, company_field)
+		if linked_company is None:
+			frappe.throw(f"{doctype} {value} does not exist.")
+		if linked_company != doc.company:
+			label = doc.meta.get_label(fieldname) or fieldname
+			frappe.throw(f"{label} must belong to Company {doc.company}.")
+
+
+def _validate_leaf_defaults(doc):
+	for fieldname, doctype in LEAF_FIELDS.items():
+		value = getattr(doc, fieldname, None)
+		if not value:
+			continue
+		is_group = frappe.db.get_value(doctype, value, "is_group")
+		if is_group is None:
+			frappe.throw(f"{doctype} {value} does not exist.")
+		if int(is_group):
+			label = doc.meta.get_label(fieldname) or fieldname
+			frappe.throw(f"{label} must be a leaf {doctype}.")
+		if doctype in {"Warehouse", "Account"}:
+			disabled = frappe.db.get_value(doctype, value, "disabled")
+			if disabled is not None and int(disabled):
+				label = doc.meta.get_label(fieldname) or fieldname
+				frappe.throw(f"{label} must be enabled.")
 
 
 def _has_doctype(doctype):
