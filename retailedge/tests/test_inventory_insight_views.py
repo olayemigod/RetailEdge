@@ -89,6 +89,39 @@ class TestInventoryInsightViews(unittest.TestCase):
 				sort_direction="asc",
 			)
 
+	@patch("retailedge.inventory_insight_views.require_report_action")
+	@patch("retailedge.inventory_insight_views.get_inventory_transfer_opportunities")
+	def test_export_returns_full_filtered_sorted_dataset_after_authorization(
+		self, transfers, require_action
+	):
+		transfers.return_value = {
+			"rows": [
+				{"item_code": "B", "suggested_transfer_qty": 2},
+				{"item_code": "A", "suggested_transfer_qty": 10},
+				{"item_code": "C", "suggested_transfer_qty": 5},
+			],
+			"summary": [{"label": "Transfer Opportunities", "value": 3, "datatype": "Int"}],
+			"metadata": {"read_only": True},
+		}
+
+		result = inventory_insight_views.get_inventory_insight_view_export(
+			"transfer-opportunities",
+			{"company": "Test Company", "branch": "Main"},
+			sort_field="suggested_transfer_qty",
+			sort_direction="desc",
+		)
+
+		require_action.assert_called_once_with(
+			"stock-position",
+			action="export",
+			company="Test Company",
+			branch="Main",
+		)
+		self.assertEqual([row["item_code"] for row in result["rows"]], ["A", "C", "B"])
+		self.assertNotIn("pagination", result)
+		self.assertEqual(result["metadata"]["export_authorization_scope"], "stock-position")
+		self.assertEqual(result["metadata"]["export_dataset_scope"], "all_filtered_bounded")
+
 	@patch("retailedge.inventory_insight_views.get_inventory_profitability_signals")
 	def test_profitability_view_keeps_unavailable_reason_and_empty_rows(self, profitability):
 		profitability.return_value = {
