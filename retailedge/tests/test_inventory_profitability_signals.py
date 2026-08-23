@@ -63,6 +63,12 @@ def _profitability_payload():
 				"gross_margin_percent": 5,
 			}
 		],
+		"scope": {
+			"company": "Test Company",
+			"branch": "Main",
+			"from_date": "2026-08-01",
+			"to_date": "2026-08-23",
+		},
 		"metadata": {"financial_truth": "ERPNext Profit and Loss Statement / Gross and Net Profit Report"},
 	}
 
@@ -74,7 +80,13 @@ def test_top_r8_profit_contributor_at_reorder_risk_is_flagged_without_new_margin
 	profitability.return_value = _profitability_payload()
 
 	result = signals.get_inventory_profitability_signals(
-		{"company": "Test Company", "branch": "Main", "lookback_days": 90}
+		{
+			"company": "Test Company",
+			"branch": "Main",
+			"lookback_days": 90,
+			"from_date": "2026-08-01",
+			"to_date": "2026-08-23",
+		}
 	)
 
 	risk = next(row for row in result["rows"] if row["kind"] == "top_profit_contributor_reorder")
@@ -86,10 +98,15 @@ def test_top_r8_profit_contributor_at_reorder_risk_is_flagged_without_new_margin
 		{
 			"company": "Test Company",
 			"branch": "Main",
-			"from_date": "2026-05-26",
+			"from_date": "2026-08-01",
 			"to_date": "2026-08-23",
 		}
 	)
+	assert result["scope"]["from_date"] == "2026-08-01"
+	assert result["scope"]["to_date"] == "2026-08-23"
+	assert result["scope"]["inventory_evidence_from_date"] == "2026-05-26"
+	assert result["scope"]["inventory_evidence_to_date"] == "2026-08-23"
+	assert "independently" in result["metadata"]["profitability_period_contract"]
 
 
 @patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
@@ -105,6 +122,7 @@ def test_r8_margin_leakage_combines_with_r10_slow_stock_classification(inventory
 	assert risk["gross_margin_percent"] == 5
 	assert risk["movement_class"] == "Slow"
 	assert risk["severity"] == "warning"
+	profitability.assert_called_once_with({"company": "Test Company", "branch": ""})
 
 
 @patch(
@@ -115,11 +133,19 @@ def test_r8_margin_leakage_combines_with_r10_slow_stock_classification(inventory
 def test_cost_visibility_failure_returns_unavailable_without_profitability_rows(inventory, profitability):
 	inventory.return_value = _inventory_payload()
 
-	result = signals.get_inventory_profitability_signals({"company": "Test Company"})
+	result = signals.get_inventory_profitability_signals(
+		{
+			"company": "Test Company",
+			"from_date": "2026-08-01",
+			"to_date": "2026-08-23",
+		}
+	)
 
 	assert result["available"] is False
 	assert result["rows"] == []
 	assert result["summary"][0]["value"] == 0
+	assert result["scope"]["from_date"] == "2026-08-01"
+	assert result["scope"]["to_date"] == "2026-08-23"
 	assert "cost visibility" in result["metadata"]["reason"].lower()
 
 
