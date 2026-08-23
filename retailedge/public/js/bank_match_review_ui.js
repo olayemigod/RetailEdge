@@ -248,6 +248,9 @@
 		const status = text(doc.decision_status, __("Suggested"));
 		const category = candidate.transaction_category || candidate.candidate_category ||
 			(doc.suggested_document_type === "Sales Invoice" ? __("Customer Receipt") : "");
+		const direction = accountEvidence.direction || doc.bank_direction || bank.bank_direction || "";
+		const statementRecord = doc.bank_transaction || bank.name || "";
+		const accountingRecord = `${text(accounting.doctype || doc.suggested_document_type, "")} ${text(accounting.name || doc.suggested_document, "")}`.trim();
 
 		if (titleNode) {
 			titleNode.textContent = __("Review Match: {0}", [doc.bank_transaction || matchName]);
@@ -263,45 +266,65 @@
 		const compare = make("div", "retailedge-review-compare");
 		const bankCard = make("section", "retailedge-review-card");
 		const candidateCard = make("section", "retailedge-review-card");
-		bankCard.appendChild(cardHeader("Bank Statement", accountEvidence.direction || doc.bank_direction || bank.bank_direction || "", "info"));
+		bankCard.appendChild(cardHeader("Bank Statement", direction, "info"));
 		candidateCard.appendChild(cardHeader("Accounting Record", confidence, confidence === "Strong Match" ? "success" : "warning"));
 
 		const bankRows = make("div", "retailedge-review-card-rows");
 		const candidateRows = make("div", "retailedge-review-card-rows");
 
+		// Keep both cards on one shared semantic row order so an accountant can
+		// compare like-for-like without scanning up or down either column.
 		bankRows.append(
+			valueRow("Bank Transaction", statementRecord),
 			valueRow("Bank", statement.bank),
 			valueRow("Bank Account", statement.bank_account || doc.bank_account || bank.bank_account),
 			valueRow("GL Account", statement.gl_account),
 			valueRow("Company", statement.company || doc.company || bank.company),
 			valueRow("Branch", statement.branch || doc.branch || bank.branch),
-			valueRow("Direction", accountEvidence.direction || doc.bank_direction || bank.bank_direction, { badge: true, tone: "info" }),
+			valueRow("Direction", direction, { badge: true, tone: "info" }),
 			valueRow("Amount", money(statement.amount ?? doc.bank_amount, doc.currency), { emphasis: true }),
 			valueRow("Date", statement.date || doc.transaction_date),
-			valueRow("Reference", statement.reference || doc.bank_reference || bank.reference),
-			valueRow("Narration", doc.bank_narration || bank.description)
+			valueRow("Reference", statement.reference || doc.bank_reference || bank.reference)
 		);
 
 		candidateRows.append(
-			valueRow("Document", `${text(accounting.doctype || doc.suggested_document_type, "")} ${text(accounting.name || doc.suggested_document, "")}`.trim(), {
+			valueRow("Accounting Document", accountingRecord, {
 				link: () => frappe.set_route("Form", accounting.doctype || doc.suggested_document_type, accounting.name || doc.suggested_document)
 			}),
-			valueRow("Category", category, { badge: true, tone: "neutral" }),
 			valueRow("Bank", accounting.bank),
 			valueRow("Bank Account", accounting.bank_account || __("Resolved from GL account")),
 			valueRow(accounting.gl_account_label || "Bank-side Account", accounting.gl_account),
 			valueRow("Company", accounting.company),
 			valueRow("Branch", accounting.branch),
+			valueRow("Direction", direction, { badge: true, tone: "info" }),
 			valueRow("Amount", money(accounting.amount ?? doc.candidate_amount, doc.currency), { emphasis: true }),
 			valueRow("Date", accounting.date),
-			valueRow("Reference", accounting.reference),
-			valueRow("Mode of Payment", accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode)
+			valueRow("Reference", accounting.reference)
 		);
 
 		bankCard.appendChild(bankRows);
 		candidateCard.appendChild(candidateRows);
 		compare.append(bankCard, candidateCard);
 		root.appendChild(compare);
+
+		const extraContextItems = [
+			[__("Bank Narration"), doc.bank_narration || bank.description],
+			[__("Accounting Category"), category],
+			[__("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode],
+		].filter(([, value]) => String(value || "").trim());
+		if (extraContextItems.length) {
+			const context = make("section", "retailedge-review-why");
+			context.appendChild(make("h3", "retailedge-review-section-title", __("Additional Context")));
+			const contextList = make("div", "retailedge-review-why-list");
+			extraContextItems.forEach(([label, value]) => {
+				const item = make("div", "retailedge-review-why-item");
+				item.appendChild(make("strong", "", `${label}:`));
+				item.appendChild(make("span", "", text(value)));
+				contextList.appendChild(item);
+			});
+			context.appendChild(contextList);
+			root.appendChild(context);
+		}
 
 		const safety = accountSafetyPanel(accountEvidence);
 		if (safety) root.appendChild(safety);
