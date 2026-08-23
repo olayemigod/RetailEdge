@@ -67,6 +67,8 @@ def _unavailable_early_warning(reason: str, *, permission_isolated: bool = False
 		"critical_count": 0,
 		"warning_count": 0,
 		"profitability_trend": {},
+		"liquidity": {},
+		"budget_spend": {},
 		"metadata": {
 			"reason": reason,
 			"permission_isolated": permission_isolated,
@@ -108,6 +110,8 @@ def _build_business_control_center(
 			"critical_count": warnings.get("critical_count") or 0,
 			"warning_count": warnings.get("warning_count") or 0,
 			"profitability_trend": warnings.get("profitability_trend") or {},
+			"liquidity": warnings.get("liquidity") or {},
+			"budget_spend": warnings.get("budget_spend") or {},
 			"metadata": warnings.get("metadata") or {},
 		},
 		"metadata": {
@@ -115,6 +119,7 @@ def _build_business_control_center(
 			"duplicate_domains": "Collections and Supplier Obligations remain owned by the existing Action Centre receivables/payables sources and are not duplicated from R9 early warning.",
 			"follow_up_contract": "R9-only warnings are read-only in the pure composition helper; the runtime endpoint decorates all visible items through the existing Action Follow Up store after permission-aware resolution.",
 			"accounting_truth": "Business Control Centre composes existing ERPNext/RetailEdge reporting and control engines; it does not create a ledger or mutate accounting documents.",
+			"financial_payload_contract": "Liquidity and budget/spend payloads already computed by R9 early warning are exposed for presentation without triggering duplicate financial queries.",
 		},
 	}
 
