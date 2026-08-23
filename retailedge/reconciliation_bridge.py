@@ -225,10 +225,10 @@ def _sales_invoice_native_reconciliation_safety(match_doc, invoice_name):
 	linked_payment_entries = get_payment_entries_for_sales_invoice(invoice_name) or []
 	if linked_payment_entries:
 		payment_entry_names = ", ".join(
-			cstr(row.get("payment_entry")).strip()
-			for row in linked_payment_entries
-			if cstr(row.get("payment_entry")).strip()
-		)
+				cstr(row.get("payment_entry")).strip()
+				for row in linked_payment_entries
+				if cstr(row.get("payment_entry")).strip()
+			)
 		return {
 			"safe": False,
 			"status": TARGET_AMBIGUOUS,
@@ -1093,6 +1093,29 @@ def check_reconciliation_execution_gate(match_name, user=None, settings=None, dr
 		return _execution_gate_result(EXECUTION_GATE_SETTINGS_DISABLED, ["Bank reconciliation execution is disabled in RetailEdge Settings."], warnings, dry_run_result, settings_snapshot, user)
 	if not _user_has_allowed_reconciliation_execution_role(user, settings_snapshot["allowed_reconciliation_execution_roles"]):
 		return _execution_gate_result(EXECUTION_GATE_PERMISSION_DENIED, ["User does not have an allowed reconciliation execution role."], warnings, dry_run_result, settings_snapshot, user)
+
+	execution_status = cstr(match_doc.get("execution_status")).strip()
+	if execution_status in {EXECUTION_STATUS_EXECUTED, EXECUTION_STATUS_ALREADY_HANDLED}:
+		return _execution_gate_result(
+			EXECUTION_GATE_BLOCKED,
+			["This Bank Match Review execution has already been handled."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
+
+	erpnext_reconciliation_status = cstr(match_doc.get("erpnext_reconciliation_status")).strip()
+	if erpnext_reconciliation_status == "Reconciled":
+		return _execution_gate_result(
+			EXECUTION_GATE_BLOCKED,
+			["Bank Transaction is already reconciled in ERPNext."],
+			warnings,
+			dry_run_result,
+			settings_snapshot,
+			user,
+		)
+
 	if cstr(match_doc.get("decision_status") or match_doc.get("review_status")).strip() != "Confirmed":
 		block_reasons.append("Bank Match Review must be confirmed before reconciliation execution can be considered.")
 	if not cstr(match_doc.get("bank_transaction")).strip():
