@@ -143,8 +143,20 @@ class BankingPageContractTests(unittest.TestCase):
 			'valueRow("Date", accounting.date)',
 			'valueRow("Reference", accounting.reference)',
 		)
-		for rows in (statement_rows, accounting_rows):
-			positions = [review_js.index(snippet) for snippet in rows]
+
+		bank_rows_start = review_js.index("\t\tbankRows.append(")
+		bank_rows_end = review_js.index("\n\n\t\tcandidateRows.append(", bank_rows_start)
+		bank_rows_block = review_js[bank_rows_start:bank_rows_end]
+
+		candidate_rows_start = review_js.index("\t\tcandidateRows.append(", bank_rows_end)
+		candidate_rows_end = review_js.index("\n\n\t\tbankCard.appendChild(bankRows)", candidate_rows_start)
+		candidate_rows_block = review_js[candidate_rows_start:candidate_rows_end]
+
+		for block, rows in (
+			(bank_rows_block, statement_rows),
+			(candidate_rows_block, accounting_rows),
+		):
+			positions = [block.index(snippet) for snippet in rows]
 			self.assertEqual(positions, sorted(positions))
 
 		self.assertIn('valueRow(accounting.gl_account_label || "Bank-side Account", accounting.gl_account)', review_js)
