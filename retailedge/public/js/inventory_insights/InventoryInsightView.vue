@@ -41,6 +41,14 @@
 		>
 			<template #actions>
 				<button type="button" class="edge-button" @click="goBackToInventory">Inventory Intelligence</button>
+				<EdgeExportMenu
+					v-if="rows.length && exportFormats.length"
+					:dataset="exportDataset"
+					:loadDataset="loadExportDataset"
+					:formats="exportFormats"
+					@export-start="onExportStart"
+					@export-error="handleExportError"
+				/>
 				<button
 					v-if="isTransferView && selectedRow"
 					type="button"
@@ -108,7 +116,7 @@
 <script>
 import SimpleStockTransferDialog from "../retailedge_business_hub/SimpleStockTransferDialog.vue";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
 const VIEW_CONFIG = {
 	ageing: {
 		title: "Inventory Ageing",
@@ -165,6 +173,7 @@ export default {
 	props: {
 		view: { type: String, required: true },
 		pageMethod: { type: String, default: "retailedge.inventory_insight_views.get_inventory_insight_view" },
+		exportMethod: { type: String, default: "retailedge.inventory_insight_views.get_inventory_insight_view_export" },
 	},
 	components: {
 		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
@@ -192,6 +201,8 @@ export default {
 			selectedRow: null,
 			guidedTransferOpen: false,
 			sort: null,
+			exportCapabilities: { can_export: false, can_print: false },
+			exportAction: "export",
 			filters: {
 				company: "",
 				branch: "",
@@ -231,6 +242,58 @@ export default {
 				sortable: true,
 			}));
 		},
+		exportFormats() {
+			const formats = [];
+			if (this.exportCapabilities.can_export) {
+				formats.push({ value: "csv", label: "CSV" }, { value: "excel", label: "Excel" });
+			}
+			if (this.exportCapabilities.can_print) formats.push({ value: "print", label: "Print / PDF" });
+			return formats;
+		},
+		exportDataset() {
+			return {
+				title: this.config.title,
+				filename: `RetailEdge ${this.config.title} ${this.filters.company || ""}`.trim(),
+				columns: this.columns,
+				rows: this.rows,
+				filters: this.exportFilters,
+				summary: this.summary,
+				metadata: this.exportMetadata,
+			};
+		},
+		exportFilters() {
+			const entries = [
+				{ label: "Company", value: this.filters.company },
+				{ label: "Branch", value: this.filters.branch },
+				{ label: "Warehouse", value: this.filters.warehouse },
+				{ label: "Item Group", value: this.filters.item_group },
+				{ label: "Item", value: this.filters.item_code },
+			];
+			if (this.isAgeingView) {
+				entries.push(
+					{ label: "Age Bands (Days)", value: this.filters.age_ranges },
+					{ label: "Aged Stock Threshold (Days)", value: this.filters.aged_threshold_days },
+				);
+			}
+			if (this.isProfitabilityView) {
+				entries.push(
+					{ label: "From Date", value: this.filters.from_date },
+					{ label: "To Date", value: this.filters.to_date },
+				);
+			}
+			return entries.filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined);
+		},
+		exportMetadata() {
+			const entries = [
+				{ label: "Inventory Truth", value: "ERPNext stock and RetailEdge bounded inventory intelligence" },
+				{ label: "Dataset Scope", value: "All filtered records within the bounded server-side service" },
+			];
+			if (this.isAgeingView) entries.push({ label: "Ageing Truth", value: "ERPNext v16 Stock Ageing FIFO semantics" });
+			if (this.isTransferView) entries.push({ label: "Transfer Status", value: "Advisory only; no Stock Entry is created automatically" });
+			if (this.isProfitabilityView) entries.push({ label: "Profitability Truth", value: "R8 profitability intelligence / ERPNext financial truth" });
+			if (this.sort?.field) entries.push({ label: "Sort", value: `${this.sort.field} ${this.sort.direction || "asc"}` });
+			return entries;
+		},
 		scopeLabel() {
 			if (this.scope.warehouse) return `Warehouse: ${this.scope.warehouse}`;
 			if (this.scope.branch) return `Branch: ${this.scope.branch}`;
@@ -267,11 +330,31 @@ export default {
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				await this.fetchExportCapabilities();
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, `Failed to load ${this.config.title} controls.`);
 			} finally {
 				this.metadataLoading = false;
+			}
+		},
+		async fetchExportCapabilities() {
+			if (!this.filters.company) {
+				this.exportCapabilities = { can_export: false, can_print: false };
+				return;
+			}
+			try {
+				const capabilities = await callMethod("retailedge.reporting_capabilities.get_shell_capabilities", {
+					report_key: "stock-position",
+					company: this.filters.company,
+					branch: this.filters.branch || "",
+				});
+				this.exportCapabilities = {
+					can_export: Boolean(capabilities.can_export),
+					can_print: Boolean(capabilities.can_print),
+				};
+			} catch (_error) {
+				this.exportCapabilities = { can_export: false, can_print: false };
 			}
 		},
 		mapNavigationGroups(groups) {
@@ -307,10 +390,16 @@ export default {
 		onCompanySelected(option) {
 			this.filters.company = option.value;
 			this.filters.branch = ""; this.filters.warehouse = ""; this.filters.item_group = ""; this.filters.item_code = "";
-			this.itemLabel = ""; this.branchName = ""; this.resetResultState();
+			this.itemLabel = ""; this.branchName = ""; this.exportCapabilities = { can_export: false, can_print: false }; this.resetResultState();
 		},
-		onBranchSelected(option) { this.filters.branch = option.value; this.filters.warehouse = ""; this.branchName = option.label || option.value; this.resetResultState(); },
-		clearBranch() { this.filters.branch = ""; this.filters.warehouse = ""; this.branchName = ""; this.resetResultState(); },
+		onBranchSelected(option) {
+			this.filters.branch = option.value; this.filters.warehouse = ""; this.branchName = option.label || option.value;
+			this.exportCapabilities = { can_export: false, can_print: false }; this.resetResultState();
+		},
+		clearBranch() {
+			this.filters.branch = ""; this.filters.warehouse = ""; this.branchName = "";
+			this.exportCapabilities = { can_export: false, can_print: false }; this.resetResultState();
+		},
 		clearWarehouse() { this.filters.warehouse = ""; this.resetResultState(); },
 		async onWarehouseSelected(option) {
 			this.filters.warehouse = option.value; this.resetResultState();
@@ -319,7 +408,11 @@ export default {
 				const resolved = await callMethod("retailedge.guided_entry_context.resolve_branch_warehouse_selection", {
 					company: this.filters.company, branch: this.filters.branch, warehouse: this.filters.warehouse, preference: "default",
 				});
-				if (resolved.branch) { this.filters.branch = resolved.branch; this.branchName = resolved.branch; }
+				if (resolved.branch) {
+					this.filters.branch = resolved.branch;
+					this.branchName = resolved.branch;
+					this.exportCapabilities = { can_export: false, can_print: false };
+				}
 			} catch (error) {
 				this.filters.warehouse = "";
 				this.error = errorMessage(error, "The selected Warehouse is not valid for this inventory scope.");
@@ -330,7 +423,11 @@ export default {
 		onItemSelected(option) { this.filters.item_code = option.value; this.itemLabel = option.label || option.value; if (!this.filters.item_group && option.raw?.item_group) this.filters.item_group = option.raw.item_group; this.resetResultState(); },
 		clearItem() { this.filters.item_code = ""; this.itemLabel = ""; this.resetResultState(); },
 		resetResultState() { this.currentPage = 1; this.selectedRow = null; },
-		applyFilters() { this.resetResultState(); return this.fetchData(); },
+		async applyFilters() {
+			this.resetResultState();
+			await this.fetchExportCapabilities();
+			return this.fetchData();
+		},
 		requestFilters() {
 			const { page_size: _pageSize, ...filters } = this.filters;
 			if (!this.isProfitabilityView) { delete filters.from_date; delete filters.to_date; }
@@ -360,6 +457,29 @@ export default {
 				this.rows = []; this.columns = []; this.summary = [];
 				this.error = errorMessage(error, `${this.config.title} failed to load.`);
 			} finally { this.loading = false; }
+		},
+		onExportStart(format) {
+			this.exportAction = format === "print" ? "print" : "export";
+		},
+		handleExportError(payload) {
+			const exportError = payload?.error || payload;
+			frappe.show_alert?.({ message: errorMessage(exportError, `${this.config.title} export failed.`), indicator: "red" });
+		},
+		async loadExportDataset() {
+			const result = await callMethod(this.exportMethod, {
+				view: this.view,
+				filters: this.requestFilters(),
+				sort_field: this.sort?.field || "",
+				sort_direction: this.sort?.direction || "",
+				action: this.exportAction,
+			});
+			return {
+				columns: result.columns || this.columns,
+				rows: result.rows || [],
+				summary: result.summary || this.summary,
+				filters: this.exportFilters,
+				metadata: this.exportMetadata,
+			};
 		},
 		rowKey(row, index) { return [row.item_code, row.source_warehouse, row.target_warehouse, row.label, index].filter(Boolean).join("::") || String(index); },
 		changeSort(next) { this.sort = next; this.currentPage = 1; this.selectedRow = null; this.fetchData(); },
