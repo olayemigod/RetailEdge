@@ -8,15 +8,36 @@ def test_shared_inventory_insight_component_reuses_edgesuite_and_guided_transfer
 	component = (
 		APP_ROOT / "public" / "js" / "inventory_insights" / "InventoryInsightView.vue"
 	).read_text(encoding="utf-8")
+	dialog = (
+		APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleStockTransferDialog.vue"
+	).read_text(encoding="utf-8")
 	bundle = (APP_ROOT / "public" / "js" / "inventory_insights.bundle.js").read_text(encoding="utf-8")
 
 	for token in ("EdgeAppShell", "EdgeReportShell", "EdgeLinkField"):
 		assert token in component
 	assert "SimpleStockTransferDialog" in component
 	assert "../retailedge_business_hub/SimpleStockTransferDialog.vue" in component
+	assert ':prefill="guidedTransferPrefill"' in component
+	for token in (
+		"source_warehouse: row.source_warehouse",
+		"target_warehouse: row.target_warehouse",
+		"item_code: row.item_code",
+		"qty: Number(row.suggested_transfer_qty",
+	):
+		assert token in component
+	assert 'prefill: { type: Object, default: () => ({}) }' in dialog
+	assert "await this.applyPrefill()" in dialog
+	assert "await this.setSourceWarehouse(sourceWarehouse)" in dialog
+	assert "await this.setTargetWarehouse(targetWarehouse)" in dialog
+	assert "this.values.items = [{ item_code: itemCode, qty }]" in dialog
 	assert "retailedge.stock_position.search_stock_position_options" in component
 	assert "resolve_branch_warehouse_selection" in component
 	assert "from_date" in component and "to_date" in component
+	assert "Age Bands (Days)" in component
+	assert 'age_ranges: "30,60,90,180"' in component
+	assert "Aged Stock Threshold (Days)" in component
+	assert "aged_threshold_days: 90" in component
+	assert "delete filters.age_ranges" in component
 	assert "@sort-change=\"changeSort\"" in component
 	assert "sort_field" in component and "sort_direction" in component
 	assert 'window.open(`/app/item/${encodeURIComponent(payload.value)}`' in component
