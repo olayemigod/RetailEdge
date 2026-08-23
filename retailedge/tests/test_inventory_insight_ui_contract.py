@@ -6,7 +6,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestInventoryInsightUIContract(unittest.TestCase):
-	def test_shared_inventory_insight_component_reuses_edgesuite_and_guided_transfer(self):
+	def test_shared_inventory_insight_component_reuses_edgesuite_guided_transfer_and_export(self):
 		component = (
 			APP_ROOT / "public" / "js" / "inventory_insights" / "InventoryInsightView.vue"
 		).read_text(encoding="utf-8")
@@ -15,7 +15,7 @@ class TestInventoryInsightUIContract(unittest.TestCase):
 		).read_text(encoding="utf-8")
 		bundle = (APP_ROOT / "public" / "js" / "inventory_insights.bundle.js").read_text(encoding="utf-8")
 
-		for token in ("EdgeAppShell", "EdgeReportShell", "EdgeLinkField"):
+		for token in ("EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"):
 			self.assertIn(token, component)
 		self.assertIn("SimpleStockTransferDialog", component)
 		self.assertIn("../retailedge_business_hub/SimpleStockTransferDialog.vue", component)
@@ -51,6 +51,21 @@ class TestInventoryInsightUIContract(unittest.TestCase):
 		self.assertIn("R10 does not recalculate margin", component)
 		self.assertIn("mountInventoryInsightView", bundle)
 		self.assertIn("get_inventory_insight_view", bundle)
+
+		# Secondary export/print is shared EdgeSuite UI and server-authorized. The
+		# browser never loops report pages to build a hidden full dataset.
+		self.assertIn('exportMethod: { type: String, default: "retailedge.inventory_insight_views.get_inventory_insight_view_export" }', component)
+		self.assertIn(':loadDataset="loadExportDataset"', component)
+		self.assertIn(':formats="exportFormats"', component)
+		self.assertIn('@export-start="onExportStart"', component)
+		self.assertIn('report_key: "stock-position"', component)
+		self.assertIn("can_export: Boolean(capabilities.can_export)", component)
+		self.assertIn("can_print: Boolean(capabilities.can_print)", component)
+		self.assertIn('format === "print" ? "print" : "export"', component)
+		self.assertIn("action: this.exportAction", component)
+		self.assertIn("loadExportDataset()", component)
+		self.assertNotIn("for (let page", component)
+		self.assertNotIn("while (page", component)
 
 	def test_inventory_insight_pages_use_shared_bundle_and_expected_views(self):
 		pages = {
