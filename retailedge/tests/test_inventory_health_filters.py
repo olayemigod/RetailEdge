@@ -9,9 +9,10 @@ from retailedge import inventory_health
 
 
 class TestInventoryHealthFilters(unittest.TestCase):
+	@patch("retailedge.inventory_health.get_inventory_replenishment")
 	@patch("retailedge.inventory_health.get_historical_inventory_demand")
 	@patch("retailedge.inventory_health._build_stock_position_dataset")
-	def test_movement_filter_recalculates_stock_summary_on_visible_rows(self, stock, demand):
+	def test_movement_filter_recalculates_stock_summary_on_visible_rows(self, stock, demand, replenishment):
 		stock.return_value = {
 			"columns": [
 				{"fieldname": "item_code", "label": "Item", "fieldtype": "Link"},
@@ -57,6 +58,13 @@ class TestInventoryHealthFilters(unittest.TestCase):
 			"scan": {},
 			"metadata": {},
 		}
+		replenishment.return_value = {
+			"items": [],
+			"rules": [],
+			"scope": {"company": "Test Company", "warehouse_count": 1},
+			"scan": {},
+			"metadata": {},
+		}
 
 		result = inventory_health.get_inventory_health(
 			{
@@ -73,6 +81,7 @@ class TestInventoryHealthFilters(unittest.TestCase):
 		self.assertEqual(summary["Items in Scope"], 1)
 		self.assertEqual(summary["Stock Value"], 1000)
 		self.assertEqual(summary["Non-moving"], 1)
+		replenishment.assert_called_once()
 
 
 if __name__ == "__main__":
