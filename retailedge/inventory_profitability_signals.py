@@ -10,6 +10,8 @@ from retailedge.inventory_health import _build_inventory_health_dataset
 from retailedge.profitability_intelligence import get_profitability_intelligence
 from retailedge.stock_position import _coerce_filters
 
+STOCK_AVAILABILITY_RISK = {"Out of Stock", "Fully Reserved", "Negative"}
+
 
 @frappe.whitelist()
 def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
@@ -60,15 +62,22 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 	rows: list[dict[str, Any]] = []
 	for item_code, inventory_row in inventory_by_item.items():
 		profit_row = top_contributors.get(item_code)
-		if profit_row and inventory_row.get("replenishment_status") == "Reorder Now":
+		if profit_row and inventory_row.get("stock_status") in STOCK_AVAILABILITY_RISK:
+			rows.append(
+				_signal(
+					kind="top_profit_contributor_stockout",
+					severity="danger",
+					label=_("Top profit contributor has stock availability risk"),
+					item_code=item_code,
+					inventory=inventory_row,
+					profitability=profit_row,
+				)
+			)
+		elif profit_row and inventory_row.get("replenishment_status") == "Reorder Now":
 			rows.append(
 				_signal(
 					kind="top_profit_contributor_reorder",
-					severity=(
-						"danger"
-						if inventory_row.get("stock_status") in {"Out of Stock", "Fully Reserved", "Negative"}
-						else "warning"
-					),
+					severity="warning",
 					label=_("Top profit contributor requires replenishment"),
 					item_code=item_code,
 					inventory=inventory_row,
@@ -120,6 +129,7 @@ def get_inventory_profitability_signals(filters: dict[str, Any] | str | None = N
 			"profitability_truth": profitability.get("metadata", {}).get("financial_truth"),
 			"profitability_period_contract": "Visible From Date / To Date are passed to R8 independently of the R10 inventory movement evidence window.",
 			"top_contributor_contract": "R8 top_contributors; R10 does not recalculate contribution ranking",
+			"stockout_contract": "A top R8 profit contributor with Out of Stock, Fully Reserved, or Negative current stock is flagged even when no ERPNext reorder rule is configured.",
 			"low_margin_contract": "R8 margin_leakage; R10 does not own the low-margin threshold",
 			"inventory_contract": "R10 Inventory Health / ERPNext Bin + bounded demand + ERPNext reorder rules",
 			"read_only": True,
@@ -163,6 +173,11 @@ def _signal(
 def _summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	return [
 		{"label": _("Profit + Inventory Signals"), "value": len(rows), "datatype": "Int"},
+		{
+			"label": _("Top Profit Contributors at Stock Risk"),
+			"value": sum(1 for row in rows if row.get("kind") == "top_profit_contributor_stockout"),
+			"datatype": "Int",
+		},
 		{
 			"label": _("Top Profit Contributors Requiring Replenishment"),
 			"value": sum(1 for row in rows if row.get("kind") == "top_profit_contributor_reorder"),
