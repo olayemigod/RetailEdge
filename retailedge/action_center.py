@@ -16,7 +16,7 @@ from retailedge.branch_context import (
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
 from retailedge.expense_register import get_expense_register
-from retailedge.inventory_health import get_inventory_health
+from retailedge.inventory_health import get_inventory_action_summary
 from retailedge.reporting_capabilities import _validate_scope as _validate_operational_scope
 from retailedge.supplier_payables import get_supplier_payables
 
@@ -89,15 +89,13 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 
 	stock = _safe_source(
 		"stock_position",
-		lambda: get_inventory_health(
-			filters={"company": company, "branch": branch, "include_zero": 1},
-			page=1,
-			page_size=DEFAULT_PAGE_SIZE,
+		lambda: get_inventory_action_summary(
+			filters={"company": company, "branch": branch, "include_zero": 1}
 		),
 	)
-	# Keep the established source key for follow-up/backward compatibility. The
-	# provider is now Inventory Health, which composes Stock Position once and adds
-	# R10 movement/replenishment intelligence without a second stock-domain scan.
+	# Keep the established source key and action fingerprints for follow-up/backward
+	# compatibility. The R10 action summary keeps current Bin alerts available even
+	# when optional demand/replenishment enrichment cannot be evaluated safely.
 	sources["stock_position"] = stock
 	if stock.get("available"):
 		_append_stock_exceptions(items, stock["payload"])
@@ -226,7 +224,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			"resolution_model": "drill_through_to_existing_workflow_or_report",
 			"accounting_truth": "existing ERPNext/RetailEdge documents and reporting engines",
 			"source_model": "one_authoritative_provider_per_exception_domain",
-			"stock_provider": "Inventory Health (Stock Position + R10 demand/replenishment)",
+			"stock_provider": "Inventory Action Summary (ERPNext Bin + independently optional R10 reorder/movement enrichment)",
 			"generated_for": frappe.session.user,
 			"unfiltered_action_count": len(all_items),
 			"visible_action_count": len(items),
