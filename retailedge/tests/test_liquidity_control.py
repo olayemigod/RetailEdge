@@ -57,16 +57,21 @@ class RetailEdgeLiquidityControlTests(unittest.TestCase):
 		self.assertIsNone(current["immediate_obligation_coverage_ratio"])
 		self.assertIsNone(current["indicative_liquidity_gap"])
 
-	def test_service_reuses_existing_truth_engines_and_does_not_create_parallel_ledger(self):
+	def test_service_reuses_existing_truth_engines_without_full_owner_dashboard_reload(self):
 		source = (APP_ROOT / "liquidity_control.py").read_text()
-		self.assertIn("get_financial_position", source)
+		self.assertIn("_get_liquid_position", source)
+		self.assertIn("get_cash_movement", source)
 		self.assertIn("get_customer_receivables_export", source)
 		self.assertIn("get_supplier_payables_export", source)
+		self.assertIn("require_dashboard_action", source)
+		self.assertNotIn("get_owner_dashboard_data", source)
+		self.assertNotIn("get_financial_position", source)
 		self.assertNotIn("frappe.db.sql", source)
 		self.assertNotIn("ignore_permissions", source)
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertIn("not a cash forecast", source)
 		self.assertIn("withheld rather than inferred", source)
+		self.assertIn("no full Owner Dashboard reload", source)
 
 
 if __name__ == "__main__":
