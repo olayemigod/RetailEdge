@@ -19,6 +19,15 @@ from retailedge.stock_position import (
 )
 
 MAX_REORDER_RULES = 20000
+REORDER_CHILD_DOCTYPE = "Item Reorder"
+REORDER_TABLE_FIELD = "reorder_levels"
+REQUIRED_REORDER_FIELDS = (
+	"warehouse",
+	"warehouse_group",
+	"warehouse_reorder_level",
+	"warehouse_reorder_qty",
+	"material_request_type",
+)
 
 
 @frappe.whitelist()
@@ -34,6 +43,7 @@ def get_inventory_replenishment(filters: dict[str, Any] | str | None = None) -> 
 		filters.company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	_validate_filters(filters)
 	_assert_report_access(filters)
+	_assert_reorder_runtime_contract()
 
 	warehouses = _resolve_warehouse_scope(filters)
 	items = _get_permitted_items(filters)
@@ -98,8 +108,9 @@ def get_inventory_replenishment(filters: dict[str, Any] | str | None = None) -> 
 		"metadata": {
 			"configuration_truth": "ERPNext Item.reorder_levels / Item Reorder",
 			"projected_quantity_truth": "ERPNext Bin.projected_qty",
+			"runtime_contract_validated": True,
 			"threshold_semantics": "ERPNext v16: configured rule triggers when projected quantity is at or below reorder level",
-			"quantity_semantics": "Recommended quantity is the greater of configured reorder quantity or projected deficiency",
+			"quantity_semantics": "Recommended quantity mirrors ERPNext v16: the greater of configured reorder quantity or projected deficiency",
 			"variant_semantics": "Variant inherits template reorder rows only when the variant has no direct reorder rows",
 			"warehouse_group_semantics": (
 				"Warehouse-group rules are surfaced but not scored in R10E until full group visibility can be proven permission-safely."
@@ -109,6 +120,34 @@ def get_inventory_replenishment(filters: dict[str, Any] | str | None = None) -> 
 			"persistent_derived_truth": False,
 		},
 	}
+
+
+def _assert_reorder_runtime_contract() -> None:
+	cache_key = "retailedge_r10_reorder_runtime_contract"
+	if getattr(frappe.local, cache_key, False):
+		return
+	try:
+		item_meta = frappe.get_meta("Item")
+		reorder_meta = frappe.get_meta(REORDER_CHILD_DOCTYPE)
+		table_field = item_meta.get_field(REORDER_TABLE_FIELD)
+		missing = [fieldname for fieldname in REQUIRED_REORDER_FIELDS if not reorder_meta.has_field(fieldname)]
+		compatible = bool(
+			table_field
+			and str(getattr(table_field, "fieldtype", "")) == "Table"
+			and str(getattr(table_field, "options", "")) == REORDER_CHILD_DOCTYPE
+			and not missing
+		)
+	except Exception:
+		compatible = False
+		missing = list(REQUIRED_REORDER_FIELDS)
+	if not compatible:
+		detail = ", ".join(missing) if missing else REORDER_TABLE_FIELD
+		frappe.throw(
+			_(
+				"The installed ERPNext Item Reorder schema is not compatible with RetailEdge Inventory Intelligence. Expected Item.reorder_levels → Item Reorder with fields: {0}. Update ERPNext or review the installed stock schema before using replenishment intelligence."
+			).format(detail)
+		)
+	setattr(frappe.local, cache_key, True)
 
 
 def _get_permitted_items(filters: frappe._dict) -> list[frappe._dict]:
@@ -154,7 +193,7 @@ def _get_reorder_rules(parent_names: list[str]) -> dict[str, list[frappe._dict]]
 	"""
 	if not parent_names:
 		return {}
-	reorder = frappe.qb.DocType("Item Reorder")
+	reorder = frappe.qb.DocType(REORDER_CHILD_DOCTYPE)
 	query = (
 		frappe.qb.from_(reorder)
 		.select(
@@ -167,7 +206,7 @@ def _get_reorder_rules(parent_names: list[str]) -> dict[str, list[frappe._dict]]
 		)
 		.where(reorder.parent.isin(parent_names))
 		.where(reorder.parenttype == "Item")
-		.where(reorder.parentfield == "reorder_levels")
+		.where(reorder.parentfield == REORDER_TABLE_FIELD)
 		.orderby(reorder.parent)
 		.orderby(reorder.idx)
 		.limit(MAX_REORDER_RULES + 1)
@@ -335,6 +374,7 @@ def _empty_payload(filters: frappe._dict, warehouses: list[str]) -> dict[str, An
 		"metadata": {
 			"configuration_truth": "ERPNext Item.reorder_levels / Item Reorder",
 			"projected_quantity_truth": "ERPNext Bin.projected_qty",
+			"runtime_contract_validated": True,
 			"read_only": True,
 			"creates_material_request": False,
 		},
