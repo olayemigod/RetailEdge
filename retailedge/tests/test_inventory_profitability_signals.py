@@ -18,8 +18,20 @@ def _inventory_payload():
 				"actual_qty": 0,
 				"available_qty": 0,
 				"stock_status": "Out of Stock",
-				"movement_class": "Fast",
+				"movement_class": "Normal",
 				"stock_cover_days": 0,
+				"replenishment_status": "No reorder rule",
+				"recommended_reorder_qty": 0,
+			},
+			{
+				"item_code": "PROFIT-REORDER",
+				"item_name": "Profit Reorder",
+				"item_group": "Products",
+				"actual_qty": 12,
+				"available_qty": 12,
+				"stock_status": "Available",
+				"movement_class": "Normal",
+				"stock_cover_days": 12,
 				"replenishment_status": "Reorder Now",
 				"recommended_reorder_qty": 20,
 			},
@@ -53,7 +65,13 @@ def _profitability_payload():
 				"net_sales": 500000,
 				"gross_profit": 150000,
 				"gross_margin_percent": 30,
-			}
+			},
+			{
+				"item_code": "PROFIT-REORDER",
+				"net_sales": 350000,
+				"gross_profit": 90000,
+				"gross_margin_percent": 25.7,
+			},
 		],
 		"margin_leakage": [
 			{
@@ -75,7 +93,7 @@ def _profitability_payload():
 
 @patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
 @patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
-def test_top_r8_profit_contributor_at_reorder_risk_is_flagged_without_new_margin_formula(inventory, profitability):
+def test_top_r8_profit_contributor_stockout_is_flagged_without_reorder_rule(inventory, profitability):
 	inventory.return_value = _inventory_payload()
 	profitability.return_value = _profitability_payload()
 
@@ -89,11 +107,12 @@ def test_top_r8_profit_contributor_at_reorder_risk_is_flagged_without_new_margin
 		}
 	)
 
-	risk = next(row for row in result["rows"] if row["kind"] == "top_profit_contributor_reorder")
+	risk = next(row for row in result["rows"] if row["kind"] == "top_profit_contributor_stockout")
 	assert risk["item_code"] == "FAST-PROFIT"
 	assert risk["severity"] == "danger"
 	assert risk["gross_profit"] == 150000
-	assert risk["recommended_reorder_qty"] == 20
+	assert risk["replenishment_status"] == "No reorder rule"
+	assert risk["recommended_reorder_qty"] == 0
 	profitability.assert_called_once_with(
 		{
 			"company": "Test Company",
@@ -107,6 +126,21 @@ def test_top_r8_profit_contributor_at_reorder_risk_is_flagged_without_new_margin
 	assert result["scope"]["inventory_evidence_from_date"] == "2026-05-26"
 	assert result["scope"]["inventory_evidence_to_date"] == "2026-08-23"
 	assert "independently" in result["metadata"]["profitability_period_contract"]
+	assert "even when no ERPNext reorder rule" in result["metadata"]["stockout_contract"]
+
+
+@patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
+@patch("retailedge.inventory_profitability_signals._build_inventory_health_dataset")
+def test_top_r8_profit_contributor_reorder_signal_remains_when_stock_is_available(inventory, profitability):
+	inventory.return_value = _inventory_payload()
+	profitability.return_value = _profitability_payload()
+
+	result = signals.get_inventory_profitability_signals({"company": "Test Company"})
+
+	risk = next(row for row in result["rows"] if row["kind"] == "top_profit_contributor_reorder")
+	assert risk["item_code"] == "PROFIT-REORDER"
+	assert risk["severity"] == "warning"
+	assert risk["recommended_reorder_qty"] == 20
 
 
 @patch("retailedge.inventory_profitability_signals.get_profitability_intelligence")
