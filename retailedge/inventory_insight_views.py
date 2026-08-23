@@ -9,6 +9,7 @@ from frappe.utils import flt
 from retailedge.inventory_ageing import get_inventory_ageing
 from retailedge.inventory_profitability_signals import get_inventory_profitability_signals
 from retailedge.inventory_transfer_opportunities import get_inventory_transfer_opportunities
+from retailedge.reporting_capabilities import require_report_action
 from retailedge.stock_position import DEFAULT_PAGE_SIZE, _coerce_filters, _page_response
 
 INSIGHT_VIEWS = {"ageing", "transfer-opportunities", "profitability"}
@@ -25,6 +26,53 @@ def get_inventory_insight_view(
 	sort_direction: str = "",
 ) -> dict[str, Any]:
 	"""Return a paginated R10 secondary insight using its existing authoritative service."""
+	dataset = _build_inventory_insight_dataset(
+		view,
+		filters,
+		sort_field=sort_field,
+		sort_direction=sort_direction,
+	)
+	return _page_response(dataset, page=page, page_size=page_size)
+
+
+@frappe.whitelist()
+def get_inventory_insight_view_export(
+	view: str,
+	filters: dict[str, Any] | str | None = None,
+	sort_field: str = "",
+	sort_direction: str = "",
+) -> dict[str, Any]:
+	"""Return the bounded full secondary insight for shared EdgeSuite export/print."""
+	filters = _coerce_filters(filters)
+	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	if company:
+		filters.company = company
+	require_report_action(
+		"stock-position",
+		action="export",
+		company=company,
+		branch=str(filters.get("branch") or ""),
+	)
+	dataset = _build_inventory_insight_dataset(
+		view,
+		filters,
+		sort_field=sort_field,
+		sort_direction=sort_direction,
+	)
+	metadata = dict(dataset.get("metadata") or {})
+	metadata["export_authorization_scope"] = "stock-position"
+	metadata["export_dataset_scope"] = "all_filtered_bounded"
+	dataset["metadata"] = metadata
+	return dataset
+
+
+def _build_inventory_insight_dataset(
+	view: str,
+	filters: dict[str, Any] | str | None,
+	*,
+	sort_field: str = "",
+	sort_direction: str = "",
+) -> dict[str, Any]:
 	view = str(view or "").strip().lower()
 	if view not in INSIGHT_VIEWS:
 		frappe.throw(_("Unsupported Inventory Intelligence view."))
@@ -45,7 +93,7 @@ def get_inventory_insight_view(
 	if resolved_sort:
 		rows = _sort_rows(rows, resolved_sort)
 
-	dataset = {
+	return {
 		"view": view,
 		"columns": columns,
 		"rows": rows,
@@ -61,7 +109,6 @@ def get_inventory_insight_view(
 		"show_costs": payload.get("show_costs"),
 		"available": payload.get("available", True),
 	}
-	return _page_response(dataset, page=page, page_size=page_size)
 
 
 def _resolve_sort(
