@@ -320,8 +320,15 @@ export default {
 		},
 		openReportCell({ column, row }) {
 			if (column?.fieldname !== "customer" || !row?.customer) return;
-			const route = `/app/customer/${encodeURIComponent(row.customer)}`;
-			window.open(route, "_blank", "noopener,noreferrer");
+			frappe.route_options = {
+				customer: row.customer,
+				customer_name: row.customer_name || row.customer,
+				company: this.filters.company,
+				branch: this.filters.branch,
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+			};
+			frappe.set_route("customer-360");
 		},
 		formatCell(value, column) {
 			if (value === null || value === undefined || value === "") return "—";
