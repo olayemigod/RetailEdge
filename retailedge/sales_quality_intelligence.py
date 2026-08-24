@@ -63,10 +63,10 @@ def _build_sales_quality_dataset(filters: dict[str, Any] | str | None) -> dict[s
 	sales_headers = [row for row in headers if not cint(row.get("is_return"))]
 	return_headers = [row for row in headers if cint(row.get("is_return"))]
 	sales_names = [str(row.name) for row in sales_headers]
-	invoice_details = _get_invoice_discount_details(sales_names)
-	item_rows = _get_sales_quality_items(sales_names)
-	team_map = _salespeople_by_invoice(sales_names)
 	show_costs = not should_hide_cost_price()
+	invoice_details = _get_invoice_discount_details(sales_names)
+	item_rows = _get_sales_quality_items(sales_names, show_costs=show_costs)
+	team_map = _salespeople_by_invoice(sales_names)
 
 	rows = build_sales_quality_rows(
 		sales_headers,
@@ -149,24 +149,25 @@ def _get_invoice_discount_details(invoice_names: list[str]) -> dict[str, frappe.
 	return {str(row.name): row for row in rows}
 
 
-def _get_sales_quality_items(invoice_names: list[str]) -> list[frappe._dict]:
+def _get_sales_quality_items(invoice_names: list[str], *, show_costs: bool) -> list[frappe._dict]:
 	if not invoice_names:
 		return []
+	fields = [
+		"parent",
+		"item_code",
+		"qty",
+		"base_price_list_rate",
+		"base_rate_with_margin",
+		"discount_percentage",
+		"distributed_discount_amount",
+		"base_net_amount",
+	]
+	if show_costs:
+		fields.extend(["stock_qty", "incoming_rate"])
 	rows = frappe.get_all(
 		"Sales Invoice Item",
 		filters={"parenttype": "Sales Invoice", "parent": ["in", invoice_names]},
-		fields=[
-			"parent",
-			"item_code",
-			"qty",
-			"stock_qty",
-			"base_price_list_rate",
-			"base_rate_with_margin",
-			"discount_percentage",
-			"distributed_discount_amount",
-			"base_net_amount",
-			"incoming_rate",
-		],
+		fields=fields,
 		order_by="parent asc, idx asc",
 		limit=MAX_ITEM_SCAN_ROWS + 1,
 	)
