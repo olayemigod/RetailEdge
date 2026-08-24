@@ -19,6 +19,7 @@ from retailedge.sales_reporting import (
 	_company_currency,
 	_get_invoice_items,
 	_get_permitted_invoice_headers,
+	_invoice_branch_scope,
 	_validate_filters,
 )
 
@@ -38,18 +39,28 @@ def get_customer_360(filters: dict[str, Any] | str | None = None) -> dict[str, A
 	period_dataset = _build_customer_sales_dataset(resolved)
 	period_row = next((row for row in period_dataset.get("rows") or [] if row.get("customer") == customer), None)
 	first_purchase = _get_first_purchase_dates(resolved, [customer]).get(customer)
+	latest_purchase = _get_latest_purchase_date(resolved, customer)
 	items = _get_invoice_items([row.name for row in headers], resolved)
 	receivables = _customer_receivables(resolved)
+	period = _period_summary(period_row)
+	period.update(
+		{
+			"current_outstanding": flt(receivables.get("total_outstanding")),
+			"overdue_outstanding": flt(receivables.get("overdue_outstanding")),
+			"open_invoice_count": cint(receivables.get("open_invoice_count")),
+		}
+	)
 
 	return {
 		"title": _("Customer 360"),
 		"customer": master,
 		"relationship": _relationship_summary(
 			first_purchase_date=first_purchase,
+			latest_purchase_date=latest_purchase,
 			headers=headers,
 			to_date=resolved.to_date,
 		),
-		"period": _period_summary(period_row),
+		"period": period,
 		"top_items": _top_items(headers, items),
 		"recent_invoices": _recent_invoices(headers),
 		"receivables": receivables,
@@ -70,6 +81,7 @@ def get_customer_360(filters: dict[str, Any] | str | None = None) -> dict[str, A
 		"metadata": {
 			"sales_truth": "Submitted ERPNext Sales Invoice",
 			"item_truth": "Submitted ERPNext Sales Invoice Item",
+			"relationship_truth": "First/latest submitted non-return Sales Invoice through the selected To Date in the same permitted company/branch scope; cadence remains selected-period only",
 			"receivable_truth": "RetailEdge Customer Receivables using current ERPNext Sales Invoice outstanding balances",
 			"profitability_truth": "R8 transactional profitability when RetailEdge cost visibility permits",
 			"receivables_are_current_not_historical_as_of": True,
@@ -106,9 +118,32 @@ def _get_customer_master(customer: str) -> dict[str, Any]:
 	}
 
 
+def _get_latest_purchase_date(filters: frappe._dict, customer: str) -> str | None:
+	branch_field, branch_condition = _invoice_branch_scope(filters)
+	query_filters: dict[str, Any] = {
+		"docstatus": 1,
+		"company": filters.company,
+		"customer": customer,
+		"is_return": 0,
+		"posting_date": ["<=", filters.to_date],
+	}
+	if branch_field and branch_condition is not None:
+		query_filters[branch_field] = branch_condition
+	rows = frappe.get_list(
+		"Sales Invoice",
+		filters=query_filters,
+		fields=["max(posting_date) as latest_purchase_date"],
+		limit=1,
+	)
+	if not rows or not rows[0].get("latest_purchase_date"):
+		return None
+	return str(rows[0].latest_purchase_date)
+
+
 def _relationship_summary(
 	*,
 	first_purchase_date: str | None,
+	latest_purchase_date: str | None = None,
 	headers: list[frappe._dict],
 	to_date: str,
 ) -> dict[str, Any]:
@@ -119,15 +154,16 @@ def _relationship_summary(
 			if not cint(row.get("is_return")) and row.get("posting_date")
 		]
 	)
-	last_purchase = purchases[-1] if purchases else None
 	intervals = [
 		date_diff(getdate(current), getdate(previous))
 		for previous, current in zip(purchases, purchases[1:])
 	]
 	return {
 		"first_purchase_date": first_purchase_date,
-		"last_purchase_date": last_purchase,
-		"days_since_last_purchase": date_diff(getdate(to_date), getdate(last_purchase)) if last_purchase else None,
+		"last_purchase_date": latest_purchase_date,
+		"days_since_last_purchase": (
+			date_diff(getdate(to_date), getdate(latest_purchase_date)) if latest_purchase_date else None
+		),
 		"period_purchase_count": len(purchases),
 		"average_days_between_purchases": (sum(intervals) / len(intervals)) if intervals else None,
 	}
@@ -142,10 +178,6 @@ def _period_summary(row: dict[str, Any] | None) -> dict[str, Any]:
 			"returns_value": 0.0,
 			"net_sales": 0.0,
 			"average_purchase_value": 0.0,
-			"current_outstanding": 0.0,
-			"overdue_outstanding": 0.0,
-			"open_invoice_count": 0,
-			"max_overdue_days": 0,
 		}
 	return {
 		key: row.get(key)
@@ -160,10 +192,6 @@ def _period_summary(row: dict[str, Any] | None) -> dict[str, Any]:
 			"cost_of_sales",
 			"gross_profit",
 			"gross_margin_percent",
-			"current_outstanding",
-			"overdue_outstanding",
-			"open_invoice_count",
-			"max_overdue_days",
 		)
 		if key in row
 	}
