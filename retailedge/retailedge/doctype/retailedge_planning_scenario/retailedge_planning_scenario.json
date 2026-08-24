@@ -23,7 +23,10 @@
   "cash_adjustment_percent",
   "inventory_safety_percent",
   "notes_section",
-  "notes"
+  "notes",
+  "forecast_snapshot_json",
+  "snapshot_version",
+  "snapshot_generated_at"
  ],
  "fields": [
   {"fieldname":"scenario_section","fieldtype":"Section Break","label":"Scenario"},
@@ -44,7 +47,10 @@
   {"default":"0","description":"Applied to forecast net cash movement. Scheduled receivable/payable commitments remain separately visible.","fieldname":"cash_adjustment_percent","fieldtype":"Percent","label":"Cash Movement Adjustment (%)"},
   {"default":"10","description":"Additional demand coverage applied to recommended replenishment quantities.","fieldname":"inventory_safety_percent","fieldtype":"Percent","label":"Inventory Safety Allowance (%)"},
   {"fieldname":"notes_section","fieldtype":"Section Break","label":"Notes"},
-  {"fieldname":"notes","fieldtype":"Small Text","label":"Assumptions / Notes"}
+  {"fieldname":"notes","fieldtype":"Small Text","label":"Assumptions / Notes"},
+  {"fieldname":"forecast_snapshot_json","fieldtype":"Long Text","hidden":1,"label":"Forecast Snapshot JSON","no_copy":1,"read_only":1},
+  {"default":"1","fieldname":"snapshot_version","fieldtype":"Int","hidden":1,"label":"Snapshot Version","no_copy":1,"read_only":1},
+  {"fieldname":"snapshot_generated_at","fieldtype":"Datetime","hidden":1,"label":"Snapshot Generated At","no_copy":1,"read_only":1}
  ],
  "index_web_pages_for_search": 1,
  "issingle": 0,
