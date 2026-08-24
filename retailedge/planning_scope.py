@@ -20,13 +20,14 @@ def resolve_planning_branch_scope(company: str, branch: str | None = None, *, us
 	user = user or frappe.session.user
 	resolved = str(branch or "").strip()
 	if resolved:
-		validate_user_branch_access(resolved, user=user)
+		validate_user_branch_access(resolved, user=user, company=company, throw=True)
 		return resolved
 
-	if user_has_global_branch_access(user):
+	if user_has_global_branch_access(user=user):
 		return ""
 
-	allowed = [str(value).strip() for value in get_user_allowed_branches(user) if str(value).strip()]
+	allowed_info = get_user_allowed_branches(user=user, company=company)
+	allowed = [str(value).strip() for value in allowed_info.get("branches") or [] if str(value).strip()]
 	if not allowed:
 		return ""
 	if len(allowed) == 1:
