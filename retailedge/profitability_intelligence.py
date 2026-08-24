@@ -11,17 +11,16 @@ from retailedge.accounting_profitability import build_profit_reconciliation, get
 from retailedge.cost_visibility import should_hide_cost_price
 from retailedge.sales_reporting import (
 	MAX_ITEM_SCAN_ROWS,
-	MAX_SALES_TEAM_ROWS,
 	_assert_report_access,
 	_company_currency,
 	_coerce_filters,
 	_get_permitted_invoice_headers,
 	_validate_filters,
 )
+from retailedge.sales_team_allocation import get_sales_team_allocations
 
 MAX_PROFITABILITY_ROWS = MAX_ITEM_SCAN_ROWS
 DEFAULT_LOW_MARGIN_PERCENT = 10.0
-UNALLOCATED_SALESPERSON = "Unallocated Sales Team"
 
 
 @frappe.whitelist()
@@ -70,7 +69,7 @@ def get_profitability_intelligence(filters: dict[str, Any] | str | None = None) 
 			"financial_truth": "ERPNext Profit and Loss Statement / Gross and Net Profit Report",
 			"transactional_revenue_truth": "Submitted Sales Invoice / Sales Invoice Item",
 			"transactional_cost_truth": "Sales Invoice Item incoming_rate × stock_qty",
-			"salesperson_truth": "ERPNext Sales Team allocated_percentage with residual shown as unallocated",
+			"salesperson_truth": "ERPNext Sales Team using the shared R8/R11 allocation contract",
 			"low_margin_threshold_percent": DEFAULT_LOW_MARGIN_PERCENT,
 			"invoice_count": current["invoice_count"],
 			"item_row_count": current["item_row_count"],
@@ -114,7 +113,7 @@ def _build_period(filters: frappe._dict) -> dict[str, Any]:
 	headers = _get_permitted_invoice_headers(filters)
 	invoice_names = [row.name for row in headers]
 	header_map = _get_invoice_dimension_metadata(invoice_names)
-	sales_allocations = _get_sales_allocations(invoice_names)
+	sales_allocations = get_sales_team_allocations(invoice_names)
 	items = _get_costed_items(invoice_names)
 	item_rows = _aggregate_items(items)
 	return {
@@ -136,45 +135,6 @@ def _get_invoice_dimension_metadata(invoice_names: list[str]) -> dict[str, frapp
 		limit=max(len(invoice_names), 1),
 	)
 	return {row.name: row for row in rows}
-
-
-def _get_sales_allocations(invoice_names: list[str]) -> dict[str, list[tuple[str, float]]]:
-	if not invoice_names:
-		return {}
-	rows = frappe.get_all(
-		"Sales Team",
-		filters={"parent": ["in", invoice_names], "parenttype": "Sales Invoice"},
-		fields=["parent", "sales_person", "allocated_percentage"],
-		order_by="parent asc, idx asc",
-		limit=MAX_SALES_TEAM_ROWS + 1,
-	)
-	if len(rows) > MAX_SALES_TEAM_ROWS:
-		frappe.throw(
-			_("More than {0} Sales Team rows match this profitability scope. Narrow the date range or Branch.").format(
-				MAX_SALES_TEAM_ROWS
-			)
-		)
-	by_invoice: dict[str, list[frappe._dict]] = defaultdict(list)
-	for row in rows:
-		if row.get("sales_person"):
-			by_invoice[str(row.parent)].append(row)
-
-	allocations: dict[str, list[tuple[str, float]]] = {}
-	for invoice, team in by_invoice.items():
-		positive = [(str(row.sales_person), max(flt(row.get("allocated_percentage")), 0.0) / 100.0) for row in team if flt(row.get("allocated_percentage")) > 0]
-		total_weight = sum(weight for _name, weight in positive)
-		if positive:
-			if total_weight > 1.000001:
-				frappe.throw(
-					_("Sales Team allocation on Sales Invoice {0} exceeds 100%. Correct the invoice allocation before using salesperson profitability.").format(invoice)
-				)
-			allocations[invoice] = list(positive)
-			if total_weight < 0.999999:
-				allocations[invoice].append((_(UNALLOCATED_SALESPERSON), 1.0 - total_weight))
-		else:
-			weight = 1.0 / len(team)
-			allocations[invoice] = [(str(row.sales_person), weight) for row in team]
-	return allocations
 
 
 def _previous_period_filters(filters: frappe._dict) -> frappe._dict:
