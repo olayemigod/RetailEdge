@@ -7,16 +7,12 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, cstr, flt, get_first_day, nowdate
+from frappe.utils import cstr, flt, get_first_day, nowdate
 
 from retailedge.branch_context import get_branch_query_filters, has_field
 from retailedge.branch_performance import assert_can_access_branch_performance
 from retailedge.sales_reporting import MAX_INVOICE_SCAN_ROWS, MAX_ITEM_SCAN_ROWS
-from retailedge.sales_team_allocation import (
-	UNASSIGNED_SALESPERSON,
-	get_sales_team_allocations,
-	resolve_sales_team_allocations,
-)
+from retailedge.sales_team_allocation import get_sales_team_allocations, resolve_sales_team_allocations
 
 MAX_PAGE_SIZE = 100
 MAX_EXPORT_ROWS = 500
@@ -141,7 +137,11 @@ def get_salesperson_performance(filters=None):
 
 	invoice_names = [str(row.name) for row in invoices]
 	allocations = get_sales_team_allocations(invoice_names)
-	item_context = _get_invoice_item_context(invoice_names)
+	item_context = _get_invoice_item_context(
+		invoice_names,
+		item=cstr(filters.get("item") or "").strip(),
+		item_group=cstr(filters.get("item_group") or "").strip(),
+	)
 	all_rows = allocate_salesperson_invoice_rows(
 		invoices,
 		allocations=allocations,
@@ -170,12 +170,22 @@ def get_salesperson_performance(filters=None):
 	}
 
 
-def _get_invoice_item_context(invoice_names: list[str]) -> dict[str, dict[str, Any]]:
+def _get_invoice_item_context(
+	invoice_names: list[str], *, item: str = "", item_group: str = ""
+) -> dict[str, dict[str, Any]]:
 	if not invoice_names:
 		return {}
+	query_filters: dict[str, Any] = {
+		"parent": ["in", invoice_names],
+		"parenttype": "Sales Invoice",
+	}
+	if item:
+		query_filters["item_code"] = item
+	if item_group:
+		query_filters["item_group"] = item_group
 	rows = frappe.get_all(
 		"Sales Invoice Item",
-		filters={"parent": ["in", invoice_names], "parenttype": "Sales Invoice"},
+		filters=query_filters,
 		fields=["parent", "item_code", "qty"],
 		order_by="parent asc, idx asc",
 		limit=MAX_ITEM_SCAN_ROWS + 1,
