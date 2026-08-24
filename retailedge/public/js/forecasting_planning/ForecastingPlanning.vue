@@ -23,7 +23,13 @@
 					<p class="muted">ERPNext actuals remain authoritative. Forecast and Plan are analytical layers and never create accounting or stock transactions.</p>
 				</div>
 				<div class="header-actions">
-					<button class="edge-button" type="button" @click="newScenario" :disabled="!filters.company">Save as Scenario</button>
+					<button
+						class="edge-button"
+						type="button"
+						@click="newScenario"
+						:disabled="!filters.company || !canCreateScenario"
+						:title="canCreateScenario ? 'Save the current assumptions as a Planning Scenario' : 'You do not have permission to create Planning Scenarios'"
+					>Save as Scenario</button>
 					<EdgeExportMenu v-if="rows.length" :dataset="exportDataset" :loadDataset="loadExportDataset" />
 				</div>
 			</header>
@@ -49,7 +55,7 @@
 
 			<template v-else>
 				<section v-if="summary.length" class="metric-grid">
-					<div v-for="card in summary" :key="card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div>
+					<div v-for="card in summary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div>
 				</section>
 
 				<section class="panel">
@@ -76,7 +82,7 @@
 				<section class="panel">
 					<div class="panel-heading"><div><p class="eyebrow">Budget Governance</p><h3>ERPNext Budget reference</h3></div><span class="muted">R12 does not create a second budget ledger.</span></div>
 					<div v-if="budgetReason" class="empty">{{ budgetReason }}</div>
-					<div v-else class="metric-grid compact"><div v-for="card in budgetSummary" :key="card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div>
+					<div v-else class="metric-grid compact"><div v-for="card in budgetSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div>
 				</section>
 
 				<section class="panel">
@@ -90,7 +96,7 @@
 					<div class="panel-heading"><div><p class="eyebrow">Forecast vs Actual</p><h3>{{ scenarioLabel || scenarioName }}</h3></div><button class="edge-button" type="button" @click="openScenario">Open Scenario</button></div>
 					<div v-if="performanceLoading" class="empty">Loading scenario performance…</div>
 					<div v-else-if="performanceError" class="alert error">{{ performanceError }}</div>
-					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div v-if="performanceRows.length" class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ row.period_start }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div><div v-else class="empty">No forecast months in this scenario have completed actuals yet.</div></template>
+					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div v-if="performanceRows.length" class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ row.period_start }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div><div v-else class="empty">No forecast months in this scenario have completed actuals yet.</div></template>
 				</section>
 			</template>
 		</div>
@@ -110,7 +116,7 @@ export default {
 	data() { return {
 		edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 		rows: [], columns: [], summary: [], domains: {}, scope: {}, metadata: {}, companyCurrency: "",
-		tenantName: "", branchName: "", userName: "", menuItems: [],
+		tenantName: "", branchName: "", userName: "", menuItems: [], canCreateScenario: false,
 		scenarioName: "", scenarioLabel: "", performanceRows: [], performanceSummary: [], performanceLoading: false, performanceError: "",
 		filters: { company: "", branch: "", as_of_date: "", history_months: 6, forecast_months: 3, sales_adjustment_percent: 0, expense_adjustment_percent: 0, cash_adjustment_percent: 0, inventory_safety_percent: 10 },
 	}; },
@@ -128,7 +134,7 @@ export default {
 		exportMetadata() { return [{ label: "Accounting Truth", value: this.metadata.accounting_truth || "ERPNext GL / P&L" }, { label: "Budget Truth", value: this.metadata.budget_truth || "Submitted ERPNext Budget" }, { label: "Scenario Model", value: this.metadata.scenario_truth || "Assumptions only" }]; },
 	},
 	created() { const c = components(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !c[name]); this.edgeUIValid = this.missingComponents.length === 0; },
-	mounted() { this.bootstrap(); },
+	mounted() { this.canCreateScenario = Boolean(frappe.model?.can_create?.("RetailEdge Planning Scenario")); this.bootstrap(); },
 	methods: {
 		async bootstrap() {
 			this.metadataLoading = true;
@@ -154,7 +160,20 @@ export default {
 		async loadScenario(name) { const doc = await call("frappe.client.get", { doctype: "RetailEdge Planning Scenario", name }); this.scenarioName = doc.name; this.scenarioLabel = doc.scenario_name || doc.name; this.filters = { ...this.filters, company: doc.company, branch: doc.branch || "", as_of_date: doc.as_of_date, history_months: Number(doc.history_months || 6), forecast_months: Number(doc.horizon_months || 3), sales_adjustment_percent: Number(doc.sales_adjustment_percent || 0), expense_adjustment_percent: Number(doc.expense_adjustment_percent || 0), cash_adjustment_percent: Number(doc.cash_adjustment_percent || 0), inventory_safety_percent: Number(doc.inventory_safety_percent || 0) }; await Promise.all([this.fetchData(), this.fetchPerformance()]); },
 		async fetchData() { if (!this.filters.company) return; this.loading = true; this.error = ""; try { const result = await call(this.pageMethod, { filters: { ...this.filters } }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.domains = result.domains || {}; this.scope = result.scope || {}; this.metadata = result.metadata || {}; this.companyCurrency = result.company_currency || this.companyCurrency; } catch (e) { this.error = message(e, "Failed to build Forecasting & Planning data."); } finally { this.loading = false; } },
 		async fetchPerformance() { if (!this.scenarioName) return; this.performanceLoading = true; this.performanceError = ""; try { const result = await call("retailedge.scenario_performance.get_scenario_performance", { scenario: this.scenarioName }); this.performanceRows = result.rows || []; this.performanceSummary = result.summary || []; } catch (e) { this.performanceError = message(e, "Failed to load forecast-vs-actual performance."); } finally { this.performanceLoading = false; } },
-		newScenario() { frappe.route_options = { company: this.filters.company, branch: this.filters.branch, as_of_date: this.filters.as_of_date, history_months: this.filters.history_months, horizon_months: this.filters.forecast_months, sales_adjustment_percent: this.filters.sales_adjustment_percent, expense_adjustment_percent: this.filters.expense_adjustment_percent, cash_adjustment_percent: this.filters.cash_adjustment_percent, inventory_safety_percent: this.filters.inventory_safety_percent }; frappe.new_doc("RetailEdge Planning Scenario"); },
+		newScenario() {
+			if (!this.canCreateScenario || !this.filters.company) return;
+			frappe.new_doc("RetailEdge Planning Scenario", {
+				company: this.filters.company,
+				branch: this.filters.branch,
+				as_of_date: this.filters.as_of_date,
+				history_months: this.filters.history_months,
+				horizon_months: this.filters.forecast_months,
+				sales_adjustment_percent: this.filters.sales_adjustment_percent,
+				expense_adjustment_percent: this.filters.expense_adjustment_percent,
+				cash_adjustment_percent: this.filters.cash_adjustment_percent,
+				inventory_safety_percent: this.filters.inventory_safety_percent,
+			});
+		},
 		openScenario() { if (this.scenarioName) frappe.set_route("Form", "RetailEdge Planning Scenario", this.scenarioName); },
 		loadExportDataset() { return call(this.exportMethod, { filters: { ...this.filters } }); },
 		money(value) { return value === null || value === undefined || value === "" ? "—" : format_currency(Number(value || 0), this.companyCurrency || undefined); },
