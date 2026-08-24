@@ -120,6 +120,9 @@ def apply_plan_adjustment(
 		value = float(row["forecast"]) * factor
 		if floor is not None:
 			value = max(float(floor), value)
+		# Suppress binary floating-point residue at the API contract boundary while
+		# retaining substantially more precision than downstream currency rendering.
+		value = round(value, 10)
 		planned.append(
 			{
 				"period_start": str(row["period_start"]),
