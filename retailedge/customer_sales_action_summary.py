@@ -6,8 +6,10 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from retailedge.customer_opportunity_intelligence import get_customer_opportunity_intelligence
-from retailedge.sales_quality_intelligence import get_sales_quality_intelligence
+from retailedge.customer_sales_action_metrics import (
+	get_customer_opportunity_action_counts,
+	get_sales_quality_action_counts,
+)
 
 
 DEFAULT_CHANGE_THRESHOLD_PERCENT = 25.0
@@ -16,7 +18,7 @@ DEFAULT_LOW_MARGIN_PERCENT = 10.0
 
 
 def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) -> dict[str, Any]:
-	"""Return aggregate R11 actions without creating a parallel customer/sales truth store."""
+	"""Return aggregate R11 actions without constructing full report payloads."""
 	filters = frappe._dict(dict(filters or {}))
 	filters.change_threshold_percent = flt(
 		filters.get("change_threshold_percent") or DEFAULT_CHANGE_THRESHOLD_PERCENT
@@ -29,14 +31,14 @@ def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) ->
 	)
 	period_scope = _period_scope(filters)
 
-	opportunity = get_customer_opportunity_intelligence(filters)
-	quality = get_sales_quality_intelligence(filters, page=1, page_size=1)
+	opportunity = get_customer_opportunity_action_counts(filters)
+	quality = get_sales_quality_action_counts(filters)
 
 	items: list[dict[str, Any]] = []
-	retention_count = _summary_value(opportunity, "Retention Follow-up")
-	growth_count = _summary_value(opportunity, "Growth Opportunities")
-	high_reduction_count = _summary_value(quality, "High Reduction Invoices")
-	low_margin_count = _summary_value(quality, "Low / Negative Margin Invoices")
+	retention_count = flt(opportunity.get("retention_follow_up"))
+	growth_count = flt(opportunity.get("growth_opportunities"))
+	high_reduction_count = flt(quality.get("high_reduction_invoices"))
+	low_margin_count = flt(quality.get("low_or_negative_margin_invoices"))
 
 	if retention_count > 0:
 		items.append(
@@ -103,6 +105,7 @@ def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) ->
 			"basket_affinity_reason": "Product affinity is insight-only and does not by itself represent an exception or required follow-up.",
 			"cost_visibility_applied": bool(quality.get("show_costs")),
 			"follow_up_scope": period_scope,
+			"lightweight_summary": True,
 		},
 	}
 
@@ -112,13 +115,6 @@ def _period_scope(filters: frappe._dict) -> str:
 		str(filters.get("from_date") or "").strip(),
 		str(filters.get("to_date") or "").strip(),
 	)
-
-
-def _summary_value(payload: dict[str, Any], label: str) -> float:
-	for card in payload.get("summary") or []:
-		if str(card.get("label") or "").strip() == label:
-			return flt(card.get("value"))
-	return 0.0
 
 
 def _action_item(
