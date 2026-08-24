@@ -70,15 +70,26 @@ def _bank_transaction_context(bank_transaction):
 
 
 def _payment_entry_metadata(payment_entry_name):
+	"""Read only the immutable Payment Entry fields needed for leg identity.
+
+	The leg-aware exception is allowed only when ERPNext returns a real mapping
+	that proves this is a submitted Internal Transfer. Any unavailable, invalid,
+	or ambiguous response fails closed to the legacy document-level identity.
+	"""
 	name = cstr(payment_entry_name).strip()
 	if not name:
 		return frappe._dict()
-	row = frappe.db.get_value(
-		"Payment Entry",
-		name,
-		["name", "payment_type", "paid_from", "paid_to", "docstatus"],
-		as_dict=True,
-	) or {}
+	try:
+		row = frappe.db.get_value(
+			"Payment Entry",
+			name,
+			["name", "payment_type", "paid_from", "paid_to", "docstatus"],
+			as_dict=True,
+		)
+	except Exception:
+		return frappe._dict()
+	if not isinstance(row, dict):
+		return frappe._dict()
 	return frappe._dict(row)
 
 
