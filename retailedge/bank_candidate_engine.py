@@ -34,6 +34,12 @@ CATEGORY_BANK_TRANSFER = "Bank Transfer"
 CATEGORY_OTHER_INCOME = "Other Income"
 CATEGORY_OTHER_OUTFLOW = "Other Outflow"
 
+OUTCOME_CANDIDATES_FOUND = "candidates_found"
+OUTCOME_BANKING_SETUP_BLOCKED = "banking_setup_blocked"
+OUTCOME_ACCOUNTING_EVENT_MISSING = "accounting_event_missing"
+OUTCOME_ACCOUNTING_EVENT_NOT_ELIGIBLE = "accounting_event_not_eligible"
+OUTCOME_CANDIDATE_REVIEW_BLOCKED = "candidate_review_blocked"
+
 REVIEW_SUPPORTED_DOCTYPES = {"Sales Invoice", "Payment Entry", "Journal Entry"}
 
 
@@ -360,6 +366,139 @@ def _normalize_candidate_limit(limit):
 	return min(max(value, 1), 100)
 
 
+def _candidate_bank_readiness(bank_transaction):
+	"""Return Banking Readiness for real normalized rows while preserving lightweight unit mocks."""
+	if "bank_account" not in bank_transaction:
+		return {}
+	from retailedge.banking_readiness import evaluate_bank_account_readiness
+
+	return evaluate_bank_account_readiness(
+		bank_transaction.get("bank_account"),
+		company=bank_transaction.get("company"),
+	)
+
+
+def _has_nearby_submitted_accounting_event(bank_transaction):
+	"""Detect permission-visible accounting events with compatible date/amount but no safe match.
+
+	This diagnostic runs only after normal candidate discovery returns nothing. It does not
+	make an event eligible; it only lets the UI distinguish a missing accounting event from
+	an existing event that failed account/reference/eligibility safety checks.
+	"""
+	amount = flt(bank_transaction.get("amount"))
+	direction = cstr(bank_transaction.get("direction")).strip()
+	company = cstr(bank_transaction.get("company")).strip()
+	bank_date = bank_transaction.get("transaction_date")
+	if amount <= 0 or direction not in {DIRECTION_INFLOW, DIRECTION_OUTFLOW}:
+		return False
+
+	tolerance = max(0.01, amount * 0.001)
+	amount_range = [max(0, amount - tolerance), amount + tolerance]
+	date_range = None
+	if bank_date:
+		center = getdate(bank_date)
+		date_range = [center - timedelta(days=7), center + timedelta(days=7)]
+
+	if has_doctype("Payment Entry"):
+		amount_field = "received_amount" if direction == DIRECTION_INFLOW else "paid_amount"
+		filters: dict[str, Any] = {"docstatus": 1}
+		if has_field("Payment Entry", amount_field):
+			filters[amount_field] = ["between", amount_range]
+		if company and has_field("Payment Entry", "company"):
+			filters["company"] = company
+		if date_range and has_field("Payment Entry", "posting_date"):
+			filters["posting_date"] = ["between", date_range]
+		if frappe.get_list(
+			"Payment Entry",
+			filters=filters,
+			fields=["name"],
+			limit_page_length=1,
+		):
+			return True
+
+	if has_doctype("Journal Entry") and has_doctype("Journal Entry Account"):
+		je_filters: dict[str, Any] = {"docstatus": 1}
+		if company and has_field("Journal Entry", "company"):
+			je_filters["company"] = company
+		if date_range and has_field("Journal Entry", "posting_date"):
+			je_filters["posting_date"] = ["between", date_range]
+		entries = frappe.get_list(
+			"Journal Entry",
+			filters=je_filters,
+			fields=["name"],
+			limit_page_length=40,
+		)
+		entry_names = [cstr(row.get("name")).strip() for row in entries if cstr(row.get("name")).strip()]
+		if entry_names:
+			amount_field = (
+				"debit_in_account_currency"
+				if direction == DIRECTION_INFLOW
+				else "credit_in_account_currency"
+			)
+			filters = {"parent": ["in", entry_names], "docstatus": 1}
+			if has_field("Journal Entry Account", amount_field):
+				filters[amount_field] = ["between", amount_range]
+			if frappe.get_all(
+				"Journal Entry Account",
+				filters=filters,
+				fields=["parent"],
+				limit_page_length=1,
+			):
+				return True
+
+	return False
+
+
+def _candidate_search_outcome(bank_transaction, candidates, banking_readiness=None):
+	readiness = frappe._dict(banking_readiness or {})
+	if cstr(readiness.get("readiness")).strip() == "Blocked":
+		issues = [
+			cstr(issue.get("message")).strip()
+			for issue in readiness.get("issues") or []
+			if cstr(issue.get("message")).strip()
+		]
+		message = " ".join(issues[:3]) or "Banking setup could not be resolved safely."
+		return {
+			"code": OUTCOME_BANKING_SETUP_BLOCKED,
+			"title": "Banking setup needs attention",
+			"message": f"{message} Correct Banking Setup & Readiness before matching this transaction.",
+			"indicator": "red",
+			"action": "banking_readiness",
+		}
+
+	rows = list(candidates or [])
+	if rows:
+		reviewable = [row for row in rows if int(row.get("review_supported", 1) or 0) != 0]
+		if not reviewable:
+			return {
+				"code": OUTCOME_CANDIDATE_REVIEW_BLOCKED,
+				"title": "Accounting evidence found, but review is blocked",
+				"message": "Accounting records were found, but none currently has sufficient payment evidence to enter Bank Match Review safely.",
+				"indicator": "orange",
+			}
+		return {
+			"code": OUTCOME_CANDIDATES_FOUND,
+			"title": "Matching candidates found",
+			"message": "Safe accounting candidates are available for review.",
+			"indicator": "green",
+		}
+
+	if _has_nearby_submitted_accounting_event(bank_transaction):
+		return {
+			"code": OUTCOME_ACCOUNTING_EVENT_NOT_ELIGIBLE,
+			"title": "Accounting entry found, but it is not safe to match",
+			"message": "A submitted accounting entry with a compatible amount and date exists, but it failed bank-account, reference, direction, or eligibility safety checks. Review the accounting document and Banking Setup before retrying; do not force the match.",
+			"indicator": "orange",
+		}
+
+	return {
+		"code": OUTCOME_ACCOUNTING_EVENT_MISSING,
+		"title": "No matching accounting entry found",
+		"message": "No submitted accounting event with a compatible amount and date was found for this bank transaction. Create or import the corresponding accounting entry, then run Find Match again.",
+		"indicator": "blue",
+	}
+
+
 @frappe.whitelist()
 def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, limit=40):
 	"""Return direction-safe existing candidates plus permission-aware ERPNext bank events."""
@@ -369,6 +508,17 @@ def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, lim
 	direction = cstr(bank_transaction.get("direction")).strip()
 	if direction not in {DIRECTION_INFLOW, DIRECTION_OUTFLOW}:
 		frappe.throw("Bank Transaction direction could not be determined safely.")
+
+	banking_readiness = _candidate_bank_readiness(bank_transaction)
+	if cstr(banking_readiness.get("readiness")).strip() == "Blocked":
+		return {
+			"bank_transaction": bank_transaction_name,
+			"direction": direction,
+			"candidates": [],
+			"count": 0,
+			"banking_readiness": banking_readiness,
+			"outcome": _candidate_search_outcome(bank_transaction, [], banking_readiness),
+		}
 
 	filters = frappe._dict(filters or {})
 	base_candidates = []
@@ -418,6 +568,8 @@ def get_direction_aware_bank_candidates(bank_transaction_name, filters=None, lim
 		"direction": direction,
 		"candidates": output,
 		"count": len(output),
+		"banking_readiness": banking_readiness,
+		"outcome": _candidate_search_outcome(bank_transaction, output, banking_readiness),
 	}
 
 
