@@ -183,6 +183,7 @@ export default {
 				if (routeOptions.customer) {
 					this.filters.customer = routeOptions.customer;
 					this.customerLabel = routeOptions.customer_name || routeOptions.customer;
+					if (routeOptions.company) this.filters.company = routeOptions.company;
 					if (routeOptions.from_date) this.filters.from_date = routeOptions.from_date;
 					if (routeOptions.to_date) this.filters.to_date = routeOptions.to_date;
 					if (routeOptions.branch) this.filters.branch = routeOptions.branch;
