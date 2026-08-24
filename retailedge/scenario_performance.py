@@ -6,8 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import add_months, flt, get_first_day, get_last_day, getdate, nowdate
 
-from retailedge.cash_movement import get_cash_movement_export
-from retailedge.planning_intelligence import get_planning_intelligence, _monthly_gl_actuals
+from retailedge.cash_movement import get_cash_movement
+from retailedge.planning_intelligence import _monthly_gl_actuals
+from retailedge.planning_scope import resolve_planning_branch_scope
 from retailedge.sales_forecasting import get_sales_forecast
 
 SCENARIO_DOCTYPE = "RetailEdge Planning Scenario"
@@ -21,7 +22,12 @@ def get_scenario_performance(scenario: str) -> dict[str, Any]:
 	if not frappe.has_permission(SCENARIO_DOCTYPE, "read", doc=name):
 		frappe.throw(_("You do not have permission to view this Planning Scenario."), frappe.PermissionError)
 	doc = frappe.get_doc(SCENARIO_DOCTYPE, name)
-	baseline = get_planning_intelligence(_scenario_filters(doc))
+	resolved_branch = resolve_planning_branch_scope(doc.company, doc.branch or "", user=frappe.session.user)
+	if str(doc.branch or "") != resolved_branch:
+		frappe.throw(_("You do not have permission to view this company-wide Planning Scenario."), frappe.PermissionError)
+
+	snapshot = _load_snapshot(doc)
+	baseline = {"domains": snapshot.get("domains") or {}}
 	completed_periods = _completed_future_periods(doc.as_of_date, doc.horizon_months)
 	rows: list[dict[str, Any]] = []
 
@@ -68,6 +74,8 @@ def get_scenario_performance(scenario: str) -> dict[str, Any]:
 			"as_of_date": str(doc.as_of_date),
 			"history_months": doc.history_months,
 			"horizon_months": doc.horizon_months,
+			"snapshot_version": snapshot.get("version"),
+			"snapshot_generated_at": snapshot.get("generated_at") or doc.snapshot_generated_at,
 		},
 		"rows": rows,
 		"summary": _summary(rows),
@@ -76,23 +84,18 @@ def get_scenario_performance(scenario: str) -> dict[str, Any]:
 			"future_periods_without_completed_actuals": "Remain pending and are not scored",
 			"branch_accounting_policy": "Branch scenarios score Sales and Cash only; accounting Expense/Profit remain company-level until valid ERPNext accounting attribution exists",
 			"accounting_truth": "ERPNext posted accounting remains authoritative; this comparison creates no accounting entries",
-			"scenario_snapshot_semantics": "Forecast and Plan are recalculated from the scenario's saved as-of date and assumptions, then compared only with subsequently completed actual periods",
+			"scenario_snapshot_semantics": "Forecast and Plan come from the immutable baseline frozen when the scenario was saved. Later posted or backdated transactions may change Actual but never rewrite the saved baseline.",
 		},
 	}
 
 
-def _scenario_filters(doc) -> dict[str, Any]:
-	return {
-		"company": doc.company,
-		"branch": doc.branch or "",
-		"as_of_date": str(doc.as_of_date),
-		"history_months": doc.history_months,
-		"forecast_months": doc.horizon_months,
-		"sales_adjustment_percent": flt(doc.sales_adjustment_percent),
-		"expense_adjustment_percent": flt(doc.expense_adjustment_percent),
-		"cash_adjustment_percent": flt(doc.cash_adjustment_percent),
-		"inventory_safety_percent": flt(doc.inventory_safety_percent),
-	}
+def _load_snapshot(doc) -> dict[str, Any]:
+	snapshot = frappe.parse_json(doc.forecast_snapshot_json or "{}") or {}
+	if not isinstance(snapshot, dict) or not snapshot.get("domains"):
+		frappe.throw(
+			_("This Planning Scenario does not have an immutable forecast baseline. Return it to Draft and save it once before using Forecast vs Actual.")
+		)
+	return snapshot
 
 
 def _completed_future_periods(as_of_date, horizon: int) -> list[str]:
@@ -158,14 +161,18 @@ def _sales_actual(doc, period_start: str) -> float:
 
 
 def _cash_actual(doc, period_start: str) -> float:
-	payload = get_cash_movement_export({
-		"company": doc.company,
-		"branch": doc.branch or "",
-		"from_date": period_start,
-		"to_date": str(get_last_day(period_start)),
-	})
+	payload = get_cash_movement(
+		{
+			"company": doc.company,
+			"branch": doc.branch or "",
+			"from_date": period_start,
+			"to_date": str(get_last_day(period_start)),
+		},
+		page=1,
+		page_size=1,
+	)
 	for card in payload.get("summary") or []:
-		if str(card.get("label") or "") == "Net Change":
+		if str(card.get("label") or "") == _("Net Change"):
 			return flt(card.get("value"))
 	return 0.0
 
