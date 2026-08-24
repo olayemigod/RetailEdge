@@ -130,15 +130,15 @@ class BankMatchAccountEvidenceTests(FrappeTestCase):
 	@patch("retailedge.banking_readiness.has_field", return_value=True)
 	@patch("retailedge.banking_readiness.has_doctype", return_value=True)
 	@patch("retailedge.banking_readiness.frappe.get_all")
-	@patch("retailedge.banking_readiness._read_row")
+	@patch("retailedge.banking_readiness.frappe.db.get_value")
 	def test_journal_entry_evidence_uses_reviewed_bank_ledger_direction_and_expense_category(
 		self,
-		read_row,
+		get_value,
 		get_all,
 		_has_doctype,
 		_has_field,
 	):
-		read_row.return_value = frappe._dict(
+		get_value.return_value = frappe._dict(
 			{
 				"name": "ACC-JV-2026-00001",
 				"posting_date": "2026-08-24",
