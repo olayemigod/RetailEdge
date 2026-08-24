@@ -46,7 +46,7 @@ def _normalize_queue(queue: str | None) -> str:
 
 def _status_belongs_to_queue(status: str, queue: str) -> bool:
     if queue == QUEUE_TO_MATCH:
-        return status in {STATUS_UNMATCHED, STATUS_SUGGESTED}
+        return status in {STATUS_UNMATCHED, STATUS_SUGGESTED, STATUS_NEEDS_REVIEW}
     if queue == QUEUE_TO_RECONCILE:
         return status in {
             STATUS_AWAITING_APPROVAL,
@@ -55,7 +55,6 @@ def _status_belongs_to_queue(status: str, queue: str) -> bool:
         }
     if queue == QUEUE_EXCEPTIONS:
         return status in {
-            STATUS_NEEDS_REVIEW,
             STATUS_PAYMENT_EVIDENCE_REQUIRED,
             STATUS_EXCEPTION,
             STATUS_RECONCILIATION_FAILED,
@@ -241,9 +240,9 @@ def _review_db_filters(queue: str, filters: frappe._dict) -> dict[str, Any]:
     if queue == QUEUE_TO_RECONCILE:
         db_filters["decision_status"] = "Confirmed"
     elif queue == QUEUE_TO_MATCH:
-        db_filters["decision_status"] = ["in", ["Draft", "Suggested"]]
+        db_filters["decision_status"] = ["in", ["Draft", "Suggested", "Needs Review", "Reopened"]]
     elif queue == QUEUE_EXCEPTIONS:
-        db_filters["decision_status"] = ["in", ["Needs Review", "Reopened", "Confirmed"]]
+        db_filters["decision_status"] = "Confirmed"
     return db_filters
 
 
@@ -299,12 +298,12 @@ def _cheap_operational(row, bank: dict[str, Any], queue: str) -> dict[str, Any] 
             "operational_status": STATUS_SUGGESTED if row.suggested_document else STATUS_UNMATCHED,
             "recommended_action": "Review the prepared suggestion." if row.suggested_document else "Find and review a valid accounting match.",
         }
-    if queue == QUEUE_EXCEPTIONS and decision_status in {"Needs Review", "Reopened"}:
+    if queue == QUEUE_TO_MATCH and decision_status in {"Needs Review", "Reopened"}:
         return {
             "direction": direction,
             "transaction_category": CATEGORY_UNCLASSIFIED,
             "operational_status": STATUS_NEEDS_REVIEW,
-            "recommended_action": "Review and resolve the match exception.",
+            "recommended_action": "Review the prepared match before confirmation.",
         }
     if queue == QUEUE_EXCEPTIONS and execution_status == "Failed":
         return {
