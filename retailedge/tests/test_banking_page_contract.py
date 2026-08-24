@@ -9,6 +9,7 @@ PAGE_JS = APP_ROOT / "retailedge/page/bank_matching_reconciliation/bank_matching
 PAGE_CSS = APP_ROOT / "retailedge/page/bank_matching_reconciliation/bank_matching_reconciliation.css"
 ASSET_JS = APP_ROOT / "public/js/bank_matching_reconciliation.js"
 REVIEW_ASSET_JS = APP_ROOT / "public/js/bank_match_review_ui.js"
+CONFIRMATION_ASSET_JS = APP_ROOT / "public/js/bank_reconciliation_confirmation.js"
 
 
 class BankingPageContractTests(unittest.TestCase):
@@ -16,6 +17,7 @@ class BankingPageContractTests(unittest.TestCase):
 		page_js = PAGE_JS.read_text()
 		self.assertIn("/assets/retailedge/js/bank_matching_reconciliation.js", page_js)
 		self.assertIn("/assets/retailedge/js/bank_match_review_ui.js", page_js)
+		self.assertIn("/assets/retailedge/js/bank_reconciliation_confirmation.js", page_js)
 		self.assertIn("retailedgeBootBankingWorkspace", page_js)
 		for raw_tag in ("<table", "<tr", "<td", "<div", "<button", "<a "):
 			self.assertNotIn(raw_tag, page_js)
@@ -24,12 +26,13 @@ class BankingPageContractTests(unittest.TestCase):
 		page_js = PAGE_JS.read_text()
 		self.assertIn("Promise.resolve(frappe.require(ASSET))", page_js)
 		self.assertIn("Promise.resolve(frappe.require(REVIEW_ASSET))", page_js)
+		self.assertIn("Promise.resolve(frappe.require(CONFIRMATION_ASSET))", page_js)
 		self.assertIn(".then(() => startWorkspace(wrapper))", page_js)
 		self.assertIn(".catch((error) =>", page_js)
 		self.assertNotIn("frappe.require(ASSET,", page_js)
 
 	def test_banking_assets_are_valid_javascript(self):
-		for asset in (ASSET_JS, REVIEW_ASSET_JS):
+		for asset in (ASSET_JS, REVIEW_ASSET_JS, CONFIRMATION_ASSET_JS):
 			completed = subprocess.run(
 				["node", "--check", str(asset)],
 				capture_output=True,
@@ -47,7 +50,7 @@ class BankingPageContractTests(unittest.TestCase):
 		self.assertIn("EdgeSuiteUI", asset_js)
 
 	def test_banking_assets_do_not_inject_raw_html_template_strings(self):
-		for asset in (ASSET_JS, REVIEW_ASSET_JS):
+		for asset in (ASSET_JS, REVIEW_ASSET_JS, CONFIRMATION_ASSET_JS):
 			asset_js = asset.read_text()
 			for raw_tag in ("<table", "<tr", "<td", "<div", "<button", "<a ", "<span"):
 				self.assertNotIn(raw_tag, asset_js)
@@ -101,6 +104,21 @@ class BankingPageContractTests(unittest.TestCase):
 		self.assertIn('"retailedge.api.reject_bank_transaction_match"', asset_js)
 		self.assertIn('"retailedge.api.mark_bank_transaction_match_needs_review"', asset_js)
 		self.assertIn("Match confirmed. Reconciliation is still required.", asset_js)
+
+	def test_final_reconciliation_confirmation_is_single_submit_and_fails_visibly(self):
+		confirmation_js = CONFIRMATION_ASSET_JS.read_text()
+		self.assertIn("Final Reconciliation Confirmation", confirmation_js)
+		self.assertIn("Reconcile Through ERPNext", confirmation_js)
+		self.assertIn("const originalConfirm = frappe.confirm.bind(frappe)", confirmation_js)
+		self.assertIn("if (message !== BANK_RECONCILIATION_CONFIRM_MESSAGE)", confirmation_js)
+		self.assertIn("return originalConfirm(message, ifYes, ifNo)", confirmation_js)
+		self.assertIn("let submitting = false", confirmation_js)
+		self.assertIn("if (submitting) return", confirmation_js)
+		self.assertIn("await Promise.resolve(ifYes?.())", confirmation_js)
+		self.assertIn("setPrimaryDisabled(dialog, true)", confirmation_js)
+		self.assertIn("setPrimaryDisabled(dialog, false)", confirmation_js)
+		self.assertIn("do not retry blindly", confirmation_js)
+		self.assertIn("secondary_action_label: __(\"Cancel\")", confirmation_js)
 
 	def test_review_ui_is_side_by_side_and_comparison_first(self):
 		review_js = REVIEW_ASSET_JS.read_text()
