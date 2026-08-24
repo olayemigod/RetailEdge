@@ -57,7 +57,10 @@ class RetailEdgePlanningScenario(Document):
 		forecast_inputs_changed = self.is_new() or any(self.has_value_changed(fieldname) for fieldname in _FORECAST_DEFINING_FIELDS)
 		if not self.is_new() and self.status in {"Active", "Archived"} and forecast_inputs_changed:
 			frappe.throw(_("Return this Planning Scenario to Draft before changing its forecast scope or assumptions."))
-		if forecast_inputs_changed or not self.forecast_snapshot_json:
+		self.flags.refresh_forecast_snapshot = bool(forecast_inputs_changed or not self.forecast_snapshot_json)
+
+	def before_save(self):
+		if self.flags.get("refresh_forecast_snapshot"):
 			self._refresh_forecast_snapshot()
 
 	def _refresh_forecast_snapshot(self) -> None:
