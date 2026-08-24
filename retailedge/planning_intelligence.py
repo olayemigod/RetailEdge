@@ -1,32 +1,35 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from collections import defaultdict
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Any, Callable
 
 import frappe
 from frappe import _
-from frappe.utils import add_months, cint, flt, get_first_day, get_last_day, getdate, nowdate
+from frappe.utils import add_months, flt, get_first_day, get_last_day, getdate, nowdate
 
+from retailedge.budget_spend_control import get_budget_spend_control
 from retailedge.cash_movement import get_cash_movement_export
+from retailedge.customer_receivables import get_customer_receivables_export
 from retailedge.forecasting import MAX_FORECAST_HORIZON, apply_plan_adjustment, build_baseline_forecast
 from retailedge.inventory_demand import get_historical_inventory_demand
 from retailedge.inventory_replenishment import get_inventory_replenishment
 from retailedge.sales_forecasting import get_sales_forecast
 from retailedge.sales_reporting import _company_currency, _coerce_filters
+from retailedge.stock_position import get_stock_position_export
+from retailedge.supplier_payables import get_supplier_payables_export
 
 DEFAULT_HISTORY_MONTHS = 6
 DEFAULT_HORIZON_MONTHS = 3
 MAX_HISTORY_MONTHS = 24
 MAX_GL_SCAN_ROWS = 30000
+MAX_ACCOUNT_SCOPE = 5000
 MAX_INVENTORY_FORECAST_ITEMS = 5000
 
 
 @frappe.whitelist()
 def get_planning_intelligence(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
-	resolved = _normalise_filters(filters)
-	return _build_planning_dataset(resolved)
+	return _build_planning_dataset(_normalise_filters(filters))
 
 
 @frappe.whitelist()
@@ -44,23 +47,28 @@ def get_planning_intelligence_export(filters: dict[str, Any] | str | None = None
 
 @frappe.whitelist()
 def get_planning_action_summary(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
-	"""Return lightweight R12 action signals without persisting forecast truth."""
+	"""Return read-only planning signals without creating parallel transaction truth."""
 	data = get_planning_intelligence(filters)
 	items: list[dict[str, Any]] = []
 	cash = data.get("domains", {}).get("cash") or {}
 	profit = data.get("domains", {}).get("profitability") or {}
 	inventory = data.get("domains", {}).get("inventory") or {}
 
-	cash_rows = cash.get("future_rows") or []
-	if cash.get("available") and any(flt(row.get("plan")) < 0 for row in cash_rows):
-		items.append(_action("cash_plan_negative", _("Planned cash movement is negative in at least one forecast month"), "danger"))
-	profit_rows = profit.get("future_rows") or []
-	if profit.get("available") and any(flt(row.get("plan")) < 0 for row in profit_rows):
-		items.append(_action("profit_plan_negative", _("Planned accounting result is negative in at least one forecast month"), "danger"))
-	inv_rows = inventory.get("rows") or []
-	at_risk = sum(1 for row in inv_rows if flt(row.get("planned_demand_qty")) > flt(row.get("current_projected_qty")))
-	if at_risk:
-		items.append({**_action("inventory_plan_shortfall", _("Forecast demand exceeds current projected stock for some items"), "warning"), "value": at_risk, "datatype": "Int"})
+	if cash.get("available") and any(flt(row.get("plan")) < 0 for row in cash.get("future_rows") or []):
+		items.append(_action("cash_plan_negative", _("Planned net cash movement is negative in at least one forecast month"), "warning"))
+	if profit.get("available") and any(flt(row.get("forecast")) < 0 for row in profit.get("future_rows") or []):
+		items.append(_action("profit_forecast_negative", _("Accounting profit forecast is negative in at least one forecast month"), "danger"))
+	at_risk_items = {
+		str(row.get("item_code") or "")
+		for row in inventory.get("rows") or []
+		if row.get("coverage_risk") and row.get("item_code")
+	}
+	if inventory.get("available") and at_risk_items:
+		items.append({
+			**_action("inventory_plan_shortfall", _("Planned cumulative demand exceeds current projected stock for some items"), "warning"),
+			"value": len(at_risk_items),
+			"datatype": "Int",
+		})
 	return {"items": items, "count": len(items), "route": "/app/forecasting-planning"}
 
 
@@ -90,6 +98,8 @@ def _normalise_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 		frappe.throw(_("You do not have permission to use Company {0}.").format(resolved.company), frappe.PermissionError)
 	resolved.branch = str(resolved.get("branch") or "").strip()
 	resolved.as_of_date = str(resolved.get("as_of_date") or nowdate())
+	if getdate(resolved.as_of_date) > getdate(nowdate()):
+		frappe.throw(_("As of Date cannot be in the future."))
 	resolved.history_months = _bounded_int(resolved.get("history_months"), DEFAULT_HISTORY_MONTHS, 3, MAX_HISTORY_MONTHS, _("History Months"))
 	resolved.forecast_months = _bounded_int(resolved.get("forecast_months"), DEFAULT_HORIZON_MONTHS, 1, MAX_FORECAST_HORIZON, _("Forecast Months"))
 	for fieldname in ("sales_adjustment_percent", "expense_adjustment_percent", "cash_adjustment_percent"):
@@ -102,18 +112,24 @@ def _build_planning_dataset(filters: frappe._dict) -> dict[str, Any]:
 	currency = _company_currency(filters.company)
 	sales = _safe_domain("sales", lambda: _sales_domain(filters))
 	cash = _safe_domain("cash", lambda: _cash_domain(filters))
-	expenses = _safe_domain("expenses", lambda: _accounting_domain(filters, root_type="Expense", adjustment=filters.expense_adjustment_percent))
+	expenses = _safe_domain("expenses", lambda: _expense_domain(filters))
 	profitability = _safe_domain("profitability", lambda: _profitability_domain(filters))
 	inventory = _safe_domain("inventory", lambda: _inventory_domain(filters))
+	budget = _safe_domain("budget", lambda: _budget_reference(filters))
 
-	domains = {"sales": sales, "cash": cash, "expenses": expenses, "profitability": profitability, "inventory": inventory}
-	rows = _flatten_domain_rows(domains)
-	summary = _summary_cards(domains)
+	domains = {
+		"sales": sales,
+		"cash": cash,
+		"expenses": expenses,
+		"profitability": profitability,
+		"inventory": inventory,
+		"budget": budget,
+	}
 	return {
 		"title": _("Forecasting & Planning"),
 		"columns": _columns(currency),
-		"rows": rows,
-		"summary": summary,
+		"rows": _flatten_domain_rows(domains),
+		"summary": _summary_cards(domains),
 		"company_currency": currency,
 		"domains": domains,
 		"scope": {
@@ -131,13 +147,15 @@ def _build_planning_dataset(filters: frappe._dict) -> dict[str, Any]:
 		},
 		"metadata": {
 			"actual_forecast_plan_separation": True,
-			"accounting_truth": "ERPNext General Ledger / Profit and Loss semantics remain authoritative for accounting results",
+			"accounting_truth": "ERPNext General Ledger / Profit and Loss semantics remain authoritative for posted accounting results",
 			"sales_truth": "Submitted ERPNext Sales Invoice / Sales Invoice Item",
-			"cash_truth": "Posted ERPNext GL entries for Cash and Bank accounts through RetailEdge Cash Movement",
-			"inventory_truth": "ERPNext Stock Ledger Entry demand, Bin projected quantity and Item Reorder configuration",
-			"scenario_truth": "RetailEdge Planning Scenario stores assumptions only; forecasted accounting transactions are never persisted",
+			"cash_truth": "Posted ERPNext GL cash/bank movement through RetailEdge Cash Movement; current receivable/payable due dates are shown separately and are not assumed to be paid",
+			"budget_truth": "Submitted ERPNext Budget remains authoritative; R12 reuses R9 Budget & Spend Governance as a reference and does not create another budget ledger",
+			"inventory_truth": "Observed ERPNext Stock Ledger demand plus permission-safe current Bin projected quantity and Item Reorder context",
+			"scenario_truth": "RetailEdge Planning Scenario stores assumptions only; forecasted accounting and stock transactions are never persisted",
 			"branch_accounting_policy": "Accounting expense/profit forecasts fail closed at Branch scope until valid ERPNext accounting attribution exists",
 			"mutates_accounting_documents": False,
+			"creates_stock_documents": False,
 		},
 	}
 
@@ -146,9 +164,9 @@ def _safe_domain(key: str, loader: Callable[[], dict[str, Any]]) -> dict[str, An
 	try:
 		return {"available": True, **(loader() or {})}
 	except frappe.PermissionError:
-		return {"available": False, "key": key, "reason": _("Your permissions do not allow this forecast domain.")}
+		return {"available": False, "key": key, "title": key.replace("_", " ").title(), "reason": _("Your permissions do not allow this forecast domain.")}
 	except frappe.ValidationError as exc:
-		return {"available": False, "key": key, "reason": str(exc)}
+		return {"available": False, "key": key, "title": key.replace("_", " ").title(), "reason": str(exc)}
 
 
 def _sales_domain(filters: frappe._dict) -> dict[str, Any]:
@@ -160,7 +178,11 @@ def _sales_domain(filters: frappe._dict) -> dict[str, Any]:
 		"forecast_months": filters.forecast_months,
 	})
 	forecast_rows = [row for row in payload.get("rows") or [] if row.get("row_type") == _("Forecast")]
-	planned = apply_plan_adjustment([{"period_start": row["period_start"], "forecast": flt(row.get("forecast"))} for row in forecast_rows], adjustment_percent=filters.sales_adjustment_percent, floor=0.0)
+	planned = apply_plan_adjustment(
+		[{"period_start": row["period_start"], "forecast": flt(row.get("forecast"))} for row in forecast_rows],
+		adjustment_percent=filters.sales_adjustment_percent,
+		floor=0.0,
+	)
 	return {
 		"key": "sales",
 		"title": _("Sales"),
@@ -172,39 +194,106 @@ def _sales_domain(filters: frappe._dict) -> dict[str, Any]:
 
 
 def _cash_domain(filters: frappe._dict) -> dict[str, Any]:
-	start, end, _forecast_start = _completed_month_window(filters.as_of_date, filters.history_months)
+	start, end, forecast_start = _completed_month_window(filters.as_of_date, filters.history_months)
 	actuals: list[dict[str, Any]] = []
 	for period_start in _month_starts(start, end):
-		period_end = str(get_last_day(period_start))
-		payload = get_cash_movement_export({"company": filters.company, "branch": filters.branch, "from_date": period_start, "to_date": period_end})
-		net = _summary_value(payload.get("summary") or [], "Net Change")
-		actuals.append({"period_start": period_start, "actual": net})
+		payload = get_cash_movement_export({
+			"company": filters.company,
+			"branch": filters.branch,
+			"from_date": period_start,
+			"to_date": str(get_last_day(period_start)),
+		})
+		actuals.append({"period_start": period_start, "actual": _summary_value(payload.get("summary") or [], "Net Change")})
 	forecast = build_baseline_forecast(actuals, horizon=filters.forecast_months, period="Monthly", as_of_date=end)
 	planned = apply_plan_adjustment(forecast["rows"], adjustment_percent=filters.cash_adjustment_percent)
+	future_periods = [row["period_start"] for row in planned]
+	commitments = _cash_commitment_schedule(filters, future_periods)
 	return {
 		"key": "cash",
 		"title": _("Cash Movement"),
 		"actual_rows": actuals,
 		"future_rows": planned,
-		"source": "Posted ERPNext GL Cash/Bank movements",
-		"metadata": forecast["metadata"],
+		"commitment_rows": commitments["rows"],
+		"source": "Posted ERPNext GL cash/bank movements",
+		"metadata": {
+			**forecast["metadata"],
+			"forecast_start": forecast_start,
+			"known_due_schedule": commitments["metadata"],
+			"commitment_separation": "Current submitted receivable/payable due amounts are evidence only; they are not automatically added to the historical-behaviour cash forecast to avoid double counting or assuming collection/payment timing.",
+		},
 	}
 
 
-def _accounting_domain(filters: frappe._dict, *, root_type: str, adjustment: float) -> dict[str, Any]:
-	if filters.branch:
-		frappe.throw(_("Accounting {0} forecast is company-level until Branch is mapped to a valid ERPNext accounting dimension or Cost Center.").format(root_type.lower()))
-	start, end, _forecast_start = _completed_month_window(filters.as_of_date, filters.history_months)
-	actuals = _monthly_gl_actuals(filters.company, start, end, root_type=root_type)
-	forecast = build_baseline_forecast(actuals, horizon=filters.forecast_months, period="Monthly", as_of_date=end, floor=0.0 if root_type == "Expense" else None)
-	planned = apply_plan_adjustment(forecast["rows"], adjustment_percent=adjustment, floor=0.0 if root_type == "Expense" else None)
+def _cash_commitment_schedule(filters: frappe._dict, future_periods: list[str]) -> dict[str, Any]:
+	if not future_periods:
+		return {"rows": [], "metadata": {"available": False, "reason": "No future periods."}}
+	if getdate(filters.as_of_date) != getdate(nowdate()):
+		return {
+			"rows": [],
+			"metadata": {
+				"available": False,
+				"reason": "Historical receivable/payable outstanding snapshots are not reconstructed; known-due commitments are shown only for a current as-of date.",
+			},
+		}
+	receivables = get_customer_receivables_export({"company": filters.company, "branch": filters.branch, "ageing_bucket": "All"})
+	payables = get_supplier_payables_export({"company": filters.company, "branch": filters.branch})
+	buckets = {
+		period: {"period_start": period, "receivables_due": 0.0, "payables_due": 0.0, "net_known_due": 0.0}
+		for period in future_periods
+	}
+	first_period = getdate(future_periods[0])
+	last_period = getdate(future_periods[-1])
+
+	def add_rows(rows: list[dict[str, Any]], field: str) -> None:
+		for row in rows:
+			amount = max(flt(row.get("outstanding")), 0.0)
+			if not amount:
+				continue
+			due = getdate(row.get("due_date") or row.get("posting_date") or filters.as_of_date)
+			period = getdate(get_first_day(due))
+			if period < first_period:
+				period = first_period
+			if period > last_period:
+				continue
+			key = period.isoformat()
+			if key in buckets:
+				buckets[key][field] += amount
+
+	add_rows(receivables.get("rows") or [], "receivables_due")
+	add_rows(payables.get("rows") or [], "payables_due")
+	rows = []
+	for period in future_periods:
+		row = buckets[period]
+		row["net_known_due"] = flt(row["receivables_due"]) - flt(row["payables_due"])
+		rows.append(row)
 	return {
-		"key": root_type.lower(),
-		"title": _(root_type),
+		"rows": rows,
+		"metadata": {
+			"available": True,
+			"basis": "Current submitted ERPNext Sales Invoice and Purchase Invoice outstanding amounts grouped by due month",
+			"collection_or_payment_assumed": False,
+			"historical_snapshot_supported": False,
+		},
+	}
+
+
+def _expense_domain(filters: frappe._dict) -> dict[str, Any]:
+	if filters.branch:
+		frappe.throw(_("Accounting expense forecast is company-level until Branch is mapped to a valid ERPNext accounting dimension or Cost Center."))
+	start, end, _forecast_start = _completed_month_window(filters.as_of_date, filters.history_months)
+	actuals = _monthly_gl_actuals(filters.company, start, end, root_type="Expense")
+	forecast = build_baseline_forecast(actuals, horizon=filters.forecast_months, period="Monthly", as_of_date=end, floor=0.0)
+	planned = apply_plan_adjustment(forecast["rows"], adjustment_percent=filters.expense_adjustment_percent, floor=0.0)
+	return {
+		"key": "expenses",
+		"title": _("Accounting Expenses"),
 		"actual_rows": actuals,
 		"future_rows": planned,
-		"source": f"ERPNext GL Entry + {root_type} root-type accounts",
-		"metadata": forecast["metadata"],
+		"source": "Permission-aware ERPNext GL Entry on Expense root-type accounts",
+		"metadata": {
+			**forecast["metadata"],
+			"budget_relationship": "Expense Plan is an analytical scenario. ERPNext Budget/R9 Budget & Spend Governance remains the budget truth and enforcement reference.",
+		},
 	}
 
 
@@ -212,92 +301,159 @@ def _profitability_domain(filters: frappe._dict) -> dict[str, Any]:
 	if filters.branch:
 		frappe.throw(_("Accounting profitability forecast is company-level until Branch is mapped to a valid ERPNext accounting dimension or Cost Center."))
 	start, end, _forecast_start = _completed_month_window(filters.as_of_date, filters.history_months)
-	income = _monthly_gl_actuals(filters.company, start, end, root_type="Income")
-	expense = _monthly_gl_actuals(filters.company, start, end, root_type="Expense")
-	expense_by_period = {row["period_start"]: flt(row["actual"]) for row in expense}
-	actuals = [{"period_start": row["period_start"], "actual": flt(row["actual"]) - expense_by_period.get(row["period_start"], 0.0)} for row in income]
-	forecast = build_baseline_forecast(actuals, horizon=filters.forecast_months, period="Monthly", as_of_date=end)
-	# Profit plan is derived from independently adjusted Sales and Expense assumptions, not an arbitrary profit multiplier.
-	sales = _sales_domain(filters)
-	expenses = _accounting_domain(filters, root_type="Expense", adjustment=filters.expense_adjustment_percent)
-	sales_plan = {row["period_start"]: flt(row.get("plan")) for row in sales.get("future_rows") or []}
-	expense_plan = {row["period_start"]: flt(row.get("plan")) for row in expenses.get("future_rows") or []}
-	future = []
-	for row in forecast["rows"]:
-		period = row["period_start"]
-		future.append({"period_start": period, "forecast": flt(row["forecast"]), "plan": sales_plan.get(period, 0.0) - expense_plan.get(period, 0.0), "plan_adjustment_percent": None})
+	income_actuals = _monthly_gl_actuals(filters.company, start, end, root_type="Income")
+	expense_actuals = _monthly_gl_actuals(filters.company, start, end, root_type="Expense")
+	expense_actual_map = {row["period_start"]: flt(row["actual"]) for row in expense_actuals}
+	actuals = [
+		{"period_start": row["period_start"], "actual": flt(row["actual"]) - expense_actual_map.get(row["period_start"], 0.0)}
+		for row in income_actuals
+	]
+	income_forecast = build_baseline_forecast(income_actuals, horizon=filters.forecast_months, period="Monthly", as_of_date=end)
+	expense_forecast = build_baseline_forecast(expense_actuals, horizon=filters.forecast_months, period="Monthly", as_of_date=end)
+	expense_forecast_map = {row["period_start"]: flt(row["forecast"]) for row in expense_forecast["rows"]}
+	future = [
+		{
+			"period_start": row["period_start"],
+			"forecast": flt(row["forecast"]) - expense_forecast_map.get(row["period_start"], 0.0),
+			"plan": None,
+			"plan_adjustment_percent": None,
+		}
+		for row in income_forecast["rows"]
+	]
 	return {
 		"key": "profitability",
 		"title": _("Accounting Profitability"),
 		"actual_rows": actuals,
 		"future_rows": future,
-		"source": "ERPNext GL Income less Expense accounts",
-		"metadata": {**forecast["metadata"], "plan_semantics": "Sales Plan less Expense Plan; ERPNext Profit and Loss remains authoritative for posted results"},
+		"source": "Permission-aware ERPNext GL Income less Expense accounts",
+		"metadata": {
+			"forecast_method": "Income-root forecast less Expense-root forecast using the shared R12 engine",
+			"plan_semantics": "No owner Plan overlay is applied to accounting profitability because the saved scenario does not contain a complete GL-income assumption. This avoids mixing Sales Invoice revenue with Profit & Loss GL semantics.",
+			"profit_truth": "ERPNext Profit and Loss remains authoritative for posted accounting profit.",
+		},
 	}
 
 
 def _inventory_domain(filters: frappe._dict) -> dict[str, Any]:
 	lookback_days = min(max(filters.history_months * 30, 30), 365)
-	demand = get_historical_inventory_demand({"company": filters.company, "branch": filters.branch, "as_of_date": filters.as_of_date, "lookback_days": lookback_days})
-	replenishment = get_inventory_replenishment({"company": filters.company, "branch": filters.branch})
+	demand = get_historical_inventory_demand({
+		"company": filters.company,
+		"branch": filters.branch,
+		"as_of_date": filters.as_of_date,
+		"lookback_days": lookback_days,
+	})
 	if len(demand.get("rows") or []) > MAX_INVENTORY_FORECAST_ITEMS:
 		frappe.throw(_("Inventory forecast scope is too broad. Narrow Branch, Warehouse, Item Group, or Item."))
+
+	stock = get_stock_position_export({
+		"company": filters.company,
+		"branch": filters.branch,
+		"stock_status": "All",
+		"include_zero": 1,
+	})
+	stock_map = {str(row.get("item_code")): flt(row.get("projected_qty")) for row in stock.get("rows") or [] if row.get("item_code")}
+	replenishment = get_inventory_replenishment({"company": filters.company, "branch": filters.branch})
 	reorder_map = {str(row.get("item_code")): row for row in replenishment.get("items") or [] if row.get("item_code")}
-	rows = []
-	as_of = getdate(filters.as_of_date)
+	forecast_periods = _forecast_period_starts(filters.as_of_date, filters.forecast_months)
+	rows: list[dict[str, Any]] = []
 	for item in demand.get("rows") or []:
 		item_code = str(item.get("item_code") or "")
 		avg_daily = max(flt(item.get("average_daily_demand")), 0.0)
+		current_projected = stock_map.get(item_code, 0.0)
 		reorder = reorder_map.get(item_code) or {}
-		current_projected = flt(reorder.get("recommended_reorder_qty"))
-		for step in range(1, filters.forecast_months + 1):
-			period = getdate(add_months(get_first_day(as_of), step if as_of == getdate(get_last_day(as_of)) else step - 1))
-			days = monthrange(period.year, period.month)[1]
-			forecast_qty = avg_daily * days
+		cumulative = 0.0
+		for period_start in forecast_periods:
+			period = getdate(period_start)
+			forecast_qty = avg_daily * monthrange(period.year, period.month)[1]
 			planned_qty = forecast_qty * (1 + filters.inventory_safety_percent / 100.0)
+			cumulative += planned_qty
+			shortfall = max(cumulative - current_projected, 0.0)
 			rows.append({
-				"period_start": period.isoformat(),
+				"period_start": period_start,
 				"item_code": item_code,
 				"item_name": item.get("item_name") or item_code,
 				"stock_uom": item.get("stock_uom") or "",
 				"forecast_demand_qty": forecast_qty,
 				"planned_demand_qty": planned_qty,
+				"cumulative_planned_demand_qty": cumulative,
 				"current_projected_qty": current_projected,
+				"coverage_shortfall_qty": shortfall,
+				"coverage_risk": bool(shortfall > 0),
 				"replenishment_status": reorder.get("replenishment_status") or "No reorder rule",
 			})
 	return {
 		"key": "inventory",
 		"title": _("Inventory Demand"),
 		"rows": rows,
-		"source": "Observed outward ERPNext Stock Ledger demand + ERPNext Item Reorder / Bin",
-		"metadata": {"lookback_days": lookback_days, "forecast_method": "Average observed daily demand × calendar days", "safety_allowance_percent": filters.inventory_safety_percent, "creates_material_request": False},
+		"source": "Observed outward ERPNext Stock Ledger demand + current permission-safe ERPNext Bin projected quantity + Item Reorder context",
+		"metadata": {
+			"lookback_days": lookback_days,
+			"forecast_method": "Average observed daily demand × calendar days",
+			"safety_allowance_percent": filters.inventory_safety_percent,
+			"coverage_semantics": "Current Bin projected quantity is compared with cumulative planned demand through each forecast month. Future receipts are not invented; configured replenishment status is context only.",
+			"projected_stock_snapshot": "Current stock-position projected quantity, not recommended reorder quantity",
+			"creates_material_request": False,
+		},
+	}
+
+
+def _budget_reference(filters: frappe._dict) -> dict[str, Any]:
+	period_start = str(get_first_day(filters.as_of_date))
+	control = get_budget_spend_control({
+		"company": filters.company,
+		"branch": filters.branch,
+		"from_date": period_start,
+		"to_date": filters.as_of_date,
+	})
+	if not control.get("available"):
+		frappe.throw(control.get("reason") or _("ERPNext Budget reference is not available for this scope."))
+	return {
+		"key": "budget",
+		"title": _("Budget & Spend Governance"),
+		"summary": control.get("summary") or [],
+		"controls": control.get("controls") or [],
+		"source": "R9 Budget & Spend Governance / submitted ERPNext Budget",
+		"metadata": control.get("metadata") or {},
 	}
 
 
 def _monthly_gl_actuals(company: str, from_date: str, to_date: str, *, root_type: str) -> list[dict[str, Any]]:
 	if not frappe.has_permission("GL Entry", "read"):
 		frappe.throw(_("You do not have permission to read ERPNext General Ledger entries."), frappe.PermissionError)
-	rows = frappe.db.sql(
-		"""
-		SELECT DATE_FORMAT(gle.posting_date, '%%Y-%%m-01') period_start,
-		       COUNT(gle.name) row_count,
-		       COALESCE(SUM(CASE WHEN acc.root_type = 'Income' THEN gle.credit - gle.debit ELSE gle.debit - gle.credit END), 0) actual
-		FROM `tabGL Entry` gle
-		INNER JOIN `tabAccount` acc ON acc.name = gle.account
-		WHERE gle.company = %s AND acc.company = %s AND acc.root_type = %s
-		  AND gle.posting_date BETWEEN %s AND %s
-		  AND COALESCE(gle.is_cancelled, 0) = 0
-		GROUP BY DATE_FORMAT(gle.posting_date, '%%Y-%%m-01')
-		ORDER BY period_start ASC
-		LIMIT %s
-		""",
-		values=[company, company, root_type, from_date, to_date, MAX_GL_SCAN_ROWS + 1],
-		as_dict=True,
+	accounts = frappe.get_list(
+		"Account",
+		filters={"company": company, "root_type": root_type, "is_group": 0},
+		pluck="name",
+		order_by="name asc",
+		limit=MAX_ACCOUNT_SCOPE + 1,
+	)
+	if len(accounts) > MAX_ACCOUNT_SCOPE:
+		frappe.throw(_("Accounting account scope is too broad for planning. Narrow the company/account structure."))
+	periods = _month_starts(from_date, to_date)
+	if not accounts:
+		return [{"period_start": period, "actual": 0.0} for period in periods]
+	rows = frappe.get_list(
+		"GL Entry",
+		filters={
+			"company": company,
+			"account": ["in", accounts],
+			"posting_date": ["between", [from_date, to_date]],
+			"is_cancelled": 0,
+		},
+		fields=["posting_date", "debit", "credit"],
+		order_by="posting_date asc, name asc",
+		limit=MAX_GL_SCAN_ROWS + 1,
 	)
 	if len(rows) > MAX_GL_SCAN_ROWS:
-		frappe.throw(_("Accounting forecast scope is too broad. Narrow the history window."))
-	by_period = {str(row.period_start): flt(row.actual) for row in rows}
-	return [{"period_start": period, "actual": by_period.get(period, 0.0)} for period in _month_starts(from_date, to_date)]
+		frappe.throw(_("More than {0} General Ledger rows match this planning window. Narrow the history window.").format(MAX_GL_SCAN_ROWS))
+	by_period = {period: 0.0 for period in periods}
+	for row in rows:
+		period = f"{str(row.posting_date)[:7]}-01"
+		if period not in by_period:
+			continue
+		value = flt(row.credit) - flt(row.debit) if root_type == "Income" else flt(row.debit) - flt(row.credit)
+		by_period[period] += value
+	return [{"period_start": period, "actual": flt(by_period.get(period))} for period in periods]
 
 
 def _flatten_domain_rows(domains: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -308,24 +464,51 @@ def _flatten_domain_rows(domains: dict[str, dict[str, Any]]) -> list[dict[str, A
 			continue
 		for row in domain.get("actual_rows") or []:
 			actual = row.get("actual") if "actual" in row else row.get("net_sales")
-			rows.append({"domain": domain.get("title") or key, "period_start": row.get("period_start"), "row_type": _("Actual"), "actual": actual, "forecast": None, "plan": None, "variance": None})
+			rows.append({
+				"domain": domain.get("title") or key,
+				"period_start": row.get("period_start"),
+				"row_type": _("Actual"),
+				"actual": actual,
+				"forecast": None,
+				"plan": None,
+				"variance": None,
+			})
 		for row in domain.get("future_rows") or []:
-			rows.append({"domain": domain.get("title") or key, "period_start": row.get("period_start"), "row_type": _("Forecast / Plan"), "actual": None, "forecast": row.get("forecast"), "plan": row.get("plan"), "variance": flt(row.get("plan")) - flt(row.get("forecast"))})
+			plan = row.get("plan")
+			rows.append({
+				"domain": domain.get("title") or key,
+				"period_start": row.get("period_start"),
+				"row_type": _("Forecast / Plan") if plan is not None else _("Forecast"),
+				"actual": None,
+				"forecast": row.get("forecast"),
+				"plan": plan,
+				"variance": flt(plan) - flt(row.get("forecast")) if plan is not None else None,
+			})
 	rows.sort(key=lambda row: (str(row.get("period_start") or ""), str(row.get("domain") or ""), str(row.get("row_type") or "")))
 	return rows
 
 
 def _summary_cards(domains: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-	def future_total(key: str, field: str) -> float:
+	def total(key: str, field: str) -> float:
 		domain = domains.get(key) or {}
 		return sum(flt(row.get(field)) for row in domain.get("future_rows") or []) if domain.get("available") else 0.0
-	return [
-		{"label": _("Sales Forecast"), "value": future_total("sales", "forecast"), "datatype": "Currency"},
-		{"label": _("Sales Plan"), "value": future_total("sales", "plan"), "datatype": "Currency"},
-		{"label": _("Cash Plan"), "value": future_total("cash", "plan"), "datatype": "Currency"},
-		{"label": _("Expense Plan"), "value": future_total("expenses", "plan"), "datatype": "Currency"},
-		{"label": _("Profit Plan"), "value": future_total("profitability", "plan"), "datatype": "Currency"},
+
+	cards = [
+		{"label": _("Sales Forecast"), "value": total("sales", "forecast"), "datatype": "Currency"},
+		{"label": _("Sales Plan"), "value": total("sales", "plan"), "datatype": "Currency"},
+		{"label": _("Cash Plan"), "value": total("cash", "plan"), "datatype": "Currency"},
+		{"label": _("Expense Plan"), "value": total("expenses", "plan"), "datatype": "Currency"},
+		{"label": _("Accounting Profit Forecast"), "value": total("profitability", "forecast"), "datatype": "Currency"},
 	]
+	budget = domains.get("budget") or {}
+	if budget.get("available"):
+		remaining = _find_summary_card(budget.get("summary") or [], "Remaining Budget")
+		used = _find_summary_card(budget.get("summary") or [], "Budget Used")
+		if remaining and remaining.get("value") is not None:
+			cards.append({"label": _("Current Period Budget Remaining"), "value": remaining.get("value"), "datatype": "Currency"})
+		if used and used.get("value") is not None:
+			cards.append({"label": _("Current Period Budget Used"), "value": used.get("value"), "datatype": "Percent"})
+	return cards
 
 
 def _columns(currency: str) -> list[dict[str, Any]]:
@@ -341,10 +524,15 @@ def _columns(currency: str) -> list[dict[str, Any]]:
 
 
 def _summary_value(cards: list[dict[str, Any]], label: str) -> float:
+	card = _find_summary_card(cards, label)
+	return flt(card.get("value")) if card else 0.0
+
+
+def _find_summary_card(cards: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
 	for card in cards:
 		if str(card.get("label") or "") == label:
-			return flt(card.get("value"))
-	return 0.0
+			return card
+	return None
 
 
 def _completed_month_window(as_of_date: str, history_months: int) -> tuple[str, str, str]:
@@ -357,6 +545,12 @@ def _completed_month_window(as_of_date: str, history_months: int) -> tuple[str, 
 		history_end = forecast_start - timedelta(days=1)
 	history_start = getdate(add_months(get_first_day(history_end), -(history_months - 1)))
 	return history_start.isoformat(), history_end.isoformat(), forecast_start.isoformat()
+
+
+def _forecast_period_starts(as_of_date: str, horizon: int) -> list[str]:
+	_forecast_from, _forecast_to, forecast_start = _completed_month_window(as_of_date, 1)
+	start = getdate(forecast_start)
+	return [getdate(add_months(start, offset)).isoformat() for offset in range(horizon)]
 
 
 def _month_starts(from_date: str, to_date: str) -> list[str]:
