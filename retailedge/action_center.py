@@ -18,6 +18,7 @@ from retailedge.customer_receivables import get_customer_receivables
 from retailedge.customer_sales_action_summary import get_customer_sales_action_summary
 from retailedge.expense_register import get_expense_register
 from retailedge.inventory_health import get_inventory_action_summary
+from retailedge.planning_intelligence import get_planning_action_summary
 from retailedge.reporting_capabilities import _validate_scope as _validate_operational_scope
 from retailedge.supplier_payables import get_supplier_payables
 
@@ -206,6 +207,14 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 	if customer_sales.get("available"):
 		items.extend(customer_sales["payload"].get("items") or [])
 
+	planning = _safe_source(
+		"r12_planning",
+		lambda: get_planning_action_summary({"company": company, "branch": branch, "as_of_date": today()}),
+	)
+	sources["r12_planning"] = planning
+	if planning.get("available"):
+		items.extend(planning["payload"].get("items") or [])
+
 	decorated_items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
 	all_items = prioritise_action_items(decorated_items)
 	items = _apply_follow_up_filters(
@@ -235,6 +244,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			"source_model": "one_authoritative_provider_per_exception_domain",
 			"stock_provider": "Inventory Action Summary (ERPNext Bin + independently optional R10 reorder/movement enrichment)",
 			"customer_sales_provider": "R11 aggregate retention, growth and sales-quality signals; receivables remain owned by the existing Receivables source",
+			"planning_provider": "R12 read-only forward planning signals; existing receivables/payables sources retain ownership of current overdue exposures",
 			"generated_for": frappe.session.user,
 			"unfiltered_action_count": len(all_items),
 			"visible_action_count": len(items),

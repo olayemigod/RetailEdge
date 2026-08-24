@@ -562,24 +562,32 @@ def _columns() -> list[dict[str, Any]]:
 def _summary_cards(summary: dict[str, Any], *, currency: str) -> list[dict[str, Any]]:
 	return [
 		{
+			"key": "money_in",
 			"label": _("Money In"),
 			"value": flt(summary.get("money_in")),
 			"type": "Currency",
 			"currency": currency,
 		},
 		{
+			"key": "money_out",
 			"label": _("Money Out"),
 			"value": flt(summary.get("money_out")),
 			"type": "Currency",
 			"currency": currency,
 		},
 		{
+			"key": "net_change",
 			"label": _("Net Change"),
 			"value": flt(summary.get("net_change")),
 			"type": "Currency",
 			"currency": currency,
 		},
-		{"label": _("Movements"), "value": cint(summary.get("movement_count")), "type": "Int"},
+		{
+			"key": "movement_count",
+			"label": _("Movements"),
+			"value": cint(summary.get("movement_count")),
+			"type": "Int",
+		},
 	]
 
 
