@@ -15,6 +15,7 @@ from retailedge.branch_context import (
 )
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
+from retailedge.customer_sales_action_summary import get_customer_sales_action_summary
 from retailedge.expense_register import get_expense_register
 from retailedge.inventory_health import get_inventory_action_summary
 from retailedge.reporting_capabilities import _validate_scope as _validate_operational_scope
@@ -197,6 +198,14 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 	if bank.get("available"):
 		_append_bank_exceptions(items, bank["payload"])
 
+	customer_sales = _safe_source(
+		"r11_customer_sales",
+		lambda: get_customer_sales_action_summary(common),
+	)
+	sources["r11_customer_sales"] = customer_sales
+	if customer_sales.get("available"):
+		items.extend(customer_sales["payload"].get("items") or [])
+
 	decorated_items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
 	all_items = prioritise_action_items(decorated_items)
 	items = _apply_follow_up_filters(
@@ -225,6 +234,7 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			"accounting_truth": "existing ERPNext/RetailEdge documents and reporting engines",
 			"source_model": "one_authoritative_provider_per_exception_domain",
 			"stock_provider": "Inventory Action Summary (ERPNext Bin + independently optional R10 reorder/movement enrichment)",
+			"customer_sales_provider": "R11 aggregate retention, growth and sales-quality signals; receivables remain owned by the existing Receivables source",
 			"generated_for": frappe.session.user,
 			"unfiltered_action_count": len(all_items),
 			"visible_action_count": len(items),
