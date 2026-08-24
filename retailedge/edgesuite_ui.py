@@ -153,6 +153,9 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "insights", "label": "Insights", "icon": "chart", "items": (
 			{"label": "Sales by Item", "target_type": "Page", "target": "sales-by-item", "icon": "report"},
+			{"label": "Sales Forecast", "target_type": "Page", "target": "sales-forecast", "icon": "trending-up"},
+			{"label": "Forecasting & Planning", "target_type": "Page", "target": "forecasting-planning", "icon": "calendar"},
+			{"label": "Planning Scenarios", "target_type": "DocType", "target": "RetailEdge Planning Scenario", "icon": "clipboard"},
 			{"label": "Basket & Product Affinity", "target_type": "Page", "target": "basket-affinity", "icon": "grid"},
 			{"label": "Discount & Sales Quality", "target_type": "Page", "target": "sales-quality-intelligence", "icon": "trending-down"},
 			{"label": "Sales Invoice Register", "target_type": "Page", "target": "sales-invoice-register", "icon": "report"},
