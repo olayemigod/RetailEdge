@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Salesperson Performance"
 			eyebrow="Sales Intelligence"
-			subtitle="Review submitted invoice performance using ERPNext Sales Team allocation percentages."
+			subtitle="Review submitted invoice performance using the same ERPNext Sales Team allocation contract as RetailEdge profitability intelligence."
 			:summary="summary"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -61,21 +61,24 @@
 			</template>
 
 			<EdgeDashboardGrid minColumnWidth="25rem">
-				<EdgeDashboardSection title="Invoice Allocation Detail" description="Each row reflects the salesperson share recorded on the submitted Sales Invoice." span="2">
+				<EdgeDashboardSection title="Invoice Allocation Detail" description="Each row shows the resolved salesperson share of a submitted Sales Invoice. Allocation percentage is visible for auditability." span="2">
 					<EdgeReportTable :columns="tableColumns" :rows="rows" :rowKey="rowKey" :formatter="formatCell" @cell-click="openCell" />
 					<div class="salesperson-pagination">
-						<span>Page {{ currentPage }} · {{ rows.length }} row(s)</span>
+						<span>Page {{ currentPage }} · {{ rows.length }} row(s)<template v-if="pagination.total_rows !== undefined"> of {{ pagination.total_rows }}</template></span>
 						<div class="salesperson-pagination-actions">
 							<button class="edge-button edge-button--secondary" type="button" :disabled="loading || !pagination.has_previous" @click="changePage(-1)">Previous</button>
 							<button class="edge-button edge-button--secondary" type="button" :disabled="loading || !pagination.has_next" @click="changePage(1)">Next</button>
 						</div>
 					</div>
 				</EdgeDashboardSection>
-				<EdgeDashboardSection title="Allocation Policy" description="How RetailEdge interprets the ERPNext source records.">
+				<EdgeDashboardSection title="Allocation Policy" description="How RetailEdge interprets ERPNext Sales Team records.">
 					<div class="salesperson-policy">
-						<strong>Submitted invoices only</strong>
-						<span>Gross, net, discount and outstanding values are proportionally split using Sales Team allocated percentage.</span>
-						<span>Company and Branch scope are enforced on the server.</span>
+						<strong>One shared R8/R11 allocation contract</strong>
+						<span>Positive allocation percentages are respected exactly.</span>
+						<span>If positive allocations total less than 100%, the residual is shown as Unallocated Sales Team rather than silently reassigned.</span>
+						<span>If every Sales Team percentage is blank or zero, the invoice is split evenly across the named team members.</span>
+						<span>Invoices without Sales Team are shown as Unassigned Salesperson; allocations above 100% are rejected.</span>
+						<span>Company and Branch scope are enforced on the server. Native ERPNext detail opens in a new tab.</span>
 						<span>Download is capped at {{ exportRowCap }} rows per request.</span>
 					</div>
 				</EdgeDashboardSection>
@@ -100,6 +103,13 @@ function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject }));
 }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function nativeRoute(doctype, name = "") {
+	const slug = String(doctype || "").toLowerCase().replace(/\s+/g, "-");
+	return name ? `/app/${slug}/${encodeURIComponent(name)}` : `/app/${slug}`;
+}
+function openNative(doctype, name = "") {
+	window.open(nativeRoute(doctype, name), "_blank", "noopener,noreferrer");
+}
 
 export default {
 	name: "SalespersonPerformanceDashboardV2",
@@ -140,8 +150,14 @@ export default {
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
-		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
+		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return nativeRoute(item.target); return item.target || ""; },
+		handleNavigation(route) {
+			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
+			if (!item) return;
+			if (item.target_type === "Page") frappe.set_route(item.target);
+			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
+			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
+		},
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.salesperson_performance_dashboard.search_salesperson_dashboard_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, salespersonSearch(txt) { return this.searchOptions("salesperson", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); },
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.offset = 0; }, onBranchSelected(option) { this.filters.branch = option.value; this.filters.offset = 0; }, clearBranch() { this.filters.branch = ""; this.filters.offset = 0; }, onSalespersonSelected(option) { this.filters.salesperson = option.value; this.filters.offset = 0; }, clearSalesperson() { this.filters.salesperson = ""; this.filters.offset = 0; }, onCustomerSelected(option) { this.filters.customer = option.value; this.filters.offset = 0; }, clearCustomer() { this.filters.customer = ""; this.filters.offset = 0; }, onItemSelected(option) { this.filters.item = option.value; this.filters.offset = 0; }, clearItem() { this.filters.item = ""; this.filters.offset = 0; }, onItemGroupSelected(option) { this.filters.item_group = option.value; this.filters.offset = 0; }, clearItemGroup() { this.filters.item_group = ""; this.filters.offset = 0; },
@@ -162,11 +178,17 @@ export default {
 		changePage(direction) { const limit = Number(this.filters.limit || 50); this.filters.offset = Math.max(0, Number(this.filters.offset || 0) + direction * limit); this.fetchData(); },
 		async handleExport(options) { if (!this.capabilities.can_export) return; this.exportBusy = true; try { await exportDashboard(DASHBOARD_KEY, this.filters, options); } catch (error) { frappe.msgprint({ title: __("Dashboard Export Failed"), message: errorMessage(error, "The dashboard could not be exported."), indicator: "red" }); } finally { this.exportBusy = false; } },
 		async handlePrint() { if (!this.capabilities.can_print) return; this.printBusy = true; try { await printDashboard(DASHBOARD_KEY, this.filters); } catch (error) { frappe.msgprint({ title: __("Dashboard Print Failed"), message: errorMessage(error, "The dashboard print view could not be prepared."), indicator: "red" }); } finally { this.printBusy = false; } },
-		openCell(payload) { const row = payload?.row || {}; const field = payload?.column?.fieldname; if (field === "salesperson" && row.salesperson) frappe.set_route("Form", "Sales Person", row.salesperson); if (field === "sales_invoice" && row.sales_invoice) frappe.set_route("Form", "Sales Invoice", row.sales_invoice); if (field === "customer" && row.customer) frappe.set_route("Form", "Customer", row.customer); },
-		openSalesInvoices() { frappe.set_route("List", "Sales Invoice"); },
+		openCell(payload) {
+			const row = payload?.row || {};
+			const field = payload?.column?.fieldname;
+			if (field === "salesperson" && row.salesperson && !String(row.salesperson).startsWith("Unallocated") && !String(row.salesperson).startsWith("Unassigned")) openNative("Sales Person", row.salesperson);
+			if (field === "sales_invoice" && row.sales_invoice) openNative("Sales Invoice", row.sales_invoice);
+			if (field === "customer" && row.customer) openNative("Customer", row.customer);
+		},
+		openSalesInvoices() { openNative("Sales Invoice"); },
 		rowKey(row, index) { return `${row.salesperson || "salesperson"}-${row.sales_invoice || index}`; },
 		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
-		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (column?.fieldtype === "Date" && value) { try { return frappe.datetime.str_to_user(value); } catch (_error) { return String(value); } } if (value === null || value === undefined || value === "") return "—"; return String(value); },
+		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (column?.fieldtype === "Percent") return value === null || value === undefined ? "—" : `${Number(value || 0).toFixed(1)}%`; if (column?.fieldtype === "Date" && value) { try { return frappe.datetime.str_to_user(value); } catch (_error) { return String(value); } } if (value === null || value === undefined || value === "") return "—"; return String(value); },
 	},
 };
 </script>
