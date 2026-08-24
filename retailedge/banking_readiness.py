@@ -146,6 +146,51 @@ def _date_status(bank_date, candidate_date):
 	return (EVIDENCE_MATCH if days == 0 else EVIDENCE_SUPPORTING), days
 
 
+def _journal_entry_business_context(name, bank_ledger, direction):
+	"""Classify a reviewed Journal Entry from its non-bank ledger structure."""
+	if not name or not bank_ledger or not has_doctype("Account"):
+		return {"candidate_category": "Journal Entry Match", "transaction_category": "Other Outflow" if direction == "Outflow" else "Other Income"}
+	rows = frappe.get_all(
+		"Journal Entry Account",
+		filters={"parent": name, "docstatus": 1},
+		fields=["account"],
+		limit_page_length=50,
+	)
+	counterpart_accounts = list(
+		dict.fromkeys(
+			cstr(row.get("account")).strip()
+			for row in rows
+			if cstr(row.get("account")).strip()
+			and cstr(row.get("account")).strip() != bank_ledger
+		)
+	)
+	if not counterpart_accounts:
+		return {"candidate_category": "Journal Entry Match", "transaction_category": "Other Outflow" if direction == "Outflow" else "Other Income"}
+	account_fields = ["name"]
+	for fieldname in ("root_type", "account_type"):
+		if has_field("Account", fieldname):
+			account_fields.append(fieldname)
+	account_rows = frappe.get_all(
+		"Account",
+		filters={"name": ["in", counterpart_accounts]},
+		fields=account_fields,
+		limit_page_length=len(counterpart_accounts),
+	)
+	has_expense = any(cstr(row.get("root_type")).strip() == "Expense" for row in account_rows)
+	has_bank = any(cstr(row.get("account_type")).strip() == "Bank" for row in account_rows)
+	if direction == "Outflow" and has_expense:
+		return {"candidate_category": "Expense Payment", "transaction_category": "Expense"}
+	if has_bank:
+		return {
+			"candidate_category": "Deposit to Bank" if direction == "Inflow" else "Bank Transfer",
+			"transaction_category": "Deposit to Bank" if direction == "Inflow" else "Bank Transfer",
+		}
+	return {
+		"candidate_category": "Journal Entry Match",
+		"transaction_category": "Other Income" if direction == "Inflow" else "Other Outflow",
+	}
+
+
 def _journal_entry_reconciliation_context(name, match_doc):
 	"""Resolve the exact Journal Entry bank-side row for Review Match evidence.
 
@@ -194,6 +239,7 @@ def _journal_entry_reconciliation_context(name, match_doc):
 	)
 	if candidate_amount <= 0:
 		return {}
+	business_context = _journal_entry_business_context(name, bank_ledger, direction)
 
 	return {
 		"candidate_doctype": "Journal Entry",
@@ -209,6 +255,8 @@ def _journal_entry_reconciliation_context(name, match_doc):
 		"candidate_company": row.get("company"),
 		"candidate_docstatus": row.get("docstatus"),
 		"payment_event_source": "Journal Entry",
+		"candidate_category": business_context.get("candidate_category"),
+		"transaction_category": business_context.get("transaction_category"),
 	}
 
 
@@ -480,6 +528,8 @@ def build_match_account_evidence(match_name):
 	return {
 		"match_name": name,
 		"direction": direction,
+		"candidate_category": candidate_context.get("candidate_category"),
+		"transaction_category": candidate_context.get("transaction_category"),
 		"statement": {
 			"bank_transaction": bank_transaction_name,
 			"bank_account": bank_account,
