@@ -140,7 +140,10 @@ class TestInventoryTransferOpportunities(unittest.TestCase):
 
 		result = transfers.get_inventory_transfer_opportunities({"company": "Test Company"})
 
-		self.assertEqual(result["rows"][0]["suggested_transfer_qty"], 5)
+		row = result["rows"][0]
+		self.assertEqual(row["target_reorder_need"], 10)
+		self.assertEqual(row["source_projected_excess_before_allocation"], 10)
+		self.assertEqual(row["suggested_transfer_qty"], 10)
 		self.assertFalse(result["metadata"]["creates_stock_entry"])
 		self.assertTrue(result["metadata"]["same_company_only"])
 		replenishment.assert_called_once()
