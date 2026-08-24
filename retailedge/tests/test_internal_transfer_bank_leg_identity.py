@@ -73,6 +73,11 @@ class InternalTransferBankLegIdentityTests(unittest.TestCase):
 			("Payment Entry", "ACC-PAY-2026-00007"),
 		)
 
+	@patch.object(identity.frappe.db, "get_value", return_value="RE-BTM-ACTIVE")
+	def test_invalid_payment_entry_metadata_fails_closed(self, _get_value):
+		self.assertEqual(identity._payment_entry_metadata("PE-ACTIVE"), frappe._dict())
+		self.assertFalse(identity._is_submitted_internal_transfer("PE-ACTIVE"))
+
 	@patch.object(identity, "_active_payment_entry_match_rows")
 	@patch.object(identity, "_bank_transaction_direction")
 	@patch.object(identity, "_payment_entry_metadata")
