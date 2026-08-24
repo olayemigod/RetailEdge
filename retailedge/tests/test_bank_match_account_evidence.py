@@ -125,3 +125,52 @@ class BankMatchAccountEvidenceTests(FrappeTestCase):
 		self.assertEqual(statuses["bank_account"], "Match")
 		self.assertEqual(statuses["gl_account"], "Match")
 		self.assertEqual(statuses["amount"], "Match")
+
+	@patch("retailedge.banking_readiness.has_doctype", return_value=True)
+	@patch("retailedge.banking_readiness.frappe.get_all")
+	@patch("retailedge.banking_readiness._read_row")
+	def test_journal_entry_evidence_uses_reviewed_bank_ledger_and_direction(
+		self,
+		read_row,
+		get_all,
+		_has_doctype,
+	):
+		read_row.return_value = frappe._dict(
+			{
+				"name": "ACC-JV-2026-00001",
+				"posting_date": "2026-08-24",
+				"company": "RetailEdge Consulting",
+				"voucher_type": "Bank Entry",
+				"cheque_no": "QA-BANK-EXP-185K",
+				"docstatus": 1,
+			}
+		)
+		get_all.return_value = [
+			frappe._dict(
+				{
+					"account": "Bank - RC",
+					"debit_in_account_currency": 0,
+					"credit_in_account_currency": 185000,
+					"party_type": None,
+					"party": None,
+				}
+			)
+		]
+
+		result = banking_readiness._journal_entry_reconciliation_context(
+			"ACC-JV-2026-00001",
+			{
+				"direction": "Outflow",
+				"bank_direction": "Outflow",
+				"payment_account": "Bank - RC",
+				"resolved_payment_account": "Bank - RC",
+			},
+		)
+
+		self.assertEqual(result["candidate_doctype"], "Journal Entry")
+		self.assertEqual(result["candidate_account"], "Bank - RC")
+		self.assertEqual(result["candidate_amount"], 185000)
+		self.assertEqual(result["candidate_date"], "2026-08-24")
+		self.assertEqual(result["candidate_reference"], "QA-BANK-EXP-185K")
+		self.assertEqual(result["candidate_company"], "RetailEdge Consulting")
+		self.assertEqual(result["payment_event_source"], "Journal Entry")
