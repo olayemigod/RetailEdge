@@ -22,6 +22,8 @@ class RetailEdgePlanningScenario(Document):
 			validate_user_branch_access(self.branch, user=frappe.session.user, company=self.company, throw=True)
 
 		self.as_of_date = getdate(self.as_of_date or today())
+		if self.as_of_date > getdate(today()):
+			frappe.throw(_("As of Date cannot be in the future."))
 		self.history_months = cint(self.history_months or 6)
 		self.horizon_months = cint(self.horizon_months or 3)
 		if self.history_months < 3 or self.history_months > 24:
