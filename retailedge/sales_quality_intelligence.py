@@ -23,6 +23,7 @@ from retailedge.sales_reporting import (
 
 DEFAULT_HIGH_REDUCTION_PERCENT = 10.0
 DEFAULT_LOW_MARGIN_PERCENT = 10.0
+ITEM_SCOPE_FIELDS = ("item_code", "item_group", "warehouse")
 
 
 @frappe.whitelist()
@@ -56,7 +57,8 @@ def _build_sales_quality_dataset(filters: dict[str, Any] | str | None) -> dict[s
 
 	headers = _get_permitted_invoice_headers(filters)
 	headers = _filter_headers_by_salesperson(headers, filters.get("salesperson"))
-	if any(filters.get(field) for field in ("item_code", "item_group", "warehouse")):
+	line_scoped = any(filters.get(field) for field in ITEM_SCOPE_FIELDS)
+	if line_scoped:
 		matching_parents = _matching_invoice_parents([row.name for row in headers], filters)
 		headers = [row for row in headers if row.name in matching_parents]
 
@@ -65,7 +67,7 @@ def _build_sales_quality_dataset(filters: dict[str, Any] | str | None) -> dict[s
 	sales_names = [str(row.name) for row in sales_headers]
 	show_costs = not should_hide_cost_price()
 	invoice_details = _get_invoice_discount_details(sales_names)
-	item_rows = _get_sales_quality_items(sales_names, show_costs=show_costs)
+	item_rows = _get_sales_quality_items(sales_names, show_costs=show_costs, filters=filters if line_scoped else None)
 	team_map = _salespeople_by_invoice(sales_names)
 
 	rows = build_sales_quality_rows(
@@ -77,8 +79,15 @@ def _build_sales_quality_dataset(filters: dict[str, Any] | str | None) -> dict[s
 		high_reduction_percent=max(flt(filters.get("high_reduction_percent") or DEFAULT_HIGH_REDUCTION_PERCENT), 0.0),
 		low_margin_percent=flt(filters.get("low_margin_percent") or DEFAULT_LOW_MARGIN_PERCENT),
 	)
-	return_value = sum(abs(flt(row.get("base_net_total"))) for row in return_headers)
-	return_count = len(return_headers)
+
+	if line_scoped:
+		return_names = [str(row.name) for row in return_headers]
+		return_items = _get_sales_quality_items(return_names, show_costs=False, filters=filters)
+		return_value = sum(abs(flt(row.get("base_net_amount"))) for row in return_items)
+		return_count = len({str(row.get("parent") or "") for row in return_items if row.get("parent")})
+	else:
+		return_value = sum(abs(flt(row.get("base_net_total"))) for row in return_headers)
+		return_count = len(return_headers)
 
 	columns = _columns(show_costs)
 	net_sales = sum(flt(row.get("net_sales")) for row in rows)
@@ -114,6 +123,7 @@ def _build_sales_quality_dataset(filters: dict[str, Any] | str | None) -> dict[s
 			"additional_discount_truth": "Sales Invoice base_discount_amount and additional_discount_percentage",
 			"reference_truth": "Sales Invoice Item base_rate_with_margin, falling back to base_price_list_rate",
 			"reduction_definition": "Positive difference between recorded company-currency price-list-with-margin reference and submitted base_net_amount",
+			"item_scope": "When Item, Item Group, or Warehouse is selected, reference, net sales, reduction, return value, cost and margin are calculated only from matching Sales Invoice Item rows; invoice-level additional discount remains displayed separately and is not apportioned",
 			"cost_truth": "Sales Invoice Item incoming_rate × stock_qty when RetailEdge cost visibility permits",
 			"financial_truth": "ERPNext Profit and Loss remains financial profit truth",
 			"returns": "Returns are reported separately and are not treated as discount leakage",
@@ -124,17 +134,23 @@ def _build_sales_quality_dataset(filters: dict[str, Any] | str | None) -> dict[s
 def _matching_invoice_parents(invoice_names: list[str], filters: frappe._dict) -> set[str]:
 	if not invoice_names:
 		return set()
+	query_filters = _item_query_filters(invoice_names, filters)
+	rows = frappe.get_all("Sales Invoice Item", filters=query_filters, fields=["parent"], limit=MAX_ITEM_SCAN_ROWS + 1)
+	if len(rows) > MAX_ITEM_SCAN_ROWS:
+		frappe.throw(_("Too many Sales Invoice Item rows match this sales-quality scope. Narrow the filters."))
+	return {str(row.parent) for row in rows}
+
+
+def _item_query_filters(invoice_names: list[str], filters: frappe._dict | None = None) -> dict[str, Any]:
 	query_filters: dict[str, Any] = {"parenttype": "Sales Invoice", "parent": ["in", invoice_names]}
+	filters = filters or frappe._dict()
 	if filters.get("item_code"):
 		query_filters["item_code"] = filters.item_code
 	if filters.get("item_group"):
 		query_filters["item_group"] = filters.item_group
 	if filters.get("warehouse"):
 		query_filters["warehouse"] = filters.warehouse
-	rows = frappe.get_all("Sales Invoice Item", filters=query_filters, fields=["parent"], limit=MAX_ITEM_SCAN_ROWS + 1)
-	if len(rows) > MAX_ITEM_SCAN_ROWS:
-		frappe.throw(_("Too many Sales Invoice Item rows match this sales-quality scope. Narrow the filters."))
-	return {str(row.parent) for row in rows}
+	return query_filters
 
 
 def _get_invoice_discount_details(invoice_names: list[str]) -> dict[str, frappe._dict]:
@@ -149,7 +165,12 @@ def _get_invoice_discount_details(invoice_names: list[str]) -> dict[str, frappe.
 	return {str(row.name): row for row in rows}
 
 
-def _get_sales_quality_items(invoice_names: list[str], *, show_costs: bool) -> list[frappe._dict]:
+def _get_sales_quality_items(
+	invoice_names: list[str],
+	*,
+	show_costs: bool,
+	filters: frappe._dict | None = None,
+) -> list[frappe._dict]:
 	if not invoice_names:
 		return []
 	fields = [
@@ -166,7 +187,7 @@ def _get_sales_quality_items(invoice_names: list[str], *, show_costs: bool) -> l
 		fields.extend(["stock_qty", "incoming_rate"])
 	rows = frappe.get_all(
 		"Sales Invoice Item",
-		filters={"parenttype": "Sales Invoice", "parent": ["in", invoice_names]},
+		filters=_item_query_filters(invoice_names, filters),
 		fields=fields,
 		order_by="parent asc, idx asc",
 		limit=MAX_ITEM_SCAN_ROWS + 1,
