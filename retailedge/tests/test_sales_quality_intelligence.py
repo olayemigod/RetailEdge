@@ -26,6 +26,20 @@ class TestSalesQualityIntelligence(FrappeTestCase):
 		self.assertEqual(row["additional_discount_amount"], 10)
 		self.assertEqual(row["gross_profit"], 80)
 
+	def test_line_scoped_rows_do_not_include_companion_product_values(self):
+		rows = build_sales_quality_rows(
+			[frappe._dict(name="SINV-1", customer="CUST-1")],
+			invoice_details={"SINV-1": frappe._dict(base_discount_amount=50, additional_discount_percentage=5)},
+			items=[frappe._dict(parent="SINV-1", item_code="ITEM-A", qty=1, stock_qty=1, base_price_list_rate=100, base_rate_with_margin=0, discount_percentage=20, distributed_discount_amount=0, base_net_amount=80, incoming_rate=60)],
+			show_costs=True,
+		)
+		row = rows[0]
+		self.assertEqual(row["reference_value"], 100)
+		self.assertEqual(row["net_sales"], 80)
+		self.assertEqual(row["price_reduction"], 20)
+		self.assertEqual(row["gross_profit"], 20)
+		self.assertEqual(row["additional_discount_amount"], 50)
+
 	def test_rate_with_margin_is_preferred_as_discount_reference(self):
 		rows = build_sales_quality_rows(
 			[frappe._dict(name="SINV-1", customer="CUST-1")],
@@ -75,6 +89,18 @@ class TestSalesQualityIntelligence(FrappeTestCase):
 		fields = mock_get_all.call_args.kwargs["fields"]
 		self.assertIn("incoming_rate", fields)
 		self.assertIn("stock_qty", fields)
+
+	@patch("retailedge.sales_quality_intelligence.frappe.get_all", return_value=[])
+	def test_item_group_and_warehouse_are_applied_to_quality_item_query(self, mock_get_all):
+		_get_sales_quality_items(
+			["SINV-1"],
+			show_costs=False,
+			filters=frappe._dict(item_code="ITEM-A", item_group="Batteries", warehouse="Lagos - RE"),
+		)
+		filters = mock_get_all.call_args.kwargs["filters"]
+		self.assertEqual(filters["item_code"], "ITEM-A")
+		self.assertEqual(filters["item_group"], "Batteries")
+		self.assertEqual(filters["warehouse"], "Lagos - RE")
 
 	def test_low_margin_flag_uses_r8_transactional_margin_contract(self):
 		rows = build_sales_quality_rows(
