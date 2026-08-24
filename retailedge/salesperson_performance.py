@@ -1,12 +1,22 @@
 # Copyright (c) 2026, ProcessEdge Solutions and contributors
 # For license information, please see license.txt
 
+from __future__ import annotations
+
+from typing import Any
+
 import frappe
 from frappe import _
-from frappe.utils import cstr, flt, get_first_day, nowdate
+from frappe.utils import cint, cstr, flt, get_first_day, nowdate
 
 from retailedge.branch_context import get_branch_query_filters, has_field
 from retailedge.branch_performance import assert_can_access_branch_performance
+from retailedge.sales_reporting import MAX_INVOICE_SCAN_ROWS, MAX_ITEM_SCAN_ROWS
+from retailedge.sales_team_allocation import (
+	UNASSIGNED_SALESPERSON,
+	get_sales_team_allocations,
+	resolve_sales_team_allocations,
+)
 
 MAX_PAGE_SIZE = 100
 MAX_EXPORT_ROWS = 500
@@ -28,7 +38,12 @@ def _assert_company_access(company: str) -> None:
 
 @frappe.whitelist()
 def get_salesperson_performance(filters=None):
-	"""Aggregate salesperson performance from submitted, permission-scoped Sales Invoices."""
+	"""Aggregate salesperson performance from submitted, permission-scoped Sales Invoices.
+
+	R11 uses the same Sales Team allocation contract as profitability intelligence. Invoice
+	amounts are allocated in Python after a bounded invoice scan so missing allocation
+	percentages cannot cause every Sales Team row to receive 100% of the invoice.
+	"""
 	assert_can_access_branch_performance(frappe.session.user)
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else dict(filters or {})
 
@@ -47,7 +62,7 @@ def get_salesperson_performance(filters=None):
 	_assert_company_access(company)
 
 	conditions = ["si.docstatus = 1"]
-	params = []
+	params: list[Any] = []
 	if company:
 		conditions.append("si.company = %s")
 		params.append(company)
@@ -57,9 +72,6 @@ def get_salesperson_performance(filters=None):
 	if to_date:
 		conditions.append("si.posting_date <= %s")
 		params.append(to_date)
-	if filters.get("salesperson"):
-		conditions.append("st.sales_person = %s")
-		params.append(filters.get("salesperson"))
 	if filters.get("customer"):
 		conditions.append("si.customer = %s")
 		params.append(filters.get("customer"))
@@ -103,55 +115,142 @@ def get_salesperson_performance(filters=None):
 		params.append(filters.get("item_group"))
 
 	where_sql = " AND ".join(conditions)
-	summary_query = f"""
+	invoice_query = f"""
 		SELECT
-			SUM(COALESCE(si.grand_total, 0) * (COALESCE(st.allocated_percentage, 100) / 100)) AS gross_sales,
-			SUM(COALESCE(si.net_total, 0) * (COALESCE(st.allocated_percentage, 100) / 100)) AS net_sales,
-			COUNT(DISTINCT si.name) AS total_invoices,
-			SUM(COALESCE(si.discount_amount, 0) * (COALESCE(st.allocated_percentage, 100) / 100)) AS total_discount,
-			SUM(COALESCE(si.outstanding_amount, 0) * (COALESCE(st.allocated_percentage, 100) / 100)) AS total_outstanding
+			si.name,
+			si.posting_date,
+			si.creation,
+			si.customer,
+			COALESCE(si.grand_total, 0) AS grand_total,
+			COALESCE(si.discount_amount, 0) AS discount_amount,
+			COALESCE(si.net_total, 0) AS net_total,
+			COALESCE(si.outstanding_amount, 0) AS outstanding_amount,
+			si.status
 		FROM `tabSales Invoice` si
-		INNER JOIN `tabSales Team` st ON st.parent = si.name AND st.parenttype = 'Sales Invoice'
 		WHERE {where_sql}
+		ORDER BY si.posting_date DESC, si.creation DESC, si.name DESC
+		LIMIT %s
 	"""
-	summary_results = frappe.db.sql(summary_query, params, as_dict=True)
-	summary = summary_results[0] if summary_results else {}
-	total_invoices = flt(summary.get("total_invoices") or 0)
-	gross_sales = flt(summary.get("gross_sales") or 0)
-	summary["avg_invoice_value"] = gross_sales / total_invoices if total_invoices > 0 else 0.0
+	invoices = frappe.db.sql(invoice_query, [*params, MAX_INVOICE_SCAN_ROWS + 1], as_dict=True)
+	if len(invoices) > MAX_INVOICE_SCAN_ROWS:
+		frappe.throw(
+			_("More than {0} submitted Sales Invoices match this salesperson scope. Narrow the date range or filters.").format(
+				MAX_INVOICE_SCAN_ROWS
+			)
+		)
 
+	invoice_names = [str(row.name) for row in invoices]
+	allocations = get_sales_team_allocations(invoice_names)
+	item_context = _get_invoice_item_context(invoice_names)
+	all_rows = allocate_salesperson_invoice_rows(
+		invoices,
+		allocations=allocations,
+		item_context=item_context,
+		salesperson_filter=cstr(filters.get("salesperson") or "").strip(),
+	)
+
+	summary = _salesperson_summary(all_rows)
 	requested_limit = int(filters.get("limit") or 50)
 	limit_cap = MAX_EXPORT_ROWS if filters.get("export_mode") else MAX_PAGE_SIZE
 	limit = min(max(1, requested_limit), limit_cap)
 	offset = max(0, int(filters.get("offset") or 0))
-	rows_query = f"""
-		SELECT
-			st.sales_person AS salesperson,
-			si.name AS sales_invoice,
-			si.posting_date,
-			si.customer,
-			GROUP_CONCAT(DISTINCT sii.item_code ORDER BY sii.item_code SEPARATOR ', ') AS items,
-			SUM(sii.qty) AS total_qty,
-			si.grand_total * (COALESCE(st.allocated_percentage, 100) / 100) AS gross_amount,
-			si.discount_amount * (COALESCE(st.allocated_percentage, 100) / 100) AS discount,
-			si.net_total * (COALESCE(st.allocated_percentage, 100) / 100) AS net_amount,
-			si.outstanding_amount * (COALESCE(st.allocated_percentage, 100) / 100) AS outstanding_amount,
-			si.status AS payment_status
-		FROM `tabSales Invoice` si
-		INNER JOIN `tabSales Team` st ON st.parent = si.name AND st.parenttype = 'Sales Invoice'
-		LEFT JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
-		WHERE {where_sql}
-		GROUP BY si.name, st.sales_person
-		ORDER BY si.posting_date DESC, si.creation DESC
-		LIMIT %s OFFSET %s
-	"""
-	rows = frappe.db.sql(rows_query, [*params, limit, offset], as_dict=True)
+	rows = all_rows[offset : offset + limit]
 	return {
 		"summary": summary,
 		"rows": rows,
 		"limit": limit,
 		"offset": offset,
+		"total_rows": len(all_rows),
 		"company": company,
+		"metadata": {
+			"sales_truth": "Submitted ERPNext Sales Invoice",
+			"salesperson_truth": "ERPNext Sales Team using the shared R8/R11 allocation contract",
+			"allocation_rule": "Positive percentages are respected; residual is unallocated; zero/missing allocations split evenly; invoices without Sales Team are unassigned",
+		},
+	}
+
+
+def _get_invoice_item_context(invoice_names: list[str]) -> dict[str, dict[str, Any]]:
+	if not invoice_names:
+		return {}
+	rows = frappe.get_all(
+		"Sales Invoice Item",
+		filters={"parent": ["in", invoice_names], "parenttype": "Sales Invoice"},
+		fields=["parent", "item_code", "qty"],
+		order_by="parent asc, idx asc",
+		limit=MAX_ITEM_SCAN_ROWS + 1,
+	)
+	if len(rows) > MAX_ITEM_SCAN_ROWS:
+		frappe.throw(
+			_("More than {0} Sales Invoice Item rows match this salesperson scope. Narrow the date range or filters.").format(
+				MAX_ITEM_SCAN_ROWS
+			)
+		)
+	context: dict[str, dict[str, Any]] = {}
+	for row in rows:
+		invoice = str(row.parent)
+		bucket = context.setdefault(invoice, {"items": set(), "total_qty": 0.0})
+		if row.get("item_code"):
+			bucket["items"].add(str(row.item_code))
+		bucket["total_qty"] += flt(row.get("qty"))
+	return {
+		invoice: {
+			"items": ", ".join(sorted(bucket["items"])),
+			"total_qty": flt(bucket["total_qty"]),
+		}
+		for invoice, bucket in context.items()
+	}
+
+
+def allocate_salesperson_invoice_rows(
+	invoices: list[frappe._dict] | list[dict[str, Any]],
+	*,
+	allocations: dict[str, list[tuple[str, float]]],
+	item_context: dict[str, dict[str, Any]] | None = None,
+	salesperson_filter: str = "",
+) -> list[dict[str, Any]]:
+	"""Expand invoice amounts into salesperson rows using the shared allocation contract."""
+	item_context = item_context or {}
+	rows: list[dict[str, Any]] = []
+	for invoice in invoices:
+		invoice_name = str(invoice.get("name") or "")
+		resolved_allocations = allocations.get(invoice_name)
+		if resolved_allocations is None:
+			resolved_allocations = resolve_sales_team_allocations([], invoice=invoice_name)
+		for salesperson, weight in resolved_allocations:
+			if salesperson_filter and salesperson != salesperson_filter:
+				continue
+			items = item_context.get(invoice_name) or {}
+			rows.append(
+				{
+					"salesperson": salesperson,
+					"sales_invoice": invoice_name,
+					"posting_date": invoice.get("posting_date"),
+					"customer": invoice.get("customer"),
+					"items": items.get("items") or "",
+					"total_qty": flt(items.get("total_qty")) * weight,
+					"allocation_percentage": weight * 100.0,
+					"gross_amount": flt(invoice.get("grand_total")) * weight,
+					"discount": flt(invoice.get("discount_amount")) * weight,
+					"net_amount": flt(invoice.get("net_total")) * weight,
+					"outstanding_amount": flt(invoice.get("outstanding_amount")) * weight,
+					"payment_status": invoice.get("status") or "",
+				}
+			)
+	return rows
+
+
+def _salesperson_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+	invoice_names = {str(row.get("sales_invoice") or "") for row in rows if row.get("sales_invoice")}
+	gross_sales = sum(flt(row.get("gross_amount")) for row in rows)
+	total_invoices = len(invoice_names)
+	return {
+		"gross_sales": gross_sales,
+		"net_sales": sum(flt(row.get("net_amount")) for row in rows),
+		"total_invoices": total_invoices,
+		"total_discount": sum(flt(row.get("discount")) for row in rows),
+		"total_outstanding": sum(flt(row.get("outstanding_amount")) for row in rows),
+		"avg_invoice_value": gross_sales / total_invoices if total_invoices else 0.0,
 	}
 
 
