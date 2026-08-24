@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, timedelta
+from math import isfinite
 from typing import Any
 
 DEFAULT_TREND_WINDOW = 3
@@ -71,7 +72,8 @@ def build_baseline_forecast(
 		fallback_reason = None
 
 	if floor is not None:
-		forecast_values = [max(float(floor), value) for value in forecast_values]
+		resolved_floor = _finite_float(floor, "Forecast floor")
+		forecast_values = [max(resolved_floor, value) for value in forecast_values]
 
 	rows = [
 		{
@@ -108,25 +110,27 @@ def apply_plan_adjustment(
 	floor: float | None = None,
 ) -> list[dict[str, Any]]:
 	"""Create plan values from forecast values without mutating the forecast."""
-	adjustment = float(adjustment_percent)
+	adjustment = _finite_float(adjustment_percent, "Plan adjustment")
 	if adjustment < -100 or adjustment > 1000:
 		raise ForecastValidationError("Plan adjustment must be between -100% and 1000%.")
+	resolved_floor = _finite_float(floor, "Plan floor") if floor is not None else None
 
 	factor = 1 + (adjustment / 100)
 	planned: list[dict[str, Any]] = []
 	for row in forecast_rows:
 		if "period_start" not in row or "forecast" not in row:
 			raise ForecastValidationError("Each forecast row must contain period_start and forecast.")
-		value = float(row["forecast"]) * factor
-		if floor is not None:
-			value = max(float(floor), value)
+		forecast_value = _finite_float(row["forecast"], f"Forecast for {row['period_start']}")
+		value = forecast_value * factor
+		if resolved_floor is not None:
+			value = max(resolved_floor, value)
 		# Suppress binary floating-point residue at the API contract boundary while
 		# retaining substantially more precision than downstream currency rendering.
 		value = round(value, 10)
 		planned.append(
 			{
 				"period_start": str(row["period_start"]),
-				"forecast": float(row["forecast"]),
+				"forecast": forecast_value,
 				"plan": float(value),
 				"plan_adjustment_percent": adjustment,
 			}
@@ -159,10 +163,7 @@ def normalise_history(
 				f"Historical period {period_start.isoformat()} is after the as-of date {resolved_as_of.isoformat()}."
 			)
 		seen.add(period_start)
-		try:
-			actual = float(raw["actual"])
-		except (TypeError, ValueError) as exc:
-			raise ForecastValidationError(f"Actual for {period_start.isoformat()} must be numeric.") from exc
+		actual = _finite_float(raw["actual"], f"Actual for {period_start.isoformat()}")
 		rows.append({"period_start": period_start, "actual": actual})
 
 	rows.sort(key=lambda row: row["period_start"])
@@ -175,6 +176,16 @@ def normalise_history(
 				f"got {current['period_start'].isoformat()}."
 			)
 	return rows
+
+
+def _finite_float(value: Any, label: str) -> float:
+	try:
+		resolved = float(value)
+	except (TypeError, ValueError) as exc:
+		raise ForecastValidationError(f"{label} must be numeric.") from exc
+	if not isfinite(resolved):
+		raise ForecastValidationError(f"{label} must be finite.")
+	return resolved
 
 
 def _validate_period(period: str) -> str:
@@ -236,4 +247,4 @@ def _advance_period(period_start: date, period: str) -> date:
 		year = period_start.year + (1 if period_start.month == 12 else 0)
 		month = 1 if period_start.month == 12 else period_start.month + 1
 		return date(year, month, min(period_start.day, monthrange(year, month)[1]))
-	raise ForecastValidationError(f"Unsupported period: {period}.")
+	raise ForecastValidationError(f"Unsupported period: {period}")
