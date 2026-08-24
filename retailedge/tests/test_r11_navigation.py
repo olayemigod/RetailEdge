@@ -26,6 +26,17 @@ class TestR11Navigation(unittest.TestCase):
 			self.assertNotIn("customer-360", other_targets)
 			self.assertNotIn("customer-opportunity-intelligence", other_targets)
 
+	def test_basket_affinity_lives_in_insights_group_only(self):
+		groups = {group["key"]: group for group in NAVIGATION_GROUPS}
+		insights_targets = [item.get("target") for item in groups["insights"]["items"]]
+		self.assertIn("basket-affinity", insights_targets)
+		self.assertLess(insights_targets.index("sales-by-item"), insights_targets.index("basket-affinity"))
+
+		for key, group in groups.items():
+			if key == "insights":
+				continue
+			self.assertNotIn("basket-affinity", {item.get("target") for item in group["items"]})
+
 
 if __name__ == "__main__":
 	unittest.main()
