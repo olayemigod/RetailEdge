@@ -18,6 +18,7 @@ DASHBOARD_KEY = "salesperson-performance"
 
 COLUMNS = [
 	{"label": _("Salesperson"), "fieldname": "salesperson", "fieldtype": "Link", "options": "Sales Person", "width": 170},
+	{"label": _("Allocation"), "fieldname": "allocation_percentage", "fieldtype": "Percent", "width": 105},
 	{"label": _("Sales Invoice"), "fieldname": "sales_invoice", "fieldtype": "Link", "options": "Sales Invoice", "width": 160},
 	{"label": _("Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 105},
 	{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 180},
@@ -70,21 +71,25 @@ def _build_salesperson_dashboard_dataset(filters=None, *, export_mode: bool = Fa
 	)
 	result = get_salesperson_performance(value)
 	rows = result.get("rows") or []
+	offset = result.get("offset") or 0
+	page_size = result.get("limit") or value["limit"]
+	total_rows = result.get("total_rows") or 0
 	return {
 		"title": _("Salesperson Performance"),
 		"columns": COLUMNS,
 		"rows": rows,
 		"summary": _summary_cards(result.get("summary") or {}),
 		"pagination": {
-			"offset": result.get("offset") or 0,
-			"page_size": result.get("limit") or value["limit"],
-			"has_previous": (result.get("offset") or 0) > 0,
-			"has_next": (not export_mode) and len(rows) >= (result.get("limit") or value["limit"]),
+			"offset": offset,
+			"page_size": page_size,
+			"total_rows": total_rows,
+			"has_previous": offset > 0,
+			"has_next": (not export_mode) and (offset + len(rows) < total_rows),
 		},
 		"filters": {key: val for key, val in value.items() if key != "export_mode"},
 		"metadata": {
-			"source": "Submitted ERPNext Sales Invoices with Sales Team allocation percentages",
-			"allocation": "Invoice values are proportionally split by Sales Team allocated percentage",
+			"source": "Submitted ERPNext Sales Invoices with ERPNext Sales Team",
+			"allocation": "Shared R8/R11 contract: positive percentages respected, residual explicitly unallocated, blank/zero teams split evenly, invoices without Sales Team explicitly unassigned",
 			"export_row_cap": MAX_EXPORT_ROWS,
 		},
 	}
