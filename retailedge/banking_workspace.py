@@ -55,7 +55,6 @@ def _status_belongs_to_queue(status: str, queue: str) -> bool:
         }
     if queue == QUEUE_EXCEPTIONS:
         return status in {
-            STATUS_NEEDS_REVIEW,
             STATUS_PAYMENT_EVIDENCE_REQUIRED,
             STATUS_EXCEPTION,
             STATUS_RECONCILIATION_FAILED,
@@ -63,6 +62,31 @@ def _status_belongs_to_queue(status: str, queue: str) -> bool:
     if queue == QUEUE_RECONCILED:
         return status == STATUS_RECONCILED
     return False
+
+
+def _queue_operational_status(
+    operational: dict[str, Any] | None, row: Any, queue: str
+) -> dict[str, Any]:
+    """Keep matching review states distinct from post-confirmation blockers.
+
+    Needs Review/Reopened are intentional matching states and belong in To Match. If a
+    confirmed record's reconciliation preflight still reports Needs Review, the matching
+    phase is already complete, so the workspace must present that as a real Exception
+    rather than reusing the manual-review label.
+    """
+    payload = dict(operational or {})
+    decision_status = cstr(getattr(row, "decision_status", None)).strip()
+    if (
+        queue == QUEUE_EXCEPTIONS
+        and decision_status == "Confirmed"
+        and cstr(payload.get("operational_status")).strip() == STATUS_NEEDS_REVIEW
+    ):
+        payload["operational_status"] = STATUS_EXCEPTION
+        if not cstr(payload.get("recommended_action")).strip():
+            payload["recommended_action"] = (
+                "Review the confirmed reconciliation blocker before retrying."
+            )
+    return payload
 
 
 def _matches_filters(row: dict[str, Any], filters: frappe._dict) -> bool:
@@ -374,6 +398,7 @@ def _get_review_queue_rows(
                 except Exception:
                     skipped += 1
                     continue
+            operational = _queue_operational_status(operational, row, queue)
             if direction != DIRECTION_ALL and operational.get("direction") != direction:
                 continue
             if not _status_belongs_to_queue(operational.get("operational_status"), queue):
