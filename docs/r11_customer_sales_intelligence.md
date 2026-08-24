@@ -2,186 +2,141 @@
 
 ## Business goal
 
-Give RetailEdge owners and managers an actionable view of who is buying, who is returning, customer value, current receivable exposure, returns, and customer-level transactional profitability without creating a second sales or accounting truth.
+Give RetailEdge owners and managers actionable customer and sales intelligence over ERPNext truth without creating a second sales, receivables, profitability, discount, or task ledger.
 
-R11 is an intelligence layer over ERPNext and existing RetailEdge reporting. It does not become a CRM, mutate submitted invoices, or create a parallel customer ledger.
+R11 is read-only intelligence. Submitted accounting documents are never mutated.
 
 ## Source-of-truth contracts
 
 | Intelligence | Canonical source |
 | --- | --- |
 | Period sales and returns | Submitted ERPNext Sales Invoice |
-| Customer relationship start | Earliest submitted non-return Sales Invoice in the same permitted company/branch scope |
-| Current outstanding / overdue | Existing RetailEdge Customer Receivables, based on current ERPNext Sales Invoice outstanding balances |
-| Customer transactional profit | R8 profitability contract: Sales Invoice Item `incoming_rate × stock_qty` |
-| Financial profit | ERPNext accounting reports remain the financial truth; customer transactional profit is analytical, not a replacement P&L |
-| Salesperson allocation | ERPNext Sales Team; R11 salesperson enhancement must reuse the R8 allocation contract before promotion |
+| Product/discount transaction detail | Submitted ERPNext Sales Invoice Item |
+| Customer relationship start/latest purchase | Submitted non-return Sales Invoice in the same permitted company/branch scope through the selected To Date |
+| Current outstanding / overdue | Existing RetailEdge Customer Receivables over current ERPNext outstanding balances |
+| Transactional profit | R8 `incoming_rate × stock_qty` contract |
+| Salesperson allocation | ERPNext Sales Team through the shared R8/R11 allocation resolver |
+| Financial profit | ERPNext Profit and Loss remains financial truth |
+| Follow-up metadata | Existing RetailEdge Action Follow Up only |
 
 ## R11.1 — Customer Intelligence Foundation
 
-Initial foundation provides:
+Implemented:
 
-- customer count;
-- new vs returning customers;
-- submitted sales invoice count;
-- return count and return value;
-- sales value and net sales;
-- average purchase value;
-- first purchase date;
-- last purchase date and days since last purchase;
-- current outstanding;
-- overdue outstanding;
-- open invoice count and oldest overdue days;
-- customer transactional gross profit and margin when RetailEdge cost visibility permits it.
+- New vs Returning classification from earliest submitted non-return sale.
+- Submitted sales and returns.
+- Net sales and average purchase value.
+- Last purchase and recency.
+- Current receivable exposure.
+- Transactional customer profitability when cost visibility permits.
+- Permission-aware Company/Branch/Customer scope and bounded pagination/export.
 
-### New vs returning definition
-
-A customer is **New** when the earliest submitted non-return Sales Invoice in the same permitted company/branch scope falls on or after the report `from_date`.
-
-A customer is **Returning** when that first purchase is before `from_date`.
-
-Customer master creation date is deliberately not used because a Customer can be created before or after the actual commercial relationship begins.
-
-Returns do not establish the first purchase date. They reduce period net sales.
-
-### Receivables definition
-
-Receivables are current exposure, not a historical balance reconstructed at the report `to_date`. This matches the existing Customer Receivables contract. The UI and exports must not imply that current outstanding is an as-of-period historical balance.
-
-### Cost visibility
-
-Users restricted from cost price must still be able to use non-cost customer sales intelligence. The backend therefore omits customer cost, gross profit, and gross margin fields when the RetailEdge cost-visibility policy hides cost.
-
-Cost fields must never be fetched merely to hide them in the frontend.
+Receivables are explicitly **current exposure**, not a historical balance reconstructed at the selected report end date.
 
 ## R11.2 — Customer 360
 
-Customer 360 is implemented as an EdgeSuite drill-in rather than another customer ledger or replacement Customer master.
+Customer 360 is an EdgeSuite drill-in, not a replacement Customer master or customer ledger.
 
-It provides a bounded, permission-aware view of one customer using the same R11 source-of-truth contracts:
+Relationship and period behaviour are deliberately separated:
 
-- customer identity, group and territory;
-- first and last purchase dates;
-- days since last purchase;
-- period purchase count and average days between purchases;
-- period sales, returns, net sales and average purchase value;
-- transactional gross profit and margin only when RetailEdge cost visibility permits it;
-- current outstanding and overdue exposure from Customer Receivables;
-- current ageing and open invoices;
-- top items purchased in the selected period;
-- recent submitted Sales Invoices and returns.
+- **First Purchase** and **Latest Purchase** are historical submitted non-return sales through the selected To Date in the same permitted company/branch scope.
+- **Days Since Purchase** uses that latest historical purchase.
+- **Purchases in Period** and **Average Days Between Purchases** use only the selected reporting window.
 
-Customer & Sales Intelligence rows open Customer 360 in the EdgeSuite flow and carry Company, Branch, Customer and date context. Native ERPNext Customer, Sales Invoice and Item documents retained for detailed inspection open in a new tab.
+Current outstanding, overdue exposure, open invoice count and ageing come from Customer Receivables only. They do not fall back to zero merely because the customer has no sale in the selected period.
 
-Customer 360 is read-only. It does not write to Customer, Sales Invoice, Payment Entry or ledger records.
+Top items and recent invoices remain selected-period evidence. Native Customer, Sales Invoice and Item documents open in new tabs.
 
 ## R11.3 — Retention & Opportunity Intelligence
 
-Retention & Opportunity Intelligence is implemented using explicit comparable-period evidence rather than a hidden churn score.
+The selected period is compared with the immediately preceding equal-length period.
 
-The selected current period is compared with the immediately preceding period of equal day length. The default change threshold is 25% and the report allows an adjustable threshold from 5% to 90%.
+Implemented signals:
 
-Current implemented signals are:
+- no current-period purchase after prior-period purchase;
+- declining sales value;
+- declining purchase frequency;
+- current overdue receivable exposure;
+- growing sales value;
+- growing purchase frequency.
 
-- **No purchase in current period** — the customer purchased in the preceding comparable period but has no submitted non-return sale in the selected current period;
-- **Sales value declined** — net sales declined by at least the configured percentage;
-- **Purchase frequency declined** — submitted non-return purchase count declined by at least the configured percentage;
-- **Overdue balance needs follow-up** — current ERPNext receivable exposure includes an overdue amount;
-- **Sales value growing** — net sales increased by at least the configured percentage;
-- **Purchase frequency growing** — submitted purchase count increased by at least the configured percentage.
+These describe observed behaviour only. RetailEdge does not assert churn or dormancy from a selected window.
 
-These are observed behavioural signals only. RetailEdge does **not** label a customer churned or dormant merely because a selected report window has no purchase. Retention signals are prioritised for follow-up, current overdue exposure is identified separately, and growth signals are surfaced as opportunities.
+## R11.4 — Salesperson Intelligence Alignment
 
-Returns reduce period net sales but do not inflate purchase frequency. Receivables remain current exposure and are not reconstructed as historical period-end balances.
+Implemented one shared Sales Team allocation contract:
 
-The EdgeSuite report supports Company, Branch, Customer, current-period dates and change-threshold filters, export, and Customer 360 drill-through.
+- positive ERPNext percentages are respected;
+- allocations above 100% fail closed;
+- positive totals below 100% leave an explicit Unallocated residual;
+- all-zero/missing percentages split evenly across named team members;
+- no Sales Team produces Unassigned Salesperson.
 
-## Planned slices
+This same contract is shared with R8 profitability intelligence so salesperson totals do not diverge from transactional profitability attribution.
 
-### R11.4 — Salesperson Intelligence
+## R11.5 — Basket & Product Affinity
 
-Extend existing Salesperson Performance using ERPNext Sales Team allocation. Reuse the R8 allocation rule including explicit residual/unallocated handling; do not use a separate default-100%-per-row calculation.
+Implemented bounded co-purchase analysis from submitted non-return Sales Invoices.
 
-### R11.5 — Basket & Product Affinity
+- duplicate product lines count once per basket occurrence;
+- returns do not create affinity;
+- Item and Item Group act as affinity anchors after complete permitted basket construction;
+- 50 distinct products per basket and 5,000 unique generated pairs are fail-closed limits;
+- association metrics are descriptive, not recommendation or causality claims.
 
-Bounded invoice-basket analysis for frequently bought-together items and cross-sell signals. Avoid unbounded pair explosions.
+## R11.6 — Discount & Sales Quality
 
-### R11.6 — Discount & Sales Quality
+Implemented recorded price-reduction and transactional sales-quality analysis.
 
-Discount and margin-leakage analysis by customer, item, invoice and salesperson using submitted transaction truth and cost visibility.
+When Item, Item Group or Warehouse is selected, **Reference Value, Net Sales, Price Reduction, Return Value, Cost and Margin are calculated only from matching Sales Invoice Item rows**. The filter no longer merely qualifies an invoice and then reports the whole invoice value.
 
-### R11.7 — Action Centre
+ERPNext invoice-level `base_discount_amount` / `additional_discount_percentage` remain displayed separately and are not apportioned to selected item lines. Returns remain separate from discount leakage.
 
-Surface customer/sales exceptions and opportunities through the existing RetailEdge Action Centre. Follow-up state must remain separate from the underlying accounting/sales document and must never falsely mark a business condition as resolved.
+Cost-restricted users do not fetch `incoming_rate` or `stock_qty`.
 
-## Filters and permissions
+## R11.7 — Customer & Sales Action Centre Integration
 
-R11 inherits the RetailEdge sales-reporting controls:
+Implemented aggregate actions for:
 
-- Company is required and read-permission checked.
-- Branch is validated against the current user's permitted branches.
-- Customer filters are permission checked.
-- Sales Invoice retrieval uses permission-aware bounded queries.
-- Branch-restricted users must not fall back to company-wide results when branch attribution is unavailable.
-- Dependent selectors must use bounded search rather than preloading every Customer, Sales Person, Item or Warehouse.
+- retention follow-up;
+- customer growth opportunity;
+- high recorded price reduction;
+- low/negative transactional margin when cost visibility permits.
 
-## Performance rules
+Overdue receivables remain owned by the existing Receivables Action Centre source. Basket Affinity remains insight-only.
 
-- Reuse existing bounded Sales Invoice and item scan limits.
-- Aggregate customer first-purchase dates server-side rather than issuing one query per customer.
-- Customer 360 limits recent invoices and top items rather than preloading all customer history.
-- Retention & Opportunity Intelligence performs two bounded submitted-invoice scans: current period and preceding equal-length period.
-- Do not preload customer masters.
-- Export must use the same permission and business-rule path as the visible report.
-- Basket affinity must later use bounded invoice/item sets and must not create unbounded pair combinations.
+Action Centre uses lightweight R11 count providers rather than constructing complete report payloads, Sales Team display detail, or invoice-discount detail merely to obtain four counts.
 
-## Accounting and data safety
+R11 actions are period-dependent. Their follow-up fingerprint therefore opts into a bounded `from_date/to_date` scope. The global fingerprint function preserves the exact original six-field hash whenever no scope is supplied, so existing R4/R9/R10 follow-up identities remain backward-compatible.
 
-- Never mutate submitted Sales Invoices, Payment Entries, GL Entries or other accounting documents.
-- Do not create cached customer balances as a competing ledger truth.
-- Do not reconstruct historical receivables unless a later slice explicitly implements and reconciles a ledger-based historical contract.
-- Preserve ERPNext Profit and Loss as financial truth.
-- Retention/opportunity follow-up state, when integrated into Action Centre, must remain separate from the source business condition.
+Acknowledgement, snooze, assignment and scheduling remain follow-up metadata only; they never resolve the underlying business condition.
 
-## QA gate
+## Filters, permissions and smart forms
 
-R11 is stacked on R10 and remains Draft while predecessor QA/promotion is pending. Automated validation may run on the stacked head. Before manual/browser QA, reconcile the R11 branch against the promoted R10 predecessor and rerun exact-head linters/CI.
+- Company is permission checked.
+- Branch is validated against user access.
+- Customer, Item, Item Group, Warehouse and Salesperson selectors use bounded searches.
+- Parent filter changes clear dependent invalid values in the EdgeSuite UI.
+- Backend validation remains authoritative for business correctness and branch isolation.
+- Export uses the same permission/business-rule path as the visible report.
 
-## Manual QA checklist
+## Performance and safety
 
-### R11.1
+- Sales Invoice scans are bounded by the existing 2,000-row contract.
+- Sales Invoice Item scans are bounded by the existing 10,000-row contract.
+- Sales Team scans are bounded by the existing 5,000-row contract.
+- Basket analysis has additional combinatorial fail-closed limits.
+- Customer first/latest purchase uses aggregate server-side queries rather than N+1 lookups.
+- Customer 360 limits recent invoice/top-item display.
+- R11 Action Centre providers compute aggregate counts rather than full report payloads.
+- No submitted accounting document is mutated.
+- No parallel receivable, customer, sales, discount or profitability ledger is introduced.
 
-- Global-access user sees permitted company-wide customer metrics.
-- Branch-restricted user sees only permitted branch customer activity.
-- Explicit Branch filter cannot escape user branch access.
-- Customer with first sale in period is New.
-- Customer with an earlier submitted sale is Returning.
-- Return reduces net sales and does not increase purchase count.
-- Return posting date does not replace last purchase date.
-- Current outstanding agrees with Customer Receivables for the same Company/Branch/Customer scope.
-- Overdue amount and oldest overdue days agree with Customer Receivables.
-- Cost-authorized user sees transactional customer profit/margin.
-- Cost-restricted user does not receive cost/profit fields in the API payload.
-- Export and visible results use identical definitions.
+## Manual QA gate
 
-### R11.2
+R11 remains stacked on R10 and Draft while predecessor QA/promotion is pending. Before R11 browser QA:
 
-- Clicking a Customer & Sales Intelligence customer opens Customer 360 with the same Company/Branch/date context.
-- Customer 360 cannot escape permitted Company/Branch/Customer scope.
-- Top items net returns correctly.
-- Recent invoice links open retained ERPNext native documents in a new tab.
-- Current receivable totals agree with Customer Receivables.
-- Cost-restricted users do not receive or see profit/cost fields.
-- Multi-company drill-through preserves the originating Company instead of silently reverting to the user's default Company.
-
-### R11.3
-
-- Prior comparison window is immediately before the selected current period and has equal day length.
-- A customer who bought only in the prior period is described as having no current-period purchase, not as churned.
-- Decline and growth signals respect the configured percentage threshold.
-- Returns reduce value and do not increase purchase frequency.
-- Current overdue exposure agrees with Customer Receivables.
-- Customer drill-through opens Customer 360 with the same current-period context.
-- Export and visible rows use the same comparison and signal rules.
-
-Across all R11 pages, native ERPNext pages that remain should open in a new tab while EdgeSuite flows stay within the product shell.
+1. Promote/reconcile the predecessor through R10.
+2. Reconcile R11 without losing its commits.
+3. Rerun exact-head Linters and full standalone Frappe v16 CI.
+4. Browser-test Company/Branch/customer/product filters, Customer 360 historical-vs-period semantics, current receivables, salesperson allocations, basket affinity, item-scoped sales quality, cost-restricted users, Action Centre period-specific follow-up state, export, native-new-tab drill-through, responsive layout and dark mode.
