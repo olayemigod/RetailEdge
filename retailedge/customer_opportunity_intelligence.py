@@ -10,6 +10,7 @@ from frappe.utils import add_days, cint, date_diff, flt, getdate
 from retailedge.customer_sales_intelligence import _get_receivable_exposure, _normalise_filters
 from retailedge.sales_reporting import (
 	_assert_report_access,
+	_company_currency,
 	_get_permitted_invoice_headers,
 	_validate_filters,
 )
@@ -40,11 +41,14 @@ def get_customer_opportunity_intelligence(filters: dict[str, Any] | str | None =
 		change_threshold_percent=threshold,
 	)
 	rows.sort(key=_sort_key)
+	currency = _company_currency(current_filters.company)
 
 	return {
 		"title": _("Customer Retention & Opportunity Intelligence"),
+		"columns": _columns(currency),
 		"rows": rows,
 		"summary": _summary(rows),
+		"company_currency": currency,
 		"scope": {
 			"company": current_filters.company,
 			"branch": str(current_filters.get("branch") or ""),
@@ -68,6 +72,22 @@ def get_customer_opportunity_intelligence(filters: dict[str, Any] | str | None =
 			"dormancy_claimed": False,
 			"signal_rule": "Signals describe observed period behaviour only; they do not assert customer churn",
 		},
+	}
+
+
+@frappe.whitelist()
+def get_customer_opportunity_intelligence_export(
+	filters: dict[str, Any] | str | None = None,
+) -> dict[str, Any]:
+	result = get_customer_opportunity_intelligence(filters)
+	return {
+		"title": result["title"],
+		"columns": result["columns"],
+		"rows": result["rows"],
+		"summary": result["summary"],
+		"company_currency": result["company_currency"],
+		"scope": result["scope"],
+		"metadata": result["metadata"],
 	}
 
 
@@ -124,6 +144,9 @@ def build_comparison_rows(
 			{
 				"customer": customer,
 				"customer_name": current_row.get("customer_name") or prior_row.get("customer_name") or customer,
+				"attention_status": _attention_status(signals),
+				"signal_labels": "; ".join(str(signal.get("label") or "") for signal in signals if signal.get("label")),
+				"signals": signals,
 				"current_net_sales": flt(current_row["net_sales"]),
 				"prior_net_sales": flt(prior_row["net_sales"]),
 				"value_change_percent": value_change,
@@ -135,8 +158,6 @@ def build_comparison_rows(
 				"current_outstanding": flt(receivable.get("current_outstanding")),
 				"overdue_outstanding": flt(receivable.get("overdue_outstanding")),
 				"max_overdue_days": cint(receivable.get("max_overdue_days")),
-				"signals": signals,
-				"attention_status": _attention_status(signals),
 			}
 		)
 	return rows
@@ -269,6 +290,25 @@ def _summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 		{"label": _("Retention Follow-up"), "value": sum(1 for row in rows if row.get("attention_status") == "Follow-up"), "datatype": "Int"},
 		{"label": _("Receivable Follow-up"), "value": sum(1 for row in rows if row.get("attention_status") == "Receivable Follow-up"), "datatype": "Int"},
 		{"label": _("Growth Opportunities"), "value": sum(1 for row in rows if row.get("attention_status") == "Opportunity"), "datatype": "Int"},
+	]
+
+
+def _columns(currency: str) -> list[dict[str, Any]]:
+	return [
+		{"fieldname": "customer", "label": _("Customer"), "fieldtype": "Link", "options": "Customer"},
+		{"fieldname": "customer_name", "label": _("Customer Name"), "fieldtype": "Data"},
+		{"fieldname": "attention_status", "label": _("Attention Status"), "fieldtype": "Data"},
+		{"fieldname": "signal_labels", "label": _("Signals"), "fieldtype": "Data"},
+		{"fieldname": "current_net_sales", "label": _("Current Net Sales"), "fieldtype": "Currency", "options": currency},
+		{"fieldname": "prior_net_sales", "label": _("Prior Net Sales"), "fieldtype": "Currency", "options": currency},
+		{"fieldname": "value_change_percent", "label": _("Value Change"), "fieldtype": "Percent"},
+		{"fieldname": "current_purchase_count", "label": _("Current Purchases"), "fieldtype": "Int"},
+		{"fieldname": "prior_purchase_count", "label": _("Prior Purchases"), "fieldtype": "Int"},
+		{"fieldname": "frequency_change_percent", "label": _("Frequency Change"), "fieldtype": "Percent"},
+		{"fieldname": "current_return_value", "label": _("Current Returns"), "fieldtype": "Currency", "options": currency},
+		{"fieldname": "current_outstanding", "label": _("Current Outstanding"), "fieldtype": "Currency", "options": currency},
+		{"fieldname": "overdue_outstanding", "label": _("Overdue"), "fieldtype": "Currency", "options": currency},
+		{"fieldname": "max_overdue_days", "label": _("Oldest Overdue Days"), "fieldtype": "Int"},
 	]
 
 
