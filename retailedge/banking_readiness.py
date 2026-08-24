@@ -202,11 +202,15 @@ def _journal_entry_reconciliation_context(name, match_doc):
 	match_doc = frappe._dict(match_doc or {})
 	if not name or not has_doctype("Journal Entry") or not has_doctype("Journal Entry Account"):
 		return {}
-	row = _read_row(
+	# docstatus is a standard Frappe column, not a normal DocField in meta.fields.
+	# Read the submitted voucher directly so the live evidence path cannot silently
+	# drop docstatus and reject an otherwise valid Journal Entry as a draft.
+	row = frappe.db.get_value(
 		"Journal Entry",
 		name,
-		["posting_date", "company", "voucher_type", "cheque_no", "docstatus"],
-	)
+		["name", "posting_date", "company", "voucher_type", "cheque_no", "docstatus"],
+		as_dict=True,
+	) or {}
 	if not row or cint(row.get("docstatus")) != 1:
 		return {}
 
