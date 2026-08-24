@@ -23,6 +23,7 @@ class TestActionCenterStockFallback(unittest.TestCase):
 			]
 		}
 		with (
+			patch("retailedge.action_center._resolve_action_center_branch", return_value="HQ"),
 			patch("retailedge.action_center.get_inventory_action_summary", return_value=stock_payload) as stock,
 			patch("retailedge.action_center.get_expense_register", return_value=_empty_summary()),
 			patch("retailedge.action_center.get_cash_shift_verification", return_value=_empty_summary()),
@@ -108,6 +109,7 @@ class TestActionCenterStockFallback(unittest.TestCase):
 			]
 		}
 		with (
+			patch("retailedge.action_center._resolve_action_center_branch", return_value=""),
 			patch("retailedge.action_center.get_inventory_action_summary", return_value=stock_payload) as stock,
 			patch("retailedge.action_center.get_expense_register", return_value=_empty_summary()),
 			patch("retailedge.action_center.get_cash_shift_verification", return_value=_empty_summary()),
