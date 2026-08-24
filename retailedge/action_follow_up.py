@@ -11,8 +11,26 @@ DOCTYPE = "RetailEdge Action Follow Up"
 MANAGEMENT_FILTER_KEYS = {"follow_up_status", "assignment_scope", "due_scope"}
 
 
-def action_fingerprint(*, company: str, branch: str, source: str, kind: str, label: str, route: str) -> str:
-	payload = "|".join(str(value or "").strip() for value in (company, branch, source, kind, label, route))
+def action_fingerprint(
+	*,
+	company: str,
+	branch: str,
+	source: str,
+	kind: str,
+	label: str,
+	route: str,
+	scope: str = "",
+) -> str:
+	"""Build a stable follow-up identity.
+
+	`scope` is optional so all existing R4/R9/R10 fingerprints remain byte-for-byte
+	compatible. Period-dependent providers such as R11 may opt in to a bounded scope
+	without changing the global follow-up contract for legacy action domains.
+	"""
+	payload = "|".join(
+		str(value or "").strip()
+		for value in (company, branch, source, kind, label, route, scope)
+	)
 	return sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -25,6 +43,7 @@ def decorate_action_items(items: list[dict[str, Any]], *, company: str, branch: 
 			kind=str(item.get("kind") or ""),
 			label=str(item.get("label") or ""),
 			route=str(item.get("route") or ""),
+			scope=str(item.get("fingerprint_scope") or ""),
 		)
 	if not items or not frappe.db.exists("DocType", DOCTYPE):
 		return items
