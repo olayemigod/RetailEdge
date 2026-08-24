@@ -2,6 +2,7 @@
 	"use strict";
 
 	const PAGE_NAME = "bank-matching-reconciliation";
+	const OUTCOME_ASSET = "/assets/retailedge/js/bank_candidate_outcome_notifications.js";
 	const ASSET = "/assets/retailedge/js/bank_matching_reconciliation.js";
 	const REVIEW_ASSET = "/assets/retailedge/js/bank_match_review_ui.js";
 	const CONFIRMATION_ASSET = "/assets/retailedge/js/bank_reconciliation_confirmation.js";
@@ -18,7 +19,8 @@
 	}
 
 	function boot(wrapper) {
-		Promise.resolve(frappe.require(ASSET))
+		Promise.resolve(frappe.require(OUTCOME_ASSET))
+			.then(() => Promise.resolve(frappe.require(ASSET)))
 			.then(() => Promise.resolve(frappe.require(REVIEW_ASSET)))
 			.then(() => Promise.resolve(frappe.require(CONFIRMATION_ASSET)))
 			.then(() => startWorkspace(wrapper))
