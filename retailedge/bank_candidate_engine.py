@@ -67,6 +67,95 @@ def _resolve_bank_ledger_account(bank_transaction):
 	return cstr(frappe.db.get_value("Bank Account", bank_account, "account") or "").strip()
 
 
+def _journal_entry_counterpart_context(parent_names, bank_ledger):
+	"""Return bounded accounting metadata for non-bank rows on candidate Journal Entries."""
+	parents = list(
+		dict.fromkeys(
+			cstr(parent).strip()
+			for parent in parent_names or []
+			if cstr(parent).strip()
+		)
+	)
+	bank_ledger = cstr(bank_ledger).strip()
+	if not parents or not bank_ledger or not has_doctype("Account"):
+		return {}
+
+	rows = frappe.get_all(
+		"Journal Entry Account",
+		filters={"parent": ["in", parents], "docstatus": 1},
+		fields=["parent", "account"],
+		limit_page_length=min(max(len(parents) * 6, 160), 5000),
+	)
+	account_names = list(
+		dict.fromkeys(
+			cstr(row.get("account")).strip()
+			for row in rows
+			if cstr(row.get("account")).strip()
+			and cstr(row.get("account")).strip() != bank_ledger
+		)
+	)
+	if not account_names:
+		return {}
+
+	account_fields = ["name"]
+	for fieldname in ("root_type", "account_type"):
+		if has_field("Account", fieldname):
+			account_fields.append(fieldname)
+	account_rows = frappe.get_all(
+		"Account",
+		filters={"name": ["in", account_names]},
+		fields=account_fields,
+		limit_page_length=len(account_names),
+	)
+	account_metadata = {
+		cstr(row.get("name")).strip(): row
+		for row in account_rows
+		if cstr(row.get("name")).strip()
+	}
+
+	output = {}
+	for row in rows:
+		parent = cstr(row.get("parent")).strip()
+		account = cstr(row.get("account")).strip()
+		if not parent or not account or account == bank_ledger:
+			continue
+		metadata = dict(account_metadata.get(account) or {})
+		metadata["account"] = account
+		output.setdefault(parent, []).append(metadata)
+	return output
+
+
+def _journal_entry_business_category(direction, voucher_type, remarks, counterpart_accounts=None):
+	"""Classify Journal Entry bank events using accounting structure before descriptive text."""
+	counterparts = counterpart_accounts or []
+	lower_text = f"{cstr(voucher_type).strip()} {cstr(remarks).strip()}".lower()
+	has_expense_counterpart = any(
+		cstr(row.get("root_type")).strip() == "Expense"
+		for row in counterparts
+	)
+	has_bank_counterpart = any(
+		cstr(row.get("account_type")).strip() == "Bank"
+		for row in counterparts
+	)
+	has_expense_text = any(
+		token in lower_text
+		for token in ("expense", "charge", "fee", "rent", "utility")
+	)
+
+	if direction == DIRECTION_OUTFLOW and (has_expense_counterpart or has_expense_text):
+		return "Expense Payment", CATEGORY_EXPENSE
+	if has_bank_counterpart or "bank entry" in lower_text or "transfer" in lower_text:
+		return (
+			("Deposit to Bank", CATEGORY_BANK_DEPOSIT)
+			if direction == DIRECTION_INFLOW
+			else ("Bank Transfer", CATEGORY_BANK_TRANSFER)
+		)
+	return (
+		"Journal Entry Match",
+		CATEGORY_OTHER_INCOME if direction == DIRECTION_INFLOW else CATEGORY_OTHER_OUTFLOW,
+	)
+
+
 def _journal_entry_candidates(bank_transaction, limit=40):
 	if not has_doctype("Journal Entry") or not has_doctype("Journal Entry Account"):
 		return []
@@ -118,6 +207,14 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 		fields=fields,
 		limit_page_length=min(max(limit * 8, 160), 1000),
 	)
+	candidate_parents = list(
+		dict.fromkeys(
+			cstr(row.get("parent")).strip()
+			for row in account_rows
+			if cstr(row.get("parent")).strip()
+		)
+	)
+	counterpart_context = _journal_entry_counterpart_context(candidate_parents, bank_ledger)
 
 	candidates = []
 	for account_row in account_rows:
@@ -140,15 +237,12 @@ def _journal_entry_candidates(bank_transaction, limit=40):
 
 		voucher_type = cstr(entry.get("voucher_type")).strip()
 		remarks = cstr(entry.get("user_remark") or entry.get("remark")).strip()
-		category = "Journal Entry Match"
-		business_category = CATEGORY_OTHER_INCOME if direction == DIRECTION_INFLOW else CATEGORY_OTHER_OUTFLOW
-		lower_text = f"{voucher_type} {remarks}".lower()
-		if "bank entry" in lower_text or "transfer" in lower_text:
-			category = "Deposit to Bank" if direction == DIRECTION_INFLOW else "Bank Transfer"
-			business_category = CATEGORY_BANK_DEPOSIT if direction == DIRECTION_INFLOW else CATEGORY_BANK_TRANSFER
-		elif any(token in lower_text for token in ("expense", "charge", "fee")):
-			category = "Expense Payment" if direction == DIRECTION_OUTFLOW else "Other Income"
-			business_category = CATEGORY_EXPENSE if direction == DIRECTION_OUTFLOW else CATEGORY_OTHER_INCOME
+		category, business_category = _journal_entry_business_category(
+			direction,
+			voucher_type,
+			remarks,
+			counterpart_accounts=counterpart_context.get(cstr(entry.get("name")).strip()) or [],
+		)
 
 		candidates.append(
 			{
