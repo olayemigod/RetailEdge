@@ -10,6 +10,7 @@ from retailedge.banking_workspace import (
     QUEUE_TO_MATCH,
     QUEUE_TO_RECONCILE,
     _cheap_operational,
+    _review_db_filters,
     _status_belongs_to_queue,
     get_banking_workspace_rows,
 )
@@ -30,18 +31,35 @@ class BankingWorkspaceTests(unittest.TestCase):
     def test_queue_mapping_keeps_matching_and_reconciliation_separate(self):
         self.assertTrue(_status_belongs_to_queue(STATUS_UNMATCHED, QUEUE_TO_MATCH))
         self.assertTrue(_status_belongs_to_queue(STATUS_SUGGESTED, QUEUE_TO_MATCH))
+        self.assertTrue(_status_belongs_to_queue(STATUS_NEEDS_REVIEW, QUEUE_TO_MATCH))
+        self.assertFalse(_status_belongs_to_queue(STATUS_NEEDS_REVIEW, QUEUE_EXCEPTIONS))
         self.assertTrue(_status_belongs_to_queue(STATUS_READY_TO_RECONCILE, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILIATION_PENDING, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILED, QUEUE_RECONCILED))
 
-    def test_exception_queue_contains_manual_and_failed_cases(self):
+    def test_exception_queue_contains_only_blocked_or_failed_cases(self):
         for status in (
-            STATUS_NEEDS_REVIEW,
             STATUS_PAYMENT_EVIDENCE_REQUIRED,
             STATUS_EXCEPTION,
             STATUS_RECONCILIATION_FAILED,
         ):
             self.assertTrue(_status_belongs_to_queue(status, QUEUE_EXCEPTIONS))
+
+    def test_manual_review_decision_statuses_are_queried_under_to_match(self):
+        filters = SimpleNamespace(
+            company=None,
+            branch=None,
+            bank_account=None,
+            from_date=None,
+            to_date=None,
+        )
+        to_match = _review_db_filters(QUEUE_TO_MATCH, filters)
+        exceptions = _review_db_filters(QUEUE_EXCEPTIONS, filters)
+        self.assertEqual(
+            to_match["decision_status"],
+            ["in", ["Draft", "Suggested", "Needs Review", "Reopened"]],
+        )
+        self.assertEqual(exceptions["decision_status"], "Confirmed")
 
     def test_suggested_match_does_not_need_reconciliation_preflight_to_enter_to_match(self):
         row = SimpleNamespace(
@@ -53,7 +71,7 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(operational["operational_status"], STATUS_SUGGESTED)
         self.assertEqual(operational["direction"], "Inflow")
 
-    def test_known_review_and_terminal_states_can_be_placed_without_preflight(self):
+    def test_manual_review_and_terminal_states_can_be_placed_without_preflight(self):
         review = _cheap_operational(
             SimpleNamespace(
                 decision_status="Needs Review",
@@ -61,7 +79,16 @@ class BankingWorkspaceTests(unittest.TestCase):
                 execution_status="Not Executed",
             ),
             {"direction": "Outflow"},
-            QUEUE_EXCEPTIONS,
+            QUEUE_TO_MATCH,
+        )
+        reopened = _cheap_operational(
+            SimpleNamespace(
+                decision_status="Reopened",
+                suggested_document="JV-2",
+                execution_status="Not Executed",
+            ),
+            {"direction": "Outflow"},
+            QUEUE_TO_MATCH,
         )
         terminal = _cheap_operational(
             SimpleNamespace(
@@ -73,6 +100,7 @@ class BankingWorkspaceTests(unittest.TestCase):
             QUEUE_RECONCILED,
         )
         self.assertEqual(review["operational_status"], STATUS_NEEDS_REVIEW)
+        self.assertEqual(reopened["operational_status"], STATUS_NEEDS_REVIEW)
         self.assertEqual(terminal["operational_status"], STATUS_RECONCILED)
 
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
@@ -109,7 +137,7 @@ class BankingWorkspaceTests(unittest.TestCase):
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
     @patch("retailedge.banking_workspace._get_review_queue_rows")
     @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
-    def test_to_match_combines_unmatched_and_suggested_without_losing_suggestions(
+    def test_to_match_combines_unmatched_and_review_rows_without_losing_manual_review(
         self, unmatched_rows, review_rows, _assert_access
     ):
         unmatched_rows.return_value = (
@@ -126,20 +154,20 @@ class BankingWorkspaceTests(unittest.TestCase):
         review_rows.return_value = (
             [
                 {
-                    "bank_transaction": "BT-SUGGESTED",
+                    "bank_transaction": "BT-REVIEW",
                     "transaction_date": "2026-08-17",
-                    "direction": "Inflow",
-                    "operational_status": STATUS_SUGGESTED,
+                    "direction": "Outflow",
+                    "operational_status": STATUS_NEEDS_REVIEW,
                     "match_name": "MATCH-1",
                 }
             ],
             0,
         )
-        payload = get_banking_workspace_rows(direction="Inflow", queue=QUEUE_TO_MATCH)
+        payload = get_banking_workspace_rows(direction="All", queue=QUEUE_TO_MATCH)
         self.assertEqual(payload["count"], 2)
         self.assertEqual(
             {row["operational_status"] for row in payload["rows"]},
-            {STATUS_UNMATCHED, STATUS_SUGGESTED},
+            {STATUS_UNMATCHED, STATUS_NEEDS_REVIEW},
         )
 
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
