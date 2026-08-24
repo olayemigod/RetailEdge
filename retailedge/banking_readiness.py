@@ -469,6 +469,12 @@ def build_match_account_evidence(match_name):
 	match_for_candidate = frappe._dict(dict(match))
 	match_for_candidate["direction"] = direction
 	match_for_candidate["bank_direction"] = direction
+	if cstr(match.get("suggested_document_type")).strip() == "Journal Entry" and bank_gl:
+		# Review evidence must be hydrated from the live, validated statement bank ledger.
+		# Older review rows may predate Journal Entry payment_account persistence, so do not
+		# let blank/stale match metadata hide otherwise deterministic ERPNext accounting evidence.
+		match_for_candidate["resolved_payment_account"] = bank_gl
+		match_for_candidate["payment_account"] = bank_gl
 	candidate_context = frappe._dict(
 		get_payment_event_reconciliation_context(
 			match.get("suggested_document_type"),
