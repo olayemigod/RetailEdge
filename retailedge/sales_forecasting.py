@@ -51,6 +51,8 @@ def _normalise_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 	if not resolved.get("company"):
 		resolved.company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	resolved.as_of_date = str(resolved.get("as_of_date") or nowdate())
+	if getdate(resolved.as_of_date) > getdate(nowdate()):
+		frappe.throw(_("As of Date cannot be in the future."))
 	resolved.history_months = _bounded_int(
 		resolved.get("history_months"),
 		default=DEFAULT_HISTORY_MONTHS,
