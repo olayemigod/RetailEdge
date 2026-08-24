@@ -55,6 +55,7 @@ def _status_belongs_to_queue(status: str, queue: str) -> bool:
         }
     if queue == QUEUE_EXCEPTIONS:
         return status in {
+            STATUS_NEEDS_REVIEW,
             STATUS_PAYMENT_EVIDENCE_REQUIRED,
             STATUS_EXCEPTION,
             STATUS_RECONCILIATION_FAILED,
