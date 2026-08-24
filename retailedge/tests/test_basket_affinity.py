@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unittest
 from unittest.mock import patch
 
 import frappe
@@ -114,4 +115,4 @@ class TestBasketAffinity(FrappeTestCase):
 
 
 if __name__ == "__main__":
-	FrappeTestCase.main()
+	unittest.main()
