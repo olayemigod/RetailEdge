@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import timedelta
+from math import isfinite
 from typing import Any, Callable
 
 import frappe
@@ -36,14 +37,7 @@ def get_planning_intelligence(filters: dict[str, Any] | str | None = None) -> di
 @frappe.whitelist()
 def get_planning_intelligence_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	dataset = _build_planning_dataset(_normalise_filters(filters))
-	return {
-		"title": dataset["title"],
-		"columns": dataset["columns"],
-		"rows": dataset["rows"],
-		"summary": dataset["summary"],
-		"company_currency": dataset["company_currency"],
-		"metadata": dataset["metadata"],
-	}
+	return _build_planning_export(dataset)
 
 
 @frappe.whitelist()
@@ -148,8 +142,8 @@ def _build_planning_dataset(filters: frappe._dict) -> dict[str, Any]:
 			"sales_truth": "Submitted ERPNext Sales Invoice / Sales Invoice Item",
 			"cash_truth": "Posted ERPNext GL cash/bank movement through RetailEdge Cash Movement; current receivable/payable due dates are shown separately and are not assumed to be paid",
 			"budget_truth": "Submitted ERPNext Budget remains authoritative; R12 reuses R9 Budget & Spend Governance as a reference and does not create another budget ledger",
-			"inventory_truth": "Observed ERPNext Stock Ledger demand plus permission-safe current Bin projected quantity and Item Reorder context",
-			"scenario_truth": "RetailEdge Planning Scenario stores explicit planning assumptions; forecasted accounting and stock transactions are never persisted",
+			"inventory_truth": "Observed ERPNext Stock Ledger demand plus permission-safe current Bin projected quantity and Item Reorder context; projected-stock coverage is available only for today's as-of date",
+			"scenario_truth": "RetailEdge Planning Scenario stores explicit planning assumptions and an immutable forecast/plan snapshot; forecasted accounting and stock transactions are never persisted",
 			"branch_accounting_policy": "Accounting expense/profit forecasts fail closed at Branch scope until valid ERPNext accounting attribution exists",
 			"mutates_accounting_documents": False,
 			"creates_stock_documents": False,
@@ -204,7 +198,7 @@ def _cash_domain(filters: frappe._dict, *, include_commitments: bool = True) -> 
 			page=1,
 			page_size=1,
 		)
-		actuals.append({"period_start": period_start, "actual": _summary_value(payload.get("summary") or [], _("Net Change"))})
+		actuals.append({"period_start": period_start, "actual": _summary_value(payload.get("summary") or [], "net_change", _("Net Change"))})
 	forecast = build_baseline_forecast(actuals, horizon=filters.forecast_months, period="Monthly", as_of_date=end)
 	planned = apply_plan_adjustment(forecast["rows"], adjustment_percent=filters.cash_adjustment_percent)
 	future_periods = [row["period_start"] for row in planned]
@@ -341,6 +335,7 @@ def _profitability_domain(filters: frappe._dict) -> dict[str, Any]:
 
 
 def _inventory_domain(filters: frappe._dict) -> dict[str, Any]:
+	_require_current_inventory_snapshot(filters)
 	lookback_days = min(max(filters.history_months * 30, 30), 365)
 	demand = get_historical_inventory_demand({
 		"company": filters.company,
@@ -396,8 +391,9 @@ def _inventory_domain(filters: frappe._dict) -> dict[str, Any]:
 			"lookback_days": lookback_days,
 			"forecast_method": "Average observed daily demand × calendar days",
 			"safety_allowance_percent": filters.inventory_safety_percent,
-			"coverage_semantics": "Current Bin projected quantity is compared with cumulative planned demand through each forecast month. Future receipts are not invented; configured replenishment status is context only.",
-			"projected_stock_snapshot": "Current stock-position projected quantity, not recommended reorder quantity",
+			"coverage_semantics": "Today's Bin projected quantity is compared with cumulative planned demand through each forecast month. Historical projected-stock reconstruction is intentionally not invented.",
+			"projected_stock_snapshot": "Current stock-position projected quantity as of scenario generation time, not recommended reorder quantity",
+			"historical_as_of_supported": False,
 			"creates_material_request": False,
 		},
 	}
@@ -405,6 +401,7 @@ def _inventory_domain(filters: frappe._dict) -> dict[str, Any]:
 
 def _inventory_risk_signal(filters: frappe._dict) -> dict[str, Any]:
 	"""Return only the predictive inventory count needed by Action Centre."""
+	_require_current_inventory_snapshot(filters)
 	lookback_days = min(max(filters.history_months * 30, 30), 365)
 	demand = get_historical_inventory_demand({
 		"company": filters.company,
@@ -435,6 +432,16 @@ def _inventory_risk_signal(filters: frappe._dict) -> dict[str, Any]:
 		if planned > stock_map.get(item_code, 0.0):
 			at_risk.add(item_code)
 	return {"key": "inventory", "at_risk_count": len(at_risk)}
+
+
+def _require_current_inventory_snapshot(filters: frappe._dict) -> None:
+	if getdate(filters.as_of_date) != getdate(nowdate()):
+		frappe.throw(
+			_(
+				"Historical Inventory Planning is unavailable because current projected stock cannot be mixed with historical demand. "
+				"Use today's As of Date; saved scenarios preserve the inventory risk snapshot captured when they are saved."
+			)
+		)
 
 
 def _budget_reference(filters: frappe._dict) -> dict[str, Any]:
@@ -535,20 +542,20 @@ def _summary_cards(domains: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 		return sum(flt(row.get(field)) for row in domain.get("future_rows") or []) if domain.get("available") else 0.0
 
 	cards = [
-		{"label": _("Sales Forecast"), "value": total("sales", "forecast"), "datatype": "Currency"},
-		{"label": _("Sales Plan"), "value": total("sales", "plan"), "datatype": "Currency"},
-		{"label": _("Cash Plan"), "value": total("cash", "plan"), "datatype": "Currency"},
-		{"label": _("Expense Plan"), "value": total("expenses", "plan"), "datatype": "Currency"},
-		{"label": _("Accounting Profit Forecast"), "value": total("profitability", "forecast"), "datatype": "Currency"},
+		{"key": "sales_forecast", "label": _("Sales Forecast"), "value": total("sales", "forecast"), "datatype": "Currency"},
+		{"key": "sales_plan", "label": _("Sales Plan"), "value": total("sales", "plan"), "datatype": "Currency"},
+		{"key": "cash_plan", "label": _("Cash Plan"), "value": total("cash", "plan"), "datatype": "Currency"},
+		{"key": "expense_plan", "label": _("Expense Plan"), "value": total("expenses", "plan"), "datatype": "Currency"},
+		{"key": "accounting_profit_forecast", "label": _("Accounting Profit Forecast"), "value": total("profitability", "forecast"), "datatype": "Currency"},
 	]
 	budget = domains.get("budget") or {}
 	if budget.get("available"):
-		remaining = _find_summary_card(budget.get("summary") or [], _("Remaining Budget"))
-		used = _find_summary_card(budget.get("summary") or [], _("Budget Used"))
+		remaining = _find_summary_card(budget.get("summary") or [], "remaining_budget", _("Remaining Budget"))
+		used = _find_summary_card(budget.get("summary") or [], "budget_used", _("Budget Used"))
 		if remaining and remaining.get("value") is not None:
-			cards.append({"label": _("Current Period Budget Remaining"), "value": remaining.get("value"), "datatype": "Currency"})
+			cards.append({"key": "current_period_budget_remaining", "label": _("Current Period Budget Remaining"), "value": remaining.get("value"), "datatype": "Currency"})
 		if used and used.get("value") is not None:
-			cards.append({"label": _("Current Period Budget Used"), "value": used.get("value"), "datatype": "Percent"})
+			cards.append({"key": "current_period_budget_used", "label": _("Current Period Budget Used"), "value": used.get("value"), "datatype": "Percent"})
 	return cards
 
 
@@ -564,15 +571,184 @@ def _columns(currency: str) -> list[dict[str, Any]]:
 	]
 
 
-def _summary_value(cards: list[dict[str, Any]], label: str) -> float:
-	card = _find_summary_card(cards, label)
+def _build_planning_export(dataset: dict[str, Any]) -> dict[str, Any]:
+	currency = str(dataset.get("company_currency") or "")
+	rows: list[dict[str, Any]] = []
+	for row in dataset.get("rows") or []:
+		for fieldname, metric in (
+			("actual", _("Actual")),
+			("forecast", _("Forecast")),
+			("plan", _("Plan")),
+			("variance", _("Plan vs Forecast")),
+		):
+			if row.get(fieldname) is None:
+				continue
+			_append_export_metric(
+				rows,
+				domain=row.get("domain"),
+				section=_("Planning Timeline"),
+				period_start=row.get("period_start"),
+				metric=metric,
+				value=row.get(fieldname),
+				unit=currency,
+				status=row.get("row_type"),
+			)
+
+	domains = dataset.get("domains") or {}
+	cash = domains.get("cash") or {}
+	if cash.get("available"):
+		for row in cash.get("commitment_rows") or []:
+			for fieldname, metric in (
+				("receivables_due", _("Receivables Due")),
+				("payables_due", _("Payables Due")),
+				("net_known_due", _("Net Known Due")),
+			):
+				_append_export_metric(rows, domain=_("Cash Movement"), section=_("Known Due Commitments"), period_start=row.get("period_start"), metric=metric, value=row.get(fieldname), unit=currency)
+
+	inventory = domains.get("inventory") or {}
+	if inventory.get("available"):
+		for row in inventory.get("rows") or []:
+			status = _("Coverage risk") if row.get("coverage_risk") else _("Covered")
+			notes = str(row.get("replenishment_status") or "")
+			for fieldname, metric in (
+				("forecast_demand_qty", _("Forecast Demand")),
+				("planned_demand_qty", _("Planned Demand + Safety")),
+				("cumulative_planned_demand_qty", _("Cumulative Planned Demand")),
+				("current_projected_qty", _("Projected Stock")),
+				("coverage_shortfall_qty", _("Coverage Shortfall")),
+			):
+				_append_export_metric(
+					rows,
+					domain=_("Inventory Demand"),
+					section=_("Inventory Coverage"),
+					period_start=row.get("period_start"),
+					reference=row.get("item_code"),
+					metric=metric,
+					value=row.get(fieldname),
+					unit=row.get("stock_uom"),
+					status=status,
+					notes=notes,
+				)
+
+	budget = domains.get("budget") or {}
+	if budget.get("available"):
+		for card in budget.get("summary") or []:
+			_append_export_metric(
+				rows,
+				domain=_("Budget & Spend Governance"),
+				section=_("Budget Summary"),
+				metric=card.get("label"),
+				value=card.get("value"),
+				unit=_export_unit(card.get("datatype"), currency),
+				status=_("Available") if card.get("available", True) else _("Unavailable"),
+			)
+		for control in budget.get("controls") or []:
+			_append_export_metric(
+				rows,
+				domain=_("Budget & Spend Governance"),
+				section=_("Budget Controls"),
+				reference=control.get("category") or control.get("family"),
+				metric=control.get("label"),
+				value=control.get("value"),
+				unit=_export_unit(control.get("datatype"), currency),
+				status=control.get("severity"),
+			)
+
+	for key, value in (dataset.get("assumptions") or {}).items():
+		_append_export_metric(
+			rows,
+			domain=_("Planning Scenario"),
+			section=_("Assumptions"),
+			metric=key.replace("_", " ").title(),
+			value=value,
+			unit="%",
+		)
+
+	for key, domain in domains.items():
+		if domain and domain.get("available") is False:
+			_append_export_metric(
+				rows,
+				domain=domain.get("title") or key.replace("_", " ").title(),
+				section=_("Availability"),
+				metric=_("Domain Status"),
+				status=_("Unavailable"),
+				notes=domain.get("reason"),
+			)
+
+	return {
+		"title": dataset.get("title") or _("Forecasting & Planning"),
+		"columns": _export_columns(),
+		"rows": rows,
+		"summary": dataset.get("summary") or [],
+		"company_currency": currency,
+		"metadata": {
+			**(dataset.get("metadata") or {}),
+			"export_contract": "Long-form shared EdgeSuite dataset covering planning timeline, known due commitments, inventory coverage, budget governance, assumptions, and domain availability.",
+		},
+	}
+
+
+def _append_export_metric(
+	rows: list[dict[str, Any]],
+	*,
+	domain: Any,
+	section: Any,
+	metric: Any,
+	value: Any = None,
+	period_start: Any = None,
+	reference: Any = None,
+	unit: Any = None,
+	status: Any = None,
+	notes: Any = None,
+) -> None:
+	rows.append({
+		"domain": str(domain or ""),
+		"section": str(section or ""),
+		"period_start": str(period_start or ""),
+		"reference": str(reference or ""),
+		"metric": str(metric or ""),
+		"value": value,
+		"unit": str(unit or ""),
+		"status": str(status or ""),
+		"notes": str(notes or ""),
+	})
+
+
+def _export_columns() -> list[dict[str, Any]]:
+	return [
+		{"fieldname": "domain", "label": _("Domain"), "fieldtype": "Data"},
+		{"fieldname": "section", "label": _("Section"), "fieldtype": "Data"},
+		{"fieldname": "period_start", "label": _("Period"), "fieldtype": "Data"},
+		{"fieldname": "reference", "label": _("Reference"), "fieldtype": "Data"},
+		{"fieldname": "metric", "label": _("Metric"), "fieldtype": "Data"},
+		{"fieldname": "value", "label": _("Value"), "fieldtype": "Data"},
+		{"fieldname": "unit", "label": _("Unit"), "fieldtype": "Data"},
+		{"fieldname": "status", "label": _("Status"), "fieldtype": "Data"},
+		{"fieldname": "notes", "label": _("Notes"), "fieldtype": "Data"},
+	]
+
+
+def _export_unit(datatype: Any, currency: str) -> str:
+	if datatype == "Currency":
+		return currency
+	if datatype == "Percent":
+		return "%"
+	return str(datatype or "")
+
+
+def _summary_value(cards: list[dict[str, Any]], key: str, label: str | None = None) -> float:
+	card = _find_summary_card(cards, key, label)
 	return flt(card.get("value")) if card else 0.0
 
 
-def _find_summary_card(cards: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
+def _find_summary_card(cards: list[dict[str, Any]], key: str, label: str | None = None) -> dict[str, Any] | None:
 	for card in cards:
-		if str(card.get("label") or "") == label:
+		if str(card.get("key") or "") == key:
 			return card
+	if label is not None:
+		for card in cards:
+			if str(card.get("label") or "") == label:
+				return card
 	return None
 
 
@@ -619,6 +795,8 @@ def _bounded_percent(value: Any, minimum: float, maximum: float, label: str) -> 
 		resolved = flt(value or 0)
 	except (TypeError, ValueError):
 		frappe.throw(_("Invalid percentage for {0}.").format(label))
+	if not isfinite(resolved):
+		frappe.throw(_("{0} must be a finite percentage.").format(label))
 	if resolved < minimum or resolved > maximum:
 		frappe.throw(_("{0} must be between {1}% and {2}%.").format(label, minimum, maximum))
 	return resolved
