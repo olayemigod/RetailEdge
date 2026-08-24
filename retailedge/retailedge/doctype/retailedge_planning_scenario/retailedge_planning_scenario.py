@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from math import isfinite
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -50,6 +52,8 @@ class RetailEdgePlanningScenario(Document):
 			("inventory_safety_percent", _("Inventory Safety Allowance"), 0, 500),
 		):
 			value = flt(self.get(fieldname))
+			if not isfinite(value):
+				frappe.throw(_("{0} must be a finite percentage.").format(label))
 			if value < minimum or value > maximum:
 				frappe.throw(_("{0} must be between {1}% and {2}%.").format(label, minimum, maximum))
 			self.set(fieldname, value)
