@@ -21,16 +21,15 @@ def action_fingerprint(
 	route: str,
 	scope: str = "",
 ) -> str:
-	"""Build a stable follow-up identity.
+	"""Build a stable follow-up identity while preserving all legacy hashes.
 
-	`scope` is optional so all existing R4/R9/R10 fingerprints remain byte-for-byte
-	compatible. Period-dependent providers such as R11 may opt in to a bounded scope
-	without changing the global follow-up contract for legacy action domains.
+	Existing actions hash the original six fields exactly. A provider may opt into
+	an additional bounded scope; only then is the seventh field appended.
 	"""
-	payload = "|".join(
-		str(value or "").strip()
-		for value in (company, branch, source, kind, label, route, scope)
-	)
+	values = [company, branch, source, kind, label, route]
+	if str(scope or "").strip():
+		values.append(scope)
+	payload = "|".join(str(value or "").strip() for value in values)
 	return sha256(payload.encode("utf-8")).hexdigest()
 
 
