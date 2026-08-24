@@ -12,6 +12,7 @@ class BankMatchAccountEvidenceTests(FrappeTestCase):
 		path = Path(frappe.get_app_path("retailedge", "public", "js", "bank_match_review_ui.js"))
 		text = path.read_text()
 		self.assertIn("retailedge.banking_readiness.get_match_account_evidence", text)
+		self.assertIn("accountEvidence.transaction_category", text)
 		self.assertIn('cardHeader("Bank Statement"', text)
 		self.assertIn('cardHeader("Accounting Record"', text)
 		self.assertIn('"Bank Identity & Accounting Safety"', text)
@@ -126,14 +127,16 @@ class BankMatchAccountEvidenceTests(FrappeTestCase):
 		self.assertEqual(statuses["gl_account"], "Match")
 		self.assertEqual(statuses["amount"], "Match")
 
+	@patch("retailedge.banking_readiness.has_field", return_value=True)
 	@patch("retailedge.banking_readiness.has_doctype", return_value=True)
 	@patch("retailedge.banking_readiness.frappe.get_all")
 	@patch("retailedge.banking_readiness._read_row")
-	def test_journal_entry_evidence_uses_reviewed_bank_ledger_and_direction(
+	def test_journal_entry_evidence_uses_reviewed_bank_ledger_direction_and_expense_category(
 		self,
 		read_row,
 		get_all,
 		_has_doctype,
+		_has_field,
 	):
 		read_row.return_value = frappe._dict(
 			{
@@ -145,17 +148,38 @@ class BankMatchAccountEvidenceTests(FrappeTestCase):
 				"docstatus": 1,
 			}
 		)
-		get_all.return_value = [
-			frappe._dict(
-				{
-					"account": "Bank - RC",
-					"debit_in_account_currency": 0,
-					"credit_in_account_currency": 185000,
-					"party_type": None,
-					"party": None,
-				}
-			)
-		]
+
+		def fake_get_all(doctype, **kwargs):
+			if doctype == "Journal Entry Account" and kwargs.get("filters", {}).get("account") == "Bank - RC":
+				return [
+					frappe._dict(
+						{
+							"account": "Bank - RC",
+							"debit_in_account_currency": 0,
+							"credit_in_account_currency": 185000,
+							"party_type": None,
+							"party": None,
+						}
+					)
+				]
+			if doctype == "Journal Entry Account":
+				return [
+					frappe._dict({"account": "Bank - RC"}),
+					frappe._dict({"account": "Office Rent - RC"}),
+				]
+			if doctype == "Account":
+				return [
+					frappe._dict(
+						{
+							"name": "Office Rent - RC",
+							"root_type": "Expense",
+							"account_type": "",
+						}
+					)
+				]
+			return []
+
+		get_all.side_effect = fake_get_all
 
 		result = banking_readiness._journal_entry_reconciliation_context(
 			"ACC-JV-2026-00001",
@@ -174,3 +198,5 @@ class BankMatchAccountEvidenceTests(FrappeTestCase):
 		self.assertEqual(result["candidate_reference"], "QA-BANK-EXP-185K")
 		self.assertEqual(result["candidate_company"], "RetailEdge Consulting")
 		self.assertEqual(result["payment_event_source"], "Journal Entry")
+		self.assertEqual(result["candidate_category"], "Expense Payment")
+		self.assertEqual(result["transaction_category"], "Expense")
