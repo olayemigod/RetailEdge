@@ -145,6 +145,20 @@ class InternalTransferBankLegIdentityTests(unittest.TestCase):
 		)
 		self.assertEqual([row.name for row in rows], ["MATCH-UNKNOWN"])
 
+	@patch.object(identity, "_is_submitted_internal_transfer")
+	def test_candidate_key_without_explicit_leg_evidence_keeps_legacy_identity(self, is_internal_transfer):
+		original = lambda row: ("Payment Entry", row.get("document_name"))
+		row = {
+			"document_type": "Payment Entry",
+			"document_name": "PE-ACTIVE",
+			"bank_transaction": "BT-ACTIVE",
+		}
+		self.assertEqual(
+			identity._patched_candidate_document_key(original, row),
+			("Payment Entry", "PE-ACTIVE"),
+		)
+		is_internal_transfer.assert_not_called()
+
 	@patch.object(identity, "_is_submitted_internal_transfer", return_value=True)
 	def test_current_queue_duplicate_key_is_leg_aware(self, _is_internal_transfer):
 		original = lambda row: ("Payment Entry", row.get("document_name"))
