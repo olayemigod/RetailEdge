@@ -5,9 +5,11 @@ from unittest.mock import patch
 
 from retailedge.bank_candidate_engine import (
 	CATEGORY_BANK_DEPOSIT,
+	CATEGORY_BANK_TRANSFER,
 	CATEGORY_CUSTOMER_RECEIPT,
 	CATEGORY_EXPENSE,
 	CATEGORY_SUPPLIER_PAYMENT,
+	_journal_entry_business_category,
 	_payment_entry_business_category,
 	get_direction_aware_bank_candidates,
 	prepare_direction_aware_bank_candidate,
@@ -40,6 +42,38 @@ class DirectionAwareBankCandidateEngineTests(unittest.TestCase):
 			),
 			CATEGORY_EXPENSE,
 		)
+
+	def test_bank_entry_outflow_expense_counterpart_beats_generic_transfer_label(self):
+		category, business_category = _journal_entry_business_category(
+			"Outflow",
+			"Bank Entry",
+			"Reference #QA-BANK-EXP-185K dated 24-08-2026",
+			counterpart_accounts=[
+				{
+					"account": "Office Rent - RC",
+					"root_type": "Expense",
+					"account_type": "",
+				}
+			],
+		)
+		self.assertEqual(category, "Expense Payment")
+		self.assertEqual(business_category, CATEGORY_EXPENSE)
+
+	def test_bank_entry_outflow_bank_counterpart_remains_bank_transfer(self):
+		category, business_category = _journal_entry_business_category(
+			"Outflow",
+			"Bank Entry",
+			"Internal transfer",
+			counterpart_accounts=[
+				{
+					"account": "GT Bank - RC",
+					"root_type": "Asset",
+					"account_type": "Bank",
+				}
+			],
+		)
+		self.assertEqual(category, "Bank Transfer")
+		self.assertEqual(business_category, CATEGORY_BANK_TRANSFER)
 
 	@patch("retailedge.bank_candidate_engine._can_read_candidate", return_value=True)
 	@patch("retailedge.bank_candidate_engine._hydrate_payment_entry_metadata", return_value={})
