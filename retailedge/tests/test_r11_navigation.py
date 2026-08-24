@@ -13,8 +13,10 @@ class TestR11Navigation(unittest.TestCase):
 
 		self.assertIn("customer-sales-intelligence", targets)
 		self.assertIn("customer-360", targets)
+		self.assertIn("customer-opportunity-intelligence", targets)
 		self.assertLess(targets.index("customer-receivables"), targets.index("customer-sales-intelligence"))
 		self.assertLess(targets.index("customer-sales-intelligence"), targets.index("customer-360"))
+		self.assertLess(targets.index("customer-360"), targets.index("customer-opportunity-intelligence"))
 
 		for key, group in groups.items():
 			if key == "customers":
@@ -22,6 +24,7 @@ class TestR11Navigation(unittest.TestCase):
 			other_targets = {item.get("target") for item in group["items"]}
 			self.assertNotIn("customer-sales-intelligence", other_targets)
 			self.assertNotIn("customer-360", other_targets)
+			self.assertNotIn("customer-opportunity-intelligence", other_targets)
 
 
 if __name__ == "__main__":
