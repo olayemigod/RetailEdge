@@ -27,6 +27,7 @@ def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) ->
 	filters.low_margin_percent = flt(
 		filters.get("low_margin_percent") or DEFAULT_LOW_MARGIN_PERCENT
 	)
+	period_scope = _period_scope(filters)
 
 	opportunity = get_customer_opportunity_intelligence(filters)
 	quality = get_sales_quality_intelligence(filters, page=1, page_size=1)
@@ -47,6 +48,7 @@ def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) ->
 				severity="warning",
 				route="/app/customer-opportunity-intelligence",
 				target="customer-opportunity-intelligence",
+				fingerprint_scope=period_scope,
 			)
 		)
 	if growth_count > 0:
@@ -59,6 +61,7 @@ def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) ->
 				severity="info",
 				route="/app/customer-opportunity-intelligence",
 				target="customer-opportunity-intelligence",
+				fingerprint_scope=period_scope,
 			)
 		)
 	if high_reduction_count > 0:
@@ -71,6 +74,7 @@ def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) ->
 				severity="warning",
 				route="/app/sales-quality-intelligence",
 				target="sales-quality-intelligence",
+				fingerprint_scope=period_scope,
 			)
 		)
 	if low_margin_count > 0:
@@ -83,6 +87,7 @@ def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) ->
 				severity="warning",
 				route="/app/sales-quality-intelligence",
 				target="sales-quality-intelligence",
+				fingerprint_scope=period_scope,
 			)
 		)
 
@@ -97,8 +102,16 @@ def get_customer_sales_action_summary(filters: dict[str, Any] | frappe._dict) ->
 			"basket_affinity_actionable": False,
 			"basket_affinity_reason": "Product affinity is insight-only and does not by itself represent an exception or required follow-up.",
 			"cost_visibility_applied": bool(quality.get("show_costs")),
+			"follow_up_scope": period_scope,
 		},
 	}
+
+
+def _period_scope(filters: frappe._dict) -> str:
+	return "period:{0}:{1}".format(
+		str(filters.get("from_date") or "").strip(),
+		str(filters.get("to_date") or "").strip(),
+	)
 
 
 def _summary_value(payload: dict[str, Any], label: str) -> float:
@@ -117,6 +130,7 @@ def _action_item(
 	severity: str,
 	route: str,
 	target: str,
+	fingerprint_scope: str,
 ) -> dict[str, Any]:
 	return {
 		"source": source,
@@ -128,6 +142,7 @@ def _action_item(
 		"time_basis": "period",
 		"kind": kind,
 		"semantic_key": kind,
+		"fingerprint_scope": fingerprint_scope,
 		"target_type": "Page",
 		"target": target,
 		"open_mode": "same_tab",
