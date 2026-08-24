@@ -32,13 +32,14 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertTrue(_status_belongs_to_queue(STATUS_UNMATCHED, QUEUE_TO_MATCH))
         self.assertTrue(_status_belongs_to_queue(STATUS_SUGGESTED, QUEUE_TO_MATCH))
         self.assertTrue(_status_belongs_to_queue(STATUS_NEEDS_REVIEW, QUEUE_TO_MATCH))
-        self.assertFalse(_status_belongs_to_queue(STATUS_NEEDS_REVIEW, QUEUE_EXCEPTIONS))
+        self.assertTrue(_status_belongs_to_queue(STATUS_NEEDS_REVIEW, QUEUE_EXCEPTIONS))
         self.assertTrue(_status_belongs_to_queue(STATUS_READY_TO_RECONCILE, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILIATION_PENDING, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILED, QUEUE_RECONCILED))
 
-    def test_exception_queue_contains_only_blocked_or_failed_cases(self):
+    def test_exception_queue_can_contain_confirmed_needs_review_and_blocked_cases(self):
         for status in (
+            STATUS_NEEDS_REVIEW,
             STATUS_PAYMENT_EVIDENCE_REQUIRED,
             STATUS_EXCEPTION,
             STATUS_RECONCILIATION_FAILED,
@@ -59,6 +60,8 @@ class BankingWorkspaceTests(unittest.TestCase):
             to_match["decision_status"],
             ["in", ["Draft", "Suggested", "Needs Review", "Reopened"]],
         )
+        # Operational Needs Review can still be an exception after confirmation,
+        # but manual matching states must not be fetched into the Exceptions queue.
         self.assertEqual(exceptions["decision_status"], "Confirmed")
 
     def test_suggested_match_does_not_need_reconciliation_preflight_to_enter_to_match(self):
