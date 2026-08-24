@@ -11,8 +11,25 @@ DOCTYPE = "RetailEdge Action Follow Up"
 MANAGEMENT_FILTER_KEYS = {"follow_up_status", "assignment_scope", "due_scope"}
 
 
-def action_fingerprint(*, company: str, branch: str, source: str, kind: str, label: str, route: str) -> str:
-	payload = "|".join(str(value or "").strip() for value in (company, branch, source, kind, label, route))
+def action_fingerprint(
+	*,
+	company: str,
+	branch: str,
+	source: str,
+	kind: str,
+	label: str,
+	route: str,
+	scope: str = "",
+) -> str:
+	"""Build a stable follow-up identity while preserving all legacy hashes.
+
+	Existing actions hash the original six fields exactly. A provider may opt into
+	an additional bounded scope; only then is the seventh field appended.
+	"""
+	values = [company, branch, source, kind, label, route]
+	if str(scope or "").strip():
+		values.append(scope)
+	payload = "|".join(str(value or "").strip() for value in values)
 	return sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -25,6 +42,7 @@ def decorate_action_items(items: list[dict[str, Any]], *, company: str, branch: 
 			kind=str(item.get("kind") or ""),
 			label=str(item.get("label") or ""),
 			route=str(item.get("route") or ""),
+			scope=str(item.get("fingerprint_scope") or ""),
 		)
 	if not items or not frappe.db.exists("DocType", DOCTYPE):
 		return items

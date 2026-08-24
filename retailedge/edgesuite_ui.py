@@ -137,6 +137,9 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "customers", "label": "Customers", "icon": "users", "items": (
 			{"label": "Customers", "target_type": "DocType", "target": "Customer", "icon": "user"},
 			{"label": "Customer Receivables", "target_type": "Page", "target": "customer-receivables", "icon": "report"},
+			{"label": "Customer & Sales Intelligence", "target_type": "Page", "target": "customer-sales-intelligence", "icon": "chart"},
+			{"label": "Customer 360", "target_type": "Page", "target": "customer-360", "icon": "user"},
+			{"label": "Retention & Opportunities", "target_type": "Page", "target": "customer-opportunity-intelligence", "icon": "trending-up"},
 			{"label": "Accounts Receivable (Detailed)", "target_type": "Report", "target": "Accounts Receivable", "icon": "report"},
 		),
 	},
@@ -150,6 +153,8 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "insights", "label": "Insights", "icon": "chart", "items": (
 			{"label": "Sales by Item", "target_type": "Page", "target": "sales-by-item", "icon": "report"},
+			{"label": "Basket & Product Affinity", "target_type": "Page", "target": "basket-affinity", "icon": "grid"},
+			{"label": "Discount & Sales Quality", "target_type": "Page", "target": "sales-quality-intelligence", "icon": "trending-down"},
 			{"label": "Sales Invoice Register", "target_type": "Page", "target": "sales-invoice-register", "icon": "report"},
 			{"label": "Salesperson Performance", "target_type": "Page", "target": "salesperson-performance-dashboard", "icon": "user"},
 			{"label": "Branch Performance", "target_type": "Page", "target": "branch-performance-dashboard", "icon": "chart"},
