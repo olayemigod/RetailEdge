@@ -5,8 +5,21 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint, flt, getdate, today
 
-from retailedge.branch_context import validate_user_branch_access
 from retailedge.forecasting import MAX_FORECAST_HORIZON
+from retailedge.planning_scope import resolve_planning_branch_scope
+from retailedge.planning_snapshot import SNAPSHOT_VERSION, build_planning_snapshot
+
+_FORECAST_DEFINING_FIELDS = (
+	"company",
+	"branch",
+	"as_of_date",
+	"history_months",
+	"horizon_months",
+	"sales_adjustment_percent",
+	"expense_adjustment_percent",
+	"cash_adjustment_percent",
+	"inventory_safety_percent",
+)
 
 
 class RetailEdgePlanningScenario(Document):
@@ -18,8 +31,7 @@ class RetailEdgePlanningScenario(Document):
 			frappe.throw(_("Company is required."))
 		if not frappe.has_permission("Company", "read", doc=self.company):
 			frappe.throw(_("You do not have permission to use Company {0}.").format(self.company), frappe.PermissionError)
-		if self.branch:
-			validate_user_branch_access(self.branch, user=frappe.session.user, company=self.company, throw=True)
+		self.branch = resolve_planning_branch_scope(self.company, self.branch, user=frappe.session.user)
 
 		self.as_of_date = getdate(self.as_of_date or today())
 		if self.as_of_date > getdate(today()):
@@ -41,3 +53,25 @@ class RetailEdgePlanningScenario(Document):
 			if value < minimum or value > maximum:
 				frappe.throw(_("{0} must be between {1}% and {2}%.").format(label, minimum, maximum))
 			self.set(fieldname, value)
+
+		forecast_inputs_changed = self.is_new() or any(self.has_value_changed(fieldname) for fieldname in _FORECAST_DEFINING_FIELDS)
+		if not self.is_new() and self.status in {"Active", "Archived"} and forecast_inputs_changed:
+			frappe.throw(_("Return this Planning Scenario to Draft before changing its forecast scope or assumptions."))
+		if forecast_inputs_changed or not self.forecast_snapshot_json:
+			self._refresh_forecast_snapshot()
+
+	def _refresh_forecast_snapshot(self) -> None:
+		snapshot = build_planning_snapshot({
+			"company": self.company,
+			"branch": self.branch or "",
+			"as_of_date": str(self.as_of_date),
+			"history_months": self.history_months,
+			"forecast_months": self.horizon_months,
+			"sales_adjustment_percent": flt(self.sales_adjustment_percent),
+			"expense_adjustment_percent": flt(self.expense_adjustment_percent),
+			"cash_adjustment_percent": flt(self.cash_adjustment_percent),
+			"inventory_safety_percent": flt(self.inventory_safety_percent),
+		})
+		self.forecast_snapshot_json = frappe.as_json(snapshot)
+		self.snapshot_version = SNAPSHOT_VERSION
+		self.snapshot_generated_at = snapshot.get("generated_at")
