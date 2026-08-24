@@ -63,12 +63,12 @@ def _build_budget_spend_control(*, budget: dict[str, Any], dashboard: dict[str, 
 		"available": available,
 		"reason": budget.get("reason") or "",
 		"summary": [
-			_card("Budget for Period", target, "Currency", available),
-			_card("Actual Spend", actual, "Currency", actual is not None),
-			_card("Budget Used", used_pct, "Percent", used_pct is not None),
-			_card("Remaining Budget", remaining, "Currency", remaining is not None),
-			_card("Projected Period Spend", projected_spend, "Currency", projected_spend is not None),
-			_card("Projected Variance", projected_variance, "Currency", projected_variance is not None),
+			_card("budget_for_period", "Budget for Period", target, "Currency", available),
+			_card("actual_spend", "Actual Spend", actual, "Currency", actual is not None),
+			_card("budget_used", "Budget Used", used_pct, "Percent", used_pct is not None),
+			_card("remaining_budget", "Remaining Budget", remaining, "Currency", remaining is not None),
+			_card("projected_period_spend", "Projected Period Spend", projected_spend, "Currency", projected_spend is not None),
+			_card("projected_variance", "Projected Variance", projected_variance, "Currency", projected_variance is not None),
 		],
 		"controls": controls,
 		"category_pressure": category_controls,
@@ -134,8 +134,15 @@ def _control(severity: str, family: str, label: str, value: Any, datatype: str) 
 	}
 
 
-def _card(label: str, value: Any, datatype: str, available: bool) -> dict[str, Any]:
-	return {"label": _(label), "value": value if available else None, "datatype": datatype, "available": available, "time_basis": "period"}
+def _card(key: str, label: str, value: Any, datatype: str, available: bool) -> dict[str, Any]:
+	return {
+		"key": key,
+		"label": _(label),
+		"value": value if available else None,
+		"datatype": datatype,
+		"available": available,
+		"time_basis": "period",
+	}
 
 
 def _optional_float(value: Any) -> float | None:
