@@ -246,7 +246,7 @@
 		const hardScore = Number(doc.match_score || 0);
 		const confidence = text(doc.match_confidence, __("Pending Review"));
 		const status = text(doc.decision_status, __("Suggested"));
-		const category = candidate.transaction_category || candidate.candidate_category ||
+		const category = accountEvidence.transaction_category || candidate.transaction_category || candidate.candidate_category ||
 			(doc.suggested_document_type === "Sales Invoice" ? __("Customer Receipt") : "");
 		const direction = accountEvidence.direction || doc.bank_direction || bank.bank_direction || "";
 		const statementRecord = doc.bank_transaction || bank.name || "";
