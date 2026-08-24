@@ -132,12 +132,12 @@ def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) ->
 		if row.get("item_code")
 	}
 	if replenishment_by_item:
-		stock_rows, _ = _with_zero_balance_intelligence_rows(
+		stock_rows = _with_zero_balance_intelligence_rows(
 			stock_rows,
 			demand_by_item={},
 			replenishment_by_item=replenishment_by_item,
 			show_costs=show_costs,
-		)
+		)[0]
 
 	summary = _stock_summary(stock_rows, show_costs=False)
 	summary.extend(_location_action_summary(location_exceptions))
@@ -151,12 +151,12 @@ def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) ->
 			for row in demand.get("rows") or []
 			if row.get("item_code")
 		}
-		movement_rows, _ = _with_zero_balance_intelligence_rows(
+		movement_rows = _with_zero_balance_intelligence_rows(
 			stock_rows,
 			demand_by_item=demand_by_item,
 			replenishment_by_item=replenishment_by_item,
 			show_costs=show_costs,
-		)
+		)[0]
 		lookback_days = cint(demand.get("scope", {}).get("lookback_days")) or DEFAULT_LOOKBACK_DAYS
 		thresholds = _movement_thresholds(filters)
 		enriched = [
