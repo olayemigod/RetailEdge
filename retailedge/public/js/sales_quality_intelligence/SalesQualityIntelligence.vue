@@ -91,7 +91,13 @@ export default {
 	computed: {
 		reportColumns() { return (this.columns || []).map((column) => ({ ...column, clickable: ["invoice", "customer"].includes(column.fieldname), sortable: false })); },
 		exportDataset() { return { title: "Discount & Sales Quality", filename: `RetailEdge Discount Sales Quality ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
-		exportFilters() { const labels = { company: "Company", branch: "Branch", from_date: "From Date", to_date: "To Date", customer: "Customer", salesperson: "Salesperson", item_group: "Item Group", item_code: "Item", warehouse: "Warehouse", high_reduction_percent: "High Reduction Threshold (%)", low_margin_percent: "Low Margin Threshold (%)" }; return Object.entries(labels).map(([key, label]) => ({ label, value: this.filters[key] })).filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined && (key => key !== "low_margin_percent" || this.showCosts)(key)); },
+		exportFilters() {
+			const labels = { company: "Company", branch: "Branch", from_date: "From Date", to_date: "To Date", customer: "Customer", salesperson: "Salesperson", item_group: "Item Group", item_code: "Item", warehouse: "Warehouse", high_reduction_percent: "High Reduction Threshold (%)", low_margin_percent: "Low Margin Threshold (%)" };
+			return Object.entries(labels)
+				.map(([key, label]) => ({ key, label, value: this.filters[key] }))
+				.filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined && (entry.key !== "low_margin_percent" || this.showCosts))
+				.map(({ label, value }) => ({ label, value }));
+		},
 		exportMetadata() { return [ { label: "Sales Source", value: this.metadata.sales_truth || "Submitted ERPNext Sales Invoice / Sales Invoice Item" }, { label: "Reduction", value: this.metadata.reduction_definition || "Recorded reference value less submitted net sales" }, { label: "Additional Discount", value: this.metadata.additional_discount_truth || "ERPNext invoice-level additional discount" }, { label: "Returns", value: this.metadata.returns || "Reported separately" }, { label: "Financial Profit", value: this.metadata.financial_truth || "ERPNext Profit and Loss" } ]; },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
