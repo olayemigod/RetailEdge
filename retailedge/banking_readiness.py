@@ -146,6 +146,72 @@ def _date_status(bank_date, candidate_date):
 	return (EVIDENCE_MATCH if days == 0 else EVIDENCE_SUPPORTING), days
 
 
+def _journal_entry_reconciliation_context(name, match_doc):
+	"""Resolve the exact Journal Entry bank-side row for Review Match evidence.
+
+	Journal Entries do not have paid_from/paid_to fields, so evidence must be resolved
+	from the reviewed bank ledger and the canonical Bank Transaction direction. Fail
+	closed when the reviewed ledger is missing or is not represented exactly once.
+	"""
+	name = cstr(name).strip()
+	match_doc = frappe._dict(match_doc or {})
+	if not name or not has_doctype("Journal Entry") or not has_doctype("Journal Entry Account"):
+		return {}
+	row = _read_row(
+		"Journal Entry",
+		name,
+		["posting_date", "company", "voucher_type", "cheque_no", "docstatus"],
+	)
+	if not row or cint(row.get("docstatus")) != 1:
+		return {}
+
+	direction = cstr(match_doc.get("direction") or match_doc.get("bank_direction")).strip()
+	bank_ledger = cstr(
+		match_doc.get("resolved_payment_account") or match_doc.get("payment_account")
+	).strip()
+	if direction not in {"Inflow", "Outflow"} or not bank_ledger:
+		return {}
+
+	account_rows = frappe.get_all(
+		"Journal Entry Account",
+		filters={"parent": name, "account": bank_ledger, "docstatus": 1},
+		fields=[
+			"account",
+			"debit_in_account_currency",
+			"credit_in_account_currency",
+			"party_type",
+			"party",
+		],
+		limit_page_length=5,
+	)
+	if len(account_rows) != 1:
+		return {}
+	bank_row = frappe._dict(account_rows[0])
+	candidate_amount = flt(
+		bank_row.get("debit_in_account_currency")
+		if direction == "Inflow"
+		else bank_row.get("credit_in_account_currency")
+	)
+	if candidate_amount <= 0:
+		return {}
+
+	return {
+		"candidate_doctype": "Journal Entry",
+		"candidate_name": name,
+		"candidate_date": row.get("posting_date"),
+		"candidate_account": bank_ledger,
+		"candidate_amount": candidate_amount,
+		"candidate_mode_of_payment": "",
+		"candidate_reference": row.get("cheque_no"),
+		"candidate_party": bank_row.get("party"),
+		"candidate_party_type": bank_row.get("party_type"),
+		"candidate_branch": "",
+		"candidate_company": row.get("company"),
+		"candidate_docstatus": row.get("docstatus"),
+		"payment_event_source": "Journal Entry",
+	}
+
+
 def evaluate_bank_account_readiness(bank_account_name, company=None):
 	"""Evaluate whether an ERPNext Bank Account is safe for RetailEdge matching/reconciliation.
 
@@ -336,6 +402,7 @@ def build_match_account_evidence(match_name):
 		"name", "bank_transaction", "suggested_document_type", "suggested_document",
 		"company", "branch", "bank_account", "bank_amount", "candidate_amount",
 		"transaction_date", "bank_reference", "payment_mode", "bank_direction",
+		"payment_account", "resolved_payment_account",
 	]
 	fields = [field for field in fields if field == "name" or has_field("RetailEdge Bank Transaction Match", field)]
 	match = frappe.db.get_value("RetailEdge Bank Transaction Match", name, fields, as_dict=True) or {}
@@ -361,6 +428,16 @@ def build_match_account_evidence(match_name):
 			match_doc=match_for_candidate,
 		)
 	)
+	if (
+		cstr(match.get("suggested_document_type")).strip() == "Journal Entry"
+		and not cstr(candidate_context.get("candidate_account")).strip()
+	):
+		candidate_context = frappe._dict(
+			_journal_entry_reconciliation_context(
+				match.get("suggested_document"),
+				match_for_candidate,
+			)
+		)
 	candidate_gl = cstr(candidate_context.get("candidate_account")).strip()
 	candidate_company = cstr(candidate_context.get("candidate_company")).strip()
 	if not candidate_company and match.get("suggested_document_type") and match.get("suggested_document"):
