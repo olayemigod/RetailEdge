@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from retailedge.sales_quality_intelligence import build_sales_quality_rows
+from retailedge.sales_quality_intelligence import _get_sales_quality_items, build_sales_quality_rows
 
 
 class TestSalesQualityIntelligence(FrappeTestCase):
@@ -60,6 +61,20 @@ class TestSalesQualityIntelligence(FrappeTestCase):
 		self.assertNotIn("gross_profit", rows[0])
 		self.assertNotIn("gross_margin_percent", rows[0])
 		self.assertNotIn("low_margin", rows[0])
+
+	@patch("retailedge.sales_quality_intelligence.frappe.get_all", return_value=[])
+	def test_cost_restricted_query_does_not_request_cost_fields(self, mock_get_all):
+		_get_sales_quality_items(["SINV-1"], show_costs=False)
+		fields = mock_get_all.call_args.kwargs["fields"]
+		self.assertNotIn("incoming_rate", fields)
+		self.assertNotIn("stock_qty", fields)
+
+	@patch("retailedge.sales_quality_intelligence.frappe.get_all", return_value=[])
+	def test_cost_authorized_query_requests_r8_cost_fields(self, mock_get_all):
+		_get_sales_quality_items(["SINV-1"], show_costs=True)
+		fields = mock_get_all.call_args.kwargs["fields"]
+		self.assertIn("incoming_rate", fields)
+		self.assertIn("stock_qty", fields)
 
 	def test_low_margin_flag_uses_r8_transactional_margin_contract(self):
 		rows = build_sales_quality_rows(
