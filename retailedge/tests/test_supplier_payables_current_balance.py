@@ -35,11 +35,11 @@ class TestSupplierPayablesCurrentBalance(unittest.TestCase):
 			actions,
 		)
 		self.assertIn(
-			"from retailedge.supplier_payables import get_supplier_payables_export as _dedicated_supplier_payables_export",
+			"from retailedge.supplier_payables import get_supplier_payables_export as _base_current_supplier_payables_export",
 			operating,
 		)
 		self.assertIn(
-			"return _dedicated_supplier_payables_export(filters=_constrain_report_filters(filters))",
+			"return _base_current_supplier_payables_export(filters=_constrain_report_filters(filters))",
 			operating,
 		)
 
