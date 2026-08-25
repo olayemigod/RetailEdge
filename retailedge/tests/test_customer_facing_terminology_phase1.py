@@ -110,16 +110,16 @@ def test_scoped_customer_facing_form_titles_are_not_global_dom_hacks():
 	assert '"RetailEdge Cashier Expense": "Cashier Expense"' in source
 	assert '"RetailEdge Payment Statement Import": "Import Bank Statement"' in source
 	assert '"RetailEdge Bank Transaction Match": "Bank Match Review"' in source
+	assert '"RetailEdge Settings"' not in source
+	assert '"RetailEdge Branch Profile"' not in source
 	assert "window.cur_frm" in source
 	assert "Object.entries(TITLE_BY_DOCTYPE).forEach" not in source
 	assert "querySelector" not in source
 
 
-def test_hooks_apply_scoped_titles_without_renaming_internal_doctypes():
+def test_hooks_apply_scoped_titles_without_duplicate_handlers():
 	source = HOOKS_PATH.read_text(encoding="utf-8")
 	for doctype in (
-		"RetailEdge Settings",
-		"RetailEdge Branch Profile",
 		"RetailEdge Cashier Expense",
 		"RetailEdge Expense Category",
 		"RetailEdge Daily Sales Audit",
@@ -128,6 +128,8 @@ def test_hooks_apply_scoped_titles_without_renaming_internal_doctypes():
 		"RetailEdge Bank Transaction Match",
 	):
 		assert f'"{doctype}": "public/js/customer_facing_labels.js"' in source
+	assert '"RetailEdge Settings": "public/js/customer_facing_labels.js"' not in source
+	assert '"RetailEdge Branch Profile": "public/js/customer_facing_labels.js"' not in source
 
 
 def test_customer_facing_list_titles_are_professional():
