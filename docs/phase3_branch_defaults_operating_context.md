@@ -70,6 +70,24 @@ Phase 3 wraps the Sales, Purchase and Stock Position context/search/data/export 
 - configured-but-disabled assignment state fails closed;
 - assignment lookup errors fail closed.
 
+### High — Governed export/print could bypass Branch Setup report scope
+
+**Finding**
+
+The shared report download/print path (`reporting_files` → `reporting_actions.get_report_dataset`) resolves Python export handlers directly. Direct Python imports are not intercepted by Frappe `override_whitelisted_methods`, so the five Phase 3 report families could have reached their base export handlers even after the on-screen/data endpoints were constrained.
+
+**Remediation**
+
+`reporting_actions._export_handler()` now dispatches the Phase 3 report datasets through `retailedge.operating_report_defaults` for:
+
+- Sales by Item;
+- Sales Invoice Register;
+- Purchase Register;
+- Supplier Payables;
+- Stock Position.
+
+This makes governed XLSX/CSV/PDF download and print consume the same Branch Setup-constrained export datasets as the explicit report export endpoints. Other RetailEdge report families retain their existing handlers.
+
 ### High — New-form preview accepted untrusted context values too early
 
 **Finding**
@@ -106,6 +124,7 @@ The client helper tracks values it auto-applied. On Branch change it clears only
 - ERPNext Warehouse remains the stock system of record; RetailEdge presents it as Stock Location in customer-facing UI.
 - Existing Branch Setup/default resolver behavior remains the source of operational defaults.
 - Existing report providers and permission checks remain in use; Phase 3 adds a Branch Setup access constraint where configured.
+- Governed export/print routes through the same constrained datasets for the five Phase 3 report families.
 - No global DOM, CSS, route or translation monkey patch is introduced.
 - POSNext/CoreEdge remain optional integration providers; Phase 3 does not add mandatory imports from them.
 
@@ -126,6 +145,7 @@ Regression coverage includes:
 - POS Profile applicability/validation;
 - report context/search/data/export wrapper coverage;
 - Branch Setup report restriction and fail-closed behavior;
+- governed export/print dataset dispatch through constrained wrappers;
 - editable/clearable report Branch controls;
 - stock cost-visibility preservation;
 - absence of accounting/stock posting side effects.
@@ -146,9 +166,10 @@ Because Phase 3 is stacked on the Phase 2 Operating Branch Switcher, final brows
 10. Restricted user cannot broaden outside Branch Setup assignment.
 11. Global branch manager can clear Branch and use authorized cross-branch scope.
 12. Report Branch/Stock Location search remains permission-aware and company/branch filtered.
-13. Existing drafts do not get re-contextualized when opened.
-14. Submitted/cancelled documents remain unchanged.
-15. POSNext/multi-app Desk loading shows no shared-shell regression.
+13. Governed export and print preserve the same Branch Setup scope as the on-screen report.
+14. Existing drafts do not get re-contextualized when opened.
+15. Submitted/cancelled documents remain unchanged.
+16. POSNext/multi-app Desk loading shows no shared-shell regression.
 
 ## Promotion Rule
 
