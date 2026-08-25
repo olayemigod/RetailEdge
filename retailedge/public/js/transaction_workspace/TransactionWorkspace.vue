@@ -62,19 +62,42 @@
 					<section v-for="action in actions" :key="action.key" class="edge-panel transaction-card">
 						<span class="workspace-kicker">{{ kindLabel(action.kind) }}</span>
 						<h3>{{ action.label }}</h3>
-						<p>Create a native ERPNext {{ action.label }} using the current operating context and server-side RetailEdge defaults.</p>
+						<p>{{ actionDescription(action) }}</p>
 						<div class="workspace-actions">
-							<button type="button" class="edge-button edge-button--primary" @click="createDoctype(action.doctype)">Create</button>
+							<button type="button" class="edge-button edge-button--primary" @click="runTransactionAction(action)">{{ actionButtonLabel(action) }}</button>
 							<button type="button" class="edge-button edge-button--secondary" @click="openDoctype(action.doctype)">View Records</button>
 						</div>
 					</section>
 				</div>
 			</div>
+
+			<SimpleSalesInvoiceDialog
+				:open="simpleSalesInvoiceOpen"
+				@close="simpleSalesInvoiceOpen = false"
+				@saved="handleGuidedSaved"
+				@open-native="openNativeSalesInvoice"
+			/>
+			<SimplePurchaseInvoiceDialog
+				:open="simplePurchaseInvoiceOpen"
+				@close="simplePurchaseInvoiceOpen = false"
+				@saved="handleGuidedSaved"
+				@open-native="openNativePurchaseInvoice"
+			/>
+			<SimpleStockTransferDialog
+				:open="simpleStockTransferOpen"
+				@close="simpleStockTransferOpen = false"
+				@saved="handleGuidedSaved"
+				@open-native="openNativeStockTransfer"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
+import SimplePurchaseInvoiceDialog from "../retailedge_business_hub/SimplePurchaseInvoiceDialog.vue";
+import SimpleSalesInvoiceDialog from "../retailedge_business_hub/SimpleSalesInvoiceDialog.vue";
+import SimpleStockTransferDialog from "../retailedge_business_hub/SimpleStockTransferDialog.vue";
+
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
 	"EdgePageLayout",
@@ -84,6 +107,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeEmptyState",
 	"EdgeStatusBadge",
 ];
+const GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry"]);
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -110,7 +134,12 @@ function doctypeSlug(doctype) {
 
 export default {
 	name: "RetailEdgeTransactionWorkspace",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		SimplePurchaseInvoiceDialog,
+		SimpleSalesInvoiceDialog,
+		SimpleStockTransferDialog,
+	},
 	data() {
 		return {
 			edgeUIValid: true,
@@ -125,6 +154,9 @@ export default {
 			branchName: "",
 			posProfile: "",
 			userName: "",
+			simpleSalesInvoiceOpen: false,
+			simplePurchaseInvoiceOpen: false,
+			simpleStockTransferOpen: false,
 		};
 	},
 	computed: {
@@ -205,6 +237,48 @@ export default {
 				return;
 			}
 			if (this.pos?.start_url) window.location.assign(this.pos.start_url);
+		},
+		runTransactionAction(action) {
+			if (!action?.doctype) return;
+			if (action.doctype === "Sales Invoice") {
+				this.simpleSalesInvoiceOpen = true;
+				return;
+			}
+			if (action.doctype === "Purchase Invoice") {
+				this.simplePurchaseInvoiceOpen = true;
+				return;
+			}
+			if (action.doctype === "Stock Entry") {
+				this.simpleStockTransferOpen = true;
+				return;
+			}
+			this.createDoctype(action.doctype);
+		},
+		actionButtonLabel(action) {
+			return GUIDED_DOCTYPES.has(action?.doctype) ? "Guided Entry" : "Create";
+		},
+		actionDescription(action) {
+			return GUIDED_DOCTYPES.has(action?.doctype)
+				? `Use the existing guided ${action.label} flow here, with native ERPNext as the advanced fallback.`
+				: `Create a native ERPNext ${action.label} using the current operating context and server-side RetailEdge defaults.`;
+		},
+		handleGuidedSaved() {
+			this.simpleSalesInvoiceOpen = false;
+			this.simplePurchaseInvoiceOpen = false;
+			this.simpleStockTransferOpen = false;
+			this.loadWorkspace();
+		},
+		openNativeSalesInvoice() {
+			this.simpleSalesInvoiceOpen = false;
+			this.createDoctype("Sales Invoice");
+		},
+		openNativePurchaseInvoice() {
+			this.simplePurchaseInvoiceOpen = false;
+			this.createDoctype("Purchase Invoice");
+		},
+		openNativeStockTransfer() {
+			this.simpleStockTransferOpen = false;
+			this.createDoctype("Stock Entry");
 		},
 		openDoctype(doctype) {
 			if (!doctype) return;
