@@ -8,6 +8,7 @@ from frappe import _
 from retailedge.branch_context import (
 	get_user_allowed_branches,
 	resolve_branch_from_opening_shift,
+	resolve_branch_from_pos_profile,
 	resolve_branch_from_user,
 	user_has_global_branch_access,
 	validate_user_branch_access,
@@ -219,42 +220,85 @@ def _validate_context(*, company: str, branch: str, user: str, throw: bool) -> d
 def _get_switch_blockers(*, user: str) -> list[dict[str, str]]:
 	"""Return server-detectable blockers without changing state.
 
-	An open POS shift is authoritative server evidence that branch-bound cashier
-	work is active. Browser cart/payment guards are layered on top in the POS/UI
-	integration because unsaved cart state is not server truth yet.
+	Open POSNext and ERPNext POS sessions are authoritative server evidence that
+	branch-bound cashier work is active. Browser cart/payment guards are layered on
+	top because unsaved cart state is not server truth yet.
 	"""
+	blockers: list[dict[str, str]] = []
 	try:
 		from retailedge.cashier_context import find_open_pos_opening_shift
 
 		opening_shift = find_open_pos_opening_shift(user=user)
 	except Exception:
 		opening_shift = None
-	if not opening_shift:
-		return []
+	if opening_shift:
+		shift_company = _clean(getattr(opening_shift, "company", None))
+		resolved = resolve_branch_from_opening_shift(opening_shift, company=shift_company or None)
+		blockers.append(
+			{
+				"code": "open_pos_shift",
+				"message": _("Close the active POS shift before switching to another operating context."),
+				"company": shift_company,
+				"branch": _clean(resolved.get("branch")),
+				"reference": _clean(getattr(opening_shift, "name", None)),
+			}
+		)
 
-	shift_company = _clean(getattr(opening_shift, "company", None))
-	resolved = resolve_branch_from_opening_shift(opening_shift, company=shift_company or None)
-	shift_branch = _clean(resolved.get("branch"))
-	return [
-		{
-			"code": "open_pos_shift",
-			"message": _("Close the active POS shift before switching to another operating context."),
-			"company": shift_company,
-			"branch": shift_branch,
-			"reference": _clean(getattr(opening_shift, "name", None)),
-		}
-	]
+	opening_entry = _find_open_erpnext_pos_opening(user=user)
+	if opening_entry:
+		entry_company = _clean(opening_entry.get("company"))
+		profile = _clean(opening_entry.get("pos_profile"))
+		resolved = resolve_branch_from_pos_profile(profile, company=entry_company or None) if profile else {}
+		blockers.append(
+			{
+				"code": "open_erpnext_pos",
+				"message": _("Close the active POS Opening Entry before switching to another operating context."),
+				"company": entry_company,
+				"branch": _clean(resolved.get("branch")),
+				"reference": _clean(opening_entry.get("name")),
+			}
+		)
+	return blockers
+
+
+def _find_open_erpnext_pos_opening(*, user: str) -> dict[str, Any] | None:
+	if not frappe.db.exists("DocType", "POS Opening Entry"):
+		return None
+	try:
+		meta = frappe.get_meta("POS Opening Entry")
+	except Exception:
+		return None
+	filters: dict[str, Any] = {"docstatus": ["in", [0, 1]]}
+	if meta.has_field("user"):
+		filters["user"] = user
+	elif meta.has_field("owner"):
+		filters["owner"] = user
+	if meta.has_field("status"):
+		filters["status"] = ["in", ["Open", "Opened"]]
+	fields = ["name"]
+	for fieldname in ("company", "pos_profile", "status"):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
+	try:
+		rows = frappe.get_list(
+			"POS Opening Entry",
+			filters=filters,
+			fields=fields,
+			order_by="creation desc",
+			limit_page_length=1,
+		)
+	except Exception:
+		rows = []
+	return dict(rows[0]) if rows else None
 
 
 def _assert_switch_safe(*, company: str, branch: str, user: str) -> None:
 	for blocker in _get_switch_blockers(user=user):
-		if blocker.get("code") != "open_pos_shift":
-			continue
-		shift_company = _clean(blocker.get("company"))
-		shift_branch = _clean(blocker.get("branch"))
-		if shift_company and shift_company != company:
+		blocker_company = _clean(blocker.get("company"))
+		blocker_branch = _clean(blocker.get("branch"))
+		if blocker_company and blocker_company != company:
 			frappe.throw(blocker["message"])
-		if not shift_branch or shift_branch != branch:
+		if not blocker_branch or blocker_branch != branch:
 			frappe.throw(blocker["message"])
 
 
