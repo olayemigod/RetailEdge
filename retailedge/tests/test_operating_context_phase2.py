@@ -153,6 +153,14 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+		switch_start = source.index("async function switchOperatingContext")
+		clear_start = source.index("async function clearOperatingContext")
+		guard_start = source.index("function showClientSwitchBlocker")
+		switch_source = source[switch_start:clear_start]
+		clear_source = source[clear_start:guard_start]
+		self.assertIn("showClientSwitchBlocker()", switch_source)
+		self.assertIn("showClientSwitchBlocker()", clear_source)
+
 	def test_page_fixture_is_customer_facing_and_keeps_internal_route_stable(self):
 		source = self.read("retailedge/page/operating_context/operating_context.json")
 		self.assertIn('"name": "operating-context"', source)
