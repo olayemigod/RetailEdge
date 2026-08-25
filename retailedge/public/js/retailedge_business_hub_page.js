@@ -71,7 +71,7 @@
 
 		const page = frappe.ui.make_app_page({
 			parent: wrapper,
-			title: __("RetailEdge Business Hub"),
+			title: __("Business Hub"),
 			single_column: true,
 		});
 		wrapper.page = page;
@@ -108,7 +108,7 @@
 				await requireAsset(PRODUCT_ASSET);
 			}
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
-				throw new Error(__("RetailEdge Business Hub bundle loaded without exposing its mount function: {0}", [PRODUCT_ASSET]));
+				throw new Error(__("Business Hub could not start because its interface bundle did not register correctly."));
 			}
 
 			if (!isBusinessHubRoute() || activeWrapper !== wrapper) {
@@ -240,7 +240,7 @@
 	}
 
 	function renderLoading(target) {
-		return $('<div class="edge-boot-loading p-6 text-center text-muted"></div>').text(__("Loading RetailEdge Business Hub...")).appendTo(target);
+		return $('<div class="edge-boot-loading p-6 text-center text-muted"></div>').text(__("Loading Business Hub...")).appendTo(target);
 	}
 
 	function requireAsset(asset) {
@@ -272,21 +272,22 @@
 	function assertEdgeSuiteUIRuntime() {
 		const runtime = global.EdgeSuiteUI;
 		if (!runtime || typeof runtime.createEdgeApp !== "function") {
-			throw new Error(__("Standalone EdgeSuite UI runtime is unavailable or incompatible."));
+			throw new Error(__("Business Hub could not start because the interface runtime is unavailable or incompatible."));
 		}
 
 		const components = runtime.components || runtime;
 		const required = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
 		const missing = required.filter((name) => !components[name]);
 		if (missing.length) {
-			throw new Error(__("EdgeSuite UI is missing required components: {0}", [missing.join(", ")]));
+			console.error("[RetailEdge Business Hub] missing interface components", missing);
+			throw new Error(__("Business Hub could not start because required interface components are unavailable."));
 		}
 	}
 
 	function renderFailure(target, failure) {
 		const message = failure && failure.message ? failure.message : __("Unknown loading error.");
 		const errorBox = $('<div class="retailedge-business-hub-error alert alert-danger p-6 text-center"></div>');
-		errorBox.append($("<strong></strong>").text(__("RetailEdge Business Hub failed to load")));
+		errorBox.append($("<strong></strong>").text(__("Business Hub failed to load")));
 		errorBox.append($('<div class="mt-2"></div>').text(message));
 		errorBox.appendTo(target);
 	}
