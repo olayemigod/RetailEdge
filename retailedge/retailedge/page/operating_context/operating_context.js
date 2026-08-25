@@ -28,7 +28,7 @@ function buildOperatingContextPage(wrapper) {
 		<div class="frappe-card" style="padding: 20px; max-width: 760px;">
 			<h3 style="margin-top: 0;">${__("Choose where new work starts")}</h3>
 			<p class="text-muted">${__(
-				"Your Operating Branch guides new RetailEdge drafts and defaults. Existing documents keep their saved company, branch, stock location, and accounting values."
+				"Your Operating Branch guides new drafts and defaults. Existing documents keep their saved company, branch, stock location, and accounting values."
 			)}</p>
 			<div class="retailedge-operating-context-current" style="margin: 18px 0;"></div>
 			<div class="retailedge-operating-context-fields"></div>
@@ -70,10 +70,10 @@ function buildOperatingContextPage(wrapper) {
 		await loadOperatingContext(wrapper, { company, preserveCompanySelection: true });
 	};
 
-	page.set_primary_action(__("Switch Context"), async () => {
+	page.set_primary_action(__("Use Selected Branch"), async () => {
 		await switchOperatingContext(wrapper);
 	});
-	page.add_inner_button(__("Use Default Context"), async () => {
+	page.add_inner_button(__("Restore Default"), async () => {
 		await clearOperatingContext(wrapper);
 	});
 }
@@ -137,11 +137,7 @@ function renderCurrentContext(wrapper) {
 	value.textContent = current.company
 		? `${current.company}${current.branch ? ` · ${current.branch}` : ""}`
 		: __("No operating context selected");
-	const source = document.createElement("div");
-	source.className = "text-muted small";
-	source.style.marginTop = "4px";
-	source.textContent = current.source ? `${__("Source")}: ${current.source}` : "";
-	target.append(heading, value, source);
+	target.append(heading, value);
 }
 
 function renderSwitchBlockers(wrapper) {
@@ -153,7 +149,7 @@ function renderSwitchBlockers(wrapper) {
 	for (const blocker of blockers) {
 		const note = document.createElement("div");
 		note.className = "alert alert-warning";
-		note.textContent = blocker.message || __("Active work may prevent switching context.");
+		note.textContent = blocker.message || __("Active work may prevent switching Branch.");
 		target.append(note);
 	}
 }
@@ -173,11 +169,11 @@ async function switchOperatingContext(wrapper) {
 		method: "retailedge.operating_context.switch_operating_context",
 		args: { company, branch },
 		freeze: true,
-		freeze_message: __("Switching operating context..."),
+		freeze_message: __("Updating operating branch..."),
 	});
 	state.current = response.message || {};
 	invalidateRetailEdgeContextCache();
-	frappe.show_alert({ message: __("Operating context updated."), indicator: "green" });
+	frappe.show_alert({ message: __("Operating branch updated."), indicator: "green" });
 	await loadOperatingContext(wrapper);
 }
 
@@ -187,10 +183,10 @@ async function clearOperatingContext(wrapper) {
 	await frappe.call({
 		method: "retailedge.operating_context.clear_operating_context",
 		freeze: true,
-		freeze_message: __("Restoring default context..."),
+		freeze_message: __("Restoring default operating branch..."),
 	});
 	invalidateRetailEdgeContextCache();
-	frappe.show_alert({ message: __("Default operating context restored."), indicator: "green" });
+	frappe.show_alert({ message: __("Default operating branch restored."), indicator: "green" });
 	await loadOperatingContext(wrapper);
 }
 
