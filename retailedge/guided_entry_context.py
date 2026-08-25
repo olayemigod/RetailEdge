@@ -38,12 +38,14 @@ def resolve_branch_warehouse_selection(
 	branch = str(branch or "").strip()
 	warehouse = str(warehouse or "").strip()
 	preference = str(preference or "default").strip().lower()
+	used_operating_context = False
 
 	if not company or (not branch and not warehouse):
 		operating = get_effective_operating_context(company=company)
 		company = company or str(operating.get("company") or "").strip()
 		if not branch and not warehouse:
 			branch = str(operating.get("branch") or "").strip()
+			used_operating_context = bool(branch)
 
 	if not company:
 		frappe.throw(_("Company is required to resolve Branch and Stock Location."))
@@ -117,7 +119,7 @@ def resolve_branch_warehouse_selection(
 		"company": company,
 		"branch": branch,
 		"warehouse": candidate,
-		"source": "operating_context" if branch and not warehouse else ("branch_profile" if candidate else "branch"),
+		"source": "operating_context" if used_operating_context else ("branch_profile" if candidate else "branch"),
 	}
 
 
