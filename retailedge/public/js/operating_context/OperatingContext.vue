@@ -3,75 +3,88 @@
 		<strong>Operating Context could not start.</strong>
 		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
 	</div>
-	<EdgePageLayout v-else class="retailedge-operating-context-page">
-		<EdgePageHeader
-			title="Operating Context"
-			description="Choose the Company and Branch that should guide new RetailEdge work. Existing documents keep their saved accounting, branch and stock values."
-		/>
+	<EdgeAppShell
+		v-else
+		product="RetailEdge"
+		title="Operating Context"
+		:tenantName="current.company || tenantName"
+		:branchName="current.branch || selectedBranch"
+		:userName="userName"
+		:menuItems="menuItems"
+		activeRoute="/app/operating-context"
+		:hideNativeSidebar="true"
+		@navigate="handleNavigation"
+	>
+		<EdgePageLayout class="retailedge-operating-context-page">
+			<EdgePageHeader
+				title="Operating Context"
+				description="Choose the Company and Branch that should guide new RetailEdge work. Existing documents keep their saved accounting, branch and stock values."
+			/>
 
-		<EdgeLoadingState v-if="loading && !loaded" />
-		<EdgeErrorState v-else-if="error" :message="error" @retry="loadContext()" />
+			<EdgeLoadingState v-if="loading && !loaded" />
+			<EdgeErrorState v-else-if="error" :message="error" @retry="loadContext()" />
 
-		<div v-else class="operating-context-layout">
-			<section class="edge-panel operating-context-current">
-				<div>
-					<span class="operating-context-kicker">Current operating context</span>
-					<h3>{{ currentLabel }}</h3>
-					<p>New drafts and report defaults start from this context unless a valid explicit document value is already present.</p>
-				</div>
-				<EdgeStatusBadge :status="current.branch ? 'Active' : 'Warning'" />
-			</section>
-
-			<section class="edge-panel operating-context-form">
-				<div class="operating-context-fields">
-					<label class="edge-field">
-						<span class="edge-field-label">Operating Company</span>
-						<select v-model="selectedCompany" class="edge-input" :disabled="busy" @change="onCompanyChange">
-							<option value="">Choose Company</option>
-							<option v-for="company in companies" :key="company" :value="company">{{ company }}</option>
-						</select>
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">Operating Branch</span>
-						<select v-model="selectedBranch" class="edge-input" :disabled="busy || !selectedCompany">
-							<option value="">Choose Branch</option>
-							<option v-for="branch in branches" :key="branch" :value="branch">{{ branch }}</option>
-						</select>
-					</label>
-				</div>
-
-				<div v-if="switchBlockers.length" class="operating-context-blockers">
-					<div v-for="blocker in switchBlockers" :key="`${blocker.code}-${blocker.reference || ''}`" class="operating-context-warning">
-						<strong>Finish current POS work before switching</strong>
-						<span>{{ blocker.message || "Active POS work may prevent switching Branch." }}</span>
+			<div v-else class="operating-context-layout">
+				<section class="edge-panel operating-context-current">
+					<div>
+						<span class="operating-context-kicker">Current operating context</span>
+						<h3>{{ currentLabel }}</h3>
+						<p>New drafts and report defaults start from this context unless a valid explicit document value is already present.</p>
 					</div>
-				</div>
+					<EdgeStatusBadge :status="current.branch ? 'Active' : 'Warning'" />
+				</section>
 
-				<div class="operating-context-actions">
-					<button type="button" class="edge-button edge-button--primary" :disabled="busy || !selectedCompany || !selectedBranch" @click="switchContext">
-						{{ busy ? "Updating…" : "Use Selected Branch" }}
-					</button>
-					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="restoreDefault">
-						Restore Default
-					</button>
-				</div>
-			</section>
+				<section class="edge-panel operating-context-form">
+					<div class="operating-context-fields">
+						<label class="edge-field">
+							<span class="edge-field-label">Operating Company</span>
+							<select v-model="selectedCompany" class="edge-input" :disabled="busy" @change="onCompanyChange">
+								<option value="">Choose Company</option>
+								<option v-for="company in companies" :key="company" :value="company">{{ company }}</option>
+							</select>
+						</label>
+						<label class="edge-field">
+							<span class="edge-field-label">Operating Branch</span>
+							<select v-model="selectedBranch" class="edge-input" :disabled="busy || !selectedCompany">
+								<option value="">Choose Branch</option>
+								<option v-for="branch in branches" :key="branch" :value="branch">{{ branch }}</option>
+							</select>
+						</label>
+					</div>
 
-			<section class="edge-panel operating-context-guidance">
-				<h4>What changes when you switch?</h4>
-				<ul>
-					<li>New guided and full-form transactions may receive Branch Setup defaults for the selected Branch.</li>
-					<li>Operational reports may start with the selected Company and Branch as editable defaults.</li>
-					<li>Existing drafts and submitted documents keep their stored Company, Branch, Stock Location and accounting values.</li>
-					<li>An active POS shift or unsaved POS/cart/payment state can block switching until that work is completed.</li>
-				</ul>
-			</section>
-		</div>
-	</EdgePageLayout>
+					<div v-if="switchBlockers.length" class="operating-context-blockers">
+						<div v-for="blocker in switchBlockers" :key="`${blocker.code}-${blocker.reference || ''}`" class="operating-context-warning">
+							<strong>Finish current POS work before switching</strong>
+							<span>{{ blocker.message || "Active POS work may prevent switching Branch." }}</span>
+						</div>
+					</div>
+
+					<div class="operating-context-actions">
+						<button type="button" class="edge-button edge-button--primary" :disabled="busy || !selectedCompany || !selectedBranch" @click="switchContext">
+							{{ busy ? "Updating…" : "Use Selected Branch" }}
+						</button>
+						<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="restoreDefault">
+							Restore Default
+						</button>
+					</div>
+				</section>
+
+				<section class="edge-panel operating-context-guidance">
+					<h4>What changes when you switch?</h4>
+					<ul>
+						<li>New guided and full-form transactions may receive Branch Setup defaults for the selected Branch.</li>
+						<li>Operational reports may start with the selected Company and Branch as editable defaults.</li>
+						<li>Existing drafts and submitted documents keep their stored Company, Branch, Stock Location and accounting values.</li>
+						<li>An active POS shift or unsaved POS/cart/payment state can block switching until that work is completed.</li>
+					</ul>
+				</section>
+			</div>
+		</EdgePageLayout>
+	</EdgeAppShell>
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -107,6 +120,9 @@ export default {
 			selectedCompany: "",
 			selectedBranch: "",
 			switchBlockers: [],
+			menuItems: [],
+			tenantName: "",
+			userName: "",
 		};
 	},
 	computed: {
@@ -123,12 +139,46 @@ export default {
 	},
 	mounted() {
 		window.addEventListener("retailedge-operating-context-page-show", this._onPageShow);
-		if (this.edgeUIValid) this.loadContext();
+		if (this.edgeUIValid) {
+			this.loadNavigation();
+			this.loadContext();
+		}
 	},
 	beforeUnmount() {
 		window.removeEventListener("retailedge-operating-context-page-show", this._onPageShow);
 	},
 	methods: {
+		async loadNavigation() {
+			try {
+				const navigation = typeof window.retailedgeGetBusinessHubContext === "function"
+					? await window.retailedgeGetBusinessHubContext()
+					: await callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
+				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.tenantName = navigation.context?.company || "";
+				this.userName = navigation.context?.user_name || "";
+			} catch (error) {
+				this.menuItems = [];
+			}
+		},
+		mapNavigationGroups(groups) {
+			return (groups || []).map((group) => ({
+				...group,
+				items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })),
+			}));
+		},
+		routeForItem(item) {
+			if (item.target_type === "Page") return `/app/${item.target}`;
+			if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
+			if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`;
+			return item.target || "";
+		},
+		handleNavigation(route) {
+			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
+			if (!item) return;
+			if (item.target_type === "Page") frappe.set_route(item.target);
+			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
+			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
+		},
 		clientSwitchBlocker() {
 			try {
 				const guard = window.retailedgeOperatingContextGuard;
@@ -185,7 +235,7 @@ export default {
 				);
 				this.invalidateContextCache();
 				frappe.show_alert({ message: __("Operating branch updated."), indicator: "green" });
-				await this.loadContext();
+				await Promise.all([this.loadContext(), this.loadNavigation()]);
 			} finally {
 				this.busy = false;
 			}
@@ -201,7 +251,7 @@ export default {
 				);
 				this.invalidateContextCache();
 				frappe.show_alert({ message: __("Default operating branch restored."), indicator: "green" });
-				await this.loadContext();
+				await Promise.all([this.loadContext(), this.loadNavigation()]);
 			} finally {
 				this.busy = false;
 			}
