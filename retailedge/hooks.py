@@ -83,8 +83,6 @@ doctype_js = {
 	"Stock Reconciliation Item": "public/js/inventory_documents.js",
 	"Packed Item": "public/js/cost_visibility_child_table.js",
 	"Item Default": "public/js/inventory_documents.js",
-	"RetailEdge Settings": "public/js/customer_facing_labels.js",
-	"RetailEdge Branch Profile": "public/js/customer_facing_labels.js",
 	"RetailEdge Cashier Expense": "public/js/customer_facing_labels.js",
 	"RetailEdge Expense Category": "public/js/customer_facing_labels.js",
 	"RetailEdge Daily Sales Audit": "public/js/customer_facing_labels.js",
