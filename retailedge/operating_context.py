@@ -13,7 +13,7 @@ from retailedge.branch_context import (
 	user_has_global_branch_access,
 	validate_user_branch_access,
 )
-from retailedge.branch_profile import get_branch_profile_defaults
+from retailedge.branch_profile import get_branch_profile_defaults, get_user_branch_profiles
 
 OPERATING_CONTEXT_TTL_SECONDS = 12 * 60 * 60
 OPERATING_CONTEXT_CACHE_PREFIX = "retailedge:operating-context"
@@ -49,34 +49,7 @@ def get_operating_context(company: str = "") -> dict[str, Any]:
 		else:
 			_clear_cached_context(user=user)
 
-	fallback_company = requested_company or _clean(frappe.defaults.get_user_default("Company"))
-	if fallback_company:
-		_assert_company_access(fallback_company)
-
-	resolved = resolve_branch_from_user(user=user, company=fallback_company or None)
-	fallback_branch = _clean(resolved.get("branch"))
-	fallback_company = _clean(resolved.get("company")) or fallback_company
-	if fallback_branch and fallback_company:
-		validated = _validate_context(
-			company=fallback_company,
-			branch=fallback_branch,
-			user=user,
-			throw=False,
-		)
-		if validated.get("allowed"):
-			return _build_context(
-				company=fallback_company,
-				branch=fallback_branch,
-				user=user,
-				source=resolved.get("source") or "fallback",
-			)
-
-	return _build_context(
-		company=fallback_company,
-		branch="",
-		user=user,
-		source="company_default" if fallback_company else "empty",
-	)
+	return _resolve_fallback_context(company=requested_company, user=user)
 
 
 @frappe.whitelist()
@@ -134,9 +107,17 @@ def switch_operating_context(company: str, branch: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 def clear_operating_context() -> dict[str, Any]:
-	"""Clear only the session override and return the normal fallback context."""
-	_clear_cached_context(user=frappe.session.user)
-	return get_operating_context()
+	"""Clear only the session override and safely restore the normal fallback context."""
+	user = frappe.session.user
+	fallback = _resolve_fallback_context(company="", user=user)
+	if fallback.get("company") or fallback.get("branch"):
+		_assert_switch_safe(
+			company=_clean(fallback.get("company")),
+			branch=_clean(fallback.get("branch")),
+			user=user,
+		)
+	_clear_cached_context(user=user)
+	return fallback
 
 
 def get_effective_operating_context(company: str = "", branch: str = "") -> dict[str, Any]:
@@ -176,6 +157,37 @@ def get_effective_operating_context(company: str = "", branch: str = "") -> dict
 			source="explicit_branch",
 		)
 	return current
+
+
+def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
+	fallback_company = _clean(company) or _clean(frappe.defaults.get_user_default("Company"))
+	if fallback_company:
+		_assert_company_access(fallback_company)
+
+	resolved = resolve_branch_from_user(user=user, company=fallback_company or None)
+	fallback_branch = _clean(resolved.get("branch"))
+	fallback_company = _clean(resolved.get("company")) or fallback_company
+	if fallback_branch and fallback_company:
+		validated = _validate_context(
+			company=fallback_company,
+			branch=fallback_branch,
+			user=user,
+			throw=False,
+		)
+		if validated.get("allowed"):
+			return _build_context(
+				company=fallback_company,
+				branch=fallback_branch,
+				user=user,
+				source=resolved.get("source") or "fallback",
+			)
+
+	return _build_context(
+		company=fallback_company,
+		branch="",
+		user=user,
+		source="company_default" if fallback_company else "empty",
+	)
 
 
 def _build_context(*, company: str, branch: str, user: str, source: str) -> dict[str, Any]:
@@ -339,9 +351,18 @@ def _allowed_branches(*, company: str, user: str) -> list[str]:
 		return permission_visible
 
 	restricted = set(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-	if not restricted:
-		return permission_visible
-	return [branch for branch in permission_visible if branch in restricted]
+	if restricted:
+		permission_visible = [branch for branch in permission_visible if branch in restricted]
+
+	profile_rows = get_user_branch_profiles(user=user, company=company)
+	profile_branches = {
+		_clean(row.get("branch"))
+		for row in profile_rows
+		if row.get("enabled") and _clean(row.get("branch"))
+	}
+	if profile_branches:
+		permission_visible = [branch for branch in permission_visible if branch in profile_branches]
+	return permission_visible
 
 
 def _assert_company_access(company: str) -> None:
