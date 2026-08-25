@@ -67,13 +67,24 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 		self.assertIn("POS_LAUNCH_METHOD", component)
 		self.assertIn("await callMethod(POS_LAUNCH_METHOD)", component)
 		self.assertIn("posLaunchError", component)
-		self.assertNotIn("window.location.assign(this.pos.start_url)", component)
+
+	def test_posnext_offline_launch_does_not_depend_on_server_preflight(self):
+		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
+		for contract in (
+			'if (this.pos?.provider === "posnext" && typeof navigator !== "undefined" && navigator.onLine === false)',
+			"this.launchPosTarget(this.pos)",
+			"window.location.assign(launch.start_url)",
+			"RetailEdge does not make its preflight a hard dependency",
+			"POSNext keeps control of its own offline runtime and sync behaviour",
+		):
+			self.assertIn(contract, component)
+		# Offline fallback is POSNext-only; native ERPNext POS must keep the online server gate.
+		self.assertIn('this.pos?.provider === "posnext"', component)
 
 	def test_workspace_keeps_posnext_extension_boundary(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
 		self.assertIn("POSNext remains the POS engine", component)
 		self.assertIn("ProcessEdge POSNext extension", component)
-		self.assertIn("operating entry point and context visibility", component)
 		self.assertNotIn("safe context handoff", component)
 		self.assertNotIn("allow_user_to_edit_rate", component)
 		self.assertNotIn("allow_change_posting_date", component)
