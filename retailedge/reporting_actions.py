@@ -35,9 +35,9 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 
 		return get_purchase_register_export
 	if key == "supplier-payables":
-		from retailedge.operating_report_defaults import get_supplier_payables_export
+		from retailedge.operating_report_defaults import get_governed_supplier_payables_export
 
-		return get_supplier_payables_export
+		return get_governed_supplier_payables_export
 	if key == "stock-position":
 		from retailedge.operating_report_defaults import get_stock_position_export
 
