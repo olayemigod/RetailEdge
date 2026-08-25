@@ -98,7 +98,7 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 	def test_workspace_keeps_posnext_extension_boundary(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
 		self.assertIn("POSNext remains the POS engine", component)
-		self.assertIn("ProcessEdge POSNext extension", component)
+		self.assertIn("POSNext keeps control of its own offline runtime and sync behaviour", component)
 		self.assertNotIn("safe context handoff", component)
 		self.assertNotIn("allow_user_to_edit_rate", component)
 		self.assertNotIn("allow_change_posting_date", component)
