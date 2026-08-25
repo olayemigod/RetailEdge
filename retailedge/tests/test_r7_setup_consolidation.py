@@ -15,20 +15,22 @@ class TestR7SetupConsolidation(unittest.TestCase):
 		for contract in (
 			"COMPANY_LINK_FIELDS",
 			"LEAF_FIELDS",
-			"_validate_branch_reference(doc)",
-			"_validate_company_links(doc)",
-			"_validate_leaf_defaults(doc)",
+			'_validate_company_links(doc)',
+			'_validate_leaf_defaults(doc)',
 			'"default_pos_profile": ("POS Profile", "company")',
 			'"default_warehouse": ("Warehouse", "company")',
 			'"default_cost_center": ("Cost Center", "company")',
 			'"default_cash_account": ("Account", "company")',
+			'"company": doc.company',
+			'"branch": doc.branch',
 			"must belong to Company",
 			"must be a leaf",
 			"must be enabled",
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn('"branch": ("Branch", "company")', source)
-		self.assertIn('frappe.db.exists("Branch", doc.branch)', source)
+		self.assertNotIn('frappe.db.exists("Branch", doc.branch)', source)
+		self.assertNotIn("_validate_branch_reference", source)
 
 	def test_branch_setup_form_filters_company_bound_defaults(self):
 		source = self.read("retailedge/doctype/retailedge_branch_profile/retailedge_branch_profile.js")
@@ -44,8 +46,9 @@ class TestR7SetupConsolidation(unittest.TestCase):
 			"company(frm)",
 		):
 			self.assertIn(contract, source)
-		# Native ERPNext Branch has no Company field in v16. Do not invent a
-		# frontend company filter that would disagree with server semantics.
+		# ERPNext v16 Branch has no native Company field. Company + Branch is
+		# bound by RetailEdge Branch Profile itself, while dependent defaults are
+		# filtered and validated against Company.
 		self.assertNotIn('set_query("branch"', source)
 
 	def test_branch_setup_validation_does_not_add_accounting_or_stock_writes(self):
