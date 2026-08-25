@@ -51,7 +51,9 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		source = self.read("professional_selling.py")
 		self.assertIn("min(int(limit or 8), 20)", source)
 		self.assertIn("limit_page_length=limit", source)
-		self.assertIn('frappe.has_permission(doctype, "read")', source)
+		# Recent-document access goes through the shared permission helper;
+		# _permission itself is covered above as the frappe.has_permission path.
+		self.assertIn('_permission(doctype, "read")', source)
 
 	def test_page_uses_edgesuite_single_shell(self):
 		loader = self.read("retailedge/page/professional_selling/professional_selling.js")
