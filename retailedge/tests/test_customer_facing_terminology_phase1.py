@@ -34,6 +34,20 @@ def _fields(meta: dict) -> dict[str, dict]:
 	return {field["fieldname"]: field for field in meta.get("fields", []) if field.get("fieldname")}
 
 
+def _customer_visible_metadata_offenders() -> list[str]:
+	offenders: list[str] = []
+	doctype_root = ROOT / "retailedge" / "doctype"
+	for path in sorted(doctype_root.glob("**/*.json")):
+		meta = _load(path)
+		for field in meta.get("fields", []) or []:
+			fieldname = field.get("fieldname") or "<unnamed>"
+			for key in ("label", "description"):
+				value = field.get(key)
+				if isinstance(value, str) and "RetailEdge" in value:
+					offenders.append(f"{path.relative_to(ROOT)}:{fieldname}:{key}={value}")
+	return offenders
+
+
 def test_branch_setup_preserves_internal_doctype_identity():
 	meta = _load(BRANCH_SETUP_PATH)
 	assert meta["name"] == "RetailEdge Branch Profile"
@@ -131,6 +145,11 @@ def test_customer_labels_do_not_expose_internal_branch_profile_name():
 	assert "RetailEdge Branch Profile" not in labels
 	assert "Warehouse Defaults" not in labels
 	assert "Default Warehouse" not in labels
+
+
+def test_retailedge_owned_form_metadata_has_no_unnecessary_product_prefixes():
+	offenders = _customer_visible_metadata_offenders()
+	assert not offenders, "Customer-visible metadata still exposes internal/product prefixes:\n" + "\n".join(offenders)
 
 
 def test_edgesuite_navigation_uses_customer_facing_labels_but_keeps_targets():
