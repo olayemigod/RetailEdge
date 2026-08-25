@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		:title="formContext.title || 'Record Cashier Expense'"
-		:subtitle="formContext.subtitle || 'Record a controlled RetailEdge cashier expense.'"
+		:subtitle="formContext.subtitle || 'Record a controlled cashier expense for the current operating context.'"
 		size="lg"
 		@close="requestClose"
 	>
@@ -116,9 +116,8 @@
 			</label>
 
 			<p class="guided-expense-hint">
-				RetailEdge will resolve the expense account, cost centre and cash account from the selected
-				category and current cashier context. Receipt upload and review details remain available in
-				the full form.
+				The expense account, cost centre and cash account are resolved from the selected category
+				and current cashier context. Receipt upload and review details remain available in the full form.
 			</p>
 		</form>
 
