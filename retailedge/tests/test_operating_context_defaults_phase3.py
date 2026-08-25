@@ -132,6 +132,23 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_pos_profile_defaults_apply_only_to_pos_sales_and_are_validated(self):
+		source = self.read("branch_defaults_application.py")
+		for contract in (
+			"resolve_branch_from_pos_profile",
+			"_is_pos_sales_document(doc)",
+			'doc.doctype, None) == "POS Invoice"',
+			'getattr(doc, "doctype", None) == "Sales Invoice" and getattr(doc, "is_pos", 0)',
+			"_get_valid_pos_profile_default",
+			'frappe.db.exists("POS Profile", pos_profile)',
+			'frappe.has_permission("POS Profile", "read", doc=pos_profile)',
+			'has_field("POS Profile", "disabled")',
+			'"pos_profile_company_mismatch"',
+			'"pos_profile_branch_mismatch"',
+		):
+			self.assertIn(contract, source)
+		self.assertIn('current not in (None, "") and not overwrite', source)
+
 	def test_no_accounting_or_stock_posting_side_effects_added(self):
 		source = self.read("branch_defaults_application.py")
 		for forbidden in (
