@@ -48,13 +48,15 @@ class TestOperatingReportDefaultsPhase3(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
-	def test_branch_setup_membership_restricts_non_global_report_scope(self):
+	def test_branch_setup_membership_restricts_non_global_report_scope_and_fails_closed(self):
 		source = self.read("operating_report_defaults.py")
 		for contract in (
 			"user_has_global_branch_access",
 			"get_user_branch_profiles",
-			"def _assigned_profile_branches(company: str)",
+			"def _assigned_profile_scope(company: str)",
 			'row.get("enabled")',
+			"Your assigned Branch reporting scope could not be verified",
+			"You do not have an active Branch Setup assignment for this Company",
 			"def _constrain_report_filters(",
 			"Choose one of your assigned Branches",
 			"Cross-branch reporting is available only to authorized managers",
