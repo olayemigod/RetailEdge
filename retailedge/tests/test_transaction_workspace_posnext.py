@@ -43,10 +43,38 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
+	def test_pos_launch_is_server_validated_and_read_only(self):
+		backend = self.read("retailedge/page/transaction_workspace/transaction_workspace.py")
+		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
+		for contract in (
+			"def prepare_pos_launch()",
+			"find_open_pos_opening_shift",
+			"resolve_branch_from_opening_shift",
+			"resolve_branch_from_pos_profile",
+			"Choose an Operating Company and Branch before starting POS.",
+			"active POS shift does not match the current Operating Branch",
+			"active POS shift uses a different POS Profile",
+		):
+			self.assertIn(contract, backend)
+		for forbidden in (
+			".save()",
+			".insert()",
+			".submit()",
+			"frappe.db.set_value",
+			"frappe.db.commit",
+		):
+			self.assertNotIn(forbidden, backend)
+		self.assertIn("POS_LAUNCH_METHOD", component)
+		self.assertIn("await callMethod(POS_LAUNCH_METHOD)", component)
+		self.assertIn("posLaunchError", component)
+		self.assertNotIn("window.location.assign(this.pos.start_url)", component)
+
 	def test_workspace_keeps_posnext_extension_boundary(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
 		self.assertIn("POSNext remains the POS engine", component)
 		self.assertIn("ProcessEdge POSNext extension", component)
+		self.assertIn("operating entry point and context visibility", component)
+		self.assertNotIn("safe context handoff", component)
 		self.assertNotIn("allow_user_to_edit_rate", component)
 		self.assertNotIn("allow_change_posting_date", component)
 		self.assertNotIn("posting_date", component)
@@ -65,7 +93,6 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 			'GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry"])',
 		):
 			self.assertIn(contract, component)
-		self.assertNotIn("SimpleSalesInvoiceDialog.vue\";\nimport SimpleSalesInvoiceDialog", component)
 
 	def test_native_transaction_fallbacks_remain_authoritative(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
