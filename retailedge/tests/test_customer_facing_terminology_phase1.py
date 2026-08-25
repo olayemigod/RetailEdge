@@ -20,6 +20,13 @@ SETTINGS_FORM_JS = ROOT / "retailedge" / "doctype" / "retailedge_settings" / "re
 SCOPED_LABELS_JS = ROOT / "public" / "js" / "customer_facing_labels.js"
 CASHIER_EXPENSE_LIST_JS = ROOT / "public" / "js" / "retailedge_cashier_expense_list.js"
 BANK_IMPORT_LIST_JS = ROOT / "public" / "js" / "payment_statement_import_list.js"
+BUSINESS_HUB_PAGE_META = (
+	ROOT
+	/ "retailedge"
+	/ "page"
+	/ "retailedge_business_hub"
+	/ "retailedge_business_hub.json"
+)
 EDGESUITE_UI_PATH = ROOT / "edgesuite_ui.py"
 WORKSPACE_HOME_PATH = ROOT / "workspace_home.py"
 WORKSPACE_SYNC_PATH = ROOT / "workspace_sync.py"
@@ -139,6 +146,13 @@ def test_customer_facing_list_titles_are_professional():
 	assert 'set_title(__("Bank Statement Imports"))' in bank_source
 	assert 'frappe.listview_settings["RetailEdge Cashier Expense"]' in cashier_source
 	assert 'frappe.listview_settings["RetailEdge Payment Statement Import"]' in bank_source
+
+
+def test_business_hub_page_fixture_uses_customer_facing_title_and_stable_route():
+	meta = _load(BUSINESS_HUB_PAGE_META)
+	assert meta["name"] == "retailedge-business-hub"
+	assert meta["page_name"] == "retailedge-business-hub"
+	assert meta["title"] == "Business Hub"
 
 
 def test_customer_labels_do_not_expose_internal_branch_profile_name():
