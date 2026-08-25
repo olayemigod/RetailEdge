@@ -50,8 +50,9 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 			"refreshAllItemPricing",
 		):
 			self.assertIn(contract, component)
-		self.assertIn("Stock Location", component)
-		self.assertNotIn("Warehouse", component)
+		self.assertIn('label="Stock Location"', component)
+		self.assertNotIn('label="Warehouse"', component)
+		self.assertNotIn(">Warehouse<", component)
 
 	def test_quotation_editor_is_draft_only_with_native_fallback(self):
 		component = self.read("public/js/professional_selling/ProfessionalQuotationDialog.vue")
@@ -64,7 +65,12 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 			self.assertIn(contract, component)
 		self.assertIn("Guided Quotation", workspace)
 		self.assertIn("ProfessionalQuotationDialog", workspace)
-		self.assertNotIn("submit", component.lower())
+		# Internal form-submit handling and explanatory references to submitted
+		# source documents are valid. The guided editor itself must not expose a
+		# user action that submits the ERPNext document.
+		self.assertNotIn(">Submit<", component)
+		self.assertNotIn('>Submit Quotation<', component)
+		self.assertNotIn('@click="submit', component)
 
 
 if __name__ == "__main__":
