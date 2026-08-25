@@ -57,6 +57,40 @@ def _validate_pos_profile(profile_name: str, *, company: str, branch: str) -> di
 	return {"name": profile_name, "company": profile_company, "branch": profile_branch}
 
 
+def _find_open_erpnext_pos_opening(user: str) -> dict[str, Any] | None:
+	"""Return the user's latest open ERPNext POS Opening Entry, permission-aware."""
+	if not frappe.db.exists("DocType", "POS Opening Entry"):
+		return None
+	try:
+		meta = frappe.get_meta("POS Opening Entry")
+	except Exception:
+		return None
+
+	filters: dict[str, Any] = {"docstatus": ["in", [0, 1]]}
+	if meta.has_field("user"):
+		filters["user"] = user
+	elif meta.has_field("owner"):
+		filters["owner"] = user
+	if meta.has_field("status"):
+		filters["status"] = ["in", ["Open", "Opened"]]
+
+	fields = ["name"]
+	for fieldname in ("company", "pos_profile", "status"):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
+	try:
+		rows = frappe.get_list(
+			"POS Opening Entry",
+			filters=filters,
+			fields=fields,
+			order_by="creation desc",
+			limit_page_length=1,
+		)
+	except Exception:
+		rows = []
+	return dict(rows[0]) if rows else None
+
+
 @frappe.whitelist()
 def get_transaction_workspace_context() -> dict[str, Any]:
 	"""Return a permission-aware transaction host context without writing state."""
@@ -132,6 +166,25 @@ def prepare_pos_launch() -> dict[str, Any]:
 				"company": shift_company,
 				"branch": shift_branch,
 				"pos_profile": shift_profile,
+			}
+	else:
+		opening_entry = _find_open_erpnext_pos_opening(frappe.session.user)
+		if opening_entry:
+			entry_company = _clean(opening_entry.get("company"))
+			if entry_company and entry_company != company:
+				frappe.throw(_("The active ERPNext POS opening belongs to another Company. Close it before starting POS here."))
+			entry_profile = _clean(opening_entry.get("pos_profile"))
+			entry_branch = ""
+			if entry_profile:
+				entry_profile_context = _validate_pos_profile(entry_profile, company=company, branch=branch)
+				entry_branch = _clean(entry_profile_context.get("branch"))
+			if default_profile and entry_profile and entry_profile != default_profile:
+				frappe.throw(_("The active ERPNext POS opening uses a different POS Profile from the current Branch Setup."))
+			active_shift = {
+				"name": _clean(opening_entry.get("name")),
+				"company": entry_company,
+				"branch": entry_branch,
+				"pos_profile": entry_profile,
 			}
 
 	return {
