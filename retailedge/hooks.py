@@ -37,6 +37,7 @@ app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
 	"/assets/retailedge/js/retailedge_business_hub_page.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
+	"/assets/retailedge/js/new_document_operating_defaults.js",
 ]
 
 # include js, css files in web template
@@ -122,7 +123,7 @@ doctype_list_js = {
 # importable_doctypes = [doctype_1]
 
 # Jinja
-# ----------
+# ------------------
 
 # add methods and filters to jinja environment
 # jinja = {
@@ -151,8 +152,8 @@ doctype_list_js = {
 
 # Integration Cleanup
 # -------------------
-# before_app_uninstall = "retailedge.utils.before_app_uninstall"
-# after_app_uninstall = "retailedge.utils.after_app_uninstall"
+# before_app_uninstall = "retailedge.uninstall.before_uninstall"
+# after_app_uninstall = "retailedge.uninstall.after_uninstall"
 
 # Desk Notifications
 # ------------------
