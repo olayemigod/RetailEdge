@@ -85,7 +85,7 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 	def test_full_form_helper_is_loaded_once_and_scoped_to_new_transaction_forms(self):
 		hooks = self.read("hooks.py")
 		source = self.read("public/js/new_document_operating_defaults.js")
-		self.assertIn('"/assets/retailedge/js/new_document_operating_defaults.js"', hooks)
+		self.assertEqual(hooks.count('"/assets/retailedge/js/new_document_operating_defaults.js"'), 1)
 		for doctype in (
 			"Sales Order",
 			"Delivery Note",
@@ -113,6 +113,24 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 		self.assertNotIn("frm.doc.items =", source)
 		self.assertNotIn("frappe.model.set_value", source)
 		self.assertNotIn("frm.save", source)
+
+	def test_company_change_clears_only_owned_defaults_and_discards_stale_responses(self):
+		source = self.read("public/js/new_document_operating_defaults.js")
+		for contract in (
+			"COMPANY_DEPENDENT_FIELDS",
+			"autoApplied: {}",
+			"generation: 0",
+			"pendingRefresh: false",
+			"state.autoApplied[fieldname] = proposed",
+			"frm.doc?.[fieldname] === priorDefault",
+			"delete state.autoApplied[fieldname]",
+			"generation !== state.generation",
+			"state.pendingRefresh = true",
+			"async function handleCompanyChange(frm)",
+			"state.generation += 1",
+			"company(frm)",
+		):
+			self.assertIn(contract, source)
 
 	def test_no_accounting_or_stock_posting_side_effects_added(self):
 		source = self.read("branch_defaults_application.py")
