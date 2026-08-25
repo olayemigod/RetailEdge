@@ -19,11 +19,11 @@ def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 	key = cstr(report_key or "").strip().lower()
 	if key == "sales-by-item":
-		from retailedge.sales_reporting import get_sales_by_item_export
+		from retailedge.operating_report_defaults import get_sales_by_item_export
 
 		return get_sales_by_item_export
 	if key == "sales-invoice-register":
-		from retailedge.sales_reporting import get_sales_invoice_register_export
+		from retailedge.operating_report_defaults import get_sales_invoice_register_export
 
 		return get_sales_invoice_register_export
 	if key == "customer-receivables":
@@ -31,15 +31,15 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 
 		return get_customer_receivables_export
 	if key == "purchase-register":
-		from retailedge.purchase_reporting import get_purchase_register_export
+		from retailedge.operating_report_defaults import get_purchase_register_export
 
 		return get_purchase_register_export
 	if key == "supplier-payables":
-		from retailedge.supplier_payables import get_supplier_payables_export
+		from retailedge.operating_report_defaults import get_supplier_payables_export
 
 		return get_supplier_payables_export
 	if key == "stock-position":
-		from retailedge.stock_position import get_stock_position_export
+		from retailedge.operating_report_defaults import get_stock_position_export
 
 		return get_stock_position_export
 	if key == "stock-movement-history":
