@@ -137,29 +137,33 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
-	def test_operating_context_page_cascades_company_branch_and_invalidates_shell_cache(self):
-		source = self.read("retailedge/page/operating_context/operating_context.js")
+	def test_operating_context_page_is_edgesuite_and_preserves_switch_contract(self):
+		loader = self.read("retailedge/page/operating_context/operating_context.js")
+		component = self.read("public/js/operating_context/OperatingContext.vue")
+		for contract in (
+			'"edgeui.bundle.js"',
+			'"operating_context.bundle.js"',
+			"window.EdgeSuiteUI",
+			"mountRetailEdgeOperatingContext",
+		):
+			self.assertIn(contract, loader)
+		self.assertNotIn('className = "frappe-card"', loader)
+
 		for contract in (
 			"get_allowed_operating_contexts",
 			"switch_operating_context",
 			"clear_operating_context",
 			"Operating Company",
 			"Operating Branch",
-			"preserveCompanySelection",
-			"getClientSwitchBlocker",
+			"onCompanyChange",
+			"clientSwitchBlocker",
 			"retailedgeOperatingContextGuard",
 			"__retailedgeBusinessHubContextCache = null",
 			"retailedge-operating-context-changed",
+			"EdgePageLayout",
+			"EdgePageHeader",
 		):
-			self.assertIn(contract, source)
-
-		switch_start = source.index("async function switchOperatingContext")
-		clear_start = source.index("async function clearOperatingContext")
-		guard_start = source.index("function showClientSwitchBlocker")
-		switch_source = source[switch_start:clear_start]
-		clear_source = source[clear_start:guard_start]
-		self.assertIn("showClientSwitchBlocker()", switch_source)
-		self.assertIn("showClientSwitchBlocker()", clear_source)
+			self.assertIn(contract, component)
 
 	def test_page_fixture_is_customer_facing_and_keeps_internal_route_stable(self):
 		source = self.read("retailedge/page/operating_context/operating_context.json")
