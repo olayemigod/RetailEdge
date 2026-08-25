@@ -65,6 +65,7 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 			'frappe.has_permission(doctype, "create")',
 			'payload.pop("name", None)',
 			'payload["docstatus"] = 0',
+			"_validate_preview_context(doc)",
 			"_seed_new_doc_from_operating_context(doc)",
 			"apply_branch_profile_defaults_to_doc(doc, overwrite=False)",
 			'"changes": changes',
@@ -81,6 +82,27 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 			".cancel(",
 		):
 			self.assertNotIn(forbidden, source)
+
+	def test_preview_validates_forged_company_branch_stock_pos_and_shift_context(self):
+		source = self.read("new_document_defaults.py")
+		for contract in (
+			"def _validate_preview_context(doc)",
+			'_assert_named_read("Company", company)',
+			"_assert_branch_access(branch=branch, company=company)",
+			'_assert_named_read("Warehouse", warehouse)',
+			"resolve_branch_from_warehouse",
+			"Stock Location {0} does not belong to Company {1}",
+			"Stock Location {0} does not belong to Branch {1}",
+			'_assert_named_read("POS Profile", pos_profile)',
+			"resolve_branch_from_pos_profile",
+			"POS Profile {0} does not belong to Company {1}",
+			"POS_CONTEXT_FIELDS",
+			"resolve_branch_from_opening_shift",
+			"resolve_branch_from_closing_shift",
+			"validate_user_branch_access",
+			'frappe.has_permission(doctype, "read", doc=name)',
+		):
+			self.assertIn(contract, source)
 
 	def test_full_form_helper_is_loaded_once_and_scoped_to_new_transaction_forms(self):
 		hooks = self.read("hooks.py")
