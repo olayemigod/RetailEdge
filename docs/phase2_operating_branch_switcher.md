@@ -13,59 +13,77 @@ Phase 2 belongs in RetailEdge today because RetailEdge needs the operating conte
 ## Core contracts
 
 1. Existing submitted or draft documents retain their stored Company, Branch, Warehouse, POS Profile and accounting values.
-2. The Operating Branch guides **new** drafts/defaults only when the caller has not made an explicit valid selection.
+2. The Operating Branch guides **new** guided drafts/defaults only when the caller has not made an explicit valid selection.
 3. Explicit Warehouse/Stock Location remains authoritative when supplied.
 4. Branch selection is validated server-side for:
    - Company read permission;
    - Branch read permission;
    - Company/Branch association where Branch has a Company field;
    - active/not-disabled Branch state where supported;
-   - RetailEdge/CoreEdge/User Permission branch restrictions.
+   - RetailEdge/CoreEdge/User Permission branch restrictions;
+   - enabled Branch Setup membership where Branch Users are configured for a non-global user.
 5. Allowed Company/Branch options are permission-aware and bounded; do not preload unrelated masters.
 6. Branch Profile remains the source of RetailEdge operational defaults such as POS Profile, stock locations, cost centres and payment accounts.
 7. Existing branch resolvers remain fallback/historical resolvers and are not deleted.
-8. Reports may default to the operating branch, but an authorized user may deliberately broaden or change report scope.
-9. A context switch must not silently rewrite an open document.
-10. POS/cart/payment state must block an unsafe branch switch once the client/runtime integration is wired.
+8. A context switch must not silently rewrite an open document.
+9. An active POSNext shift or ERPNext POS Opening Entry blocks switching to a different Company/Branch server-side.
+10. Unsaved browser-only POS/cart/payment state uses a client guard extension point; provider-specific cart integration is not falsely claimed by this phase.
+11. Broad full-form, POS Profile, report and dashboard default activation belongs to **Phase 3 — Branch defaults & operational context activation**.
 
 ## Delivery slices
 
-### 2A — Operating context service
+### 2A — Operating context service — implemented
 
 - `retailedge/operating_context.py`
 - Session-scoped cache keyed by user + Frappe session id.
-- 12-hour TTL; clearable without changing user defaults.
+- 12-hour TTL; clearable without changing Frappe User Defaults.
 - APIs:
   - `get_operating_context`
   - `get_allowed_operating_contexts`
   - `switch_operating_context`
   - `clear_operating_context`
 - Existing user/CoreEdge/default resolver used only when no valid session override exists.
+- Company, Branch, branch/company association and disabled state are validated server-side.
+- Non-global users are additionally constrained by configured Branch Setup membership when available.
+- Previewing another Company's Branch options does not mutate or clear the active context.
+- Clearing a session override resolves the fallback first and applies the same POS switch-safety gate before changing context.
 
-### 2B — Guided-entry integration
+### 2B — Guided-entry integration — implemented
 
 - `guided_entry_context.resolve_branch_warehouse_selection` consumes Operating Branch only when Branch and Stock Location are both absent.
 - Explicit Company/Branch/Stock Location selections continue to win.
 - Branch Profile resolves the correct stock-location preference for sales, purchases, source, target or default use.
+- Internal ERPNext `Warehouse` identities and fields remain unchanged.
 
-### 2C — Shell switcher and POS protection
+### 2C — Shell switcher and POS protection — implemented for Phase 2
 
-Planned on this same PR:
+- Dedicated `Operating Context` Page under RetailEdge Home.
+- Current Operating Company/Branch flows into the existing EdgeSuite product profile through the canonical Business Hub context.
+- Company → Branch selection cascades using bounded permission-aware server options.
+- Successful switch invalidates the existing Business Hub context cache and refreshes the product menu.
+- Server-side switch blockers cover:
+  - POSNext `POS Opening Shift`;
+  - ERPNext `POS Opening Entry`.
+- Client-side `window.retailedgeOperatingContextGuard.getBlocker()` extension point is available for browser-only unsaved cart/payment state. The actual provider-specific cart guard is deferred until the POS integration phase where that state is owned.
 
-- Product-menu Operating Context action/picker.
-- Current Company/Branch shown in the product profile.
-- Refresh Business Hub context after switch.
-- Client-side unsafe-switch guard for active guided drafts and POSNext/ERPNext POS cart/payment state.
-- Server retains permission validation even when client guard passes.
+### 2D — Phase 2 hardening/audit — current gate
 
-### 2D — Report/default integration and hardening
+- Audit branch/company isolation, fallback behavior, cache/session lifecycle, Page visibility, switch safety and multi-app coexistence.
+- Lock safety findings with regression tests.
+- Run fresh exact-head Linters and clean Frappe v16 CI.
+- Defer manual/browser QA until predecessor QA/promotion reaches this stacked PR.
 
-Planned on this same PR after 2C:
+## Deferred to Phase 3 — Branch defaults & operational context activation
 
-- Permission-aware report default context where the report currently derives a branch default.
-- Preserve deliberate user filter changes.
-- Audit context-sensitive API surfaces for branch/company isolation.
-- Automated and manual QA.
+Phase 3 will consume the trusted Phase 2 Operating Context more broadly. It should cover, where appropriate:
+
+- full-form new-document defaults;
+- branch-specific POS Profile activation and related operational defaults;
+- report/dashboard default filters while still allowing authorized users to broaden scope;
+- additional branch-aware operational pages and workflows;
+- migration/backward-compatibility review for the wider activation layer.
+
+Phase 2 does **not** turn Operating Branch into a hard historical-document filter or a competing source of document truth.
 
 ## Out of scope
 
@@ -76,6 +94,7 @@ Planned on this same PR after 2C:
 - No automatic submission or posting.
 - No CoreEdge package requirement for standalone RetailEdge.
 - No broad report enforcement that prevents authorized users from broadening scope.
+- No claim that unsaved POSNext/ERPNext browser carts are detected until the owning POS integration supplies the guard.
 
 ## Security and accounting safety
 
@@ -86,6 +105,7 @@ Planned on this same PR after 2C:
 - ERPNext Warehouse remains stock truth.
 - Branch Profile only supplies defaults; ERPNext document validation remains authoritative.
 - Client-side filtering/guards never replace server-side validation.
+- Clearing or previewing context cannot be used to bypass branch/POS safety.
 
 ## Tests required
 
@@ -94,9 +114,12 @@ Planned on this same PR after 2C:
 - session key and expiry behavior;
 - permission-aware Company/Branch queries;
 - disabled/wrong-company/unauthorized Branch rejection;
+- Branch Setup membership restriction;
 - fallback resolver preservation;
+- safe default-context restore;
 - explicit selection precedence;
 - Branch Profile default projection;
+- POSNext and ERPNext POS switch blockers;
 - no broad `get_all`, `ignore_permissions`, manual commit or accounting-document mutation.
 
 ### Integration
@@ -106,8 +129,10 @@ Planned on this same PR after 2C:
 - switch then Stock Transfer resolves source/target defaults correctly;
 - invalid branch/company combination blocked;
 - unauthorized branch blocked;
-- clear context restores configured fallback;
-- multi-company user switches only to permitted company/branch combinations.
+- Branch Setup-unassigned branch blocked where Branch Users are configured;
+- clear context restores configured fallback only when switch-safe;
+- multi-company user switches only to permitted company/branch combinations;
+- active POSNext/ERPNext POS session allows same-context use but blocks cross-context switch.
 
 ### Manual browser QA
 
@@ -116,11 +141,12 @@ Planned on this same PR after 2C:
 - invalid dependent Branch clears on Company change;
 - switch refreshes guided-create defaults without reload surprises;
 - existing open document remains unchanged;
-- branch-specific POS Profile/stock locations are respected;
-- active POS cart/payment blocks branch switching;
+- branch-specific guided stock-location defaults are respected;
+- active POS session blocks cross-branch switching;
+- client guard behaves correctly once an owning POS integration provides browser-state evidence;
 - mobile/responsive picker behavior;
 - multi-app shell remains stable.
 
 ## Phase closure
 
-Phase 2 may continue implementation while predecessor browser QA is pending. It must remain a stacked Draft PR and must be reconciled against the promoted predecessor before Phase 2 manual QA/promotion if that predecessor moves.
+Phase 2 implementation may be automated/audited while predecessor browser QA is pending. It remains a stacked Draft PR. Before Phase 2 manual QA/promotion, reconcile against the promoted/moved predecessor if needed and require fresh exact-head automated validation.
