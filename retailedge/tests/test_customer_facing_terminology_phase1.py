@@ -19,6 +19,7 @@ BRANCH_USER_PATH = (
 SETTINGS_FORM_JS = ROOT / "retailedge" / "doctype" / "retailedge_settings" / "retailedge_settings.js"
 EDGESUITE_UI_PATH = ROOT / "edgesuite_ui.py"
 WORKSPACE_HOME_PATH = ROOT / "workspace_home.py"
+WORKSPACE_SYNC_PATH = ROOT / "workspace_sync.py"
 
 
 def _load(path: Path) -> dict:
@@ -113,6 +114,13 @@ def test_native_workspace_uses_same_customer_facing_contract():
 	assert 'WorkspaceHomeItem("Branch Setup", "DocType", "RetailEdge Branch Profile"' in source
 	assert 'WorkspaceHomeItem("RetailEdge Business Hub"' not in source
 	assert 'WorkspaceHomeItem("RetailEdge Settings", "DocType"' not in source
+
+
+def test_workspace_sync_cannot_reintroduce_old_business_hub_label():
+	source = WORKSPACE_SYNC_PATH.read_text(encoding="utf-8")
+	assert 'BUSINESS_HUB_PAGE = "retailedge-business-hub"' in source
+	assert 'BUSINESS_HUB_LABEL = "Business Hub"' in source
+	assert 'BUSINESS_HUB_LABEL = "RetailEdge Business Hub"' not in source
 
 
 def test_operational_copy_avoids_unnecessary_product_prefixes():
