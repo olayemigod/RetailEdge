@@ -148,9 +148,33 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 			"delete state.autoApplied[fieldname]",
 			"generation !== state.generation",
 			"state.pendingRefresh = true",
-			"async function handleCompanyChange(frm)",
+			"async function reResolveAfterContextChange(frm, fieldsToClear)",
 			"state.generation += 1",
 			"company(frm)",
+		):
+			self.assertIn(contract, source)
+
+	def test_branch_change_re_resolves_only_retailedge_owned_dependents(self):
+		source = self.read("public/js/new_document_operating_defaults.js")
+		for contract in (
+			"BRANCH_DEPENDENT_FIELDS",
+			'!["company", "branch", "retailedge_branch", "retailedge_branch_source"].includes(fieldname)',
+			"async function clearOwnedDefaults(frm, fieldnames)",
+			"frm.doc?.[fieldname] === priorDefault",
+			"branch(frm)",
+			"retailedge_branch(frm)",
+			"reResolveAfterContextChange(frm, BRANCH_DEPENDENT_FIELDS)",
+		):
+			self.assertIn(contract, source)
+		self.assertNotIn('await frm.set_value("company", "")', source)
+
+	def test_sales_invoice_pos_mode_toggle_re_resolves_pos_profile_only(self):
+		source = self.read("public/js/new_document_operating_defaults.js")
+		for contract in (
+			'const POS_MODE_DEPENDENT_FIELDS = ["pos_profile"]',
+			'frappe.ui.form.on("Sales Invoice", {',
+			"is_pos(frm)",
+			"reResolveAfterContextChange(frm, POS_MODE_DEPENDENT_FIELDS)",
 		):
 			self.assertIn(contract, source)
 
