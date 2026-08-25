@@ -10,24 +10,25 @@ class TestOperatingReportDefaultsPhase3(unittest.TestCase):
 	def read(self, relative: str) -> str:
 		return (APP_ROOT / relative).read_text(encoding="utf-8")
 
-	def test_only_report_context_endpoints_are_overridden(self):
+	def test_context_search_data_and_export_endpoints_are_scoped_through_wrapper(self):
 		hooks = self.read("hooks.py")
 		for contract in (
 			'"retailedge.sales_reporting.get_sales_reporting_context": "retailedge.operating_report_defaults.get_sales_reporting_context"',
+			'"retailedge.sales_reporting.search_sales_reporting_options": "retailedge.operating_report_defaults.search_sales_reporting_options"',
+			'"retailedge.sales_reporting.get_sales_by_item": "retailedge.operating_report_defaults.get_sales_by_item"',
+			'"retailedge.sales_reporting.get_sales_invoice_register_export": "retailedge.operating_report_defaults.get_sales_invoice_register_export"',
 			'"retailedge.purchase_reporting.get_purchase_reporting_context": "retailedge.operating_report_defaults.get_purchase_reporting_context"',
+			'"retailedge.purchase_reporting.search_purchase_reporting_options": "retailedge.operating_report_defaults.search_purchase_reporting_options"',
+			'"retailedge.purchase_reporting.get_supplier_payables": "retailedge.operating_report_defaults.get_supplier_payables"',
+			'"retailedge.purchase_reporting.get_purchase_register_export": "retailedge.operating_report_defaults.get_purchase_register_export"',
 			'"retailedge.stock_position.get_stock_position_context": "retailedge.operating_report_defaults.get_stock_position_context"',
+			'"retailedge.stock_position.search_stock_position_options": "retailedge.operating_report_defaults.search_stock_position_options"',
+			'"retailedge.stock_position.get_stock_position": "retailedge.operating_report_defaults.get_stock_position"',
+			'"retailedge.stock_position.get_stock_position_export": "retailedge.operating_report_defaults.get_stock_position_export"',
 		):
 			self.assertIn(contract, hooks)
-		for forbidden in (
-			'"retailedge.sales_reporting.get_sales_by_item":',
-			'"retailedge.sales_reporting.get_sales_invoice_register":',
-			'"retailedge.purchase_reporting.get_purchase_register":',
-			'"retailedge.purchase_reporting.get_supplier_payables":',
-			'"retailedge.stock_position.get_stock_position":',
-		):
-			self.assertNotIn(forbidden, hooks)
 
-	def test_operating_context_changes_default_filters_only(self):
+	def test_operating_context_sets_initial_defaults_without_persisting_user_defaults(self):
 		source = self.read("operating_report_defaults.py")
 		for contract in (
 			"get_operating_context",
@@ -44,11 +45,25 @@ class TestOperatingReportDefaultsPhase3(unittest.TestCase):
 			"frappe.db.set_value",
 			"frappe.db.commit",
 			"ignore_permissions",
-			"permission_query_conditions",
 		):
 			self.assertNotIn(forbidden, source)
 
-	def test_sales_purchase_and_stock_keep_clearable_branch_filters(self):
+	def test_branch_setup_membership_restricts_non_global_report_scope(self):
+		source = self.read("operating_report_defaults.py")
+		for contract in (
+			"user_has_global_branch_access",
+			"get_user_branch_profiles",
+			"def _assigned_profile_branches(company: str)",
+			'row.get("enabled")',
+			"def _constrain_report_filters(",
+			"Choose one of your assigned Branches",
+			"Cross-branch reporting is available only to authorized managers",
+			"You do not have reporting access to Branch {0}",
+			"def _filter_branch_options(",
+		):
+			self.assertIn(contract, source)
+
+	def test_sales_purchase_and_stock_keep_user_clearable_branch_controls(self):
 		for relative in (
 			"public/js/sales_reporting/SalesReportingReport.vue",
 			"public/js/purchase_reporting/PurchaseReportingReport.vue",
@@ -61,12 +76,15 @@ class TestOperatingReportDefaultsPhase3(unittest.TestCase):
 			self.assertIn('this.filters.branch = ""', source)
 			self.assertIn("context.default_filters || {}", source)
 
-	def test_wrapper_reuses_existing_report_contexts_and_preserves_stock_cost_visibility(self):
+	def test_wrapper_reuses_existing_report_engines_and_preserves_stock_cost_visibility(self):
 		source = self.read("operating_report_defaults.py")
 		for contract in (
 			"_base_sales_reporting_context",
 			"_base_purchase_reporting_context",
 			"_base_stock_position_context",
+			"_base_get_sales_by_item",
+			"_base_get_purchase_register",
+			"_base_get_stock_position",
 			"preserve_hidden_currency=True",
 			'context.get("show_costs", 1)',
 		):
