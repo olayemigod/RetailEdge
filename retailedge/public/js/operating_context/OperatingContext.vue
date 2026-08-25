@@ -1,11 +1,15 @@
 <template>
-	<EdgePageLayout class="retailedge-operating-context-page">
+	<div v-if="!edgeUIValid" class="p-6 text-center">
+		<strong>Operating Context could not start.</strong>
+		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+	</div>
+	<EdgePageLayout v-else class="retailedge-operating-context-page">
 		<EdgePageHeader
 			title="Operating Context"
 			description="Choose the Company and Branch that should guide new RetailEdge work. Existing documents keep their saved accounting, branch and stock values."
 		/>
 
-		<EdgeLoadingState v-if="loading && !loaded" message="Loading operating context…" />
+		<EdgeLoadingState v-if="loading && !loaded" />
 		<EdgeErrorState v-else-if="error" :message="error" @retry="loadContext()" />
 
 		<div v-else class="operating-context-layout">
@@ -39,7 +43,7 @@
 				<div v-if="switchBlockers.length" class="operating-context-blockers">
 					<div v-for="blocker in switchBlockers" :key="`${blocker.code}-${blocker.reference || ''}`" class="operating-context-warning">
 						<strong>Finish current POS work before switching</strong>
-						<span>{{ blocker.message || 'Active POS work may prevent switching Branch.' }}</span>
+						<span>{{ blocker.message || "Active POS work may prevent switching Branch." }}</span>
 					</div>
 				</div>
 
@@ -66,133 +70,144 @@
 	</EdgePageLayout>
 </template>
 
-<script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+<script>
+const REQUIRED_COMPONENTS = ["EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge"];
 
-const edgeUI = window.EdgeSuiteUI || window.EdgeUI;
-const EdgePageLayout = edgeUI?.getComponent?.("EdgePageLayout");
-const EdgePageHeader = edgeUI?.getComponent?.("EdgePageHeader");
-const EdgeLoadingState = edgeUI?.getComponent?.("EdgeLoadingState");
-const EdgeErrorState = edgeUI?.getComponent?.("EdgeErrorState");
-const EdgeStatusBadge = edgeUI?.getComponent?.("EdgeStatusBadge");
-
-const loading = ref(false);
-const loaded = ref(false);
-const busy = ref(false);
-const error = ref("");
-const companies = ref([]);
-const branches = ref([]);
-const current = ref({});
-const selectedCompany = ref("");
-const selectedBranch = ref("");
-const switchBlockers = ref([]);
-
-const currentLabel = computed(() => {
-	if (!current.value?.company) return "No operating context selected";
-	return `${current.value.company}${current.value.branch ? ` · ${current.value.branch}` : ""}`;
-});
-
-function clientSwitchBlocker() {
-	try {
-		const guard = window.retailedgeOperatingContextGuard;
-		if (guard && typeof guard.getBlocker === "function") return guard.getBlocker() || "";
-	} catch (e) {
-		return "The current transaction state could not be verified. Finish current work before switching Branch.";
-	}
-	return "";
+function runtimeComponents() {
+	return window.EdgeSuiteUI?.components || {};
 }
 
-function showClientBlocker() {
-	const message = clientSwitchBlocker();
-	if (!message) return false;
-	frappe.msgprint({ title: __("Finish current work before switching"), message, indicator: "orange" });
-	return true;
-}
-
-function invalidateContextCache() {
-	window.__retailedgeBusinessHubContextCache = null;
-	window.__retailedgeBusinessHubContextRequest = null;
-	window.retailedgeInstallProductMenu?.({ force: true });
-	document.dispatchEvent(new CustomEvent("retailedge-operating-context-changed"));
-}
-
-async function loadContext(company = "") {
-	if (loading.value) return;
-	loading.value = true;
-	error.value = "";
-	try {
-		const response = await frappe.call({
-			method: "retailedge.operating_context.get_allowed_operating_contexts",
-			args: { company: company || "" },
+function callMethod(method, args = {}, options = {}) {
+	return new Promise((resolve, reject) => {
+		frappe.call({
+			method,
+			args,
+			freeze: Boolean(options.freeze),
+			freeze_message: options.freezeMessage || undefined,
+			callback: (response) => resolve(response.message || {}),
+			error: (error) => reject(error),
 		});
-		const data = response?.message || {};
-		companies.value = Array.isArray(data.companies) ? data.companies : [];
-		branches.value = Array.isArray(data.branches) ? data.branches : [];
-		current.value = data.current || {};
-		switchBlockers.value = Array.isArray(data.switch_blockers) ? data.switch_blockers : [];
-		selectedCompany.value = company || data.current?.company || data.selected_company || "";
-		const currentBranch = data.current?.company === selectedCompany.value ? data.current?.branch || "" : "";
-		selectedBranch.value = branches.value.includes(currentBranch) ? currentBranch : "";
-		loaded.value = true;
-	} catch (e) {
-		error.value = e?.message || __("The permitted Company and Branch options could not be loaded.");
-	} finally {
-		loading.value = false;
-	}
+	});
 }
 
-async function onCompanyChange() {
-	selectedBranch.value = "";
-	await loadContext(selectedCompany.value);
-}
-
-async function switchContext() {
-	if (!selectedCompany.value || !selectedBranch.value || showClientBlocker()) return;
-	busy.value = true;
-	try {
-		await frappe.call({
-			method: "retailedge.operating_context.switch_operating_context",
-			args: { company: selectedCompany.value, branch: selectedBranch.value },
-			freeze: true,
-			freeze_message: __("Updating operating branch..."),
-		});
-		invalidateContextCache();
-		frappe.show_alert({ message: __("Operating branch updated."), indicator: "green" });
-		await loadContext();
-	} finally {
-		busy.value = false;
-	}
-}
-
-async function restoreDefault() {
-	if (showClientBlocker()) return;
-	busy.value = true;
-	try {
-		await frappe.call({
-			method: "retailedge.operating_context.clear_operating_context",
-			freeze: true,
-			freeze_message: __("Restoring default operating branch..."),
-		});
-		invalidateContextCache();
-		frappe.show_alert({ message: __("Default operating branch restored."), indicator: "green" });
-		await loadContext();
-	} finally {
-		busy.value = false;
-	}
-}
-
-function onPageShow() {
-	loadContext();
-}
-
-onMounted(() => {
-	window.addEventListener("retailedge-operating-context-page-show", onPageShow);
-	loadContext();
-});
-
-onBeforeUnmount(() => {
-	window.removeEventListener("retailedge-operating-context-page-show", onPageShow);
-});
+export default {
+	name: "RetailEdgeOperatingContext",
+	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	data() {
+		return {
+			edgeUIValid: true,
+			missingComponents: [],
+			loading: false,
+			loaded: false,
+			busy: false,
+			error: "",
+			companies: [],
+			branches: [],
+			current: {},
+			selectedCompany: "",
+			selectedBranch: "",
+			switchBlockers: [],
+		};
+	},
+	computed: {
+		currentLabel() {
+			if (!this.current?.company) return "No operating context selected";
+			return `${this.current.company}${this.current.branch ? ` · ${this.current.branch}` : ""}`;
+		},
+	},
+	created() {
+		const components = runtimeComponents();
+		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
+		this.edgeUIValid = this.missingComponents.length === 0;
+		this._onPageShow = () => this.loadContext();
+	},
+	mounted() {
+		window.addEventListener("retailedge-operating-context-page-show", this._onPageShow);
+		if (this.edgeUIValid) this.loadContext();
+	},
+	beforeUnmount() {
+		window.removeEventListener("retailedge-operating-context-page-show", this._onPageShow);
+	},
+	methods: {
+		clientSwitchBlocker() {
+			try {
+				const guard = window.retailedgeOperatingContextGuard;
+				if (guard && typeof guard.getBlocker === "function") return guard.getBlocker() || "";
+			} catch (error) {
+				return "The current transaction state could not be verified. Finish current work before switching Branch.";
+			}
+			return "";
+		},
+		showClientBlocker() {
+			const message = this.clientSwitchBlocker();
+			if (!message) return false;
+			frappe.msgprint({ title: __("Finish current work before switching"), message, indicator: "orange" });
+			return true;
+		},
+		invalidateContextCache() {
+			window.__retailedgeBusinessHubContextCache = null;
+			window.__retailedgeBusinessHubContextRequest = null;
+			window.retailedgeInstallProductMenu?.({ force: true });
+			document.dispatchEvent(new CustomEvent("retailedge-operating-context-changed"));
+		},
+		async loadContext(company = "") {
+			if (this.loading) return;
+			this.loading = true;
+			this.error = "";
+			try {
+				const data = await callMethod("retailedge.operating_context.get_allowed_operating_contexts", { company: company || "" });
+				this.companies = Array.isArray(data.companies) ? data.companies : [];
+				this.branches = Array.isArray(data.branches) ? data.branches : [];
+				this.current = data.current || {};
+				this.switchBlockers = Array.isArray(data.switch_blockers) ? data.switch_blockers : [];
+				this.selectedCompany = company || data.current?.company || data.selected_company || "";
+				const currentBranch = data.current?.company === this.selectedCompany ? data.current?.branch || "" : "";
+				this.selectedBranch = this.branches.includes(currentBranch) ? currentBranch : "";
+				this.loaded = true;
+			} catch (error) {
+				this.error = error?.message || error?.exc || __("The permitted Company and Branch options could not be loaded.");
+			} finally {
+				this.loading = false;
+			}
+		},
+		async onCompanyChange() {
+			this.selectedBranch = "";
+			await this.loadContext(this.selectedCompany);
+		},
+		async switchContext() {
+			if (!this.selectedCompany || !this.selectedBranch || this.showClientBlocker()) return;
+			this.busy = true;
+			try {
+				await callMethod(
+					"retailedge.operating_context.switch_operating_context",
+					{ company: this.selectedCompany, branch: this.selectedBranch },
+					{ freeze: true, freezeMessage: __("Updating operating branch...") },
+				);
+				this.invalidateContextCache();
+				frappe.show_alert({ message: __("Operating branch updated."), indicator: "green" });
+				await this.loadContext();
+			} finally {
+				this.busy = false;
+			}
+		},
+		async restoreDefault() {
+			if (this.showClientBlocker()) return;
+			this.busy = true;
+			try {
+				await callMethod(
+					"retailedge.operating_context.clear_operating_context",
+					{},
+					{ freeze: true, freezeMessage: __("Restoring default operating branch...") },
+				);
+				this.invalidateContextCache();
+				frappe.show_alert({ message: __("Default operating branch restored."), indicator: "green" });
+				await this.loadContext();
+			} finally {
+				this.busy = false;
+			}
+		},
+	},
+};
 </script>
 
 <style scoped>
