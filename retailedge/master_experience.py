@@ -73,8 +73,19 @@ def _promote_browser_approved_r4_pages(navigation_groups: list[dict[str, Any]]) 
 			item["target"] = target
 
 
+def _can_open_operating_context_page() -> bool:
+	target = OPERATING_CONTEXT_ITEM["target"]
+	try:
+		return bool(
+			frappe.db.exists("Page", target)
+			and frappe.has_permission("Page", "read", doc=target)
+		)
+	except Exception:
+		return False
+
+
 def _add_operating_context_navigation(navigation_groups: list[dict[str, Any]]) -> None:
-	if not frappe.db.exists("Page", OPERATING_CONTEXT_ITEM["target"]):
+	if not _can_open_operating_context_page():
 		return
 	for group in navigation_groups:
 		if group.get("key") != "home":
