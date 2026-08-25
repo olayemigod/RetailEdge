@@ -1,8 +1,8 @@
 <template>
 	<EdgeModal
 		:open="open"
-		:title="formContext.title || 'Simple Sales Invoice'"
-		:subtitle="formContext.subtitle || 'Create a standard ERPNext Sales Invoice draft.'"
+		:title="formContext.title || 'Sales Invoice'"
+		:subtitle="formContext.subtitle || 'Create a Sales Invoice draft using ERPNext pricing and accounting controls.'"
 		size="xl"
 		@close="requestClose"
 	>
@@ -64,7 +64,7 @@
 					:modelValue="values.branch"
 					label="Branch"
 					placeholder="Search branch"
-					description="Selecting a Branch loads its preferred assigned warehouse when available."
+					description="Selecting a Branch loads its preferred assigned stock location when available."
 					:searcher="searchBranch"
 					:context="searchContext"
 					@update:modelValue="setBranch"
@@ -72,9 +72,9 @@
 
 				<EdgeLinkField
 					:modelValue="values.warehouse"
-					label="Warehouse"
-					placeholder="Search warehouse"
-					description="Selecting an assigned Warehouse resolves its Branch automatically."
+					label="Stock Location"
+					placeholder="Search stock location"
+					description="Selecting an assigned stock location resolves its Branch automatically."
 					:required="Boolean(values.update_stock)"
 					:searcher="searchWarehouse"
 					:context="searchContext"
@@ -104,10 +104,8 @@
 			/>
 
 			<p class="guided-invoice-hint">
-				Rates are pulled on demand from the authenticated user's assigned Price List or POS Profile,
-				then ERPNext pricing rules. If no assigned Price List exists, RetailEdge falls back through
-				ERPNext's default selling list and finally the Item Standard Rate. The server resolves pricing
-				again when the draft is saved.
+				Rates use your assigned Price List or POS Profile where available, followed by ERPNext pricing
+				rules and selling defaults. The server validates pricing again when the draft is saved.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -285,7 +283,7 @@ export default {
 					);
 				}
 			} catch (error) {
-				this.loadError = errorMessage(error, "Unable to prepare Simple Sales Invoice.");
+				this.loadError = errorMessage(error, "Unable to prepare Sales Invoice.");
 			} finally {
 				this.loading = false;
 			}
@@ -365,7 +363,7 @@ export default {
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
-					this.saveError = errorMessage(error, "Unable to resolve the Branch warehouse.");
+					this.saveError = errorMessage(error, "Unable to resolve the Branch stock location.");
 				}
 			}
 		},
@@ -389,7 +387,7 @@ export default {
 			} catch (error) {
 				if (token === this.cascadeToken) {
 					this.values.warehouse = "";
-					this.saveError = errorMessage(error, "Unable to use the selected Warehouse.");
+					this.saveError = errorMessage(error, "Unable to use the selected Stock Location.");
 				}
 			}
 		},
