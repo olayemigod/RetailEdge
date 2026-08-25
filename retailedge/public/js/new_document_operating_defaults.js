@@ -29,6 +29,10 @@
 		"retailedge_branch_resolution_note",
 	];
 	const COMPANY_DEPENDENT_FIELDS = SAFE_SCALAR_FIELDS.filter((fieldname) => fieldname !== "company");
+	const BRANCH_DEPENDENT_FIELDS = SAFE_SCALAR_FIELDS.filter(
+		(fieldname) => !["company", "branch", "retailedge_branch", "retailedge_branch_source"].includes(fieldname)
+	);
+	const POS_MODE_DEPENDENT_FIELDS = ["pos_profile"];
 
 	function isEmpty(value) {
 		return value === undefined || value === null || value === "";
@@ -94,11 +98,11 @@
 		}
 	}
 
-	async function clearOwnedCompanyDependentDefaults(frm) {
+	async function clearOwnedDefaults(frm, fieldnames) {
 		const state = getRequestState(frm);
 		state.applying = true;
 		try {
-			for (const fieldname of COMPANY_DEPENDENT_FIELDS) {
+			for (const fieldname of fieldnames) {
 				if (!Object.prototype.hasOwnProperty.call(state.autoApplied, fieldname)) continue;
 				const priorDefault = state.autoApplied[fieldname];
 				if (frm.doc?.[fieldname] === priorDefault && frm.fields_dict?.[fieldname]) {
@@ -106,7 +110,6 @@
 				}
 				delete state.autoApplied[fieldname];
 			}
-			delete state.autoApplied.company;
 		} finally {
 			state.applying = false;
 		}
@@ -142,13 +145,13 @@
 		}
 	}
 
-	async function handleCompanyChange(frm) {
+	async function reResolveAfterContextChange(frm, fieldsToClear) {
 		if (!isEligibleNewForm(frm)) return;
 		const state = getRequestState(frm);
 		if (state.applying) return;
 		state.generation += 1;
 		state.loaded = false;
-		await clearOwnedCompanyDependentDefaults(frm);
+		await clearOwnedDefaults(frm, fieldsToClear);
 		if (state.loading) {
 			state.pendingRefresh = true;
 			return;
@@ -162,9 +165,21 @@
 				applyOperatingDefaults(frm);
 			},
 			company(frm) {
-				handleCompanyChange(frm);
+				reResolveAfterContextChange(frm, COMPANY_DEPENDENT_FIELDS);
+			},
+			branch(frm) {
+				reResolveAfterContextChange(frm, BRANCH_DEPENDENT_FIELDS);
+			},
+			retailedge_branch(frm) {
+				reResolveAfterContextChange(frm, BRANCH_DEPENDENT_FIELDS);
 			},
 		});
+	});
+
+	frappe.ui.form.on("Sales Invoice", {
+		is_pos(frm) {
+			reResolveAfterContextChange(frm, POS_MODE_DEPENDENT_FIELDS);
+		},
 	});
 
 	window.retailedge = window.retailedge || {};
