@@ -46,6 +46,24 @@ def _assert_mapped_sales_order_context(doc) -> tuple[str, str]:
 	return company, branch
 
 
+def _preserve_source_quotation_context(source, target) -> None:
+	"""Preserve explicit submitted Quotation Company/Branch truth on the mapped draft."""
+	source_company = str(source.get("company") or "").strip()
+	target_company = str(target.get("company") or "").strip()
+	if source_company and target_company != source_company:
+		frappe.throw(_("The mapped Sales Order Company does not match the submitted Quotation."))
+
+	source_branch = str(source.get("branch") or source.get("retailedge_branch") or "").strip()
+	if not source_branch:
+		return
+	validate_user_branch_access(source_branch, user=frappe.session.user, company=source_company or target_company, throw=True)
+	target_branch = str(target.get("branch") or target.get("retailedge_branch") or "").strip()
+	if target_branch and target_branch != source_branch:
+		frappe.throw(_("The mapped Sales Order Branch does not match the submitted Quotation Branch."))
+	if not target_branch:
+		_set_branch_if_supported(target, source_branch)
+
+
 def _apply_shipping_rule_to_draft(doc) -> None:
 	if doc.get("shipping_rule"):
 		doc.apply_shipping_rule()
@@ -155,6 +173,7 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 		frappe.throw(_("ERPNext could not prepare a Sales Order from this Quotation."))
 	if target.docstatus != 0:
 		frappe.throw(_("ERPNext returned a non-draft Sales Order mapping; creation was stopped."))
+	_preserve_source_quotation_context(source, target)
 	_company, branch = _assert_mapped_sales_order_context(target)
 
 	# The mapper may carry the source Shipping Rule. Validate it again before insert.
