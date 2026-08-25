@@ -96,7 +96,7 @@
   },
   {
    "default": "0",
-   "description": "Allow RetailEdge to control whether POS/Sales Invoice posting date behavior is extended.",
+   "description": "Controls whether POS and Sales Invoice posting-date behaviour can be extended.",
    "fieldname": "enable_posting_date_control",
    "fieldtype": "Check",
    "label": "Enable Posting Date Control"
@@ -104,14 +104,14 @@
   {
    "default": "0",
    "depends_on": "eval:doc.enable_posting_date_control",
-   "description": "Allows permitted users to set or preserve posting date on POS/Sales Invoice transactions when supported by ERPNext/POSNext.",
+   "description": "Allows permitted users to set or preserve posting dates on POS and Sales Invoice transactions where supported by ERPNext or POSNext.",
    "fieldname": "allow_pos_posting_date_override",
    "fieldtype": "Check",
    "label": "Allow POS Posting Date Override"
   },
   {
    "depends_on": "eval:doc.enable_posting_date_control && doc.allow_pos_posting_date_override",
-   "description": "Roles allowed to override posting date when RetailEdge posting date control is enabled.",
+   "description": "Roles allowed to override posting dates when posting-date control is enabled.",
    "fieldname": "posting_date_allowed_roles",
    "fieldtype": "Table",
    "label": "Roles Allowed to Override Posting Date",
@@ -124,7 +124,7 @@
   },
   {
    "default": "0",
-   "description": "When enabled, selected roles will be restricted from seeing cost price, valuation, incoming rate, purchase rate, stock value, gross profit, and other cost-related values controlled by RetailEdge.",
+   "description": "When enabled, selected roles are restricted from seeing cost price, valuation, incoming rate, purchase rate, stock value, gross profit, and other protected cost values.",
    "fieldname": "hide_cost_price_for_selected_roles",
    "fieldtype": "Check",
    "label": "Hide Cost Price for Selected Roles"
@@ -139,11 +139,11 @@
   {
    "fieldname": "audit_foundation_section",
    "fieldtype": "Section Break",
-   "label": "Audit Foundation"
+   "label": "Audit Controls"
   },
   {
    "default": "0",
-   "description": "Enables RetailEdge audit intelligence for Sales Invoices and payments. V0.1A only creates the setting; audit functionality will be added in later phases.",
+   "description": "Enables sales and payment audit controls for supported transactions.",
    "fieldname": "enable_sales_payment_audit",
    "fieldtype": "Check",
    "label": "Enable Sales & Payment Audit"
@@ -160,7 +160,7 @@
   },
   {
    "default": "0",
-   "description": "Enables RetailEdge cashier expense capture and review workflow.",
+   "description": "Enables cashier expense capture and review workflow.",
    "fieldname": "enable_cashier_expense_workflow",
    "fieldtype": "Check",
    "label": "Enable Cashier Expense Workflow"
@@ -168,7 +168,7 @@
   {
    "default": "0",
    "depends_on": "eval:doc.enable_cashier_expense_workflow",
-   "description": "Require receipt/evidence attachment before a cashier expense can be submitted.",
+   "description": "Require a receipt or supporting evidence before a cashier expense can be submitted.",
    "fieldname": "require_cashier_expense_attachment",
    "fieldtype": "Check",
    "label": "Require Attachment for Cashier Expense"
@@ -176,7 +176,7 @@
   {
    "default": "0",
    "depends_on": "eval:doc.enable_cashier_expense_workflow",
-   "description": "Reserved for a later phase. Keep disabled by default. Current cashier expense phases only provide posting readiness and preview; they do not create Journal Entries or Payment Entries.",
+   "description": "Controls accounting posting for cashier expenses. Keep disabled unless the configured posting workflow is in use.",
    "fieldname": "enable_cashier_expense_accounting_posting",
    "fieldtype": "Check",
    "label": "Enable Accounting Posting for Cashier Expenses"
@@ -184,7 +184,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.enable_cashier_expense_workflow",
-   "description": "Allows non-cancelled cashier expenses to be considered by RetailEdge variance reporting, even before ledger posting is implemented.",
+   "description": "Allows eligible non-cancelled cashier expenses to be considered in variance reporting.",
    "fieldname": "include_cashier_expenses_in_variance_report",
    "fieldtype": "Check",
    "label": "Include Cashier Expenses in Variance Report"
@@ -192,7 +192,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.enable_cashier_expense_workflow",
-   "description": "When enabled, cashiers must have an open POS Opening Shift before recording expenses.",
+   "description": "When enabled, cashiers must have an open POS shift before recording expenses.",
    "fieldname": "require_open_shift_for_cashier_expense",
    "fieldtype": "Check",
    "label": "Require Open POS Shift for Cashier Expense"
@@ -216,7 +216,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.enable_cashier_expense_workflow",
-   "description": "When enabled, rejected expenses still reduce shift cash because they may represent actual cash spent but rejected for review/accounting reasons.",
+   "description": "When enabled, rejected expenses still reduce shift cash because they may represent actual cash spent but rejected for review or accounting reasons.",
    "fieldname": "include_rejected_cashier_expenses_in_cash_check",
    "fieldtype": "Check",
    "label": "Include Rejected Cashier Expenses in Cash Check"
@@ -242,7 +242,7 @@
   {
    "default": "Journal Entry",
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
-   "description": "Preferred accounting document type for a future cashier expense posting phase. Current behavior remains preview and readiness only.",
+   "description": "Accounting document type used by the configured cashier expense posting workflow.",
    "fieldname": "cashier_expense_posting_document_type",
    "fieldtype": "Select",
    "label": "Cashier Expense Posting Document Type",
@@ -250,7 +250,7 @@
   },
   {
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
-   "description": "Reserved for a future posting mode if payable clearing is required. No accounting document is created in the current phase.",
+   "description": "Default payable account used when the configured posting mode requires payable clearing.",
    "fieldname": "default_cashier_expense_payable_account",
    "fieldtype": "Link",
    "label": "Default Cashier Expense Payable Account",
@@ -271,9 +271,9 @@
    "label": "Allow Rejected Cashier Expense Posting"
   },
   {
-   "default": "RetailEdge Cashier Expense {expense_name} - {expense_category}",
+   "default": "Cashier Expense {expense_name} - {expense_category}",
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
-   "description": "Template used by posting readiness preview to show how a future accounting remark may look. No Journal Entry or Payment Entry is created in the current phase.",
+   "description": "Template used for the accounting posting remark.",
    "fieldname": "cashier_expense_posting_remark_template",
    "fieldtype": "Small Text",
    "label": "Posting Remark Template"
@@ -331,7 +331,7 @@
   },
   {
    "default": "0",
-   "description": "Enables the Daily Sales Audit foundation. This phase remains read-only and does not mutate invoices, payments, POS shifts, or accounting records.",
+   "description": "Enables Daily Sales Audit controls without changing submitted invoices, payments, POS shifts, or accounting records.",
    "fieldname": "enable_daily_sales_audit",
    "fieldtype": "Check",
    "label": "Enable Daily Sales Audit"
@@ -382,20 +382,20 @@
   {
    "fieldname": "branch_default_application_section",
    "fieldtype": "Section Break",
-   "label": "Branch Default Application Controls"
+   "label": "Branch Defaults"
   },
   {
    "default": "1",
-   "description": "Allows RetailEdge to apply branch profile defaults to empty fields on draft documents.",
+   "description": "Applies configured branch defaults only to empty fields on supported draft documents.",
    "fieldname": "enable_branch_default_application",
    "fieldtype": "Check",
-   "label": "Enable Branch Default Application"
+   "label": "Enable Branch Defaults"
   },
   {
    "default": "1",
    "fieldname": "apply_branch_default_warehouse",
    "fieldtype": "Check",
-   "label": "Apply Default Warehouse"
+   "label": "Apply Default Stock Location"
   },
   {
    "default": "1",
@@ -428,28 +428,28 @@
   },
   {
    "default": "0",
-   "description": "When enabled, RetailEdge will attempt to consume CoreEdge shared services where available.",
+   "description": "Use available CoreEdge shared services where configured.",
    "fieldname": "enable_coreedge_integration",
    "fieldtype": "Check",
    "label": "Enable CoreEdge Integration"
   },
   {
    "default": "0",
-   "description": "If enabled, RetailEdge customer portal features should require CoreEdge entitlement/access checks.",
+   "description": "Require CoreEdge entitlement and access checks for customer portal features.",
    "fieldname": "coreedge_required_for_portal",
    "fieldtype": "Check",
    "label": "Require CoreEdge for Portal Access"
   },
   {
    "default": "0",
-   "description": "Use CoreEdge payment/payment gateway services for invoice payment requests when CoreEdge is installed and available.",
+   "description": "Use CoreEdge payment services for invoice payment requests when available.",
    "fieldname": "enable_coreedge_payment_requests",
    "fieldtype": "Check",
    "label": "Use CoreEdge Payment Requests"
   },
   {
    "default": "0",
-   "description": "Use CoreEdge notification services for RetailEdge alerts when available.",
+   "description": "Use CoreEdge notification services for alerts when available.",
    "fieldname": "enable_coreedge_notifications",
    "fieldtype": "Check",
    "label": "Use CoreEdge Notifications"
@@ -469,7 +469,7 @@
   {
    "fieldname": "bank_transaction_matching_section",
    "fieldtype": "Section Break",
-   "label": "RetailEdge Auto-Match Controls"
+   "label": "Bank Auto-Match Controls"
   },
   {
    "fieldname": "bank_auto_match_mode",
@@ -485,7 +485,7 @@
   },
   {
    "default": "0",
-   "description": "Master switch for RetailEdge bank auto-match at the review layer only. It does not reconcile Bank Transactions, change Bank Transaction status, or create accounting entries.",
+   "description": "Master switch for bank auto-match at the review layer only. It does not reconcile Bank Transactions, change Bank Transaction status, or create accounting entries.",
    "fieldname": "enable_bank_auto_match",
    "fieldtype": "Check",
    "label": "Enable Bank Auto-Match"
@@ -493,7 +493,7 @@
   {
    "default": "0",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Creates RetailEdge Bank Transaction Match review records for strict exact matches only. It does not confirm them unless auto-confirm is separately enabled, and it does not reconcile Bank Transactions.",
+   "description": "Creates Bank Match Review records for strict exact matches only. It does not confirm them unless auto-confirm is separately enabled, and it does not reconcile Bank Transactions.",
    "fieldname": "auto_prepare_exact_bank_matches",
    "fieldtype": "Check",
    "label": "Auto-Prepare Exact Bank Matches"
@@ -501,7 +501,7 @@
   {
    "default": "0",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Confirms only strict exact RetailEdge review-layer matches. Keep disabled by default. It does not perform ERPNext bank reconciliation and does not create Payment Entries, Journal Entries, or GL Entries.",
+   "description": "Confirms only strict exact review-layer matches. Keep disabled by default. It does not perform ERPNext bank reconciliation and does not create Payment Entries, Journal Entries, or GL Entries.",
    "fieldname": "auto_confirm_exact_bank_matches",
    "fieldtype": "Check",
    "label": "Auto-Confirm Exact Bank Matches"
@@ -509,7 +509,7 @@
   {
    "default": "95",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Minimum score required before RetailEdge can consider a suggestion for auto-match. Lower scores remain manual review.",
+   "description": "Minimum score required before a suggestion can be considered for auto-match. Lower scores remain manual review.",
    "fieldname": "minimum_auto_match_score",
    "fieldtype": "Int",
    "label": "Minimum Auto-Match Score"
@@ -517,7 +517,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Requires strong or exact reference evidence before RetailEdge can auto-match a suggestion.",
+   "description": "Requires strong or exact reference evidence before a suggestion can be auto-matched.",
    "fieldname": "require_exact_reference_for_auto_match",
    "fieldtype": "Check",
    "label": "Require Exact Reference for Auto-Match"
@@ -533,7 +533,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Blocks auto-match when branch context does not align, where RetailEdge branch is available.",
+   "description": "Blocks auto-match when the operating branch context does not align.",
    "fieldname": "require_same_branch_for_auto_match",
    "fieldtype": "Check",
    "label": "Require Same Branch for Auto-Match"
@@ -541,7 +541,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Allows strict exact submitted Payment Entry matches under all other RetailEdge safety gates. It does not reconcile the Bank Transaction.",
+   "description": "Allows strict exact submitted Payment Entry matches when all other safety gates pass. It does not reconcile the Bank Transaction.",
    "fieldname": "allow_auto_match_payment_entry",
    "fieldtype": "Check",
    "label": "Allow Auto-Match for Payment Entry"
@@ -549,7 +549,7 @@
   {
    "default": "0",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Conservative option. Sales Invoice auto-match confirms RetailEdge review only. It does not mark the invoice paid and does not create a Payment Entry.",
+   "description": "Conservative option. Sales Invoice auto-match confirms the review only. It does not mark the invoice paid and does not create a Payment Entry.",
    "fieldname": "allow_auto_match_sales_invoice",
    "fieldtype": "Check",
    "label": "Allow Auto-Match for Sales Invoice"
@@ -557,7 +557,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Blocks auto-match when duplicate candidate risk exists in the current RetailEdge view or queue.",
+   "description": "Blocks auto-match when duplicate candidate risk exists in the current review queue.",
    "fieldname": "require_no_duplicate_candidate_for_auto_match",
    "fieldtype": "Check",
    "label": "Require No Duplicate Candidate for Auto-Match"
@@ -565,7 +565,7 @@
   {
    "default": "1",
    "depends_on": "eval:doc.enable_bank_auto_match",
-   "description": "Blocks auto-match when an active RetailEdge Bank Match Review record already exists for the same suggestion.",
+   "description": "Blocks auto-match when an active Bank Match Review already exists for the same suggestion.",
    "fieldname": "require_no_active_review_for_auto_match",
    "fieldtype": "Check",
    "label": "Require No Active Review for Auto-Match"
@@ -577,21 +577,21 @@
   },
   {
    "default": "0",
-   "description": "Master gate for future live bank reconciliation execution. Keep disabled unless a controlled execution phase explicitly enables it. R5.8 only evaluates the gate and never executes reconciliation.",
+   "description": "Master gate for controlled live bank reconciliation execution. Keep disabled unless a controlled execution phase explicitly enables it.",
    "fieldname": "enable_bank_reconciliation_execution",
    "fieldtype": "Check",
    "label": "Enable Bank Reconciliation Execution"
   },
   {
    "default": "1",
-   "description": "Requires the execution gate to run the current dry-run readiness evaluator and block anything that is not Ready.",
+   "description": "Requires the execution gate to run the dry-run readiness evaluator and block anything that is not Ready.",
    "fieldname": "require_reconciliation_dry_run_before_execution",
    "fieldtype": "Check",
    "label": "Require Dry Run Before Reconciliation Execution"
   },
   {
    "default": "Ready",
-   "description": "Minimum readiness status required before a future execution phase can proceed. R5.8 supports Ready only.",
+   "description": "Minimum readiness status required before reconciliation execution can proceed.",
    "fieldname": "minimum_reconciliation_readiness_status",
    "fieldtype": "Select",
    "label": "Minimum Reconciliation Readiness Status",
@@ -599,14 +599,14 @@
   },
   {
    "default": "System Manager\nAccounts Manager\nRetailEdge Manager\nRetailEdgeManager",
-   "description": "Roles allowed to pass the future reconciliation execution gate. This does not grant live execution in R5.8.",
+   "description": "Roles allowed to pass the reconciliation execution gate. This does not by itself grant permission to reconcile transactions.",
    "fieldname": "allowed_reconciliation_execution_roles",
    "fieldtype": "Small Text",
    "label": "Allowed Reconciliation Execution Roles"
   },
   {
    "default": "1",
-   "description": "Future gate flag for requiring second approval before live reconciliation execution. R5.8 records the requirement only; it does not implement an approval workflow.",
+   "description": "Require second approval before live reconciliation execution when the execution workflow supports it.",
    "fieldname": "require_second_approval_for_reconciliation_execution",
    "fieldtype": "Check",
    "label": "Require Second Approval for Reconciliation Execution"

@@ -1,8 +1,8 @@
 <template>
 	<EdgeModal
 		:open="open"
-		:title="formContext.title || 'Simple Payment'"
-		:subtitle="formContext.subtitle || 'Create a standard ERPNext Payment Entry draft.'"
+		:title="formContext.title || 'Payment'"
+		:subtitle="formContext.subtitle || 'Create a Payment Entry draft using ERPNext payment and allocation controls.'"
 		size="xl"
 		@close="requestClose"
 	>
@@ -319,7 +319,7 @@ export default {
 					})),
 				};
 			} catch (error) {
-				this.loadError = errorMessage(error, "Unable to prepare Simple Payment.");
+				this.loadError = errorMessage(error, "Unable to prepare Payment Entry.");
 			} finally {
 				this.loading = false;
 			}

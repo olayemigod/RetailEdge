@@ -46,7 +46,7 @@ HOME_SECTIONS: tuple[str, ...] = (
 )
 
 HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
-	WorkspaceHomeItem("RetailEdge Business Hub", "Page", "retailedge-business-hub", "Home", 10, "all", "RetailEdge Native", "Blue"),
+	WorkspaceHomeItem("Business Hub", "Page", "retailedge-business-hub", "Home", 10, "all", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem(START_POS_LABEL, "URL", POSNEXT_POS_URL, "Sell", 10, "cashier", "POS Runtime", "Green", POSNEXT_POS_URL),
 	WorkspaceHomeItem("POS Opening", "DocType", POSNEXT_OPENING_SHIFT, "Sell", 20, "cashier", "POS Runtime"),
 	WorkspaceHomeItem("POS Closing", "DocType", POSNEXT_CLOSING_SHIFT, "Sell", 30, "cashier", "POS Runtime"),
@@ -57,7 +57,7 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Purchase Orders", "DocType", "Purchase Order", "Buy", 20, "purchasing", "ERPNext Link"),
 	WorkspaceHomeItem("Purchase Receipts", "DocType", "Purchase Receipt", "Buy", 30, "purchasing", "ERPNext Link"),
 	WorkspaceHomeItem("Products", "DocType", "Item", "Stock", 10, "stock", "ERPNext Link"),
-	WorkspaceHomeItem("Warehouses", "DocType", "Warehouse", "Stock", 20, "stock", "ERPNext Link"),
+	WorkspaceHomeItem("Stock Locations", "DocType", "Warehouse", "Stock", 20, "stock", "ERPNext Link"),
 	WorkspaceHomeItem("Stock Movement History", "Report", "RetailEdge Stock Movement History", "Stock", 30, "stock", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("Stock Balance", "Report", "Stock Balance", "Stock", 40, "stock", "ERPNext Link"),
 	WorkspaceHomeItem("Stock Transfers", "DocType", "Stock Entry", "Stock", 50, "stock", "ERPNext Link"),
@@ -89,8 +89,8 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Reconciliation Readiness", "Report", "RetailEdge Bank Match Reconciliation Readiness", "Review & Approvals", 90, "reviewer", "RetailEdge Overlay", "Blue"),
 	WorkspaceHomeItem("Reconciliation Handoff", "Report", "RetailEdge Reconciliation Handoff", "Review & Approvals", 100, "reviewer", "RetailEdge Overlay", "Blue"),
 	WorkspaceHomeItem("Daily Sales Audit Register", "Report", "RetailEdge Daily Sales Audit Register", "Review & Approvals", 110, "manager", "RetailEdge Native", "Blue"),
-	WorkspaceHomeItem("RetailEdge Settings", "DocType", "RetailEdge Settings", "Setup", 10, "admin", "RetailEdge Native"),
-	WorkspaceHomeItem("Branch Profiles", "DocType", "RetailEdge Branch Profile", "Setup", 20, "admin", "RetailEdge Native"),
+	WorkspaceHomeItem("Settings", "DocType", "RetailEdge Settings", "Setup", 10, "admin", "RetailEdge Native"),
+	WorkspaceHomeItem("Branch Setup", "DocType", "RetailEdge Branch Profile", "Setup", 20, "admin", "RetailEdge Native"),
 	WorkspaceHomeItem("Expense Categories", "DocType", "RetailEdge Expense Category", "Setup", 30, "admin", "RetailEdge Native"),
 	WorkspaceHomeItem("Bank Accounts", "DocType", "Bank Account", "Setup", 40, "admin", "ERPNext Link"),
 	WorkspaceHomeItem("Modes of Payment", "DocType", "Mode of Payment", "Setup", 50, "admin", "ERPNext Link"),

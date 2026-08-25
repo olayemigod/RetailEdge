@@ -1,4 +1,9 @@
 frappe.listview_settings["RetailEdge Payment Statement Import"] = {
+	onload(listview) {
+		if (listview.page && listview.page.set_title) {
+			listview.page.set_title(__("Bank Statement Imports"));
+		}
+	},
 	add_fields: [
 		"company",
 		"branch",

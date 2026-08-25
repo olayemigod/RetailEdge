@@ -37,9 +37,9 @@
 				/>
 				<EdgeLinkField
 					:modelValue="values.warehouse"
-					label="Warehouse"
-					placeholder="Search permitted warehouse"
-					description="Only warehouses valid for the selected company and branch are offered."
+					label="Stock Location"
+					placeholder="Search permitted stock location"
+					description="Only stock locations valid for the selected company and branch are offered."
 					:required="true"
 					:searcher="searchWarehouse"
 					:context="searchContext"
@@ -153,7 +153,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
-			} catch (error) { if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve the Branch warehouse."); }
+			} catch (error) { if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve the Branch stock location."); }
 		},
 		async setWarehouse(next) {
 			const warehouse = next || "";
@@ -166,13 +166,13 @@ export default {
 				this.values.branch = resolved.branch || this.values.branch;
 				this.values.warehouse = resolved.warehouse || warehouse;
 			} catch (error) {
-				if (token === this.cascadeToken) { this.values.warehouse = ""; this.saveError = errorMessage(error, "Unable to use the selected Warehouse."); }
+				if (token === this.cascadeToken) { this.values.warehouse = ""; this.saveError = errorMessage(error, "Unable to use the selected Stock Location."); }
 			}
 		},
 		updateItems(rows) { this.values.items = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : []; },
 		async saveDraft() {
 			if (this.saving || this.loading) return;
-			if (!this.values.company || !this.values.warehouse) { this.saveError = "Company and Warehouse are required."; return; }
+			if (!this.values.company || !this.values.warehouse) { this.saveError = "Company and Stock Location are required."; return; }
 			const rows = (this.values.items || []).filter((row) => row?.item_code);
 			if (!rows.length) { this.saveError = "Add at least one counted Item."; return; }
 			if (rows.some((row) => row.qty === "" || row.qty === null || row.qty === undefined || Number(row.qty) < 0)) {

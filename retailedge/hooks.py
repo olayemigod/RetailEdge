@@ -83,6 +83,12 @@ doctype_js = {
 	"Stock Reconciliation Item": "public/js/inventory_documents.js",
 	"Packed Item": "public/js/cost_visibility_child_table.js",
 	"Item Default": "public/js/inventory_documents.js",
+	"RetailEdge Cashier Expense": "public/js/customer_facing_labels.js",
+	"RetailEdge Expense Category": "public/js/customer_facing_labels.js",
+	"RetailEdge Daily Sales Audit": "public/js/customer_facing_labels.js",
+	"RetailEdge Payment Statement Import": "public/js/customer_facing_labels.js",
+	"RetailEdge Statement Mapping Template": "public/js/customer_facing_labels.js",
+	"RetailEdge Bank Transaction Match": "public/js/customer_facing_labels.js",
 }
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",

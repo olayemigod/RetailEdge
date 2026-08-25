@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		:title="formContext.title || 'Simple Stock Transfer'"
-		:subtitle="formContext.subtitle || 'Create a standard ERPNext Material Transfer draft.'"
+		:subtitle="formContext.subtitle || 'Create a stock transfer draft using ERPNext stock controls.'"
 		size="xl"
 		@close="requestClose"
 	>
@@ -45,7 +45,7 @@
 					:modelValue="values.source_branch"
 					label="Source Branch"
 					placeholder="Search source branch"
-					description="Loads the branch's assigned source warehouse when available."
+					description="Loads the branch's assigned source stock location when available."
 					:searcher="searchSourceBranch"
 					:context="searchContext"
 					@update:modelValue="setSourceBranch"
@@ -53,9 +53,9 @@
 
 				<EdgeLinkField
 					:modelValue="values.source_warehouse"
-					label="Source Warehouse"
-					placeholder="Search source warehouse"
-					description="Selecting an assigned Warehouse resolves its Branch automatically."
+					label="Source Stock Location"
+					placeholder="Search source stock location"
+					description="Selecting an assigned stock location resolves its Branch automatically."
 					:required="true"
 					:searcher="searchSourceWarehouse"
 					:context="searchContext"
@@ -65,9 +65,9 @@
 				<EdgeLinkField
 					v-if="branchEnabled"
 					:modelValue="values.target_branch"
-					label="Target Branch"
-					placeholder="Search target branch"
-					description="Loads the branch's assigned target warehouse when available."
+					label="Destination Branch"
+					placeholder="Search destination branch"
+					description="Loads the branch's assigned destination stock location when available."
 					:searcher="searchTargetBranch"
 					:context="searchContext"
 					@update:modelValue="setTargetBranch"
@@ -75,9 +75,9 @@
 
 				<EdgeLinkField
 					:modelValue="values.target_warehouse"
-					label="Target Warehouse"
-					placeholder="Search target warehouse"
-					description="Selecting an assigned Warehouse resolves its Branch automatically."
+					label="Destination Stock Location"
+					placeholder="Search destination stock location"
+					description="Selecting an assigned stock location resolves its Branch automatically."
 					:required="true"
 					:searcher="searchTargetWarehouse"
 					:context="searchContext"
@@ -86,7 +86,7 @@
 			</div>
 
 			<div v-if="sameWarehouse" class="guided-stock-warning" role="alert">
-				Source and Target Warehouse must be different.
+				Source and Destination Stock Location must be different.
 			</div>
 
 			<EdgeChildTable
@@ -255,7 +255,7 @@ export default {
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
 			} catch (error) {
-				this.loadError = errorMessage(error, "Unable to prepare Simple Stock Transfer.");
+				this.loadError = errorMessage(error, "Unable to prepare Stock Transfer.");
 			} finally {
 				this.loading = false;
 			}
@@ -320,7 +320,7 @@ export default {
 				if (this.sameWarehouse) this.values.target_warehouse = "";
 			} catch (error) {
 				if (token === this.sourceCascadeToken) {
-					this.saveError = errorMessage(error, "Unable to resolve the Source Branch warehouse.");
+					this.saveError = errorMessage(error, "Unable to resolve the Source Branch stock location.");
 				}
 			}
 		},
@@ -344,7 +344,7 @@ export default {
 						: "";
 			} catch (error) {
 				if (token === this.targetCascadeToken) {
-					this.saveError = errorMessage(error, "Unable to resolve the Target Branch warehouse.");
+					this.saveError = errorMessage(error, "Unable to resolve the Destination Branch stock location.");
 				}
 			}
 		},
@@ -367,7 +367,7 @@ export default {
 			} catch (error) {
 				if (token === this.sourceCascadeToken) {
 					this.values.source_warehouse = "";
-					this.saveError = errorMessage(error, "Unable to use the selected Source Warehouse.");
+					this.saveError = errorMessage(error, "Unable to use the selected Source Stock Location.");
 				}
 			}
 		},
@@ -377,7 +377,7 @@ export default {
 			if (!warehouse || !this.values.company) return;
 			if (warehouse === this.values.source_warehouse) {
 				this.values.target_warehouse = "";
-				this.saveError = "Source and Target Warehouse must be different.";
+				this.saveError = "Source and Destination Stock Location must be different.";
 				return;
 			}
 			const token = ++this.targetCascadeToken;
@@ -394,7 +394,7 @@ export default {
 			} catch (error) {
 				if (token === this.targetCascadeToken) {
 					this.values.target_warehouse = "";
-					this.saveError = errorMessage(error, "Unable to use the selected Target Warehouse.");
+					this.saveError = errorMessage(error, "Unable to use the selected Destination Stock Location.");
 				}
 			}
 		},

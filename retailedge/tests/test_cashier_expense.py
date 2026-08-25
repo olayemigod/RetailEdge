@@ -31,7 +31,7 @@ R2_FORBIDDEN_NATIVE_TARGETS = {
 }
 
 R2_REQUIRED_LINKS = {
-	"RetailEdge Business Hub": ("Page", "retailedge-business-hub"),
+	"Business Hub": ("Page", "retailedge-business-hub"),
 	"Sales Invoices": ("DocType", "Sales Invoice"),
 	"Payments": ("DocType", "Payment Entry"),
 	"Cashier Expenses": ("DocType", "RetailEdge Cashier Expense"),
@@ -42,10 +42,13 @@ R2_REQUIRED_LINKS = {
 	"Daily Sales Audit": ("DocType", "RetailEdge Daily Sales Audit"),
 	"Bank Matching": ("Report", "RetailEdge Bank Transaction Matching"),
 	"Stock Movement History": ("Report", "RetailEdge Stock Movement History"),
+	"Stock Locations": ("DocType", "Warehouse"),
+	"Settings": ("DocType", "RetailEdge Settings"),
+	"Branch Setup": ("DocType", "RetailEdge Branch Profile"),
 }
 
 R2_SHORTCUTS = [
-	"RetailEdge Business Hub",
+	"Business Hub",
 	"Start POS",
 	"Sales Invoices",
 	"Payments",
