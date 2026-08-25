@@ -49,7 +49,7 @@
 						<button v-if="pos?.opening_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.opening_doctype)">POS Opening</button>
 						<button v-if="pos?.closing_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.closing_doctype)">POS Closing</button>
 					</div>
-					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. RetailEdge provides the operating shell and safe context handoff; POSNext-specific runtime overrides remain in the ProcessEdge POSNext extension.</p>
+					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. RetailEdge provides the operating entry point and context visibility; POSNext-specific runtime overrides remain in the ProcessEdge POSNext extension.</p>
 				</section>
 
 				<EdgeEmptyState
@@ -165,7 +165,7 @@ export default {
 		},
 		posDescription() {
 			return this.pos?.provider === "posnext"
-				? "Use the installed POSNext provider with RetailEdge operating Company, Branch and POS Profile context."
+				? "Use the installed POSNext provider from the current RetailEdge operating context."
 				: "POSNext is not available, so RetailEdge falls back to ERPNext's native Point of Sale where installed.";
 		},
 		canStartPos() {
