@@ -163,6 +163,7 @@ jobs:
           grep -Eq 'cash_shift_verification\.bundle' sites/assets/assets.json
           grep -Eq 'daily_sales_audit\.bundle' sites/assets/assets.json
           grep -Eq 'transaction_workspace\.bundle' sites/assets/assets.json
+          grep -Eq 'professional_selling\.bundle' sites/assets/assets.json
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
           grep -Eq 'createPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
           grep -Eq 'createBoundedPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
