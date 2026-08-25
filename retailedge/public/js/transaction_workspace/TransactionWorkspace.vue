@@ -50,7 +50,7 @@
 						<button v-if="pos?.opening_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.opening_doctype)">POS Opening</button>
 						<button v-if="pos?.closing_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.closing_doctype)">POS Closing</button>
 					</div>
-					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. RetailEdge provides the operating entry point and context visibility; POSNext-specific runtime overrides remain in the ProcessEdge POSNext extension.</p>
+					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. When online, RetailEdge validates the current operating context before launch. If the device is offline, RetailEdge does not make its preflight a hard dependency; POSNext keeps control of its own offline runtime and sync behaviour.</p>
 				</section>
 
 				<EdgeEmptyState
@@ -239,22 +239,32 @@ export default {
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
+		launchPosTarget(launch) {
+			if (launch?.start_link_type === "Page" && launch.start_target) {
+				frappe.set_route(launch.start_target);
+				return true;
+			}
+			if (launch?.start_url) {
+				window.location.assign(launch.start_url);
+				return true;
+			}
+			return false;
+		},
 		async startPos() {
 			if (this.posStarting) return;
 			this.posStarting = true;
 			this.posLaunchError = "";
 			try {
+				if (this.pos?.provider === "posnext" && typeof navigator !== "undefined" && navigator.onLine === false) {
+					if (!this.launchPosTarget(this.pos)) throw new Error("No cached POSNext launch target is available.");
+					return;
+				}
 				const launch = await callMethod(POS_LAUNCH_METHOD);
-				if (launch.start_link_type === "Page" && launch.start_target) {
-					frappe.set_route(launch.start_target);
-					return;
-				}
-				if (launch.start_url) {
-					window.location.assign(launch.start_url);
-					return;
-				}
-				throw new Error("No POS launch target is available.");
+				if (!this.launchPosTarget(launch)) throw new Error("No POS launch target is available.");
 			} catch (error) {
+				if (this.pos?.provider === "posnext" && typeof navigator !== "undefined" && navigator.onLine === false && this.launchPosTarget(this.pos)) {
+					return;
+				}
 				this.posLaunchError = errorMessage(error, "POS could not be started from the current Operating Context.");
 			} finally {
 				this.posStarting = false;
