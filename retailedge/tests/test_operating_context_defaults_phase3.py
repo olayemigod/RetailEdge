@@ -57,6 +57,31 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 		self.assertIn("current not in (None, \"\") and not overwrite", source)
 		self.assertIn('getattr(doc, "branch", None) or getattr(doc, "retailedge_branch", None)', source)
 
+	def test_preview_api_requires_create_permission_and_never_saves(self):
+		source = self.read("new_document_defaults.py")
+		for contract in (
+			"@frappe.whitelist()",
+			"def get_new_document_operating_defaults(",
+			'frappe.has_permission(doctype, "create")',
+			'payload.pop("name", None)',
+			'payload["docstatus"] = 0',
+			"_seed_new_doc_from_operating_context(doc)",
+			"apply_branch_profile_defaults_to_doc(doc, overwrite=False)",
+			'"changes": changes',
+			'"has_changes": bool(changes)',
+		):
+			self.assertIn(contract, source)
+		for forbidden in (
+			"frappe.db.set_value",
+			"frappe.db.commit",
+			"ignore_permissions",
+			".save(",
+			".insert(",
+			".submit(",
+			".cancel(",
+		):
+			self.assertNotIn(forbidden, source)
+
 	def test_no_accounting_or_stock_posting_side_effects_added(self):
 		source = self.read("branch_defaults_application.py")
 		for forbidden in (
