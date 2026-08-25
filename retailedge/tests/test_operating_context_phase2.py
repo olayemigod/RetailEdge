@@ -14,7 +14,7 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		source = self.read("operating_context.py")
 		for contract in (
 			"OPERATING_CONTEXT_TTL_SECONDS",
-			"frappe.session.sid",
+			'getattr(frappe.session, "sid"',
 			"frappe.cache.get_value",
 			"frappe.cache.set_value",
 			"frappe.cache.delete_value",
@@ -42,6 +42,12 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_context_preview_does_not_clear_valid_session_context(self):
+		source = self.read("operating_context.py")
+		self.assertIn("Previewing Branch", source)
+		self.assertIn("current = get_operating_context()", source)
+		self.assertIn('"selected_company": selected_company', source)
+
 	def test_context_guides_new_work_but_explicit_selection_wins(self):
 		source = self.read("operating_context.py")
 		self.assertIn("Explicit arguments win", source)
@@ -62,12 +68,24 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_open_pos_shift_blocks_cross_branch_context_switch(self):
+		source = self.read("operating_context.py")
+		for contract in (
+			"find_open_pos_opening_shift",
+			"resolve_branch_from_opening_shift",
+			'"code": "open_pos_shift"',
+			"_assert_switch_safe",
+			"Close the active POS shift before switching",
+		):
+			self.assertIn(contract, source)
+
 	def test_guided_entry_uses_operating_context_only_when_selection_is_missing(self):
 		source = self.read("guided_entry_context.py")
 		self.assertIn("get_effective_operating_context", source)
 		self.assertIn("if not company or (not branch and not warehouse):", source)
 		self.assertIn("if not branch and not warehouse:", source)
-		self.assertIn("Warehouse is authoritative", source)
+		self.assertIn("explicitly selected Stock Location remains authoritative", source)
+		self.assertIn("used_operating_context", source)
 		self.assertIn('"source": "warehouse"', source)
 		self.assertNotIn("frappe.get_all(", source)
 
@@ -77,6 +95,40 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		self.assertIn("Stock Location {0} does not belong to Company {1}", source)
 		self.assertIn('"Warehouse"', source)
 		self.assertIn('frappe.db.get_value("Warehouse"', source)
+
+	def test_shell_context_uses_operating_company_branch_and_exposes_switcher(self):
+		source = self.read("master_experience.py")
+		for contract in (
+			"get_operating_context",
+			'"label": "Operating Context"',
+			'"target": "operating-context"',
+			'"company": operating.get("company")',
+			'"branch": operating.get("branch")',
+			'feature_flags["operating_branch_context"] = "phase2_active"',
+		):
+			self.assertIn(contract, source)
+
+	def test_operating_context_page_cascades_company_branch_and_invalidates_shell_cache(self):
+		source = self.read("retailedge/page/operating_context/operating_context.js")
+		for contract in (
+			"get_allowed_operating_contexts",
+			"switch_operating_context",
+			"clear_operating_context",
+			"Operating Company",
+			"Operating Branch",
+			"preserveCompanySelection",
+			"getClientSwitchBlocker",
+			"retailedgeOperatingContextGuard",
+			"__retailedgeBusinessHubContextCache = null",
+			"retailedge-operating-context-changed",
+		):
+			self.assertIn(contract, source)
+
+	def test_page_fixture_is_customer_facing_and_keeps_internal_route_stable(self):
+		source = self.read("retailedge/page/operating_context/operating_context.json")
+		self.assertIn('"name": "operating-context"', source)
+		self.assertIn('"page_name": "operating-context"', source)
+		self.assertIn('"title": "Operating Context"', source)
 
 
 if __name__ == "__main__":
