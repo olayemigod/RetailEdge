@@ -78,6 +78,26 @@ class TestOperatingReportDefaultsPhase3(unittest.TestCase):
 			self.assertIn('this.filters.branch = ""', source)
 			self.assertIn("context.default_filters || {}", source)
 
+	def test_governed_export_and_print_dataset_dispatch_uses_constrained_wrappers(self):
+		source = self.read("reporting_actions.py")
+		for contract in (
+			"from retailedge.operating_report_defaults import get_sales_by_item_export",
+			"from retailedge.operating_report_defaults import get_sales_invoice_register_export",
+			"from retailedge.operating_report_defaults import get_purchase_register_export",
+			"from retailedge.operating_report_defaults import get_supplier_payables_export",
+			"from retailedge.operating_report_defaults import get_stock_position_export",
+		):
+			self.assertIn(contract, source)
+		for forbidden in (
+			"from retailedge.sales_reporting import get_sales_by_item_export",
+			"from retailedge.sales_reporting import get_sales_invoice_register_export",
+			"from retailedge.purchase_reporting import get_purchase_register_export",
+			"from retailedge.stock_position import get_stock_position_export",
+		):
+			self.assertNotIn(forbidden, source)
+		self.assertIn("handler = _export_handler(report_key)", source)
+		self.assertIn("return handler(filters=resolved_filters)", source)
+
 	def test_wrapper_reuses_existing_report_engines_and_preserves_stock_cost_visibility(self):
 		source = self.read("operating_report_defaults.py")
 		for contract in (
