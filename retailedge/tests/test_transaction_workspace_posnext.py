@@ -52,6 +52,21 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 		self.assertNotIn("posting_date", component)
 		self.assertNotIn("<iframe", component.lower())
 
+	def test_workspace_reuses_existing_guided_transaction_components(self):
+		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
+		for contract in (
+			'../retailedge_business_hub/SimpleSalesInvoiceDialog.vue',
+			'../retailedge_business_hub/SimplePurchaseInvoiceDialog.vue',
+			'../retailedge_business_hub/SimpleStockTransferDialog.vue',
+			"SimpleSalesInvoiceDialog",
+			"SimplePurchaseInvoiceDialog",
+			"SimpleStockTransferDialog",
+			"runTransactionAction(action)",
+			'GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry"])',
+		):
+			self.assertIn(contract, component)
+		self.assertNotIn("SimpleSalesInvoiceDialog.vue\";\nimport SimpleSalesInvoiceDialog", component)
+
 	def test_native_transaction_fallbacks_remain_authoritative(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
 		self.assertIn("createDoctype(action.doctype)", component)
