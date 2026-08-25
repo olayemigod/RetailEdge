@@ -64,7 +64,7 @@
 								<span v-if="document.source_warehouse_field">Stock Location</span>
 							</div>
 							<div class="selling-actions">
-								<button v-if="document.can_create" type="button" class="edge-button edge-button--primary" @click="createNative(document)">Create {{ document.label }}</button>
+								<button v-if="document.can_create" type="button" class="edge-button edge-button--primary" @click="startCreate(document)">{{ createLabel(document) }}</button>
 								<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="openNative(document)">View Records</button>
 								<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="loadRecent(document)">Recent</button>
 							</div>
@@ -92,11 +92,21 @@
 					</div>
 				</section>
 			</div>
+
+			<ProfessionalQuotationDialog
+				:open="quotationOpen"
+				:context="sellingContext"
+				@close="quotationOpen = false"
+				@saved="handleQuotationSaved"
+				@open-native="openQuotationNative"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
+import ProfessionalQuotationDialog from "./ProfessionalQuotationDialog.vue";
+
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const RECENT_METHOD = "retailedge.professional_selling.get_recent_selling_documents";
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
@@ -122,7 +132,10 @@ function errorMessage(error, fallback) {
 
 export default {
 	name: "RetailEdgeProfessionalSelling",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		ProfessionalQuotationDialog,
+	},
 	data() {
 		return {
 			edgeUIValid: true,
@@ -137,6 +150,8 @@ export default {
 			pricing: {},
 			shipping: {},
 			documents: [],
+			sellingContext: {},
+			quotationOpen: false,
 			recentDocument: null,
 			recentRows: [],
 			recentLoading: false,
@@ -165,6 +180,7 @@ export default {
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [selling, navigation] = await Promise.all([callMethod(CONTEXT_METHOD), navigationPromise]);
+				this.sellingContext = selling || {};
 				this.tenantName = selling.operating?.company || navigation.context?.company || "";
 				this.branchName = selling.operating?.branch || navigation.context?.branch || "";
 				this.userName = navigation.context?.user_name || selling.user_name || "";
@@ -201,6 +217,16 @@ export default {
 				"delivery-note": "Fulfil stock from the approved order or create a permitted delivery using ERPNext stock truth and delivery charges.",
 			})[key] || "Continue the selling workflow.";
 		},
+		createLabel(document) {
+			return document?.key === "quotation" ? "Guided Quotation" : `Create ${document?.label || "Document"}`;
+		},
+		startCreate(document) {
+			if (document?.key === "quotation") {
+				this.quotationOpen = true;
+				return;
+			}
+			this.createNative(document);
+		},
 		createNative(document) {
 			window.open(`/app/${doctypeSlug(document.doctype)}/new`, "_blank", "noopener,noreferrer");
 		},
@@ -209,6 +235,15 @@ export default {
 		},
 		openRecord(document, name) {
 			window.open(`/app/${doctypeSlug(document.doctype)}/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer");
+		},
+		handleQuotationSaved(result) {
+			this.quotationOpen = false;
+			this.loadWorkspace();
+			if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer");
+		},
+		openQuotationNative() {
+			this.quotationOpen = false;
+			this.createNative({ doctype: "Quotation" });
 		},
 		async loadRecent(document) {
 			this.recentDocument = document;
