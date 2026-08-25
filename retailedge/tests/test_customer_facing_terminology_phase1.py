@@ -124,15 +124,17 @@ def test_settings_form_presents_customer_facing_title_without_renaming_doctype()
 	assert 'set_title(__("Settings"))' in source
 
 
-def test_scoped_customer_facing_form_titles_are_not_global_dom_hacks():
+def test_scoped_customer_facing_form_titles_are_deterministic_and_not_dom_hacks():
 	source = SCOPED_LABELS_JS.read_text(encoding="utf-8")
 	assert '"RetailEdge Cashier Expense": "Cashier Expense"' in source
 	assert '"RetailEdge Payment Statement Import": "Import Bank Statement"' in source
 	assert '"RetailEdge Bank Transaction Match": "Bank Match Review"' in source
 	assert '"RetailEdge Settings"' not in source
 	assert '"RetailEdge Branch Profile"' not in source
-	assert "window.cur_frm" in source
-	assert "Object.entries(TITLE_BY_DOCTYPE).forEach" not in source
+	assert "window.cur_frm" not in source
+	assert 'const registrationKey = "__retailedge_customer_facing_title_handlers_registered";' in source
+	assert "Object.entries(TITLE_BY_DOCTYPE).forEach" in source
+	assert "frappe.ui.form.on(doctype" in source
 	assert "querySelector" not in source
 
 
