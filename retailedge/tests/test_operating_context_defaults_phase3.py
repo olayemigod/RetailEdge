@@ -137,7 +137,7 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 		for contract in (
 			"resolve_branch_from_pos_profile",
 			"_is_pos_sales_document(doc)",
-			'doc.doctype, None) == "POS Invoice"',
+			'getattr(doc, "doctype", None) == "POS Invoice"',
 			'getattr(doc, "doctype", None) == "Sales Invoice" and getattr(doc, "is_pos", 0)',
 			"_get_valid_pos_profile_default",
 			'frappe.db.exists("POS Profile", pos_profile)',
