@@ -26,6 +26,14 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"mount": "mountRetailEdgeSetup",
 		"component_name": "RetailEdgeSetup.vue",
 	},
+	"transaction_workspace": {
+		"loader": APP_ROOT / "retailedge" / "page" / "transaction_workspace" / "transaction_workspace.js",
+		"bundle": APP_ROOT / "public" / "js" / "transaction_workspace.bundle.js",
+		"component": APP_ROOT / "public" / "js" / "transaction_workspace" / "TransactionWorkspace.vue",
+		"asset": "transaction_workspace.bundle.js",
+		"mount": "mountRetailEdgeTransactionWorkspace",
+		"component_name": "TransactionWorkspace.vue",
+	},
 }
 
 
@@ -70,6 +78,18 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 		self.assertNotIn("ignore_permissions", backend)
 		self.assertIn("frappe.get_list", backend)
 		self.assertNotIn("frappe.get_all", backend)
+
+	def test_transaction_workspace_keeps_provider_and_document_truth_server_authoritative(self):
+		component = EDGE_SUITE_REQUIRED_PAGES["transaction_workspace"]["component"].read_text(encoding="utf-8")
+		backend = (APP_ROOT / "retailedge" / "page" / "transaction_workspace" / "transaction_workspace.py").read_text(encoding="utf-8")
+		self.assertIn("get_transaction_workspace_context", component)
+		self.assertIn("get_pos_runtime_capabilities", backend)
+		self.assertIn("get_operating_context", backend)
+		self.assertIn("frappe.has_permission", backend)
+		self.assertNotIn("ignore_permissions", backend)
+		self.assertNotIn("frappe.db.commit", backend)
+		self.assertNotIn("frappe.client.save", component)
+		self.assertNotIn("<iframe", component.lower())
 
 
 if __name__ == "__main__":
