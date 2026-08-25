@@ -34,6 +34,14 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"mount": "mountRetailEdgeTransactionWorkspace",
 		"component_name": "TransactionWorkspace.vue",
 	},
+	"professional_selling": {
+		"loader": APP_ROOT / "retailedge" / "page" / "professional_selling" / "professional_selling.js",
+		"bundle": APP_ROOT / "public" / "js" / "professional_selling.bundle.js",
+		"component": APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSelling.vue",
+		"asset": "professional_selling.bundle.js",
+		"mount": "mountRetailEdgeProfessionalSelling",
+		"component_name": "ProfessionalSelling.vue",
+	},
 }
 
 
@@ -86,6 +94,18 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 		self.assertIn("get_pos_runtime_capabilities", backend)
 		self.assertIn("get_operating_context", backend)
 		self.assertIn("frappe.has_permission", backend)
+		self.assertNotIn("ignore_permissions", backend)
+		self.assertNotIn("frappe.db.commit", backend)
+		self.assertNotIn("frappe.client.save", component)
+		self.assertNotIn("<iframe", component.lower())
+
+	def test_professional_selling_keeps_erpnext_document_truth_server_authoritative(self):
+		component = EDGE_SUITE_REQUIRED_PAGES["professional_selling"]["component"].read_text(encoding="utf-8")
+		backend = (APP_ROOT / "professional_selling.py").read_text(encoding="utf-8")
+		self.assertIn("get_professional_selling_context", component)
+		self.assertIn("get_operating_context", backend)
+		self.assertIn("frappe.has_permission", backend)
+		self.assertIn("frappe.get_list", backend)
 		self.assertNotIn("ignore_permissions", backend)
 		self.assertNotIn("frappe.db.commit", backend)
 		self.assertNotIn("frappe.client.save", component)
