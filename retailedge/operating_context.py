@@ -7,6 +7,7 @@ from frappe import _
 
 from retailedge.branch_context import (
 	get_user_allowed_branches,
+	resolve_branch_from_opening_shift,
 	resolve_branch_from_user,
 	user_has_global_branch_access,
 	validate_user_branch_access,
@@ -36,16 +37,16 @@ def get_operating_context(company: str = "") -> dict[str, Any]:
 			user=user,
 			throw=False,
 		)
-		if validated.get("allowed") and (
-			not requested_company or validated.get("company") == requested_company
-		):
-			return _build_context(
-				company=validated.get("company") or "",
-				branch=validated.get("branch") or "",
-				user=user,
-				source="session",
-			)
-		_clear_cached_context(user=user)
+		if validated.get("allowed"):
+			if not requested_company or validated.get("company") == requested_company:
+				return _build_context(
+					company=validated.get("company") or "",
+					branch=validated.get("branch") or "",
+					user=user,
+					source="session",
+				)
+		else:
+			_clear_cached_context(user=user)
 
 	fallback_company = requested_company or _clean(frappe.defaults.get_user_default("Company"))
 	if fallback_company:
@@ -81,7 +82,8 @@ def get_operating_context(company: str = "") -> dict[str, Any]:
 def get_allowed_operating_contexts(company: str = "") -> dict[str, Any]:
 	"""Return permission-aware Companies and Branches for the switcher.
 
-	Queries remain bounded and do not preload unrelated masters.
+	Queries remain bounded and do not preload unrelated masters. Previewing Branch
+	options for another Company never changes the active session context.
 	"""
 	user = frappe.session.user
 	requested_company = _clean(company)
@@ -89,18 +91,20 @@ def get_allowed_operating_contexts(company: str = "") -> dict[str, Any]:
 	if requested_company and requested_company not in companies:
 		frappe.throw(_("You do not have access to Company {0}.").format(requested_company), frappe.PermissionError)
 
-	selected_company = requested_company or _clean(frappe.defaults.get_user_default("Company"))
+	current = get_operating_context()
+	selected_company = requested_company or _clean(current.get("company")) or _clean(frappe.defaults.get_user_default("Company"))
 	if selected_company not in companies:
 		selected_company = companies[0] if len(companies) == 1 else ""
 
 	branches = _allowed_branches(company=selected_company, user=user) if selected_company else []
-	current = get_operating_context(company=selected_company) if selected_company else get_operating_context()
 	return {
 		"companies": companies,
 		"branches": branches,
+		"selected_company": selected_company,
 		"current": current,
 		"can_switch_company": len(companies) > 1,
 		"can_switch_branch": len(branches) > 1,
+		"switch_blockers": _get_switch_blockers(user=user),
 	}
 
 
@@ -116,6 +120,7 @@ def switch_operating_context(company: str, branch: str) -> dict[str, Any]:
 		frappe.throw(_("Branch is required."))
 
 	validated = _validate_context(company=company, branch=branch, user=user, throw=True)
+	_assert_switch_safe(company=validated["company"], branch=validated["branch"], user=user)
 	context = _build_context(
 		company=validated["company"],
 		branch=validated["branch"],
@@ -209,6 +214,48 @@ def _validate_context(*, company: str, branch: str, user: str, throw: bool) -> d
 		if throw:
 			raise
 		return {"allowed": False, "company": company, "branch": branch, "reason": "validation_failed"}
+
+
+def _get_switch_blockers(*, user: str) -> list[dict[str, str]]:
+	"""Return server-detectable blockers without changing state.
+
+	An open POS shift is authoritative server evidence that branch-bound cashier
+	work is active. Browser cart/payment guards are layered on top in the POS/UI
+	integration because unsaved cart state is not server truth yet.
+	"""
+	try:
+		from retailedge.cashier_context import find_open_pos_opening_shift
+
+		opening_shift = find_open_pos_opening_shift(user=user)
+	except Exception:
+		opening_shift = None
+	if not opening_shift:
+		return []
+
+	shift_company = _clean(getattr(opening_shift, "company", None))
+	resolved = resolve_branch_from_opening_shift(opening_shift, company=shift_company or None)
+	shift_branch = _clean(resolved.get("branch"))
+	return [
+		{
+			"code": "open_pos_shift",
+			"message": _("Close the active POS shift before switching to another operating context."),
+			"company": shift_company,
+			"branch": shift_branch,
+			"reference": _clean(getattr(opening_shift, "name", None)),
+		}
+	]
+
+
+def _assert_switch_safe(*, company: str, branch: str, user: str) -> None:
+	for blocker in _get_switch_blockers(user=user):
+		if blocker.get("code") != "open_pos_shift":
+			continue
+		shift_company = _clean(blocker.get("company"))
+		shift_branch = _clean(blocker.get("branch"))
+		if shift_company and shift_company != company:
+			frappe.throw(blocker["message"])
+		if not shift_branch or shift_branch != branch:
+			frappe.throw(blocker["message"])
 
 
 def _allowed_companies() -> list[str]:
