@@ -68,14 +68,19 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
-	def test_open_pos_shift_blocks_cross_branch_context_switch(self):
+	def test_open_pos_sessions_block_cross_branch_context_switch(self):
 		source = self.read("operating_context.py")
 		for contract in (
 			"find_open_pos_opening_shift",
 			"resolve_branch_from_opening_shift",
 			'"code": "open_pos_shift"',
+			'"POS Opening Entry"',
+			"_find_open_erpnext_pos_opening",
+			"resolve_branch_from_pos_profile",
+			'"code": "open_erpnext_pos"',
 			"_assert_switch_safe",
 			"Close the active POS shift before switching",
+			"Close the active POS Opening Entry before switching",
 		):
 			self.assertIn(contract, source)
 
