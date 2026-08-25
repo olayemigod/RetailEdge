@@ -82,6 +82,38 @@ class TestOperatingContextDefaultsPhase3(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
+	def test_full_form_helper_is_loaded_once_and_scoped_to_new_transaction_forms(self):
+		hooks = self.read("hooks.py")
+		source = self.read("public/js/new_document_operating_defaults.js")
+		self.assertIn('"/assets/retailedge/js/new_document_operating_defaults.js"', hooks)
+		for doctype in (
+			"Sales Order",
+			"Delivery Note",
+			"Sales Invoice",
+			"POS Invoice",
+			"Purchase Order",
+			"Purchase Receipt",
+			"Purchase Invoice",
+			"Material Request",
+			"Stock Entry",
+		):
+			self.assertIn(f'"{doctype}"', source)
+		self.assertIn("frm.is_new?.()", source)
+		self.assertIn("Number(frm.doc?.docstatus || 0) === 0", source)
+		self.assertIn("if (state.loading || state.loaded) return;", source)
+		self.assertIn('method: "retailedge.new_document_defaults.get_new_document_operating_defaults"', source)
+
+	def test_full_form_helper_preserves_user_edits_and_applies_scalar_defaults_only(self):
+		source = self.read("public/js/new_document_operating_defaults.js")
+		self.assertIn("SAFE_SCALAR_FIELDS", source)
+		self.assertIn("if (!isEmpty(frm.doc?.[fieldname])) continue;", source)
+		self.assertGreaterEqual(source.count("if (!isEmpty(frm.doc?.[fieldname])) continue;"), 2)
+		self.assertIn('if (isEmpty(proposed) || Array.isArray(proposed) || typeof proposed === "object") continue;', source)
+		self.assertIn("await frm.set_value(fieldname, proposed);", source)
+		self.assertNotIn("frm.doc.items =", source)
+		self.assertNotIn("frappe.model.set_value", source)
+		self.assertNotIn("frm.save", source)
+
 	def test_no_accounting_or_stock_posting_side_effects_added(self):
 		source = self.read("branch_defaults_application.py")
 		for forbidden in (
