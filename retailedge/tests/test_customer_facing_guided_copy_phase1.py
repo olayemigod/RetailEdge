@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GUIDED_ROOT = ROOT / "public" / "js" / "retailedge_business_hub"
+BUSINESS_HUB = GUIDED_ROOT / "RetailEdgeBusinessHub.vue"
 ACTION_CENTER = ROOT / "public" / "js" / "action_center" / "ActionCenter.vue"
 
 
@@ -51,6 +52,20 @@ def test_guided_stock_adjustment_uses_stock_location_language():
 	assert "Company and Stock Location are required." in source
 	assert 'label="Warehouse"' not in source
 	assert "Company and Warehouse are required." not in source
+
+
+def test_business_hub_keeps_product_identity_but_removes_redundant_operational_prefixes():
+	source = BUSINESS_HUB.read_text(encoding="utf-8")
+	assert 'title="RetailEdge"' in source
+	assert 'title="Business Hub"' in source
+	assert 'message="Loading your permitted business tools..."' in source
+	assert "Five connected experiences" in source
+	assert "Guided entry" in source
+	assert "RetailEdge Business Hub" not in source
+	assert "Loading your permitted RetailEdge tools" not in source
+	assert "Five connected RetailEdge experiences" not in source
+	assert "Product switching suspended" not in source
+	assert '"RetailEdge entry"' not in source
 
 
 def test_action_centre_copy_is_business_facing_and_permission_truth_remains_explicit():
