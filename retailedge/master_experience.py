@@ -57,6 +57,14 @@ OPERATING_CONTEXT_ITEM: dict[str, Any] = {
 	"icon": "building",
 }
 
+TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
+	"label": "Transaction Workspace",
+	"description": "Start sales, purchasing, stock and POS work inside the RetailEdge operating shell.",
+	"target_type": "Page",
+	"target": "transaction-workspace",
+	"icon": "shopping-cart",
+}
+
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
 	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
@@ -114,6 +122,28 @@ def _add_operating_context_navigation(navigation_groups: list[dict[str, Any]]) -
 		return
 
 
+def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Add the EdgeSuite transaction host without removing the direct POS path.
+
+	Transaction Workspace is the preferred RetailEdge operating entry point, but
+	the existing provider-aware Start POS item remains available. That preserves a
+	direct POSNext route for offline resilience and an explicit native POS fallback.
+	If the Page is unavailable, navigation is left untouched.
+	"""
+	if not _can_open_page(TRANSACTION_WORKSPACE_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "sell":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target_type") == "Page" and item.get("target") == TRANSACTION_WORKSPACE_ITEM["target"] for item in items):
+			return
+		pos_index = next((index for index, item in enumerate(items) if item.get("runtime_target") == "pos"), 0)
+		items.insert(pos_index, deepcopy(TRANSACTION_WORKSPACE_ITEM))
+		group["items"] = items
+		return
+
+
 def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> None:
 	"""Route RetailEdge-owned setup masters through one EdgeSuite Setup hub.
 
@@ -150,6 +180,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	navigation_groups = context.get("navigation_groups") or []
 	_promote_browser_approved_r4_pages(navigation_groups)
 	_add_operating_context_navigation(navigation_groups)
+	_promote_transaction_workspace(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
 
 	quick_actions = list(context.get("quick_actions") or [])
@@ -179,6 +210,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["r4_browser_promoted_pages"] = sorted(PROMOTED_R4_PAGE_TARGETS.values())
 	feature_flags["operating_branch_context"] = "phase2_active"
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
+	feature_flags["transaction_workspace"] = "edgesuite_host"
 	context["feature_flags"] = feature_flags
 	return context
 
