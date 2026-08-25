@@ -16,6 +16,7 @@ BRANCH_USER_PATH = (
 	/ "retailedge_branch_profile_user"
 	/ "retailedge_branch_profile_user.json"
 )
+SETTINGS_FORM_JS = ROOT / "retailedge" / "doctype" / "retailedge_settings" / "retailedge_settings.js"
 EDGESUITE_UI_PATH = ROOT / "edgesuite_ui.py"
 WORKSPACE_HOME_PATH = ROOT / "workspace_home.py"
 
@@ -77,6 +78,12 @@ def test_branch_setup_form_and_list_present_customer_facing_title():
 		source = path.read_text(encoding="utf-8")
 		assert 'set_title(__("Branch Setup"))' in source
 		assert 'frappe.ui.form.on("RetailEdge Branch Profile"' in source or 'frappe.listview_settings["RetailEdge Branch Profile"]' in source
+
+
+def test_settings_form_presents_customer_facing_title_without_renaming_doctype():
+	source = SETTINGS_FORM_JS.read_text(encoding="utf-8")
+	assert 'frappe.ui.form.on("RetailEdge Settings"' in source
+	assert 'set_title(__("Settings"))' in source
 
 
 def test_customer_labels_do_not_expose_internal_branch_profile_name():
