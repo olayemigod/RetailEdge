@@ -110,12 +110,11 @@ def clear_operating_context() -> dict[str, Any]:
 	"""Clear only the session override and safely restore the normal fallback context."""
 	user = frappe.session.user
 	fallback = _resolve_fallback_context(company="", user=user)
-	if fallback.get("company") or fallback.get("branch"):
-		_assert_switch_safe(
-			company=_clean(fallback.get("company")),
-			branch=_clean(fallback.get("branch")),
-			user=user,
-		)
+	_assert_switch_safe(
+		company=_clean(fallback.get("company")),
+		branch=_clean(fallback.get("branch")),
+		user=user,
+	)
 	_clear_cached_context(user=user)
 	return fallback
 
