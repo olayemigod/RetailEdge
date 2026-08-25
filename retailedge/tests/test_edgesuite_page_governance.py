@@ -34,10 +34,12 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 
 				self.assertIn("createEdgeApp", bundle)
 				self.assertIn("OperatingContext.vue", bundle)
+				self.assertIn("EdgeAppShell", component)
 				self.assertIn("EdgePageLayout", component)
 				self.assertIn("EdgePageHeader", component)
 				self.assertIn("EdgeLoadingState", component)
 				self.assertIn("EdgeErrorState", component)
+				self.assertIn("retailedge.master_experience.get_retailedge_business_hub_context", component)
 
 	def test_operating_context_keeps_server_authority(self):
 		component = EDGE_SUITE_REQUIRED_PAGES["operating_context"]["component"].read_text(encoding="utf-8")
