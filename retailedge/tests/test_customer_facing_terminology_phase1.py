@@ -17,9 +17,13 @@ BRANCH_USER_PATH = (
 	/ "retailedge_branch_profile_user.json"
 )
 SETTINGS_FORM_JS = ROOT / "retailedge" / "doctype" / "retailedge_settings" / "retailedge_settings.js"
+SCOPED_LABELS_JS = ROOT / "public" / "js" / "customer_facing_labels.js"
+CASHIER_EXPENSE_LIST_JS = ROOT / "public" / "js" / "retailedge_cashier_expense_list.js"
+BANK_IMPORT_LIST_JS = ROOT / "public" / "js" / "payment_statement_import_list.js"
 EDGESUITE_UI_PATH = ROOT / "edgesuite_ui.py"
 WORKSPACE_HOME_PATH = ROOT / "workspace_home.py"
 WORKSPACE_SYNC_PATH = ROOT / "workspace_sync.py"
+HOOKS_PATH = ROOT / "hooks.py"
 
 
 def _load(path: Path) -> dict:
@@ -85,6 +89,40 @@ def test_settings_form_presents_customer_facing_title_without_renaming_doctype()
 	source = SETTINGS_FORM_JS.read_text(encoding="utf-8")
 	assert 'frappe.ui.form.on("RetailEdge Settings"' in source
 	assert 'set_title(__("Settings"))' in source
+
+
+def test_scoped_customer_facing_form_titles_are_not_global_dom_hacks():
+	source = SCOPED_LABELS_JS.read_text(encoding="utf-8")
+	assert '"RetailEdge Cashier Expense": "Cashier Expense"' in source
+	assert '"RetailEdge Payment Statement Import": "Import Bank Statement"' in source
+	assert '"RetailEdge Bank Transaction Match": "Bank Match Review"' in source
+	assert "window.cur_frm" in source
+	assert "Object.entries(TITLE_BY_DOCTYPE).forEach" not in source
+	assert "querySelector" not in source
+
+
+def test_hooks_apply_scoped_titles_without_renaming_internal_doctypes():
+	source = HOOKS_PATH.read_text(encoding="utf-8")
+	for doctype in (
+		"RetailEdge Settings",
+		"RetailEdge Branch Profile",
+		"RetailEdge Cashier Expense",
+		"RetailEdge Expense Category",
+		"RetailEdge Daily Sales Audit",
+		"RetailEdge Payment Statement Import",
+		"RetailEdge Statement Mapping Template",
+		"RetailEdge Bank Transaction Match",
+	):
+		assert f'"{doctype}": "public/js/customer_facing_labels.js"' in source
+
+
+def test_customer_facing_list_titles_are_professional():
+	cashier_source = CASHIER_EXPENSE_LIST_JS.read_text(encoding="utf-8")
+	bank_source = BANK_IMPORT_LIST_JS.read_text(encoding="utf-8")
+	assert 'set_title(__("Cashier Expenses"))' in cashier_source
+	assert 'set_title(__("Bank Statement Imports"))' in bank_source
+	assert 'frappe.listview_settings["RetailEdge Cashier Expense"]' in cashier_source
+	assert 'frappe.listview_settings["RetailEdge Payment Statement Import"]' in bank_source
 
 
 def test_customer_labels_do_not_expose_internal_branch_profile_name():
