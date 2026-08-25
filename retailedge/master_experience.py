@@ -65,6 +65,14 @@ TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 	"icon": "shopping-cart",
 }
 
+PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
+	"label": "Professional Selling",
+	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided RetailEdge selling flow.",
+	"target_type": "Page",
+	"target": "professional-selling",
+	"icon": "shopping-bag",
+}
+
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
 	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
@@ -144,6 +152,25 @@ def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> N
 		return
 
 
+def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Expose the guided selling suite while retaining native ERPNext fallbacks."""
+	if not _can_open_page(PROFESSIONAL_SELLING_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "sell":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target_type") == "Page" and item.get("target") == PROFESSIONAL_SELLING_ITEM["target"] for item in items):
+			return
+		workspace_index = next(
+			(index for index, item in enumerate(items) if item.get("target") == TRANSACTION_WORKSPACE_ITEM["target"]),
+			-1,
+		)
+		items.insert(workspace_index + 1 if workspace_index >= 0 else 0, deepcopy(PROFESSIONAL_SELLING_ITEM))
+		group["items"] = items
+		return
+
+
 def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> None:
 	"""Route RetailEdge-owned setup masters through one EdgeSuite Setup hub.
 
@@ -181,6 +208,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_browser_approved_r4_pages(navigation_groups)
 	_add_operating_context_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
+	_promote_professional_selling(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
 
 	quick_actions = list(context.get("quick_actions") or [])
@@ -211,6 +239,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["operating_branch_context"] = "phase2_active"
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
+	feature_flags["professional_selling"] = "edgesuite_guided"
 	context["feature_flags"] = feature_flags
 	return context
 
