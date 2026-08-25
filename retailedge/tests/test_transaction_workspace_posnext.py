@@ -10,7 +10,7 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 	def read(self, relative: str) -> str:
 		return (APP_ROOT / relative).read_text(encoding="utf-8")
 
-	def test_sell_navigation_promotes_transaction_workspace_with_safe_fallback(self):
+	def test_sell_navigation_adds_transaction_workspace_without_removing_direct_pos(self):
 		source = self.read("master_experience.py")
 		for contract in (
 			"TRANSACTION_WORKSPACE_ITEM",
@@ -19,9 +19,11 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 			'item.get("runtime_target") == "pos"',
 			'_can_open_page(TRANSACTION_WORKSPACE_ITEM["target"])',
 			'feature_flags["transaction_workspace"] = "edgesuite_host"',
+			"existing provider-aware Start POS item remains available",
+			"items.insert(pos_index, deepcopy(TRANSACTION_WORKSPACE_ITEM))",
 		):
 			self.assertIn(contract, source)
-		self.assertIn("existing provider-aware Start POS item is left", source)
+		self.assertNotIn("items[index] = deepcopy(TRANSACTION_WORKSPACE_ITEM)", source)
 
 	def test_workspace_backend_reuses_operating_context_and_runtime_provider(self):
 		source = self.read("retailedge/page/transaction_workspace/transaction_workspace.py")
@@ -91,7 +93,6 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 			"POSNext keeps control of its own offline runtime and sync behaviour",
 		):
 			self.assertIn(contract, component)
-		# Offline fallback is POSNext-only; native ERPNext POS must keep the online server gate.
 		self.assertIn('this.pos?.provider === "posnext"', component)
 
 	def test_workspace_keeps_posnext_extension_boundary(self):
