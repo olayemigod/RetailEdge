@@ -10,6 +10,7 @@ from erpnext.selling.doctype.quotation.quotation import make_sales_order as erpn
 
 from retailedge.branch_context import validate_user_branch_access
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
+from retailedge.operating_context import get_operating_context
 from retailedge.professional_quotation import _normalise_items, _validate_shipping_rule
 from retailedge.professional_selling import _assert_read, _coerce_values, _permission, _validate_context
 
@@ -35,7 +36,7 @@ def _assert_mapped_sales_order_context(doc) -> tuple[str, str]:
 	if branch:
 		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
 
-	operating = frappe.call("retailedge.operating_context.get_operating_context") or {}
+	operating = get_operating_context() or {}
 	operating_company = str(operating.get("company") or "").strip()
 	operating_branch = str(operating.get("branch") or "").strip()
 	if operating_company and operating_company != company:
