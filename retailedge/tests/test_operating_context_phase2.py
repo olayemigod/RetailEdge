@@ -20,6 +20,7 @@ class TestOperatingContextPhase2(unittest.TestCase):
 			"frappe.cache.delete_value",
 			"frappe.get_list(",
 			"validate_user_branch_access",
+			"get_user_branch_profiles",
 			"frappe.has_permission(\"Company\", \"read\"",
 			"frappe.has_permission(\"Branch\", \"read\"",
 			"Branch {0} does not belong to Company {1}",
@@ -56,6 +57,27 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		self.assertNotIn("set_value(\"Sales Invoice\"", source)
 		self.assertNotIn("set_value(\"Payment Entry\"", source)
 		self.assertNotIn("set_value(\"Stock Entry\"", source)
+
+	def test_branch_setup_membership_adds_a_server_side_branch_constraint(self):
+		source = self.read("operating_context.py")
+		for contract in (
+			"get_user_branch_profiles(user=user, company=company)",
+			"profile_branches = {",
+			'row.get("enabled")',
+			"if profile_branches:",
+			"if branch in profile_branches",
+		):
+			self.assertIn(contract, source)
+
+	def test_default_context_restore_cannot_bypass_pos_switch_safety(self):
+		source = self.read("operating_context.py")
+		clear_start = source.index("def clear_operating_context(")
+		clear_end = source.index("\n\ndef get_effective_operating_context", clear_start)
+		clear_source = source[clear_start:clear_end]
+		self.assertIn("_resolve_fallback_context", clear_source)
+		self.assertIn("_assert_switch_safe", clear_source)
+		self.assertIn("_clear_cached_context", clear_source)
+		self.assertLess(clear_source.index("_assert_switch_safe"), clear_source.index("_clear_cached_context"))
 
 	def test_branch_profile_defaults_are_returned_for_active_context(self):
 		source = self.read("operating_context.py")
