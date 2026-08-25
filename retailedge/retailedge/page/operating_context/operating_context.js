@@ -167,15 +167,7 @@ async function switchOperatingContext(wrapper) {
 		return;
 	}
 
-	const clientBlocker = getClientSwitchBlocker();
-	if (clientBlocker) {
-		frappe.msgprint({
-			title: __("Finish current work before switching"),
-			message: clientBlocker,
-			indicator: "orange",
-		});
-		return;
-	}
+	if (showClientSwitchBlocker()) return;
 
 	const response = await frappe.call({
 		method: "retailedge.operating_context.switch_operating_context",
@@ -190,6 +182,8 @@ async function switchOperatingContext(wrapper) {
 }
 
 async function clearOperatingContext(wrapper) {
+	if (showClientSwitchBlocker()) return;
+
 	await frappe.call({
 		method: "retailedge.operating_context.clear_operating_context",
 		freeze: true,
@@ -198,6 +192,17 @@ async function clearOperatingContext(wrapper) {
 	invalidateRetailEdgeContextCache();
 	frappe.show_alert({ message: __("Default operating context restored."), indicator: "green" });
 	await loadOperatingContext(wrapper);
+}
+
+function showClientSwitchBlocker() {
+	const clientBlocker = getClientSwitchBlocker();
+	if (!clientBlocker) return false;
+	frappe.msgprint({
+		title: __("Finish current work before switching"),
+		message: clientBlocker,
+		indicator: "orange",
+	});
+	return true;
 }
 
 function getClientSwitchBlocker() {
