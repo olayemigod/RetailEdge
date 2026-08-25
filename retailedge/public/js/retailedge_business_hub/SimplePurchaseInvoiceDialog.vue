@@ -1,8 +1,8 @@
 <template>
 	<EdgeModal
 		:open="open"
-		:title="formContext.title || 'Simple Purchase Invoice'"
-		:subtitle="formContext.subtitle || 'Create a standard ERPNext Purchase Invoice draft.'"
+		:title="formContext.title || 'Purchase Invoice'"
+		:subtitle="formContext.subtitle || 'Create a Purchase Invoice draft using ERPNext buying and stock controls.'"
 		size="xl"
 		@close="requestClose"
 	>
@@ -64,7 +64,7 @@
 					:modelValue="values.branch"
 					label="Branch"
 					placeholder="Search branch"
-					description="Selecting a Branch loads its preferred receiving warehouse when available."
+					description="Selecting a Branch loads its preferred receiving stock location when available."
 					:searcher="searchBranch"
 					:context="searchContext"
 					@update:modelValue="setBranch"
@@ -72,9 +72,9 @@
 
 				<EdgeLinkField
 					:modelValue="values.warehouse"
-					label="Warehouse"
-					placeholder="Search warehouse"
-					description="Selecting an assigned Warehouse resolves its Branch automatically."
+					label="Receiving Stock Location"
+					placeholder="Search receiving stock location"
+					description="Selecting an assigned stock location resolves its Branch automatically."
 					:required="Boolean(values.update_stock)"
 					:searcher="searchWarehouse"
 					:context="searchContext"
@@ -119,9 +119,9 @@
 			/>
 
 			<p class="guided-purchase-hint">
-				Buying Rate is resolved on demand through the user's Buying Price List, ERPNext Buying
-				Settings and Item Price/last-purchase logic. A blank unresolved buying rate is not accepted
-				at save; enter the agreed supplier rate or configure the buying price first.
+				Buying Rate follows your assigned Buying Price List and ERPNext buying defaults, Item Prices
+				and last-purchase information. If no valid rate is available, enter the agreed supplier rate
+				or configure the buying price before saving.
 			</p>
 
 			<label class="guided-field guided-field--wide">
@@ -295,7 +295,7 @@ export default {
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
 			} catch (error) {
-				this.loadError = errorMessage(error, "Unable to prepare Simple Purchase Invoice.");
+				this.loadError = errorMessage(error, "Unable to prepare Purchase Invoice.");
 			} finally {
 				this.loading = false;
 			}
@@ -375,7 +375,7 @@ export default {
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
-					this.saveError = errorMessage(error, "Unable to resolve the Branch warehouse.");
+					this.saveError = errorMessage(error, "Unable to resolve the Branch receiving stock location.");
 				}
 			}
 		},
@@ -399,7 +399,7 @@ export default {
 			} catch (error) {
 				if (token === this.cascadeToken) {
 					this.values.warehouse = "";
-					this.saveError = errorMessage(error, "Unable to use the selected Warehouse.");
+					this.saveError = errorMessage(error, "Unable to use the selected Receiving Stock Location.");
 				}
 			}
 		},
