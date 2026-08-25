@@ -34,6 +34,23 @@ def test_guided_purchase_invoice_uses_receiving_stock_location_language():
 	assert "Unable to prepare Simple Purchase Invoice." not in source
 
 
+def test_guided_payment_uses_business_facing_name_without_simple_implementation_wording():
+	source = _source("SimplePaymentDialog.vue")
+	assert ":title=\"formContext.title || 'Payment'\"" in source
+	assert "Create a Payment Entry draft using ERPNext payment and allocation controls." in source
+	assert "Unable to prepare Payment Entry." in source
+	assert "Simple Payment" not in source
+
+
+def test_guided_cashier_expense_keeps_internal_doctype_but_not_visible_product_prefix():
+	source = _source("SimpleCashierExpenseDialog.vue")
+	assert "Record a controlled cashier expense for the current operating context." in source
+	assert "The expense account, cost centre and cash account are resolved" in source
+	assert 'this.$emit("open-native", "RetailEdge Cashier Expense")' in source
+	assert "controlled RetailEdge cashier expense" not in source
+	assert "RetailEdge will resolve the expense account" not in source
+
+
 def test_guided_stock_transfer_preserves_internal_warehouse_keys_but_not_visible_warehouse_labels():
 	source = _source("SimpleStockTransferDialog.vue")
 	assert 'label="Source Stock Location"' in source
@@ -52,6 +69,14 @@ def test_guided_stock_adjustment_uses_stock_location_language():
 	assert "Company and Stock Location are required." in source
 	assert 'label="Warehouse"' not in source
 	assert "Company and Warehouse are required." not in source
+
+
+def test_guided_cash_transfer_hides_payment_entry_implementation_detail_from_context():
+	source = _source("SimpleCashTransferDialog.vue")
+	assert "Move funds safely between permitted Cash and Bank accounts." in source
+	assert "<span>Transfer Type</span><strong>Internal Transfer</strong>" in source
+	assert 'this.formContext.full_form_doctype || "Payment Entry"' in source
+	assert "<span>Document</span><strong>Payment Entry · Internal Transfer</strong>" not in source
 
 
 def test_business_hub_keeps_product_identity_but_removes_redundant_operational_prefixes():
