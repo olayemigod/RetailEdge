@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import frappe
 
-from retailedge.branch_context import has_field, resolve_retailedge_operational_defaults
+from retailedge.branch_context import (
+	has_field,
+	resolve_branch_from_pos_profile,
+	resolve_retailedge_operational_defaults,
+)
 from retailedge.operating_context import get_effective_operating_context
 from retailedge.transaction_branch_attribution import (
 	apply_transaction_branch_attribution,
@@ -270,6 +274,53 @@ def _apply_sales_defaults(doc, defaults, settings, summary, overwrite=False):
 			summary,
 			overwrite=overwrite,
 		)
+	if settings["apply_pos_profile"] and _is_pos_sales_document(doc):
+		pos_profile = _get_valid_pos_profile_default(doc, defaults, summary)
+		_apply_doc_field(doc, "pos_profile", pos_profile, summary, overwrite=overwrite)
+
+
+def _is_pos_sales_document(doc):
+	if getattr(doc, "doctype", None) == "POS Invoice":
+		return True
+	return bool(getattr(doc, "doctype", None) == "Sales Invoice" and getattr(doc, "is_pos", 0))
+
+
+def _get_valid_pos_profile_default(doc, defaults, summary):
+	pos_profile = defaults.get("default_pos_profile")
+	if not pos_profile:
+		summary["skipped"].append({"field": "pos_profile", "reason": "no_default_value"})
+		return None
+	if not has_field(doc.doctype, "pos_profile"):
+		summary["skipped"].append({"field": "pos_profile", "reason": "field_missing"})
+		return None
+	if not frappe.db.exists("POS Profile", pos_profile):
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_missing"})
+		return None
+	if not frappe.has_permission("POS Profile", "read", doc=pos_profile):
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_not_permitted"})
+		return None
+	if has_field("POS Profile", "disabled") and frappe.db.get_value("POS Profile", pos_profile, "disabled"):
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_disabled"})
+		return None
+
+	company = getattr(doc, "company", None) or defaults.get("company")
+	branch = (
+		getattr(doc, "branch", None)
+		or getattr(doc, "retailedge_branch", None)
+		or defaults.get("branch")
+	)
+	resolved = resolve_branch_from_pos_profile(pos_profile, company=company)
+	profile_company = resolved.get("company")
+	profile_branch = resolved.get("branch")
+	if company and profile_company and profile_company != company:
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_company_mismatch"})
+		summary["messages"].append("The Branch Setup POS Profile belongs to a different Company and was not applied.")
+		return None
+	if branch and profile_branch and profile_branch != branch:
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_branch_mismatch"})
+		summary["messages"].append("The Branch Setup POS Profile belongs to a different Branch and was not applied.")
+		return None
+	return pos_profile
 
 
 def _apply_cashier_expense_defaults(doc, defaults, settings, summary, overwrite=False):
