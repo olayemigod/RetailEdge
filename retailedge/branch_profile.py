@@ -28,7 +28,8 @@ PROFILE_DEFAULT_FIELDS = [
 # ERPNext v16 Branch is not Company-bound by a native `company` column. The
 # RetailEdge Branch Profile's own Company + Branch pair is therefore the binding
 # between those records. Only masters that are genuinely Company-bound are
-# validated here.
+# validated here. Branch itself remains a normal Frappe Link, so standard Link
+# validation remains responsible for reference existence on document save.
 COMPANY_LINK_FIELDS = {
 	"default_pos_profile": ("POS Profile", "company"),
 	"default_warehouse": ("Warehouse", "company"),
@@ -168,7 +169,6 @@ def validate_branch_profile(doc):
 		frappe.throw("Company is required.")
 	if not getattr(doc, "branch", None):
 		frappe.throw("Branch is required.")
-	_validate_branch_reference(doc)
 	_validate_company_links(doc)
 	_validate_leaf_defaults(doc)
 	if getattr(doc, "enabled", 1):
@@ -189,12 +189,6 @@ def validate_branch_profile(doc):
 			}
 			if frappe.db.exists("RetailEdge Branch Profile", default_filters):
 				frappe.throw("Only one enabled default RetailEdge Branch Profile is allowed per Company.")
-
-
-def _validate_branch_reference(doc):
-	"""Validate the Branch reference without inventing a native Company relation."""
-	if not frappe.db.exists("Branch", doc.branch):
-		frappe.throw(f"Branch {doc.branch} does not exist.")
 
 
 def _validate_company_links(doc):
