@@ -100,12 +100,20 @@
 				@saved="handleQuotationSaved"
 				@open-native="openQuotationNative"
 			/>
+			<ProfessionalSalesOrderDialog
+				:open="salesOrderOpen"
+				:context="sellingContext"
+				@close="salesOrderOpen = false"
+				@saved="handleSalesOrderSaved"
+				@open-native="openSalesOrderNative"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
 import ProfessionalQuotationDialog from "./ProfessionalQuotationDialog.vue";
+import ProfessionalSalesOrderDialog from "./ProfessionalSalesOrderDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const RECENT_METHOD = "retailedge.professional_selling.get_recent_selling_documents";
@@ -135,6 +143,7 @@ export default {
 	components: {
 		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 		ProfessionalQuotationDialog,
+		ProfessionalSalesOrderDialog,
 	},
 	data() {
 		return {
@@ -152,6 +161,7 @@ export default {
 			documents: [],
 			sellingContext: {},
 			quotationOpen: false,
+			salesOrderOpen: false,
 			recentDocument: null,
 			recentRows: [],
 			recentLoading: false,
@@ -218,11 +228,17 @@ export default {
 			})[key] || "Continue the selling workflow.";
 		},
 		createLabel(document) {
-			return document?.key === "quotation" ? "Guided Quotation" : `Create ${document?.label || "Document"}`;
+			if (document?.key === "quotation") return "Guided Quotation";
+			if (document?.key === "sales-order") return "Guided Sales Order";
+			return `Create ${document?.label || "Document"}`;
 		},
 		startCreate(document) {
 			if (document?.key === "quotation") {
 				this.quotationOpen = true;
+				return;
+			}
+			if (document?.key === "sales-order") {
+				this.salesOrderOpen = true;
 				return;
 			}
 			this.createNative(document);
@@ -244,6 +260,15 @@ export default {
 		openQuotationNative() {
 			this.quotationOpen = false;
 			this.createNative({ doctype: "Quotation" });
+		},
+		handleSalesOrderSaved(result) {
+			this.salesOrderOpen = false;
+			this.loadWorkspace();
+			if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer");
+		},
+		openSalesOrderNative() {
+			this.salesOrderOpen = false;
+			this.createNative({ doctype: "Sales Order" });
 		},
 		async loadRecent(document) {
 			this.recentDocument = document;
