@@ -79,28 +79,40 @@ def _coerce_filters(filters: dict[str, Any] | str | None) -> dict[str, Any]:
 	return dict(filters or {})
 
 
-def _assigned_profile_branches(company: str) -> list[str]:
+def _assigned_profile_scope(company: str) -> tuple[bool, list[str]]:
 	user = frappe.session.user
-	if user_has_global_branch_access(user=user):
-		return []
+	company = str(company or "").strip()
+	if not company or user_has_global_branch_access(user=user):
+		return False, []
 	try:
-		rows = get_user_branch_profiles(user=user, company=company or None)
+		rows = get_user_branch_profiles(user=user, company=company)
 	except Exception:
-		rows = []
-	return sorted(
+		frappe.throw(
+			_("Your assigned Branch reporting scope could not be verified. Try again or contact an administrator."),
+			frappe.PermissionError,
+		)
+	if not rows:
+		return False, []
+	branches = sorted(
 		{
 			str(row.get("branch") or "").strip()
 			for row in rows
 			if row.get("enabled") and str(row.get("branch") or "").strip()
 		}
 	)
+	if not branches:
+		frappe.throw(
+			_("You do not have an active Branch Setup assignment for this Company."),
+			frappe.PermissionError,
+		)
+	return True, branches
 
 
 def _constrain_report_filters(filters: dict[str, Any] | str | None) -> dict[str, Any]:
 	resolved = _coerce_filters(filters)
 	company = str(resolved.get("company") or "").strip()
-	assigned = _assigned_profile_branches(company)
-	if not assigned:
+	configured, assigned = _assigned_profile_scope(company)
+	if not configured:
 		return resolved
 
 	branch = str(resolved.get("branch") or "").strip()
@@ -117,8 +129,8 @@ def _constrain_report_filters(filters: dict[str, Any] | str | None) -> dict[str,
 def _constrain_search_scope(kind: str, company: str, branch: str) -> tuple[str, list[str]]:
 	company = str(company or "").strip()
 	branch = str(branch or "").strip()
-	assigned = _assigned_profile_branches(company)
-	if not assigned:
+	configured, assigned = _assigned_profile_scope(company)
+	if not configured:
 		return branch, []
 	if branch and branch not in assigned:
 		frappe.throw(_("You do not have reporting access to Branch {0}.").format(branch), frappe.PermissionError)
