@@ -37,6 +37,45 @@ class TestR7SetupConsolidation(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
+	def test_setup_route_consolidation_is_server_shared_and_permission_gated(self):
+		source = self.read("master_experience.py")
+		for contract in (
+			"SETUP_HUB_ITEM",
+			"SETUP_MANAGED_DOCTYPES",
+			"_consolidate_setup_navigation",
+			'_can_open_page(SETUP_HUB_ITEM["target"])',
+			'"target": "retailedge-setup"',
+			'feature_flags["setup_route_consolidation"] = "edgesuite_setup"',
+		):
+			self.assertIn(contract, source)
+
+	def test_setup_consolidation_keeps_native_erpnext_fallbacks(self):
+		source = self.read("master_experience.py")
+		for managed_doctype in (
+			"RetailEdge Settings",
+			"RetailEdge Branch Profile",
+			"RetailEdge Expense Category",
+			"RetailEdge Statement Mapping Template",
+		):
+			self.assertIn(managed_doctype, source)
+		self.assertIn("Bank Account and Mode of Payment remain visible", source)
+		self.assertNotIn("frappe.set_route =", source)
+		self.assertNotIn("window.history", source)
+
+	def test_setup_context_is_permission_filtered_and_bounded(self):
+		source = self.read("retailedge/page/retailedge_setup/retailedge_setup.py")
+		for contract in (
+			"frappe.has_permission",
+			"frappe.get_list",
+			"limit_page_length=limit",
+			'"can_create"',
+			'"count_capped"',
+		):
+			self.assertIn(contract, source)
+		self.assertNotIn("frappe.get_all", source)
+		self.assertNotIn("ignore_permissions", source)
+		self.assertNotIn("frappe.db.commit", source)
+
 
 if __name__ == "__main__":
 	unittest.main()
