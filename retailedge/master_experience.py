@@ -62,7 +62,6 @@ TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 	"description": "Start sales, purchasing, stock and POS work inside the RetailEdge operating shell.",
 	"target_type": "Page",
 	"target": "transaction-workspace",
-	"runtime_target": "pos",
 	"icon": "shopping-cart",
 }
 
@@ -124,11 +123,12 @@ def _add_operating_context_navigation(navigation_groups: list[dict[str, Any]]) -
 
 
 def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Make the EdgeSuite transaction host the normal POS/selling entry point.
+	"""Add the EdgeSuite transaction host without removing the direct POS path.
 
-	The underlying POS provider remains resolved at runtime inside the workspace;
-	if the Page is unavailable, the existing provider-aware Start POS item is left
-	untouched as the compatibility fallback.
+	Transaction Workspace is the preferred RetailEdge operating entry point, but
+	the existing provider-aware Start POS item remains available. That preserves a
+	direct POSNext route for offline resilience and an explicit native POS fallback.
+	If the Page is unavailable, navigation is left untouched.
 	"""
 	if not _can_open_page(TRANSACTION_WORKSPACE_ITEM["target"]):
 		return
@@ -136,12 +136,10 @@ def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> N
 		if group.get("key") != "sell":
 			continue
 		items = list(group.get("items") or [])
-		for index, item in enumerate(items):
-			if item.get("runtime_target") == "pos":
-				items[index] = deepcopy(TRANSACTION_WORKSPACE_ITEM)
-				group["items"] = items
-				return
-		items.insert(0, deepcopy(TRANSACTION_WORKSPACE_ITEM))
+		if any(item.get("target_type") == "Page" and item.get("target") == TRANSACTION_WORKSPACE_ITEM["target"] for item in items):
+			return
+		pos_index = next((index for index, item in enumerate(items) if item.get("runtime_target") == "pos"), 0)
+		items.insert(pos_index, deepcopy(TRANSACTION_WORKSPACE_ITEM))
 		group["items"] = items
 		return
 
