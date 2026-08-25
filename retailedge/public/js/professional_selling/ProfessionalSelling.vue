@@ -107,6 +107,13 @@
 				@saved="handleSalesOrderSaved"
 				@open-native="openSalesOrderNative"
 			/>
+			<ProfessionalDeliveryDialog
+				:open="deliveryOpen"
+				:context="sellingContext"
+				@close="deliveryOpen = false"
+				@saved="handleDeliverySaved"
+				@open-native="openDeliveryNative"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
@@ -114,6 +121,7 @@
 <script>
 import ProfessionalQuotationDialog from "./ProfessionalQuotationDialog.vue";
 import ProfessionalSalesOrderDialog from "./ProfessionalSalesOrderDialog.vue";
+import ProfessionalDeliveryDialog from "./ProfessionalDeliveryDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const RECENT_METHOD = "retailedge.professional_selling.get_recent_selling_documents";
@@ -144,6 +152,7 @@ export default {
 		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 		ProfessionalQuotationDialog,
 		ProfessionalSalesOrderDialog,
+		ProfessionalDeliveryDialog,
 	},
 	data() {
 		return {
@@ -162,6 +171,7 @@ export default {
 			sellingContext: {},
 			quotationOpen: false,
 			salesOrderOpen: false,
+			deliveryOpen: false,
 			recentDocument: null,
 			recentRows: [],
 			recentLoading: false,
@@ -224,12 +234,13 @@ export default {
 			return ({
 				quotation: "Prepare a customer offer using ERPNext pricing, taxes and optional Shipping Rule before commitment.",
 				"sales-order": "Confirm the customer's order, requested delivery date and source Stock Location without bypassing ERPNext controls.",
-				"delivery-note": "Fulfil stock from the approved order or create a permitted delivery using ERPNext stock truth and delivery charges.",
+				"delivery-note": "Fulfil stock from a submitted Sales Order using ERPNext remaining quantities, stock truth and delivery charges.",
 			})[key] || "Continue the selling workflow.";
 		},
 		createLabel(document) {
 			if (document?.key === "quotation") return "Guided Quotation";
 			if (document?.key === "sales-order") return "Guided Sales Order";
+			if (document?.key === "delivery-note") return "Create Delivery";
 			return `Create ${document?.label || "Document"}`;
 		},
 		startCreate(document) {
@@ -239,6 +250,10 @@ export default {
 			}
 			if (document?.key === "sales-order") {
 				this.salesOrderOpen = true;
+				return;
+			}
+			if (document?.key === "delivery-note") {
+				this.deliveryOpen = true;
 				return;
 			}
 			this.createNative(document);
@@ -269,6 +284,15 @@ export default {
 		openSalesOrderNative() {
 			this.salesOrderOpen = false;
 			this.createNative({ doctype: "Sales Order" });
+		},
+		handleDeliverySaved(result) {
+			this.deliveryOpen = false;
+			this.loadWorkspace();
+			if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer");
+		},
+		openDeliveryNative() {
+			this.deliveryOpen = false;
+			this.createNative({ doctype: "Delivery Note" });
 		},
 		async loadRecent(document) {
 			this.recentDocument = document;
