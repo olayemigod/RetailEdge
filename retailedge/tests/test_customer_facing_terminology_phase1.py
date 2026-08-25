@@ -27,6 +27,7 @@ BUSINESS_HUB_PAGE_META = (
 	/ "retailedge_business_hub"
 	/ "retailedge_business_hub.json"
 )
+WORKSPACE_FIXTURE_PATH = ROOT / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
 BUSINESS_HUB_CONTROLLER = ROOT / "public" / "js" / "retailedge_business_hub_page.js"
 EDGESUITE_UI_PATH = ROOT / "edgesuite_ui.py"
 WORKSPACE_HOME_PATH = ROOT / "workspace_home.py"
@@ -216,6 +217,20 @@ def test_native_workspace_uses_same_customer_facing_contract():
 	assert 'WorkspaceHomeItem("Branch Setup", "DocType", "RetailEdge Branch Profile"' in source
 	assert 'WorkspaceHomeItem("RetailEdge Business Hub"' not in source
 	assert 'WorkspaceHomeItem("RetailEdge Settings", "DocType"' not in source
+
+
+def test_committed_workspace_fixture_matches_customer_facing_contract():
+	meta = _load(WORKSPACE_FIXTURE_PATH)
+	links = {(row.get("link_to"), row.get("type")): row.get("label") for row in meta.get("links", [])}
+	shortcuts = {row.get("link_to"): row.get("label") for row in meta.get("shortcuts", [])}
+
+	assert meta["label"] == "RetailEdge"
+	assert meta["title"] == "RetailEdge"
+	assert links[("retailedge-business-hub", "Link")] == "Business Hub"
+	assert links[("Warehouse", "Link")] == "Stock Locations"
+	assert links[("RetailEdge Settings", "Link")] == "Settings"
+	assert links[("RetailEdge Branch Profile", "Link")] == "Branch Setup"
+	assert shortcuts["retailedge-business-hub"] == "Business Hub"
 
 
 def test_workspace_sync_cannot_reintroduce_old_business_hub_label():
