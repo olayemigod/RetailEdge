@@ -44,8 +44,9 @@
 						</div>
 						<EdgeStatusBadge :status="pos?.provider === 'posnext' ? 'Active' : 'Warning'" />
 					</div>
+					<div v-if="posLaunchError" class="pos-launch-error" role="alert">{{ posLaunchError }}</div>
 					<div class="workspace-actions">
-						<button v-if="canStartPos" type="button" class="edge-button edge-button--primary" @click="startPos">Start POS</button>
+						<button v-if="canStartPos" type="button" class="edge-button edge-button--primary" :disabled="posStarting" @click="startPos">{{ posStarting ? "Checking POS..." : "Start POS" }}</button>
 						<button v-if="pos?.opening_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.opening_doctype)">POS Opening</button>
 						<button v-if="pos?.closing_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.closing_doctype)">POS Closing</button>
 					</div>
@@ -108,6 +109,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeStatusBadge",
 ];
 const GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry"]);
+const POS_LAUNCH_METHOD = "retailedge.retailedge.page.transaction_workspace.transaction_workspace.prepare_pos_launch";
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -132,6 +134,10 @@ function doctypeSlug(doctype) {
 		.replace(/^-|-$/g, "");
 }
 
+function errorMessage(error, fallback) {
+	return error?.message || error?.exc || error?._server_messages || fallback;
+}
+
 export default {
 	name: "RetailEdgeTransactionWorkspace",
 	components: {
@@ -154,6 +160,8 @@ export default {
 			branchName: "",
 			posProfile: "",
 			userName: "",
+			posStarting: false,
+			posLaunchError: "",
 			simpleSalesInvoiceOpen: false,
 			simplePurchaseInvoiceOpen: false,
 			simpleStockTransferOpen: false,
@@ -207,7 +215,7 @@ export default {
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.loaded = true;
 			} catch (error) {
-				this.error = error?.message || error?.exc || "Transaction Workspace failed to load.";
+				this.error = errorMessage(error, "Transaction Workspace failed to load.");
 			} finally {
 				this.loading = false;
 			}
@@ -231,12 +239,26 @@ export default {
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
-		startPos() {
-			if (this.pos?.start_link_type === "Page" && this.pos.start_target) {
-				frappe.set_route(this.pos.start_target);
-				return;
+		async startPos() {
+			if (this.posStarting) return;
+			this.posStarting = true;
+			this.posLaunchError = "";
+			try {
+				const launch = await callMethod(POS_LAUNCH_METHOD);
+				if (launch.start_link_type === "Page" && launch.start_target) {
+					frappe.set_route(launch.start_target);
+					return;
+				}
+				if (launch.start_url) {
+					window.location.assign(launch.start_url);
+					return;
+				}
+				throw new Error("No POS launch target is available.");
+			} catch (error) {
+				this.posLaunchError = errorMessage(error, "POS could not be started from the current Operating Context.");
+			} finally {
+				this.posStarting = false;
 			}
-			if (this.pos?.start_url) window.location.assign(this.pos.start_url);
 		},
 		runTransactionAction(action) {
 			if (!action?.doctype) return;
@@ -309,5 +331,6 @@ export default {
 .transaction-card { display: flex; flex-direction: column; gap: 0.8rem; min-height: 11rem; }
 .workspace-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
 .muted { color: var(--text-muted); font-size: 0.9rem; }
+.pos-launch-error { margin-top: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--red-200, #fecaca); border-radius: 0.6rem; color: var(--red-700, #b91c1c); background: var(--red-50, #fef2f2); }
 @media (max-width: 760px) { .transaction-grid { grid-template-columns: 1fr; } .context-panel, .panel-heading { flex-direction: column; } }
 </style>
