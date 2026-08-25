@@ -15,6 +15,7 @@ class TestR7SetupConsolidation(unittest.TestCase):
 		for contract in (
 			"COMPANY_LINK_FIELDS",
 			"LEAF_FIELDS",
+			"_validate_branch_reference(doc)",
 			"_validate_company_links(doc)",
 			"_validate_leaf_defaults(doc)",
 			'"default_pos_profile": ("POS Profile", "company")',
@@ -26,6 +27,26 @@ class TestR7SetupConsolidation(unittest.TestCase):
 			"must be enabled",
 		):
 			self.assertIn(contract, source)
+		self.assertNotIn('"branch": ("Branch", "company")', source)
+		self.assertIn('frappe.db.exists("Branch", doc.branch)', source)
+
+	def test_branch_setup_form_filters_company_bound_defaults(self):
+		source = self.read("retailedge/doctype/retailedge_branch_profile/retailedge_branch_profile.js")
+		for contract in (
+			"COMPANY_DEPENDENT_FIELDS",
+			"setCompanyDependentQueries(frm)",
+			'frm.set_query("default_pos_profile"',
+			"WAREHOUSE_FIELDS.forEach",
+			"COST_CENTER_FIELDS.forEach",
+			"ACCOUNT_FIELDS.forEach",
+			"{ is_group: 0, disabled: 0 }",
+			"clearCompanyDependentDefaults(frm)",
+			"company(frm)",
+		):
+			self.assertIn(contract, source)
+		# Native ERPNext Branch has no Company field in v16. Do not invent a
+		# frontend company filter that would disagree with server semantics.
+		self.assertNotIn('set_query("branch"', source)
 
 	def test_branch_setup_validation_does_not_add_accounting_or_stock_writes(self):
 		source = self.read("branch_profile.py")
