@@ -30,6 +30,7 @@ from retailedge.stock_position import (
 	get_stock_position_export as _base_get_stock_position_export,
 	search_stock_position_options as _base_search_stock_position_options,
 )
+from retailedge.supplier_payables import get_supplier_payables_export as _base_current_supplier_payables_export
 
 
 def _company_currency(company: str) -> str:
@@ -226,6 +227,11 @@ def get_supplier_payables(filters=None, page=1, page_size=50):
 @frappe.whitelist()
 def get_supplier_payables_export(filters=None):
 	return _base_get_supplier_payables_export(filters=_constrain_report_filters(filters))
+
+
+def get_governed_supplier_payables_export(filters=None):
+	"""Preserve the dedicated current-outstanding Supplier Payables export contract."""
+	return _base_current_supplier_payables_export(filters=_constrain_report_filters(filters))
 
 
 @frappe.whitelist()
