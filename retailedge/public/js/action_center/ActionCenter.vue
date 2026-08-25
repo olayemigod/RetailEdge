@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Action Centre could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Please refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Action Centre"
 			eyebrow="Exceptions & Follow-up"
-			subtitle="Prioritised issues from existing RetailEdge and ERPNext controls, with separate follow-up tracking. Resolve each underlying issue in its owning workflow or report."
+			subtitle="Prioritised business exceptions with separate follow-up tracking. Resolve each underlying issue in its owning workflow or report."
 			:summary="summary"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -105,8 +105,8 @@
 
 				<EdgeDashboardSection title="How resolution works" description="Follow-up tracking is separate from business resolution." span="2">
 					<div class="action-note">
-						<strong>RetailEdge does not resolve accounting, stock or workflow exceptions from Action Centre.</strong>
-						<span>Acknowledge, assignment, follow-up date and snooze only update the separate Action Follow Up record. Open workflow keeps RetailEdge pages in this tab and opens retained native ERPNext/Frappe records or reports in a new tab, where existing permissions, approvals, submissions and accounting controls remain authoritative.</span>
+						<strong>Follow-up actions do not resolve accounting, stock or workflow exceptions.</strong>
+						<span>Acknowledge, assignment, follow-up date and snooze update only the follow-up record. Open workflow takes you to the authoritative page, document or report, where existing permissions, approvals, submission rules and accounting controls remain authoritative.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
@@ -163,7 +163,7 @@ export default {
 				await callMethod("retailedge.action_follow_up.update_action_follow_up", { fingerprint: item.fingerprint, action, filters: this.filters, ...values });
 				await this.fetchData();
 			} catch (error) {
-				frappe.msgprint({ title: "Follow-up was not updated", message: errorMessage(error, "RetailEdge could not update this follow-up record."), indicator: "red" });
+				frappe.msgprint({ title: "Follow-up was not updated", message: errorMessage(error, "The follow-up record could not be updated."), indicator: "red" });
 			} finally { this.mutatingFingerprint = ""; }
 		},
 		acknowledge(item) { return this.updateFollowUp(item, "acknowledge"); },
@@ -205,7 +205,7 @@ export default {
 			}
 			window.location.assign(route);
 		},
-		workflowTitle(item) { return item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open RetailEdge workflow"; },
+		workflowTitle(item) { return item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open workflow"; },
 		itemKey(item) { return item.fingerprint || `${item.source}:${item.semantic_key || item.kind}:${item.route}`; },
 		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
 		basisLabel(value) { return value === "current" ? "Current position" : "Selected period"; },
