@@ -5,7 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 
-from erpnext.selling.doctype.sales_order.mapper import make_delivery_note as erpnext_make_delivery_note
+from erpnext.selling.doctype.sales_order.sales_order import make_delivery_note as erpnext_make_delivery_note
 
 from retailedge.branch_context import resolve_branch_from_warehouse, validate_user_branch_access
 from retailedge.operating_context import get_operating_context
