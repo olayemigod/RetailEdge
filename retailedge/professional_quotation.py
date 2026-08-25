@@ -8,6 +8,7 @@ from frappe.utils import flt, getdate, nowdate
 
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.professional_selling import _assert_read, _coerce_values, _permission, _validate_context
+from retailedge.transaction_branch_attribution import apply_transaction_branch_attribution
 
 
 MAX_ITEMS = 50
@@ -59,6 +60,17 @@ def _validate_shipping_rule(shipping_rule: str, *, company: str) -> str:
 	return shipping_rule
 
 
+def _set_quotation_branch(doc, branch: str) -> None:
+	branch = str(branch or "").strip()
+	if not branch:
+		return
+	if doc.meta.has_field("retailedge_branch"):
+		doc.retailedge_branch = branch
+		apply_transaction_branch_attribution(doc, overwrite=False)
+	elif doc.meta.has_field("branch"):
+		doc.branch = branch
+
+
 @frappe.whitelist(methods=["POST"])
 def create_professional_quotation_draft(values: dict | str | None = None) -> dict[str, Any]:
 	"""Create a Customer Quotation draft without bypassing ERPNext controls.
@@ -106,6 +118,7 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 		doc.shipping_rule = shipping_rule
 	if values.get("terms") and doc.meta.has_field("terms"):
 		doc.terms = str(values.get("terms") or "").strip()
+	_set_quotation_branch(doc, branch)
 
 	for item in items:
 		_assert_read("Item", item["item_code"])
@@ -150,7 +163,7 @@ def create_professional_quotation_draft(values: dict | str | None = None) -> dic
 		"docstatus": doc.docstatus,
 		"customer": customer,
 		"company": doc.company,
-		"branch": branch,
+		"branch": doc.get("branch") or doc.get("retailedge_branch") or branch,
 		"selling_price_list": getattr(doc, "selling_price_list", None) or pricing_context.get("price_list"),
 		"shipping_rule": getattr(doc, "shipping_rule", None) or "",
 		"grand_total": doc.grand_total,
