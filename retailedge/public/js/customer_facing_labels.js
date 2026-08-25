@@ -8,17 +8,19 @@
 		"RetailEdge Bank Transaction Match": "Bank Match Review",
 	};
 
-	const doctype = window.cur_frm && window.cur_frm.doctype;
-	const title = doctype && TITLE_BY_DOCTYPE[doctype];
-	if (!doctype || !title) {
+	const registrationKey = "__retailedge_customer_facing_title_handlers_registered";
+	if (window[registrationKey]) {
 		return;
 	}
+	window[registrationKey] = true;
 
-	frappe.ui.form.on(doctype, {
-		refresh(frm) {
-			if (frm.page && frm.page.set_title) {
-				frm.page.set_title(__(title));
-			}
-		},
+	Object.entries(TITLE_BY_DOCTYPE).forEach(([doctype, title]) => {
+		frappe.ui.form.on(doctype, {
+			refresh(frm) {
+				if (frm.page && frm.page.set_title) {
+					frm.page.set_title(__(title));
+				}
+			},
+		});
 	});
 })();
