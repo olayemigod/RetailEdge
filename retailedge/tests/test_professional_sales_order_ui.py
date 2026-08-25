@@ -36,7 +36,11 @@ class TestProfessionalSalesOrderUI(unittest.TestCase):
 			"Save Draft",
 		):
 			self.assertIn(contract, component)
-		self.assertNotIn("submit", component.lower())
+		# References to submitted source Quotations are required for native
+		# mapping. What must stay absent is a submit action for the new order.
+		self.assertNotIn(">Submit<", component)
+		self.assertNotIn(">Submit Sales Order<", component)
+		self.assertNotIn('@click="submit', component)
 
 	def test_new_order_form_is_smart_and_edgesuite_based(self):
 		component = self.read("public/js/professional_selling/ProfessionalSalesOrderDialog.vue")
