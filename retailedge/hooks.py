@@ -37,6 +37,7 @@ app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
 	"/assets/retailedge/js/retailedge_business_hub_page.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
+	"/assets/retailedge/js/new_document_operating_defaults.js",
 ]
 
 # include js, css files in web template
@@ -257,6 +258,22 @@ override_whitelisted_methods = {
 	"retailedge.guided_stock_adjustment.search_simple_stock_adjustment_options": "retailedge.guided_link_search_extended.search_simple_stock_adjustment_options",
 	"retailedge.guided_cash_transfer.search_simple_cash_transfer_options": "retailedge.guided_link_search_extended.search_simple_cash_transfer_options",
 	"retailedge.cash_custody.search_cash_deposit_options": "retailedge.guided_link_search_extended.search_cash_deposit_options",
+	"retailedge.sales_reporting.get_sales_reporting_context": "retailedge.operating_report_defaults.get_sales_reporting_context",
+	"retailedge.sales_reporting.search_sales_reporting_options": "retailedge.operating_report_defaults.search_sales_reporting_options",
+	"retailedge.sales_reporting.get_sales_by_item": "retailedge.operating_report_defaults.get_sales_by_item",
+	"retailedge.sales_reporting.get_sales_by_item_export": "retailedge.operating_report_defaults.get_sales_by_item_export",
+	"retailedge.sales_reporting.get_sales_invoice_register": "retailedge.operating_report_defaults.get_sales_invoice_register",
+	"retailedge.sales_reporting.get_sales_invoice_register_export": "retailedge.operating_report_defaults.get_sales_invoice_register_export",
+	"retailedge.purchase_reporting.get_purchase_reporting_context": "retailedge.operating_report_defaults.get_purchase_reporting_context",
+	"retailedge.purchase_reporting.search_purchase_reporting_options": "retailedge.operating_report_defaults.search_purchase_reporting_options",
+	"retailedge.purchase_reporting.get_purchase_register": "retailedge.operating_report_defaults.get_purchase_register",
+	"retailedge.purchase_reporting.get_purchase_register_export": "retailedge.operating_report_defaults.get_purchase_register_export",
+	"retailedge.purchase_reporting.get_supplier_payables": "retailedge.operating_report_defaults.get_supplier_payables",
+	"retailedge.purchase_reporting.get_supplier_payables_export": "retailedge.operating_report_defaults.get_supplier_payables_export",
+	"retailedge.stock_position.get_stock_position_context": "retailedge.operating_report_defaults.get_stock_position_context",
+	"retailedge.stock_position.search_stock_position_options": "retailedge.operating_report_defaults.search_stock_position_options",
+	"retailedge.stock_position.get_stock_position": "retailedge.operating_report_defaults.get_stock_position",
+	"retailedge.stock_position.get_stock_position_export": "retailedge.operating_report_defaults.get_stock_position_export",
 }
 
 # Request Events

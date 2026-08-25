@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import frappe
 
-from retailedge.branch_context import has_field, resolve_retailedge_operational_defaults
+from retailedge.branch_context import (
+	has_field,
+	resolve_branch_from_pos_profile,
+	resolve_retailedge_operational_defaults,
+)
+from retailedge.operating_context import get_effective_operating_context
 from retailedge.transaction_branch_attribution import (
 	apply_transaction_branch_attribution,
 	get_branch_attribution_target_doctypes,
@@ -30,6 +35,16 @@ WAREHOUSE_CONTEXT_FIELDS = (
 	"from_warehouse",
 	"source_warehouse",
 )
+EXPLICIT_CONTEXT_FIELDS = (
+	"branch",
+	"retailedge_branch",
+	"pos_profile",
+	"linked_pos_opening_shift",
+	"pos_opening_shift",
+	"linked_pos_closing_shift",
+	"pos_closing_shift",
+	*WAREHOUSE_CONTEXT_FIELDS,
+)
 
 
 def get_branch_default_application_settings():
@@ -44,6 +59,7 @@ def get_branch_default_application_settings():
 
 
 def apply_branch_attribution_and_defaults(doc, method=None, overwrite=False):
+	_seed_new_doc_from_operating_context(doc)
 	doctype = getattr(doc, "doctype", None)
 	if doctype == "Sales Invoice":
 		validate_sales_invoice_with_branch_attribution(doc, method=method)
@@ -68,7 +84,7 @@ def apply_branch_profile_defaults_to_doc(doc, method=None, overwrite=False):
 
 	defaults = resolve_retailedge_operational_defaults(
 		company=getattr(doc, "company", None),
-		branch=getattr(doc, "branch", None),
+		branch=getattr(doc, "branch", None) or getattr(doc, "retailedge_branch", None),
 		user=_get_context_user(doc),
 		pos_profile=getattr(doc, "pos_profile", None),
 		warehouse=_get_context_warehouse(doc),
@@ -120,6 +136,69 @@ def assert_can_preview_branch_defaults():
 		"You do not have permission to preview RetailEdge branch defaults.",
 		frappe.PermissionError,
 	)
+
+
+def _seed_new_doc_from_operating_context(doc):
+	"""Seed only missing context on a genuinely new document.
+
+	Explicit document evidence wins. Operating Context is never used to rewrite
+	stored documents, submitted documents, explicit branch/stock/POS selections,
+	or branch-driving linked POS state.
+	"""
+	if not getattr(doc, "doctype", None) or getattr(doc, "docstatus", 0) in (1, 2):
+		return {"applied": [], "reason": "unsupported_or_submitted"}
+	if not _is_new_doc(doc):
+		return {"applied": [], "reason": "existing_document"}
+	if _has_explicit_operational_context(doc):
+		return {"applied": [], "reason": "explicit_context_preserved"}
+
+	operating = get_effective_operating_context(
+		company=getattr(doc, "company", None) or "",
+		branch="",
+	)
+	company = operating.get("company") or ""
+	branch = operating.get("branch") or ""
+	applied = []
+
+	if company and has_field(doc.doctype, "company") and not getattr(doc, "company", None):
+		doc.company = company
+		applied.append("company")
+
+	branch_field = _get_transaction_branch_field(doc)
+	if branch and branch_field and not getattr(doc, branch_field, None):
+		setattr(doc, branch_field, branch)
+		applied.append(branch_field)
+		if branch_field == "retailedge_branch" and has_field(doc.doctype, "retailedge_branch_source"):
+			doc.retailedge_branch_source = "Operating Context"
+
+	return {
+		"applied": applied,
+		"company": company,
+		"branch": branch,
+		"source": operating.get("source") or "",
+		"reason": "operating_context" if applied else "no_supported_missing_fields",
+	}
+
+
+def _is_new_doc(doc):
+	try:
+		return bool(doc.is_new())
+	except Exception:
+		return not bool(getattr(doc, "name", None))
+
+
+def _has_explicit_operational_context(doc):
+	for fieldname in EXPLICIT_CONTEXT_FIELDS:
+		if hasattr(doc, fieldname) and getattr(doc, fieldname, None):
+			return True
+	return False
+
+
+def _get_transaction_branch_field(doc):
+	for fieldname in ("branch", "retailedge_branch"):
+		if has_field(doc.doctype, fieldname):
+			return fieldname
+	return None
 
 
 def _apply_material_request_defaults(doc, defaults, settings, summary, overwrite=False):
@@ -195,6 +274,53 @@ def _apply_sales_defaults(doc, defaults, settings, summary, overwrite=False):
 			summary,
 			overwrite=overwrite,
 		)
+	if settings["apply_pos_profile"] and _is_pos_sales_document(doc):
+		pos_profile = _get_valid_pos_profile_default(doc, defaults, summary)
+		_apply_doc_field(doc, "pos_profile", pos_profile, summary, overwrite=overwrite)
+
+
+def _is_pos_sales_document(doc):
+	if getattr(doc, "doctype", None) == "POS Invoice":
+		return True
+	return bool(getattr(doc, "doctype", None) == "Sales Invoice" and getattr(doc, "is_pos", 0))
+
+
+def _get_valid_pos_profile_default(doc, defaults, summary):
+	pos_profile = defaults.get("default_pos_profile")
+	if not pos_profile:
+		summary["skipped"].append({"field": "pos_profile", "reason": "no_default_value"})
+		return None
+	if not has_field(doc.doctype, "pos_profile"):
+		summary["skipped"].append({"field": "pos_profile", "reason": "field_missing"})
+		return None
+	if not frappe.db.exists("POS Profile", pos_profile):
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_missing"})
+		return None
+	if not frappe.has_permission("POS Profile", "read", doc=pos_profile):
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_not_permitted"})
+		return None
+	if has_field("POS Profile", "disabled") and frappe.db.get_value("POS Profile", pos_profile, "disabled"):
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_disabled"})
+		return None
+
+	company = getattr(doc, "company", None) or defaults.get("company")
+	branch = (
+		getattr(doc, "branch", None)
+		or getattr(doc, "retailedge_branch", None)
+		or defaults.get("branch")
+	)
+	resolved = resolve_branch_from_pos_profile(pos_profile, company=company)
+	profile_company = resolved.get("company")
+	profile_branch = resolved.get("branch")
+	if company and profile_company and profile_company != company:
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_company_mismatch"})
+		summary["messages"].append("The Branch Setup POS Profile belongs to a different Company and was not applied.")
+		return None
+	if branch and profile_branch and profile_branch != branch:
+		summary["skipped"].append({"field": "pos_profile", "reason": "pos_profile_branch_mismatch"})
+		summary["messages"].append("The Branch Setup POS Profile belongs to a different Branch and was not applied.")
+		return None
+	return pos_profile
 
 
 def _apply_cashier_expense_defaults(doc, defaults, settings, summary, overwrite=False):
@@ -281,6 +407,9 @@ def _build_preview_doc(doctype, name=None, values=None):
 def _snapshot_branch_default_fields(doc):
 	fields = {"docstatus": getattr(doc, "docstatus", 0)}
 	for fieldname in (
+		"company",
+		"branch",
+		"retailedge_branch",
 		"target_warehouse",
 		"set_warehouse",
 		"from_warehouse",
