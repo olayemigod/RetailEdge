@@ -123,7 +123,7 @@ doctype_list_js = {
 # importable_doctypes = [doctype_1]
 
 # Jinja
-# ------------------
+# ----------
 
 # add methods and filters to jinja environment
 # jinja = {
@@ -258,6 +258,9 @@ override_whitelisted_methods = {
 	"retailedge.guided_stock_adjustment.search_simple_stock_adjustment_options": "retailedge.guided_link_search_extended.search_simple_stock_adjustment_options",
 	"retailedge.guided_cash_transfer.search_simple_cash_transfer_options": "retailedge.guided_link_search_extended.search_simple_cash_transfer_options",
 	"retailedge.cash_custody.search_cash_deposit_options": "retailedge.guided_link_search_extended.search_cash_deposit_options",
+	"retailedge.sales_reporting.get_sales_reporting_context": "retailedge.operating_report_defaults.get_sales_reporting_context",
+	"retailedge.purchase_reporting.get_purchase_reporting_context": "retailedge.operating_report_defaults.get_purchase_reporting_context",
+	"retailedge.stock_position.get_stock_position_context": "retailedge.operating_report_defaults.get_stock_position_context",
 }
 
 # Request Events
