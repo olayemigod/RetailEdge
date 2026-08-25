@@ -68,6 +68,19 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 		self.assertIn("await callMethod(POS_LAUNCH_METHOD)", component)
 		self.assertIn("posLaunchError", component)
 
+	def test_native_erpnext_pos_uses_permission_aware_online_parity_gate(self):
+		backend = self.read("retailedge/page/transaction_workspace/transaction_workspace.py")
+		for contract in (
+			"def _find_open_erpnext_pos_opening",
+			'frappe.get_list(',
+			'"POS Opening Entry"',
+			"active ERPNext POS opening belongs to another Company",
+			"active ERPNext POS opening uses a different POS Profile",
+			"_validate_pos_profile(entry_profile, company=company, branch=branch)",
+		):
+			self.assertIn(contract, backend)
+		self.assertNotIn('frappe.get_all(\n\t\t\t"POS Opening Entry"', backend)
+
 	def test_posnext_offline_launch_does_not_depend_on_server_preflight(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
 		for contract in (
