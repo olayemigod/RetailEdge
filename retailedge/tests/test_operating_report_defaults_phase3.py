@@ -84,7 +84,7 @@ class TestOperatingReportDefaultsPhase3(unittest.TestCase):
 			"from retailedge.operating_report_defaults import get_sales_by_item_export",
 			"from retailedge.operating_report_defaults import get_sales_invoice_register_export",
 			"from retailedge.operating_report_defaults import get_purchase_register_export",
-			"from retailedge.operating_report_defaults import get_supplier_payables_export",
+			"from retailedge.operating_report_defaults import get_governed_supplier_payables_export",
 			"from retailedge.operating_report_defaults import get_stock_position_export",
 		):
 			self.assertIn(contract, source)
@@ -92,11 +92,28 @@ class TestOperatingReportDefaultsPhase3(unittest.TestCase):
 			"from retailedge.sales_reporting import get_sales_by_item_export",
 			"from retailedge.sales_reporting import get_sales_invoice_register_export",
 			"from retailedge.purchase_reporting import get_purchase_register_export",
+			"from retailedge.supplier_payables import get_supplier_payables_export",
 			"from retailedge.stock_position import get_stock_position_export",
 		):
 			self.assertNotIn(forbidden, source)
 		self.assertIn("handler = _export_handler(report_key)", source)
 		self.assertIn("return handler(filters=resolved_filters)", source)
+
+	def test_supplier_payables_governed_export_preserves_current_outstanding_contract(self):
+		source = self.read("operating_report_defaults.py")
+		for contract in (
+			"from retailedge.supplier_payables import get_supplier_payables_export as _base_current_supplier_payables_export",
+			"def get_governed_supplier_payables_export(filters=None):",
+			"_base_current_supplier_payables_export(filters=_constrain_report_filters(filters))",
+		):
+			self.assertIn(contract, source)
+		supplier_source = self.read("supplier_payables.py")
+		for contract in (
+			"current_outstanding",
+			"historical_balance_supported",
+			"Historical payables as of a past date require ledger reconstruction",
+		):
+			self.assertIn(contract, supplier_source)
 
 	def test_wrapper_reuses_existing_report_engines_and_preserves_stock_cost_visibility(self):
 		source = self.read("operating_report_defaults.py")
