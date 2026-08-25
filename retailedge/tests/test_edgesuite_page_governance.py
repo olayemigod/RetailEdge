@@ -14,6 +14,17 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"loader": APP_ROOT / "retailedge" / "page" / "operating_context" / "operating_context.js",
 		"bundle": APP_ROOT / "public" / "js" / "operating_context.bundle.js",
 		"component": APP_ROOT / "public" / "js" / "operating_context" / "OperatingContext.vue",
+		"asset": "operating_context.bundle.js",
+		"mount": "mountRetailEdgeOperatingContext",
+		"component_name": "OperatingContext.vue",
+	},
+	"retailedge_setup": {
+		"loader": APP_ROOT / "retailedge" / "page" / "retailedge_setup" / "retailedge_setup.js",
+		"bundle": APP_ROOT / "public" / "js" / "retailedge_setup.bundle.js",
+		"component": APP_ROOT / "public" / "js" / "retailedge_setup" / "RetailEdgeSetup.vue",
+		"asset": "retailedge_setup.bundle.js",
+		"mount": "mountRetailEdgeSetup",
+		"component_name": "RetailEdgeSetup.vue",
 	},
 }
 
@@ -27,13 +38,13 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 				component = files["component"].read_text(encoding="utf-8")
 
 				self.assertIn('"edgeui.bundle.js"', loader)
-				self.assertIn('"operating_context.bundle.js"', loader)
+				self.assertIn(f'"{files["asset"]}"', loader)
 				self.assertIn("window.EdgeSuiteUI", loader)
-				self.assertIn("mountRetailEdgeOperatingContext", loader)
+				self.assertIn(files["mount"], loader)
 				self.assertNotIn('className = "frappe-card"', loader)
 
 				self.assertIn("createEdgeApp", bundle)
-				self.assertIn("OperatingContext.vue", bundle)
+				self.assertIn(files["component_name"], bundle)
 				self.assertIn("EdgeAppShell", component)
 				self.assertIn("EdgePageLayout", component)
 				self.assertIn("EdgePageHeader", component)
@@ -49,6 +60,16 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 		self.assertIn("retailedgeOperatingContextGuard", component)
 		self.assertNotIn("frappe.db.set_value", component)
 		self.assertNotIn("frappe.client.save", component)
+
+	def test_setup_page_uses_native_doctypes_as_authoritative_editors(self):
+		component = EDGE_SUITE_REQUIRED_PAGES["retailedge_setup"]["component"].read_text(encoding="utf-8")
+		backend = (APP_ROOT / "retailedge" / "page" / "retailedge_setup" / "retailedge_setup.py").read_text(encoding="utf-8")
+		self.assertIn("get_setup_context", component)
+		self.assertIn("window.open(`/app/${doctypeSlug(resource.doctype)}`", component)
+		self.assertNotIn("frappe.client.save", component)
+		self.assertNotIn("ignore_permissions", backend)
+		self.assertIn("frappe.get_list", backend)
+		self.assertNotIn("frappe.get_all", backend)
 
 
 if __name__ == "__main__":
