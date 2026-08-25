@@ -70,6 +70,18 @@ class TestProfessionalSalesOrder(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_quotation_context_is_preserved_on_mapped_order_draft(self):
+		source = self.read("professional_sales_order.py")
+		for contract in (
+			"_preserve_source_quotation_context(source, target)",
+			'source.get("branch") or source.get("retailedge_branch")',
+			"validate_user_branch_access(source_branch",
+			"mapped Sales Order Company does not match the submitted Quotation",
+			"mapped Sales Order Branch does not match the submitted Quotation Branch",
+			"_set_branch_if_supported(target, source_branch)",
+		):
+			self.assertIn(contract, source)
+
 	def test_quotation_guided_path_preserves_retailedge_branch_truth(self):
 		source = self.read("professional_quotation.py")
 		for contract in (
