@@ -13,14 +13,14 @@
 		<EdgePageLayout>
 			<template #header>
 				<EdgePageHeader
-					title="RetailEdge Business Hub"
+					title="Business Hub"
 					subtitle="Navigate, act, operate, understand, and respond from one business-focused workspace."
 					:withBackButton="false"
 				/>
 			</template>
 
 			<div v-if="loading" class="hub-state">
-				<EdgeLoadingState message="Loading your permitted RetailEdge tools..." :skeleton="true" />
+				<EdgeLoadingState message="Loading your permitted business tools..." :skeleton="true" />
 			</div>
 
 			<div v-else-if="error" class="hub-state">
@@ -46,7 +46,6 @@
 						<div class="hub-context">
 							<span v-if="context.company">{{ context.company }}</span>
 							<span v-if="context.branch">{{ context.branch }}</span>
-							<span>Product switching suspended</span>
 						</div>
 						<button
 							v-if="quickActions.length"
@@ -62,8 +61,8 @@
 				<section>
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Programme structure</p>
-							<h3>Five connected RetailEdge experiences</h3>
+							<p class="section-kicker">Business workflow</p>
+							<h3>Five connected experiences</h3>
 						</div>
 					</div>
 					<div class="experience-grid">
@@ -290,7 +289,7 @@ export default {
 		greeting() {
 			return this.context.user_name
 				? `Welcome, ${this.context.user_name}`
-				: "Your RetailEdge command centre";
+				: "Your business command centre";
 		},
 		shellMenuItems() {
 			return this.navigationGroups
@@ -330,7 +329,7 @@ export default {
 			return fetchSharedContext({ force })
 				.then((data) => this.applyContext(data || {}))
 				.catch((error) => {
-					this.error = error?.message || "Unable to load RetailEdge Business Hub context.";
+					this.error = error?.message || "Unable to load Business Hub context.";
 				})
 				.finally(() => {
 					this.loading = false;
@@ -534,7 +533,7 @@ export default {
 			return "";
 		},
 		actionModeLabel(action) {
-			return action?.mode === "available" ? "RetailEdge entry" : "Full form";
+			return action?.mode === "available" ? "Guided entry" : "Full form";
 		},
 		iconText(icon) {
 			const icons = {
