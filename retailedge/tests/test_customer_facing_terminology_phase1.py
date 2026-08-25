@@ -16,6 +16,8 @@ BRANCH_USER_PATH = (
 	/ "retailedge_branch_profile_user"
 	/ "retailedge_branch_profile_user.json"
 )
+EDGESUITE_UI_PATH = ROOT / "edgesuite_ui.py"
+WORKSPACE_HOME_PATH = ROOT / "workspace_home.py"
 
 
 def _load(path: Path) -> dict:
@@ -83,3 +85,31 @@ def test_customer_labels_do_not_expose_internal_branch_profile_name():
 	assert "RetailEdge Branch Profile" not in labels
 	assert "Warehouse Defaults" not in labels
 	assert "Default Warehouse" not in labels
+
+
+def test_edgesuite_navigation_uses_customer_facing_labels_but_keeps_targets():
+	source = EDGESUITE_UI_PATH.read_text(encoding="utf-8")
+	assert '"label": "Business Hub", "target_type": "Page", "target": "retailedge-business-hub"' in source
+	assert '"label": "Stock Locations", "target_type": "DocType", "target": "Warehouse"' in source
+	assert '"label": "Settings", "target_type": "DocType", "target": "RetailEdge Settings"' in source
+	assert '"label": "Branch Setup", "target_type": "DocType", "target": "RetailEdge Branch Profile"' in source
+	assert '"label": "RetailEdge Business Hub"' not in source
+	assert '"label": "RetailEdge Settings", "target_type": "DocType"' not in source
+	assert '"label": "Branch Profiles", "target_type": "DocType", "target": "RetailEdge Branch Profile"' not in source
+
+
+def test_native_workspace_uses_same_customer_facing_contract():
+	source = WORKSPACE_HOME_PATH.read_text(encoding="utf-8")
+	assert 'WorkspaceHomeItem("Business Hub", "Page", "retailedge-business-hub"' in source
+	assert 'WorkspaceHomeItem("Stock Locations", "DocType", "Warehouse"' in source
+	assert 'WorkspaceHomeItem("Settings", "DocType", "RetailEdge Settings"' in source
+	assert 'WorkspaceHomeItem("Branch Setup", "DocType", "RetailEdge Branch Profile"' in source
+	assert 'WorkspaceHomeItem("RetailEdge Business Hub"' not in source
+	assert 'WorkspaceHomeItem("RetailEdge Settings", "DocType"' not in source
+
+
+def test_operational_copy_avoids_unnecessary_product_prefixes():
+	source = EDGESUITE_UI_PATH.read_text(encoding="utf-8")
+	assert "access to RetailEdge workspaces" not in source
+	assert "permitted warehouses" not in source
+	assert "permitted stock locations" in source
