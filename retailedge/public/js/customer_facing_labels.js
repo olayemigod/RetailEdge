@@ -1,7 +1,5 @@
 (() => {
 	const TITLE_BY_DOCTYPE = {
-		"RetailEdge Settings": "Settings",
-		"RetailEdge Branch Profile": "Branch Setup",
 		"RetailEdge Cashier Expense": "Cashier Expense",
 		"RetailEdge Expense Category": "Expense Category",
 		"RetailEdge Daily Sales Audit": "Daily Sales Audit",
