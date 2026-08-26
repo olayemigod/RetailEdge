@@ -8,7 +8,7 @@
 	const BRANCH_SEARCH_ASSET = "/assets/retailedge/js/bank_matching_branch_search_adapter.js";
 	const DENSE_WORKSPACE_CSS = "/assets/retailedge/css/bank_matching_dense_workspace.css";
 	const COMPLETION_CSS = "/assets/retailedge/css/bank_matching_edgesuite_completion.css";
-	const STYLE_VERSION = "20260826-4";
+	const STYLE_VERSION = "20260826-5";
 	const WORKSPACE_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_workspace.js";
 	const COMPLETION_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_completion_adapter.js";
 
