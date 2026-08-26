@@ -7,6 +7,7 @@
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
 	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge.js";
 	const LOAD_TIMEOUT_MS = 15000;
+	const FRAPPE_REQUIRE_POLL_MS = 50;
 	let productMenuBootPromise = null;
 	let routeBridgeBootPromise = null;
 	let activeWrapper = null;
@@ -246,26 +247,42 @@
 	function requireAsset(asset) {
 		return new Promise((resolve, reject) => {
 			let settled = false;
+			let pollTimer = null;
+			const deadlineTimer = global.setTimeout(
+				() => fail(new Error(__("Timed out waiting for the Frappe asset loader while loading {0}", [asset]))),
+				LOAD_TIMEOUT_MS
+			);
+			const clearTimers = () => {
+				global.clearTimeout(deadlineTimer);
+				if (pollTimer) global.clearTimeout(pollTimer);
+			};
 			const finish = () => {
 				if (settled) return;
 				settled = true;
-				global.clearTimeout(timer);
+				clearTimers();
 				resolve();
 			};
 			const fail = (error) => {
 				if (settled) return;
 				settled = true;
-				global.clearTimeout(timer);
+				clearTimers();
 				reject(error instanceof Error ? error : new Error(String(error || asset)));
 			};
-			const timer = global.setTimeout(() => fail(new Error(__("Timed out loading {0}", [asset]))), LOAD_TIMEOUT_MS);
+			const attemptRequire = () => {
+				if (settled) return;
+				if (!global.frappe || typeof global.frappe.require !== "function") {
+					pollTimer = global.setTimeout(attemptRequire, FRAPPE_REQUIRE_POLL_MS);
+					return;
+				}
+				try {
+					const pending = global.frappe.require(asset, finish);
+					if (pending && typeof pending.then === "function") pending.then(finish).catch(fail);
+				} catch (requireError) {
+					fail(requireError);
+				}
+			};
 
-			try {
-				const pending = frappe.require(asset, finish);
-				if (pending && typeof pending.then === "function") pending.then(finish).catch(fail);
-			} catch (requireError) {
-				fail(requireError);
-			}
+			attemptRequire();
 		});
 	}
 
