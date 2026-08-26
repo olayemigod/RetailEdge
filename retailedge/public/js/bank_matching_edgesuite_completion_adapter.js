@@ -97,6 +97,21 @@
 		return element;
 	}
 
+	function detailPair(label, value) {
+		const pair = node("div", "retailedge-bank-detail-pair retailedge-bank-completion-detail-pair");
+		pair.appendChild(node("dt", "", t(label)));
+		pair.appendChild(node("dd", "", clean(value) || t("Not Available")));
+		return pair;
+	}
+
+	function appendComparisonContext(modal, statement, accounting, doc) {
+		const cards = modal.querySelectorAll(".retailedge-bank-compare-card");
+		const statementGrid = cards[0]?.querySelector(".retailedge-bank-detail-grid");
+		const accountingGrid = cards[1]?.querySelector(".retailedge-bank-detail-grid");
+		if (statementGrid) statementGrid.appendChild(detailPair("Branch", statement.branch || doc.branch));
+		if (accountingGrid) accountingGrid.appendChild(detailPair("Branch", accounting.branch));
+	}
+
 	function contextItem(label, value, note) {
 		if (!clean(value)) return null;
 		const item = node("div", "retailedge-bank-completion-item");
@@ -140,12 +155,13 @@
 		const recordLinks = body.querySelector(".retailedge-bank-record-links");
 		const insertBefore = recordLinks || null;
 
+		appendComparisonContext(modal, statement, accounting, doc);
+
 		const context = node("section", "retailedge-bank-review-section retailedge-bank-completion-context");
 		context.appendChild(node("h3", "", t("Operational Context")));
 		const grid = node("div", "retailedge-bank-completion-grid");
 		[
 			contextItem(t("Bank Narration"), doc.bank_narration || statement.description || details.bank_context?.description),
-			contextItem(t("Branch"), [statement.branch, accounting.branch].filter(Boolean).join(" ↔ ") || doc.branch, t("Supporting context; company and bank/GL identity remain authoritative.")),
 			contextItem(t("Mode of Payment"), accounting.mode_of_payment || doc.payment_mode || candidate.payment_mode, t("Supporting evidence only; it cannot override a bank/GL mismatch.")),
 			contextItem(t("Payment Event Source"), doc.payment_event_source || candidate.payment_event_source),
 			contextItem(t("Business Category"), humanize(evidence.transaction_category || evidence.candidate_category || candidate.transaction_category || candidate.candidate_category)),
@@ -165,8 +181,7 @@
 		guidance.appendChild(node("h3", "", t("Operational Guidance")));
 		const action = clean(operational.recommended_action);
 		if (action) guidance.appendChild(node("p", "retailedge-bank-completion-action", action));
-		const explanation = node("p", "retailedge-bank-completion-info", t("Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check."));
-		guidance.appendChild(explanation);
+		guidance.appendChild(node("p", "retailedge-bank-completion-info", t("Matching does not reconcile the Bank Transaction. Approval also does not reconcile it. ERPNext Banking reconciliation runs only after final confirmation and a fresh safety check.")));
 
 		body.insertBefore(guidance, insertBefore);
 		body.insertBefore(evidenceGrid, guidance);
