@@ -1,0 +1,47 @@
+/* Bank Matching uses one visible date authority: EdgeSuite Smart Date.
+   Exact From/To inputs remain mounted only as internal query values. */
+.retailedge-bank-layout .retailedge-bank-internal-date-filter {
+	display: none !important;
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-date--primary {
+	grid-column: span 2;
+	min-width: min(30rem, 100%);
+	max-width: 38rem;
+	margin: 0;
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-date--primary .edge-smart-date {
+	margin: 0;
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-date--primary .edge-smart-date__label {
+	display: block;
+	margin-bottom: .32rem;
+	font-weight: 650;
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-date--primary .edge-smart-date__input-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: .45rem;
+	align-items: center;
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-date--primary .edge-smart-date__input {
+	width: 100%;
+	min-height: 2.4rem;
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-date--primary .edge-smart-date__interpretation,
+.retailedge-bank-layout .retailedge-bank-smart-date--primary .edge-smart-date__error {
+	margin-top: .3rem;
+}
+
+@media (max-width: 820px) {
+	.retailedge-bank-layout .retailedge-bank-smart-date--primary {
+		grid-column: 1 / -1;
+		min-width: 100%;
+		max-width: none;
+	}
+}
