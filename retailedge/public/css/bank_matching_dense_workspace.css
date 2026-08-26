@@ -1,0 +1,294 @@
+.retailedge-bank-layout {
+	font-size: .84rem;
+}
+
+.retailedge-bank-layout .edge-filter-bar,
+.retailedge-bank-layout .edge-action-bar,
+.retailedge-bank-layout .edge-stat-card {
+	font-size: .82rem;
+}
+
+.retailedge-bank-layout .edge-filter-bar input,
+.retailedge-bank-layout .edge-filter-bar button,
+.retailedge-bank-layout .edge-link-field__input,
+.retailedge-bank-layout .edge-dropdown__trigger {
+	font-size: .8rem;
+	min-height: 2.15rem;
+}
+
+.retailedge-bank-table-wrap {
+	max-width: 100%;
+	overflow-x: hidden !important;
+}
+
+.retailedge-bank-table {
+	width: 100% !important;
+	min-width: 0 !important;
+	table-layout: fixed;
+	font-size: .78rem;
+	line-height: 1.28;
+}
+
+.retailedge-bank-table th,
+.retailedge-bank-table td {
+	padding: .46rem .5rem !important;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.retailedge-bank-table th {
+	font-size: .72rem;
+	font-weight: 700;
+	letter-spacing: .01em;
+}
+
+.retailedge-bank-table .retailedge-col-date {
+	width: 8.5%;
+}
+
+.retailedge-bank-table .retailedge-col-transaction {
+	width: 25%;
+	min-width: 0;
+}
+
+.retailedge-bank-table .retailedge-col-direction {
+	width: 8%;
+}
+
+.retailedge-bank-table .retailedge-col-amount {
+	width: 12%;
+	white-space: normal;
+}
+
+.retailedge-bank-table .retailedge-col-candidate {
+	width: 23%;
+	min-width: 0;
+}
+
+.retailedge-bank-table .retailedge-col-status {
+	width: 12.5%;
+}
+
+.retailedge-bank-table .retailedge-col-action {
+	width: 11%;
+}
+
+.retailedge-bank-narration,
+.retailedge-bank-candidate-cell .edge-link-button {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	max-width: 100%;
+	font-size: .79rem;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
+.retailedge-bank-meta,
+.retailedge-bank-skipped-note {
+	font-size: .7rem !important;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
+.retailedge-bank-table .edge-status-badge,
+.retailedge-bank-table [class*="status-badge"] {
+	font-size: .68rem;
+	line-height: 1.15;
+	white-space: normal;
+}
+
+.retailedge-bank-table .edge-button {
+	padding: .34rem .48rem;
+	min-height: 1.9rem;
+	font-size: .7rem;
+	line-height: 1.15;
+	white-space: normal;
+}
+
+.edge-modal--xl {
+	width: min(97vw, 1240px) !important;
+	max-width: 1240px !important;
+}
+
+.edge-modal--xl .edge-modal__header {
+	padding-top: .8rem;
+	padding-bottom: .8rem;
+}
+
+.edge-modal--xl .edge-modal__body {
+	font-size: .8rem;
+}
+
+.edge-modal--xl .retailedge-bank-compare-grid,
+.edge-modal--xl .retailedge-bank-review-section,
+.edge-modal--xl .retailedge-bank-record-links {
+	gap: .65rem;
+}
+
+.edge-modal--xl .retailedge-bank-compare-card,
+.edge-modal--xl .retailedge-bank-review-section,
+.retailedge-bank-candidate-review,
+.retailedge-bank-final-warning {
+	padding: .75rem;
+	border-radius: .75rem;
+}
+
+.edge-modal--xl .retailedge-bank-compare-card h3,
+.edge-modal--xl .retailedge-bank-review-section h3 {
+	font-size: .9rem;
+}
+
+.edge-modal--xl .retailedge-bank-detail-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: .52rem .7rem;
+}
+
+.edge-modal--xl .retailedge-bank-detail-pair dt,
+.retailedge-bank-candidate-review .retailedge-bank-detail-pair dt {
+	font-size: .63rem;
+	letter-spacing: .015em;
+}
+
+.edge-modal--xl .retailedge-bank-detail-pair dd,
+.retailedge-bank-candidate-review .retailedge-bank-detail-pair dd {
+	font-size: .77rem;
+	line-height: 1.25;
+	font-weight: 600;
+}
+
+.edge-modal--xl .retailedge-bank-safety-grid {
+	gap: .45rem .7rem;
+}
+
+.edge-modal--xl .retailedge-bank-safety-row {
+	grid-template-columns: minmax(5.5rem, .72fr) auto minmax(0, 1.5fr);
+	gap: .38rem;
+	padding: .35rem 0;
+	font-size: .73rem;
+}
+
+.edge-modal--xl .retailedge-bank-evidence-text,
+.edge-modal--xl .retailedge-bank-fuzzy-note {
+	font-size: .75rem;
+	line-height: 1.35;
+	margin-top: .55rem;
+}
+
+.edge-modal--xl .edge-button,
+.retailedge-bank-candidate-review + .edge-button {
+	font-size: .75rem;
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+	.retailedge-bank-table {
+		font-size: .72rem;
+	}
+
+	.retailedge-bank-table th,
+	.retailedge-bank-table td {
+		padding: .4rem .38rem !important;
+	}
+
+	.retailedge-bank-table th {
+		font-size: .66rem;
+	}
+
+	.retailedge-bank-table .edge-button {
+		font-size: .65rem;
+		padding: .3rem .38rem;
+	}
+
+	.retailedge-bank-meta {
+		font-size: .64rem !important;
+	}
+}
+
+@media (max-width: 900px) {
+	.retailedge-bank-table-wrap {
+		overflow: visible !important;
+		border: 0;
+		background: transparent;
+	}
+
+	.retailedge-bank-table {
+		display: block;
+		min-width: 0 !important;
+		font-size: .8rem;
+	}
+
+	.retailedge-bank-table thead {
+		display: none;
+	}
+
+	.retailedge-bank-table tbody,
+	.retailedge-bank-table tr,
+	.retailedge-bank-table td {
+		display: block;
+		width: 100% !important;
+	}
+
+	.retailedge-bank-table tr {
+		margin-bottom: .65rem;
+		padding: .65rem;
+		border: 1px solid var(--edge-color-border, var(--border-color));
+		border-radius: .8rem;
+		background: var(--edge-color-surface, var(--card-bg));
+	}
+
+	.retailedge-bank-table td {
+		display: grid;
+		grid-template-columns: minmax(7rem, .38fr) minmax(0, 1fr);
+		gap: .45rem;
+		padding: .34rem 0 !important;
+		border: 0 !important;
+		text-align: left !important;
+	}
+
+	.retailedge-bank-table td::before {
+		content: attr(data-label);
+		font-size: .68rem;
+		font-weight: 700;
+		color: var(--edge-color-text-muted, var(--text-muted));
+	}
+
+	.retailedge-bank-table .retailedge-col-date,
+	.retailedge-bank-table .retailedge-col-transaction,
+	.retailedge-bank-table .retailedge-col-direction,
+	.retailedge-bank-table .retailedge-col-amount,
+	.retailedge-bank-table .retailedge-col-candidate,
+	.retailedge-bank-table .retailedge-col-status,
+	.retailedge-bank-table .retailedge-col-action {
+		width: 100% !important;
+	}
+
+	.edge-modal--xl .retailedge-bank-compare-grid,
+	.edge-modal--xl .retailedge-bank-safety-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.edge-modal--xl .retailedge-bank-safety-row {
+		grid-template-columns: minmax(6rem, .7fr) auto minmax(0, 1.4fr);
+	}
+}
+
+@media (max-width: 600px) {
+	.retailedge-bank-layout {
+		font-size: .8rem;
+	}
+
+	.retailedge-bank-table td {
+		grid-template-columns: 1fr;
+	}
+
+	.retailedge-bank-table td::before {
+		margin-bottom: .1rem;
+	}
+
+	.edge-modal--xl .retailedge-bank-detail-grid,
+	.edge-modal--xl .retailedge-bank-safety-row {
+		grid-template-columns: 1fr;
+	}
+}
