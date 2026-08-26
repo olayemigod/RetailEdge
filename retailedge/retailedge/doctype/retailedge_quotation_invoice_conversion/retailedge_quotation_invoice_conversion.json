@@ -28,6 +28,7 @@
  "name": "RetailEdge Quotation Invoice Conversion",
  "owner": "Administrator",
  "permissions": [
+  {"create":1,"delete":1,"write":1,"role":"All"},
   {"create":1,"delete":1,"read":1,"write":1,"report":1,"role":"System Manager"},
   {"create":1,"delete":1,"read":1,"write":1,"role":"RetailEdge Manager"},
   {"create":1,"delete":1,"read":1,"write":1,"role":"RetailEdgeManager"},
