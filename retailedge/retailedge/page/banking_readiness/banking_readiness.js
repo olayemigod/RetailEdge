@@ -2,6 +2,12 @@
 	"use strict";
 
 	const PAGE_NAME = "banking-readiness";
+	const READINESS_FILTERS = [
+		{ label: "All States", value: "All" },
+		{ label: "Ready", value: "Ready" },
+		{ label: "Warning", value: "Warning" },
+		{ label: "Blocked", value: "Blocked" },
+	];
 
 	function runtime() {
 		return global.EdgeSuiteUI || global.EdgeUI || null;
@@ -46,7 +52,7 @@
 		if (!edge?.createEdgeApp || !edge?.Vue) {
 			global.frappe.throw(t("EdgeSuite UI runtime is required for Banking Setup & Readiness."));
 		}
-		const required = ["EdgePageLayout", "EdgePageHeader", "EdgeFilterBar", "EdgeLinkField", "EdgeStatCard", "EdgeStatusBadge", "EdgeLoadingState", "EdgeEmptyState", "EdgeErrorState"];
+		const required = ["EdgePageLayout", "EdgePageHeader", "EdgeFilterBar", "EdgeLinkField", "EdgeDropdown", "EdgeStatCard", "EdgeStatusBadge", "EdgeLoadingState", "EdgeEmptyState", "EdgeErrorState"];
 		const missing = required.filter((name) => !edge.getComponent(name));
 		if (missing.length) global.frappe.throw(t("EdgeSuite UI is missing required readiness components: {0}", [missing.join(", ")]));
 
@@ -60,6 +66,7 @@
 		const EdgePageHeader = edge.getComponent("EdgePageHeader");
 		const EdgeFilterBar = edge.getComponent("EdgeFilterBar");
 		const EdgeLinkField = edge.getComponent("EdgeLinkField");
+		const EdgeDropdown = edge.getComponent("EdgeDropdown");
 		const EdgeStatCard = edge.getComponent("EdgeStatCard");
 		const EdgeStatusBadge = edge.getComponent("EdgeStatusBadge");
 		const EdgeLoadingState = edge.getComponent("EdgeLoadingState");
@@ -73,10 +80,15 @@
 					loading: false,
 					error: "",
 					company: "",
+					readinessFilter: "All",
 					rows: [],
 					summary: { ready: 0, warning: 0, blocked: 0 },
 				});
 				const total = computed(() => Number(state.summary.ready || 0) + Number(state.summary.warning || 0) + Number(state.summary.blocked || 0));
+				const visibleRows = computed(() => {
+					if (state.readinessFilter === "All") return state.rows;
+					return state.rows.filter((row) => clean(row.readiness) === state.readinessFilter);
+				});
 
 				async function refresh() {
 					state.loading = true;
@@ -150,6 +162,7 @@
 							h("ul", items.map(issueRow)),
 						]) : h("p", { class: "retailedge-readiness-clear" }, t("No banking setup issues were detected for this account.")),
 						h("footer", { class: "retailedge-readiness-card__actions" }, [
+							row.resolved_gl_account ? actionButton(t("Open GL Account"), "secondary", () => global.frappe.set_route("Form", "Account", row.resolved_gl_account)) : null,
 							actionButton(t("Open ERPNext Bank Account"), "secondary", () => openNativeBankAccount(row.bank_account)),
 						]),
 					]);
@@ -169,13 +182,21 @@
 						],
 					}),
 					filters: () => h(EdgeFilterBar, { title: t("Context") }, {
-						default: () => [h(EdgeLinkField, {
-							label: t("Company"),
-							modelValue: state.company,
-							searcher: (query) => permissionAwareLinkSearch("Company", query),
-							"onUpdate:modelValue": (value) => { state.company = value || ""; refresh(); },
-						})],
-						actions: () => state.company ? [actionButton(t("Clear Company"), "secondary", () => { state.company = ""; refresh(); })] : [],
+						default: () => [
+							h(EdgeLinkField, {
+								label: t("Company"),
+								modelValue: state.company,
+								searcher: (query) => permissionAwareLinkSearch("Company", query),
+								"onUpdate:modelValue": (value) => { state.company = value || ""; refresh(); },
+							}),
+							h(EdgeDropdown, {
+								label: t("Readiness State"),
+								modelValue: state.readinessFilter,
+								options: READINESS_FILTERS.map((item) => ({ value: item.value, label: t(item.label) })),
+								"onUpdate:modelValue": (value) => { state.readinessFilter = value || "All"; },
+							}),
+						],
+						actions: () => (state.company || state.readinessFilter !== "All") ? [actionButton(t("Clear Filters"), "secondary", () => { state.company = ""; state.readinessFilter = "All"; refresh(); })] : [],
 					}),
 					default: () => [
 						h("div", { class: "retailedge-readiness-summary" }, [
@@ -186,11 +207,11 @@
 						]),
 						state.loading ? h(EdgeLoadingState, { message: t("Evaluating banking readiness...") }) : null,
 						state.error ? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh }) : null,
-						!state.loading && !state.error && !state.rows.length ? h(EdgeEmptyState, {
-							title: t("No Bank Accounts found"),
-							description: t("Select another company or configure an ERPNext Bank Account that you are permitted to use."),
+						!state.loading && !state.error && !visibleRows.value.length ? h(EdgeEmptyState, {
+							title: state.readinessFilter === "All" ? t("No Bank Accounts found") : t("No bank accounts in this readiness state"),
+							description: state.readinessFilter === "All" ? t("Select another company or configure an ERPNext Bank Account that you are permitted to use.") : t("Choose another readiness state or company to continue."),
 						}) : null,
-						!state.loading && !state.error ? h("div", { class: "retailedge-readiness-list" }, state.rows.map(rowCard)) : null,
+						!state.loading && !state.error ? h("div", { class: "retailedge-readiness-list" }, visibleRows.value.map(rowCard)) : null,
 					],
 				});
 			},
