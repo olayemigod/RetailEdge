@@ -43,15 +43,15 @@ class BankingPageContractTests(unittest.TestCase):
 	def test_page_controller_load_order_preserves_adapters_before_workspace(self):
 		page_js = PAGE_JS.read_text()
 		markers = (
-			"frappe.require(OUTCOME_ASSET)",
-			"frappe.require(REVIEW_CATEGORY_ASSET)",
-			"frappe.require(FUZZY_DISCOVERY_ASSET)",
-			"frappe.require(BRANCH_SEARCH_ASSET)",
-			"loadBankingStyles()",
-			"frappe.require(WORKSPACE_ASSET)",
-			"frappe.require(COMPLETION_ASSET)",
-			"frappe.require(PAGE_ENHANCEMENTS_ASSET)",
-			"startWorkspace(wrapper)",
+			"Promise.resolve(frappe.require(OUTCOME_ASSET))",
+			".then(() => Promise.resolve(frappe.require(REVIEW_CATEGORY_ASSET)))",
+			".then(() => Promise.resolve(frappe.require(FUZZY_DISCOVERY_ASSET)))",
+			".then(() => Promise.resolve(frappe.require(BRANCH_SEARCH_ASSET)))",
+			".then(() => loadBankingStyles())",
+			".then(() => Promise.resolve(frappe.require(WORKSPACE_ASSET)))",
+			".then(() => Promise.resolve(frappe.require(COMPLETION_ASSET)))",
+			".then(() => Promise.resolve(frappe.require(PAGE_ENHANCEMENTS_ASSET)))",
+			".then(() => startWorkspace(wrapper))",
 		)
 		positions = [page_js.index(marker) for marker in markers]
 		self.assertEqual(positions, sorted(positions))
