@@ -76,7 +76,7 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 		self.assertIn("action.key === GUIDED_STOCK_ADJUSTMENT_ACTION", component)
 		self.assertIn("this.simpleStockAdjustmentOpen = true", component)
 		self.assertIn("SimpleStockAdjustmentDialog", component)
-		self.assertIn('return action?.mode === "available" ? "RetailEdge entry" : "Full form";', component)
+		self.assertIn('return action?.mode === "available" ? "Guided entry" : "Full form";', component)
 		self.assertIn("this.closeCreatePicker();", component)
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.db.insert", component)

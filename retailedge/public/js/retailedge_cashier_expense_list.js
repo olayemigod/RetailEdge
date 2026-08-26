@@ -1,4 +1,9 @@
 frappe.listview_settings["RetailEdge Cashier Expense"] = {
+	onload(listview) {
+		if (listview.page && listview.page.set_title) {
+			listview.page.set_title(__("Cashier Expenses"));
+		}
+	},
 	add_fields: [
 		"expense_status",
 		"ledger_status",

@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		:title="formContext.title || 'Cash / Bank Transfer'"
-		:subtitle="formContext.subtitle || 'Create an ERPNext internal-transfer Payment Entry draft.'"
+		:subtitle="formContext.subtitle || 'Move funds safely between permitted Cash and Bank accounts.'"
 		size="lg"
 		@close="requestClose"
 	>
@@ -16,7 +16,7 @@
 			<div class="guided-transfer-context">
 				<div><span>Company</span><strong>{{ values.company || 'Not set' }}</strong></div>
 				<div v-if="values.branch"><span>Branch</span><strong>{{ values.branch }}</strong></div>
-				<div><span>Document</span><strong>Payment Entry · Internal Transfer</strong></div>
+				<div><span>Transfer Type</span><strong>Internal Transfer</strong></div>
 			</div>
 			<div v-if="saveError" class="guided-transfer-error" role="alert">{{ saveError }}</div>
 			<div class="guided-transfer-grid">

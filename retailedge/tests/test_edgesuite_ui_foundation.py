@@ -182,8 +182,8 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("retailedgeRegisterBusinessHubPage", controller)
 		self.assertIn("retailedgeBootBusinessHubPage", controller)
 		self.assertIn("__retailedge_business_hub_registered", controller)
-		self.assertIn("Loading RetailEdge Business Hub", controller)
-		self.assertIn("RetailEdge Business Hub failed to load", controller)
+		self.assertIn("Loading Business Hub", controller)
+		self.assertIn("Business Hub failed to load", controller)
 
 	def test_business_hub_uses_one_edgesuite_navigation_surface(self):
 		component = (

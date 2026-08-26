@@ -34,7 +34,7 @@ PROGRAMME_EXPERIENCES: tuple[dict[str, Any], ...] = (
 	{
 		"key": "navigate",
 		"label": "Navigate",
-		"description": "Professional, role-aware access to RetailEdge workspaces, transactions, reports, and setup.",
+		"description": "Professional, role-aware access to workspaces, transactions, reports, and setup.",
 		"icon": "grid",
 		"status": "In Progress",
 	},
@@ -73,7 +73,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "home",
 		"label": "Home",
 		"icon": "home",
-		"items": ({"label": "RetailEdge Business Hub", "target_type": "Page", "target": "retailedge-business-hub", "icon": "home"},),
+		"items": ({"label": "Business Hub", "target_type": "Page", "target": "retailedge-business-hub", "icon": "home"},),
 	},
 	{
 		"key": "sell",
@@ -102,7 +102,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "stock", "label": "Stock", "icon": "layers", "items": (
 			{"label": "Products", "target_type": "DocType", "target": "Item", "icon": "layers"},
-			{"label": "Warehouses", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
+			{"label": "Stock Locations", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
 			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History", "icon": "report"},
 			{"label": "Stock Position", "target_type": "Page", "target": "stock-position", "icon": "report"},
 			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance", "icon": "report"},
@@ -180,8 +180,8 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "setup", "label": "Setup", "icon": "settings", "required_roles": ("System Manager",), "items": (
-			{"label": "RetailEdge Settings", "target_type": "DocType", "target": "RetailEdge Settings", "icon": "settings"},
-			{"label": "Branch Profiles", "target_type": "DocType", "target": "RetailEdge Branch Profile", "icon": "building"},
+			{"label": "Settings", "target_type": "DocType", "target": "RetailEdge Settings", "icon": "settings"},
+			{"label": "Branch Setup", "target_type": "DocType", "target": "RetailEdge Branch Profile", "icon": "building"},
 			{"label": "Bank Accounts", "target_type": "DocType", "target": "Bank Account", "icon": "wallet"},
 			{"label": "Modes of Payment", "target_type": "DocType", "target": "Mode of Payment", "icon": "wallet"},
 			{"label": "Bank Statement Mapping", "target_type": "DocType", "target": "RetailEdge Statement Mapping Template", "icon": "settings"},
@@ -212,7 +212,7 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 		"key": "record-purchase", "label": "Record Purchase", "description": "Create a purchase invoice for stock, services, or operating expenses.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted warehouses using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
+		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted stock locations using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "adjust-stock", "label": "Stock Adjustment", "description": "Record a physical stock count using a native Stock Reconciliation draft.", "doctype": "Stock Reconciliation", "icon": "clipboard", "experience": "act", "mode": "available",

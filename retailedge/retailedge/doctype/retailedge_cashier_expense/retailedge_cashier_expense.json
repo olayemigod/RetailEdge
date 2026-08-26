@@ -119,7 +119,7 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "Auto-filled from cashier/user/POS context.",
+   "description": "Auto-filled from cashier, user, or POS context.",
    "fieldname": "company",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -148,7 +148,7 @@
    "read_only": 1
   },
   {
-   "description": "Auto-filled from the cashier’s current/open POS profile where possible.",
+   "description": "Auto-filled from the cashier’s current or open POS profile where available.",
    "fieldname": "pos_profile",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -158,7 +158,7 @@
    "read_only": 1
   },
   {
-   "description": "Auto-filled from branch context, POS profile, or future CoreEdge branch switcher.",
+   "description": "Auto-filled from the available branch or POS context.",
    "fieldname": "branch",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -182,7 +182,7 @@
    "read_only": 1
   },
   {
-   "description": "Auto-filled from Expense Category, POS Profile, branch, or defaults.",
+   "description": "Auto-filled from Expense Category, POS Profile, branch, or configured defaults.",
    "fieldname": "cost_center",
    "fieldtype": "Link",
    "label": "Cost Center",
@@ -190,7 +190,7 @@
    "read_only": 1
   },
   {
-   "description": "Auto-filled later from cashier cash/current open shift/POS profile cash account.",
+   "description": "Resolved from the cashier, open shift, POS profile, or configured cash account.",
    "fieldname": "payment_account",
    "fieldtype": "Link",
    "label": "Payment Account",
@@ -211,14 +211,14 @@
    "read_only": 1
   },
   {
-   "description": "Cash sales/payments detected for the current shift where resolvable.",
+   "description": "Cash sales or payments detected for the current shift where resolvable.",
    "fieldname": "shift_cash_sales_amount",
    "fieldtype": "Currency",
    "label": "Shift Cash Sales Amount",
    "read_only": 1
   },
   {
-   "description": "Existing non-cancelled RetailEdge cashier expenses already recorded for this opening shift, excluding this document.",
+   "description": "Existing non-cancelled cashier expenses already recorded for this opening shift, excluding this document.",
    "fieldname": "prior_shift_expense_amount",
    "fieldtype": "Currency",
    "label": "Prior Shift Expense Amount",
@@ -239,7 +239,7 @@
    "read_only": 1
   },
   {
-   "description": "Shows how RetailEdge resolved the cash balance.",
+   "description": "Shows how the cash balance was resolved.",
    "fieldname": "cash_balance_source",
    "fieldtype": "Data",
    "label": "Cash Balance Source",
@@ -271,7 +271,7 @@
   {
    "allow_on_submit": 1,
    "default": "Not Applicable",
-   "description": "Reserved for later ledger/accounting posting.",
+   "description": "Shows the current accounting-posting status for this expense.",
    "fieldname": "ledger_status",
    "fieldtype": "Select",
    "in_standard_filter": 1,
@@ -287,7 +287,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "Auto-filled later from the cashier’s current open POS shift.",
+   "description": "Linked current POS Opening Shift where available.",
    "fieldname": "linked_pos_opening_shift",
    "fieldtype": "Link",
    "label": "Linked POS Opening Shift",
@@ -296,7 +296,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "Auto-filled later after the related opening shift is closed.",
+   "description": "Linked POS Closing Shift after the related opening shift is closed, where available.",
    "fieldname": "linked_pos_closing_shift",
    "fieldtype": "Link",
    "label": "Linked POS Closing Shift",
@@ -305,7 +305,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "Reserved for later Daily Sales Audit integration.",
+   "description": "Linked Daily Sales Audit when this expense has been included in an audit.",
    "fieldname": "linked_daily_sales_audit",
    "fieldtype": "Data",
    "label": "Linked Daily Sales Audit",
@@ -357,11 +357,11 @@
    "collapsible": 1,
    "fieldname": "future_posting_reference_section",
    "fieldtype": "Section Break",
-   "label": "Future Posting Reference"
+   "label": "Posting Reference"
   },
   {
    "allow_on_submit": 1,
-   "description": "Reserved for later accounting posting phase.",
+   "description": "Accounting document type used when a posting reference is available.",
    "fieldname": "posting_reference_type",
    "fieldtype": "Data",
    "label": "Posting Reference Type",
@@ -369,7 +369,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "Reserved for later accounting posting phase.",
+   "description": "Accounting document linked to this expense when posting has occurred.",
    "fieldname": "posting_reference",
    "fieldtype": "Dynamic Link",
    "label": "Posting Reference",
@@ -384,7 +384,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "Indicates whether this expense has enough information for future ledger posting.",
+   "description": "Indicates whether this expense has enough information for ledger posting.",
    "fieldname": "posting_ready",
    "fieldtype": "Check",
    "label": "Posting Ready",
@@ -400,7 +400,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "Future posting debit account, normally the expense account from Expense Category.",
+   "description": "Resolved debit account, normally the expense account from Expense Category.",
    "fieldname": "resolved_debit_account",
    "fieldtype": "Link",
    "label": "Resolved Debit Account",
@@ -409,7 +409,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "Future posting credit account, normally the cash/payment account.",
+   "description": "Resolved credit account, normally the cash or payment account.",
    "fieldname": "resolved_credit_account",
    "fieldtype": "Link",
    "label": "Resolved Credit Account",
@@ -426,7 +426,7 @@
   },
   {
    "allow_on_submit": 1,
-   "description": "Human-readable preview of the future accounting entry.",
+   "description": "Human-readable preview of the accounting entry that would be posted.",
    "fieldname": "posting_preview",
    "fieldtype": "Long Text",
    "label": "Posting Preview",
@@ -470,7 +470,7 @@
   {
    "allow_on_submit": 1,
    "default": "1",
-   "description": "Indicates whether this expense should be visible for future Daily Audit review.",
+   "description": "Indicates whether this expense should be visible for Daily Audit review.",
    "fieldname": "include_in_daily_audit",
    "fieldtype": "Check",
    "label": "Include in Daily Audit"

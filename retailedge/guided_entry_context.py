@@ -7,6 +7,7 @@ from frappe import _
 
 from retailedge.branch_context import resolve_branch_from_warehouse, validate_user_branch_access
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
+from retailedge.operating_context import get_effective_operating_context
 
 
 WAREHOUSE_PREFERENCES: dict[str, tuple[str, ...]] = {
@@ -25,28 +26,36 @@ def resolve_branch_warehouse_selection(
 	warehouse: str = "",
 	preference: str = "default",
 ) -> dict[str, Any]:
-	"""Resolve one guided-entry Branch/Warehouse pair without broad data loading.
+	"""Resolve one guided-entry Branch/Stock Location pair without broad data loading.
 
-	Warehouse is authoritative when explicitly selected: its configured branch is
-	resolved and returned. When Branch is selected without Warehouse, only the
-	branch profile's preferred warehouse is considered; we deliberately do not
-	scan or preload all warehouses.
+	An explicitly selected Stock Location remains authoritative. When neither Branch
+	nor Stock Location is supplied, the session Operating Branch guides the new
+	draft. Existing documents and explicit selections are never overwritten by the
+	operating context.
 	"""
 	user = frappe.session.user
 	company = str(company or "").strip()
 	branch = str(branch or "").strip()
 	warehouse = str(warehouse or "").strip()
 	preference = str(preference or "default").strip().lower()
+	used_operating_context = False
+
+	if not company or (not branch and not warehouse):
+		operating = get_effective_operating_context(company=company)
+		company = company or str(operating.get("company") or "").strip()
+		if not branch and not warehouse:
+			branch = str(operating.get("branch") or "").strip()
+			used_operating_context = bool(branch)
 
 	if not company:
-		frappe.throw(_("Company is required to resolve Branch and Warehouse."))
+		frappe.throw(_("Company is required to resolve Branch and Stock Location."))
 	_assert_read_permission("Company", company)
 
 	if warehouse:
 		_assert_read_permission("Warehouse", warehouse)
 		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
 		if warehouse_company and warehouse_company != company:
-			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
+			frappe.throw(_("Stock Location {0} does not belong to Company {1}.").format(warehouse, company))
 
 		resolved = resolve_branch_from_warehouse(warehouse, company=company)
 		resolved_branch = str(resolved.get("branch") or "").strip()
@@ -79,7 +88,7 @@ def resolve_branch_warehouse_selection(
 			)
 			if not profile:
 				frappe.throw(
-					_("Warehouse {0} is not configured for Branch {1}.").format(warehouse, branch)
+					_("Stock Location {0} is not configured for Branch {1}.").format(warehouse, branch)
 				)
 		return {
 			"company": company,
@@ -110,7 +119,7 @@ def resolve_branch_warehouse_selection(
 		"company": company,
 		"branch": branch,
 		"warehouse": candidate,
-		"source": "branch_profile" if candidate else "branch",
+		"source": "operating_context" if used_operating_context else ("branch_profile" if candidate else "branch"),
 	}
 
 
