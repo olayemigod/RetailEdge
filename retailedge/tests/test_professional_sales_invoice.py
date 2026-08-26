@@ -33,13 +33,14 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
-	def test_quotation_can_invoice_directly_without_hidden_sales_order(self):
+	def test_quotation_can_invoice_directly_without_hidden_order_or_repricing(self):
 		source = self.read("professional_sales_invoice.py")
 		for contract in (
 			"create_sales_invoice_from_quotation",
-			"create_simple_sales_invoice_draft",
+			'frappe.new_doc("Sales Invoice")',
 			"_copy_quotation_commercial_terms(source, target)",
-			"no hidden Sales Order is created",
+			"_quotation_invoice_item(row)",
+			"does not reprice the accepted Quotation",
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("erpnext_make_sales_order", source)
