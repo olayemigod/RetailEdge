@@ -135,39 +135,42 @@ class BankingPageContractTests(unittest.TestCase):
 		self.assertIn("Supplemental Fuzzy Score", asset)
 		self.assertIn("Fuzzy evidence is supplemental only", asset)
 
-	def test_fuzzy_date_tolerance_is_visible_and_configurable_without_changing_hard_eligibility(self):
+	def test_smart_date_reuses_shared_edgesuite_component_and_only_sets_exact_filters(self):
 		fuzzy = FUZZY_JS.read_text()
 		enhancements = ENHANCEMENTS_JS.read_text()
-		for marker in (
-			"retailedgeBankingFuzzyDateToleranceDays",
-			"configuredTolerance",
-			"MAX_DATE_TOLERANCE_DAYS = 7",
-			"Supplemental evidence only; accounting eligibility is unchanged.",
-		):
-			self.assertIn(marker, fuzzy)
-		for marker in (
-			"Smart Match",
-			"Same day",
-			"±1 day",
-			"±3 days",
-			"±7 days",
-			"Date proximity is supplemental only; bank/accounting eligibility still controls.",
-		):
-			self.assertIn(marker, enhancements)
+		self.assertIn('getComponent?.("EdgeSmartDateRange")', enhancements)
+		self.assertIn('label: t("Smart Date")', enhancements)
+		self.assertIn("last 90 days", enhancements)
+		self.assertIn('fieldInputByLabel(filterBar, "From Date")', enhancements)
+		self.assertIn('fieldInputByLabel(filterBar, "To Date")', enhancements)
+		self.assertIn("value.from_date", enhancements)
+		self.assertIn("value.to_date", enhancements)
+		self.assertNotIn("Smart Match", enhancements)
+		self.assertNotIn("retailedgeBankingFuzzyDateToleranceDays", enhancements)
+		self.assertIn("DEFAULT_DATE_TOLERANCE_DAYS = 3", fuzzy)
+		self.assertNotIn("configuredTolerance", fuzzy)
 
-	def test_page_enhancements_compact_filters_and_use_native_statement_import(self):
+	def test_page_enhancements_compact_filters_and_import_inside_edgesuite_modal(self):
 		enhancements = ENHANCEMENTS_JS.read_text()
 		css = ENHANCEMENTS_CSS.read_text()
 		self.assertIn("removeFilterHeading", enhancements)
 		self.assertIn("Reset filters", enhancements)
 		self.assertIn("Upload Statement", enhancements)
 		self.assertIn('IMPORT_DOCTYPE = "Bank Statement Import"', enhancements)
-		self.assertIn("frappe.new_doc", enhancements)
-		self.assertIn('reference_doctype: "Bank Transaction"', enhancements)
-		self.assertIn('import_type: "Insert New Records"', enhancements)
+		self.assertIn('getComponent?.("EdgeModal")', enhancements)
+		self.assertIn('getComponent?.("EdgeLinkField")', enhancements)
+		self.assertIn("create_bank_statement_import", enhancements)
+		self.assertIn("get_preview_from_template", enhancements)
+		self.assertIn("form_start_import", enhancements)
+		self.assertIn("get_import_status", enhancements)
+		self.assertIn('type: "file"', enhancements)
+		self.assertIn("download_template", enhancements)
+		self.assertIn("Import creates Bank Transactions only", enhancements)
+		self.assertNotIn("frappe.new_doc", enhancements)
 		self.assertNotIn("frappe.ui.Dialog", enhancements)
 		self.assertIn("retailedge-bank-reset-link", css)
-		self.assertIn("retailedge-bank-smart-match", css)
+		self.assertIn("retailedge-bank-smart-date", css)
+		self.assertIn("retailedge-bank-import-preview", css)
 		self.assertIn("retailedge-bank-layout", css)
 
 	def test_review_stays_in_edgesuite_workspace_and_uses_existing_workflow_actions(self):
