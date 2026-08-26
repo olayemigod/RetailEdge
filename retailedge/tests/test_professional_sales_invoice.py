@@ -45,6 +45,15 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertNotIn("erpnext_make_sales_order", source)
 
+	def test_direct_quote_invoice_is_blocked_after_order_creation(self):
+		source = self.read("professional_sales_invoice.py")
+		for contract in (
+			'{"Partially Ordered", "Ordered"}',
+			"This Quotation already has a Sales Order.",
+			'["Partially Ordered", "Ordered", "Lost", "Cancelled", "Expired"]',
+		):
+			self.assertIn(contract, source)
+
 	def test_submitted_sources_are_never_mutated_or_submitted(self):
 		source = self.read("professional_sales_invoice.py")
 		for forbidden in (
