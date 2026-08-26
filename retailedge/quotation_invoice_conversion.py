@@ -36,7 +36,11 @@ def get_quotation_conversion(quotation: str) -> dict[str, Any] | None:
 
 
 def quotation_has_conversion(quotation: str) -> bool:
-	return bool(get_quotation_conversion(quotation))
+	existing = get_quotation_conversion(quotation)
+	if not existing:
+		return False
+	sales_invoice = str(existing.get("sales_invoice") or "").strip()
+	return bool(sales_invoice and frappe.db.exists("Sales Invoice", sales_invoice))
 
 
 def filter_unconverted_quotation_results(rows: Iterable[Any], *, limit: int) -> list[Any]:
@@ -64,7 +68,14 @@ def reserve_quotation_conversion(source, *, company: str, branch: str) -> Any:
 	assert_conversion_registry_available()
 	existing = get_quotation_conversion(source.name)
 	if existing:
-		_throw_already_converted(source.name, existing.get("sales_invoice"))
+		sales_invoice = str(existing.get("sales_invoice") or "").strip()
+		if sales_invoice and frappe.db.exists("Sales Invoice", sales_invoice):
+			_throw_already_converted(source.name, sales_invoice)
+		# A user may legitimately delete an unwanted draft Sales Invoice. Because
+		# the target reference is audit data rather than a Link, a stale registry
+		# row can be retired safely before reserving a replacement conversion.
+		with _conversion_write_scope():
+			frappe.get_doc(CONVERSION_DOCTYPE, existing["name"]).delete()
 
 	tracker = frappe.new_doc(CONVERSION_DOCTYPE)
 	tracker.quotation = source.name
@@ -84,6 +95,8 @@ def reserve_quotation_conversion(source, *, company: str, branch: str) -> Any:
 def complete_quotation_conversion(tracker, sales_invoice: str) -> None:
 	if not tracker or tracker.doctype != CONVERSION_DOCTYPE:
 		frappe.throw(_("RetailEdge could not complete the quotation conversion audit record."))
+	if not frappe.db.exists("Sales Invoice", sales_invoice):
+		frappe.throw(_("RetailEdge could not find the Sales Invoice created from this quotation."))
 	with _conversion_write_scope():
 		tracker.sales_invoice = sales_invoice
 		tracker.save()
@@ -114,10 +127,10 @@ def _search_result_value(row: Any) -> str:
 def _throw_already_converted(quotation: str, sales_invoice: str | None) -> None:
 	if sales_invoice:
 		frappe.throw(
-		_(
-			"Quotation {0} already created direct Sales Invoice {1}. Open that invoice instead; "
-			"if it was cancelled, use ERPNext Amend rather than converting the quotation again."
-		).format(quotation, sales_invoice)
+			_(
+				"Quotation {0} already created direct Sales Invoice {1}. Open that invoice instead; "
+				"if it was cancelled, use ERPNext Amend rather than converting the quotation again."
+			).format(quotation, sales_invoice)
 		)
 	frappe.throw(
 		_(
