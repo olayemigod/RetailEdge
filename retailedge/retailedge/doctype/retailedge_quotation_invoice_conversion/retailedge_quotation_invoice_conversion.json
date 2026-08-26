@@ -1,0 +1,46 @@
+{
+ "actions": [],
+ "autoname": "field:quotation",
+ "creation": "2026-08-26 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "quotation",
+  "sales_invoice",
+  "company",
+  "branch",
+  "converted_by",
+  "converted_on"
+ ],
+ "fields": [
+  {"fieldname":"quotation","fieldtype":"Link","label":"Quotation","options":"Quotation","reqd":1,"unique":1,"read_only":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"sales_invoice","fieldtype":"Link","label":"Sales Invoice","options":"Sales Invoice","read_only":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"company","fieldtype":"Link","label":"Company","options":"Company","reqd":1,"read_only":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"branch","fieldtype":"Link","label":"Branch","options":"Branch","read_only":1,"in_standard_filter":1},
+  {"fieldname":"converted_by","fieldtype":"Link","label":"Converted By","options":"User","reqd":1,"read_only":1},
+  {"fieldname":"converted_on","fieldtype":"Datetime","label":"Converted On","reqd":1,"read_only":1}
+ ],
+ "index_web_pages_for_search": 0,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "module": "RetailEdge",
+ "name": "RetailEdge Quotation Invoice Conversion",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"read":1,"write":1,"report":1,"role":"System Manager"},
+  {"create":1,"delete":1,"read":1,"write":1,"role":"RetailEdge Manager"},
+  {"create":1,"delete":1,"read":1,"write":1,"role":"RetailEdgeManager"},
+  {"create":1,"delete":1,"read":1,"write":1,"role":"RetailEdge Branch Manager"},
+  {"create":1,"delete":1,"read":1,"write":1,"role":"RetailEdgeBranchManager"},
+  {"create":1,"delete":1,"read":1,"write":1,"role":"Accounts Manager"},
+  {"create":1,"delete":1,"read":1,"write":1,"role":"Accounts User"},
+  {"create":1,"delete":1,"read":1,"write":1,"role":"Sales Manager"},
+  {"create":1,"delete":1,"read":1,"write":1,"role":"Sales User"}
+ ],
+ "search_fields": "quotation,sales_invoice,company,branch",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "quotation",
+ "track_changes": 1
+}
