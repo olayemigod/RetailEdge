@@ -1,0 +1,98 @@
+.retailedge-bank-completion-context,
+.retailedge-bank-completion-evidence-grid,
+.retailedge-bank-completion-guidance {
+	margin-top: var(--edge-space-4, 1rem);
+}
+
+.retailedge-bank-completion-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+}
+
+.retailedge-bank-completion-item {
+	display: grid;
+	gap: .2rem;
+	min-width: 0;
+	padding: var(--edge-space-3, .75rem);
+	border: 1px solid var(--edge-color-border-subtle, var(--border-color));
+	border-radius: var(--edge-radius-lg, .75rem);
+	background: var(--edge-color-surface-raised, var(--card-bg));
+}
+
+.retailedge-bank-completion-item strong {
+	font-size: var(--edge-font-size-xs, .75rem);
+	text-transform: uppercase;
+	letter-spacing: .02em;
+	color: var(--edge-color-text-muted, var(--text-muted));
+}
+
+.retailedge-bank-completion-item span {
+	font-weight: 600;
+	color: var(--edge-color-text, var(--text-color));
+	overflow-wrap: anywhere;
+}
+
+.retailedge-bank-completion-item small {
+	color: var(--edge-color-text-muted, var(--text-muted));
+	line-height: 1.35;
+}
+
+.retailedge-bank-completion-evidence-title {
+	margin-bottom: var(--edge-space-3, .75rem) !important;
+}
+
+.retailedge-bank-completion-evidence-panels {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+}
+
+.retailedge-bank-completion-evidence {
+	padding: var(--edge-space-3, .75rem);
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-lg, .75rem);
+	background: var(--edge-color-surface-raised, var(--card-bg));
+}
+
+.retailedge-bank-completion-evidence.is-accounting {
+	border-left: 3px solid var(--edge-color-success, var(--green-500));
+}
+
+.retailedge-bank-completion-evidence.is-fuzzy {
+	border-left: 3px solid var(--edge-color-info, var(--blue-500));
+}
+
+.retailedge-bank-completion-evidence h4 {
+	margin: 0 0 .4rem;
+	font-size: .82rem;
+	color: var(--edge-color-heading, var(--heading-color));
+}
+
+.retailedge-bank-completion-evidence p,
+.retailedge-bank-completion-guidance p {
+	margin: 0;
+	line-height: 1.45;
+}
+
+.retailedge-bank-completion-action {
+	padding: var(--edge-space-3, .75rem);
+	border-radius: var(--edge-radius-lg, .75rem);
+	background: var(--edge-color-warning-soft, var(--yellow-50));
+	border: 1px solid var(--edge-color-warning-border, var(--yellow-200));
+	font-weight: 600;
+}
+
+.retailedge-bank-completion-info {
+	margin-top: var(--edge-space-3, .75rem) !important;
+	padding-left: var(--edge-space-3, .75rem);
+	border-left: 3px solid var(--edge-color-info, var(--blue-400));
+	color: var(--edge-color-text-muted, var(--text-muted));
+}
+
+@media (max-width: 760px) {
+	.retailedge-bank-completion-grid,
+	.retailedge-bank-completion-evidence-panels {
+		grid-template-columns: 1fr;
+	}
+}
