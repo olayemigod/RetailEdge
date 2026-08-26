@@ -38,7 +38,7 @@
 
 	function openNativeBankAccount(name) {
 		if (!name) return;
-		global.frappe.set_route("Form", "Bank Account", name);
+		global.open(`/app/bank-account/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer");
 	}
 
 	frappe.pages[PAGE_NAME].on_page_load = function onPageLoad(wrapper) {
