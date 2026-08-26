@@ -93,12 +93,13 @@ class BankCandidateOutcomeNotificationTests(unittest.TestCase):
 		self.assertIn("suppressGenericNoCandidateOnce", asset)
 		self.assertIn("isBankMatchingPage()", asset)
 
-	def test_page_loader_loads_outcome_adapter_before_workspace(self):
+	def test_page_loader_loads_outcome_adapter_before_edgesuite_workspace(self):
 		loader = PAGE_LOADER.read_text()
 		self.assertIn("bank_candidate_outcome_notifications.js", loader)
+		self.assertIn("bank_matching_edgesuite_workspace.js", loader)
 		self.assertLess(
 			loader.index("frappe.require(OUTCOME_ASSET)"),
-			loader.index("frappe.require(ASSET)"),
+			loader.index("frappe.require(WORKSPACE_ASSET)"),
 		)
 
 
