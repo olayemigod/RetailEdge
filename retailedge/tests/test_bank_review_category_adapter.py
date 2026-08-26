@@ -45,12 +45,13 @@ class BankReviewCategoryAdapterTests(unittest.TestCase):
 		self.assertIn('doctype: "Payment Entry"', asset)
 		self.assertIn("isBankMatchingPage()", asset)
 
-	def test_loader_installs_category_adapter_before_review_ui(self):
+	def test_loader_installs_category_adapter_before_edgesuite_workspace(self):
 		loader = PAGE_LOADER.read_text()
 		self.assertIn("bank_review_category_adapter.js", loader)
+		self.assertIn("bank_matching_edgesuite_workspace.js", loader)
 		self.assertLess(
 			loader.index("frappe.require(REVIEW_CATEGORY_ASSET)"),
-			loader.index("frappe.require(REVIEW_ASSET)"),
+			loader.index("frappe.require(WORKSPACE_ASSET)"),
 		)
 
 
