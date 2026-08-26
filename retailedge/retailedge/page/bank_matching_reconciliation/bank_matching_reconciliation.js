@@ -6,7 +6,9 @@
 	const REVIEW_CATEGORY_ASSET = "/assets/retailedge/js/bank_review_category_adapter.js";
 	const FUZZY_DISCOVERY_ASSET = "/assets/retailedge/js/bank_matching_fuzzy_discovery_adapter.js";
 	const DENSE_WORKSPACE_CSS = "/assets/retailedge/css/bank_matching_dense_workspace.css";
+	const COMPLETION_CSS = "/assets/retailedge/css/bank_matching_edgesuite_completion.css";
 	const WORKSPACE_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_workspace.js";
+	const COMPLETION_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_completion_adapter.js";
 
 	function startWorkspace(wrapper) {
 		if (typeof window.retailedgeBootBankingWorkspace !== "function") {
@@ -24,7 +26,9 @@
 			.then(() => Promise.resolve(frappe.require(REVIEW_CATEGORY_ASSET)))
 			.then(() => Promise.resolve(frappe.require(FUZZY_DISCOVERY_ASSET)))
 			.then(() => Promise.resolve(frappe.require(DENSE_WORKSPACE_CSS)))
+			.then(() => Promise.resolve(frappe.require(COMPLETION_CSS)))
 			.then(() => Promise.resolve(frappe.require(WORKSPACE_ASSET)))
+			.then(() => Promise.resolve(frappe.require(COMPLETION_ASSET)))
 			.then(() => startWorkspace(wrapper))
 			.catch((error) => {
 				console.error("RetailEdge Banking EdgeSuite workspace asset failed to load", error);
