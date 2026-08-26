@@ -73,6 +73,14 @@ PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 	"icon": "shopping-bag",
 }
 
+DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
+	"label": "Document Output & Sharing",
+	"description": "Print, download and share customer documents using ERPNext Print Formats and permissions.",
+	"target_type": "Page",
+	"target": "document-output-sharing",
+	"icon": "share-2",
+}
+
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
 	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
@@ -171,6 +179,25 @@ def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> No
 		return
 
 
+def _promote_document_output(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Expose customer document output next to the guided selling experience."""
+	if not _can_open_page(DOCUMENT_OUTPUT_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "sell":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target_type") == "Page" and item.get("target") == DOCUMENT_OUTPUT_ITEM["target"] for item in items):
+			return
+		selling_index = next(
+			(index for index, item in enumerate(items) if item.get("target") == PROFESSIONAL_SELLING_ITEM["target"]),
+			-1,
+		)
+		items.insert(selling_index + 1 if selling_index >= 0 else 0, deepcopy(DOCUMENT_OUTPUT_ITEM))
+		group["items"] = items
+		return
+
+
 def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> None:
 	"""Route RetailEdge-owned setup masters through one EdgeSuite Setup hub.
 
@@ -209,6 +236,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_add_operating_context_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
+	_promote_document_output(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
 
 	quick_actions = list(context.get("quick_actions") or [])
@@ -240,6 +268,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
 	feature_flags["professional_selling"] = "edgesuite_guided"
+	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	context["feature_flags"] = feature_flags
 	return context
 
