@@ -324,7 +324,10 @@ def search_professional_invoice_sources(
 		filters.update(
 			{
 				"quotation_to": "Customer",
-				"status": ["not in", ["Lost", "Cancelled", "Expired"]],
+				"status": [
+					"not in",
+					["Partially Ordered", "Ordered", "Lost", "Cancelled", "Expired"],
+				],
 			}
 		)
 		link_fieldname = "quotation"
@@ -396,7 +399,12 @@ def create_sales_invoice_from_quotation(quotation: str) -> dict[str, Any]:
 		frappe.throw(_("Submit the Quotation before creating a Sales Invoice from it."))
 	if str(source.get("quotation_to") or "") != "Customer":
 		frappe.throw(_("Only Customer Quotations can be converted directly to Sales Invoice."))
-	if str(source.get("status") or "") in {"Lost", "Cancelled", "Expired"}:
+	status = str(source.get("status") or "")
+	if status in {"Partially Ordered", "Ordered"}:
+		frappe.throw(
+			_("This Quotation already has a Sales Order. Create the Sales Invoice from that Sales Order instead.")
+		)
+	if status in {"Lost", "Cancelled", "Expired"}:
 		frappe.throw(_("This Quotation is not open for invoicing."))
 
 	company, branch = _validate_source_context(source, source_label="Quotation")
