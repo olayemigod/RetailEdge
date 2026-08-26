@@ -174,10 +174,14 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn('required_apps = ["edgesuite_ui"]', hooks)
 		self.assertNotIn('required_apps = ["coreedge"]', hooks)
 
-	def test_business_hub_controller_is_loaded_globally_in_desk(self):
+	def test_business_hub_bootstrap_is_loaded_globally_in_desk(self):
 		hooks = (APP_ROOT / "hooks.py").read_text()
-		self.assertIn("retailedge_business_hub_page.js", hooks)
+		self.assertIn("retailedge_business_hub_bootstrap.js", hooks)
+		self.assertNotIn('"/assets/retailedge/js/retailedge_business_hub_page.js"', hooks)
+		bootstrap = (APP_ROOT / "public" / "js" / "retailedge_business_hub_bootstrap.js").read_text()
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
+		self.assertIn("retailedge_business_hub_page.js", bootstrap)
+		self.assertIn('typeof global.frappe.require === "function"', bootstrap)
 		self.assertIn('const PAGE_NAME = "retailedge-business-hub"', controller)
 		self.assertIn("retailedgeRegisterBusinessHubPage", controller)
 		self.assertIn("retailedgeBootBusinessHubPage", controller)
@@ -248,7 +252,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 
 	def test_global_controller_supports_promise_based_frappe_require(self):
 		controller = (APP_ROOT / "public" / "js" / "retailedge_business_hub_page.js").read_text()
-		self.assertIn("const pending = frappe.require(asset, finish)", controller)
+		self.assertIn("const pending = global.frappe.require(asset, finish)", controller)
 		self.assertIn('typeof pending.then === "function"', controller)
 		self.assertIn("pending.then(finish).catch(fail)", controller)
 		self.assertIn("if (!currentWrapper._retailedgeBusinessHub)", controller)
