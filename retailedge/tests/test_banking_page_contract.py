@@ -8,10 +8,14 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 PAGE_JS = APP_ROOT / "retailedge/page/bank_matching_reconciliation/bank_matching_reconciliation.js"
 PAGE_CSS = APP_ROOT / "retailedge/page/bank_matching_reconciliation/bank_matching_reconciliation.css"
 DENSE_CSS = APP_ROOT / "public/css/bank_matching_dense_workspace.css"
+ENHANCEMENTS_CSS = APP_ROOT / "public/css/bank_matching_page_enhancements.css"
 WORKSPACE_JS = APP_ROOT / "public/js/bank_matching_edgesuite_workspace.js"
 OUTCOME_JS = APP_ROOT / "public/js/bank_candidate_outcome_notifications.js"
 CATEGORY_JS = APP_ROOT / "public/js/bank_review_category_adapter.js"
 FUZZY_JS = APP_ROOT / "public/js/bank_matching_fuzzy_discovery_adapter.js"
+BRANCH_SEARCH_JS = APP_ROOT / "public/js/bank_matching_branch_search_adapter.js"
+COMPLETION_JS = APP_ROOT / "public/js/bank_matching_edgesuite_completion_adapter.js"
+ENHANCEMENTS_JS = APP_ROOT / "public/js/bank_matching_page_enhancements.js"
 
 
 class BankingPageContractTests(unittest.TestCase):
@@ -21,8 +25,13 @@ class BankingPageContractTests(unittest.TestCase):
 			"/assets/retailedge/js/bank_candidate_outcome_notifications.js",
 			"/assets/retailedge/js/bank_review_category_adapter.js",
 			"/assets/retailedge/js/bank_matching_fuzzy_discovery_adapter.js",
+			"/assets/retailedge/js/bank_matching_branch_search_adapter.js",
 			"/assets/retailedge/css/bank_matching_dense_workspace.css",
+			"/assets/retailedge/css/bank_matching_edgesuite_completion.css",
+			"/assets/retailedge/css/bank_matching_page_enhancements.css",
 			"/assets/retailedge/js/bank_matching_edgesuite_workspace.js",
+			"/assets/retailedge/js/bank_matching_edgesuite_completion_adapter.js",
+			"/assets/retailedge/js/bank_matching_page_enhancements.js",
 		):
 			self.assertIn(asset, page_js)
 		self.assertIn("retailedgeBootBankingWorkspace", page_js)
@@ -37,16 +46,30 @@ class BankingPageContractTests(unittest.TestCase):
 			"frappe.require(OUTCOME_ASSET)",
 			"frappe.require(REVIEW_CATEGORY_ASSET)",
 			"frappe.require(FUZZY_DISCOVERY_ASSET)",
-			"frappe.require(DENSE_WORKSPACE_CSS)",
+			"frappe.require(BRANCH_SEARCH_ASSET)",
+			"loadBankingStyles()",
 			"frappe.require(WORKSPACE_ASSET)",
+			"frappe.require(COMPLETION_ASSET)",
+			"frappe.require(PAGE_ENHANCEMENTS_ASSET)",
+			"startWorkspace(wrapper)",
 		)
 		positions = [page_js.index(marker) for marker in markers]
 		self.assertEqual(positions, sorted(positions))
-		self.assertIn(".then(() => startWorkspace(wrapper))", page_js)
+		self.assertIn("STYLE_VERSION", page_js)
+		self.assertIn("loadVersionedStylesheet", page_js)
 		self.assertIn(".catch((error) =>", page_js)
 
 	def test_live_banking_assets_are_valid_javascript(self):
-		for asset in (PAGE_JS, WORKSPACE_JS, OUTCOME_JS, CATEGORY_JS, FUZZY_JS):
+		for asset in (
+			PAGE_JS,
+			WORKSPACE_JS,
+			OUTCOME_JS,
+			CATEGORY_JS,
+			FUZZY_JS,
+			BRANCH_SEARCH_JS,
+			COMPLETION_JS,
+			ENHANCEMENTS_JS,
+		):
 			completed = subprocess.run(
 				["node", "--check", str(asset)],
 				capture_output=True,
@@ -111,6 +134,41 @@ class BankingPageContractTests(unittest.TestCase):
 		self.assertIn("Accounting / Hard Score", asset)
 		self.assertIn("Supplemental Fuzzy Score", asset)
 		self.assertIn("Fuzzy evidence is supplemental only", asset)
+
+	def test_fuzzy_date_tolerance_is_visible_and_configurable_without_changing_hard_eligibility(self):
+		fuzzy = FUZZY_JS.read_text()
+		enhancements = ENHANCEMENTS_JS.read_text()
+		for marker in (
+			"retailedgeBankingFuzzyDateToleranceDays",
+			"configuredTolerance",
+			"MAX_DATE_TOLERANCE_DAYS = 7",
+			"Supplemental evidence only; accounting eligibility is unchanged.",
+		):
+			self.assertIn(marker, fuzzy)
+		for marker in (
+			"Smart Match",
+			"Same day",
+			"±1 day",
+			"±3 days",
+			"±7 days",
+			"Date proximity is supplemental only; bank/accounting eligibility still controls.",
+		):
+			self.assertIn(marker, enhancements)
+
+	def test_page_enhancements_compact_filters_and_use_native_statement_import(self):
+		enhancements = ENHANCEMENTS_JS.read_text()
+		css = ENHANCEMENTS_CSS.read_text()
+		self.assertIn("removeFilterHeading", enhancements)
+		self.assertIn("Reset filters", enhancements)
+		self.assertIn("Upload Statement", enhancements)
+		self.assertIn('IMPORT_DOCTYPE = "Bank Statement Import"', enhancements)
+		self.assertIn("frappe.new_doc", enhancements)
+		self.assertIn('reference_doctype: "Bank Transaction"', enhancements)
+		self.assertIn('import_type: "Insert New Records"', enhancements)
+		self.assertNotIn("frappe.ui.Dialog", enhancements)
+		self.assertIn("retailedge-bank-reset-link", css)
+		self.assertIn("retailedge-bank-smart-match", css)
+		self.assertIn("retailedge-bank-layout", css)
 
 	def test_review_stays_in_edgesuite_workspace_and_uses_existing_workflow_actions(self):
 		asset = WORKSPACE_JS.read_text()
