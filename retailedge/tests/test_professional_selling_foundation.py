@@ -77,9 +77,9 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 	def test_ui_preserves_erpnext_shipping_and_native_document_truth(self):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		for contract in (
-			"ERPNext pricing and delivery charges stay authoritative",
-			"Shipping Rules",
-			"Price Lists",
+			"ERPNext pricing, taxes, Shipping Rules, stock and accounting remain authoritative",
+			"Selling Price List",
+			"Shipping Rule",
 			"createNative(document)",
 			"openNative(document)",
 		):
