@@ -28,6 +28,26 @@ class TestQuotationInvoiceConversion(unittest.TestCase):
 		self.assertEqual(fields["converted_by"].get("options"), "User")
 		self.assertEqual(fields["converted_on"].get("fieldtype"), "Datetime")
 
+	def test_registry_internal_writes_do_not_narrow_erpnext_custom_roles(self):
+		definition = json.loads(
+			self.read(
+				"retailedge/doctype/retailedge_quotation_invoice_conversion/"
+				"retailedge_quotation_invoice_conversion.json"
+			)
+		)
+		all_role = next(row for row in definition["permissions"] if row.get("role") == "All")
+		self.assertEqual(all_role.get("create"), 1)
+		self.assertEqual(all_role.get("write"), 1)
+		self.assertEqual(all_role.get("delete"), 1)
+		self.assertFalse(bool(all_role.get("read")))
+		# Controller authorization still blocks direct/manual writes. The broad
+		# internal write permission therefore does not expose the audit registry.
+		controller = self.read(
+			"retailedge/doctype/retailedge_quotation_invoice_conversion/"
+			"retailedge_quotation_invoice_conversion.py"
+		)
+		self.assertIn("conversion_write_authorized()", controller)
+
 	def test_registry_blocks_manual_mutation(self):
 		controller = self.read(
 			"retailedge/doctype/retailedge_quotation_invoice_conversion/"
