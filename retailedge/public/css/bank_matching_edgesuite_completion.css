@@ -90,6 +90,65 @@
 	color: var(--edge-color-text-muted, var(--text-muted));
 }
 
+/* Banking workspace density: preserve native EdgeSuite typography and reduce only
+   whitespace/padding so the queue becomes the primary working surface. */
+.retailedge-bank-layout .edge-page-header {
+	padding-top: var(--edge-space-4, 1rem);
+	padding-bottom: var(--edge-space-4, 1rem);
+}
+
+.retailedge-bank-layout .edge-filter-bar {
+	padding-top: var(--edge-space-3, .75rem);
+	padding-bottom: var(--edge-space-3, .75rem);
+	row-gap: var(--edge-space-2, .5rem);
+}
+
+.retailedge-bank-layout .edge-action-bar {
+	padding-top: var(--edge-space-2, .5rem);
+	padding-bottom: var(--edge-space-2, .5rem);
+	min-height: 0;
+}
+
+.retailedge-bank-layout .retailedge-bank-stats {
+	gap: var(--edge-space-2, .5rem);
+	margin-block: var(--edge-space-2, .5rem);
+}
+
+.retailedge-bank-layout .retailedge-bank-stats .edge-stat-card {
+	padding-top: var(--edge-space-3, .75rem);
+	padding-bottom: var(--edge-space-3, .75rem);
+	min-height: 0;
+}
+
+/* Bank Transaction and Candidate are navigation controls, not disabled fields. */
+.retailedge-bank-table .edge-link-button {
+	appearance: none;
+	border: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	padding: 0 !important;
+	min-height: 0 !important;
+	width: auto !important;
+	max-width: 100%;
+	color: var(--edge-color-primary, var(--primary));
+	font: inherit;
+	font-weight: 600;
+	line-height: 1.3;
+	text-align: left;
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.retailedge-bank-table .edge-link-button:hover,
+.retailedge-bank-table .edge-link-button:focus-visible {
+	text-decoration: underline;
+}
+
+.retailedge-bank-table .edge-link-button:focus-visible {
+	outline: 2px solid var(--edge-color-focus, var(--primary));
+	outline-offset: 2px;
+}
+
 @media (max-width: 760px) {
 	.retailedge-bank-completion-grid,
 	.retailedge-bank-completion-evidence-panels {
