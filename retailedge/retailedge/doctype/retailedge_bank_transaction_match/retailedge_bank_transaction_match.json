@@ -86,7 +86,7 @@
   {
    "fieldname": "match_identity_section",
    "fieldtype": "Section Break",
-   "label": "Match Identity"
+   "label": "Match Details"
   },
   {
    "default": "RE-BTM-.YYYY.-.####",
@@ -206,7 +206,7 @@
    "fieldname": "candidate_amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "SI/PE Amount"
+   "label": "Candidate Amount"
   },
   {
    "fieldname": "amount_difference",
@@ -377,7 +377,7 @@
   {
    "fieldname": "sync_readiness_section",
    "fieldtype": "Section Break",
-   "label": "Sync Readiness"
+   "label": "Sales Invoice Sync"
   },
   {
    "fieldname": "sales_invoice_sync_ready",
@@ -401,7 +401,7 @@
   {
    "fieldname": "technical_section",
    "fieldtype": "Section Break",
-   "label": "Technical"
+   "label": "System Details"
   },
   {
    "default": "Bank Transaction Matching",
@@ -556,19 +556,19 @@
   {
    "fieldname": "execution_candidate_doctype",
    "fieldtype": "Data",
-   "label": "Execution Candidate DocType",
+   "label": "Execution Candidate Type",
    "read_only": 1
   },
   {
    "fieldname": "execution_candidate_name",
    "fieldtype": "Data",
-   "label": "Execution Candidate Name",
+   "label": "Execution Candidate",
    "read_only": 1
   },
   {
    "fieldname": "execution_payment_event_identity",
    "fieldtype": "Data",
-   "label": "Execution Payment Event Identity",
+   "label": "Payment Event Reference",
    "read_only": 1
   }
  ],

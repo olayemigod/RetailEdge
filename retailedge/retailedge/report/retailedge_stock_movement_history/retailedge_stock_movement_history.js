@@ -1,3 +1,58 @@
+let retailedgeStockMovementCascade = false;
+let retailedgeStockMovementCascadeToken = 0;
+
+async function resolveStockMovementContext({ branch = "", warehouse = "" } = {}) {
+	const company = frappe.query_report.get_filter_value("company");
+	if (!company) return {};
+	const token = ++retailedgeStockMovementCascadeToken;
+	const response = await frappe.call({
+		method: "retailedge.guided_entry_context.resolve_branch_warehouse_selection",
+		args: {
+			company,
+			branch,
+			warehouse,
+			preference: "default",
+		},
+	});
+	if (token !== retailedgeStockMovementCascadeToken) return {};
+	return response.message || {};
+}
+
+async function handleStockMovementBranchChange() {
+	if (retailedgeStockMovementCascade) return;
+	const branch = frappe.query_report.get_filter_value("branch") || "";
+	retailedgeStockMovementCascade = true;
+	try {
+		await frappe.query_report.set_filter_value("warehouse", "");
+		if (!branch) return;
+		const resolved = await resolveStockMovementContext({ branch });
+		if (resolved.warehouse) {
+			await frappe.query_report.set_filter_value("warehouse", resolved.warehouse);
+		}
+	} finally {
+		retailedgeStockMovementCascade = false;
+	}
+}
+
+async function handleStockMovementWarehouseChange() {
+	if (retailedgeStockMovementCascade) return;
+	const warehouse = frappe.query_report.get_filter_value("warehouse") || "";
+	if (!warehouse) return;
+	const branch = frappe.query_report.get_filter_value("branch") || "";
+	retailedgeStockMovementCascade = true;
+	try {
+		const resolved = await resolveStockMovementContext({ branch, warehouse });
+		if (resolved.branch && resolved.branch !== branch) {
+			await frappe.query_report.set_filter_value("branch", resolved.branch);
+		}
+	} catch (error) {
+		await frappe.query_report.set_filter_value("warehouse", "");
+		throw error;
+	} finally {
+		retailedgeStockMovementCascade = false;
+	}
+}
+
 frappe.query_reports["RetailEdge Stock Movement History"] = {
 	filters: [
 		{
@@ -66,12 +121,14 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 			fieldtype: "Link",
 			options: "Branch",
 			get_query() {
-				const company = frappe.query_report.get_filter_value("company");
-				return { filters: company ? { company } : {} };
+				return {
+					query: "retailedge.stock_movement_filters.branch_query",
+					filters: {
+						company: frappe.query_report.get_filter_value("company"),
+					},
+				};
 			},
-			on_change() {
-				frappe.query_report.set_filter_value("warehouse", "");
-			},
+			on_change: handleStockMovementBranchChange,
 		},
 		{
 			fieldname: "warehouse",
@@ -80,11 +137,15 @@ frappe.query_reports["RetailEdge Stock Movement History"] = {
 			options: "Warehouse",
 			reqd: 1,
 			get_query() {
-				const company = frappe.query_report.get_filter_value("company");
-				const filters = { is_group: 0 };
-				if (company) filters.company = company;
-				return { filters };
+				return {
+					query: "retailedge.stock_movement_filters.warehouse_query",
+					filters: {
+						company: frappe.query_report.get_filter_value("company"),
+						branch: frappe.query_report.get_filter_value("branch"),
+					},
+				};
 			},
+			on_change: handleStockMovementWarehouseChange,
 		},
 		{
 			fieldname: "compare_uom",

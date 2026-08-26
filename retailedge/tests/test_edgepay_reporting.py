@@ -4,7 +4,7 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 
 from retailedge.tests.utils.fixture_cleanup import collect_fixture_names, delete_fixture_records
-from retailedge.workspace_home import HOME_SECTIONS, HOME_WORKSPACE_ITEMS
+from retailedge.workspace_home import HOME_WORKSPACE_ITEMS
 
 
 class TestEdgePayReporting(FrappeTestCase):
@@ -124,37 +124,19 @@ class TestEdgePayReporting(FrappeTestCase):
 		self.assertEqual(summary_dict.get("Payment Entries Submitted"), 1)
 		self.assertEqual(summary_dict.get("Reconciliation Confirmed"), 1)
 
-	def test_workspace_definitions_are_valid(self):
-		# Verify that new items in HOME_WORKSPACE_ITEMS point to valid targets
-		new_labels = [
+	def test_edgepay_reporting_is_not_exposed_in_business_workspace(self):
+		"""Legacy EdgePay reporting stays available without surfacing EdgePay in RetailEdge navigation."""
+		edgepay_labels = {
 			"EdgePay Handoff Log",
 			"EdgePay Payment Evidence",
 			"EdgePay Reconciliation Readiness",
 			"EdgePay Evidence Summary",
 			"EdgePay Lifecycle Status",
 			"EdgePay Rollout Monitor",
-		]
+		}
 
-		found_items = [item for item in HOME_WORKSPACE_ITEMS if item.label in new_labels]
-		self.assertEqual(len(found_items), 6)
-
-		for item in found_items:
-			self.assertEqual(item.section, "EdgePay Review")
-			if item.link_type == "DocType":
-				self.assertTrue(
-					frappe.db.exists("DocType", item.link_to), f"DocType {item.link_to} does not exist."
-				)
-			elif item.link_type == "Report":
-				# Standard reports might not be imported yet in the database, but we verify target name
-				self.assertTrue(
-					item.link_to
-					in [
-						"RetailEdge EdgePay Reconciliation Readiness",
-						"RetailEdge EdgePay Payment Evidence Summary",
-						"RetailEdge EdgePay Lifecycle Status",
-						"RetailEdge EdgePay Rollout Monitor",
-					]
-				)
+		exposed_items = [item.label for item in HOME_WORKSPACE_ITEMS if item.label in edgepay_labels]
+		self.assertEqual(exposed_items, [])
 
 	def test_rollout_monitor_report_executes_correctly(self):
 		from retailedge.retailedge.report.retailedge_edgepay_rollout_monitor.retailedge_edgepay_rollout_monitor import (
