@@ -8,9 +8,11 @@
 	const BRANCH_SEARCH_ASSET = "/assets/retailedge/js/bank_matching_branch_search_adapter.js";
 	const DENSE_WORKSPACE_CSS = "/assets/retailedge/css/bank_matching_dense_workspace.css";
 	const COMPLETION_CSS = "/assets/retailedge/css/bank_matching_edgesuite_completion.css";
-	const STYLE_VERSION = "20260826-5";
+	const PAGE_ENHANCEMENTS_CSS = "/assets/retailedge/css/bank_matching_page_enhancements.css";
+	const STYLE_VERSION = "20260826-6";
 	const WORKSPACE_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_workspace.js";
 	const COMPLETION_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_completion_adapter.js";
+	const PAGE_ENHANCEMENTS_ASSET = "/assets/retailedge/js/bank_matching_page_enhancements.js";
 
 	function loadVersionedStylesheet(href, marker) {
 		return new Promise((resolve, reject) => {
@@ -40,6 +42,7 @@
 		return Promise.all([
 			loadVersionedStylesheet(DENSE_WORKSPACE_CSS, "dense-workspace"),
 			loadVersionedStylesheet(COMPLETION_CSS, "completion"),
+			loadVersionedStylesheet(PAGE_ENHANCEMENTS_CSS, "page-enhancements"),
 		]);
 	}
 
@@ -58,6 +61,7 @@
 			.then(() => loadBankingStyles())
 			.then(() => Promise.resolve(frappe.require(WORKSPACE_ASSET)))
 			.then(() => Promise.resolve(frappe.require(COMPLETION_ASSET)))
+			.then(() => Promise.resolve(frappe.require(PAGE_ENHANCEMENTS_ASSET)))
 			.then(() => startWorkspace(wrapper))
 			.catch((error) => {
 				console.error("RetailEdge Banking EdgeSuite workspace asset failed to load", error);
