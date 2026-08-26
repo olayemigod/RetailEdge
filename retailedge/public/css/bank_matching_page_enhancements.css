@@ -1,0 +1,93 @@
+/* Bank Matching page-only refinements. Keep typography changes scoped here so the
+   rest of RetailEdge and EdgeSuite retain their normal sizing. */
+.retailedge-bank-layout {
+	font-size: 1.035rem;
+}
+
+.retailedge-bank-layout .edge-page-header p,
+.retailedge-bank-layout .edge-filter-bar,
+.retailedge-bank-layout .edge-action-bar,
+.retailedge-bank-layout .retailedge-bank-stats,
+.retailedge-bank-layout .retailedge-bank-table {
+	font-size: 1rem;
+}
+
+.retailedge-bank-layout .edge-filter-bar label,
+.retailedge-bank-layout .edge-filter-bar [class*="label"],
+.retailedge-bank-layout .retailedge-bank-table th {
+	font-size: .96rem;
+}
+
+.retailedge-bank-layout .retailedge-bank-table td,
+.retailedge-bank-layout .edge-button,
+.retailedge-bank-layout .edge-link-button {
+	font-size: 1rem;
+}
+
+/* Reset is a low-emphasis utility, not a primary workflow button. */
+.retailedge-bank-layout .retailedge-bank-reset-link {
+	appearance: none;
+	border: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	min-height: 0 !important;
+	padding: .25rem .15rem !important;
+	color: var(--edge-color-primary, var(--primary));
+	font-weight: 600;
+	text-decoration: underline;
+	text-underline-offset: .16rem;
+}
+
+.retailedge-bank-layout .retailedge-bank-reset-link:hover,
+.retailedge-bank-layout .retailedge-bank-reset-link:focus-visible {
+	text-decoration-thickness: 2px;
+}
+
+/* Visible control for the fuzzy-date behaviour that already feeds the queue.
+   It stays compact and explicitly marks fuzzy date evidence as supplemental. */
+.retailedge-bank-layout .retailedge-bank-smart-match {
+	display: inline-flex;
+	align-items: center;
+	gap: .45rem;
+	min-width: 0;
+	margin-right: .8rem;
+	color: var(--edge-color-text, var(--text-color));
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-match__label {
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-match__select {
+	min-height: 2rem;
+	padding: .3rem 1.8rem .3rem .55rem;
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-md, .5rem);
+	background: var(--edge-color-surface, var(--card-bg));
+	color: var(--edge-color-text, var(--text-color));
+	font: inherit;
+}
+
+.retailedge-bank-layout .retailedge-bank-smart-match__note {
+	max-width: 25rem;
+	color: var(--edge-color-text-muted, var(--text-muted));
+	line-height: 1.3;
+}
+
+.retailedge-bank-layout .retailedge-bank-upload-statement {
+	white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+	.retailedge-bank-layout .retailedge-bank-smart-match {
+		width: 100%;
+		flex-wrap: wrap;
+		margin-right: 0;
+	}
+
+	.retailedge-bank-layout .retailedge-bank-smart-match__note {
+		max-width: none;
+		flex-basis: 100%;
+	}
+}
