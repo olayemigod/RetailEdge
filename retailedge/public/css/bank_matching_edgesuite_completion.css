@@ -93,13 +93,13 @@
 /* Banking workspace density: preserve native EdgeSuite typography and reduce only
    whitespace/padding so the queue becomes the primary working surface. */
 .retailedge-bank-layout .edge-page-header {
-	padding-top: var(--edge-space-4, 1rem);
-	padding-bottom: var(--edge-space-4, 1rem);
+	padding-top: var(--edge-space-3, .75rem);
+	padding-bottom: var(--edge-space-3, .75rem);
 }
 
 .retailedge-bank-layout .edge-filter-bar {
-	padding-top: var(--edge-space-3, .75rem);
-	padding-bottom: var(--edge-space-3, .75rem);
+	padding-top: var(--edge-space-2, .5rem);
+	padding-bottom: var(--edge-space-2, .5rem);
 	row-gap: var(--edge-space-2, .5rem);
 }
 
@@ -115,9 +115,23 @@
 }
 
 .retailedge-bank-layout .retailedge-bank-stats .edge-stat-card {
-	padding-top: var(--edge-space-3, .75rem);
-	padding-bottom: var(--edge-space-3, .75rem);
+	padding-top: var(--edge-space-2, .5rem);
+	padding-bottom: var(--edge-space-2, .5rem);
 	min-height: 0;
+}
+
+/* Direction and Workflow Status are one operational control band on desktop.
+   Keep their native EdgeSuite components and typography; only change layout. */
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar,
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar + .edge-action-bar {
+	display: inline-flex;
+	width: calc(50% - .25rem);
+	box-sizing: border-box;
+	vertical-align: top;
+}
+
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar {
+	margin-right: .5rem;
 }
 
 /* Bank Transaction and Candidate are navigation controls, not disabled fields. */
@@ -147,6 +161,15 @@
 .retailedge-bank-table .edge-link-button:focus-visible {
 	outline: 2px solid var(--edge-color-focus, var(--primary));
 	outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+	.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar,
+	.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar + .edge-action-bar {
+		display: flex;
+		width: 100%;
+		margin-right: 0;
+	}
 }
 
 @media (max-width: 760px) {
