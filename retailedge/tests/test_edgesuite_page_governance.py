@@ -42,6 +42,14 @@ EDGE_SUITE_REQUIRED_PAGES = {
 		"mount": "mountRetailEdgeProfessionalSelling",
 		"component_name": "ProfessionalSelling.vue",
 	},
+	"document_output_sharing": {
+		"loader": APP_ROOT / "retailedge" / "page" / "document_output_sharing" / "document_output_sharing.js",
+		"bundle": APP_ROOT / "public" / "js" / "document_output_sharing.bundle.js",
+		"component": APP_ROOT / "public" / "js" / "document_output_sharing" / "DocumentOutputSharing.vue",
+		"asset": "document_output_sharing.bundle.js",
+		"mount": "mountRetailEdgeDocumentOutputSharing",
+		"component_name": "DocumentOutputSharing.vue",
+	},
 }
 
 
@@ -110,6 +118,20 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 		self.assertNotIn("frappe.db.commit", backend)
 		self.assertNotIn("frappe.client.save", component)
 		self.assertNotIn("<iframe", component.lower())
+
+	def test_document_output_keeps_print_and_business_document_truth_server_authoritative(self):
+		component = EDGE_SUITE_REQUIRED_PAGES["document_output_sharing"]["component"].read_text(encoding="utf-8")
+		backend = (APP_ROOT / "document_output.py").read_text(encoding="utf-8")
+		self.assertIn("retailedge.document_output.get_document_output_context", component)
+		self.assertIn("get_operating_context", backend)
+		self.assertIn("frappe.has_permission", backend)
+		self.assertIn("frappe.get_print", backend)
+		self.assertIn("frappe.sendmail", backend)
+		self.assertNotIn("ignore_permissions", backend)
+		self.assertNotIn("frappe.db.commit", backend)
+		self.assertNotIn("frappe.client.save", component)
+		self.assertNotIn("<iframe", component.lower())
+		self.assertNotIn("public/files", backend)
 
 
 if __name__ == "__main__":
