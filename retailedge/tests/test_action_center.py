@@ -256,6 +256,22 @@ class TestActionCenter(unittest.TestCase):
 			)
 		validate_scope.assert_called_once()
 
+
+	def test_frontend_formats_action_values_as_plain_text_not_html(self):
+		from pathlib import Path
+
+		component = (
+			Path(__file__).resolve().parents[1]
+			/ "public"
+			/ "js"
+			/ "action_center"
+			/ "ActionCenter.vue"
+		).read_text(encoding="utf-8")
+		self.assertNotIn("frappe.format(value", component)
+		self.assertIn('fieldtype === "Int"', component)
+		self.assertIn('fieldtype === "Currency"', component)
+		self.assertNotIn("v-html", component)
+
 	def test_source_contains_no_transaction_completion_calls(self):
 		from pathlib import Path
 

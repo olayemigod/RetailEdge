@@ -264,20 +264,20 @@ def _get_summary(query_filters: dict[str, Any]) -> dict[str, Any]:
 	overall = frappe.get_list(
 		EXPENSE_DOCTYPE,
 		filters=query_filters,
-		fields=["count(name) as count", "sum(amount) as total_amount"],
+		fields=[{"COUNT": "*", "as": "count"}, {"SUM": "amount", "as": "total_amount"}],
 		limit_page_length=1,
 	)
 	status_rows = frappe.get_list(
 		EXPENSE_DOCTYPE,
 		filters=query_filters,
-		fields=["expense_status", "count(name) as count", "sum(amount) as amount"],
+		fields=["expense_status", {"COUNT": "*", "as": "count"}, {"SUM": "amount", "as": "amount"}],
 		group_by="expense_status",
 		limit_page_length=len(_EXPENSE_STATUSES) + 1,
 	)
 	posting_rows = frappe.get_list(
 		EXPENSE_DOCTYPE,
 		filters=query_filters,
-		fields=["posting_ready", "count(name) as count"],
+		fields=["posting_ready", {"COUNT": "*", "as": "count"}],
 		group_by="posting_ready",
 		limit_page_length=3,
 	)

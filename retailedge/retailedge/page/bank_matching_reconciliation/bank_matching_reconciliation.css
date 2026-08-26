@@ -1,0 +1,461 @@
+.retailedge-bank-table-wrap {
+	overflow-x: auto;
+	border-radius: 12px;
+}
+
+.retailedge-bank-table {
+	width: 100%;
+	min-width: 1040px;
+	table-layout: fixed;
+}
+
+.retailedge-bank-table th {
+	white-space: nowrap;
+}
+
+.retailedge-bank-table td,
+.retailedge-bank-table th {
+	vertical-align: middle;
+	padding-left: 12px;
+	padding-right: 12px;
+}
+
+.retailedge-col-date {
+	width: 100px;
+}
+
+.retailedge-col-transaction {
+	width: 320px;
+}
+
+.retailedge-col-direction {
+	width: 90px;
+}
+
+.retailedge-col-amount {
+	width: 140px;
+}
+
+.retailedge-col-candidate {
+	width: 220px;
+}
+
+.retailedge-col-status {
+	width: 150px;
+}
+
+.retailedge-col-action {
+	width: 130px;
+}
+
+.retailedge-bank-transaction-cell,
+.retailedge-bank-candidate-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.retailedge-bank-narration {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	max-width: 100%;
+	line-height: 1.35;
+	text-decoration: none;
+	font-weight: 600;
+}
+
+.retailedge-bank-meta {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.edge-link-button {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	text-align: left;
+	text-decoration: underline;
+	cursor: pointer;
+	padding: 0;
+}
+
+.retailedge-review-dialog {
+	width: min(1480px, calc(100vw - 48px));
+	max-width: 1480px;
+}
+
+.retailedge-bank-review-enhanced .modal-content {
+	border: 0;
+	border-radius: 18px;
+	overflow: hidden;
+	box-shadow: 0 24px 70px rgba(16, 24, 40, 0.18);
+}
+
+.retailedge-bank-review-enhanced .modal-header {
+	padding: 20px 24px;
+	border-bottom: 1px solid var(--border-color, #e5e7eb);
+	align-items: center;
+}
+
+.retailedge-bank-review-enhanced .modal-title {
+	font-size: 24px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	color: var(--text-color, #17223b);
+}
+
+.retailedge-review-title-badge {
+	margin-left: 12px;
+}
+
+.retailedge-bank-review-enhanced .modal-body {
+	padding: 18px 22px 8px;
+	background: var(--fg-color, #fff);
+	max-height: calc(100vh - 190px);
+	overflow-y: auto;
+}
+
+.retailedge-review-modern {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.retailedge-review-compare,
+.retailedge-review-evidence-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.retailedge-review-card,
+.retailedge-review-why,
+.retailedge-review-evidence,
+.retailedge-review-approval {
+	border: 1px solid var(--border-color, #e3e8ef);
+	border-radius: 14px;
+	background: var(--card-bg, #fff);
+	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.retailedge-review-card-header,
+.retailedge-review-evidence-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--border-color, #edf0f4);
+}
+
+.retailedge-review-card-title,
+.retailedge-review-evidence-title,
+.retailedge-review-section-title {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 700;
+	color: var(--text-color, #17223b);
+}
+
+.retailedge-review-card-rows {
+	display: grid;
+	grid-auto-rows: minmax(64px, auto);
+	padding: 0 16px 10px;
+}
+
+.retailedge-review-row {
+	display: grid;
+	grid-template-columns: minmax(130px, 0.42fr) minmax(0, 0.58fr);
+	gap: 16px;
+	align-items: center;
+	padding: 11px 0;
+	border-bottom: 1px solid var(--border-color, #edf0f4);
+	min-width: 0;
+}
+
+.retailedge-review-row:last-child {
+	border-bottom: 0;
+}
+
+.retailedge-review-label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-muted, #667085);
+}
+
+.retailedge-review-value {
+	min-width: 0;
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--text-color, #17223b);
+	word-break: break-word;
+}
+
+.retailedge-review-value--emphasis {
+	font-size: 17px;
+	font-weight: 700;
+}
+
+.retailedge-review-value--positive {
+	color: var(--green-700, #15803d);
+	font-weight: 700;
+}
+
+.retailedge-review-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 28px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.retailedge-review-badge--info {
+	background: #eaf3ff;
+	color: #0969da;
+}
+
+.retailedge-review-badge--success {
+	background: #eaf8ef;
+	color: #15803d;
+}
+
+.retailedge-review-badge--warning {
+	background: #fff3e6;
+	color: #c05a00;
+}
+
+.retailedge-review-badge--danger {
+	background: #fff0f0;
+	color: #c62828;
+}
+
+.retailedge-review-badge--neutral {
+	background: #f1f3f7;
+	color: #475467;
+}
+
+.retailedge-review-link {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	padding: 0;
+	font: inherit;
+	font-weight: 700;
+	color: var(--primary, #0b6bcb);
+	cursor: pointer;
+	text-align: left;
+}
+
+.retailedge-review-link:hover {
+	text-decoration: underline;
+}
+
+.retailedge-review-why {
+	padding: 15px 16px;
+}
+
+.retailedge-review-why-list {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px 18px;
+	margin-top: 13px;
+}
+
+.retailedge-review-why-item,
+.retailedge-review-fuzzy-note,
+.retailedge-review-evidence-item {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 13px;
+	line-height: 1.45;
+	color: var(--text-color, #344054);
+}
+
+.retailedge-review-fuzzy-note {
+	border-left: 1px solid var(--border-color, #e3e8ef);
+	padding-left: 14px;
+}
+
+.retailedge-review-check,
+.retailedge-review-info {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	font-size: 11px;
+	font-weight: 800;
+}
+
+.retailedge-review-check {
+	border: 1.5px solid #16a34a;
+	color: #15803d;
+}
+
+.retailedge-review-info {
+	border: 1.5px solid #1473e6;
+	color: #0969da;
+	font-family: Georgia, serif;
+}
+
+.retailedge-review-evidence-list {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px 16px;
+	padding: 14px 16px 16px;
+}
+
+.retailedge-review-evidence--fuzzy .retailedge-review-check {
+	border-color: #1473e6;
+	color: #0969da;
+}
+
+.retailedge-review-approval-content {
+	padding: 14px 16px 16px;
+}
+
+.retailedge-review-approval-guidance,
+.retailedge-review-approval-actor {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--text-color, #344054);
+}
+
+.retailedge-review-approval-actor {
+	margin-top: 6px;
+	font-weight: 600;
+}
+
+.retailedge-review-info-banner {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 1px solid #cfe4ff;
+	border-radius: 10px;
+	background: #f4f9ff;
+	font-size: 13px;
+	line-height: 1.45;
+	color: #23446b;
+}
+
+.retailedge-review-decision-area {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 14px;
+	align-items: end;
+	padding: 14px 0 4px;
+}
+
+.retailedge-review-note .frappe-control {
+	margin-bottom: 0;
+}
+
+.retailedge-review-approval-note {
+	grid-column: 1 / -1;
+}
+
+.retailedge-review-approval-actions,
+.retailedge-review-aux-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.retailedge-review-approval-actions {
+	grid-column: 1 / -1;
+	justify-content: flex-end;
+}
+
+.retailedge-review-approval-actions .frappe-control,
+.retailedge-review-aux-actions .frappe-control {
+	margin: 0;
+}
+
+.retailedge-review-hidden-field {
+	display: none !important;
+}
+
+.retailedge-bank-review-enhanced .modal-footer {
+	padding: 14px 22px 18px;
+	border-top: 1px solid var(--border-color, #e5e7eb);
+	background: var(--fg-color, #fff);
+	gap: 10px;
+}
+
+.retailedge-bank-review-enhanced .modal-footer .btn-primary {
+	min-width: 210px;
+	font-weight: 700;
+}
+
+.retailedge-bank-review-enhanced .modal-footer .btn-secondary {
+	min-width: 170px;
+	border-color: #ef4444;
+	color: #dc2626;
+	background: #fff;
+	font-weight: 700;
+}
+
+@media (max-width: 992px) {
+	.retailedge-bank-table {
+		min-width: 920px;
+	}
+
+	.retailedge-col-transaction {
+		width: 260px;
+	}
+
+	.retailedge-col-candidate {
+		width: 190px;
+	}
+
+	.retailedge-review-dialog {
+		width: calc(100vw - 24px);
+	}
+
+	.retailedge-review-compare,
+	.retailedge-review-evidence-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.retailedge-review-why-list {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.retailedge-review-decision-area {
+		grid-template-columns: 1fr;
+	}
+
+	.retailedge-review-approval-actions {
+		justify-content: flex-start;
+	}
+}
+
+@media (max-width: 640px) {
+	.retailedge-review-why-list,
+	.retailedge-review-evidence-list {
+		grid-template-columns: 1fr;
+	}
+
+	.retailedge-review-row {
+		grid-template-columns: 1fr;
+		gap: 4px;
+	}
+}
