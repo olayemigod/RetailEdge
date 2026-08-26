@@ -123,7 +123,8 @@ doctype_list_js = {
 # importable_doctypes = [doctype_1]
 
 # Jinja
-# ------------------
+# ----------
+
 # add methods and filters to jinja environment
 # jinja = {
 # 	"methods": "retailedge.utils.jinja_methods",
@@ -151,8 +152,8 @@ doctype_list_js = {
 
 # Integration Cleanup
 # -------------------
-# before_app_uninstall = "retailedge.utils.before_uninstall"
-# after_app_uninstall = "retailedge.utils.after_uninstall"
+# before_app_uninstall = "retailedge.utils.before_app_uninstall"
+# after_app_uninstall = "retailedge.utils.after_app_uninstall"
 
 # Desk Notifications
 # ------------------
