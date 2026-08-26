@@ -26,6 +26,11 @@ from retailedge.professional_selling import (
 	_permission,
 	_validate_context,
 )
+from retailedge.quotation_invoice_conversion import (
+	complete_quotation_conversion,
+	filter_unconverted_quotation_results,
+	reserve_quotation_conversion,
+)
 
 INVOICE_DEFINITION: dict[str, Any] = {
 	"key": "sales-invoice",
@@ -348,14 +353,18 @@ def search_professional_invoice_sources(
 		)
 		link_fieldname = "delivery_note"
 
-	return search_link(
+	page_length = min(max(limit * 5, limit), 100) if source == "quotation" else limit
+	rows = search_link(
 		config["doctype"],
 		txt or "",
 		filters=filters,
-		page_length=limit,
+		page_length=page_length,
 		reference_doctype="Sales Invoice",
 		link_fieldname=link_fieldname,
 	)
+	if source == "quotation":
+		return filter_unconverted_quotation_results(rows, limit=limit)
+	return list(rows)[:limit]
 
 
 @frappe.whitelist(methods=["POST"])
@@ -411,6 +420,7 @@ def create_sales_invoice_from_quotation(quotation: str) -> dict[str, Any]:
 	if source.get("shipping_rule"):
 		_validate_shipping_rule(source.shipping_rule, company=company)
 
+	tracker = reserve_quotation_conversion(source, company=company, branch=branch)
 	target = frappe.new_doc("Sales Invoice")
 	target.company = company
 	target.customer = source.party_name
@@ -429,8 +439,10 @@ def create_sales_invoice_from_quotation(quotation: str) -> dict[str, Any]:
 
 	mapped_branch = _validate_invoice_stock_context(target, company=company, source_branch=branch)
 	# Draft insertion only. ERPNext validates accounts, taxes, pricing references,
-	# Selling Settings and document linkage rules on insert.
+	# Selling Settings and document linkage rules on insert. The conversion
+	# reservation and invoice insert remain in the same request transaction.
 	target.insert()
+	complete_quotation_conversion(tracker, target.name)
 	return _invoice_response(
 		target,
 		branch=mapped_branch,
