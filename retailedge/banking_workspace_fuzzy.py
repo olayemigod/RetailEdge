@@ -163,10 +163,10 @@ def get_fuzzy_banking_workspace_rows(
             scored.append(item)
         scored.sort(
             key=lambda row: (
-                -int(row.get("search_relevance") or 0),
+                int(row.get("search_relevance") or 0),
                 _row_sort_date(row),
             ),
-            reverse=False,
+            reverse=True,
         )
         rows = scored
 
