@@ -23,7 +23,8 @@ class TestQuotationInvoiceConversion(unittest.TestCase):
 		fields = {row["fieldname"]: row for row in definition["fields"]}
 		self.assertEqual(fields["quotation"].get("unique"), 1)
 		self.assertEqual(fields["quotation"].get("options"), "Quotation")
-		self.assertEqual(fields["sales_invoice"].get("options"), "Sales Invoice")
+		self.assertEqual(fields["sales_invoice"].get("fieldtype"), "Data")
+		self.assertIsNone(fields["sales_invoice"].get("options"))
 		self.assertEqual(fields["converted_by"].get("options"), "User")
 		self.assertEqual(fields["converted_on"].get("fieldtype"), "Datetime")
 
@@ -51,6 +52,13 @@ class TestQuotationInvoiceConversion(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertNotIn("ignore_permissions=True", source)
+
+	def test_deleted_draft_can_retire_stale_registry_without_weakening_cancelled_invoice_safety(self):
+		source = self.read("quotation_invoice_conversion.py")
+		self.assertIn('frappe.db.exists("Sales Invoice", sales_invoice)', source)
+		self.assertIn('frappe.get_doc(CONVERSION_DOCTYPE, existing["name"]).delete()', source)
+		self.assertIn("A user may legitimately delete an unwanted draft Sales Invoice", source)
+		self.assertIn("use ERPNext Amend", source)
 
 	def test_direct_invoice_reserves_before_invoice_insert_and_completes_after(self):
 		source = self.read("professional_sales_invoice.py")
