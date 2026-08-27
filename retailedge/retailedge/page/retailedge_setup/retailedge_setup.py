@@ -15,10 +15,20 @@ SETUP_RESOURCES = (
 	{
 		"key": "branches",
 		"label": "Branch Setup",
-		"description": "Manage Branch operating defaults, Stock Locations, POS Profile, accounts and operational users.",
+		"description": "Manage Branch operating defaults, Stock Locations, POS Profile, accounts and controls.",
 		"doctype": "RetailEdge Branch Profile",
+		"page": "branch-setup",
 		"singleton": False,
 		"icon": "building",
+	},
+	{
+		"key": "branch-assignments",
+		"label": "Branch Assignments",
+		"description": "Assign users to Branches with effective dates and preserve transfer history between locations.",
+		"doctype": "RetailEdge Branch Assignment",
+		"page": "branch-assignments",
+		"singleton": False,
+		"icon": "users",
 	},
 	{
 		"key": "expense-categories",
@@ -93,7 +103,11 @@ def get_setup_context() -> dict:
 		if not _doctype_available(doctype) or not _has_permission(doctype, "read"):
 			continue
 		resource = dict(definition)
-		resource["can_create"] = False if definition["singleton"] else _has_permission(doctype, "create")
+		resource["can_create"] = bool(
+			not definition["singleton"]
+			and not definition.get("page")
+			and _has_permission(doctype, "create")
+		)
 		if definition["singleton"]:
 			resource["count"] = None
 			resource["count_capped"] = False

@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, nowdate
+from frappe.utils.user import get_user_fullname
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
@@ -13,12 +14,15 @@ from retailedge.branch_context import (
 	get_user_allowed_branches,
 	has_field,
 	resolve_branch_from_warehouse,
-	user_has_global_branch_access,
 	validate_user_branch_access,
 )
 from retailedge.branch_profile import get_branch_profile_defaults
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
-from retailedge.operating_context import get_operating_context
+from retailedge.operating_context import (
+	get_allowed_operating_branches,
+	get_operating_context,
+	validate_operating_branch,
+)
 
 
 MAX_LINK_RESULTS = 20
@@ -97,7 +101,10 @@ def _assert_read(doctype: str, name: str) -> None:
 	if not name or not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} is not available.").format(doctype, name))
 	if not frappe.has_permission(doctype, "read", doc=name):
-		frappe.throw(_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use {0} {1}.").format(doctype, name),
+			frappe.PermissionError,
+		)
 
 
 def _document_capability(definition: dict[str, Any]) -> dict[str, Any]:
@@ -122,14 +129,30 @@ def _coerce_values(values: dict | str | None) -> dict[str, Any]:
 
 def _validate_context(values: dict[str, Any]) -> tuple[str, str, str]:
 	operating = get_operating_context() or {}
-	company = str(values.get("company") or operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	company = str(
+		values.get("company")
+		or operating.get("company")
+		or frappe.defaults.get_user_default("Company")
+		or ""
+	).strip()
 	branch = str(values.get("branch") or operating.get("branch") or "").strip()
 	warehouse = str(values.get("warehouse") or "").strip()
 	if not company:
 		frappe.throw(_("Choose an Operating Company before starting a selling document."))
 	_assert_read("Company", company)
 	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+		validate_user_branch_access(
+			branch,
+			user=frappe.session.user,
+			company=company,
+			throw=True,
+		)
+		validate_operating_branch(
+			company=company,
+			branch=branch,
+			user=frappe.session.user,
+			throw=True,
+		)
 	if warehouse:
 		_assert_read("Warehouse", warehouse)
 		warehouse_company = str(frappe.db.get_value("Warehouse", warehouse, "company") or "").strip()
@@ -146,9 +169,7 @@ def _branch_filters(company: str) -> dict[str, Any]:
 	filters: dict[str, Any] = {}
 	if company and has_field("Branch", "company"):
 		filters["company"] = company
-	if user_has_global_branch_access(user=frappe.session.user):
-		return filters
-	allowed = get_user_allowed_branches(user=frappe.session.user, company=company or None).get("branches") or []
+	allowed = get_allowed_operating_branches(company=company, user=frappe.session.user)
 	filters["name"] = ["in", allowed] if allowed else ["in", ["__no_permitted_branch__"]]
 	return filters
 
@@ -159,14 +180,34 @@ def _warehouse_filters(company: str, branch: str) -> dict[str, Any] | None:
 		filters["company"] = company
 	if not branch:
 		return filters
-	validate_user_branch_access(branch, user=frappe.session.user, company=company or None, throw=True)
+	validate_user_branch_access(
+		branch,
+		user=frappe.session.user,
+		company=company or None,
+		throw=True,
+	)
+	validate_operating_branch(
+		company=company,
+		branch=branch,
+		user=frappe.session.user,
+		throw=True,
+	)
 	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
 	if branch_field:
 		filters[branch_field] = branch
 		return filters
-	defaults = get_branch_profile_defaults(company=company or None, branch=branch, user=frappe.session.user)
+	defaults = get_branch_profile_defaults(
+		company=company or None,
+		branch=branch,
+		user=frappe.session.user,
+	)
 	warehouses = []
-	for key in ("default_source_warehouse", "default_warehouse", "default_target_warehouse", "default_returns_warehouse"):
+	for key in (
+		"default_source_warehouse",
+		"default_warehouse",
+		"default_target_warehouse",
+		"default_returns_warehouse",
+	):
 		value = str(defaults.get(key) or "").strip()
 		if value and value not in warehouses:
 			warehouses.append(value)
@@ -184,7 +225,12 @@ def get_professional_selling_context() -> dict[str, Any]:
 	branch = str(operating.get("branch") or "").strip()
 	pricing: dict[str, Any] = {}
 	if company and _permission("Price List", "read"):
-		pricing = resolve_price_list_context(mode="selling", company=company, branch=branch, user=frappe.session.user)
+		pricing = resolve_price_list_context(
+			mode="selling",
+			company=company,
+			branch=branch,
+			user=frappe.session.user,
+		)
 
 	documents = [_document_capability(row) for row in SELLING_DOCUMENTS]
 	return {
@@ -212,7 +258,7 @@ def get_professional_selling_context() -> dict[str, Any]:
 			"erpnext_pricing_authoritative": True,
 			"erpnext_shipping_rule_authoritative": True,
 		},
-		"user_name": frappe.get_user().get_fullname() if getattr(frappe, "session", None) else "",
+		"user_name": get_user_fullname(frappe.session.user) if getattr(frappe, "session", None) else "",
 	}
 
 
@@ -227,7 +273,10 @@ def search_professional_selling_options(
 	"""Bound Link searches to records valid for the current selling context."""
 	definition = get_selling_document_definition(document)
 	if not _permission(definition["doctype"], "create"):
-		frappe.throw(_("You do not have permission to create {0}.").format(definition["doctype"]), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to create {0}.").format(definition["doctype"]),
+			frappe.PermissionError,
+		)
 	values = _coerce_values(values)
 	company, branch, _warehouse = _validate_context(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
@@ -255,15 +304,35 @@ def search_professional_selling_options(
 			link_fieldname="item_code",
 		)
 	if fieldname == "branch":
-		return search_link("Branch", txt or "", filters=_branch_filters(company), page_length=limit, reference_doctype=definition["doctype"])
+		return search_link(
+			"Branch",
+			txt or "",
+			filters=_branch_filters(company),
+			page_length=limit,
+			reference_doctype=definition["doctype"],
+		)
 	if fieldname == "warehouse":
 		filters = _warehouse_filters(company, branch)
 		if filters is None:
 			return []
-		return search_link("Warehouse", txt or "", filters=filters, page_length=limit, reference_doctype=definition["doctype"], link_fieldname="set_warehouse")
+		return search_link(
+			"Warehouse",
+			txt or "",
+			filters=filters,
+			page_length=limit,
+			reference_doctype=definition["doctype"],
+			link_fieldname="set_warehouse",
+		)
 	if fieldname == "shipping_rule":
 		filters = {"disabled": 0, "shipping_rule_type": "Selling", "company": company}
-		return search_link("Shipping Rule", txt or "", filters=filters, page_length=limit, reference_doctype=definition["doctype"], link_fieldname="shipping_rule")
+		return search_link(
+			"Shipping Rule",
+			txt or "",
+			filters=filters,
+			page_length=limit,
+			reference_doctype=definition["doctype"],
+			link_fieldname="shipping_rule",
+		)
 	frappe.throw(_("Unsupported Professional Selling search field: {0}").format(fieldname))
 	return []
 
@@ -277,7 +346,10 @@ def get_professional_selling_item_pricing(
 	"""Resolve item price on the server; the browser never selects the effective Price List."""
 	definition = get_selling_document_definition(document)
 	if not _permission(definition["doctype"], "create"):
-		frappe.throw(_("You do not have permission to create {0}.").format(definition["doctype"]), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to create {0}.").format(definition["doctype"]),
+			frappe.PermissionError,
+		)
 	values = _coerce_values(values)
 	company, branch, warehouse = _validate_context(values)
 	customer = str(values.get("customer") or values.get("party_name") or "").strip()

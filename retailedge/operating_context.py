@@ -5,6 +5,11 @@ from typing import Any
 import frappe
 from frappe import _
 
+from retailedge.branch_assignment import (
+	get_active_branch_assignments,
+	get_assignment_branches,
+	has_branch_assignments,
+)
 from retailedge.branch_context import (
 	get_user_allowed_branches,
 	resolve_branch_from_opening_shift,
@@ -13,7 +18,14 @@ from retailedge.branch_context import (
 	user_has_global_branch_access,
 	validate_user_branch_access,
 )
-from retailedge.branch_profile import get_branch_profile_defaults, get_user_branch_profiles
+from retailedge.branch_profile import (
+	get_branch_profile_defaults,
+	get_enabled_branch_profile_companies,
+	get_enabled_branch_profiles,
+	get_user_branch_profiles,
+	resolve_branch_pos_requirement,
+	user_has_pos_profile_assignment,
+)
 
 OPERATING_CONTEXT_TTL_SECONDS = 12 * 60 * 60
 OPERATING_CONTEXT_CACHE_PREFIX = "retailedge:operating-context"
@@ -54,19 +66,19 @@ def get_operating_context(company: str = "") -> dict[str, Any]:
 
 @frappe.whitelist()
 def get_allowed_operating_contexts(company: str = "") -> dict[str, Any]:
-	"""Return permission-aware Companies and Branches for the switcher.
-
-	Queries remain bounded and do not preload unrelated masters. Previewing Branch
-	options for another Company never changes the active session context.
-	"""
+	"""Return permission-aware Companies and Branches for the switcher."""
 	user = frappe.session.user
 	requested_company = _clean(company)
-	companies = _allowed_companies()
+	companies = _allowed_companies(user=user)
 	if requested_company and requested_company not in companies:
 		frappe.throw(_("You do not have access to Company {0}.").format(requested_company), frappe.PermissionError)
 
 	current = get_operating_context()
-	selected_company = requested_company or _clean(current.get("company")) or _clean(frappe.defaults.get_user_default("Company"))
+	selected_company = (
+		requested_company
+		or _clean(current.get("company"))
+		or _clean(frappe.defaults.get_user_default("Company"))
+	)
 	if selected_company not in companies:
 		selected_company = companies[0] if len(companies) == 1 else ""
 
@@ -76,10 +88,21 @@ def get_allowed_operating_contexts(company: str = "") -> dict[str, Any]:
 		"branches": branches,
 		"selected_company": selected_company,
 		"current": current,
+		"pos_required": user_has_pos_profile_assignment(user=user),
 		"can_switch_company": len(companies) > 1,
 		"can_switch_branch": len(branches) > 1,
 		"switch_blockers": _get_switch_blockers(user=user),
 	}
+
+
+@frappe.whitelist()
+def preview_operating_context(company: str, branch: str) -> dict[str, Any]:
+	"""Preview Branch Setup defaults/POS readiness without mutating session state."""
+	user = frappe.session.user
+	company = _clean(company)
+	branch = _clean(branch)
+	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
+	return _build_context(company=company, branch=branch, user=user, source="preview")
 
 
 @frappe.whitelist()
@@ -158,12 +181,82 @@ def get_effective_operating_context(company: str = "", branch: str = "") -> dict
 	return current
 
 
+def get_allowed_operating_branches(company: str, user: str | None = None) -> list[str]:
+	"""Shared Company→Branch option resolver for Operating Context and smart forms."""
+	return _allowed_branches(company=_clean(company), user=user or frappe.session.user)
+
+
+def validate_operating_branch(
+	company: str,
+	branch: str,
+	user: str | None = None,
+	throw: bool = True,
+) -> dict[str, Any]:
+	"""Validate Company→Branch setup/access without imposing POS document semantics."""
+	company = _clean(company)
+	branch = _clean(branch)
+	user = user or frappe.session.user
+	if not company or not branch:
+		result = {"allowed": False, "company": company, "branch": branch, "reason": "missing_context"}
+		if throw:
+			frappe.throw(_("Company and Branch are required."))
+		return result
+
+	try:
+		_assert_company_access(company)
+		_assert_branch_exists_and_active(branch)
+		branch_company = _branch_company(branch)
+		if branch_company and branch_company != company:
+			frappe.throw(_("Branch {0} does not belong to Company {1}.").format(branch, company))
+
+		configured_rows = get_enabled_branch_profiles(company=company)
+		configured_branches = {
+			_clean(row.get("branch"))
+			for row in configured_rows
+			if _clean(row.get("branch"))
+		}
+		has_any_setup = bool(frappe.db.exists("RetailEdge Branch Profile", {"company": company}))
+		if has_any_setup and branch not in configured_branches:
+			frappe.throw(_("Branch {0} is not enabled in Branch Setup for Company {1}.").format(branch, company))
+
+		mapped_companies = get_enabled_branch_profile_companies(branch=branch)
+		if mapped_companies and company not in mapped_companies:
+			frappe.throw(_("Branch {0} does not belong to Company {1}.").format(branch, company))
+		if len(mapped_companies) > 1:
+			frappe.throw(
+				_(
+					"Branch {0} is configured for multiple Companies. Correct Branch Setup before using it."
+				).format(branch)
+			)
+
+		if not user_has_global_branch_access(user=user) and has_branch_assignments(user=user):
+			assigned = set(get_assignment_branches(user=user, company=company))
+			if branch not in assigned:
+				frappe.throw(
+					_("You do not have an active Branch Assignment for Branch {0}.").format(branch),
+					frappe.PermissionError,
+				)
+		else:
+			validate_user_branch_access(branch, user=user, company=company, throw=True)
+
+		if branch not in _allowed_branches(company=company, user=user):
+			frappe.throw(_("You do not have access to Branch {0}.").format(branch), frappe.PermissionError)
+		return {"allowed": True, "company": company, "branch": branch, "reason": "validated"}
+	except Exception:
+		if throw:
+			raise
+		return {"allowed": False, "company": company, "branch": branch, "reason": "validation_failed"}
+
+
 def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 	fallback_company = _clean(company) or _clean(frappe.defaults.get_user_default("Company"))
 	if fallback_company:
 		_assert_company_access(fallback_company)
 
-	resolved = resolve_branch_from_user(user=user, company=fallback_company or None)
+	if not user_has_global_branch_access(user=user) and has_branch_assignments(user=user):
+		resolved = _resolve_assignment_fallback(user=user, company=fallback_company)
+	else:
+		resolved = resolve_branch_from_user(user=user, company=fallback_company or None)
 	fallback_branch = _clean(resolved.get("branch"))
 	fallback_company = _clean(resolved.get("company")) or fallback_company
 	if fallback_branch and fallback_company:
@@ -185,18 +278,42 @@ def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 		company=fallback_company,
 		branch="",
 		user=user,
-		source="company_default" if fallback_company else "empty",
+		source="branch_assignment" if has_branch_assignments(user=user) else ("company_default" if fallback_company else "empty"),
 	)
 
 
+def _resolve_assignment_fallback(*, user: str, company: str) -> dict[str, str]:
+	rows = get_active_branch_assignments(user=user, company=company or None)
+	if not rows:
+		return {"branch": "", "company": company or "", "source": "Branch Assignment"}
+	primary = [row for row in rows if row.get("is_primary")]
+	candidate = primary[0] if len(primary) == 1 else (rows[0] if len(rows) == 1 else None)
+	if not candidate:
+		return {"branch": "", "company": company or "", "source": "Branch Assignment"}
+	return {
+		"branch": _clean(candidate.get("branch")),
+		"company": _clean(candidate.get("company")) or company or "",
+		"source": "Branch Assignment",
+	}
+
+
 def _build_context(*, company: str, branch: str, user: str, source: str) -> dict[str, Any]:
-	defaults = get_branch_profile_defaults(company=company or None, branch=branch or None, user=user) if company and branch else {}
+	defaults = (
+		get_branch_profile_defaults(company=company or None, branch=branch or None, user=user)
+		if company and branch
+		else {}
+	)
+	pos_state = resolve_branch_pos_requirement(company=company, branch=branch, user=user)
 	return {
 		"company": company or "",
 		"branch": branch or "",
 		"source": source,
 		"defaults": defaults,
 		"default_pos_profile": defaults.get("default_pos_profile") or "",
+		"pos_required": bool(pos_state.get("pos_required")),
+		"pos_profile": pos_state.get("pos_profile") or "",
+		"pos_ready": bool(pos_state.get("pos_ready")),
+		"pos_message": pos_state.get("pos_message") or "",
 		"default_stock_location": defaults.get("default_warehouse") or "",
 		"default_source_stock_location": defaults.get("default_source_warehouse") or "",
 		"default_destination_stock_location": defaults.get("default_target_warehouse") or "",
@@ -204,37 +321,29 @@ def _build_context(*, company: str, branch: str, user: str, source: str) -> dict
 
 
 def _validate_context(*, company: str, branch: str, user: str, throw: bool) -> dict[str, Any]:
-	company = _clean(company)
-	branch = _clean(branch)
-	if not company or not branch:
-		result = {"allowed": False, "company": company, "branch": branch, "reason": "missing_context"}
-		if throw:
-			frappe.throw(_("Company and Branch are required."))
-		return result
+	validated = validate_operating_branch(company=company, branch=branch, user=user, throw=throw)
+	if not validated.get("allowed"):
+		return validated
 
-	try:
-		_assert_company_access(company)
-		_assert_branch_exists_and_active(branch)
-		branch_company = _branch_company(branch)
-		if branch_company and branch_company != company:
-			frappe.throw(_("Branch {0} does not belong to Company {1}.").format(branch, company))
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
-		if branch not in _allowed_branches(company=company, user=user):
-			frappe.throw(_("You do not have access to Branch {0}.").format(branch), frappe.PermissionError)
-		return {"allowed": True, "company": company, "branch": branch, "reason": "validated"}
-	except Exception:
+	pos_state = resolve_branch_pos_requirement(
+		company=validated["company"],
+		branch=validated["branch"],
+		user=user,
+	)
+	if pos_state.get("pos_required") and not pos_state.get("pos_ready"):
 		if throw:
-			raise
-		return {"allowed": False, "company": company, "branch": branch, "reason": "validation_failed"}
+			frappe.throw(pos_state.get("pos_message") or _("A valid POS Profile is required for this Branch."))
+		return {
+			"allowed": False,
+			"company": validated["company"],
+			"branch": validated["branch"],
+			"reason": "pos_profile_required",
+		}
+	return validated
 
 
 def _get_switch_blockers(*, user: str) -> list[dict[str, str]]:
-	"""Return server-detectable blockers without changing state.
-
-	Open POSNext and ERPNext POS sessions are authoritative server evidence that
-	branch-bound cashier work is active. Browser cart/payment guards are layered on
-	top because unsaved cart state is not server truth yet.
-	"""
+	"""Return server-detectable blockers without changing state."""
 	blockers: list[dict[str, str]] = []
 	try:
 		from retailedge.cashier_context import find_open_pos_opening_shift
@@ -313,7 +422,7 @@ def _assert_switch_safe(*, company: str, branch: str, user: str) -> None:
 			frappe.throw(blocker["message"])
 
 
-def _allowed_companies() -> list[str]:
+def _allowed_companies(*, user: str) -> list[str]:
 	try:
 		rows = frappe.get_list(
 			"Company",
@@ -323,13 +432,22 @@ def _allowed_companies() -> list[str]:
 		)
 	except Exception:
 		rows = []
-	return [_clean(row.get("name")) for row in rows if _clean(row.get("name"))]
+	companies = [_clean(row.get("name")) for row in rows if _clean(row.get("name"))]
+	if user_has_global_branch_access(user=user) or not has_branch_assignments(user=user):
+		return companies
+	active_companies = {
+		_clean(row.get("company"))
+		for row in get_active_branch_assignments(user=user)
+		if _clean(row.get("company"))
+	}
+	return [company for company in companies if company in active_companies]
 
 
 def _allowed_branches(*, company: str, user: str) -> list[str]:
 	company = _clean(company)
 	if not company:
 		return []
+
 	filters: dict[str, Any] = {}
 	if _doctype_has_field("Branch", "company"):
 		filters["company"] = company
@@ -346,8 +464,31 @@ def _allowed_branches(*, company: str, user: str) -> list[str]:
 	except Exception:
 		rows = []
 	permission_visible = [_clean(row.get("name")) for row in rows if _clean(row.get("name"))]
+
+	# Branch Setup is the RetailEdge Company→Branch binding whenever the Company
+	# has any setup history. Disabled-only mappings deliberately produce no
+	# operational Branches rather than falling back to unrelated global Branches.
+	configured_rows = get_enabled_branch_profiles(company=company)
+	configured_branches = {
+		_clean(row.get("branch"))
+		for row in configured_rows
+		if _clean(row.get("branch"))
+	}
+	has_any_setup = bool(frappe.db.exists("RetailEdge Branch Profile", {"company": company}))
+	if configured_branches:
+		permission_visible = [branch for branch in permission_visible if branch in configured_branches]
+	elif has_any_setup:
+		permission_visible = []
+
 	if user_has_global_branch_access(user=user):
 		return permission_visible
+
+	# Once a user has Branch Assignment history, effective assignments are the
+	# RetailEdge operational authority. Legacy User Permission / Branch Profile
+	# child rows remain fallback only for users not yet migrated to assignments.
+	if has_branch_assignments(user=user):
+		assigned = set(get_assignment_branches(user=user, company=company))
+		return [branch for branch in permission_visible if branch in assigned]
 
 	restricted = set(get_user_allowed_branches(user=user, company=company).get("branches") or [])
 	if restricted:

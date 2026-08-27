@@ -45,11 +45,25 @@
 						</label>
 						<label class="edge-field">
 							<span class="edge-field-label">Operating Branch</span>
-							<select v-model="selectedBranch" class="edge-input" :disabled="busy || !selectedCompany">
+							<select
+								v-model="selectedBranch"
+								class="edge-input"
+								:disabled="busy || !selectedCompany"
+								@change="onBranchChange"
+							>
 								<option value="">Choose Branch</option>
 								<option v-for="branch in branches" :key="branch" :value="branch">{{ branch }}</option>
 							</select>
 						</label>
+					</div>
+
+					<div v-if="posRequired && selectedBranch" class="operating-context-pos">
+						<div>
+							<span class="operating-context-kicker">Required POS access</span>
+							<strong>{{ posProfile || "POS Profile not ready" }}</strong>
+							<small>{{ posMessage || "Your Branch Setup POS Profile is valid for this operating Branch." }}</small>
+						</div>
+						<EdgeStatusBadge :status="posReady ? 'Active' : 'Warning'" />
 					</div>
 
 					<div v-if="switchBlockers.length" class="operating-context-blockers">
@@ -60,7 +74,12 @@
 					</div>
 
 					<div class="operating-context-actions">
-						<button type="button" class="edge-button edge-button--primary" :disabled="busy || !selectedCompany || !selectedBranch" @click="switchContext">
+						<button
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="busy || !selectedCompany || !selectedBranch || (posRequired && !posReady)"
+							@click="switchContext"
+						>
 							{{ busy ? "Updating…" : "Use Selected Branch" }}
 						</button>
 						<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="restoreDefault">
@@ -75,6 +94,7 @@
 						<li>New guided and full-form transactions may receive Branch Setup defaults for the selected Branch.</li>
 						<li>Operational reports may start with the selected Company and Branch as editable defaults.</li>
 						<li>Existing drafts and submitted documents keep their stored Company, Branch, Stock Location and accounting values.</li>
+						<li>Users assigned to ERPNext POS Profiles must have a valid Branch Setup POS Profile for the selected Branch.</li>
 						<li>An active POS shift or unsaved POS/cart/payment state can block switching until that work is completed.</li>
 					</ul>
 				</section>
@@ -119,6 +139,10 @@ export default {
 			current: {},
 			selectedCompany: "",
 			selectedBranch: "",
+			posRequired: false,
+			posProfile: "",
+			posReady: true,
+			posMessage: "",
 			switchBlockers: [],
 			menuItems: [],
 			tenantName: "",
@@ -200,6 +224,18 @@ export default {
 			window.retailedgeInstallProductMenu?.({ force: true });
 			document.dispatchEvent(new CustomEvent("retailedge-operating-context-changed"));
 		},
+		resetPosState(required = false) {
+			this.posRequired = Boolean(required);
+			this.posProfile = "";
+			this.posReady = !this.posRequired;
+			this.posMessage = "";
+		},
+		applyPosState(context = {}) {
+			this.posRequired = Boolean(context.pos_required);
+			this.posProfile = context.pos_profile || "";
+			this.posReady = context.pos_ready !== false;
+			this.posMessage = context.pos_message || "";
+		},
 		async loadContext(company = "") {
 			if (this.loading) return;
 			this.loading = true;
@@ -213,6 +249,8 @@ export default {
 				this.selectedCompany = company || data.current?.company || data.selected_company || "";
 				const currentBranch = data.current?.company === this.selectedCompany ? data.current?.branch || "" : "";
 				this.selectedBranch = this.branches.includes(currentBranch) ? currentBranch : "";
+				if (this.selectedBranch) this.applyPosState(data.current || {});
+				else this.resetPosState(Boolean(data.pos_required));
 				this.loaded = true;
 			} catch (error) {
 				this.error = error?.message || error?.exc || __("The permitted Company and Branch options could not be loaded.");
@@ -222,10 +260,25 @@ export default {
 		},
 		async onCompanyChange() {
 			this.selectedBranch = "";
+			this.resetPosState(this.posRequired);
 			await this.loadContext(this.selectedCompany);
 		},
+		async onBranchChange() {
+			this.resetPosState(this.posRequired);
+			if (!this.selectedCompany || !this.selectedBranch) return;
+			try {
+				const preview = await callMethod("retailedge.operating_context.preview_operating_context", {
+					company: this.selectedCompany,
+					branch: this.selectedBranch,
+				});
+				this.applyPosState(preview);
+			} catch (error) {
+				this.posReady = false;
+				this.posMessage = error?.message || error?.exc || __("The selected Branch context could not be validated.");
+			}
+		},
 		async switchContext() {
-			if (!this.selectedCompany || !this.selectedBranch || this.showClientBlocker()) return;
+			if (!this.selectedCompany || !this.selectedBranch || (this.posRequired && !this.posReady) || this.showClientBlocker()) return;
 			this.busy = true;
 			try {
 				await callMethod(
@@ -268,6 +321,9 @@ export default {
 .operating-context-current p { margin: 0; color: var(--text-muted); max-width: 52rem; }
 .operating-context-kicker { color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .operating-context-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.operating-context-pos { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding: 0.85rem 1rem; border-radius: 0.6rem; border: 1px solid var(--edge-border-color, var(--border-color)); }
+.operating-context-pos > div { display: grid; gap: 0.2rem; }
+.operating-context-pos small { color: var(--text-muted); }
 .operating-context-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
 .operating-context-blockers { display: grid; gap: 0.65rem; margin-top: 1rem; }
 .operating-context-warning { display: grid; gap: 0.2rem; padding: 0.85rem 1rem; border-radius: 0.6rem; background: var(--orange-50, rgba(245, 158, 11, 0.1)); }

@@ -64,11 +64,16 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 				with self.assertRaises(frappe.ValidationError):
 					_normalise_items(rows)
 
+	@patch("retailedge.guided_sales_invoice.validate_operating_branch")
 	@patch("retailedge.guided_sales_invoice.validate_user_branch_access")
 	@patch("retailedge.guided_sales_invoice.get_first_existing_field", return_value="branch")
 	@patch("retailedge.guided_sales_invoice.has_field", return_value=True)
 	def test_warehouse_search_filters_company_and_branch_without_loading_all_rows(
-		self, _mock_has_field, _mock_branch_field, mock_validate_access
+		self,
+		_mock_has_field,
+		_mock_branch_field,
+		mock_validate_access,
+		mock_validate_operating,
 	):
 		filters = _warehouse_search_filters(
 			company="Demo Company",
@@ -79,6 +84,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertEqual(filters["branch"], "Lagos")
 		self.assertEqual(filters["is_group"], 0)
 		mock_validate_access.assert_called_once()
+		mock_validate_operating.assert_called_once()
 
 	@patch("retailedge.guided_sales_invoice.get_branch_profile")
 	@patch("retailedge.guided_sales_invoice.resolve_branch_from_warehouse")
@@ -96,6 +102,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 	@patch("retailedge.guided_sales_invoice.resolve_sales_item_pricing")
 	@patch("retailedge.guided_sales_invoice.resolve_price_list_context")
 	@patch("retailedge.guided_sales_invoice._assert_read_permission")
+	@patch("retailedge.guided_sales_invoice.validate_operating_branch")
 	@patch("retailedge.guided_sales_invoice.validate_user_branch_access")
 	@patch("retailedge.guided_sales_invoice._assert_can_create_sales_invoice")
 	@patch("retailedge.guided_sales_invoice.frappe.new_doc")
@@ -104,6 +111,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		mock_new_doc,
 		_mock_create_permission,
 		mock_branch_access,
+		mock_operating_branch,
 		mock_read_permission,
 		mock_price_context,
 		mock_item_pricing,
@@ -137,6 +145,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 
 		mock_new_doc.assert_called_once_with("Sales Invoice")
 		mock_branch_access.assert_called_once()
+		mock_operating_branch.assert_called_once()
 		self.assertGreaterEqual(mock_read_permission.call_count, 4)
 		self.assertEqual(doc.insert_calls, 1)
 		self.assertEqual(doc.company, "Demo Company")

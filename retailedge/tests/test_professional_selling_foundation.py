@@ -30,6 +30,7 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 			"resolve_price_list_context",
 			"frappe.has_permission",
 			"frappe.get_list",
+			"get_user_fullname(frappe.session.user)",
 			'"policy": "erpnext_native"',
 			'"draft_first": True',
 			'"submitted_documents_immutable": True',
@@ -44,6 +45,7 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 			".save()",
 			".submit()",
 			"frappe.db.set_value",
+			"frappe.get_user().get_fullname()",
 		):
 			self.assertNotIn(forbidden, source)
 
@@ -77,9 +79,9 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 	def test_ui_preserves_erpnext_shipping_and_native_document_truth(self):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		for contract in (
-			"ERPNext pricing and delivery charges stay authoritative",
-			"Shipping Rules",
-			"Price Lists",
+			"ERPNext pricing, taxes, Shipping Rules, stock and accounting remain authoritative",
+			"Selling Price List",
+			"Shipping Rule",
 			"createNative(document)",
 			"openNative(document)",
 		):

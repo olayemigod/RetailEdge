@@ -165,6 +165,8 @@ jobs:
           grep -Eq 'transaction_workspace\.bundle' sites/assets/assets.json
           grep -Eq 'professional_selling\.bundle' sites/assets/assets.json
           grep -Eq 'document_output_sharing\.bundle' sites/assets/assets.json
+          grep -Eq 'branch_setup\.bundle' sites/assets/assets.json
+          grep -Eq 'branch_assignments\.bundle' sites/assets/assets.json
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
           grep -Eq 'createPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js
           grep -Eq 'createBoundedPaginatedReportProvider' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_runtime.js

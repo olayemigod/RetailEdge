@@ -42,14 +42,19 @@ class TestR7SetupConsolidation(unittest.TestCase):
 			"COST_CENTER_FIELDS.forEach",
 			"ACCOUNT_FIELDS.forEach",
 			"{ is_group: 0, disabled: 0 }",
-			"clearCompanyDependentDefaults(frm)",
+			"clearIdentityDependentDefaults(frm)",
 			"company(frm)",
 		):
 			self.assertIn(contract, source)
-		# ERPNext v16 Branch has no native Company field. Company + Branch is
-		# bound by RetailEdge Branch Profile itself, while dependent defaults are
-		# filtered and validated against Company.
-		self.assertNotIn('set_query("branch"', source)
+		# ERPNext v16 Branch has no native Company field. RetailEdge may therefore
+		# query Branch only through its own Branch Setup mapping authority; it must
+		# never pretend the ERPNext Branch master itself has a Company field.
+		self.assertIn('frm.set_query("branch"', source)
+		self.assertIn(
+			"retailedge.branch_profile_queries.search_available_branch_setup_branches",
+			source,
+		)
+		self.assertNotIn('frm.set_query("branch", () => companyFilters', source)
 
 	def test_branch_setup_validation_does_not_add_accounting_or_stock_writes(self):
 		source = self.read("branch_profile.py")

@@ -45,7 +45,13 @@ class TestOperatingContextPhase2(unittest.TestCase):
 
 	def test_context_preview_does_not_clear_valid_session_context(self):
 		source = self.read("operating_context.py")
-		self.assertIn("Previewing Branch", source)
+		preview_start = source.index("def preview_operating_context(")
+		preview_end = source.index("\n\n@frappe.whitelist()\ndef switch_operating_context", preview_start)
+		preview_source = source[preview_start:preview_end]
+		self.assertIn("validate_operating_branch", preview_source)
+		self.assertIn('source="preview"', preview_source)
+		self.assertNotIn("_write_cached_context", preview_source)
+		self.assertNotIn("_clear_cached_context", preview_source)
 		self.assertIn("current = get_operating_context()", source)
 		self.assertIn('"selected_company": selected_company', source)
 

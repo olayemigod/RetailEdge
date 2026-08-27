@@ -16,7 +16,7 @@ class TestGuidedEntryUsability(unittest.TestCase):
 		for contract in (
 			"resolve_branch_warehouse_selection",
 			"resolve_branch_from_warehouse",
-			"validate_user_branch_access",
+			"validate_operating_branch",
 			"get_branch_profile_defaults",
 			"get_branch_profile(",
 			"_assert_read_permission",

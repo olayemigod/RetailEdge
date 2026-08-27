@@ -18,7 +18,7 @@
 		<EdgePageLayout class="retailedge-professional-selling-page">
 			<EdgePageHeader
 				title="Professional Selling"
-				description="Manage the customer journey from quotation to order and delivery while ERPNext remains the system of record."
+				description="Prepare quotations, orders, deliveries and invoices using the documents your transaction actually needs while ERPNext remains the system of record."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -40,37 +40,35 @@
 
 				<section class="edge-panel policy-panel">
 					<div>
-						<span class="selling-kicker">Commercial controls</span>
-						<h3>ERPNext pricing and delivery charges stay authoritative</h3>
-						<p>Price Lists, Pricing Rules, taxes and Shipping Rules are applied through ERPNext. RetailEdge does not maintain a separate sales or delivery-charge ledger.</p>
+						<span class="selling-kicker">Flexible selling paths</span>
+						<h3>Use the next document the business transaction requires</h3>
+						<p>A Quotation can become an Order or go directly to Invoice. Orders can be delivered or invoiced. Delivery Notes can be invoiced. ERPNext pricing, taxes, Shipping Rules, stock and accounting remain authoritative.</p>
 					</div>
 					<EdgeStatusBadge :status="shipping.available ? 'Active' : 'Warning'" />
 				</section>
 
-				<div class="selling-flow" aria-label="Selling workflow">
-					<template v-for="(document, index) in documents" :key="document.key">
-						<section class="edge-panel selling-stage">
-							<div class="stage-heading">
-								<span class="stage-number">{{ index + 1 }}</span>
-								<div>
-									<span class="selling-kicker">{{ document.stage }}</span>
-									<h3>{{ document.label }}</h3>
-								</div>
+				<div class="selling-flow" aria-label="Professional selling documents">
+					<section v-for="(document, index) in documents" :key="document.key" class="edge-panel selling-stage">
+						<div class="stage-heading">
+							<span class="stage-number">{{ index + 1 }}</span>
+							<div>
+								<span class="selling-kicker">{{ document.stage }}</span>
+								<h3>{{ document.label }}</h3>
 							</div>
-							<p>{{ stageDescription(document.key) }}</p>
-							<div class="stage-flags">
-								<span v-if="document.selling_price_list_field">Price List</span>
-								<span v-if="document.shipping_rule_field">Shipping Rule</span>
-								<span v-if="document.source_warehouse_field">Stock Location</span>
-							</div>
-							<div class="selling-actions">
-								<button v-if="document.can_create" type="button" class="edge-button edge-button--primary" @click="startCreate(document)">{{ createLabel(document) }}</button>
-								<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="openNative(document)">View Records</button>
-								<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="loadRecent(document)">Recent</button>
-							</div>
-						</section>
-						<div v-if="index < documents.length - 1" class="flow-arrow" aria-hidden="true">→</div>
-					</template>
+						</div>
+						<p>{{ stageDescription(document.key) }}</p>
+						<div class="stage-flags">
+							<span v-if="document.selling_price_list_field">Price List</span>
+							<span v-if="document.shipping_rule_field">Shipping Rule</span>
+							<span v-if="document.source_warehouse_field">Stock Location</span>
+							<span v-if="document.key === 'sales-invoice'">Flexible Conversion</span>
+						</div>
+						<div class="selling-actions">
+							<button v-if="document.can_create" type="button" class="edge-button edge-button--primary" @click="startCreate(document)">{{ createLabel(document) }}</button>
+							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="openNative(document)">View Records</button>
+							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="loadRecent(document)">Recent</button>
+						</div>
+					</section>
 				</div>
 
 				<section v-if="recentDocument" class="edge-panel recent-panel">
@@ -114,6 +112,13 @@
 				@saved="handleDeliverySaved"
 				@open-native="openDeliveryNative"
 			/>
+			<ProfessionalSalesInvoiceDialog
+				:open="salesInvoiceOpen"
+				:context="sellingContext"
+				@close="salesInvoiceOpen = false"
+				@saved="handleSalesInvoiceSaved"
+				@open-native="openSalesInvoiceNative"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
@@ -122,9 +127,12 @@
 import ProfessionalQuotationDialog from "./ProfessionalQuotationDialog.vue";
 import ProfessionalSalesOrderDialog from "./ProfessionalSalesOrderDialog.vue";
 import ProfessionalDeliveryDialog from "./ProfessionalDeliveryDialog.vue";
+import ProfessionalSalesInvoiceDialog from "./ProfessionalSalesInvoiceDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
+const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability";
 const RECENT_METHOD = "retailedge.professional_selling.get_recent_selling_documents";
+const RECENT_INVOICE_METHOD = "retailedge.professional_sales_invoice.get_recent_professional_sales_invoices";
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
 
 function runtimeComponents() {
@@ -153,6 +161,7 @@ export default {
 		ProfessionalQuotationDialog,
 		ProfessionalSalesOrderDialog,
 		ProfessionalDeliveryDialog,
+		ProfessionalSalesInvoiceDialog,
 	},
 	data() {
 		return {
@@ -172,6 +181,7 @@ export default {
 			quotationOpen: false,
 			salesOrderOpen: false,
 			deliveryOpen: false,
+			salesInvoiceOpen: false,
 			recentDocument: null,
 			recentRows: [],
 			recentLoading: false,
@@ -199,14 +209,19 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
-				const [selling, navigation] = await Promise.all([callMethod(CONTEXT_METHOD), navigationPromise]);
+				const [selling, invoice, navigation] = await Promise.all([
+					callMethod(CONTEXT_METHOD),
+					callMethod(INVOICE_CAPABILITY_METHOD),
+					navigationPromise,
+				]);
 				this.sellingContext = selling || {};
 				this.tenantName = selling.operating?.company || navigation.context?.company || "";
 				this.branchName = selling.operating?.branch || navigation.context?.branch || "";
 				this.userName = navigation.context?.user_name || selling.user_name || "";
 				this.pricing = selling.pricing || {};
 				this.shipping = selling.shipping || {};
-				this.documents = Array.isArray(selling.documents) ? selling.documents.filter((row) => row.available && (row.can_read || row.can_create)) : [];
+				const allDocuments = [...(Array.isArray(selling.documents) ? selling.documents : []), invoice];
+				this.documents = allDocuments.filter((row) => row?.available && (row.can_read || row.can_create));
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.loaded = true;
 			} catch (error) {
@@ -233,29 +248,23 @@ export default {
 		stageDescription(key) {
 			return ({
 				quotation: "Prepare a customer offer using ERPNext pricing, taxes and optional Shipping Rule before commitment.",
-				"sales-order": "Confirm the customer's order, requested delivery date and source Stock Location without bypassing ERPNext controls.",
-				"delivery-note": "Fulfil stock from a submitted Sales Order using ERPNext remaining quantities, stock truth and delivery charges.",
+				"sales-order": "Confirm an order when the business needs order tracking, fulfilment or a customer PO workflow.",
+				"delivery-note": "Record fulfilment from a submitted Sales Order using ERPNext remaining quantities and stock truth.",
+				"sales-invoice": "Invoice directly, from an accepted Quotation, from a Sales Order, or from a Delivery Note while preserving ERPNext accounting controls.",
 			})[key] || "Continue the selling workflow.";
 		},
 		createLabel(document) {
 			if (document?.key === "quotation") return "Guided Quotation";
 			if (document?.key === "sales-order") return "Guided Sales Order";
 			if (document?.key === "delivery-note") return "Create Delivery";
+			if (document?.key === "sales-invoice") return "Create / Convert Invoice";
 			return `Create ${document?.label || "Document"}`;
 		},
 		startCreate(document) {
-			if (document?.key === "quotation") {
-				this.quotationOpen = true;
-				return;
-			}
-			if (document?.key === "sales-order") {
-				this.salesOrderOpen = true;
-				return;
-			}
-			if (document?.key === "delivery-note") {
-				this.deliveryOpen = true;
-				return;
-			}
+			if (document?.key === "quotation") { this.quotationOpen = true; return; }
+			if (document?.key === "sales-order") { this.salesOrderOpen = true; return; }
+			if (document?.key === "delivery-note") { this.deliveryOpen = true; return; }
+			if (document?.key === "sales-invoice") { this.salesInvoiceOpen = true; return; }
 			this.createNative(document);
 		},
 		createNative(document) {
@@ -267,39 +276,22 @@ export default {
 		openRecord(document, name) {
 			window.open(`/app/${doctypeSlug(document.doctype)}/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer");
 		},
-		handleQuotationSaved(result) {
-			this.quotationOpen = false;
-			this.loadWorkspace();
-			if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer");
-		},
-		openQuotationNative() {
-			this.quotationOpen = false;
-			this.createNative({ doctype: "Quotation" });
-		},
-		handleSalesOrderSaved(result) {
-			this.salesOrderOpen = false;
-			this.loadWorkspace();
-			if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer");
-		},
-		openSalesOrderNative() {
-			this.salesOrderOpen = false;
-			this.createNative({ doctype: "Sales Order" });
-		},
-		handleDeliverySaved(result) {
-			this.deliveryOpen = false;
-			this.loadWorkspace();
-			if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer");
-		},
-		openDeliveryNative() {
-			this.deliveryOpen = false;
-			this.createNative({ doctype: "Delivery Note" });
-		},
+		handleQuotationSaved(result) { this.quotationOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
+		openQuotationNative() { this.quotationOpen = false; this.createNative({ doctype: "Quotation" }); },
+		handleSalesOrderSaved(result) { this.salesOrderOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
+		openSalesOrderNative() { this.salesOrderOpen = false; this.createNative({ doctype: "Sales Order" }); },
+		handleDeliverySaved(result) { this.deliveryOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
+		openDeliveryNative() { this.deliveryOpen = false; this.createNative({ doctype: "Delivery Note" }); },
+		handleSalesInvoiceSaved(result) { this.salesInvoiceOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
+		openSalesInvoiceNative() { this.salesInvoiceOpen = false; this.createNative({ doctype: "Sales Invoice" }); },
 		async loadRecent(document) {
 			this.recentDocument = document;
 			this.recentRows = [];
 			this.recentLoading = true;
 			try {
-				const rows = await callMethod(RECENT_METHOD, { document: document.key, limit: 8 });
+				const method = document.key === "sales-invoice" ? RECENT_INVOICE_METHOD : RECENT_METHOD;
+				const args = document.key === "sales-invoice" ? { limit: 8 } : { document: document.key, limit: 8 };
+				const rows = await callMethod(method, args);
 				this.recentRows = Array.isArray(rows) ? rows : [];
 			} catch (error) {
 				this.error = errorMessage(error, `Could not load recent ${document.label}.`);
@@ -307,13 +299,8 @@ export default {
 				this.recentLoading = false;
 			}
 		},
-		clearRecent() {
-			this.recentDocument = null;
-			this.recentRows = [];
-		},
-		openOperatingContext() {
-			frappe.set_route("operating-context");
-		},
+		clearRecent() { this.recentDocument = null; this.recentRows = []; },
+		openOperatingContext() { frappe.set_route("operating-context"); },
 	},
 };
 </script>
@@ -327,15 +314,14 @@ export default {
 .selling-kicker { color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .context-meta { display: grid; gap: 0.2rem; min-width: 12rem; }
 .context-meta span { color: var(--text-muted); font-size: 0.8rem; }
-.selling-flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); gap: 0.75rem; align-items: stretch; }
+.selling-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; align-items: stretch; }
 .selling-stage { min-height: 14rem; display: flex; flex-direction: column; gap: 0.8rem; }
 .stage-heading { display: flex; gap: 0.75rem; align-items: flex-start; }
 .stage-number { width: 2rem; height: 2rem; border-radius: 999px; display: inline-grid; place-items: center; background: var(--subtle-fg, var(--control-bg)); font-weight: 700; }
-.flow-arrow { display: grid; place-items: center; color: var(--text-muted); font-size: 1.4rem; }
 .stage-flags, .selling-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: auto; }
 .stage-flags span { padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--subtle-fg, var(--control-bg)); color: var(--text-muted); font-size: 0.75rem; }
 .recent-list { display: grid; gap: 0.5rem; margin-top: 1rem; }
 .recent-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 1rem; text-align: left; align-items: center; width: 100%; padding: 0.75rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.6rem; background: transparent; color: inherit; }
-@media (max-width: 900px) { .selling-flow { grid-template-columns: 1fr; } .flow-arrow { transform: rotate(90deg); } }
-@media (max-width: 680px) { .selling-context, .policy-panel, .recent-heading { flex-direction: column; } .recent-row { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .selling-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .selling-flow { grid-template-columns: 1fr; } .selling-context, .policy-panel, .recent-heading { flex-direction: column; } .recent-row { grid-template-columns: 1fr; } }
 </style>
