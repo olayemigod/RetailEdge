@@ -86,6 +86,7 @@ def get_branch_setup_context(filters=None, limit: int = MAX_LIST_RESULTS) -> dic
 		query_filters["enabled"] = 1
 	elif enabled in {"0", "no", "false", "disabled"}:
 		query_filters["enabled"] = 0
+	query_filters = _scope_branch_setup_filters(query_filters)
 
 	limit = min(max(cint(limit) or MAX_LIST_RESULTS, 1), MAX_LIST_RESULTS)
 	rows = frappe.get_list(
@@ -109,6 +110,7 @@ def get_branch_setup_context(filters=None, limit: int = MAX_LIST_RESULTS) -> dic
 def get_branch_setup(name: str) -> dict[str, Any]:
 	doc = frappe.get_doc(BRANCH_SETUP_DOCTYPE, name)
 	doc.check_permission("read")
+	_assert_branch_setup_scope(doc)
 	state = get_branch_profile_reassignment_state(doc.name)
 	serialised_doc, configuration_issues = _serialise_for_edgesuite(doc)
 	if configuration_issues:
@@ -138,6 +140,7 @@ def save_branch_setup(values=None) -> dict[str, Any]:
 	if name:
 		doc = frappe.get_doc(BRANCH_SETUP_DOCTYPE, name)
 		doc.check_permission("write")
+		_assert_branch_setup_scope(doc)
 	else:
 		if not frappe.has_permission(BRANCH_SETUP_DOCTYPE, "create"):
 			frappe.throw(_("You do not have permission to create Branch Setup records."), frappe.PermissionError)
@@ -172,12 +175,7 @@ def save_branch_setup(values=None) -> dict[str, Any]:
 
 @frappe.whitelist(methods=["POST"])
 def quick_create_branch(branch_name: str, company: str) -> dict[str, Any]:
-	"""Create the ERPNext Branch master without leaving the EdgeSuite setup flow.
-
-	Branch is a global ERPNext master in v16, so Company remains a RetailEdge
-	Branch Setup concern. Company is still required here to keep quick creation
-	inside an explicit Company context and to validate that the user can read it.
-	"""
+	"""Create the ERPNext Branch master without leaving the EdgeSuite setup flow."""
 	branch_name = str(branch_name or "").strip()
 	company = str(company or "").strip()
 	if not company:
@@ -272,14 +270,14 @@ def search_branch_setup_options(
 		"default_source_warehouse": ("Warehouse", {"company": company, "is_group": 0, "disabled": 0}),
 		"default_target_warehouse": ("Warehouse", {"company": company, "is_group": 0, "disabled": 0}),
 		"default_returns_warehouse": ("Warehouse", {"company": company, "is_group": 0, "disabled": 0}),
-		"default_cost_center": ("Cost Center", {"company": company, "is_group": 0}),
-		"default_sales_cost_center": ("Cost Center", {"company": company, "is_group": 0}),
-		"default_expense_cost_center": ("Cost Center", {"company": company, "is_group": 0}),
-		"default_pos_opening_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0}),
-		"default_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0}),
-		"default_bank_account": ("Account", {"company": company, "is_group": 0, "disabled": 0}),
-		"default_card_pos_account": ("Account", {"company": company, "is_group": 0, "disabled": 0}),
-		"default_mobile_money_account": ("Account", {"company": company, "is_group": 0, "disabled": 0}),
+		"default_cost_center": ("Cost Center", {"company": company, "is_group": 0, "disabled": 0}),
+		"default_sales_cost_center": ("Cost Center", {"company": company, "is_group": 0, "disabled": 0}),
+		"default_expense_cost_center": ("Cost Center", {"company": company, "is_group": 0, "disabled": 0}),
+		"default_pos_opening_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0, "account_type": "Cash"}),
+		"default_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0, "account_type": "Cash"}),
+		"default_bank_account": ("Account", {"company": company, "is_group": 0, "disabled": 0, "account_type": "Bank"}),
+		"default_card_pos_account": ("Account", {"company": company, "is_group": 0, "disabled": 0, "root_type": "Asset", "account_type": ["in", ["", "Bank", "Cash"]]}),
+		"default_mobile_money_account": ("Account", {"company": company, "is_group": 0, "disabled": 0, "root_type": "Asset", "account_type": ["in", ["", "Bank", "Cash"]]}),
 		"default_cash_mode_of_payment": ("Mode of Payment", {}),
 	}
 	if fieldname not in search_config:
@@ -324,11 +322,27 @@ def _get_legacy_default_issues(doc) -> list[dict[str, str]]:
 		if is_group is not None and cint(is_group):
 			issues.append({"fieldname": fieldname, "label": label, "reason": _("must be a leaf record")})
 			continue
-		if doctype in {"Warehouse", "Account"}:
+		if doctype in {"Warehouse", "Account", "Cost Center"} and frappe.get_meta(doctype).has_field("disabled"):
 			disabled = frappe.db.get_value(doctype, value, "disabled")
 			if disabled is not None and cint(disabled):
 				issues.append({"fieldname": fieldname, "label": label, "reason": _("is disabled")})
+				continue
+		if doctype == "Account" and not _account_matches_semantics(fieldname, value):
+			issues.append({"fieldname": fieldname, "label": label, "reason": _("has an incompatible Account Type")})
 	return issues
+
+
+def _account_matches_semantics(fieldname: str, account: str) -> bool:
+	account_type, root_type = frappe.db.get_value("Account", account, ["account_type", "root_type"]) or ("", "")
+	account_type = str(account_type or "").strip()
+	root_type = str(root_type or "").strip()
+	if fieldname in {"default_pos_opening_cash_account", "default_cash_account"}:
+		return account_type == "Cash"
+	if fieldname == "default_bank_account":
+		return account_type == "Bank"
+	if fieldname in {"default_card_pos_account", "default_mobile_money_account"}:
+		return root_type == "Asset" and account_type in {"", "Bank", "Cash"}
+	return True
 
 
 def _serialise_doc(doc) -> dict[str, Any]:
@@ -342,6 +356,42 @@ def _coerce_values(values) -> dict[str, Any]:
 	if isinstance(values, str):
 		values = frappe.parse_json(values)
 	return dict(values or {})
+
+
+def _scope_branch_setup_filters(filters: dict[str, Any]) -> dict[str, Any]:
+	from retailedge.branch_assignment import get_assignment_branches, has_branch_assignments
+	from retailedge.branch_context import get_user_allowed_branches, user_has_global_branch_access
+	from retailedge.operating_context import get_allowed_operating_branches
+
+	user = frappe.session.user
+	if user_has_global_branch_access(user=user):
+		return filters
+	company = str(filters.get("company") or "").strip()
+	if company:
+		branches = get_allowed_operating_branches(company=company, user=user)
+	elif has_branch_assignments(user=user):
+		branches = get_assignment_branches(user=user)
+	else:
+		branches = get_user_allowed_branches(user=user).get("branches") or []
+	requested_branch = filters.get("branch")
+	if requested_branch and requested_branch not in branches:
+		filters["name"] = "__no_visible_branch_setup__"
+	elif branches:
+		filters["branch"] = ["in", list(dict.fromkeys(branches))]
+	else:
+		filters["name"] = "__no_visible_branch_setup__"
+	return filters
+
+
+def _assert_branch_setup_scope(doc) -> None:
+	from retailedge.branch_context import user_has_global_branch_access
+	from retailedge.operating_context import get_allowed_operating_branches
+
+	user = frappe.session.user
+	if user_has_global_branch_access(user=user):
+		return
+	if doc.branch not in get_allowed_operating_branches(company=doc.company, user=user):
+		frappe.throw(_("You do not have access to this Branch Setup."), frappe.PermissionError)
 
 
 def _can_create_branch() -> bool:
