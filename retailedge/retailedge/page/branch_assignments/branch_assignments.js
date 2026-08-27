@@ -2,6 +2,7 @@ const EDGEUI_ASSET = "edgeui.bundle.js";
 const PAGE_ASSET = "branch_assignments.bundle.js";
 const PAGE_ROUTE = "branch-assignments";
 const PAGE_TITLE = "Branch Assignments";
+const ASSET_MANIFEST_URL = "/assets/assets.json";
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {
@@ -13,6 +14,44 @@ function requireAsync(assetName) {
 			if (pending && typeof pending.then === "function") pending.then(finish).catch(fail);
 		} catch (error) { fail(error); }
 	});
+}
+
+async function getFreshBundledAsset(assetName) {
+	const response = await fetch(`${ASSET_MANIFEST_URL}?v=${Date.now()}`, {
+		cache: "no-store",
+		credentials: "same-origin",
+	});
+	if (!response.ok) throw new Error(`${PAGE_TITLE} could not refresh the asset manifest.`);
+	const manifest = await response.json();
+	const resolved = manifest?.[assetName];
+	if (!resolved) throw new Error(`${assetName} is missing from the current asset manifest.`);
+	if (frappe.boot?.assets_json) frappe.boot.assets_json[assetName] = resolved;
+	return resolved;
+}
+
+function loadScriptStrict(url, assetName) {
+	return new Promise((resolve, reject) => {
+		const script = document.createElement("script");
+		script.type = "text/javascript";
+		script.src = new URL(url, window.location.origin).toString();
+		script.dataset.retailedgeAsset = assetName;
+		script.onload = () => resolve();
+		script.onerror = () => reject(new Error(`${assetName} could not be loaded from the current asset manifest.`));
+		document.head.appendChild(script);
+	});
+}
+
+async function ensureBundledAsset(assetName, isReady, label) {
+	if (isReady()) return;
+	await requireAsync(assetName);
+	if (isReady()) return;
+
+	// Frappe v16 deliberately resolves frappe.require() even when a script fails.
+	// Refresh the manifest and retry the exact current hashed asset with real
+	// onerror handling so an open Desk session survives a local/production rebuild.
+	const resolved = await getFreshBundledAsset(assetName);
+	await loadScriptStrict(resolved, assetName);
+	if (!isReady()) throw new Error(`${label} loaded but did not register its runtime.`);
 }
 
 function hideNativePageSidebar(wrapper) {
@@ -47,10 +86,8 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true });
 		wrapper.page = page;
 		hideNativePageSidebar(wrapper);
-		await requireAsync(EDGEUI_ASSET);
-		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
-		await requireAsync(PAGE_ASSET);
-		if (typeof window.mountRetailEdgeBranchAssignments !== "function") throw new Error("Branch Assignments bundle is unavailable.");
+		await ensureBundledAsset(EDGEUI_ASSET, () => Boolean(window.EdgeSuiteUI?.components), "EdgeSuite UI");
+		await ensureBundledAsset(PAGE_ASSET, () => typeof window.mountRetailEdgeBranchAssignments === "function", PAGE_TITLE);
 		loading.remove();
 		const root = document.createElement("div");
 		root.className = "retailedge-branch-assignments-root";
