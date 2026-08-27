@@ -16,8 +16,11 @@ class BankingDarkModeContractTests(unittest.TestCase):
 
 		self.assertIn("/assets/retailedge/css/bank_matching_dark_contrast.css", loader)
 		self.assertIn('loadVersionedStylesheet(DARK_CONTRAST_CSS, "dark-contrast")', loader)
-		self.assertIn('STYLE_VERSION = "20260827-4"', loader)
+		self.assertIn('STYLE_VERSION = "20260827-5"', loader)
 		self.assertIn(':root[data-edge-appearance="dark"] .retailedge-bank-layout', css)
+		self.assertIn(":has(.retailedge-bank-layout)", css)
+		self.assertIn(".layout-main-section", css)
+		self.assertIn("var(--edge-color-surface-soft", css)
 		self.assertIn(".retailedge-bank-reset-link", css)
 		self.assertIn(".retailedge-bank-table .edge-link-button", css)
 		self.assertIn(".retailedge-bank-sort", css)
@@ -34,6 +37,9 @@ class BankingDarkModeContractTests(unittest.TestCase):
 		css = READINESS_CSS.read_text(encoding="utf-8")
 
 		self.assertIn(':root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell', css)
+		self.assertIn(":has(.retailedge-banking-readiness-shell)", css)
+		self.assertIn(".layout-main-section", css)
+		self.assertIn("var(--edge-color-surface-soft", css)
 		self.assertIn(".retailedge-readiness-card__header p", css)
 		self.assertIn(".retailedge-readiness-context-value strong", css)
 		self.assertIn(".retailedge-readiness-issue span", css)

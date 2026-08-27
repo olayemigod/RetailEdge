@@ -1,6 +1,21 @@
 /* Dark-mode contrast completion for the standalone Bank Matching EdgeSuite page.
-   The shared EdgeSuite dark contract currently targets EdgeAppShell; this page
-   intentionally runs as a focused EdgePageLayout inside Frappe Desk. */
+   The page keeps Frappe Desk chrome, while all RetailEdge workspace surfaces use
+   the shared EdgeSuite theme tokens. */
+
+/* Complete the standalone EdgeSuite canvas without globally restyling Frappe
+   Desk. These selectors only affect Frappe containers that actually contain the
+   RetailEdge Bank Matching workspace. */
+:root[data-edge-appearance="dark"] :is(
+	.page-container,
+	.page-body,
+	.page-body > .container,
+	.layout-main,
+	.layout-main-section-wrapper,
+	.layout-main-section,
+	.page-content
+):has(.retailedge-bank-layout) {
+	background: var(--edge-color-surface-soft, var(--edge-color-surface-muted, var(--edge-color-surface))) !important;
+}
 
 :root[data-edge-appearance="dark"] .retailedge-bank-layout {
 	--text-color: var(--edge-color-ink-950);

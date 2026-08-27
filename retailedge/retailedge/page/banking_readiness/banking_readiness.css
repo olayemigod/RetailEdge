@@ -134,6 +134,21 @@
 	gap: var(--edge-space-2, .5rem);
 }
 
+/* Standalone EdgePageLayout pages keep Frappe Desk chrome, but their working
+   canvas must inherit the active EdgeSuite theme. Scope the override only to
+   Frappe containers that contain this readiness page. */
+:root[data-edge-appearance="dark"] :is(
+	.page-container,
+	.page-body,
+	.page-body > .container,
+	.layout-main,
+	.layout-main-section-wrapper,
+	.layout-main-section,
+	.page-content
+):has(.retailedge-banking-readiness-shell) {
+	background: var(--edge-color-surface-soft, var(--edge-color-surface-muted, var(--edge-color-surface))) !important;
+}
+
 /* Standalone EdgePageLayout pages do not inherit the shell-only dark contrast
    completion layer, so keep this page readable with EdgeSuite theme tokens. */
 :root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell {
