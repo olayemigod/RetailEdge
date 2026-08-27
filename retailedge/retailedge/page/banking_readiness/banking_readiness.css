@@ -4,6 +4,16 @@
 	width: 100%;
 }
 
+/* Keep the two readiness context controls compact on desktop. This override is
+   intentionally page-scoped so the shared EdgeFilterBar keeps its normal
+   behaviour elsewhere. */
+.retailedge-banking-readiness-shell .edge-filter-bar__fields {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+	align-items: end;
+}
+
 .retailedge-readiness-summary {
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -132,6 +142,7 @@
 }
 
 @media (max-width: 650px) {
+	.retailedge-banking-readiness-shell .edge-filter-bar__fields,
 	.retailedge-readiness-summary,
 	.retailedge-readiness-context-grid {
 		grid-template-columns: 1fr;
