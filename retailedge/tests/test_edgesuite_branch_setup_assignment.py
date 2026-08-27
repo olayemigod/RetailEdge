@@ -108,8 +108,11 @@ class TestEdgeSuiteBranchSetupAssignment(unittest.TestCase):
 			"_get_legacy_default_issues",
 			'state["configuration_issues"]',
 			"Branch Setup needs correction",
-			'"default_pos_opening_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0})',
-			'"default_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0})',
+			'"default_pos_opening_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0, "account_type": "Cash"})',
+			'"default_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0, "account_type": "Cash"})',
+			'"default_bank_account": ("Account", {"company": company, "is_group": 0, "disabled": 0, "account_type": "Bank"})',
+			'"default_cost_center": ("Cost Center", {"company": company, "is_group": 0, "disabled": 0})',
+			"_account_matches_semantics",
 		):
 			self.assertIn(contract, source)
 		self.assertIn('result[issue["fieldname"]] = ""', source)
