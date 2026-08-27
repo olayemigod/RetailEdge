@@ -31,7 +31,7 @@
   {"fieldname":"period_section","fieldtype":"Section Break","label":"Assignment Period"},
   {"default":"Today","fieldname":"effective_from","fieldtype":"Date","in_list_view":1,"in_standard_filter":1,"label":"Effective From","reqd":1},
   {"fieldname":"effective_to","fieldtype":"Date","in_list_view":1,"in_standard_filter":1,"label":"Effective To"},
-  {"fieldname":"status","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Status","options":"Planned\nActive\nEnded","read_only":1},
+  {"description":"Derived from Effective From/To. EdgeSuite and access checks calculate the live status from dates.","fieldname":"status","fieldtype":"Select","hidden":1,"label":"Status","options":"Planned\nActive\nEnded","read_only":1},
   {"fieldname":"history_section","fieldtype":"Section Break","label":"History & Notes"},
   {"fieldname":"transfer_reason","fieldtype":"Small Text","label":"Assignment / Transfer Reason"},
   {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
@@ -51,7 +51,7 @@
   {"read":1,"report":1,"role":"RetailEdgeAuditor"},
   {"read":1,"report":1,"role":"Accounts Manager"}
  ],
- "search_fields": "user,company,branch,branch_role,status",
+ "search_fields": "user,company,branch,branch_role",
  "sort_field": "effective_from",
  "sort_order": "DESC",
  "title_field": "user",
