@@ -44,8 +44,17 @@ class RetailEdgeBranchProfile(Document):
 			["name", "company", "enabled"],
 			as_dict=True,
 		)
-		if existing and str(existing.get("company") or "") != str(self.company or ""):
+		if not existing:
+			return
+
+		existing_company = str(existing.get("company") or "")
+		if existing_company != str(self.company or ""):
 			frappe.throw(
-				f"Branch {self.branch} is already assigned to Company {existing.get('company')} in Branch Setup "
+				f"Branch {self.branch} is already assigned to Company {existing_company} in Branch Setup "
 				f"{existing.get('name')}. Disabling that setup does not release the Branch to another Company."
 			)
+
+		frappe.throw(
+			f"Branch {self.branch} already has Branch Setup {existing.get('name')} for Company {self.company}. "
+			"Edit the existing Branch Setup instead of creating a second ownership record."
+		)
