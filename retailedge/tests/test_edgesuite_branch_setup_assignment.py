@@ -34,6 +34,18 @@ class TestEdgeSuiteBranchSetupAssignment(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertNotIn("new frappe.ui.Dialog", source)
 
+	def test_branch_setup_can_quick_create_erpnext_branch_in_edgesuite(self):
+		source = BRANCH_SETUP_VUE.read_text(encoding="utf-8")
+		for contract in (
+			"retailedge.branch_setup.quick_create_branch",
+			':canCreate="canCreateBranch && Boolean(editor.company)"',
+			':creator="createEditorBranch"',
+			'createLabel="Create Branch"',
+			"Save Branch Setup to assign it",
+			"createReassignBranch",
+		):
+			self.assertIn(contract, source)
+
 	def test_branch_assignments_uses_edgesuite_modals_and_links(self):
 		source = BRANCH_ASSIGNMENTS_VUE.read_text(encoding="utf-8")
 		for contract in (
@@ -69,6 +81,20 @@ class TestEdgeSuiteBranchSetupAssignment(unittest.TestCase):
 			"search_available_branch_setup_branches",
 			"search_reassignment_target_branches",
 			"search_configured_company_branches",
+		):
+			self.assertIn(contract, source)
+		self.assertNotIn("ignore_permissions=True", source)
+		self.assertNotIn("frappe.db.commit", source)
+
+	def test_branch_quick_create_respects_erpnext_permissions(self):
+		source = BRANCH_SETUP_SERVICE.read_text(encoding="utf-8")
+		for contract in (
+			"def quick_create_branch",
+			'frappe.has_permission("Branch", "create")',
+			'frappe.new_doc("Branch")',
+			"branch.insert()",
+			'company_doc.check_permission("read")',
+			"already exists. Select the existing Branch instead.",
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("ignore_permissions=True", source)
