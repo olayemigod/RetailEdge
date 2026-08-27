@@ -8,6 +8,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 PAGE_JS = APP_ROOT / "retailedge/page/bank_matching_reconciliation/bank_matching_reconciliation.js"
 PRIMARY_DATE_JS = APP_ROOT / "public/js/bank_matching_primary_date_adapter.js"
 PRIMARY_DATE_CSS = APP_ROOT / "public/css/bank_matching_primary_date.css"
+COMPLETION_CSS = APP_ROOT / "public/css/bank_matching_edgesuite_completion.css"
 
 
 class BankingPrimaryDateAdapterTests(unittest.TestCase):
@@ -27,11 +28,23 @@ class BankingPrimaryDateAdapterTests(unittest.TestCase):
 			'edgeInputField(filterBar, "To Date")',
 			'internalizeLegacyDateField(fromDate)',
 			'internalizeLegacyDateField(toDate)',
-			'fieldsHost.insertBefore(smartDate, fromDate)',
+			'ensurePrimaryDateRow(fieldsHost, smartDate, fromDate, resetAction)',
 			'label.textContent = t("Date")',
 			'Last 3 weeks, This Month, Last 90 days',
 		):
 			self.assertIn(marker, asset)
+
+	def test_reset_filters_is_moved_immediately_before_primary_date(self):
+		asset = PRIMARY_DATE_JS.read_text()
+		css = PRIMARY_DATE_CSS.read_text()
+		self.assertIn("retailedge-bank-date-control-row", asset)
+		self.assertIn("resetFilterAction(filterBar)", asset)
+		self.assertIn("row.appendChild(resetAction)", asset)
+		self.assertIn("row.appendChild(smartDate)", asset)
+		self.assertLess(asset.index("row.appendChild(resetAction)"), asset.index("row.appendChild(smartDate)"))
+		self.assertIn("grid-template-columns: auto minmax(0, 1fr)", css)
+		self.assertIn("grid-column: span 2", css)
+		self.assertIn(".edge-filter-bar__actions:empty", css)
 
 	def test_internal_date_fields_are_hidden_but_not_removed(self):
 		asset = PRIMARY_DATE_JS.read_text()
@@ -41,6 +54,14 @@ class BankingPrimaryDateAdapterTests(unittest.TestCase):
 		self.assertIn("retailedge-bank-internal-date-filter", asset)
 		self.assertIn("display: none !important", css)
 		self.assertNotIn("remove()", asset)
+
+	def test_desktop_workflow_bar_has_more_width_and_tabs_do_not_wrap(self):
+		css = COMPLETION_CSS.read_text()
+		self.assertIn("width: calc(35% - .25rem)", css)
+		self.assertIn("width: calc(65% - .25rem)", css)
+		self.assertIn("flex-wrap: nowrap", css)
+		self.assertIn("white-space: nowrap", css)
+		self.assertIn("@media (max-width: 1100px)", css)
 
 	def test_adapter_is_valid_javascript(self):
 		completed = subprocess.run(
