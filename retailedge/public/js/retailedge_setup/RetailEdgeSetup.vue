@@ -176,6 +176,10 @@ export default {
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
 		openResource(resource) {
+			if (resource?.page) {
+				frappe.set_route(resource.page);
+				return;
+			}
 			if (!resource?.doctype) return;
 			window.open(`/app/${doctypeSlug(resource.doctype)}`, "_blank", "noopener,noreferrer");
 		},
