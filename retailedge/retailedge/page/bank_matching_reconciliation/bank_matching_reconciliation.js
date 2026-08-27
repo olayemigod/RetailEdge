@@ -6,6 +6,7 @@
 	const REVIEW_CATEGORY_ASSET = "/assets/retailedge/js/bank_review_category_adapter.js";
 	const FUZZY_DISCOVERY_ASSET = "/assets/retailedge/js/bank_matching_fuzzy_discovery_adapter.js";
 	const BRANCH_SEARCH_ASSET = "/assets/retailedge/js/bank_matching_branch_search_adapter.js";
+	const BANK_ACCOUNT_CASCADE_ASSET = "/assets/retailedge/js/bank_matching_bank_account_cascade_adapter.js";
 	const DENSE_WORKSPACE_CSS = "/assets/retailedge/css/bank_matching_dense_workspace.css";
 	const COMPLETION_CSS = "/assets/retailedge/css/bank_matching_edgesuite_completion.css";
 	const PAGE_ENHANCEMENTS_CSS = "/assets/retailedge/css/bank_matching_page_enhancements.css";
@@ -61,6 +62,7 @@
 			.then(() => Promise.resolve(frappe.require(REVIEW_CATEGORY_ASSET)))
 			.then(() => Promise.resolve(frappe.require(FUZZY_DISCOVERY_ASSET)))
 			.then(() => Promise.resolve(frappe.require(BRANCH_SEARCH_ASSET)))
+			.then(() => Promise.resolve(frappe.require(BANK_ACCOUNT_CASCADE_ASSET)))
 			.then(() => loadBankingStyles())
 			.then(() => Promise.resolve(frappe.require(WORKSPACE_ASSET)))
 			.then(() => Promise.resolve(frappe.require(COMPLETION_ASSET)))
