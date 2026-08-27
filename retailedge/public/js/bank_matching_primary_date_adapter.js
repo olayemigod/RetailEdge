@@ -27,6 +27,13 @@
 		}) || null;
 	}
 
+	function resetFilterAction(filterBar) {
+		return filterBar?.querySelector(".retailedge-bank-reset-link") || Array.from(filterBar?.querySelectorAll("button") || []).find((button) => {
+			const label = clean(button.textContent).toLowerCase();
+			return label === clean(t("Reset filters")).toLowerCase() || label === clean(t("Clear Filters")).toLowerCase();
+		}) || null;
+	}
+
 	function internalizeLegacyDateField(field) {
 		if (!field) return;
 		field.hidden = true;
@@ -34,6 +41,21 @@
 		field.classList.add("retailedge-bank-internal-date-filter");
 		const input = field.querySelector("input");
 		if (input) input.tabIndex = -1;
+	}
+
+	function ensurePrimaryDateRow(fieldsHost, smartDate, fromDate, resetAction) {
+		let row = fieldsHost.querySelector(".retailedge-bank-date-control-row");
+		if (!row) {
+			row = document.createElement("div");
+			row.className = "retailedge-bank-date-control-row";
+			fieldsHost.insertBefore(row, fromDate);
+		}
+
+		// Keep Reset filters beside the single visible Date selector so it does not
+		// consume a separate filter-bar row. Search remains in the third grid column.
+		if (resetAction && resetAction.parentElement !== row) row.appendChild(resetAction);
+		if (smartDate.parentElement !== row) row.appendChild(smartDate);
+		return row;
 	}
 
 	function promoteSmartDate() {
@@ -46,6 +68,7 @@
 		const smartDate = filterBar?.querySelector(".retailedge-bank-smart-date");
 		const fromDate = edgeInputField(filterBar, "From Date");
 		const toDate = edgeInputField(filterBar, "To Date");
+		const resetAction = resetFilterAction(filterBar);
 		if (!filterBar || !fieldsHost || !smartDate || !fromDate || !toDate) return;
 
 		// The exact From/To controls remain mounted only as internal query state.
@@ -53,10 +76,7 @@
 		// interaction pattern without creating a second date authority.
 		internalizeLegacyDateField(fromDate);
 		internalizeLegacyDateField(toDate);
-
-		if (smartDate.parentElement !== fieldsHost || smartDate.nextElementSibling !== fromDate) {
-			fieldsHost.insertBefore(smartDate, fromDate);
-		}
+		ensurePrimaryDateRow(fieldsHost, smartDate, fromDate, resetAction);
 		smartDate.classList.add("retailedge-bank-smart-date--primary");
 
 		const label = smartDate.querySelector(".edge-smart-date__label");
