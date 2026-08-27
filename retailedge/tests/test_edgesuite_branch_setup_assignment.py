@@ -11,6 +11,8 @@ BRANCH_ASSIGNMENTS_VUE = APP_ROOT / "public" / "js" / "branch_assignments" / "Br
 BRANCH_SETUP_SERVICE = APP_ROOT / "branch_setup.py"
 BRANCH_ASSIGNMENT_UI = APP_ROOT / "branch_assignment_ui.py"
 BRANCH_SETUP_PAGE = APP_ROOT / "retailedge" / "page" / "branch_setup" / "branch_setup.json"
+BRANCH_SETUP_LOADER = APP_ROOT / "retailedge" / "page" / "branch_setup" / "branch_setup.js"
+BRANCH_ASSIGNMENTS_LOADER = APP_ROOT / "retailedge" / "page" / "branch_assignments" / "branch_assignments.js"
 SETUP_HUB = APP_ROOT / "retailedge" / "page" / "retailedge_setup" / "retailedge_setup.py"
 
 
@@ -73,6 +75,23 @@ class TestEdgeSuiteBranchSetupAssignment(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("error?.exc ||", source)
+
+	def test_branch_page_loaders_recover_from_stale_asset_manifest(self):
+		for path in (BRANCH_SETUP_LOADER, BRANCH_ASSIGNMENTS_LOADER):
+			source = path.read_text(encoding="utf-8")
+			for contract in (
+				'ASSET_MANIFEST_URL = "/assets/assets.json"',
+				"function requireAsync",
+				"async function getFreshBundledAsset",
+				'cache: "no-store"',
+				"frappe.boot.assets_json[assetName] = resolved",
+				"function loadScriptStrict",
+				"script.onerror",
+				"async function ensureBundledAsset",
+				"await requireAsync(assetName)",
+				"await loadScriptStrict(resolved, assetName)",
+			):
+				self.assertIn(contract, source)
 
 	def test_branch_setup_page_registration_and_setup_hub_route(self):
 		definition = json.loads(BRANCH_SETUP_PAGE.read_text(encoding="utf-8"))
