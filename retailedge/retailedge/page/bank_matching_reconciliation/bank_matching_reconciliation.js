@@ -11,7 +11,8 @@
 	const COMPLETION_CSS = "/assets/retailedge/css/bank_matching_edgesuite_completion.css";
 	const PAGE_ENHANCEMENTS_CSS = "/assets/retailedge/css/bank_matching_page_enhancements.css";
 	const PRIMARY_DATE_CSS = "/assets/retailedge/css/bank_matching_primary_date.css";
-	const STYLE_VERSION = "20260827-1";
+	const DARK_CONTRAST_CSS = "/assets/retailedge/css/bank_matching_dark_contrast.css";
+	const STYLE_VERSION = "20260827-2";
 	const WORKSPACE_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_workspace.js";
 	const COMPLETION_ASSET = "/assets/retailedge/js/bank_matching_edgesuite_completion_adapter.js";
 	const PAGE_ENHANCEMENTS_ASSET = "/assets/retailedge/js/bank_matching_page_enhancements.js";
@@ -47,6 +48,7 @@
 			loadVersionedStylesheet(COMPLETION_CSS, "completion"),
 			loadVersionedStylesheet(PAGE_ENHANCEMENTS_CSS, "page-enhancements"),
 			loadVersionedStylesheet(PRIMARY_DATE_CSS, "primary-date"),
+			loadVersionedStylesheet(DARK_CONTRAST_CSS, "dark-contrast"),
 		]);
 	}
 
