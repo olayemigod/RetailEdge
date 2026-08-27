@@ -61,6 +61,7 @@ BRANCH_USER_TABLE_FIELDS = (
 class RetailEdgeBranchProfile(Document):
 	def validate(self):
 		self._validate_company_branch_identity()
+		self._validate_disable_safety()
 		try:
 			from retailedge.branch_profile import validate_branch_profile
 		except Exception:
@@ -68,24 +69,40 @@ class RetailEdgeBranchProfile(Document):
 		if validate_branch_profile:
 			validate_branch_profile(self)
 
+	def on_trash(self):
+		if getattr(self.flags, "branch_reassignment_archive", False):
+			return
+		usage = get_branch_operational_usage(company=_clean(self.company), branch=_clean(self.branch))
+		if usage or _has_assignment_history(self.name):
+			frappe.throw(
+				_(
+					"This Branch Setup has operational or Branch Assignment history and cannot be deleted. "
+					"Disable it when it is no longer operational so the historical mapping remains auditable."
+				)
+			)
+
 	def _validate_company_branch_identity(self):
 		"""Allow corrections while protecting historical Company↔Branch meaning."""
 		if getattr(self.flags, "branch_reassignment_archive", False):
 			return
 
-		stored = _stored_identity(self.name) if not self.is_new() and self.name else None
+		stored = _stored_state(self.name) if not self.is_new() and self.name else None
 		stored_company = _clean(stored.get("company")) if stored else ""
 		stored_branch = _clean(stored.get("branch")) if stored else ""
 		company_changed = bool(stored and stored_company != _clean(self.company))
 		branch_changed = bool(stored and stored_branch != _clean(self.branch))
 		identity_changed = bool(company_changed or branch_changed)
 
+		if self.is_new() or identity_changed:
+			_lock_branch_identity(company=_clean(self.company), branch=_clean(self.branch))
+
 		if identity_changed and not getattr(self.flags, "controlled_branch_reassignment", False):
 			usage = get_branch_operational_usage(company=stored_company, branch=stored_branch)
-			if usage:
+			assignment_history = _has_assignment_history(self.name)
+			if usage or assignment_history:
 				frappe.throw(
 					_(
-						"This Branch Setup already has operational history. Use the Change Company / Branch "
+						"This Branch Setup already has operational or Branch Assignment history. Use the Change Company / Branch "
 						"action so RetailEdge preserves the historical mapping instead of rewriting it."
 					)
 				)
@@ -112,6 +129,25 @@ class RetailEdgeBranchProfile(Document):
 					branch=_clean(self.branch),
 				)
 
+	def _validate_disable_safety(self):
+		if self.is_new() or getattr(self.flags, "branch_reassignment_archive", False):
+			return
+		stored = _stored_state(self.name)
+		if not stored:
+			return
+		was_enabled = int(stored.get("enabled") or 0)
+		will_be_enabled = int(getattr(self, "enabled", 0) or 0)
+		if was_enabled and not will_be_enabled:
+			blockers = _assignment_blockers(self.name)
+			if blockers:
+				refs = ", ".join(f"{row.get('user')} ({row.get('name')})" for row in blockers[:5])
+				frappe.throw(
+					_(
+						"Transfer or end current/planned Branch Assignments before disabling this Branch Setup. "
+						"Blocking assignments: {0}."
+					).format(refs)
+				)
+
 
 @frappe.whitelist()
 def get_branch_profile_reassignment_state(name: str) -> dict:
@@ -119,26 +155,27 @@ def get_branch_profile_reassignment_state(name: str) -> dict:
 	doc = frappe.get_doc("RetailEdge Branch Profile", name)
 	doc.check_permission("read")
 	usage = get_branch_operational_usage(company=_clean(doc.company), branch=_clean(doc.branch))
+	assignment_history = _has_assignment_history(doc.name)
+	assignment_blockers = _assignment_blockers(doc.name)
+	has_history = bool(usage or assignment_history)
 	can_write = bool(doc.has_permission("write"))
 	can_create = bool(frappe.has_permission("RetailEdge Branch Profile", "create"))
+	usage_doctypes = [row["doctype"] for row in usage]
+	if assignment_history:
+		usage_doctypes.append("RetailEdge Branch Assignment")
 	return {
-		"has_operational_history": bool(usage),
-		"identity_editable": bool(can_write and not usage),
-		"requires_controlled_reassignment": bool(usage),
-		"can_reassign": bool(can_write and can_create),
-		"usage_doctypes": [row["doctype"] for row in usage],
+		"has_operational_history": has_history,
+		"identity_editable": bool(can_write and not has_history),
+		"requires_controlled_reassignment": has_history,
+		"can_reassign": bool(can_write and can_create and not assignment_blockers),
+		"assignment_blockers": assignment_blockers,
+		"usage_doctypes": list(dict.fromkeys(usage_doctypes)),
 	}
 
 
 @frappe.whitelist()
 def reassign_branch_profile(name: str, new_company: str, new_branch: str) -> dict:
-	"""Deliberately change Branch identity without rewriting historical meaning.
-
-	Unused setups are corrected in place. If operational history exists, RetailEdge
-	first creates a disabled historical snapshot of the old Company↔Branch mapping,
-	then moves the current setup to the requested target in the same request
-	transaction. Submitted ERPNext documents are never changed.
-	"""
+	"""Deliberately change Branch identity without rewriting historical meaning."""
 	doc = frappe.get_doc("RetailEdge Branch Profile", name)
 	doc.check_permission("write")
 	if not frappe.has_permission("RetailEdge Branch Profile", "create"):
@@ -155,6 +192,7 @@ def reassign_branch_profile(name: str, new_company: str, new_branch: str) -> dic
 		frappe.throw(_("New Branch is required."))
 	_assert_master_access("Company", new_company)
 	_assert_master_access("Branch", new_branch)
+	_lock_branch_identity(company=new_company, branch=new_branch)
 
 	old_company = _clean(doc.company)
 	old_branch = _clean(doc.branch)
@@ -172,6 +210,17 @@ def reassign_branch_profile(name: str, new_company: str, new_branch: str) -> dic
 		company=new_company,
 		branch=new_branch,
 	)
+	assignment_blockers = _assignment_blockers(doc.name)
+	if assignment_blockers:
+		references = ", ".join(
+			f"{row.get('user')} / {row.get('name')}" for row in assignment_blockers[:5]
+		)
+		frappe.throw(
+			_(
+				"Transfer or end current/planned Branch Assignments before changing this Branch Setup: {0}."
+			).format(references)
+		)
+
 	blockers = _get_active_reassignment_blockers(doc)
 	if blockers:
 		references = ", ".join(f"{row['doctype']} {row['name']}" for row in blockers)
@@ -180,13 +229,22 @@ def reassign_branch_profile(name: str, new_company: str, new_branch: str) -> dic
 		)
 
 	usage = get_branch_operational_usage(company=old_company, branch=old_branch)
+	assignment_history = _has_assignment_history(doc.name)
 	historical_setup = ""
-	if usage:
+	relinked_assignments = 0
+	if usage or assignment_history:
 		historical_setup = _create_historical_snapshot(
 			doc,
 			new_company=new_company,
 			new_branch=new_branch,
 		)
+		if assignment_history:
+			from retailedge.branch_assignment import relink_ended_assignments_to_history
+
+			relinked_assignments = relink_ended_assignments_to_history(
+				old_setup=doc.name,
+				historical_setup=historical_setup,
+			)
 
 	company_changed = old_company != new_company
 	branch_changed = old_branch != new_branch
@@ -214,7 +272,8 @@ def reassign_branch_profile(name: str, new_company: str, new_branch: str) -> dic
 		"branch": new_branch,
 		"historical_setup": historical_setup,
 		"changed": True,
-		"had_operational_history": bool(usage),
+		"had_operational_history": bool(usage or assignment_history),
+		"relinked_assignments": relinked_assignments,
 		"cleared_identity_defaults": list(IDENTITY_DEPENDENT_FIELDS),
 	}
 
@@ -230,43 +289,41 @@ def get_branch_operational_usage(company: str, branch: str) -> list[dict[str, st
 	for doctype in OPERATIONAL_HISTORY_DOCTYPES:
 		if not _doctype_exists(doctype):
 			continue
-		filters = _usage_filters(doctype=doctype, company=company, branch=branch)
-		if not filters:
-			continue
-		try:
-			name = frappe.db.exists(doctype, filters)
-		except Exception:
-			name = None
-		if name:
-			usage.append({"doctype": doctype, "name": str(name)})
+		for filters in _usage_filter_candidates(doctype=doctype, company=company, branch=branch):
+			try:
+				name = frappe.db.exists(doctype, filters)
+			except Exception:
+				name = None
+			if name:
+				usage.append({"doctype": doctype, "name": str(name)})
+				break
 	return usage
 
 
-def _usage_filters(*, doctype: str, company: str, branch: str) -> dict:
+def _usage_filter_candidates(*, doctype: str, company: str, branch: str) -> list[dict]:
 	try:
 		meta = frappe.get_meta(doctype)
 	except Exception:
-		return {}
+		return []
 
-	filters = {}
+	base = {}
 	if meta.has_field("company") and company:
-		filters["company"] = company
+		base["company"] = company
+	candidates = []
 	if meta.has_field("retailedge_branch"):
-		filters["retailedge_branch"] = branch
-	elif meta.has_field("branch"):
-		filters["branch"] = branch
-	else:
-		return {}
-	return filters
+		candidates.append({**base, "retailedge_branch": branch})
+	if meta.has_field("branch"):
+		candidates.append({**base, "branch": branch})
+	return candidates
 
 
-def _stored_identity(name: str) -> dict | None:
+def _stored_state(name: str) -> dict | None:
 	if not name:
 		return None
 	return frappe.db.get_value(
 		"RetailEdge Branch Profile",
 		name,
-		["company", "branch"],
+		["company", "branch", "enabled"],
 		as_dict=True,
 	)
 
@@ -309,11 +366,7 @@ def _assert_controlled_target_available(*, profile_name: str, company: str, bran
 		_(
 			"Branch {0} is currently active in Branch Setup {1} for Company {2}. "
 			"Disable or correct that active mapping first."
-		).format(
-			branch,
-			other.get("name"),
-			other.get("company"),
-		)
+		).format(branch, other.get("name"), other.get("company"))
 	)
 
 
@@ -380,6 +433,24 @@ def _append_note_text(existing, detail: str) -> str:
 	return f"{existing}\n{line}".strip() if existing else line
 
 
+def _assignment_blockers(branch_setup: str) -> list[dict]:
+	try:
+		from retailedge.branch_assignment import get_branch_setup_assignment_blockers
+
+		return get_branch_setup_assignment_blockers(branch_setup)
+	except Exception:
+		return []
+
+
+def _has_assignment_history(branch_setup: str) -> bool:
+	try:
+		from retailedge.branch_assignment import has_branch_setup_assignment_history
+
+		return has_branch_setup_assignment_history(branch_setup)
+	except Exception:
+		return False
+
+
 def _get_active_reassignment_blockers(doc) -> list[dict[str, str]]:
 	blockers = []
 	for doctype in ("POS Opening Shift", "POS Opening Entry"):
@@ -419,6 +490,13 @@ def _open_pos_filters(*, doctype: str, doc) -> dict:
 	if meta.has_field("docstatus"):
 		filters["docstatus"] = ["<", 2]
 	return filters
+
+
+def _lock_branch_identity(*, company: str, branch: str) -> None:
+	if company:
+		frappe.db.sql("select name from `tabCompany` where name = %s for update", (company,))
+	if branch:
+		frappe.db.sql("select name from `tabBranch` where name = %s for update", (branch,))
 
 
 def _assert_master_access(doctype: str, name: str) -> None:
