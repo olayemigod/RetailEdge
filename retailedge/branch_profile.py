@@ -62,7 +62,14 @@ LEAF_FIELDS = {
 }
 
 
-def get_branch_profile(company=None, branch=None, user=None, pos_profile=None, warehouse=None, active_only=True):
+def get_branch_profile(
+	company=None,
+	branch=None,
+	user=None,
+	pos_profile=None,
+	warehouse=None,
+	active_only=True,
+):
 	if not _has_doctype("RetailEdge Branch Profile"):
 		return None
 	if not any([company, branch, user, pos_profile, warehouse]):
@@ -112,6 +119,57 @@ def get_branch_profile(company=None, branch=None, user=None, pos_profile=None, w
 	return None
 
 
+def get_exact_branch_profile(company=None, branch=None, active_only=True):
+	"""Return only the exact Company + Branch setup; never fall back to company default."""
+	if not company or not branch or not _has_doctype("RetailEdge Branch Profile"):
+		return None
+	filters = {"company": company, "branch": branch}
+	if active_only:
+		filters["enabled"] = 1
+	return _get_profile_by_filters(filters, active_only=False)
+
+
+def get_enabled_branch_profiles(company=None):
+	"""Internal setup lookup used to bind ERPNext Branch to a RetailEdge Company."""
+	if not _has_doctype("RetailEdge Branch Profile"):
+		return []
+	filters = {"enabled": 1}
+	if company:
+		filters["company"] = company
+	return frappe.get_all(
+		"RetailEdge Branch Profile",
+		filters=filters,
+		fields=[
+			"name",
+			"profile_name",
+			"company",
+			"branch",
+			"enabled",
+			"is_default_for_company",
+			"default_pos_profile",
+		],
+		limit_page_length=0,
+		order_by="company asc, branch asc",
+	)
+
+
+def has_enabled_branch_profiles(company=None):
+	return bool(get_enabled_branch_profiles(company=company))
+
+
+def get_enabled_branch_profile_companies(branch=None):
+	if not branch or not _has_doctype("RetailEdge Branch Profile"):
+		return []
+	rows = frappe.get_all(
+		"RetailEdge Branch Profile",
+		filters={"branch": branch, "enabled": 1},
+		fields=["company"],
+		limit_page_length=0,
+		order_by="company asc",
+	)
+	return list(dict.fromkeys(row.get("company") for row in rows if row.get("company")))
+
+
 def get_branch_profile_defaults(company=None, branch=None, user=None, pos_profile=None, warehouse=None):
 	profile = get_branch_profile(
 		company=company,
@@ -127,7 +185,11 @@ def get_branch_profile_defaults(company=None, branch=None, user=None, pos_profil
 
 
 def get_user_branch_profiles(user=None, company=None):
-	if not user or not _has_doctype("RetailEdge Branch Profile") or not _has_doctype("RetailEdge Branch Profile User"):
+	if (
+		not user
+		or not _has_doctype("RetailEdge Branch Profile")
+		or not _has_doctype("RetailEdge Branch Profile User")
+	):
 		return []
 	rows = frappe.get_all(
 		"RetailEdge Branch Profile User",
@@ -145,11 +207,128 @@ def get_user_branch_profiles(user=None, company=None):
 	profiles = frappe.get_all(
 		"RetailEdge Branch Profile",
 		filters=profile_filters,
-		fields=["name", "profile_name", "company", "branch", "enabled", "is_default_for_company", "default_pos_profile"],
+		fields=[
+			"name",
+			"profile_name",
+			"company",
+			"branch",
+			"enabled",
+			"is_default_for_company",
+			"default_pos_profile",
+		],
 		limit_page_length=0,
 		order_by="modified desc",
 	)
 	return profiles
+
+
+def get_user_pos_profiles(user=None, company=None):
+	"""Return enabled ERPNext POS Profiles explicitly assigned to the user.
+
+	Generic permission to read/administer POS Profile is deliberately not treated
+	as operational POS entitlement.
+	"""
+	user = user or getattr(frappe.session, "user", None)
+	if not user or not _has_doctype("POS Profile") or not _has_doctype("POS Profile User"):
+		return []
+	try:
+		assignments = frappe.get_all(
+			"POS Profile User",
+			filters={"user": user, "parenttype": "POS Profile"},
+			fields=["parent", "default"],
+			limit_page_length=0,
+			order_by="default desc, idx asc",
+		)
+	except Exception:
+		return []
+	profile_names = [row.get("parent") for row in assignments if row.get("parent")]
+	if not profile_names:
+		return []
+
+	filters = {"name": ["in", profile_names]}
+	if _doctype_has_field("POS Profile", "disabled"):
+		filters["disabled"] = 0
+	if company and _doctype_has_field("POS Profile", "company"):
+		filters["company"] = company
+	try:
+		return frappe.get_all(
+			"POS Profile",
+			filters=filters,
+			fields=["name", "company", "disabled"],
+			limit_page_length=0,
+			order_by="name asc",
+		)
+	except Exception:
+		return []
+
+
+def user_has_pos_profile_assignment(user=None):
+	return bool(get_user_pos_profiles(user=user))
+
+
+def resolve_branch_pos_requirement(company=None, branch=None, user=None):
+	"""Resolve the conditional POS requirement for one operating Company/Branch."""
+	user = user or getattr(frappe.session, "user", None)
+	company = str(company or "").strip()
+	branch = str(branch or "").strip()
+	assigned_profiles = get_user_pos_profiles(user=user)
+	pos_required = bool(assigned_profiles)
+	result = {
+		"pos_required": pos_required,
+		"pos_profile": "",
+		"pos_ready": True,
+		"pos_message": "",
+	}
+
+	if not pos_required:
+		return result
+	if not company or not branch:
+		result["pos_ready"] = False
+		result["pos_message"] = "Choose a Company and Branch to resolve your required POS Profile."
+		return result
+
+	profile = get_exact_branch_profile(company=company, branch=branch, active_only=True)
+	if not profile:
+		result["pos_ready"] = False
+		result["pos_message"] = f"No enabled Branch Setup exists for Branch {branch} in Company {company}."
+		return result
+
+	pos_profile = str(getattr(profile, "default_pos_profile", None) or "").strip()
+	if not pos_profile:
+		result["pos_ready"] = False
+		result["pos_message"] = f"No POS Profile is configured for your access in Branch {branch}."
+		return result
+	if not frappe.db.exists("POS Profile", pos_profile):
+		result["pos_ready"] = False
+		result["pos_message"] = f"The POS Profile configured for Branch {branch} does not exist."
+		return result
+	if not frappe.has_permission("POS Profile", "read", doc=pos_profile):
+		result["pos_ready"] = False
+		result["pos_message"] = f"You do not have permission to use the POS Profile configured for Branch {branch}."
+		return result
+	if _doctype_has_field("POS Profile", "disabled") and frappe.db.get_value(
+		"POS Profile", pos_profile, "disabled"
+	):
+		result["pos_ready"] = False
+		result["pos_message"] = f"The POS Profile configured for Branch {branch} is disabled."
+		return result
+
+	profile_company = ""
+	if _doctype_has_field("POS Profile", "company"):
+		profile_company = str(frappe.db.get_value("POS Profile", pos_profile, "company") or "").strip()
+	if profile_company and profile_company != company:
+		result["pos_ready"] = False
+		result["pos_message"] = f"The POS Profile configured for Branch {branch} belongs to another Company."
+		return result
+
+	assigned_names = {str(row.get("name") or "").strip() for row in assigned_profiles}
+	if pos_profile not in assigned_names:
+		result["pos_ready"] = False
+		result["pos_message"] = f"You are not assigned to the POS Profile configured for Branch {branch}."
+		return result
+
+	result["pos_profile"] = pos_profile
+	return result
 
 
 def get_default_branch_for_user(user=None, company=None):
@@ -180,6 +359,22 @@ def validate_branch_profile(doc):
 		}
 		if frappe.db.exists("RetailEdge Branch Profile", duplicate_filters):
 			frappe.throw("An enabled RetailEdge Branch Profile already exists for this Company and Branch.")
+
+		existing_company = frappe.db.get_value(
+			"RetailEdge Branch Profile",
+			{
+				"name": ["!=", doc.name or ""],
+				"branch": doc.branch,
+				"enabled": 1,
+			},
+			"company",
+		)
+		if existing_company and existing_company != doc.company:
+			frappe.throw(
+				f"Branch {doc.branch} is already configured for Company {existing_company}. "
+				"Use a distinct ERPNext Branch for each Company."
+			)
+
 		if getattr(doc, "is_default_for_company", 0):
 			default_filters = {
 				"name": ["!=", doc.name or ""],
@@ -225,6 +420,13 @@ def _validate_leaf_defaults(doc):
 def _has_doctype(doctype):
 	try:
 		return bool(frappe.db.exists("DocType", doctype))
+	except Exception:
+		return False
+
+
+def _doctype_has_field(doctype, fieldname):
+	try:
+		return bool(frappe.get_meta(doctype).has_field(fieldname))
 	except Exception:
 		return False
 

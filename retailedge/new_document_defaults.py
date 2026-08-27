@@ -6,7 +6,6 @@ import frappe
 from frappe import _
 
 from retailedge.branch_context import (
-	has_field,
 	resolve_branch_from_closing_shift,
 	resolve_branch_from_opening_shift,
 	resolve_branch_from_pos_profile,
@@ -20,6 +19,7 @@ from retailedge.branch_defaults_application import (
 	_snapshot_branch_default_fields,
 	apply_branch_profile_defaults_to_doc,
 )
+from retailedge.operating_context import validate_operating_branch
 
 WAREHOUSE_CONTEXT_FIELDS = (
 	"warehouse",
@@ -39,7 +39,10 @@ POS_CONTEXT_FIELDS = {
 
 
 @frappe.whitelist()
-def get_new_document_operating_defaults(doctype: str, values: str | dict[str, Any] | None = None) -> dict[str, Any]:
+def get_new_document_operating_defaults(
+	doctype: str,
+	values: str | dict[str, Any] | None = None,
+) -> dict[str, Any]:
 	"""Preview missing Operating Context / Branch Setup defaults for a new document.
 
 	This API never inserts, saves, submits, cancels or updates a database document.
@@ -139,18 +142,23 @@ def _assert_named_read(doctype: str, name: str) -> None:
 	if not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
 	if not frappe.has_permission(doctype, "read", doc=name):
-		frappe.throw(_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use {0} {1}.").format(doctype, name),
+			frappe.PermissionError,
+		)
 
 
 def _assert_branch_access(*, branch: str, company: str = "") -> None:
 	_assert_named_read("Branch", branch)
-	if company and has_field("Branch", "company"):
-		branch_company = str(frappe.db.get_value("Branch", branch, "company") or "").strip()
-		if branch_company and branch_company != company:
-			frappe.throw(_("Branch {0} does not belong to Company {1}.").format(branch, company))
 	validate_user_branch_access(
 		branch,
 		user=frappe.session.user,
 		company=company or None,
+		throw=True,
+	)
+	validate_operating_branch(
+		company=company,
+		branch=branch,
+		user=frappe.session.user,
 		throw=True,
 	)

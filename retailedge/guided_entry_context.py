@@ -5,9 +5,9 @@ from typing import Any
 import frappe
 from frappe import _
 
-from retailedge.branch_context import resolve_branch_from_warehouse, validate_user_branch_access
+from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
-from retailedge.operating_context import get_effective_operating_context
+from retailedge.operating_context import get_effective_operating_context, validate_operating_branch
 
 
 WAREHOUSE_PREFERENCES: dict[str, tuple[str, ...]] = {
@@ -69,7 +69,7 @@ def resolve_branch_warehouse_selection(
 			resolved_branch = str(getattr(profile, "branch", None) or "").strip() if profile else ""
 
 		if resolved_branch:
-			validate_user_branch_access(resolved_branch, user=user, company=company, throw=True)
+			validate_operating_branch(company=company, branch=resolved_branch, user=user, throw=True)
 			return {
 				"company": company,
 				"branch": resolved_branch,
@@ -78,7 +78,7 @@ def resolve_branch_warehouse_selection(
 			}
 
 		if branch:
-			validate_user_branch_access(branch, user=user, company=company, throw=True)
+			validate_operating_branch(company=company, branch=branch, user=user, throw=True)
 			profile = get_branch_profile(
 				company=company,
 				branch=branch,
@@ -100,7 +100,7 @@ def resolve_branch_warehouse_selection(
 	if not branch:
 		return {"company": company, "branch": "", "warehouse": "", "source": "empty"}
 
-	validate_user_branch_access(branch, user=user, company=company, throw=True)
+	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
 	defaults = get_branch_profile_defaults(company=company, branch=branch, user=user)
 	candidate = ""
 	for fieldname in WAREHOUSE_PREFERENCES.get(preference, WAREHOUSE_PREFERENCES["default"]):
@@ -119,7 +119,9 @@ def resolve_branch_warehouse_selection(
 		"company": company,
 		"branch": branch,
 		"warehouse": candidate,
-		"source": "operating_context" if used_operating_context else ("branch_profile" if candidate else "branch"),
+		"source": "operating_context"
+		if used_operating_context
+		else ("branch_profile" if candidate else "branch"),
 	}
 
 

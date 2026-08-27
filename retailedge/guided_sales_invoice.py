@@ -10,16 +10,15 @@ from frappe.utils import cint, flt, getdate, nowdate
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
 	get_first_existing_field,
-	get_user_allowed_branches,
 	has_doctype,
 	has_field,
 	resolve_branch_from_warehouse,
 	resolve_retailedge_operational_defaults,
-	user_has_global_branch_access,
 	validate_user_branch_access,
 )
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
+from retailedge.operating_context import get_allowed_operating_branches, validate_operating_branch
 
 ACTION_KEY = "new-sales-invoice"
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
@@ -49,6 +48,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 	_assert_read_permission("Company", company)
 	if branch:
 		validate_user_branch_access(branch, user=user, company=company, throw=True)
+		validate_operating_branch(company=company, branch=branch, user=user, throw=True)
 
 	warehouse = (
 		defaults.get("default_source_warehouse")
@@ -309,6 +309,7 @@ def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple
 	branch = str(values.get("branch") or "").strip()
 	if branch:
 		validate_user_branch_access(branch, user=user, company=company, throw=True)
+		validate_operating_branch(company=company, branch=branch, user=user, throw=True)
 
 	warehouse = str(values.get("warehouse") or "").strip()
 	if warehouse:
@@ -329,6 +330,7 @@ def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str,
 		return filters
 
 	validate_user_branch_access(branch, user=user, company=company or None, throw=True)
+	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
 	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
 	if branch_field:
 		filters[branch_field] = branch
@@ -353,11 +355,8 @@ def _branch_search_filters(company: str, user: str) -> dict[str, Any]:
 	filters: dict[str, Any] = {}
 	if company and has_field("Branch", "company"):
 		filters["company"] = company
-	if user_has_global_branch_access(user=user):
-		return filters
-	allowed = get_user_allowed_branches(user=user, company=company or None).get("branches") or []
-	if allowed:
-		filters["name"] = ["in", allowed]
+	allowed = get_allowed_operating_branches(company=company, user=user)
+	filters["name"] = ["in", allowed] if allowed else ["in", ["__no_permitted_branch__"]]
 	return filters
 
 
