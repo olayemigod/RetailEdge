@@ -9,6 +9,7 @@ import frappe
 from retailedge.branch_profile_queries import (
 	MAX_BRANCH_RESULTS,
 	MAX_BRANCH_SCAN_RESULTS,
+	_active_candidate_branches,
 	_assigned_candidate_branches,
 )
 
@@ -37,26 +38,50 @@ class TestBranchSetupCascade(unittest.TestCase):
 			"retailedge.branch_profile_queries.search_available_branch_setup_branches",
 			'company: frm.doc.company || ""',
 			'profile_name: frm.doc.name || ""',
-			"if (!frm.is_new())",
 			'frm.set_value("branch", null)',
-			"Choose an unassigned Branch here to assign it to this Company",
+			"Choose an unassigned Branch to establish its Company mapping",
 		):
 			self.assertIn(contract, source)
 
-	def test_saved_setup_locks_company_and_branch_identity(self):
+	def test_unused_setup_identity_remains_directly_editable(self):
 		frontend = BRANCH_PROFILE_JS.read_text(encoding="utf-8")
 		controller = BRANCH_PROFILE_CONTROLLER.read_text(encoding="utf-8")
 		for contract in (
-			'frm.toggle_enable("company", isNew)',
-			'frm.toggle_enable("branch", isNew && Boolean(frm.doc.company))',
-			"assignment is fixed after the Branch Setup is saved",
+			"identity_editable",
+			"No operational history was found. Company and Branch can be corrected directly",
+			"clearIdentityDependentDefaults(frm)",
+			"BRANCH_USER_TABLE_FIELDS",
 		):
 			self.assertIn(contract, frontend)
 		for contract in (
-			"_validate_company_branch_identity",
-			"cannot be changed after save",
-			'"branch": self.branch',
-			"Disabling that setup does not release the Branch",
+			"identity_changed",
+			"get_branch_operational_usage",
+			"if usage:",
+			"controlled_branch_reassignment",
+		):
+			self.assertIn(contract, controller)
+		self.assertNotIn('frm.toggle_enable("company", isNew)', frontend)
+		self.assertNotIn("cannot be changed after save", controller)
+
+	def test_used_setup_has_controlled_reassignment_action(self):
+		frontend = BRANCH_PROFILE_JS.read_text(encoding="utf-8")
+		controller = BRANCH_PROFILE_CONTROLLER.read_text(encoding="utf-8")
+		for contract in (
+			'__("Change Company / Branch")',
+			"requires_controlled_reassignment",
+			"search_reassignment_target_branches",
+			"Validate & Reassign",
+			"will not change submitted ERPNext documents",
+		):
+			self.assertIn(contract, frontend)
+		for contract in (
+			"def reassign_branch_profile",
+			"_create_historical_snapshot",
+			"archive.enabled = 0",
+			"doc.flags.controlled_branch_reassignment = True",
+			"Close active POS work before changing this Branch assignment",
+			"IDENTITY_DEPENDENT_FIELDS",
+			"BRANCH_USER_TABLE_FIELDS",
 		):
 			self.assertIn(contract, controller)
 		self.assertNotIn("ignore_permissions=True", controller)
@@ -71,7 +96,8 @@ class TestBranchSetupCascade(unittest.TestCase):
 			'frappe.get_list(\n\t\t\t"Branch"',
 			'frappe.get_list(\n\t\t"RetailEdge Branch Profile"',
 			"while len(available) < needed and scanned < MAX_BRANCH_SCAN_RESULTS",
-			"considered assigned as soon as any Branch Setup exists",
+			"including disabled historical mappings",
+			"search_reassignment_target_branches",
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("frappe.get_all(", source)
@@ -80,7 +106,7 @@ class TestBranchSetupCascade(unittest.TestCase):
 		self.assertEqual(MAX_BRANCH_SCAN_RESULTS, 200)
 
 	@patch("retailedge.branch_profile_queries.frappe.get_list")
-	def test_disabled_and_enabled_setups_both_preserve_branch_ownership(self, mock_get_list):
+	def test_normal_setup_treats_disabled_and_enabled_mappings_as_assigned(self, mock_get_list):
 		mock_get_list.return_value = [
 			frappe._dict(name="SETUP-LAGOS", branch="Lagos", company="Company A", enabled=0),
 			frappe._dict(name="SETUP-ABUJA", branch="Abuja", company="Company B", enabled=1),
@@ -95,6 +121,26 @@ class TestBranchSetupCascade(unittest.TestCase):
 		mock_get_list.assert_called_once_with(
 			"RetailEdge Branch Profile",
 			filters={"branch": ["in", ["Lagos", "Abuja", "Current"]]},
+			fields=["name", "branch", "company", "enabled"],
+			limit_page_length=20,
+			order_by="branch asc",
+		)
+
+	@patch("retailedge.branch_profile_queries.frappe.get_list")
+	def test_controlled_reassignment_only_reserves_enabled_mappings(self, mock_get_list):
+		mock_get_list.return_value = [
+			frappe._dict(name="SETUP-ABUJA", branch="Abuja", company="Company B", enabled=1),
+			frappe._dict(name="CURRENT", branch="Current", company="Company A", enabled=1),
+		]
+
+		active = _active_candidate_branches(
+			["Lagos", "Abuja", "Current"], profile_name="CURRENT"
+		)
+
+		self.assertEqual(active, {"Abuja"})
+		mock_get_list.assert_called_once_with(
+			"RetailEdge Branch Profile",
+			filters={"branch": ["in", ["Lagos", "Abuja", "Current"]], "enabled": 1},
 			fields=["name", "branch", "company", "enabled"],
 			limit_page_length=20,
 			order_by="branch asc",
