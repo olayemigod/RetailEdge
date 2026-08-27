@@ -74,19 +74,14 @@ class RetailEdgeBranchProfile(Document):
 			return
 
 		stored = _stored_identity(self.name) if not self.is_new() and self.name else None
-		identity_changed = bool(
-			stored
-			and (
-				_clean(stored.get("company")) != _clean(self.company)
-				or _clean(stored.get("branch")) != _clean(self.branch)
-			)
-		)
+		stored_company = _clean(stored.get("company")) if stored else ""
+		stored_branch = _clean(stored.get("branch")) if stored else ""
+		company_changed = bool(stored and stored_company != _clean(self.company))
+		branch_changed = bool(stored and stored_branch != _clean(self.branch))
+		identity_changed = bool(company_changed or branch_changed)
 
 		if identity_changed and not getattr(self.flags, "controlled_branch_reassignment", False):
-			usage = get_branch_operational_usage(
-				company=_clean(stored.get("company")),
-				branch=_clean(stored.get("branch")),
-			)
+			usage = get_branch_operational_usage(company=stored_company, branch=stored_branch)
 			if usage:
 				frappe.throw(
 					_(
@@ -94,6 +89,14 @@ class RetailEdgeBranchProfile(Document):
 						"action so RetailEdge preserves the historical mapping instead of rewriting it."
 					)
 				)
+
+			# Direct correction is allowed only while the mapping is unused. Clear
+			# Branch-dependent values on the server as well as the form so API/import
+			# callers cannot carry stale operational defaults into the new identity.
+			_clear_identity_dependent_values(self)
+			_clear_branch_users(self)
+			if company_changed:
+				self.is_default_for_company = 0
 
 		if self.is_new() or identity_changed:
 			if getattr(self.flags, "controlled_branch_reassignment", False):
@@ -139,7 +142,10 @@ def reassign_branch_profile(name: str, new_company: str, new_branch: str) -> dic
 	doc = frappe.get_doc("RetailEdge Branch Profile", name)
 	doc.check_permission("write")
 	if not frappe.has_permission("RetailEdge Branch Profile", "create"):
-		frappe.throw(_("You need permission to create Branch Setup history before reassigning this Branch."), frappe.PermissionError)
+		frappe.throw(
+			_("You need permission to create Branch Setup history before reassigning this Branch."),
+			frappe.PermissionError,
+		)
 
 	new_company = _clean(new_company)
 	new_branch = _clean(new_branch)
@@ -300,7 +306,10 @@ def _assert_controlled_target_available(*, profile_name: str, company: str, bran
 	if not other:
 		return
 	frappe.throw(
-		_("Branch {0} is currently active in Branch Setup {1} for Company {2}. Disable or correct that active mapping first.").format(
+		_(
+			"Branch {0} is currently active in Branch Setup {1} for Company {2}. "
+			"Disable or correct that active mapping first."
+		).format(
 			branch,
 			other.get("name"),
 			other.get("company"),
@@ -416,7 +425,10 @@ def _assert_master_access(doctype: str, name: str) -> None:
 	if not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
 	if not frappe.has_permission(doctype, "read", doc=name):
-		frappe.throw(_("You do not have access to {0} {1}.").format(doctype, name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have access to {0} {1}.").format(doctype, name),
+			frappe.PermissionError,
+		)
 
 
 def _doctype_exists(doctype: str) -> bool:
