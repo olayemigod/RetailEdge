@@ -61,6 +61,19 @@ class TestEdgeSuiteBranchSetupAssignment(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertNotIn("new frappe.ui.Dialog", source)
 
+	def test_branch_assignment_validation_errors_do_not_render_raw_tracebacks(self):
+		source = BRANCH_ASSIGNMENTS_VUE.read_text(encoding="utf-8")
+		for contract in (
+			"function extractServerMessage",
+			"responseJSON",
+			"_server_messages",
+			'!message.includes("Traceback")',
+			"extractServerMessage(error, __(\"Branch Assignment could not be created.\"))",
+			"extractServerMessage(error, __(\"Branch transfer could not be recorded.\"))",
+		):
+			self.assertIn(contract, source)
+		self.assertNotIn("error?.exc ||", source)
+
 	def test_branch_setup_page_registration_and_setup_hub_route(self):
 		definition = json.loads(BRANCH_SETUP_PAGE.read_text(encoding="utf-8"))
 		self.assertEqual(definition["page_name"], "branch-setup")
