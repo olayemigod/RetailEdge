@@ -1,0 +1,47 @@
+/* Dark-mode contrast completion for the standalone Bank Matching EdgeSuite page.
+   The shared EdgeSuite dark contract currently targets EdgeAppShell; this page
+   intentionally runs as a focused EdgePageLayout inside Frappe Desk. */
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout {
+	--text-color: var(--edge-color-ink-950);
+	--heading-color: var(--edge-color-ink-950);
+	color: var(--edge-color-ink-800);
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout :is(h1, h2, h3, h4, h5, h6),
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-filter-bar label,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-action-bar__content,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table th,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table td {
+	color: var(--edge-color-ink-950) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-reset-link,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table .edge-link-button {
+	color: var(--edge-color-ink-950) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table .edge-link-button:hover,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table .edge-link-button:focus-visible,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-reset-link:hover,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-reset-link:focus-visible {
+	color: var(--edge-color-ink-950) !important;
+	text-decoration: underline;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-meta,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-skipped-note,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-page-header__subtitle,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-link-field__helper,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-stat-card__helper {
+	color: var(--edge-color-ink-600) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table thead th {
+	background: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
+	border-color: var(--edge-color-border) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody td {
+	border-color: var(--edge-color-border) !important;
+}
