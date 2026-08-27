@@ -15,7 +15,7 @@ function clearBranchContext(frm) {
 }
 
 function addTransferAction(frm) {
-	if (frm.is_new() || !frm.doc.name || frm.doc.status !== "Active" || !frappe.model.can_write("RetailEdge Branch Assignment")) {
+	if (frm.is_new() || !frm.doc.name || frm.doc.status !== "Active" || !frm.perm?.[0]?.write) {
 		return;
 	}
 	frm.add_custom_button(__("Transfer to Branch"), () => openTransferDialog(frm), __("Actions"));
