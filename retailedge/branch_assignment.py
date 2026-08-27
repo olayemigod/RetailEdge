@@ -9,15 +9,15 @@ from frappe.utils import add_days, getdate, nowdate
 from retailedge.branch_profile import get_exact_branch_profile
 
 
-ACTIVE_STATUSES = {"Active", "Planned", "Ended"}
 ROLE_TYPES = {"Cashier", "Manager", "Auditor", "Sales", "Stock", "Accounts", "Purchasing", "Other"}
 
 
 def get_active_branch_assignments(user: str | None = None, company: str | None = None, as_of=None) -> list[dict[str, Any]]:
 	"""Return effective RetailEdge Branch Assignments for one user.
 
-	The assignment layer is RetailEdge access/history truth. ERPNext permissions
-	still apply separately and are never widened by this helper.
+	Effective dates are authoritative. The saved display status is not used for
+	access decisions because time passing must activate/end assignments without a
+	manual edit or scheduler job.
 	"""
 	if not _has_assignment_doctype():
 		return []
@@ -28,7 +28,6 @@ def get_active_branch_assignments(user: str | None = None, company: str | None =
 	filters: dict[str, Any] = {
 		"user": user,
 		"effective_from": ["<=", as_of],
-		"status": "Active",
 	}
 	if company:
 		filters["company"] = company
@@ -77,10 +76,11 @@ def get_branch_assignment_context(filters=None, limit: int = 200) -> dict[str, A
 	_assert_assignment_read()
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	query_filters: dict[str, Any] = {}
-	for fieldname in ("user", "company", "branch", "status"):
+	for fieldname in ("user", "company", "branch"):
 		value = str(filters.get(fieldname) or "").strip()
 		if value:
 			query_filters[fieldname] = value
+	requested_status = str(filters.get("status") or "").strip()
 	limit = min(max(int(limit or 200), 1), 500)
 	rows = frappe.get_list(
 		"RetailEdge Branch Assignment",
@@ -102,8 +102,18 @@ def get_branch_assignment_context(filters=None, limit: int = 200) -> dict[str, A
 		order_by="effective_from desc, modified desc",
 		limit_page_length=limit,
 	)
+	assignments = []
+	for row in rows:
+		item = dict(row)
+		item["status"] = _status_for_dates(
+			getdate(item.get("effective_from")),
+			getdate(item.get("effective_to")) if item.get("effective_to") else None,
+		)
+		if requested_status and item["status"] != requested_status:
+			continue
+		assignments.append(item)
 	return {
-		"assignments": [dict(row) for row in rows],
+		"assignments": assignments,
 		"can_create": bool(frappe.has_permission("RetailEdge Branch Assignment", "create")),
 		"can_write": bool(frappe.has_permission("RetailEdge Branch Assignment", "write")),
 		"user": frappe.session.user,
@@ -281,7 +291,10 @@ def _assignment_response(doc) -> dict[str, Any]:
 		"branch_role": doc.branch_role,
 		"effective_from": doc.effective_from,
 		"effective_to": doc.effective_to,
-		"status": doc.status,
+		"status": _status_for_dates(
+			getdate(doc.effective_from),
+			getdate(doc.effective_to) if doc.effective_to else None,
+		),
 		"is_primary": int(doc.is_primary or 0),
 	}
 
