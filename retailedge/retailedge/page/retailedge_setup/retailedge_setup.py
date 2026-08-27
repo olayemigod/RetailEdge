@@ -103,7 +103,11 @@ def get_setup_context() -> dict:
 		if not _doctype_available(doctype) or not _has_permission(doctype, "read"):
 			continue
 		resource = dict(definition)
-		resource["can_create"] = False if definition["singleton"] else _has_permission(doctype, "create")
+		resource["can_create"] = bool(
+			not definition["singleton"]
+			and not definition.get("page")
+			and _has_permission(doctype, "create")
+		)
 		if definition["singleton"]:
 			resource["count"] = None
 			resource["count_capped"] = False
