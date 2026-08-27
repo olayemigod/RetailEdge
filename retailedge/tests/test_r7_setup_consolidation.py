@@ -42,7 +42,7 @@ class TestR7SetupConsolidation(unittest.TestCase):
 			"COST_CENTER_FIELDS.forEach",
 			"ACCOUNT_FIELDS.forEach",
 			"{ is_group: 0, disabled: 0 }",
-			"clearCompanyDependentDefaults(frm)",
+			"clearIdentityDependentDefaults(frm)",
 			"company(frm)",
 		):
 			self.assertIn(contract, source)
