@@ -56,6 +56,21 @@ LIST_FIELDS = (
 	"modified",
 )
 
+LEAF_DEFAULT_FIELDS = {
+	"default_warehouse": "Warehouse",
+	"default_source_warehouse": "Warehouse",
+	"default_target_warehouse": "Warehouse",
+	"default_returns_warehouse": "Warehouse",
+	"default_cost_center": "Cost Center",
+	"default_sales_cost_center": "Cost Center",
+	"default_expense_cost_center": "Cost Center",
+	"default_pos_opening_cash_account": "Account",
+	"default_cash_account": "Account",
+	"default_bank_account": "Account",
+	"default_card_pos_account": "Account",
+	"default_mobile_money_account": "Account",
+}
+
 
 @frappe.whitelist()
 def get_branch_setup_context(filters=None, limit: int = MAX_LIST_RESULTS) -> dict[str, Any]:
@@ -94,8 +109,20 @@ def get_branch_setup(name: str) -> dict[str, Any]:
 	doc = frappe.get_doc(BRANCH_SETUP_DOCTYPE, name)
 	doc.check_permission("read")
 	state = get_branch_profile_reassignment_state(doc.name)
+	serialised_doc, configuration_issues = _serialise_for_edgesuite(doc)
+	if configuration_issues:
+		state = dict(state or {})
+		state["configuration_issues"] = configuration_issues
+		frappe.msgprint(
+			_(
+				"This Branch Setup contains older defaults that are no longer valid. "
+				"EdgeSuite has left the affected fields blank for correction before the next save: {0}"
+			).format(", ".join(issue["label"] for issue in configuration_issues)),
+			title=_("Branch Setup needs correction"),
+			indicator="orange",
+		)
 	return {
-		"doc": _serialise_doc(doc),
+		"doc": serialised_doc,
 		"state": state,
 		"can_write": bool(doc.has_permission("write")),
 		"native_route": f"/app/retailedge-branch-profile/{doc.name}",
@@ -228,6 +255,40 @@ def search_branch_setup_options(
 		reference_doctype=BRANCH_SETUP_DOCTYPE,
 		link_fieldname=fieldname,
 	)
+
+
+def _serialise_for_edgesuite(doc) -> tuple[dict[str, Any], list[dict[str, str]]]:
+	result = _serialise_doc(doc)
+	issues = _get_legacy_default_issues(doc)
+	for issue in issues:
+		result[issue["fieldname"]] = ""
+	return result, issues
+
+
+def _get_legacy_default_issues(doc) -> list[dict[str, str]]:
+	issues: list[dict[str, str]] = []
+	company = str(getattr(doc, "company", None) or "").strip()
+	for fieldname, doctype in LEAF_DEFAULT_FIELDS.items():
+		value = str(getattr(doc, fieldname, None) or "").strip()
+		if not value:
+			continue
+		label = doc.meta.get_label(fieldname) or fieldname
+		if not frappe.db.exists(doctype, value):
+			issues.append({"fieldname": fieldname, "label": label, "reason": _("record no longer exists")})
+			continue
+		linked_company = frappe.db.get_value(doctype, value, "company")
+		if company and linked_company is not None and linked_company != company:
+			issues.append({"fieldname": fieldname, "label": label, "reason": _("belongs to another Company")})
+			continue
+		is_group = frappe.db.get_value(doctype, value, "is_group")
+		if is_group is not None and cint(is_group):
+			issues.append({"fieldname": fieldname, "label": label, "reason": _("must be a leaf record")})
+			continue
+		if doctype in {"Warehouse", "Account"}:
+			disabled = frappe.db.get_value(doctype, value, "disabled")
+			if disabled is not None and cint(disabled):
+				issues.append({"fieldname": fieldname, "label": label, "reason": _("is disabled")})
+	return issues
 
 
 def _serialise_doc(doc) -> dict[str, Any]:
