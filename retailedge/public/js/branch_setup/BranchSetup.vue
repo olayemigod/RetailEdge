@@ -117,7 +117,18 @@
 					<label class="check-field"><input v-model="editor.enabled" type="checkbox" :true-value="1" :false-value="0" :disabled="saving" /><span><strong>Enabled</strong><small>Disabled mappings stay available as history but are not operational Branch options.</small></span></label>
 					<template v-if="identityEditable">
 						<EdgeLinkField :modelValue="editor.company" label="Company" placeholder="Choose Company" :required="true" :searcher="searchEditorCompany" @update:modelValue="setEditorCompany" />
-						<EdgeLinkField :modelValue="editor.branch" label="Branch" placeholder="Choose unassigned Branch" :required="true" :searcher="searchEditorBranch" @update:modelValue="setEditorBranch" />
+						<EdgeLinkField
+							:modelValue="editor.branch"
+							label="Branch"
+							placeholder="Choose or create Branch"
+							description="Choose an unassigned ERPNext Branch, or create a new Branch here and then save this Branch Setup to assign it to the selected Company."
+							:required="true"
+							:searcher="searchEditorBranch"
+							:canCreate="canCreateBranch && Boolean(editor.company)"
+							:creator="createEditorBranch"
+							createLabel="Create Branch"
+							@update:modelValue="setEditorBranch"
+						/>
 					</template>
 					<div v-else class="identity-readonly"><span>Company</span><strong>{{ editor.company }}</strong></div>
 					<div v-if="!identityEditable" class="identity-readonly"><span>Branch</span><strong>{{ editor.branch }}</strong></div>
@@ -185,7 +196,17 @@
 		<div v-if="reassignError" class="form-error">{{ reassignError }}</div>
 		<div class="form-grid">
 			<EdgeLinkField :modelValue="reassign.company" label="New Company" placeholder="Choose Company" :required="true" :searcher="searchReassignCompany" @update:modelValue="setReassignCompany" />
-			<EdgeLinkField :modelValue="reassign.branch" label="New Branch" placeholder="Choose Branch" :required="true" :searcher="searchReassignBranch" @update:modelValue="reassign.branch = $event || ''" />
+			<EdgeLinkField
+				:modelValue="reassign.branch"
+				label="New Branch"
+				placeholder="Choose or create Branch"
+				:required="true"
+				:searcher="searchReassignBranch"
+				:canCreate="canCreateBranch && Boolean(reassign.company)"
+				:creator="createReassignBranch"
+				createLabel="Create Branch"
+				@update:modelValue="reassign.branch = $event || ''"
+			/>
 		</div>
 		<div class="history-warning"><strong>History-safe change</strong><span>Submitted ERPNext transactions are not changed. Active POS work can block the reassignment.</span></div>
 		<template #footer>
@@ -206,6 +227,7 @@ const CONTEXT_METHOD = "retailedge.branch_setup.get_branch_setup_context";
 const GET_METHOD = "retailedge.branch_setup.get_branch_setup";
 const SAVE_METHOD = "retailedge.branch_setup.save_branch_setup";
 const SEARCH_METHOD = "retailedge.branch_setup.search_branch_setup_options";
+const CREATE_BRANCH_METHOD = "retailedge.branch_setup.quick_create_branch";
 const REASSIGN_METHOD = "retailedge.retailedge.doctype.retailedge_branch_profile.retailedge_branch_profile.reassign_branch_profile";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -244,7 +266,7 @@ export default {
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 	data() {
 		return {
-			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", profiles: [], canCreate: false, canWrite: false,
+			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", profiles: [], canCreate: false, canWrite: false, canCreateBranch: false,
 		filters: { company: "", branch: "", enabled: "" }, sortKey: "company", sortDirection: "asc", userName: "", menuItems: [],
 		editorOpen: false, editorLoading: false, saving: false, editorError: "", editor: blankEditor(), state: {}, activeTab: "identity",
 		reassignOpen: false, reassigning: false, reassignError: "", reassign: { company: "", branch: "" },
@@ -301,7 +323,7 @@ export default {
 			try {
 				const data = await callMethod(CONTEXT_METHOD, { filters: this.filters });
 				this.profiles = Array.isArray(data.profiles) ? data.profiles : [];
-				this.canCreate = Boolean(data.can_create); this.canWrite = Boolean(data.can_write); this.userName = this.userName || data.user_name || ""; this.loaded = true;
+				this.canCreate = Boolean(data.can_create); this.canWrite = Boolean(data.can_write); this.canCreateBranch = Boolean(data.can_create_branch); this.userName = this.userName || data.user_name || ""; this.loaded = true;
 			} catch (error) { this.error = error?.message || error?.exc || __("Branch Setup could not be loaded."); }
 			finally { this.loading = false; }
 		},
@@ -327,10 +349,25 @@ export default {
 		searchBankAccount(query) { return this.search("default_bank_account", query); },
 		searchCardAccount(query) { return this.search("default_card_pos_account", query); },
 		searchMobileMoneyAccount(query) { return this.search("default_mobile_money_account", query); },
+		async quickCreateBranch(query, company) {
+			const branchName = String(query || "").trim();
+			if (!company || !branchName) return null;
+			const created = await callMethod(CREATE_BRANCH_METHOD, { branch_name: branchName, company }, { freeze: true, freezeMessage: __("Creating Branch...") });
+			frappe.show_alert({ message: __("Branch created. Save Branch Setup to assign it to {0}.", [company]), indicator: "green" });
+			return created;
+		},
+		async createEditorBranch(query) {
+			try { return await this.quickCreateBranch(query, this.editor.company); }
+			catch (error) { this.editorError = error?.message || error?.exc || __("Branch could not be created."); throw error; }
+		},
+		async createReassignBranch(query) {
+			try { return await this.quickCreateBranch(query, this.reassign.company); }
+			catch (error) { this.reassignError = error?.message || error?.exc || __("Branch could not be created."); throw error; }
+		},
 		openNew() { this.editor = blankEditor(); this.state = { identity_editable: true }; this.activeTab = "identity"; this.editorError = ""; this.editorOpen = true; },
 		async openEdit(row) {
 			this.editorOpen = true; this.editorLoading = true; this.editorError = ""; this.activeTab = "identity";
-			try { const data = await callMethod(GET_METHOD, { name: row.name }); this.editor = { ...blankEditor(), ...(data.doc || {}) }; this.state = data.state || {}; this.canWrite = Boolean(data.can_write); }
+			try { const data = await callMethod(GET_METHOD, { name: row.name }); this.editor = { ...blankEditor(), ...(data.doc || {}) }; this.state = data.state || {}; this.canWrite = Boolean(data.can_write); this.canCreateBranch = Boolean(data.can_create_branch); }
 			catch (error) { this.editorError = error?.message || error?.exc || __("Branch Setup could not be opened."); }
 			finally { this.editorLoading = false; }
 		},
