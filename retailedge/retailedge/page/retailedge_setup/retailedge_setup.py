@@ -17,6 +17,7 @@ SETUP_RESOURCES = (
 		"label": "Branch Setup",
 		"description": "Manage Branch operating defaults, Stock Locations, POS Profile, accounts and controls.",
 		"doctype": "RetailEdge Branch Profile",
+		"page": "branch-setup",
 		"singleton": False,
 		"icon": "building",
 	},
