@@ -51,6 +51,11 @@
 	color: var(--edge-color-ink-600) !important;
 }
 
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table {
+	--bs-table-hover-bg: var(--edge-color-surface-muted, var(--edge-color-surface));
+	--bs-table-hover-color: var(--edge-color-ink-950);
+}
+
 :root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table thead th {
 	background: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
 	border-color: var(--edge-color-border) !important;
@@ -58,4 +63,22 @@
 
 :root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody td {
 	border-color: var(--edge-color-border) !important;
+}
+
+/* Frappe/Bootstrap table-hover state can inject a light state layer through
+   table variables or cell box-shadows. Pin both pointer hover and keyboard focus
+   to a dark EdgeSuite surface so row content never loses contrast. */
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody tr:hover,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody tr:focus-within {
+	background: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody tr:hover > *,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody tr:focus-within > * {
+	--bs-table-accent-bg: transparent;
+	--bs-table-bg-state: transparent;
+	--bs-table-color-state: var(--edge-color-ink-950);
+	background-color: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
+	color: var(--edge-color-ink-950) !important;
+	box-shadow: none !important;
 }
