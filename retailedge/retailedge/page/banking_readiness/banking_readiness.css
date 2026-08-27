@@ -134,6 +134,32 @@
 	gap: var(--edge-space-2, .5rem);
 }
 
+/* Standalone EdgePageLayout pages do not inherit the shell-only dark contrast
+   completion layer, so keep this page readable with EdgeSuite theme tokens. */
+:root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell {
+	--text-color: var(--edge-color-ink-950);
+	--heading-color: var(--edge-color-ink-950);
+	color: var(--edge-color-ink-800);
+}
+
+:root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell :is(h1, h2, h3, h4, h5, h6),
+:root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell .retailedge-readiness-context-value strong,
+:root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell .retailedge-readiness-issue span {
+	color: var(--edge-color-ink-950) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell .retailedge-readiness-card__header p,
+:root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell .retailedge-readiness-context-item > span {
+	color: var(--edge-color-ink-600) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell .retailedge-readiness-context-item,
+:root[data-edge-appearance="dark"] .retailedge-banking-readiness-shell .retailedge-readiness-diagnostics {
+	background: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
+	border-color: var(--edge-color-border) !important;
+	color: var(--edge-color-ink-800) !important;
+}
+
 @media (max-width: 1100px) {
 	.retailedge-readiness-summary,
 	.retailedge-readiness-context-grid {
