@@ -44,6 +44,24 @@ function companyFilters(frm, extra = {}) {
 	};
 }
 
+function setBranchIdentityState(frm) {
+	const isNew = frm.is_new();
+	frm.toggle_enable("company", isNew);
+	frm.toggle_enable("branch", isNew && Boolean(frm.doc.company));
+
+	frm.set_df_property(
+		"branch",
+		"description",
+		isNew
+			? __(
+					"ERPNext Branches are global. Choose an unassigned Branch here to assign it to this Company in RetailEdge."
+			  )
+			: __(
+					"This Company ↔ Branch assignment is fixed after the Branch Setup is saved. Disabling the setup does not release the Branch to another Company."
+			  )
+	);
+}
+
 function setBranchQuery(frm) {
 	frm.set_query("branch", () => ({
 		query: "retailedge.branch_profile_queries.search_available_branch_setup_branches",
@@ -52,7 +70,7 @@ function setBranchQuery(frm) {
 			profile_name: frm.doc.name || "",
 		},
 	}));
-	frm.toggle_enable("branch", Boolean(frm.doc.company));
+	setBranchIdentityState(frm);
 }
 
 function setCompanyDependentQueries(frm) {
@@ -91,6 +109,9 @@ frappe.ui.form.on("RetailEdge Branch Profile", {
 		setCompanyDependentQueries(frm);
 	},
 	company(frm) {
+		if (!frm.is_new()) {
+			return;
+		}
 		if (frm.doc.branch) {
 			frm.set_value("branch", null);
 		}
