@@ -13,17 +13,16 @@ MAX_BRANCH_SCAN_RESULTS = 200
 @frappe.whitelist()
 @validate_and_sanitize_search_inputs
 def search_available_branch_setup_branches(doctype, txt, searchfield, start, page_len, filters):
-	"""Return unassigned ERPNext Branch masters for a new RetailEdge Branch Setup.
+	"""Return unassigned ERPNext Branch masters for ordinary Branch Setup editing.
 
 	ERPNext v16 Branch is global and has no native Company field. RetailEdge
-	Branch Setup is therefore the Company↔Branch ownership record. A Branch is
-	considered assigned as soon as any Branch Setup exists for it, even when that
-	setup is disabled. Disabling operational use must never release the Branch to
-	another Company accidentally.
+	Branch Setup therefore establishes the Company↔Branch mapping. Ordinary setup
+	creation/editing deliberately hides Branches that already have any mapping,
+	including disabled historical mappings, so an administrator cannot silently
+	reassign a previously used Branch by picking it in a normal Link field.
 
-	This endpoint is for establishing a new assignment only. Existing Branch
-	Setup identity is locked in the DocType form/controller; operational Company
-	→ Branch selectors must use enabled Branch Setup mappings instead.
+	A deliberate historical reassignment uses ``search_reassignment_target_branches``
+	and the controlled server action instead.
 	"""
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
 	company = str(filters.get("company") or "").strip()
@@ -31,6 +30,41 @@ def search_available_branch_setup_branches(doctype, txt, searchfield, start, pag
 		return []
 
 	profile_name = str(filters.get("profile_name") or "").strip()
+	return _search_branch_candidates(
+		txt=txt,
+		start=start,
+		page_len=page_len,
+		profile_name=profile_name,
+		exclude_mode="assigned",
+	)
+
+
+@frappe.whitelist()
+@validate_and_sanitize_search_inputs
+def search_reassignment_target_branches(doctype, txt, searchfield, start, page_len, filters):
+	"""Return Branches that may be targets of an explicit controlled reassignment.
+
+	The current Branch remains selectable so a Branch can deliberately move to a
+	different Company. Disabled historical mappings do not reserve a Branch
+	forever; only another *enabled* Branch Setup blocks the controlled target.
+	Backend validation and active-session checks remain authoritative.
+	"""
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	company = str(filters.get("company") or "").strip()
+	if not company:
+		return []
+
+	profile_name = str(filters.get("profile_name") or "").strip()
+	return _search_branch_candidates(
+		txt=txt,
+		start=start,
+		page_len=page_len,
+		profile_name=profile_name,
+		exclude_mode="active",
+	)
+
+
+def _search_branch_candidates(*, txt, start, page_len, profile_name, exclude_mode):
 	filtered_start = max(cint(start), 0)
 	requested = min(cint(page_len) or MAX_BRANCH_RESULTS, MAX_BRANCH_RESULTS)
 	needed = filtered_start + requested
@@ -55,8 +89,11 @@ def search_available_branch_setup_branches(doctype, txt, searchfield, start, pag
 			break
 
 		names = [row.get("name") for row in rows if row.get("name")]
-		assigned = _assigned_candidate_branches(names, profile_name=profile_name)
-		available.extend(name for name in names if name not in assigned)
+		if exclude_mode == "active":
+			excluded = _active_candidate_branches(names, profile_name=profile_name)
+		else:
+			excluded = _assigned_candidate_branches(names, profile_name=profile_name)
+		available.extend(name for name in names if name not in excluded)
 
 		row_count = len(rows)
 		raw_start += row_count
@@ -68,14 +105,26 @@ def search_available_branch_setup_branches(doctype, txt, searchfield, start, pag
 
 
 def _assigned_candidate_branches(branch_names, profile_name=None):
-	"""Return ownership bindings for only the bounded Branch candidates being displayed."""
+	"""Return any historical/current mappings for bounded Branch candidates."""
+	return _candidate_branches(branch_names, profile_name=profile_name, active_only=False)
+
+
+def _active_candidate_branches(branch_names, profile_name=None):
+	"""Return enabled mappings for bounded controlled-reassignment candidates."""
+	return _candidate_branches(branch_names, profile_name=profile_name, active_only=True)
+
+
+def _candidate_branches(branch_names, *, profile_name=None, active_only=False):
 	branch_names = [name for name in dict.fromkeys(branch_names or []) if name]
 	if not branch_names:
 		return set()
 
+	filters = {"branch": ["in", branch_names]}
+	if active_only:
+		filters["enabled"] = 1
 	rows = frappe.get_list(
 		"RetailEdge Branch Profile",
-		filters={"branch": ["in", branch_names]},
+		filters=filters,
 		fields=["name", "branch", "company", "enabled"],
 		limit_page_length=min(max(len(branch_names) * 2, MAX_BRANCH_RESULTS), MAX_BRANCH_SCAN_RESULTS),
 		order_by="branch asc",
@@ -87,7 +136,6 @@ def _assigned_candidate_branches(branch_names, profile_name=None):
 	}
 
 
-# Compatibility alias for the first PR #41 cascade contract. Ownership is now
-# deliberately independent of the enabled flag, so "reserved" means assigned.
+# Compatibility alias retained for earlier PR #41 contracts.
 def _reserved_candidate_branches(branch_names, profile_name=None):
 	return _assigned_candidate_branches(branch_names, profile_name=profile_name)
