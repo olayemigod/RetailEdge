@@ -139,6 +139,30 @@ function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}, options = {}) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, freeze: Boolean(options.freeze), freeze_message: options.freezeMessage || undefined, callback: (response) => resolve(response.message || {}), error: reject }));
 }
+function extractServerMessage(error, fallback) {
+	const response = error?.responseJSON || {};
+	const rawMessages = response._server_messages;
+	if (rawMessages) {
+		try {
+			const messages = JSON.parse(rawMessages);
+			for (const item of messages) {
+				let payload = item;
+				if (typeof payload === "string") {
+					try { payload = JSON.parse(payload); } catch (_) { payload = { message: payload }; }
+				}
+				const message = payload?.message || payload?.title || "";
+				if (message) return String(message).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+			}
+		} catch (_) {
+			// Frappe still renders its normal Message dialog; do not expose malformed server diagnostics.
+		}
+	}
+	for (const candidate of [response.message, error?.message]) {
+		const message = String(candidate || "").trim();
+		if (message && !message.includes("Traceback") && !message.includes('File "apps/')) return message;
+	}
+	return fallback;
+}
 function blankAssign() { return { user: "", company: "", branch: "", branch_role: "Other", effective_from: frappe.datetime.get_today(), effective_to: "", is_primary: 0, transfer_reason: "", notes: "" }; }
 function blankTransfer(row = {}) { return { company: row.company || "", branch: "", effective_date: frappe.datetime.get_today(), branch_role: row.branch_role || "Other", reason: "", notes: "" }; }
 
@@ -173,7 +197,7 @@ export default {
 		async loadAssignments() {
 			if (this.loading) return; this.loading = true; this.error = "";
 			try { const data = await callMethod(CONTEXT_METHOD, { filters: this.filters }); this.assignments = Array.isArray(data.assignments) ? data.assignments : []; this.canCreate = Boolean(data.can_create); this.canWrite = Boolean(data.can_write); this.userName = this.userName || data.user_name || ""; this.loaded = true; }
-			catch (error) { this.error = error?.message || error?.exc || __("Branch Assignment history could not be loaded."); }
+			catch (error) { this.error = extractServerMessage(error, __("Branch Assignment history could not be loaded.")); }
 			finally { this.loading = false; }
 		},
 		clearFilters() { this.filters = { user: "", company: "", branch: "", status: "" }; this.loadAssignments(); },
@@ -191,7 +215,7 @@ export default {
 			if (!this.assign.user || !this.assign.company || !this.assign.branch || !this.assign.effective_from) { this.assignError = __("User, Company, Branch and Effective From are required."); return; }
 			this.saving = true; this.assignError = "";
 			try { await callMethod(CREATE_METHOD, this.assign, { freeze: true, freezeMessage: __("Creating Branch Assignment...") }); this.assignOpen = false; frappe.show_alert({ message: __("Branch Assignment created."), indicator: "green" }); await this.loadAssignments(); }
-			catch (error) { this.assignError = error?.message || error?.exc || __("Branch Assignment could not be created."); }
+			catch (error) { this.assignError = extractServerMessage(error, __("Branch Assignment could not be created.")); }
 			finally { this.saving = false; }
 		},
 		openTransfer(row) { this.transferRow = { ...row }; this.transfer = blankTransfer(row); this.transferError = ""; this.transferOpen = true; }, closeTransfer() { if (!this.saving) this.transferOpen = false; },
@@ -200,7 +224,7 @@ export default {
 			if (!this.transfer.company || !this.transfer.branch || !this.transfer.effective_date || !this.transfer.reason) { this.transferError = __("New Company, Branch, Transfer Date and Transfer Reason are required."); return; }
 			this.saving = true; this.transferError = "";
 			try { await callMethod(TRANSFER_METHOD, { name: this.transferRow.name, new_company: this.transfer.company, new_branch: this.transfer.branch, effective_date: this.transfer.effective_date, branch_role: this.transfer.branch_role, reason: this.transfer.reason, notes: this.transfer.notes }, { freeze: true, freezeMessage: __("Recording Branch transfer...") }); this.transferOpen = false; frappe.show_alert({ message: __("Branch transfer recorded; previous assignment preserved."), indicator: "green" }); await this.loadAssignments(); }
-			catch (error) { this.transferError = error?.message || error?.exc || __("Branch transfer could not be recorded."); }
+			catch (error) { this.transferError = extractServerMessage(error, __("Branch transfer could not be recorded.")); }
 			finally { this.saving = false; }
 		},
 		openNative(row) { if (row?.name) window.open(`/app/retailedge-branch-assignment/${encodeURIComponent(row.name)}`, "_blank", "noopener,noreferrer"); },
