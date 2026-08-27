@@ -44,7 +44,19 @@ function companyFilters(frm, extra = {}) {
 	};
 }
 
+function setBranchQuery(frm) {
+	frm.set_query("branch", () => ({
+		query: "retailedge.branch_profile_queries.search_available_branch_setup_branches",
+		filters: {
+			company: frm.doc.company || "",
+			profile_name: frm.doc.name || "",
+		},
+	}));
+	frm.toggle_enable("branch", Boolean(frm.doc.company));
+}
+
 function setCompanyDependentQueries(frm) {
+	setBranchQuery(frm);
 	frm.set_query("default_pos_profile", () => companyFilters(frm, { disabled: 0 }));
 
 	WAREHOUSE_FIELDS.forEach((fieldname) => {
@@ -79,6 +91,9 @@ frappe.ui.form.on("RetailEdge Branch Profile", {
 		setCompanyDependentQueries(frm);
 	},
 	company(frm) {
+		if (frm.doc.branch) {
+			frm.set_value("branch", null);
+		}
 		clearCompanyDependentDefaults(frm);
 		setCompanyDependentQueries(frm);
 	},
