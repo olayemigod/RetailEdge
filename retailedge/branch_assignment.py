@@ -44,8 +44,9 @@ def get_active_branch_assignments(
 ) -> list[dict[str, Any]]:
 	"""Return effective assignments using date predicates in the database.
 
-	Saved ``status`` is deliberately not an access authority. Effective dates are
-	the truth so time passing can activate/end access without an edit or scheduler.
+	This is an internal access resolver, so it deliberately does not depend on the
+	user having read permission on Branch Assignment history. The query is always
+	constrained to the requested user and effective date.
 	"""
 	if not _has_assignment_doctype():
 		return []
@@ -59,7 +60,7 @@ def get_active_branch_assignments(
 	}
 	if company:
 		filters["company"] = company
-	rows = frappe.get_list(
+	rows = frappe.get_all(
 		"RetailEdge Branch Assignment",
 		filters=filters,
 		or_filters=[
@@ -216,7 +217,12 @@ def transfer_branch_assignment(
 
 
 def validate_branch_assignment(doc) -> None:
-	_validate_assignment_user(doc.user)
+	controlled_relink = bool(getattr(doc.flags, "controlled_branch_setup_relink", False))
+	if controlled_relink:
+		if not doc.user or not frappe.db.exists("User", doc.user):
+			frappe.throw(_("The linked User no longer exists."))
+	else:
+		_validate_assignment_user(doc.user)
 	if not doc.company:
 		frappe.throw(_("Company is required."))
 	if not doc.branch:
@@ -233,7 +239,7 @@ def validate_branch_assignment(doc) -> None:
 	if end and end < start:
 		frappe.throw(_("Effective To cannot be before Effective From."))
 
-	if not getattr(doc.flags, "controlled_branch_setup_relink", False):
+	if not controlled_relink:
 		profile = _validate_company_branch(doc.company, doc.branch)
 		doc.branch_setup = profile.name
 	doc.status = _status_for_dates(start, end)
@@ -297,7 +303,8 @@ def _validate_assignment_user(user: str) -> None:
 		frappe.throw(_("User {0} does not exist.").format(user))
 	if not frappe.has_permission("User", "read", doc=user):
 		frappe.throw(_("You do not have permission to assign User {0}.").format(user), frappe.PermissionError)
-	enabled, user_type = frappe.db.get_value("User", user, ["enabled", "user_type"]) or (0, "")
+	values = frappe.db.get_value("User", user, ["enabled", "user_type"])
+	enabled, user_type = values if values else (0, "")
 	if not int(enabled or 0) or user_type != "System User":
 		frappe.throw(_("Branch Assignments require an enabled System User."))
 
@@ -404,13 +411,6 @@ def _find_overlap(
 	exclude_name: str | None,
 	primary_only: bool = False,
 ) -> str | None:
-	conditions = [
-		"user = %(user)s",
-		"company = %(company)s",
-		"name != %(exclude_name)s",
-		"effective_from <= %(end_bound)s",
-		"(effective_to is null or effective_to >= %(start)s)",
-	]
 	values = {
 		"user": user,
 		"company": company,
@@ -418,22 +418,41 @@ def _find_overlap(
 		"start": getdate(start),
 		"end_bound": getdate(end) if end else date(9999, 12, 31),
 	}
-	if branch:
-		conditions.append("branch = %(branch)s")
-		values["branch"] = branch
 	if primary_only:
-		conditions.append("is_primary = 1")
-	rows = frappe.db.sql(
-		f"""
-		select name
-		from `tabRetailEdge Branch Assignment`
-		where {' and '.join(conditions)}
-		order by effective_from asc
-		limit 1
-		""",
-		values,
-		pluck=True,
-	)
+		rows = frappe.db.sql(
+			"""
+			select name
+			from `tabRetailEdge Branch Assignment`
+			where user = %(user)s
+			  and company = %(company)s
+			  and name != %(exclude_name)s
+			  and is_primary = 1
+			  and effective_from <= %(end_bound)s
+			  and (effective_to is null or effective_to >= %(start)s)
+			order by effective_from asc
+			limit 1
+			""",
+			values,
+			pluck=True,
+		)
+	else:
+		values["branch"] = branch or ""
+		rows = frappe.db.sql(
+			"""
+			select name
+			from `tabRetailEdge Branch Assignment`
+			where user = %(user)s
+			  and company = %(company)s
+			  and branch = %(branch)s
+			  and name != %(exclude_name)s
+			  and effective_from <= %(end_bound)s
+			  and (effective_to is null or effective_to >= %(start)s)
+			order by effective_from asc
+			limit 1
+			""",
+			values,
+			pluck=True,
+		)
 	return str(rows[0]) if rows else None
 
 
@@ -475,14 +494,22 @@ def _scope_assignment_filters(query_filters: dict[str, Any]) -> dict[str, Any]:
 	user = frappe.session.user
 	if user_has_global_branch_access(user=user):
 		return query_filters
-	allowed = get_user_allowed_branches(user=user, company=query_filters.get("company") or None)
-	branches = [str(value or "").strip() for value in allowed.get("branches") or [] if str(value or "").strip()]
+	company = query_filters.get("company") or None
+	if has_branch_assignments(user=user):
+		branches = get_assignment_branches(user=user, company=company)
+	else:
+		allowed = get_user_allowed_branches(user=user, company=company)
+		branches = [
+			str(value or "").strip()
+			for value in allowed.get("branches") or []
+			if str(value or "").strip()
+		]
 	requested_branch = str(query_filters.get("branch") or "").strip()
 	if requested_branch and requested_branch not in branches:
 		query_filters["name"] = "__no_visible_branch_assignment__"
 		return query_filters
 	if branches:
-		query_filters["branch"] = ["in", branches]
+		query_filters["branch"] = ["in", list(dict.fromkeys(branches))]
 	else:
 		query_filters["name"] = "__no_visible_branch_assignment__"
 	return query_filters
