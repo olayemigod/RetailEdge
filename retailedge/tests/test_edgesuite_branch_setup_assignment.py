@@ -74,6 +74,20 @@ class TestEdgeSuiteBranchSetupAssignment(unittest.TestCase):
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("frappe.db.commit", source)
 
+	def test_branch_setup_smart_links_are_leaf_only_and_legacy_invalid_defaults_are_surfaced(self):
+		source = BRANCH_SETUP_SERVICE.read_text(encoding="utf-8")
+		for contract in (
+			"LEAF_DEFAULT_FIELDS",
+			"_serialise_for_edgesuite",
+			"_get_legacy_default_issues",
+			'state["configuration_issues"]',
+			"Branch Setup needs correction",
+			'"default_pos_opening_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0})',
+			'"default_cash_account": ("Account", {"company": company, "is_group": 0, "disabled": 0})',
+		):
+			self.assertIn(contract, source)
+		self.assertIn('result[issue["fieldname"]] = ""', source)
+
 	def test_assignment_search_is_smart_and_does_not_widen_access(self):
 		source = BRANCH_ASSIGNMENT_UI.read_text(encoding="utf-8")
 		for contract in (
