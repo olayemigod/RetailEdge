@@ -30,6 +30,7 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 			"resolve_price_list_context",
 			"frappe.has_permission",
 			"frappe.get_list",
+			"get_user_fullname(frappe.session.user)",
 			'"policy": "erpnext_native"',
 			'"draft_first": True',
 			'"submitted_documents_immutable": True',
@@ -44,6 +45,7 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 			".save()",
 			".submit()",
 			"frappe.db.set_value",
+			"frappe.get_user().get_fullname()",
 		):
 			self.assertNotIn(forbidden, source)
 
