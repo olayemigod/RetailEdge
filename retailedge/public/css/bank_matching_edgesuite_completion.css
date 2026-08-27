@@ -121,17 +121,46 @@
 }
 
 /* Direction and Workflow Status are one operational control band on desktop.
-   Keep their native EdgeSuite components and typography; only change layout. */
+   Direction needs only three compact options, so reserve more width for the four
+   Workflow Status tabs and keep both sets on a single line. */
 .retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar,
 .retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar + .edge-action-bar {
 	display: inline-flex;
-	width: calc(50% - .25rem);
 	box-sizing: border-box;
 	vertical-align: top;
+	align-items: center;
 }
 
 .retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar {
+	width: calc(35% - .25rem);
 	margin-right: .5rem;
+}
+
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar + .edge-action-bar {
+	width: calc(65% - .25rem);
+}
+
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar .edge-action-bar__content,
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar + .edge-action-bar .edge-action-bar__content {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar .edge-action-bar__actions,
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar + .edge-action-bar .edge-action-bar__actions {
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: flex-end;
+	min-width: 0;
+	gap: var(--edge-space-2, .5rem);
+}
+
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar .edge-action-bar__actions .edge-button,
+.retailedge-bank-layout .retailedge-bank-stats + .edge-action-bar + .edge-action-bar .edge-action-bar__actions .edge-button {
+	flex: 0 1 auto;
+	white-space: nowrap;
 }
 
 /* Bank Transaction and Candidate are navigation controls, not disabled fields. */
