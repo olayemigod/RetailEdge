@@ -15,10 +15,19 @@ SETUP_RESOURCES = (
 	{
 		"key": "branches",
 		"label": "Branch Setup",
-		"description": "Manage Branch operating defaults, Stock Locations, POS Profile, accounts and operational users.",
+		"description": "Manage Branch operating defaults, Stock Locations, POS Profile, accounts and controls.",
 		"doctype": "RetailEdge Branch Profile",
 		"singleton": False,
 		"icon": "building",
+	},
+	{
+		"key": "branch-assignments",
+		"label": "Branch Assignments",
+		"description": "Assign users to Branches with effective dates and preserve transfer history between locations.",
+		"doctype": "RetailEdge Branch Assignment",
+		"page": "branch-assignments",
+		"singleton": False,
+		"icon": "users",
 	},
 	{
 		"key": "expense-categories",
