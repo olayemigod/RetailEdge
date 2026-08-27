@@ -58,6 +58,9 @@ class TestBranchSetupCascade(unittest.TestCase):
 			"get_branch_operational_usage",
 			"if usage:",
 			"controlled_branch_reassignment",
+			"_clear_identity_dependent_values(self)",
+			"_clear_branch_users(self)",
+			"API/import",
 		):
 			self.assertIn(contract, controller)
 		self.assertNotIn('frm.toggle_enable("company", isNew)', frontend)
