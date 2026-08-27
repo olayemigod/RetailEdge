@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, nowdate
+from frappe.utils.user import get_user_fullname
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
@@ -212,7 +213,7 @@ def get_professional_selling_context() -> dict[str, Any]:
 			"erpnext_pricing_authoritative": True,
 			"erpnext_shipping_rule_authoritative": True,
 		},
-		"user_name": frappe.get_user().get_fullname() if getattr(frappe, "session", None) else "",
+		"user_name": get_user_fullname(frappe.session.user) if getattr(frappe, "session", None) else "",
 	}
 
 
