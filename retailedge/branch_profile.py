@@ -26,10 +26,7 @@ PROFILE_DEFAULT_FIELDS = [
 ]
 
 # ERPNext v16 Branch is not Company-bound by a native `company` column. The
-# RetailEdge Branch Profile's own Company + Branch pair is therefore the binding
-# between those records. Only masters that are genuinely Company-bound are
-# validated here. Branch itself remains a normal Frappe Link, so standard Link
-# validation remains responsible for reference existence on document save.
+# RetailEdge Branch Profile's own Company + Branch pair is therefore the binding.
 COMPANY_LINK_FIELDS = {
 	"default_pos_profile": ("POS Profile", "company"),
 	"default_warehouse": ("Warehouse", "company"),
@@ -59,6 +56,17 @@ LEAF_FIELDS = {
 	"default_bank_account": "Account",
 	"default_card_pos_account": "Account",
 	"default_mobile_money_account": "Account",
+}
+
+ACCOUNT_SEMANTICS = {
+	"default_pos_opening_cash_account": {"account_types": {"Cash"}},
+	"default_cash_account": {"account_types": {"Cash"}},
+	"default_bank_account": {"account_types": {"Bank"}},
+	# Card/POS and mobile-money settlement ledgers can be Bank/Cash typed or a
+	# dedicated untyped current-asset ledger, but must never be income/expense,
+	# receivable/payable or another non-asset control account.
+	"default_card_pos_account": {"account_types": {"", "Bank", "Cash"}, "root_types": {"Asset"}},
+	"default_mobile_money_account": {"account_types": {"", "Bank", "Cash"}, "root_types": {"Asset"}},
 }
 
 
@@ -350,6 +358,7 @@ def validate_branch_profile(doc):
 		frappe.throw("Branch is required.")
 	_validate_company_links(doc)
 	_validate_leaf_defaults(doc)
+	_validate_account_semantics(doc)
 	if getattr(doc, "enabled", 1):
 		duplicate_filters = {
 			"name": ["!=", doc.name or ""],
@@ -410,11 +419,30 @@ def _validate_leaf_defaults(doc):
 		if int(is_group):
 			label = doc.meta.get_label(fieldname) or fieldname
 			frappe.throw(f"{label} must be a leaf {doctype}.")
-		if doctype in {"Warehouse", "Account"}:
+		if doctype in {"Warehouse", "Account", "Cost Center"} and _doctype_has_field(doctype, "disabled"):
 			disabled = frappe.db.get_value(doctype, value, "disabled")
 			if disabled is not None and int(disabled):
 				label = doc.meta.get_label(fieldname) or fieldname
 				frappe.throw(f"{label} must be enabled.")
+
+
+def _validate_account_semantics(doc):
+	for fieldname, rules in ACCOUNT_SEMANTICS.items():
+		value = getattr(doc, fieldname, None)
+		if not value:
+			continue
+		account_type, root_type = frappe.db.get_value("Account", value, ["account_type", "root_type"]) or ("", "")
+		account_type = str(account_type or "").strip()
+		root_type = str(root_type or "").strip()
+		allowed_types = rules.get("account_types")
+		allowed_roots = rules.get("root_types")
+		label = doc.meta.get_label(fieldname) or fieldname
+		if allowed_types is not None and account_type not in allowed_types:
+			frappe.throw(
+				f"{label} has the wrong ERPNext Account Type. Allowed: {', '.join(sorted(t or 'Untyped Asset' for t in allowed_types))}."
+			)
+		if allowed_roots is not None and root_type not in allowed_roots:
+			frappe.throw(f"{label} must use an Asset account.")
 
 
 def _has_doctype(doctype):
