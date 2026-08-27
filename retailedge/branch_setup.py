@@ -99,6 +99,7 @@ def get_branch_setup_context(filters=None, limit: int = MAX_LIST_RESULTS) -> dic
 		"profiles": [dict(row) for row in rows],
 		"can_create": bool(frappe.has_permission(BRANCH_SETUP_DOCTYPE, "create")),
 		"can_write": bool(frappe.has_permission(BRANCH_SETUP_DOCTYPE, "write")),
+		"can_create_branch": _can_create_branch(),
 		"user": frappe.session.user,
 		"user_name": frappe.utils.get_fullname(frappe.session.user),
 	}
@@ -125,6 +126,7 @@ def get_branch_setup(name: str) -> dict[str, Any]:
 		"doc": serialised_doc,
 		"state": state,
 		"can_write": bool(doc.has_permission("write")),
+		"can_create_branch": _can_create_branch(),
 		"native_route": f"/app/retailedge-branch-profile/{doc.name}",
 	}
 
@@ -165,6 +167,44 @@ def save_branch_setup(values=None) -> dict[str, Any]:
 		"doc": _serialise_doc(doc),
 		"state": get_branch_profile_reassignment_state(doc.name),
 		"native_route": f"/app/retailedge-branch-profile/{doc.name}",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def quick_create_branch(branch_name: str, company: str) -> dict[str, Any]:
+	"""Create the ERPNext Branch master without leaving the EdgeSuite setup flow.
+
+	Branch is a global ERPNext master in v16, so Company remains a RetailEdge
+	Branch Setup concern. Company is still required here to keep quick creation
+	inside an explicit Company context and to validate that the user can read it.
+	"""
+	branch_name = str(branch_name or "").strip()
+	company = str(company or "").strip()
+	if not company:
+		frappe.throw(_("Select a Company before creating a Branch."))
+	if not branch_name:
+		frappe.throw(_("Branch name is required."))
+	if not _can_create_branch():
+		frappe.throw(_("You do not have permission to create ERPNext Branch records."), frappe.PermissionError)
+	if not (
+		frappe.has_permission(BRANCH_SETUP_DOCTYPE, "create")
+		or frappe.has_permission(BRANCH_SETUP_DOCTYPE, "write")
+	):
+		frappe.throw(_("You do not have permission to configure RetailEdge Branch Setup."), frappe.PermissionError)
+
+	company_doc = frappe.get_doc("Company", company)
+	company_doc.check_permission("read")
+	if frappe.db.exists("Branch", branch_name):
+		frappe.throw(_("Branch {0} already exists. Select the existing Branch instead.").format(branch_name))
+
+	branch = frappe.new_doc("Branch")
+	branch.branch = branch_name
+	branch.insert()
+	return {
+		"value": branch.name,
+		"label": branch.name,
+		"description": _("ERPNext Branch created. Save Branch Setup to assign it to Company {0}.").format(company),
+		"raw": {"name": branch.name, "branch": branch.branch},
 	}
 
 
@@ -302,6 +342,13 @@ def _coerce_values(values) -> dict[str, Any]:
 	if isinstance(values, str):
 		values = frappe.parse_json(values)
 	return dict(values or {})
+
+
+def _can_create_branch() -> bool:
+	try:
+		return bool(frappe.db.exists("DocType", "Branch") and frappe.has_permission("Branch", "create"))
+	except Exception:
+		return False
 
 
 def _assert_read_permission() -> None:
