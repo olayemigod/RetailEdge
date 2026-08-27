@@ -16,6 +16,20 @@
 	color: var(--edge-color-ink-950) !important;
 }
 
+/* Sortable table headers are buttons inside <th>; give them their own explicit
+   dark-mode foreground because button defaults can otherwise override the th. */
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-sort {
+	color: var(--edge-color-ink-950) !important;
+	background: transparent !important;
+	border-color: transparent !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-sort:hover,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-sort:focus-visible,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-sort.is-active {
+	color: var(--edge-color-ink-950) !important;
+}
+
 :root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-reset-link,
 :root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table .edge-link-button {
 	color: var(--edge-color-ink-950) !important;
