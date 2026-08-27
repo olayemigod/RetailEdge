@@ -64,6 +64,47 @@ def search_reassignment_target_branches(doctype, txt, searchfield, start, page_l
 	)
 
 
+@frappe.whitelist()
+@validate_and_sanitize_search_inputs
+def search_configured_company_branches(doctype, txt, searchfield, start, page_len, filters):
+	"""Return enabled Branch Setup mappings for one Company.
+
+	This query is used by operational setup such as Branch Assignment. It never
+	guesses Company ownership from the ERPNext Branch master; the enabled
+	RetailEdge Branch Setup Company↔Branch mapping is authoritative.
+	"""
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
+	company = str(filters.get("company") or "").strip()
+	if not company:
+		return []
+	start = max(cint(start), 0)
+	page_len = min(cint(page_len) or MAX_BRANCH_RESULTS, MAX_BRANCH_RESULTS)
+	profile_filters = {"company": company, "enabled": 1}
+	if txt:
+		profile_filters["branch"] = ["like", f"%{txt}%"]
+	rows = frappe.get_list(
+		"RetailEdge Branch Profile",
+		filters=profile_filters,
+		fields=["branch"],
+		order_by="branch asc",
+		limit_start=start,
+		limit_page_length=page_len,
+	)
+	branches = [row.get("branch") for row in rows if row.get("branch")]
+	if not branches:
+		return []
+	visible = set(
+		frappe.get_list(
+			"Branch",
+			filters={"name": ["in", branches]},
+			pluck="name",
+			limit_page_length=min(len(branches), MAX_BRANCH_RESULTS),
+		)
+		or []
+	)
+	return [(branch,) for branch in branches if branch in visible]
+
+
 def _search_branch_candidates(*, txt, start, page_len, profile_name, exclude_mode):
 	filtered_start = max(cint(start), 0)
 	requested = min(cint(page_len) or MAX_BRANCH_RESULTS, MAX_BRANCH_RESULTS)
