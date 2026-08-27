@@ -56,7 +56,7 @@ class TestBranchSetupCascade(unittest.TestCase):
 		for contract in (
 			"identity_changed",
 			"get_branch_operational_usage",
-			"if usage:",
+			"if usage or _has_assignment_history(self.name):",
 			"controlled_branch_reassignment",
 			"_clear_identity_dependent_values(self)",
 			"_clear_branch_users(self)",
