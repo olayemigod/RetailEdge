@@ -21,7 +21,8 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			"if user_has_global_branch_access(user=user):",
 			"get_allowed_operating_branches",
 			"validate_operating_branch",
-			"Branch {0} is not configured for Company {1}",
+			"has_any_setup and branch not in configured_branches",
+			"Branch {0} is not enabled in Branch Setup for Company {1}",
 		):
 			self.assertIn(contract, source)
 		self.assertLess(
