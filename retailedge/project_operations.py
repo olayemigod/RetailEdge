@@ -12,6 +12,15 @@ from retailedge.advanced_payments import _payment_branch_field
 PROJECT_DOCTYPE = "Project"
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 MAX_PAYMENT_ROWS = 2000
+MAX_TIMELINE_ROWS = 200
+
+TIMELINE_DOCTYPES: tuple[dict[str, str], ...] = (
+	{"doctype": "Sales Order", "kind": "Revenue", "label": "Sales Order"},
+	{"doctype": "Sales Invoice", "kind": "Revenue", "label": "Sales Invoice"},
+	{"doctype": "Purchase Invoice", "kind": "Cost", "label": "Purchase Invoice"},
+	{"doctype": "Expense Claim", "kind": "Cost", "label": "Expense Claim"},
+	{"doctype": "Stock Entry", "kind": "Stock", "label": "Stock Entry"},
+)
 
 
 def _assert_read(doctype: str, name: str | None = None) -> None:
@@ -21,6 +30,13 @@ def _assert_read(doctype: str, name: str | None = None) -> None:
 
 def _project_company_currency(company: str) -> str:
 	return str(frappe.db.get_value("Company", company, "default_currency") or "")
+
+
+def _has_field(doctype: str, fieldname: str) -> bool:
+	try:
+		return bool(frappe.get_meta(doctype).has_field(fieldname))
+	except Exception:
+		return False
 
 
 def _project_payment_rows(project: str, *, payment_type: str | None = None, branch: str | None = None) -> list[Any]:
@@ -68,6 +84,79 @@ def _project_payment_rows(project: str, *, payment_type: str | None = None, bran
 	)
 
 
+def _date_field_for(doctype: str) -> str:
+	for fieldname in ("posting_date", "transaction_date", "expense_approver_date", "creation"):
+		if fieldname == "creation" or _has_field(doctype, fieldname):
+			return fieldname
+	return "creation"
+
+
+def _branch_field_for(doctype: str) -> str | None:
+	for fieldname in ("retailedge_branch", "branch"):
+		if _has_field(doctype, fieldname):
+			return fieldname
+	return None
+
+
+def _project_timeline_rows(project: str, *, branch: str | None = None) -> list[dict[str, Any]]:
+	"""Build a read-only timeline from native ERPNext documents carrying Project.
+
+	When Branch scope is requested, document types without a branch attribution
+	field are omitted rather than widened to company/project-wide results.
+	"""
+	rows: list[dict[str, Any]] = []
+	for spec in TIMELINE_DOCTYPES:
+		doctype = spec["doctype"]
+		if not frappe.db.exists("DocType", doctype) or not _has_field(doctype, "project"):
+			continue
+		if not frappe.has_permission(doctype, "read"):
+			continue
+
+		branch_field = _branch_field_for(doctype)
+		if branch and not branch_field:
+			continue
+
+		date_field = _date_field_for(doctype)
+		filters: dict[str, Any] = {"project": project}
+		if _has_field(doctype, "docstatus"):
+			filters["docstatus"] = ["<", 2]
+		if branch and branch_field:
+			filters[branch_field] = branch
+
+		fields = ["name", date_field]
+		for candidate in ("docstatus", "status", "company", "customer", "supplier", "grand_total", "base_grand_total"):
+			if _has_field(doctype, candidate):
+				fields.append(candidate)
+		if branch_field:
+			fields.append(branch_field)
+
+		for row in frappe.get_list(
+			doctype,
+			filters=filters,
+			fields=fields,
+			order_by=f"{date_field} desc, name desc",
+			limit_page_length=MAX_TIMELINE_ROWS,
+		):
+			amount = flt(getattr(row, "base_grand_total", 0) or getattr(row, "grand_total", 0))
+			rows.append(
+				{
+					"doctype": doctype,
+					"name": row.name,
+					"kind": spec["kind"],
+					"label": spec["label"],
+					"date": getattr(row, date_field, None),
+					"status": getattr(row, "status", "") or ("Submitted" if getattr(row, "docstatus", 0) == 1 else "Draft"),
+					"party": getattr(row, "customer", "") or getattr(row, "supplier", "") or "",
+					"amount": amount,
+					"branch": getattr(row, branch_field, "") if branch_field else "",
+					"route": f"/app/{frappe.scrub(doctype).replace('_', '-')}/{row.name}",
+				}
+			)
+
+	rows.sort(key=lambda row: (str(row.get("date") or ""), str(row.get("name") or "")), reverse=True)
+	return rows[:MAX_TIMELINE_ROWS]
+
+
 @frappe.whitelist()
 def get_project_funds_context(project: str, branch: str | None = None) -> dict[str, Any]:
 	"""Return a permission-aware project operations/funds snapshot from ERPNext truth.
@@ -95,6 +184,7 @@ def get_project_funds_context(project: str, branch: str | None = None) -> dict[s
 	funds_received = 0.0
 	funds_paid_out = 0.0
 	unallocated_receipts = 0.0
+	branch_field = _payment_branch_field()
 
 	for row in payments:
 		payment_type = str(row.payment_type or "")
@@ -113,7 +203,7 @@ def get_project_funds_context(project: str, branch: str | None = None) -> dict[s
 			"mode_of_payment": row.mode_of_payment or "",
 			"reference_no": row.reference_no or "",
 			"reference_date": row.reference_date,
-			"branch": getattr(row, _payment_branch_field(), "") if _payment_branch_field() else "",
+			"branch": getattr(row, branch_field, "") if branch_field else "",
 			"route": f"/app/payment-entry/{row.name}",
 		}
 		if payment_type == "Receive":
@@ -129,6 +219,7 @@ def get_project_funds_context(project: str, branch: str | None = None) -> dict[s
 		+ flt(getattr(doc, "total_consumed_material_cost", 0))
 		+ flt(getattr(doc, "total_costing_amount", 0))
 	)
+	timeline = _project_timeline_rows(project, branch=branch or None)
 
 	return {
 		"project": doc.name,
@@ -160,9 +251,12 @@ def get_project_funds_context(project: str, branch: str | None = None) -> dict[s
 		"customer_receipts": customer_receipts,
 		"project_payments": project_payments,
 		"payment_count": len(payments),
+		"timeline": timeline,
+		"timeline_count": len(timeline),
 		"source_of_truth": {
 			"project": PROJECT_DOCTYPE,
 			"cash": PAYMENT_ENTRY_DOCTYPE,
+			"timeline": "Native ERPNext documents carrying the Project accounting/operational link.",
 			"ledger_policy": "ERPNext native documents only; no RetailEdge project wallet or shadow ledger.",
 		},
 		"routes": {
