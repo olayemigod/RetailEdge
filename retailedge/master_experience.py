@@ -97,6 +97,22 @@ CUSTOMER_ADVANCE_REPORT_ITEM: dict[str, Any] = {
 	"icon": "report",
 }
 
+PROJECT_OPERATIONS_ITEM: dict[str, Any] = {
+	"label": "Project Operations",
+	"description": "Manage project progress, funds, receipts and linked ERPNext transactions from one operational view.",
+	"target_type": "Page",
+	"target": "project-operations",
+	"icon": "briefcase",
+}
+
+PROJECT_LIST_ITEM: dict[str, Any] = {
+	"label": "Projects",
+	"description": "Open the native ERPNext Project list and full project forms.",
+	"target_type": "DocType",
+	"target": "Project",
+	"icon": "briefcase",
+}
+
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
 	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
@@ -248,6 +264,23 @@ def _promote_payment_management(navigation_groups: list[dict[str, Any]]) -> None
 		return
 
 
+def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Add a governed Projects group without replacing ERPNext Project."""
+	if not _can_open_page(PROJECT_OPERATIONS_ITEM["target"]):
+		return
+	if any(group.get("key") == "projects" for group in navigation_groups):
+		return
+	items = [deepcopy(PROJECT_OPERATIONS_ITEM)]
+	try:
+		if frappe.db.exists("DocType", "Project") and frappe.has_permission("Project", "read"):
+			items.append(deepcopy(PROJECT_LIST_ITEM))
+	except Exception:
+		pass
+	project_group = {"key": "projects", "label": "Projects", "icon": "briefcase", "items": items}
+	insert_at = next((index for index, group in enumerate(navigation_groups) if group.get("key") == "insights"), len(navigation_groups))
+	navigation_groups.insert(insert_at, project_group)
+
+
 def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> None:
 	"""Route RetailEdge-owned setup masters through one EdgeSuite Setup hub.
 
@@ -288,6 +321,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_professional_selling(navigation_groups)
 	_promote_document_output(navigation_groups)
 	_promote_payment_management(navigation_groups)
+	_promote_project_operations(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
 
 	quick_actions = list(context.get("quick_actions") or [])
@@ -322,6 +356,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"
+	feature_flags["project_operations"] = "erpnext_native_project_funds"
 	context["feature_flags"] = feature_flags
 	return context
 
