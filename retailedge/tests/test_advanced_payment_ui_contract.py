@@ -49,8 +49,25 @@ class TestAdvancedPaymentUIContract(TestCase):
 		source = (APP_ROOT / "master_experience.py").read_text()
 
 		self.assertIn('"target": "payment-management"', source)
+		self.assertIn('"target": "RetailEdge Customer Advance Register"', source)
 		self.assertIn("def _promote_payment_management", source)
+		self.assertIn("def _can_open_report", source)
 		self.assertIn('group.get("key") != "money"', source)
 		self.assertIn('item.get("target") == "Payment Entry"', source)
 		self.assertIn("_promote_payment_management(navigation_groups)", source)
 		self.assertIn('feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"', source)
+		self.assertIn('feature_flags["customer_advance_reporting"] = "current_open_receipts"', source)
+
+	def test_customer_advance_register_is_bounded_and_payment_entry_backed(self):
+		report_dir = APP_ROOT / "retailedge" / "report" / "retailedge_customer_advance_register"
+		report_json = (report_dir / "retailedge_customer_advance_register.json").read_text()
+		report_py = (report_dir / "retailedge_customer_advance_register.py").read_text()
+
+		self.assertIn('"report_type": "Script Report"', report_json)
+		self.assertIn('"ref_doctype": "Payment Entry"', report_json)
+		self.assertIn("MAX_ROWS = 2000", report_py)
+		self.assertIn('"unallocated_amount": [">", 0]', report_py)
+		self.assertIn('"payment_type": "Receive"', report_py)
+		self.assertIn('"party_type": "Customer"', report_py)
+		self.assertIn('"allocated_amount": max(received - available, 0)', report_py)
+		self.assertIn("validate_user_branch_access", report_py)
