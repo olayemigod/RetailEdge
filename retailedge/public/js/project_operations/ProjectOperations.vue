@@ -13,6 +13,7 @@
 				</div>
 				<div class="hero-actions">
 					<button class="edge-secondary-button" type="button" :disabled="!project" @click="openProject">Open ERPNext Project</button>
+					<button class="edge-secondary-button" type="button" :disabled="!project" @click="openCostDialog">Record Project Cost</button>
 					<button class="edge-primary-button" type="button" :disabled="!project || !context.customer" @click="openReceiptDialog">Record Project Receipt</button>
 				</div>
 			</header>
@@ -94,6 +95,29 @@ export default {
 		clearProject() { this.project = ""; this.projectLabel = ""; this.context = {}; this.error = ""; },
 		async loadContext() { if (!this.project) return; this.loading = true; this.error = ""; try { this.context = await callMethod("retailedge.project_operations.get_project_funds_context", { project: this.project, branch: this.branch || null }); } catch (error) { this.context = {}; this.error = errorMessage(error, "Project funds failed to load."); } finally { this.loading = false; } },
 		openReceiptDialog() { const dialog = new frappe.ui.Dialog({ title: __("Record Project Receipt"), fields: [ { fieldname: "project", fieldtype: "Data", label: __("Project"), default: this.project, read_only: 1 }, { fieldname: "customer", fieldtype: "Data", label: __("Customer"), default: this.context.customer, read_only: 1 }, { fieldname: "company", fieldtype: "Data", label: __("Company"), default: this.context.company, read_only: 1 }, { fieldname: "branch", fieldtype: "Data", label: __("Branch"), default: this.branch || "" }, { fieldname: "posting_date", fieldtype: "Date", label: __("Posting Date"), default: frappe.datetime.get_today(), reqd: 1 }, { fieldname: "mode_of_payment", fieldtype: "Link", options: "Mode of Payment", label: __("Mode of Payment"), reqd: 1 }, { fieldname: "amount", fieldtype: "Currency", label: __("Amount"), reqd: 1 }, { fieldname: "reference_no", fieldtype: "Data", label: __("Reference No") }, { fieldname: "reference_date", fieldtype: "Date", label: __("Reference Date") }, { fieldname: "remarks", fieldtype: "Small Text", label: __("Remarks") } ], primary_action_label: __("Create Draft Payment"), primary_action: async (values) => { try { const result = await callMethod("retailedge.project_receipts.create_project_receipt_draft", { values }); dialog.hide(); frappe.show_alert({ message: __("Project receipt draft created."), indicator: "green" }); if (result.name) frappe.set_route("Form", "Payment Entry", result.name); } catch (error) { frappe.msgprint({ title: __("Could not create project receipt"), message: errorMessage(error, "Project receipt draft could not be created."), indicator: "red" }); } } }); dialog.show(); },
+		async openCostDialog() {
+			try {
+				const result = await callMethod("retailedge.project_expense_routing.get_project_expense_routes", { project: this.project });
+				const routes = result.routes || [];
+				if (!routes.length) { frappe.msgprint(__("You do not have permission to create any supported project cost document.")); return; }
+				const optionMap = Object.fromEntries(routes.map((route) => [route.label, route]));
+				const dialog = new frappe.ui.Dialog({
+					title: __("Record Project Cost"),
+					fields: [
+						{ fieldname: "route", fieldtype: "Select", label: __("Cost Type"), options: routes.map((route) => route.label).join("\n"), reqd: 1 },
+						{ fieldname: "policy", fieldtype: "HTML", options: `<div class="text-muted small">${frappe.utils.escape_html(result.policy || "")}</div>` },
+					],
+					primary_action_label: __("Open Native Entry"),
+					primary_action: (values) => {
+						const route = optionMap[values.route];
+						if (!route) return;
+						dialog.hide();
+						frappe.new_doc(route.doctype, route.defaults || {});
+					},
+				});
+				dialog.show();
+			} catch (error) { frappe.msgprint({ title: __("Could not load project cost options"), message: errorMessage(error, "Project cost routes could not be loaded."), indicator: "red" }); }
+		},
 		openProject() { if (this.project) frappe.set_route("Form", "Project", this.project); },
 		openPayment(name) { frappe.set_route("Form", "Payment Entry", name); },
 		openTimelineDoc(row) { if (row?.doctype && row?.name) frappe.set_route("Form", row.doctype, row.name); },
