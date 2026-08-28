@@ -29,6 +29,8 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("retailedge.project_receipts.create_project_receipt_draft", component)
 		self.assertIn("Open ERPNext Project", component)
 		self.assertIn("Payment Entry", component)
+		self.assertIn("Project Transaction Timeline", component)
+		self.assertIn("openTimelineDoc", component)
 		self.assertIn("does not maintain a project wallet", component)
 		self.assertNotIn("GL Entry", component)
 
@@ -41,6 +43,29 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("doc.insert()", source)
 		self.assertNotIn("doc.submit()", source)
 		self.assertNotIn("ignore_permissions=True", source)
+
+	def test_project_timeline_is_native_bounded_and_excludes_cancelled_documents(self):
+		source = (APP_ROOT / "project_operations.py").read_text()
+
+		self.assertIn("MAX_TIMELINE_ROWS = 200", source)
+		self.assertIn('"Sales Order"', source)
+		self.assertIn('"Sales Invoice"', source)
+		self.assertIn('"Purchase Invoice"', source)
+		self.assertIn('"Expense Claim"', source)
+		self.assertIn('"Stock Entry"', source)
+		self.assertIn('"docstatus": ["<", 2]', source)
+		self.assertIn("if branch and not branch_field", source)
+		self.assertIn("rows[:MAX_TIMELINE_ROWS]", source)
+
+	def test_project_operations_is_governed_navigation_with_native_fallback(self):
+		source = (APP_ROOT / "master_experience.py").read_text()
+
+		self.assertIn('"target": "project-operations"', source)
+		self.assertIn('"target": "Project"', source)
+		self.assertIn("def _promote_project_operations", source)
+		self.assertIn('"key": "projects"', source)
+		self.assertIn("_promote_project_operations(navigation_groups)", source)
+		self.assertIn('feature_flags["project_operations"] = "erpnext_native_project_funds"', source)
 
 
 if __name__ == "__main__":
