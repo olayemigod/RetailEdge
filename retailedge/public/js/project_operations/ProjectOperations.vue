@@ -52,6 +52,12 @@
 				</section>
 
 				<section class="project-panel">
+					<div class="panel-head"><div><h3>Project Transaction Timeline</h3><p>Read-only view of permitted ERPNext Sales Orders, Sales Invoices, Purchase Invoices, Expense Claims and Stock Entries linked to this Project. Cancelled documents are excluded.</p></div><span>{{ context.timeline_count || 0 }} records</span></div>
+					<div v-if="!context.timeline?.length" class="project-state">No project-linked operational documents found for the current scope.</div>
+					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Date</th><th>Type</th><th>Document</th><th>Status</th><th>Party</th><th class="num">Amount</th></tr></thead><tbody><tr v-for="row in context.timeline" :key="`${row.doctype}-${row.name}`"><td>{{ row.date || "—" }}</td><td>{{ row.label }}</td><td><button class="link-button" @click="openTimelineDoc(row)">{{ row.name }}</button></td><td>{{ row.status || "—" }}</td><td>{{ row.party || "—" }}</td><td class="num">{{ row.amount ? money(row.amount) : "—" }}</td></tr></tbody></table></div>
+				</section>
+
+				<section class="project-panel">
 					<div class="panel-head"><div><h3>Project Receipts</h3><p>Submitted ERPNext Payment Entries explicitly linked to this Project.</p></div></div>
 					<div v-if="!context.customer_receipts?.length" class="project-state">No submitted project receipts found.</div>
 					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party</th><th>Mode</th><th class="num">Received</th><th class="num">Unapplied</th></tr></thead><tbody><tr v-for="row in context.customer_receipts" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.received_amount) }}</td><td class="num">{{ money(row.unallocated_amount) }}</td></tr></tbody></table></div>
@@ -63,7 +69,7 @@
 					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party</th><th>Mode</th><th class="num">Paid</th></tr></thead><tbody><tr v-for="row in context.project_payments" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.paid_amount) }}</td></tr></tbody></table></div>
 				</section>
 
-				<div class="accounting-note"><strong>Accounting safety:</strong> Project Funds is a derived management view. ERPNext Project and project-linked Payment Entries remain the source of truth; RetailEdge does not maintain a project wallet or separate ledger.</div>
+				<div class="accounting-note"><strong>Accounting safety:</strong> Project Funds is a derived management view. ERPNext Project and project-linked native documents remain the source of truth; RetailEdge does not maintain a project wallet or separate ledger.</div>
 			</template>
 		</section>
 	</EdgeAppShell>
@@ -90,6 +96,7 @@ export default {
 		openReceiptDialog() { const dialog = new frappe.ui.Dialog({ title: __("Record Project Receipt"), fields: [ { fieldname: "project", fieldtype: "Data", label: __("Project"), default: this.project, read_only: 1 }, { fieldname: "customer", fieldtype: "Data", label: __("Customer"), default: this.context.customer, read_only: 1 }, { fieldname: "company", fieldtype: "Data", label: __("Company"), default: this.context.company, read_only: 1 }, { fieldname: "branch", fieldtype: "Data", label: __("Branch"), default: this.branch || "" }, { fieldname: "posting_date", fieldtype: "Date", label: __("Posting Date"), default: frappe.datetime.get_today(), reqd: 1 }, { fieldname: "mode_of_payment", fieldtype: "Link", options: "Mode of Payment", label: __("Mode of Payment"), reqd: 1 }, { fieldname: "amount", fieldtype: "Currency", label: __("Amount"), reqd: 1 }, { fieldname: "reference_no", fieldtype: "Data", label: __("Reference No") }, { fieldname: "reference_date", fieldtype: "Date", label: __("Reference Date") }, { fieldname: "remarks", fieldtype: "Small Text", label: __("Remarks") } ], primary_action_label: __("Create Draft Payment"), primary_action: async (values) => { try { const result = await callMethod("retailedge.project_receipts.create_project_receipt_draft", { values }); dialog.hide(); frappe.show_alert({ message: __("Project receipt draft created."), indicator: "green" }); if (result.name) frappe.set_route("Form", "Payment Entry", result.name); } catch (error) { frappe.msgprint({ title: __("Could not create project receipt"), message: errorMessage(error, "Project receipt draft could not be created."), indicator: "red" }); } } }); dialog.show(); },
 		openProject() { if (this.project) frappe.set_route("Form", "Project", this.project); },
 		openPayment(name) { frappe.set_route("Form", "Payment Entry", name); },
+		openTimelineDoc(row) { if (row?.doctype && row?.name) frappe.set_route("Form", row.doctype, row.name); },
 		money(value) { return format_currency(Number(value || 0), this.context.currency || undefined); },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
