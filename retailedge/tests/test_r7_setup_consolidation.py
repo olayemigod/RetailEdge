@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+from retailedge.master_experience import SETUP_MANAGED_DOCTYPES
+
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -87,7 +89,8 @@ class TestR7SetupConsolidation(unittest.TestCase):
 			"RetailEdge Statement Mapping Template",
 		):
 			self.assertIn(managed_doctype, source)
-		self.assertIn("Bank Account and Mode of Payment remain visible", source)
+		self.assertNotIn("Bank Account", SETUP_MANAGED_DOCTYPES)
+		self.assertNotIn("Mode of Payment", SETUP_MANAGED_DOCTYPES)
 		self.assertNotIn("frappe.set_route =", source)
 		self.assertNotIn("window.history", source)
 
