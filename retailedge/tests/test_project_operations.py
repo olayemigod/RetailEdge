@@ -11,6 +11,7 @@ from retailedge.project_operations import get_project_funds_context
 
 class TestProjectOperations(unittest.TestCase):
 	@patch("retailedge.project_operations._project_company_currency", return_value="NGN")
+	@patch("retailedge.project_operations._project_timeline_rows", return_value=[])
 	@patch("retailedge.project_operations._project_payment_rows")
 	@patch("retailedge.project_operations._assert_read")
 	@patch("retailedge.project_operations.frappe.get_doc")
@@ -19,6 +20,7 @@ class TestProjectOperations(unittest.TestCase):
 		mock_get_doc,
 		_mock_read,
 		mock_payment_rows,
+		_mock_timeline_rows,
 		_mock_currency,
 	):
 		mock_get_doc.return_value = SimpleNamespace(
@@ -86,6 +88,50 @@ class TestProjectOperations(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			_project_payment_rows("PROJ-0001", branch="Lagos")
 		mock_branch_access.assert_not_called()
+
+	@patch("retailedge.project_operations._branch_field_for", return_value=None)
+	@patch("retailedge.project_operations._date_field_for", return_value="posting_date")
+	@patch("retailedge.project_operations._has_field")
+	@patch("retailedge.project_operations.frappe.has_permission", return_value=True)
+	@patch("retailedge.project_operations.frappe.get_list")
+	@patch("retailedge.project_operations.frappe.db.exists")
+	def test_project_timeline_uses_native_document_filters(
+		self,
+		mock_exists,
+		mock_get_list,
+		_mock_permission,
+		mock_has_field,
+		_mock_date_field,
+		_mock_branch_field,
+	):
+		from retailedge.project_operations import _project_timeline_rows
+
+		mock_exists.side_effect = lambda doctype, name: doctype == "DocType" and name == "Sales Invoice"
+		mock_has_field.side_effect = lambda doctype, fieldname: doctype == "Sales Invoice" and fieldname in {
+			"project", "posting_date", "status", "company", "customer", "grand_total", "base_grand_total"
+		}
+		mock_get_list.return_value = [
+			frappe._dict(
+				name="SINV-0001",
+				docstatus=1,
+				posting_date="2026-08-20",
+				status="Paid",
+				company="Demo Company",
+				customer="CUST-001",
+				grand_total=120000,
+				base_grand_total=120000,
+			)
+		]
+
+		rows = _project_timeline_rows("PROJ-0001")
+
+		self.assertEqual(len(rows), 1)
+		self.assertEqual(rows[0]["doctype"], "Sales Invoice")
+		self.assertEqual(rows[0]["name"], "SINV-0001")
+		self.assertEqual(rows[0]["amount"], 120000)
+		filters = mock_get_list.call_args.kwargs["filters"]
+		self.assertEqual(filters["project"], "PROJ-0001")
+		self.assertEqual(filters["docstatus"], ["<", 2])
 
 
 if __name__ == "__main__":
