@@ -41,10 +41,7 @@ def _has_field(doctype: str, fieldname: str) -> bool:
 
 def _project_payment_rows(project: str, *, payment_type: str | None = None, branch: str | None = None) -> list[Any]:
 	_assert_read(PAYMENT_ENTRY_DOCTYPE)
-	filters: dict[str, Any] = {
-		"docstatus": 1,
-		"project": project,
-	}
+	filters: dict[str, Any] = {"docstatus": 1, "project": project}
 	if payment_type:
 		filters["payment_type"] = payment_type
 
@@ -103,6 +100,7 @@ def _project_timeline_rows(project: str, *, branch: str | None = None) -> list[d
 
 	When Branch scope is requested, document types without a branch attribution
 	field are omitted rather than widened to company/project-wide results.
+	Cancelled documents are always excluded.
 	"""
 	rows: list[dict[str, Any]] = []
 	for spec in TIMELINE_DOCTYPES:
@@ -117,14 +115,12 @@ def _project_timeline_rows(project: str, *, branch: str | None = None) -> list[d
 			continue
 
 		date_field = _date_field_for(doctype)
-		filters: dict[str, Any] = {"project": project}
-		if _has_field(doctype, "docstatus"):
-			filters["docstatus"] = ["<", 2]
+		filters: dict[str, Any] = {"project": project, "docstatus": ["<", 2]}
 		if branch and branch_field:
 			filters[branch_field] = branch
 
-		fields = ["name", date_field]
-		for candidate in ("docstatus", "status", "company", "customer", "supplier", "grand_total", "base_grand_total"):
+		fields = ["name", "docstatus", date_field]
+		for candidate in ("status", "company", "customer", "supplier", "grand_total", "base_grand_total"):
 			if _has_field(doctype, candidate):
 				fields.append(candidate)
 		if branch_field:
