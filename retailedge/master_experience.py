@@ -89,6 +89,14 @@ PAYMENT_MANAGEMENT_ITEM: dict[str, Any] = {
 	"icon": "wallet",
 }
 
+CUSTOMER_ADVANCE_REPORT_ITEM: dict[str, Any] = {
+	"label": "Customer Advance Register",
+	"description": "Review current unapplied customer receipts, allocated portions and available advance balances.",
+	"target_type": "Report",
+	"target": "RetailEdge Customer Advance Register",
+	"icon": "report",
+}
+
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
 	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
@@ -123,6 +131,13 @@ def _promote_browser_approved_r4_pages(navigation_groups: list[dict[str, Any]]) 
 def _can_open_page(target: str) -> bool:
 	try:
 		return bool(frappe.db.exists("Page", target) and frappe.has_permission("Page", "read", doc=target))
+	except Exception:
+		return False
+
+
+def _can_open_report(target: str) -> bool:
+	try:
+		return bool(frappe.db.exists("Report", target) and frappe.has_permission("Report", "read", doc=target))
 	except Exception:
 		return False
 
@@ -207,20 +222,28 @@ def _promote_document_output(navigation_groups: list[dict[str, Any]]) -> None:
 
 
 def _promote_payment_management(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Expose the permission-aware payment workspace while retaining Payment Entry fallback."""
-	if not _can_open_page(PAYMENT_MANAGEMENT_ITEM["target"]):
+	"""Expose payment operations and reporting while retaining native Payment Entry."""
+	page_available = _can_open_page(PAYMENT_MANAGEMENT_ITEM["target"])
+	report_available = _can_open_report(CUSTOMER_ADVANCE_REPORT_ITEM["target"])
+	if not page_available and not report_available:
 		return
 	for group in navigation_groups:
 		if group.get("key") != "money":
 			continue
 		items = list(group.get("items") or [])
-		if any(item.get("target_type") == "Page" and item.get("target") == PAYMENT_MANAGEMENT_ITEM["target"] for item in items):
-			return
 		payment_index = next(
 			(index for index, item in enumerate(items) if item.get("target_type") == "DocType" and item.get("target") == "Payment Entry"),
-			-1,
+			len(items),
 		)
-		items.insert(payment_index if payment_index >= 0 else 0, deepcopy(PAYMENT_MANAGEMENT_ITEM))
+		if page_available and not any(
+			item.get("target_type") == "Page" and item.get("target") == PAYMENT_MANAGEMENT_ITEM["target"] for item in items
+		):
+			items.insert(payment_index, deepcopy(PAYMENT_MANAGEMENT_ITEM))
+			payment_index += 1
+		if report_available and not any(
+			item.get("target_type") == "Report" and item.get("target") == CUSTOMER_ADVANCE_REPORT_ITEM["target"] for item in items
+		):
+			items.insert(payment_index, deepcopy(CUSTOMER_ADVANCE_REPORT_ITEM))
 		group["items"] = items
 		return
 
@@ -298,6 +321,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["professional_selling"] = "edgesuite_guided"
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
+	feature_flags["customer_advance_reporting"] = "current_open_receipts"
 	context["feature_flags"] = feature_flags
 	return context
 
