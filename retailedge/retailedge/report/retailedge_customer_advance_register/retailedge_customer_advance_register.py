@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, getdate
 
-from retailedge.advanced_payments import _payment_branch_field
+from retailedge.advanced_payments import _require_payment_branch_field
 from retailedge.branch_context import validate_user_branch_access
 
 MAX_ROWS = 2000
@@ -44,7 +44,7 @@ def execute(filters: dict[str, Any] | None = None):
 	elif filters.get("to_date"):
 		query_filters["posting_date"] = ["<=", filters.to_date]
 
-	branch_field = _payment_branch_field()
+	branch_field = _require_payment_branch_field(branch)
 	if branch and branch_field:
 		query_filters[branch_field] = branch
 
