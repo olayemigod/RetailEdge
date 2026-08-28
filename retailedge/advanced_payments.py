@@ -4,10 +4,12 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate, nowdate
+
+from erpnext.accounts.doctype.payment_entry.payment_entry import get_party_details
 
 from retailedge.branch_context import has_field, validate_user_branch_access
-from retailedge.guided_payment import create_simple_payment_draft
+from retailedge.guided_payment import get_simple_payment_mode_details
 
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
@@ -152,27 +154,111 @@ def list_customer_advances(
 
 @frappe.whitelist(methods=["POST"])
 def create_customer_advance_draft(values: dict | str | None = None) -> dict[str, Any]:
-	"""Create a draft ERPNext customer Receipt with no invoice allocation.
+	"""Create an unallocated draft ERPNext customer receipt.
 
-	This deliberately delegates account resolution, currency checks and document
-	validation to the existing guided Payment Entry engine. It never submits a
+	The draft intentionally has no invoice references. ERPNext Payment Entry
+	validation remains responsible for account completion, exchange rates, totals
+	and the authoritative unallocated amount. This method never submits the
 	Payment Entry and never changes a Sales Invoice.
 	"""
 	_assert_create_payment_entry()
 	values = frappe.parse_json(values) if isinstance(values, str) else dict(values or {})
-	values.pop("references", None)
-	result = create_simple_payment_draft(
-		"receive-customer-payment",
-		{**values, "references": []},
-	)
-	result.update(
-		{
-			"advance_payment": True,
-			"allocation_status": "Unallocated",
-			"source_of_truth": PAYMENT_ENTRY_DOCTYPE,
-		}
-	)
-	return result
+	if values.get("references"):
+		frappe.throw(
+			_(
+				"Customer Advance must not include invoice allocations. Use Receive Customer Payment for an allocated receipt."
+			)
+		)
+
+	company = str(values.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	if not company:
+		frappe.throw(_("Company is required."))
+	_assert_read("Company", company)
+	company_currency = _company_currency(company)
+	if not company_currency:
+		frappe.throw(_("Company {0} has no default currency configured.").format(company))
+
+	branch = str(values.get("branch") or "").strip()
+	if branch:
+		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+
+	customer = str(values.get("customer") or values.get("party") or "").strip()
+	if not customer:
+		frappe.throw(_("Customer is required."))
+	_assert_read(CUSTOMER_DOCTYPE, customer)
+
+	posting_date = getdate(values.get("posting_date") or nowdate())
+	party_details = get_party_details(company, CUSTOMER_DOCTYPE, customer, posting_date)
+	party_account = party_details.get("party_account")
+	party_currency = party_details.get("party_account_currency")
+	if not party_account:
+		frappe.throw(_("No receivable account could be resolved for {0}.").format(customer))
+	_assert_read("Account", party_account)
+
+	mode_of_payment = str(values.get("mode_of_payment") or "").strip()
+	if not mode_of_payment:
+		frappe.throw(_("Mode of Payment is required."))
+	mode_details = get_simple_payment_mode_details("receive-customer-payment", company, mode_of_payment)
+	bank_account = mode_details["account"]
+	bank_currency = mode_details["account_currency"]
+	if party_currency != company_currency or bank_currency != company_currency:
+		frappe.throw(
+			_(
+				"Customer Advance currently supports company-currency payments only. Use the full Payment Entry form for multi-currency payments."
+			)
+		)
+
+	amount = flt(values.get("amount"))
+	if amount <= 0:
+		frappe.throw(_("Amount must be greater than zero."))
+
+	doc = frappe.new_doc(PAYMENT_ENTRY_DOCTYPE)
+	doc.payment_type = "Receive"
+	doc.company = company
+	doc.posting_date = posting_date
+	doc.party_type = CUSTOMER_DOCTYPE
+	doc.party = customer
+	doc.mode_of_payment = mode_of_payment
+	doc.paid_amount = amount
+	doc.received_amount = amount
+	doc.paid_from = party_account
+	doc.paid_to = bank_account
+
+	branch_field = _payment_branch_field()
+	if branch and branch_field:
+		setattr(doc, branch_field, branch)
+
+	if mode_details["reference_required"]:
+		reference_no = str(values.get("reference_no") or "").strip()
+		if not reference_no:
+			frappe.throw(_("Reference No is required for Bank payments."))
+		doc.reference_no = reference_no
+		doc.reference_date = getdate(values.get("reference_date") or posting_date)
+
+	if values.get("remarks"):
+		doc.custom_remarks = 1
+		doc.remarks = str(values.get("remarks")).strip()
+
+	# Insert only. The user must review and submit the ERPNext Payment Entry.
+	# There are deliberately no reference rows, so a submitted receipt remains
+	# available as a standard ERPNext customer advance until reconciled.
+	doc.insert()
+	return {
+		"doctype": doc.doctype,
+		"name": doc.name,
+		"docstatus": doc.docstatus,
+		"payment_type": doc.payment_type,
+		"party_type": doc.party_type,
+		"customer": doc.party,
+		"company": doc.company,
+		"branch": getattr(doc, branch_field, "") if branch_field else "",
+		"paid_amount": flt(doc.paid_amount),
+		"unallocated_amount": getattr(doc, "unallocated_amount", None),
+		"advance_payment": True,
+		"allocation_status": "Unallocated",
+		"source_of_truth": PAYMENT_ENTRY_DOCTYPE,
+		"route": f"/app/payment-entry/{doc.name}",
+	}
 
 
 @frappe.whitelist()
