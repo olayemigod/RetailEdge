@@ -35,6 +35,17 @@ def _payment_branch_field() -> str | None:
 	return None
 
 
+def _require_payment_branch_field(branch: str | None) -> str | None:
+	field = _payment_branch_field()
+	if branch and not field:
+		frappe.throw(
+			_(
+				"Payment Entry branch attribution is unavailable. Run the RetailEdge migration before using a Branch-scoped advance workflow."
+			)
+		)
+	return field
+
+
 def _invoice_branch(invoice: Any) -> str:
 	return str(getattr(invoice, "retailedge_branch", None) or getattr(invoice, "branch", None) or "")
 
@@ -104,7 +115,7 @@ def list_customer_advances(
 	if company:
 		filters["company"] = company
 
-	branch_field = _payment_branch_field()
+	branch_field = _require_payment_branch_field(branch)
 	if branch and branch_field:
 		filters[branch_field] = branch
 
@@ -181,6 +192,7 @@ def create_customer_advance_draft(values: dict | str | None = None) -> dict[str,
 	branch = str(values.get("branch") or "").strip()
 	if branch:
 		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+	branch_field = _require_payment_branch_field(branch)
 
 	customer = str(values.get("customer") or values.get("party") or "").strip()
 	if not customer:
@@ -224,7 +236,6 @@ def create_customer_advance_draft(values: dict | str | None = None) -> dict[str,
 	doc.paid_from = party_account
 	doc.paid_to = bank_account
 
-	branch_field = _payment_branch_field()
 	if branch and branch_field:
 		setattr(doc, branch_field, branch)
 
