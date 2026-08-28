@@ -27,7 +27,10 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("retailedge.project_search.search_projects", component)
 		self.assertIn("retailedge.project_operations.get_project_funds_context", component)
 		self.assertIn("retailedge.project_receipts.create_project_receipt_draft", component)
+		self.assertIn("retailedge.project_expense_routing.get_project_expense_routes", component)
 		self.assertIn("Open ERPNext Project", component)
+		self.assertIn("Record Project Cost", component)
+		self.assertIn("frappe.new_doc(route.doctype, route.defaults || {})", component)
 		self.assertIn("Payment Entry", component)
 		self.assertIn("Project Transaction Timeline", component)
 		self.assertIn("openTimelineDoc", component)
@@ -66,6 +69,18 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn('"key": "projects"', source)
 		self.assertIn("_promote_project_operations(navigation_groups)", source)
 		self.assertIn('feature_flags["project_operations"] = "erpnext_native_project_funds"', source)
+
+	def test_project_cost_router_does_not_create_generic_expense_entries(self):
+		source = (APP_ROOT / "project_expense_routing.py").read_text()
+
+		self.assertIn('doctype="Purchase Invoice"', source)
+		self.assertIn('doctype="Stock Entry"', source)
+		self.assertIn('doctype="Expense Claim"', source)
+		self.assertIn('doctype="Journal Entry"', source)
+		self.assertIn("which standard documents the current user can create", source)
+		self.assertNotIn("frappe.new_doc(", source)
+		self.assertNotIn("insert()", source)
+		self.assertNotIn("submit()", source)
 
 
 if __name__ == "__main__":
