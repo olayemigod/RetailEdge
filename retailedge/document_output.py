@@ -10,6 +10,7 @@ from frappe.utils import cint, flt, validate_email_address
 
 from retailedge.branch_context import BRANCH_FIELD_CANDIDATES, get_first_existing_field
 from retailedge.operating_context import get_operating_context
+from retailedge.professional_print_formats import get_preferred_print_format
 
 
 MAX_LINK_RESULTS = 20
@@ -89,6 +90,7 @@ def _document_capability(definition: dict[str, Any]) -> dict[str, Any]:
 		"can_read": _permission(doctype, "read"),
 		"can_print": _permission(doctype, "print"),
 		"can_email": _permission(doctype, "email"),
+		"recommended_print_format": get_preferred_print_format(doctype),
 	}
 
 
@@ -138,6 +140,11 @@ def _available_print_formats(doctype: str) -> list[str]:
 		name = str(row.get("name") or "").strip()
 		if name and name not in formats:
 			formats.append(name)
+
+	preferred = get_preferred_print_format(doctype)
+	if preferred and preferred in formats:
+		formats.remove(preferred)
+		formats.insert(0, preferred)
 	return formats
 
 
@@ -179,6 +186,7 @@ def get_document_output_context() -> dict[str, Any]:
 		"policy": {
 			"print_engine": "erpnext_native",
 			"print_formats": "erpnext_native",
+			"professional_formats": "retailedge_managed_optional",
 			"letterhead": "erpnext_native",
 			"email_transport": "frappe_native",
 			"whatsapp": "user_initiated_handoff",
@@ -212,12 +220,15 @@ def get_output_document_details(document: str, name: str) -> dict[str, Any]:
 	doctype = definition["doctype"]
 	_assert_document_permission(doctype, name, "read")
 	doc = frappe.get_doc(doctype, name)
+	formats = _available_print_formats(doctype)
+	preferred = get_preferred_print_format(doctype)
 	summary = _document_summary(definition, doc)
 	summary.update(
 		{
 			"can_print": _permission(doctype, "print", name=name),
 			"can_email": _permission(doctype, "email", name=name),
-			"print_formats": _available_print_formats(doctype),
+			"print_formats": formats,
+			"recommended_print_format": preferred if preferred in formats else "Standard",
 			"native_route": f"{definition['native_route']}/{quote(str(name), safe='')}",
 		}
 	)
