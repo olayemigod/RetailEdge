@@ -191,6 +191,17 @@ def _document_summary(definition: dict[str, Any], doc) -> dict[str, Any]:
 	}
 
 
+def _default_share_copy(definition: dict[str, Any], summary: dict[str, Any]) -> dict[str, str]:
+	"""Create neutral customer-facing defaults from the client Company identity."""
+	company = str(summary.get("company") or "").strip()
+	label = str(definition.get("label") or definition.get("doctype") or "Document").strip()
+	name = str(summary.get("name") or "").strip()
+	identity = company or _("Your supplier")
+	subject = _("{0} {1} from {2}").format(label, name, identity)
+	message = _("Please find attached {0} {1} from {2}.").format(label, name, identity)
+	return {"subject": subject, "message": message, "company": company}
+
+
 @frappe.whitelist()
 def get_document_output_context() -> dict[str, Any]:
 	operating = get_operating_context() or {}
@@ -207,6 +218,7 @@ def get_document_output_context() -> dict[str, Any]:
 			"letterhead": "erpnext_native",
 			"email_transport": "frappe_native",
 			"whatsapp": "user_initiated_handoff",
+			"visible_identity": "document_company_and_letterhead",
 			"public_pdf_links": False,
 			"business_documents_immutable": True,
 		},
@@ -239,12 +251,15 @@ def get_output_document_details(document: str, name: str) -> dict[str, Any]:
 	formats = _available_print_formats(doctype)
 	preferred = _preferred_print_format(doctype)
 	summary = _document_summary(definition, doc)
+	share_copy = _default_share_copy(definition, summary)
 	summary.update(
 		{
 			"can_print": _permission(doctype, "print", name=name),
 			"can_email": _permission(doctype, "email", name=name),
 			"print_formats": formats,
 			"recommended_print_format": preferred if preferred in formats else "Standard",
+			"default_email_subject": share_copy["subject"],
+			"default_email_message": share_copy["message"],
 			"native_route": f"{definition['native_route']}/{quote(str(name), safe='')}",
 		}
 	)
@@ -290,8 +305,9 @@ def send_document_email(
 	validate_email_address(recipient, throw=True)
 	doc = frappe.get_doc(doctype, name)
 	summary = _document_summary(definition, doc)
-	subject = str(subject or _("{0} {1}").format(definition["label"], name)).strip()
-	message = str(message or _("Please find attached {0} {1}.").format(definition["label"], name)).strip()
+	share_copy = _default_share_copy(definition, summary)
+	subject = str(subject or share_copy["subject"]).strip()
+	message = str(message or share_copy["message"]).strip()
 	pdf = frappe.get_print(
 		doctype,
 		name,
@@ -312,6 +328,7 @@ def send_document_email(
 		"recipient": recipient,
 		"doctype": doctype,
 		"name": name,
+		"company": summary.get("company") or "",
 		"party": summary.get("party") or "",
 	}
 
@@ -323,16 +340,20 @@ def get_whatsapp_handoff(document: str, name: str) -> dict[str, Any]:
 	_assert_document_permission(doctype, name, "read")
 	doc = frappe.get_doc(doctype, name)
 	summary = _document_summary(definition, doc)
+	company = str(summary.get("company") or "").strip()
 	amount = ""
 	if summary.get("grand_total"):
 		amount = f" — {summary.get('currency') or ''} {summary['grand_total']:,.2f}".strip()
-	text = _("{0} {1}{2}. The PDF can be attached from the secure document download.").format(
+	identity = company or _("Your supplier")
+	text = _("{0} {1}{2} from {3}. The PDF can be attached from the secure document download.").format(
 		definition["label"],
 		name,
 		amount,
+		identity,
 	)
 	return {
 		"text": text,
+		"company": company,
 		"phone": summary.get("contact_mobile") or "",
 		"requires_manual_attachment": True,
 		"public_pdf_link": False,
