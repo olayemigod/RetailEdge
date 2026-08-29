@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, getdate, today
 from frappe.utils.user import is_website_user
 
 from erpnext.controllers.website_list_for_contact import get_parents_for_user
@@ -73,6 +73,7 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 		"status",
 		"transaction_date",
 		"posting_date",
+		"due_date",
 		"grand_total",
 		"currency",
 		"outstanding_amount",
@@ -87,13 +88,18 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 	rows = _safe_list(doctype, customers, fields=fields, filters=filters, limit=limit)
 	result = []
 	for row in rows:
+		outstanding = flt(getattr(row, "outstanding_amount", 0))
+		due_date = getattr(row, "due_date", None)
+		is_overdue = bool(doctype == "Sales Invoice" and outstanding > 0 and due_date and getdate(due_date) < getdate(today()))
 		result.append(
 			{
 				"name": row.name,
 				"status": getattr(row, "status", "") or "",
 				"date": getattr(row, "transaction_date", None) or getattr(row, "posting_date", None),
+				"due_date": due_date,
+				"is_overdue": is_overdue,
 				"grand_total": flt(getattr(row, "grand_total", 0)),
-				"outstanding_amount": flt(getattr(row, "outstanding_amount", 0)),
+				"outstanding_amount": outstanding,
 				"currency": getattr(row, "currency", "") or "",
 				"project_name": getattr(row, "project_name", "") or "",
 				"percent_complete": flt(getattr(row, "percent_complete", 0)),
@@ -106,14 +112,19 @@ def _invoice_summary(customers: list[str]) -> dict[str, Any]:
 	rows = _safe_list(
 		"Sales Invoice",
 		customers,
-		fields=["name", "grand_total", "outstanding_amount", "currency", "status"],
+		fields=["name", "grand_total", "outstanding_amount", "currency", "status", "due_date"],
 		filters={"docstatus": 1, "is_return": 0},
 	)
+	today_date = getdate(today())
+	overdue_rows = [row for row in rows if flt(row.outstanding_amount) > 0 and row.due_date and getdate(row.due_date) < today_date]
 	return {
 		"count": len(rows),
 		"outstanding": sum(flt(row.outstanding_amount) for row in rows),
+		"overdue_count": len(overdue_rows),
+		"overdue_amount": sum(flt(row.outstanding_amount) for row in overdue_rows),
 		"billed": sum(flt(row.grand_total) for row in rows),
 		"currency": next((str(row.currency or "") for row in rows if row.currency), ""),
+		"overdue_basis": "Submitted Sales Invoice due date plus positive outstanding amount.",
 	}
 
 
