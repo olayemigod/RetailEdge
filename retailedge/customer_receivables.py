@@ -15,6 +15,7 @@ from retailedge.branch_context import (
 	user_has_global_branch_access,
 	validate_user_branch_access,
 )
+from retailedge.receivables_collections import enrich_receivable_rows
 from retailedge.stock_movement_filters import branch_query
 
 DEFAULT_PAGE_SIZE = 50
@@ -158,7 +159,13 @@ def _build_customer_receivables_dataset(filters: frappe._dict) -> dict[str, Any]
 			}
 		)
 
-	rows.sort(key=lambda row: (row["overdue_days"], str(row["due_date"] or ""), row["invoice"]), reverse=True)
+	collections = enrich_receivable_rows(rows, company=filters.company)
+	rows = collections["rows"]
+	collection_meta = collections["metadata"]
+	rows.sort(
+		key=lambda row: (row["overdue_days"], str(row["due_date"] or ""), row["invoice"]),
+		reverse=True,
+	)
 	bucket_totals = defaultdict(float)
 	customer_totals = defaultdict(float)
 	for row in rows:
@@ -166,11 +173,29 @@ def _build_customer_receivables_dataset(filters: frappe._dict) -> dict[str, Any]
 		customer_totals[row["customer"]] += flt(row["outstanding"])
 
 	summary = [
-		{"label": _("Total Receivables"), "value": sum(flt(row["outstanding"]) for row in rows), "datatype": "Currency"},
+		{
+			"label": _("Total Receivables"),
+			"value": sum(flt(row["outstanding"]) for row in rows),
+			"datatype": "Currency",
+		},
 		{"label": _("Open Invoices"), "value": len(rows), "datatype": "Int"},
 		{"label": _("Customers Owing"), "value": len(customer_totals), "datatype": "Int"},
-		{"label": _("Overdue"), "value": sum(flt(row["outstanding"]) for row in rows if row["overdue_days"] > 0), "datatype": "Currency"},
+		{
+			"label": _("Overdue"),
+			"value": sum(flt(row["outstanding"]) for row in rows if row["overdue_days"] > 0),
+			"datatype": "Currency",
+		},
 		{"label": _("Over 90 Days"), "value": bucket_totals["91+ Days"], "datatype": "Currency"},
+		{
+			"label": _("Payment Requests"),
+			"value": collection_meta["payment_request_count"],
+			"datatype": "Int",
+		},
+		{
+			"label": _("Dunning Ready"),
+			"value": collection_meta["dunning_ready_count"],
+			"datatype": "Int",
+		},
 	]
 	return {
 		"title": _("Customer Receivables"),
@@ -180,6 +205,7 @@ def _build_customer_receivables_dataset(filters: frappe._dict) -> dict[str, Any]
 		"company_currency": currency,
 		"current_balance_date": str(balance_date),
 		"balance_basis": "current_outstanding",
+		"collections": collection_meta,
 		"scan": {"invoices": len(headers), "invoice_limit": MAX_INVOICE_SCAN_ROWS},
 	}
 
@@ -222,7 +248,10 @@ def _get_permitted_invoice_headers(filters: frappe._dict) -> list[frappe._dict]:
 	)
 	if len(rows) > MAX_INVOICE_SCAN_ROWS:
 		frappe.throw(
-			_("More than {0} submitted Sales Invoices match these filters. Narrow the scope before loading Customer Receivables.").format(MAX_INVOICE_SCAN_ROWS)
+			_(
+				"More than {0} submitted Sales Invoices match these filters. "
+				"Narrow the scope before loading Customer Receivables."
+			).format(MAX_INVOICE_SCAN_ROWS)
 		)
 	for row in rows:
 		row["branch"] = row.get(branch_field) if branch_field else ""
@@ -236,14 +265,25 @@ def _invoice_branch_scope(filters: frappe._dict) -> tuple[str | None, Any]:
 	if branch:
 		validate_user_branch_access(branch, user=user, company=filters.company, throw=True)
 		if not fieldname:
-			frappe.throw(_("Sales Invoice branch attribution is unavailable; this Branch filter cannot be applied safely."))
+			frappe.throw(
+				_(
+					"Sales Invoice branch attribution is unavailable; "
+					"this Branch filter cannot be applied safely."
+				)
+			)
 		return fieldname, branch
 	if user_has_global_branch_access(user=user):
 		return fieldname, None
 	allowed = list(get_user_allowed_branches(user=user, company=filters.company).get("branches") or [])
 	if allowed:
 		if not fieldname:
-			frappe.throw(_("Sales Invoice branch attribution is unavailable; branch-restricted receivables cannot be applied safely."), frappe.PermissionError)
+			frappe.throw(
+				_(
+					"Sales Invoice branch attribution is unavailable; "
+					"branch-restricted receivables cannot be applied safely."
+				),
+				frappe.PermissionError,
+			)
 		return fieldname, ["in", allowed]
 	return fieldname, None
 
@@ -268,7 +308,12 @@ def _assert_report_access(filters: frappe._dict) -> None:
 			_assert_named_read(doctype, filters.get(fieldname))
 	branch = str(filters.get("branch") or "").strip()
 	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=filters.company, throw=True)
+		validate_user_branch_access(
+			branch,
+			user=frappe.session.user,
+			company=filters.company,
+			throw=True,
+		)
 
 
 def _validate_filters(filters: frappe._dict) -> None:
@@ -276,7 +321,10 @@ def _validate_filters(filters: frappe._dict) -> None:
 		frappe.throw(_("Company is required."))
 	if filters.get("as_of_date") and str(filters.get("as_of_date")) != nowdate():
 		frappe.throw(
-			_("Customer Receivables shows current ERPNext outstanding balances only. Historical balances require ledger reconstruction and cannot use a past As of Date."),
+			_(
+				"Customer Receivables shows current ERPNext outstanding balances only. "
+				"Historical balances require ledger reconstruction and cannot use a past As of Date."
+			),
 		)
 	if str(filters.get("ageing_bucket") or "All") not in {
 		"All",
@@ -289,7 +337,12 @@ def _validate_filters(filters: frappe._dict) -> None:
 		frappe.throw(_("Unsupported ageing bucket."))
 
 
-def _page_response(dataset: dict[str, Any], *, page: int | str, page_size: int | str) -> dict[str, Any]:
+def _page_response(
+	dataset: dict[str, Any],
+	*,
+	page: int | str,
+	page_size: int | str,
+) -> dict[str, Any]:
 	rows = list(dataset.get("rows") or [])
 	resolved_page_size = max(25, min(cint(page_size) or DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
 	resolved_page = max(cint(page), 1)
@@ -320,6 +373,7 @@ def _export_response(dataset: dict[str, Any]) -> dict[str, Any]:
 		"company_currency": dataset.get("company_currency") or "",
 		"current_balance_date": dataset.get("current_balance_date") or "",
 		"balance_basis": dataset.get("balance_basis") or "",
+		"collections": dataset.get("collections") or {},
 		"scan": dataset.get("scan") or {},
 	}
 
@@ -328,14 +382,41 @@ def _columns(currency: str) -> list[dict[str, Any]]:
 	return [
 		{"fieldname": "customer", "label": _("Customer"), "fieldtype": "Link", "options": "Customer"},
 		{"fieldname": "customer_name", "label": _("Customer Name"), "fieldtype": "Data"},
-		{"fieldname": "invoice", "label": _("Sales Invoice"), "fieldtype": "Link", "options": "Sales Invoice"},
+		{
+			"fieldname": "invoice",
+			"label": _("Sales Invoice"),
+			"fieldtype": "Link",
+			"options": "Sales Invoice",
+		},
 		{"fieldname": "branch", "label": _("Branch"), "fieldtype": "Data"},
 		{"fieldname": "posting_date", "label": _("Posting Date"), "fieldtype": "Date"},
 		{"fieldname": "due_date", "label": _("Due Date"), "fieldtype": "Date"},
-		{"fieldname": "outstanding", "label": _("Outstanding"), "fieldtype": "Currency", "options": currency},
+		{
+			"fieldname": "outstanding",
+			"label": _("Outstanding"),
+			"fieldtype": "Currency",
+			"options": currency,
+		},
 		{"fieldname": "overdue_days", "label": _("Days Overdue"), "fieldtype": "Int"},
 		{"fieldname": "ageing_bucket", "label": _("Age"), "fieldtype": "Data"},
 		{"fieldname": "status", "label": _("Status"), "fieldtype": "Data"},
+		{
+			"fieldname": "payment_request",
+			"label": _("Payment Request"),
+			"fieldtype": "Link",
+			"options": "Payment Request",
+		},
+		{
+			"fieldname": "payment_request_status",
+			"label": _("Payment Status"),
+			"fieldtype": "Data",
+		},
+		{"fieldname": "dunning", "label": _("Dunning"), "fieldtype": "Link", "options": "Dunning"},
+		{
+			"fieldname": "collection_status",
+			"label": _("Collection Status"),
+			"fieldtype": "Data",
+		},
 	]
 
 
@@ -376,7 +457,10 @@ def _assert_named_read(doctype: str, name: str) -> None:
 	if not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
 	if not frappe.has_permission(doctype, "read", doc=name):
-		frappe.throw(_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use {0} {1}.").format(doctype, name),
+			frappe.PermissionError,
+		)
 
 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
