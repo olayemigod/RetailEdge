@@ -29,7 +29,9 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("retailedge.project_receipts.create_project_receipt_draft", component)
 		self.assertIn("retailedge.project_expense_routing.get_project_expense_routes", component)
 		self.assertIn("Open ERPNext Project", component)
-		self.assertIn("Record Project Cost", component)
+		self.assertIn("Spend & Materials", component)
+		self.assertIn("Financial Control", component)
+		self.assertIn('"RetailEdge Project Financial Control"', component)
 		self.assertIn("frappe.new_doc(route.doctype, route.defaults || {})", component)
 		self.assertIn("Payment Entry", component)
 		self.assertIn("Project Transaction Timeline", component)
@@ -105,6 +107,25 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("Consumed Material Cost", component)
 		self.assertIn("Timesheet Cost", component)
 
+	def test_spend_materials_chooser_explains_and_opens_only_native_routes(self):
+		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
+		source = (APP_ROOT / "project_expense_routing.py").read_text()
+		self.assertIn('title: __("Project Spend & Materials")', component)
+		self.assertIn('label: __("Operation")', component)
+		self.assertIn("route.description", component)
+		self.assertIn("frappe.utils.escape_html", component)
+		for doctype in ("Material Request", "Purchase Order", "Purchase Receipt", "Purchase Invoice", "Stock Entry", "Expense Claim", "Journal Entry"):
+			self.assertIn(f'doctype="{doctype}"', source)
+		self.assertIn("current user can create", source)
+		self.assertNotIn("frappe.new_doc(", source)
+		self.assertNotIn("insert()", source)
+		self.assertNotIn("submit()", source)
+		self.assertNotIn("ignore_permissions=True", source)
+
+	def test_project_financial_control_action_preserves_current_context(self):
+		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
+		self.assertIn('frappe.set_route("query-report", "RetailEdge Project Financial Control", { company: this.context.company, project: this.project })', component)
+
 	def test_project_receipt_action_creates_draft_payment_entry(self):
 		source = (APP_ROOT / "project_receipts.py").read_text()
 		self.assertIn('doc = frappe.new_doc(PAYMENT_ENTRY_DOCTYPE)', source)
@@ -134,17 +155,6 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn('"key": "projects"', source)
 		self.assertIn("_promote_project_operations(navigation_groups)", source)
 		self.assertIn('feature_flags["project_operations"] = "erpnext_native_project_funds"', source)
-
-	def test_project_cost_router_does_not_create_generic_expense_entries(self):
-		source = (APP_ROOT / "project_expense_routing.py").read_text()
-		self.assertIn('doctype="Purchase Invoice"', source)
-		self.assertIn('doctype="Stock Entry"', source)
-		self.assertIn('doctype="Expense Claim"', source)
-		self.assertIn('doctype="Journal Entry"', source)
-		self.assertIn("which standard documents the current user can create", source)
-		self.assertNotIn("frappe.new_doc(", source)
-		self.assertNotIn("insert()", source)
-		self.assertNotIn("submit()", source)
 
 
 if __name__ == "__main__":
