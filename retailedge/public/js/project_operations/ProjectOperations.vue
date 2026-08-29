@@ -9,10 +9,12 @@
 				<div>
 					<div class="project-eyebrow">Projects & Funds</div>
 					<h2>{{ context.project_name || "Project Operations" }}</h2>
-					<p>Operational and financial visibility over ERPNext Project, Payment Entry and native project accounting dimensions.</p>
+					<p>Operational and financial visibility over ERPNext Project, Task, Payment Entry and native project accounting dimensions.</p>
 				</div>
 				<div class="hero-actions">
 					<button class="edge-secondary-button" type="button" :disabled="!project" @click="openProject">Open ERPNext Project</button>
+					<button class="edge-secondary-button" type="button" :disabled="!project" @click="openProjectTasks">Open Tasks</button>
+					<button class="edge-secondary-button" type="button" :disabled="!project || !activity.can_create_task" @click="newTask">New Task</button>
 					<button class="edge-secondary-button" type="button" :disabled="!project" @click="openCostDialog">Record Project Cost</button>
 					<button class="edge-primary-button" type="button" :disabled="!project || !context.customer" @click="openReceiptDialog">Record Project Receipt</button>
 				</div>
@@ -27,7 +29,7 @@
 			</section>
 
 			<div v-if="error" class="project-error">{{ error }}</div>
-			<div v-else-if="loading" class="project-state">Loading project funds…</div>
+			<div v-else-if="loading" class="project-state">Loading project operations…</div>
 			<template v-else-if="project && context.project">
 				<div v-if="context.scope?.branch_scope_note" class="scope-note"><strong>Scope:</strong> {{ context.scope.branch_scope_note }}</div>
 				<div class="project-cards">
@@ -39,43 +41,31 @@
 					<article class="metric-card"><span>Tracked Cost</span><strong>{{ money(context.tracked_cost) }}</strong></article>
 					<article class="metric-card"><span>Gross Margin</span><strong>{{ money(context.gross_margin) }}</strong></article>
 					<article class="metric-card"><span>Progress</span><strong>{{ context.percent_complete || 0 }}%</strong></article>
+					<article class="metric-card"><span>Open Tasks</span><strong>{{ activity.open_count || 0 }}</strong></article>
+					<article class="metric-card"><span>Milestones</span><strong>{{ activity.milestone_count || 0 }}</strong></article>
 				</div>
 
 				<section class="project-panel">
 					<div class="panel-head"><div><h3>Project Summary</h3><p>ERPNext Project remains authoritative for project identity, costing, billing and margin.</p></div></div>
 					<div class="summary-grid">
-						<div><span>Project</span><strong>{{ context.project }}</strong></div>
-						<div><span>Status</span><strong>{{ context.status || "—" }}</strong></div>
-						<div><span>Customer</span><strong>{{ context.customer || "—" }}</strong></div>
-						<div><span>Company</span><strong>{{ context.company || "—" }}</strong></div>
-						<div><span>Cost Center</span><strong>{{ context.cost_center || "—" }}</strong></div>
-						<div><span>Unapplied Receipts</span><strong>{{ money(context.unallocated_receipts) }}</strong></div>
-						<div><span>Purchase Cost</span><strong>{{ money(context.purchase_cost) }}</strong></div>
-						<div><span>Consumed Material Cost</span><strong>{{ money(context.consumed_material_cost) }}</strong></div>
-						<div><span>Timesheet Cost</span><strong>{{ money(context.timesheet_cost) }}</strong></div>
+						<div><span>Project</span><strong>{{ context.project }}</strong></div><div><span>Status</span><strong>{{ context.status || "—" }}</strong></div><div><span>Customer</span><strong>{{ context.customer || "—" }}</strong></div><div><span>Company</span><strong>{{ context.company || "—" }}</strong></div><div><span>Cost Center</span><strong>{{ context.cost_center || "—" }}</strong></div><div><span>Unapplied Receipts</span><strong>{{ money(context.unallocated_receipts) }}</strong></div><div><span>Purchase Cost</span><strong>{{ money(context.purchase_cost) }}</strong></div><div><span>Consumed Material Cost</span><strong>{{ money(context.consumed_material_cost) }}</strong></div><div><span>Timesheet Cost</span><strong>{{ money(context.timesheet_cost) }}</strong></div>
 					</div>
 					<p class="panel-note">Tracked Cost is the transparent sum of these ERPNext Project cost components. It is not a separate RetailEdge accounting balance.</p>
 				</section>
 
 				<section class="project-panel">
-					<div class="panel-head"><div><h3>Project Transaction Timeline</h3><p>Read-only view of permitted ERPNext Sales Orders, Sales Invoices, Purchase Invoices, Expense Claims and Stock Entries linked to this Project. Cancelled documents are excluded.</p></div><span>{{ context.timeline_count || 0 }} records</span></div>
-					<div v-if="!context.timeline?.length" class="project-state">No project-linked operational documents found for the current scope.</div>
-					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Date</th><th>Type</th><th>Document</th><th>Status</th><th>Party</th><th class="num">Amount</th></tr></thead><tbody><tr v-for="row in context.timeline" :key="`${row.doctype}-${row.name}`"><td>{{ row.date || "—" }}</td><td>{{ row.label }}</td><td><button class="link-button" @click="openTimelineDoc(row)">{{ row.name }}</button></td><td>{{ row.status || "—" }}</td><td>{{ row.party || "—" }}</td><td class="num">{{ row.amount ? money(row.amount) : "—" }}</td></tr></tbody></table></div>
+					<div class="panel-head"><div><h3>Tasks & Milestones</h3><p>{{ activity.scope_note || "ERPNext Task remains the operational source of truth." }}</p></div><span>{{ activity.task_count || 0 }} tasks</span></div>
+					<div v-if="!activity.tasks?.length" class="project-state">No ERPNext Tasks are linked to this Project.</div>
+					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Task</th><th>Type</th><th>Status</th><th>Priority</th><th class="num">Progress</th><th>Expected End</th></tr></thead><tbody><tr v-for="row in activity.tasks" :key="row.name"><td><button class="link-button" @click="openTask(row.name)">{{ row.subject }}</button></td><td>{{ row.is_milestone ? "Milestone" : (row.is_group ? "Group" : "Task") }}</td><td>{{ row.status || "—" }}</td><td>{{ row.priority || "—" }}</td><td class="num">{{ row.progress || 0 }}%</td><td>{{ row.expected_end || "—" }}</td></tr></tbody></table></div>
 				</section>
 
-				<section class="project-panel">
-					<div class="panel-head"><div><h3>Project Cash In</h3><p>Submitted incoming ERPNext Payment Entries explicitly linked to this Project. This is cash movement, not revenue recognition.</p></div></div>
-					<div v-if="!context.project_cash_in_rows?.length" class="project-state">No submitted project-linked incoming payments found.</div>
-					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party Type</th><th>Party</th><th>Mode</th><th class="num">Received</th><th class="num">Unapplied</th></tr></thead><tbody><tr v-for="row in context.project_cash_in_rows" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party_type || "—" }}</td><td>{{ row.party || "—" }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.received_amount) }}</td><td class="num">{{ money(row.unallocated_amount) }}</td></tr></tbody></table></div>
-				</section>
+				<section class="project-panel"><div class="panel-head"><div><h3>Project Transaction Timeline</h3><p>Read-only view of permitted ERPNext Sales Orders, Sales Invoices, Purchase Invoices, Expense Claims and Stock Entries linked to this Project. Cancelled documents are excluded.</p></div><span>{{ context.timeline_count || 0 }} records</span></div><div v-if="!context.timeline?.length" class="project-state">No project-linked operational documents found for the current scope.</div><div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Date</th><th>Type</th><th>Document</th><th>Status</th><th>Party</th><th class="num">Amount</th></tr></thead><tbody><tr v-for="row in context.timeline" :key="`${row.doctype}-${row.name}`"><td>{{ row.date || "—" }}</td><td>{{ row.label }}</td><td><button class="link-button" @click="openTimelineDoc(row)">{{ row.name }}</button></td><td>{{ row.status || "—" }}</td><td>{{ row.party || "—" }}</td><td class="num">{{ row.amount ? money(row.amount) : "—" }}</td></tr></tbody></table></div></section>
 
-				<section class="project-panel">
-					<div class="panel-head"><div><h3>Project Cash Out</h3><p>Submitted outgoing ERPNext Payment Entries explicitly linked to this Project. This is cash movement, not an expense/P&amp;L measure.</p></div></div>
-					<div v-if="!context.project_cash_out_rows?.length" class="project-state">No submitted project-linked outgoing payments found.</div>
-					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party Type</th><th>Party</th><th>Mode</th><th class="num">Paid</th></tr></thead><tbody><tr v-for="row in context.project_cash_out_rows" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party_type || "—" }}</td><td>{{ row.party || "—" }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.paid_amount) }}</td></tr></tbody></table></div>
-				</section>
+				<section class="project-panel"><div class="panel-head"><div><h3>Project Cash In</h3><p>Submitted incoming ERPNext Payment Entries explicitly linked to this Project. This is cash movement, not revenue recognition.</p></div></div><div v-if="!context.project_cash_in_rows?.length" class="project-state">No submitted project-linked incoming payments found.</div><div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party Type</th><th>Party</th><th>Mode</th><th class="num">Received</th><th class="num">Unapplied</th></tr></thead><tbody><tr v-for="row in context.project_cash_in_rows" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party_type || "—" }}</td><td>{{ row.party || "—" }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.received_amount) }}</td><td class="num">{{ money(row.unallocated_amount) }}</td></tr></tbody></table></div></section>
 
-				<div class="accounting-note"><strong>Accounting safety:</strong> Project Funds is a derived management view. ERPNext Project and project-linked native documents remain the source of truth; RetailEdge does not maintain a project wallet or separate ledger. Project Cash In/Out is not a bank balance, revenue, expense or profit measure.</div>
+				<section class="project-panel"><div class="panel-head"><div><h3>Project Cash Out</h3><p>Submitted outgoing ERPNext Payment Entries explicitly linked to this Project. This is cash movement, not an expense/P&amp;L measure.</p></div></div><div v-if="!context.project_cash_out_rows?.length" class="project-state">No submitted project-linked outgoing payments found.</div><div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party Type</th><th>Party</th><th>Mode</th><th class="num">Paid</th></tr></thead><tbody><tr v-for="row in context.project_cash_out_rows" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party_type || "—" }}</td><td>{{ row.party || "—" }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.paid_amount) }}</td></tr></tbody></table></div></section>
+
+				<div class="accounting-note"><strong>Accounting safety:</strong> Project Funds is a derived management view. ERPNext Project, Task and project-linked native documents remain the source of truth; RetailEdge does not maintain a project wallet, task ledger or separate accounting ledger. Project Cash In/Out is not a bank balance, revenue, expense or profit measure.</div>
 			</template>
 		</section>
 	</EdgeAppShell>
@@ -90,43 +80,24 @@ function errorMessage(error, fallback) { return error?.message || error?.exc || 
 export default {
 	name: "ProjectOperations",
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
-	data() { return { edgeUIValid: true, missingComponents: [], loading: false, error: "", project: "", projectLabel: "", projectCompany: "", branch: "", branchLabel: "", context: {}, menuItems: [], userName: "" }; },
+	data() { return { edgeUIValid: true, missingComponents: [], loading: false, error: "", project: "", projectLabel: "", projectCompany: "", branch: "", branchLabel: "", context: {}, activity: {}, menuItems: [], userName: "" }; },
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.loadNavigation(); },
 	methods: {
 		async loadNavigation() { try { const navigation = typeof window.retailedgeGetBusinessHubContext === "function" ? await window.retailedgeGetBusinessHubContext() : await callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context"); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.userName = navigation.user_name || navigation.context?.user_name || ""; } catch (error) { this.error = errorMessage(error, "Failed to load Project Operations navigation."); } },
 		async projectSearch(txt) { const result = await callMethod("retailedge.project_search.search_projects", { txt, limit: 20 }); return Array.isArray(result) ? result : []; },
 		async branchSearch(txt) { if (!this.projectCompany) return []; const result = await callMethod("retailedge.project_search.search_project_branches", { txt, company: this.projectCompany, limit: 20 }); return Array.isArray(result) ? result : []; },
-		onProjectSelected(option) { this.project = option.value; this.projectLabel = option.label || option.value; this.projectCompany = option.company || ""; this.branch = ""; this.branchLabel = ""; this.context = {}; this.loadContext(); },
-		clearProject() { this.project = ""; this.projectLabel = ""; this.projectCompany = ""; this.branch = ""; this.branchLabel = ""; this.context = {}; this.error = ""; },
+		onProjectSelected(option) { this.project = option.value; this.projectLabel = option.label || option.value; this.projectCompany = option.company || ""; this.branch = ""; this.branchLabel = ""; this.context = {}; this.activity = {}; this.loadContext(); },
+		clearProject() { this.project = ""; this.projectLabel = ""; this.projectCompany = ""; this.branch = ""; this.branchLabel = ""; this.context = {}; this.activity = {}; this.error = ""; },
 		onBranchSelected(option) { this.branch = option.value; this.branchLabel = option.label || option.value; this.loadContext(); },
 		clearBranch() { this.branch = ""; this.branchLabel = ""; if (this.project) this.loadContext(); },
-		async loadContext() { if (!this.project) return; this.loading = true; this.error = ""; try { this.context = await callMethod("retailedge.project_operations.get_project_funds_context", { project: this.project, branch: this.branch || null }); this.projectCompany = this.context.company || this.projectCompany; if (this.branch && !this.branchLabel) this.branchLabel = this.branch; } catch (error) { this.context = {}; this.error = errorMessage(error, "Project funds failed to load."); } finally { this.loading = false; } },
+		async loadContext() { if (!this.project) return; this.loading = true; this.error = ""; try { const [funds, activity] = await Promise.all([callMethod("retailedge.project_operations.get_project_funds_context", { project: this.project, branch: this.branch || null }), callMethod("retailedge.project_activity.get_project_activity_context", { project: this.project, limit: 200 })]); this.context = funds; this.activity = activity; this.projectCompany = this.context.company || this.projectCompany; if (this.branch && !this.branchLabel) this.branchLabel = this.branch; } catch (error) { this.context = {}; this.activity = {}; this.error = errorMessage(error, "Project operations failed to load."); } finally { this.loading = false; } },
 		openReceiptDialog() { const dialog = new frappe.ui.Dialog({ title: __("Record Project Receipt"), fields: [ { fieldname: "project", fieldtype: "Data", label: __("Project"), default: this.project, read_only: 1 }, { fieldname: "customer", fieldtype: "Data", label: __("Customer"), default: this.context.customer, read_only: 1 }, { fieldname: "company", fieldtype: "Data", label: __("Company"), default: this.context.company, read_only: 1 }, { fieldname: "branch", fieldtype: "Data", label: __("Branch"), default: this.branch || "", read_only: 1 }, { fieldname: "posting_date", fieldtype: "Date", label: __("Posting Date"), default: frappe.datetime.get_today(), reqd: 1 }, { fieldname: "mode_of_payment", fieldtype: "Link", options: "Mode of Payment", label: __("Mode of Payment"), reqd: 1 }, { fieldname: "amount", fieldtype: "Currency", label: __("Amount"), reqd: 1 }, { fieldname: "reference_no", fieldtype: "Data", label: __("Reference No") }, { fieldname: "reference_date", fieldtype: "Date", label: __("Reference Date") }, { fieldname: "remarks", fieldtype: "Small Text", label: __("Remarks") } ], primary_action_label: __("Create Draft Payment"), primary_action: async (values) => { try { const result = await callMethod("retailedge.project_receipts.create_project_receipt_draft", { values }); dialog.hide(); frappe.show_alert({ message: __("Project receipt draft created."), indicator: "green" }); if (result.name) frappe.set_route("Form", "Payment Entry", result.name); } catch (error) { frappe.msgprint({ title: __("Could not create project receipt"), message: errorMessage(error, "Project receipt draft could not be created."), indicator: "red" }); } } }); dialog.show(); },
-		async openCostDialog() {
-			try {
-				const result = await callMethod("retailedge.project_expense_routing.get_project_expense_routes", { project: this.project });
-				const routes = result.routes || [];
-				if (!routes.length) { frappe.msgprint(__("You do not have permission to create any supported project cost document.")); return; }
-				const optionMap = Object.fromEntries(routes.map((route) => [route.label, route]));
-				const dialog = new frappe.ui.Dialog({
-					title: __("Record Project Cost"),
-					fields: [
-						{ fieldname: "route", fieldtype: "Select", label: __("Cost Type"), options: routes.map((route) => route.label).join("\n"), reqd: 1 },
-						{ fieldname: "policy", fieldtype: "HTML", options: `<div class="text-muted small">${frappe.utils.escape_html(result.policy || "")}</div>` },
-					],
-					primary_action_label: __("Open Native Entry"),
-					primary_action: (values) => {
-						const route = optionMap[values.route];
-						if (!route) return;
-						dialog.hide();
-						frappe.new_doc(route.doctype, route.defaults || {});
-					},
-				});
-				dialog.show();
-			} catch (error) { frappe.msgprint({ title: __("Could not load project cost options"), message: errorMessage(error, "Project cost routes could not be loaded."), indicator: "red" }); }
-		},
+		async openCostDialog() { try { const result = await callMethod("retailedge.project_expense_routing.get_project_expense_routes", { project: this.project }); const routes = result.routes || []; if (!routes.length) { frappe.msgprint(__("You do not have permission to create any supported project cost document.")); return; } const optionMap = Object.fromEntries(routes.map((route) => [route.label, route])); const dialog = new frappe.ui.Dialog({ title: __("Record Project Cost"), fields: [ { fieldname: "route", fieldtype: "Select", label: __("Cost Type"), options: routes.map((route) => route.label).join("\n"), reqd: 1 }, { fieldname: "policy", fieldtype: "HTML", options: `<div class="text-muted small">${frappe.utils.escape_html(result.policy || "")}</div>` } ], primary_action_label: __("Open Native Entry"), primary_action: (values) => { const route = optionMap[values.route]; if (!route) return; dialog.hide(); frappe.new_doc(route.doctype, route.defaults || {}); } }); dialog.show(); } catch (error) { frappe.msgprint({ title: __("Could not load project cost options"), message: errorMessage(error, "Project cost routes could not be loaded."), indicator: "red" }); } },
 		openProject() { if (this.project) frappe.set_route("Form", "Project", this.project); },
+		openProjectTasks() { if (this.project) frappe.set_route("List", "Task", { project: this.project }); },
+		newTask() { if (this.project && this.activity.can_create_task) frappe.new_doc("Task", { project: this.project }); },
+		openTask(name) { if (name) frappe.set_route("Form", "Task", name); },
 		openPayment(name) { frappe.set_route("Form", "Payment Entry", name); },
 		openTimelineDoc(row) { if (row?.doctype && row?.name) frappe.set_route("Form", row.doctype, row.name); },
 		money(value) { return format_currency(Number(value || 0), this.context.currency || undefined); },
