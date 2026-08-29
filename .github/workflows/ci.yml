@@ -196,3 +196,12 @@ jobs:
           fi
         env:
           CI: "Yes"
+
+      - name: Preserve RetailEdge test failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retailedge-test-failure-log
+          path: /tmp/retailedge-tests.log
+          if-no-files-found: ignore
+          retention-days: 3

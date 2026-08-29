@@ -97,6 +97,38 @@ CUSTOMER_ADVANCE_REPORT_ITEM: dict[str, Any] = {
 	"icon": "report",
 }
 
+PROJECT_OPERATIONS_ITEM: dict[str, Any] = {
+	"label": "Project Operations",
+	"description": "Manage project progress, funds, receipts and linked ERPNext transactions from one operational view.",
+	"target_type": "Page",
+	"target": "project-operations",
+	"icon": "briefcase",
+}
+
+PROJECT_PORTFOLIO_REPORT_ITEM: dict[str, Any] = {
+	"label": "Project Portfolio",
+	"description": "Review project billing, project-linked cash, cost, margin and completion across the permitted portfolio.",
+	"target_type": "Report",
+	"target": "RetailEdge Project Portfolio",
+	"icon": "report",
+}
+
+PROJECT_FINANCIAL_CONTROL_REPORT_ITEM: dict[str, Any] = {
+	"label": "Project Financial Control",
+	"description": "Control project budget, billing, receivables, payables, project-linked cash, cost and margin from ERPNext truth.",
+	"target_type": "Report",
+	"target": "RetailEdge Project Financial Control",
+	"icon": "report",
+}
+
+PROJECT_LIST_ITEM: dict[str, Any] = {
+	"label": "Projects",
+	"description": "Open the native ERPNext Project list and full project forms.",
+	"target_type": "DocType",
+	"target": "Project",
+	"icon": "briefcase",
+}
+
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
 	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
@@ -162,13 +194,6 @@ def _add_operating_context_navigation(navigation_groups: list[dict[str, Any]]) -
 
 
 def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Add the EdgeSuite transaction host without removing the direct POS path.
-
-	Transaction Workspace is the preferred RetailEdge operating entry point, but
-	the existing provider-aware Start POS item remains available. That preserves a
-	direct POSNext route for offline resilience and an explicit native POS fallback.
-	If the Page is unavailable, navigation is left untouched.
-	"""
 	if not _can_open_page(TRANSACTION_WORKSPACE_ITEM["target"]):
 		return
 	for group in navigation_groups:
@@ -184,7 +209,6 @@ def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> N
 
 
 def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Expose the guided selling suite while retaining native ERPNext fallbacks."""
 	if not _can_open_page(PROFESSIONAL_SELLING_ITEM["target"]):
 		return
 	for group in navigation_groups:
@@ -193,17 +217,13 @@ def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> No
 		items = list(group.get("items") or [])
 		if any(item.get("target_type") == "Page" and item.get("target") == PROFESSIONAL_SELLING_ITEM["target"] for item in items):
 			return
-		workspace_index = next(
-			(index for index, item in enumerate(items) if item.get("target") == TRANSACTION_WORKSPACE_ITEM["target"]),
-			-1,
-		)
+		workspace_index = next((index for index, item in enumerate(items) if item.get("target") == TRANSACTION_WORKSPACE_ITEM["target"]), -1)
 		items.insert(workspace_index + 1 if workspace_index >= 0 else 0, deepcopy(PROFESSIONAL_SELLING_ITEM))
 		group["items"] = items
 		return
 
 
 def _promote_document_output(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Expose customer document output next to the guided selling experience."""
 	if not _can_open_page(DOCUMENT_OUTPUT_ITEM["target"]):
 		return
 	for group in navigation_groups:
@@ -212,17 +232,13 @@ def _promote_document_output(navigation_groups: list[dict[str, Any]]) -> None:
 		items = list(group.get("items") or [])
 		if any(item.get("target_type") == "Page" and item.get("target") == DOCUMENT_OUTPUT_ITEM["target"] for item in items):
 			return
-		selling_index = next(
-			(index for index, item in enumerate(items) if item.get("target") == PROFESSIONAL_SELLING_ITEM["target"]),
-			-1,
-		)
+		selling_index = next((index for index, item in enumerate(items) if item.get("target") == PROFESSIONAL_SELLING_ITEM["target"]), -1)
 		items.insert(selling_index + 1 if selling_index >= 0 else 0, deepcopy(DOCUMENT_OUTPUT_ITEM))
 		group["items"] = items
 		return
 
 
 def _promote_payment_management(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Expose payment operations and reporting while retaining native Payment Entry."""
 	page_available = _can_open_page(PAYMENT_MANAGEMENT_ITEM["target"])
 	report_available = _can_open_report(CUSTOMER_ADVANCE_REPORT_ITEM["target"])
 	if not page_available and not report_available:
@@ -231,33 +247,51 @@ def _promote_payment_management(navigation_groups: list[dict[str, Any]]) -> None
 		if group.get("key") != "money":
 			continue
 		items = list(group.get("items") or [])
-		payment_index = next(
-			(index for index, item in enumerate(items) if item.get("target_type") == "DocType" and item.get("target") == "Payment Entry"),
-			len(items),
-		)
-		if page_available and not any(
-			item.get("target_type") == "Page" and item.get("target") == PAYMENT_MANAGEMENT_ITEM["target"] for item in items
-		):
+		payment_index = next((index for index, item in enumerate(items) if item.get("target_type") == "DocType" and item.get("target") == "Payment Entry"), len(items))
+		if page_available and not any(item.get("target_type") == "Page" and item.get("target") == PAYMENT_MANAGEMENT_ITEM["target"] for item in items):
 			items.insert(payment_index, deepcopy(PAYMENT_MANAGEMENT_ITEM))
 			payment_index += 1
-		if report_available and not any(
-			item.get("target_type") == "Report" and item.get("target") == CUSTOMER_ADVANCE_REPORT_ITEM["target"] for item in items
-		):
+		if report_available and not any(item.get("target_type") == "Report" and item.get("target") == CUSTOMER_ADVANCE_REPORT_ITEM["target"] for item in items):
 			items.insert(payment_index, deepcopy(CUSTOMER_ADVANCE_REPORT_ITEM))
 		group["items"] = items
 		return
 
 
-def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Route RetailEdge-owned setup masters through one EdgeSuite Setup hub.
+def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None:
+	page_available = _can_open_page(PROJECT_OPERATIONS_ITEM["target"])
+	portfolio_available = _can_open_report(PROJECT_PORTFOLIO_REPORT_ITEM["target"])
+	financial_control_available = _can_open_report(PROJECT_FINANCIAL_CONTROL_REPORT_ITEM["target"])
+	if not page_available and not portfolio_available and not financial_control_available:
+		return
+	existing_group = next((group for group in navigation_groups if group.get("key") == "projects"), None)
+	if existing_group is not None:
+		items = list(existing_group.get("items") or [])
+	else:
+		items = []
 
-	Native DocTypes remain authoritative and are opened from the Setup hub as
-	explicit full-form fallbacks. Bank Account and Mode of Payment remain visible
-	native ERPNext destinations in the Setup group.
-	"""
+	if page_available and not any(item.get("target") == PROJECT_OPERATIONS_ITEM["target"] for item in items):
+		items.append(deepcopy(PROJECT_OPERATIONS_ITEM))
+	if portfolio_available and not any(item.get("target") == PROJECT_PORTFOLIO_REPORT_ITEM["target"] for item in items):
+		items.append(deepcopy(PROJECT_PORTFOLIO_REPORT_ITEM))
+	if financial_control_available and not any(item.get("target") == PROJECT_FINANCIAL_CONTROL_REPORT_ITEM["target"] for item in items):
+		items.append(deepcopy(PROJECT_FINANCIAL_CONTROL_REPORT_ITEM))
+	try:
+		if frappe.db.exists("DocType", "Project") and frappe.has_permission("Project", "read") and not any(item.get("target_type") == "DocType" and item.get("target") == "Project" for item in items):
+			items.append(deepcopy(PROJECT_LIST_ITEM))
+	except Exception:
+		pass
+
+	if existing_group is not None:
+		existing_group["items"] = items
+		return
+	project_group = {"key": "projects", "label": "Projects", "icon": "briefcase", "items": items}
+	insert_at = next((index for index, group in enumerate(navigation_groups) if group.get("key") == "insights"), len(navigation_groups))
+	navigation_groups.insert(insert_at, project_group)
+
+
+def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(SETUP_HUB_ITEM["target"]):
 		return
-
 	setup_group = None
 	for group in navigation_groups:
 		if group.get("key") == "setup":
@@ -268,7 +302,6 @@ def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> No
 				continue
 			items.append(item)
 		group["items"] = items
-
 	if setup_group is None:
 		return
 	items = list(setup_group.get("items") or [])
@@ -279,7 +312,6 @@ def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> No
 
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
-	"""Extend the canonical Business Hub context with safe product UX refinements."""
 	context = deepcopy(_base_business_hub_context() or {})
 	navigation_groups = context.get("navigation_groups") or []
 	_promote_browser_approved_r4_pages(navigation_groups)
@@ -288,6 +320,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_professional_selling(navigation_groups)
 	_promote_document_output(navigation_groups)
 	_promote_payment_management(navigation_groups)
+	_promote_project_operations(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
 
 	quick_actions = list(context.get("quick_actions") or [])
@@ -301,15 +334,13 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 
 	operating = get_operating_context()
 	user_context = dict(context.get("context") or {})
-	user_context.update(
-		{
-			"company": operating.get("company") or "",
-			"branch": operating.get("branch") or "",
-			"operating_context_source": operating.get("source") or "",
-			"default_pos_profile": operating.get("default_pos_profile") or "",
-			"default_stock_location": operating.get("default_stock_location") or "",
-		}
-	)
+	user_context.update({
+		"company": operating.get("company") or "",
+		"branch": operating.get("branch") or "",
+		"operating_context_source": operating.get("source") or "",
+		"default_pos_profile": operating.get("default_pos_profile") or "",
+		"default_stock_location": operating.get("default_stock_location") or "",
+	})
 	context["context"] = user_context
 
 	feature_flags = dict(context.get("feature_flags") or {})
@@ -322,6 +353,9 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"
+	feature_flags["project_operations"] = "erpnext_native_project_funds"
+	feature_flags["project_portfolio_reporting"] = "erpnext_project_plus_payment_entries"
+	feature_flags["project_financial_control"] = "whole_project_erpnext_financial_control"
 	context["feature_flags"] = feature_flags
 	return context
 

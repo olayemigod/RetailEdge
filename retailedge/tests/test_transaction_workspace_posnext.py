@@ -19,11 +19,11 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 			'item.get("runtime_target") == "pos"',
 			'_can_open_page(TRANSACTION_WORKSPACE_ITEM["target"])',
 			'feature_flags["transaction_workspace"] = "edgesuite_host"',
-			"existing provider-aware Start POS item remains available",
 			"items.insert(pos_index, deepcopy(TRANSACTION_WORKSPACE_ITEM))",
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("items[index] = deepcopy(TRANSACTION_WORKSPACE_ITEM)", source)
+		self.assertNotIn("items[pos_index] = deepcopy(TRANSACTION_WORKSPACE_ITEM)", source)
 
 	def test_workspace_backend_reuses_operating_context_and_runtime_provider(self):
 		source = self.read("retailedge/page/transaction_workspace/transaction_workspace.py")
