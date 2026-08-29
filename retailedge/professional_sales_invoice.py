@@ -23,6 +23,7 @@ from retailedge.professional_selling import (
 	MAX_LINK_RESULTS,
 	_assert_read,
 	_coerce_values,
+	_operating_document_filters,
 	_permission,
 	_validate_context,
 )
@@ -257,6 +258,13 @@ def get_professional_sales_invoice_capability() -> dict[str, Any]:
 def get_recent_professional_sales_invoices(limit: int = 8) -> list[dict[str, Any]]:
 	if not _permission("Sales Invoice", "read"):
 		frappe.throw(_("You do not have permission to view Sales Invoice."), frappe.PermissionError)
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	if not company:
+		frappe.throw(_("Choose an Operating Company before viewing recent Sales Invoices."))
+	_assert_read("Company", company)
+	filters = _operating_document_filters("Sales Invoice", company=company, branch=branch)
 	limit = max(1, min(cint(limit) or 8, 20))
 	fields = [
 		"name",
@@ -274,6 +282,7 @@ def get_recent_professional_sales_invoices(limit: int = 8) -> list[dict[str, Any
 		dict(row)
 		for row in frappe.get_list(
 			"Sales Invoice",
+			filters=filters,
 			fields=fields,
 			order_by="modified desc",
 			limit_page_length=limit,
@@ -320,9 +329,10 @@ def search_professional_invoice_sources(
 		)
 
 	values = _coerce_values(values)
-	company, _branch, _warehouse = _validate_context(values)
+	company, branch, _warehouse = _validate_context(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
-	filters: dict[str, Any] = {"docstatus": 1, "company": company}
+	filters: dict[str, Any] = {"docstatus": 1}
+	filters.update(_operating_document_filters(config["doctype"], company=company, branch=branch))
 	link_fieldname = None
 
 	if source == "quotation":
