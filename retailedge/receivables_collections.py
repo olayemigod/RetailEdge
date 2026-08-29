@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Any
 
 import frappe
+from frappe import _
 from frappe.utils import getdate, today
 
 ACTIVE_DUNNING_STATUSES = {"Draft", "Unresolved"}
@@ -16,7 +17,7 @@ def enrich_receivable_rows(rows: list[dict[str, Any]], *, company: str) -> dict[
 	invoice_names = [str(row.get("invoice") or "") for row in rows if row.get("invoice")]
 	payment_requests = _payment_request_map(invoice_names)
 	dunnings = _active_dunning_map(invoice_names, company=company)
-	dunning_eligible = _dunning_eligible_invoice_names(invoice_names)
+	dunning_eligible = _dunning_eligible_invoice_names(invoice_names, rows)
 	payment_request_create_allowed = _can_create_doctype("Payment Request")
 	dunning_create_allowed = _can_create_doctype("Dunning")
 
@@ -31,9 +32,7 @@ def enrich_receivable_rows(rows: list[dict[str, Any]], *, company: str) -> dict[
 		outstanding = float(row.get("outstanding") or 0)
 		overdue = int(row.get("overdue_days") or 0) > 0 and outstanding > 0
 		payment_request_ready = bool(outstanding > 0 and not payment_request and payment_request_create_allowed)
-		dunning_ready = bool(
-			invoice in dunning_eligible and not dunning and dunning_create_allowed
-		)
+		dunning_ready = bool(invoice in dunning_eligible and not dunning and dunning_create_allowed)
 
 		if payment_request:
 			payment_request_count += 1
@@ -104,7 +103,10 @@ def _payment_request_map(invoice_names: list[str]) -> dict[str, dict[str, Any]]:
 	return result
 
 
-def _dunning_eligible_invoice_names(invoice_names: list[str]) -> set[str]:
+def _dunning_eligible_invoice_names(
+	invoice_names: list[str],
+	receivable_rows: list[dict[str, Any]],
+) -> set[str]:
 	"""Mirror ERPNext Dunning eligibility for already-permitted Sales Invoices."""
 	if not invoice_names:
 		return set()
@@ -118,15 +120,20 @@ def _dunning_eligible_invoice_names(invoice_names: list[str]) -> set[str]:
 		fields=["parent", "due_date", "outstanding"],
 		limit=MAX_COLLECTION_ROWS,
 	)
-	if not rows:
-		return set()
 
 	today_date = getdate(today())
-	return {
+	scheduled_invoices = {str(row.parent) for row in rows if row.parent}
+	eligible = {
 		str(row.parent)
 		for row in rows
 		if row.parent and float(row.outstanding or 0) > 0 and row.due_date and getdate(row.due_date) < today_date
 	}
+	for row in receivable_rows:
+		invoice = str(row.get("invoice") or "")
+		if invoice and invoice not in scheduled_invoices:
+			if int(row.get("overdue_days") or 0) > 0 and float(row.get("outstanding") or 0) > 0:
+				eligible.add(invoice)
+	return eligible
 
 
 def _active_dunning_map(invoice_names: list[str], *, company: str) -> dict[str, dict[str, Any]]:
