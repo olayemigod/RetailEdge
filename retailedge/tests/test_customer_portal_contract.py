@@ -36,12 +36,34 @@ class TestCustomerPortalContract(TestCase):
 		self.assertIn("grand_total", source)
 		self.assertIn("percent_complete", source)
 
+	def test_payment_history_is_customer_scoped_submitted_and_read_only(self):
+		source = (APP_ROOT / "customer_portal.py").read_text()
+		self.assertIn('"Payment Entry"', source)
+		self.assertIn('"docstatus": 1', source)
+		self.assertIn('"payment_type": "Receive"', source)
+		self.assertIn('"party_type": "Customer"', source)
+		self.assertIn('"party": ["in", customers]', source)
+		self.assertIn('"payment_history_read_only": True', source)
+		self.assertIn("not a wallet balance", source)
+		self.assertNotIn("frappe.new_doc(\"Payment Entry\")", source)
+		self.assertNotIn("submit()", source)
+
 	def test_website_controller_redirects_guest_and_uses_neutral_title(self):
 		source = (APP_ROOT / "www" / "customer_portal.py").read_text()
 		self.assertIn('redirect_location = "/login?redirect-to=/customer_portal"', source)
 		self.assertIn('context.title = "Customer Portal"', source)
 		self.assertNotIn("RetailEdge", source)
 		self.assertNotIn("ProcessEdge", source)
+
+	def test_portal_menu_setup_is_additive_customer_only_and_migrated(self):
+		source = (APP_ROOT / "customer_portal_setup.py").read_text()
+		patches = (APP_ROOT / "patches.txt").read_text()
+		self.assertIn('CUSTOMER_PORTAL_ROUTE = "/customer_portal"', source)
+		self.assertIn('"role": "Customer"', source)
+		self.assertIn('settings.append(\n\t\t"menu"', source)
+		self.assertIn("next((item for item in (settings.get(\"menu\") or [])", source)
+		self.assertNotIn("settings.set(\"menu\"", source)
+		self.assertIn("retailedge.patches.install_customer_portal_menu", patches)
 
 	def test_portal_ui_is_edgesuite_ready_and_product_neutral(self):
 		template = (APP_ROOT / "www" / "customer_portal.html").read_text()
@@ -50,6 +72,8 @@ class TestCustomerPortalContract(TestCase):
 		self.assertIn("--edge-portal-accent:var(--edge-color-primary", template)
 		self.assertIn("Customer Portal", template)
 		self.assertIn("Outstanding", template)
+		self.assertIn("Payments Received", template)
+		self.assertIn("Payment history is read-only", template)
 		self.assertIn("Secure document access", template)
 		self.assertNotIn("RetailEdge", template)
 		self.assertNotIn("ProcessEdge", template)
