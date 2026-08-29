@@ -12,6 +12,7 @@ from retailedge.guided_stock_transfer import (
 	MAX_ITEMS,
 	MAX_LINK_RESULTS,
 	_assert_simple_stock_item,
+	_coerce_values,
 	_normalise_items,
 	create_simple_stock_transfer_draft,
 )
@@ -60,6 +61,14 @@ class TestGuidedStockTransfer(unittest.TestCase):
 			with self.subTest(rows=len(invalid)):
 				with self.assertRaises(frappe.ValidationError):
 					_normalise_items(invalid)
+
+	def test_values_payload_accepts_mapping_or_json_object_and_rejects_other_shapes(self):
+		self.assertEqual(_coerce_values({"company": "Demo Company"}), {"company": "Demo Company"})
+		self.assertEqual(_coerce_values('{"company":"Demo Company"}'), {"company": "Demo Company"})
+		for invalid in (["Demo Company"], 42, '"Demo Company"'):
+			with self.subTest(value=invalid):
+				with self.assertRaises(frappe.ValidationError):
+					_coerce_values(invalid)
 
 	@patch("retailedge.guided_stock_transfer._assert_read_permission")
 	@patch("retailedge.guided_stock_transfer.frappe.db.get_value")
@@ -142,6 +151,7 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		self.assertIn('query="erpnext.controllers.queries.item_query"', source)
 		self.assertIn('filters={"is_stock_item": 1, "disabled": 0}', source)
 		self.assertIn('@frappe.whitelist(methods=["POST"])', source)
+		self.assertIn("Invalid Simple Stock Transfer values.", source)
 		self.assertIn("doc.insert()", source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("doc.submit()", source)
@@ -149,7 +159,7 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		self.assertNotIn("basic_rate", source)
 		self.assertNotIn("valuation_rate", source)
 
-	def test_dialog_uses_shared_edgesuite_components_and_cascades_branches(self):
+	def test_dialog_uses_shared_edgesuite_components_cascades_and_accepts_safe_prefill(self):
 		component = (
 			APP_ROOT
 			/ "public"
@@ -160,6 +170,10 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		self.assertIn("EdgeModal: runtimeComponents.EdgeModal", component)
 		self.assertIn("EdgeLinkField: runtimeComponents.EdgeLinkField", component)
 		self.assertIn("EdgeChildTable: runtimeComponents.EdgeChildTable", component)
+		self.assertIn('prefill: { type: Object, default: () => ({}) }', component)
+		self.assertIn("await this.applyPrefill()", component)
+		self.assertIn("await this.setSourceWarehouse(sourceWarehouse)", component)
+		self.assertIn("await this.setTargetWarehouse(targetWarehouse)", component)
 		self.assertIn("setSourceBranch(next)", component)
 		self.assertIn("setTargetBranch(next)", component)
 		self.assertIn('this.values.source_warehouse = "";', component)

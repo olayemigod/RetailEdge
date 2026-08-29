@@ -56,7 +56,14 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		groups = {group["key"]: group for group in NAVIGATION_GROUPS}
 		self.assertEqual(
 			{item["target"] for item in groups["customers"]["items"]},
-			{"Customer", "customer-receivables", "Accounts Receivable"},
+			{
+				"Customer",
+				"customer-receivables",
+				"customer-sales-intelligence",
+				"customer-360",
+				"customer-opportunity-intelligence",
+				"Accounts Receivable",
+			},
 		)
 		self.assertEqual(
 			{item["target"] for item in groups["suppliers-payables"]["items"]},

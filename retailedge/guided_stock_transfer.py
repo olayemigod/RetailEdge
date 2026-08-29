@@ -27,15 +27,21 @@ MAX_ITEMS = 50
 
 
 @frappe.whitelist()
-def get_simple_stock_transfer_context() -> dict[str, Any]:
+def get_simple_stock_transfer_context(company: str = "", branch: str = "") -> dict[str, Any]:
 	_assert_can_create_stock_entry()
 	user = frappe.session.user
-	company = frappe.defaults.get_user_default("Company") or ""
-	branch = (
-		frappe.defaults.get_user_default("RetailEdge Branch")
+	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(
+		branch
+		or frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
-	)
+	).strip()
+	if company:
+		_assert_read_permission("Company", company)
+	if branch and company:
+		validate_user_branch_access(branch, user=user, company=company, throw=True)
+
 	defaults = resolve_retailedge_operational_defaults(
 		company=company or None,
 		branch=branch or None,
@@ -367,11 +373,13 @@ def _coerce_values(values: dict | str | None) -> dict[str, Any]:
 	return {}
 
 
-def _unique(values: list[str | None]) -> list[str]:
+def _unique(values: list[Any]) -> list[str]:
 	seen: set[str] = set()
 	result: list[str] = []
 	for value in values:
-		if value and value not in seen:
-			seen.add(value)
-			result.append(value)
+		value = str(value or "").strip()
+		if not value or value in seen:
+			continue
+		seen.add(value)
+		result.append(value)
 	return result

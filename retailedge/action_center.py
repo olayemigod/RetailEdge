@@ -15,9 +15,11 @@ from retailedge.branch_context import (
 )
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
+from retailedge.customer_sales_action_summary import get_customer_sales_action_summary
 from retailedge.expense_register import get_expense_register
+from retailedge.inventory_health import get_inventory_action_summary
+from retailedge.planning_intelligence import get_planning_action_summary
 from retailedge.reporting_capabilities import _validate_scope as _validate_operational_scope
-from retailedge.stock_position import get_stock_position
 from retailedge.supplier_payables import get_supplier_payables
 
 DEFAULT_PAGE_SIZE = 1
@@ -89,12 +91,13 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 
 	stock = _safe_source(
 		"stock_position",
-		lambda: get_stock_position(
-			filters={"company": company, "branch": branch},
-			page=1,
-			page_size=DEFAULT_PAGE_SIZE,
+		lambda: get_inventory_action_summary(
+			filters={"company": company, "branch": branch, "include_zero": 1}
 		),
 	)
+	# Keep the established source key and action fingerprints for follow-up/backward
+	# compatibility. The R10 action summary keeps current Bin alerts available even
+	# when optional demand/replenishment enrichment cannot be evaluated safely.
 	sources["stock_position"] = stock
 	if stock.get("available"):
 		_append_stock_exceptions(items, stock["payload"])
@@ -196,6 +199,22 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 	if bank.get("available"):
 		_append_bank_exceptions(items, bank["payload"])
 
+	customer_sales = _safe_source(
+		"r11_customer_sales",
+		lambda: get_customer_sales_action_summary(common),
+	)
+	sources["r11_customer_sales"] = customer_sales
+	if customer_sales.get("available"):
+		items.extend(customer_sales["payload"].get("items") or [])
+
+	planning = _safe_source(
+		"r12_planning",
+		lambda: get_planning_action_summary({"company": company, "branch": branch, "as_of_date": today()}),
+	)
+	sources["r12_planning"] = planning
+	if planning.get("available"):
+		items.extend(planning["payload"].get("items") or [])
+
 	decorated_items = decorate_action_items(_dedupe_and_sort(items), company=company, branch=branch)
 	all_items = prioritise_action_items(decorated_items)
 	items = _apply_follow_up_filters(
@@ -223,6 +242,9 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 			"resolution_model": "drill_through_to_existing_workflow_or_report",
 			"accounting_truth": "existing ERPNext/RetailEdge documents and reporting engines",
 			"source_model": "one_authoritative_provider_per_exception_domain",
+			"stock_provider": "Inventory Action Summary (ERPNext Bin + independently optional R10 reorder/movement enrichment)",
+			"customer_sales_provider": "R11 aggregate retention, growth and sales-quality signals; receivables remain owned by the existing Receivables source",
+			"planning_provider": "R12 read-only forward planning signals; existing receivables/payables sources retain ownership of current overdue exposures",
 			"generated_for": frappe.session.user,
 			"unfiltered_action_count": len(all_items),
 			"visible_action_count": len(items),
@@ -251,6 +273,7 @@ def _summary_card(payload: dict[str, Any], label: str) -> dict[str, Any] | None:
 
 
 def _append_stock_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]) -> None:
+	# Preserve the established Stock Position exception fingerprints and routes.
 	for metric, severity, label, kind in (
 		("Negative Stock", "danger", _("Items have negative stock"), "negative_stock"),
 		("Out of Stock", "warning", _("Items are out of stock"), "out_of_stock"),
@@ -272,6 +295,60 @@ def _append_stock_exceptions(items: list[dict[str, Any]], payload: dict[str, Any
 				semantic_key=kind,
 				target_type="Page",
 				target="stock-position",
+			)
+		)
+
+	# R10 adds new semantic identities rather than duplicating the legacy stock
+	# alerts above. These are advisory/read-only and resolve through the Inventory
+	# Intelligence Centre, where the underlying evidence can be inspected.
+	for metric, severity, label, kind in (
+		(
+			"Negative Stock Locations Hidden by Aggregate",
+			"danger",
+			_("Some warehouse negative stock is hidden by combined item totals"),
+			"inventory_hidden_negative_location",
+		),
+		(
+			"Fully Reserved Locations Hidden by Aggregate",
+			"warning",
+			_("Some warehouse fully reserved stock is hidden by combined item totals"),
+			"inventory_hidden_fully_reserved_location",
+		),
+		(
+			"Items Requiring Reorder",
+			"warning",
+			_("Items have reached ERPNext reorder thresholds"),
+			"inventory_reorder_required",
+		),
+		(
+			"Reorder Rules Requiring Review",
+			"warning",
+			_("ERPNext warehouse-group reorder rules need review"),
+			"inventory_reorder_rule_review",
+		),
+		(
+			"Non-moving",
+			"warning",
+			_("Items are non-moving in the current evidence window"),
+			"inventory_non_moving",
+		),
+	):
+		card = _summary_card(payload, metric)
+		if not card or flt(card.get("value")) <= 0:
+			continue
+		items.append(
+			_action(
+				source="stock",
+				label=label,
+				value=card.get("value"),
+				datatype=str(card.get("datatype") or card.get("type") or "Int"),
+				severity=severity,
+				route="/app/inventory-intelligence",
+				time_basis="current",
+				kind=kind,
+				semantic_key=kind,
+				target_type="Page",
+				target="inventory-intelligence",
 			)
 		)
 

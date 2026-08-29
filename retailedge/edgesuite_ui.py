@@ -105,13 +105,16 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Stock Locations", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
 			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History", "icon": "report"},
 			{"label": "Stock Position", "target_type": "Page", "target": "stock-position", "icon": "report"},
+			{"label": "Inventory Intelligence", "target_type": "Page", "target": "inventory-intelligence", "icon": "chart"},
+			{"label": "Transfer Opportunities", "target_type": "Page", "target": "inventory-transfer-opportunities", "icon": "repeat"},
+			{"label": "Inventory Ageing", "target_type": "Page", "target": "inventory-ageing", "icon": "report"},
 			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance", "icon": "report"},
 			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry", "icon": "repeat"},
 			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation", "icon": "clipboard"},
 			{"label": "Reorder Requests", "target_type": "DocType", "target": "Material Request", "icon": "clipboard"},
 			{"label": "Stock Ledger", "target_type": "Report", "target": "Stock Ledger", "icon": "report"},
 			{"label": "Projected Stock", "target_type": "Report", "target": "Stock Projected Qty", "icon": "report"},
-			{"label": "Stock Ageing", "target_type": "Report", "target": "Stock Ageing", "icon": "report"},
+			{"label": "Stock Ageing (Detailed)", "target_type": "Report", "target": "Stock Ageing", "icon": "report"},
 		),
 	},
 	{
@@ -134,6 +137,9 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "customers", "label": "Customers", "icon": "users", "items": (
 			{"label": "Customers", "target_type": "DocType", "target": "Customer", "icon": "user"},
 			{"label": "Customer Receivables", "target_type": "Page", "target": "customer-receivables", "icon": "report"},
+			{"label": "Customer & Sales Intelligence", "target_type": "Page", "target": "customer-sales-intelligence", "icon": "chart"},
+			{"label": "Customer 360", "target_type": "Page", "target": "customer-360", "icon": "user"},
+			{"label": "Retention & Opportunities", "target_type": "Page", "target": "customer-opportunity-intelligence", "icon": "trending-up"},
 			{"label": "Accounts Receivable (Detailed)", "target_type": "Report", "target": "Accounts Receivable", "icon": "report"},
 		),
 	},
@@ -147,13 +153,20 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "insights", "label": "Insights", "icon": "chart", "items": (
 			{"label": "Sales by Item", "target_type": "Page", "target": "sales-by-item", "icon": "report"},
+			{"label": "Sales Forecast", "target_type": "Page", "target": "sales-forecast", "icon": "trending-up"},
+			{"label": "Forecasting & Planning", "target_type": "Page", "target": "forecasting-planning", "icon": "calendar"},
+			{"label": "Planning Scenarios", "target_type": "DocType", "target": "RetailEdge Planning Scenario", "icon": "clipboard"},
+			{"label": "Basket & Product Affinity", "target_type": "Page", "target": "basket-affinity", "icon": "grid"},
+			{"label": "Discount & Sales Quality", "target_type": "Page", "target": "sales-quality-intelligence", "icon": "trending-down"},
 			{"label": "Sales Invoice Register", "target_type": "Page", "target": "sales-invoice-register", "icon": "report"},
 			{"label": "Salesperson Performance", "target_type": "Page", "target": "salesperson-performance-dashboard", "icon": "user"},
 			{"label": "Branch Performance", "target_type": "Page", "target": "branch-performance-dashboard", "icon": "chart"},
+			{"label": "Inventory + Profitability", "target_type": "Page", "target": "inventory-profitability", "icon": "chart"},
 		),
 	},
 	{
 		"key": "review-approvals", "label": "Review & Approvals", "icon": "shield", "items": (
+			{"label": "Business Control Centre", "target_type": "Page", "target": "business-control-center", "icon": "shield", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match", "icon": "shield"},
 			{"label": "Daily Sales Audit", "target_type": "DocType", "target": "RetailEdge Daily Sales Audit", "icon": "shield"},

@@ -11,8 +11,25 @@ DOCTYPE = "RetailEdge Action Follow Up"
 MANAGEMENT_FILTER_KEYS = {"follow_up_status", "assignment_scope", "due_scope"}
 
 
-def action_fingerprint(*, company: str, branch: str, source: str, kind: str, label: str, route: str) -> str:
-	payload = "|".join(str(value or "").strip() for value in (company, branch, source, kind, label, route))
+def action_fingerprint(
+	*,
+	company: str,
+	branch: str,
+	source: str,
+	kind: str,
+	label: str,
+	route: str,
+	scope: str = "",
+) -> str:
+	"""Build a stable follow-up identity while preserving all legacy hashes.
+
+	Existing actions hash the original six fields exactly. A provider may opt into
+	an additional bounded scope; only then is the seventh field appended.
+	"""
+	values = [company, branch, source, kind, label, route]
+	if str(scope or "").strip():
+		values.append(scope)
+	payload = "|".join(str(value or "").strip() for value in values)
 	return sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -25,6 +42,7 @@ def decorate_action_items(items: list[dict[str, Any]], *, company: str, branch: 
 			kind=str(item.get("kind") or ""),
 			label=str(item.get("label") or ""),
 			route=str(item.get("route") or ""),
+			scope=str(item.get("fingerprint_scope") or ""),
 		)
 	if not items or not frappe.db.exists("DocType", DOCTYPE):
 		return items
@@ -83,8 +101,27 @@ def _has_action_center_role(user: str) -> bool:
 	return bool(set(frappe.get_roles(user)).intersection(_action_center_roles()))
 
 
+def _has_owner_financial_access(user: str, *, company: str = "", branch: str = "") -> bool:
+	"""Return whether a user may view owner-level R9 financial intelligence in this scope."""
+	from retailedge.dashboard_capabilities import get_dashboard_capabilities
+
+	if user == "Administrator":
+		return True
+	try:
+		return bool(
+			get_dashboard_capabilities(
+				"owner-dashboard",
+				company=company,
+				branch=branch,
+				user=user,
+			).get("can_view")
+		)
+	except (frappe.PermissionError, frappe.ValidationError):
+		return False
+
+
 def get_permission_query_conditions(user: str | None = None) -> str:
-	"""Restrict direct list/report reads to the same operational branch scope."""
+	"""Restrict direct list/report reads to operational scope and R9 financial entitlement."""
 	from retailedge.branch_context import get_user_allowed_branches, user_has_global_branch_access
 
 	user = user or frappe.session.user
@@ -92,17 +129,20 @@ def get_permission_query_conditions(user: str | None = None) -> str:
 		return ""
 	if not _has_action_center_role(user):
 		return "1=0"
-	if user_has_global_branch_access(user=user):
-		return ""
-	branches = list(get_user_allowed_branches(user=user).get("branches") or [])
-	if not branches:
-		return "1=0"
-	escaped = ", ".join(frappe.db.escape(branch) for branch in branches)
-	return f"`tab{DOCTYPE}`.`branch` in ({escaped})"
+	conditions: list[str] = []
+	if not _has_owner_financial_access(user):
+		conditions.append(f"`tab{DOCTYPE}`.`source` != {frappe.db.escape('r9_early_warning')}")
+	if not user_has_global_branch_access(user=user):
+		branches = list(get_user_allowed_branches(user=user).get("branches") or [])
+		if not branches:
+			return "1=0"
+		escaped = ", ".join(frappe.db.escape(branch) for branch in branches)
+		conditions.append(f"`tab{DOCTYPE}`.`branch` in ({escaped})")
+	return " AND ".join(conditions)
 
 
 def has_permission(doc, user: str | None = None, permission_type: str | None = None) -> bool:
-	"""Apply company/branch visibility to direct form access as well as lists."""
+	"""Apply financial, company and branch visibility to direct form access as well as lists."""
 	from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
 
 	user = user or frappe.session.user
@@ -112,7 +152,10 @@ def has_permission(doc, user: str | None = None, permission_type: str | None = N
 		return False
 	company = str(getattr(doc, "company", "") or "").strip()
 	branch = str(getattr(doc, "branch", "") or "").strip()
+	source = str(getattr(doc, "source", "") or "").strip()
 	if company and not frappe.has_permission("Company", "read", doc=company, user=user):
+		return False
+	if source == "r9_early_warning" and not _has_owner_financial_access(user, company=company, branch=branch):
 		return False
 	if user_has_global_branch_access(user=user):
 		return True
@@ -127,8 +170,15 @@ def _assert_action_center_role(user: str | None = None) -> None:
 		frappe.throw(_("You do not have permission to manage Action Centre follow-ups."), frappe.PermissionError)
 
 
-def _validate_assignment_user(user: str, *, company: str, branch: str) -> None:
-	from retailedge.branch_context import validate_user_branch_access
+def _validate_assignment_user(
+	user: str,
+	*,
+	company: str,
+	branch: str,
+	require_global_scope: bool = False,
+	require_owner_scope: bool = False,
+) -> None:
+	from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
 
 	user = str(user or "").strip()
 	if not user:
@@ -137,6 +187,16 @@ def _validate_assignment_user(user: str, *, company: str, branch: str) -> None:
 		frappe.throw(_("Assigned user must be enabled."))
 	if not _has_action_center_role(user):
 		frappe.throw(_("Assigned user must have access to the RetailEdge Action Centre."), frappe.PermissionError)
+	if require_owner_scope and not _has_owner_financial_access(user, company=company, branch=branch):
+		frappe.throw(
+			_("Business Control financial warnings can only be assigned to users permitted to view owner-level financial intelligence for this scope."),
+			frappe.PermissionError,
+		)
+	if require_global_scope and not user_has_global_branch_access(user=user):
+		frappe.throw(
+			_("Company-level Business Control warnings can only be assigned to users with global Branch access."),
+			frappe.PermissionError,
+		)
 	if branch:
 		allowed = validate_user_branch_access(branch, user=user, company=company, throw=False)
 		if not allowed.get("allowed"):
@@ -153,14 +213,14 @@ def update_action_follow_up(
 	snoozed_until: str = "",
 	notes: str | None = None,
 ) -> dict[str, Any]:
-	from retailedge.action_center import get_action_center_data
+	from retailedge.business_control_center import get_business_control_center
 
 	_assert_action_center_role()
 	filters = frappe.parse_json(filters) if isinstance(filters, str) else (filters or {})
-	payload = get_action_center_data(_visibility_filters(filters))
+	payload = get_business_control_center(_visibility_filters(filters))
 	visible = next((row for row in payload.get("items") or [] if row.get("fingerprint") == fingerprint), None)
 	if not visible:
-		frappe.throw(_("This Action Centre item is no longer available in your current scope."), frappe.PermissionError)
+		frappe.throw(_("This Business Control Centre item is no longer available in your current scope."), frappe.PermissionError)
 
 	action = str(action or "").strip().lower()
 	if action not in {"acknowledge", "snooze", "assign", "schedule", "reopen"}:
@@ -202,10 +262,14 @@ def update_action_follow_up(
 		doc.acknowledged_on = None
 	if action == "assign" or assigned_to:
 		resolved_assignee = assigned_to or frappe.session.user
+		resolved_branch = str(payload["filters"].get("branch") or "")
+		is_r9_warning = str(visible.get("source") or "") == "r9_early_warning"
 		_validate_assignment_user(
 			resolved_assignee,
 			company=str(payload["filters"].get("company") or ""),
-			branch=str(payload["filters"].get("branch") or ""),
+			branch=resolved_branch,
+			require_global_scope=(is_r9_warning and not resolved_branch),
+			require_owner_scope=is_r9_warning,
 		)
 		doc.assigned_to = resolved_assignee
 	if follow_up_on:
