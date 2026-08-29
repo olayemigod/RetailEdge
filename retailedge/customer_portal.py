@@ -12,6 +12,7 @@ from erpnext.controllers.website_list_for_contact import get_parents_for_user
 
 MAX_PORTAL_ROWS = 200
 PORTAL_DOWNLOAD_DOCTYPES = {"Quotation", "Sales Order", "Sales Invoice", "Delivery Note"}
+PORTAL_PAYMENT_REQUEST_STATUSES = {"Requested", "Initiated", "Partially Paid", "Failed"}
 
 PORTAL_SECTIONS: tuple[dict[str, str], ...] = (
 	{"key": "quotations", "doctype": "Quotation", "route": "/quotations", "label": "Quotations"},
@@ -42,154 +43,72 @@ def _customer_filter(doctype: str, customers: list[str]) -> dict[str, Any]:
 	return filters
 
 
-def _safe_list(
-	doctype: str,
-	customers: list[str],
-	*,
-	fields: list[str],
-	filters: dict[str, Any] | None = None,
-	order_by: str = "modified desc",
-	limit: int = MAX_PORTAL_ROWS,
-) -> list[Any]:
+def _safe_list(doctype: str, customers: list[str], *, fields: list[str], filters: dict[str, Any] | None = None, order_by: str = "modified desc", limit: int = MAX_PORTAL_ROWS) -> list[Any]:
 	if not frappe.db.exists("DocType", doctype):
 		return []
 	merged = _customer_filter(doctype, customers)
 	merged.update(filters or {})
-	# ERPNext's website transaction controller uses the same customer boundary
-	# before bypassing Desk permissions for Website Users. Keep this query
-	# strictly server-derived from Portal User -> Customer links.
-	return frappe.get_list(
-		doctype,
-		filters=merged,
-		fields=fields,
-		order_by=order_by,
-		limit_page_length=max(1, min(int(limit or MAX_PORTAL_ROWS), MAX_PORTAL_ROWS)),
-		ignore_permissions=True,
-	)
+	return frappe.get_list(doctype, filters=merged, fields=fields, order_by=order_by, limit_page_length=max(1, min(int(limit or MAX_PORTAL_ROWS), MAX_PORTAL_ROWS)), ignore_permissions=True)
 
 
 def _portal_download_url(doctype: str, name: str) -> str:
 	if doctype not in PORTAL_DOWNLOAD_DOCTYPES:
 		return ""
-	return (
-		"/api/method/retailedge.customer_portal_download.download_customer_document_pdf"
-		f"?doctype={quote(doctype, safe='')}&name={quote(str(name), safe='')}"
-	)
+	return "/api/method/retailedge.customer_portal_download.download_customer_document_pdf" f"?doctype={quote(doctype, safe='')}&name={quote(str(name), safe='')}"
+
+
+def _payment_request_states(invoice_names: list[str]) -> dict[str, dict[str, Any]]:
+	if not invoice_names or not frappe.db.exists("DocType", "Payment Request"):
+		return {}
+	rows = frappe.get_list("Payment Request", filters={"reference_doctype": "Sales Invoice", "reference_name": ["in", invoice_names], "docstatus": 1, "status": ["in", sorted(PORTAL_PAYMENT_REQUEST_STATUSES)]}, fields=["name", "reference_name", "status", "outstanding_amount", "currency", "creation"], order_by="creation desc", limit_page_length=MAX_PORTAL_ROWS, ignore_permissions=True)
+	states: dict[str, dict[str, Any]] = {}
+	for row in rows:
+		invoice_name = str(row.reference_name or "")
+		if invoice_name and invoice_name not in states:
+			states[invoice_name] = {"name": row.name, "status": row.status or "", "outstanding_amount": flt(row.outstanding_amount), "currency": row.currency or ""}
+	return states
 
 
 def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dict[str, Any]]:
 	meta = frappe.get_meta(doctype)
 	fields = ["name", "modified"]
-	for fieldname in (
-		"status",
-		"transaction_date",
-		"posting_date",
-		"due_date",
-		"grand_total",
-		"currency",
-		"outstanding_amount",
-		"project_name",
-		"percent_complete",
-	):
+	for fieldname in ("docstatus", "is_return", "status", "transaction_date", "posting_date", "due_date", "grand_total", "currency", "outstanding_amount", "project_name", "percent_complete"):
 		if meta.has_field(fieldname):
 			fields.append(fieldname)
 	filters: dict[str, Any] = {}
 	if meta.has_field("docstatus") and doctype not in {"Project"}:
 		filters["docstatus"] = ["<", 2]
 	rows = _safe_list(doctype, customers, fields=fields, filters=filters, limit=limit)
+	payment_states = _payment_request_states([row.name for row in rows]) if doctype == "Sales Invoice" else {}
 	result = []
 	for row in rows:
 		outstanding = flt(getattr(row, "outstanding_amount", 0))
 		due_date = getattr(row, "due_date", None)
 		is_overdue = bool(doctype == "Sales Invoice" and outstanding > 0 and due_date and getdate(due_date) < getdate(today()))
-		result.append(
-			{
-				"name": row.name,
-				"status": getattr(row, "status", "") or "",
-				"date": getattr(row, "transaction_date", None) or getattr(row, "posting_date", None),
-				"due_date": due_date,
-				"is_overdue": is_overdue,
-				"grand_total": flt(getattr(row, "grand_total", 0)),
-				"outstanding_amount": outstanding,
-				"currency": getattr(row, "currency", "") or "",
-				"project_name": getattr(row, "project_name", "") or "",
-				"percent_complete": flt(getattr(row, "percent_complete", 0)),
-				"download_url": _portal_download_url(doctype, row.name),
-			}
-		)
+		payment_state = payment_states.get(row.name, {})
+		can_pay_online = bool(doctype == "Sales Invoice" and int(getattr(row, "docstatus", 0) or 0) == 1 and not int(getattr(row, "is_return", 0) or 0) and outstanding > 0)
+		result.append({"name": row.name, "status": getattr(row, "status", "") or "", "date": getattr(row, "transaction_date", None) or getattr(row, "posting_date", None), "due_date": due_date, "is_overdue": is_overdue, "grand_total": flt(getattr(row, "grand_total", 0)), "outstanding_amount": outstanding, "currency": getattr(row, "currency", "") or "", "project_name": getattr(row, "project_name", "") or "", "percent_complete": flt(getattr(row, "percent_complete", 0)), "download_url": _portal_download_url(doctype, row.name), "can_pay_online": can_pay_online, "payment_request_status": payment_state.get("status", ""), "payment_action_label": _("Continue Payment") if payment_state else _("Pay Invoice")})
 	return result
 
 
 def _invoice_summary(customers: list[str]) -> dict[str, Any]:
-	rows = _safe_list(
-		"Sales Invoice",
-		customers,
-		fields=["name", "grand_total", "outstanding_amount", "currency", "status", "due_date"],
-		filters={"docstatus": 1, "is_return": 0},
-	)
+	rows = _safe_list("Sales Invoice", customers, fields=["name", "grand_total", "outstanding_amount", "currency", "status", "due_date"], filters={"docstatus": 1, "is_return": 0})
 	today_date = getdate(today())
 	overdue_rows = [row for row in rows if flt(row.outstanding_amount) > 0 and row.due_date and getdate(row.due_date) < today_date]
-	return {
-		"count": len(rows),
-		"outstanding": sum(flt(row.outstanding_amount) for row in rows),
-		"overdue_count": len(overdue_rows),
-		"overdue_amount": sum(flt(row.outstanding_amount) for row in overdue_rows),
-		"billed": sum(flt(row.grand_total) for row in rows),
-		"currency": next((str(row.currency or "") for row in rows if row.currency), ""),
-		"overdue_basis": "Submitted Sales Invoice due date plus positive outstanding amount.",
-	}
+	return {"count": len(rows), "outstanding": sum(flt(row.outstanding_amount) for row in rows), "overdue_count": len(overdue_rows), "overdue_amount": sum(flt(row.outstanding_amount) for row in overdue_rows), "billed": sum(flt(row.grand_total) for row in rows), "currency": next((str(row.currency or "") for row in rows if row.currency), ""), "overdue_basis": "Submitted Sales Invoice due date plus positive outstanding amount."}
 
 
 def _payment_summary(customers: list[str]) -> dict[str, Any]:
 	if not frappe.db.exists("DocType", "Payment Entry"):
 		return {"count": 0, "received": 0.0, "recent": []}
-	rows = frappe.get_list(
-		"Payment Entry",
-		filters={
-			"docstatus": 1,
-			"payment_type": "Receive",
-			"party_type": "Customer",
-			"party": ["in", customers],
-		},
-		fields=[
-			"name",
-			"posting_date",
-			"company",
-			"party",
-			"mode_of_payment",
-			"reference_no",
-			"base_received_amount",
-			"received_amount",
-		],
-		order_by="posting_date desc, name desc",
-		limit_page_length=MAX_PORTAL_ROWS,
-		ignore_permissions=True,
-	)
+	rows = frappe.get_list("Payment Entry", filters={"docstatus": 1, "payment_type": "Receive", "party_type": "Customer", "party": ["in", customers]}, fields=["name", "posting_date", "company", "party", "mode_of_payment", "reference_no", "base_received_amount", "received_amount"], order_by="posting_date desc, name desc", limit_page_length=MAX_PORTAL_ROWS, ignore_permissions=True)
 	company_currency: dict[str, str] = {}
 	for row in rows:
 		company = str(row.company or "")
 		if company and company not in company_currency:
 			company_currency[company] = str(frappe.get_cached_value("Company", company, "default_currency") or "")
-
-	recent = []
-	for row in rows[:5]:
-		recent.append(
-			{
-				"name": row.name,
-				"posting_date": row.posting_date,
-				"party": row.party or "",
-				"mode_of_payment": row.mode_of_payment or "",
-				"reference_no": row.reference_no or "",
-				"amount": flt(row.base_received_amount or row.received_amount),
-				"currency": company_currency.get(str(row.company or ""), ""),
-			}
-		)
-	return {
-		"count": len(rows),
-		"received": sum(flt(row.base_received_amount or row.received_amount) for row in rows),
-		"recent": recent,
-		"scope_note": _("Submitted incoming payments linked to your Customer account. Amounts are shown in each Payment Entry Company's base currency. This is payment history, not a wallet balance."),
-	}
+	recent = [{"name": row.name, "posting_date": row.posting_date, "party": row.party or "", "mode_of_payment": row.mode_of_payment or "", "reference_no": row.reference_no or "", "amount": flt(row.base_received_amount or row.received_amount), "currency": company_currency.get(str(row.company or ""), "")} for row in rows[:5]]
+	return {"count": len(rows), "received": sum(flt(row.base_received_amount or row.received_amount) for row in rows), "recent": recent, "scope_note": _("Submitted incoming payments linked to your Customer account. Amounts are shown in each Payment Entry Company's base currency. This is payment history, not a wallet balance.")}
 
 
 def _document_count(doctype: str, customers: list[str], submitted_only: bool = False) -> int:
@@ -204,39 +123,5 @@ def get_customer_portal_context() -> dict[str, Any]:
 	customers = _assert_customer_portal_user()
 	invoice_summary = _invoice_summary(customers)
 	payment_summary = _payment_summary(customers)
-	sections = []
-	for spec in PORTAL_SECTIONS:
-		doctype = spec["doctype"]
-		sections.append(
-			{
-				**spec,
-				"count": _document_count(doctype, customers, submitted_only=doctype != "Project"),
-				"recent": _recent_rows(doctype, customers),
-			}
-		)
-	return {
-		"customer_names": customers,
-		"customer_label": customers[0] if len(customers) == 1 else _("Your Accounts"),
-		"user": frappe.session.user,
-		"user_full_name": frappe.get_user().get_fullname(),
-		"invoice_summary": invoice_summary,
-		"payment_summary": payment_summary,
-		"sections": sections,
-		"routes": {
-			"quotations": "/quotations",
-			"orders": "/orders",
-			"invoices": "/invoices",
-			"shipments": "/shipments",
-			"projects": "/project",
-		},
-		"security": {
-			"customer_source": "ERPNext Portal User links",
-			"customer_filter_server_derived": True,
-			"native_document_pages": True,
-			"portal_pdf_uses_website_permission": True,
-			"portal_pdf_print_format_browser_selectable": False,
-			"payment_history_read_only": True,
-			"payment_history_base_currency": True,
-			"cross_customer_selection": False,
-		},
-	}
+	sections = [{**spec, "count": _document_count(spec["doctype"], customers, submitted_only=spec["doctype"] != "Project"), "recent": _recent_rows(spec["doctype"], customers)} for spec in PORTAL_SECTIONS]
+	return {"customer_names": customers, "customer_label": customers[0] if len(customers) == 1 else _("Your Accounts"), "user": frappe.session.user, "user_full_name": frappe.get_user().get_fullname(), "invoice_summary": invoice_summary, "payment_summary": payment_summary, "sections": sections, "routes": {"quotations": "/quotations", "orders": "/orders", "invoices": "/invoices", "shipments": "/shipments", "projects": "/project"}, "security": {"customer_source": "ERPNext Portal User links", "customer_filter_server_derived": True, "native_document_pages": True, "portal_pdf_uses_website_permission": True, "portal_pdf_print_format_browser_selectable": False, "payment_history_read_only": True, "payment_history_base_currency": True, "payment_request_native_erpnext": True, "payment_gateway_browser_selectable": False, "payment_entry_created_by_portal": False, "cross_customer_selection": False}}
