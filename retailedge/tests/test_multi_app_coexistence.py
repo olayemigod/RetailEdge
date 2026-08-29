@@ -24,12 +24,11 @@ class TestMultiAppCoexistence(unittest.TestCase):
 		self.assertNotIn('"erpnext.', hooks.split("override_whitelisted_methods = {", 1)[1])
 
 	def test_optional_coreedge_integration_remains_optional(self):
-		source = self.read("coreedge_adapter.py")
-		self.assertIn("get_installed_apps", source)
-		self.assertIn('"coreedge"', source.lower())
-		self.assertNotIn("from coreedge", source)
-		self.assertNotIn("import coreedge", source)
-		self.assertNotIn("required_apps = [\"coreedge\"]", self.read("hooks.py"))
+		hooks = self.read("hooks.py")
+		self.assertIn('required_apps = ["edgesuite_ui"]', hooks)
+		self.assertNotIn('required_apps = ["coreedge"]', hooks.lower())
+		self.assertNotIn("from coreedge", hooks.lower())
+		self.assertNotIn("import coreedge", hooks.lower())
 
 	def test_shared_frontend_runtime_is_edgesuiteui_only(self):
 		for relative in (
