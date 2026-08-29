@@ -69,7 +69,16 @@ def _safe_list(
 def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dict[str, Any]]:
 	meta = frappe.get_meta(doctype)
 	fields = ["name", "modified"]
-	for fieldname in ("status", "transaction_date", "posting_date", "grand_total", "currency", "outstanding_amount", "project_name", "percent_complete"):
+	for fieldname in (
+		"status",
+		"transaction_date",
+		"posting_date",
+		"grand_total",
+		"currency",
+		"outstanding_amount",
+		"project_name",
+		"percent_complete",
+	):
 		if meta.has_field(fieldname):
 			fields.append(fieldname)
 	filters: dict[str, Any] = {}
@@ -108,6 +117,52 @@ def _invoice_summary(customers: list[str]) -> dict[str, Any]:
 	}
 
 
+def _payment_summary(customers: list[str]) -> dict[str, Any]:
+	if not frappe.db.exists("DocType", "Payment Entry"):
+		return {"count": 0, "received": 0.0, "recent": []}
+	rows = frappe.get_list(
+		"Payment Entry",
+		filters={
+			"docstatus": 1,
+			"payment_type": "Receive",
+			"party_type": "Customer",
+			"party": ["in", customers],
+		},
+		fields=[
+			"name",
+			"posting_date",
+			"party",
+			"mode_of_payment",
+			"reference_no",
+			"base_received_amount",
+			"received_amount",
+			"paid_from_account_currency",
+		],
+		order_by="posting_date desc, name desc",
+		limit_page_length=MAX_PORTAL_ROWS,
+		ignore_permissions=True,
+	)
+	recent = []
+	for row in rows[:5]:
+		recent.append(
+			{
+				"name": row.name,
+				"posting_date": row.posting_date,
+				"party": row.party or "",
+				"mode_of_payment": row.mode_of_payment or "",
+				"reference_no": row.reference_no or "",
+				"amount": flt(row.base_received_amount or row.received_amount),
+				"currency": row.paid_from_account_currency or "",
+			}
+		)
+	return {
+		"count": len(rows),
+		"received": sum(flt(row.base_received_amount or row.received_amount) for row in rows),
+		"recent": recent,
+		"scope_note": _("Submitted incoming payments linked to your Customer account. This is payment history, not a wallet balance."),
+	}
+
+
 def _document_count(doctype: str, customers: list[str], submitted_only: bool = False) -> int:
 	meta = frappe.get_meta(doctype)
 	filters: dict[str, Any] = {}
@@ -119,6 +174,7 @@ def _document_count(doctype: str, customers: list[str], submitted_only: bool = F
 def get_customer_portal_context() -> dict[str, Any]:
 	customers = _assert_customer_portal_user()
 	invoice_summary = _invoice_summary(customers)
+	payment_summary = _payment_summary(customers)
 	sections = []
 	for spec in PORTAL_SECTIONS:
 		doctype = spec["doctype"]
@@ -135,6 +191,7 @@ def get_customer_portal_context() -> dict[str, Any]:
 		"user": frappe.session.user,
 		"user_full_name": frappe.get_user().get_fullname(),
 		"invoice_summary": invoice_summary,
+		"payment_summary": payment_summary,
 		"sections": sections,
 		"routes": {
 			"quotations": "/quotations",
@@ -147,6 +204,7 @@ def get_customer_portal_context() -> dict[str, Any]:
 			"customer_source": "ERPNext Portal User links",
 			"customer_filter_server_derived": True,
 			"native_document_pages": True,
+			"payment_history_read_only": True,
 			"cross_customer_selection": False,
 		},
 	}
