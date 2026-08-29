@@ -57,6 +57,15 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn("doc.set(payment_branch_field, branch)", source)
 		self.assertNotIn("same RetailEdge Branch", source)
 
+	def test_project_spend_routes_require_company_and_permission_aware_cost_center(self):
+		source = self.read("project_expense_routing.py")
+		self.assertIn('_assert_read("Company", doc.company)', source)
+		self.assertIn('if cost_center and not _can_read("Cost Center", cost_center):', source)
+		self.assertIn('cost_center = ""', source)
+		self.assertIn("frappe.has_permission(doctype, \"create\")", source)
+		self.assertIn("Purchasing, stock, Budget and accounting controls remain authoritative", source)
+		self.assertNotIn("RetailEdge does not maintain a generic project expense", source)
+
 	def test_guided_accounting_paths_do_not_directly_write_submitted_accounting_truth(self):
 		for relative in (
 			"professional_sales_invoice.py",
@@ -64,6 +73,7 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 			"payment_application.py",
 			"project_receipts.py",
 			"guided_payment.py",
+			"project_expense_routing.py",
 		):
 			source = self.read(relative)
 			for forbidden in (
@@ -75,11 +85,14 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 			):
 				self.assertNotIn(forbidden, source, msg=f"{relative} contains unsafe accounting write {forbidden}")
 
-	def test_runtime_errors_do_not_expose_product_branding(self):
+	def test_runtime_errors_and_policies_do_not_expose_product_branding(self):
 		conversion = self.read("quotation_invoice_conversion.py")
 		project_receipts = self.read("project_receipts.py")
 		advanced = self.read("advanced_payments.py")
 		guided_payment = self.read("guided_payment.py")
+		project_operations = self.read("project_operations.py")
+		project_routing = self.read("project_expense_routing.py")
+		visible_sources = conversion + project_receipts + advanced + guided_payment + project_operations + project_routing
 		for visible_error in (
 			"RetailEdge direct Quotation to Sales Invoice tracking",
 			"RetailEdge could not complete",
@@ -87,8 +100,10 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 			"RetailEdge direct-invoice conversion reservation",
 			"RetailEdge Payment Entry branch attribution",
 			"same RetailEdge Branch",
+			"no RetailEdge project wallet",
+			"RetailEdge does not maintain a generic project expense",
 		):
-			self.assertNotIn(visible_error, conversion + project_receipts + advanced + guided_payment)
+			self.assertNotIn(visible_error, visible_sources)
 		# Stable internal identities remain intentionally unchanged.
 		self.assertIn('CONVERSION_DOCTYPE = "RetailEdge Quotation Invoice Conversion"', conversion)
 
