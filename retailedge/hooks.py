@@ -31,28 +31,32 @@ required_apps = ["edgesuite_ui"]
 app_include_css = [
 	"/assets/retailedge/css/retailedge_cards.css",
 	"/assets/retailedge/css/retailedge_workspace_home.css",
+	"/assets/retailedge/css/retailedge_guided_create_menu.css",
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
-	"/assets/retailedge/js/retailedge_business_hub_page.js",
+	"/assets/retailedge/js/retailedge_business_hub_bootstrap.js",
+	"/assets/retailedge/js/retailedge_reporting_actions.js",
+	"/assets/retailedge/js/new_document_operating_defaults.js",
 ]
 
-# include js, css files in header of web template
+# include js, css files in web template
 # web_include_css = "/assets/retailedge/css/retailedge.css"
 # web_include_js = "/assets/retailedge/js/retailedge.js"
 
 # include custom scss in every website theme (without file extension ".scss")
 # website_theme_scss = "retailedge/public/scss/website"
 
-# include js, css files in header of web form
+# include js in web form
 # webform_include_js = {"doctype": "public/js/doctype.js"}
 # webform_include_css = {"doctype": "public/css/doctype.css"}
 
-# include js in page
+# include custom js in page
 # Report summary cards are styled via native Frappe DOM selectors in CSS.
 
 # include js in doctype views
 doctype_js = {
+	"Bank Account": "public/js/bank_account.js",
 	"Item": "public/js/inventory_documents.js",
 	"Material Request": "public/js/material_request.js",
 	"Purchase Invoice": "public/js/purchase_documents.js",
@@ -80,6 +84,12 @@ doctype_js = {
 	"Stock Reconciliation Item": "public/js/inventory_documents.js",
 	"Packed Item": "public/js/cost_visibility_child_table.js",
 	"Item Default": "public/js/inventory_documents.js",
+	"RetailEdge Cashier Expense": "public/js/customer_facing_labels.js",
+	"RetailEdge Expense Category": "public/js/customer_facing_labels.js",
+	"RetailEdge Daily Sales Audit": "public/js/customer_facing_labels.js",
+	"RetailEdge Payment Statement Import": "public/js/customer_facing_labels.js",
+	"RetailEdge Statement Mapping Template": "public/js/customer_facing_labels.js",
+	"RetailEdge Bank Transaction Match": "public/js/customer_facing_labels.js",
 }
 doctype_list_js = {
 	"Purchase Receipt": "public/js/purchase_documents_list.js",
@@ -94,7 +104,6 @@ doctype_list_js = {
 # Svg Icons
 # ------------------
 # include app icons in desk
-# app_include_icons = "retailedge/public/icons.svg"
 
 # Home Pages
 # ----------
@@ -110,10 +119,7 @@ doctype_list_js = {
 # Generators
 # ----------
 
-# automatically create page for each record of this doctype
-# website_generators = ["Web Page"]
-
-# automatically load and sync documents of this doctype from downstream apps
+# automatically load and sync documents from downstream apps
 # importable_doctypes = [doctype_1]
 
 # Jinja
@@ -133,44 +139,32 @@ doctype_list_js = {
 
 # Uninstallation
 # ------------
-
 # before_uninstall = "retailedge.uninstall.before_uninstall"
 # after_uninstall = "retailedge.uninstall.after_uninstall"
 
 # Integration Setup
-# ------------------
+# -------------------
 # To set up dependencies/integrations with other apps
-# Name of the app being installed is passed as an argument
+# Name of app being installed is passed as an argument
 
 # before_app_install = "retailedge.utils.before_app_install"
 # after_app_install = "retailedge.utils.after_app_install"
 
 # Integration Cleanup
 # -------------------
-# To clean up dependencies/integrations with other apps
-# Name of the app being uninstalled is passed as an argument
-
 # before_app_uninstall = "retailedge.utils.before_app_uninstall"
 # after_app_uninstall = "retailedge.utils.after_app_uninstall"
 
 # Desk Notifications
 # ------------------
-# See frappe.core.notifications.get_notification_config
-
 # notification_config = "retailedge.notifications.get_notification_config"
 
 # Document Events
 # ---------------
-# Hook on document methods and events
-
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
 doc_events = {
+	"Bank Account": {
+		"validate": "retailedge.bank_account_policy.validate_bank_account_branch",
+	},
 	"Sales Invoice": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
 	},
@@ -185,6 +179,7 @@ doc_events = {
 	},
 	"Payment Entry": {
 		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
+		"before_submit": "retailedge.cash_custody.validate_cash_deposit_before_submit",
 	},
 	"Payment Request": {
 		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
@@ -225,117 +220,72 @@ doc_events = {
 
 # Scheduled Tasks
 # ---------------
-
-# scheduler_events = {
-# 	"all": [
-# 		"retailedge.tasks.all"
-# 	],
-# 	"daily": [
-# 		"retailedge.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"retailedge.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"retailedge.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"retailedge.tasks.monthly"
-# 	],
-# }
+# scheduler_events = {}
 
 # Testing
 # -------
-
 # before_tests = "retailedge.install.before_tests"
 after_migrate = [
 	"retailedge.setup_roles.ensure_retailedge_roles",
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
+	"retailedge.cash_custody.ensure_cash_custody_custom_fields",
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
 ]
 boot_session = "retailedge.boot.boot_session"
 
+# Permission scope
+# ------------------------------
+permission_query_conditions = {
+	"RetailEdge Action Follow Up": "retailedge.action_follow_up.get_permission_query_conditions",
+}
+has_permission = {
+	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
+}
+
 # Extend DocType Class
 # ------------------------------
-#
-# Specify custom mixins to extend the standard doctype controller.
-# extend_doctype_class = {
-# 	"Task": "retailedge.custom.task.CustomTaskMixin"
-# }
+# extend_doctype_class = {}
 
 # Overriding Methods
 # ------------------------------
-#
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "retailedge.event.get_events"
-# }
-#
-# each overriding function accepts a `data` argument;
-# generated from the base implementation of the doctype dashboard,
-# along with any modifications made in other apps
-# override_doctype_dashboards = {
-# 	"Task": "retailedge.task.get_dashboard_data"
-# }
-
-# exempt linked doctypes from being automatically cancelled
-#
-# auto_cancel_exempted_doctypes = ["Auto Repeat"]
-
-# Ignore links to specified DocTypes when deleting documents
-# -----------------------------------------------------------
-
-# ignore_links_on_delete = ["Communication", "ToDo"]
+override_whitelisted_methods = {
+	"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "retailedge.master_experience.get_retailedge_business_hub_context",
+	"retailedge.guided_sales_invoice.search_simple_sales_invoice_options": "retailedge.guided_link_search.search_simple_sales_invoice_options",
+	"retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options": "retailedge.guided_link_search.search_simple_purchase_invoice_options",
+	"retailedge.guided_payment.search_simple_payment_options": "retailedge.guided_link_search.search_simple_payment_options",
+	"retailedge.guided_stock_transfer.search_simple_stock_transfer_options": "retailedge.guided_link_search_extended.search_simple_stock_transfer_options",
+	"retailedge.guided_stock_adjustment.search_simple_stock_adjustment_options": "retailedge.guided_link_search_extended.search_simple_stock_adjustment_options",
+	"retailedge.guided_cash_transfer.search_simple_cash_transfer_options": "retailedge.guided_link_search_extended.search_simple_cash_transfer_options",
+	"retailedge.cash_custody.search_cash_deposit_options": "retailedge.guided_link_search_extended.search_cash_deposit_options",
+	"retailedge.sales_reporting.get_sales_reporting_context": "retailedge.operating_report_defaults.get_sales_reporting_context",
+	"retailedge.sales_reporting.search_sales_reporting_options": "retailedge.operating_report_defaults.search_sales_reporting_options",
+	"retailedge.sales_reporting.get_sales_by_item": "retailedge.operating_report_defaults.get_sales_by_item",
+	"retailedge.sales_reporting.get_sales_by_item_export": "retailedge.operating_report_defaults.get_sales_by_item_export",
+	"retailedge.sales_reporting.get_sales_invoice_register": "retailedge.operating_report_defaults.get_sales_invoice_register",
+	"retailedge.sales_reporting.get_sales_invoice_register_export": "retailedge.operating_report_defaults.get_sales_invoice_register_export",
+	"retailedge.purchase_reporting.get_purchase_reporting_context": "retailedge.operating_report_defaults.get_purchase_reporting_context",
+	"retailedge.purchase_reporting.search_purchase_reporting_options": "retailedge.operating_report_defaults.search_purchase_reporting_options",
+	"retailedge.purchase_reporting.get_purchase_register": "retailedge.operating_report_defaults.get_purchase_register",
+	"retailedge.purchase_reporting.get_purchase_register_export": "retailedge.operating_report_defaults.get_purchase_register_export",
+	"retailedge.purchase_reporting.get_supplier_payables": "retailedge.operating_report_defaults.get_supplier_payables",
+	"retailedge.purchase_reporting.get_supplier_payables_export": "retailedge.operating_report_defaults.get_supplier_payables_export",
+	"retailedge.stock_position.get_stock_position_context": "retailedge.operating_report_defaults.get_stock_position_context",
+	"retailedge.stock_position.search_stock_position_options": "retailedge.operating_report_defaults.search_stock_position_options",
+	"retailedge.stock_position.get_stock_position": "retailedge.operating_report_defaults.get_stock_position",
+	"retailedge.stock_position.get_stock_position_export": "retailedge.operating_report_defaults.get_stock_position_export",
+}
 
 # Request Events
-# ----------------
-# before_request = ["retailedge.utils.before_request"]
-# after_request = ["retailedge.utils.after_request"]
+# ------------------
+# before_request = []
+# after_request = []
 
 # Job Events
 # ----------
-# before_job = ["retailedge.utils.before_job"]
-# after_job = ["retailedge.utils.after_job"]
-
-# User Data Protection
-# --------------------
-
-# user_data_fields = [
-# 	{
-# 		"doctype": "{doctype_1}",
-# 		"filter_by": "{filter_by}",
-# 		"redact_fields": ["{field_1}", "{field_2}"],
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_2}",
-# 		"filter_by": "{filter_by}",
-# 		"partial": 1,
-# 	},
-# 	{
-# 		"doctype": "{doctype_3}",
-# 		"strict": False,
-# 	},
-# 	{
-# 		"doctype": "{doctype_4}"
-# 	}
-# ]
+# before_job = []
+# after_job = []
 
 # Authentication and authorization
 # --------------------------------
-
-# auth_hooks = [
-# 	"retailedge.auth.validate"
-# ]
-
-# Automatically update python controller files with type annotations for this app.
-# export_python_type_annotations = True
-
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
-
-# Translation
-# ------------
-# List of apps whose translatable strings should be excluded from this app's translations.
-# ignore_translatable_strings_from = []
+# auth_hooks = []

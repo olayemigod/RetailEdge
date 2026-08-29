@@ -1,0 +1,327 @@
+<template>
+	<div v-if="!edgeUIValid" class="p-6 text-center">
+		<strong>Professional Selling could not start.</strong>
+		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+	</div>
+	<EdgeAppShell
+		v-else
+		product="RetailEdge"
+		title="Professional Selling"
+		:tenantName="tenantName"
+		:branchName="branchName"
+		:userName="userName"
+		:menuItems="menuItems"
+		activeRoute="/app/professional-selling"
+		:hideNativeSidebar="true"
+		@navigate="handleNavigation"
+	>
+		<EdgePageLayout class="retailedge-professional-selling-page">
+			<EdgePageHeader
+				title="Professional Selling"
+				description="Prepare quotations, orders, deliveries and invoices using the documents your transaction actually needs while ERPNext remains the system of record."
+			/>
+
+			<EdgeLoadingState v-if="loading && !loaded" />
+			<EdgeErrorState v-else-if="error" :message="error" @retry="loadWorkspace" />
+
+			<div v-else class="selling-content">
+				<section class="edge-panel selling-context">
+					<div>
+						<span class="selling-kicker">Operating context</span>
+						<h3>{{ tenantName || "No operating company" }}</h3>
+						<p>{{ branchName || "No operating branch selected" }}</p>
+					</div>
+					<div class="context-meta">
+						<span>Selling Price List</span>
+						<strong>{{ pricing.price_list || "ERPNext default" }}</strong>
+					</div>
+					<button type="button" class="edge-button edge-button--secondary" @click="openOperatingContext">Change Operating Context</button>
+				</section>
+
+				<section class="edge-panel policy-panel">
+					<div>
+						<span class="selling-kicker">Flexible selling paths</span>
+						<h3>Use the next document the business transaction requires</h3>
+						<p>A Quotation can become an Order or go directly to Invoice. Orders can be delivered or invoiced. Delivery Notes can be invoiced. ERPNext pricing, taxes, Shipping Rules, stock and accounting remain authoritative.</p>
+					</div>
+					<EdgeStatusBadge :status="shipping.available ? 'Active' : 'Warning'" />
+				</section>
+
+				<div class="selling-flow" aria-label="Professional selling documents">
+					<section v-for="(document, index) in documents" :key="document.key" class="edge-panel selling-stage">
+						<div class="stage-heading">
+							<span class="stage-number">{{ index + 1 }}</span>
+							<div>
+								<span class="selling-kicker">{{ document.stage }}</span>
+								<h3>{{ document.label }}</h3>
+							</div>
+						</div>
+						<p>{{ stageDescription(document.key) }}</p>
+						<div class="stage-flags">
+							<span v-if="document.selling_price_list_field">Price List</span>
+							<span v-if="document.shipping_rule_field">Shipping Rule</span>
+							<span v-if="document.source_warehouse_field">Stock Location</span>
+							<span v-if="document.key === 'sales-invoice'">Flexible Conversion</span>
+						</div>
+						<div class="selling-actions">
+							<button v-if="document.can_create" type="button" class="edge-button edge-button--primary" @click="startCreate(document)">{{ createLabel(document) }}</button>
+							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="openNative(document)">View Records</button>
+							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="loadRecent(document)">Recent</button>
+						</div>
+					</section>
+				</div>
+
+				<section v-if="recentDocument" class="edge-panel recent-panel">
+					<div class="recent-heading">
+						<div>
+							<span class="selling-kicker">Recent {{ recentDocument.label }}</span>
+							<h3>Latest records</h3>
+						</div>
+						<button type="button" class="edge-button edge-button--secondary" @click="clearRecent">Close</button>
+					</div>
+					<EdgeLoadingState v-if="recentLoading" message="Loading recent records..." />
+					<EdgeEmptyState v-else-if="!recentRows.length" title="No records found" description="No permitted records are available for this document type." />
+					<div v-else class="recent-list">
+						<button v-for="row in recentRows" :key="row.name" type="button" class="recent-row" @click="openRecord(recentDocument, row.name)">
+							<strong>{{ row.name }}</strong>
+							<span>{{ row.customer || row.party_name || row.status || "Draft" }}</span>
+							<span v-if="row.grand_total !== undefined">{{ row.currency || "" }} {{ row.grand_total }}</span>
+						</button>
+					</div>
+				</section>
+			</div>
+
+			<ProfessionalQuotationDialog
+				:open="quotationOpen"
+				:context="sellingContext"
+				@close="quotationOpen = false"
+				@saved="handleQuotationSaved"
+				@open-native="openQuotationNative"
+			/>
+			<ProfessionalSalesOrderDialog
+				:open="salesOrderOpen"
+				:context="sellingContext"
+				@close="salesOrderOpen = false"
+				@saved="handleSalesOrderSaved"
+				@open-native="openSalesOrderNative"
+			/>
+			<ProfessionalDeliveryDialog
+				:open="deliveryOpen"
+				:context="sellingContext"
+				@close="deliveryOpen = false"
+				@saved="handleDeliverySaved"
+				@open-native="openDeliveryNative"
+			/>
+			<ProfessionalSalesInvoiceDialog
+				:open="salesInvoiceOpen"
+				:context="sellingContext"
+				@close="salesInvoiceOpen = false"
+				@saved="handleSalesInvoiceSaved"
+				@open-native="openSalesInvoiceNative"
+			/>
+		</EdgePageLayout>
+	</EdgeAppShell>
+</template>
+
+<script>
+import ProfessionalQuotationDialog from "./ProfessionalQuotationDialog.vue";
+import ProfessionalSalesOrderDialog from "./ProfessionalSalesOrderDialog.vue";
+import ProfessionalDeliveryDialog from "./ProfessionalDeliveryDialog.vue";
+import ProfessionalSalesInvoiceDialog from "./ProfessionalSalesInvoiceDialog.vue";
+
+const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
+const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability";
+const RECENT_METHOD = "retailedge.professional_selling.get_recent_selling_documents";
+const RECENT_INVOICE_METHOD = "retailedge.professional_sales_invoice.get_recent_professional_sales_invoices";
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
+
+function runtimeComponents() {
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	return edgeUI?.components || edgeUI || {};
+}
+
+function callMethod(method, args = {}) {
+	return new Promise((resolve, reject) => {
+		frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject });
+	});
+}
+
+function doctypeSlug(doctype) {
+	return String(doctype || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function errorMessage(error, fallback) {
+	return error?.message || error?.exc || error?._server_messages || fallback;
+}
+
+export default {
+	name: "RetailEdgeProfessionalSelling",
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		ProfessionalQuotationDialog,
+		ProfessionalSalesOrderDialog,
+		ProfessionalDeliveryDialog,
+		ProfessionalSalesInvoiceDialog,
+	},
+	data() {
+		return {
+			edgeUIValid: true,
+			missingComponents: [],
+			loading: false,
+			loaded: false,
+			error: "",
+			tenantName: "",
+			branchName: "",
+			userName: "",
+			menuItems: [],
+			pricing: {},
+			shipping: {},
+			documents: [],
+			sellingContext: {},
+			quotationOpen: false,
+			salesOrderOpen: false,
+			deliveryOpen: false,
+			salesInvoiceOpen: false,
+			recentDocument: null,
+			recentRows: [],
+			recentLoading: false,
+		};
+	},
+	created() {
+		const components = runtimeComponents();
+		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
+		this.edgeUIValid = this.missingComponents.length === 0;
+		this._onPageShow = () => this.loadWorkspace();
+	},
+	mounted() {
+		window.addEventListener("retailedge-professional-selling-page-show", this._onPageShow);
+		if (this.edgeUIValid) this.loadWorkspace();
+	},
+	beforeUnmount() {
+		window.removeEventListener("retailedge-professional-selling-page-show", this._onPageShow);
+	},
+	methods: {
+		async loadWorkspace() {
+			if (this.loading) return;
+			this.loading = true;
+			this.error = "";
+			try {
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
+					? window.retailedgeGetBusinessHubContext()
+					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
+				const [selling, invoice, navigation] = await Promise.all([
+					callMethod(CONTEXT_METHOD),
+					callMethod(INVOICE_CAPABILITY_METHOD),
+					navigationPromise,
+				]);
+				this.sellingContext = selling || {};
+				this.tenantName = selling.operating?.company || navigation.context?.company || "";
+				this.branchName = selling.operating?.branch || navigation.context?.branch || "";
+				this.userName = navigation.context?.user_name || selling.user_name || "";
+				this.pricing = selling.pricing || {};
+				this.shipping = selling.shipping || {};
+				const allDocuments = [...(Array.isArray(selling.documents) ? selling.documents : []), invoice];
+				this.documents = allDocuments.filter((row) => row?.available && (row.can_read || row.can_create));
+				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.loaded = true;
+			} catch (error) {
+				this.error = errorMessage(error, "Professional Selling failed to load.");
+			} finally {
+				this.loading = false;
+			}
+		},
+		mapNavigationGroups(groups) {
+			return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) }));
+		},
+		routeForItem(item) {
+			if (item.target_type === "Page") return `/app/${item.target}`;
+			if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
+			if (item.target_type === "DocType") return `/app/${doctypeSlug(item.target)}`;
+			return item.target || "";
+		},
+		handleNavigation(route) {
+			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
+			if (!item) return;
+			if (item.target_type === "Page") frappe.set_route(item.target);
+			else if (item.target) window.open(route || item.target, "_blank", "noopener,noreferrer");
+		},
+		stageDescription(key) {
+			return ({
+				quotation: "Prepare a customer offer using ERPNext pricing, taxes and optional Shipping Rule before commitment.",
+				"sales-order": "Confirm an order when the business needs order tracking, fulfilment or a customer PO workflow.",
+				"delivery-note": "Record fulfilment from a submitted Sales Order using ERPNext remaining quantities and stock truth.",
+				"sales-invoice": "Invoice directly, from an accepted Quotation, from a Sales Order, or from a Delivery Note while preserving ERPNext accounting controls.",
+			})[key] || "Continue the selling workflow.";
+		},
+		createLabel(document) {
+			if (document?.key === "quotation") return "Guided Quotation";
+			if (document?.key === "sales-order") return "Guided Sales Order";
+			if (document?.key === "delivery-note") return "Create Delivery";
+			if (document?.key === "sales-invoice") return "Create / Convert Invoice";
+			return `Create ${document?.label || "Document"}`;
+		},
+		startCreate(document) {
+			if (document?.key === "quotation") { this.quotationOpen = true; return; }
+			if (document?.key === "sales-order") { this.salesOrderOpen = true; return; }
+			if (document?.key === "delivery-note") { this.deliveryOpen = true; return; }
+			if (document?.key === "sales-invoice") { this.salesInvoiceOpen = true; return; }
+			this.createNative(document);
+		},
+		createNative(document) {
+			window.open(`/app/${doctypeSlug(document.doctype)}/new`, "_blank", "noopener,noreferrer");
+		},
+		openNative(document) {
+			window.open(document.native_route || `/app/${doctypeSlug(document.doctype)}`, "_blank", "noopener,noreferrer");
+		},
+		openRecord(document, name) {
+			window.open(`/app/${doctypeSlug(document.doctype)}/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer");
+		},
+		handleQuotationSaved(result) { this.quotationOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
+		openQuotationNative() { this.quotationOpen = false; this.createNative({ doctype: "Quotation" }); },
+		handleSalesOrderSaved(result) { this.salesOrderOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
+		openSalesOrderNative() { this.salesOrderOpen = false; this.createNative({ doctype: "Sales Order" }); },
+		handleDeliverySaved(result) { this.deliveryOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
+		openDeliveryNative() { this.deliveryOpen = false; this.createNative({ doctype: "Delivery Note" }); },
+		handleSalesInvoiceSaved(result) { this.salesInvoiceOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
+		openSalesInvoiceNative() { this.salesInvoiceOpen = false; this.createNative({ doctype: "Sales Invoice" }); },
+		async loadRecent(document) {
+			this.recentDocument = document;
+			this.recentRows = [];
+			this.recentLoading = true;
+			try {
+				const method = document.key === "sales-invoice" ? RECENT_INVOICE_METHOD : RECENT_METHOD;
+				const args = document.key === "sales-invoice" ? { limit: 8 } : { document: document.key, limit: 8 };
+				const rows = await callMethod(method, args);
+				this.recentRows = Array.isArray(rows) ? rows : [];
+			} catch (error) {
+				this.error = errorMessage(error, `Could not load recent ${document.label}.`);
+			} finally {
+				this.recentLoading = false;
+			}
+		},
+		clearRecent() { this.recentDocument = null; this.recentRows = []; },
+		openOperatingContext() { frappe.set_route("operating-context"); },
+	},
+};
+</script>
+
+<style scoped>
+.selling-content { display: grid; gap: 1rem; }
+.edge-panel { padding: 1.25rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.75rem; background: var(--edge-surface, var(--card-bg)); }
+.selling-context, .policy-panel, .recent-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.selling-context h3, .policy-panel h3, .selling-stage h3, .recent-panel h3 { margin: 0.2rem 0 0.35rem; }
+.selling-context p, .policy-panel p, .selling-stage p { margin: 0; color: var(--text-muted); }
+.selling-kicker { color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.context-meta { display: grid; gap: 0.2rem; min-width: 12rem; }
+.context-meta span { color: var(--text-muted); font-size: 0.8rem; }
+.selling-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; align-items: stretch; }
+.selling-stage { min-height: 14rem; display: flex; flex-direction: column; gap: 0.8rem; }
+.stage-heading { display: flex; gap: 0.75rem; align-items: flex-start; }
+.stage-number { width: 2rem; height: 2rem; border-radius: 999px; display: inline-grid; place-items: center; background: var(--subtle-fg, var(--control-bg)); font-weight: 700; }
+.stage-flags, .selling-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: auto; }
+.stage-flags span { padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--subtle-fg, var(--control-bg)); color: var(--text-muted); font-size: 0.75rem; }
+.recent-list { display: grid; gap: 0.5rem; margin-top: 1rem; }
+.recent-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 1rem; text-align: left; align-items: center; width: 100%; padding: 0.75rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.6rem; background: transparent; color: inherit; }
+@media (max-width: 1100px) { .selling-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .selling-flow { grid-template-columns: 1fr; } .selling-context, .policy-panel, .recent-heading { flex-direction: column; } .recent-row { grid-template-columns: 1fr; } }
+</style>

@@ -7,6 +7,7 @@
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
 	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge.js";
 	const LOAD_TIMEOUT_MS = 15000;
+	const FRAPPE_REQUIRE_POLL_MS = 50;
 	let productMenuBootPromise = null;
 	let routeBridgeBootPromise = null;
 	let activeWrapper = null;
@@ -44,7 +45,9 @@
 
 			const component = getMountedComponent(currentWrapper);
 			if (component && typeof component.refreshContext === "function") {
-				return component.refreshContext();
+				return component.refreshContext().finally(() => {
+					enforceCreateVisibility(currentWrapper._retailedgeBusinessHubRoot?.[0]);
+				});
 			}
 			return undefined;
 		};
@@ -52,18 +55,29 @@
 		return true;
 	}
 
+	function suppressNativePageChrome(wrapper) {
+		if (!wrapper) return;
+		$(wrapper).addClass("retailedge-edge-shell-page");
+		const pageHead = $(wrapper).find(".page-head").first();
+		if (!pageHead.length) return;
+		pageHead.attr("data-retailedge-shell-suppressed", "1");
+		pageHead.hide();
+	}
+
 	function ensurePage(wrapper) {
 		if (wrapper.page && wrapper._retailedgeBusinessHubTarget) {
+			suppressNativePageChrome(wrapper);
 			return wrapper.page;
 		}
 
 		const page = frappe.ui.make_app_page({
 			parent: wrapper,
-			title: __("RetailEdge Business Hub"),
+			title: __("Business Hub"),
 			single_column: true,
 		});
 		wrapper.page = page;
 		wrapper._retailedgeBusinessHubTarget = resolvePageBody(page, wrapper);
+		suppressNativePageChrome(wrapper);
 		return page;
 	}
 
@@ -81,8 +95,7 @@
 
 	async function mountBusinessHub(wrapper) {
 		ensurePage(wrapper);
-		const target =
-			wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
+		const target = wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
 		clearPreviousMount(wrapper, target);
 		const loading = renderLoading(target);
 
@@ -96,12 +109,7 @@
 				await requireAsset(PRODUCT_ASSET);
 			}
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
-				throw new Error(
-					__(
-						"RetailEdge Business Hub bundle loaded without exposing its mount function: {0}",
-						[PRODUCT_ASSET]
-					)
-				);
+				throw new Error(__("Business Hub could not start because its interface bundle did not register correctly."));
 			}
 
 			if (!isBusinessHubRoute() || activeWrapper !== wrapper) {
@@ -113,6 +121,7 @@
 			const root = $('<div class="retailedge-business-hub-root"></div>').appendTo(target);
 			wrapper._retailedgeBusinessHubRoot = root;
 			wrapper._retailedgeBusinessHub = global.mountRetailEdgeBusinessHub(root[0]);
+			installCreateVisibilityGuard(root[0]);
 			global.retailedgeRefreshProductMenu?.();
 			return wrapper._retailedgeBusinessHub;
 		} catch (mountError) {
@@ -124,20 +133,35 @@
 		}
 	}
 
+	function enforceCreateVisibility(root) {
+		if (!root) return;
+		root.querySelectorAll(".hub-create-button").forEach((button) => {
+			const unavailable = button.disabled || button.getAttribute("aria-disabled") === "true";
+			button.hidden = unavailable;
+			button.setAttribute("aria-hidden", unavailable ? "true" : "false");
+		});
+	}
+
+	function installCreateVisibilityGuard(root) {
+		if (!root || root.__retailedgeCreateVisibilityObserver) return;
+		enforceCreateVisibility(root);
+		const observer = new MutationObserver(() => enforceCreateVisibility(root));
+		observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled", "aria-disabled"] });
+		root.__retailedgeCreateVisibilityObserver = observer;
+	}
+
 	function teardownBusinessHub() {
 		const wrapper = activeWrapper;
 		activeWrapper = null;
 		if (wrapper) {
-			const target =
-				wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
+			const root = wrapper._retailedgeBusinessHubRoot?.[0];
+			root?.__retailedgeCreateVisibilityObserver?.disconnect?.();
+			if (root) root.__retailedgeCreateVisibilityObserver = null;
+			const target = wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
 			clearPreviousMount(wrapper, target);
 			wrapper._retailedgeBusinessHubBootPromise = null;
 		}
-		$(global.document)
-			.find(
-				".retailedge-business-hub-root, .retailedge-business-hub-error, .edge-boot-loading"
-			)
-			.remove();
+		$(global.document).find(".retailedge-business-hub-root, .retailedge-business-hub-error, .edge-boot-loading").remove();
 		return true;
 	}
 
@@ -150,12 +174,7 @@
 		productMenuBootPromise = requireAsset(PRODUCT_MENU_ASSET)
 			.then(() => {
 				if (typeof global.retailedgeInstallProductMenu !== "function") {
-					throw new Error(
-						__(
-							"RetailEdge product-menu bundle loaded without exposing its installer: {0}",
-							[PRODUCT_MENU_ASSET]
-						)
-					);
+					throw new Error(__("RetailEdge product-menu bundle loaded without exposing its installer: {0}", [PRODUCT_MENU_ASSET]));
 				}
 				return global.retailedgeInstallProductMenu();
 			})
@@ -178,19 +197,12 @@
 		routeBridgeBootPromise = requireAsset(ROUTE_BRIDGE_ASSET)
 			.then(() => {
 				if (!global.retailedgeBusinessHubRouteBridge) {
-					throw new Error(
-						__("RetailEdge Business Hub route bridge failed to register: {0}", [
-							ROUTE_BRIDGE_ASSET,
-						])
-					);
+					throw new Error(__("RetailEdge Business Hub route bridge failed to register: {0}", [ROUTE_BRIDGE_ASSET]));
 				}
 				return global.retailedgeBusinessHubRouteBridge.boot();
 			})
 			.catch((bridgeError) => {
-				console.error(
-					"[RetailEdge Business Hub] route bridge failed to load",
-					bridgeError
-				);
+				console.error("[RetailEdge Business Hub] route bridge failed to load", bridgeError);
 				return null;
 			})
 			.finally(() => {
@@ -205,104 +217,94 @@
 	}
 
 	function resolvePageBody(page, wrapper) {
-		if (page && page.body) {
-			return page.body;
-		}
-		if (page && page.main) {
-			return page.main;
-		}
+		if (page && page.body) return page.body;
+		if (page && page.main) return page.main;
 		const fallback = $(wrapper).find(".layout-main-section").first();
 		return fallback.length ? fallback : $(wrapper);
 	}
 
 	function clearPreviousMount(wrapper, target) {
+		const root = wrapper._retailedgeBusinessHubRoot?.[0];
+		root?.__retailedgeCreateVisibilityObserver?.disconnect?.();
+		if (root) root.__retailedgeCreateVisibilityObserver = null;
 		const instance = wrapper._retailedgeBusinessHub;
 		if (instance && typeof instance.unmount === "function") {
 			try {
 				instance.unmount();
 			} catch (unmountError) {
-				console.warn(
-					"[RetailEdge Business Hub] previous app unmount failed",
-					unmountError
-				);
+				console.warn("[RetailEdge Business Hub] previous app unmount failed", unmountError);
 			}
 		}
 		wrapper._retailedgeBusinessHub = null;
 		wrapper._retailedgeBusinessHubRoot = null;
-		$(target)
-			.find(
-				".retailedge-business-hub-root, .retailedge-business-hub-error, .edge-boot-loading"
-			)
-			.remove();
+		$(target).find(".retailedge-business-hub-root, .retailedge-business-hub-error, .edge-boot-loading").remove();
 	}
 
 	function renderLoading(target) {
-		return $('<div class="edge-boot-loading p-6 text-center text-muted"></div>')
-			.text(__("Loading RetailEdge Business Hub..."))
-			.appendTo(target);
+		return $('<div class="edge-boot-loading p-6 text-center text-muted"></div>').text(__("Loading Business Hub...")).appendTo(target);
 	}
 
 	function requireAsset(asset) {
 		return new Promise((resolve, reject) => {
 			let settled = false;
+			let pollTimer = null;
+			const deadlineTimer = global.setTimeout(
+				() => fail(new Error(__("Timed out waiting for the Frappe asset loader while loading {0}", [asset]))),
+				LOAD_TIMEOUT_MS
+			);
+			const clearTimers = () => {
+				global.clearTimeout(deadlineTimer);
+				if (pollTimer) global.clearTimeout(pollTimer);
+			};
 			const finish = () => {
 				if (settled) return;
 				settled = true;
-				global.clearTimeout(timer);
+				clearTimers();
 				resolve();
 			};
 			const fail = (error) => {
 				if (settled) return;
 				settled = true;
-				global.clearTimeout(timer);
+				clearTimers();
 				reject(error instanceof Error ? error : new Error(String(error || asset)));
 			};
-			const timer = global.setTimeout(() => {
-				fail(new Error(__("Timed out loading {0}", [asset])));
-			}, LOAD_TIMEOUT_MS);
-
-			try {
-				const pending = frappe.require(asset, finish);
-				if (pending && typeof pending.then === "function") {
-					pending.then(finish).catch(fail);
+			const attemptRequire = () => {
+				if (settled) return;
+				if (!global.frappe || typeof global.frappe.require !== "function") {
+					pollTimer = global.setTimeout(attemptRequire, FRAPPE_REQUIRE_POLL_MS);
+					return;
 				}
-			} catch (requireError) {
-				fail(requireError);
-			}
+				try {
+					const pending = global.frappe.require(asset, finish);
+					if (pending && typeof pending.then === "function") pending.then(finish).catch(fail);
+				} catch (requireError) {
+					fail(requireError);
+				}
+			};
+
+			attemptRequire();
 		});
 	}
 
 	function assertEdgeSuiteUIRuntime() {
 		const runtime = global.EdgeSuiteUI;
 		if (!runtime || typeof runtime.createEdgeApp !== "function") {
-			throw new Error(__("Standalone EdgeSuite UI runtime is unavailable or incompatible."));
+			throw new Error(__("Business Hub could not start because the interface runtime is unavailable or incompatible."));
 		}
 
 		const components = runtime.components || runtime;
-		const required = [
-			"EdgeAppShell",
-			"EdgePageLayout",
-			"EdgePageHeader",
-			"EdgeLoadingState",
-			"EdgeErrorState",
-			"EdgeEmptyState",
-			"EdgeStatusBadge",
-		];
+		const required = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
 		const missing = required.filter((name) => !components[name]);
 		if (missing.length) {
-			throw new Error(
-				__("EdgeSuite UI is missing required components: {0}", [missing.join(", ")])
-			);
+			console.error("[RetailEdge Business Hub] missing interface components", missing);
+			throw new Error(__("Business Hub could not start because required interface components are unavailable."));
 		}
 	}
 
 	function renderFailure(target, failure) {
-		const message =
-			failure && failure.message ? failure.message : __("Unknown loading error.");
-		const errorBox = $(
-			'<div class="retailedge-business-hub-error alert alert-danger p-6 text-center"></div>'
-		);
-		errorBox.append($("<strong></strong>").text(__("RetailEdge Business Hub failed to load")));
+		const message = failure && failure.message ? failure.message : __("Unknown loading error.");
+		const errorBox = $('<div class="retailedge-business-hub-error alert alert-danger p-6 text-center"></div>');
+		errorBox.append($("<strong></strong>").text(__("Business Hub failed to load")));
 		errorBox.append($('<div class="mt-2"></div>').text(message));
 		errorBox.appendTo(target);
 	}
@@ -320,8 +322,6 @@
 	global.retailedgeBootProductMenu = bootProductMenu;
 	global.retailedgeBootBusinessHubRouteBridge = bootRouteBridge;
 	if (!initialiseDeskFeatures() && global.document) {
-		global.document.addEventListener("DOMContentLoaded", initialiseDeskFeatures, {
-			once: true,
-		});
+		global.document.addEventListener("DOMContentLoaded", initialiseDeskFeatures, { once: true });
 	}
 })(window);

@@ -1621,7 +1621,23 @@ class BankTransactionMatchWorkflowTests(unittest.TestCase):
 			synced_to_sales_invoice=0,
 		)
 		mock_get_doc.return_value = doc
-		mock_get_value.side_effect = ["RE-BTM-2026-0001"]
+
+		def get_value_side_effect(doctype, *args, **kwargs):
+			if doctype == "Payment Entry":
+				return frappe._dict(
+					{
+						"name": "PE-0001",
+						"payment_type": "Receive",
+						"paid_from": "Debtors - RC",
+						"paid_to": "Bank - RC",
+						"docstatus": 1,
+					}
+				)
+			if doctype == "RetailEdge Bank Transaction Match":
+				return "RE-BTM-2026-0001"
+			return None
+
+		mock_get_value.side_effect = get_value_side_effect
 		with self.assertRaises(frappe.ValidationError):
 			confirm_bank_transaction_match("RE-BTM-2026-0002", decision_note="Conflict")
 

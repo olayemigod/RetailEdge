@@ -91,6 +91,7 @@ def get_payment_event_reconciliation_context(candidate_doctype, candidate_name, 
 		fields = [
 			"name",
 			"posting_date",
+			"payment_type",
 			"paid_to",
 			"paid_from",
 			"received_amount",
@@ -106,12 +107,29 @@ def get_payment_event_reconciliation_context(candidate_doctype, candidate_name, 
 		if has_field("Payment Entry", "retailedge_branch"):
 			fields.append("retailedge_branch")
 		row = frappe.db.get_value("Payment Entry", name, fields, as_dict=True) or {}
+		direction = cstr(
+			match_doc.get("direction") or match_doc.get("bank_direction")
+		).strip()
+		payment_type = cstr(row.get("payment_type")).strip()
+
+		if direction == "Inflow" or (not direction and payment_type == "Receive"):
+			candidate_account = cstr(row.get("paid_to")).strip()
+			candidate_amount = flt(row.get("received_amount"))
+		elif direction == "Outflow" or (not direction and payment_type == "Pay"):
+			candidate_account = cstr(row.get("paid_from")).strip()
+			candidate_amount = flt(row.get("paid_amount"))
+		else:
+			# Internal Transfer and unknown payment types must have an explicit
+			# Bank Transaction direction. Do not guess which ledger is being reconciled.
+			candidate_account = ""
+			candidate_amount = 0
+
 		return {
 			"candidate_doctype": doctype,
 			"candidate_name": name,
 			"candidate_date": row.get("posting_date"),
-			"candidate_account": cstr(row.get("paid_to") or row.get("paid_from")).strip(),
-			"candidate_amount": flt(row.get("received_amount") or row.get("paid_amount")),
+			"candidate_account": candidate_account,
+			"candidate_amount": candidate_amount,
 			"candidate_mode_of_payment": row.get("mode_of_payment"),
 			"candidate_reference": row.get("reference_no"),
 			"candidate_party": row.get("party"),

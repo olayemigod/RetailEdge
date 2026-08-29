@@ -60,6 +60,14 @@
   "last_action",
   "last_action_by",
   "last_action_on",
+  "reconciliation_approval_section",
+  "approval_status",
+  "approval_requested_by",
+  "approval_requested_on",
+  "approved_by",
+  "approved_on",
+  "approval_note",
+  "approval_candidate_identity",
   "sync_readiness_section",
   "sales_invoice_sync_ready",
   "sync_blocked_reason",
@@ -86,7 +94,7 @@
   {
    "fieldname": "match_identity_section",
    "fieldtype": "Section Break",
-   "label": "Match Identity"
+   "label": "Match Details"
   },
   {
    "default": "RE-BTM-.YYYY.-.####",
@@ -160,7 +168,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "Suggested Document Type",
-   "options": "Sales Invoice\nPayment Entry"
+   "options": "Sales Invoice\nPayment Entry\nJournal Entry"
   },
   {
    "fieldname": "suggested_document",
@@ -206,7 +214,7 @@
    "fieldname": "candidate_amount",
    "fieldtype": "Currency",
    "in_list_view": 1,
-   "label": "SI/PE Amount"
+   "label": "Candidate Amount"
   },
   {
    "fieldname": "amount_difference",
@@ -375,9 +383,63 @@
    "read_only": 1
   },
   {
+   "fieldname": "reconciliation_approval_section",
+   "fieldtype": "Section Break",
+   "label": "Reconciliation Approval"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "approval_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Approval Status",
+   "options": "Pending\nApproved\nDeclined\nInvalidated\nNot Required",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_requested_by",
+   "fieldtype": "Link",
+   "label": "Approval Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_requested_on",
+   "fieldtype": "Datetime",
+   "label": "Approval Requested On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_note",
+   "fieldtype": "Small Text",
+   "label": "Approval Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approval_candidate_identity",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Approval Candidate Identity",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
    "fieldname": "sync_readiness_section",
    "fieldtype": "Section Break",
-   "label": "Sync Readiness"
+   "label": "Sales Invoice Sync"
   },
   {
    "fieldname": "sales_invoice_sync_ready",
@@ -401,7 +463,7 @@
   {
    "fieldname": "technical_section",
    "fieldtype": "Section Break",
-   "label": "Technical"
+   "label": "System Details"
   },
   {
    "default": "Bank Transaction Matching",
@@ -556,19 +618,19 @@
   {
    "fieldname": "execution_candidate_doctype",
    "fieldtype": "Data",
-   "label": "Execution Candidate DocType",
+   "label": "Execution Candidate Type",
    "read_only": 1
   },
   {
    "fieldname": "execution_candidate_name",
    "fieldtype": "Data",
-   "label": "Execution Candidate Name",
+   "label": "Execution Candidate",
    "read_only": 1
   },
   {
    "fieldname": "execution_payment_event_identity",
    "fieldtype": "Data",
-   "label": "Execution Payment Event Identity",
+   "label": "Payment Event Reference",
    "read_only": 1
   }
  ],
