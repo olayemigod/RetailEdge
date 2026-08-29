@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 import frappe
@@ -90,11 +91,36 @@ def _payment_request_map(invoice_names: list[str]) -> dict[str, dict[str, Any]]:
 def _active_dunning_map(invoice_names: list[str], *, company: str) -> dict[str, dict[str, Any]]:
 	if not invoice_names or not company or not _can_read_doctype("Dunning"):
 		return {}
-	# Parent Dunning names are permission-filtered first. Child rows are then read
-	# only from those permitted parents; Overdue Payment has no standalone roles.
+
+	# Overdue Payment is a child table with no standalone permission model. Read it
+	# only to discover candidate Dunning parents for the already-permitted invoice
+	# set, then apply normal permission-filtered Dunning reads before exposing data.
+	candidate_links = frappe.get_all(
+		"Overdue Payment",
+		filters={
+			"parenttype": "Dunning",
+			"parentfield": "overdue_payments",
+			"sales_invoice": ["in", invoice_names],
+		},
+		fields=["parent", "sales_invoice"],
+		limit=MAX_COLLECTION_ROWS,
+	)
+	if not candidate_links:
+		return {}
+
+	invoices_by_parent: dict[str, set[str]] = defaultdict(set)
+	for link in candidate_links:
+		parent = str(link.parent or "")
+		invoice = str(link.sales_invoice or "")
+		if parent and invoice:
+			invoices_by_parent[parent].add(invoice)
+	if not invoices_by_parent:
+		return {}
+
 	parents = frappe.get_list(
 		"Dunning",
 		filters={
+			"name": ["in", list(invoices_by_parent)],
 			"company": company,
 			"docstatus": ["<", 2],
 			"status": ["in", sorted(ACTIVE_DUNNING_STATUSES)],
@@ -103,18 +129,12 @@ def _active_dunning_map(invoice_names: list[str], *, company: str) -> dict[str, 
 		order_by="creation desc",
 		limit=MAX_COLLECTION_ROWS,
 	)
-	if not parents:
-		return {}
 
-	invoice_set = set(invoice_names)
 	result: dict[str, dict[str, Any]] = {}
 	for parent in parents:
-		doc = frappe.get_doc("Dunning", parent.name)
-		doc.check_permission("read")
-		for payment in doc.get("overdue_payments") or []:
-			invoice = str(payment.get("sales_invoice") or "")
-			if invoice in invoice_set and invoice not in result:
-				result[invoice] = {"name": doc.name, "status": doc.status or ""}
+		for invoice in invoices_by_parent.get(str(parent.name or ""), set()):
+			if invoice not in result:
+				result[invoice] = {"name": parent.name, "status": parent.status or ""}
 	return result
 
 
