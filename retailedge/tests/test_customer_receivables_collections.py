@@ -88,6 +88,23 @@ class TestCustomerReceivablesCollections(TestCase):
 		self.assertIn("select name from `tabSales Invoice` where name=%s for update", self.actions)
 		self.assertGreaterEqual(self.actions.count("_assert_invoice_scope(invoice)"), 2)
 
+	def test_hidden_existing_native_records_block_duplicates_without_identifier_leak(self):
+		self.assertIn("Existence detection is intentionally permissionless", self.actions)
+		self.assertIn('frappe.get_all(\n\t\t"Payment Request"', self.actions)
+		self.assertIn('frappe.get_all(\n\t\t"Dunning"', self.actions)
+		self.assertIn('if not frappe.has_permission(doctype, "read", doc=row.name):', self.actions)
+		self.assertIn('_visible_existing_or_block("Payment Request"', self.actions)
+		self.assertIn('_visible_existing_or_block("Dunning"', self.actions)
+		self.assertIn(
+			"An active {0} already exists for this Sales Invoice but is not accessible to you.",
+			self.actions,
+		)
+		self.assertNotIn("but is not accessible to you: {", self.actions)
+		self.assertIn(
+			'if not payment_request.is_new() and not frappe.has_permission(\n\t\t"Payment Request", "read", doc=payment_request.name',
+			self.actions,
+		)
+
 	def test_payment_request_handoff_uses_native_constructor_and_stops_at_draft(self):
 		self.assertIn("from erpnext.accounts.doctype.payment_request.payment_request import make_payment_request", self.actions)
 		self.assertIn('@frappe.whitelist(methods=["POST"])\ndef prepare_payment_request', self.actions)
