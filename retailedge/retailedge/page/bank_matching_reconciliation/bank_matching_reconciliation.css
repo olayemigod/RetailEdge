@@ -1,0 +1,338 @@
+.retailedge-bank-layout {
+	display: grid;
+	gap: var(--edge-space-4, 1rem);
+	width: 100%;
+}
+
+.retailedge-bank-layout .edge-filter-bar {
+	align-items: end;
+}
+
+.retailedge-bank-layout .edge-filter-bar__fields,
+.retailedge-bank-layout .edge-filter-bar__content {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+	width: 100%;
+}
+
+.retailedge-bank-stats {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+}
+
+.retailedge-bank-notice {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--edge-space-3, .75rem);
+	padding: var(--edge-space-3, .75rem) var(--edge-space-4, 1rem);
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-lg, .75rem);
+	background: var(--edge-color-surface-raised, var(--card-bg));
+	color: var(--edge-color-text, var(--text-color));
+}
+
+.retailedge-bank-notice.is-success {
+	border-color: var(--edge-color-success-border, var(--green-200));
+	background: var(--edge-color-success-soft, var(--green-50));
+}
+
+.retailedge-bank-notice.is-warning {
+	border-color: var(--edge-color-warning-border, var(--yellow-200));
+	background: var(--edge-color-warning-soft, var(--yellow-50));
+}
+
+.retailedge-bank-notice.is-danger {
+	border-color: var(--edge-color-danger-border, var(--red-200));
+	background: var(--edge-color-danger-soft, var(--red-50));
+}
+
+.retailedge-bank-table-wrap {
+	width: 100%;
+	overflow-x: auto;
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-xl, 1rem);
+	background: var(--edge-color-surface, var(--card-bg));
+}
+
+.retailedge-bank-table {
+	width: 100%;
+	min-width: 1040px;
+	border-collapse: collapse;
+}
+
+.retailedge-bank-table th,
+.retailedge-bank-table td {
+	padding: var(--edge-space-3, .75rem);
+	vertical-align: top;
+	border-bottom: 1px solid var(--edge-color-border-subtle, var(--border-color));
+}
+
+.retailedge-bank-table tbody tr:last-child td {
+	border-bottom: 0;
+}
+
+.retailedge-bank-table tbody tr:hover {
+	background: var(--edge-color-surface-hover, var(--subtle-fg));
+}
+
+.retailedge-bank-sort {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	padding: 0;
+	font: inherit;
+	font-weight: 650;
+	color: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+
+.retailedge-bank-sort.is-active {
+	color: var(--edge-color-primary, var(--primary));
+}
+
+.retailedge-col-date { width: 9rem; }
+.retailedge-col-direction { width: 7rem; }
+.retailedge-col-amount { width: 10rem; white-space: nowrap; }
+.retailedge-col-status { width: 10rem; }
+.retailedge-col-action { width: 10rem; }
+.retailedge-col-transaction,
+.retailedge-col-candidate { min-width: 15rem; }
+
+.retailedge-bank-transaction-cell,
+.retailedge-bank-candidate-cell {
+	display: grid;
+	gap: .25rem;
+}
+
+.retailedge-bank-narration {
+	max-width: 28rem;
+	white-space: normal;
+	text-align: left;
+	font-weight: 650;
+}
+
+.retailedge-bank-meta,
+.retailedge-bank-skipped-note {
+	color: var(--edge-color-text-muted, var(--text-muted));
+	font-size: var(--edge-font-size-sm, .875rem);
+}
+
+.retailedge-bank-candidate-review,
+.retailedge-bank-compare-card,
+.retailedge-bank-review-section,
+.retailedge-bank-final-warning {
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-xl, 1rem);
+	background: var(--edge-color-surface, var(--card-bg));
+	padding: var(--edge-space-4, 1rem);
+}
+
+.retailedge-bank-candidate-review {
+	margin-top: var(--edge-space-4, 1rem);
+}
+
+.retailedge-bank-candidate-review__header,
+.retailedge-bank-compare-card > header,
+.retailedge-bank-section-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--edge-space-3, .75rem);
+	margin-bottom: var(--edge-space-3, .75rem);
+}
+
+.retailedge-bank-compare-card h3,
+.retailedge-bank-review-section h3 {
+	margin: 0;
+	font-size: var(--edge-font-size-lg, 1.125rem);
+	color: var(--edge-color-heading, var(--heading-color));
+}
+
+.retailedge-bank-compare-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--edge-space-4, 1rem);
+}
+
+.retailedge-bank-detail-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+	margin: 0;
+}
+
+.retailedge-bank-detail-pair {
+	display: grid;
+	gap: .2rem;
+	min-width: 0;
+}
+
+.retailedge-bank-detail-pair dt {
+	font-size: var(--edge-font-size-xs, .75rem);
+	font-weight: 600;
+	color: var(--edge-color-text-muted, var(--text-muted));
+	text-transform: uppercase;
+	letter-spacing: .02em;
+}
+
+.retailedge-bank-detail-pair dd {
+	margin: 0;
+	font-weight: 600;
+	color: var(--edge-color-text, var(--text-color));
+	overflow-wrap: anywhere;
+}
+
+.retailedge-bank-review-section {
+	margin-top: var(--edge-space-4, 1rem);
+}
+
+.retailedge-bank-safety-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--edge-space-3, .75rem);
+}
+
+.retailedge-bank-safety-row {
+	display: grid;
+	grid-template-columns: minmax(7rem, .8fr) auto minmax(10rem, 1.6fr);
+	align-items: center;
+	gap: var(--edge-space-2, .5rem);
+	padding: var(--edge-space-2, .5rem) 0;
+	border-bottom: 1px solid var(--edge-color-border-subtle, var(--border-color));
+}
+
+.retailedge-bank-safety-row:last-child {
+	border-bottom: 0;
+}
+
+.retailedge-bank-evidence-text,
+.retailedge-bank-fuzzy-note {
+	margin: var(--edge-space-3, .75rem) 0 0;
+	line-height: 1.55;
+}
+
+.retailedge-bank-fuzzy-note {
+	padding-left: var(--edge-space-3, .75rem);
+	border-left: 3px solid var(--edge-color-info, var(--blue-400));
+	color: var(--edge-color-text-muted, var(--text-muted));
+}
+
+.retailedge-bank-record-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--edge-space-2, .5rem);
+	margin-top: var(--edge-space-4, 1rem);
+}
+
+.retailedge-bank-inline-error {
+	margin-top: var(--edge-space-3, .75rem);
+	padding: var(--edge-space-3, .75rem);
+	border: 1px solid var(--edge-color-danger-border, var(--red-200));
+	border-radius: var(--edge-radius-lg, .75rem);
+	background: var(--edge-color-danger-soft, var(--red-50));
+	color: var(--edge-color-danger-text, var(--red-700));
+}
+
+.retailedge-bank-final-warning {
+	background: var(--edge-color-warning-soft, var(--yellow-50));
+	border-color: var(--edge-color-warning-border, var(--yellow-200));
+}
+
+.retailedge-bank-final-warning p {
+	margin: .5rem 0 0;
+}
+
+.retailedge-bank-confirm-check {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--edge-space-2, .5rem);
+	margin-top: var(--edge-space-4, 1rem);
+	line-height: 1.5;
+}
+
+.retailedge-bank-confirm-check input {
+	margin-top: .2rem;
+}
+
+.edge-modal--xl {
+	width: min(96vw, 1180px);
+	max-width: 1180px;
+}
+
+@media (max-width: 1100px) {
+	.retailedge-bank-layout .edge-filter-bar__fields,
+	.retailedge-bank-layout .edge-filter-bar__content {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.retailedge-bank-stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.retailedge-bank-safety-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 760px) {
+	.retailedge-bank-layout .edge-filter-bar__fields,
+	.retailedge-bank-layout .edge-filter-bar__content,
+	.retailedge-bank-stats,
+	.retailedge-bank-compare-grid,
+	.retailedge-bank-detail-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.retailedge-bank-table-wrap {
+		overflow: visible;
+		border: 0;
+		background: transparent;
+	}
+
+	.retailedge-bank-table {
+		min-width: 0;
+		display: block;
+	}
+
+	.retailedge-bank-table thead {
+		display: none;
+	}
+
+	.retailedge-bank-table tbody,
+	.retailedge-bank-table tr,
+	.retailedge-bank-table td {
+		display: block;
+		width: 100%;
+	}
+
+	.retailedge-bank-table tr {
+		margin-bottom: var(--edge-space-3, .75rem);
+		padding: var(--edge-space-3, .75rem);
+		border: 1px solid var(--edge-color-border, var(--border-color));
+		border-radius: var(--edge-radius-xl, 1rem);
+		background: var(--edge-color-surface, var(--card-bg));
+	}
+
+	.retailedge-bank-table td {
+		display: grid;
+		grid-template-columns: minmax(7.5rem, .42fr) 1fr;
+		gap: var(--edge-space-2, .5rem);
+		padding: .45rem 0;
+		border: 0;
+		text-align: left !important;
+	}
+
+	.retailedge-bank-table td::before {
+		content: attr(data-label);
+		font-weight: 650;
+		color: var(--edge-color-text-muted, var(--text-muted));
+	}
+
+	.retailedge-bank-safety-row {
+		grid-template-columns: 1fr;
+	}
+}

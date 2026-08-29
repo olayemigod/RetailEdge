@@ -48,6 +48,7 @@ frappe.query_reports["RetailEdge Bank Match Reconciliation Readiness"] = {
 		{ fieldname: "company", label: __("Company"), fieldtype: "Link", options: "Company" },
 		{ fieldname: "branch", label: __("Branch"), fieldtype: "Link", options: "Branch" },
 		{ fieldname: "bank_account", label: __("Bank Account"), fieldtype: "Link", options: "Bank Account" },
+		{ fieldname: "direction", label: __("Direction"), fieldtype: "Select", options: "All\nInflow\nOutflow", default: "All" },
 		{ fieldname: "from_date", label: __("Date From"), fieldtype: "Date", default: frappe.datetime.month_start(), reqd: 1 },
 		{ fieldname: "to_date", label: __("Date To"), fieldtype: "Date", default: frappe.datetime.get_today(), reqd: 1 },
 		{ fieldname: "review_status", label: __("Review Status"), fieldtype: "Data" },

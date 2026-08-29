@@ -80,8 +80,30 @@ class TestBankAccountPolicy(unittest.TestCase):
 		self.assertEqual(result[1]["branch"], "Aba")
 		self.assertIn("••••7890", result[0]["description"])
 		self.assertIn("Aba", result[1]["description"])
-		self.assertEqual(mock_get_list.call_count, 2)
-		for call in mock_get_list.call_args_list:
+
+		# Assert the search semantics rather than an implementation-specific exact
+		# invocation count. Framework wrappers or future bounded probes must not make
+		# this compatibility test fail as long as both required scopes are queried
+		# safely and permission-aware.
+		bank_account_calls = [
+			call
+			for call in mock_get_list.call_args_list
+			if call.args and call.args[0] == "Bank Account"
+		]
+		queried_filters = [call.kwargs.get("filters", {}) for call in bank_account_calls]
+		self.assertTrue(
+			any(filters.get(BRANCH_FIELD) == ["in", ["", None]] for filters in queried_filters),
+			queried_filters,
+		)
+		self.assertTrue(
+			any(filters.get(BRANCH_FIELD) == "Aba" for filters in queried_filters),
+			queried_filters,
+		)
+		for call in bank_account_calls:
+			filters = call.kwargs.get("filters", {})
+			self.assertEqual(filters.get("company"), "Demo Company")
+			self.assertEqual(filters.get("is_company_account"), 1)
+			self.assertEqual(filters.get("disabled"), 0)
 			self.assertLessEqual(call.kwargs["limit_page_length"], 100)
 
 	def test_bank_account_branch_contract_is_migration_safe_and_searchable(self):

@@ -1,0 +1,33 @@
+{
+ "content": null,
+ "creation": "2026-08-23 16:20:00.000000",
+ "docstatus": 0,
+ "doctype": "Page",
+ "icon": "octicon octicon-shield-check",
+ "idx": 0,
+ "modified": "2026-08-23 16:20:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "banking-readiness",
+ "owner": "Administrator",
+ "page_name": "banking-readiness",
+ "roles": [
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "RetailEdge Manager"
+  },
+  {
+   "role": "RetailEdge Branch Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Banking Setup & Readiness"
+}

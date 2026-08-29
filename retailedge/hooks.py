@@ -35,7 +35,7 @@ app_include_css = [
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
-	"/assets/retailedge/js/retailedge_business_hub_page.js",
+	"/assets/retailedge/js/retailedge_business_hub_bootstrap.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
 	"/assets/retailedge/js/new_document_operating_defaults.js",
 ]

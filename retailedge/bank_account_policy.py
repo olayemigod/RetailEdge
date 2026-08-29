@@ -60,11 +60,20 @@ def search_retailedge_bank_accounts(
 	branch: str = "",
 	txt: str = "",
 	limit: int = MAX_LINK_RESULTS,
+	strict_branch_scope: int = 0,
 ) -> list[dict[str, Any]]:
-	"""Return company-wide plus branch-specific Bank Accounts for RetailEdge selectors."""
+	"""Return permission-aware Bank Accounts for RetailEdge selectors.
+
+	Default behaviour remains backward compatible: when a Branch is selected, both
+	company-wide and that Branch's Bank Accounts are returned. Consumers such as Bank
+	Matching may opt into strict branch scope, where a selected Branch returns only
+	Bank Accounts explicitly restricted to that Branch. With no Branch selected, strict
+	scope returns company-wide accounts only.
+	"""
 	company = str(company or "").strip()
 	branch = str(branch or "").strip()
 	txt = str(txt or "").strip()
+	strict_branch_scope = bool(cint(strict_branch_scope))
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
 	if not company or not has_doctype(BANK_ACCOUNT_DOCTYPE):
 		return []
@@ -80,7 +89,7 @@ def search_retailedge_bank_accounts(
 
 	rows: list[Any] = []
 	seen: set[str] = set()
-	for branch_filter in _bank_account_branch_filters(branch):
+	for branch_filter in _bank_account_branch_filters(branch, strict_branch_scope=strict_branch_scope):
 		filters: dict[str, Any] = {
 			"company": company,
 			"is_company_account": 1,
@@ -105,8 +114,19 @@ def search_retailedge_bank_accounts(
 	return [_bank_account_option(row) for row in rows[:limit]]
 
 
-def resolve_retailedge_bank_account(*, company: str, branch: str = "", bank_account: str) -> dict[str, Any]:
-	"""Resolve one permitted Bank Account to its ERPNext Bank ledger account."""
+def resolve_retailedge_bank_account(
+	*,
+	company: str,
+	branch: str = "",
+	bank_account: str,
+	strict_branch_scope: bool = False,
+) -> dict[str, Any]:
+	"""Resolve one permitted Bank Account to its ERPNext Bank ledger account.
+
+	`strict_branch_scope` is intentionally opt-in so existing cash custody and other
+	RetailEdge workflows retain company-wide Bank Account behaviour. In strict mode,
+	selecting a Branch requires a Bank Account explicitly scoped to that Branch.
+	"""
 	company = str(company or "").strip()
 	branch = str(branch or "").strip()
 	bank_account = str(bank_account or "").strip()
@@ -138,6 +158,13 @@ def resolve_retailedge_bank_account(*, company: str, branch: str = "", bank_acco
 		validate_user_branch_access(configured_branch, user=frappe.session.user, company=company, throw=True)
 	elif branch:
 		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+		if strict_branch_scope:
+			frappe.throw(
+				_("Bank Account {0} is company-wide and cannot be selected while branch {1} is active. Select a branch-specific Bank Account or clear the Branch filter.").format(
+					bank_account, branch
+				),
+				frappe.ValidationError,
+			)
 
 	_account_must_be_company_bank_account(row.account, company)
 	return {
@@ -179,9 +206,14 @@ def validate_cash_deposit_bank_destination(doc, method=None):
 	resolve_retailedge_bank_account(company=company, branch=branch, bank_account=bank_account)
 
 
-def _bank_account_branch_filters(branch: str) -> list[dict[str, Any]]:
+def _bank_account_branch_filters(branch: str, *, strict_branch_scope: bool = False) -> list[dict[str, Any]]:
+	branch = str(branch or "").strip()
 	if not has_field(BANK_ACCOUNT_DOCTYPE, BRANCH_FIELD):
+		if branch and strict_branch_scope:
+			return []
 		return [{}]
+	if branch and strict_branch_scope:
+		return [{BRANCH_FIELD: branch}]
 	filters: list[dict[str, Any]] = [{BRANCH_FIELD: ["in", ["", None]]}]
 	if branch:
 		filters.append({BRANCH_FIELD: branch})
