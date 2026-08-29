@@ -244,12 +244,14 @@ def get_customer_project_updates(project: str | None = None) -> dict[str, Any]:
 		}
 		for row in owned
 	]
+	companies = sorted({str(row.company or "").strip() for row in owned if str(row.company or "").strip()})
 	return {
 		"customer_names": customers,
 		"project": requested_project,
 		"projects": projects,
 		"rows": rows,
 		"row_count": len(rows),
+		"company_name": companies[0] if len(companies) == 1 else "",
 		"source_of_truth": PROJECT_UPDATE_DOCTYPE,
 		"project_source_of_truth": PROJECT_DOCTYPE,
 		"publication_required": True,
