@@ -10,6 +10,11 @@ from frappe.utils.user import is_website_user
 
 from erpnext.controllers.website_list_for_contact import get_parents_for_user
 
+from retailedge.customer_portal_collaboration import (
+	get_quotation_activity_states,
+	quotation_response_allowed,
+)
+
 MAX_PORTAL_ROWS = 200
 PORTAL_DOWNLOAD_DOCTYPES = {"Quotation", "Sales Order", "Sales Invoice", "Delivery Note"}
 PORTAL_PAYMENT_REQUEST_STATUSES = {"Requested", "Initiated", "Partially Paid", "Failed"}
@@ -118,6 +123,7 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 		"transaction_date",
 		"posting_date",
 		"due_date",
+		"valid_till",
 		"grand_total",
 		"currency",
 		"outstanding_amount",
@@ -131,6 +137,11 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 		filters["docstatus"] = ["<", 2]
 	rows = _safe_list(doctype, customers, fields=fields, filters=filters, limit=limit)
 	payment_states = _payment_request_states([row.name for row in rows]) if doctype == "Sales Invoice" else {}
+	quotation_states = (
+		get_quotation_activity_states([row.name for row in rows], customers)
+		if doctype == "Quotation"
+		else {}
+	)
 	result = []
 	for row in rows:
 		outstanding = flt(getattr(row, "outstanding_amount", 0))
@@ -142,6 +153,7 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 			and getdate(due_date) < getdate(today())
 		)
 		payment_state = payment_states.get(row.name, {})
+		quotation_state = quotation_states.get(row.name, {})
 		can_pay_online = bool(
 			doctype == "Sales Invoice"
 			and int(getattr(row, "docstatus", 0) or 0) == 1
@@ -154,6 +166,7 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 				"status": getattr(row, "status", "") or "",
 				"date": getattr(row, "transaction_date", None) or getattr(row, "posting_date", None),
 				"due_date": due_date,
+				"valid_till": getattr(row, "valid_till", None),
 				"is_overdue": is_overdue,
 				"grand_total": flt(getattr(row, "grand_total", 0)),
 				"outstanding_amount": outstanding,
@@ -164,6 +177,16 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 				"can_pay_online": can_pay_online,
 				"payment_request_status": payment_state.get("status", ""),
 				"payment_action_label": _("Continue Payment") if payment_state else _("Pay Invoice"),
+				"quotation_response": quotation_state.get("response", ""),
+				"quotation_response_on": quotation_state.get("response_on"),
+				"quotation_response_note": quotation_state.get("response_note", ""),
+				"quotation_message_count": int(quotation_state.get("message_count") or 0),
+				"can_respond_to_quotation": bool(
+					doctype == "Quotation" and quotation_response_allowed(row)
+				),
+				"can_message_quotation": bool(
+					doctype == "Quotation" and int(getattr(row, "docstatus", 0) or 0) == 1
+				),
 			}
 		)
 	return result
@@ -298,6 +321,9 @@ def get_customer_portal_context() -> dict[str, Any]:
 			"payment_request_native_erpnext": True,
 			"payment_gateway_browser_selectable": False,
 			"payment_entry_created_by_portal": False,
+			"quotation_activity_append_only": True,
+			"quotation_submitted_document_mutated": False,
+			"quotation_customer_server_derived": True,
 			"cross_customer_selection": False,
 		},
 	}
