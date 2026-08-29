@@ -8,7 +8,7 @@
 		<div>
 			<div class="edge-portal-kicker">{{ company_name or "Customer Portal" }}</div>
 			<h1>Welcome, {{ user_full_name or customer_label }}</h1>
-			<p>View quotations, orders, invoices, deliveries, payments and projects linked to your customer account.</p>
+			<p>View quotations, orders, invoices, deliveries, payments, statements and project updates linked to your customer account.</p>
 		</div>
 		<div class="edge-portal-identity">
 			<span>Account</span>
@@ -58,14 +58,14 @@
 					<a class="edge-portal-row-main" href="{{ section.route }}/{{ row.name }}">
 						<div>
 							<strong>{{ row.project_name or row.name }}</strong>
-							<span>{{ row.status or "Open" }}{% if row.date %} · {{ frappe.utils.formatdate(row.date) }}{% endif %}{% if row.valid_till %} · Valid till {{ frappe.utils.formatdate(row.valid_till) }}{% endif %}{% if row.is_overdue and row.due_date %} · Overdue since {{ frappe.utils.formatdate(row.due_date) }}{% endif %}{% if row.payment_request_status %} · Payment {{ row.payment_request_status }}{% endif %}{% if row.quotation_response %} · Response {{ row.quotation_response }}{% endif %}{% if row.quotation_message_count %} · {{ row.quotation_message_count }} message{% if row.quotation_message_count != 1 %}s{% endif %}{% endif %}</span>
+							<span>{{ row.status or "Open" }}{% if row.date %} · {{ frappe.utils.formatdate(row.date) }}{% endif %}{% if row.valid_till %} · Valid till {{ frappe.utils.formatdate(row.valid_till) }}{% endif %}{% if row.is_overdue and row.due_date %} · Overdue since {{ frappe.utils.formatdate(row.due_date) }}{% endif %}{% if row.payment_request_status %} · Payment {{ row.payment_request_status }}{% endif %}{% if row.quotation_response %} · Response {{ row.quotation_response }}{% endif %}{% if row.quotation_message_count %} · {{ row.quotation_message_count }} message{% if row.quotation_message_count != 1 %}s{% endif %}{% endif %}{% if row.expected_start_date %} · Starts {{ frappe.utils.formatdate(row.expected_start_date) }}{% endif %}{% if row.expected_end_date %} · Target {{ frappe.utils.formatdate(row.expected_end_date) }}{% endif %}{% if row.project_update_count %} · {{ row.project_update_count }} published update{% if row.project_update_count != 1 %}s{% endif %}{% endif %}</span>
 						</div>
 						<div class="edge-portal-row-value">
-							{% if row.grand_total %}{{ frappe.utils.fmt_money(row.grand_total, currency=row.currency or None) }}{% elif row.percent_complete %}{{ row.percent_complete }}%{% endif %}
+							{% if row.grand_total %}{{ frappe.utils.fmt_money(row.grand_total, currency=row.currency or None) }}{% elif row.project_name %}{{ row.percent_complete or 0 }}%{% elif row.percent_complete %}{{ row.percent_complete }}%{% endif %}
 							{% if row.outstanding_amount %}<small>Outstanding {{ frappe.utils.fmt_money(row.outstanding_amount, currency=row.currency or None) }}</small>{% endif %}
 						</div>
 					</a>
-					{% if row.download_url or row.can_pay_online or row.can_respond_to_quotation or row.can_message_quotation %}
+					{% if row.download_url or row.can_pay_online or row.can_respond_to_quotation or row.can_message_quotation or row.project_updates_url %}
 					<div class="edge-portal-row-actions">
 						{% if row.download_url %}<a class="edge-portal-download" href="{{ row.download_url }}" aria-label="Download {{ row.name }} PDF">Download PDF</a>{% endif %}
 						{% if row.can_pay_online %}<button class="edge-portal-pay" type="button" data-invoice-name="{{ row.name }}">{{ row.payment_action_label or "Pay Invoice" }}</button>{% endif %}
@@ -74,9 +74,11 @@
 						<button class="edge-portal-quote-action edge-portal-quote-decline{% if row.quotation_response == 'Declined' %} is-current{% endif %}" type="button" data-quotation-name="{{ row.name }}" data-activity-type="Declined">Decline</button>
 						{% endif %}
 						{% if row.can_message_quotation %}<button class="edge-portal-quote-action edge-portal-quote-message" type="button" data-quotation-name="{{ row.name }}" data-activity-type="Message">Message</button>{% endif %}
+						{% if row.project_updates_url %}<a class="edge-portal-download" href="{{ row.project_updates_url }}">Project Updates</a>{% endif %}
 					</div>
 					{% endif %}
 					{% if row.quotation_response_note %}<div class="edge-portal-response-note"><strong>Response note:</strong> {{ row.quotation_response_note }}</div>{% endif %}
+					{% if row.latest_project_update %}<div class="edge-portal-response-note"><strong>Latest project update{% if row.latest_project_update_on %} · {{ frappe.utils.format_datetime(row.latest_project_update_on) }}{% endif %}:</strong> {{ row.latest_project_update }}</div>{% endif %}
 				</div>
 				{% endfor %}
 			</div>
@@ -110,11 +112,37 @@
 			{% endif %}
 			<div class="edge-portal-panel-note">{{ portal.payment_summary.scope_note }}</div>
 		</article>
+
+		<article class="edge-portal-panel">
+			<header>
+				<div>
+					<span class="edge-portal-kicker">Advances & Statements</span>
+					<h2>{{ portal.advance_summary.balance_count or 0 }} available balance{% if portal.advance_summary.balance_count != 1 %}s{% endif %}</h2>
+				</div>
+				<a class="edge-portal-button" href="{{ portal.routes.account_statement }}">Account Statement</a>
+			</header>
+			{% if portal.advance_summary.balances %}
+			<div class="edge-portal-list">
+				{% for balance in portal.advance_summary.balances %}
+				<div class="edge-portal-row edge-portal-row-static">
+					<div>
+						<strong>{{ balance.company }}</strong>
+						<span>{{ balance.count }} unallocated payment{% if balance.count != 1 %}s{% endif %}</span>
+					</div>
+					<div class="edge-portal-row-value">{{ frappe.utils.fmt_money(balance.available_advance or 0, currency=balance.currency or None) }}</div>
+				</div>
+				{% endfor %}
+			</div>
+			{% else %}
+			<div class="edge-portal-empty">No available customer advances found.</div>
+			{% endif %}
+			<div class="edge-portal-panel-note">{{ portal.advance_summary.scope_note or "Available advances are read-only ERPNext payment balances and are not a wallet." }}</div>
+		</article>
 	</section>
 
 	<section class="edge-portal-note">
-		<strong>Secure document, response and payment access</strong>
-		<p>Document pages and PDF downloads use ERPNext customer website permissions. Quotation responses are recorded as separate customer activity and do not alter the submitted quotation. Invoice payment actions are revalidated on the server against your customer account. Payment history is read-only and is not a wallet or available balance.</p>
+		<strong>Secure document, financial and project access</strong>
+		<p>Document pages and PDF downloads use ERPNext customer website permissions. Quotation responses are recorded separately and do not alter the submitted quotation. Invoice payment actions are revalidated on the server. Available advances remain ERPNext unallocated Payment Entry amounts, statements come from the receivable Payment Ledger, and project activity shows only submitted Project Updates explicitly approved for customer publication.</p>
 	</section>
 </div>
 
