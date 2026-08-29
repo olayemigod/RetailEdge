@@ -63,6 +63,10 @@ class TestCustomerPortalPayment(TestCase):
 		self.assertIn("payment_request.flags.ignore_permissions = True", self.service)
 		self.assertIn("payment_request.submit()", self.service)
 
+	def test_payment_endpoint_is_server_post_only(self):
+		self.assertIn('@frappe.whitelist(methods=["POST"])', self.service)
+		self.assertIn("def request_invoice_payment(invoice_name: str)", self.service)
+
 	def test_portal_does_not_post_accounting_documents_or_ledgers(self):
 		combined = self.service + "\n" + self.portal + "\n" + self.template
 		self.assertNotIn('frappe.new_doc("Payment Entry")', combined)
