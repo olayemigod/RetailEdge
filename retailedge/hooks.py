@@ -228,6 +228,7 @@ doc_events = {
 after_migrate = [
 	"retailedge.setup_roles.ensure_retailedge_roles",
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
+	"retailedge.coexistence.ensure_neutral_branch_field_labels",
 	"retailedge.cash_custody.ensure_cash_custody_custom_fields",
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
