@@ -3,6 +3,9 @@ from __future__ import annotations
 import inspect
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import frappe
 
 from retailedge import coexistence, transaction_branch_attribution
 
@@ -65,6 +68,23 @@ class TestMultiAppCoexistence(unittest.TestCase):
 		self.assertNotIn("@frappe.whitelist", preceding)
 		self.assertIn("if not dry_run and would_update:", source)
 		self.assertIn("update_modified=False", source)
+
+	@patch("retailedge.coexistence.frappe.only_for")
+	@patch("retailedge.transaction_branch_attribution.run_transaction_branch_backfill")
+	def test_backfill_write_wrapper_requires_system_manager_and_exact_confirmation(self, mock_backfill, mock_only_for):
+		with self.assertRaises(frappe.ValidationError):
+			coexistence.apply_branch_attribution_backfill(confirmation="yes")
+		mock_only_for.assert_called_once_with("System Manager")
+		mock_backfill.assert_not_called()
+
+		mock_only_for.reset_mock()
+		coexistence.apply_branch_attribution_backfill(
+			doctype="Sales Invoice",
+			confirmation=coexistence.BACKFILL_CONFIRMATION,
+		)
+		mock_only_for.assert_called_once_with("System Manager")
+		mock_backfill.assert_called_once()
+		self.assertFalse(mock_backfill.call_args.kwargs["dry_run"])
 
 	def test_shared_erpnext_form_scripts_are_additive(self):
 		hooks = self.read("hooks.py")
