@@ -165,6 +165,24 @@ def _validate_context(values: dict[str, Any]) -> tuple[str, str, str]:
 	return company, branch, warehouse
 
 
+def _operating_document_filters(doctype: str, *, company: str, branch: str) -> dict[str, Any]:
+	filters: dict[str, Any] = {}
+	meta = frappe.get_meta(doctype)
+	if company and meta.has_field("company"):
+		filters["company"] = company
+	if branch:
+		validate_user_branch_access(
+			branch,
+			user=frappe.session.user,
+			company=company or None,
+			throw=True,
+		)
+		branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+		if branch_field:
+			filters[branch_field] = branch
+	return filters
+
+
 def _branch_filters(company: str) -> dict[str, Any]:
 	filters: dict[str, Any] = {}
 	if company and has_field("Branch", "company"):
@@ -372,11 +390,19 @@ def get_professional_selling_item_pricing(
 
 @frappe.whitelist()
 def get_recent_selling_documents(document: str, limit: int = 8) -> list[dict[str, Any]]:
-	"""Return a bounded recent-document list using native Frappe permissions."""
+	"""Return a bounded recent-document list within active Operating Context."""
 	definition = get_selling_document_definition(document)
 	doctype = definition["doctype"]
 	if not _permission(doctype, "read"):
 		frappe.throw(_("You do not have permission to view {0}.").format(doctype), frappe.PermissionError)
+
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	if not company:
+		frappe.throw(_("Choose an Operating Company before viewing recent selling documents."))
+	_assert_read("Company", company)
+	filters = _operating_document_filters(doctype, company=company, branch=branch)
 
 	limit = max(1, min(int(limit or 8), 20))
 	meta = frappe.get_meta(doctype)
@@ -392,5 +418,11 @@ def get_recent_selling_documents(document: str, limit: int = 8) -> list[dict[str
 		if candidate not in fields and meta.has_field(candidate):
 			fields.append(candidate)
 
-	rows = frappe.get_list(doctype, fields=fields, order_by="modified desc", limit_page_length=limit)
+	rows = frappe.get_list(
+		doctype,
+		filters=filters,
+		fields=fields,
+		order_by="modified desc",
+		limit_page_length=limit,
+	)
 	return [dict(row) for row in rows]

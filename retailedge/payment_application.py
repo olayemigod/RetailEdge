@@ -62,9 +62,9 @@ def apply_customer_advance(
 ) -> dict[str, Any]:
 	"""Apply a submitted unallocated customer Payment Entry to a Sales Invoice.
 
-	RetailEdge performs eligibility and branch checks, then delegates the actual
+	Eligibility and branch checks are performed before delegating the actual
 	reconciliation to ERPNext's Payment Reconciliation document. No Sales Invoice
-	field or GL Entry is written directly by RetailEdge.
+	field or GL Entry is written directly by this guided action.
 
 	The guided action intentionally supports company-currency receipts only. More
 	complex multi-currency or separate-advance-account cases remain on ERPNext's
@@ -120,6 +120,13 @@ def apply_customer_advance(
 			company=invoice.company,
 			throw=True,
 		)
+	if payment_branch:
+		validate_user_branch_access(
+			payment_branch,
+			user=frappe.session.user,
+			company=payment.company,
+			throw=True,
+		)
 	if invoice_branch and payment_branch and invoice_branch != payment_branch:
 		frappe.throw(
 			_("Payment Entry belongs to Branch {0}, not Branch {1}.").format(payment_branch, invoice_branch)
@@ -151,10 +158,6 @@ def apply_customer_advance(
 	if amount > flt(invoice_row.get("outstanding_amount")):
 		frappe.throw(_("Sales Invoice outstanding amount changed. Refresh and try again."))
 
-	# Let ERPNext build the allocation row, exchange metadata and reconciliation
-	# structure from its current authoritative payment/invoice snapshots. The
-	# guided company-currency path may then safely reduce the generated allocation
-	# to the user's requested partial amount before ERPNext validates/reconciles it.
 	reconciliation.allocate_entries(
 		{
 			"payments": [frappe._dict(payment_row.as_dict())],
@@ -168,10 +171,6 @@ def apply_customer_advance(
 	allocation.allocated_amount = amount
 	allocation.difference_amount = 0
 
-	# PaymentReconciliation.reconcile() performs final allocation validation,
-	# updates submitted Payment Entry references through ERPNext's controlled
-	# reconciliation path, reposts ledgers as required, and refreshes unreconciled
-	# entries. RetailEdge never writes Sales Invoice or GL rows directly.
 	reconciliation.reconcile()
 
 	return {
