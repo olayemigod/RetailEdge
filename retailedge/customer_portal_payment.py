@@ -158,7 +158,7 @@ def _create_payment_request(invoice):
 	return payment_request
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def request_invoice_payment(invoice_name: str) -> dict[str, Any]:
 	customers = _assert_customer_portal_user()
 	invoice_name = str(invoice_name or "").strip()
