@@ -29,12 +29,13 @@
 			<div v-if="error" class="project-error">{{ error }}</div>
 			<div v-else-if="loading" class="project-state">Loading project funds…</div>
 			<template v-else-if="project && context.project">
+				<div v-if="context.scope?.branch_scope_note" class="scope-note"><strong>Scope:</strong> {{ context.scope.branch_scope_note }}</div>
 				<div class="project-cards">
 					<article class="metric-card"><span>Sales Order Value</span><strong>{{ money(context.sales_order_value) }}</strong></article>
 					<article class="metric-card"><span>Billed</span><strong>{{ money(context.billed_amount) }}</strong></article>
-					<article class="metric-card"><span>Funds Received</span><strong>{{ money(context.funds_received) }}</strong></article>
-					<article class="metric-card"><span>Funds Paid Out</span><strong>{{ money(context.funds_paid_out) }}</strong></article>
-					<article class="metric-card"><span>Cash Funds Position</span><strong>{{ money(context.cash_funds_position) }}</strong></article>
+					<article class="metric-card"><span>Project Cash In</span><strong>{{ money(context.project_cash_in) }}</strong></article>
+					<article class="metric-card"><span>Project Cash Out</span><strong>{{ money(context.project_cash_out) }}</strong></article>
+					<article class="metric-card"><span>Net Project-linked Cash</span><strong>{{ money(context.net_project_cash) }}</strong></article>
 					<article class="metric-card"><span>Tracked Cost</span><strong>{{ money(context.tracked_cost) }}</strong></article>
 					<article class="metric-card"><span>Gross Margin</span><strong>{{ money(context.gross_margin) }}</strong></article>
 					<article class="metric-card"><span>Progress</span><strong>{{ context.percent_complete || 0 }}%</strong></article>
@@ -49,7 +50,11 @@
 						<div><span>Company</span><strong>{{ context.company || "—" }}</strong></div>
 						<div><span>Cost Center</span><strong>{{ context.cost_center || "—" }}</strong></div>
 						<div><span>Unapplied Receipts</span><strong>{{ money(context.unallocated_receipts) }}</strong></div>
+						<div><span>Purchase Cost</span><strong>{{ money(context.purchase_cost) }}</strong></div>
+						<div><span>Consumed Material Cost</span><strong>{{ money(context.consumed_material_cost) }}</strong></div>
+						<div><span>Timesheet Cost</span><strong>{{ money(context.timesheet_cost) }}</strong></div>
 					</div>
+					<p class="panel-note">Tracked Cost is the transparent sum of these ERPNext Project cost components. It is not a separate RetailEdge accounting balance.</p>
 				</section>
 
 				<section class="project-panel">
@@ -59,18 +64,18 @@
 				</section>
 
 				<section class="project-panel">
-					<div class="panel-head"><div><h3>Project Receipts</h3><p>Submitted ERPNext Payment Entries explicitly linked to this Project.</p></div></div>
-					<div v-if="!context.customer_receipts?.length" class="project-state">No submitted project receipts found.</div>
-					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party</th><th>Mode</th><th class="num">Received</th><th class="num">Unapplied</th></tr></thead><tbody><tr v-for="row in context.customer_receipts" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.received_amount) }}</td><td class="num">{{ money(row.unallocated_amount) }}</td></tr></tbody></table></div>
+					<div class="panel-head"><div><h3>Project Cash In</h3><p>Submitted incoming ERPNext Payment Entries explicitly linked to this Project. This is cash movement, not revenue recognition.</p></div></div>
+					<div v-if="!context.project_cash_in_rows?.length" class="project-state">No submitted project-linked incoming payments found.</div>
+					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party Type</th><th>Party</th><th>Mode</th><th class="num">Received</th><th class="num">Unapplied</th></tr></thead><tbody><tr v-for="row in context.project_cash_in_rows" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party_type || "—" }}</td><td>{{ row.party || "—" }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.received_amount) }}</td><td class="num">{{ money(row.unallocated_amount) }}</td></tr></tbody></table></div>
 				</section>
 
 				<section class="project-panel">
-					<div class="panel-head"><div><h3>Project Payments</h3><p>Submitted outgoing Payment Entries explicitly attributed to this Project.</p></div></div>
-					<div v-if="!context.project_payments?.length" class="project-state">No submitted project payments found.</div>
-					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party</th><th>Mode</th><th class="num">Paid</th></tr></thead><tbody><tr v-for="row in context.project_payments" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.paid_amount) }}</td></tr></tbody></table></div>
+					<div class="panel-head"><div><h3>Project Cash Out</h3><p>Submitted outgoing ERPNext Payment Entries explicitly linked to this Project. This is cash movement, not an expense/P&amp;L measure.</p></div></div>
+					<div v-if="!context.project_cash_out_rows?.length" class="project-state">No submitted project-linked outgoing payments found.</div>
+					<div v-else class="table-wrap"><table class="project-table"><thead><tr><th>Payment</th><th>Date</th><th>Party Type</th><th>Party</th><th>Mode</th><th class="num">Paid</th></tr></thead><tbody><tr v-for="row in context.project_cash_out_rows" :key="row.name"><td><button class="link-button" @click="openPayment(row.name)">{{ row.name }}</button></td><td>{{ row.posting_date }}</td><td>{{ row.party_type || "—" }}</td><td>{{ row.party || "—" }}</td><td>{{ row.mode_of_payment || "—" }}</td><td class="num">{{ money(row.paid_amount) }}</td></tr></tbody></table></div>
 				</section>
 
-				<div class="accounting-note"><strong>Accounting safety:</strong> Project Funds is a derived management view. ERPNext Project and project-linked native documents remain the source of truth; RetailEdge does not maintain a project wallet or separate ledger.</div>
+				<div class="accounting-note"><strong>Accounting safety:</strong> Project Funds is a derived management view. ERPNext Project and project-linked native documents remain the source of truth; RetailEdge does not maintain a project wallet or separate ledger. Project Cash In/Out is not a bank balance, revenue, expense or profit measure.</div>
 			</template>
 		</section>
 	</EdgeAppShell>
@@ -133,5 +138,5 @@ export default {
 </script>
 
 <style scoped>
-.project-page{display:grid;gap:16px;padding:18px}.project-hero,.panel-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.project-eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;opacity:.7}.hero-actions{display:flex;gap:8px;flex-wrap:wrap}.project-panel,.metric-card,.accounting-note{border:1px solid var(--border-color);border-radius:12px;padding:16px;background:var(--card-bg)}.filter-grid,.project-cards,.summary-grid{display:grid;gap:12px}.filter-grid{grid-template-columns:minmax(260px,1fr) minmax(180px,.5fr) auto;align-items:end}.project-cards{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}.summary-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}.metric-card span,.summary-grid span{display:block;font-size:12px;opacity:.7}.metric-card strong{display:block;font-size:20px;margin-top:6px}.summary-grid strong{display:block;margin-top:4px}.table-wrap{overflow:auto}.project-table{width:100%;border-collapse:collapse}.project-table th,.project-table td{padding:10px;border-bottom:1px solid var(--border-color);text-align:left}.project-table .num{text-align:right}.link-button{background:none;border:0;padding:0;color:var(--primary);cursor:pointer}.project-error{padding:12px;border-radius:8px;background:var(--alert-bg-danger);color:var(--text-color)}.project-state{padding:18px;text-align:center;opacity:.7}.accounting-note{font-size:13px}.filter-action{padding-bottom:1px}@media(max-width:800px){.project-hero,.panel-head{flex-direction:column}.filter-grid{grid-template-columns:1fr}.hero-actions{width:100%}}
+.project-page{display:grid;gap:16px;padding:18px}.project-hero,.panel-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.project-eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;opacity:.7}.hero-actions{display:flex;gap:8px;flex-wrap:wrap}.project-panel,.metric-card,.accounting-note,.scope-note{border:1px solid var(--border-color);border-radius:12px;padding:16px;background:var(--card-bg)}.filter-grid,.project-cards,.summary-grid{display:grid;gap:12px}.filter-grid{grid-template-columns:minmax(260px,1fr) minmax(180px,.5fr) auto;align-items:end}.project-cards{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}.summary-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}.metric-card span,.summary-grid span{display:block;font-size:12px;opacity:.7}.metric-card strong{display:block;font-size:20px;margin-top:6px}.summary-grid strong{display:block;margin-top:4px}.table-wrap{overflow:auto}.project-table{width:100%;border-collapse:collapse}.project-table th,.project-table td{padding:10px;border-bottom:1px solid var(--border-color);text-align:left}.project-table .num{text-align:right}.link-button{background:none;border:0;padding:0;color:var(--primary);cursor:pointer}.project-error{padding:12px;border-radius:8px;background:var(--alert-bg-danger);color:var(--text-color)}.project-state{padding:18px;text-align:center;opacity:.7}.accounting-note,.scope-note,.panel-note{font-size:13px}.panel-note{margin:12px 0 0;opacity:.75}.filter-action{padding-bottom:1px}@media(max-width:800px){.project-hero,.panel-head{flex-direction:column}.filter-grid{grid-template-columns:1fr}.hero-actions{width:100%}}
 </style>
