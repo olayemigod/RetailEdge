@@ -26,6 +26,7 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("ProjectOperations", bundle)
 		self.assertIn("retailedge.project_search.search_projects", component)
 		self.assertIn("retailedge.project_operations.get_project_funds_context", component)
+		self.assertIn("retailedge.project_activity.get_project_activity_context", component)
 		self.assertIn("retailedge.project_receipts.create_project_receipt_draft", component)
 		self.assertIn("retailedge.project_expense_routing.get_project_expense_routes", component)
 		self.assertIn("Open ERPNext Project", component)
@@ -63,12 +64,37 @@ class TestProjectOperationsUIContract(TestCase):
 
 	def test_project_receipt_inherits_validated_branch_scope(self):
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
-
 		self.assertIn('{ fieldname: "branch", fieldtype: "Data", label: __("Branch"), default: this.branch || "", read_only: 1 }', component)
+
+	def test_project_activity_uses_native_task_and_milestone_workflow(self):
+		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
+		source = (APP_ROOT / "project_activity.py").read_text()
+
+		self.assertIn("Tasks & Milestones", component)
+		self.assertIn("Open Tasks", component)
+		self.assertIn("New Task", component)
+		self.assertIn('frappe.new_doc("Task", { project: this.project })', component)
+		self.assertIn('frappe.set_route("List", "Task", { project: this.project })', component)
+		self.assertIn('filters={"project": project, "is_template": 0}', source)
+		self.assertIn('"is_milestone"', source)
+		self.assertIn("MAX_PROJECT_TASK_ROWS = 500", source)
+		self.assertIn('frappe.has_permission("Task", "read")', source)
+		self.assertIn('frappe.has_permission("Task", "create")', source)
+		self.assertNotIn("frappe.new_doc(", source)
+
+	def test_project_cash_and_cost_labels_are_not_accounting_claims(self):
+		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
+		self.assertIn("Project Cash In", component)
+		self.assertIn("Project Cash Out", component)
+		self.assertIn("Net Project-linked Cash", component)
+		self.assertIn("not revenue recognition", component)
+		self.assertIn("not an expense/P&amp;L measure", component)
+		self.assertIn("Purchase Cost", component)
+		self.assertIn("Consumed Material Cost", component)
+		self.assertIn("Timesheet Cost", component)
 
 	def test_project_receipt_action_creates_draft_payment_entry(self):
 		source = (APP_ROOT / "project_receipts.py").read_text()
-
 		self.assertIn('doc = frappe.new_doc(PAYMENT_ENTRY_DOCTYPE)', source)
 		self.assertIn('doc.payment_type = "Receive"', source)
 		self.assertIn("doc.project = project", source)
@@ -78,7 +104,6 @@ class TestProjectOperationsUIContract(TestCase):
 
 	def test_project_timeline_is_native_bounded_and_excludes_cancelled_documents(self):
 		source = (APP_ROOT / "project_operations.py").read_text()
-
 		self.assertIn("MAX_TIMELINE_ROWS = 200", source)
 		self.assertIn('"Sales Order"', source)
 		self.assertIn('"Sales Invoice"', source)
@@ -91,7 +116,6 @@ class TestProjectOperationsUIContract(TestCase):
 
 	def test_project_operations_is_governed_navigation_with_native_fallback(self):
 		source = (APP_ROOT / "master_experience.py").read_text()
-
 		self.assertIn('"target": "project-operations"', source)
 		self.assertIn('"target": "Project"', source)
 		self.assertIn("def _promote_project_operations", source)
@@ -101,7 +125,6 @@ class TestProjectOperationsUIContract(TestCase):
 
 	def test_project_cost_router_does_not_create_generic_expense_entries(self):
 		source = (APP_ROOT / "project_expense_routing.py").read_text()
-
 		self.assertIn('doctype="Purchase Invoice"', source)
 		self.assertIn('doctype="Stock Entry"', source)
 		self.assertIn('doctype="Expense Claim"', source)
