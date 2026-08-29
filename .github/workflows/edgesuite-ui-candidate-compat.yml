@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   compatibility:
-    name: RetailEdge E15 + reconciled EdgeSuite UI
+    name: RetailEdge + reconciled EdgeSuite UI
     runs-on: ubuntu-24.04
     timeout-minutes: 75
 
@@ -38,7 +38,7 @@ jobs:
           --health-retries=10
 
     steps:
-      - name: Check out RetailEdge E15
+      - name: Check out RetailEdge QA candidate
         uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
@@ -123,7 +123,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: retailedge-e15-edgeui-candidate-failure
+          name: retailedge-edgeui-candidate-failure
           path: /tmp/retailedge-edgeui-candidate-tests.log
           if-no-files-found: ignore
           retention-days: 3
