@@ -8,7 +8,7 @@ This audit is the implementation filter after the E15 multi-app coexistence chec
 2. Do not rebuild native ERPNext capabilities. Add guided orchestration, controls, collaboration and reporting where the native experience has a real usability or market gap.
 3. EdgeSuite UI remains the shared frontend runtime.
 4. The product must remain safe alongside other Frappe/ERPNext product apps.
-5. Any new E16 implementation is stacked on the exact green E15 checkpoint `1f01b27d02b322f49ecaaecf1103a4b7188d6fed`.
+5. E16 remains stacked on the exact green E15 checkpoint `1f01b27d02b322f49ecaaecf1103a4b7188d6fed`; continue the existing E16 branch/PR rather than creating divergent implementation lines.
 
 ## Native ERPNext capabilities that are not gaps
 
@@ -17,45 +17,62 @@ This audit is the implementation filter after the E15 multi-app coexistence chec
 - Subscription and Auto Repeat already cover recurring/retainer billing patterns.
 - Dunning already provides formal overdue collection notices, optional interest/fees and linked payment handling.
 - ERPNext Customer Portal already exposes customer/order information and Project portal access can expose tasks/timesheets.
+- ERPNext Supplier portal already exposes Request for Quotation, Supplier Quotation, Purchase Order and Purchase Invoice with Supplier ownership checks derived from Portal User links.
 
-The product should expose or orchestrate these safely rather than create parallel ledgers or duplicate recurring-billing documents.
+The product should expose or orchestrate these safely rather than create parallel ledgers or duplicate recurring-billing, buying or payment documents.
 
-## Confirmed experience gaps worth implementation
+## Priority A — Customer collaboration and self-service — IMPLEMENTED / GREEN
 
-### Priority A — Customer collaboration and self-service
+The EdgeSuite customer portal now extends native ERPNext documents without mutating submitted accounting documents:
+- quotation accept/decline and transaction-scoped collaboration are append-only;
+- invoice payment initiation uses native ERPNext Payment Request and configured gateways;
+- outstanding, overdue, received-payment, available-advance and receivable statement context remain native accounting read models;
+- project progress and only explicitly customer-published Project Updates are exposed;
+- customer/company/document identity is server-derived and revalidated;
+- PDF access uses ERPNext website permission and server-controlled Print Format selection;
+- no direct Payment Entry, GL Entry or Stock Ledger Entry writes are introduced by portal self-service.
 
-Extend the existing EdgeSuite customer portal around native ERPNext documents so customers can:
-- view quotations and clearly accept/decline them without mutating submitted accounting documents;
-- add transaction-scoped comments/communication;
-- initiate permitted invoice payments through native Payment Request / configured gateways;
-- see invoice outstanding status, advance/credit context and statements;
-- see relevant project progress and approved customer-facing project activity.
+Validated checkpoint: `273d795d4acd66b7478f8968a5a74ef40ff50681`
+- RetailEdge Theme Compatibility #105: PASS
+- Linters #1800: PASS
+- CI #1818, including full RetailEdge tests: PASS
+- EdgeSuite UI Candidate Compatibility #56: PASS
 
-### Priority A — Receivables automation workspace
+## Priority A — Receivables automation workspace — IMPLEMENTED / GREEN
 
-Provide an EdgeSuite collections workspace over ERPNext Accounts Receivable, Payment Terms, Payment Request and Dunning:
+The collections workspace orchestrates ERPNext Accounts Receivable, Payment Terms, Payment Request and Dunning with:
 - overdue prioritisation;
 - reminder/dunning readiness;
-- payment-request creation/handoff;
-- promise/follow-up visibility where supported without inventing accounting balances;
-- branch/permission-aware customer collections queues.
+- governed Payment Request and Dunning handoffs;
+- existing Action Follow Up visibility for collection follow-up scheduling without misrepresenting follow-up notes as an accounting or customer promise-to-pay balance;
+- branch/company/permission-aware collection queues.
 
-### Priority B — Supplier collaboration
+The Action Follow Up store remains operational follow-up metadata, not a shadow receivables ledger.
 
-Evaluate a supplier-facing portal over native Purchase Order, Purchase Invoice, Payment Entry and attachments:
-- purchase-order visibility and acknowledgement;
-- supplier document upload/intake routed to native buying documents;
-- payment-status and statement visibility;
-- comments/activity with strict supplier ownership checks.
+Validated with the same Priority-A checkpoint `273d795d4acd66b7478f8968a5a74ef40ff50681`.
 
-### Priority B — Project collaboration
+## Priority B — Supplier collaboration — NEXT
 
-Expose native Project/Task/Timesheet/Expense Claim and project-linked sales/purchase documents through a coherent EdgeSuite collaboration surface rather than duplicating project accounting.
+ERPNext v16 already owns Supplier portal transaction pages and website permissions for Request for Quotation, Supplier Quotation, Purchase Order and Purchase Invoice. RetailEdge must not rebuild them.
 
-### Priority C — Document capture assistance
+Implement an additive, product-neutral supplier workspace that reuses those native routes and Supplier ownership boundaries while adding genuine collaboration gaps:
+- unified supplier dashboard over native RFQ, Supplier Quotation, Purchase Order and Purchase Invoice;
+- purchase-order acknowledgement and supplier messages as append-only collaboration records, never Purchase Order mutation;
+- read-only payment/payables/statement context derived from ERPNext accounting data;
+- secure document/attachment intake routed to native buying documents with human review before any posting;
+- strict Supplier Portal User ownership checks on every read/write boundary.
+
+## Priority B — Project collaboration — PARTIALLY IMPLEMENTED / GREEN
+
+Customer-facing project collaboration is now available through native Project progress plus explicitly published Project Updates. Internal Project/Task/Timesheet/Expense Claim and project-linked sales/purchase documents remain ERPNext authority. Further Project collaboration should be added only where a confirmed UX gap remains; do not duplicate project accounting.
+
+## Priority C — Document capture assistance
 
 Evaluate attachment/document intake and extraction assistance for supplier bills/receipts. Any accepted transaction must still be created and validated as the correct native ERPNext document, with human review before posting.
 
-## First implementation tranche
+## Current execution order
 
-Start with Customer Collaboration + Receivables Automation because the existing customer portal, professional selling, Payment Request/payment infrastructure, advanced payments and project operations provide the highest reuse with the lowest accounting risk.
+1. Preserve Priority-A green checkpoint `273d795d4acd66b7478f8968a5a74ef40ff50681` as a reconcilable milestone.
+2. Continue Priority-B Supplier Collaboration on the existing `agent/competitive-gap-nextgen-20260829` / PR #53 line.
+3. Validate every Supplier slice at exact head before expanding to document capture assistance.
+4. Keep manual QA deferred until implementation is complete and the cumulative E16 line is reconciled into the single consolidated QA branch.
