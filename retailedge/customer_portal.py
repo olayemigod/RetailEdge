@@ -14,6 +14,8 @@ from retailedge.customer_portal_collaboration import (
 	get_quotation_activity_states,
 	quotation_response_allowed,
 )
+from retailedge.customer_portal_financial import get_customer_advance_summary
+from retailedge.customer_project_updates import get_customer_project_update_states
 
 MAX_PORTAL_ROWS = 200
 PORTAL_DOWNLOAD_DOCTYPES = {"Quotation", "Sales Order", "Sales Invoice", "Delivery Note"}
@@ -129,6 +131,8 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 		"outstanding_amount",
 		"project_name",
 		"percent_complete",
+		"expected_start_date",
+		"expected_end_date",
 	):
 		if meta.has_field(fieldname):
 			fields.append(fieldname)
@@ -140,6 +144,11 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 	quotation_states = (
 		get_quotation_activity_states([row.name for row in rows], customers)
 		if doctype == "Quotation"
+		else {}
+	)
+	project_states = (
+		get_customer_project_update_states([row.name for row in rows], customers)
+		if doctype == "Project"
 		else {}
 	)
 	result = []
@@ -154,6 +163,7 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 		)
 		payment_state = payment_states.get(row.name, {})
 		quotation_state = quotation_states.get(row.name, {})
+		project_state = project_states.get(row.name, {})
 		can_pay_online = bool(
 			doctype == "Sales Invoice"
 			and int(getattr(row, "docstatus", 0) or 0) == 1
@@ -173,6 +183,8 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 				"currency": getattr(row, "currency", "") or "",
 				"project_name": getattr(row, "project_name", "") or "",
 				"percent_complete": flt(getattr(row, "percent_complete", 0)),
+				"expected_start_date": getattr(row, "expected_start_date", None),
+				"expected_end_date": getattr(row, "expected_end_date", None),
 				"download_url": _portal_download_url(doctype, row.name),
 				"can_pay_online": can_pay_online,
 				"payment_request_status": payment_state.get("status", ""),
@@ -186,6 +198,14 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 				),
 				"can_message_quotation": bool(
 					doctype == "Quotation" and int(getattr(row, "docstatus", 0) or 0) == 1
+				),
+				"project_update_count": int(project_state.get("count") or 0),
+				"latest_project_update": project_state.get("latest_summary", ""),
+				"latest_project_update_on": project_state.get("latest_on"),
+				"project_updates_url": (
+					f"/customer_project_updates?project={quote(str(row.name), safe='')}"
+					if doctype == "Project"
+					else ""
 				),
 			}
 		)
@@ -285,6 +305,7 @@ def get_customer_portal_context() -> dict[str, Any]:
 	customers = _assert_customer_portal_user()
 	invoice_summary = _invoice_summary(customers)
 	payment_summary = _payment_summary(customers)
+	advance_summary = get_customer_advance_summary(customers)
 	sections = []
 	for spec in PORTAL_SECTIONS:
 		doctype = spec["doctype"]
@@ -302,6 +323,7 @@ def get_customer_portal_context() -> dict[str, Any]:
 		"user_full_name": frappe.get_user().get_fullname(),
 		"invoice_summary": invoice_summary,
 		"payment_summary": payment_summary,
+		"advance_summary": advance_summary,
 		"sections": sections,
 		"routes": {
 			"quotations": "/quotations",
@@ -309,6 +331,8 @@ def get_customer_portal_context() -> dict[str, Any]:
 			"invoices": "/invoices",
 			"shipments": "/shipments",
 			"projects": "/project",
+			"project_updates": "/customer_project_updates",
+			"account_statement": "/customer_account_statement",
 		},
 		"security": {
 			"customer_source": "ERPNext Portal User links",
@@ -321,9 +345,16 @@ def get_customer_portal_context() -> dict[str, Any]:
 			"payment_request_native_erpnext": True,
 			"payment_gateway_browser_selectable": False,
 			"payment_entry_created_by_portal": False,
+			"advance_source": "Payment Entry.unallocated_amount",
+			"advance_cross_currency_total": False,
+			"account_statement_source": "Payment Ledger Entry",
 			"quotation_activity_append_only": True,
 			"quotation_submitted_document_mutated": False,
 			"quotation_customer_server_derived": True,
+			"project_update_source": "Project Update",
+			"project_update_publication_required": True,
+			"project_update_internal_users_exposed": False,
+			"project_costing_exposed": False,
 			"cross_customer_selection": False,
 		},
 	}
