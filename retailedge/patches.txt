@@ -12,3 +12,4 @@ retailedge.patches.ensure_stock_movement_history_menu_v2
 retailedge.patches.ensure_stock_movement_history_menu_v3
 retailedge.patches.add_reporting_action_settings
 retailedge.patches.install_professional_print_formats
+retailedge.patches.install_customer_portal_menu
