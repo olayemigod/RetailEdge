@@ -37,6 +37,18 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("does not maintain a project wallet", component)
 		self.assertNotIn("GL Entry", component)
 
+	def test_project_branch_search_is_bounded_permission_aware_and_company_contextual(self):
+		source = (APP_ROOT / "project_search.py").read_text()
+
+		self.assertIn("def search_project_branches", source)
+		self.assertIn('frappe.has_permission("Branch", "read")', source)
+		self.assertIn("get_user_allowed_branches", source)
+		self.assertIn("user_has_global_branch_access", source)
+		self.assertIn('"RetailEdge Branch Profile"', source)
+		self.assertIn('filters={"company": company, "enabled": 1}', source)
+		self.assertIn("limit_page_length=page_length", source)
+		self.assertNotIn('frappe.get_all(\n\t\t"Branch"', source)
+
 	def test_project_receipt_action_creates_draft_payment_entry(self):
 		source = (APP_ROOT / "project_receipts.py").read_text()
 
