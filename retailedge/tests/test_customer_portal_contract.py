@@ -57,6 +57,31 @@ class TestCustomerPortalContract(TestCase):
 		self.assertNotIn("frappe.new_doc(\"Payment Entry\")", source)
 		self.assertNotIn("submit()", source)
 
+	def test_portal_pdf_download_uses_website_permission_and_server_selected_format(self):
+		source = (APP_ROOT / "customer_portal_download.py").read_text()
+		for doctype in ("Quotation", "Sales Order", "Sales Invoice", "Delivery Note"):
+			self.assertIn(f'"{doctype}"', source)
+		self.assertIn('has_website_permission(doc, "read", frappe.session.user)', source)
+		self.assertIn("_assert_customer_portal_user()", source)
+		self.assertIn("get_preferred_print_format(doctype)", source)
+		self.assertIn("MANAGED_MARKER", source)
+		self.assertIn('return "Standard"', source)
+		self.assertIn("frappe.get_print(", source)
+		self.assertIn("as_pdf=True", source)
+		self.assertIn('frappe.local.response.type = "download"', source)
+		self.assertNotIn("customer: str", source)
+		self.assertNotIn("print_format: str", source)
+		self.assertNotIn("ignore_permissions=True", source)
+
+	def test_portal_download_urls_are_server_generated_and_not_available_for_projects(self):
+		source = (APP_ROOT / "customer_portal.py").read_text()
+		self.assertIn('PORTAL_DOWNLOAD_DOCTYPES = {"Quotation", "Sales Order", "Sales Invoice", "Delivery Note"}', source)
+		self.assertIn("def _portal_download_url", source)
+		self.assertIn("customer_portal_download.download_customer_document_pdf", source)
+		self.assertIn('"download_url": _portal_download_url(doctype, row.name)', source)
+		self.assertIn('"portal_pdf_uses_website_permission": True', source)
+		self.assertIn('"portal_pdf_print_format_browser_selectable": False', source)
+
 	def test_website_controller_redirects_guest_and_uses_configured_company_identity(self):
 		source = (APP_ROOT / "www" / "customer_portal.py").read_text()
 		self.assertIn('redirect_location = "/login?redirect-to=/customer_portal"', source)
@@ -87,7 +112,8 @@ class TestCustomerPortalContract(TestCase):
 		self.assertIn("Overdue since", template)
 		self.assertIn("Payments Received", template)
 		self.assertIn("Payment history is read-only", template)
-		self.assertIn("Secure document access", template)
+		self.assertIn("Download PDF", template)
+		self.assertIn("Document pages and PDF downloads use ERPNext customer website permissions", template)
 		self.assertNotIn("RetailEdge", template)
 		self.assertNotIn("ProcessEdge", template)
 		self.assertNotIn("Powered by", template)
