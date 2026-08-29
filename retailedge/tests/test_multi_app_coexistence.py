@@ -27,7 +27,21 @@ class TestMultiAppCoexistence(unittest.TestCase):
 		source = self.read("coreedge_adapter.py")
 		self.assertIn("get_installed_apps", source)
 		self.assertIn('"coreedge"', source.lower())
+		self.assertNotIn("from coreedge", source)
+		self.assertNotIn("import coreedge", source)
 		self.assertNotIn("required_apps = [\"coreedge\"]", self.read("hooks.py"))
+
+	def test_shared_frontend_runtime_is_edgesuiteui_only(self):
+		for relative in (
+			"public/js/retailedge_business_hub.bundle.js",
+			"public/js/retailedge_business_hub_page.js",
+			"public/js/retailedge_product_menu.bundle.js",
+		):
+			with self.subTest(relative=relative):
+				source = self.read(relative)
+				self.assertIn("EdgeSuiteUI", source)
+				self.assertNotIn("window.EdgeUI", source)
+				self.assertNotIn("global.EdgeUI", source)
 
 	def test_branch_fieldnames_remain_namespaced_but_visible_labels_are_neutral(self):
 		self.assertIn("retailedge_branch", coexistence.VISIBLE_BRANCH_FIELD_METADATA)
@@ -64,6 +78,18 @@ class TestMultiAppCoexistence(unittest.TestCase):
 			self.assertNotIn(f"\n{selector}", css)
 		self.assertIn(".edge-modal:has(.create-picker-list) .create-picker-item {", css)
 		self.assertIn(".edge-modal:has(.create-picker-list) .guided-create-search {", css)
+
+	def test_global_desk_styles_do_not_take_over_html_or_body(self):
+		for relative in (
+			"public/css/retailedge_cards.css",
+			"public/css/retailedge_workspace_home.css",
+			"public/css/retailedge_guided_create_menu.css",
+		):
+			with self.subTest(relative=relative):
+				css = self.read(relative)
+				self.assertNotIn("\nbody {", css)
+				self.assertNotIn("\nhtml {", css)
+				self.assertNotIn("\n* {", css)
 
 	def test_backfill_is_dry_run_first_and_not_a_whitelisted_runtime_api(self):
 		signature = inspect.signature(transaction_branch_attribution.run_transaction_branch_backfill)
