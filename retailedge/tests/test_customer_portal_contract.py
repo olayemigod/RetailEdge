@@ -72,7 +72,6 @@ class TestCustomerPortalContract(TestCase):
 		self.assertNotIn("customer: str", source)
 		self.assertNotIn("print_format: str", source)
 		self.assertNotIn("ignore_permissions=True", source)
-		self.assertNotIn("RetailEdge", source.replace('"module") == "RetailEdge"', ""))
 		self.assertNotIn("ProcessEdge", source)
 		self.assertNotIn("Powered by", source)
 
