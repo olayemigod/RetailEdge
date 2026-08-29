@@ -88,13 +88,14 @@ class BankMatchingBankAccountCascadeTests(unittest.TestCase):
 	def test_loader_installs_cascade_after_branch_adapter_before_workspace(self):
 		page = PAGE.read_text()
 		self.assertIn("bank_matching_bank_account_cascade_adapter.js", page)
+		boot_start = page.index("function boot(wrapper)")
 		markers = (
 			"frappe.require(BRANCH_SEARCH_ASSET)",
 			"frappe.require(BANK_ACCOUNT_CASCADE_ASSET)",
 			"loadBankingStyles()",
 			"frappe.require(WORKSPACE_ASSET)",
 		)
-		positions = [page.index(marker) for marker in markers]
+		positions = [page.index(marker, boot_start) for marker in markers]
 		self.assertEqual(positions, sorted(positions))
 
 	def test_adapter_is_valid_javascript(self):
