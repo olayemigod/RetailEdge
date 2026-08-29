@@ -83,10 +83,15 @@ class TestCustomerPortalCollaboration(TestCase):
 			self.assertNotIn(forbidden, self.service)
 
 	def test_duplicate_identical_response_reuses_latest_activity(self):
+		self.assertIn('"reference_name",', self.service)
 		self.assertIn("_latest_response(quotation.name, quotation.party_name)", self.service)
 		self.assertIn("existing.activity_type == activity_type", self.service)
 		self.assertIn('str(existing.message or "") == cleaned_message', self.service)
 		self.assertIn("_activity_result(existing, reused=True)", self.service)
+
+	def test_quotation_activity_endpoint_is_server_post_only(self):
+		self.assertIn('@frappe.whitelist(methods=["POST"])', self.service)
+		self.assertIn("def record_quotation_activity(", self.service)
 
 	def test_portal_exposes_server_derived_response_state_and_only_minimal_browser_arguments(self):
 		self.assertIn("get_quotation_activity_states", self.portal)
@@ -95,19 +100,17 @@ class TestCustomerPortalCollaboration(TestCase):
 		self.assertIn('data-activity-type="Accepted"', self.html)
 		self.assertIn('data-activity-type="Declined"', self.html)
 		self.assertIn('data-activity-type="Message"', self.html)
+		call = self.html.rsplit("window.frappe.call({", 1)[1].split("}).then", 1)[0]
 		self.assertIn(
 			'method: "retailedge.customer_portal_collaboration.record_quotation_activity"',
-			self.html,
+			call,
 		)
-		call = self.html.split(
-			'method: "retailedge.customer_portal_collaboration.record_quotation_activity"', 1
-		)[1].split("}).then", 1)[0]
+		self.assertIn('type: "POST"', call)
 		self.assertIn("quotation_name: quotationName", call)
 		self.assertIn("activity_type: activityType", call)
 		self.assertIn("message: message.value", call)
 		self.assertNotIn("customer:", call)
 		self.assertNotIn("company:", call)
-		self.assertIn('type: "POST"', call)
 
 	def test_customer_facing_copy_explains_separate_non_mutating_response(self):
 		self.assertIn("do not alter the submitted quotation", self.html)
