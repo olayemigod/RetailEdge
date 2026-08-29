@@ -66,6 +66,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.cash_movement import get_cash_movement_export
 
 		return get_cash_movement_export
+	if key == "cash-flow-outlook":
+		from retailedge.cash_flow_outlook import get_cash_flow_outlook_export
+
+		return get_cash_flow_outlook_export
 	frappe.throw(_("Unsupported RetailEdge report export scope."))
 
 

@@ -15,6 +15,17 @@ from retailedge.pos_runtime import (
 )
 
 FINANCE_TRANSFER_ROLES = {"Accounts User", "Accounts Manager", "System Manager"}
+CASH_FLOW_OUTLOOK_ROLES = {
+	"System Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Branch Manager",
+	"RetailEdgeBranchManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+	"Accounts Manager",
+	"Accounts User",
+}
 ACTION_CENTER_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
@@ -117,6 +128,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "money", "label": "Money", "icon": "wallet", "items": (
 			{"label": "Cash Movement", "target_type": "Page", "target": "cash-movement", "icon": "report"},
+			{"label": "Cash Flow Outlook", "target_type": "Page", "target": "cash-flow-outlook", "icon": "chart", "required_roles": tuple(sorted(CASH_FLOW_OUTLOOK_ROLES))},
 			{"label": "Payments", "target_type": "DocType", "target": "Payment Entry", "icon": "wallet"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet"},
 			{"label": "Import Bank Statement", "target_type": "DocType", "target": "RetailEdge Payment Statement Import", "icon": "upload"},

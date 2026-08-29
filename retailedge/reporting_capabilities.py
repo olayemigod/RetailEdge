@@ -122,6 +122,12 @@ _REPORT_SPECS = {
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Payment Entry",
 	),
+	"cash-flow-outlook": ReportCapabilitySpec(
+		key="cash-flow-outlook", label="Cash Flow Outlook",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+	),
 }
 
 
