@@ -17,6 +17,13 @@ def _can_create(doctype: str) -> bool:
 		return False
 
 
+def _can_read(doctype: str, name: str | None = None) -> bool:
+	try:
+		return bool(frappe.db.exists("DocType", doctype) and frappe.has_permission(doctype, "read", doc=name))
+	except Exception:
+		return False
+
+
 def _route_option(
 	*,
 	key: str,
@@ -54,13 +61,17 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 
 	This endpoint never creates, submits or posts transactions. It only exposes
 	native ERPNext/HRMS documents the current user can create. Project/Company/Cost
-	Center defaults are supplied only when those parent fields exist on the installed
-	DocType. Child-row project allocation remains inside the native document UI.
+	Center defaults are supplied only when those parent fields exist and the
+	current user may read the corresponding context record.
 	"""
 	_assert_read(PROJECT_DOCTYPE, project)
 	doc = frappe.get_doc(PROJECT_DOCTYPE, project)
 	if not doc.company:
 		frappe.throw(_("Project {0} has no Company.").format(project))
+	_assert_read("Company", doc.company)
+	cost_center = str(doc.cost_center or "").strip()
+	if cost_center and not _can_read("Cost Center", cost_center):
+		cost_center = ""
 
 	routes: list[dict[str, Any]] = []
 
@@ -73,7 +84,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 				doctype="Material Request",
 				project=project,
 				company=doc.company,
-				cost_center=doc.cost_center or "",
+				cost_center=cost_center,
 				project_prefill=True,
 				kind="procurement-planning",
 			)
@@ -88,7 +99,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 				doctype="Purchase Order",
 				project=project,
 				company=doc.company,
-				cost_center=doc.cost_center or "",
+				cost_center=cost_center,
 				project_prefill=True,
 				kind="procurement-order",
 			)
@@ -103,7 +114,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 				doctype="Purchase Receipt",
 				project=project,
 				company=doc.company,
-				cost_center=doc.cost_center or "",
+				cost_center=cost_center,
 				project_prefill=True,
 				kind="procurement-receipt",
 			)
@@ -118,7 +129,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 				doctype="Purchase Invoice",
 				project=project,
 				company=doc.company,
-				cost_center=doc.cost_center or "",
+				cost_center=cost_center,
 				project_prefill=True,
 				kind="expense",
 			)
@@ -133,7 +144,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 				doctype="Stock Entry",
 				project=project,
 				company=doc.company,
-				cost_center=doc.cost_center or "",
+				cost_center=cost_center,
 				project_prefill=True,
 				kind="stock",
 			)
@@ -148,7 +159,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 				doctype="Expense Claim",
 				project=project,
 				company=doc.company,
-				cost_center=doc.cost_center or "",
+				cost_center=cost_center,
 				project_prefill=False,
 				kind="employee-expense",
 			)
@@ -163,7 +174,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 				doctype="Journal Entry",
 				project=project,
 				company=doc.company,
-				cost_center=doc.cost_center or "",
+				cost_center=cost_center,
 				project_prefill=False,
 				kind="accounting-adjustment",
 			)
@@ -172,7 +183,7 @@ def get_project_expense_routes(project: str) -> dict[str, Any]:
 	return {
 		"project": doc.name,
 		"company": doc.company,
-		"cost_center": doc.cost_center or "",
+		"cost_center": cost_center,
 		"routes": routes,
-		"policy": "Choose the native ERPNext/HRMS document that matches the business event. Purchasing, stock, Budget and accounting controls remain authoritative; RetailEdge does not maintain a generic project expense or procurement ledger.",
+		"policy": "Choose the native ERPNext/HRMS document that matches the business event. Purchasing, stock, Budget and accounting controls remain authoritative; no generic project expense or procurement ledger is maintained.",
 	}
