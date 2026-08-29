@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
 import frappe
 from frappe import _
+from frappe.query_builder.functions import Sum
 from frappe.utils import add_days, date_diff, flt, getdate, today
 
 MAX_ADVANCE_ROWS = 200
@@ -158,13 +158,18 @@ def get_customer_account_statement(
 		"party": ["in", customers],
 		"delinked": 0,
 	}
-	opening = frappe.get_all(
-		"Payment Ledger Entry",
-		filters={**base_filters, "posting_date": ["<", resolved_from]},
-		fields=["sum(amount) as balance"],
-		limit_page_length=1,
-	)
-	opening_balance = flt(opening[0].balance) if opening else 0.0
+	ple = frappe.qb.DocType("Payment Ledger Entry")
+	opening_rows = (
+		frappe.qb.from_(ple)
+		.select(Sum(ple.amount).as_("balance"))
+		.where(ple.company == company)
+		.where(ple.account_type == "Receivable")
+		.where(ple.party_type == "Customer")
+		.where(ple.party.isin(customers))
+		.where(ple.delinked == 0)
+		.where(ple.posting_date < resolved_from)
+	).run(as_dict=True)
+	opening_balance = flt(opening_rows[0].balance) if opening_rows else 0.0
 
 	ledger_rows = frappe.get_all(
 		"Payment Ledger Entry",
