@@ -1,7 +1,7 @@
 const EDGEUI_ASSET = "edgeui.bundle.js";
 const OUTLOOK_ASSET = "cash_flow_outlook.bundle.js";
 const PAGE_ROUTE = "cash-flow-outlook";
-const PAGE_TITLE = "Cash Flow Outlook";
+const PAGE_TITLE = "13-Week Cash Commitments";
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {
@@ -47,7 +47,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(EDGEUI_ASSET);
 		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(OUTLOOK_ASSET);
-		if (typeof window.mountCashFlowOutlookPage !== "function") throw new Error("Cash Flow Outlook bundle is unavailable.");
+		if (typeof window.mountCashFlowOutlookPage !== "function") throw new Error("13-Week Cash Commitments bundle is unavailable.");
 		bootLoading.remove();
 		const root = document.createElement("div");
 		root.className = "retailedge-cash-flow-outlook-root";

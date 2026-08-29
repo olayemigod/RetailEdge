@@ -31,10 +31,13 @@ class TestCashFlowOutlookContract(unittest.TestCase):
 		self.assertIn('voucher_type="Sales Invoice"', source)
 		self.assertIn('voucher_type="Purchase Invoice"', source)
 		self.assertIn("validate_user_branch_access", source)
+		self.assertIn('"forecasting": False', source)
 		self.assertIn('"cash_balance_included": False', source)
 		self.assertIn('"journal_entries_included": False', source)
 		self.assertIn('"orders_included": False', source)
 		self.assertIn('"manual_scenarios_included": False', source)
+		self.assertNotIn("build_baseline_forecast", source)
+		self.assertNotIn("from retailedge.forecasting", source)
 
 	def test_outlook_is_read_only_and_never_posts_accounting(self):
 		source = (APP_ROOT / "cash_flow_outlook.py").read_text()
@@ -48,7 +51,7 @@ class TestCashFlowOutlookContract(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
-	def test_edgesuite_page_uses_strict_runtime_and_product_neutral_visible_copy(self):
+	def test_edgesuite_page_is_explicitly_commitments_not_forecasting(self):
 		bundle = (APP_ROOT / "public" / "js" / "cash_flow_outlook.bundle.js").read_text()
 		component = (
 			APP_ROOT / "public" / "js" / "cash_flow_outlook" / "CashFlowOutlookReport.vue"
@@ -63,7 +66,9 @@ class TestCashFlowOutlookContract(unittest.TestCase):
 		self.assertNotIn("window.EdgeUI", component)
 		self.assertNotIn("window.EdgeUI", page)
 		self.assertIn("EdgeReportShell", component)
-		self.assertIn("Net scheduled movement is not a bank or cash balance", component)
+		self.assertIn("13-Week Cash Commitments", component)
+		self.assertIn("Forecasting remains in Forecasting & Planning", component)
+		self.assertIn("known-commitments schedule", component)
 
 	def test_shared_navigation_export_and_capability_registries_include_outlook(self):
 		navigation = (APP_ROOT / "edgesuite_ui.py").read_text()

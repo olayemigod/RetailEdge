@@ -48,7 +48,7 @@ def _assert_document_permissions() -> None:
 	for doctype in ("Sales Invoice", "Purchase Invoice"):
 		if not frappe.has_permission(doctype, "read"):
 			frappe.throw(
-				_("You do not have permission to view {0} records required for Cash Flow Outlook.").format(doctype),
+				_("You do not have permission to view {0} records required for 13-Week Cash Commitments.").format(doctype),
 				frappe.PermissionError,
 			)
 
@@ -89,7 +89,7 @@ def search_cash_flow_outlook_options(kind: str, txt: str = "", company: str = ""
 	if kind == "branch":
 		rows = branch_query("Branch", txt, "name", 0, MAX_LINK_RESULTS, {"company": company})
 		return [{"value": row[0], "label": row[0]} for row in rows]
-	frappe.throw(_("Unsupported Cash Flow Outlook search type."))
+	frappe.throw(_("Unsupported 13-Week Cash Commitments search type."))
 
 
 def _native_outstanding_rows(company: str, account_type: str) -> list[frappe._dict]:
@@ -118,8 +118,8 @@ def _native_outstanding_rows(company: str, account_type: str) -> list[frappe._di
 			"cust_master_name" if account_type == "Receivable" else "supp_master_name",
 		],
 	}
-	_report = ReceivablePayableReport(filters)
-	_columns, data, *_rest = _report.run(args)
+	report = ReceivablePayableReport(filters)
+	_columns, data, *_rest = report.run(args)
 	return [frappe._dict(row) for row in (data or []) if row]
 
 
@@ -242,13 +242,13 @@ def _columns(currency: str) -> list[dict[str, Any]]:
 		},
 		{
 			"fieldname": "net_scheduled",
-			"label": _("Net Scheduled"),
+			"label": _("Net Scheduled Commitments"),
 			"fieldtype": "Currency",
 			"options": currency,
 		},
 		{
 			"fieldname": "cumulative_scheduled_net",
-			"label": _("Cumulative Scheduled Net"),
+			"label": _("Cumulative Scheduled Commitments"),
 			"fieldtype": "Currency",
 			"options": currency,
 		},
@@ -304,7 +304,7 @@ def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
 	through_payables = sum(flt(row["payables_due"]) for row in buckets)
 	currency = _company_currency(company)
 	return {
-		"title": _("Cash Flow Outlook"),
+		"title": _("13-Week Cash Commitments"),
 		"columns": _columns(currency),
 		"rows": buckets,
 		"summary": [
@@ -312,9 +312,9 @@ def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
 			{"label": _("Payables Due Now"), "value": buckets[0]["payables_due"], "datatype": "Currency"},
 			{"label": _("Receivables Through 13 Weeks"), "value": through_receivables, "datatype": "Currency"},
 			{"label": _("Payables Through 13 Weeks"), "value": through_payables, "datatype": "Currency"},
-			{"label": _("Net Scheduled Movement"), "value": through_receivables - through_payables, "datatype": "Currency"},
+			{"label": _("Net Scheduled Commitments"), "value": through_receivables - through_payables, "datatype": "Currency"},
 			{
-				"label": _("Beyond 13 Weeks Net"),
+				"label": _("Beyond 13 Weeks Net Commitments"),
 				"value": flt(beyond_receivables["amount"]) - flt(beyond_payables["amount"]),
 				"datatype": "Currency",
 			},
@@ -337,6 +337,9 @@ def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
 		"metadata": {
 			"source_of_truth": "ERPNext Accounts Receivable and Accounts Payable allocation",
 			"basis": "current outstanding allocated by native payment terms and due dates",
+			"forecasting": False,
+			"forecast_owner": "RetailEdge R12 Forecasting & Planning Intelligence",
+			"r12_reconciliation_contract": "Replace the R12 simplified known-due commitment scheduler with this payment-term schedule when the intelligence stack is reconciled; do not run parallel commitment calculators.",
 			"cash_balance_included": False,
 			"journal_entries_included": False,
 			"orders_included": False,

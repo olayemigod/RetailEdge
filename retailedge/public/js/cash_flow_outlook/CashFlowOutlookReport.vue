@@ -1,12 +1,12 @@
 <template>
 	<div v-if="!edgeUIValid" class="outlook-fallback">
-		<strong>Cash Flow Outlook could not start.</strong>
+		<strong>13-Week Cash Commitments could not start.</strong>
 		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
 	</div>
 	<EdgeAppShell
 		v-else
 		product="RetailEdge"
-		title="Cash Flow Outlook"
+		title="13-Week Cash Commitments"
 		:tenantName="tenantName || filters.company"
 		:branchName="branchName || filters.branch"
 		:userName="userName"
@@ -16,9 +16,9 @@
 		@navigate="handleNavigation"
 	>
 		<EdgeReportShell
-			title="Cash Flow Outlook"
-			eyebrow="Liquidity Planning"
-			subtitle="A 13-week schedule of current ERPNext receivables and payables using native payment terms and due dates. It is not a projected bank balance."
+			title="13-Week Cash Commitments"
+			eyebrow="Known Due Commitments"
+			subtitle="Current ERPNext receivables and payables split by native payment terms into Due now plus 13 weekly buckets. Forecasting remains in Forecasting & Planning."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -28,7 +28,7 @@
 			:formatter="formatCell"
 			emptyTitle="No scheduled receivables or payables"
 			emptyDescription="No current invoice payment schedules fall within this scope."
-			loadingMessage="Building cash flow outlook…"
+			loadingMessage="Building 13-week cash commitments…"
 			@retry="fetchData"
 		>
 			<template #filters>
@@ -42,8 +42,8 @@
 				<span>As of {{ asOfDate || "today" }} · {{ horizonWeeks }}-week horizon</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
 				<span>ERPNext current outstanding allocated by native payment terms and due dates</span>
-				<span>Journal Entries, future orders and manual scenarios are excluded from this first outlook</span>
-				<span>Net scheduled movement is not a bank or cash balance</span>
+				<span>This is a known-commitments schedule, not a behavioural forecast or projected bank balance</span>
+				<span>Journal Entries, future orders and manual scenarios remain outside this commitment schedule</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -119,7 +119,7 @@ export default {
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
-				this.error = errorMessage(error, "Failed to load Cash Flow Outlook controls.");
+				this.error = errorMessage(error, "Failed to load 13-Week Cash Commitments controls.");
 			} finally {
 				this.metadataLoading = false;
 			}
@@ -171,7 +171,7 @@ export default {
 		async fetchData() {
 			if (!this.filters.company) return;
 			if (!this.reportProvider?.load) {
-				this.error = "The shared EdgeSuite Cash Flow Outlook provider is unavailable.";
+				this.error = "The shared EdgeSuite 13-Week Cash Commitments provider is unavailable.";
 				return;
 			}
 			this.loading = true;
@@ -188,7 +188,7 @@ export default {
 				this.rows = [];
 				this.columns = [];
 				this.summary = [];
-				this.error = errorMessage(error, "Cash Flow Outlook failed to load.");
+				this.error = errorMessage(error, "13-Week Cash Commitments failed to load.");
 			} finally {
 				this.loading = false;
 			}
