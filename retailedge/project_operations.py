@@ -17,6 +17,9 @@ MAX_TIMELINE_ROWS = 200
 TIMELINE_DOCTYPES: tuple[dict[str, str], ...] = (
 	{"doctype": "Sales Order", "kind": "Revenue", "label": "Sales Order"},
 	{"doctype": "Sales Invoice", "kind": "Revenue", "label": "Sales Invoice"},
+	{"doctype": "Material Request", "kind": "Procurement", "label": "Material Request"},
+	{"doctype": "Purchase Order", "kind": "Procurement", "label": "Purchase Order"},
+	{"doctype": "Purchase Receipt", "kind": "Procurement", "label": "Purchase Receipt"},
 	{"doctype": "Purchase Invoice", "kind": "Cost", "label": "Purchase Invoice"},
 	{"doctype": "Expense Claim", "kind": "Cost", "label": "Expense Claim"},
 	{"doctype": "Stock Entry", "kind": "Stock", "label": "Stock Entry"},
@@ -82,7 +85,7 @@ def _project_payment_rows(project: str, *, payment_type: str | None = None, bran
 
 
 def _date_field_for(doctype: str) -> str:
-	for fieldname in ("posting_date", "transaction_date", "expense_approver_date", "creation"):
+	for fieldname in ("posting_date", "transaction_date", "schedule_date", "expense_approver_date", "creation"):
 		if fieldname == "creation" or _has_field(doctype, fieldname):
 			return fieldname
 	return "creation"
@@ -98,6 +101,9 @@ def _branch_field_for(doctype: str) -> str | None:
 def _project_timeline_rows(project: str, *, branch: str | None = None) -> list[dict[str, Any]]:
 	"""Build a read-only timeline from native ERPNext documents carrying Project.
 
+	Only parent DocTypes with an actual Project field participate. Procurement
+	documents whose Project exists only on child rows are omitted rather than
+	showing a whole-document amount that could include unrelated projects.
 	When Branch scope is requested, document types without a branch attribution
 	field are omitted rather than widened to company/project-wide results.
 	Cancelled documents are always excluded.
@@ -277,7 +283,7 @@ def get_project_funds_context(project: str, branch: str | None = None) -> dict[s
 		"source_of_truth": {
 			"project": PROJECT_DOCTYPE,
 			"cash": PAYMENT_ENTRY_DOCTYPE,
-			"timeline": "Native ERPNext documents carrying the Project accounting/operational link.",
+			"timeline": "Native ERPNext documents carrying a safe parent Project accounting/operational link.",
 			"cash_policy": "Cash In/Out means submitted project-linked Payment Entry movement; it is not revenue, expense, profit, or a bank balance.",
 			"cost_policy": "Tracked Cost is a transparent sum of ERPNext Project purchase, consumed-material and timesheet costing fields; ERPNext remains authoritative.",
 			"ledger_policy": "ERPNext native documents only; no RetailEdge project wallet or shadow ledger.",
