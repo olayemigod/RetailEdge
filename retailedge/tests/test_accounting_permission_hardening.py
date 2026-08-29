@@ -45,12 +45,25 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		self.assertIn("company=payment.company", source)
 		self.assertIn("reconciliation.reconcile()", source)
 
+	def test_guided_payment_uses_shared_branch_fields_and_authorizes_reference_branch(self):
+		source = self.read("guided_payment.py")
+		self.assertIn("BRANCH_FIELD_CANDIDATES", source)
+		self.assertIn("get_first_existing_field", source)
+		self.assertIn('branch_field = get_first_existing_field(config["reference_doctype"], BRANCH_FIELD_CANDIDATES)', source)
+		self.assertIn("filters[branch_field] = branch", source)
+		self.assertIn("reference_branch = row.get(branch_field) if branch_field else None", source)
+		self.assertIn("validate_user_branch_access(reference_branch", source)
+		self.assertIn("payment_branch_field = get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES)", source)
+		self.assertIn("doc.set(payment_branch_field, branch)", source)
+		self.assertNotIn("same RetailEdge Branch", source)
+
 	def test_guided_accounting_paths_do_not_directly_write_submitted_accounting_truth(self):
 		for relative in (
 			"professional_sales_invoice.py",
 			"advanced_payments.py",
 			"payment_application.py",
 			"project_receipts.py",
+			"guided_payment.py",
 		):
 			source = self.read(relative)
 			for forbidden in (
@@ -66,14 +79,16 @@ class TestAccountingPermissionHardening(unittest.TestCase):
 		conversion = self.read("quotation_invoice_conversion.py")
 		project_receipts = self.read("project_receipts.py")
 		advanced = self.read("advanced_payments.py")
+		guided_payment = self.read("guided_payment.py")
 		for visible_error in (
 			"RetailEdge direct Quotation to Sales Invoice tracking",
 			"RetailEdge could not complete",
 			"RetailEdge could not find",
 			"RetailEdge direct-invoice conversion reservation",
 			"RetailEdge Payment Entry branch attribution",
+			"same RetailEdge Branch",
 		):
-			self.assertNotIn(visible_error, conversion + project_receipts + advanced)
+			self.assertNotIn(visible_error, conversion + project_receipts + advanced + guided_payment)
 		# Stable internal identities remain intentionally unchanged.
 		self.assertIn('CONVERSION_DOCTYPE = "RetailEdge Quotation Invoice Conversion"', conversion)
 
