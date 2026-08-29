@@ -52,7 +52,7 @@ def _project_payment_rows(project: str, *, payment_type: str | None = None, bran
 	if branch:
 		if not branch_field:
 			frappe.throw(
-				_("RetailEdge Payment Entry branch attribution is not available. Run bench migrate before using Branch-scoped Project Funds."),
+				_("Payment Entry branch attribution is not available. Run bench migrate before using Branch-scoped Project Funds."),
 			)
 		filters[branch_field] = branch
 
@@ -161,12 +161,7 @@ def _project_timeline_rows(project: str, *, branch: str | None = None) -> list[d
 
 @frappe.whitelist()
 def get_project_funds_context(project: str, branch: str | None = None) -> dict[str, Any]:
-	"""Return a permission-aware project operations/funds snapshot from ERPNext truth.
-
-	RetailEdge does not maintain a project wallet or shadow ledger. Project billing,
-	costing and margin come from the ERPNext Project document; cash movements come
-	from submitted ERPNext Payment Entries explicitly linked to the Project.
-	"""
+	"""Return a permission-aware project operations/funds snapshot from ERPNext truth."""
 	_assert_read(PROJECT_DOCTYPE, project)
 	doc = frappe.get_doc(PROJECT_DOCTYPE, project)
 	if not doc.company:
@@ -259,8 +254,6 @@ def get_project_funds_context(project: str, branch: str | None = None) -> dict[s
 		"supplier_cash_out": supplier_cash_out,
 		"project_cash_in_rows": project_cash_in_rows,
 		"project_cash_out_rows": project_cash_out_rows,
-		# Backward-compatible aliases retained for existing integrations. These are
-		# project-linked cash movement values, not revenue/expense or bank balances.
 		"funds_received": project_cash_in,
 		"funds_paid_out": project_cash_out,
 		"cash_funds_position": project_cash_in - project_cash_out,
@@ -286,7 +279,7 @@ def get_project_funds_context(project: str, branch: str | None = None) -> dict[s
 			"timeline": "Native ERPNext documents carrying a safe parent Project accounting/operational link.",
 			"cash_policy": "Cash In/Out means submitted project-linked Payment Entry movement; it is not revenue, expense, profit, or a bank balance.",
 			"cost_policy": "Tracked Cost is a transparent sum of ERPNext Project purchase, consumed-material and timesheet costing fields; ERPNext remains authoritative.",
-			"ledger_policy": "ERPNext native documents only; no RetailEdge project wallet or shadow ledger.",
+			"ledger_policy": "ERPNext native documents only; no custom project wallet or shadow ledger.",
 		},
 		"routes": {
 			"project": f"/app/project/{doc.name}",
