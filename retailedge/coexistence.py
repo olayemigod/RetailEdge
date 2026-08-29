@@ -19,6 +19,8 @@ HIDDEN_BRANCH_FIELD_LABELS = {
 	"retailedge_warehouse_branch": "Warehouse Branch",
 }
 
+BACKFILL_CONFIRMATION = "APPLY BRANCH ATTRIBUTION"
+
 
 def ensure_neutral_branch_field_labels():
 	"""Keep namespaced fieldnames while removing product branding from visible metadata.
@@ -36,6 +38,53 @@ def ensure_neutral_branch_field_labels():
 	for fieldname, label in HIDDEN_BRANCH_FIELD_LABELS.items():
 		updated += _update_matching_custom_fields(fieldname, {"label": label})
 	return {"updated": updated}
+
+
+def preview_branch_attribution_backfill(doctype=None, filters=None, limit=500):
+	"""Safe read-only maintenance preview."""
+	from retailedge.transaction_branch_attribution import run_transaction_branch_backfill
+
+	return run_transaction_branch_backfill(
+		doctype=doctype,
+		filters=filters,
+		limit=limit,
+		overwrite=False,
+		dry_run=True,
+	)
+
+
+def apply_branch_attribution_backfill(
+	doctype=None,
+	filters=None,
+	limit=500,
+	overwrite=False,
+	commit_every=100,
+	confirmation=None,
+):
+	"""Explicit maintenance-only write path for historical attribution metadata.
+
+	The normal transaction hooks populate attribution on draft/validate. Historical
+	backfill is intentionally separate, System Manager only and requires an exact
+	confirmation phrase before it may update stored metadata.
+	"""
+	frappe.only_for("System Manager")
+	if confirmation != BACKFILL_CONFIRMATION:
+		frappe.throw(
+			"Historical branch attribution is maintenance-only. "
+			f"Confirm with '{BACKFILL_CONFIRMATION}' before applying changes.",
+			frappe.ValidationError,
+		)
+
+	from retailedge.transaction_branch_attribution import run_transaction_branch_backfill
+
+	return run_transaction_branch_backfill(
+		doctype=doctype,
+		filters=filters,
+		limit=limit,
+		overwrite=overwrite,
+		dry_run=False,
+		commit_every=commit_every,
+	)
 
 
 def _update_matching_custom_fields(fieldname: str, values: dict) -> int:
