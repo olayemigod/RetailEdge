@@ -84,7 +84,8 @@ class TestProjectOperations(unittest.TestCase):
 		self.assertEqual(context["source_of_truth"]["project"], "Project")
 		self.assertEqual(context["source_of_truth"]["cash"], "Payment Entry")
 		self.assertIn("not revenue, expense, profit, or a bank balance", context["source_of_truth"]["cash_policy"])
-		self.assertIn("no RetailEdge project wallet", context["source_of_truth"]["ledger_policy"])
+		self.assertIn("no custom project wallet or shadow ledger", context["source_of_truth"]["ledger_policy"])
+		self.assertNotIn("RetailEdge", context["source_of_truth"]["ledger_policy"])
 		self.assertEqual(context["scope"]["project_totals"], "Whole Project across all branches")
 
 	@patch("retailedge.project_operations._project_company_currency", return_value="NGN")
