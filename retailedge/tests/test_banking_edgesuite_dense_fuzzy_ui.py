@@ -34,7 +34,7 @@ class BankingEdgeSuiteDenseFuzzyUITests(unittest.TestCase):
         self.assertIn("overflow-x: hidden !important", css)
         self.assertIn("min-width: 0 !important", css)
         self.assertIn("table-layout: fixed", css)
-        self.assertIn("font-size: .78rem", css)
+        self.assertIn("padding: .46rem .5rem !important", css)
         self.assertIn("@media (max-width: 900px)", css)
         self.assertIn("display: block", css)
 

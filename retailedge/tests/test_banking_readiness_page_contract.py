@@ -17,12 +17,11 @@ class BankingReadinessPageContractTests(IntegrationTestCase):
             / "banking_readiness"
             / "banking_readiness.js"
         ).read_text()
-        cls.matching_js = (
+        cls.matching_workspace_js = (
             app_root
-            / "retailedge"
-            / "page"
-            / "bank_matching_reconciliation"
-            / "bank_matching_reconciliation.js"
+            / "public"
+            / "js"
+            / "bank_matching_edgesuite_workspace.js"
         ).read_text()
 
     def test_readiness_page_uses_edgesuite_runtime(self):
@@ -51,7 +50,10 @@ class BankingReadinessPageContractTests(IntegrationTestCase):
 
     def test_banking_pages_link_to_each_other(self):
         self.assertIn('frappe.set_route("bank-matching-reconciliation")', self.readiness_js)
-        self.assertIn('frappe.set_route("banking-readiness")', self.matching_js)
+        self.assertIn(
+            'global.frappe.set_route("banking-readiness")',
+            self.matching_workspace_js,
+        )
 
     def test_readiness_page_calls_permission_aware_backend(self):
         self.assertIn(
