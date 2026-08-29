@@ -107,9 +107,17 @@ PROJECT_OPERATIONS_ITEM: dict[str, Any] = {
 
 PROJECT_PORTFOLIO_REPORT_ITEM: dict[str, Any] = {
 	"label": "Project Portfolio",
-	"description": "Review project billing, funds, cost, margin and completion across the permitted portfolio.",
+	"description": "Review project billing, project-linked cash, cost, margin and completion across the permitted portfolio.",
 	"target_type": "Report",
 	"target": "RetailEdge Project Portfolio",
+	"icon": "report",
+}
+
+PROJECT_FINANCIAL_CONTROL_REPORT_ITEM: dict[str, Any] = {
+	"label": "Project Financial Control",
+	"description": "Control project budget, billing, receivables, payables, project-linked cash, cost and margin from ERPNext truth.",
+	"target_type": "Report",
+	"target": "RetailEdge Project Financial Control",
 	"icon": "report",
 }
 
@@ -251,8 +259,9 @@ def _promote_payment_management(navigation_groups: list[dict[str, Any]]) -> None
 
 def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None:
 	page_available = _can_open_page(PROJECT_OPERATIONS_ITEM["target"])
-	report_available = _can_open_report(PROJECT_PORTFOLIO_REPORT_ITEM["target"])
-	if not page_available and not report_available:
+	portfolio_available = _can_open_report(PROJECT_PORTFOLIO_REPORT_ITEM["target"])
+	financial_control_available = _can_open_report(PROJECT_FINANCIAL_CONTROL_REPORT_ITEM["target"])
+	if not page_available and not portfolio_available and not financial_control_available:
 		return
 	existing_group = next((group for group in navigation_groups if group.get("key") == "projects"), None)
 	if existing_group is not None:
@@ -262,8 +271,10 @@ def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None
 
 	if page_available and not any(item.get("target") == PROJECT_OPERATIONS_ITEM["target"] for item in items):
 		items.append(deepcopy(PROJECT_OPERATIONS_ITEM))
-	if report_available and not any(item.get("target") == PROJECT_PORTFOLIO_REPORT_ITEM["target"] for item in items):
+	if portfolio_available and not any(item.get("target") == PROJECT_PORTFOLIO_REPORT_ITEM["target"] for item in items):
 		items.append(deepcopy(PROJECT_PORTFOLIO_REPORT_ITEM))
+	if financial_control_available and not any(item.get("target") == PROJECT_FINANCIAL_CONTROL_REPORT_ITEM["target"] for item in items):
+		items.append(deepcopy(PROJECT_FINANCIAL_CONTROL_REPORT_ITEM))
 	try:
 		if frappe.db.exists("DocType", "Project") and frappe.has_permission("Project", "read") and not any(item.get("target_type") == "DocType" and item.get("target") == "Project" for item in items):
 			items.append(deepcopy(PROJECT_LIST_ITEM))
@@ -344,6 +355,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"
 	feature_flags["project_operations"] = "erpnext_native_project_funds"
 	feature_flags["project_portfolio_reporting"] = "erpnext_project_plus_payment_entries"
+	feature_flags["project_financial_control"] = "whole_project_erpnext_financial_control"
 	context["feature_flags"] = feature_flags
 	return context
 
