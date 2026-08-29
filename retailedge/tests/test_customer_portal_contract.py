@@ -45,15 +45,22 @@ class TestCustomerPortalContract(TestCase):
 		self.assertIn('"overdue_amount": sum(flt(row.outstanding_amount) for row in overdue_rows)', source)
 		self.assertIn("Submitted Sales Invoice due date plus positive outstanding amount", source)
 
-	def test_payment_history_is_customer_scoped_submitted_and_read_only(self):
+	def test_payment_history_is_customer_scoped_submitted_read_only_and_base_currency(self):
 		source = (APP_ROOT / "customer_portal.py").read_text()
 		self.assertIn('"Payment Entry"', source)
 		self.assertIn('"docstatus": 1', source)
 		self.assertIn('"payment_type": "Receive"', source)
 		self.assertIn('"party_type": "Customer"', source)
 		self.assertIn('"party": ["in", customers]', source)
+		self.assertIn('"company"', source)
+		self.assertIn('frappe.get_cached_value("Company", company, "default_currency")', source)
+		self.assertIn('"amount": flt(row.base_received_amount or row.received_amount)', source)
+		self.assertIn('"currency": company_currency.get(str(row.company or ""), "")', source)
 		self.assertIn('"payment_history_read_only": True', source)
+		self.assertIn('"payment_history_base_currency": True', source)
+		self.assertIn("base currency", source)
 		self.assertIn("not a wallet balance", source)
+		self.assertNotIn("paid_from_account_currency", source)
 		self.assertNotIn("frappe.new_doc(\"Payment Entry\")", source)
 		self.assertNotIn("submit()", source)
 
