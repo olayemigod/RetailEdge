@@ -39,6 +39,12 @@ class TestMultiAppCoexistence(unittest.TestCase):
 			"RetailEdge",
 			coexistence.VISIBLE_BRANCH_FIELD_METADATA["retailedge_branch"]["description"],
 		)
+		source = self.read("transaction_branch_attribution.py")
+		self.assertIn('"fieldname": "retailedge_branch"', source)
+		self.assertIn('"label": "Operating Branch"', source)
+		self.assertIn('"description": "Branch attributed for operating context, filtering and reporting."', source)
+		self.assertNotIn('"label": "RetailEdge Branch"', source)
+		self.assertNotIn("RetailEdge branch attribution already exists", source)
 		hooks = self.read("hooks.py")
 		installer = hooks.index("retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields")
 		neutralizer = hooks.index("retailedge.coexistence.ensure_neutral_branch_field_labels")
