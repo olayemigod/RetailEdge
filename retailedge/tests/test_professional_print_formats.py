@@ -62,6 +62,15 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 			self.assertNotIn("buying_rate", values["html"])
 			self.assertNotIn("gross_profit", values["html"])
 
+	def test_receipts_use_client_company_as_visible_identity(self):
+		for spec in RECEIPT_PRINT_FORMATS:
+			html = _format_values(spec)["html"]
+			self.assertIn('{{ doc.get("company") or "" }}', html)
+			self.assertNotIn(">RetailEdge<", html)
+			self.assertNotIn("ProcessEdge Solutions", html)
+			self.assertNotIn("processedge.com.ng", html)
+			self.assertNotIn("Powered by", html)
+
 	def test_receipts_use_thermal_page_widths_and_no_page_number(self):
 		for spec in RECEIPT_PRINT_FORMATS:
 			values = _format_values(spec)
