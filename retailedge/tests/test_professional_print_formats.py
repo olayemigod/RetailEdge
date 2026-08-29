@@ -130,6 +130,14 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		self.assertNotIn('product="RetailEdge"', component)
 		self.assertNotIn("RetailEdge does not publish", component)
 
+	def test_output_workspace_consumes_server_company_identity_and_recommended_format(self):
+		component = (APP_ROOT / "public" / "js" / "document_output_sharing" / "DocumentOutputSharing.vue").read_text()
+		self.assertIn("this.details.recommended_print_format", component)
+		self.assertIn("this.details.default_email_subject", component)
+		self.assertIn("this.details.default_email_message", component)
+		self.assertIn("{{ details.company }}", component)
+		self.assertNotIn("Please find attached ${this.selectedDefinition", component)
+
 	def test_installer_is_registered_and_collision_safe(self):
 		patches = (APP_ROOT / "patches.txt").read_text()
 		source = (APP_ROOT / "professional_print_formats.py").read_text()
