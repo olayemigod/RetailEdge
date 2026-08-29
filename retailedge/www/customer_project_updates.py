@@ -19,5 +19,5 @@ def get_context(context):
 	context.show_sidebar = True
 	context.title = "Project Updates"
 	context.updates = updates
-	context.company_name = str(frappe.defaults.get_global_default("default_company") or "").strip()
+	context.company_name = str(updates.get("company_name") or "").strip()
 	return context
