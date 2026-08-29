@@ -36,6 +36,15 @@ class TestCustomerPortalContract(TestCase):
 		self.assertIn("grand_total", source)
 		self.assertIn("percent_complete", source)
 
+	def test_overdue_receivables_use_sales_invoice_due_date_and_outstanding_truth(self):
+		source = (APP_ROOT / "customer_portal.py").read_text()
+		self.assertIn('fields=["name", "grand_total", "outstanding_amount", "currency", "status", "due_date"]', source)
+		self.assertIn("flt(row.outstanding_amount) > 0", source)
+		self.assertIn("getdate(row.due_date) < today_date", source)
+		self.assertIn('"overdue_count": len(overdue_rows)', source)
+		self.assertIn('"overdue_amount": sum(flt(row.outstanding_amount) for row in overdue_rows)', source)
+		self.assertIn("Submitted Sales Invoice due date plus positive outstanding amount", source)
+
 	def test_payment_history_is_customer_scoped_submitted_and_read_only(self):
 		source = (APP_ROOT / "customer_portal.py").read_text()
 		self.assertIn('"Payment Entry"', source)
@@ -48,10 +57,12 @@ class TestCustomerPortalContract(TestCase):
 		self.assertNotIn("frappe.new_doc(\"Payment Entry\")", source)
 		self.assertNotIn("submit()", source)
 
-	def test_website_controller_redirects_guest_and_uses_neutral_title(self):
+	def test_website_controller_redirects_guest_and_uses_configured_company_identity(self):
 		source = (APP_ROOT / "www" / "customer_portal.py").read_text()
 		self.assertIn('redirect_location = "/login?redirect-to=/customer_portal"', source)
 		self.assertIn('context.title = "Customer Portal"', source)
+		self.assertIn('frappe.defaults.get_global_default("default_company")', source)
+		self.assertIn("context.company_name = company_name", source)
 		self.assertNotIn("RetailEdge", source)
 		self.assertNotIn("ProcessEdge", source)
 
@@ -70,8 +81,10 @@ class TestCustomerPortalContract(TestCase):
 		self.assertIn('data-edge-suite-ready="true"', template)
 		self.assertIn("--edge-portal-surface:var(--edge-color-surface", template)
 		self.assertIn("--edge-portal-accent:var(--edge-color-primary", template)
-		self.assertIn("Customer Portal", template)
+		self.assertIn('{{ company_name or "Customer Portal" }}', template)
 		self.assertIn("Outstanding", template)
+		self.assertIn("Overdue", template)
+		self.assertIn("Overdue since", template)
 		self.assertIn("Payments Received", template)
 		self.assertIn("Payment history is read-only", template)
 		self.assertIn("Secure document access", template)
