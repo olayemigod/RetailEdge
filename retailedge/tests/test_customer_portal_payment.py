@@ -15,9 +15,19 @@ class TestCustomerPortalPayment(TestCase):
 
 	def test_browser_endpoint_accepts_only_invoice_name(self):
 		tree = ast.parse(self.service)
-		request_fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "request_invoice_payment")
+		request_fn = next(
+			node
+			for node in tree.body
+			if isinstance(node, ast.FunctionDef) and node.name == "request_invoice_payment"
+		)
 		self.assertEqual([arg.arg for arg in request_fn.args.args], ["invoice_name"])
-		for forbidden in ("customer:", "company:", "amount:", "payment_gateway", "payment_gateway_account:"):
+		for forbidden in (
+			"customer:",
+			"company:",
+			"amount:",
+			"payment_gateway",
+			"payment_gateway_account:",
+		):
 			self.assertNotIn(forbidden, ast.get_source_segment(self.service, request_fn) or "")
 
 	def test_server_rederives_customer_and_rechecks_website_permission(self):
@@ -41,7 +51,10 @@ class TestCustomerPortalPayment(TestCase):
 	def test_native_erpnext_gateway_and_amount_authority_are_used(self):
 		self.assertIn("get_gateway_details(frappe._dict(company=invoice.company))", self.service)
 		self.assertIn('gateway.get("payment_account")', self.service)
-		self.assertIn('str(gateway.get("payment_channel") or "").strip() == "Phone"', self.service)
+		self.assertIn(
+			'str(gateway.get("payment_channel") or "").strip() == "Phone"',
+			self.service,
+		)
 		self.assertIn("get_amount(invoice, gateway.get(\"payment_account\"))", self.service)
 		self.assertIn('"payment_request_type": "Inward"', self.service)
 		self.assertIn('"party": invoice.customer', self.service)
@@ -72,7 +85,10 @@ class TestCustomerPortalPayment(TestCase):
 	def test_portal_action_is_post_only_and_sends_no_payment_authority_fields(self):
 		self.assertIn('class="edge-portal-pay"', self.template)
 		self.assertIn('data-invoice-name="{{ row.name }}"', self.template)
-		self.assertIn('method: "retailedge.customer_portal_payment.request_invoice_payment"', self.template)
+		self.assertIn(
+			'method: "retailedge.customer_portal_payment.request_invoice_payment"',
+			self.template,
+		)
 		self.assertIn('type: "POST"', self.template)
 		self.assertIn("args: { invoice_name: invoiceName }", self.template)
 		self.assertNotIn("customer: customer", self.template)
