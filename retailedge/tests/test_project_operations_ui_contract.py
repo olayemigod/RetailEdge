@@ -49,6 +49,23 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("limit_page_length=page_length", source)
 		self.assertNotIn('frappe.get_all(\n\t\t"Branch"', source)
 
+	def test_project_operations_branch_field_uses_smart_cascading_selector(self):
+		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
+
+		self.assertIn('label="Branch"', component)
+		self.assertIn(':searcher="branchSearch"', component)
+		self.assertIn('retailedge.project_search.search_project_branches', component)
+		self.assertIn('company: this.projectCompany', component)
+		self.assertIn('this.branch = ""; this.branchLabel = "";', component)
+		self.assertIn('onBranchSelected(option)', component)
+		self.assertIn('clearBranch()', component)
+		self.assertNotIn('<input v-model="branch"', component)
+
+	def test_project_receipt_inherits_validated_branch_scope(self):
+		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
+
+		self.assertIn('{ fieldname: "branch", fieldtype: "Data", label: __("Branch"), default: this.branch || "", read_only: 1 }', component)
+
 	def test_project_receipt_action_creates_draft_payment_entry(self):
 		source = (APP_ROOT / "project_receipts.py").read_text()
 
