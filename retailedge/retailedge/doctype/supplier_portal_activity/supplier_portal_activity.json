@@ -1,0 +1,52 @@
+{
+ "actions": [],
+ "autoname": "field:activity_key",
+ "creation": "2026-08-29 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "activity_key",
+  "reference_doctype",
+  "reference_name",
+  "activity_type",
+  "activity_datetime",
+  "supplier",
+  "company",
+  "portal_user",
+  "message",
+  "document_status",
+  "document_modified"
+ ],
+ "fields": [
+  {"fieldname":"activity_key","fieldtype":"Data","label":"Activity Key","reqd":1,"unique":1,"read_only":1,"hidden":1},
+  {"fieldname":"reference_doctype","fieldtype":"Link","label":"Document Type","options":"DocType","reqd":1,"read_only":1,"in_standard_filter":1},
+  {"fieldname":"reference_name","fieldtype":"Dynamic Link","label":"Document","options":"reference_doctype","reqd":1,"read_only":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"activity_type","fieldtype":"Select","label":"Activity","options":"Message\nAcknowledged","reqd":1,"read_only":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"activity_datetime","fieldtype":"Datetime","label":"Activity Date","reqd":1,"read_only":1,"in_list_view":1},
+  {"fieldname":"supplier","fieldtype":"Link","label":"Supplier","options":"Supplier","reqd":1,"read_only":1,"in_list_view":1,"in_standard_filter":1},
+  {"fieldname":"company","fieldtype":"Link","label":"Company","options":"Company","reqd":1,"read_only":1,"in_standard_filter":1},
+  {"fieldname":"portal_user","fieldtype":"Link","label":"Portal User","options":"User","reqd":1,"read_only":1,"in_standard_filter":1},
+  {"fieldname":"message","fieldtype":"Small Text","label":"Message","read_only":1},
+  {"fieldname":"document_status","fieldtype":"Data","label":"Document Status at Activity","read_only":1},
+  {"fieldname":"document_modified","fieldtype":"Datetime","label":"Document Modified at Activity","read_only":1}
+ ],
+ "index_web_pages_for_search": 0,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "module": "RetailEdge",
+ "name": "Supplier Portal Activity",
+ "owner": "Administrator",
+ "permissions": [
+  {"read":1,"report":1,"export":1,"role":"System Manager"},
+  {"read":1,"report":1,"export":1,"role":"Purchase Manager"},
+  {"read":1,"report":1,"role":"Purchase User"},
+  {"read":1,"report":1,"export":1,"role":"Accounts Manager"},
+  {"read":1,"report":1,"role":"Accounts User"}
+ ],
+ "search_fields": "reference_name,supplier,company,portal_user,activity_type",
+ "sort_field": "activity_datetime",
+ "sort_order": "DESC",
+ "title_field": "reference_name",
+ "track_changes": 0
+}
