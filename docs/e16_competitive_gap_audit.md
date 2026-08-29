@@ -61,9 +61,9 @@ Validated checkpoint: `3a91fd6f0e93c34e8fe04dd72867db480e3becef`
 - CI #1823, including clean Frappe v16 install/migration/assets and full RetailEdge tests: PASS
 - EdgeSuite UI Candidate Compatibility #61: PASS
 
-## Priority B — Supplier document intake — IMPLEMENTED / VALIDATION ACTIVE
+## Priority B — Supplier document intake — IMPLEMENTED / GREEN
 
-The next Supplier slice adds a human-review document queue without creating any native buying transaction:
+The Supplier intake slice provides a human-review document queue without creating any native buying transaction:
 - `/supplier_documents` is a Supplier-role portal page installed additively;
 - browser supplies only Purchase Order identity, document category, notes and file; Supplier and Company are derived on the server;
 - the referenced Purchase Order must be submitted, supplier-owned and pass ERPNext native website permission;
@@ -74,20 +74,36 @@ The next Supplier slice adds a human-review document queue without creating any 
 - Accepted/Rejected decisions are final in the intake audit trail;
 - no Purchase Invoice, Purchase Order, Payment Entry, GL Entry or Stock Ledger Entry is created or mutated by intake.
 
-Promote this slice to GREEN only after exact-head Theme, Linters, standalone CI/full tests and EdgeSuite candidate compatibility pass.
+Validated checkpoint: `9772d544feb9816ae5bd73d87b19117c4b99351a`
+- RetailEdge Theme Compatibility #109: PASS
+- Linters #1808: PASS
+- CI #1826, including clean Frappe v16 install/migration/assets and full RetailEdge tests: PASS
+- EdgeSuite UI Candidate Compatibility #64: PASS
 
 ## Priority B — Project collaboration — PARTIALLY IMPLEMENTED / GREEN
 
 Customer-facing project collaboration is available through native Project progress plus explicitly published Project Updates. Internal Project/Task/Timesheet/Expense Claim and project-linked sales/purchase documents remain ERPNext authority. Further Project collaboration should be added only where a confirmed UX gap remains.
 
-## Priority C — Document capture assistance
+## Priority C — Document capture assistance — IMPLEMENTED / VALIDATION ACTIVE
 
-Supplier document intake now provides the governed human-review foundation. Extraction/OCR assistance, if added later, must remain advisory: accepted values must be reviewed before creating the appropriate native ERPNext buying document, and no extraction service may post accounting automatically.
+Supplier document extraction assistance now extends the governed intake queue without making extracted data authoritative:
+- internal Purchase/Accounts users can record structured extracted document number/date, currency, subtotal, tax, total and document-visible Purchase Order reference;
+- Supplier, Company, authoritative Purchase Order and the private source File are copied only from the already-authorized Supplier Document Intake record;
+- extraction evidence is immutable after creation;
+- Accepted/Rejected extraction decisions are separate immutable review records rather than edits to extraction evidence;
+- a reviewed extraction cannot be re-reviewed; corrections require a new extraction record, preserving both evidence and decision history;
+- provider confidence and raw provider payload are supported by the audit model, but the provider recording boundary is deliberately server-only and no OCR/vision vendor is hard-wired;
+- Supplier Portal users receive no generic create/write permission on extraction or extraction-review DocTypes;
+- neither manual nor future provider extraction creates or mutates Purchase Invoice, Purchase Order, Payment Entry, GL Entry or Stock Ledger Entry;
+- extracted suggestions remain advisory until an internal human uses the appropriate native ERPNext buying workflow.
+
+Promote this slice to GREEN only after exact-head Theme, Linters, standalone CI/full tests and EdgeSuite candidate compatibility pass.
 
 ## Current execution order
 
 1. Preserve Priority-A checkpoint `273d795d4acd66b7478f8968a5a74ef40ff50681`.
 2. Preserve Supplier Collaboration checkpoint `3a91fd6f0e93c34e8fe04dd72867db480e3becef`.
-3. Validate Supplier Document Intake at exact head on the existing `agent/competitive-gap-nextgen-20260829` / PR #53 line.
-4. Only after that checkpoint is green, evaluate the remaining Priority-C extraction/document-capture gap.
-5. Keep manual QA deferred until implementation is complete and the cumulative E16 line is reconciled into the single consolidated QA branch.
+3. Preserve Supplier Document Intake checkpoint `9772d544feb9816ae5bd73d87b19117c4b99351a`.
+4. Validate Supplier Document Extraction Assistance at exact head on the existing `agent/competitive-gap-nextgen-20260829` / PR #53 line.
+5. After the extraction checkpoint is green, reassess the remaining competitive gaps before adding another E16 feature slice.
+6. Keep manual QA deferred until implementation is complete and the cumulative E16 line is reconciled into the single consolidated QA branch.
