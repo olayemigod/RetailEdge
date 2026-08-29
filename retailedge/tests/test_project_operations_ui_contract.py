@@ -12,7 +12,6 @@ class TestProjectOperationsUIContract(TestCase):
 		page_dir = APP_ROOT / "retailedge" / "page" / "project_operations"
 		page_json = (page_dir / "project_operations.json").read_text()
 		page_js = (page_dir / "project_operations.js").read_text()
-
 		self.assertIn('"page_name": "project-operations"', page_json)
 		self.assertIn('"standard": "Yes"', page_json)
 		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page_js)
@@ -22,11 +21,11 @@ class TestProjectOperationsUIContract(TestCase):
 	def test_project_operations_uses_erpnext_native_sources(self):
 		bundle = (APP_ROOT / "public" / "js" / "project_operations.bundle.js").read_text()
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
-
 		self.assertIn("ProjectOperations", bundle)
 		self.assertIn("retailedge.project_search.search_projects", component)
 		self.assertIn("retailedge.project_operations.get_project_funds_context", component)
 		self.assertIn("retailedge.project_activity.get_project_activity_context", component)
+		self.assertIn("retailedge.project_budget.get_project_budget_context", component)
 		self.assertIn("retailedge.project_receipts.create_project_receipt_draft", component)
 		self.assertIn("retailedge.project_expense_routing.get_project_expense_routes", component)
 		self.assertIn("Open ERPNext Project", component)
@@ -40,7 +39,6 @@ class TestProjectOperationsUIContract(TestCase):
 
 	def test_project_branch_search_is_bounded_permission_aware_and_company_contextual(self):
 		source = (APP_ROOT / "project_search.py").read_text()
-
 		self.assertIn("def search_project_branches", source)
 		self.assertIn('frappe.has_permission("Branch", "read")', source)
 		self.assertIn("get_user_allowed_branches", source)
@@ -52,7 +50,6 @@ class TestProjectOperationsUIContract(TestCase):
 
 	def test_project_operations_branch_field_uses_smart_cascading_selector(self):
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
-
 		self.assertIn('label="Branch"', component)
 		self.assertIn(':searcher="branchSearch"', component)
 		self.assertIn('retailedge.project_search.search_project_branches', component)
@@ -69,7 +66,6 @@ class TestProjectOperationsUIContract(TestCase):
 	def test_project_activity_uses_native_task_and_milestone_workflow(self):
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
 		source = (APP_ROOT / "project_activity.py").read_text()
-
 		self.assertIn("Tasks & Milestones", component)
 		self.assertIn("Open Tasks", component)
 		self.assertIn("New Task", component)
@@ -81,6 +77,22 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn('frappe.has_permission("Task", "read")', source)
 		self.assertIn('frappe.has_permission("Task", "create")', source)
 		self.assertNotIn("frappe.new_doc(", source)
+
+	def test_project_budget_governance_uses_native_erpnext_budget(self):
+		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
+		source = (APP_ROOT / "project_budget.py").read_text()
+		self.assertIn("Project Budget Governance", component)
+		self.assertIn("Open Budgets", component)
+		self.assertIn("New Budget", component)
+		self.assertIn('frappe.new_doc("Budget", { budget_against: "Project", project: this.project, company: this.context.company })', component)
+		self.assertIn('budget_against: "Project"', component)
+		self.assertIn('filters={"budget_against": "Project", "project": project, "company": doc.company, "docstatus": ["<", 2]}', source)
+		self.assertIn('frappe.has_permission("Budget", "read")', source)
+		self.assertIn('frappe.has_permission("Budget", "create")', source)
+		self.assertIn("applicable_on_purchase_order", source)
+		self.assertIn("applicable_on_booking_actual_expenses", source)
+		self.assertIn("applicable_on_cumulative_expense", source)
+		self.assertNotIn("ignore_permissions=True", source)
 
 	def test_project_cash_and_cost_labels_are_not_accounting_claims(self):
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
