@@ -1,0 +1,87 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="edge-supplier-documents" data-edge-suite-ready="true">
+	<section class="edge-supplier-documents-hero">
+		<div>
+			<span class="edge-supplier-documents-kicker">Supplier document intake</span>
+			<h1>{{ company_name or "Supplier Documents" }}</h1>
+			<p>{{ supplier_label }}</p>
+		</div>
+		<a class="edge-supplier-documents-button edge-supplier-documents-secondary" href="/supplier_portal">Back to Supplier Portal</a>
+	</section>
+
+	<section class="edge-supplier-documents-panel">
+		<header>
+			<div>
+				<span class="edge-supplier-documents-kicker">Private upload</span>
+				<h2>Submit a document for review</h2>
+				<p>Link the file to a Purchase Order you can access. Submission does not create or change a Purchase Invoice.</p>
+			</div>
+		</header>
+		<form id="edge-supplier-document-form" class="edge-supplier-documents-form">
+			<label><span>Purchase Order</span><input id="edge-supplier-document-po" name="purchase_order_name" list="edge-supplier-po-list" required autocomplete="off" placeholder="Purchase Order"><datalist id="edge-supplier-po-list">{% for row in intake.purchase_orders %}<option value="{{ row.name }}">{{ row.status }}{% if row.company %} · {{ row.company }}{% endif %}</option>{% endfor %}</datalist></label>
+			<label><span>Document Type</span><select id="edge-supplier-document-type" name="document_type" required>{% for document_type in intake.document_types %}<option value="{{ document_type }}">{{ document_type }}</option>{% endfor %}</select></label>
+			<label class="edge-supplier-documents-file"><span>File</span><input id="edge-supplier-document-file" name="file" type="file" required accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.csv,.txt"><small>PDF, JPG, PNG, Word, Excel, CSV or text. Frappe site file-size limits also apply.</small></label>
+			<label class="edge-supplier-documents-notes"><span>Notes</span><textarea id="edge-supplier-document-notes" name="notes" maxlength="2000" rows="4" placeholder="Optional context for the reviewer"></textarea></label>
+			<div class="edge-supplier-documents-actions"><button class="edge-supplier-documents-button" type="submit">Submit for Review</button></div>
+		</form>
+		<div class="edge-supplier-documents-note">Every upload is stored as a private File attached to a Supplier Document Intake record with status <strong>Pending Review</strong>. Internal review is required before staff create or post any native ERPNext buying document.</div>
+	</section>
+
+	<section class="edge-supplier-documents-panel">
+		<header><div><span class="edge-supplier-documents-kicker">Review queue</span><h2>Your submitted documents</h2></div></header>
+		{% if intake.intakes %}
+		<div class="edge-supplier-documents-table-wrap"><table><thead><tr><th>Submitted</th><th>Purchase Order</th><th>Type</th><th>File</th><th>Status</th><th>Review</th></tr></thead><tbody>{% for row in intake.intakes %}<tr><td>{{ frappe.utils.format_datetime(row.submitted_on) }}</td><td>{{ row.purchase_order }}</td><td>{{ row.document_type }}</td><td>{{ row.original_file_name }}</td><td><strong>{{ row.review_status }}</strong></td><td>{% if row.reviewed_on %}{{ frappe.utils.format_datetime(row.reviewed_on) }}{% endif %}{% if row.review_notes %}<div class="edge-supplier-documents-review-note">{{ row.review_notes }}</div>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+		{% else %}<div class="edge-supplier-documents-empty">No supplier documents have been submitted yet.</div>{% endif %}
+	</section>
+
+	<section class="edge-supplier-documents-safety">
+		<strong>Human review only — no automatic posting</strong>
+		<p>Supplier and Company identity are resolved from the owned Purchase Order on the server. This intake does not create or mutate Purchase Orders, Purchase Invoices, Payment Entries, GL Entries or Stock Ledger Entries.</p>
+	</section>
+</div>
+
+<style>
+.edge-supplier-documents{--edge-doc-surface:var(--edge-color-surface,#fff);--edge-doc-subtle:var(--edge-color-surface-muted,#f7f7f8);--edge-doc-border:var(--edge-color-border,#e5e7eb);--edge-doc-ink:var(--edge-color-ink,#111827);--edge-doc-muted:var(--edge-color-ink-muted,#6b7280);--edge-doc-accent:var(--edge-color-primary,#2563eb);display:grid;gap:1rem;color:var(--edge-doc-ink);padding:1rem 0 2rem}.edge-supplier-documents-hero,.edge-supplier-documents-panel,.edge-supplier-documents-safety{background:var(--edge-doc-surface);border:1px solid var(--edge-doc-border);border-radius:14px}.edge-supplier-documents-hero{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;padding:1.25rem}.edge-supplier-documents-hero h1,.edge-supplier-documents-panel h2{margin:.2rem 0 .35rem}.edge-supplier-documents-hero p,.edge-supplier-documents-panel header p,.edge-supplier-documents-safety p{margin:0;color:var(--edge-doc-muted)}.edge-supplier-documents-kicker{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--edge-doc-muted)}.edge-supplier-documents-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.4rem;padding:.5rem .85rem;border:1px solid var(--edge-doc-accent);border-radius:8px;background:var(--edge-doc-accent);color:#fff!important;text-decoration:none;font:inherit;cursor:pointer}.edge-supplier-documents-secondary{background:var(--edge-doc-surface);color:var(--edge-doc-ink)!important;border-color:var(--edge-doc-border)}.edge-supplier-documents-panel>header{padding:1rem;border-bottom:1px solid var(--edge-doc-border)}.edge-supplier-documents-form{display:grid;grid-template-columns:1fr 1fr;gap:1rem;padding:1rem}.edge-supplier-documents-form label{display:grid;gap:.4rem;font-weight:600}.edge-supplier-documents-form input,.edge-supplier-documents-form select,.edge-supplier-documents-form textarea{width:100%;border:1px solid var(--edge-doc-border);border-radius:8px;padding:.65rem;background:var(--edge-doc-surface);color:var(--edge-doc-ink);font:inherit}.edge-supplier-documents-form small{color:var(--edge-doc-muted);font-weight:400}.edge-supplier-documents-file,.edge-supplier-documents-notes,.edge-supplier-documents-actions{grid-column:1/-1}.edge-supplier-documents-actions{display:flex;justify-content:flex-end}.edge-supplier-documents-note,.edge-supplier-documents-empty,.edge-supplier-documents-safety{padding:1rem}.edge-supplier-documents-note{border-top:1px solid var(--edge-doc-border);color:var(--edge-doc-muted);font-size:.85rem}.edge-supplier-documents-table-wrap{overflow:auto}.edge-supplier-documents table{width:100%;border-collapse:collapse}.edge-supplier-documents th,.edge-supplier-documents td{padding:.7rem .8rem;border-bottom:1px solid var(--edge-doc-border);text-align:left;vertical-align:top}.edge-supplier-documents th{font-size:.75rem;text-transform:uppercase;color:var(--edge-doc-muted);white-space:nowrap}.edge-supplier-documents-review-note{margin-top:.3rem;color:var(--edge-doc-muted);font-size:.82rem}.edge-supplier-documents-safety p{margin-top:.35rem}@media(max-width:700px){.edge-supplier-documents-hero{flex-direction:column}.edge-supplier-documents-form{grid-template-columns:1fr}.edge-supplier-documents-file,.edge-supplier-documents-notes,.edge-supplier-documents-actions{grid-column:auto}}
+</style>
+
+<script>
+(function() {
+	const form = document.getElementById("edge-supplier-document-form");
+	if (!form) return;
+	const submit = form.querySelector('button[type="submit"]');
+	form.addEventListener("submit", async function(event) {
+		event.preventDefault();
+		const purchaseOrder = document.getElementById("edge-supplier-document-po").value.trim();
+		const documentType = document.getElementById("edge-supplier-document-type").value;
+		const fileInput = document.getElementById("edge-supplier-document-file");
+		const notes = document.getElementById("edge-supplier-document-notes").value;
+		if (!purchaseOrder || !documentType || !fileInput.files.length || submit.disabled) return;
+		const originalLabel = submit.textContent;
+		submit.disabled = true;
+		submit.textContent = "Submitting…";
+		const body = new FormData();
+		body.append("file", fileInput.files[0]);
+		body.append("is_private", "1");
+		body.append("method", "retailedge.supplier_document_intake.upload_supplier_document");
+		body.append("purchase_order_name", purchaseOrder);
+		body.append("document_type", documentType);
+		body.append("notes", notes);
+		const headers = {};
+		if (window.frappe && window.frappe.csrf_token) headers["X-Frappe-CSRF-Token"] = window.frappe.csrf_token;
+		try {
+			const response = await fetch("/api/method/upload_file", {method: "POST", body, headers});
+			const payload = await response.json();
+			if (!response.ok || payload.exc) throw new Error((payload && (payload.exception || payload._server_messages)) || "Document upload failed.");
+			window.location.reload();
+		} catch (error) {
+			submit.disabled = false;
+			submit.textContent = originalLabel;
+			const text = error && error.message || "Document upload failed. Please try again.";
+			if (window.frappe && typeof window.frappe.msgprint === "function") window.frappe.msgprint(text); else window.alert(text);
+		}
+	});
+})();
+</script>
+{% endblock %}

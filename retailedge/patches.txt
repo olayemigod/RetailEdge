@@ -14,3 +14,4 @@ retailedge.patches.add_reporting_action_settings
 retailedge.patches.install_professional_print_formats
 retailedge.patches.install_customer_portal_menu
 retailedge.patches.install_supplier_portal_menu
+retailedge.patches.install_supplier_document_intake_menu

@@ -25,7 +25,7 @@ The product should expose or orchestrate these safely rather than create paralle
 
 The EdgeSuite customer portal now extends native ERPNext documents without mutating submitted accounting documents:
 - quotation accept/decline and transaction-scoped collaboration are append-only;
-- invoice payment initiation uses native ERPNext Payment Request and configured gateways;
+- invoice payment initiation uses native ERPNext Payment Request;
 - outstanding, overdue, received-payment, available-advance and receivable statement context remain native accounting read models;
 - project progress and only explicitly customer-published Project Updates are exposed;
 - customer/company/document identity is server-derived and revalidated;
@@ -40,39 +40,54 @@ Validated checkpoint: `273d795d4acd66b7478f8968a5a74ef40ff50681`
 
 ## Priority A — Receivables automation workspace — IMPLEMENTED / GREEN
 
-The collections workspace orchestrates ERPNext Accounts Receivable, Payment Terms, Payment Request and Dunning with:
-- overdue prioritisation;
-- reminder/dunning readiness;
-- governed Payment Request and Dunning handoffs;
-- existing Action Follow Up visibility for collection follow-up scheduling without misrepresenting follow-up notes as an accounting or customer promise-to-pay balance;
-- branch/company/permission-aware collection queues.
-
-The Action Follow Up store remains operational follow-up metadata, not a shadow receivables ledger.
+The collections workspace orchestrates ERPNext Accounts Receivable, Payment Terms, Payment Request and Dunning with overdue prioritisation, governed handoffs, Action Follow Up scheduling, and branch/company/permission-aware queues. Action Follow Up remains operational metadata, not a shadow receivables or promise-to-pay ledger.
 
 Validated with the same Priority-A checkpoint `273d795d4acd66b7478f8968a5a74ef40ff50681`.
 
-## Priority B — Supplier collaboration — NEXT
+## Priority B — Supplier collaboration — IMPLEMENTED / GREEN
 
-ERPNext v16 already owns Supplier portal transaction pages and website permissions for Request for Quotation, Supplier Quotation, Purchase Order and Purchase Invoice. RetailEdge must not rebuild them.
+ERPNext v16 remains authority for Request for Quotation, Supplier Quotation, Purchase Order and Purchase Invoice portal pages. RetailEdge adds only the collaboration and financial experience gaps:
+- unified product-neutral supplier workspace over native ERPNext supplier routes;
+- Supplier identity derived from Portal User links;
+- append-only Purchase Order acknowledgement and messages with native website-permission checks and no Purchase Order mutation;
+- read-only Purchase Invoice outstanding/overdue context;
+- read-only submitted outgoing Payment Entry context;
+- bounded supplier account statements from Payable Payment Ledger Entry;
+- additive portal menu installation.
 
-Implement an additive, product-neutral supplier workspace that reuses those native routes and Supplier ownership boundaries while adding genuine collaboration gaps:
-- unified supplier dashboard over native RFQ, Supplier Quotation, Purchase Order and Purchase Invoice;
-- purchase-order acknowledgement and supplier messages as append-only collaboration records, never Purchase Order mutation;
-- read-only payment/payables/statement context derived from ERPNext accounting data;
-- secure document/attachment intake routed to native buying documents with human review before any posting;
-- strict Supplier Portal User ownership checks on every read/write boundary.
+Validated checkpoint: `3a91fd6f0e93c34e8fe04dd72867db480e3becef`
+- RetailEdge Theme Compatibility #108: PASS
+- Linters #1806: PASS
+- CI #1823, including clean Frappe v16 install/migration/assets and full RetailEdge tests: PASS
+- EdgeSuite UI Candidate Compatibility #61: PASS
+
+## Priority B — Supplier document intake — IMPLEMENTED / VALIDATION ACTIVE
+
+The next Supplier slice adds a human-review document queue without creating any native buying transaction:
+- `/supplier_documents` is a Supplier-role portal page installed additively;
+- browser supplies only Purchase Order identity, document category, notes and file; Supplier and Company are derived on the server;
+- the referenced Purchase Order must be submitted, supplier-owned and pass ERPNext native website permission;
+- upload transport reuses Frappe's native POST `upload_file` boundary and then applies a stricter document MIME allowlist;
+- each file is private and attached to a namespaced Supplier Document Intake record;
+- Supplier Portal users have no generic create/write permission on the intake DocType;
+- source identity is immutable after submission; internal Purchase/Accounts reviewers can change only review status/notes;
+- Accepted/Rejected decisions are final in the intake audit trail;
+- no Purchase Invoice, Purchase Order, Payment Entry, GL Entry or Stock Ledger Entry is created or mutated by intake.
+
+Promote this slice to GREEN only after exact-head Theme, Linters, standalone CI/full tests and EdgeSuite candidate compatibility pass.
 
 ## Priority B — Project collaboration — PARTIALLY IMPLEMENTED / GREEN
 
-Customer-facing project collaboration is now available through native Project progress plus explicitly published Project Updates. Internal Project/Task/Timesheet/Expense Claim and project-linked sales/purchase documents remain ERPNext authority. Further Project collaboration should be added only where a confirmed UX gap remains; do not duplicate project accounting.
+Customer-facing project collaboration is available through native Project progress plus explicitly published Project Updates. Internal Project/Task/Timesheet/Expense Claim and project-linked sales/purchase documents remain ERPNext authority. Further Project collaboration should be added only where a confirmed UX gap remains.
 
 ## Priority C — Document capture assistance
 
-Evaluate attachment/document intake and extraction assistance for supplier bills/receipts. Any accepted transaction must still be created and validated as the correct native ERPNext document, with human review before posting.
+Supplier document intake now provides the governed human-review foundation. Extraction/OCR assistance, if added later, must remain advisory: accepted values must be reviewed before creating the appropriate native ERPNext buying document, and no extraction service may post accounting automatically.
 
 ## Current execution order
 
-1. Preserve Priority-A green checkpoint `273d795d4acd66b7478f8968a5a74ef40ff50681` as a reconcilable milestone.
-2. Continue Priority-B Supplier Collaboration on the existing `agent/competitive-gap-nextgen-20260829` / PR #53 line.
-3. Validate every Supplier slice at exact head before expanding to document capture assistance.
-4. Keep manual QA deferred until implementation is complete and the cumulative E16 line is reconciled into the single consolidated QA branch.
+1. Preserve Priority-A checkpoint `273d795d4acd66b7478f8968a5a74ef40ff50681`.
+2. Preserve Supplier Collaboration checkpoint `3a91fd6f0e93c34e8fe04dd72867db480e3becef`.
+3. Validate Supplier Document Intake at exact head on the existing `agent/competitive-gap-nextgen-20260829` / PR #53 line.
+4. Only after that checkpoint is green, evaluate the remaining Priority-C extraction/document-capture gap.
+5. Keep manual QA deferred until implementation is complete and the cumulative E16 line is reconciled into the single consolidated QA branch.
