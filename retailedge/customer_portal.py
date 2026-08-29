@@ -154,17 +154,23 @@ def _payment_summary(customers: list[str]) -> dict[str, Any]:
 		fields=[
 			"name",
 			"posting_date",
+			"company",
 			"party",
 			"mode_of_payment",
 			"reference_no",
 			"base_received_amount",
 			"received_amount",
-			"paid_from_account_currency",
 		],
 		order_by="posting_date desc, name desc",
 		limit_page_length=MAX_PORTAL_ROWS,
 		ignore_permissions=True,
 	)
+	company_currency: dict[str, str] = {}
+	for row in rows:
+		company = str(row.company or "")
+		if company and company not in company_currency:
+			company_currency[company] = str(frappe.get_cached_value("Company", company, "default_currency") or "")
+
 	recent = []
 	for row in rows[:5]:
 		recent.append(
@@ -175,14 +181,14 @@ def _payment_summary(customers: list[str]) -> dict[str, Any]:
 				"mode_of_payment": row.mode_of_payment or "",
 				"reference_no": row.reference_no or "",
 				"amount": flt(row.base_received_amount or row.received_amount),
-				"currency": row.paid_from_account_currency or "",
+				"currency": company_currency.get(str(row.company or ""), ""),
 			}
 		)
 	return {
 		"count": len(rows),
 		"received": sum(flt(row.base_received_amount or row.received_amount) for row in rows),
 		"recent": recent,
-		"scope_note": _("Submitted incoming payments linked to your Customer account. This is payment history, not a wallet balance."),
+		"scope_note": _("Submitted incoming payments linked to your Customer account. Amounts are shown in each Payment Entry Company's base currency. This is payment history, not a wallet balance."),
 	}
 
 
@@ -230,6 +236,7 @@ def get_customer_portal_context() -> dict[str, Any]:
 			"portal_pdf_uses_website_permission": True,
 			"portal_pdf_print_format_browser_selectable": False,
 			"payment_history_read_only": True,
+			"payment_history_base_currency": True,
 			"cross_customer_selection": False,
 		},
 	}
