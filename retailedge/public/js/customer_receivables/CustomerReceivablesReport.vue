@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Customer Receivables"
 			eyebrow="Customers & Receivables"
-			subtitle="Current unpaid customer invoices, overdue exposure, and ageing from ERPNext Sales Invoice accounting truth."
+			subtitle="Current unpaid customer invoices, overdue exposure, native payment requests, and dunning readiness from ERPNext accounting truth."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -64,6 +64,7 @@
 				<span>Current ERPNext outstanding balances aged at {{ currentBalanceDate || "today" }}</span>
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
+				<span>Collections status is read-only · Dunning Ready does not create or submit a Dunning</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
 			</template>
 		</EdgeReportShell>
@@ -111,7 +112,7 @@ export default {
 	computed: {
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 0); },
-		reportColumns() { return (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: ["invoice", "customer"].includes(column.fieldname) })); },
+		reportColumns() { return (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: ["invoice", "customer", "payment_request", "dunning"].includes(column.fieldname) })); },
 	},
 	created() {
 		const components = runtimeComponents();
@@ -181,7 +182,7 @@ export default {
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		rowKey(row, index) { return row.invoice || `customer-receivables:${index}`; },
-		openReportCell(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "invoice") frappe.set_route("Form", "Sales Invoice", value); else if (column.fieldname === "customer") frappe.set_route("Form", "Customer", value); },
+		openReportCell(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "invoice") frappe.set_route("Form", "Sales Invoice", value); else if (column.fieldname === "customer") frappe.set_route("Form", "Customer", value); else if (column.fieldname === "payment_request") frappe.set_route("Form", "Payment Request", value); else if (column.fieldname === "dunning") frappe.set_route("Form", "Dunning", value); },
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
 		formatValue(value, fieldtype, currency) {
 			if (value === null || value === undefined || value === "") return "—";
