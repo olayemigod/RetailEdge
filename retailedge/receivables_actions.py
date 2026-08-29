@@ -86,8 +86,27 @@ def _get_locked_invoice(invoice_name: str):
 	return invoice
 
 
+def _visible_existing_or_block(doctype: str, row: Any | None) -> Any | None:
+	"""Return an active native record only when it is readable.
+
+	Existence detection is intentionally permissionless so an inaccessible draft
+	cannot be duplicated. Its identifier is never returned or interpolated into an
+	error when document-level permission does not allow the current user to read it.
+	"""
+	if not row:
+		return None
+	if not frappe.has_permission(doctype, "read", doc=row.name):
+		frappe.throw(
+			_("An active {0} already exists for this Sales Invoice but is not accessible to you.").format(
+				_(doctype)
+			),
+			frappe.PermissionError,
+		)
+	return row
+
+
 def _active_payment_request(invoice_name: str) -> Any | None:
-	rows = frappe.get_list(
+	rows = frappe.get_all(
 		"Payment Request",
 		filters={
 			"reference_doctype": "Sales Invoice",
@@ -99,7 +118,7 @@ def _active_payment_request(invoice_name: str) -> Any | None:
 		order_by="creation desc",
 		limit_page_length=1,
 	)
-	return rows[0] if rows else None
+	return _visible_existing_or_block("Payment Request", rows[0] if rows else None)
 
 
 def _active_dunning(invoice_name: str, *, company: str) -> Any | None:
@@ -115,7 +134,7 @@ def _active_dunning(invoice_name: str, *, company: str) -> Any | None:
 	)
 	if not links:
 		return None
-	rows = frappe.get_list(
+	rows = frappe.get_all(
 		"Dunning",
 		filters={
 			"name": ["in", links],
@@ -127,7 +146,7 @@ def _active_dunning(invoice_name: str, *, company: str) -> Any | None:
 		order_by="creation desc",
 		limit_page_length=1,
 	)
-	return rows[0] if rows else None
+	return _visible_existing_or_block("Dunning", rows[0] if rows else None)
 
 
 def _has_overdue_payment_schedule(invoice: Any) -> bool:
@@ -170,6 +189,13 @@ def prepare_payment_request(invoice_name: str) -> dict[str, Any]:
 		submit_doc=0,
 		return_doc=1,
 	)
+	if not payment_request.is_new() and not frappe.has_permission(
+		"Payment Request", "read", doc=payment_request.name
+	):
+		frappe.throw(
+			_("An active Payment Request already exists for this Sales Invoice but is not accessible to you."),
+			frappe.PermissionError,
+		)
 	if payment_request.is_new():
 		payment_request.insert()
 	if payment_request.docstatus != 0:
