@@ -78,7 +78,14 @@ def _latest_response(quotation_name: str, customer: str) -> Any | None:
 			"customer": customer,
 			"activity_type": ["in", sorted(QUOTATION_RESPONSE_TYPES)],
 		},
-		fields=["name", "activity_type", "message", "activity_datetime", "portal_user"],
+		fields=[
+			"name",
+			"reference_name",
+			"activity_type",
+			"message",
+			"activity_datetime",
+			"portal_user",
+		],
 		order_by="activity_datetime desc, creation desc",
 		limit_page_length=1,
 	)
@@ -121,7 +128,7 @@ def _insert_activity(quotation, activity_type: str, message: str):
 	return activity
 
 
-@frappe.whitelist()
+@frappe.whitelist(methods=["POST"])
 def record_quotation_activity(
 	quotation_name: str,
 	activity_type: str,
