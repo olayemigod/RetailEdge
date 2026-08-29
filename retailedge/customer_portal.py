@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import frappe
 from frappe import _
@@ -10,6 +11,7 @@ from frappe.utils.user import is_website_user
 from erpnext.controllers.website_list_for_contact import get_parents_for_user
 
 MAX_PORTAL_ROWS = 200
+PORTAL_DOWNLOAD_DOCTYPES = {"Quotation", "Sales Order", "Sales Invoice", "Delivery Note"}
 
 PORTAL_SECTIONS: tuple[dict[str, str], ...] = (
 	{"key": "quotations", "doctype": "Quotation", "route": "/quotations", "label": "Quotations"},
@@ -66,6 +68,15 @@ def _safe_list(
 	)
 
 
+def _portal_download_url(doctype: str, name: str) -> str:
+	if doctype not in PORTAL_DOWNLOAD_DOCTYPES:
+		return ""
+	return (
+		"/api/method/retailedge.customer_portal_download.download_customer_document_pdf"
+		f"?doctype={quote(doctype, safe='')}&name={quote(str(name), safe='')}"
+	)
+
+
 def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dict[str, Any]]:
 	meta = frappe.get_meta(doctype)
 	fields = ["name", "modified"]
@@ -103,6 +114,7 @@ def _recent_rows(doctype: str, customers: list[str], limit: int = 5) -> list[dic
 				"currency": getattr(row, "currency", "") or "",
 				"project_name": getattr(row, "project_name", "") or "",
 				"percent_complete": flt(getattr(row, "percent_complete", 0)),
+				"download_url": _portal_download_url(doctype, row.name),
 			}
 		)
 	return result
@@ -215,6 +227,8 @@ def get_customer_portal_context() -> dict[str, Any]:
 			"customer_source": "ERPNext Portal User links",
 			"customer_filter_server_derived": True,
 			"native_document_pages": True,
+			"portal_pdf_uses_website_permission": True,
+			"portal_pdf_print_format_browser_selectable": False,
 			"payment_history_read_only": True,
 			"cross_customer_selection": False,
 		},
