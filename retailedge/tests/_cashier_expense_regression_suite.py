@@ -3390,7 +3390,7 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 			if not field.get("hidden") and field.get("fieldtype") not in {"Section Break", "Column Break"}
 		]
 		self.assertEqual(visible_fields, ["retailedge_branch"])
-		self.assertEqual(by_fieldname["retailedge_branch"].get("label"), "RetailEdge Branch")
+		self.assertEqual(by_fieldname["retailedge_branch"].get("label"), "Operating Branch")
 		self.assertNotIn("retailedge_branch_attribution_section", by_fieldname)
 		self.assertEqual(by_fieldname["retailedge_branch_source"].get("hidden"), 1)
 		self.assertEqual(by_fieldname["retailedge_branch_resolved_on"].get("hidden"), 1)
