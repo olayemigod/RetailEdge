@@ -20,13 +20,21 @@ class TestCustomerReceivablesCollections(TestCase):
 		self.assertIn('frappe.get_list(\n\t\t"Payment Request"', self.collections)
 		self.assertIn('frappe.get_list(\n\t\t"Dunning"', self.collections)
 		self.assertIn('"company": company', self.collections)
-		self.assertIn('doc.check_permission("read")', self.collections)
+		self.assertNotIn('frappe.get_all(\n\t\t"Dunning"', self.collections)
 		self.assertNotIn("ignore_permissions", self.collections)
-		self.assertNotIn("frappe.get_all", self.collections)
+
+	def test_dunning_lookup_narrows_candidates_through_native_child_links(self):
+		self.assertIn('frappe.get_all(\n\t\t"Overdue Payment"', self.collections)
+		self.assertIn('"parenttype": "Dunning"', self.collections)
+		self.assertIn('"parentfield": "overdue_payments"', self.collections)
+		self.assertIn('"sales_invoice": ["in", invoice_names]', self.collections)
+		self.assertIn('"name": ["in", list(invoices_by_parent)]', self.collections)
+		self.assertIn("already-permitted invoice", self.collections)
+		self.assertNotIn('frappe.get_doc("Dunning"', self.collections)
 
 	def test_collections_enrichment_is_bounded_and_read_only(self):
 		self.assertIn("MAX_COLLECTION_ROWS = 2000", self.collections)
-		self.assertIn("limit=MAX_COLLECTION_ROWS", self.collections)
+		self.assertGreaterEqual(self.collections.count("limit=MAX_COLLECTION_ROWS"), 3)
 		self.assertIn('"read_only_enrichment": True', self.collections)
 		for forbidden in (
 			'frappe.new_doc("Payment Request")',
@@ -43,7 +51,6 @@ class TestCustomerReceivablesCollections(TestCase):
 		self.assertIn('ACTIVE_DUNNING_STATUSES = {"Draft", "Unresolved"}', self.collections)
 		self.assertIn("overdue and not dunning and dunning_create_allowed", self.collections)
 		self.assertIn('return "Dunning Ready"', self.collections)
-		self.assertIn('payment.get("sales_invoice")', self.collections)
 
 	def test_payment_request_state_uses_native_invoice_reference_and_active_statuses(self):
 		self.assertIn('"reference_doctype": "Sales Invoice"', self.collections)
