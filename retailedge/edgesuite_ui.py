@@ -26,6 +26,13 @@ CASH_FLOW_OUTLOOK_ROLES = {
 	"Accounts Manager",
 	"Accounts User",
 }
+SUPPLIER_DOCUMENT_REVIEW_ROLES = {
+	"System Manager",
+	"Purchase Manager",
+	"Purchase User",
+	"Accounts Manager",
+	"Accounts User",
+}
 ACTION_CENTER_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
@@ -167,6 +174,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	{
 		"key": "review-approvals", "label": "Review & Approvals", "icon": "shield", "items": (
 			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
+			{"label": "Supplier Document Review", "target_type": "Page", "target": "supplier-document-review", "icon": "clipboard", "required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match", "icon": "shield"},
 			{"label": "Daily Sales Audit", "target_type": "DocType", "target": "RetailEdge Daily Sales Audit", "icon": "shield"},
 			{"label": "Cashier Expense Review", "target_type": "Report", "target": "RetailEdge Cashier Expense Review", "icon": "report"},
