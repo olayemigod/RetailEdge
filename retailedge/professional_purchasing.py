@@ -9,6 +9,7 @@ from frappe.utils import cint, flt
 from frappe.utils.user import get_user_fullname
 
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
+from erpnext.stock.doctype.material_request.material_request import make_request_for_quotation
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
@@ -22,8 +23,14 @@ from retailedge.operating_context import get_operating_context
 
 PURCHASE_ORDER_DOCTYPE = "Purchase Order"
 PURCHASE_RECEIPT_DOCTYPE = "Purchase Receipt"
+MATERIAL_REQUEST_DOCTYPE = "Material Request"
+REQUEST_FOR_QUOTATION_DOCTYPE = "Request for Quotation"
+SUPPLIER_QUOTATION_DOCTYPE = "Supplier Quotation"
 SUPPLIER_DOCTYPE = "Supplier"
+SUPPLIER_QUOTATION_COMPARISON_REPORT = "Supplier Quotation Comparison"
 MAX_PURCHASE_ORDERS = 200
+MAX_MATERIAL_REQUESTS = 200
+MAX_RFQ_SUPPLIERS = 20
 MAX_LINK_RESULTS = 20
 
 
@@ -87,6 +94,31 @@ def _resolve_scope(company: str | None = None, branch: str | None = None) -> tup
 	return resolved_company, resolved_branch, allowed, global_access
 
 
+def _branch_scoped_filters(
+	doctype: str,
+	*,
+	company: str,
+	branch: str,
+	allowed_branches: list[str],
+	global_branch_access: bool,
+) -> tuple[dict[str, Any], str | None]:
+	filters: dict[str, Any] = {"company": company}
+	branch_field = _transaction_branch_field(doctype)
+	if branch:
+		if not branch_field:
+			frappe.throw(
+				_("{0} branch attribution is unavailable. Run site migration before using a Branch-scoped purchasing workspace.").format(doctype)
+			)
+		filters[branch_field] = branch
+	elif not global_branch_access:
+		if not branch_field:
+			frappe.throw(
+				_("{0} branch attribution is unavailable. Run site migration before using restricted Branch purchasing access.").format(doctype)
+			)
+		filters[branch_field] = ["in", allowed_branches or ["__no_permitted_branch__"]]
+	return filters, branch_field
+
+
 def _purchase_order_filters(
 	*,
 	company: str,
@@ -95,24 +127,136 @@ def _purchase_order_filters(
 	allowed_branches: list[str],
 	global_branch_access: bool,
 ) -> tuple[dict[str, Any], str | None]:
-	filters: dict[str, Any] = {"company": company, "docstatus": ["<", 2]}
+	filters, branch_field = _branch_scoped_filters(
+		PURCHASE_ORDER_DOCTYPE,
+		company=company,
+		branch=branch,
+		allowed_branches=allowed_branches,
+		global_branch_access=global_branch_access,
+	)
+	filters["docstatus"] = ["<", 2]
 	if supplier:
 		filters["supplier"] = supplier
-
-	branch_field = _transaction_branch_field(PURCHASE_ORDER_DOCTYPE)
-	if branch:
-		if not branch_field:
-			frappe.throw(
-			_("Purchase Order branch attribution is unavailable. Run site migration before using a Branch-scoped purchasing workspace.")
-		)
-		filters[branch_field] = branch
-	elif not global_branch_access:
-		if not branch_field:
-			frappe.throw(
-			_("Purchase Order branch attribution is unavailable. Run site migration before using restricted Branch purchasing access.")
-		)
-		filters[branch_field] = ["in", allowed_branches or ["__no_permitted_branch__"]]
 	return filters, branch_field
+
+
+def _material_request_filters(
+	*,
+	company: str,
+	branch: str,
+	allowed_branches: list[str],
+	global_branch_access: bool,
+) -> tuple[dict[str, Any], str | None]:
+	filters, branch_field = _branch_scoped_filters(
+		MATERIAL_REQUEST_DOCTYPE,
+		company=company,
+		branch=branch,
+		allowed_branches=allowed_branches,
+		global_branch_access=global_branch_access,
+	)
+	filters.update(
+		{
+			"docstatus": 1,
+			"material_request_type": "Purchase",
+			"per_ordered": ["<", 100],
+			"status": ["not in", ["Stopped", "Cancelled", "Ordered"]],
+		}
+	)
+	return filters, branch_field
+
+
+def _get_material_request_rows(
+	*,
+	company: str,
+	branch: str,
+	allowed_branches: list[str],
+	global_branch_access: bool,
+	limit: int,
+) -> list[dict[str, Any]]:
+	if not _permission(MATERIAL_REQUEST_DOCTYPE, "read"):
+		return []
+	filters, branch_field = _material_request_filters(
+		company=company,
+		branch=branch,
+		allowed_branches=allowed_branches,
+		global_branch_access=global_branch_access,
+	)
+	fields = [
+		"name",
+		"docstatus",
+		"transaction_date",
+		"schedule_date",
+		"company",
+		"title",
+		"status",
+		"material_request_type",
+		"per_ordered",
+		"modified",
+	]
+	if branch_field:
+		fields.append(branch_field)
+	rows = frappe.get_list(
+		MATERIAL_REQUEST_DOCTYPE,
+		filters=filters,
+		fields=fields,
+		order_by="transaction_date desc, name desc",
+		limit_page_length=limit,
+	)
+	can_create_rfq = _permission(REQUEST_FOR_QUOTATION_DOCTYPE, "create")
+	return [
+		{
+			"name": row.get("name"),
+			"docstatus": cint(row.get("docstatus")),
+			"transaction_date": row.get("transaction_date"),
+			"schedule_date": row.get("schedule_date"),
+			"company": row.get("company"),
+			"title": row.get("title") or row.get("name"),
+			"status": row.get("status") or "Submitted",
+			"material_request_type": row.get("material_request_type"),
+			"per_ordered": flt(row.get("per_ordered")),
+			"branch": str(row.get(branch_field) or "") if branch_field else "",
+			"can_start_rfq": bool(can_create_rfq and cint(row.get("docstatus")) == 1 and flt(row.get("per_ordered")) < 100),
+			"route": f"/app/material-request/{row.get('name')}",
+		}
+		for row in rows
+	]
+
+
+def _coerce_supplier_names(suppliers: list[Any] | str | None) -> list[str]:
+	if isinstance(suppliers, str):
+		try:
+			suppliers = frappe.parse_json(suppliers)
+		except Exception:
+			suppliers = [suppliers]
+	if not isinstance(suppliers, (list, tuple)):
+		suppliers = []
+
+	names: list[str] = []
+	for value in suppliers:
+		if isinstance(value, dict):
+			value = value.get("value") or value.get("name") or value.get("supplier")
+		name = str(value or "").strip()
+		if not name:
+			continue
+		if name in names:
+			frappe.throw(_("Supplier {0} was selected more than once.").format(name))
+		names.append(name)
+
+	if not names:
+		frappe.throw(_("Select at least one Supplier before preparing a Request for Quotation."))
+	if len(names) > MAX_RFQ_SUPPLIERS:
+		frappe.throw(_("A single guided RFQ can include at most {0} Suppliers.").format(MAX_RFQ_SUPPLIERS))
+	return names
+
+
+def _can_open_supplier_quotation_comparison() -> bool:
+	try:
+		return bool(
+			frappe.db.exists("Report", SUPPLIER_QUOTATION_COMPARISON_REPORT)
+			and frappe.has_permission("Report", "read", doc=SUPPLIER_QUOTATION_COMPARISON_REPORT)
+		)
+	except Exception:
+		return False
 
 
 @frappe.whitelist()
@@ -122,11 +266,7 @@ def get_professional_purchasing_context(
 	supplier: str | None = None,
 	limit: int | str = 100,
 ) -> dict[str, Any]:
-	"""Return a permission-aware operational Purchase Order view.
-
-	The dataset is read from ERPNext Purchase Orders. RetailEdge does not maintain
-	purchase-order progress, receipt quantities or billing state separately.
-	"""
+	"""Return permission-aware sourcing, PO and receipt context from ERPNext."""
 	_assert_read(PURCHASE_ORDER_DOCTYPE)
 	company, branch, allowed_branches, global_branch_access = _resolve_scope(company, branch)
 	supplier = str(supplier or "").strip()
@@ -201,26 +341,47 @@ def get_professional_purchasing_context(
 			}
 		)
 
+	material_request_rows = _get_material_request_rows(
+		company=company,
+		branch=branch,
+		allowed_branches=allowed_branches,
+		global_branch_access=global_branch_access,
+		limit=min(row_limit, MAX_MATERIAL_REQUESTS),
+	)
 	to_receive = [row for row in result_rows if row["can_prepare_receipt"]]
 	return {
 		"company": company,
 		"branch": branch,
 		"supplier": supplier,
 		"rows": result_rows,
+		"material_requests": material_request_rows,
 		"summary": {
 			"purchase_orders": len(result_rows),
 			"to_receive": len(to_receive),
 			"drafts": sum(1 for row in result_rows if row["docstatus"] == 0),
 			"open_value": sum(row["grand_total"] for row in result_rows if row["docstatus"] == 1),
+			"purchase_requests": len(material_request_rows),
+			"ready_for_rfq": sum(1 for row in material_request_rows if row["can_start_rfq"]),
 		},
 		"capabilities": {
 			"can_read_purchase_order": True,
 			"can_create_purchase_order": _permission(PURCHASE_ORDER_DOCTYPE, "create"),
 			"can_read_purchase_receipt": _permission(PURCHASE_RECEIPT_DOCTYPE, "read"),
 			"can_create_purchase_receipt": can_create_receipt,
+			"can_read_material_request": _permission(MATERIAL_REQUEST_DOCTYPE, "read"),
+			"can_read_request_for_quotation": _permission(REQUEST_FOR_QUOTATION_DOCTYPE, "read"),
+			"can_create_request_for_quotation": _permission(REQUEST_FOR_QUOTATION_DOCTYPE, "create"),
+			"can_read_supplier_quotation": _permission(SUPPLIER_QUOTATION_DOCTYPE, "read"),
+			"can_compare_supplier_quotations": _can_open_supplier_quotation_comparison(),
 		},
-		"limits": {"purchase_orders": MAX_PURCHASE_ORDERS, "link_results": MAX_LINK_RESULTS},
+		"limits": {
+			"purchase_orders": MAX_PURCHASE_ORDERS,
+			"material_requests": MAX_MATERIAL_REQUESTS,
+			"rfq_suppliers": MAX_RFQ_SUPPLIERS,
+			"link_results": MAX_LINK_RESULTS,
+		},
 		"source_of_truth": PURCHASE_ORDER_DOCTYPE,
+		"sourcing_source_of_truth": "ERPNext Material Request make_request_for_quotation mapper",
 		"receipt_source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
 		"user_name": get_user_fullname(frappe.session.user),
 	}
@@ -236,12 +397,13 @@ def search_professional_purchasing_options(
 	txt = str(txt or "").strip()
 	if kind == "company":
 		return search_link("Company", txt, page_length=MAX_LINK_RESULTS)
-	if kind == "supplier":
+	if kind in {"supplier", "rfq_supplier"}:
 		return search_link(
 			SUPPLIER_DOCTYPE,
 			txt,
+			filters={"disabled": 0},
 			page_length=MAX_LINK_RESULTS,
-			reference_doctype=PURCHASE_ORDER_DOCTYPE,
+			reference_doctype=REQUEST_FOR_QUOTATION_DOCTYPE if kind == "rfq_supplier" else PURCHASE_ORDER_DOCTYPE,
 			link_fieldname="supplier",
 		)
 	if kind == "branch":
@@ -262,6 +424,85 @@ def search_professional_purchasing_options(
 		return [{"value": row.name, "label": row.name} for row in rows]
 	frappe.throw(_("Unsupported Professional Purchasing search type."))
 	return []
+
+
+@frappe.whitelist(methods=["POST"])
+def prepare_request_for_quotation_draft(
+	material_request: str,
+	suppliers: list[Any] | str | None = None,
+) -> dict[str, Any]:
+	"""Prepare one ERPNext RFQ draft from a submitted Purchase Material Request."""
+	material_request = str(material_request or "").strip()
+	if not material_request:
+		frappe.throw(_("Material Request is required."))
+	_assert_read(MATERIAL_REQUEST_DOCTYPE, material_request)
+	_assert_create(REQUEST_FOR_QUOTATION_DOCTYPE)
+	supplier_names = _coerce_supplier_names(suppliers)
+	for supplier in supplier_names:
+		_assert_read(SUPPLIER_DOCTYPE, supplier)
+
+	request = frappe.get_doc(MATERIAL_REQUEST_DOCTYPE, material_request)
+	if cint(request.docstatus) != 1:
+		frappe.throw(_("Only submitted Material Requests can prepare a Request for Quotation."))
+	if str(getattr(request, "material_request_type", "") or "") != "Purchase":
+		frappe.throw(_("Only Purchase Material Requests can prepare a Request for Quotation."))
+	if str(getattr(request, "status", "") or "") in {"Stopped", "Cancelled", "Ordered"}:
+		frappe.throw(_("Material Request {0} is not open for sourcing.").format(material_request))
+	if flt(getattr(request, "per_ordered", 0)) >= 100:
+		frappe.throw(_("Material Request {0} is already fully ordered.").format(material_request))
+
+	branch = _document_branch(request)
+	if branch:
+		validate_user_branch_access(
+			branch,
+			user=frappe.session.user,
+			company=request.company,
+			throw=True,
+		)
+
+	rfq = make_request_for_quotation(request.name)
+	if not rfq or getattr(rfq, "doctype", None) != REQUEST_FOR_QUOTATION_DOCTYPE:
+		frappe.throw(_("ERPNext could not prepare a Request for Quotation from {0}.").format(material_request))
+	if str(getattr(rfq, "company", "") or "") != str(request.company or ""):
+		frappe.throw(_("Mapped Request for Quotation Company does not match the Material Request."))
+
+	items = [row for row in (getattr(rfq, "items", None) or []) if flt(getattr(row, "qty", 0)) > 0]
+	if not items:
+		frappe.throw(_("Material Request {0} has no remaining quantities available for RFQ.").format(material_request))
+	if any(str(getattr(row, "material_request", "") or "") != request.name for row in items):
+		frappe.throw(_("Mapped Request for Quotation contains items outside Material Request {0}.").format(material_request))
+
+	rfq_branch_field = _transaction_branch_field(REQUEST_FOR_QUOTATION_DOCTYPE)
+	if branch and rfq_branch_field:
+		setattr(rfq, rfq_branch_field, branch)
+	elif branch and not rfq_branch_field:
+		frappe.throw(
+			_("Request for Quotation branch attribution is unavailable. Run site migration before using this Branch-scoped action.")
+		)
+
+	for supplier in supplier_names:
+		rfq.append("suppliers", {"supplier": supplier, "send_email": 0})
+
+	# ERPNext RFQ validation remains authoritative for Supplier eligibility,
+	# scorecard controls, item references and mandatory document fields.
+	rfq.insert()
+	if cint(rfq.docstatus) != 0:
+		frappe.throw(_("Guided sourcing may prepare only a draft Request for Quotation."))
+	return {
+		"doctype": rfq.doctype,
+		"name": rfq.name,
+		"docstatus": cint(rfq.docstatus),
+		"material_request": request.name,
+		"company": rfq.company,
+		"branch": getattr(rfq, rfq_branch_field, "") if rfq_branch_field else "",
+		"item_count": len(items),
+		"supplier_count": len(supplier_names),
+		"suppliers": supplier_names,
+		"email_sending": False,
+		"posting_status": "Draft",
+		"source_of_truth": "ERPNext Material Request make_request_for_quotation mapper",
+		"route": f"/app/request-for-quotation/{rfq.name}",
+	}
 
 
 @frappe.whitelist(methods=["POST"])
