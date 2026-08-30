@@ -116,4 +116,8 @@ Baseline before Professional Purchasing: `427bf451435de564654d87b1b917cbe9675cf2
 
 C1 implementation checkpoint: `7fc24e993f908cdc28b72dc841f2771a21b570d3`.
 
-If work stops now, resume at **C2 audit**, not C1 implementation. Do not rebuild C1 and do not begin C3.
+C1 fully validated recovery-plan checkpoint before competitive-gap-audit synchronization: `d8d81994ab5152bf690eed75ae810bb3de294dc1`.
+
+The final C1 documentation head is the commit that synchronizes this recovery plan and `docs/e16_competitive_gap_audit.md`; validate that exact PR head before beginning C2.
+
+If work stops now, resume by validating the current documentation head and then at **C2 audit**, not C1 implementation. Do not rebuild C1 and do not begin C3.
