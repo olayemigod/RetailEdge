@@ -5,10 +5,23 @@ This audit is the implementation filter after the E15 multi-app coexistence chec
 ## Rules
 
 1. ERPNext remains the source of truth for accounting, stock, selling, buying, projects and payment documents.
-2. Do not rebuild native ERPNext capabilities. Add guided orchestration, controls, collaboration and reporting where the native experience has a real usability or market gap.
-3. EdgeSuite UI remains the shared frontend runtime.
+2. Do not rebuild native ERPNext capabilities. Add guided orchestration, controls, collaboration and reporting only where the native experience has a real usability or market gap.
+3. EdgeSuite UI remains the shared frontend runtime. New operational pages, dialogs, filters, review queues and workflow surfaces must use the governed EdgeSuite runtime/shells/components rather than introducing a parallel frontend system.
 4. The product must remain safe alongside other Frappe/ERPNext product apps.
 5. E16 remains stacked on the exact green E15 checkpoint `1f01b27d02b322f49ecaaecf1103a4b7188d6fed`; continue the existing E16 branch/PR rather than creating divergent implementation lines.
+6. Treat previously implemented RetailEdge programme capabilities as existing even where they remain on historical or QA reconciliation stacks. Reconcile them; do not reimplement them in E16.
+7. Manual QA remains deferred until implementation is complete and the cumulative source line is reconciled into the single consolidated QA branch.
+
+## Existing programme capabilities that are not E16 gaps
+
+The competitive-gap audit must not duplicate already implemented RetailEdge programme work, including:
+
+- Advanced Payment Management / advance receipt and invoice allocation work from the existing payments programme line;
+- Project Operations / project funds, project receipts, project expenses and ERPNext Project-linked operational work from the existing project programme line;
+- R8–R12 intelligence capabilities, including forecasting/planning, scenarios and other historical intelligence work carried by the consolidated QA stack;
+- existing Banking & Reconciliation, reporting, branch operations, Professional Selling and guided-entry foundations.
+
+Where E16 discovers a better source layer for one of these capabilities, document a reconciliation contract rather than leaving two implementations in parallel.
 
 ## Native ERPNext capabilities that are not gaps
 
@@ -23,7 +36,8 @@ The product should expose or orchestrate these safely rather than create paralle
 
 ## Priority A — Customer collaboration and self-service — IMPLEMENTED / GREEN
 
-The EdgeSuite customer portal now extends native ERPNext documents without mutating submitted accounting documents:
+The EdgeSuite customer portal extends native ERPNext documents without mutating submitted accounting documents:
+
 - quotation accept/decline and transaction-scoped collaboration are append-only;
 - invoice payment initiation uses native ERPNext Payment Request;
 - outstanding, overdue, received-payment, available-advance and receivable statement context remain native accounting read models;
@@ -33,6 +47,7 @@ The EdgeSuite customer portal now extends native ERPNext documents without mutat
 - no direct Payment Entry, GL Entry or Stock Ledger Entry writes are introduced by portal self-service.
 
 Validated checkpoint: `273d795d4acd66b7478f8968a5a74ef40ff50681`
+
 - RetailEdge Theme Compatibility #105: PASS
 - Linters #1800: PASS
 - CI #1818, including full RetailEdge tests: PASS
@@ -47,6 +62,7 @@ Validated with the same Priority-A checkpoint `273d795d4acd66b7478f8968a5a74ef40
 ## Priority B — Supplier collaboration — IMPLEMENTED / GREEN
 
 ERPNext v16 remains authority for Request for Quotation, Supplier Quotation, Purchase Order and Purchase Invoice portal pages. RetailEdge adds only the collaboration and financial experience gaps:
+
 - unified product-neutral supplier workspace over native ERPNext supplier routes;
 - Supplier identity derived from Portal User links;
 - append-only Purchase Order acknowledgement and messages with native website-permission checks and no Purchase Order mutation;
@@ -56,6 +72,7 @@ ERPNext v16 remains authority for Request for Quotation, Supplier Quotation, Pur
 - additive portal menu installation.
 
 Validated checkpoint: `3a91fd6f0e93c34e8fe04dd72867db480e3becef`
+
 - RetailEdge Theme Compatibility #108: PASS
 - Linters #1806: PASS
 - CI #1823, including clean Frappe v16 install/migration/assets and full RetailEdge tests: PASS
@@ -64,6 +81,7 @@ Validated checkpoint: `3a91fd6f0e93c34e8fe04dd72867db480e3becef`
 ## Priority B — Supplier document intake — IMPLEMENTED / GREEN
 
 The Supplier intake slice provides a human-review document queue without creating any native buying transaction:
+
 - `/supplier_documents` is a Supplier-role portal page installed additively;
 - browser supplies only Purchase Order identity, document category, notes and file; Supplier and Company are derived on the server;
 - the referenced Purchase Order must be submitted, supplier-owned and pass ERPNext native website permission;
@@ -75,6 +93,7 @@ The Supplier intake slice provides a human-review document queue without creatin
 - no Purchase Invoice, Purchase Order, Payment Entry, GL Entry or Stock Ledger Entry is created or mutated by intake.
 
 Validated checkpoint: `9772d544feb9816ae5bd73d87b19117c4b99351a`
+
 - RetailEdge Theme Compatibility #109: PASS
 - Linters #1808: PASS
 - CI #1826, including clean Frappe v16 install/migration/assets and full RetailEdge tests: PASS
@@ -82,28 +101,95 @@ Validated checkpoint: `9772d544feb9816ae5bd73d87b19117c4b99351a`
 
 ## Priority B — Project collaboration — PARTIALLY IMPLEMENTED / GREEN
 
-Customer-facing project collaboration is available through native Project progress plus explicitly published Project Updates. Internal Project/Task/Timesheet/Expense Claim and project-linked sales/purchase documents remain ERPNext authority. Further Project collaboration should be added only where a confirmed UX gap remains.
+Customer-facing project collaboration is available through native Project progress plus explicitly published Project Updates. Internal Project/Task/Timesheet/Expense Claim and project-linked sales/purchase documents remain ERPNext authority. Deeper project operations/project-funds work belongs to the existing Project Operations programme line and must be reconciled rather than rebuilt here.
 
-## Priority C — Document capture assistance — IMPLEMENTED / VALIDATION ACTIVE
+## Priority C — Supplier document extraction assistance — IMPLEMENTED / GREEN
 
-Supplier document extraction assistance now extends the governed intake queue without making extracted data authoritative:
+Supplier document extraction assistance extends the governed intake queue without making extracted data authoritative:
+
 - internal Purchase/Accounts users can record structured extracted document number/date, currency, subtotal, tax, total and document-visible Purchase Order reference;
 - Supplier, Company, authoritative Purchase Order and the private source File are copied only from the already-authorized Supplier Document Intake record;
 - extraction evidence is immutable after creation;
 - Accepted/Rejected extraction decisions are separate immutable review records rather than edits to extraction evidence;
-- a reviewed extraction cannot be re-reviewed; corrections require a new extraction record, preserving both evidence and decision history;
+- a reviewed extraction cannot be re-reviewed; corrections require a new extraction record, preserving evidence and decision history;
 - provider confidence and raw provider payload are supported by the audit model, but the provider recording boundary is deliberately server-only and no OCR/vision vendor is hard-wired;
 - Supplier Portal users receive no generic create/write permission on extraction or extraction-review DocTypes;
 - neither manual nor future provider extraction creates or mutates Purchase Invoice, Purchase Order, Payment Entry, GL Entry or Stock Ledger Entry;
 - extracted suggestions remain advisory until an internal human uses the appropriate native ERPNext buying workflow.
 
-Promote this slice to GREEN only after exact-head Theme, Linters, standalone CI/full tests and EdgeSuite candidate compatibility pass.
+Validated checkpoint: `81aef915b993c1e69d430e9c8c5e2968542a4af2`
+
+- RetailEdge Theme Compatibility #111: PASS
+- Linters #1812: PASS
+- CI #1830: PASS
+- EdgeSuite UI Candidate Compatibility #68: PASS
+
+## Priority C — 13-Week Cash Commitments — IMPLEMENTED / GREEN
+
+RetailEdge now exposes a read-only known-due commitments layer over ERPNext v16 Accounts Receivable and Accounts Payable allocation:
+
+- current submitted Sales Invoice receivables and Purchase Invoice payables are allocated using ERPNext native AR/AP logic;
+- `based_on_payment_terms=1` splits current outstanding by native Payment Schedule terms;
+- overdue/due balances are grouped into Due now and future balances into 13 weekly buckets;
+- branch scope intersects native AR/AP output with RetailEdge permission-aware invoice scopes;
+- amounts remain in company currency from the native report;
+- no accounting, invoice, payment or stock document is mutated.
+
+This is deliberately **not** a second forecasting engine. R12 / PR #32 remains the owner of behavioural forecasting, scenarios and forecast-vs-actual. At reconciliation, R12's simplified invoice-level commitment calculator must be replaced by this payment-term-aware commitment source so only one known-commitment calculator remains.
+
+Validated checkpoint: `d52262d9b4110cc7eef5896e4574093b2c0d9bb6`
+
+- RetailEdge Theme Compatibility #113: PASS
+- Linters #1816: PASS
+- CI #1834: PASS
+- EdgeSuite UI Candidate Compatibility #71: PASS
+
+## Priority C — Supplier document → draft Purchase Invoice handoff — IMPLEMENTED / VALIDATION ACTIVE
+
+The next incremental buying gap is now implemented on the same cumulative E16 line.
+
+The workflow is intentionally staged:
+
+1. Supplier submits a private Supplier Invoice against an authoritative submitted ERPNext Purchase Order.
+2. Internal Purchase/Accounts staff review the source document in the EdgeSuite `Supplier Document Review` workspace.
+3. Manual or future provider-neutral extraction is recorded as immutable advisory evidence.
+4. Extraction is explicitly accepted/rejected.
+5. The source document is explicitly accepted/rejected.
+6. Only after both accepted states does an internal user explicitly prepare an ERPNext **draft Purchase Invoice**.
+
+Safety and ERPNext authority:
+
+- Supplier, Company, Purchase Order and private source File are server-derived and revalidated;
+- the Purchase Invoice uses ERPNext's native Purchase Order → Purchase Invoice mapper;
+- mapped PO items, remaining quantities, rates, taxes and Purchase Order links remain authoritative;
+- extracted subtotal, tax and total are never written into the Purchase Invoice;
+- accepted supplier document number/date may populate the draft supplier bill reference/date;
+- an extracted currency mismatch fails closed against the ERPNext-mapped draft;
+- the action inserts only a draft and never submits it;
+- no Payment Entry, GL Entry or Stock Ledger Entry is created;
+- one extraction can create only one immutable handoff audit record and repeat requests are idempotent;
+- if a handed-off draft is deliberately deleted, the immutable handoff is retained and a new extraction is required before another handoff.
+
+EdgeSuite frontend contract:
+
+- `supplier-document-review` is an internal role-aware standard Page;
+- it requires `window.EdgeSuiteUI` and mounts through `createEdgeApp`;
+- it uses `EdgeAppShell`, `EdgeDashboardShell`, `EdgeDashboardGrid`, `EdgeDashboardSection` and `EdgeLinkField`;
+- controls use the shared EdgeSuite field/button contract;
+- no legacy `window.EdgeUI`, `frappe.ui.Dialog` or `frappe.prompt` is used by this workflow;
+- Company → Branch and Supplier filtering is permission-aware and backend validated;
+- the shared `Review & Approvals` navigation exposes the page only to Purchase/Accounts/System Manager roles.
+
+Promote this slice to GREEN only after exact-head Theme, Linters, clean standalone CI/full tests and governed EdgeSuite UI candidate compatibility all pass.
 
 ## Current execution order
 
 1. Preserve Priority-A checkpoint `273d795d4acd66b7478f8968a5a74ef40ff50681`.
 2. Preserve Supplier Collaboration checkpoint `3a91fd6f0e93c34e8fe04dd72867db480e3becef`.
 3. Preserve Supplier Document Intake checkpoint `9772d544feb9816ae5bd73d87b19117c4b99351a`.
-4. Validate Supplier Document Extraction Assistance at exact head on the existing `agent/competitive-gap-nextgen-20260829` / PR #53 line.
-5. After the extraction checkpoint is green, reassess the remaining competitive gaps before adding another E16 feature slice.
-6. Keep manual QA deferred until implementation is complete and the cumulative E16 line is reconciled into the single consolidated QA branch.
+4. Preserve Supplier Document Extraction checkpoint `81aef915b993c1e69d430e9c8c5e2968542a4af2`.
+5. Preserve 13-Week Cash Commitments checkpoint `d52262d9b4110cc7eef5896e4574093b2c0d9bb6` and its R12 reconciliation contract.
+6. Validate the Supplier Document → draft Purchase Invoice handoff at exact head on the existing `agent/competitive-gap-nextgen-20260829` / PR #53 line.
+7. After that checkpoint is green, continue the fresh competitive-gap audit against the consolidated capability inventory before selecting another E16 feature slice.
+8. Do not create a divergent E16 PR/branch.
+9. Keep manual QA deferred until implementation is complete and the cumulative source line is reconciled into the single consolidated QA branch.
