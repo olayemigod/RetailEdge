@@ -6,7 +6,11 @@ from unittest.mock import call, patch
 
 import frappe
 
-from retailedge.payment_application import apply_customer_advance, apply_customer_advances
+from retailedge.payment_application import (
+	apply_customer_advance,
+	apply_customer_advances,
+	create_sales_invoice_payment_draft,
+)
 
 
 class _Row(frappe._dict):
@@ -140,6 +144,46 @@ class TestPaymentApplication(unittest.TestCase):
 				],
 			)
 		mock_apply.assert_not_called()
+
+	@patch("retailedge.payment_application.create_simple_payment_draft")
+	@patch("retailedge.payment_application.validate_user_branch_access")
+	@patch("retailedge.payment_application._assert_read")
+	@patch("retailedge.payment_application.frappe.get_doc")
+	def test_sales_invoice_payment_draft_derives_invoice_authority_server_side(self, mock_get_doc, _mock_read, mock_branch_access, mock_create_draft):
+		mock_get_doc.return_value = SimpleNamespace(
+			name="SINV-0001",
+			docstatus=1,
+			is_return=0,
+			customer="CUST-001",
+			company="Demo Company",
+			branch="Lagos",
+			outstanding_amount=900.0,
+		)
+		mock_create_draft.return_value = {"name": "ACC-PAY-DRAFT-1", "docstatus": 0, "route": "/app/payment-entry/ACC-PAY-DRAFT-1"}
+
+		result = create_sales_invoice_payment_draft(
+			"SINV-0001",
+			{
+				"company": "Wrong Company",
+				"party": "WRONG-CUSTOMER",
+				"branch": "Wrong Branch",
+				"posting_date": "2026-08-30",
+				"mode_of_payment": "Cash",
+				"amount": 300,
+			},
+		)
+
+		mock_branch_access.assert_called_once_with("Lagos", user=frappe.session.user, company="Demo Company", throw=True)
+		mock_create_draft.assert_called_once()
+		intent, values = mock_create_draft.call_args.args
+		self.assertEqual(intent, "receive-customer-payment")
+		self.assertEqual(values["company"], "Demo Company")
+		self.assertEqual(values["party"], "CUST-001")
+		self.assertEqual(values["branch"], "Lagos")
+		self.assertEqual(values["references"], [{"reference_name": "SINV-0001", "allocated_amount": 300.0}])
+		self.assertEqual(result["posting_status"], "Draft")
+		self.assertEqual(result["outstanding_effect"], "none_until_payment_entry_submission")
+		self.assertEqual(result["authoritative_outstanding_amount"], 900.0)
 
 
 if __name__ == "__main__":
