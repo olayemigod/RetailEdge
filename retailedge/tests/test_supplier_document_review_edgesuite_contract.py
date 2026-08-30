@@ -37,6 +37,14 @@ class TestSupplierDocumentReviewEdgeSuiteContract(unittest.TestCase):
 		self.assertNotIn("frappe.ui.Dialog", vue)
 		self.assertNotIn("frappe.prompt", vue)
 
+	def test_shared_edgesuite_navigation_exposes_review_page_to_internal_roles(self):
+		navigation = (APP_ROOT / "edgesuite_ui.py").read_text()
+		self.assertIn("SUPPLIER_DOCUMENT_REVIEW_ROLES", navigation)
+		self.assertIn('"label": "Supplier Document Review"', navigation)
+		self.assertIn('"target_type": "Page"', navigation)
+		self.assertIn('"target": "supplier-document-review"', navigation)
+		self.assertIn("tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))", navigation)
+
 	def test_frontend_only_sends_intake_or_extraction_identity_for_authoritative_actions(self):
 		vue = (APP_ROOT / "public" / "js" / "supplier_document_review" / "SupplierDocumentReview.vue").read_text()
 		self.assertIn("intake_name: this.modal.row.intake", vue)
