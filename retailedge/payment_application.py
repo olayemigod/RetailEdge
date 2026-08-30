@@ -17,6 +17,7 @@ from retailedge.advanced_payments import (
 from retailedge.branch_context import validate_user_branch_access
 
 PAYMENT_RECONCILIATION_DOCTYPE = "Payment Reconciliation"
+MAX_MIXED_SETTLEMENT_ADVANCES = 20
 
 
 def _assert_read(doctype: str, name: str) -> None:
@@ -52,6 +53,33 @@ def _find_invoice_row(reconciliation: Any, sales_invoice: str) -> Any:
 		if row.get("invoice_type") == SALES_INVOICE_DOCTYPE and row.get("invoice_number") == sales_invoice:
 			return row
 	frappe.throw(_("Sales Invoice {0} is no longer outstanding for reconciliation.").format(sales_invoice))
+
+
+def _normalise_mixed_allocations(allocations: list[dict[str, Any]] | str | None) -> list[dict[str, Any]]:
+	rows = frappe.parse_json(allocations) if isinstance(allocations, str) else allocations
+	if not isinstance(rows, list) or not rows:
+		frappe.throw(_("Choose at least one customer advance to apply."))
+	if len(rows) > MAX_MIXED_SETTLEMENT_ADVANCES:
+		frappe.throw(
+			_("A mixed settlement can apply at most {0} advances at once.").format(MAX_MIXED_SETTLEMENT_ADVANCES)
+		)
+
+	normalised: list[dict[str, Any]] = []
+	seen: set[str] = set()
+	for row in rows:
+		if not isinstance(row, dict):
+			frappe.throw(_("Each advance allocation must contain a Payment Entry and amount."))
+		payment_entry = str(row.get("payment_entry") or "").strip()
+		amount = flt(row.get("allocated_amount"))
+		if not payment_entry:
+			frappe.throw(_("Payment Entry is required for every advance allocation."))
+		if payment_entry in seen:
+			frappe.throw(_("Payment Entry {0} was selected more than once.").format(payment_entry))
+		if amount <= 0:
+			frappe.throw(_("Allocated Amount must be greater than zero for {0}.").format(payment_entry))
+		seen.add(payment_entry)
+		normalised.append({"payment_entry": payment_entry, "allocated_amount": amount})
+	return normalised
 
 
 @frappe.whitelist(methods=["POST"])
@@ -186,4 +214,41 @@ def apply_customer_advance(
 		"source_of_truth": PAYMENT_RECONCILIATION_DOCTYPE,
 		"invoice_route": f"/app/sales-invoice/{sales_invoice}",
 		"payment_route": f"/app/payment-entry/{payment_entry}",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_customer_advances(
+	sales_invoice: str,
+	allocations: list[dict[str, Any]] | str | None = None,
+) -> dict[str, Any]:
+	"""Apply several eligible customer advances to one Sales Invoice safely.
+
+	Each allocation is revalidated by ``apply_customer_advance`` against the
+	current ERPNext Sales Invoice and Payment Entry state. The function deliberately
+	does not commit: Frappe's request transaction remains the batch boundary, so an
+	exception can roll back the mixed advance application instead of leaving a
+	browser-driven partial settlement.
+	"""
+	rows = _normalise_mixed_allocations(allocations)
+	results: list[dict[str, Any]] = []
+	for row in rows:
+		results.append(
+			apply_customer_advance(
+				sales_invoice=sales_invoice,
+				payment_entry=row["payment_entry"],
+				allocated_amount=row["allocated_amount"],
+			)
+		)
+
+	return {
+		"sales_invoice": sales_invoice,
+		"applied_count": len(results),
+		"allocated_amount": sum(flt(row.get("allocated_amount")) for row in results),
+		"invoice_outstanding_amount": flt(
+			frappe.db.get_value(SALES_INVOICE_DOCTYPE, sales_invoice, "outstanding_amount")
+		),
+		"source_of_truth": PAYMENT_RECONCILIATION_DOCTYPE,
+		"allocations": results,
+		"invoice_route": f"/app/sales-invoice/{sales_invoice}",
 	}
