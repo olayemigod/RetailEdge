@@ -145,6 +145,36 @@ class TestProfessionalPurchasing(unittest.TestCase):
 		with self.assertRaises(frappe.PermissionError):
 			prepare_purchase_receipt_draft("PUR-ORD-0003")
 
+	@patch("retailedge.professional_purchasing._document_branch", return_value="Abuja")
+	@patch("retailedge.professional_purchasing.make_purchase_receipt")
+	@patch("retailedge.professional_purchasing.validate_user_branch_access", side_effect=frappe.PermissionError)
+	@patch("retailedge.professional_purchasing.frappe.get_doc")
+	@patch("retailedge.professional_purchasing._assert_create")
+	@patch("retailedge.professional_purchasing._assert_read")
+	def test_prepare_receipt_rejects_denied_purchase_order_branch_before_mapping(
+		self,
+		_mock_read,
+		_mock_create,
+		mock_get_doc,
+		_mock_branch_access,
+		mock_mapper,
+		_mock_document_branch,
+	):
+		mock_get_doc.return_value = SimpleNamespace(
+			doctype="Purchase Order",
+			name="PUR-ORD-ABUJA",
+			docstatus=1,
+			status="To Receive and Bill",
+			per_received=0,
+			is_subcontracted=0,
+			company="Demo Company",
+			supplier="SUP-001",
+		)
+
+		with self.assertRaises(frappe.PermissionError):
+			prepare_purchase_receipt_draft("PUR-ORD-ABUJA")
+		mock_mapper.assert_not_called()
+
 	@patch("retailedge.professional_purchasing.search_link")
 	def test_company_search_preserves_frappe_link_result_shape(self, mock_search_link):
 		mock_search_link.return_value = [
