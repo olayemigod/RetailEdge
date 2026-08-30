@@ -15,6 +15,7 @@ from retailedge.advanced_payments import (
 	_payment_branch_field,
 )
 from retailedge.branch_context import validate_user_branch_access
+from retailedge.guided_payment import create_simple_payment_draft
 
 PAYMENT_RECONCILIATION_DOCTYPE = "Payment Reconciliation"
 MAX_MIXED_SETTLEMENT_ADVANCES = 20
@@ -252,3 +253,73 @@ def apply_customer_advances(
 		"allocations": results,
 		"invoice_route": f"/app/sales-invoice/{sales_invoice}",
 	}
+
+
+@frappe.whitelist(methods=["POST"])
+def create_sales_invoice_payment_draft(
+	sales_invoice: str,
+	values: dict[str, Any] | str | None = None,
+) -> dict[str, Any]:
+	"""Create a draft customer Payment Entry against one submitted Sales Invoice.
+
+	Company, Customer, Branch and invoice allocation are derived from the current
+	Sales Invoice. Browser values can provide receipt details only. The delegated
+	guided Payment Entry service inserts a draft; this action never submits it and
+	therefore does not reduce authoritative Sales Invoice outstanding.
+	"""
+	_assert_read(SALES_INVOICE_DOCTYPE, sales_invoice)
+	invoice = frappe.get_doc(SALES_INVOICE_DOCTYPE, sales_invoice)
+	if invoice.docstatus != 1:
+		frappe.throw(_("Only submitted Sales Invoices can receive a customer payment draft."))
+	if getattr(invoice, "is_return", 0):
+		frappe.throw(_("Return Sales Invoices are not supported by Mixed Customer Settlement."))
+	outstanding = flt(getattr(invoice, "outstanding_amount", 0))
+	if outstanding <= 0:
+		frappe.throw(_("Sales Invoice {0} has no positive outstanding amount.").format(sales_invoice))
+	if not getattr(invoice, "customer", None):
+		frappe.throw(_("Sales Invoice {0} has no Customer.").format(sales_invoice))
+
+	branch = _invoice_branch(invoice)
+	if branch:
+		validate_user_branch_access(
+			branch,
+			user=frappe.session.user,
+			company=invoice.company,
+			throw=True,
+		)
+
+	provided = frappe.parse_json(values) if isinstance(values, str) else dict(values or {})
+	amount = flt(provided.get("amount"))
+	if amount <= 0:
+		frappe.throw(_("Receipt Amount must be greater than zero."))
+	if amount > outstanding:
+		frappe.throw(_("Receipt Amount cannot exceed the current Sales Invoice outstanding amount."))
+
+	authoritative_values = {
+		"company": invoice.company,
+		"branch": branch,
+		"party": invoice.customer,
+		"posting_date": provided.get("posting_date"),
+		"mode_of_payment": provided.get("mode_of_payment"),
+		"amount": amount,
+		"reference_no": provided.get("reference_no"),
+		"reference_date": provided.get("reference_date"),
+		"remarks": provided.get("remarks"),
+		"references": [
+			{
+				"reference_name": invoice.name,
+				"allocated_amount": amount,
+			}
+		],
+	}
+	result = create_simple_payment_draft("receive-customer-payment", authoritative_values)
+	result.update(
+		{
+			"sales_invoice": invoice.name,
+			"customer": invoice.customer,
+			"authoritative_outstanding_amount": outstanding,
+			"outstanding_effect": "none_until_payment_entry_submission",
+			"posting_status": "Draft",
+		}
+	)
+	return result
