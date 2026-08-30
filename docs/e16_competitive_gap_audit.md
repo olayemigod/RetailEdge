@@ -144,9 +144,9 @@ Validated checkpoint: `d52262d9b4110cc7eef5896e4574093b2c0d9bb6`
 - CI #1834: PASS
 - EdgeSuite UI Candidate Compatibility #71: PASS
 
-## Priority C — Supplier document → draft Purchase Invoice handoff — IMPLEMENTED / VALIDATION ACTIVE
+## Priority C — Supplier document → draft Purchase Invoice handoff — IMPLEMENTED / GREEN
 
-The next incremental buying gap is now implemented on the same cumulative E16 line.
+The buying handoff extends the supplier document review flow without making extracted values authoritative.
 
 The workflow is intentionally staged:
 
@@ -180,7 +180,38 @@ EdgeSuite frontend contract:
 - Company → Branch and Supplier filtering is permission-aware and backend validated;
 - the shared `Review & Approvals` navigation exposes the page only to Purchase/Accounts/System Manager roles.
 
-Promote this slice to GREEN only after exact-head Theme, Linters, clean standalone CI/full tests and governed EdgeSuite UI candidate compatibility all pass.
+Validated checkpoint: `40b8f1fc3f0293ae89df91e6ea157f40894c7d93`
+
+- RetailEdge Theme Compatibility #119: PASS
+- Linters #1828: PASS
+- CI #1846, including clean Frappe v16 install, asset build and full RetailEdge tests: PASS
+- EdgeSuite UI Candidate Compatibility #84: PASS
+
+## Priority C — Mixed Customer Settlement — IMPLEMENTED / GREEN
+
+Mixed Customer Settlement extends the existing Advanced Payment Management programme rather than creating another payment or receivables ledger.
+
+The EdgeSuite `Payment Management` workspace now provides an invoice-centred settlement flow:
+
+- a submitted Sales Invoice is loaded with its current authoritative ERPNext outstanding amount;
+- eligible submitted customer Payment Entries with positive unapplied amounts are shown from the existing advance read model;
+- users may select and apply several eligible advances in one server request;
+- the server bounds a mixed settlement to 20 advances, rejects duplicate Payment Entries, and revalidates every allocation through the existing single-advance primitive before delegating to ERPNext Payment Reconciliation;
+- no manual database commit is introduced, so the Frappe request transaction remains the batch boundary rather than the browser issuing independent accounting writes;
+- after reconciliation the workspace reloads the current ERPNext Sales Invoice outstanding amount;
+- users may optionally create a standard ERPNext **draft Payment Entry** allocated to the same invoice for additional money received;
+- Company, Customer, Branch and Sales Invoice allocation for the draft receipt are derived from the authoritative Sales Invoice on the server; browser input is limited to receipt details such as amount, date, mode, reference and remarks;
+- the draft Payment Entry is never auto-submitted and the UI explicitly states that it does not reduce Sales Invoice outstanding until standard ERPNext submission;
+- the submitted Sales Invoice `Payments` action now routes into the EdgeSuite `payment-management` settlement experience rather than opening a parallel Frappe advance-allocation dialog;
+- multi-currency invoices, multi-currency advances and separate-party-advance-account cases continue to fall back to ERPNext's full Payment Reconciliation / Payment Entry workflows;
+- no customer wallet, settlement ledger, direct Sales Invoice outstanding mutation, auto-submit, direct GL Entry or Stock Ledger Entry write is introduced.
+
+Validated checkpoint: `5122464e21f9cdfceb52855e54302b11be074172`
+
+- RetailEdge Theme Compatibility #126: PASS
+- Linters #1842, including pre-commit, Semgrep and vulnerable dependency audit: PASS
+- CI #1860, including clean Frappe v16 install, asset build, EdgeSuite asset contract and full RetailEdge tests: PASS
+- EdgeSuite UI Candidate Compatibility #98, including clean build/migrate and full RetailEdge tests: PASS
 
 ## Current execution order
 
@@ -189,7 +220,8 @@ Promote this slice to GREEN only after exact-head Theme, Linters, clean standalo
 3. Preserve Supplier Document Intake checkpoint `9772d544feb9816ae5bd73d87b19117c4b99351a`.
 4. Preserve Supplier Document Extraction checkpoint `81aef915b993c1e69d430e9c8c5e2968542a4af2`.
 5. Preserve 13-Week Cash Commitments checkpoint `d52262d9b4110cc7eef5896e4574093b2c0d9bb6` and its R12 reconciliation contract.
-6. Validate the Supplier Document → draft Purchase Invoice handoff at exact head on the existing `agent/competitive-gap-nextgen-20260829` / PR #53 line.
-7. After that checkpoint is green, continue the fresh competitive-gap audit against the consolidated capability inventory before selecting another E16 feature slice.
-8. Do not create a divergent E16 PR/branch.
-9. Keep manual QA deferred until implementation is complete and the cumulative source line is reconciled into the single consolidated QA branch.
+6. Preserve Supplier Document → draft Purchase Invoice checkpoint `40b8f1fc3f0293ae89df91e6ea157f40894c7d93`.
+7. Preserve Mixed Customer Settlement checkpoint `5122464e21f9cdfceb52855e54302b11be074172`.
+8. Continue the fresh competitive-gap audit against the consolidated capability inventory before selecting another genuinely incremental E16 feature slice.
+9. Do not create a divergent E16 PR/branch.
+10. Keep manual QA deferred until implementation is complete and the cumulative source line is reconciled into the single consolidated QA branch.
