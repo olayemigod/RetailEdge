@@ -8,6 +8,7 @@ import frappe
 
 from retailedge.professional_purchasing import (
 	prepare_purchase_receipt_draft,
+	prepare_request_for_quotation_draft,
 	search_professional_purchasing_options,
 )
 
@@ -24,6 +25,31 @@ class _DraftReceipt(SimpleNamespace):
 			items=items if items is not None else [SimpleNamespace(qty=2)],
 			insert_calls=0,
 		)
+
+	def insert(self):
+		self.insert_calls += 1
+		return self
+
+
+class _DraftRFQ(SimpleNamespace):
+	doctype = "Request for Quotation"
+
+	def __init__(self, *, material_request="MAT-MR-0001", items=None):
+		super().__init__(
+			name="PUR-RFQ-0001",
+			docstatus=0,
+			company="Demo Company",
+			items=items if items is not None else [SimpleNamespace(qty=3, material_request=material_request)],
+			suppliers=[],
+			insert_calls=0,
+		)
+
+	def append(self, fieldname, values):
+		if fieldname != "suppliers":
+			raise AssertionError(f"Unexpected append field {fieldname}")
+		row = SimpleNamespace(**values)
+		self.suppliers.append(row)
+		return row
 
 	def insert(self):
 		self.insert_calls += 1
@@ -175,6 +201,171 @@ class TestProfessionalPurchasing(unittest.TestCase):
 			prepare_purchase_receipt_draft("PUR-ORD-ABUJA")
 		mock_mapper.assert_not_called()
 
+	@patch("retailedge.professional_purchasing._transaction_branch_field", return_value="retailedge_branch")
+	@patch("retailedge.professional_purchasing.validate_user_branch_access")
+	@patch("retailedge.professional_purchasing._document_branch", return_value="Lagos")
+	@patch("retailedge.professional_purchasing.make_request_for_quotation")
+	@patch("retailedge.professional_purchasing.frappe.get_doc")
+	@patch("retailedge.professional_purchasing._assert_create")
+	@patch("retailedge.professional_purchasing._assert_read")
+	def test_prepare_rfq_delegates_to_native_mapper_and_inserts_draft_with_email_disabled(
+		self,
+		_mock_read,
+		_mock_create,
+		mock_get_doc,
+		mock_mapper,
+		_mock_document_branch,
+		mock_branch_access,
+		_mock_branch_field,
+	):
+		request = SimpleNamespace(
+			doctype="Material Request",
+			name="MAT-MR-0001",
+			docstatus=1,
+			material_request_type="Purchase",
+			status="Pending",
+			per_ordered=25,
+			company="Demo Company",
+		)
+		rfq = _DraftRFQ(material_request=request.name)
+		mock_get_doc.return_value = request
+		mock_mapper.return_value = rfq
+
+		result = prepare_request_for_quotation_draft(request.name, ["SUP-001", "SUP-002"])
+
+		mock_mapper.assert_called_once_with(request.name)
+		mock_branch_access.assert_called_once_with(
+			"Lagos",
+			user=frappe.session.user,
+			company="Demo Company",
+			throw=True,
+		)
+		self.assertEqual(rfq.insert_calls, 1)
+		self.assertEqual(rfq.docstatus, 0)
+		self.assertEqual(rfq.retailedge_branch, "Lagos")
+		self.assertEqual([row.supplier for row in rfq.suppliers], ["SUP-001", "SUP-002"])
+		self.assertTrue(all(row.send_email == 0 for row in rfq.suppliers))
+		self.assertEqual(result["posting_status"], "Draft")
+		self.assertFalse(result["email_sending"])
+		self.assertEqual(result["supplier_count"], 2)
+		self.assertIn("make_request_for_quotation", result["source_of_truth"])
+
+	@patch("retailedge.professional_purchasing.make_request_for_quotation")
+	@patch("retailedge.professional_purchasing.frappe.get_doc")
+	@patch("retailedge.professional_purchasing._assert_create")
+	@patch("retailedge.professional_purchasing._assert_read")
+	def test_prepare_rfq_rejects_non_purchase_material_request(
+		self,
+		_mock_read,
+		_mock_create,
+		mock_get_doc,
+		mock_mapper,
+	):
+		mock_get_doc.return_value = SimpleNamespace(
+			doctype="Material Request",
+			name="MAT-MR-TRANSFER",
+			docstatus=1,
+			material_request_type="Material Transfer",
+			status="Pending",
+			per_ordered=0,
+			company="Demo Company",
+		)
+		with self.assertRaises(frappe.ValidationError):
+			prepare_request_for_quotation_draft("MAT-MR-TRANSFER", ["SUP-001"])
+		mock_mapper.assert_not_called()
+
+	@patch("retailedge.professional_purchasing.make_request_for_quotation")
+	@patch("retailedge.professional_purchasing.frappe.get_doc")
+	@patch("retailedge.professional_purchasing._assert_create")
+	@patch("retailedge.professional_purchasing._assert_read")
+	def test_prepare_rfq_rejects_fully_ordered_material_request(
+		self,
+		_mock_read,
+		_mock_create,
+		mock_get_doc,
+		mock_mapper,
+	):
+		mock_get_doc.return_value = SimpleNamespace(
+			doctype="Material Request",
+			name="MAT-MR-ORDERED",
+			docstatus=1,
+			material_request_type="Purchase",
+			status="Pending",
+			per_ordered=100,
+			company="Demo Company",
+		)
+		with self.assertRaises(frappe.ValidationError):
+			prepare_request_for_quotation_draft("MAT-MR-ORDERED", ["SUP-001"])
+		mock_mapper.assert_not_called()
+
+	@patch("retailedge.professional_purchasing._document_branch", return_value="")
+	@patch("retailedge.professional_purchasing.make_request_for_quotation")
+	@patch("retailedge.professional_purchasing.frappe.get_doc")
+	@patch("retailedge.professional_purchasing._assert_create")
+	@patch("retailedge.professional_purchasing._assert_read")
+	def test_prepare_rfq_rejects_mapper_without_remaining_items(
+		self,
+		_mock_read,
+		_mock_create,
+		mock_get_doc,
+		mock_mapper,
+		_mock_document_branch,
+	):
+		mock_get_doc.return_value = SimpleNamespace(
+			doctype="Material Request",
+			name="MAT-MR-EMPTY",
+			docstatus=1,
+			material_request_type="Purchase",
+			status="Pending",
+			per_ordered=50,
+			company="Demo Company",
+		)
+		mock_mapper.return_value = _DraftRFQ(material_request="MAT-MR-EMPTY", items=[])
+		with self.assertRaises(frappe.ValidationError):
+			prepare_request_for_quotation_draft("MAT-MR-EMPTY", ["SUP-001"])
+
+	@patch("retailedge.professional_purchasing.make_request_for_quotation")
+	@patch("retailedge.professional_purchasing.validate_user_branch_access", side_effect=frappe.PermissionError)
+	@patch("retailedge.professional_purchasing._document_branch", return_value="Abuja")
+	@patch("retailedge.professional_purchasing.frappe.get_doc")
+	@patch("retailedge.professional_purchasing._assert_create")
+	@patch("retailedge.professional_purchasing._assert_read")
+	def test_prepare_rfq_rejects_denied_branch_before_mapping(
+		self,
+		_mock_read,
+		_mock_create,
+		mock_get_doc,
+		_mock_document_branch,
+		_mock_branch_access,
+		mock_mapper,
+	):
+		mock_get_doc.return_value = SimpleNamespace(
+			doctype="Material Request",
+			name="MAT-MR-ABUJA",
+			docstatus=1,
+			material_request_type="Purchase",
+			status="Pending",
+			per_ordered=0,
+			company="Demo Company",
+		)
+		with self.assertRaises(frappe.PermissionError):
+			prepare_request_for_quotation_draft("MAT-MR-ABUJA", ["SUP-001"])
+		mock_mapper.assert_not_called()
+
+	@patch("retailedge.professional_purchasing._assert_create")
+	@patch("retailedge.professional_purchasing._assert_read")
+	def test_prepare_rfq_requires_suppliers_and_rejects_duplicates(self, _mock_read, _mock_create):
+		with self.assertRaises(frappe.ValidationError):
+			prepare_request_for_quotation_draft("MAT-MR-0001", [])
+		with self.assertRaises(frappe.ValidationError):
+			prepare_request_for_quotation_draft("MAT-MR-0001", ["SUP-001", "SUP-001"])
+
+	@patch("retailedge.professional_purchasing._assert_create")
+	@patch("retailedge.professional_purchasing._assert_read")
+	def test_prepare_rfq_bounds_supplier_count(self, _mock_read, _mock_create):
+		with self.assertRaises(frappe.ValidationError):
+			prepare_request_for_quotation_draft("MAT-MR-0001", [f"SUP-{index:03d}" for index in range(21)])
+
 	@patch("retailedge.professional_purchasing.search_link")
 	def test_company_search_preserves_frappe_link_result_shape(self, mock_search_link):
 		mock_search_link.return_value = [
@@ -185,6 +376,22 @@ class TestProfessionalPurchasing(unittest.TestCase):
 
 		self.assertEqual(result, mock_search_link.return_value)
 		mock_search_link.assert_called_once_with("Company", "Demo", page_length=20)
+
+	@patch("retailedge.professional_purchasing.search_link")
+	def test_rfq_supplier_search_uses_native_supplier_link_and_disabled_filter(self, mock_search_link):
+		mock_search_link.return_value = [{"value": "SUP-001", "label": "Supplier One", "description": ""}]
+
+		result = search_professional_purchasing_options("rfq_supplier", "Supplier")
+
+		self.assertEqual(result, mock_search_link.return_value)
+		mock_search_link.assert_called_once_with(
+			"Supplier",
+			"Supplier",
+			filters={"disabled": 0},
+			page_length=20,
+			reference_doctype="Request for Quotation",
+			link_fieldname="supplier",
+		)
 
 
 if __name__ == "__main__":
