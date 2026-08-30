@@ -5,7 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.desk.search import search_link
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate, nowdate
 from frappe.utils.user import get_user_fullname
 
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
@@ -28,10 +28,13 @@ REQUEST_FOR_QUOTATION_DOCTYPE = "Request for Quotation"
 SUPPLIER_QUOTATION_DOCTYPE = "Supplier Quotation"
 SUPPLIER_DOCTYPE = "Supplier"
 SUPPLIER_QUOTATION_COMPARISON_REPORT = "Supplier Quotation Comparison"
+PURCHASE_ORDER_ANALYSIS_REPORT = "Purchase Order Analysis"
 MAX_PURCHASE_ORDERS = 200
 MAX_MATERIAL_REQUESTS = 200
 MAX_RFQ_SUPPLIERS = 20
 MAX_LINK_RESULTS = 20
+ATTENTION_TOLERANCE = 0.01
+CLOSED_PURCHASE_ORDER_STATUSES = {"Closed", "Completed", "Cancelled", "Stopped", "On Hold"}
 
 
 def _permission(doctype: str, ptype: str, name: str | None = None) -> bool:
@@ -249,14 +252,72 @@ def _coerce_supplier_names(suppliers: list[Any] | str | None) -> list[str]:
 	return names
 
 
-def _can_open_supplier_quotation_comparison() -> bool:
+def _can_open_report(report_name: str) -> bool:
 	try:
 		return bool(
-			frappe.db.exists("Report", SUPPLIER_QUOTATION_COMPARISON_REPORT)
-			and frappe.has_permission("Report", "read", doc=SUPPLIER_QUOTATION_COMPARISON_REPORT)
+			frappe.db.exists("Report", report_name)
+			and frappe.has_permission("Report", "read", doc=report_name)
 		)
 	except Exception:
 		return False
+
+
+def _can_open_supplier_quotation_comparison() -> bool:
+	return _can_open_report(SUPPLIER_QUOTATION_COMPARISON_REPORT)
+
+
+def _classify_purchase_order_attention(row: dict[str, Any], *, today: str | None = None) -> dict[str, Any]:
+	"""Classify PO readiness from authoritative ERPNext header progress only.
+
+	This is operational guidance, not a persisted matching or accounting state.
+	"""
+	docstatus = cint(row.get("docstatus"))
+	status = str(row.get("status") or "")
+	if docstatus != 1 or status in CLOSED_PURCHASE_ORDER_STATUSES:
+		return {"attention_flags": [], "attention_level": "Clear"}
+
+	per_received = flt(row.get("per_received"))
+	per_billed = flt(row.get("per_billed"))
+	required_date = row.get("schedule_date")
+	today_date = getdate(today or nowdate())
+	is_overdue = bool(required_date and getdate(required_date) < today_date and per_received < 100 - ATTENTION_TOLERANCE)
+	flags: list[dict[str, str]] = []
+
+	if is_overdue:
+		flags.append({"key": "overdue_receipt", "label": _("Overdue Receipt"), "kind": "exception"})
+	elif per_received < 100 - ATTENTION_TOLERANCE:
+		flags.append({"key": "ready_to_receive", "label": _("Ready to Receive"), "kind": "readiness"})
+
+	if per_received > per_billed + ATTENTION_TOLERANCE:
+		flags.append({"key": "received_not_billed", "label": _("Received Not Fully Billed"), "kind": "exception"})
+	if per_billed > per_received + ATTENTION_TOLERANCE:
+		flags.append({"key": "billed_ahead_of_receipt", "label": _("Billed Ahead of Receipt"), "kind": "review"})
+
+	if any(flag["kind"] in {"exception", "review"} for flag in flags):
+		level = "Review"
+	elif flags:
+		level = "Readiness"
+	else:
+		level = "Clear"
+	return {"attention_flags": flags, "attention_level": level}
+
+
+def _attention_summary(rows: list[dict[str, Any]]) -> dict[str, int]:
+	counts = {
+		"overdue_receipt": 0,
+		"received_not_billed": 0,
+		"billed_ahead_of_receipt": 0,
+		"ready_to_receive": 0,
+		"attention_total": 0,
+	}
+	for row in rows:
+		keys = {flag.get("key") for flag in row.get("attention_flags") or []}
+		for key in tuple(counts):
+			if key != "attention_total" and key in keys:
+				counts[key] += 1
+		if any(key in keys for key in {"overdue_receipt", "received_not_billed", "billed_ahead_of_receipt"}):
+			counts["attention_total"] += 1
+	return counts
 
 
 @frappe.whitelist()
@@ -266,7 +327,7 @@ def get_professional_purchasing_context(
 	supplier: str | None = None,
 	limit: int | str = 100,
 ) -> dict[str, Any]:
-	"""Return permission-aware sourcing, PO and receipt context from ERPNext."""
+	"""Return permission-aware sourcing, PO, receipt and attention context from ERPNext."""
 	_assert_read(PURCHASE_ORDER_DOCTYPE)
 	company, branch, allowed_branches, global_branch_access = _resolve_scope(company, branch)
 	supplier = str(supplier or "").strip()
@@ -308,10 +369,12 @@ def get_professional_purchasing_context(
 		limit_page_length=row_limit,
 	)
 	can_create_receipt = _permission(PURCHASE_RECEIPT_DOCTYPE, "create")
+	server_today = nowdate()
 	result_rows = []
 	for row in rows:
 		row_branch = str(row.get(branch_field) or "") if branch_field else ""
 		per_received = flt(row.get("per_received"))
+		per_billed = flt(row.get("per_billed"))
 		status = str(row.get("status") or "")
 		can_prepare_receipt = bool(
 			can_create_receipt
@@ -320,26 +383,26 @@ def get_professional_purchasing_context(
 			and not cint(row.get("is_subcontracted"))
 			and status not in {"Closed", "Completed", "Cancelled"}
 		)
-		result_rows.append(
-			{
-				"name": row.get("name"),
-				"docstatus": cint(row.get("docstatus")),
-				"transaction_date": row.get("transaction_date"),
-				"schedule_date": row.get("schedule_date"),
-				"company": row.get("company"),
-				"supplier": row.get("supplier"),
-				"supplier_name": row.get("supplier_name") or row.get("supplier"),
-				"status": status,
-				"currency": row.get("currency"),
-				"grand_total": flt(row.get("grand_total")),
-				"per_received": per_received,
-				"per_billed": flt(row.get("per_billed")),
-				"branch": row_branch,
-				"is_subcontracted": bool(cint(row.get("is_subcontracted"))),
-				"can_prepare_receipt": can_prepare_receipt,
-				"route": f"/app/purchase-order/{row.get('name')}",
-			}
-		)
+		result = {
+			"name": row.get("name"),
+			"docstatus": cint(row.get("docstatus")),
+			"transaction_date": row.get("transaction_date"),
+			"schedule_date": row.get("schedule_date"),
+			"company": row.get("company"),
+			"supplier": row.get("supplier"),
+			"supplier_name": row.get("supplier_name") or row.get("supplier"),
+			"status": status,
+			"currency": row.get("currency"),
+			"grand_total": flt(row.get("grand_total")),
+			"per_received": per_received,
+			"per_billed": per_billed,
+			"branch": row_branch,
+			"is_subcontracted": bool(cint(row.get("is_subcontracted"))),
+			"can_prepare_receipt": can_prepare_receipt,
+			"route": f"/app/purchase-order/{row.get('name')}",
+		}
+		result.update(_classify_purchase_order_attention(result, today=server_today))
+		result_rows.append(result)
 
 	material_request_rows = _get_material_request_rows(
 		company=company,
@@ -349,6 +412,7 @@ def get_professional_purchasing_context(
 		limit=min(row_limit, MAX_MATERIAL_REQUESTS),
 	)
 	to_receive = [row for row in result_rows if row["can_prepare_receipt"]]
+	attention = _attention_summary(result_rows)
 	return {
 		"company": company,
 		"branch": branch,
@@ -362,6 +426,7 @@ def get_professional_purchasing_context(
 			"open_value": sum(row["grand_total"] for row in result_rows if row["docstatus"] == 1),
 			"purchase_requests": len(material_request_rows),
 			"ready_for_rfq": sum(1 for row in material_request_rows if row["can_start_rfq"]),
+			**attention,
 		},
 		"capabilities": {
 			"can_read_purchase_order": True,
@@ -373,6 +438,7 @@ def get_professional_purchasing_context(
 			"can_create_request_for_quotation": _permission(REQUEST_FOR_QUOTATION_DOCTYPE, "create"),
 			"can_read_supplier_quotation": _permission(SUPPLIER_QUOTATION_DOCTYPE, "read"),
 			"can_compare_supplier_quotations": _can_open_supplier_quotation_comparison(),
+			"can_open_purchase_order_analysis": _can_open_report(PURCHASE_ORDER_ANALYSIS_REPORT),
 		},
 		"limits": {
 			"purchase_orders": MAX_PURCHASE_ORDERS,
@@ -380,9 +446,11 @@ def get_professional_purchasing_context(
 			"rfq_suppliers": MAX_RFQ_SUPPLIERS,
 			"link_results": MAX_LINK_RESULTS,
 		},
+		"server_today": server_today,
 		"source_of_truth": PURCHASE_ORDER_DOCTYPE,
 		"sourcing_source_of_truth": "ERPNext Material Request make_request_for_quotation mapper",
 		"receipt_source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
+		"attention_source_of_truth": "ERPNext Purchase Order schedule_date, status, per_received and per_billed",
 		"user_name": get_user_fullname(frappe.session.user),
 	}
 
