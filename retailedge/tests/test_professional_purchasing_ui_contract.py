@@ -36,6 +36,7 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn("branchSearch", component)
 		self.assertIn("supplierSearch", component)
 		self.assertIn("Prepare Receipt", component)
+		self.assertIn("sortBy('per_received')", component)
 		self.assertIn("frappe.new_doc(\"Purchase Order\")", component)
 		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', component)
 		self.assertNotIn("frappe.ui.Dialog", component)
@@ -52,6 +53,17 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertNotIn('frappe.new_doc("GL Entry")', source)
 		self.assertNotIn('frappe.new_doc("Stock Ledger Entry")', source)
+
+	def test_business_hub_promotes_page_without_removing_native_buying_routes(self):
+		source = (APP_ROOT / "master_experience.py").read_text()
+
+		self.assertIn('"target": "professional-purchasing"', source)
+		self.assertIn("def _promote_professional_purchasing", source)
+		self.assertIn('group.get("key") != "buy"', source)
+		self.assertIn('item.get("target") == "Purchase Order"', source)
+		self.assertIn("_promote_professional_purchasing(navigation_groups)", source)
+		self.assertIn('feature_flags["professional_purchasing"] = "erpnext_native_po_receipt"', source)
+		self.assertNotIn('item["target"] = PROFESSIONAL_PURCHASING_ITEM["target"]', source)
 
 
 if __name__ == "__main__":
