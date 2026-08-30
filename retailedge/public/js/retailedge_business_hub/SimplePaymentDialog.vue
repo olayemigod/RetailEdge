@@ -203,6 +203,10 @@ function emptyValues() {
 	};
 }
 
+function cleanPrefill(value) {
+	return typeof value === "string" ? value.trim() : "";
+}
+
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
@@ -232,6 +236,7 @@ export default {
 	props: {
 		open: { type: Boolean, default: false },
 		intent: { type: String, default: "" },
+		initialContext: { type: Object, default: () => ({}) },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {
@@ -297,6 +302,12 @@ export default {
 		intent(next, previous) {
 			if (this.open && next && next !== previous) this.loadContext();
 		},
+		initialContext: {
+			deep: true,
+			handler(next, previous) {
+				if (this.open && next !== previous) this.loadContext();
+			},
+		},
 	},
 	mounted() {
 		if (this.open) this.loadContext();
@@ -318,10 +329,46 @@ export default {
 						...row,
 					})),
 				};
+				await this.applyInitialContext();
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Payment Entry.");
 			} finally {
 				this.loading = false;
+			}
+		},
+		async applyInitialContext() {
+			const initial = this.initialContext || {};
+			const company = cleanPrefill(initial.company);
+			const branch = cleanPrefill(initial.branch);
+			const party = cleanPrefill(initial.party);
+			const referenceName = cleanPrefill(initial.reference_name);
+
+			if (company) this.values.company = company;
+			if (branch) this.values.branch = branch;
+			if (party) this.values.party = party;
+			if (!referenceName || !party) return;
+
+			this.referenceLoading = true;
+			try {
+				const details = await callMethod(REFERENCE_METHOD, {
+					intent: this.intent,
+					company: this.values.company,
+					party: this.values.party,
+					reference_name: referenceName,
+					branch: this.values.branch,
+				});
+				const outstandingAmount = Number(details.outstanding_amount || 0);
+				if (!(outstandingAmount > 0)) {
+					throw new Error("The selected invoice no longer has an outstanding amount available for payment.");
+				}
+				this.values.references = [{
+					reference_name: referenceName,
+					outstanding_amount: outstandingAmount,
+					allocated_amount: outstandingAmount,
+				}];
+				this.values.amount = outstandingAmount;
+			} finally {
+				this.referenceLoading = false;
 			}
 		},
 		requestClose() {
