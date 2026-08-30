@@ -30,20 +30,26 @@ class TestAdvancedPaymentUIContract(TestCase):
 		self.assertIn("retailedge.advanced_payments.get_customer_advance_context", component)
 		self.assertIn("retailedge.advanced_payments.create_customer_advance_draft", component)
 		self.assertIn("retailedge.advanced_payments.get_sales_invoice_advance_context", component)
-		self.assertIn("retailedge.payment_application.apply_customer_advance", component)
+		self.assertIn("retailedge.payment_application.apply_customer_advances", component)
+		self.assertIn("retailedge.payment_application.create_sales_invoice_payment_draft", component)
+		self.assertIn("retailedge.guided_payment.search_simple_payment_options", component)
 		self.assertIn("Payment Reconciliation", component)
+		self.assertIn("Drafts do not reduce outstanding until submitted", component)
+		self.assertNotIn("openApplyDialog", component)
 		self.assertNotIn("GL Entry", component)
 
-	def test_sales_invoice_exposes_guarded_apply_advance_action(self):
+	def test_sales_invoice_routes_guarded_settlement_to_edgesuite_page(self):
 		source = (APP_ROOT / "public" / "js" / "sales_documents.js").read_text()
 
-		self.assertIn('ADVANCE_CONTEXT_METHOD = "retailedge.advanced_payments.get_sales_invoice_advance_context"', source)
-		self.assertIn('APPLY_ADVANCE_METHOD = "retailedge.payment_application.apply_customer_advance"', source)
+		self.assertIn("function openMixedSettlement(frm)", source)
+		self.assertIn("frappe.route_options = { sales_invoice: frm.doc.name }", source)
+		self.assertIn('frappe.set_route("payment-management")', source)
 		self.assertIn('frm.doc.docstatus !== 1', source)
 		self.assertIn('Number(frm.doc.outstanding_amount || 0) <= 0', source)
-		self.assertIn('frm.add_custom_button(__("Apply Customer Advance")', source)
+		self.assertIn('frm.add_custom_button(__("Settle Customer Invoice")', source)
 		self.assertIn('__("Payments")', source)
-		self.assertIn("await frm.reload_doc()", source)
+		self.assertNotIn("frappe.ui.Dialog", source)
+		self.assertNotIn("APPLY_ADVANCE_METHOD", source)
 
 	def test_payment_management_is_promoted_without_removing_payment_entry(self):
 		source = (APP_ROOT / "master_experience.py").read_text()
