@@ -160,6 +160,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "suppliers-payables", "label": "Suppliers & Payables", "icon": "users", "items": (
 			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier", "icon": "user"},
 			{"label": "Supplier Payables", "target_type": "Page", "target": "supplier-payables", "icon": "report"},
+			{"label": "Payment Orders", "target_type": "DocType", "target": "Payment Order", "icon": "wallet"},
 			{"label": "Accounts Payable (Detailed)", "target_type": "Report", "target": "Accounts Payable", "icon": "report"},
 		),
 	},
