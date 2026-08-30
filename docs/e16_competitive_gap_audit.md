@@ -38,8 +38,6 @@ The product should expose or orchestrate these safely rather than create paralle
 
 ## Priority A — Customer collaboration and self-service — IMPLEMENTED / GREEN
 
-The EdgeSuite customer portal extends native ERPNext documents without mutating submitted accounting documents.
-
 Validated checkpoint: `273d795d4acd66b7478f8968a5a74ef40ff50681`
 
 - RetailEdge Theme Compatibility #105: PASS
@@ -49,13 +47,9 @@ Validated checkpoint: `273d795d4acd66b7478f8968a5a74ef40ff50681`
 
 ## Priority A — Receivables automation workspace — IMPLEMENTED / GREEN
 
-The collections workspace orchestrates ERPNext Accounts Receivable, Payment Terms, Payment Request and Dunning with overdue prioritisation, governed handoffs, Action Follow Up scheduling, and branch/company/permission-aware queues.
-
 Validated with Priority-A checkpoint `273d795d4acd66b7478f8968a5a74ef40ff50681`.
 
 ## Priority B — Supplier collaboration — IMPLEMENTED / GREEN
-
-Product-neutral supplier collaboration extends native ERPNext Request for Quotation, Supplier Quotation, Purchase Order and Purchase Invoice portal routes without replacing those documents.
 
 Validated checkpoint: `3a91fd6f0e93c34e8fe04dd72867db480e3becef`
 
@@ -65,8 +59,6 @@ Validated checkpoint: `3a91fd6f0e93c34e8fe04dd72867db480e3becef`
 - EdgeSuite UI Candidate Compatibility #61: PASS
 
 ## Priority B — Supplier document intake — IMPLEMENTED / GREEN
-
-Private supplier-document intake provides a governed human-review queue without creating buying/accounting transactions.
 
 Validated checkpoint: `9772d544feb9816ae5bd73d87b19117c4b99351a`
 
@@ -81,8 +73,6 @@ Customer-facing project collaboration is available through native Project progre
 
 ## Priority C — Supplier document extraction assistance — IMPLEMENTED / GREEN
 
-Immutable advisory extraction and review extend supplier-document intake without making extracted values authoritative.
-
 Validated checkpoint: `81aef915b993c1e69d430e9c8c5e2968542a4af2`
 
 - RetailEdge Theme Compatibility #111: PASS
@@ -92,8 +82,6 @@ Validated checkpoint: `81aef915b993c1e69d430e9c8c5e2968542a4af2`
 
 ## Priority C — 13-Week Cash Commitments — IMPLEMENTED / GREEN
 
-Payment-term-aware known receivable/payable commitments remain a read-only ERPNext source layer, not a second behavioural forecast engine. R12 / PR #32 remains the forecasting owner and must consume this commitment source when stacks are reconciled.
-
 Validated checkpoint: `d52262d9b4110cc7eef5896e4574093b2c0d9bb6`
 
 - RetailEdge Theme Compatibility #113: PASS
@@ -101,9 +89,9 @@ Validated checkpoint: `d52262d9b4110cc7eef5896e4574093b2c0d9bb6`
 - CI #1834: PASS
 - EdgeSuite UI Candidate Compatibility #71: PASS
 
-## Priority C — Supplier document → draft Purchase Invoice handoff — IMPLEMENTED / GREEN
+R12 / PR #32 remains the forecasting owner and must consume this commitment source when stacks are reconciled.
 
-Accepted supplier-document/extraction evidence can explicitly prepare a draft ERPNext Purchase Invoice through the native Purchase Order mapper; extracted totals remain advisory and no document is auto-submitted.
+## Priority C — Supplier document → draft Purchase Invoice handoff — IMPLEMENTED / GREEN
 
 Validated checkpoint: `40b8f1fc3f0293ae89df91e6ea157f40894c7d93`
 
@@ -113,8 +101,6 @@ Validated checkpoint: `40b8f1fc3f0293ae89df91e6ea157f40894c7d93`
 - EdgeSuite UI Candidate Compatibility #84: PASS
 
 ## Priority C — Mixed Customer Settlement — IMPLEMENTED / GREEN
-
-Advanced Payment Management now supports invoice-centred mixed settlement over authoritative ERPNext Payment Entries and Payment Reconciliation, plus optional draft Payment Entry creation for additional receipt money. Submitted Sales Invoices are never mutated directly.
 
 Validated checkpoint: `5122464e21f9cdfceb52855e54302b11be074172`
 
@@ -135,38 +121,38 @@ Delivered scope:
 - sortable operational table while preserving the authoritative server dataset;
 - native Purchase Order creation/list/form and Purchase Receipt routes remain available;
 - submitted eligible Purchase Orders expose `Prepare Receipt`;
-- the server re-reads PO state, Purchase Receipt create permission and Branch access;
-- receipt preparation delegates to ERPNext v16 `make_purchase_receipt`;
+- receipt preparation delegates to ERPNext v16 `make_purchase_receipt` after server revalidation;
 - mapped Purchase Receipt is inserted as **draft only** as the current user;
-- mapped Company/Supplier are revalidated and Branch attribution is preserved where available;
+- mapped Company/Supplier and Branch access are revalidated;
 - draft/cancelled/non-open, fully received, subcontracted, no-remaining-item and denied-Branch cases fail closed or fall back to the native ERPNext workflow;
-- no Purchase Receipt submit, no manual commit, no direct PO progress mutation, no Purchase Invoice creation and no direct GL/SLE writes;
-- Professional Purchasing is promoted before native Purchase Orders in the shared Buy navigation without removing native Purchase Order/Purchase Receipt fallbacks.
+- no Purchase Receipt submit, manual commit, direct PO progress mutation, Purchase Invoice creation or direct GL/SLE write;
+- Professional Purchasing is promoted before native Purchase Orders without removing native Purchase Order/Purchase Receipt fallbacks.
 
 Implementation checkpoint: `7fc24e993f908cdc28b72dc841f2771a21b570d3`
 
 - RetailEdge Theme Compatibility #141: PASS
-- Linters #1872, including pre-commit, Semgrep and vulnerable dependency audit: PASS
-- CI #1890, including clean Frappe v16 install/site/app-set/assets/EdgeSuite contract/full RetailEdge tests: PASS
-- EdgeSuite UI Candidate Compatibility #128, including clean build/migrate/shared-runtime verification/full RetailEdge tests: PASS
+- Linters #1872: PASS
+- CI #1890: PASS
+- EdgeSuite UI Candidate Compatibility #128: PASS
 
-Recovery-plan/documentation head: `d8d81994ab5152bf690eed75ae810bb3de294dc1`
+Recovery-plan checkpoint: `d8d81994ab5152bf690eed75ae810bb3de294dc1`
 
 - RetailEdge Theme Compatibility #142: PASS
 - Linters #1873 and #1874: PASS
 - CI #1891: PASS
 - EdgeSuite UI Candidate Compatibility #129 and #130: PASS
 
-Detailed recovery contract: `docs/e16_professional_purchasing_plan.md`.
+The C1 recovery contract is `docs/e16_professional_purchasing_plan.md`.
 
 ## Current execution order
 
 1. Preserve all existing green checkpoints above.
-2. Preserve Professional Purchasing C1 implementation checkpoint `7fc24e993f908cdc28b72dc841f2771a21b570d3` and recovery-plan head `d8d81994ab5152bf690eed75ae810bb3de294dc1`.
-3. Start **Professional Purchasing C2 as an audit/contract chunk only**.
-4. Re-audit Material Request, Request for Quotation, Supplier Quotation, Supplier Collaboration and Project Operations before deciding whether any C2 implementation is genuinely incremental.
-5. Inspect exact ERPNext v16 mapper/permission contracts immediately before defining C2.
-6. Write the bounded C2 contract into `docs/e16_professional_purchasing_plan.md` before any C2 feature code.
-7. Implement only the approved C2 slice; repeat focused tests, diff check, exact-head validation and checkpoint documentation before C3.
-8. Do not create a divergent E16 PR/branch.
-9. Keep manual QA deferred until implementation is complete and the cumulative source line is reconciled into the single consolidated QA branch.
+2. Preserve Professional Purchasing C1 implementation checkpoint `7fc24e993f908cdc28b72dc841f2771a21b570d3`.
+3. Treat the current documentation-only PR head as the C1 closeout head; validate its exact Theme/Linters/CI/EdgeSuite gates before beginning C2.
+4. Start **Professional Purchasing C2 as an audit/contract chunk only** after that closeout head is green.
+5. Re-audit Material Request, Request for Quotation, Supplier Quotation, Supplier Collaboration and Project Operations before deciding whether any C2 implementation is genuinely incremental.
+6. Inspect exact ERPNext v16 mapper/permission contracts immediately before defining C2.
+7. Write the bounded C2 contract into `docs/e16_professional_purchasing_plan.md` before any C2 feature code.
+8. Implement only the approved C2 slice; repeat focused tests, diff check, exact-head validation and checkpoint documentation before C3.
+9. Do not create a divergent E16 PR/branch.
+10. Keep manual QA deferred until implementation is complete and the cumulative source line is reconciled into the single consolidated QA branch.
