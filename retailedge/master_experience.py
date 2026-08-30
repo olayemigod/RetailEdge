@@ -73,6 +73,14 @@ PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 	"icon": "shopping-bag",
 }
 
+PROFESSIONAL_PURCHASING_ITEM: dict[str, Any] = {
+	"label": "Professional Purchasing",
+	"description": "Operate Purchase Orders and prepare draft Purchase Receipts through ERPNext buying truth.",
+	"target_type": "Page",
+	"target": "professional-purchasing",
+	"icon": "shopping-bag",
+}
+
 DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
 	"label": "Document Output & Sharing",
 	"description": "Print, download and share customer documents using ERPNext Print Formats and permissions.",
@@ -223,6 +231,24 @@ def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> No
 		return
 
 
+def _promote_professional_purchasing(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(PROFESSIONAL_PURCHASING_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "buy":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target_type") == "Page" and item.get("target") == PROFESSIONAL_PURCHASING_ITEM["target"] for item in items):
+			return
+		purchase_order_index = next(
+			(index for index, item in enumerate(items) if item.get("target_type") == "DocType" and item.get("target") == "Purchase Order"),
+			0,
+		)
+		items.insert(purchase_order_index, deepcopy(PROFESSIONAL_PURCHASING_ITEM))
+		group["items"] = items
+		return
+
+
 def _promote_document_output(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(DOCUMENT_OUTPUT_ITEM["target"]):
 		return
@@ -318,6 +344,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_add_operating_context_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
+	_promote_professional_purchasing(navigation_groups)
 	_promote_document_output(navigation_groups)
 	_promote_payment_management(navigation_groups)
 	_promote_project_operations(navigation_groups)
@@ -350,6 +377,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
 	feature_flags["professional_selling"] = "edgesuite_guided"
+	feature_flags["professional_purchasing"] = "erpnext_native_po_receipt"
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"
