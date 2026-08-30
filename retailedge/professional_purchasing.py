@@ -231,21 +231,19 @@ def search_professional_purchasing_options(
 	kind: str,
 	txt: str = "",
 	company: str | None = None,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	if kind == "company":
-		rows = search_link("Company", txt, page_length=MAX_LINK_RESULTS)
-		return [{"value": row[0], "label": row[1] or row[0]} for row in rows]
+		return search_link("Company", txt, page_length=MAX_LINK_RESULTS)
 	if kind == "supplier":
-		rows = search_link(
+		return search_link(
 			SUPPLIER_DOCTYPE,
 			txt,
 			page_length=MAX_LINK_RESULTS,
 			reference_doctype=PURCHASE_ORDER_DOCTYPE,
 			link_fieldname="supplier",
 		)
-		return [{"value": row[0], "label": row[1] or row[0]} for row in rows]
 	if kind == "branch":
 		resolved_company, _branch, allowed, global_access = _resolve_scope(company=company, branch=None)
 		filters: dict[str, Any] = {}
