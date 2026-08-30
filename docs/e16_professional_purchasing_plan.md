@@ -40,24 +40,41 @@ Each implementation chunk must complete this cycle before the next chunk starts:
 
 A stalled thread must therefore leave a usable checkpoint and an explicit next chunk rather than an unbounded half-implementation.
 
-## C1 — Purchase Order operations + PO → draft Purchase Receipt
+## C1 — Purchase Order operations + PO → draft Purchase Receipt — IMPLEMENTED / GREEN
 
-### Scope
+Validated implementation checkpoint: `7fc24e993f908cdc28b72dc841f2771a21b570d3`.
 
-- Add a standard EdgeSuite `professional-purchasing` page for internal Purchase/Accounts/System Manager users subject to native permissions.
-- Show permission-aware Purchase Order operational context for the selected Company and optional Branch/Supplier.
-- Surface PO status, transaction date, supplier, grand total, percent received and percent billed from ERPNext.
-- Allow opening the native Purchase Order and Purchase Receipt records.
-- Allow creation of a new native Purchase Order through the existing ERPNext form; do not build a second PO document editor in C1.
-- For a submitted PO with remaining receivable quantity, provide an explicit `Prepare Purchase Receipt` action.
-- The server must re-read and revalidate the Purchase Order, permissions, Company and Branch.
-- Delegate mapping to ERPNext v16 `erpnext.buying.doctype.purchase_order.purchase_order.make_purchase_receipt`.
-- Insert the resulting Purchase Receipt as **draft only** as the current user.
-- Never submit the Purchase Receipt automatically.
-- Never write Stock Ledger Entry, GL Entry, Purchase Order receipt percentages or Purchase Invoice directly.
-- Keep ERPNext item links, remaining quantities, rates, taxes and source references authoritative.
-- If the mapper produces no receivable items, fail closed and direct the user to the native PO/receipt workflow.
-- Complex subcontracting or unsupported cases may fall back to the full native ERPNext workflow rather than adding custom accounting/stock logic.
+- RetailEdge Theme Compatibility #141: PASS
+- Linters #1872, including pre-commit, Semgrep and vulnerable dependency audit: PASS
+- CI #1890, including clean Frappe v16 site creation, exact app set, asset build, EdgeSuite asset contract and full RetailEdge tests: PASS
+- EdgeSuite UI Candidate Compatibility #128, including clean build/migrate/shared runtime verification and full RetailEdge tests: PASS
+
+### Delivered scope
+
+- Added a standard EdgeSuite `professional-purchasing` page for internal Purchase/Accounts/System Manager users subject to native permissions.
+- Added permission-aware Purchase Order operational context for Company and optional Branch/Supplier scope.
+- Surfaces PO status, transaction date, supplier, grand total, percent received and percent billed from ERPNext.
+- Tables support local sorting without changing the authoritative server dataset.
+- Native Purchase Order and Purchase Receipt records remain directly accessible.
+- New Purchase Order creation continues through the native ERPNext form; C1 does not create a second PO document editor.
+- Submitted Purchase Orders with remaining receivable quantity expose an explicit `Prepare Receipt` action.
+- The server re-reads and revalidates Purchase Order state, Purchase Receipt create permission and RetailEdge Branch access.
+- Mapping delegates to ERPNext v16 `erpnext.buying.doctype.purchase_order.purchase_order.make_purchase_receipt`.
+- The mapped Purchase Receipt is inserted as **draft only** as the current user.
+- Purchase Receipt Branch attribution is copied from the authoritative Purchase Order when the field is available; Branch-scoped actions fail closed if migration fields are unavailable.
+- Draft/cancelled/non-open, fully received, subcontracted, no-remaining-item and denied-Branch cases fail closed or fall back to the native ERPNext workflow.
+- Frappe v16 link-search result shape is preserved for EdgeSuite Link fields.
+- Professional Purchasing is promoted into the shared Buy navigation before native Purchase Orders only when the Page is readable; native Purchase Order and Purchase Receipt navigation remains intact.
+- Feature flag: `professional_purchasing = erpnext_native_po_receipt`.
+
+### Accounting and stock safety
+
+- No Purchase Receipt auto-submit.
+- No direct Stock Ledger Entry or GL Entry write.
+- No direct Purchase Order receipt-percentage mutation.
+- No Purchase Invoice creation in this chunk.
+- No manual database commit.
+- ERPNext owns mapped item links, remaining quantities, rates, taxes, warehouses, stock validation and accounting consequences at standard document submission.
 
 ### Explicitly out of scope for C1
 
@@ -72,23 +89,20 @@ A stalled thread must therefore leave a usable checkpoint and an explicit next c
 - Approval-workflow replacement.
 - New supplier portal behaviour.
 
-### C1 tests required
+## C2 — Material Request / RFQ / Supplier Quotation orchestration — NEXT AUDIT CHUNK
 
-- backend: submitted PO + create/read permissions delegates to native `make_purchase_receipt` and inserts draft only;
-- backend: draft/cancelled PO rejected;
-- backend: no remaining receivable items rejected;
-- backend: Company/Branch mismatch or denied branch access rejected;
-- backend: user without Purchase Receipt create permission rejected;
-- contract: standard EdgeSuite page and bundle/component mount contract;
-- contract: no `frappe.ui.Dialog`, direct GL/SLE write, submit or manual commit in the C1 workflow;
-- navigation: page promoted only where the current user has appropriate buying access, without removing native Purchase Order / Purchase Receipt fallbacks;
-- full RetailEdge regression suite and clean-install/migration/build validation.
+C2 is **not automatically approved for implementation merely because C1 is green**.
 
-## C2 — Material Request / RFQ / Supplier Quotation orchestration
+Before coding C2:
 
-Start only after C1 is fully green and checkpointed.
+1. inspect the exact current PR #53 head and confirm no branch movement;
+2. re-audit existing Material Request, Request for Quotation, Supplier Quotation, Supplier Collaboration and Project Operations capabilities;
+3. inspect the exact ERPNext v16 Material Request → RFQ / RFQ / Supplier Quotation mapper and permission contracts;
+4. identify the smallest genuinely incremental internal purchasing UX gap;
+5. write the C2 implementation contract into this document before code;
+6. implement only that bounded C2 scope and repeat the full checkpoint cycle.
 
-Potential scope is limited to native ERPNext mappings/searches and supplier-comparison UX. Exact ERPNext v16 mapper contracts must be inspected again immediately before implementation. Do not assume C2 is required merely because it is listed here; re-run the competitive-gap audit first.
+Potential scope remains limited to native ERPNext mappings/searches and supplier-comparison UX. Do not build a second procurement ledger, supplier bid store or approval workflow.
 
 ## C3 — Purchase receipt / invoice readiness and exception visibility
 
@@ -100,4 +114,6 @@ Potential scope: actionable readiness/exception views over native PO → Receipt
 
 Baseline before Professional Purchasing: `427bf451435de564654d87b1b917cbe9675cf2da`.
 
-The next implementation checkpoint to create is **C1 only**. If work stops before C1 is green, resume from this document and the latest C1 commit; do not begin C2.
+C1 implementation checkpoint: `7fc24e993f908cdc28b72dc841f2771a21b570d3`.
+
+If work stops now, resume at **C2 audit**, not C1 implementation. Do not rebuild C1 and do not begin C3.
