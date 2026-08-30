@@ -7,7 +7,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestSupplierDocumentReviewEdgeSuiteContract(unittest.TestCase):
-	def test_page_requires_edgesuite_runtime_and_mounts_with_create_edge_app(self):
+	def test_page_requires_edgesuite_runtime_and_governed_shells(self):
 		bundle = (APP_ROOT / "public" / "js" / "supplier_document_review.bundle.js").read_text()
 		page_js = (APP_ROOT / "retailedge" / "page" / "supplier_document_review" / "supplier_document_review.js").read_text()
 		vue = (APP_ROOT / "public" / "js" / "supplier_document_review" / "SupplierDocumentReview.vue").read_text()
@@ -15,10 +15,27 @@ class TestSupplierDocumentReviewEdgeSuiteContract(unittest.TestCase):
 		self.assertIn("edgeUI.createEdgeApp", bundle)
 		self.assertIn("edgeui.bundle.js", page_js)
 		self.assertIn("window.EdgeSuiteUI?.components", page_js)
-		self.assertIn("<EdgeAppShell", vue)
-		self.assertIn("<EdgeLinkField", vue)
+		for component in (
+			"<EdgeAppShell",
+			"<EdgeDashboardShell",
+			"<EdgeDashboardGrid",
+			"<EdgeDashboardSection",
+			"<EdgeLinkField",
+		):
+			self.assertIn(component, vue)
+		for component_name in (
+			'"EdgeAppShell"',
+			'"EdgeDashboardShell"',
+			'"EdgeDashboardGrid"',
+			'"EdgeDashboardSection"',
+			'"EdgeLinkField"',
+		):
+			self.assertIn(component_name, vue)
+		self.assertIn("edge-button edge-button--primary", vue)
+		self.assertIn("class=\"edge-input\"", vue)
 		self.assertNotIn("window.EdgeUI", bundle + page_js + vue)
 		self.assertNotIn("frappe.ui.Dialog", vue)
+		self.assertNotIn("frappe.prompt", vue)
 
 	def test_frontend_only_sends_intake_or_extraction_identity_for_authoritative_actions(self):
 		vue = (APP_ROOT / "public" / "js" / "supplier_document_review" / "SupplierDocumentReview.vue").read_text()
@@ -31,7 +48,15 @@ class TestSupplierDocumentReviewEdgeSuiteContract(unittest.TestCase):
 
 	def test_page_exposes_human_review_before_draft_handoff(self):
 		vue = (APP_ROOT / "public" / "js" / "supplier_document_review" / "SupplierDocumentReview.vue").read_text()
-		for label in ("Start Review", "Record Extraction", "Accept Extraction", "Reject Extraction", "Accept Document", "Reject Document", "Prepare Draft PI"):
+		for label in (
+			"Start Review",
+			"Record Extraction",
+			"Accept Extraction",
+			"Reject Extraction",
+			"Accept Document",
+			"Reject Document",
+			"Prepare Draft PI",
+		):
 			self.assertIn(label, vue)
 		self.assertIn("creates drafts only", vue)
 		self.assertNotIn(".submit()", vue)
