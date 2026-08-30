@@ -6,7 +6,10 @@ from unittest.mock import patch
 
 import frappe
 
-from retailedge.professional_purchasing import prepare_purchase_receipt_draft
+from retailedge.professional_purchasing import (
+	prepare_purchase_receipt_draft,
+	search_professional_purchasing_options,
+)
 
 
 class _DraftReceipt(SimpleNamespace):
@@ -141,6 +144,17 @@ class TestProfessionalPurchasing(unittest.TestCase):
 	def test_prepare_receipt_requires_purchase_receipt_create_permission(self, _mock_read, _mock_permission):
 		with self.assertRaises(frappe.PermissionError):
 			prepare_purchase_receipt_draft("PUR-ORD-0003")
+
+	@patch("retailedge.professional_purchasing.search_link")
+	def test_company_search_preserves_frappe_link_result_shape(self, mock_search_link):
+		mock_search_link.return_value = [
+			{"value": "Demo Company", "description": "DC", "label": "Demo Company"}
+		]
+
+		result = search_professional_purchasing_options("company", "Demo")
+
+		self.assertEqual(result, mock_search_link.return_value)
+		mock_search_link.assert_called_once_with("Company", "Demo", page_length=20)
 
 
 if __name__ == "__main__":
