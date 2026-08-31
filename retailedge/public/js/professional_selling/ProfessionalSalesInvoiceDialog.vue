@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Sales Invoice"
-		subtitle="Create a new draft invoice or invoice a submitted Quotation, Sales Order or Delivery Note without forcing a rigid selling path."
+		subtitle="Create a new draft invoice, invoice a submitted source document, or prepare an ERPNext Return / Credit Note without forcing a rigid selling path."
 		size="xl"
 		@close="requestClose"
 	>
@@ -26,7 +26,7 @@
 				:searcher="searchSource"
 				@update:modelValue="sourceDocument = $event || ''"
 			/>
-			<p class="selling-form-hint">The source remains submitted and unchanged. RetailEdge creates a new ERPNext Sales Invoice draft only.</p>
+			<p class="selling-form-hint">{{ sourceHint }}</p>
 		</div>
 
 		<form v-else class="selling-form" @submit.prevent="saveDraft">
@@ -133,6 +133,7 @@ const CREATE_NEW = "retailedge.professional_sales_invoice.create_professional_sa
 const CREATE_FROM_QUOTATION = "retailedge.professional_sales_invoice.create_sales_invoice_from_quotation";
 const CREATE_FROM_ORDER = "retailedge.professional_sales_invoice.create_sales_invoice_from_sales_order";
 const CREATE_FROM_DELIVERY = "retailedge.professional_sales_invoice.create_sales_invoice_from_delivery_note";
+const CREATE_RETURN = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
 function initialValues(context = {}) {
@@ -168,6 +169,7 @@ export default {
 				{ key: "quotation", label: "From Quotation" },
 				{ key: "sales-order", label: "From Sales Order" },
 				{ key: "delivery-note", label: "From Delivery Note" },
+				{ key: "return", label: "Return / Credit Note" },
 			],
 			itemTableField: { label: "Items", description: "Add the products or services to invoice." },
 			itemColumns: [
@@ -182,15 +184,21 @@ export default {
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
 		sourceLabel() {
-			return { quotation: "Submitted Quotation", "sales-order": "Submitted Sales Order", "delivery-note": "Submitted Delivery Note" }[this.mode] || "Source Document";
+			return { quotation: "Submitted Quotation", "sales-order": "Submitted Sales Order", "delivery-note": "Submitted Delivery Note", return: "Submitted Sales Invoice" }[this.mode] || "Source Document";
 		},
 		sourceDescription() {
+			if (this.mode === "return") return "ERPNext prepares a draft Return / Credit Note from the selected submitted Sales Invoice. The source remains submitted and unchanged.";
 			return this.mode === "quotation"
 				? "Create the invoice directly from the accepted Quotation; no Sales Order is created behind the scenes."
 				: `ERPNext maps the ${this.sourceLabel.replace("Submitted ", "")} into a new Sales Invoice draft using remaining billable quantities.`;
 		},
+		sourceHint() {
+			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. Review the prepared draft in the standard Sales Invoice form; no refund or Payment Entry is created automatically.";
+			return "The source remains submitted and unchanged. RetailEdge creates a new ERPNext Sales Invoice draft only.";
+		},
 		saveLabel() {
 			if (this.mode === "new") return "Save Draft";
+			if (this.mode === "return") return "Prepare Draft Return / Credit Note";
 			return `Create Draft from ${this.sourceLabel.replace("Submitted ", "")}`;
 		},
 	},
@@ -299,10 +307,11 @@ export default {
 				if (this.mode === "quotation") { method = CREATE_FROM_QUOTATION; args = { quotation: this.sourceDocument }; }
 				if (this.mode === "sales-order") { method = CREATE_FROM_ORDER; args = { sales_order: this.sourceDocument }; }
 				if (this.mode === "delivery-note") { method = CREATE_FROM_DELIVERY; args = { delivery_note: this.sourceDocument }; }
+				if (this.mode === "return") { method = CREATE_RETURN; args = { sales_invoice: this.sourceDocument }; }
 				const result = await callMethod(method, args);
 				this.$emit("saved", result);
 			} catch (error) {
-				this.saveError = errorMessage(error, "Sales Invoice draft could not be created.");
+				this.saveError = errorMessage(error, this.mode === "return" ? "Return / Credit Note draft could not be prepared." : "Sales Invoice draft could not be created.");
 			} finally {
 				this.saving = false;
 			}
