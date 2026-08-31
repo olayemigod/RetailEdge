@@ -31,6 +31,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 			[
 				"Home",
 				"Sell",
+				"Pricing & Promotions",
 				"Buy",
 				"Stock",
 				"Assets",
