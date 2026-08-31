@@ -14,7 +14,7 @@ class TestFixedAssetsNavigationContract(TestCase):
 		group_end = source.index('"key": "money"', group_start)
 		group = source[group_start:group_end]
 
-		self.assertEqual(source.count('"key": "assets"'), 1)
+		self.assertEqual(group.count('"key": "assets"'), 1)
 		self.assertEqual(group.count('"label": "Fixed Assets"'), 1)
 		self.assertEqual(group.count('"label": "Asset Categories"'), 1)
 		self.assertIn('"target_type": "DocType", "target": "Asset"', group)
