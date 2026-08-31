@@ -107,6 +107,15 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		),
 	},
 	{
+		"key": "pricing-promotions", "label": "Pricing & Promotions", "icon": "tag", "items": (
+			{"label": "Price Lists", "target_type": "DocType", "target": "Price List", "icon": "tag"},
+			{"label": "Item Prices", "target_type": "DocType", "target": "Item Price", "icon": "tag"},
+			{"label": "Pricing Rules", "target_type": "DocType", "target": "Pricing Rule", "icon": "settings"},
+			{"label": "Promotional Schemes", "target_type": "DocType", "target": "Promotional Scheme", "icon": "gift"},
+			{"label": "Coupon Codes", "target_type": "DocType", "target": "Coupon Code", "icon": "tag"},
+		),
+	},
+	{
 		"key": "buy",
 		"label": "Buy",
 		"icon": "shopping-bag",
@@ -437,7 +446,6 @@ def _target_exists(target_type: str, target: str) -> bool:
 
 def _doctype_exists(doctype: str) -> bool:
 	return _target_exists("DocType", doctype)
-
 
 def _has_permission(doctype: str, permission_type: str) -> bool:
 	try:
