@@ -81,6 +81,8 @@
 				/>
 			</div>
 
+			<CustomerCreditSummary :customer="values.customer" :company="values.company" />
+
 			<label class="guided-check-field">
 				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
 				<span><strong>Update Stock</strong><small>Stock moves only if this draft is later submitted by an authorised user.</small></span>
@@ -121,6 +123,7 @@
 
 <script>
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
+import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 
 const GUIDED_SEARCH = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const GUIDED_PRICING = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
@@ -148,7 +151,7 @@ function initialValues(context = {}) {
 
 export default {
 	name: "ProfessionalSalesInvoiceDialog",
-	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable },
+	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
 	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) } },
 	emits: ["close", "saved", "open-native"],
 	data() {
