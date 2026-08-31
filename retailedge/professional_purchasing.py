@@ -636,3 +636,218 @@ def prepare_purchase_receipt_draft(purchase_order: str) -> dict[str, Any]:
 		"source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
 		"route": f"/app/purchase-receipt/{receipt.name}",
 	}
+
+
+@frappe.whitelist()
+def get_purchase_return_capability() -> dict[str, Any]:
+	"""Return the permission gate for C17 guided supplier returns and credits."""
+	purchase_invoice_doctype = "Purchase Invoice"
+	return {
+		"can_prepare_purchase_return": bool(
+			_permission(PURCHASE_RECEIPT_DOCTYPE, "read")
+			and _permission(PURCHASE_RECEIPT_DOCTYPE, "create")
+		),
+		"can_prepare_supplier_debit_note": bool(
+			_permission(purchase_invoice_doctype, "read")
+			and _permission(purchase_invoice_doctype, "create")
+		),
+		"source_of_truth": "ERPNext Purchase Receipt make_purchase_return and Purchase Invoice make_debit_note mappers",
+	}
+
+
+@frappe.whitelist()
+def search_purchase_return_sources(
+	kind: str,
+	txt: str = "",
+	company: str | None = None,
+	branch: str | None = None,
+	supplier: str | None = None,
+) -> list[dict[str, Any]]:
+	"""Search submitted, non-return purchase documents inside authorised operating scope."""
+	kind = str(kind or "").strip().lower()
+	config = {
+		"purchase_receipt": PURCHASE_RECEIPT_DOCTYPE,
+		"purchase_invoice": "Purchase Invoice",
+	}
+	doctype = config.get(kind)
+	if not doctype:
+		frappe.throw(_("Unsupported purchase return source type."))
+	if not _permission(doctype, "read") or not _permission(doctype, "create"):
+		frappe.throw(_("You do not have permission to prepare returns from {0}.").format(_(doctype)), frappe.PermissionError)
+
+	resolved_company, resolved_branch, allowed, global_access = _resolve_scope(company=company, branch=branch)
+	filters, _branch_field = _branch_scoped_filters(
+		doctype,
+		company=resolved_company,
+		branch=resolved_branch,
+		allowed_branches=allowed,
+		global_branch_access=global_access,
+	)
+	filters.update({"docstatus": 1, "is_return": 0})
+	supplier = str(supplier or "").strip()
+	if supplier:
+		_assert_read(SUPPLIER_DOCTYPE, supplier)
+		filters["supplier"] = supplier
+
+	return list(
+		search_link(
+			doctype,
+			str(txt or "").strip(),
+			filters=filters,
+			page_length=MAX_LINK_RESULTS,
+			reference_doctype=doctype,
+			link_fieldname="return_against",
+		)
+	)
+
+
+def _validate_native_purchase_return_source(source: Any, *, source_label: str) -> tuple[str, str]:
+	if cint(getattr(source, "docstatus", 0)) != 1:
+		frappe.throw(_("Only submitted {0} documents can prepare a return.").format(source_label))
+	if cint(getattr(source, "is_return", 0)):
+		frappe.throw(_("Prepare the return from the original {0}, not from another return.").format(source_label))
+
+	company = str(getattr(source, "company", "") or "").strip()
+	if not company:
+		frappe.throw(_("{0} {1} has no Company.").format(source_label, source.name))
+	_assert_read("Company", company)
+
+	branch = _document_branch(source)
+	if branch:
+		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+
+	operating = get_operating_context() or {}
+	operating_company = str(operating.get("company") or "").strip()
+	operating_branch = str(operating.get("branch") or "").strip()
+	if operating_company and operating_company != company:
+		frappe.throw(_("The selected {0} belongs to another Company. Change Operating Context first.").format(source_label))
+	if operating_branch and branch and operating_branch != branch:
+		frappe.throw(_("The selected {0} Branch does not match the current Operating Branch.").format(source_label))
+	return company, branch
+
+
+def _validate_native_purchase_return_target(
+	source: Any,
+	target: Any,
+	*,
+	target_doctype: str,
+	source_label: str,
+	company: str,
+	source_branch: str,
+) -> tuple[list[Any], str]:
+	if not target or getattr(target, "doctype", None) != target_doctype:
+		frappe.throw(_("ERPNext could not prepare the expected {0} return draft.").format(target_doctype))
+	if cint(getattr(target, "docstatus", 0)) != 0:
+		frappe.throw(_("ERPNext returned a non-draft {0}; creation was stopped.").format(target_doctype))
+	if not cint(getattr(target, "is_return", 0)):
+		frappe.throw(_("ERPNext returned a {0} that is not marked as a return.").format(target_doctype))
+	if str(getattr(target, "return_against", "") or "") != str(source.name or ""):
+		frappe.throw(_("ERPNext return linkage does not match the selected {0}.").format(source_label))
+	if str(getattr(target, "company", "") or "") != company:
+		frappe.throw(_("Mapped {0} Company does not match the source {1}.").format(target_doctype, source_label))
+	if str(getattr(target, "supplier", "") or "") != str(getattr(source, "supplier", "") or ""):
+		frappe.throw(_("Mapped {0} Supplier does not match the source {1}.").format(target_doctype, source_label))
+
+	items = [row for row in (getattr(target, "items", None) or []) if flt(getattr(row, "qty", 0)) < 0]
+	if not items:
+		frappe.throw(_("The selected {0} has no remaining returnable item quantity.").format(source_label))
+
+	target_branch_field = _transaction_branch_field(target_doctype)
+	target_branch = _document_branch(target)
+	if source_branch and target_branch and target_branch != source_branch:
+		frappe.throw(_("Mapped {0} Branch does not match the source {1}.").format(target_doctype, source_label))
+	if source_branch and not target_branch:
+		if not target_branch_field:
+			frappe.throw(_("{0} Branch attribution is unavailable for this Branch-scoped return.").format(target_doctype))
+		setattr(target, target_branch_field, source_branch)
+		target_branch = source_branch
+	if target_branch:
+		validate_user_branch_access(target_branch, user=frappe.session.user, company=company, throw=True)
+
+	operating_branch = str((get_operating_context() or {}).get("branch") or "").strip()
+	if operating_branch and target_branch and operating_branch != target_branch:
+		frappe.throw(_("Mapped {0} Branch does not match the current Operating Branch.").format(target_doctype))
+	return items, target_branch
+
+
+@frappe.whitelist(methods=["POST"])
+def prepare_purchase_return_draft(purchase_receipt: str) -> dict[str, Any]:
+	"""Prepare one native Purchase Receipt return as a draft only."""
+	purchase_receipt = str(purchase_receipt or "").strip()
+	if not purchase_receipt:
+		frappe.throw(_("Purchase Receipt is required."))
+	_assert_read(PURCHASE_RECEIPT_DOCTYPE, purchase_receipt)
+	_assert_create(PURCHASE_RECEIPT_DOCTYPE)
+
+	source = frappe.get_doc(PURCHASE_RECEIPT_DOCTYPE, purchase_receipt)
+	company, source_branch = _validate_native_purchase_return_source(source, source_label=PURCHASE_RECEIPT_DOCTYPE)
+
+	from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_purchase_return
+
+	target = make_purchase_return(source.name)
+	items, target_branch = _validate_native_purchase_return_target(
+		source,
+		target,
+		target_doctype=PURCHASE_RECEIPT_DOCTYPE,
+		source_label=PURCHASE_RECEIPT_DOCTYPE,
+		company=company,
+		source_branch=source_branch,
+	)
+	target.insert()
+	if cint(target.docstatus) != 0:
+		frappe.throw(_("Guided Purchase Receipt return preparation may create only a draft."))
+	return {
+		"doctype": target.doctype,
+		"name": target.name,
+		"docstatus": cint(target.docstatus),
+		"return_against": target.return_against,
+		"company": target.company,
+		"supplier": target.supplier,
+		"branch": target_branch,
+		"item_count": len(items),
+		"posting_status": "Draft",
+		"source_of_truth": "ERPNext Purchase Receipt make_purchase_return mapper",
+		"route": f"/app/purchase-receipt/{target.name}",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def prepare_supplier_debit_note_draft(purchase_invoice: str) -> dict[str, Any]:
+	"""Prepare one native Purchase Invoice return/debit note as a draft only."""
+	purchase_invoice = str(purchase_invoice or "").strip()
+	if not purchase_invoice:
+		frappe.throw(_("Purchase Invoice is required."))
+	_assert_read("Purchase Invoice", purchase_invoice)
+	_assert_create("Purchase Invoice")
+
+	source = frappe.get_doc("Purchase Invoice", purchase_invoice)
+	company, source_branch = _validate_native_purchase_return_source(source, source_label="Purchase Invoice")
+
+	from erpnext.accounts.doctype.purchase_invoice.purchase_invoice import make_debit_note
+
+	target = make_debit_note(source.name)
+	items, target_branch = _validate_native_purchase_return_target(
+		source,
+		target,
+		target_doctype="Purchase Invoice",
+		source_label="Purchase Invoice",
+		company=company,
+		source_branch=source_branch,
+	)
+	target.insert()
+	if cint(target.docstatus) != 0:
+		frappe.throw(_("Guided supplier Debit Note preparation may create only a draft."))
+	return {
+		"doctype": target.doctype,
+		"name": target.name,
+		"docstatus": cint(target.docstatus),
+		"return_against": target.return_against,
+		"company": target.company,
+		"supplier": target.supplier,
+		"branch": target_branch,
+		"item_count": len(items),
+		"update_stock": bool(cint(getattr(target, "update_stock", 0))),
+		"posting_status": "Draft",
+		"source_of_truth": "ERPNext Purchase Invoice make_debit_note mapper",
+		"route": f"/app/purchase-invoice/{target.name}",
+	}
