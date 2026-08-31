@@ -49,7 +49,7 @@
 						<EdgeLinkField v-model="filters.supplier" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
 						<div class="filter-action"><button type="button" class="edge-button edge-button--primary" :disabled="loading || !filters.company" @click="loadWorkspace">{{ loading ? "Refreshing…" : "Apply Filters" }}</button></div>
 					</div>
-					<p class="filter-help">Company and Branch scope purchasing operations. Supplier filters the Purchase Order queue, guided returns and landed-cost source lists.</p>
+					<p class="filter-help">Company and Branch scope purchasing operations. Supplier filters the Purchase Order queue, guided returns, landed-cost sources and incoming quality-inspection receipts.</p>
 				</section>
 
 				<div class="metric-grid">
@@ -125,6 +125,8 @@
 					</div>
 					<p class="landed-cost-help">The prepared voucher remains unsaved until you enter the mandatory landed-cost charges on ERPNext's Landed Cost Voucher form. Valuation, Stock Ledger and General Ledger changes occur only through standard ERPNext submission.</p>
 				</section>
+
+				<IncomingQualityInspection :company="filters.company" :branch="filters.branch" :supplier="filters.supplier" />
 
 				<section v-if="capabilities.can_read_material_request" class="edge-panel sourcing-panel">
 					<div class="panel-heading">
@@ -204,13 +206,15 @@
 					</div>
 				</section>
 
-				<section class="edge-panel safety-note"><strong>Draft-first procurement safety.</strong><span>RFQ, receipt, physical-return and supplier-debit-note actions delegate to ERPNext mappers and create drafts only. Landed Cost delegates to ERPNext's native unsaved voucher handoff so mandatory charge/accounting rows are reviewed before the first save. Supplier email, submission, stock movement, detailed PO analysis and accounting consequences remain standard ERPNext workflows.</span></section>
+				<section class="edge-panel safety-note"><strong>Draft-first procurement safety.</strong><span>RFQ, receipt, physical-return, supplier-debit-note and incoming-quality actions delegate to ERPNext native workflows and create drafts only. Landed Cost delegates to ERPNext's native unsaved voucher handoff so mandatory charge/accounting rows are reviewed before the first save. Supplier email, submission, quality readings and acceptance, stock movement, detailed PO analysis and accounting consequences remain standard ERPNext workflows.</span></section>
 			</div>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
+import IncomingQualityInspection from "./IncomingQualityInspection.vue";
+
 const CONTEXT_METHOD = "retailedge.professional_purchasing.get_professional_purchasing_context";
 const PROCUREMENT_TRACKER_HANDOFF_METHOD = "retailedge.procurement_tracker_handoff.get_procurement_tracker_handoff";
 const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_purchasing_options";
@@ -236,7 +240,7 @@ function sortedCopy(rows, sort) {
 
 export default {
 	name: "RetailEdgeProfessionalPurchasing",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: { IncomingQualityInspection, ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])) },
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", actionError: "", actionNotice: "", company: "", branch: "", userName: "", menuItems: [],
