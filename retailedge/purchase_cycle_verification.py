@@ -36,7 +36,11 @@ def get_purchase_cycle_verification(invoice_names: list[str] | str | None = None
 		limit=MAX_VERIFICATION_INVOICES + 1,
 	)
 	if len(headers) > MAX_VERIFICATION_INVOICES:
-		frappe.throw(_("Purchase-cycle verification is limited to {0} invoices per request.").format(MAX_VERIFICATION_INVOICES))
+		frappe.throw(
+			_("Purchase-cycle verification is limited to {0} invoices per request.").format(
+				MAX_VERIFICATION_INVOICES
+			)
+		)
 
 	permitted_names = {str(row.name) for row in headers}
 	if not permitted_names:
@@ -46,17 +50,24 @@ def get_purchase_cycle_verification(invoice_names: list[str] | str | None = None
 		"Purchase Invoice Item",
 		filters={"parenttype": "Purchase Invoice", "parent": ["in", sorted(permitted_names)]},
 		fields=[
-			"parent", "idx", "item_code", "stock_qty", "base_net_rate",
-			"purchase_order", "po_detail", "purchase_receipt", "pr_detail",
+			"parent",
+			"idx",
+			"item_code",
+			"stock_qty",
+			"base_net_rate",
+			"purchase_order",
+			"po_detail",
+			"purchase_receipt",
+			"pr_detail",
 		],
 		order_by="parent asc, idx asc",
 		limit=MAX_VERIFICATION_ITEM_ROWS + 1,
 	)
 	if len(items) > MAX_VERIFICATION_ITEM_ROWS:
 		frappe.throw(
-			_("More than {0} Purchase Invoice item rows are in this verification scope. Narrow the page size first.").format(
-				MAX_VERIFICATION_ITEM_ROWS
-			)
+			_(
+				"More than {0} Purchase Invoice item rows are in this verification scope. Narrow the page size first."
+			).format(MAX_VERIFICATION_ITEM_ROWS)
 		)
 
 	po_names = {str(row.purchase_order) for row in items if row.get("purchase_order")}
@@ -118,7 +129,11 @@ def _normalise_invoice_names(invoice_names: list[str] | str | None) -> list[str]
 		seen.add(name)
 		names.append(name)
 	if len(names) > MAX_VERIFICATION_INVOICES:
-		frappe.throw(_("Purchase-cycle verification is limited to {0} invoices per request.").format(MAX_VERIFICATION_INVOICES))
+		frappe.throw(
+			_("Purchase-cycle verification is limited to {0} invoices per request.").format(
+				MAX_VERIFICATION_INVOICES
+			)
+		)
 	return names
 
 
@@ -135,7 +150,11 @@ def _permitted_parent_names(doctype: str, names: set[str]) -> set[str]:
 	return {str(name) for name in rows}
 
 
-def _source_item_map(doctype: str, detail_names: set[str], permitted_parents: set[str]) -> dict[str, frappe._dict]:
+def _source_item_map(
+	doctype: str,
+	detail_names: set[str],
+	permitted_parents: set[str],
+) -> dict[str, frappe._dict]:
 	if not detail_names or not permitted_parents:
 		return {}
 	# Child tables do not carry independent user permissions. Parent documents were
@@ -192,6 +211,9 @@ def _classify_invoice(
 				if not po_row:
 					flag_count += 1
 					_add_reason(reasons, _("Linked Purchase Order item is unavailable"))
+				elif str(po_row.get("parent") or "") != po_name:
+					flag_count += 1
+					_add_reason(reasons, _("Purchase Order item reference does not belong to the linked Purchase Order"))
 				elif _rate_differs(row.get("base_net_rate"), po_row.get("base_net_rate")):
 					flag_count += 1
 					_add_reason(reasons, _("Invoice rate differs from linked Purchase Order"))
@@ -208,15 +230,26 @@ def _classify_invoice(
 				if not pr_row:
 					flag_count += 1
 					_add_reason(reasons, _("Linked Purchase Receipt item is unavailable"))
+				elif str(pr_row.get("parent") or "") != pr_name:
+					flag_count += 1
+					_add_reason(reasons, _("Purchase Receipt item reference does not belong to the linked Purchase Receipt"))
 				else:
 					if _rate_differs(row.get("base_net_rate"), pr_row.get("base_net_rate")):
 						flag_count += 1
 						_add_reason(reasons, _("Invoice rate differs from linked Purchase Receipt"))
 					if flt(row.get("stock_qty")) > flt(pr_row.get("stock_qty")) + QTY_TOLERANCE:
 						flag_count += 1
-						_add_reason(reasons, _("Invoice quantity exceeds the directly linked accepted receipt quantity"))
+						_add_reason(
+							reasons,
+							_("Invoice quantity exceeds the directly linked accepted receipt quantity"),
+						)
 
-	status = _coverage_status(line_count=line_count, po_links=po_links, receipt_links=receipt_links, review_flags=flag_count)
+	status = _coverage_status(
+		line_count=line_count,
+		po_links=po_links,
+		receipt_links=receipt_links,
+		review_flags=flag_count,
+	)
 	return {
 		"invoice": invoice,
 		"verification_status": status,
