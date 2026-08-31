@@ -37,6 +37,7 @@
 						<button v-if="capabilities.can_read_supplier_quotation" type="button" class="edge-button edge-button--secondary" @click="openSupplierQuotations">Supplier Quotations</button>
 						<button v-if="capabilities.can_compare_supplier_quotations" type="button" class="edge-button edge-button--secondary" @click="openSupplierQuotationComparison">Compare Quotations</button>
 						<button v-if="capabilities.can_open_purchase_order_analysis" type="button" class="edge-button edge-button--secondary" @click="openPurchaseOrderAnalysis">PO Analysis</button>
+						<button v-if="procurementTracker.available" type="button" class="edge-button edge-button--secondary" @click="openProcurementTracker">Procurement Tracker</button>
 						<button v-if="capabilities.can_read_purchase_receipt" type="button" class="edge-button edge-button--secondary" @click="openPurchaseReceipts">Purchase Receipts</button>
 					</div>
 				</section>
@@ -155,6 +156,7 @@
 
 <script>
 const CONTEXT_METHOD = "retailedge.professional_purchasing.get_professional_purchasing_context";
+const PROCUREMENT_TRACKER_HANDOFF_METHOD = "retailedge.procurement_tracker_handoff.get_procurement_tracker_handoff";
 const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_purchasing_options";
 const PREPARE_RFQ_METHOD = "retailedge.professional_purchasing.prepare_request_for_quotation_draft";
 const PREPARE_RECEIPT_METHOD = "retailedge.professional_purchasing.prepare_purchase_receipt_draft";
@@ -176,6 +178,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", actionError: "", actionNotice: "", company: "", branch: "", userName: "", menuItems: [],
 			filters: { company: "", branch: "", supplier: "" }, summary: {}, capabilities: {}, limits: {}, rows: [], materialRequests: [], serverToday: "",
+			procurementTracker: { available: false, company: "", branch: "", report: "Procurement Tracker", reason: "" },
 			preparingReceipt: "", preparingRfq: false, rfqSupplierInput: "", rfqDraft: { material_request: "", suppliers: [] },
 			sort: { key: "transaction_date", direction: "desc" }, materialSort: { key: "transaction_date", direction: "desc" }, attentionFilter: "all",
 			attentionOptions: [
@@ -201,8 +204,12 @@ export default {
 			if (this.loading) return; this.loading = true; this.error = "";
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
-				const [context, navigation] = await Promise.all([callMethod(CONTEXT_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null, limit: 200 }), navigationPromise]);
-				this.applyContext(context || {}); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
+				const [context, navigation, procurementTracker] = await Promise.all([
+					callMethod(CONTEXT_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null, limit: 200 }),
+					navigationPromise,
+					callMethod(PROCUREMENT_TRACKER_HANDOFF_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null }),
+				]);
+				this.applyContext(context || {}); this.procurementTracker = procurementTracker || this.procurementTracker; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
 			} catch (error) { this.error = errorMessage(error, "Professional Purchasing failed to load."); } finally { this.loading = false; }
 		},
 		applyContext(context) {
@@ -241,6 +248,7 @@ export default {
 		clearActionFeedback() { this.actionError = ""; this.actionNotice = ""; }, newPurchaseOrder() { frappe.new_doc("Purchase Order"); },
 		openMaterialRequest(name) { frappe.set_route("Form", "Material Request", name); }, openMaterialRequests() { frappe.set_route("List", "Material Request"); }, openRequestsForQuotation() { frappe.set_route("List", "Request for Quotation"); }, openSupplierQuotations() { frappe.set_route("List", "Supplier Quotation"); }, openSupplierQuotationComparison() { frappe.set_route("query-report", "Supplier Quotation Comparison"); },
 		openPurchaseOrderAnalysis() { frappe.route_options = { company: this.filters.company || this.company || "" }; frappe.set_route("query-report", "Purchase Order Analysis"); },
+		openProcurementTracker() { if (!this.procurementTracker?.available) return; frappe.route_options = { company: this.procurementTracker.company || this.filters.company || this.company || "" }; frappe.set_route("query-report", this.procurementTracker.report || "Procurement Tracker"); },
 		openPurchaseOrder(name) { frappe.set_route("Form", "Purchase Order", name); }, openPurchaseReceipts() { frappe.set_route("List", "Purchase Receipt"); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; }, sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },
 		sortMaterialBy(key) { if (this.materialSort.key === key) this.materialSort.direction = this.materialSort.direction === "asc" ? "desc" : "asc"; else this.materialSort = { key, direction: "asc" }; }, materialSortMark(key) { return this.materialSort.key === key ? (this.materialSort.direction === "asc" ? "↑" : "↓") : ""; },
