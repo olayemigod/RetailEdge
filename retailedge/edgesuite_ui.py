@@ -133,6 +133,12 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		),
 	},
 	{
+		"key": "assets", "label": "Assets", "icon": "briefcase", "items": (
+			{"label": "Fixed Assets", "target_type": "DocType", "target": "Asset", "icon": "briefcase"},
+			{"label": "Asset Categories", "target_type": "DocType", "target": "Asset Category", "icon": "layers"},
+		),
+	},
+	{
 		"key": "money", "label": "Money", "icon": "wallet", "items": (
 			{"label": "Cash Movement", "target_type": "Page", "target": "cash-movement", "icon": "report"},
 			{"label": "Cash Flow Outlook", "target_type": "Page", "target": "cash-flow-outlook", "icon": "chart", "required_roles": tuple(sorted(CASH_FLOW_OUTLOOK_ROLES))},
