@@ -1,91 +1,97 @@
 <template>
-	<section v-if="capability.can_prepare_incoming_quality" class="edge-panel incoming-quality-panel">
-		<div class="quality-heading">
-			<div>
-				<span class="quality-kicker">Receiving quality control</span>
-				<h3>Incoming Quality Inspection</h3>
-				<p>Select a saved draft Purchase Receipt, inspect only the rows ERPNext identifies as requiring incoming quality control, then continue readings and submission on the native Quality Inspection forms.</p>
-			</div>
-			<button v-if="context.purchase_receipt" type="button" class="edge-button edge-button--secondary" @click="openReceipt">Open Purchase Receipt</button>
-		</div>
-
-		<div class="quality-source">
-			<EdgeLinkField
-				v-model="source"
-				label="Draft Purchase Receipt"
-				placeholder="Search permitted saved draft receipt"
-				:searcher="receiptSearch"
-				@select="onReceiptSelected"
-				@clear="clearReceipt"
-			/>
-			<p class="quality-help">Submitted and return Purchase Receipts are intentionally excluded from this guided flow. ERPNext remains authoritative for inspection requirements, templates, readings, acceptance and receipt submission gates.</p>
-		</div>
-
-		<div v-if="error || notice" class="quality-feedback" :class="{ 'quality-feedback--error': error }">
-			<strong>{{ error ? "Quality inspection needs attention" : "Quality inspection prepared" }}</strong>
-			<span>{{ error || notice }}</span>
-		</div>
-
-		<p v-if="loadingContext" class="quality-loading">Loading ERPNext inspection requirements…</p>
-
-		<div v-else-if="context.purchase_receipt" class="quality-context">
-			<div class="quality-context-summary">
-				<div><span>Purchase Receipt</span><strong>{{ context.purchase_receipt }}</strong></div>
-				<div><span>Supplier</span><strong>{{ context.supplier_name || context.supplier || "—" }}</strong></div>
-				<div><span>Eligible rows</span><strong>{{ context.eligible_count || 0 }}</strong></div>
+	<div class="professional-purchasing-extensions">
+		<section v-if="capability.can_prepare_incoming_quality" class="edge-panel incoming-quality-panel">
+			<div class="quality-heading">
+				<div>
+					<span class="quality-kicker">Receiving quality control</span>
+					<h3>Incoming Quality Inspection</h3>
+					<p>Select a saved draft Purchase Receipt, inspect only the rows ERPNext identifies as requiring incoming quality control, then continue readings and submission on the native Quality Inspection forms.</p>
+				</div>
+				<button v-if="context.purchase_receipt" type="button" class="edge-button edge-button--secondary" @click="openReceipt">Open Purchase Receipt</button>
 			</div>
 
-			<EdgeEmptyState
-				v-if="!context.items || !context.items.length"
-				title="No rows need a new incoming inspection"
-				description="ERPNext found no uninspected Purchase Receipt rows currently requiring Incoming Quality Inspection."
-			/>
-
-			<div v-else class="quality-table-wrap">
-				<table class="quality-table">
-					<thead>
-						<tr><th>Select</th><th>Item</th><th>Accepted Qty</th><th>Warehouse</th><th>Batch / Serial</th><th>Sample Size</th></tr>
-					</thead>
-					<tbody>
-						<tr v-for="row in context.items" :key="row.child_row_reference">
-							<td><input type="checkbox" :checked="isSelected(row.child_row_reference)" @change="toggleRow(row.child_row_reference, $event)" /></td>
-							<td><strong>{{ row.item_code }}</strong><small>{{ row.item_name || "" }}</small></td>
-							<td>{{ formatQty(row.qty) }} {{ row.uom || "" }}</td>
-							<td>{{ row.warehouse || "—" }}</td>
-							<td>{{ row.batch_no || (row.has_serial_no ? "Serialised" : "—") }}</td>
-							<td>
-								<input
-									type="number"
-									class="quality-sample-input"
-									:min="0"
-									:max="row.qty"
-									step="any"
-									:value="sampleSizes[row.child_row_reference]"
-									@input="setSampleSize(row.child_row_reference, $event)"
-								/>
-							</td>
-						</tr>
-					</tbody>
-				</table>
+			<div class="quality-source">
+				<EdgeLinkField
+					v-model="source"
+					label="Draft Purchase Receipt"
+					placeholder="Search permitted saved draft receipt"
+					:searcher="receiptSearch"
+					@select="onReceiptSelected"
+					@clear="clearReceipt"
+				/>
+				<p class="quality-help">Submitted and return Purchase Receipts are intentionally excluded from this guided flow. ERPNext remains authoritative for inspection requirements, templates, readings, acceptance and receipt submission gates.</p>
 			</div>
 
-			<div v-if="context.items && context.items.length" class="quality-actions">
-				<span>{{ selectedCount }} selected</span>
-				<button type="button" class="edge-button edge-button--primary" :disabled="creating || !selectedCount" @click="createInspections">{{ creating ? "Creating Draft Inspections…" : "Create Draft Quality Inspections" }}</button>
+			<div v-if="error || notice" class="quality-feedback" :class="{ 'quality-feedback--error': error }">
+				<strong>{{ error ? "Quality inspection needs attention" : "Quality inspection prepared" }}</strong>
+				<span>{{ error || notice }}</span>
 			</div>
-		</div>
 
-		<div v-if="created.length" class="quality-created">
-			<strong>Created draft Quality Inspections</strong>
-			<div class="quality-created-links">
-				<button v-for="inspection in created" :key="inspection.name" type="button" class="edge-small-button edge-small-button--primary" @click="openInspection(inspection.name)">{{ inspection.name }}</button>
+			<p v-if="loadingContext" class="quality-loading">Loading ERPNext inspection requirements…</p>
+
+			<div v-else-if="context.purchase_receipt" class="quality-context">
+				<div class="quality-context-summary">
+					<div><span>Purchase Receipt</span><strong>{{ context.purchase_receipt }}</strong></div>
+					<div><span>Supplier</span><strong>{{ context.supplier_name || context.supplier || "—" }}</strong></div>
+					<div><span>Eligible rows</span><strong>{{ context.eligible_count || 0 }}</strong></div>
+				</div>
+
+				<EdgeEmptyState
+					v-if="!context.items || !context.items.length"
+					title="No rows need a new incoming inspection"
+					description="ERPNext found no uninspected Purchase Receipt rows currently requiring Incoming Quality Inspection."
+				/>
+
+				<div v-else class="quality-table-wrap">
+					<table class="quality-table">
+						<thead>
+							<tr><th>Select</th><th>Item</th><th>Accepted Qty</th><th>Warehouse</th><th>Batch / Serial</th><th>Sample Size</th></tr>
+						</thead>
+						<tbody>
+							<tr v-for="row in context.items" :key="row.child_row_reference">
+								<td><input type="checkbox" :checked="isSelected(row.child_row_reference)" @change="toggleRow(row.child_row_reference, $event)" /></td>
+								<td><strong>{{ row.item_code }}</strong><small>{{ row.item_name || "" }}</small></td>
+								<td>{{ formatQty(row.qty) }} {{ row.uom || "" }}</td>
+								<td>{{ row.warehouse || "—" }}</td>
+								<td>{{ row.batch_no || (row.has_serial_no ? "Serialised" : "—") }}</td>
+								<td>
+									<input
+										type="number"
+										class="quality-sample-input"
+										:min="0"
+										:max="row.qty"
+										step="any"
+										:value="sampleSizes[row.child_row_reference]"
+										@input="setSampleSize(row.child_row_reference, $event)"
+									/>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+
+				<div v-if="context.items && context.items.length" class="quality-actions">
+					<span>{{ selectedCount }} selected</span>
+					<button type="button" class="edge-button edge-button--primary" :disabled="creating || !selectedCount" @click="createInspections">{{ creating ? "Creating Draft Inspections…" : "Create Draft Quality Inspections" }}</button>
+				</div>
 			</div>
-			<p>Enter readings, review acceptance status and submit each Quality Inspection in ERPNext. This guided action never submits the inspection or the Purchase Receipt.</p>
-		</div>
-	</section>
+
+			<div v-if="created.length" class="quality-created">
+				<strong>Created draft Quality Inspections</strong>
+				<div class="quality-created-links">
+					<button v-for="inspection in created" :key="inspection.name" type="button" class="edge-small-button edge-small-button--primary" @click="openInspection(inspection.name)">{{ inspection.name }}</button>
+				</div>
+				<p>Enter readings, review acceptance status and submit each Quality Inspection in ERPNext. This guided action never submits the inspection or the Purchase Receipt.</p>
+			</div>
+		</section>
+
+		<SupplierScorecardGovernance :company="company" :branch="branch" :supplier="supplier" />
+	</div>
 </template>
 
 <script>
+import SupplierScorecardGovernance from "./SupplierScorecardGovernance.vue";
+
 const CAPABILITY_METHOD = "retailedge.incoming_quality_inspection.get_incoming_quality_capability";
 const SEARCH_METHOD = "retailedge.incoming_quality_inspection.search_incoming_quality_receipts";
 const CONTEXT_METHOD = "retailedge.incoming_quality_inspection.get_incoming_quality_receipt_context";
@@ -118,6 +124,7 @@ function linkValue(value) {
 export default {
 	name: "IncomingQualityInspection",
 	components: {
+		SupplierScorecardGovernance,
 		EdgeLinkField: runtimeComponents().EdgeLinkField,
 		EdgeEmptyState: runtimeComponents().EdgeEmptyState,
 	},
@@ -252,6 +259,7 @@ export default {
 </script>
 
 <style scoped>
+.professional-purchasing-extensions { display: grid; gap: 20px; }
 .incoming-quality-panel { display: grid; gap: 16px; }
 .quality-heading { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .quality-heading h3 { margin: 4px 0 6px; }
