@@ -30,7 +30,7 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertIn("company: this.filters.company || null", component)
 		self.assertIn("branch: this.filters.branch || null", component)
 		self.assertIn("supplier: this.filters.supplier || null", component)
-		self.assertIn("clearReturnSources(); this.loadWorkspace()", component)
+		self.assertIn("this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace()", component)
 		self.assertIn('this.returnSources = { purchaseReceipt: "", purchaseInvoice: "" }', component)
 
 	def test_success_handoff_routes_to_native_erpnext_drafts(self):
