@@ -386,9 +386,28 @@ def _can_open_target(item: dict[str, Any], *, target_cache=None, permission_cach
 		return True
 	if target_type == "DocType":
 		return _doctype_exists_cached(target, target_cache) and _has_permission_cached(target, "read", permission_cache)
-	if target_type in {"Page", "Report"}:
+	if target_type == "Report":
+		return _target_exists_cached(target_type, target, target_cache) and _can_open_report_cached(target, permission_cache)
+	if target_type == "Page":
 		return _target_exists_cached(target_type, target, target_cache)
 	return False
+
+
+def _can_open_report_cached(report_name: str, cache: dict[tuple[str, str], bool]) -> bool:
+	key = (f"Report:{report_name}", "open")
+	if key not in cache:
+		cache[key] = _can_open_report(report_name)
+	return cache[key]
+
+
+def _can_open_report(report_name: str) -> bool:
+	try:
+		from frappe.desk.query_report import get_report_doc
+
+		get_report_doc(report_name)
+		return True
+	except Exception:
+		return False
 
 
 def _target_exists_cached(target_type: str, target: str, cache: dict[tuple[str, str], bool]) -> bool:
