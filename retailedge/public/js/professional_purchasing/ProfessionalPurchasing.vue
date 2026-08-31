@@ -49,7 +49,7 @@
 						<EdgeLinkField v-model="filters.supplier" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
 						<div class="filter-action"><button type="button" class="edge-button edge-button--primary" :disabled="loading || !filters.company" @click="loadWorkspace">{{ loading ? "Refreshing…" : "Apply Filters" }}</button></div>
 					</div>
-					<p class="filter-help">Company and Branch scope purchasing operations. Supplier filters the Purchase Order queue and guided return/debit-note source lists.</p>
+					<p class="filter-help">Company and Branch scope purchasing operations. Supplier filters the Purchase Order queue, guided returns and landed-cost source lists.</p>
 				</section>
 
 				<div class="metric-grid">
@@ -90,6 +90,40 @@
 							<button type="button" class="edge-button edge-button--primary" :disabled="preparingReturn || !returnSources.purchaseInvoice" @click="prepareSupplierDebitNote">{{ preparingReturn === "purchase_invoice" ? "Preparing…" : "Prepare Draft Debit Note" }}</button>
 						</article>
 					</div>
+				</section>
+
+				<section v-if="landedCostCapability.can_prepare_landed_cost" class="edge-panel landed-cost-panel">
+					<div class="panel-heading">
+						<div>
+							<span class="purchasing-kicker">True inventory cost</span>
+							<h3>Allocate Landed Cost</h3>
+							<p>Prepare ERPNext's native Landed Cost Voucher from received stock. Freight, clearing, customs duty, insurance, expense accounts and final allocation stay on the native voucher; nothing is saved or posted by this guided handoff.</p>
+						</div>
+					</div>
+					<div class="landed-cost-source-types" aria-label="Landed cost source type">
+						<button v-if="landedCostCapability.can_use_purchase_receipt" type="button" class="attention-chip" :class="{ 'attention-chip--active': landedCost.sourceType === 'purchase_receipt' }" @click="setLandedCostSourceType('purchase_receipt')">Purchase Receipt</button>
+						<button v-if="landedCostCapability.can_use_purchase_invoice" type="button" class="attention-chip" :class="{ 'attention-chip--active': landedCost.sourceType === 'purchase_invoice' }" @click="setLandedCostSourceType('purchase_invoice')">Stock-updating Purchase Invoice</button>
+					</div>
+					<div class="landed-cost-controls">
+						<EdgeLinkField
+							v-model="landedCost.source"
+							:label="landedCost.sourceType === 'purchase_invoice' ? 'Stock-updating Purchase Invoice' : 'Submitted Purchase Receipt'"
+							placeholder="Search permitted stock receipt"
+							:searcher="landedCostSourceSearch"
+							@select="onLandedCostSourceSelected"
+							@clear="clearLandedCostSource"
+						/>
+						<label class="edge-select-field">
+							<span>Distribution basis</span>
+							<select v-model="landedCost.distributionMethod">
+								<option value="Amount">Amount</option>
+								<option value="Qty">Quantity</option>
+								<option value="Distribute Manually">Distribute Manually</option>
+							</select>
+						</label>
+						<button type="button" class="edge-button edge-button--primary" :disabled="preparingLandedCost || !landedCost.source" @click="prepareLandedCost">{{ preparingLandedCost ? "Preparing…" : "Prepare Landed Cost Draft" }}</button>
+					</div>
+					<p class="landed-cost-help">The prepared voucher remains unsaved until you enter the mandatory landed-cost charges on ERPNext's Landed Cost Voucher form. Valuation, Stock Ledger and General Ledger changes occur only through standard ERPNext submission.</p>
 				</section>
 
 				<section v-if="capabilities.can_read_material_request" class="edge-panel sourcing-panel">
@@ -170,7 +204,7 @@
 					</div>
 				</section>
 
-				<section class="edge-panel safety-note"><strong>Draft-first procurement safety.</strong><span>RFQ, receipt, physical-return and supplier-debit-note actions delegate to ERPNext mappers and create drafts only. Return workflows stay separate to avoid duplicate stock effects. Supplier email, submission, stock movement, detailed PO analysis and accounting consequences remain standard ERPNext workflows.</span></section>
+				<section class="edge-panel safety-note"><strong>Draft-first procurement safety.</strong><span>RFQ, receipt, physical-return and supplier-debit-note actions delegate to ERPNext mappers and create drafts only. Landed Cost delegates to ERPNext's native unsaved voucher handoff so mandatory charge/accounting rows are reviewed before the first save. Supplier email, submission, stock movement, detailed PO analysis and accounting consequences remain standard ERPNext workflows.</span></section>
 			</div>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -186,6 +220,9 @@ const RETURN_CAPABILITY_METHOD = "retailedge.professional_purchasing.get_purchas
 const RETURN_SEARCH_METHOD = "retailedge.professional_purchasing.search_purchase_return_sources";
 const PREPARE_PURCHASE_RETURN_METHOD = "retailedge.professional_purchasing.prepare_purchase_return_draft";
 const PREPARE_DEBIT_NOTE_METHOD = "retailedge.professional_purchasing.prepare_supplier_debit_note_draft";
+const LANDED_COST_CAPABILITY_METHOD = "retailedge.landed_cost_allocation.get_landed_cost_capability";
+const LANDED_COST_SEARCH_METHOD = "retailedge.landed_cost_allocation.search_landed_cost_sources";
+const PREPARE_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.prepare_landed_cost_voucher_draft";
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeLinkField"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -206,6 +243,7 @@ export default {
 			filters: { company: "", branch: "", supplier: "" }, summary: {}, capabilities: {}, limits: {}, rows: [], materialRequests: [], serverToday: "",
 			procurementTracker: { available: false, company: "", branch: "", report: "Procurement Tracker", reason: "" },
 			returnCapabilities: { can_prepare_purchase_return: false, can_prepare_supplier_debit_note: false }, returnSources: { purchaseReceipt: "", purchaseInvoice: "" }, preparingReturn: "",
+			landedCostCapability: { can_prepare_landed_cost: false, can_use_purchase_receipt: false, can_use_purchase_invoice: false }, landedCost: { sourceType: "purchase_receipt", source: "", distributionMethod: "Amount" }, preparingLandedCost: false,
 			preparingReceipt: "", preparingRfq: false, rfqSupplierInput: "", rfqDraft: { material_request: "", suppliers: [] },
 			sort: { key: "transaction_date", direction: "desc" }, materialSort: { key: "transaction_date", direction: "desc" }, attentionFilter: "all",
 			attentionOptions: [
@@ -231,13 +269,14 @@ export default {
 			if (this.loading) return; this.loading = true; this.error = "";
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
-				const [context, navigation, procurementTracker, returnCapabilities] = await Promise.all([
+				const [context, navigation, procurementTracker, returnCapabilities, landedCostCapability] = await Promise.all([
 					callMethod(CONTEXT_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null, limit: 200 }),
 					navigationPromise,
 					callMethod(PROCUREMENT_TRACKER_HANDOFF_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null }),
 					callMethod(RETURN_CAPABILITY_METHOD),
+					callMethod(LANDED_COST_CAPABILITY_METHOD),
 				]);
-				this.applyContext(context || {}); this.procurementTracker = procurementTracker || this.procurementTracker; this.returnCapabilities = returnCapabilities || this.returnCapabilities; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
+				this.applyContext(context || {}); this.procurementTracker = procurementTracker || this.procurementTracker; this.returnCapabilities = returnCapabilities || this.returnCapabilities; this.applyLandedCostCapability(landedCostCapability || {}); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
 			} catch (error) { this.error = errorMessage(error, "Professional Purchasing failed to load."); } finally { this.loading = false; }
 		},
 		applyContext(context) {
@@ -245,17 +284,25 @@ export default {
 			if (!this.filters.company) this.filters.company = this.company; if (!this.filters.branch) this.filters.branch = this.branch;
 			this.userName = context.user_name || this.userName; this.rows = context.rows || []; this.materialRequests = context.material_requests || []; this.summary = context.summary || {}; this.capabilities = context.capabilities || {}; this.limits = context.limits || {}; this.serverToday = context.server_today || "";
 		},
+		applyLandedCostCapability(capability) {
+			this.landedCostCapability = { ...this.landedCostCapability, ...(capability || {}) };
+			if (!this.landedCostCapability.can_use_purchase_receipt && this.landedCostCapability.can_use_purchase_invoice) this.landedCost.sourceType = "purchase_invoice";
+			if (!this.landedCostCapability.can_use_purchase_invoice && this.landedCost.sourceType === "purchase_invoice") this.landedCost.sourceType = "purchase_receipt";
+		},
 		async searchOptions(kind, txt) { const result = await callMethod(SEARCH_METHOD, { kind, txt, company: this.filters.company || null }); return Array.isArray(result) ? result : []; },
 		async searchReturnSources(kind, txt) { const result = await callMethod(RETURN_SEARCH_METHOD, { kind, txt, company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null }); return Array.isArray(result) ? result : []; },
+		async searchLandedCostSources(txt) { const result = await callMethod(LANDED_COST_SEARCH_METHOD, { source_type: this.landedCost.sourceType, txt, company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, supplierSearch(txt) { return this.searchOptions("supplier", txt); }, rfqSupplierSearch(txt) { return this.searchOptions("rfq_supplier", txt); },
-		purchaseReturnSourceSearch(txt) { return this.searchReturnSources("purchase_receipt", txt); }, debitNoteSourceSearch(txt) { return this.searchReturnSources("purchase_invoice", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.supplier = ""; this.branch = ""; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.loadWorkspace(); },
-		onBranchSelected(option) { this.filters.branch = option.value; this.branch = option.label || option.value; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.loadWorkspace(); },
-		clearBranch() { this.filters.branch = ""; this.branch = ""; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.loadWorkspace(); },
-		onSupplierSelected(option) { this.filters.supplier = option.value; this.attentionFilter = "all"; this.clearReturnSources(); this.loadWorkspace(); }, clearSupplier() { this.filters.supplier = ""; this.attentionFilter = "all"; this.clearReturnSources(); this.loadWorkspace(); },
+		purchaseReturnSourceSearch(txt) { return this.searchReturnSources("purchase_receipt", txt); }, debitNoteSourceSearch(txt) { return this.searchReturnSources("purchase_invoice", txt); }, landedCostSourceSearch(txt) { return this.searchLandedCostSources(txt); },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.supplier = ""; this.branch = ""; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace(); },
+		onBranchSelected(option) { this.filters.branch = option.value; this.branch = option.label || option.value; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace(); },
+		clearBranch() { this.filters.branch = ""; this.branch = ""; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace(); },
+		onSupplierSelected(option) { this.filters.supplier = option.value; this.attentionFilter = "all"; this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace(); }, clearSupplier() { this.filters.supplier = ""; this.attentionFilter = "all"; this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace(); },
 		onPurchaseReturnSourceSelected(option) { this.returnSources.purchaseReceipt = option?.value || ""; }, clearPurchaseReturnSource() { this.returnSources.purchaseReceipt = ""; },
 		onDebitNoteSourceSelected(option) { this.returnSources.purchaseInvoice = option?.value || ""; }, clearDebitNoteSource() { this.returnSources.purchaseInvoice = ""; },
 		clearReturnSources() { this.returnSources = { purchaseReceipt: "", purchaseInvoice: "" }; },
+		setLandedCostSourceType(sourceType) { if (this.landedCost.sourceType === sourceType) return; this.landedCost.sourceType = sourceType; this.clearLandedCostSource(); },
+		onLandedCostSourceSelected(option) { this.landedCost.source = option?.value || ""; }, clearLandedCostSource() { this.landedCost.source = ""; },
 		setAttentionFilter(key) { this.attentionFilter = key || "all"; },
 		attentionCount(key) {
 			if (key === "all") return Number(this.summary.purchase_orders || 0); if (key === "needs_review") return Number(this.summary.attention_total || 0); return Number(this.summary[key] || 0);
@@ -288,6 +335,16 @@ export default {
 			try { const result = await callMethod(PREPARE_DEBIT_NOTE_METHOD, { purchase_invoice: this.returnSources.purchaseInvoice }); this.actionNotice = result.update_stock ? `Draft supplier Debit Note ${result.name || ""} prepared. ERPNext Update Stock remains enabled; review stock and accounting effects before submission.` : `Draft supplier Debit Note ${result.name || ""} prepared. Review native ERPNext tax, value and accounting details before submission.`; this.clearReturnSources(); if (result.name) frappe.set_route("Form", "Purchase Invoice", result.name); }
 			catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the supplier Debit Note draft."); } finally { this.preparingReturn = ""; }
 		},
+		async prepareLandedCost() {
+			if (!this.landedCost.source || this.preparingLandedCost) return; this.preparingLandedCost = true; this.clearActionFeedback();
+			try {
+				const result = await callMethod(PREPARE_LANDED_COST_METHOD, { source_type: this.landedCost.sourceType, source_name: this.landedCost.source, distribution_method: this.landedCost.distributionMethod });
+				const synced = frappe.model.sync(result.document || {}); const document = Array.isArray(synced) ? synced[0] : null;
+				if (!document?.name) throw new Error("ERPNext did not return an unsaved Landed Cost Voucher document.");
+				this.actionNotice = `Unsaved Landed Cost Voucher prepared from ${result.source_type || "purchase source"}. Enter and review landed-cost charges on the native ERPNext form before saving or submitting.`;
+				this.clearLandedCostSource(); frappe.set_route("Form", "Landed Cost Voucher", document.name);
+			} catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the Landed Cost Voucher."); } finally { this.preparingLandedCost = false; }
+		},
 		clearActionFeedback() { this.actionError = ""; this.actionNotice = ""; }, newPurchaseOrder() { frappe.new_doc("Purchase Order"); },
 		openMaterialRequest(name) { frappe.set_route("Form", "Material Request", name); }, openMaterialRequests() { frappe.set_route("List", "Material Request"); }, openRequestsForQuotation() { frappe.set_route("List", "Request for Quotation"); }, openSupplierQuotations() { frappe.set_route("List", "Supplier Quotation"); }, openSupplierQuotationComparison() { frappe.set_route("query-report", "Supplier Quotation Comparison"); },
 		openPurchaseOrderAnalysis() { frappe.route_options = { company: this.filters.company || this.company || "" }; frappe.set_route("query-report", "Purchase Order Analysis"); },
@@ -308,16 +365,17 @@ export default {
 <style scoped>
 .purchasing-fallback,.edge-panel { border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-lg,10px); background:var(--edge-surface,#fff); }
 .purchasing-fallback { margin:20px; padding:24px; display:flex; flex-direction:column; gap:8px; }.purchasing-content { display:flex; flex-direction:column; gap:var(--edge-space-lg,20px); padding-bottom:24px; }
-.purchasing-hero,.panel-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }.purchasing-hero,.filter-panel,.orders-panel,.sourcing-panel,.rfq-panel,.returns-panel,.safety-note,.action-feedback { padding:18px; }
+.purchasing-hero,.panel-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }.purchasing-hero,.filter-panel,.orders-panel,.sourcing-panel,.rfq-panel,.returns-panel,.landed-cost-panel,.safety-note,.action-feedback { padding:18px; }
 .purchasing-hero h3,.panel-heading h3 { margin:3px 0 6px; color:var(--edge-text,#101828); }.purchasing-hero p,.panel-heading p,.filter-help { margin:0; max-width:820px; color:var(--edge-text-muted,#667085); }.filter-help { margin-top:10px; font-size:.82rem; }
 .purchasing-kicker { font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--edge-primary,#0f766e); }.hero-actions,.actions-cell { display:flex; gap:8px; flex-wrap:wrap; }
 .filter-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:end; }.filter-action { display:flex; }.metric-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }.metric-card { padding:16px; display:flex; flex-direction:column; gap:6px; }.metric-card span { color:var(--edge-text-muted,#667085); font-size:.8rem; }.metric-card strong { color:var(--edge-text,#101828); font-size:1.2rem; }
 .return-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }.return-card { border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); padding:16px; display:flex; flex-direction:column; gap:14px; background:var(--edge-surface-subtle,#f8fafc); }.return-card h4 { margin:0 0 6px; color:var(--edge-text,#101828); }.return-card p { margin:0; color:var(--edge-text-muted,#667085); }
+.landed-cost-source-types { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }.landed-cost-controls { display:grid; grid-template-columns:minmax(260px,1.5fr) minmax(180px,.8fr) auto; gap:14px; align-items:end; }.edge-select-field { display:flex; flex-direction:column; gap:6px; color:var(--edge-text-muted,#667085); font-size:.82rem; font-weight:600; }.edge-select-field select { min-height:40px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); background:var(--edge-surface,#fff); color:var(--edge-text,#101828); padding:0 10px; }.landed-cost-help { margin:12px 0 0; color:var(--edge-text-muted,#667085); font-size:.82rem; max-width:900px; }
 .panel-heading { margin-bottom:14px; }.panel-heading h3 { margin-bottom:0; }.table-wrap { width:100%; overflow:auto; }.purchasing-table { width:100%; min-width:850px; border-collapse:collapse; }.purchasing-table--orders { min-width:1120px; }.purchasing-table th,.purchasing-table td { padding:10px 9px; border-bottom:1px solid var(--edge-border,#e5e7eb); text-align:left; vertical-align:top; }.purchasing-table th { color:var(--edge-text-muted,#667085); font-size:.76rem; text-transform:uppercase; letter-spacing:.04em; }.purchasing-table .num { text-align:right; }.purchasing-table .strong { font-weight:700; }.row-subtitle { display:block; margin-top:3px; color:var(--edge-text-muted,#667085); max-width:260px; }
 .sort-button,.link-button { border:0; background:transparent; padding:0; color:inherit; cursor:pointer; font:inherit; text-transform:inherit; letter-spacing:inherit; }.link-button { color:var(--edge-primary,#0f766e); font-weight:600; }.status-pill { display:inline-flex; padding:3px 8px; border:1px solid var(--edge-border,#d9d9d9); border-radius:999px; font-size:.75rem; }
 .edge-button,.edge-small-button { min-height:38px; border-radius:var(--edge-radius-md,8px); padding:0 12px; font-weight:600; cursor:pointer; border:1px solid var(--edge-border,#d9d9d9); background:var(--edge-surface,#fff); color:var(--edge-text,#101828); }.edge-button--primary,.edge-small-button--primary { border-color:var(--edge-primary,#0f766e); background:var(--edge-primary,#0f766e); color:#fff; }.edge-small-button { min-height:30px; padding:0 9px; font-size:.78rem; }button:disabled { opacity:.55; cursor:not-allowed; }
 .rfq-controls { display:grid; grid-template-columns:minmax(240px,1fr) minmax(280px,2fr) auto; gap:14px; align-items:end; }.supplier-selection { min-height:42px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }.selection-empty { color:var(--edge-text-muted,#667085); }.supplier-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border:1px solid var(--edge-border,#d9d9d9); border-radius:999px; background:var(--edge-surface-subtle,#f8fafc); }.supplier-chip button { border:0; background:transparent; color:inherit; cursor:pointer; font-size:1rem; line-height:1; }
 .attention-controls,.attention-badges { display:flex; gap:7px; flex-wrap:wrap; }.attention-controls { margin:0 0 14px; }.attention-chip { min-height:32px; padding:0 10px; border:1px solid var(--edge-border,#d9d9d9); border-radius:999px; background:var(--edge-surface,#fff); color:var(--edge-text,#101828); cursor:pointer; }.attention-chip--active { border-color:var(--edge-primary,#0f766e); box-shadow:inset 0 0 0 1px var(--edge-primary,#0f766e); }.attention-badges { display:flex; gap:7px; flex-wrap:wrap; }.attention-badge { display:inline-flex; padding:3px 7px; border-radius:999px; border:1px solid var(--edge-border,#d9d9d9); font-size:.72rem; white-space:nowrap; }.attention-badge--exception { border-color:var(--edge-danger,#b42318); color:var(--edge-danger,#b42318); }.attention-badge--review { border-color:var(--edge-warning,#b54708); color:var(--edge-warning,#b54708); }.attention-badge--readiness { border-color:var(--edge-primary,#0f766e); color:var(--edge-primary,#0f766e); }.attention-badge--clear { color:var(--edge-text-muted,#667085); }
 .action-feedback { display:flex; align-items:center; gap:10px; flex-wrap:wrap; color:var(--edge-text-muted,#667085); }.action-feedback strong { color:var(--edge-text,#101828); }.action-feedback--error { border-color:var(--edge-danger,#b42318); }.action-feedback--error strong,.action-feedback--error span { color:var(--edge-danger,#b42318); }.inline-error { padding:18px; color:var(--edge-danger,#b42318); text-align:center; }.safety-note { display:flex; gap:8px; flex-wrap:wrap; color:var(--edge-text-muted,#667085); }.safety-note strong { color:var(--edge-text,#101828); }
-@media (max-width:1100px) { .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.rfq-controls,.return-grid { grid-template-columns:1fr; } } @media (max-width:980px) { .filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.purchasing-hero,.panel-heading { flex-direction:column; } } @media (max-width:560px) { .metric-grid,.filter-grid { grid-template-columns:1fr; } }
+@media (max-width:1100px) { .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.rfq-controls,.return-grid,.landed-cost-controls { grid-template-columns:1fr; } } @media (max-width:980px) { .filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.purchasing-hero,.panel-heading { flex-direction:column; } } @media (max-width:560px) { .metric-grid,.filter-grid { grid-template-columns:1fr; } }
 </style>
