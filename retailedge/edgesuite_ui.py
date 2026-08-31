@@ -138,6 +138,8 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Cash Flow Outlook", "target_type": "Page", "target": "cash-flow-outlook", "icon": "chart", "required_roles": tuple(sorted(CASH_FLOW_OUTLOOK_ROLES))},
 			{"label": "Payments", "target_type": "DocType", "target": "Payment Entry", "icon": "wallet"},
 			{"label": "Payment Reconciliation", "target_type": "DocType", "target": "Payment Reconciliation", "icon": "repeat"},
+			{"label": "Subscriptions", "target_type": "DocType", "target": "Subscription", "icon": "repeat"},
+			{"label": "Subscription Plans", "target_type": "DocType", "target": "Subscription Plan", "icon": "clipboard"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet"},
 			{"label": "Import Bank Statement", "target_type": "DocType", "target": "RetailEdge Payment Statement Import", "icon": "upload"},
 			{"label": "Bank Matching", "target_type": "Report", "target": "RetailEdge Bank Transaction Matching", "icon": "report"},
