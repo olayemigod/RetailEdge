@@ -114,6 +114,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Pricing Rules", "target_type": "DocType", "target": "Pricing Rule", "icon": "settings"},
 			{"label": "Promotional Schemes", "target_type": "DocType", "target": "Promotional Scheme", "icon": "gift"},
 			{"label": "Coupon Codes", "target_type": "DocType", "target": "Coupon Code", "icon": "tag"},
+			{"label": "Loyalty Programs", "target_type": "DocType", "target": "Loyalty Program", "icon": "gift"},
 		),
 	},
 	{

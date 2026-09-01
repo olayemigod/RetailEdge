@@ -51,7 +51,7 @@
 
 				<label class="selling-field">
 					<span>Posting Date <b>*</b></span>
-					<input v-model="values.posting_date" class="form-control" type="date" required />
+					<input v-model="values.posting_date" class="form-control" type="date" required @change="postingDateChanged" />
 				</label>
 
 				<EdgeLinkField
@@ -82,6 +82,30 @@
 			</div>
 
 			<CustomerCreditSummary :customer="values.customer" :company="values.company" />
+
+			<section v-if="values.customer" class="loyalty-panel" aria-live="polite">
+				<div class="loyalty-panel-heading">
+					<div>
+						<span class="loyalty-kicker">Loyalty & Rewards</span>
+						<strong>{{ loyaltyStatus.loyalty_program || "Customer programme" }}</strong>
+					</div>
+					<a v-if="loyaltyStatus.can_manage_programs" :href="loyaltyStatus.native_route || '/app/loyalty-program'" target="_blank" rel="noopener noreferrer">Manage Programmes</a>
+				</div>
+				<p v-if="loyaltyLoading" class="selling-form-hint">Checking current ERPNext Loyalty Points...</p>
+				<template v-else-if="loyaltyStatus.enrolled">
+					<div class="loyalty-summary">
+						<div><span>Available Points</span><strong>{{ loyaltyStatus.available_points || 0 }}</strong></div>
+						<div><span>Current Tier</span><strong>{{ loyaltyStatus.tier_name || "Standard" }}</strong></div>
+						<div><span>Available Value</span><strong>{{ loyaltyStatus.currency || "" }} {{ loyaltyStatus.available_redemption_value || 0 }}</strong></div>
+					</div>
+					<label class="selling-field">
+						<span>Points to Redeem</span>
+						<input v-model.number="values.loyalty_points" class="form-control" type="number" min="0" step="1" :max="loyaltyStatus.available_points || 0" placeholder="0" />
+					</label>
+					<p class="selling-form-hint">Estimated redemption: {{ loyaltyRedemptionLabel }}. ERPNext revalidates the balance and final invoice value before saving the draft.</p>
+				</template>
+				<p v-else class="selling-form-hint">{{ loyaltyStatus.message || "No Loyalty Program is assigned to this Customer." }}</p>
+			</section>
 
 			<label class="guided-check-field">
 				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
@@ -129,6 +153,7 @@ const GUIDED_SEARCH = "retailedge.guided_sales_invoice.search_simple_sales_invoi
 const GUIDED_PRICING = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const SHIPPING_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_shipping_rules";
 const SOURCE_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_sources";
+const LOYALTY_STATUS = "retailedge.loyalty_rewards.get_customer_loyalty_status";
 const CREATE_NEW = "retailedge.professional_sales_invoice.create_professional_sales_invoice_draft";
 const CREATE_FROM_QUOTATION = "retailedge.professional_sales_invoice.create_sales_invoice_from_quotation";
 const CREATE_FROM_ORDER = "retailedge.professional_sales_invoice.create_sales_invoice_from_sales_order";
@@ -144,6 +169,7 @@ function initialValues(context = {}) {
 		customer: "",
 		posting_date: context.today || "",
 		shipping_rule: "",
+		loyalty_points: 0,
 		update_stock: 0,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
@@ -163,6 +189,9 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
+			loyaltyToken: 0,
+			loyaltyLoading: false,
+			loyaltyStatus: {},
 			values: initialValues(this.context),
 			modes: [
 				{ key: "new", label: "New Invoice" },
@@ -181,6 +210,10 @@ export default {
 	},
 	computed: {
 		priceListLabel() { return this.context.pricing?.price_list || "ERPNext default"; },
+		loyaltyRedemptionLabel() {
+			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
+			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
+		},
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
 		sourceLabel() {
@@ -208,6 +241,8 @@ export default {
 				this.mode = "new";
 				this.sourceDocument = "";
 				this.values = initialValues(this.context);
+				this.loyaltyStatus = {};
+				this.loyaltyLoading = false;
 				this.saveError = "";
 			}
 		},
@@ -235,9 +270,41 @@ export default {
 		setCustomer(next) {
 			const changed = this.values.customer && this.values.customer !== next;
 			this.values.customer = next || "";
+			this.values.loyalty_points = 0;
+			this.loyaltyStatus = {};
+			if (this.values.customer) this.loadLoyaltyStatus();
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
+			}
+		},
+		postingDateChanged() {
+			this.values.loyalty_points = 0;
+			this.loyaltyStatus = {};
+			if (this.values.customer) this.loadLoyaltyStatus();
+		},
+		async loadLoyaltyStatus() {
+			if (!this.values.customer) return;
+			const token = ++this.loyaltyToken;
+			this.loyaltyLoading = true;
+			try {
+				const status = await callMethod(LOYALTY_STATUS, {
+					values: {
+						company: this.values.company,
+						branch: this.values.branch,
+						warehouse: this.values.warehouse,
+						customer: this.values.customer,
+						posting_date: this.values.posting_date,
+					},
+				});
+				if (token === this.loyaltyToken) this.loyaltyStatus = status || {};
+			} catch (error) {
+				if (token === this.loyaltyToken) {
+					this.loyaltyStatus = {};
+					this.saveError = errorMessage(error, "Unable to load Loyalty Points.");
+				}
+			} finally {
+				if (token === this.loyaltyToken) this.loyaltyLoading = false;
 			}
 		},
 		async setBranch(next) {
@@ -324,6 +391,12 @@ export default {
 .invoice-mode-switch { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
 .source-invoice-panel { display: grid; gap: 1rem; }
 .selling-form { display: grid; gap: 1rem; }
+.loyalty-panel { display: grid; gap: 0.75rem; padding: 0.9rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.65rem; }
+.loyalty-panel-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.loyalty-panel-heading > div { display: grid; gap: 0.2rem; }
+.loyalty-kicker, .loyalty-summary span { color: var(--text-muted); font-size: 0.8rem; }
+.loyalty-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.loyalty-summary > div { display: grid; gap: 0.2rem; }
 .selling-form-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
 .selling-form-context > div { display: grid; gap: 0.2rem; }
 .selling-form-context span, .selling-form-hint, .guided-check-field small { color: var(--text-muted); font-size: 0.8rem; }
@@ -335,5 +408,5 @@ export default {
 .selling-form-footer { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .selling-form-footer-actions { display: flex; gap: 0.5rem; }
 .selling-form-error { padding: 0.75rem; margin-bottom: 1rem; border: 1px solid var(--red-300, #f1aeb5); border-radius: 0.5rem; }
-@media (max-width: 720px) { .selling-form-context, .selling-form-grid { grid-template-columns: 1fr; } .selling-form-footer { align-items: stretch; flex-direction: column; } .selling-form-footer-actions { justify-content: flex-end; } }
+@media (max-width: 720px) { .selling-form-context, .selling-form-grid, .loyalty-summary { grid-template-columns: 1fr; } .selling-form-footer, .loyalty-panel-heading { align-items: stretch; flex-direction: column; } .selling-form-footer-actions { justify-content: flex-end; } }
 </style>

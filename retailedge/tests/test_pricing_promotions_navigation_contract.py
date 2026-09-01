@@ -13,6 +13,7 @@ APPROVED_TARGETS = [
 	"Pricing Rule",
 	"Promotional Scheme",
 	"Coupon Code",
+	"Loyalty Program",
 ]
 
 

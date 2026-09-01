@@ -20,6 +20,7 @@ from erpnext.stock.doctype.delivery_note.delivery_note import (
 
 from retailedge.branch_context import resolve_branch_from_warehouse, validate_user_branch_access
 from retailedge.guided_sales_invoice import create_simple_sales_invoice_draft
+from retailedge.loyalty_rewards import apply_loyalty_redemption_to_draft
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_quotation import _validate_shipping_rule
 from retailedge.professional_selling import (
@@ -186,6 +187,10 @@ def _invoice_response(
 		"branch": doc.get("branch") or doc.get("retailedge_branch") or branch,
 		"selling_price_list": doc.get("selling_price_list") or "",
 		"shipping_rule": doc.get("shipping_rule") or "",
+		"redeem_loyalty_points": bool(cint(doc.get("redeem_loyalty_points"))),
+		"loyalty_program": doc.get("loyalty_program") or "",
+		"loyalty_points": cint(doc.get("loyalty_points")),
+		"loyalty_amount": flt(doc.get("loyalty_amount")),
 		"grand_total": doc.grand_total,
 		"currency": doc.currency,
 		"source_doctype": source_doctype,
@@ -411,6 +416,15 @@ def create_professional_sales_invoice_draft(
 	"""Reuse the guarded invoice engine, then apply ERPNext Shipping Rule to its draft."""
 	values = _coerce_values(values)
 	shipping_rule = str(values.pop("shipping_rule", "") or "").strip()
+	loyalty_points = values.pop("loyalty_points", 0)
+	for browser_owned_field in (
+		"redeem_loyalty_points",
+		"loyalty_program",
+		"loyalty_amount",
+		"loyalty_redemption_account",
+		"loyalty_redemption_cost_center",
+	):
+		values.pop(browser_owned_field, None)
 	company, _branch, _warehouse = _validate_context(values)
 	if shipping_rule:
 		_validate_shipping_rule(shipping_rule, company=company)
@@ -421,9 +435,17 @@ def create_professional_sales_invoice_draft(
 		frappe.throw(
 			_("Sales Invoice creation stopped because the guarded invoice engine returned a non-draft document.")
 		)
+	needs_save = False
 	if shipping_rule:
 		doc.shipping_rule = shipping_rule
 		doc.apply_shipping_rule()
+		needs_save = True
+	if loyalty_points not in (None, "", 0, "0"):
+		apply_loyalty_redemption_to_draft(doc, loyalty_points)
+		needs_save = True
+	if needs_save:
+		# ERPNext validates the final Shipping Rule total before accepting
+		# native loyalty fields and deriving the redemption accounting fields.
 		doc.save()
 	return _invoice_response(doc, branch=result.get("branch") or "")
 
