@@ -180,6 +180,13 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		),
 	},
 	{
+		"key": "service-warranty", "label": "Service & Warranty", "icon": "tool", "items": (
+			{"label": "Warranty Claims", "target_type": "DocType", "target": "Warranty Claim", "icon": "shield"},
+			{"label": "Maintenance Schedules", "target_type": "DocType", "target": "Maintenance Schedule", "icon": "calendar"},
+			{"label": "Maintenance Visits", "target_type": "DocType", "target": "Maintenance Visit", "icon": "tool"},
+		),
+	},
+	{
 		"key": "suppliers-payables", "label": "Suppliers & Payables", "icon": "users", "items": (
 			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier", "icon": "user"},
 			{"label": "Supplier Payables", "target_type": "Page", "target": "supplier-payables", "icon": "report"},
@@ -254,6 +261,9 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "record-purchase", "label": "Record Purchase", "description": "Create a purchase invoice for stock, services, or operating expenses.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
+	},
+	{
+		"key": "new-warranty-claim", "label": "New Warranty Claim", "description": "Open an unsaved native ERPNext warranty claim for a customer item or serial number.", "doctype": "Warranty Claim", "icon": "tool", "experience": "act", "mode": "native_fallback",
 	},
 	{
 		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted stock locations using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",

@@ -38,6 +38,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 				"Money",
 				"Expenses",
 				"Customers",
+				"Service & Warranty",
 				"Suppliers & Payables",
 				"Insights",
 				"Review & Approvals",
