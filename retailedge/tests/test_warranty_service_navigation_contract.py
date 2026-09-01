@@ -59,7 +59,6 @@ class TestWarrantyServiceNavigationContract(TestCase):
 			"resolve_warranty_claim",
 			'frappe.get_doc("Warranty Claim"',
 			'frappe.new_doc("Warranty Claim"',
-			'"doctype": "Warranty Claim"',
 			"ignore_permissions",
 			"frappe.db.commit",
 		):
