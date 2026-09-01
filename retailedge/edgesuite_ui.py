@@ -140,6 +140,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "stock", "label": "Stock", "icon": "layers", "items": (
 			{"label": "Products", "target_type": "DocType", "target": "Item", "icon": "layers"},
 			{"label": "Stock Locations", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
+			{"label": "Stock Traceability", "target_type": "Page", "target": "stock-traceability-control", "icon": "search"},
 			{"label": "Batches", "target_type": "DocType", "target": "Batch", "icon": "layers"},
 			{"label": "Serial Numbers", "target_type": "DocType", "target": "Serial No", "icon": "clipboard"},
 			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History", "icon": "report"},
