@@ -16,6 +16,10 @@ from retailedge.purchase_reporting import (
 	get_supplier_payables_export as _base_get_supplier_payables_export,
 	search_purchase_reporting_options as _base_search_purchase_reporting_options,
 )
+from retailedge.replenishment_handoff import (
+	get_replenishment_handoff_context as _base_replenishment_handoff_context,
+	get_replenishment_material_request_handoff as _base_replenishment_material_request_handoff,
+)
 from retailedge.sales_reporting import (
 	get_sales_by_item as _base_get_sales_by_item,
 	get_sales_by_item_export as _base_get_sales_by_item_export,
@@ -163,6 +167,11 @@ def get_stock_position_context() -> dict[str, Any]:
 
 
 @frappe.whitelist()
+def get_replenishment_handoff_context() -> dict[str, int]:
+	return _base_replenishment_handoff_context()
+
+
+@frappe.whitelist()
 def search_sales_reporting_options(kind: str, txt: str = "", company: str = "", branch: str = "", item_group: str = ""):
 	branch, assigned = _constrain_search_scope(kind, company, branch)
 	if str(kind or "").strip().lower() == "warehouse" and assigned and not branch:
@@ -242,3 +251,11 @@ def get_stock_position(filters=None, page=1, page_size=50):
 @frappe.whitelist()
 def get_stock_position_export(filters=None):
 	return _base_get_stock_position_export(filters=_constrain_report_filters(filters))
+
+
+@frappe.whitelist(methods=["POST"])
+def get_replenishment_material_request_handoff(item_code: str, filters=None):
+	return _base_replenishment_material_request_handoff(
+		item_code=item_code,
+		filters=_constrain_report_filters(filters),
+	)
