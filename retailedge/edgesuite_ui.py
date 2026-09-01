@@ -103,6 +103,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice", "icon": "clipboard"},
 			{"label": "Sales Orders", "target_type": "DocType", "target": "Sales Order", "icon": "clipboard"},
 			{"label": "Delivery Notes", "target_type": "DocType", "target": "Delivery Note", "icon": "truck"},
+			{"label": "Sales Team & Targets", "target_type": "Page", "target": "sales-team-control", "icon": "users"},
 			{"label": "Sales People", "target_type": "DocType", "target": "Sales Person", "icon": "user"},
 			{"label": "Sales Partners", "target_type": "DocType", "target": "Sales Partner", "icon": "users"},
 			{"label": "Sales Person Commissions", "target_type": "Report", "target": "Sales Person Commission Summary", "icon": "report"},
@@ -187,6 +188,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "service-warranty", "label": "Service & Warranty", "icon": "tool", "items": (
+			{"label": "Service & Warranty Overview", "target_type": "Page", "target": "service-warranty-control", "icon": "tool"},
 			{"label": "Warranty Claims", "target_type": "DocType", "target": "Warranty Claim", "icon": "shield"},
 			{"label": "Maintenance Schedules", "target_type": "DocType", "target": "Maintenance Schedule", "icon": "calendar"},
 			{"label": "Maintenance Visits", "target_type": "DocType", "target": "Maintenance Visit", "icon": "tool"},
@@ -232,6 +234,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Profit & Loss", "target_type": "Report", "target": "Profit and Loss Statement", "icon": "report"},
 			{"label": "Balance Sheet", "target_type": "Report", "target": "Balance Sheet", "icon": "report"},
 			{"label": "Cash Flow Statement", "target_type": "Report", "target": "Cash Flow", "icon": "report"},
+			{"label": "Budgeting & Cost Control", "target_type": "Page", "target": "budget-control", "icon": "chart"},
 			{"label": "Budgets", "target_type": "DocType", "target": "Budget", "icon": "chart"},
 			{"label": "Budget Variance", "target_type": "Report", "target": "Budget Variance Report", "icon": "report"},
 			{"label": "Cost Centers", "target_type": "DocType", "target": "Cost Center", "icon": "layers"},
