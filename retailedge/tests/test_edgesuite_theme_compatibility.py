@@ -7,6 +7,9 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 THEME_CSS = APP_ROOT / "public" / "css" / "retailedge_edgeui_theme_compat.css"
 WORKSPACE_CSS = APP_ROOT / "public" / "css" / "retailedge_workspace_home.css"
 BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
+STOCK_ACCOUNTING_INTEGRITY = (
+	APP_ROOT / "public" / "js" / "stock_accounting_integrity" / "StockAccountingIntegrityReport.vue"
+)
 
 
 class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
@@ -54,6 +57,17 @@ class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 			"var(--edge-surface",
 			"var(--edge-text-muted",
 			"var(--edge-primary",
+		):
+			self.assertIn(expected, component)
+
+	def test_c22_integrity_page_uses_edgesuite_shell_and_semantic_theme_aliases(self):
+		component = STOCK_ACCOUNTING_INTEGRITY.read_text(encoding="utf-8")
+		for expected in (
+			"EdgeAppShell",
+			"EdgeReportShell",
+			"var(--edge-border",
+			"var(--edge-surface",
+			"var(--edge-text-muted",
 		):
 			self.assertIn(expected, component)
 

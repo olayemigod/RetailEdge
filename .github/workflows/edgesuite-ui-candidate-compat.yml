@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   compatibility:
-    name: RetailEdge E15 + reconciled EdgeSuite UI
+    name: RetailEdge + reconciled EdgeSuite UI
     runs-on: ubuntu-24.04
     timeout-minutes: 75
 
@@ -38,7 +38,7 @@ jobs:
           --health-retries=10
 
     steps:
-      - name: Check out RetailEdge E15
+      - name: Check out RetailEdge QA candidate
         uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
@@ -75,7 +75,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: b1d403be980c45baf7043515a96da327d8e86b2b
+          ref: e40ea4d7dc000d17443a0571c1e246b61bfd3e1d
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -104,7 +104,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "b1d403be980c45baf7043515a96da327d8e86b2b"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "e40ea4d7dc000d17443a0571c1e246b61bfd3e1d"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
           bench build --app edgesuite_ui
           bench build --app retailedge
@@ -123,7 +123,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: retailedge-e15-edgeui-candidate-failure
+          name: retailedge-edgeui-candidate-failure
           path: /tmp/retailedge-edgeui-candidate-tests.log
           if-no-files-found: ignore
           retention-days: 3
