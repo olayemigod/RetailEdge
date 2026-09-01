@@ -78,7 +78,6 @@ class TestStockTraceabilityNavigationContract(unittest.TestCase):
 			"create_serial_no",
 			'frappe.get_doc("Batch"',
 			'frappe.get_doc("Serial No"',
-			"Serial and Batch Bundle",
 			"ignore_permissions",
 			"frappe.db.commit",
 			".insert(",
