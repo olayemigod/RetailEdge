@@ -156,6 +156,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "assets", "label": "Assets", "icon": "briefcase", "items": (
+			{"label": "Assets Overview", "target_type": "Page", "target": "assets-control", "icon": "briefcase"},
 			{"label": "Fixed Assets", "target_type": "DocType", "target": "Asset", "icon": "briefcase"},
 			{"label": "Asset Categories", "target_type": "DocType", "target": "Asset Category", "icon": "layers"},
 		),
@@ -472,7 +473,6 @@ def _target_exists(target_type: str, target: str) -> bool:
 
 def _doctype_exists(doctype: str) -> bool:
 	return _target_exists("DocType", doctype)
-
 def _has_permission(doctype: str, permission_type: str) -> bool:
 	try:
 		return bool(frappe.has_permission(doctype, permission_type))
