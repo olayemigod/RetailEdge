@@ -26,6 +26,7 @@ CASH_FLOW_OUTLOOK_ROLES = {
 	"Accounts Manager",
 	"Accounts User",
 }
+STOCK_ACCOUNTING_INTEGRITY_ROLES = {"System Manager", "Stock User", "Accounts Manager"}
 SUPPLIER_DOCUMENT_REVIEW_ROLES = {
 	"System Manager",
 	"Purchase Manager",
@@ -134,6 +135,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Serial Numbers", "target_type": "DocType", "target": "Serial No", "icon": "clipboard"},
 			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History", "icon": "report"},
 			{"label": "Stock Position", "target_type": "Page", "target": "stock-position", "icon": "report"},
+			{"label": "Stock & Accounting Integrity", "target_type": "Page", "target": "stock-accounting-integrity", "icon": "shield", "required_roles": tuple(sorted(STOCK_ACCOUNTING_INTEGRITY_ROLES))},
 			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance", "icon": "report"},
 			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry", "icon": "repeat"},
 			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation", "icon": "clipboard"},
