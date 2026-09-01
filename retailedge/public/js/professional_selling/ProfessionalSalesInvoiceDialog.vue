@@ -96,8 +96,10 @@
 					<div class="loyalty-summary">
 						<div><span>Available Points</span><strong>{{ loyaltyStatus.available_points || 0 }}</strong></div>
 						<div><span>Current Tier</span><strong>{{ loyaltyStatus.tier_name || "Standard" }}</strong></div>
+						<div><span>Point Value</span><strong>{{ loyaltyStatus.currency || "" }} {{ loyaltyStatus.conversion_factor || 0 }}</strong></div>
 						<div><span>Available Value</span><strong>{{ loyaltyStatus.currency || "" }} {{ loyaltyStatus.available_redemption_value || 0 }}</strong></div>
 					</div>
+					<p v-if="loyaltyStatus.from_date || loyaltyStatus.to_date" class="selling-form-hint">Programme validity: {{ loyaltyStatus.from_date || "No start limit" }} – {{ loyaltyStatus.to_date || "No end limit" }}</p>
 					<label class="selling-field">
 						<span>Points to Redeem</span>
 						<input v-model.number="values.loyalty_points" class="form-control" type="number" min="0" step="1" :max="loyaltyStatus.available_points || 0" placeholder="0" />
@@ -241,6 +243,7 @@ export default {
 				this.mode = "new";
 				this.sourceDocument = "";
 				this.values = initialValues(this.context);
+				this.loyaltyToken += 1;
 				this.loyaltyStatus = {};
 				this.loyaltyLoading = false;
 				this.saveError = "";
@@ -270,6 +273,7 @@ export default {
 		setCustomer(next) {
 			const changed = this.values.customer && this.values.customer !== next;
 			this.values.customer = next || "";
+			this.loyaltyToken += 1;
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
 			if (this.values.customer) this.loadLoyaltyStatus();
@@ -395,7 +399,7 @@ export default {
 .loyalty-panel-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
 .loyalty-panel-heading > div { display: grid; gap: 0.2rem; }
 .loyalty-kicker, .loyalty-summary span { color: var(--text-muted); font-size: 0.8rem; }
-.loyalty-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.loyalty-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
 .loyalty-summary > div { display: grid; gap: 0.2rem; }
 .selling-form-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
 .selling-form-context > div { display: grid; gap: 0.2rem; }
