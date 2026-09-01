@@ -117,6 +117,56 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 			},
 		),
 	},
+	"pricing-promotions": {
+		"page_route": "pricing-promotions-control",
+		"title": "Pricing & Promotions",
+		"eyebrow": "Commercial Control",
+		"description": "Review pricing, promotions, coupons and loyalty configuration in EdgeSuite while ERPNext remains authoritative for master data, pricing evaluation and transaction-time enforcement.",
+		"sources": (
+			{
+				"kind": "doctype",
+				"label": "Price Lists",
+				"target": "Price List",
+				"description": "ERPNext selling and buying price-list masters used by transaction pricing.",
+				"fields": ("enabled", "selling", "buying", "currency"),
+			},
+			{
+				"kind": "doctype",
+				"label": "Item Prices",
+				"target": "Item Price",
+				"description": "ERPNext item-level rates, validity dates, UOM and price-list assignments.",
+				"fields": ("item_code", "price_list", "price_list_rate", "currency", "valid_from", "valid_upto"),
+			},
+			{
+				"kind": "doctype",
+				"label": "Pricing Rules",
+				"target": "Pricing Rule",
+				"description": "ERPNext conditional pricing and product-discount rules applied during selling or buying.",
+				"fields": ("title", "apply_on", "price_or_product_discount", "selling", "buying", "valid_from", "valid_upto", "disable"),
+			},
+			{
+				"kind": "doctype",
+				"label": "Promotional Schemes",
+				"target": "Promotional Scheme",
+				"description": "ERPNext promotional schemes used to generate and govern promotional pricing rules.",
+				"fields": ("apply_on", "selling", "buying", "valid_from", "valid_upto", "disable"),
+			},
+			{
+				"kind": "doctype",
+				"label": "Coupon Codes",
+				"target": "Coupon Code",
+				"description": "ERPNext coupon codes and their validity or usage limits for eligible pricing rules.",
+				"fields": ("coupon_code", "valid_from", "valid_upto", "maximum_use", "used"),
+			},
+			{
+				"kind": "doctype",
+				"label": "Loyalty Programs",
+				"target": "Loyalty Program",
+				"description": "ERPNext loyalty programmes, programme dates and points conversion configuration.",
+				"fields": ("company", "customer_group", "from_date", "to_date", "conversion_factor", "expiry_duration"),
+			},
+		),
+	},
 }
 
 
