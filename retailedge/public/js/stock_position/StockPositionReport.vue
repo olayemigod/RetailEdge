@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Stock Position"
 			eyebrow="Stock Intelligence"
-			subtitle="See current on-hand, reserved, available, ordered and projected stock across your permitted Branch or Warehouse scope."
+			subtitle="See current and projected stock together with ERPNext direct-warehouse replenishment signals across your permitted Branch or Warehouse scope."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -97,7 +97,7 @@
 						<input v-model="includeZero" type="checkbox" />
 						<span>
 							<strong>Include zero rows</strong>
-							<small>Show items whose current and projected quantities are all zero.</small>
+							<small>Show zero-stock rows. Reorder-due items remain visible even when this is off.</small>
 						</span>
 					</label>
 					<div class="filter-action">
@@ -111,9 +111,10 @@
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
 				<span v-if="scan.bin_rows !== undefined">{{ scan.bin_rows }} Bin row{{ scan.bin_rows === 1 ? "" : "s" }} scanned</span>
+				<span v-if="scan.reorder_rows !== undefined">{{ scan.reorder_rows }} direct reorder rule{{ scan.reorder_rows === 1 ? "" : "s" }} scanned</span>
 				<span v-if="!showCosts">Cost values hidden by RetailEdge settings</span>
 				<span v-else-if="companyCurrency">Valuation in {{ companyCurrency }}</span>
-				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} Bin-row cap</span>
+				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} export-row cap</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -177,7 +178,7 @@ export default {
 				page_size: 50,
 			},
 			currentPage: 1,
-			stockStatuses: ["All", "In Stock", "Available", "Out of Stock", "Negative", "Fully Reserved"],
+			stockStatuses: ["All", "In Stock", "Available", "Out of Stock", "Negative", "Fully Reserved", "Reorder Due"],
 		};
 	},
 	computed: {
@@ -229,7 +230,7 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Source", value: "ERPNext Bin current stock" },
+				{ label: "Source", value: "ERPNext Bin + direct Item Reorder rules" },
 				{ label: "Warehouse Scope", value: this.scopeLabel },
 				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by RetailEdge settings" },
 			].concat(this.showCosts && this.companyCurrency ? [{ label: "Company Currency", value: this.companyCurrency }] : []);
@@ -411,7 +412,7 @@ export default {
 				rows: result.rows || [],
 				summary: result.summary || this.summary,
 				metadata: [
-					{ label: "Source", value: "ERPNext Bin current stock" },
+					{ label: "Source", value: "ERPNext Bin + direct Item Reorder rules" },
 					{ label: "Warehouse Scope", value: this.scopeLabel },
 					{ label: "Cost Visibility", value: Number(result.show_costs) ? "Included" : "Hidden by RetailEdge settings" },
 				].concat(result.company_currency ? [{ label: "Company Currency", value: result.company_currency }] : []),
