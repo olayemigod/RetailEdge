@@ -305,6 +305,7 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
 	roles = set(frappe.get_roles(frappe.session.user))
+	access_context = _get_edgesuite_access_context()
 	target_cache: dict[tuple[str, str], bool] = {}
 	permission_cache: dict[tuple[str, str], bool] = {}
 	pos_capabilities = get_pos_runtime_capabilities(
@@ -320,11 +321,13 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		roles=roles,
 		target_cache=target_cache,
 		permission_cache=permission_cache,
+		native_desk_enabled=bool(access_context.get("can_use_native_desk")),
 	)
 	return {
 		"programme_experiences": deepcopy(PROGRAMME_EXPERIENCES),
 		"navigation_groups": navigation_groups,
 		"quick_actions": quick_actions,
+		"access": access_context,
 		"context": {
 			"user": frappe.session.user,
 			"user_name": frappe.utils.get_fullname(frappe.session.user),
@@ -336,10 +339,24 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		"feature_flags": {
 			"product_switcher_enabled": False,
 			"guided_entries_stage": "active",
-			"native_document_fallback_enabled": True,
+			"native_document_fallback_enabled": bool(access_context.get("can_use_native_desk")),
 			"performance_profile": "r2_request_cached",
 		},
 	}
+
+
+def _get_edgesuite_access_context() -> dict[str, Any]:
+	"""Read shared interface exposure without changing RetailEdge authorization."""
+	try:
+		from edgesuite_ui.access_control import get_access_context
+	except ImportError:
+		return {
+			"mode": "native_desk",
+			"restricted_to_edgesuite": False,
+			"can_use_native_desk": True,
+			"authorization_source": "frappe_permissions",
+		}
+	return dict(get_access_context())
 
 
 def _get_permitted_navigation_groups(
@@ -399,13 +416,17 @@ def _resolve_navigation_item(item: dict[str, Any], *, pos_capabilities=None) -> 
 	return resolved
 
 
-def _get_permitted_quick_actions(*, roles=None, target_cache=None, permission_cache=None) -> list[dict[str, Any]]:
+def _get_permitted_quick_actions(
+	*, roles=None, target_cache=None, permission_cache=None, native_desk_enabled: bool = True,
+) -> list[dict[str, Any]]:
 	roles = set(roles if roles is not None else frappe.get_roles(frappe.session.user))
 	target_cache = target_cache if target_cache is not None else {}
 	permission_cache = permission_cache if permission_cache is not None else {}
 	actions: list[dict[str, Any]] = []
 	for action in QUICK_ACTIONS:
 		doctype = action["doctype"]
+		if action.get("mode") == "native_fallback" and not native_desk_enabled:
+			continue
 		if not _doctype_exists_cached(doctype, target_cache) or not _has_permission_cached(doctype, "create", permission_cache):
 			continue
 		required_roles = set(action.get("required_roles") or ())
@@ -439,8 +460,25 @@ def _can_open_target(item: dict[str, Any], *, target_cache=None, permission_cach
 	if target_type == "Report":
 		return _target_exists_cached(target_type, target, target_cache) and _can_open_report_cached(target, permission_cache)
 	if target_type == "Page":
-		return _target_exists_cached(target_type, target, target_cache)
+		return _target_exists_cached(target_type, target, target_cache) and _can_open_page_cached(
+			target, permission_cache
+		)
 	return False
+
+
+def _can_open_page_cached(page_name: str, cache: dict[tuple[str, str], bool]) -> bool:
+	key = (f"Page:{page_name}", "open")
+	if key not in cache:
+		cache[key] = _can_open_page(page_name)
+	return cache[key]
+
+
+def _can_open_page(page_name: str) -> bool:
+	try:
+		page = frappe.get_doc("Page", page_name)
+		return bool(page.is_permitted())
+	except Exception:
+		return False
 
 
 def _can_open_report_cached(report_name: str, cache: dict[tuple[str, str], bool]) -> bool:

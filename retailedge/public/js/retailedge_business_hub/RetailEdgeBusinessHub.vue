@@ -118,6 +118,7 @@
 
 			<SimpleSalesInvoiceDialog
 				:open="simpleSalesInvoiceOpen"
+				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleSalesInvoice"
 				@saved="handleSimpleSalesInvoiceSaved"
 				@open-native="openNativeSalesInvoice"
@@ -125,6 +126,7 @@
 
 			<SimplePaymentDialog
 				:open="simplePaymentOpen"
+				:native-fallback-enabled="nativeFallbackEnabled"
 				:intent="simplePaymentIntent"
 				@close="closeSimplePayment"
 				@saved="handleSimplePaymentSaved"
@@ -133,6 +135,7 @@
 
 			<SimpleCashDepositDialog
 				:open="simpleCashDepositOpen"
+				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleCashDeposit"
 				@saved="handleSimpleCashDepositSaved"
 				@open-native="openNativeCashDeposit"
@@ -140,6 +143,7 @@
 
 			<SimpleCashTransferDialog
 				:open="simpleCashTransferOpen"
+				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleCashTransfer"
 				@saved="handleSimpleCashTransferSaved"
 				@open-native="openNativeCashTransfer"
@@ -147,6 +151,7 @@
 
 			<SimplePurchaseInvoiceDialog
 				:open="simplePurchaseInvoiceOpen"
+				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimplePurchaseInvoice"
 				@saved="handleSimplePurchaseInvoiceSaved"
 				@open-native="openNativePurchaseInvoice"
@@ -154,6 +159,7 @@
 
 			<SimpleCashierExpenseDialog
 				:open="simpleCashierExpenseOpen"
+				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleCashierExpense"
 				@saved="handleSimpleCashierExpenseSaved"
 				@open-native="openNativeCashierExpense"
@@ -161,6 +167,7 @@
 
 			<SimpleStockTransferDialog
 				:open="simpleStockTransferOpen"
+				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleStockTransfer"
 				@saved="handleSimpleStockTransferSaved"
 				@open-native="openNativeStockTransfer"
@@ -168,6 +175,7 @@
 
 			<SimpleStockAdjustmentDialog
 				:open="simpleStockAdjustmentOpen"
+				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleStockAdjustment"
 				@saved="handleSimpleStockAdjustmentSaved"
 				@open-native="openNativeStockAdjustment"
@@ -283,6 +291,7 @@ export default {
 			quickActions: [],
 			context: { user: "", user_name: "", company: "", branch: "" },
 			featureFlags: {},
+			accessContext: { mode: "native_desk", restricted_to_edgesuite: false, can_use_native_desk: true },
 		};
 	},
 	computed: {
@@ -290,6 +299,12 @@ export default {
 			return this.context.user_name
 				? `Welcome, ${this.context.user_name}`
 				: "Your business command centre";
+		},
+		nativeFallbackEnabled() {
+			return (
+				this.accessContext.can_use_native_desk !== false &&
+				this.featureFlags.native_document_fallback_enabled !== false
+			);
 		},
 		shellMenuItems() {
 			return this.navigationGroups
@@ -304,6 +319,8 @@ export default {
 							description: item.description || "",
 							route: this.routeForTarget(item),
 							icon: item.icon || "list",
+							link_type: item.target_type,
+							link_to: item.target,
 							source: item,
 						}))
 						.filter((item) => item.route),
@@ -321,6 +338,7 @@ export default {
 			this.quickActions = data.quick_actions || [];
 			this.context = { ...this.context, ...(data.context || {}) };
 			this.featureFlags = data.feature_flags || {};
+			this.accessContext = { ...this.accessContext, ...(data.access || {}) };
 			if (!this.quickActions.length) this.createPickerOpen = false;
 		},
 		refreshContext({ force = false } = {}) {
@@ -378,12 +396,18 @@ export default {
 				this.simpleStockAdjustmentOpen = true;
 				return;
 			}
+			if (!this.nativeFallbackEnabled) {
+				frappe.show_alert?.({ message: "This account is limited to EdgeSuite operational pages.", indicator: "orange" });
+				return;
+			}
 			frappe.new_doc(action.doctype);
 		},
 		notifyGuidedDraftSaved(result, fallbackDoctype, label) {
 			if (!result?.name) return;
 			const doctype = result.doctype || fallbackDoctype;
-			frappe.set_route("Form", doctype, result.name);
+			if (this.nativeFallbackEnabled) {
+				frappe.set_route("Form", doctype, result.name);
+			}
 			frappe.call({
 				method: WORKFLOW_READINESS_METHOD,
 				args: { doctype, name: result.name },
