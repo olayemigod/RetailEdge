@@ -12,8 +12,10 @@ from retailedge.guided_stock_transfer import (
 	MAX_ITEMS,
 	MAX_LINK_RESULTS,
 	_assert_simple_stock_item,
+	_branch_search_filters,
 	_coerce_values,
 	_normalise_items,
+	_warehouse_search_filters,
 	create_simple_stock_transfer_draft,
 )
 
@@ -48,10 +50,13 @@ class TestGuidedStockTransfer(unittest.TestCase):
 				{"item_code": "ITEM-002", "qty": "3"},
 			]
 		)
-		self.assertEqual(rows, [
-			{"item_code": "ITEM-001", "qty": 2.0},
-			{"item_code": "ITEM-002", "qty": 3.0},
-		])
+		self.assertEqual(
+			rows,
+			[
+				{"item_code": "ITEM-001", "qty": 2.0},
+				{"item_code": "ITEM-002", "qty": 3.0},
+			],
+		)
 		for invalid in (
 			[],
 			[{"item_code": "", "qty": 1}],
@@ -84,7 +89,7 @@ class TestGuidedStockTransfer(unittest.TestCase):
 	@patch("retailedge.guided_stock_transfer._assert_simple_stock_item")
 	@patch("retailedge.guided_stock_transfer._validate_branch_warehouse")
 	@patch("retailedge.guided_stock_transfer._assert_read_permission")
-	@patch("retailedge.guided_stock_transfer.validate_user_branch_access")
+	@patch("retailedge.guided_stock_transfer.resolve_operational_branch")
 	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
 	@patch("retailedge.guided_stock_transfer.frappe.db.get_value", return_value="Demo Company")
 	@patch("retailedge.guided_stock_transfer.frappe.new_doc")
@@ -93,13 +98,14 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		mock_new_doc,
 		_mock_db,
 		_mock_create_permission,
-		mock_branch_access,
+		mock_branch_scope,
 		_mock_read_permission,
 		mock_validate_warehouse,
 		mock_item,
 	):
 		doc = _DraftStockEntry()
 		mock_new_doc.return_value = doc
+		mock_branch_scope.side_effect = lambda _company, branch="", user=None: {"branch": branch}
 		result = create_simple_stock_transfer_draft(
 			{
 				"company": "Demo Company",
@@ -116,7 +122,7 @@ class TestGuidedStockTransfer(unittest.TestCase):
 			}
 		)
 		mock_new_doc.assert_called_once_with("Stock Entry")
-		self.assertEqual(mock_branch_access.call_count, 2)
+		self.assertEqual(mock_branch_scope.call_count, 2)
 		self.assertEqual(mock_validate_warehouse.call_count, 2)
 		self.assertEqual(mock_item.call_count, 2)
 		self.assertEqual(doc.insert_calls, 1)
@@ -130,9 +136,18 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		self.assertEqual(result["docstatus"], 0)
 		self.assertEqual(result["name"], doc.name)
 
+	@patch(
+		"retailedge.guided_stock_transfer.resolve_operational_branch",
+		side_effect=lambda _company, branch="", user=None: {"branch": branch},
+	)
 	@patch("retailedge.guided_stock_transfer._assert_read_permission")
 	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
-	def test_same_source_and_target_warehouse_is_blocked(self, _mock_permission, _mock_create_permission):
+	def test_same_source_and_target_warehouse_is_blocked(
+		self,
+		_mock_create_permission,
+		_mock_permission,
+		_mock_branch_scope,
+	):
 		with self.assertRaises(frappe.ValidationError):
 			create_simple_stock_transfer_draft(
 				{
@@ -142,6 +157,70 @@ class TestGuidedStockTransfer(unittest.TestCase):
 					"items": [{"item_code": "ITEM-001", "qty": 1}],
 				}
 			)
+
+	@patch("retailedge.guided_stock_transfer._assert_simple_stock_item")
+	@patch("retailedge.guided_stock_transfer._validate_branch_warehouse")
+	@patch("retailedge.guided_stock_transfer._assert_read_permission")
+	@patch(
+		"retailedge.guided_stock_transfer.resolve_operational_branch",
+		return_value={"branch": "Lagos"},
+	)
+	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
+	@patch("retailedge.guided_stock_transfer.frappe.db.get_value", return_value="Demo Company")
+	@patch("retailedge.guided_stock_transfer.frappe.new_doc")
+	def test_restricted_blank_branch_is_resolved_before_warehouse_validation(
+		self,
+		mock_new_doc,
+		_mock_db,
+		_mock_create_permission,
+		mock_branch_scope,
+		_mock_read_permission,
+		mock_validate_warehouse,
+		_mock_item,
+	):
+		doc = _DraftStockEntry()
+		mock_new_doc.return_value = doc
+		create_simple_stock_transfer_draft(
+			{
+				"company": "Demo Company",
+				"source_warehouse": "Lagos Stores - DC",
+				"target_warehouse": "Lagos Transit - DC",
+				"items": [{"item_code": "ITEM-001", "qty": 1}],
+			}
+		)
+
+		self.assertEqual(mock_branch_scope.call_count, 2)
+		self.assertEqual(mock_validate_warehouse.call_count, 2)
+		for call in mock_validate_warehouse.call_args_list:
+			self.assertEqual(call.kwargs["branch"], "Lagos")
+
+	@patch(
+		"retailedge.guided_stock_transfer.get_operational_branch_scope",
+		return_value={"restricted": True, "allowed_branches": ["Lagos", "Ikeja"]},
+	)
+	@patch("retailedge.guided_stock_transfer.has_field", return_value=True)
+	def test_restricted_multi_branch_warehouse_search_requires_branch_selection(
+		self,
+		_mock_has_field,
+		_mock_scope,
+	):
+		self.assertIsNone(_warehouse_search_filters("Demo Company", "", "stock@example.com"))
+
+	@patch(
+		"retailedge.guided_stock_transfer.get_operational_branch_scope",
+		return_value={"restricted": True, "allowed_branches": []},
+	)
+	@patch("retailedge.guided_stock_transfer.has_field", return_value=True)
+	def test_restricted_zero_branch_search_fails_closed(self, _mock_has_field, _mock_scope):
+		filters = _branch_search_filters("Demo Company", "stock@example.com")
+		self.assertEqual(filters["name"], "__never__")
+
+	def test_branch_and_warehouse_search_fail_closed_without_company(self):
+		self.assertIsNone(_warehouse_search_filters("", "", "stock@example.com"))
+		self.assertEqual(
+			_branch_search_filters("", "stock@example.com"),
+			{"name": "__never__"},
+		)
 
 	def test_adapter_is_bounded_permission_aware_and_draft_only(self):
 		source = (APP_ROOT / "guided_stock_transfer.py").read_text()
@@ -161,16 +240,12 @@ class TestGuidedStockTransfer(unittest.TestCase):
 
 	def test_dialog_uses_shared_edgesuite_components_cascades_and_accepts_safe_prefill(self):
 		component = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "retailedge_business_hub"
-			/ "SimpleStockTransferDialog.vue"
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleStockTransferDialog.vue"
 		).read_text()
 		self.assertIn("EdgeModal: runtimeComponents.EdgeModal", component)
 		self.assertIn("EdgeLinkField: runtimeComponents.EdgeLinkField", component)
 		self.assertIn("EdgeChildTable: runtimeComponents.EdgeChildTable", component)
-		self.assertIn('prefill: { type: Object, default: () => ({}) }', component)
+		self.assertIn("prefill: { type: Object, default: () => ({}) }", component)
 		self.assertIn("await this.applyPrefill()", component)
 		self.assertIn("await this.setSourceWarehouse(sourceWarehouse)", component)
 		self.assertIn("await this.setTargetWarehouse(targetWarehouse)", component)
