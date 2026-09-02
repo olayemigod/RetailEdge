@@ -5,8 +5,6 @@ from typing import Any, Callable
 import frappe
 from frappe import _
 
-from retailedge.branch_context import user_has_global_branch_access
-from retailedge.branch_profile import get_user_branch_profiles
 from retailedge.operating_context import get_operating_context
 from retailedge.purchase_reporting import (
 	get_purchase_register as _base_get_purchase_register,
@@ -20,6 +18,7 @@ from retailedge.replenishment_handoff import (
 	get_replenishment_handoff_context as _base_replenishment_handoff_context,
 	get_replenishment_material_request_handoff as _base_replenishment_material_request_handoff,
 )
+from retailedge.reporting_scope import constrain_report_filters, get_report_branch_scope, validate_report_scope
 from retailedge.sales_reporting import (
 	get_sales_by_item as _base_get_sales_by_item,
 	get_sales_by_item_export as _base_get_sales_by_item_export,
@@ -84,62 +83,28 @@ def _coerce_filters(filters: dict[str, Any] | str | None) -> dict[str, Any]:
 	return dict(filters or {})
 
 
-def _assigned_profile_scope(company: str) -> tuple[bool, list[str]]:
-	user = frappe.session.user
-	company = str(company or "").strip()
-	if not company or user_has_global_branch_access(user=user):
-		return False, []
-	try:
-		rows = get_user_branch_profiles(user=user, company=company)
-	except Exception:
-		frappe.throw(
-			_("Your assigned Branch reporting scope could not be verified. Try again or contact an administrator."),
-			frappe.PermissionError,
-		)
-	if not rows:
-		return False, []
-	branches = sorted(
-		{
-			str(row.get("branch") or "").strip()
-			for row in rows
-			if row.get("enabled") and str(row.get("branch") or "").strip()
-		}
-	)
-	if not branches:
-		frappe.throw(
-			_("You do not have an active Branch Setup assignment for this Company."),
-			frappe.PermissionError,
-		)
-	return True, branches
-
-
 def _constrain_report_filters(filters: dict[str, Any] | str | None) -> dict[str, Any]:
-	resolved = _coerce_filters(filters)
-	company = str(resolved.get("company") or "").strip()
-	configured, assigned = _assigned_profile_scope(company)
-	if not configured:
-		return resolved
-
-	branch = str(resolved.get("branch") or "").strip()
-	if not branch:
-		frappe.throw(
-			_("Choose one of your assigned Branches. Cross-branch reporting is available only to authorized managers."),
-			frappe.PermissionError,
-		)
-	if branch not in assigned:
-		frappe.throw(_("You do not have reporting access to Branch {0}.").format(branch), frappe.PermissionError)
-	return resolved
+	return constrain_report_filters(
+		_coerce_filters(filters),
+		require_branch_when_restricted=True,
+	)
 
 
 def _constrain_search_scope(kind: str, company: str, branch: str) -> tuple[str, list[str]]:
 	company = str(company or "").strip()
 	branch = str(branch or "").strip()
-	configured, assigned = _assigned_profile_scope(company)
-	if not configured:
+	if not company:
 		return branch, []
-	if branch and branch not in assigned:
-		frappe.throw(_("You do not have reporting access to Branch {0}.").format(branch), frappe.PermissionError)
-	if str(kind or "").strip().lower() == "warehouse" and not branch:
+
+	scope = get_report_branch_scope(company)
+	assigned = list(scope.get("allowed_branches") or []) if scope.get("restricted") else []
+	if branch:
+		validate_report_scope(
+			company=company,
+			branch=branch,
+			require_branch_when_restricted=False,
+		)
+	if str(kind or "").strip().lower() == "warehouse" and assigned and not branch:
 		return "", assigned
 	return branch, assigned
 
