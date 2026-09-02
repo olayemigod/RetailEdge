@@ -6,11 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, cstr
 
-from retailedge.branch_context import (
-	get_user_allowed_branches,
-	user_has_global_branch_access,
-	validate_user_branch_access,
-)
+from retailedge.reporting_scope import validate_report_scope
 from retailedge.utils.settings import RETAILEDGE_SETTINGS_DOCTYPE
 
 PRINT_SETTING = "enable_reporting_print"
@@ -165,33 +161,13 @@ def _user_roles(user: str) -> set[str]:
 	return set(frappe.get_roles(user))
 
 
-def _company_branch_count(company: str) -> int:
-	if not company or not frappe.db.exists("DocType", "Branch"):
-		return 0
-	meta = frappe.get_meta("Branch")
-	if not meta.has_field("company"):
-		return 0
-	return int(frappe.db.count("Branch", filters={"company": company}) or 0)
-
-
 def _validate_scope(*, company: str = "", branch: str = "", user: str) -> None:
-	company = cstr(company or "").strip()
-	branch = cstr(branch or "").strip()
-	if company and not frappe.has_permission("Company", "read", doc=company, user=user):
-		frappe.throw(_("You do not have access to this Company."), frappe.PermissionError)
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company or None, throw=True)
-		return
-	if not company or user_has_global_branch_access(user=user):
-		return
-	if _company_branch_count(company) <= 1:
-		return
-	allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-	if not allowed:
-		frappe.throw(
-			_("Your Branch access is not configured for this multi-branch Company."),
-			frappe.PermissionError,
-		)
+	validate_report_scope(
+		company=company,
+		branch=branch,
+		user=user,
+		require_branch_when_restricted=True,
+	)
 
 
 def _has_ref_read_permission(spec: ReportCapabilitySpec, user: str) -> bool:
@@ -213,7 +189,7 @@ def get_report_capabilities(report_key: str, company: str = "", branch: str = ""
 	return {
 		"scope_name": spec.label, "scope_key": spec.key, "scope_type": "report",
 		"can_view": can_view, "can_print": can_print, "can_export": can_export,
-		"authorization_model": "settings_scope_role_document_and_branch_permission",
+		"authorization_model": "settings_scope_role_document_and_operating_branch_permission",
 	}
 
 
