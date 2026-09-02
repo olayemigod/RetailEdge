@@ -31,6 +31,8 @@ jobs:
           echo "merge_exit_code=$rc"
           echo "--- unmerged files ---"
           git diff --name-only --diff-filter=U | sort
+          echo "--- EdgeSuite semantic conflict ---"
+          git diff --cc -- retailedge/edgesuite_ui.py || true
           echo "--- merge status ---"
           git status --short
           if [ "$rc" -ne 0 ]; then
