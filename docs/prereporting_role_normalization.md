@@ -17,12 +17,13 @@ This is an internal compatibility decision. It does not prevent product UI from 
 
 ## Compatibility aliases
 
-The following existing spaced names remain accepted compatibility aliases:
+Only spaced names already observed in the product contract are retained as compatibility aliases:
 
-- `RetailEdge Cashier` → `RetailEdgeCashier`
 - `RetailEdge Manager` → `RetailEdgeManager`
 - `RetailEdge Branch Manager` → `RetailEdgeBranchManager`
 - `RetailEdge Auditor` → `RetailEdgeAuditor`
+
+No new spaced Cashier role is introduced; `RetailEdgeCashier` remains its single internal identity in this checkpoint.
 
 Aliases are not deleted or renamed in this phase. Existing pages and runtime checks that deliberately include both forms continue to work.
 
@@ -30,8 +31,8 @@ Aliases are not deleted or renamed in this phase. Existing pages and runtime che
 
 `retailedge.patches.normalize_retailedge_role_assignments` is additive and idempotent:
 
-1. ensure canonical and compatibility Role records exist;
-2. find User role assignments that use a compatibility alias;
+1. ensure canonical and known compatibility Role records exist;
+2. find User role assignments that use a known compatibility alias;
 3. add the corresponding canonical role when it is missing;
 4. preserve the compatibility alias assignment.
 
