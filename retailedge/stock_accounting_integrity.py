@@ -5,9 +5,9 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, date_diff, flt, getdate, nowdate, add_days
+from frappe.utils import add_days, cint, date_diff, flt, getdate, nowdate
 
-from retailedge.branch_context import user_has_global_branch_access
+from retailedge.reporting_scope import assert_company_wide_report_scope
 
 NATIVE_REPORT_NAME = "Stock and Account Value Comparison"
 DEFAULT_PAGE_SIZE = 50
@@ -25,6 +25,7 @@ def get_stock_accounting_integrity_context() -> dict[str, Any]:
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	if company:
 		_assert_company_read(company)
+		_assert_company_wide_branch_scope(company)
 	return {
 		"default_filters": {
 			"company": company,
@@ -250,23 +251,7 @@ def _assert_native_report_access() -> None:
 
 
 def _assert_company_wide_branch_scope(company: str, *, user: str | None = None) -> None:
-	user = user or frappe.session.user
-	if user_has_global_branch_access(user=user):
-		return
-	if not frappe.db.exists("DocType", "Branch"):
-		return
-	meta = frappe.get_meta("Branch")
-	if not meta.has_field("company"):
-		return
-	branch_count = int(frappe.db.count("Branch", filters={"company": company}) or 0)
-	if branch_count <= 1:
-		return
-	frappe.throw(
-		_(
-			"Stock & Accounting Integrity is a Company-wide accounting control. Your current access is Branch-restricted, so this multi-branch Company cannot be reviewed here."
-		),
-		frappe.PermissionError,
-	)
+	assert_company_wide_report_scope(company, user=user)
 
 
 def _assert_stock_account(account: str, company: str) -> None:
