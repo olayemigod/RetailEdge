@@ -1,0 +1,285 @@
+name: RetailEdge Pre-Reporting B1 Access Hardening V2
+
+on:
+  push:
+    branches:
+      - qa/retailedge-prereporting-hardening-20260902
+
+permissions:
+  contents: write
+
+jobs:
+  apply-b1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out audit branch with full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply B1 to exact reconciled product head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "RetailEdge Pre-Reporting Hardening"
+          git config user.email "retailedge-hardening@users.noreply.github.com"
+          git fetch origin qa/retailedge-reconciled-20260902
+          git checkout -B qa/retailedge-reconciled-20260902 origin/qa/retailedge-reconciled-20260902
+          test "$(git rev-parse HEAD)" = "451eebac2e6aa5ada54727810391fb89ce4bba69"
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path("retailedge")
+          backend_path = root / "edgesuite_ui.py"
+          backend = backend_path.read_text()
+
+          replacements = [
+              (
+                  '@frappe.whitelist()\ndef get_retailedge_business_hub_context() -> dict[str, Any]:\n\troles = set(frappe.get_roles(frappe.session.user))\n\ttarget_cache: dict[tuple[str, str], bool] = {}\n',
+                  '@frappe.whitelist()\ndef get_retailedge_business_hub_context() -> dict[str, Any]:\n\troles = set(frappe.get_roles(frappe.session.user))\n\taccess_context = _get_edgesuite_access_context()\n\ttarget_cache: dict[tuple[str, str], bool] = {}\n',
+              ),
+              (
+                  '\tquick_actions = _get_permitted_quick_actions(\n\t\troles=roles,\n\t\ttarget_cache=target_cache,\n\t\tpermission_cache=permission_cache,\n\t)\n\treturn {\n',
+                  '\tquick_actions = _get_permitted_quick_actions(\n\t\troles=roles,\n\t\ttarget_cache=target_cache,\n\t\tpermission_cache=permission_cache,\n\t\tnative_desk_enabled=bool(access_context.get("can_use_native_desk")),\n\t)\n\treturn {\n',
+              ),
+              (
+                  '\t\t"quick_actions": quick_actions,\n\t\t"context": {\n',
+                  '\t\t"quick_actions": quick_actions,\n\t\t"access": access_context,\n\t\t"context": {\n',
+              ),
+              (
+                  '\t\t\t"native_document_fallback_enabled": True,\n',
+                  '\t\t\t"native_document_fallback_enabled": bool(access_context.get("can_use_native_desk")),\n',
+              ),
+              (
+                  'def _get_permitted_quick_actions(*, roles=None, target_cache=None, permission_cache=None) -> list[dict[str, Any]]:\n',
+                  'def _get_permitted_quick_actions(\n\t*, roles=None, target_cache=None, permission_cache=None, native_desk_enabled: bool = True,\n) -> list[dict[str, Any]]:\n',
+              ),
+              (
+                  '\tfor action in QUICK_ACTIONS:\n\t\tdoctype = action["doctype"]\n\t\tif not _doctype_exists_cached(doctype, target_cache) or not _has_permission_cached(doctype, "create", permission_cache):\n',
+                  '\tfor action in QUICK_ACTIONS:\n\t\tdoctype = action["doctype"]\n\t\tif action.get("mode") == "native_fallback" and not native_desk_enabled:\n\t\t\tcontinue\n\t\tif not _doctype_exists_cached(doctype, target_cache) or not _has_permission_cached(doctype, "create", permission_cache):\n',
+              ),
+              (
+                  '\tif target_type == "Page":\n\t\treturn _target_exists_cached(target_type, target, target_cache)\n\treturn False\n\n\ndef _can_open_report_cached',
+                  '\tif target_type == "Page":\n\t\treturn _target_exists_cached(target_type, target, target_cache) and _can_open_page_cached(\n\t\t\ttarget, permission_cache\n\t\t)\n\treturn False\n\n\ndef _can_open_page_cached(page_name: str, cache: dict[tuple[str, str], bool]) -> bool:\n\tkey = (f"Page:{page_name}", "open")\n\tif key not in cache:\n\t\tcache[key] = _can_open_page(page_name)\n\treturn cache[key]\n\n\ndef _can_open_page(page_name: str) -> bool:\n\ttry:\n\t\tpage = frappe.get_doc("Page", page_name)\n\t\treturn bool(page.is_permitted())\n\texcept Exception:\n\t\treturn False\n\n\ndef _can_open_report_cached',
+              ),
+          ]
+          for old, new in replacements:
+              assert backend.count(old) == 1, old[:100]
+              backend = backend.replace(old, new, 1)
+
+          anchor = '\ndef _get_permitted_navigation_groups(\n'
+          helper = '''\ndef _get_edgesuite_access_context() -> dict[str, Any]:
+\t"""Read shared interface exposure without changing RetailEdge authorization."""
+\ttry:
+\t\tfrom edgesuite_ui.access_control import get_access_context
+\texcept ImportError:
+\t\treturn {
+\t\t\t"mode": "native_desk",
+\t\t\t"restricted_to_edgesuite": False,
+\t\t\t"can_use_native_desk": True,
+\t\t\t"authorization_source": "frappe_permissions",
+\t\t}
+\treturn dict(get_access_context())
+
+
+def _get_permitted_navigation_groups(
+'''
+          assert backend.count(anchor) == 1
+          backend = backend.replace(anchor, helper, 1)
+          backend_path.write_text(backend)
+
+          hub_path = root / "public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue"
+          hub = hub_path.read_text()
+          dialog_names = [
+              "SimpleSalesInvoiceDialog",
+              "SimplePaymentDialog",
+              "SimpleCashDepositDialog",
+              "SimpleCashTransferDialog",
+              "SimplePurchaseInvoiceDialog",
+              "SimpleCashierExpenseDialog",
+              "SimpleStockTransferDialog",
+              "SimpleStockAdjustmentDialog",
+          ]
+          for name in dialog_names:
+              pattern = re.compile(rf'(<{re.escape(name)}\n\s*:open="[^"]+"\n)')
+              hub, count = pattern.subn(
+                  r'\1\t\t\t\t:nativeFallbackEnabled="nativeFallbackEnabled"\n', hub, count=1
+              )
+              assert count == 1, f"missing parent prop for {name}"
+
+          hub_replacements = [
+              (
+                  '\t\t\tfeatureFlags: {},\n\t\t};\n',
+                  '\t\t\tfeatureFlags: {},\n\t\t\taccessContext: { mode: "native_desk", restricted_to_edgesuite: false, can_use_native_desk: true },\n\t\t};\n',
+              ),
+              (
+                  '\t\tshellMenuItems() {\n',
+                  '\t\tnativeFallbackEnabled() {\n\t\t\treturn (\n\t\t\t\tthis.accessContext.can_use_native_desk !== false &&\n\t\t\t\tthis.featureFlags.native_document_fallback_enabled !== false\n\t\t\t);\n\t\t},\n\t\tshellMenuItems() {\n',
+              ),
+              (
+                  '\t\t\t\t\t\t\tdescription: item.description || "",\n\t\t\t\t\t\t\troute: this.routeForTarget(item),\n\t\t\t\t\t\t\ticon: item.icon || "list",\n\t\t\t\t\t\t\tsource: item,\n',
+                  '\t\t\t\t\t\t\tdescription: item.description || "",\n\t\t\t\t\t\t\troute: this.routeForTarget(item),\n\t\t\t\t\t\t\ticon: item.icon || "list",\n\t\t\t\t\t\t\tlink_type: item.target_type,\n\t\t\t\t\t\t\tlink_to: item.target,\n\t\t\t\t\t\t\tsource: item,\n',
+              ),
+              (
+                  '\t\t\tthis.featureFlags = data.feature_flags || {};\n\t\t\tif (!this.quickActions.length) this.createPickerOpen = false;\n',
+                  '\t\t\tthis.featureFlags = data.feature_flags || {};\n\t\t\tthis.accessContext = { ...this.accessContext, ...(data.access || {}) };\n\t\t\tif (!this.quickActions.length) this.createPickerOpen = false;\n',
+              ),
+              (
+                  '\t\t\tfrappe.new_doc(action.doctype);\n\t\t},\n\t\tnotifyGuidedDraftSaved',
+                  '\t\t\tif (!this.nativeFallbackEnabled) {\n\t\t\t\tfrappe.show_alert?.({\n\t\t\t\t\tmessage: "This account is limited to EdgeSuite operational pages.",\n\t\t\t\t\tindicator: "orange",\n\t\t\t\t});\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tfrappe.new_doc(action.doctype);\n\t\t},\n\t\tnotifyGuidedDraftSaved',
+              ),
+              (
+                  '\t\t\tconst doctype = result.doctype || fallbackDoctype;\n\t\t\tfrappe.set_route("Form", doctype, result.name);\n\t\t\tfrappe.call({\n',
+                  '\t\t\tconst doctype = result.doctype || fallbackDoctype;\n\t\t\tif (this.nativeFallbackEnabled) {\n\t\t\t\tfrappe.set_route("Form", doctype, result.name);\n\t\t\t}\n\t\t\tfrappe.call({\n',
+              ),
+          ]
+          for old, new in hub_replacements:
+              assert hub.count(old) == 1, old[:100]
+              hub = hub.replace(old, new, 1)
+          hub_path.write_text(hub)
+
+          for name in dialog_names:
+              path = root / f"public/js/retailedge_business_hub/{name}.vue"
+              text = path.read_text()
+              open_prop = '\t\topen: { type: Boolean, default: false },\n'
+              assert text.count(open_prop) == 1, f"open prop mismatch: {path}"
+              text = text.replace(
+                  open_prop,
+                  open_prop + '\t\tnativeFallbackEnabled: { type: Boolean, default: true },\n',
+                  1,
+              )
+              button = re.compile(
+                  r'<button type="button" class="edge-button" :disabled="([^"]*)" @click="openFullForm">'
+              )
+              text, count = button.subn(
+                  r'<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="\1" @click="openFullForm">',
+                  text,
+                  count=1,
+              )
+              assert count == 1, f"Open Full Form button mismatch: {path}"
+              path.write_text(text)
+
+          test_path = root / "tests/test_prereporting_access_hardening.py"
+          test_path.write_text('''from __future__ import annotations
+
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from retailedge import edgesuite_ui
+
+APP_ROOT = Path(__file__).resolve().parents[1]
+
+
+class RetailEdgePreReportingAccessHardeningTests(unittest.TestCase):
+\tdef test_page_navigation_uses_native_frappe_page_permission(self):
+\t\tpage = SimpleNamespace(is_permitted=lambda: False)
+\t\twith patch.object(edgesuite_ui.frappe, "get_doc", return_value=page) as get_doc:
+\t\t\tself.assertFalse(edgesuite_ui._can_open_page("restricted-page"))
+\t\tget_doc.assert_called_once_with("Page", "restricted-page")
+
+\tdef test_page_permission_failure_fails_closed(self):
+\t\twith patch.object(edgesuite_ui.frappe, "get_doc", side_effect=RuntimeError("no page")):
+\t\t\tself.assertFalse(edgesuite_ui._can_open_page("missing-page"))
+
+\tdef test_native_fallback_quick_action_is_hidden_for_edgesuite_only_users(self):
+\t\twith (
+\t\t\tpatch("retailedge.edgesuite_ui._doctype_exists_cached", return_value=True),
+\t\t\tpatch("retailedge.edgesuite_ui._has_permission_cached", return_value=True),
+\t\t\tpatch("retailedge.edgesuite_ui._cashier_deposit_available", return_value=True),
+\t\t):
+\t\t\tactions = edgesuite_ui._get_permitted_quick_actions(
+\t\t\t\troles={"System Manager"}, native_desk_enabled=False
+\t\t\t)
+\t\tself.assertNotIn("new-warranty-claim", {action["key"] for action in actions})
+\t\tself.assertTrue(actions)
+\t\tself.assertTrue(all(action["mode"] == "available" for action in actions))
+
+\tdef test_native_fallback_remains_available_for_native_desk_users(self):
+\t\twith (
+\t\t\tpatch("retailedge.edgesuite_ui._doctype_exists_cached", return_value=True),
+\t\t\tpatch("retailedge.edgesuite_ui._has_permission_cached", return_value=True),
+\t\t\tpatch("retailedge.edgesuite_ui._cashier_deposit_available", return_value=True),
+\t\t):
+\t\t\tactions = edgesuite_ui._get_permitted_quick_actions(
+\t\t\t\troles={"System Manager"}, native_desk_enabled=True
+\t\t\t)
+\t\tself.assertIn("new-warranty-claim", {action["key"] for action in actions})
+
+\tdef test_retailedge_roles_remain_system_user_roles(self):
+\t\troles = (APP_ROOT / "setup_roles.py").read_text()
+\t\tself.assertIn('"desk_access": 1', roles)
+\t\tself.assertNotIn('"desk_access": 0', roles)
+
+\tdef test_business_hub_preserves_native_link_type_for_shared_access_filter(self):
+\t\thub = (APP_ROOT / "public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue").read_text()
+\t\tself.assertIn("link_type: item.target_type", hub)
+\t\tself.assertIn("link_to: item.target", hub)
+\t\tself.assertIn("data.access || {}", hub)
+\t\tself.assertIn("if (this.nativeFallbackEnabled)", hub)
+
+\tdef test_guided_dialogs_hide_full_form_fallback_when_native_desk_is_unavailable(self):
+\t\tfor name in (
+\t\t\t"SimpleSalesInvoiceDialog",
+\t\t\t"SimplePaymentDialog",
+\t\t\t"SimpleCashDepositDialog",
+\t\t\t"SimpleCashTransferDialog",
+\t\t\t"SimplePurchaseInvoiceDialog",
+\t\t\t"SimpleCashierExpenseDialog",
+\t\t\t"SimpleStockTransferDialog",
+\t\t\t"SimpleStockAdjustmentDialog",
+\t\t):
+\t\t\twith self.subTest(name=name):
+\t\t\t\tsource = (APP_ROOT / f"public/js/retailedge_business_hub/{name}.vue").read_text()
+\t\t\t\tself.assertIn("nativeFallbackEnabled: { type: Boolean, default: true }", source)
+\t\t\t\tself.assertIn('v-if="nativeFallbackEnabled"', source)
+
+
+if __name__ == "__main__":
+\tunittest.main()
+''')
+
+          Path("docs/prereporting_access_hardening.md").write_text('''# RetailEdge Pre-Reporting Access Hardening
+
+## B1 — EdgeSuite-only access foundation
+
+RetailEdge operational roles intentionally retain Frappe `desk_access = 1`: EdgeSuite operational pages run inside Frappe Desk, so ordinary operators must remain valid System Users. The governed EdgeSuite UI 1.1.0 runtime owns the separate per-user **EdgeSuite Desk Access** interface selector. This selector does not grant DocType, Page, Report, Company, Branch, workflow, accounting or stock authorization.
+
+### Changes
+
+- Business Hub Page targets now use Frappe v16 `Page.is_permitted()` before being advertised.
+- Business Hub context exposes the shared EdgeSuite access mode.
+- Native-only fallback quick actions are omitted for EdgeSuite-only users.
+- Business Hub shell items preserve native link-type metadata so the shared access guard can remove DocType/Report destinations.
+- Guided dialogs hide **Open Full Form** when native Desk is unavailable.
+- Guided draft saves stay in EdgeSuite for restricted users rather than routing into a rejected native Form.
+- Native Desk users retain existing full-form continuation.
+
+### Backward compatibility and safety
+
+If the shared access-control module is unavailable during a rolling deploy, RetailEdge preserves prior native-Desk exposure to avoid locking System Users out; normal Frappe/ERPNext permissions remain authoritative. No role is renamed, no role-level Desk capability is disabled, no business permission is broadened, and no submitted accounting/stock/payment document is mutated.
+
+Manual browser QA remains deferred until the consolidated pre-reporting candidate is ready.
+''')
+          PY
+
+          python -m compileall -q retailedge/edgesuite_ui.py retailedge/tests/test_prereporting_access_hardening.py
+          grep -q 'link_type: item.target_type' retailedge/public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue
+          grep -q 'page.is_permitted()' retailedge/edgesuite_ui.py
+          grep -q 'native_desk_enabled' retailedge/edgesuite_ui.py
+          test "$(grep -l 'v-if="nativeFallbackEnabled"' retailedge/public/js/retailedge_business_hub/Simple*Dialog.vue | wc -l)" -eq 8
+          grep -q '"desk_access": 1' retailedge/setup_roles.py
+          ! grep -q '"desk_access": 0' retailedge/setup_roles.py
+
+          git add retailedge/edgesuite_ui.py \
+            retailedge/public/js/retailedge_business_hub \
+            retailedge/tests/test_prereporting_access_hardening.py \
+            docs/prereporting_access_hardening.md
+          git diff --cached --check
+          git status --short
+          git commit -m "fix(access): harden EdgeSuite-only RetailEdge navigation"
+          git push origin HEAD:refs/heads/qa/retailedge-reconciled-20260902
+          echo "b1_head=$(git rev-parse HEAD)"
