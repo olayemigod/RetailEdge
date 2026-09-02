@@ -1,0 +1,27 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="edge-supplier-statement" data-edge-suite-ready="true">
+	<section class="edge-supplier-statement-hero">
+		<div><span>Supplier finance</span><h1>{{ company_name or "Supplier Account Statement" }}</h1><p>Read-only ERPNext payable Payment Ledger Entry activity.</p></div>
+		<a href="/supplier_portal">Back to Supplier Portal</a>
+	</section>
+	<form method="get" class="edge-supplier-statement-filters">
+		<label>Company<select name="company">{% for company in statement.companies %}<option value="{{ company }}" {% if company == statement.company %}selected{% endif %}>{{ company }}</option>{% endfor %}</select></label>
+		<label>From Date <input type="date" name="from_date" value="{{ statement.from_date }}"></label>
+		<label>To Date <input type="date" name="to_date" value="{{ statement.to_date }}"></label>
+		<button type="submit">Apply</button>
+	</form>
+	<section class="edge-supplier-statement-summary">
+		<article><span>Opening balance</span><strong>{{ frappe.utils.fmt_money(statement.opening_balance or 0, currency=statement.currency or None) }}</strong></article>
+		<article><span>Payable increase</span><strong>{{ frappe.utils.fmt_money(statement.total_increase or 0, currency=statement.currency or None) }}</strong></article>
+		<article><span>Settlement / reduction</span><strong>{{ frappe.utils.fmt_money(statement.total_settlement or 0, currency=statement.currency or None) }}</strong></article>
+		<article><span>Closing balance</span><strong>{{ frappe.utils.fmt_money(statement.closing_balance or 0, currency=statement.currency or None) }}</strong></article>
+	</section>
+	<section class="edge-supplier-statement-table-wrap"><table><thead><tr><th>Date</th><th>Supplier</th><th>Voucher</th><th>Against</th><th>Remarks</th><th>Increase</th><th>Settlement</th><th>Balance</th></tr></thead><tbody>{% for row in statement.rows %}<tr><td>{{ frappe.utils.formatdate(row.posting_date) }}</td><td>{{ row.supplier }}</td><td>{{ row.voucher_type }} {{ row.voucher_no }}</td><td>{% if row.against_voucher_no %}{{ row.against_voucher_type }} {{ row.against_voucher_no }}{% endif %}</td><td>{{ row.remarks }}</td><td>{{ frappe.utils.fmt_money(row.increase or 0, currency=statement.currency or None) }}</td><td>{{ frappe.utils.fmt_money(row.settlement or 0, currency=statement.currency or None) }}</td><td>{{ frappe.utils.fmt_money(row.balance or 0, currency=statement.currency or None) }}</td></tr>{% else %}<tr><td colspan="8">No payable ledger entries found for this period.</td></tr>{% endfor %}</tbody></table></section>
+	<p class="edge-supplier-statement-note">Source of truth: {{ statement.source_of_truth }}. This page is read-only and does not create or modify Purchase Invoices, Payment Entries or ledger entries.</p>
+</div>
+<style>
+.edge-supplier-statement{--edge-statement-surface:var(--edge-color-surface,#fff);--edge-statement-border:var(--edge-color-border,#e5e7eb);--edge-statement-ink:var(--edge-color-ink,#111827);--edge-statement-muted:var(--edge-color-ink-muted,#6b7280);--edge-statement-accent:var(--edge-color-primary,#2563eb);display:grid;gap:1rem;color:var(--edge-statement-ink);padding:1rem 0 2rem}.edge-supplier-statement-hero,.edge-supplier-statement-filters,.edge-supplier-statement-summary article,.edge-supplier-statement-table-wrap,.edge-supplier-statement-note{background:var(--edge-statement-surface);border:1px solid var(--edge-statement-border);border-radius:12px}.edge-supplier-statement-hero{display:flex;justify-content:space-between;gap:1rem;padding:1rem}.edge-supplier-statement-hero h1{margin:.2rem 0}.edge-supplier-statement-hero p,.edge-supplier-statement-note{color:var(--edge-statement-muted)}.edge-supplier-statement-filters{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:.75rem;align-items:end;padding:1rem}.edge-supplier-statement-filters label{display:grid;gap:.35rem;font-weight:600}.edge-supplier-statement-filters input,.edge-supplier-statement-filters select{min-height:2.4rem;border:1px solid var(--edge-statement-border);border-radius:8px;padding:.45rem;background:var(--edge-statement-surface);color:var(--edge-statement-ink)}.edge-supplier-statement-filters button{min-height:2.4rem;border:1px solid var(--edge-statement-accent);border-radius:8px;padding:.45rem .8rem;background:var(--edge-statement-accent);color:#fff}.edge-supplier-statement-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}.edge-supplier-statement-summary article{display:grid;gap:.35rem;padding:1rem}.edge-supplier-statement-summary span{font-size:.8rem;color:var(--edge-statement-muted)}.edge-supplier-statement-table-wrap{overflow:auto}.edge-supplier-statement table{width:100%;border-collapse:collapse}.edge-supplier-statement th,.edge-supplier-statement td{padding:.65rem .75rem;border-bottom:1px solid var(--edge-statement-border);text-align:left;white-space:nowrap}.edge-supplier-statement th{font-size:.75rem;text-transform:uppercase;color:var(--edge-statement-muted)}.edge-supplier-statement-note{padding:.8rem 1rem;margin:0}@media(max-width:900px){.edge-supplier-statement-filters,.edge-supplier-statement-summary{grid-template-columns:1fr 1fr}}@media(max-width:560px){.edge-supplier-statement-hero{flex-direction:column}.edge-supplier-statement-filters,.edge-supplier-statement-summary{grid-template-columns:1fr}}
+</style>
+{% endblock %}

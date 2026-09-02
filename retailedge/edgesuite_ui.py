@@ -15,6 +15,25 @@ from retailedge.pos_runtime import (
 )
 
 FINANCE_TRANSFER_ROLES = {"Accounts User", "Accounts Manager", "System Manager"}
+CASH_FLOW_OUTLOOK_ROLES = {
+	"System Manager",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Branch Manager",
+	"RetailEdgeBranchManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+	"Accounts Manager",
+	"Accounts User",
+}
+STOCK_ACCOUNTING_INTEGRITY_ROLES = {"System Manager", "Stock User", "Accounts Manager"}
+SUPPLIER_DOCUMENT_REVIEW_ROLES = {
+	"System Manager",
+	"Purchase Manager",
+	"Purchase User",
+	"Accounts Manager",
+	"Accounts User",
+}
 ACTION_CENTER_ROLES = {
 	"System Manager",
 	"RetailEdge Manager",
@@ -84,8 +103,26 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Sales Invoices", "target_type": "DocType", "target": "Sales Invoice", "icon": "clipboard"},
 			{"label": "Sales Orders", "target_type": "DocType", "target": "Sales Order", "icon": "clipboard"},
 			{"label": "Delivery Notes", "target_type": "DocType", "target": "Delivery Note", "icon": "truck"},
+			{"label": "Sales Team & Targets", "target_type": "Page", "target": "sales-team-control", "icon": "users"},
+			{"label": "Sales People", "target_type": "DocType", "target": "Sales Person", "icon": "user"},
+			{"label": "Sales Partners", "target_type": "DocType", "target": "Sales Partner", "icon": "users"},
+			{"label": "Sales Person Commissions", "target_type": "Report", "target": "Sales Person Commission Summary", "icon": "report"},
+			{"label": "Sales Partner Commissions", "target_type": "Report", "target": "Sales Partner Commission Summary", "icon": "report"},
+			{"label": "Sales Person Targets", "target_type": "Report", "target": "Sales Person Target Variance Based On Item Group", "icon": "chart"},
+			{"label": "Sales Partner Targets", "target_type": "Report", "target": "Sales Partner Target Variance based on Item Group", "icon": "chart"},
 			{"label": "POS Opening", "target_type": "DocType", "target": ERPNEXT_POS_OPENING_ENTRY, "runtime_target": "pos_opening", "icon": "calendar"},
 			{"label": "POS Closing", "target_type": "DocType", "target": ERPNEXT_POS_CLOSING_ENTRY, "runtime_target": "pos_closing", "icon": "calendar"},
+		),
+	},
+	{
+		"key": "pricing-promotions", "label": "Pricing & Promotions", "icon": "tag", "items": (
+			{"label": "Pricing & Promotions Overview", "target_type": "Page", "target": "pricing-promotions-control", "icon": "tag"},
+			{"label": "Price Lists", "target_type": "DocType", "target": "Price List", "icon": "tag"},
+			{"label": "Item Prices", "target_type": "DocType", "target": "Item Price", "icon": "tag"},
+			{"label": "Pricing Rules", "target_type": "DocType", "target": "Pricing Rule", "icon": "settings"},
+			{"label": "Promotional Schemes", "target_type": "DocType", "target": "Promotional Scheme", "icon": "gift"},
+			{"label": "Coupon Codes", "target_type": "DocType", "target": "Coupon Code", "icon": "tag"},
+			{"label": "Loyalty Programs", "target_type": "DocType", "target": "Loyalty Program", "icon": "gift"},
 		),
 	},
 	{
@@ -103,11 +140,15 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "stock", "label": "Stock", "icon": "layers", "items": (
 			{"label": "Products", "target_type": "DocType", "target": "Item", "icon": "layers"},
 			{"label": "Stock Locations", "target_type": "DocType", "target": "Warehouse", "icon": "building"},
+			{"label": "Stock Traceability", "target_type": "Page", "target": "stock-traceability-control", "icon": "search"},
+			{"label": "Batches", "target_type": "DocType", "target": "Batch", "icon": "layers"},
+			{"label": "Serial Numbers", "target_type": "DocType", "target": "Serial No", "icon": "clipboard"},
 			{"label": "Stock Movement History", "target_type": "Report", "target": "RetailEdge Stock Movement History", "icon": "report"},
 			{"label": "Stock Position", "target_type": "Page", "target": "stock-position", "icon": "report"},
 			{"label": "Inventory Intelligence", "target_type": "Page", "target": "inventory-intelligence", "icon": "chart"},
 			{"label": "Transfer Opportunities", "target_type": "Page", "target": "inventory-transfer-opportunities", "icon": "repeat"},
 			{"label": "Inventory Ageing", "target_type": "Page", "target": "inventory-ageing", "icon": "report"},
+			{"label": "Stock & Accounting Integrity", "target_type": "Page", "target": "stock-accounting-integrity", "icon": "shield", "required_roles": tuple(sorted(STOCK_ACCOUNTING_INTEGRITY_ROLES))},
 			{"label": "Stock Balance", "target_type": "Report", "target": "Stock Balance", "icon": "report"},
 			{"label": "Stock Transfers", "target_type": "DocType", "target": "Stock Entry", "icon": "repeat"},
 			{"label": "Stock Count", "target_type": "DocType", "target": "Stock Reconciliation", "icon": "clipboard"},
@@ -118,9 +159,20 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		),
 	},
 	{
+		"key": "assets", "label": "Assets", "icon": "briefcase", "items": (
+			{"label": "Assets Overview", "target_type": "Page", "target": "assets-control", "icon": "briefcase"},
+			{"label": "Fixed Assets", "target_type": "DocType", "target": "Asset", "icon": "briefcase"},
+			{"label": "Asset Categories", "target_type": "DocType", "target": "Asset Category", "icon": "layers"},
+		),
+	},
+	{
 		"key": "money", "label": "Money", "icon": "wallet", "items": (
 			{"label": "Cash Movement", "target_type": "Page", "target": "cash-movement", "icon": "report"},
+			{"label": "Cash Flow Outlook", "target_type": "Page", "target": "cash-flow-outlook", "icon": "chart", "required_roles": tuple(sorted(CASH_FLOW_OUTLOOK_ROLES))},
 			{"label": "Payments", "target_type": "DocType", "target": "Payment Entry", "icon": "wallet"},
+			{"label": "Payment Reconciliation", "target_type": "DocType", "target": "Payment Reconciliation", "icon": "repeat"},
+			{"label": "Subscriptions", "target_type": "DocType", "target": "Subscription", "icon": "repeat"},
+			{"label": "Subscription Plans", "target_type": "DocType", "target": "Subscription Plan", "icon": "clipboard"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet"},
 			{"label": "Import Bank Statement", "target_type": "DocType", "target": "RetailEdge Payment Statement Import", "icon": "upload"},
 			{"label": "Bank Matching", "target_type": "Report", "target": "RetailEdge Bank Transaction Matching", "icon": "report"},
@@ -144,9 +196,18 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		),
 	},
 	{
+		"key": "service-warranty", "label": "Service & Warranty", "icon": "tool", "items": (
+			{"label": "Service & Warranty Overview", "target_type": "Page", "target": "service-warranty-control", "icon": "tool"},
+			{"label": "Warranty Claims", "target_type": "DocType", "target": "Warranty Claim", "icon": "shield"},
+			{"label": "Maintenance Schedules", "target_type": "DocType", "target": "Maintenance Schedule", "icon": "calendar"},
+			{"label": "Maintenance Visits", "target_type": "DocType", "target": "Maintenance Visit", "icon": "tool"},
+		),
+	},
+	{
 		"key": "suppliers-payables", "label": "Suppliers & Payables", "icon": "users", "items": (
 			{"label": "Suppliers", "target_type": "DocType", "target": "Supplier", "icon": "user"},
 			{"label": "Supplier Payables", "target_type": "Page", "target": "supplier-payables", "icon": "report"},
+			{"label": "Payment Orders", "target_type": "DocType", "target": "Payment Order", "icon": "wallet"},
 			{"label": "Accounts Payable (Detailed)", "target_type": "Report", "target": "Accounts Payable", "icon": "report"},
 		),
 	},
@@ -168,6 +229,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "review-approvals", "label": "Review & Approvals", "icon": "shield", "items": (
 			{"label": "Business Control Centre", "target_type": "Page", "target": "business-control-center", "icon": "shield", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
 			{"label": "Action Centre", "target_type": "Page", "target": "action-center", "icon": "bell", "required_roles": tuple(sorted(ACTION_CENTER_ROLES))},
+			{"label": "Supplier Document Review", "target_type": "Page", "target": "supplier-document-review", "icon": "clipboard", "required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "DocType", "target": "RetailEdge Bank Transaction Match", "icon": "shield"},
 			{"label": "Daily Sales Audit", "target_type": "DocType", "target": "RetailEdge Daily Sales Audit", "icon": "shield"},
 			{"label": "Cashier Expense Review", "target_type": "Report", "target": "RetailEdge Cashier Expense Review", "icon": "report"},
@@ -188,6 +250,10 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Profit & Loss", "target_type": "Report", "target": "Profit and Loss Statement", "icon": "report"},
 			{"label": "Balance Sheet", "target_type": "Report", "target": "Balance Sheet", "icon": "report"},
 			{"label": "Cash Flow Statement", "target_type": "Report", "target": "Cash Flow", "icon": "report"},
+			{"label": "Budgeting & Cost Control", "target_type": "Page", "target": "budget-control", "icon": "chart"},
+			{"label": "Budgets", "target_type": "DocType", "target": "Budget", "icon": "chart"},
+			{"label": "Budget Variance", "target_type": "Report", "target": "Budget Variance Report", "icon": "report"},
+			{"label": "Cost Centers", "target_type": "DocType", "target": "Cost Center", "icon": "layers"},
 			{"label": "Journal Entries", "target_type": "DocType", "target": "Journal Entry", "icon": "clipboard"},
 		),
 	},
@@ -223,6 +289,9 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "record-purchase", "label": "Record Purchase", "description": "Create a purchase invoice for stock, services, or operating expenses.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
+	},
+	{
+		"key": "new-warranty-claim", "label": "New Warranty Claim", "description": "Open an unsaved native ERPNext warranty claim for a customer item or serial number.", "doctype": "Warranty Claim", "icon": "tool", "experience": "act", "mode": "native_fallback",
 	},
 	{
 		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted stock locations using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
@@ -367,9 +436,28 @@ def _can_open_target(item: dict[str, Any], *, target_cache=None, permission_cach
 		return True
 	if target_type == "DocType":
 		return _doctype_exists_cached(target, target_cache) and _has_permission_cached(target, "read", permission_cache)
-	if target_type in {"Page", "Report"}:
+	if target_type == "Report":
+		return _target_exists_cached(target_type, target, target_cache) and _can_open_report_cached(target, permission_cache)
+	if target_type == "Page":
 		return _target_exists_cached(target_type, target, target_cache)
 	return False
+
+
+def _can_open_report_cached(report_name: str, cache: dict[tuple[str, str], bool]) -> bool:
+	key = (f"Report:{report_name}", "open")
+	if key not in cache:
+		cache[key] = _can_open_report(report_name)
+	return cache[key]
+
+
+def _can_open_report(report_name: str) -> bool:
+	try:
+		from frappe.desk.query_report import get_report_doc
+
+		get_report_doc(report_name)
+		return True
+	except Exception:
+		return False
 
 
 def _target_exists_cached(target_type: str, target: str, cache: dict[tuple[str, str], bool]) -> bool:
@@ -399,8 +487,6 @@ def _target_exists(target_type: str, target: str) -> bool:
 
 def _doctype_exists(doctype: str) -> bool:
 	return _target_exists("DocType", doctype)
-
-
 def _has_permission(doctype: str, permission_type: str) -> bool:
 	try:
 		return bool(frappe.has_permission(doctype, permission_type))

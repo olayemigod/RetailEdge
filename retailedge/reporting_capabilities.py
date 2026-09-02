@@ -92,6 +92,12 @@ _REPORT_SPECS = {
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _STOCK_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _STOCK_MANAGER_ROLES), ref_doctype="Stock Ledger Entry",
 	),
+	"stock-accounting-integrity": ReportCapabilitySpec(
+		key="stock-accounting-integrity", label="Stock & Accounting Integrity",
+		view_roles=_roles({"System Manager", "Stock User"}, _STOCK_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		print_roles=_roles({"System Manager"}, _STOCK_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles({"System Manager"}, _STOCK_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Stock Ledger Entry",
+	),
 	"expense-register": ReportCapabilitySpec(
 		key="expense-register", label="Expense Register",
 		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
@@ -121,6 +127,12 @@ _REPORT_SPECS = {
 		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Payment Entry",
+	),
+	"cash-flow-outlook": ReportCapabilitySpec(
+		key="cash-flow-outlook", label="Cash Flow Outlook",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 	),
 }
 

@@ -2,6 +2,14 @@ import PurchaseReportingReport from "./purchase_reporting/PurchaseReportingRepor
 
 const REPORT_PRODUCT = "RetailEdge";
 const GOVERNED_EXPORT_METHOD = "retailedge.reporting_actions.get_report_export_data";
+const PURCHASE_VERIFICATION_METHOD = "retailedge.purchase_cycle_verification.get_purchase_cycle_verification";
+const PURCHASE_VERIFICATION_COLUMNS = Object.freeze([
+	{ fieldname: "verification_status", label: "Verification", fieldtype: "Data", width: 120 },
+	{ fieldname: "po_links", label: "PO Links", fieldtype: "Data", width: 90 },
+	{ fieldname: "receipt_links", label: "Receipt Links", fieldtype: "Data", width: 100 },
+	{ fieldname: "review_flags", label: "Review Flags", fieldtype: "Int", width: 90 },
+	{ fieldname: "review_reason", label: "Review Reason", fieldtype: "Data", width: 260 },
+]);
 const PURCHASE_REPORT_PROVIDERS = Object.freeze({
 	purchase_register: {
 		key: "purchase-register",
@@ -26,6 +34,28 @@ function callMethod(method, args = {}) {
 	});
 }
 
+async function enrichPurchaseRegister(result = {}) {
+	const rows = Array.isArray(result.rows) ? result.rows : [];
+	const verification = await callMethod(PURCHASE_VERIFICATION_METHOD, {
+		invoice_names: rows.map((row) => row.invoice).filter(Boolean),
+	});
+	const verificationByInvoice = new Map(
+		(Array.isArray(verification.rows) ? verification.rows : []).map((row) => [row.invoice, row])
+	);
+	const existingFields = new Set((result.columns || []).map((column) => column.fieldname));
+	const verificationColumns = PURCHASE_VERIFICATION_COLUMNS.filter((column) => !existingFields.has(column.fieldname));
+	return {
+		...result,
+		rows: rows.map((row) => ({ ...row, ...(verificationByInvoice.get(row.invoice) || {}) })),
+		columns: [...(result.columns || []), ...verificationColumns],
+		metadata: {
+			...(result.metadata || {}),
+			verification_policy: verification.policy || {},
+			verification_source_of_truth: verification.source_of_truth || "",
+		},
+	};
+}
+
 function registerPurchaseReportingProviders(target = window) {
 	const reports = target?.EdgeSuiteReports || target?.EdgeSuiteUI?.reports;
 	if (!reports?.createBoundedPaginatedReportProvider || !reports?.registerProvider) return [];
@@ -42,11 +72,12 @@ function registerPurchaseReportingProviders(target = window) {
 			loadPage: async ({ filters = {}, start = 0, page_length = 50 } = {}) => {
 				const safeLength = Math.max(1, Number(page_length || 50));
 				const page = Math.floor(Math.max(0, Number(start || 0)) / safeLength) + 1;
-				const result = await callMethod(config.pageMethod, {
+				const rawResult = await callMethod(config.pageMethod, {
 					filters: { ...filters, page_size: safeLength },
 					page,
 					page_size: safeLength,
 				});
+				const result = config.key === "purchase-register" ? await enrichPurchaseRegister(rawResult) : rawResult;
 				const pagination = result.pagination || {};
 				return {
 					...result,

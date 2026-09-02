@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="Sales Invoice"
-		subtitle="Create a new draft invoice or invoice a submitted Quotation, Sales Order or Delivery Note without forcing a rigid selling path."
+		subtitle="Create a new draft invoice, invoice a submitted source document, or prepare an ERPNext Return / Credit Note without forcing a rigid selling path."
 		size="xl"
 		@close="requestClose"
 	>
@@ -26,7 +26,7 @@
 				:searcher="searchSource"
 				@update:modelValue="sourceDocument = $event || ''"
 			/>
-			<p class="selling-form-hint">The source remains submitted and unchanged. RetailEdge creates a new ERPNext Sales Invoice draft only.</p>
+			<p class="selling-form-hint">{{ sourceHint }}</p>
 		</div>
 
 		<form v-else class="selling-form" @submit.prevent="saveDraft">
@@ -51,7 +51,7 @@
 
 				<label class="selling-field">
 					<span>Posting Date <b>*</b></span>
-					<input v-model="values.posting_date" class="form-control" type="date" required />
+					<input v-model="values.posting_date" class="form-control" type="date" required @change="postingDateChanged" />
 				</label>
 
 				<EdgeLinkField
@@ -80,6 +80,34 @@
 					@update:modelValue="values.shipping_rule = $event || ''"
 				/>
 			</div>
+
+			<CustomerCreditSummary :customer="values.customer" :company="values.company" />
+
+			<section v-if="values.customer" class="loyalty-panel" aria-live="polite">
+				<div class="loyalty-panel-heading">
+					<div>
+						<span class="loyalty-kicker">Loyalty & Rewards</span>
+						<strong>{{ loyaltyStatus.loyalty_program || "Customer programme" }}</strong>
+					</div>
+					<a v-if="loyaltyStatus.can_manage_programs" :href="loyaltyStatus.native_route || '/app/loyalty-program'" target="_blank" rel="noopener noreferrer">Manage Programmes</a>
+				</div>
+				<p v-if="loyaltyLoading" class="selling-form-hint">Checking current ERPNext Loyalty Points...</p>
+				<template v-else-if="loyaltyStatus.enrolled">
+					<div class="loyalty-summary">
+						<div><span>Available Points</span><strong>{{ loyaltyStatus.available_points || 0 }}</strong></div>
+						<div><span>Current Tier</span><strong>{{ loyaltyStatus.tier_name || "Standard" }}</strong></div>
+						<div><span>Point Value</span><strong>{{ loyaltyStatus.currency || "" }} {{ loyaltyStatus.conversion_factor || 0 }}</strong></div>
+						<div><span>Available Value</span><strong>{{ loyaltyStatus.currency || "" }} {{ loyaltyStatus.available_redemption_value || 0 }}</strong></div>
+					</div>
+					<p v-if="loyaltyStatus.from_date || loyaltyStatus.to_date" class="selling-form-hint">Programme validity: {{ loyaltyStatus.from_date || "No start limit" }} – {{ loyaltyStatus.to_date || "No end limit" }}</p>
+					<label class="selling-field">
+						<span>Points to Redeem</span>
+						<input v-model.number="values.loyalty_points" class="form-control" type="number" min="0" step="1" :max="loyaltyStatus.available_points || 0" placeholder="0" />
+					</label>
+					<p class="selling-form-hint">Estimated redemption: {{ loyaltyRedemptionLabel }}. ERPNext revalidates the balance and final invoice value before saving the draft.</p>
+				</template>
+				<p v-else class="selling-form-hint">{{ loyaltyStatus.message || "No Loyalty Program is assigned to this Customer." }}</p>
+			</section>
 
 			<label class="guided-check-field">
 				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
@@ -121,15 +149,18 @@
 
 <script>
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
+import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 
 const GUIDED_SEARCH = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const GUIDED_PRICING = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const SHIPPING_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_shipping_rules";
 const SOURCE_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_sources";
+const LOYALTY_STATUS = "retailedge.loyalty_rewards.get_customer_loyalty_status";
 const CREATE_NEW = "retailedge.professional_sales_invoice.create_professional_sales_invoice_draft";
 const CREATE_FROM_QUOTATION = "retailedge.professional_sales_invoice.create_sales_invoice_from_quotation";
 const CREATE_FROM_ORDER = "retailedge.professional_sales_invoice.create_sales_invoice_from_sales_order";
 const CREATE_FROM_DELIVERY = "retailedge.professional_sales_invoice.create_sales_invoice_from_delivery_note";
+const CREATE_RETURN = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
 function initialValues(context = {}) {
@@ -140,6 +171,7 @@ function initialValues(context = {}) {
 		customer: "",
 		posting_date: context.today || "",
 		shipping_rule: "",
+		loyalty_points: 0,
 		update_stock: 0,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
@@ -148,7 +180,7 @@ function initialValues(context = {}) {
 
 export default {
 	name: "ProfessionalSalesInvoiceDialog",
-	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable },
+	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
 	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) } },
 	emits: ["close", "saved", "open-native"],
 	data() {
@@ -159,12 +191,16 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
+			loyaltyToken: 0,
+			loyaltyLoading: false,
+			loyaltyStatus: {},
 			values: initialValues(this.context),
 			modes: [
 				{ key: "new", label: "New Invoice" },
 				{ key: "quotation", label: "From Quotation" },
 				{ key: "sales-order", label: "From Sales Order" },
 				{ key: "delivery-note", label: "From Delivery Note" },
+				{ key: "return", label: "Return / Credit Note" },
 			],
 			itemTableField: { label: "Items", description: "Add the products or services to invoice." },
 			itemColumns: [
@@ -176,18 +212,28 @@ export default {
 	},
 	computed: {
 		priceListLabel() { return this.context.pricing?.price_list || "ERPNext default"; },
+		loyaltyRedemptionLabel() {
+			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
+			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
+		},
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
 		sourceLabel() {
-			return { quotation: "Submitted Quotation", "sales-order": "Submitted Sales Order", "delivery-note": "Submitted Delivery Note" }[this.mode] || "Source Document";
+			return { quotation: "Submitted Quotation", "sales-order": "Submitted Sales Order", "delivery-note": "Submitted Delivery Note", return: "Submitted Sales Invoice" }[this.mode] || "Source Document";
 		},
 		sourceDescription() {
+			if (this.mode === "return") return "ERPNext prepares a draft Return / Credit Note from the selected submitted Sales Invoice. The source remains submitted and unchanged.";
 			return this.mode === "quotation"
 				? "Create the invoice directly from the accepted Quotation; no Sales Order is created behind the scenes."
 				: `ERPNext maps the ${this.sourceLabel.replace("Submitted ", "")} into a new Sales Invoice draft using remaining billable quantities.`;
 		},
+		sourceHint() {
+			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. Review the prepared draft in the standard Sales Invoice form; no refund or Payment Entry is created automatically.";
+			return "The source remains submitted and unchanged. RetailEdge creates a new ERPNext Sales Invoice draft only.";
+		},
 		saveLabel() {
 			if (this.mode === "new") return "Save Draft";
+			if (this.mode === "return") return "Prepare Draft Return / Credit Note";
 			return `Create Draft from ${this.sourceLabel.replace("Submitted ", "")}`;
 		},
 	},
@@ -197,6 +243,9 @@ export default {
 				this.mode = "new";
 				this.sourceDocument = "";
 				this.values = initialValues(this.context);
+				this.loyaltyToken += 1;
+				this.loyaltyStatus = {};
+				this.loyaltyLoading = false;
 				this.saveError = "";
 			}
 		},
@@ -224,9 +273,42 @@ export default {
 		setCustomer(next) {
 			const changed = this.values.customer && this.values.customer !== next;
 			this.values.customer = next || "";
+			this.loyaltyToken += 1;
+			this.values.loyalty_points = 0;
+			this.loyaltyStatus = {};
+			if (this.values.customer) this.loadLoyaltyStatus();
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
+			}
+		},
+		postingDateChanged() {
+			this.values.loyalty_points = 0;
+			this.loyaltyStatus = {};
+			if (this.values.customer) this.loadLoyaltyStatus();
+		},
+		async loadLoyaltyStatus() {
+			if (!this.values.customer) return;
+			const token = ++this.loyaltyToken;
+			this.loyaltyLoading = true;
+			try {
+				const status = await callMethod(LOYALTY_STATUS, {
+					values: {
+						company: this.values.company,
+						branch: this.values.branch,
+						warehouse: this.values.warehouse,
+						customer: this.values.customer,
+						posting_date: this.values.posting_date,
+					},
+				});
+				if (token === this.loyaltyToken) this.loyaltyStatus = status || {};
+			} catch (error) {
+				if (token === this.loyaltyToken) {
+					this.loyaltyStatus = {};
+					this.saveError = errorMessage(error, "Unable to load Loyalty Points.");
+				}
+			} finally {
+				if (token === this.loyaltyToken) this.loyaltyLoading = false;
 			}
 		},
 		async setBranch(next) {
@@ -296,10 +378,11 @@ export default {
 				if (this.mode === "quotation") { method = CREATE_FROM_QUOTATION; args = { quotation: this.sourceDocument }; }
 				if (this.mode === "sales-order") { method = CREATE_FROM_ORDER; args = { sales_order: this.sourceDocument }; }
 				if (this.mode === "delivery-note") { method = CREATE_FROM_DELIVERY; args = { delivery_note: this.sourceDocument }; }
+				if (this.mode === "return") { method = CREATE_RETURN; args = { sales_invoice: this.sourceDocument }; }
 				const result = await callMethod(method, args);
 				this.$emit("saved", result);
 			} catch (error) {
-				this.saveError = errorMessage(error, "Sales Invoice draft could not be created.");
+				this.saveError = errorMessage(error, this.mode === "return" ? "Return / Credit Note draft could not be prepared." : "Sales Invoice draft could not be created.");
 			} finally {
 				this.saving = false;
 			}
@@ -312,6 +395,12 @@ export default {
 .invoice-mode-switch { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
 .source-invoice-panel { display: grid; gap: 1rem; }
 .selling-form { display: grid; gap: 1rem; }
+.loyalty-panel { display: grid; gap: 0.75rem; padding: 0.9rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.65rem; }
+.loyalty-panel-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.loyalty-panel-heading > div { display: grid; gap: 0.2rem; }
+.loyalty-kicker, .loyalty-summary span { color: var(--text-muted); font-size: 0.8rem; }
+.loyalty-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+.loyalty-summary > div { display: grid; gap: 0.2rem; }
 .selling-form-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
 .selling-form-context > div { display: grid; gap: 0.2rem; }
 .selling-form-context span, .selling-form-hint, .guided-check-field small { color: var(--text-muted); font-size: 0.8rem; }
@@ -323,5 +412,5 @@ export default {
 .selling-form-footer { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .selling-form-footer-actions { display: flex; gap: 0.5rem; }
 .selling-form-error { padding: 0.75rem; margin-bottom: 1rem; border: 1px solid var(--red-300, #f1aeb5); border-radius: 0.5rem; }
-@media (max-width: 720px) { .selling-form-context, .selling-form-grid { grid-template-columns: 1fr; } .selling-form-footer { align-items: stretch; flex-direction: column; } .selling-form-footer-actions { justify-content: flex-end; } }
+@media (max-width: 720px) { .selling-form-context, .selling-form-grid, .loyalty-summary { grid-template-columns: 1fr; } .selling-form-footer, .loyalty-panel-heading { align-items: stretch; flex-direction: column; } .selling-form-footer-actions { justify-content: flex-end; } }
 </style>

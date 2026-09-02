@@ -31,11 +31,14 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 			[
 				"Home",
 				"Sell",
+				"Pricing & Promotions",
 				"Buy",
 				"Stock",
+				"Assets",
 				"Money",
 				"Expenses",
 				"Customers",
+				"Service & Warranty",
 				"Suppliers & Payables",
 				"Insights",
 				"Review & Approvals",
@@ -67,7 +70,7 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		)
 		self.assertEqual(
 			{item["target"] for item in groups["suppliers-payables"]["items"]},
-			{"Supplier", "supplier-payables", "Accounts Payable"},
+			{"Supplier", "supplier-payables", "Payment Order", "Accounts Payable"},
 		)
 		self.assertIn(
 			"RetailEdge Stock Movement History",

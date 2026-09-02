@@ -11,6 +11,8 @@ from erpnext.accounts.doctype.journal_entry.journal_entry import get_default_ban
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_party_details, get_reference_details
 
 from retailedge.branch_context import (
+	BRANCH_FIELD_CANDIDATES,
+	get_first_existing_field,
 	get_user_allowed_branches,
 	has_doctype,
 	has_field,
@@ -141,7 +143,7 @@ def search_simple_payment_options(
 			filters=_branch_search_filters(company=company, user=frappe.session.user),
 			page_length=limit,
 			reference_doctype=PAYMENT_ENTRY_DOCTYPE,
-			link_fieldname="retailedge_branch",
+			link_fieldname=get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES) or "branch",
 		)
 	if fieldname == "reference_name":
 		if not party:
@@ -282,7 +284,7 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 	if total_allocated > amount:
 		frappe.throw(_("Total allocated amount cannot exceed the payment amount."))
 	if len(resolved_branches) > 1:
-		frappe.throw(_("All selected invoices must belong to the same RetailEdge Branch."))
+		frappe.throw(_("All selected invoices must belong to the same Branch."))
 	if branch and resolved_branches and branch not in resolved_branches:
 		frappe.throw(_("Selected invoices do not belong to Branch {0}.").format(branch))
 
@@ -301,8 +303,9 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 	else:
 		doc.paid_from = bank_account
 		doc.paid_to = party_account
-	if branch:
-		doc.branch = branch
+	payment_branch_field = get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES)
+	if branch and payment_branch_field:
+		doc.set(payment_branch_field, branch)
 
 	if mode_details["reference_required"]:
 		reference_no = str(values.get("reference_no") or "").strip()
@@ -339,7 +342,7 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 		"party_type": doc.party_type,
 		"party": doc.party,
 		"company": doc.company,
-		"branch": getattr(doc, "retailedge_branch", None) or branch,
+		"branch": getattr(doc, payment_branch_field, None) if payment_branch_field else "",
 		"paid_amount": doc.paid_amount,
 		"unallocated_amount": getattr(doc, "unallocated_amount", None),
 		"route": f"/app/payment-entry/{doc.name}",
@@ -364,9 +367,11 @@ def _search_outstanding_references(
 	}
 	if txt:
 		filters["name"] = ["like", f"%{txt}%"]
-	if branch and has_field(config["reference_doctype"], "retailedge_branch"):
+	branch_field = get_first_existing_field(config["reference_doctype"], BRANCH_FIELD_CANDIDATES)
+	if branch:
 		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
-		filters["retailedge_branch"] = branch
+		if branch_field:
+			filters[branch_field] = branch
 
 	fields = ["name", "posting_date", "outstanding_amount", "currency"]
 	if has_field(config["reference_doctype"], "due_date"):
@@ -400,8 +405,9 @@ def _get_reference_snapshot(
 	_assert_read_permission(reference_doctype, reference_name)
 	party_field = config["party_type"].lower()
 	fields = ["company", party_field, "docstatus", "currency", "payment_terms_template"]
-	if has_field(reference_doctype, "retailedge_branch"):
-		fields.append("retailedge_branch")
+	branch_field = get_first_existing_field(reference_doctype, BRANCH_FIELD_CANDIDATES)
+	if branch_field:
+		fields.append(branch_field)
 	row = frappe.db.get_value(reference_doctype, reference_name, fields, as_dict=True)
 	if not row or row.company != company or row.get(party_field) != party or cint(row.docstatus) != 1:
 		frappe.throw(_("{0} {1} is not a submitted outstanding invoice for this party and company.").format(reference_doctype, reference_name))
@@ -435,7 +441,9 @@ def _get_reference_snapshot(
 	if outstanding <= 0:
 		frappe.throw(_("{0} has no positive outstanding amount.").format(reference_name))
 
-	reference_branch = row.get("retailedge_branch") if "retailedge_branch" in row else None
+	reference_branch = row.get(branch_field) if branch_field else None
+	if reference_branch:
+		validate_user_branch_access(reference_branch, user=frappe.session.user, company=company, throw=True)
 	if branch and reference_branch and reference_branch != branch:
 		frappe.throw(_("{0} belongs to Branch {1}, not Branch {2}.").format(reference_name, reference_branch, branch))
 	return {

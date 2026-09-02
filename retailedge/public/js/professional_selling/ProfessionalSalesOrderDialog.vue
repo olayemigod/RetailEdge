@@ -92,6 +92,8 @@
 				</label>
 			</div>
 
+			<CustomerCreditSummary :customer="values.customer" :company="values.company" />
+
 			<EdgeChildTable
 				:field="itemTableField"
 				:rows="values.items"
@@ -127,6 +129,7 @@
 
 <script>
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
+import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 
 const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
 const SOURCE_METHOD = "retailedge.professional_selling_sources.search_professional_selling_sources";
@@ -154,7 +157,7 @@ function initialValues(context = {}) {
 
 export default {
 	name: "ProfessionalSalesOrderDialog",
-	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable },
+	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
 	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) } },
 	emits: ["close", "saved", "open-native"],
 	data() {
