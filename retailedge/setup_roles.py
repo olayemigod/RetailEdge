@@ -6,17 +6,23 @@ import frappe
 
 
 # These compact names are the long-standing internal RetailEdge role IDs used by
-# existing DocType permissions and installed sites. Keep them stable. Human-
-# readable spaced variants remain compatibility aliases until a future explicit
-# role-rename programme can prove every downstream permission surface is safe.
+# existing DocType permissions and installed sites. Keep them stable.
+RETAILEDGE_ROLE_NAMES = (
+	"RetailEdgeCashier",
+	"RetailEdgeManager",
+	"RetailEdgeBranchManager",
+	"RetailEdgeAuditor",
+)
+
+# Only aliases already present in the product contract are preserved here. Do
+# not invent additional spellings: every extra Role becomes another permission
+# identity that must be governed and migrated later.
 RETAILEDGE_ROLE_ALIASES = {
-	"RetailEdgeCashier": ("RetailEdge Cashier",),
 	"RetailEdgeManager": ("RetailEdge Manager",),
 	"RetailEdgeBranchManager": ("RetailEdge Branch Manager",),
 	"RetailEdgeAuditor": ("RetailEdge Auditor",),
 }
 
-RETAILEDGE_ROLE_NAMES = tuple(RETAILEDGE_ROLE_ALIASES)
 RETAILEDGE_COMPATIBILITY_ROLE_NAMES = tuple(
 	alias for aliases in RETAILEDGE_ROLE_ALIASES.values() for alias in aliases
 )
@@ -26,7 +32,7 @@ ALL_RETAILEDGE_ROLE_NAMES = RETAILEDGE_ROLE_NAMES + RETAILEDGE_COMPATIBILITY_ROL
 def canonical_retailedge_role(role_name: str | None) -> str | None:
 	if not role_name:
 		return role_name
-	if role_name in RETAILEDGE_ROLE_ALIASES:
+	if role_name in RETAILEDGE_ROLE_NAMES:
 		return role_name
 	for canonical, aliases in RETAILEDGE_ROLE_ALIASES.items():
 		if role_name in aliases:
@@ -40,9 +46,9 @@ def canonicalize_retailedge_roles(role_names: Iterable[str] | None) -> set[str]:
 
 def retailedge_role_variants(role_name: str) -> tuple[str, ...]:
 	canonical = canonical_retailedge_role(role_name)
-	if canonical not in RETAILEDGE_ROLE_ALIASES:
+	if canonical not in RETAILEDGE_ROLE_NAMES:
 		return (role_name,)
-	return (canonical, *RETAILEDGE_ROLE_ALIASES[canonical])
+	return (canonical, *RETAILEDGE_ROLE_ALIASES.get(canonical, ()))
 
 
 def user_has_retailedge_role(role_name: str, *, user: str | None = None) -> bool:
@@ -51,7 +57,7 @@ def user_has_retailedge_role(role_name: str, *, user: str | None = None) -> bool
 
 
 def ensure_retailedge_roles(*, migrate_alias_assignments: bool = True):
-	"""Ensure stable RetailEdge roles and preserve legacy/spaced compatibility.
+	"""Ensure stable RetailEdge roles and preserve known alias compatibility.
 
 	Existing Role records are never renamed, deleted, or have ``desk_access``
 	changed here. New missing canonical/compatibility Role records are created as
