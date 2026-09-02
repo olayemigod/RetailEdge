@@ -6,36 +6,73 @@ on:
       - qa/retailedge-prereporting-hardening-20260902
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit-merge:
+  reconcile:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out reconciliation branch
+      - name: Check out audit branch with full history
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Fetch E16 source line
-        run: git fetch origin agent/competitive-gap-nextgen-20260829
-
-      - name: Attempt exact three-way merge and report conflicts
+      - name: Build clean QA + E16 reconciliation branch
         shell: bash
         run: |
-          set +e
-          git config user.name "RetailEdge Reconciliation Audit"
+          set -euo pipefail
+          git config user.name "RetailEdge Reconciliation"
           git config user.email "retailedge-reconciliation@users.noreply.github.com"
+          git fetch origin qa/retailedge-consolidated-20260829 agent/competitive-gap-nextgen-20260829
+          git checkout -B qa/retailedge-reconciled-20260902 origin/qa/retailedge-consolidated-20260829
+
+          set +e
           git merge --no-commit --no-ff origin/agent/competitive-gap-nextgen-20260829
           rc=$?
-          echo "merge_exit_code=$rc"
-          echo "--- unmerged files ---"
-          git diff --name-only --diff-filter=U | sort
-          echo "--- EdgeSuite semantic conflict ---"
-          git diff --cc -- retailedge/edgesuite_ui.py || true
-          echo "--- merge status ---"
-          git status --short
-          if [ "$rc" -ne 0 ]; then
-            exit 1
-          fi
-          git merge --abort || true
+          set -e
+
+          test "$rc" -ne 0
+          mapfile -t conflicts < <(git diff --name-only --diff-filter=U | sort)
+          printf 'conflicts=%s\n' "${conflicts[*]}"
+          test "${#conflicts[@]}" -eq 2
+          test "${conflicts[0]}" = ".github/workflows/edgesuite-ui-candidate-compat.yml"
+          test "${conflicts[1]}" = "retailedge/edgesuite_ui.py"
+
+          # Both lines carry the same compatibility safeguards; E16 pins the newer governed EdgeSuite UI 1.1.0 candidate.
+          git checkout --theirs .github/workflows/edgesuite-ui-candidate-compat.yml
+          git add .github/workflows/edgesuite-ui-candidate-compat.yml
+
+          # The only EdgeSuite semantic conflict is additive: preserve QA inventory intelligence and E16 stock integrity.
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("retailedge/edgesuite_ui.py")
+          text = path.read_text()
+          assert text.count("<<<<<<< HEAD") == 1, "unexpected EdgeSuite conflict count"
+          start = text.index("<<<<<<< HEAD\n")
+          split = text.index("=======\n", start)
+          end = text.index(">>>>>>> origin/agent/competitive-gap-nextgen-20260829\n", split)
+          ours = text[start + len("<<<<<<< HEAD\n"):split]
+          theirs = text[split + len("=======\n"):end]
+          assert '"Inventory Intelligence"' in ours
+          assert '"Transfer Opportunities"' in ours
+          assert '"Inventory Ageing"' in ours
+          assert '"Stock & Accounting Integrity"' in theirs
+          merged = text[:start] + ours + theirs + text[end + len(">>>>>>> origin/agent/competitive-gap-nextgen-20260829\n"):]
+          assert "<<<<<<<" not in merged and ">>>>>>>" not in merged and "=======\n" not in merged
+          path.write_text(merged)
+          PY
+          git add retailedge/edgesuite_ui.py
+
+          test -z "$(git diff --name-only --diff-filter=U)"
+          grep -q '"Inventory Intelligence"' retailedge/edgesuite_ui.py
+          grep -q '"Transfer Opportunities"' retailedge/edgesuite_ui.py
+          grep -q '"Inventory Ageing"' retailedge/edgesuite_ui.py
+          grep -q '"Stock & Accounting Integrity"' retailedge/edgesuite_ui.py
+          grep -q '"Business Control Centre"' retailedge/edgesuite_ui.py
+          grep -q '"Supplier Document Review"' retailedge/edgesuite_ui.py
+          grep -q 'e40ea4d7dc000d17443a0571c1e246b61bfd3e1d' .github/workflows/edgesuite-ui-candidate-compat.yml
+
+          git commit -m "merge(retailedge): reconcile QA authority with E16"
+          git push origin HEAD:refs/heads/qa/retailedge-reconciled-20260902
+          echo "reconciled_head=$(git rev-parse HEAD)"
