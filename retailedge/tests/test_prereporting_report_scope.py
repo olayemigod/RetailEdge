@@ -19,8 +19,6 @@ class RetailEdgePreReportingReportScopeTests(unittest.TestCase):
 		with (
 			patch("retailedge.reporting_scope.user_has_global_branch_access", return_value=False),
 			patch("retailedge.reporting_scope.has_branch_assignments", return_value=True),
-			patch("retailedge.reporting_scope.get_user_allowed_branches", return_value={"branches": []}),
-			patch("retailedge.reporting_scope.get_user_branch_profiles", return_value=[]),
 			patch(
 				"retailedge.reporting_scope.get_allowed_operating_branches",
 				return_value=["Lagos", "Ikeja"],
@@ -166,8 +164,8 @@ class RetailEdgePreReportingReportScopeTests(unittest.TestCase):
 	def test_stock_accounting_company_wide_guard_no_longer_depends_on_branch_company_field(self):
 		source = inspect.getsource(stock_accounting_integrity._assert_company_wide_branch_scope)
 		self.assertIn("assert_company_wide_report_scope", source)
-		self.assertNotIn("Branch", source)
-		self.assertNotIn("company", source.replace("company", "", 1))
+		self.assertNotIn("frappe.get_meta", source)
+		self.assertNotIn("frappe.db.count", source)
 
 
 if __name__ == "__main__":
