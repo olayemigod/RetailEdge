@@ -1,7 +1,10 @@
 const EDGEUI_ASSET = "edgeui.bundle.js";
 const PURCHASING_ASSET = "professional_purchasing.bundle.js";
+const PURCHASE_ORDER_ASSET = "professional_purchase_order.bundle.js";
 const PAGE_ROUTE = "professional-purchasing";
 const PAGE_TITLE = "Professional Purchasing";
+const OPEN_PURCHASE_ORDER_EVENT = "retailedge-open-professional-purchase-order";
+const PURCHASE_ORDER_TRIGGER_LABEL = "New Purchase Order";
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {
@@ -30,6 +33,29 @@ function hideNativePageSidebar(wrapper) {
 	}
 }
 
+function normaliseButtonLabel(button) {
+	return String(button?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function installGuidedPurchaseOrderTrigger(wrapper, root) {
+	if (!root || wrapper._retailedgePurchaseOrderTriggerInstalled) return;
+	const handler = (event) => {
+		const button = event.target?.closest?.("button");
+		if (!button || !root.contains(button)) return;
+		if (normaliseButtonLabel(button) !== PURCHASE_ORDER_TRIGGER_LABEL) return;
+		event.preventDefault();
+		event.stopPropagation();
+		event.stopImmediatePropagation();
+		window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_ORDER_EVENT));
+	};
+	root.addEventListener("click", handler, true);
+	wrapper._retailedgePurchaseOrderTriggerInstalled = true;
+	wrapper._retailedgePurchaseOrderTriggerCleanup = () => {
+		root.removeEventListener("click", handler, true);
+		wrapper._retailedgePurchaseOrderTriggerInstalled = false;
+	};
+}
+
 function renderLoadError(wrapper, error) {
 	const node = document.createElement("div");
 	node.className = "professional-purchasing-load-error alert alert-danger p-6 text-center";
@@ -53,13 +79,21 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
 		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
-		await requireAsync(PURCHASING_ASSET);
+		await Promise.all([requireAsync(PURCHASING_ASSET), requireAsync(PURCHASE_ORDER_ASSET)]);
 		if (typeof window.mountRetailEdgeProfessionalPurchasing !== "function") throw new Error("Professional Purchasing bundle is unavailable.");
+		if (typeof window.mountRetailEdgeProfessionalPurchaseOrder !== "function") throw new Error("Professional Purchase Order bundle is unavailable.");
 		bootLoading.remove();
+
 		const root = document.createElement("div");
 		root.className = "retailedge-professional-purchasing-root";
 		page.body.append(root);
 		wrapper._retailedgeProfessionalPurchasingApp = await window.mountRetailEdgeProfessionalPurchasing(root);
+		installGuidedPurchaseOrderTrigger(wrapper, root);
+
+		const overlayRoot = document.createElement("div");
+		overlayRoot.className = "retailedge-professional-purchase-order-overlay-root";
+		page.body.append(overlayRoot);
+		wrapper._retailedgeProfessionalPurchaseOrderApp = await window.mountRetailEdgeProfessionalPurchaseOrder(overlayRoot);
 	} catch (error) {
 		bootLoading.remove();
 		renderLoadError(wrapper, error);
