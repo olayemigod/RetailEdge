@@ -1,0 +1,53 @@
+name: RetailEdge Pre-Reporting B2 Warranty Runner V2
+
+on:
+  push:
+    branches:
+      - qa/retailedge-prereporting-hardening-20260902
+    paths:
+      - .github/workflows/prereporting-b2-warranty-runner-v2.yml
+      - .github/scripts/apply_b2_warranty_operations_v2.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply-b2-warranty:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out audit branch with full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply corrected B2 warranty operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/apply_b2_warranty_operations.py /tmp/apply_b2_warranty_operations.py
+          cp .github/scripts/apply_b2_warranty_operations_v2.py /tmp/apply_b2_warranty_operations_v2.py
+          git config user.name "RetailEdge Pre-Reporting Hardening"
+          git config user.email "retailedge-hardening@users.noreply.github.com"
+          git fetch origin qa/retailedge-reconciled-20260902
+          git checkout -B qa/retailedge-reconciled-20260902 origin/qa/retailedge-reconciled-20260902
+          test "$(git rev-parse HEAD)" = "9c56b3f4bc3f880a29441afdf095b7194836d98a"
+          python /tmp/apply_b2_warranty_operations_v2.py
+          python -m compileall -q retailedge/guided_warranty_claim.py retailedge/native_visual_workspaces.py retailedge/tests/test_guided_warranty_claim_contract.py retailedge/tests/test_native_visual_workspace_contract.py
+          grep -q 'save_guided_warranty_claim' retailedge/guided_warranty_claim.py
+          grep -q 'GuidedWarrantyClaimDialog' retailedge/public/js/native_visual_workspaces/NativeERPNextWorkspace.vue
+          grep -q 'link_type: item.target_type' retailedge/public/js/native_visual_workspaces/NativeERPNextWorkspace.vue
+          grep -q 'page.is_permitted()' retailedge/native_visual_workspaces.py
+          ! grep -q 'ignore_permissions' retailedge/guided_warranty_claim.py
+          ! grep -q '\.submit(' retailedge/guided_warranty_claim.py
+          git diff --check
+          git add \
+            retailedge/guided_warranty_claim.py \
+            retailedge/native_visual_workspaces.py \
+            retailedge/public/js/native_visual_workspaces/GuidedWarrantyClaimDialog.vue \
+            retailedge/public/js/native_visual_workspaces/NativeERPNextWorkspace.vue \
+            retailedge/tests/test_guided_warranty_claim_contract.py \
+            retailedge/tests/test_native_visual_workspace_contract.py \
+            docs/prereporting_b2_warranty_operations.md
+          git commit -m "feat(access): add EdgeSuite warranty operations"
+          git push origin HEAD:refs/heads/qa/retailedge-reconciled-20260902
+          echo "b2_warranty_head=$(git rev-parse HEAD)"
