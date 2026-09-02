@@ -68,8 +68,12 @@ class TestReportNavigationPermissionContract(unittest.TestCase):
 			patch("retailedge.edgesuite_ui._target_exists", return_value=True) as exists,
 			patch("retailedge.edgesuite_ui._can_open_report", return_value=True) as can_open,
 		):
-			self.assertTrue(_can_open_target(item, target_cache=target_cache, permission_cache=permission_cache))
-			self.assertTrue(_can_open_target(item, target_cache=target_cache, permission_cache=permission_cache))
+			self.assertTrue(
+				_can_open_target(item, target_cache=target_cache, permission_cache=permission_cache)
+			)
+			self.assertTrue(
+				_can_open_target(item, target_cache=target_cache, permission_cache=permission_cache)
+			)
 
 		exists.assert_called_once_with("Report", "Trial Balance")
 		can_open.assert_called_once_with("Trial Balance")
@@ -79,6 +83,7 @@ class TestReportNavigationPermissionContract(unittest.TestCase):
 			patch("retailedge.edgesuite_ui._doctype_exists_cached", return_value=True) as doctype_exists,
 			patch("retailedge.edgesuite_ui._has_permission_cached", return_value=True) as has_permission,
 			patch("retailedge.edgesuite_ui._target_exists_cached", return_value=True) as target_exists,
+			patch("retailedge.edgesuite_ui._can_open_page_cached", return_value=True) as page_gate,
 			patch("retailedge.edgesuite_ui._can_open_report_cached") as report_gate,
 		):
 			self.assertTrue(
@@ -99,6 +104,7 @@ class TestReportNavigationPermissionContract(unittest.TestCase):
 		doctype_exists.assert_called_once()
 		has_permission.assert_called_once()
 		target_exists.assert_called_once_with("Page", "stock-position", {})
+		page_gate.assert_called_once_with("stock-position", {})
 		report_gate.assert_not_called()
 
 	def test_native_report_gate_delegates_to_frappe_without_permission_reimplementation(self):

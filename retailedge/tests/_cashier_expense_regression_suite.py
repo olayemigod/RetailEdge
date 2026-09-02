@@ -991,8 +991,9 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["expense_status"], "Submitted")
 		self.assertEqual(result["ledger_status"], "Not Applicable")
 
+	@patch("retailedge.cashier_expense.get_branch_query_filters", return_value={"filters": {}})
 	@patch("retailedge.cashier_expense.frappe.get_all")
-	def test_summary_groups_by_status(self, mock_get_all):
+	def test_summary_groups_by_status(self, mock_get_all, _mock_branch_filters):
 		mock_get_all.return_value = [
 			SimpleNamespace(expense_status="Submitted", amount=100),
 			SimpleNamespace(expense_status="Submitted", amount=50),
