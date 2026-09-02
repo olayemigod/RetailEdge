@@ -15,3 +15,4 @@ retailedge.patches.install_professional_print_formats
 retailedge.patches.install_customer_portal_menu
 retailedge.patches.install_supplier_portal_menu
 retailedge.patches.install_supplier_document_intake_menu
+retailedge.patches.normalize_retailedge_role_assignments
