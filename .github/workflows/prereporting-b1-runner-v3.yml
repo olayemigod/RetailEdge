@@ -1,0 +1,42 @@
+name: RetailEdge Pre-Reporting B1 Runner V3
+
+on:
+  push:
+    branches:
+      - qa/retailedge-prereporting-hardening-20260902
+    paths:
+      - .github/workflows/prereporting-b1-runner-v3.yml
+      - .github/scripts/apply_b1_access_hardening.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply-b1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out audit branch with full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply B1 source hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/scripts/apply_b1_access_hardening.py /tmp/apply_b1_access_hardening.py
+          git config user.name "RetailEdge Pre-Reporting Hardening"
+          git config user.email "retailedge-hardening@users.noreply.github.com"
+          git fetch origin qa/retailedge-reconciled-20260902
+          git checkout -B qa/retailedge-reconciled-20260902 origin/qa/retailedge-reconciled-20260902
+          test "$(git rev-parse HEAD)" = "451eebac2e6aa5ada54727810391fb89ce4bba69"
+          python /tmp/apply_b1_access_hardening.py
+          python -m compileall -q retailedge/edgesuite_ui.py
+          grep -q 'page.is_permitted()' retailedge/edgesuite_ui.py
+          grep -q 'link_type: item.target_type' retailedge/public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue
+          test "$(grep -l 'v-if="nativeFallbackEnabled"' retailedge/public/js/retailedge_business_hub/Simple*Dialog.vue | wc -l)" -eq 8
+          git diff --check
+          git add retailedge/edgesuite_ui.py retailedge/public/js/retailedge_business_hub
+          git commit -m "fix(access): harden EdgeSuite-only RetailEdge navigation"
+          git push origin HEAD:refs/heads/qa/retailedge-reconciled-20260902
+          echo "b1_source_head=$(git rev-parse HEAD)"
