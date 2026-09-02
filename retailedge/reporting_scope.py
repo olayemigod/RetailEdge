@@ -7,7 +7,7 @@ from frappe import _
 
 from retailedge.branch_assignment import has_branch_assignments
 from retailedge.branch_context import get_user_allowed_branches, user_has_global_branch_access
-from retailedge.branch_profile import get_enabled_branch_profiles, get_user_branch_profiles
+from retailedge.branch_profile import get_user_branch_profiles
 from retailedge.operating_context import get_allowed_operating_branches, validate_operating_branch
 
 
@@ -30,6 +30,20 @@ def get_report_branch_scope(company: str, *, user: str | None = None) -> dict[st
 		}
 
 	has_assignments = has_branch_assignments(user=user)
+	if has_assignments:
+		allowed = list(dict.fromkeys(get_allowed_operating_branches(company=company, user=user)))
+		if not allowed:
+			frappe.throw(
+				_("Your Branch reporting access is not active for Company {0}.").format(company),
+				frappe.PermissionError,
+			)
+		return {
+			"company": company,
+			"restricted": True,
+			"allowed_branches": allowed,
+			"source": "branch_assignment",
+		}
+
 	legacy = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
 	profile_rows = get_user_branch_profiles(user=user, company=company)
 	profile_branches = [
@@ -37,8 +51,7 @@ def get_report_branch_scope(company: str, *, user: str | None = None) -> dict[st
 		for row in profile_rows
 		if row.get("enabled") and str(row.get("branch") or "").strip()
 	]
-	restricted = bool(has_assignments or legacy or profile_branches)
-	if not restricted:
+	if not legacy and not profile_branches:
 		return {
 			"company": company,
 			"restricted": False,
@@ -56,7 +69,7 @@ def get_report_branch_scope(company: str, *, user: str | None = None) -> dict[st
 		"company": company,
 		"restricted": True,
 		"allowed_branches": allowed,
-		"source": "branch_assignment" if has_assignments else "legacy_branch_restriction",
+		"source": "legacy_branch_restriction",
 	}
 
 
@@ -146,16 +159,20 @@ def assert_company_wide_report_scope(company: str, *, user: str | None = None) -
 
 def _configured_company_branches(company: str) -> list[str]:
 	"""Return a Company Branch universe only when RetailEdge/ERPNext can prove it."""
-	profiles = get_enabled_branch_profiles(company=company)
-	profile_branches = list(
-		dict.fromkeys(
-			str(row.get("branch") or "").strip()
-			for row in profiles
-			if str(row.get("branch") or "").strip()
+	if frappe.db.exists("DocType", "RetailEdge Branch Profile"):
+		profiles = frappe.get_all(
+			"RetailEdge Branch Profile",
+			filters={"company": company},
+			pluck="branch",
+			limit_page_length=500,
 		)
-	)
-	if profile_branches:
-		return profile_branches
+		profile_branches = list(
+			dict.fromkeys(str(branch).strip() for branch in profiles if str(branch).strip())
+		)
+		if profile_branches:
+			# Include disabled/history rows. Company-wide accounting can contain
+			# historical activity from a Branch that is no longer operational.
+			return profile_branches
 
 	if not frappe.db.exists("DocType", "Branch"):
 		return []
@@ -165,8 +182,6 @@ def _configured_company_branches(company: str) -> list[str]:
 		# no safe Company→Branch universe to prove Company-wide equivalence.
 		return []
 	filters: dict[str, Any] = {"company": company}
-	if meta.has_field("disabled"):
-		filters["disabled"] = 0
 	rows = frappe.get_all(
 		"Branch",
 		filters=filters,
