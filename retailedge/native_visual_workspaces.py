@@ -5,7 +5,24 @@ from typing import Any
 import frappe
 from frappe import _
 
+from retailedge.branch_profile import get_exact_branch_profile
+from retailedge.operating_context import get_operating_context
+
 RECENT_LIMIT = 12
+SCOPE_NATIVE_PERMISSION = "native_permission"
+SCOPE_COMPANY = "company"
+SCOPE_CONFIGURED_BRANCH_STOCK = "configured_branch_stock"
+SUPPORTED_PREVIEW_SCOPES = {
+	SCOPE_NATIVE_PERMISSION,
+	SCOPE_COMPANY,
+	SCOPE_CONFIGURED_BRANCH_STOCK,
+}
+BRANCH_STOCK_PROFILE_FIELDS = (
+	"default_warehouse",
+	"default_source_warehouse",
+	"default_target_warehouse",
+	"default_returns_warehouse",
+)
 
 WORKSPACES: dict[str, dict[str, Any]] = {
 	"service-warranty": {
@@ -20,6 +37,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Warranty Claim",
 				"description": "Customer warranty cases, serial eligibility, complaint status, and ERPNext resolution lifecycle.",
 				"fields": ("customer", "serial_no", "complaint_date", "status"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -27,6 +45,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Maintenance Schedule",
 				"description": "Authoritative ERPNext schedules and planned after-sales service visits.",
 				"fields": ("customer", "transaction_date", "status"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -34,6 +53,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Maintenance Visit",
 				"description": "Recorded maintenance visits and their native ERPNext document status.",
 				"fields": ("customer", "mntc_date", "completion_status", "status"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 		),
 	},
@@ -55,6 +75,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Sales Person",
 				"description": "ERPNext Sales Person hierarchy and target ownership.",
 				"fields": ("sales_person_name", "parent_sales_person", "is_group", "enabled"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -62,6 +83,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Sales Partner",
 				"description": "ERPNext partner master data used by selling and commission reporting.",
 				"fields": ("partner_name", "commission_rate", "territory"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "report",
@@ -101,6 +123,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Budget",
 				"description": "ERPNext budgets against Cost Center or Project, including fiscal period and control settings.",
 				"fields": ("company", "budget_against", "from_fiscal_year", "to_fiscal_year"),
+				"scope": SCOPE_COMPANY,
 			},
 			{
 				"kind": "report",
@@ -114,6 +137,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Cost Center",
 				"description": "ERPNext cost-centre hierarchy used for accounting classification and budget control.",
 				"fields": ("company", "parent_cost_center", "is_group", "disabled"),
+				"scope": SCOPE_COMPANY,
 			},
 		),
 	},
@@ -140,6 +164,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 					"calculate_depreciation",
 					"next_depreciation_date",
 				),
+				"scope": SCOPE_COMPANY,
 			},
 			{
 				"kind": "doctype",
@@ -147,6 +172,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Asset Category",
 				"description": "ERPNext asset categories and their depreciation/CWIP classification context.",
 				"fields": ("asset_category_name", "enable_cwip_accounting", "non_depreciable_category"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 		),
 	},
@@ -162,6 +188,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Batch",
 				"description": "ERPNext batches with item, quantity, manufacturing/expiry date and source context.",
 				"fields": ("item", "item_name", "batch_qty", "stock_uom", "manufacturing_date", "expiry_date", "disabled", "supplier"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -180,6 +207,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 					"amc_expiry_date",
 					"maintenance_status",
 				),
+				"scope": SCOPE_CONFIGURED_BRANCH_STOCK,
 			},
 			{
 				"kind": "report",
@@ -213,6 +241,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Price List",
 				"description": "ERPNext selling and buying price-list masters used by transaction pricing.",
 				"fields": ("enabled", "selling", "buying", "currency"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -220,6 +249,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Item Price",
 				"description": "ERPNext item-level rates, validity dates, UOM and price-list assignments.",
 				"fields": ("item_code", "price_list", "price_list_rate", "currency", "valid_from", "valid_upto"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -227,6 +257,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Pricing Rule",
 				"description": "ERPNext conditional pricing and product-discount rules applied during selling or buying.",
 				"fields": ("title", "apply_on", "price_or_product_discount", "selling", "buying", "valid_from", "valid_upto", "disable"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -234,6 +265,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Promotional Scheme",
 				"description": "ERPNext promotional schemes used to generate and govern promotional pricing rules.",
 				"fields": ("apply_on", "selling", "buying", "valid_from", "valid_upto", "disable"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -241,6 +273,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Coupon Code",
 				"description": "ERPNext coupon codes and their validity or usage limits for eligible pricing rules.",
 				"fields": ("coupon_code", "valid_from", "valid_upto", "maximum_use", "used"),
+				"scope": SCOPE_NATIVE_PERMISSION,
 			},
 			{
 				"kind": "doctype",
@@ -248,6 +281,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 				"target": "Loyalty Program",
 				"description": "ERPNext loyalty programmes, programme dates and points conversion configuration.",
 				"fields": ("company", "customer_group", "from_date", "to_date", "conversion_factor", "expiry_duration"),
+				"scope": SCOPE_COMPANY,
 			},
 		),
 	},
@@ -263,9 +297,15 @@ def get_native_visual_workspace(workspace: str) -> dict[str, Any]:
 	if not config:
 		frappe.throw(_("Unsupported RetailEdge control workspace."))
 
+	# Resolve one authoritative server-side context for both the banner and every
+	# context-aware preview. Client parameters can never widen this scope.
+	operating_context = get_operating_context()
+	company = str(operating_context.get("company") or "")
+	branch = str(operating_context.get("branch") or "")
+
 	sources: list[dict[str, Any]] = []
 	for source in config["sources"]:
-		resolved = _resolve_source(source)
+		resolved = _resolve_source(source, operating_context=operating_context)
 		if resolved:
 			sources.append(resolved)
 
@@ -275,12 +315,6 @@ def get_native_visual_workspace(workspace: str) -> dict[str, Any]:
 			frappe.PermissionError,
 		)
 
-	company = str(frappe.defaults.get_user_default("Company") or "")
-	branch = str(
-		frappe.defaults.get_user_default("RetailEdge Branch")
-		or frappe.defaults.get_user_default("Branch")
-		or ""
-	)
 	return {
 		"workspace": workspace,
 		"page_route": config["page_route"],
@@ -298,10 +332,10 @@ def get_native_visual_workspace(workspace: str) -> dict[str, Any]:
 	}
 
 
-def _resolve_source(source: dict[str, Any]) -> dict[str, Any] | None:
+def _resolve_source(source: dict[str, Any], *, operating_context: dict[str, Any]) -> dict[str, Any] | None:
 	kind = source["kind"]
 	if kind == "doctype":
-		return _resolve_doctype_source(source)
+		return _resolve_doctype_source(source, operating_context=operating_context)
 	if kind == "report":
 		return _resolve_report_source(source)
 	if kind == "page":
@@ -309,7 +343,11 @@ def _resolve_source(source: dict[str, Any]) -> dict[str, Any] | None:
 	return None
 
 
-def _resolve_doctype_source(source: dict[str, Any]) -> dict[str, Any] | None:
+def _resolve_doctype_source(
+	source: dict[str, Any],
+	*,
+	operating_context: dict[str, Any],
+) -> dict[str, Any] | None:
 	doctype = source["target"]
 	if not frappe.db.exists("DocType", doctype) or not frappe.has_permission(doctype, "read"):
 		return None
@@ -317,12 +355,21 @@ def _resolve_doctype_source(source: dict[str, Any]) -> dict[str, Any] | None:
 	meta = frappe.get_meta(doctype)
 	candidate_fields = [field for field in source.get("fields", ()) if meta.has_field(field)]
 	fields = ["name", "modified", "docstatus", *candidate_fields]
-	rows = frappe.get_list(
-		doctype,
-		fields=fields,
-		order_by="modified desc",
-		limit_page_length=RECENT_LIMIT,
+	scope_plan = _build_preview_scope_plan(
+		source,
+		doctype=doctype,
+		meta=meta,
+		operating_context=operating_context,
 	)
+	rows = []
+	if scope_plan["query_allowed"]:
+		rows = frappe.get_list(
+			doctype,
+			fields=fields,
+			filters=scope_plan["filters"],
+			order_by="modified desc",
+			limit_page_length=RECENT_LIMIT,
+		)
 	columns = [
 		{"fieldname": "name", "label": _("ID")},
 		*[
@@ -343,7 +390,126 @@ def _resolve_doctype_source(source: dict[str, Any]) -> dict[str, Any] | None:
 		"columns": columns,
 		"rows": [dict(row) for row in rows],
 		"preview_label": _("Recent {0}").format(min(len(rows), RECENT_LIMIT)),
+		"scope": scope_plan["scope"],
+		"scope_state": scope_plan["state"],
+		"scope_message": _(scope_plan["message"]) if scope_plan.get("message") else "",
 	}
+
+
+def _build_preview_scope_plan(
+	source: dict[str, Any],
+	*,
+	doctype: str,
+	meta: Any,
+	operating_context: dict[str, Any],
+) -> dict[str, Any]:
+	"""Build server-authoritative preview filters without weakening native permissions."""
+	scope = str(source.get("scope") or SCOPE_NATIVE_PERMISSION).strip()
+	if scope not in SUPPORTED_PREVIEW_SCOPES:
+		return _blocked_scope_plan(
+			scope=scope,
+			message=f"Unsupported preview scope configured for {doctype}.",
+		)
+
+	static_filters = source.get("filters") or {}
+	if not isinstance(static_filters, dict):
+		return _blocked_scope_plan(
+			scope=scope,
+			message=f"Invalid preview filters configured for {doctype}.",
+		)
+	filters = dict(static_filters)
+	company = str(operating_context.get("company") or "").strip()
+	branch = str(operating_context.get("branch") or "").strip()
+
+	if scope == SCOPE_NATIVE_PERMISSION:
+		return {
+			"scope": scope,
+			"state": "native_permission",
+			"message": "",
+			"filters": filters,
+			"query_allowed": True,
+		}
+
+	if not company:
+		return _blocked_scope_plan(
+			scope=scope,
+			message="Choose an operating Company to load this preview.",
+			filters=filters,
+		)
+
+	if scope == SCOPE_COMPANY:
+		if not meta.has_field("company"):
+			return _blocked_scope_plan(
+				scope=scope,
+				message=f"{doctype} cannot be safely limited to the operating Company on this ERPNext schema.",
+				filters=filters,
+			)
+		filters["company"] = company
+		return {
+			"scope": scope,
+			"state": "applied",
+			"message": "",
+			"filters": filters,
+			"query_allowed": True,
+		}
+
+	if not branch:
+		return _blocked_scope_plan(
+			scope=scope,
+			message="Choose an operating Branch to load this preview.",
+			filters=filters,
+		)
+	if not meta.has_field("warehouse"):
+		return _blocked_scope_plan(
+			scope=scope,
+			message=f"{doctype} cannot be safely limited to configured Branch stock locations on this ERPNext schema.",
+			filters=filters,
+		)
+
+	warehouses = _get_configured_branch_stock_locations(company=company, branch=branch)
+	if not warehouses:
+		return _blocked_scope_plan(
+			scope=scope,
+			message="Configure at least one Branch stock location before loading this preview.",
+			filters=filters,
+		)
+	filters["warehouse"] = ["in", warehouses]
+	if meta.has_field("company"):
+		filters["company"] = company
+	return {
+		"scope": scope,
+		"state": "applied",
+		"message": "",
+		"filters": filters,
+		"query_allowed": True,
+	}
+
+
+def _blocked_scope_plan(
+	*,
+	scope: str,
+	message: str,
+	filters: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+	return {
+		"scope": scope,
+		"state": "blocked",
+		"message": message,
+		"filters": dict(filters or {}),
+		"query_allowed": False,
+	}
+
+
+def _get_configured_branch_stock_locations(*, company: str, branch: str) -> list[str]:
+	"""Return only stock locations bound to the exact enabled Company + Branch profile."""
+	profile = get_exact_branch_profile(company=company, branch=branch, active_only=True)
+	if not profile:
+		return []
+	warehouses = [
+		str(getattr(profile, fieldname, None) or "").strip()
+		for fieldname in BRANCH_STOCK_PROFILE_FIELDS
+	]
+	return list(dict.fromkeys(warehouse for warehouse in warehouses if warehouse))
 
 
 def _resolve_report_source(source: dict[str, Any]) -> dict[str, Any] | None:
