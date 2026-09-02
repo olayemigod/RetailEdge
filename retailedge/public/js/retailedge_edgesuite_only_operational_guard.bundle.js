@@ -74,6 +74,12 @@
 		const path = urlPath(value);
 		if (!path) return false;
 		const appPath = path.replace(/^\/(?:app|desk)\/?/i, "");
+		if (appPath.startsWith("query-report/")) {
+			let reportSlug = appPath.slice("query-report/".length);
+			try { reportSlug = decodeURIComponent(reportSlug); } catch (_error) { /* keep raw path */ }
+			const normalizedReport = normalizeRoutePart(reportSlug);
+			if (config.nativeReports.some((report) => normalizeRoutePart(report) === normalizedReport)) return true;
+		}
 		return config.nativePathSlugs.some((slug) => {
 			const normalizedSlug = normalizeRoutePart(slug);
 			return appPath === normalizedSlug || appPath.startsWith(`${normalizedSlug}/`);
@@ -84,8 +90,11 @@
 		const parts = Array.from(args || []).map((part) => String(part || ""));
 		if (!parts.length) return false;
 		const family = normalize(parts[0]);
-		if (family !== "form" && family !== "list") return false;
 		const target = normalize(parts[1]);
+		if (family === "query-report") {
+			return config.nativeReports.some((report) => normalize(report) === target);
+		}
+		if (family !== "form" && family !== "list") return false;
 		return config.nativeDoctypes.some((doctype) => normalize(doctype) === target);
 	}
 
@@ -119,6 +128,15 @@
 		return String(node?.textContent || "").replace(/\s+/g, " ").trim();
 	}
 
+	function markHidden(node) {
+		if (!node.hasAttribute("data-retailedge-native-hidden")) {
+			node.setAttribute("data-retailedge-native-was-hidden", node.hidden ? "true" : "false");
+		}
+		node.hidden = true;
+		node.setAttribute("aria-hidden", "true");
+		node.setAttribute("data-retailedge-native-hidden", "true");
+	}
+
 	function restoreMarkedControls() {
 		document.querySelectorAll("[data-retailedge-native-hidden='true']").forEach((node) => {
 			node.hidden = node.getAttribute("data-retailedge-native-was-hidden") === "true";
@@ -140,12 +158,14 @@
 		if (!scope || !config.hiddenButtonLabels.length) return;
 		scope.querySelectorAll("button").forEach((button) => {
 			if (!config.hiddenButtonLabels.includes(buttonLabel(button))) return;
-			if (!button.hasAttribute("data-retailedge-native-hidden")) {
-				button.setAttribute("data-retailedge-native-was-hidden", button.hidden ? "true" : "false");
-			}
-			button.hidden = true;
-			button.setAttribute("aria-hidden", "true");
-			button.setAttribute("data-retailedge-native-hidden", "true");
+			markHidden(button);
+		});
+	}
+
+	function hideMatchingSelectors(scope, config) {
+		if (!scope || !config.hiddenSelectors.length) return;
+		config.hiddenSelectors.forEach((selector) => {
+			scope.querySelectorAll(selector).forEach(markHidden);
 		});
 	}
 
@@ -154,6 +174,7 @@
 		if (!root) return;
 
 		hideMatchingButtons(root, config);
+		hideMatchingSelectors(root, config);
 		document.querySelectorAll(".modal").forEach((scope) => hideMatchingButtons(scope, config));
 
 		config.neutralizeSelectors.forEach((selector) => {
@@ -195,7 +216,9 @@
 			rootSelector: String(raw.rootSelector || "").trim(),
 			nativeDoctypes: Array.isArray(raw.nativeDoctypes) ? raw.nativeDoctypes.filter(Boolean).map(String) : [],
 			nativePathSlugs: Array.isArray(raw.nativePathSlugs) ? raw.nativePathSlugs.filter(Boolean).map(String) : [],
+			nativeReports: Array.isArray(raw.nativeReports) ? raw.nativeReports.filter(Boolean).map(String) : [],
 			hiddenButtonLabels: Array.isArray(raw.hiddenButtonLabels) ? raw.hiddenButtonLabels.filter(Boolean).map(String) : [],
+			hiddenSelectors: Array.isArray(raw.hiddenSelectors) ? raw.hiddenSelectors.filter(Boolean).map(String) : [],
 			neutralizeSelectors: Array.isArray(raw.neutralizeSelectors) ? raw.neutralizeSelectors.filter(Boolean).map(String) : [],
 		};
 	}

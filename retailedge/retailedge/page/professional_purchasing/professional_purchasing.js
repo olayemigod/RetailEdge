@@ -1,4 +1,5 @@
 const EDGEUI_ASSET = "edgeui.bundle.js";
+const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bundle.js";
 const PURCHASING_ASSET = "professional_purchasing.bundle.js";
 const PURCHASE_ORDER_ASSET = "professional_purchase_order.bundle.js";
 const PAGE_ROUTE = "professional-purchasing";
@@ -31,6 +32,56 @@ function hideNativePageSidebar(wrapper) {
 		mainWrapper.style.maxWidth = "100%";
 		mainWrapper.classList.add("retailedge-edgeui-main");
 	}
+}
+
+function installRestrictedOperationalGuard() {
+	if (typeof window.retailedgeInstallEdgesuiteOnlyOperationalGuard !== "function") {
+		throw new Error("RetailEdge EdgeSuite-only operational guard is unavailable.");
+	}
+	window.retailedgeInstallEdgesuiteOnlyOperationalGuard({
+		pageRoute: PAGE_ROUTE,
+		rootSelector: ".retailedge-professional-purchasing-root",
+		nativeDoctypes: [
+			"Material Request",
+			"Request for Quotation",
+			"Supplier Quotation",
+			"Purchase Order",
+			"Purchase Receipt",
+			"Purchase Invoice",
+			"Landed Cost Voucher",
+			"Quality Inspection",
+			"Supplier Scorecard",
+		],
+		nativePathSlugs: [
+			"material-request",
+			"request-for-quotation",
+			"supplier-quotation",
+			"purchase-order",
+			"purchase-receipt",
+			"purchase-invoice",
+			"landed-cost-voucher",
+			"quality-inspection",
+			"supplier-scorecard",
+		],
+		nativeReports: ["Supplier Quotation Comparison", "Purchase Order Analysis", "Procurement Tracker"],
+		hiddenButtonLabels: [
+			"RFQs",
+			"Supplier Quotations",
+			"Compare Quotations",
+			"PO Analysis",
+			"Procurement Tracker",
+			"Purchase Receipts",
+			"Material Requests",
+			"Open",
+			"Open Purchase Receipt",
+			"Scorecards",
+			"New Native Scorecard",
+			"Open Native Scorecard",
+			"Open Full Form",
+		],
+		hiddenSelectors: [".landed-cost-panel", ".quality-created-links"],
+		neutralizeSelectors: [".link-button"],
+	});
 }
 
 function normaliseButtonLabel(button) {
@@ -79,6 +130,8 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
 		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
+		await requireAsync(RESTRICTED_GUARD_ASSET);
+		installRestrictedOperationalGuard();
 		await Promise.all([requireAsync(PURCHASING_ASSET), requireAsync(PURCHASE_ORDER_ASSET)]);
 		if (typeof window.mountRetailEdgeProfessionalPurchasing !== "function") throw new Error("Professional Purchasing bundle is unavailable.");
 		if (typeof window.mountRetailEdgeProfessionalPurchaseOrder !== "function") throw new Error("Professional Purchase Order bundle is unavailable.");
@@ -102,5 +155,6 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
 	hideNativePageSidebar(wrapper);
+	installRestrictedOperationalGuard();
 	window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
 };
