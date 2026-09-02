@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import frappe
 
@@ -37,27 +37,18 @@ class TestC22StockAccountingIntegrity(unittest.TestCase):
 		self.assertEqual(MAX_REVIEW_WINDOW_DAYS, 366)
 
 	def test_branch_restricted_multi_branch_company_fails_closed(self):
-		meta = Mock()
-		meta.has_field.return_value = True
-		with (
-			patch("retailedge.stock_accounting_integrity.user_has_global_branch_access", return_value=False),
-			patch.object(frappe.db, "exists", return_value=True),
-			patch.object(frappe, "get_meta", return_value=meta),
-			patch.object(frappe.db, "count", return_value=2),
-		):
+		with patch(
+			"retailedge.stock_accounting_integrity.assert_company_wide_report_scope",
+			side_effect=frappe.PermissionError,
+		) as scope_guard:
 			with self.assertRaises(frappe.PermissionError):
 				_assert_company_wide_branch_scope("Retail", user="branch.user@example.com")
+		scope_guard.assert_called_once_with("Retail", user="branch.user@example.com")
 
 	def test_single_branch_company_can_pass_company_wide_scope_gate(self):
-		meta = Mock()
-		meta.has_field.return_value = True
-		with (
-			patch("retailedge.stock_accounting_integrity.user_has_global_branch_access", return_value=False),
-			patch.object(frappe.db, "exists", return_value=True),
-			patch.object(frappe, "get_meta", return_value=meta),
-			patch.object(frappe.db, "count", return_value=1),
-		):
+		with patch("retailedge.stock_accounting_integrity.assert_company_wide_report_scope") as scope_guard:
 			_assert_company_wide_branch_scope("Retail", user="branch.user@example.com")
+		scope_guard.assert_called_once_with("Retail", user="branch.user@example.com")
 
 	def test_native_erpnext_report_is_the_mismatch_authority(self):
 		from erpnext.stock.report.stock_and_account_value_comparison import (
@@ -97,6 +88,7 @@ class TestC22StockAccountingIntegrity(unittest.TestCase):
 		source = (APP_ROOT / "stock_accounting_integrity.py").read_text()
 		self.assertIn("stock_and_account_value_comparison", source)
 		self.assertIn("native_report.execute(filters)", source)
+		self.assertIn("assert_company_wide_report_scope", source)
 		self.assertNotIn("stock_value -", source)
 		self.assertNotIn("account_value -", source)
 		for forbidden in (
