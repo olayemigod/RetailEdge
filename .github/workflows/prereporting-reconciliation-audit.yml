@@ -150,16 +150,16 @@ jobs:
           for name in dialog_names:
               path = root / f"public/js/retailedge_business_hub/{name}.vue"
               text = path.read_text()
-              open_prop = '\t\topen: { type: Boolean, default: false },\n'
+              props_marker = '\tprops: {\n'
               text = replace_once(
                   text,
-                  open_prop,
-                  open_prop + '\t\tnativeFallbackEnabled: { type: Boolean, default: true },\n',
-                  f"{name} prop",
+                  props_marker,
+                  props_marker + '\t\tnativeFallbackEnabled: { type: Boolean, default: true },\n',
+                  f"{name} props block",
               )
-              pattern = re.compile(r'<button type="button" class="edge-button" :disabled="([^"]*)" @click="openFullForm">')
+              pattern = re.compile(r'(<button\b)([^>]*@click="openFullForm"[^>]*>)')
               text, count = pattern.subn(
-                  r'<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="\1" @click="openFullForm">',
+                  r'\1 v-if="nativeFallbackEnabled"\2',
                   text,
                   count=1,
               )
