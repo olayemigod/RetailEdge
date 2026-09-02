@@ -1,0 +1,39 @@
+name: RetailEdge Pre-Reporting Reconciliation Audit
+
+on:
+  push:
+    branches:
+      - qa/retailedge-prereporting-hardening-20260902
+
+permissions:
+  contents: read
+
+jobs:
+  audit-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out reconciliation branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch E16 source line
+        run: git fetch origin agent/competitive-gap-nextgen-20260829
+
+      - name: Attempt exact three-way merge and report conflicts
+        shell: bash
+        run: |
+          set +e
+          git config user.name "RetailEdge Reconciliation Audit"
+          git config user.email "retailedge-reconciliation@users.noreply.github.com"
+          git merge --no-commit --no-ff origin/agent/competitive-gap-nextgen-20260829
+          rc=$?
+          echo "merge_exit_code=$rc"
+          echo "--- unmerged files ---"
+          git diff --name-only --diff-filter=U | sort
+          echo "--- merge status ---"
+          git status --short
+          if [ "$rc" -ne 0 ]; then
+            exit 1
+          fi
+          git merge --abort || true
