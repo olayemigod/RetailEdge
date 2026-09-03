@@ -8,13 +8,9 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from retailedge.branch_context import (
-	get_user_allowed_branches,
-	resolve_branch_from_warehouse,
-	user_has_global_branch_access,
-	validate_user_branch_access,
-)
+from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.cost_visibility import should_hide_cost_price
+from retailedge.operating_context import get_operational_branch_scope
 from retailedge.retailedge.report.retailedge_stock_movement_history.retailedge_stock_movement_history import (
 	get_branch_warehouses,
 )
@@ -56,21 +52,17 @@ def get_stock_position_context() -> dict[str, Any]:
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	branch = ""
 	if company and frappe.has_permission("Company", "read", doc=company):
+		scope = get_operational_branch_scope(company, user=user)
+		allowed = list(scope.get("allowed_branches") or [])
 		candidate = str(
 			frappe.defaults.get_user_default("RetailEdge Branch")
 			or frappe.defaults.get_user_default("Branch")
 			or ""
 		).strip()
-		if candidate:
-			try:
-				validate_user_branch_access(candidate, user=user, company=company, throw=True)
-				branch = candidate
-			except (frappe.PermissionError, frappe.ValidationError):
-				branch = ""
-		if not branch and not user_has_global_branch_access(user=user):
-			allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-			if len(allowed) == 1:
-				branch = allowed[0]
+		if candidate and (not scope.get("restricted") or candidate in allowed):
+			branch = candidate
+		if not branch and scope.get("restricted") and len(allowed) == 1:
+			branch = allowed[0]
 
 	show_costs = not should_hide_cost_price(user=user)
 	return {
@@ -431,6 +423,21 @@ def _resolve_warehouse_scope(filters: frappe._dict) -> list[str]:
 	branch = str(filters.get("branch") or "").strip()
 	warehouse = str(filters.get("warehouse") or "").strip()
 	user = frappe.session.user
+	scope = get_operational_branch_scope(company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed_branches = {
+		str(value).strip()
+		for value in scope.get("allowed_branches") or []
+		if str(value or "").strip()
+	}
+
+	if branch:
+		_assert_branch_read_scope(
+			company=company,
+			branch=branch,
+			user=user,
+			scope=scope,
+		)
 
 	if warehouse:
 		_assert_named_read("Warehouse", warehouse)
@@ -439,30 +446,35 @@ def _resolve_warehouse_scope(filters: frappe._dict) -> list[str]:
 			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
 		if is_group:
 			frappe.throw(_("Select a non-group Warehouse."))
-		resolved_branch = resolve_branch_from_warehouse(warehouse, company=company)
+		resolved = resolve_branch_from_warehouse(warehouse, company=company)
+		resolved_branch = str((resolved or {}).get("branch") or "").strip() if isinstance(resolved, dict) else str(resolved or "").strip()
 		if resolved_branch:
-			validate_user_branch_access(resolved_branch, user=user, company=company, throw=True)
+			if restricted and resolved_branch not in allowed_branches:
+				frappe.throw(
+					_("Warehouse {0} is outside your active RetailEdge Branch scope.").format(warehouse),
+					frappe.PermissionError,
+				)
 			if branch and resolved_branch != branch:
 				frappe.throw(_("Warehouse {0} does not belong to Branch {1}.").format(warehouse, branch))
-		elif not user_has_global_branch_access(user=user):
-			allowed_scope = _allowed_branch_warehouses(company, user=user)
+		elif restricted:
+			allowed_scope = _branch_scope_warehouses(company, allowed_branches)
 			if warehouse not in allowed_scope:
 				frappe.throw(_("Warehouse {0} is outside your permitted Branch scope.").format(warehouse), frappe.PermissionError)
-		if branch:
-			validate_user_branch_access(branch, user=user, company=company, throw=True)
-			if warehouse not in get_branch_warehouses(company, branch):
-				frappe.throw(_("Warehouse {0} is outside Branch {1} scope.").format(warehouse, branch), frappe.PermissionError)
+		if branch and warehouse not in get_branch_warehouses(company, branch):
+			frappe.throw(_("Warehouse {0} is outside Branch {1} scope.").format(warehouse, branch), frappe.PermissionError)
 		return [warehouse]
 
 	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
 		candidate_scope = set(get_branch_warehouses(company, branch))
+	elif restricted:
+		if not allowed_branches:
+			frappe.throw(
+				_("Your Branch operating access is not active for Company {0}.").format(company),
+				frappe.PermissionError,
+			)
+		candidate_scope = _branch_scope_warehouses(company, allowed_branches)
 	else:
-		candidate_scope = (
-			set(_all_company_warehouses(company))
-			if user_has_global_branch_access(user=user)
-			else _allowed_branch_warehouses(company, user=user)
-		)
+		candidate_scope = set(_all_company_warehouses(company))
 	if not candidate_scope:
 		frappe.throw(_("No permitted Warehouse scope could be resolved for Stock Position."), frappe.PermissionError)
 
@@ -480,12 +492,34 @@ def _resolve_warehouse_scope(filters: frappe._dict) -> list[str]:
 	return list(permitted)
 
 
-def _allowed_branch_warehouses(company: str, *, user: str) -> set[str]:
-	branches = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-	if not branches:
-		return set()
+def _assert_branch_read_scope(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	scope: dict[str, Any] | None = None,
+) -> None:
+	branch = str(branch or "").strip()
+	if not branch:
+		return
+	scope = scope or get_operational_branch_scope(company, user=user)
+	if not scope.get("restricted"):
+		return
+	allowed = {
+		str(value).strip()
+		for value in scope.get("allowed_branches") or []
+		if str(value or "").strip()
+	}
+	if branch not in allowed:
+		frappe.throw(
+			_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+			frappe.PermissionError,
+		)
+
+
+def _branch_scope_warehouses(company: str, branches: set[str]) -> set[str]:
 	warehouses: set[str] = set()
-	for branch in branches:
+	for branch in sorted(branches):
 		warehouses.update(get_branch_warehouses(company, branch))
 	if len(warehouses) > MAX_WAREHOUSE_SCOPE:
 		frappe.throw(_("Your permitted Branch scope contains more than {0} Warehouses. Select a Branch first.").format(MAX_WAREHOUSE_SCOPE))
@@ -617,7 +651,7 @@ def _assert_report_access(filters: frappe._dict) -> None:
 		if filters.get(fieldname):
 			_assert_named_read(doctype, filters.get(fieldname))
 	if filters.get("branch"):
-		validate_user_branch_access(filters.branch, user=frappe.session.user, company=filters.company, throw=True)
+		_assert_named_read("Branch", filters.branch)
 
 
 def _assert_named_read(doctype: str, name: str) -> None:
