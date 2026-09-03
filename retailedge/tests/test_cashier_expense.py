@@ -1,9 +1,23 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import retailedge.tests._cashier_expense_regression_suite as _legacy
 from retailedge.tests._cashier_expense_regression_suite import *  # noqa: F403,F405
+
+
+def _set_up_cashier_expense_service_read_permission(self):
+	self._cashier_expense_read_permission = patch(
+		"retailedge.cashier_expense_read_scope.frappe.has_permission",
+		return_value=True,
+	)
+	self._cashier_expense_read_permission.start()
+	self.addCleanup(self._cashier_expense_read_permission.stop)
+
+
+_legacy.CashierExpenseServiceTests.setUp = _set_up_cashier_expense_service_read_permission
+
 
 R2_NATIVE_SECTIONS = [
 	"Home",
