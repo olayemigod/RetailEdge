@@ -22,21 +22,19 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 class TestExpenseRegister(unittest.TestCase):
 	@patch("retailedge.expense_register._assert_company_read_access")
 	@patch("retailedge.expense_register._assert_expense_read_access")
-	@patch("retailedge.expense_register.validate_user_branch_access")
-	@patch("retailedge.expense_register.get_branch_query_filters")
+	@patch("retailedge.expense_register.apply_cashier_expense_read_scope")
 	@patch("retailedge.expense_register._can_view_other_cashiers", return_value=False)
 	@patch("retailedge.expense_register.frappe.defaults.get_user_default")
 	def test_cashier_scope_is_forced_to_current_user(
 		self,
 		mock_default,
 		_mock_cashier_visibility,
-		mock_branch_scope,
-		_mock_branch_access,
+		mock_read_scope,
 		_mock_expense_access,
 		_mock_company_access,
 	):
 		mock_default.return_value = "Demo Company"
-		mock_branch_scope.return_value = {"filters": {"branch": "Lagos"}}
+		mock_read_scope.return_value = {"company": "Demo Company", "branch": "Lagos"}
 		original_user = frappe.session.user
 		try:
 			frappe.session.user = "cashier@example.com"
@@ -57,16 +55,16 @@ class TestExpenseRegister(unittest.TestCase):
 
 	@patch("retailedge.expense_register._assert_company_read_access")
 	@patch("retailedge.expense_register._assert_expense_read_access")
-	@patch("retailedge.expense_register.get_branch_query_filters")
+	@patch("retailedge.expense_register.apply_cashier_expense_read_scope")
 	@patch("retailedge.expense_register._can_view_other_cashiers", return_value=True)
 	def test_date_range_is_bounded(
 		self,
 		_mock_cashier_visibility,
-		mock_branch_scope,
+		mock_read_scope,
 		_mock_expense_access,
 		_mock_company_access,
 	):
-		mock_branch_scope.return_value = {"filters": {}}
+		mock_read_scope.return_value = {"company": "Demo Company"}
 		with self.assertRaises(frappe.ValidationError):
 			_build_query_filters(
 				frappe._dict(
@@ -142,7 +140,10 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertNotIn("frappe.get_all(", source)
 		self.assertIn("limit_page_length=page_size", source)
 		self.assertIn("limit_page_length=MAX_EXPORT_ROWS + 1", source)
-		self.assertIn("strict=True", source)
+		self.assertIn("apply_cashier_expense_read_scope(", source)
+		self.assertIn("get_operational_branch_scope(", source)
+		self.assertNotIn("get_branch_query_filters", source)
+		self.assertNotIn("validate_user_branch_access", source)
 		self.assertIn('query_filters["cashier"] = frappe.session.user', source)
 		self.assertNotIn('"payment_account"', source)
 		self.assertNotIn('"approved_by"', source)
@@ -161,7 +162,7 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertIn(':pageSizes="[25, 50, 100]"', component)
 		self.assertIn("Expense Category", component)
 		self.assertIn("Cashier view is limited to your own expenses", component)
-		self.assertIn("this.filters.expense_category = \"\"", component)
+		self.assertIn('this.filters.expense_category = ""', component)
 		self.assertIn('frappe.new_doc("RetailEdge Cashier Expense")', component)
 		self.assertIn('frappe.set_route("Form", "RetailEdge Cashier Expense", name)', component)
 		self.assertNotIn("<table", component)
@@ -186,13 +187,7 @@ class TestExpenseRegister(unittest.TestCase):
 		self.assertNotIn("setInterval(", bundle)
 
 	def test_page_uses_single_edgesuite_shell(self):
-		page = (
-			APP_ROOT
-			/ "retailedge"
-			/ "page"
-			/ "expense_register"
-			/ "expense_register.js"
-		).read_text()
+		page = (APP_ROOT / "retailedge" / "page" / "expense_register" / "expense_register.js").read_text()
 		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page)
 		self.assertIn('const EXPENSE_REGISTER_ASSET = "expense_register.bundle.js"', page)
 		self.assertIn("hideNativePageSidebar", page)
