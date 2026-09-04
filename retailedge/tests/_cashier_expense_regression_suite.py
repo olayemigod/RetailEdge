@@ -1801,7 +1801,11 @@ class DailySalesAuditTests(unittest.TestCase):
 			return None
 
 		mock_coerce_doc.side_effect = _coerce
-		resolved = resolve_daily_sales_audit_context_from_selection({"pos_opening_shift": "OPEN-1"})
+		with patch(
+			"retailedge.daily_sales_audit.validate_daily_sales_audit_read_context",
+			side_effect=lambda context, **_kwargs: context,
+		):
+			resolved = resolve_daily_sales_audit_context_from_selection({"pos_opening_shift": "OPEN-1"})
 		self.assertEqual(resolved["company"], "Demo Company")
 		self.assertEqual(resolved["pos_profile"], "Testing")
 		self.assertEqual(resolved["cashier"], "cashier@example.com")
@@ -2088,16 +2092,20 @@ class DailySalesAuditTests(unittest.TestCase):
 			"source_map": {"branch": "POS Opening Shift"},
 		}
 		mock_expenses.return_value = []
-		get_daily_sales_audit_context(
-			{
-				"company": "Demo Company",
-				"branch": "Airport Branch",
-				"pos_profile": "Airport",
-				"cashier": "cashier@example.com",
-				"pos_opening_shift": "OPEN-1",
-				"pos_closing_shift": "CLOSE-1",
-			}
-		)
+		with patch(
+			"retailedge.daily_sales_audit.validate_daily_sales_audit_read_context",
+			side_effect=lambda context, **_kwargs: context,
+		):
+			get_daily_sales_audit_context(
+				{
+					"company": "Demo Company",
+					"branch": "Airport Branch",
+					"pos_profile": "Airport",
+					"cashier": "cashier@example.com",
+					"pos_opening_shift": "OPEN-1",
+					"pos_closing_shift": "CLOSE-1",
+				}
+			)
 		expense_filters = mock_expenses.call_args.kwargs["filters"]
 		self.assertEqual(expense_filters["branch"], "HQ")
 
@@ -2467,13 +2475,17 @@ class DailySalesAuditTests(unittest.TestCase):
 
 		mock_get_doc.side_effect = _get_doc
 
-		context = get_daily_sales_audit_context(
-			{
-				"company": "Demo Company",
-				"audit_date": "2026-05-14",
-				"pos_profile": "Testing",
-			}
-		)
+		with patch(
+			"retailedge.daily_sales_audit.validate_daily_sales_audit_read_context",
+			side_effect=lambda context, **_kwargs: context,
+		):
+			context = get_daily_sales_audit_context(
+				{
+					"company": "Demo Company",
+					"audit_date": "2026-05-14",
+					"pos_profile": "Testing",
+				}
+			)
 		self.assertEqual(len(context["invoice_lines"]), 1)
 		self.assertEqual(context["invoice_lines"][0]["remarks"], "POS Invoice")
 		self.assertEqual(len(context["payment_lines"]), 2)
