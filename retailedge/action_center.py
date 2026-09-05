@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import frappe
 from frappe import _
@@ -9,17 +10,13 @@ from frappe.utils import flt, get_first_day, today
 from retailedge.action_follow_up import decorate_action_items
 from retailedge.action_prioritization import prioritise_action_items
 from retailedge.bank_exception_summary import get_bank_exception_summary
-from retailedge.branch_context import (
-	get_user_allowed_branches,
-	user_has_global_branch_access,
-)
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.customer_receivables import get_customer_receivables
 from retailedge.customer_sales_action_summary import get_customer_sales_action_summary
 from retailedge.expense_register import get_expense_register
 from retailedge.inventory_health import get_inventory_action_summary
 from retailedge.planning_intelligence import get_planning_action_summary
-from retailedge.reporting_capabilities import _validate_scope as _validate_operational_scope
+from retailedge.reporting_scope import validate_report_scope
 from retailedge.supplier_payables import get_supplier_payables
 
 DEFAULT_PAGE_SIZE = 1
@@ -31,11 +28,16 @@ DUE_SCOPES = {"all", "due"}
 @frappe.whitelist()
 def get_action_center_context() -> dict[str, Any]:
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
-	branch = str(
+	default_branch = str(
 		frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
 	).strip()
+	branch = (
+		_resolve_action_center_default_branch(company, default_branch, user=frappe.session.user)
+		if company
+		else ""
+	)
 	return {
 		"default_filters": {
 			"company": company,
@@ -52,20 +54,80 @@ def get_action_center_context() -> dict[str, Any]:
 	}
 
 
-def _resolve_action_center_branch(company: str, branch: str, *, user: str) -> str:
+def _allowed_scope_branches(scope: dict[str, Any]) -> list[str]:
+	return list(
+		dict.fromkeys(
+			str(branch or "").strip()
+			for branch in scope.get("allowed_branches") or []
+			if str(branch or "").strip()
+		)
+	)
+
+
+def _resolve_action_center_default_branch(company: str, branch: str, *, user: str) -> str:
+	"""Return only an authorised default; leave ambiguous restricted scope unselected."""
+	company = str(company or "").strip()
 	branch = str(branch or "").strip()
-	_validate_operational_scope(company=company, branch=branch, user=user)
-	if branch or user_has_global_branch_access(user=user):
+	scope = validate_report_scope(
+		company=company,
+		branch="",
+		user=user,
+		require_branch_when_restricted=False,
+	)
+	allowed = _allowed_scope_branches(scope)
+	if branch and (not scope.get("restricted") or branch in allowed):
+		try:
+			validate_report_scope(
+				company=company,
+				branch=branch,
+				user=user,
+				require_branch_when_restricted=False,
+			)
+			return branch
+		except (frappe.PermissionError, frappe.ValidationError):
+			pass
+	if scope.get("restricted") and len(allowed) == 1:
+		resolved = allowed[0]
+		validate_report_scope(
+			company=company,
+			branch=resolved,
+			user=user,
+			require_branch_when_restricted=False,
+		)
+		return resolved
+	return ""
+
+
+def _resolve_action_center_branch(company: str, branch: str, *, user: str) -> str:
+	company = str(company or "").strip()
+	branch = str(branch or "").strip()
+	scope = validate_report_scope(
+		company=company,
+		branch=branch,
+		user=user,
+		require_branch_when_restricted=False,
+	)
+	if branch or not scope.get("restricted"):
 		return branch
-	allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
+	allowed = _allowed_scope_branches(scope)
 	if len(allowed) == 1:
-		return str(allowed[0])
+		resolved = allowed[0]
+		validate_report_scope(
+			company=company,
+			branch=resolved,
+			user=user,
+			require_branch_when_restricted=False,
+		)
+		return resolved
 	if len(allowed) > 1:
 		frappe.throw(
 			_("Select a Branch before loading the Action Centre for this multi-branch access scope."),
 			frappe.PermissionError,
 		)
-	return ""
+	frappe.throw(
+		_("Your Branch reporting access is not active for Company {0}.").format(company),
+		frappe.PermissionError,
+	)
 
 
 @frappe.whitelist()
@@ -233,7 +295,9 @@ def get_action_center_data(filters: dict[str, Any] | str | None = None) -> dict[
 		},
 		"summary": _summary(items),
 		"items": items,
-		"sources": {key: {k: v for k, v in value.items() if k != "payload"} for key, value in sources.items()},
+		"sources": {
+			key: {k: v for k, v in value.items() if k != "payload"} for key, value in sources.items()
+		},
 		"metadata": {
 			"read_only": True,
 			"follow_up_state_only": True,
@@ -256,7 +320,11 @@ def _safe_source(key: str, loader: Callable[[], dict[str, Any]]) -> dict[str, An
 	try:
 		return {"available": True, "key": key, "payload": loader() or {}}
 	except frappe.PermissionError:
-		return {"available": False, "key": key, "reason": _("Your permissions do not allow this action source.")}
+		return {
+			"available": False,
+			"key": key,
+			"reason": _("Your permissions do not allow this action source."),
+		}
 	except frappe.ValidationError:
 		return {
 			"available": False,

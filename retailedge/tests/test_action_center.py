@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import frappe
 
@@ -62,7 +62,9 @@ class TestActionCenter(unittest.TestCase):
 		)
 
 		self.assertTrue(result["metadata"]["read_only"])
-		self.assertEqual(result["metadata"]["source_model"], "one_authoritative_provider_per_exception_domain")
+		self.assertEqual(
+			result["metadata"]["source_model"], "one_authoritative_provider_per_exception_domain"
+		)
 		self.assertNotIn("owner", result["sources"])
 		self.assertTrue(any(row["kind"] == "cash_control" for row in result["items"]))
 		self.assertEqual(len([row for row in result["items"] if row["kind"] == "review_or_posting"]), 2)
@@ -70,7 +72,9 @@ class TestActionCenter(unittest.TestCase):
 
 		receivable_action = next(row for row in result["items"] if row["kind"] == "overdue_receivables")
 		payable_action = next(row for row in result["items"] if row["kind"] == "overdue_payables")
-		bank_exception = next(row for row in result["items"] if row["kind"] == "bank_reconciliation_exception")
+		bank_exception = next(
+			row for row in result["items"] if row["kind"] == "bank_reconciliation_exception"
+		)
 		bank_review = next(row for row in result["items"] if row["kind"] == "bank_match_review")
 		bank_ready = next(row for row in result["items"] if row["kind"] == "bank_ready_for_reconciliation")
 
@@ -165,10 +169,26 @@ class TestActionCenter(unittest.TestCase):
 
 	def test_follow_up_filters_use_effective_status_assignment_and_due_state(self):
 		items = [
-			{"label": "Mine due", "follow_up": {"effective_status": "Open", "assigned_to": "Administrator", "is_due": True}},
-			{"label": "Other due", "follow_up": {"effective_status": "Open", "assigned_to": "other@example.com", "is_due": True}},
-			{"label": "Mine acknowledged", "follow_up": {"effective_status": "Acknowledged", "assigned_to": "Administrator", "is_due": False}},
-			{"label": "Mine snoozed", "follow_up": {"effective_status": "Snoozed", "assigned_to": "Administrator", "is_due": False}},
+			{
+				"label": "Mine due",
+				"follow_up": {"effective_status": "Open", "assigned_to": "Administrator", "is_due": True},
+			},
+			{
+				"label": "Other due",
+				"follow_up": {"effective_status": "Open", "assigned_to": "other@example.com", "is_due": True},
+			},
+			{
+				"label": "Mine acknowledged",
+				"follow_up": {
+					"effective_status": "Acknowledged",
+					"assigned_to": "Administrator",
+					"is_due": False,
+				},
+			},
+			{
+				"label": "Mine snoozed",
+				"follow_up": {"effective_status": "Snoozed", "assigned_to": "Administrator", "is_due": False},
+			},
 		]
 		result = action_center._apply_follow_up_filters(
 			items,
@@ -196,7 +216,14 @@ class TestActionCenter(unittest.TestCase):
 			{"company": "Test Company", "from_date": "2026-08-01", "to_date": "2026-08-19"}
 		)
 		self.assertEqual(result["items"], [])
-		for source in ("stock_position", "expenses", "cash_shift", "receivables", "payables", "bank_controls"):
+		for source in (
+			"stock_position",
+			"expenses",
+			"cash_shift",
+			"receivables",
+			"payables",
+			"bank_controls",
+		):
 			self.assertFalse(result["sources"][source]["available"])
 
 	def test_validation_failure_isolated_to_one_source(self):
@@ -207,65 +234,74 @@ class TestActionCenter(unittest.TestCase):
 		self.assertFalse(result["available"])
 		self.assertNotIn("scope too broad", result["reason"])
 
-	@patch("retailedge.action_center._validate_operational_scope")
+	@patch("retailedge.action_center.validate_report_scope")
 	def test_explicit_branch_is_validated_before_composition(self, validate_scope):
+		validate_scope.return_value = {
+			"restricted": True,
+			"allowed_branches": ["Main"],
+			"branch": "Main",
+		}
 		resolved = action_center._resolve_action_center_branch(
 			"Test Company", "Main", user="branch@example.com"
 		)
 		self.assertEqual(resolved, "Main")
 		validate_scope.assert_called_once_with(
-			company="Test Company", branch="Main", user="branch@example.com"
+			company="Test Company",
+			branch="Main",
+			user="branch@example.com",
+			require_branch_when_restricted=False,
 		)
 
-	@patch("retailedge.action_center.get_user_allowed_branches")
-	@patch("retailedge.action_center.user_has_global_branch_access", return_value=False)
-	@patch("retailedge.action_center._validate_operational_scope")
-	def test_blank_branch_auto_narrows_to_sole_permitted_branch(
-		self, validate_scope, global_access, allowed_branches
-	):
-		allowed_branches.return_value = {"branches": ["Main"]}
-		resolved = action_center._resolve_action_center_branch(
-			"Test Company", "", user="branch@example.com"
+	@patch("retailedge.action_center.validate_report_scope")
+	def test_blank_branch_auto_narrows_to_sole_permitted_branch(self, validate_scope):
+		validate_scope.side_effect = (
+			{"restricted": True, "allowed_branches": ["Main"], "branch": ""},
+			{"restricted": True, "allowed_branches": ["Main"], "branch": "Main"},
 		)
+		resolved = action_center._resolve_action_center_branch("Test Company", "", user="branch@example.com")
 		self.assertEqual(resolved, "Main")
-		validate_scope.assert_called_once_with(
-			company="Test Company", branch="", user="branch@example.com"
+		self.assertEqual(
+			validate_scope.call_args_list,
+			[
+				call(
+					company="Test Company",
+					branch="",
+					user="branch@example.com",
+					require_branch_when_restricted=False,
+				),
+				call(
+					company="Test Company",
+					branch="Main",
+					user="branch@example.com",
+					require_branch_when_restricted=False,
+				),
+			],
 		)
-		global_access.assert_called_once_with(user="branch@example.com")
 
-	@patch("retailedge.action_center.get_user_allowed_branches")
-	@patch("retailedge.action_center.user_has_global_branch_access", return_value=False)
-	@patch("retailedge.action_center._validate_operational_scope")
-	def test_blank_branch_rejects_ambiguous_multi_branch_access(
-		self, validate_scope, global_access, allowed_branches
-	):
-		allowed_branches.return_value = {"branches": ["Main", "North"]}
+	@patch("retailedge.action_center.validate_report_scope")
+	def test_blank_branch_rejects_ambiguous_multi_branch_access(self, validate_scope):
+		validate_scope.return_value = {
+			"restricted": True,
+			"allowed_branches": ["Main", "North"],
+			"branch": "",
+		}
 		with self.assertRaises(frappe.PermissionError):
-			action_center._resolve_action_center_branch(
-				"Test Company", "", user="branch@example.com"
-			)
+			action_center._resolve_action_center_branch("Test Company", "", user="branch@example.com")
 
 	@patch(
-		"retailedge.action_center._validate_operational_scope",
+		"retailedge.action_center.validate_report_scope",
 		side_effect=frappe.PermissionError,
 	)
 	def test_scope_denial_stops_action_center_before_source_loading(self, validate_scope):
 		with self.assertRaises(frappe.PermissionError):
-			action_center._resolve_action_center_branch(
-				"Other Company", "", user="branch@example.com"
-			)
+			action_center._resolve_action_center_branch("Other Company", "", user="branch@example.com")
 		validate_scope.assert_called_once()
-
 
 	def test_frontend_formats_action_values_as_plain_text_not_html(self):
 		from pathlib import Path
 
 		component = (
-			Path(__file__).resolve().parents[1]
-			/ "public"
-			/ "js"
-			/ "action_center"
-			/ "ActionCenter.vue"
+			Path(__file__).resolve().parents[1] / "public" / "js" / "action_center" / "ActionCenter.vue"
 		).read_text(encoding="utf-8")
 		self.assertNotIn("frappe.format(value", component)
 		self.assertIn('fieldtype === "Int"', component)
@@ -282,7 +318,7 @@ class TestActionCenter(unittest.TestCase):
 		self.assertIn("get_inventory_action_summary", source)
 		self.assertIn("one_authoritative_provider_per_exception_domain", source)
 		self.assertIn("_resolve_action_center_branch(", source)
-		self.assertIn("_validate_operational_scope", source)
+		self.assertIn("validate_report_scope", source)
 
 
 if __name__ == "__main__":
