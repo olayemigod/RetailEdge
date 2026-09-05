@@ -34,12 +34,12 @@ def _page_definition(directory_name: str, filename: str) -> dict:
 
 
 class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
-	def test_bank_matching_is_frozen_as_current_wrong_route_before_b2(self):
+	def test_bank_matching_b1_decision_has_advanced_to_confirmed_page_route(self):
 		base = _base_item("money", "Bank Matching")
 		fallback = _fallback_item("Bank Matching")
 
-		self.assertEqual((base["target_type"], base["target"]), ("Report", "RetailEdge Bank Transaction Matching"))
-		self.assertEqual((fallback.link_type, fallback.link_to), ("Report", "RetailEdge Bank Transaction Matching"))
+		self.assertEqual((base["target_type"], base["target"]), ("Page", "bank-matching-reconciliation"))
+		self.assertEqual((fallback.link_type, fallback.link_to), ("Page", "bank-matching-reconciliation"))
 
 		page = _page_definition(
 			"bank_matching_reconciliation",
@@ -108,7 +108,7 @@ class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 		self.assertNotIn(("Page", "branch-assignments"), base_targets)
 		self.assertNotIn(("Page", "branch-assignments"), fallback_targets)
 
-	def test_rir2b1_document_freezes_b2_and_deferred_decisions(self):
+	def test_rir2b1_document_preserves_historical_promotion_and_deferred_decisions(self):
 		doc = (REPO_ROOT / "docs" / "retailedge_route_promotion_matrix.md").read_text()
 		self.assertIn("RIR2B1 — current route/promotion matrix freeze", doc)
 		self.assertIn("PROMOTE_B2", doc)
