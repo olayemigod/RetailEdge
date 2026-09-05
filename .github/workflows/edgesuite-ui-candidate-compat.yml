@@ -115,8 +115,8 @@ jobs:
           assets = json.loads(Path("sites/assets/assets.json").read_text())
           required = (
               "retailedge_edgesuite_only_operational_guard.bundle.js",
-              "retailedge_professional_selling.bundle.js",
-              "retailedge_professional_purchasing.bundle.js",
+              "professional_selling.bundle.js",
+              "professional_purchasing.bundle.js",
           )
           missing = [bundle for bundle in required if bundle not in assets]
           if missing:
