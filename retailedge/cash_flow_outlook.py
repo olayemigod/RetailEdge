@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from erpnext.accounts.report.accounts_receivable.accounts_receivable import ReceivablePayableReport
 from frappe import _
 from frappe.utils import add_days, flt, getdate, nowdate
 
-from erpnext.accounts.report.accounts_receivable.accounts_receivable import ReceivablePayableReport
-
 from retailedge import customer_receivables, purchase_reporting
-from retailedge.branch_context import get_user_allowed_branches, user_has_global_branch_access, validate_user_branch_access
+from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.reporting_capabilities import require_report_action
 from retailedge.stock_movement_filters import branch_query
 
@@ -26,6 +25,8 @@ def _default_branch(company: str) -> str:
 	if not company or not frappe.has_permission("Company", "read", doc=company):
 		return ""
 	user = frappe.session.user
+	scope = get_operational_branch_scope(company, user=user)
+	allowed = _allowed_scope_branches(scope)
 	candidate = str(
 		frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
@@ -33,22 +34,51 @@ def _default_branch(company: str) -> str:
 	).strip()
 	if candidate:
 		try:
-			validate_user_branch_access(candidate, user=user, company=company, throw=True)
+			_validate_outlook_branch(
+				company=company,
+				branch=candidate,
+				user=user,
+				scope=scope,
+			)
 			return candidate
 		except (frappe.PermissionError, frappe.ValidationError):
 			pass
-	if not user_has_global_branch_access(user=user):
-		allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-		if len(allowed) == 1:
-			return str(allowed[0])
+	if scope.get("restricted") and len(allowed) == 1:
+		return allowed[0]
 	return ""
+
+
+def _validate_outlook_branch(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	scope: dict[str, Any] | None = None,
+) -> None:
+	scope = scope or get_operational_branch_scope(company, user=user)
+	if scope.get("restricted") and branch not in _allowed_scope_branches(scope):
+		frappe.throw(
+			_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+			frappe.PermissionError,
+		)
+	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
+
+
+def _allowed_scope_branches(scope: dict[str, Any]) -> list[str]:
+	return sorted(
+		str(branch).strip()
+		for branch in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(branch or "").strip()
+	)
 
 
 def _assert_document_permissions() -> None:
 	for doctype in ("Sales Invoice", "Purchase Invoice"):
 		if not frappe.has_permission(doctype, "read"):
 			frappe.throw(
-				_("You do not have permission to view {0} records required for 13-Week Cash Commitments.").format(doctype),
+				_(
+					"You do not have permission to view {0} records required for 13-Week Cash Commitments."
+				).format(doctype),
 				frappe.PermissionError,
 			)
 
@@ -262,6 +292,12 @@ def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
 	branch = str(filters.get("branch") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."))
+	if branch:
+		_validate_outlook_branch(
+			company=company,
+			branch=branch,
+			user=frappe.session.user,
+		)
 	require_report_action(REPORT_KEY, "view", company=company, branch=branch)
 	_assert_document_permissions()
 
@@ -308,11 +344,23 @@ def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
 		"columns": _columns(currency),
 		"rows": buckets,
 		"summary": [
-			{"label": _("Receivables Due Now"), "value": buckets[0]["receivables_due"], "datatype": "Currency"},
+			{
+				"label": _("Receivables Due Now"),
+				"value": buckets[0]["receivables_due"],
+				"datatype": "Currency",
+			},
 			{"label": _("Payables Due Now"), "value": buckets[0]["payables_due"], "datatype": "Currency"},
-			{"label": _("Receivables Through 13 Weeks"), "value": through_receivables, "datatype": "Currency"},
+			{
+				"label": _("Receivables Through 13 Weeks"),
+				"value": through_receivables,
+				"datatype": "Currency",
+			},
 			{"label": _("Payables Through 13 Weeks"), "value": through_payables, "datatype": "Currency"},
-			{"label": _("Net Scheduled Commitments"), "value": through_receivables - through_payables, "datatype": "Currency"},
+			{
+				"label": _("Net Scheduled Commitments"),
+				"value": through_receivables - through_payables,
+				"datatype": "Currency",
+			},
 			{
 				"label": _("Beyond 13 Weeks Net Commitments"),
 				"value": flt(beyond_receivables["amount"]) - flt(beyond_payables["amount"]),

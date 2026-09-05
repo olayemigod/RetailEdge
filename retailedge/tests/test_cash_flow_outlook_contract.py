@@ -30,7 +30,11 @@ class TestCashFlowOutlookContract(unittest.TestCase):
 		self.assertIn("purchase_reporting._get_permitted_invoice_headers", source)
 		self.assertIn('voucher_type="Sales Invoice"', source)
 		self.assertIn('voucher_type="Purchase Invoice"', source)
-		self.assertIn("validate_user_branch_access", source)
+		self.assertIn("get_operational_branch_scope", source)
+		self.assertIn("validate_operating_branch", source)
+		self.assertNotIn("validate_user_branch_access", source)
+		self.assertNotIn("get_user_allowed_branches", source)
+		self.assertNotIn("user_has_global_branch_access", source)
 		self.assertIn('"forecasting": False', source)
 		self.assertIn('"cash_balance_included": False', source)
 		self.assertIn('"journal_entries_included": False', source)
@@ -56,9 +60,7 @@ class TestCashFlowOutlookContract(unittest.TestCase):
 		component = (
 			APP_ROOT / "public" / "js" / "cash_flow_outlook" / "CashFlowOutlookReport.vue"
 		).read_text()
-		page = (
-			APP_ROOT / "retailedge" / "page" / "cash_flow_outlook" / "cash_flow_outlook.js"
-		).read_text()
+		page = (APP_ROOT / "retailedge" / "page" / "cash_flow_outlook" / "cash_flow_outlook.js").read_text()
 		self.assertIn("window.EdgeSuiteUI", bundle)
 		self.assertIn("window.EdgeSuiteUI", component)
 		self.assertIn("window.EdgeSuiteUI", page)
