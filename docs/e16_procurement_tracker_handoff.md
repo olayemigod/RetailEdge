@@ -20,7 +20,7 @@ Native ERPNext fields include Material Request date/no, Cost Center, Project, re
 2. The capability is available only when:
    - the standard `Procurement Tracker` Report exists;
    - the current user can read the report; and
-   - the current user has global/company-wide RetailEdge Branch access.
+   - the current user has unrestricted reporting scope for the selected Company.
 3. Add one `Procurement Tracker` action inside the existing EdgeSuite Professional Purchasing page.
 4. The action opens the native ERPNext Query Report with the current Company passed as initial route/filter context where supported.
 5. Branch-restricted users must not see the action in C7A.
@@ -48,7 +48,7 @@ Until a future audited branch-safe source contract exists, C7A must fail closed 
 ### Backend
 
 - Add a constant for `Procurement Tracker` in `retailedge/professional_purchasing.py`.
-- Add a helper that returns true only when the report is readable and the user has global Branch access.
+- Add a helper that returns true only when the report is readable and the user has unrestricted reporting scope for the selected Company.
 - Surface `can_open_procurement_tracker` in the existing Professional Purchasing capability map.
 - Do not execute the report server-side in C7A.
 
@@ -77,7 +77,7 @@ Until a future audited branch-safe source contract exists, C7A must fail closed 
 
 ## Tests Required
 
-1. Capability true when report is readable and global Branch access is true.
+1. Capability true when the report is readable and Company reporting scope is unrestricted.
 2. Capability false when report is unavailable/unreadable.
 3. Capability false for branch-restricted access even if the report is readable.
 4. UI renders `Procurement Tracker` only behind the capability.

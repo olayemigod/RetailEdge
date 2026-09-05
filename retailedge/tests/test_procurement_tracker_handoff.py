@@ -8,18 +8,18 @@ from retailedge import procurement_tracker_handoff as handoff
 
 
 class TestProcurementTrackerHandoff(FrappeTestCase):
-	def _call(self, *, branch="", report=True, global_access=True, po_read=True):
+	def _call(self, *, branch="", report=True, unrestricted=True, po_read=True):
 		with (
 			patch.object(handoff, "_resolve_company", return_value="Test Company"),
 			patch.object(handoff, "_can_open_report", return_value=report),
-			patch.object(handoff, "user_has_global_branch_access", return_value=global_access),
-			patch.object(handoff, "validate_user_branch_access") as validate_branch,
+			patch.object(handoff, "has_unrestricted_report_scope", return_value=unrestricted),
+			patch.object(handoff, "validate_report_scope") as validate_branch,
 			patch.object(handoff.frappe, "has_permission", return_value=po_read),
 		):
 			result = handoff.get_procurement_tracker_handoff(company="Test Company", branch=branch)
 		return result, validate_branch
 
-	def test_company_wide_global_user_can_open_native_tracker(self):
+	def test_company_wide_unrestricted_user_can_open_native_tracker(self):
 		result, validate_branch = self._call()
 		self.assertTrue(result["available"])
 		self.assertEqual(result["report"], "Procurement Tracker")
@@ -28,7 +28,7 @@ class TestProcurementTrackerHandoff(FrappeTestCase):
 		validate_branch.assert_not_called()
 
 	def test_branch_restricted_user_cannot_open_native_tracker(self):
-		result, _validate_branch = self._call(global_access=False)
+		result, _validate_branch = self._call(unrestricted=False)
 		self.assertFalse(result["available"])
 		self.assertIn("Branch-restricted", result["reason"])
 
@@ -36,7 +36,11 @@ class TestProcurementTrackerHandoff(FrappeTestCase):
 		result, validate_branch = self._call(branch="Lagos")
 		self.assertFalse(result["available"])
 		self.assertIn("Clear the Branch filter", result["reason"])
-		validate_branch.assert_called_once()
+		validate_branch.assert_called_once_with(
+			company="Test Company",
+			branch="Lagos",
+			user=handoff.frappe.session.user,
+		)
 
 	def test_unreadable_report_is_not_exposed(self):
 		result, _validate_branch = self._call(report=False)

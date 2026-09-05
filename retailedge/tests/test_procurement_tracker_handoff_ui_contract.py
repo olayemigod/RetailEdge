@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue"
 HANDOFF = APP_ROOT / "procurement_tracker_handoff.py"
@@ -41,7 +40,8 @@ class TestProcurementTrackerHandoffUIContract(TestCase):
 		source = HANDOFF.read_text()
 
 		self.assertIn('PROCUREMENT_TRACKER_REPORT = "Procurement Tracker"', source)
-		self.assertIn("user_has_global_branch_access", source)
+		self.assertIn("has_unrestricted_report_scope", source)
+		self.assertIn("validate_report_scope", source)
 		self.assertIn("company_wide_view = not resolved_branch", source)
 		self.assertIn('"company_wide_only": True', source)
 		self.assertNotIn("erpnext.buying.report.procurement_tracker", source)
