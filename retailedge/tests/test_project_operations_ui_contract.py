@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -43,8 +42,8 @@ class TestProjectOperationsUIContract(TestCase):
 		source = (APP_ROOT / "project_search.py").read_text()
 		self.assertIn("def search_project_branches", source)
 		self.assertIn('frappe.has_permission("Branch", "read")', source)
-		self.assertIn("get_user_allowed_branches", source)
-		self.assertIn("user_has_global_branch_access", source)
+		self.assertIn('frappe.has_permission("Company", "read", doc=company)', source)
+		self.assertIn("get_operational_branch_scope", source)
 		self.assertIn('"RetailEdge Branch Profile"', source)
 		self.assertIn('filters={"company": company, "enabled": 1}', source)
 		self.assertIn("limit_page_length=page_length", source)
@@ -54,16 +53,19 @@ class TestProjectOperationsUIContract(TestCase):
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
 		self.assertIn('label="Branch"', component)
 		self.assertIn(':searcher="branchSearch"', component)
-		self.assertIn('retailedge.project_search.search_project_branches', component)
-		self.assertIn('company: this.projectCompany', component)
+		self.assertIn("retailedge.project_search.search_project_branches", component)
+		self.assertIn("company: this.projectCompany", component)
 		self.assertIn('this.branch = ""; this.branchLabel = "";', component)
-		self.assertIn('onBranchSelected(option)', component)
-		self.assertIn('clearBranch()', component)
+		self.assertIn("onBranchSelected(option)", component)
+		self.assertIn("clearBranch()", component)
 		self.assertNotIn('<input v-model="branch"', component)
 
 	def test_project_receipt_inherits_validated_branch_scope(self):
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
-		self.assertIn('{ fieldname: "branch", fieldtype: "Data", label: __("Branch"), default: this.branch || "", read_only: 1 }', component)
+		self.assertIn(
+			'{ fieldname: "branch", fieldtype: "Data", label: __("Branch"), default: this.branch || "", read_only: 1 }',
+			component,
+		)
 
 	def test_project_activity_uses_native_task_and_milestone_workflow(self):
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
@@ -86,9 +88,15 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("Project Budget Governance", component)
 		self.assertIn("Open Budgets", component)
 		self.assertIn("New Budget", component)
-		self.assertIn('frappe.new_doc("Budget", { budget_against: "Project", project: this.project, company: this.context.company })', component)
+		self.assertIn(
+			'frappe.new_doc("Budget", { budget_against: "Project", project: this.project, company: this.context.company })',
+			component,
+		)
 		self.assertIn('budget_against: "Project"', component)
-		self.assertIn('filters={"budget_against": "Project", "project": project, "company": doc.company, "docstatus": ["<", 2]}', source)
+		self.assertIn(
+			'filters={"budget_against": "Project", "project": project, "company": doc.company, "docstatus": ["<", 2]}',
+			source,
+		)
 		self.assertIn('frappe.has_permission("Budget", "read")', source)
 		self.assertIn('frappe.has_permission("Budget", "create")', source)
 		self.assertIn("applicable_on_purchase_order", source)
@@ -114,7 +122,15 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn('label: __("Operation")', component)
 		self.assertIn("route.description", component)
 		self.assertIn("frappe.utils.escape_html", component)
-		for doctype in ("Material Request", "Purchase Order", "Purchase Receipt", "Purchase Invoice", "Stock Entry", "Expense Claim", "Journal Entry"):
+		for doctype in (
+			"Material Request",
+			"Purchase Order",
+			"Purchase Receipt",
+			"Purchase Invoice",
+			"Stock Entry",
+			"Expense Claim",
+			"Journal Entry",
+		):
 			self.assertIn(f'doctype="{doctype}"', source)
 		self.assertIn("current user can create", source)
 		self.assertNotIn("frappe.new_doc(", source)
@@ -124,11 +140,14 @@ class TestProjectOperationsUIContract(TestCase):
 
 	def test_project_financial_control_action_preserves_current_context(self):
 		component = (APP_ROOT / "public" / "js" / "project_operations" / "ProjectOperations.vue").read_text()
-		self.assertIn('frappe.set_route("query-report", "RetailEdge Project Financial Control", { company: this.context.company, project: this.project })', component)
+		self.assertIn(
+			'frappe.set_route("query-report", "RetailEdge Project Financial Control", { company: this.context.company, project: this.project })',
+			component,
+		)
 
 	def test_project_receipt_action_creates_draft_payment_entry(self):
 		source = (APP_ROOT / "project_receipts.py").read_text()
-		self.assertIn('doc = frappe.new_doc(PAYMENT_ENTRY_DOCTYPE)', source)
+		self.assertIn("doc = frappe.new_doc(PAYMENT_ENTRY_DOCTYPE)", source)
 		self.assertIn('doc.payment_type = "Receive"', source)
 		self.assertIn("doc.project = project", source)
 		self.assertIn("doc.insert()", source)
@@ -159,4 +178,5 @@ class TestProjectOperationsUIContract(TestCase):
 
 if __name__ == "__main__":
 	import unittest
+
 	unittest.main()
