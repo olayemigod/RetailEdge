@@ -99,13 +99,34 @@ def validate_report_scope(
 	if branch:
 		validate_operating_branch(company=company, branch=branch, user=user, throw=True)
 		if scope["restricted"] and branch not in scope["allowed_branches"]:
-			frappe.throw(_("You do not have reporting access to Branch {0}.").format(branch), frappe.PermissionError)
+			frappe.throw(
+				_("You do not have reporting access to Branch {0}.").format(branch), frappe.PermissionError
+			)
 	elif scope["restricted"] and require_branch_when_restricted:
 		frappe.throw(
-			_("Choose one of your assigned Branches. Cross-branch reporting is available only to authorized managers."),
+			_(
+				"Choose one of your assigned Branches. Cross-branch reporting is available only to authorized managers."
+			),
 			frappe.PermissionError,
 		)
 	return {**scope, "branch": branch}
+
+
+def has_unrestricted_report_scope(company: str, *, user: str | None = None) -> bool:
+	"""Return whether one reader may safely consume Company-wide report data."""
+	company = str(company or "").strip()
+	if not company:
+		return False
+	try:
+		scope = validate_report_scope(
+			company=company,
+			branch="",
+			user=user,
+			require_branch_when_restricted=False,
+		)
+	except (frappe.PermissionError, frappe.ValidationError):
+		return False
+	return not bool(scope.get("restricted"))
 
 
 def constrain_report_filters(
