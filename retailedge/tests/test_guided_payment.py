@@ -34,6 +34,9 @@ class _DraftPaymentEntry(SimpleNamespace):
 		self.references.append(frappe._dict(row))
 		return self.references[-1]
 
+	def set(self, fieldname, value):
+		setattr(self, fieldname, value)
+
 	def insert(self):
 		self.insert_calls += 1
 		return self
@@ -88,10 +91,7 @@ class TestGuidedPayment(unittest.TestCase):
 		mock_db_value.side_effect = lambda doctype, name, fieldname, *args, **kwargs: (
 			"NGN" if doctype == "Company" and fieldname == "default_currency" else None
 		)
-		mock_party_details.return_value = frappe._dict(
-			party_account="Debtors - DC",
-			party_account_currency="NGN",
-		)
+		mock_party_details.return_value = frappe._dict(party_account="Debtors - DC", party_account_currency="NGN")
 		mock_mode_details.return_value = {
 			"account": "Bank - DC",
 			"account_type": "Bank",
@@ -107,20 +107,21 @@ class TestGuidedPayment(unittest.TestCase):
 			"currency": "NGN",
 		}
 
-		result = create_simple_payment_draft(
-			"receive-customer-payment",
-			{
-				"company": "Demo Company",
-				"branch": "Lagos",
-				"posting_date": "2026-08-15",
-				"party": "CUST-001",
-				"mode_of_payment": "Bank Transfer",
-				"amount": 1500,
-				"reference_no": "TRF-123",
-				"reference_date": "2026-08-15",
-				"references": [{"reference_name": "SINV-0001", "allocated_amount": 1500}],
-			},
-		)
+		with patch("retailedge.guided_payment.get_first_existing_field", return_value="retailedge_branch"):
+			result = create_simple_payment_draft(
+				"receive-customer-payment",
+				{
+					"company": "Demo Company",
+					"branch": "Lagos",
+					"posting_date": "2026-08-15",
+					"party": "CUST-001",
+					"mode_of_payment": "Bank Transfer",
+					"amount": 1500,
+					"reference_no": "TRF-123",
+					"reference_date": "2026-08-15",
+					"references": [{"reference_name": "SINV-0001", "allocated_amount": 1500}],
+				},
+			)
 
 		mock_new_doc.assert_called_once_with("Payment Entry")
 		mock_branch_access.assert_called_once()
@@ -133,7 +134,7 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertEqual(doc.paid_amount, 1500.0)
 		self.assertEqual(doc.received_amount, 1500.0)
 		self.assertEqual(doc.reference_no, "TRF-123")
-		self.assertEqual(doc.branch, "Lagos")
+		self.assertEqual(doc.retailedge_branch, "Lagos")
 		self.assertEqual(len(doc.references), 1)
 		self.assertEqual(doc.references[0].reference_doctype, "Sales Invoice")
 		self.assertEqual(doc.references[0].allocated_amount, 1500.0)
@@ -164,10 +165,7 @@ class TestGuidedPayment(unittest.TestCase):
 		mock_db_value.side_effect = lambda doctype, name, fieldname, *args, **kwargs: (
 			"NGN" if doctype == "Company" and fieldname == "default_currency" else None
 		)
-		mock_party_details.return_value = frappe._dict(
-			party_account="Creditors - DC",
-			party_account_currency="NGN",
-		)
+		mock_party_details.return_value = frappe._dict(party_account="Creditors - DC", party_account_currency="NGN")
 		mock_mode_details.return_value = {
 			"account": "Cash - DC",
 			"account_type": "Cash",
@@ -182,7 +180,6 @@ class TestGuidedPayment(unittest.TestCase):
 			"branch": "Lagos",
 			"currency": "NGN",
 		}
-
 		create_simple_payment_draft(
 			"pay-supplier",
 			{
@@ -194,7 +191,6 @@ class TestGuidedPayment(unittest.TestCase):
 				"references": [{"reference_name": "PINV-0001", "allocated_amount": 700}],
 			},
 		)
-
 		self.assertEqual(doc.payment_type, "Pay")
 		self.assertEqual(doc.party_type, "Supplier")
 		self.assertEqual(doc.paid_from, "Cash - DC")
@@ -208,25 +204,9 @@ class TestGuidedPayment(unittest.TestCase):
 	@patch("retailedge.guided_payment._assert_read_permission")
 	@patch("retailedge.guided_payment.validate_user_branch_access")
 	@patch("retailedge.guided_payment._assert_can_create_payment_entry")
-	def test_multi_currency_payment_is_redirected_to_full_form(
-		self,
-		_mock_create_permission,
-		_mock_branch_access,
-		_mock_read_permission,
-		mock_party_details,
-		mock_mode_details,
-		_mock_db_value,
-	):
-		mock_party_details.return_value = frappe._dict(
-			party_account="Debtors USD - DC",
-			party_account_currency="USD",
-		)
-		mock_mode_details.return_value = {
-			"account": "Bank - DC",
-			"account_type": "Bank",
-			"account_currency": "NGN",
-			"reference_required": True,
-		}
+	def test_multi_currency_payment_is_redirected_to_full_form(self, _mock_create_permission, _mock_branch_access, _mock_read_permission, mock_party_details, mock_mode_details, _mock_db_value):
+		mock_party_details.return_value = frappe._dict(party_account="Debtors USD - DC", party_account_currency="USD")
+		mock_mode_details.return_value = {"account": "Bank - DC", "account_type": "Bank", "account_currency": "NGN", "reference_required": True}
 		with self.assertRaises(frappe.ValidationError):
 			create_simple_payment_draft(
 				"receive-customer-payment",
@@ -257,13 +237,7 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertNotIn("frappe.db.commit()", source)
 
 	def test_payment_dialog_uses_shared_edgesuite_components_and_cascades_context(self):
-		component = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "retailedge_business_hub"
-			/ "SimplePaymentDialog.vue"
-		).read_text()
+		component = (APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue").read_text()
 		self.assertIn("EdgeModal: runtimeComponents.EdgeModal", component)
 		self.assertIn("EdgeLinkField: runtimeComponents.EdgeLinkField", component)
 		self.assertIn("EdgeChildTable: runtimeComponents.EdgeChildTable", component)
@@ -276,13 +250,7 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertIn("unallocatedAmount", component)
 
 	def test_payment_dialog_loads_reference_details_on_demand_and_keeps_native_fallback(self):
-		component = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "retailedge_business_hub"
-			/ "SimplePaymentDialog.vue"
-		).read_text()
+		component = (APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue").read_text()
 		self.assertIn("get_simple_payment_reference_details", component)
 		self.assertIn("get_simple_payment_mode_details", component)
 		self.assertIn("search_simple_payment_options", component)

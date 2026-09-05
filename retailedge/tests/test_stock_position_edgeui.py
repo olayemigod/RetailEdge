@@ -4,6 +4,7 @@ import inspect
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from retailedge import stock_position
 
@@ -47,14 +48,114 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 			'frappe.has_permission("Bin", "read")',
 			'frappe.get_list(\n\t\t"Bin"',
 			"limit=MAX_BIN_SCAN_ROWS + 1",
-			"validate_user_branch_access",
-			"get_user_allowed_branches",
+			"get_operational_branch_scope",
+			"_assert_branch_read_scope",
+			"_branch_scope_warehouses",
 			"get_branch_warehouses",
 		):
 			self.assertIn(contract, source)
+		self.assertNotIn("validate_user_branch_access", source)
+		self.assertNotIn("get_user_allowed_branches", source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("frappe.db.commit()", source)
 		self.assertNotIn("frappe.db.sql", source)
+
+	def test_restricted_explicit_branch_outside_assignments_fails_closed(self):
+		filters = stock_position.frappe._dict(company="Scope Co", branch="Branch B")
+		with (
+			patch.object(
+				stock_position,
+				"get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": ["Branch A"], "source": "branch_assignment"},
+			),
+			patch.object(stock_position.frappe, "throw", side_effect=RuntimeError("denied")),
+		):
+			with self.assertRaises(RuntimeError):
+				stock_position._resolve_warehouse_scope(filters)
+
+	def test_restricted_blank_branch_aggregates_only_assignment_warehouses(self):
+		filters = stock_position.frappe._dict(company="Scope Co")
+		with (
+			patch.object(
+				stock_position,
+				"get_operational_branch_scope",
+				return_value={
+					"restricted": True,
+					"allowed_branches": ["Branch A", "Branch B"],
+					"source": "branch_assignment",
+				},
+			),
+			patch.object(
+				stock_position,
+				"get_branch_warehouses",
+				side_effect=lambda company, branch: [f"{branch} Warehouse"],
+			),
+			patch.object(
+				stock_position.frappe,
+				"get_list",
+				return_value=["Branch A Warehouse", "Branch B Warehouse"],
+			),
+		):
+			warehouses = stock_position._resolve_warehouse_scope(filters)
+
+		self.assertEqual(warehouses, ["Branch A Warehouse", "Branch B Warehouse"])
+
+	def test_restricted_zero_active_branches_fails_closed(self):
+		filters = stock_position.frappe._dict(company="Scope Co")
+		with (
+			patch.object(
+				stock_position,
+				"get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": [], "source": "branch_assignment"},
+			),
+			patch.object(stock_position.frappe, "throw", side_effect=RuntimeError("denied")),
+		):
+			with self.assertRaises(RuntimeError):
+				stock_position._resolve_warehouse_scope(filters)
+
+	def test_explicit_warehouse_branch_is_checked_against_assignment_scope(self):
+		filters = stock_position.frappe._dict(company="Scope Co", warehouse="Branch B Warehouse")
+		with (
+			patch.object(
+				stock_position,
+				"get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": ["Branch A"], "source": "branch_assignment"},
+			),
+			patch.object(stock_position, "_assert_named_read"),
+			patch.object(stock_position.frappe.db, "get_value", return_value=("Scope Co", 0)),
+			patch.object(
+				stock_position,
+				"resolve_branch_from_warehouse",
+				return_value={"branch": "Branch B", "company": "Scope Co"},
+			),
+			patch.object(stock_position.frappe, "throw", side_effect=RuntimeError("denied")),
+		):
+			with self.assertRaises(RuntimeError):
+				stock_position._resolve_warehouse_scope(filters)
+
+	def test_unrestricted_blank_branch_retains_company_wide_scope(self):
+		filters = stock_position.frappe._dict(company="Scope Co")
+		with (
+			patch.object(
+				stock_position,
+				"get_operational_branch_scope",
+				return_value={"restricted": False, "allowed_branches": [], "source": "global"},
+			),
+			patch.object(
+				stock_position,
+				"_all_company_warehouses",
+				return_value=["Warehouse A", "Warehouse B"],
+			) as all_company,
+			patch.object(
+				stock_position.frappe,
+				"get_list",
+				return_value=["Warehouse A", "Warehouse B"],
+			),
+		):
+			warehouses = stock_position._resolve_warehouse_scope(filters)
+
+		self.assertEqual(warehouses, ["Warehouse A", "Warehouse B"])
+		all_company.assert_called_once_with("Scope Co")
 
 	def test_cost_visibility_uses_existing_retailedge_policy_and_avoids_fetch_when_hidden(self):
 		source = inspect.getsource(stock_position._build_stock_position_dataset)

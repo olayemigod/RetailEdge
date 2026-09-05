@@ -73,6 +73,14 @@ PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 	"icon": "shopping-bag",
 }
 
+PROFESSIONAL_PURCHASING_ITEM: dict[str, Any] = {
+	"label": "Professional Purchasing",
+	"description": "Operate Purchase Orders and prepare draft Purchase Receipts through ERPNext buying truth.",
+	"target_type": "Page",
+	"target": "professional-purchasing",
+	"icon": "shopping-bag",
+}
+
 DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
 	"label": "Document Output & Sharing",
 	"description": "Print, download and share customer documents using ERPNext Print Formats and permissions.",
@@ -107,9 +115,17 @@ PROJECT_OPERATIONS_ITEM: dict[str, Any] = {
 
 PROJECT_PORTFOLIO_REPORT_ITEM: dict[str, Any] = {
 	"label": "Project Portfolio",
-	"description": "Review project billing, funds, cost, margin and completion across the permitted portfolio.",
+	"description": "Review project billing, project-linked cash, cost, margin and completion across the permitted portfolio.",
 	"target_type": "Report",
 	"target": "RetailEdge Project Portfolio",
+	"icon": "report",
+}
+
+PROJECT_FINANCIAL_CONTROL_REPORT_ITEM: dict[str, Any] = {
+	"label": "Project Financial Control",
+	"description": "Control project budget, billing, receivables, payables, project-linked cash, cost and margin from ERPNext truth.",
+	"target_type": "Report",
+	"target": "RetailEdge Project Financial Control",
 	"icon": "report",
 }
 
@@ -215,6 +231,24 @@ def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> No
 		return
 
 
+def _promote_professional_purchasing(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(PROFESSIONAL_PURCHASING_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "buy":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target_type") == "Page" and item.get("target") == PROFESSIONAL_PURCHASING_ITEM["target"] for item in items):
+			return
+		purchase_order_index = next(
+			(index for index, item in enumerate(items) if item.get("target_type") == "DocType" and item.get("target") == "Purchase Order"),
+			0,
+		)
+		items.insert(purchase_order_index, deepcopy(PROFESSIONAL_PURCHASING_ITEM))
+		group["items"] = items
+		return
+
+
 def _promote_document_output(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(DOCUMENT_OUTPUT_ITEM["target"]):
 		return
@@ -251,8 +285,9 @@ def _promote_payment_management(navigation_groups: list[dict[str, Any]]) -> None
 
 def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None:
 	page_available = _can_open_page(PROJECT_OPERATIONS_ITEM["target"])
-	report_available = _can_open_report(PROJECT_PORTFOLIO_REPORT_ITEM["target"])
-	if not page_available and not report_available:
+	portfolio_available = _can_open_report(PROJECT_PORTFOLIO_REPORT_ITEM["target"])
+	financial_control_available = _can_open_report(PROJECT_FINANCIAL_CONTROL_REPORT_ITEM["target"])
+	if not page_available and not portfolio_available and not financial_control_available:
 		return
 	existing_group = next((group for group in navigation_groups if group.get("key") == "projects"), None)
 	if existing_group is not None:
@@ -262,8 +297,10 @@ def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None
 
 	if page_available and not any(item.get("target") == PROJECT_OPERATIONS_ITEM["target"] for item in items):
 		items.append(deepcopy(PROJECT_OPERATIONS_ITEM))
-	if report_available and not any(item.get("target") == PROJECT_PORTFOLIO_REPORT_ITEM["target"] for item in items):
+	if portfolio_available and not any(item.get("target") == PROJECT_PORTFOLIO_REPORT_ITEM["target"] for item in items):
 		items.append(deepcopy(PROJECT_PORTFOLIO_REPORT_ITEM))
+	if financial_control_available and not any(item.get("target") == PROJECT_FINANCIAL_CONTROL_REPORT_ITEM["target"] for item in items):
+		items.append(deepcopy(PROJECT_FINANCIAL_CONTROL_REPORT_ITEM))
 	try:
 		if frappe.db.exists("DocType", "Project") and frappe.has_permission("Project", "read") and not any(item.get("target_type") == "DocType" and item.get("target") == "Project" for item in items):
 			items.append(deepcopy(PROJECT_LIST_ITEM))
@@ -307,6 +344,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_add_operating_context_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
+	_promote_professional_purchasing(navigation_groups)
 	_promote_document_output(navigation_groups)
 	_promote_payment_management(navigation_groups)
 	_promote_project_operations(navigation_groups)
@@ -339,11 +377,13 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
 	feature_flags["professional_selling"] = "edgesuite_guided"
+	feature_flags["professional_purchasing"] = "erpnext_native_po_receipt"
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"
 	feature_flags["project_operations"] = "erpnext_native_project_funds"
 	feature_flags["project_portfolio_reporting"] = "erpnext_project_plus_payment_entries"
+	feature_flags["project_financial_control"] = "whole_project_erpnext_financial_control"
 	context["feature_flags"] = feature_flags
 	return context
 

@@ -6,8 +6,11 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.desk.search import search_link
-from frappe.utils import cint, nowdate
+from frappe.utils import cint, flt, nowdate
 
+from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
+	make_sales_return as erpnext_make_sales_return,
+)
 from erpnext.selling.doctype.sales_order.sales_order import (
 	make_sales_invoice as erpnext_make_sales_invoice_from_order,
 )
@@ -17,12 +20,14 @@ from erpnext.stock.doctype.delivery_note.delivery_note import (
 
 from retailedge.branch_context import resolve_branch_from_warehouse, validate_user_branch_access
 from retailedge.guided_sales_invoice import create_simple_sales_invoice_draft
+from retailedge.loyalty_rewards import apply_loyalty_redemption_to_draft
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_quotation import _validate_shipping_rule
 from retailedge.professional_selling import (
 	MAX_LINK_RESULTS,
 	_assert_read,
 	_coerce_values,
+	_operating_document_filters,
 	_permission,
 	_validate_context,
 )
@@ -49,6 +54,7 @@ _SOURCE_CONFIG = {
 	"quotation": {"doctype": "Quotation", "label": "Quotation"},
 	"sales-order": {"doctype": "Sales Order", "label": "Sales Order"},
 	"delivery-note": {"doctype": "Delivery Note", "label": "Delivery Note"},
+	"return": {"doctype": "Sales Invoice", "label": "Sales Invoice"},
 }
 
 _CHILD_IDENTITY_FIELDS = {
@@ -181,6 +187,10 @@ def _invoice_response(
 		"branch": doc.get("branch") or doc.get("retailedge_branch") or branch,
 		"selling_price_list": doc.get("selling_price_list") or "",
 		"shipping_rule": doc.get("shipping_rule") or "",
+		"redeem_loyalty_points": bool(cint(doc.get("redeem_loyalty_points"))),
+		"loyalty_program": doc.get("loyalty_program") or "",
+		"loyalty_points": cint(doc.get("loyalty_points")),
+		"loyalty_amount": flt(doc.get("loyalty_amount")),
 		"grand_total": doc.grand_total,
 		"currency": doc.currency,
 		"source_doctype": source_doctype,
@@ -238,6 +248,24 @@ def _quotation_invoice_item(row) -> dict[str, Any]:
 	return values
 
 
+def _filter_return_sources(rows: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+	names = [str(row.get("value") or "").strip() for row in rows if row.get("value")]
+	if not names:
+		return []
+	ineligible = set(
+		frappe.get_all(
+			"Sales Invoice",
+			filters={
+				"name": ["in", names],
+				"is_consolidated": 1,
+				"is_pos": 1,
+			},
+			pluck="name",
+		)
+	)
+	return [row for row in rows if row.get("value") not in ineligible][:limit]
+
+
 @frappe.whitelist()
 def get_professional_sales_invoice_capability() -> dict[str, Any]:
 	available = bool(frappe.db.exists("DocType", "Sales Invoice"))
@@ -249,7 +277,7 @@ def get_professional_sales_invoice_capability() -> dict[str, Any]:
 		"shipping_rule_field": available and _field_exists("Sales Invoice", "shipping_rule"),
 		"selling_price_list_field": available and _field_exists("Sales Invoice", "selling_price_list"),
 		"source_warehouse_field": available and _field_exists("Sales Invoice", "set_warehouse"),
-		"conversion_sources": ["quotation", "sales-order", "delivery-note"],
+		"conversion_sources": ["quotation", "sales-order", "delivery-note", "return"],
 	}
 
 
@@ -257,6 +285,13 @@ def get_professional_sales_invoice_capability() -> dict[str, Any]:
 def get_recent_professional_sales_invoices(limit: int = 8) -> list[dict[str, Any]]:
 	if not _permission("Sales Invoice", "read"):
 		frappe.throw(_("You do not have permission to view Sales Invoice."), frappe.PermissionError)
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	if not company:
+		frappe.throw(_("Choose an Operating Company before viewing recent Sales Invoices."))
+	_assert_read("Company", company)
+	filters = _operating_document_filters("Sales Invoice", company=company, branch=branch)
 	limit = max(1, min(cint(limit) or 8, 20))
 	fields = [
 		"name",
@@ -274,6 +309,7 @@ def get_recent_professional_sales_invoices(limit: int = 8) -> list[dict[str, Any
 		dict(row)
 		for row in frappe.get_list(
 			"Sales Invoice",
+			filters=filters,
 			fields=fields,
 			order_by="modified desc",
 			limit_page_length=limit,
@@ -320,9 +356,10 @@ def search_professional_invoice_sources(
 		)
 
 	values = _coerce_values(values)
-	company, _branch, _warehouse = _validate_context(values)
+	company, branch, _warehouse = _validate_context(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
-	filters: dict[str, Any] = {"docstatus": 1, "company": company}
+	filters: dict[str, Any] = {"docstatus": 1}
+	filters.update(_operating_document_filters(config["doctype"], company=company, branch=branch))
 	link_fieldname = None
 
 	if source == "quotation":
@@ -344,7 +381,7 @@ def search_professional_invoice_sources(
 			}
 		)
 		link_fieldname = "sales_order"
-	else:
+	elif source == "delivery-note":
 		filters.update(
 			{
 				"status": ["not in", ["Closed", "Completed", "Cancelled", "Return"]],
@@ -352,8 +389,11 @@ def search_professional_invoice_sources(
 			}
 		)
 		link_fieldname = "delivery_note"
+	else:
+		filters["is_return"] = 0
+		link_fieldname = "return_against"
 
-	page_length = min(max(limit * 5, limit), 100) if source == "quotation" else limit
+	page_length = min(max(limit * 5, limit), 100) if source in {"quotation", "return"} else limit
 	rows = search_link(
 		config["doctype"],
 		txt or "",
@@ -364,6 +404,8 @@ def search_professional_invoice_sources(
 	)
 	if source == "quotation":
 		return filter_unconverted_quotation_results(rows, limit=limit)
+	if source == "return":
+		return _filter_return_sources(list(rows), limit=limit)
 	return list(rows)[:limit]
 
 
@@ -374,6 +416,15 @@ def create_professional_sales_invoice_draft(
 	"""Reuse the guarded invoice engine, then apply ERPNext Shipping Rule to its draft."""
 	values = _coerce_values(values)
 	shipping_rule = str(values.pop("shipping_rule", "") or "").strip()
+	loyalty_points = values.pop("loyalty_points", 0)
+	for browser_owned_field in (
+		"redeem_loyalty_points",
+		"loyalty_program",
+		"loyalty_amount",
+		"loyalty_redemption_account",
+		"loyalty_redemption_cost_center",
+	):
+		values.pop(browser_owned_field, None)
 	company, _branch, _warehouse = _validate_context(values)
 	if shipping_rule:
 		_validate_shipping_rule(shipping_rule, company=company)
@@ -384,9 +435,17 @@ def create_professional_sales_invoice_draft(
 		frappe.throw(
 			_("Sales Invoice creation stopped because the guarded invoice engine returned a non-draft document.")
 		)
+	needs_save = False
 	if shipping_rule:
 		doc.shipping_rule = shipping_rule
 		doc.apply_shipping_rule()
+		needs_save = True
+	if loyalty_points not in (None, "", 0, "0"):
+		apply_loyalty_redemption_to_draft(doc, loyalty_points)
+		needs_save = True
+	if needs_save:
+		# ERPNext validates the final Shipping Rule total before accepting
+		# native loyalty fields and deriving the redemption accounting fields.
 		doc.save()
 	return _invoice_response(doc, branch=result.get("branch") or "")
 
@@ -504,3 +563,58 @@ def create_sales_invoice_from_delivery_note(delivery_note: str) -> dict[str, Any
 		delivery_note,
 		erpnext_make_sales_invoice_from_delivery,
 	)
+
+
+@frappe.whitelist(methods=["POST"])
+def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
+	"""Prepare and insert an ERPNext Sales Invoice return as draft only."""
+	if not _permission("Sales Invoice", "create"):
+		frappe.throw(_("You do not have permission to create Sales Invoice."), frappe.PermissionError)
+	sales_invoice = str(sales_invoice or "").strip()
+	_assert_read("Sales Invoice", sales_invoice)
+	source = frappe.get_doc("Sales Invoice", sales_invoice)
+	if source.docstatus != 1:
+		frappe.throw(_("Submit the Sales Invoice before preparing a Return / Credit Note."))
+	if cint(source.get("is_return")):
+		frappe.throw(_("Create a Return / Credit Note from the original Sales Invoice, not from another return."))
+	if cint(source.get("is_consolidated")) and cint(source.get("is_pos")):
+		frappe.throw(_("Use the native POS return workflow for a consolidated POS Sales Invoice."))
+
+	company, source_branch = _validate_source_context(source, source_label="Sales Invoice")
+	target = erpnext_make_sales_return(source.name)
+	if not target or target.doctype != "Sales Invoice":
+		frappe.throw(_("ERPNext could not prepare a Return / Credit Note from this Sales Invoice."))
+	if target.docstatus != 0:
+		frappe.throw(_("ERPNext returned a non-draft Sales Invoice return; creation was stopped."))
+	if not cint(target.get("is_return")):
+		frappe.throw(_("ERPNext returned a Sales Invoice that is not marked as a return; creation was stopped."))
+	if str(target.get("return_against") or "") != source.name:
+		frappe.throw(_("ERPNext return linkage does not match the selected Sales Invoice; creation was stopped."))
+	if str(target.get("company") or "") != company:
+		frappe.throw(_("The mapped Return / Credit Note Company does not match the source Sales Invoice."))
+	if str(target.get("customer") or "") != str(source.get("customer") or ""):
+		frappe.throw(_("The mapped Return / Credit Note Customer does not match the source Sales Invoice."))
+	if not target.get("items") or not any(flt(row.get("qty")) < 0 for row in target.get("items")):
+		frappe.throw(_("There are no remaining returnable quantities on this Sales Invoice."))
+
+	mapped_branch = _validate_invoice_stock_context(
+		target,
+		company=company,
+		source_branch=source_branch,
+	)
+	_set_branch_if_supported(target, mapped_branch)
+	target.insert()
+	response = _invoice_response(
+		target,
+		branch=mapped_branch,
+		source_doctype="Sales Invoice",
+		source_name=source.name,
+	)
+	response.update(
+		{
+			"is_return": True,
+			"return_against": source.name,
+			"posting_status": "Draft",
+		}
+	)
+	return response

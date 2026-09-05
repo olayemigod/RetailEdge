@@ -4,9 +4,9 @@ import frappe
 from frappe import _
 from frappe.utils import cstr
 
-from retailedge.branch_context import get_branch_query_filters
 from retailedge.branch_performance import _coerce_filters, assert_can_access_branch_performance
 from retailedge.dashboard_capabilities import require_dashboard_action
+from retailedge.operating_context import get_operational_branch_scope
 from retailedge.reporting.date_ranges import get_preset_dates
 from retailedge.retailedge.report.retailedge_branch_performance_summary.retailedge_branch_performance_summary import (
 	execute as execute_branch_performance_report,
@@ -116,10 +116,12 @@ def _search_companies(like: str) -> list[dict]:
 
 
 def _search_branches(like: str, company: str) -> list[dict]:
-	scope = get_branch_query_filters("RetailEdge Daily Sales Audit", company=company)
-	allowed = scope.get("allowed_branches") or []
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	allowed = list(scope.get("allowed_branches") or [])
+	if scope.get("restricted") and not allowed:
+		return []
 	filters: list[list] = [["Branch", "name", "like", like]]
-	if allowed:
+	if scope.get("restricted"):
 		filters.append(["Branch", "name", "in", allowed])
 	if company and frappe.get_meta("Branch").has_field("company"):
 		filters.append(["Branch", "company", "=", company])
@@ -172,6 +174,7 @@ def search_branch_performance_options(
 	like = f"%{cstr(txt).strip()}%"
 	if kind == "company":
 		return _search_companies(like)
+	_assert_company(company)
 	if kind == "branch":
 		return _search_branches(like, company)
 	if kind == "pos_profile":

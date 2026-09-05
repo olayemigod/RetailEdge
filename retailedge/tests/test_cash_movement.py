@@ -67,10 +67,13 @@ class TestCashMovement(unittest.TestCase):
 		self.assertNotIn("Lagos", where_sql)
 		self.assertNotIn("Abuja", where_sql)
 
-	@patch("retailedge.cash_movement.get_user_allowed_branches")
-	@patch("retailedge.cash_movement.user_has_global_branch_access", return_value=False)
-	def test_non_global_scope_uses_only_permitted_branches(self, _mock_global, mock_allowed):
-		mock_allowed.return_value = {"branches": ["Lagos", "Abuja"]}
+	@patch("retailedge.cash_movement.get_operational_branch_scope")
+	def test_restricted_scope_uses_only_permitted_branches(self, mock_scope):
+		mock_scope.return_value = {
+			"restricted": True,
+			"allowed_branches": ["Lagos", "Abuja"],
+			"source": "branch_assignment",
+		}
 		original_user = frappe.session.user
 		try:
 			frappe.session.user = "manager@example.com"
@@ -115,8 +118,9 @@ class TestCashMovement(unittest.TestCase):
 		self.assertIn("MAX_EXPORT_ROWS + 1", source)
 		self.assertIn("MAX_DATE_RANGE_DAYS", source)
 		self.assertIn("LIMIT %s OFFSET %s", source)
-		self.assertIn("get_user_allowed_branches", source)
-		self.assertIn("validate_user_branch_access", source)
+		self.assertIn("get_operational_branch_scope", source)
+		self.assertNotIn("get_user_allowed_branches", source)
+		self.assertNotIn("validate_user_branch_access", source)
 		self.assertNotIn("frappe.get_all(", source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("frappe.db.commit()", source)

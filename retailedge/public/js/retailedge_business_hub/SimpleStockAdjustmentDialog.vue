@@ -66,7 +66,7 @@
 
 		<template #footer>
 			<div class="guided-adjustment-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="openFullForm">Open Full Form</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Open Full Form</button>
 				<div class="guided-adjustment-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || loading" @click="saveDraft">
@@ -99,7 +99,10 @@ export default {
 		EdgeLoadingState: runtimeComponents.EdgeLoadingState,
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
-	props: { open: { type: Boolean, default: false } },
+	props: {
+		open: { type: Boolean, default: false },
+		nativeFallbackEnabled: { type: Boolean, default: true },
+	},
 	emits: ["close", "saved", "open-native"],
 	data() {
 		return {

@@ -10,7 +10,7 @@ from frappe.utils import cint, flt, validate_email_address
 
 from retailedge.branch_context import BRANCH_FIELD_CANDIDATES, get_first_existing_field
 from retailedge.operating_context import get_operating_context
-
+from retailedge.professional_print_formats import get_preferred_print_format
 
 MAX_LINK_RESULTS = 20
 MAX_PRINT_FORMATS = 50
@@ -47,10 +47,24 @@ OUTPUT_DOCUMENTS: tuple[dict[str, Any], ...] = (
 		"date_field": "posting_date",
 		"native_route": "/app/sales-invoice",
 	},
+	{
+		"key": "pos-receipt",
+		"doctype": "POS Invoice",
+		"label": "POS Receipt",
+		"party_field": "customer",
+		"date_field": "posting_date",
+		"native_route": "/app/pos-invoice",
+	},
 )
 
 _DOCUMENT_BY_KEY = {row["key"]: row for row in OUTPUT_DOCUMENTS}
 _DOCUMENT_BY_DOCTYPE = {row["doctype"]: row for row in OUTPUT_DOCUMENTS}
+
+
+def _preferred_print_format(doctype: str) -> str:
+	if str(doctype or "").strip() == "POS Invoice":
+		return "POS Receipt 80mm"
+	return get_preferred_print_format(doctype)
 
 
 def get_output_document_definition(value: str) -> dict[str, Any]:
@@ -67,7 +81,9 @@ def _doctype_available(doctype: str) -> bool:
 
 def _permission(doctype: str, ptype: str, *, name: str | None = None) -> bool:
 	try:
-		return bool(_doctype_available(doctype) and frappe.has_permission(doctype, ptype, doc=name) if name else _doctype_available(doctype) and frappe.has_permission(doctype, ptype))
+		if name:
+			return bool(_doctype_available(doctype) and frappe.has_permission(doctype, ptype, doc=name))
+		return bool(_doctype_available(doctype) and frappe.has_permission(doctype, ptype))
 	except Exception:
 		return False
 
@@ -77,18 +93,21 @@ def _assert_document_permission(doctype: str, name: str, ptype: str = "read") ->
 	if not name or not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} is not available.").format(doctype, name))
 	if not _permission(doctype, ptype, name=name):
-		frappe.throw(_("You do not have {0} permission for {1} {2}.").format(ptype, doctype, name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have {0} permission for {1} {2}.").format(ptype, doctype, name),
+			frappe.PermissionError,
+		)
 
 
 def _document_capability(definition: dict[str, Any]) -> dict[str, Any]:
 	doctype = definition["doctype"]
-	available = _doctype_available(doctype)
 	return {
 		**definition,
-		"available": available,
+		"available": _doctype_available(doctype),
 		"can_read": _permission(doctype, "read"),
 		"can_print": _permission(doctype, "print"),
 		"can_email": _permission(doctype, "email"),
+		"recommended_print_format": _preferred_print_format(doctype),
 	}
 
 
@@ -114,7 +133,10 @@ def _validate_print_format(doctype: str, print_format: str | None) -> str:
 	if not frappe.db.exists("Print Format", print_format):
 		frappe.throw(_("Print Format {0} is not available.").format(print_format))
 	if not _permission("Print Format", "read", name=print_format):
-		frappe.throw(_("You do not have permission to use Print Format {0}.").format(print_format), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use Print Format {0}.").format(print_format),
+			frappe.PermissionError,
+		)
 	row = frappe.db.get_value("Print Format", print_format, ["doc_type", "disabled"], as_dict=True) or {}
 	if str(row.get("doc_type") or "") != doctype:
 		frappe.throw(_("Print Format {0} is not for {1}.").format(print_format, doctype))
@@ -138,12 +160,15 @@ def _available_print_formats(doctype: str) -> list[str]:
 		name = str(row.get("name") or "").strip()
 		if name and name not in formats:
 			formats.append(name)
+
+	preferred = _preferred_print_format(doctype)
+	if preferred and preferred in formats:
+		formats.remove(preferred)
+		formats.insert(0, preferred)
 	return formats
 
 
 def _document_summary(definition: dict[str, Any], doc) -> dict[str, Any]:
-	party_field = definition["party_field"]
-	date_field = definition["date_field"]
 	branch = ""
 	for fieldname in BRANCH_FIELD_CANDIDATES:
 		if doc.meta.has_field(fieldname):
@@ -154,8 +179,8 @@ def _document_summary(definition: dict[str, Any], doc) -> dict[str, Any]:
 		"doctype": definition["doctype"],
 		"document_key": definition["key"],
 		"name": doc.name,
-		"party": doc.get(party_field) or "",
-		"date": doc.get(date_field) or "",
+		"party": doc.get(definition["party_field"]) or "",
+		"date": doc.get(definition["date_field"]) or "",
 		"company": doc.get("company") if doc.meta.has_field("company") else "",
 		"branch": branch,
 		"status": doc.get("status") if doc.meta.has_field("status") else "",
@@ -166,9 +191,19 @@ def _document_summary(definition: dict[str, Any], doc) -> dict[str, Any]:
 	}
 
 
+def _default_share_copy(definition: dict[str, Any], summary: dict[str, Any]) -> dict[str, str]:
+	"""Create neutral customer-facing defaults from the client Company identity."""
+	company = str(summary.get("company") or "").strip()
+	label = str(definition.get("label") or definition.get("doctype") or "Document").strip()
+	name = str(summary.get("name") or "").strip()
+	identity = company or _("Your supplier")
+	subject = _("{0} {1} from {2}").format(label, name, identity)
+	message = _("Please find attached {0} {1} from {2}.").format(label, name, identity)
+	return {"subject": subject, "message": message, "company": company}
+
+
 @frappe.whitelist()
 def get_document_output_context() -> dict[str, Any]:
-	"""Return permission-aware output capabilities without changing business documents."""
 	operating = get_operating_context() or {}
 	return {
 		"operating": {
@@ -179,9 +214,11 @@ def get_document_output_context() -> dict[str, Any]:
 		"policy": {
 			"print_engine": "erpnext_native",
 			"print_formats": "erpnext_native",
+			"professional_formats": "managed_optional",
 			"letterhead": "erpnext_native",
 			"email_transport": "frappe_native",
 			"whatsapp": "user_initiated_handoff",
+			"visible_identity": "document_company_and_letterhead",
 			"public_pdf_links": False,
 			"business_documents_immutable": True,
 		},
@@ -191,7 +228,6 @@ def get_document_output_context() -> dict[str, Any]:
 
 @frappe.whitelist()
 def search_output_documents(document: str, txt: str = "", limit: int = MAX_LINK_RESULTS) -> list[dict[str, Any]]:
-	"""Search only permitted documents in the active Company/Branch context."""
 	definition = get_output_document_definition(document)
 	doctype = definition["doctype"]
 	if not _permission(doctype, "read"):
@@ -212,12 +248,18 @@ def get_output_document_details(document: str, name: str) -> dict[str, Any]:
 	doctype = definition["doctype"]
 	_assert_document_permission(doctype, name, "read")
 	doc = frappe.get_doc(doctype, name)
+	formats = _available_print_formats(doctype)
+	preferred = _preferred_print_format(doctype)
 	summary = _document_summary(definition, doc)
+	share_copy = _default_share_copy(definition, summary)
 	summary.update(
 		{
 			"can_print": _permission(doctype, "print", name=name),
 			"can_email": _permission(doctype, "email", name=name),
-			"print_formats": _available_print_formats(doctype),
+			"print_formats": formats,
+			"recommended_print_format": preferred if preferred in formats else "Standard",
+			"default_email_subject": share_copy["subject"],
+			"default_email_message": share_copy["message"],
 			"native_route": f"{definition['native_route']}/{quote(str(name), safe='')}",
 		}
 	)
@@ -226,7 +268,6 @@ def get_output_document_details(document: str, name: str) -> dict[str, Any]:
 
 @frappe.whitelist(methods=["GET"])
 def download_document_pdf(document: str, name: str, print_format: str = "Standard", no_letterhead: int = 0):
-	"""Download a private PDF through ERPNext/Frappe's print engine and permissions."""
 	definition = get_output_document_definition(document)
 	doctype = definition["doctype"]
 	_assert_document_permission(doctype, name, "read")
@@ -254,7 +295,6 @@ def send_document_email(
 	print_format: str = "Standard",
 	no_letterhead: int = 0,
 ) -> dict[str, Any]:
-	"""Email a PDF using Frappe's mail transport; never change the source document."""
 	definition = get_output_document_definition(document)
 	doctype = definition["doctype"]
 	_assert_document_permission(doctype, name, "read")
@@ -265,8 +305,9 @@ def send_document_email(
 	validate_email_address(recipient, throw=True)
 	doc = frappe.get_doc(doctype, name)
 	summary = _document_summary(definition, doc)
-	subject = str(subject or _("{0} {1}").format(definition["label"], name)).strip()
-	message = str(message or _("Please find attached {0} {1}.").format(definition["label"], name)).strip()
+	share_copy = _default_share_copy(definition, summary)
+	subject = str(subject or share_copy["subject"]).strip()
+	message = str(message or share_copy["message"]).strip()
 	pdf = frappe.get_print(
 		doctype,
 		name,
@@ -287,24 +328,32 @@ def send_document_email(
 		"recipient": recipient,
 		"doctype": doctype,
 		"name": name,
+		"company": summary.get("company") or "",
 		"party": summary.get("party") or "",
 	}
 
 
 @frappe.whitelist()
 def get_whatsapp_handoff(document: str, name: str) -> dict[str, Any]:
-	"""Prepare share text only. Private PDFs are never exposed through a public link."""
 	definition = get_output_document_definition(document)
 	doctype = definition["doctype"]
 	_assert_document_permission(doctype, name, "read")
 	doc = frappe.get_doc(doctype, name)
 	summary = _document_summary(definition, doc)
+	company = str(summary.get("company") or "").strip()
 	amount = ""
 	if summary.get("grand_total"):
 		amount = f" — {summary.get('currency') or ''} {summary['grand_total']:,.2f}".strip()
-	text = _("{0} {1}{2}. The PDF can be attached from the secure RetailEdge download.").format(definition["label"], name, amount)
+	identity = company or _("Your supplier")
+	text = _("{0} {1}{2} from {3}. The PDF can be attached from the secure document download.").format(
+		definition["label"],
+		name,
+		amount,
+		identity,
+	)
 	return {
 		"text": text,
+		"company": company,
 		"phone": summary.get("contact_mobile") or "",
 		"requires_manual_attachment": True,
 		"public_pdf_link": False,

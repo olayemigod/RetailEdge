@@ -1,4 +1,5 @@
 const EDGEUI_ASSET = "edgeui.bundle.js";
+const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bundle.js";
 const PAYMENT_ASSET = "payment_management.bundle.js";
 const PAGE_ROUTE = "payment-management";
 const PAGE_TITLE = "Payment Management";
@@ -18,6 +19,20 @@ function hideNativePageSidebar(wrapper) {
 	const mainWrapper = pageContainer.querySelector?.(".layout-main-section-wrapper");
 	if (sideSection) { sideSection.hidden = true; sideSection.setAttribute("aria-hidden", "true"); }
 	if (mainWrapper) { mainWrapper.style.width = "100%"; mainWrapper.style.maxWidth = "100%"; mainWrapper.classList.add("retailedge-edgeui-main"); }
+}
+
+function installRestrictedOperationalGuard() {
+	if (typeof window.retailedgeInstallEdgesuiteOnlyOperationalGuard !== "function") {
+		throw new Error("RetailEdge EdgeSuite-only operational guard is unavailable.");
+	}
+	window.retailedgeInstallEdgesuiteOnlyOperationalGuard({
+		pageRoute: PAGE_ROUTE,
+		rootSelector: ".retailedge-payment-management-root",
+		nativeDoctypes: ["Payment Entry", "Sales Invoice", "Payment Reconciliation"],
+		nativePathSlugs: ["payment-entry", "sales-invoice", "payment-reconciliation"],
+		hiddenButtonLabels: ["Payment Entries", "Open Draft Payment"],
+		neutralizeSelectors: [".link-button"],
+	});
 }
 
 function renderLoadError(wrapper, error) {
@@ -40,6 +55,8 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
 		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
+		await requireAsync(RESTRICTED_GUARD_ASSET);
+		installRestrictedOperationalGuard();
 		await requireAsync(PAYMENT_ASSET);
 		if (typeof window.mountPaymentManagementPage !== "function") throw new Error("Payment Management bundle is unavailable.");
 		bootLoading.remove();
@@ -52,4 +69,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	}
 };
 
-frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) { hideNativePageSidebar(wrapper); };
+frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
+	hideNativePageSidebar(wrapper);
+	installRestrictedOperationalGuard();
+};

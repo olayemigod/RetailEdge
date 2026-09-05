@@ -4,8 +4,9 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate
 
-from retailedge.branch_context import get_branch_query_filters, has_doctype
+from retailedge.branch_context import has_doctype
 from retailedge.cash_deposit_audit import get_submitted_deposit_totals
+from retailedge.cash_shift_verification_read_scope import resolve_cash_shift_verification_read_scope
 
 
 def execute(filters=None):
@@ -16,30 +17,84 @@ def execute(filters=None):
 
 
 def validate_filters(filters):
-	if filters.get("from_date") and filters.get("to_date") and getdate(filters.from_date) > getdate(filters.to_date):
+	if (
+		filters.get("from_date")
+		and filters.get("to_date")
+		and getdate(filters.from_date) > getdate(filters.to_date)
+	):
 		frappe.throw(_("From Date cannot be after To Date."))
 
 
 def get_columns():
 	return [
-		{"label": _("Company"), "fieldname": "company", "fieldtype": "Link", "options": "Company", "width": 155},
+		{
+			"label": _("Company"),
+			"fieldname": "company",
+			"fieldtype": "Link",
+			"options": "Company",
+			"width": 155,
+		},
 		{"label": _("Branch"), "fieldname": "branch", "fieldtype": "Link", "options": "Branch", "width": 130},
-		{"label": _("POS Profile"), "fieldname": "pos_profile", "fieldtype": "Link", "options": "POS Profile", "width": 145},
+		{
+			"label": _("POS Profile"),
+			"fieldname": "pos_profile",
+			"fieldtype": "Link",
+			"options": "POS Profile",
+			"width": 145,
+		},
 		{"label": _("Cashier"), "fieldname": "cashier", "fieldtype": "Link", "options": "User", "width": 150},
-		{"label": _("Opening Shift"), "fieldname": "opening_shift", "fieldtype": "Link", "options": "POS Opening Shift", "width": 160},
-		{"label": _("Closing Shift"), "fieldname": "closing_shift", "fieldtype": "Link", "options": "POS Closing Shift", "width": 160},
+		{
+			"label": _("Opening Shift"),
+			"fieldname": "opening_shift",
+			"fieldtype": "Link",
+			"options": "POS Opening Shift",
+			"width": 160,
+		},
+		{
+			"label": _("Closing Shift"),
+			"fieldname": "closing_shift",
+			"fieldtype": "Link",
+			"options": "POS Closing Shift",
+			"width": 160,
+		},
 		{"label": _("Shift Date"), "fieldname": "shift_date", "fieldtype": "Date", "width": 100},
 		{"label": _("Opening Cash"), "fieldname": "opening_cash", "fieldtype": "Currency", "width": 110},
 		{"label": _("Cash Sales"), "fieldname": "cash_sales", "fieldtype": "Currency", "width": 110},
-		{"label": _("Included Cashier Expenses"), "fieldname": "included_cashier_expenses", "fieldtype": "Currency", "width": 165},
+		{
+			"label": _("Included Cashier Expenses"),
+			"fieldname": "included_cashier_expenses",
+			"fieldtype": "Currency",
+			"width": 165,
+		},
 		{"label": _("Cash Deposits"), "fieldname": "cash_deposits", "fieldtype": "Currency", "width": 120},
 		{"label": _("Expected Cash"), "fieldname": "expected_cash", "fieldtype": "Currency", "width": 115},
-		{"label": _("Actual Closing Cash"), "fieldname": "actual_closing_cash", "fieldtype": "Currency", "width": 145},
+		{
+			"label": _("Actual Closing Cash"),
+			"fieldname": "actual_closing_cash",
+			"fieldtype": "Currency",
+			"width": 145,
+		},
 		{"label": _("Cash Variance"), "fieldname": "cash_variance", "fieldtype": "Currency", "width": 110},
 		{"label": _("Cash Status"), "fieldname": "cash_status", "fieldtype": "Data", "width": 130},
-		{"label": _("Eligible Cash Invoices"), "fieldname": "eligible_cash_invoices", "fieldtype": "Int", "width": 135},
-		{"label": _("Synced Cash Invoices"), "fieldname": "synced_cash_invoices", "fieldtype": "Int", "width": 135},
-		{"label": _("Daily Sales Audit"), "fieldname": "daily_sales_audit", "fieldtype": "Link", "options": "RetailEdge Daily Sales Audit", "width": 170},
+		{
+			"label": _("Eligible Cash Invoices"),
+			"fieldname": "eligible_cash_invoices",
+			"fieldtype": "Int",
+			"width": 135,
+		},
+		{
+			"label": _("Synced Cash Invoices"),
+			"fieldname": "synced_cash_invoices",
+			"fieldtype": "Int",
+			"width": 135,
+		},
+		{
+			"label": _("Daily Sales Audit"),
+			"fieldname": "daily_sales_audit",
+			"fieldtype": "Link",
+			"options": "RetailEdge Daily Sales Audit",
+			"width": 170,
+		},
 		{"label": _("Review Status"), "fieldname": "review_status", "fieldtype": "Data", "width": 130},
 	]
 
@@ -48,20 +103,10 @@ def get_data(filters, limit_page_length=0):
 	if not has_doctype("RetailEdge Daily Sales Audit"):
 		return []
 
-	query_filters = {}
-	query_filters.update(
-		(get_branch_query_filters(
-			"RetailEdge Daily Sales Audit",
-			user=frappe.session.user,
-			company=filters.get("company"),
-			branch=filters.get("branch"),
-		).get("filters") or {})
+	query_filters = resolve_cash_shift_verification_read_scope(
+		filters,
+		user=frappe.session.user,
 	)
-
-	for fieldname in ("company", "branch", "pos_profile", "cashier", "pos_opening_shift", "pos_closing_shift"):
-		value = filters.get(fieldname)
-		if value and fieldname not in query_filters:
-			query_filters[fieldname] = value
 
 	if filters.get("from_date") and filters.get("to_date"):
 		query_filters["audit_date"] = ["between", [filters.get("from_date"), filters.get("to_date")]]
@@ -127,12 +172,17 @@ def get_data(filters, limit_page_length=0):
 			"review_status": row.get("audit_status"),
 		}
 		report_row["cash_status"] = get_cash_status(report_row)
-		report_row["eligible_cash_invoices"], report_row["synced_cash_invoices"] = get_cash_invoice_sync_counts(row.get("name"))
+		report_row["eligible_cash_invoices"], report_row["synced_cash_invoices"] = (
+			get_cash_invoice_sync_counts(row.get("name"))
+		)
 		if filters.get("cash_status") and report_row["cash_status"] != filters.get("cash_status"):
 			continue
 		if filters.get("review_status") and report_row.get("review_status") != filters.get("review_status"):
 			continue
-		if cint(filters.get("only_unsynced")) and report_row["eligible_cash_invoices"] == report_row["synced_cash_invoices"]:
+		if (
+			cint(filters.get("only_unsynced"))
+			and report_row["eligible_cash_invoices"] == report_row["synced_cash_invoices"]
+		):
 			continue
 		result.append(report_row)
 	return result
@@ -182,7 +232,20 @@ def get_report_summary(rows):
 			"indicator": "Red" if any(flt(row.get("cash_variance")) for row in rows) else "Green",
 		},
 		{
-			"value": len([row for row in rows if row.get("cash_status") in {"Shortage", "Overage", "Needs Review", "Missing Closing Shift", "Missing Opening Shift"}]),
+			"value": len(
+				[
+					row
+					for row in rows
+					if row.get("cash_status")
+					in {
+						"Shortage",
+						"Overage",
+						"Needs Review",
+						"Missing Closing Shift",
+						"Missing Opening Shift",
+					}
+				]
+			),
 			"label": _("Exceptions"),
 			"datatype": "Int",
 			"indicator": "Orange",
@@ -215,5 +278,7 @@ def get_cash_invoice_sync_counts(daily_sales_audit):
 	except Exception:
 		return len(invoices), 0
 	eligible = len(docs)
-	synced = len([row for row in docs if row.get("retailedge_payment_verification_status") == "Cash Verified by Shift"])
+	synced = len(
+		[row for row in docs if row.get("retailedge_payment_verification_status") == "Cash Verified by Shift"]
+	)
 	return eligible, synced

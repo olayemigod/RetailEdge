@@ -4,7 +4,6 @@ import frappe
 from frappe import _
 from frappe.utils import cstr
 
-from retailedge.branch_context import get_branch_query_filters
 from retailedge.branch_performance import assert_can_access_branch_performance
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.reporting.date_ranges import get_preset_dates
@@ -12,16 +11,35 @@ from retailedge.salesperson_performance import (
 	MAX_EXPORT_ROWS,
 	MAX_LINK_RESULTS,
 	get_salesperson_performance,
+	resolve_salesperson_performance_read_scope,
 )
 
 DASHBOARD_KEY = "salesperson-performance"
 
 COLUMNS = [
-	{"label": _("Salesperson"), "fieldname": "salesperson", "fieldtype": "Link", "options": "Sales Person", "width": 170},
+	{
+		"label": _("Salesperson"),
+		"fieldname": "salesperson",
+		"fieldtype": "Link",
+		"options": "Sales Person",
+		"width": 170,
+	},
 	{"label": _("Allocation"), "fieldname": "allocation_percentage", "fieldtype": "Percent", "width": 105},
-	{"label": _("Sales Invoice"), "fieldname": "sales_invoice", "fieldtype": "Link", "options": "Sales Invoice", "width": 160},
+	{
+		"label": _("Sales Invoice"),
+		"fieldname": "sales_invoice",
+		"fieldtype": "Link",
+		"options": "Sales Invoice",
+		"width": 160,
+	},
 	{"label": _("Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 105},
-	{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 180},
+	{
+		"label": _("Customer"),
+		"fieldname": "customer",
+		"fieldtype": "Link",
+		"options": "Customer",
+		"width": 180,
+	},
 	{"label": _("Items Sold"), "fieldname": "items", "fieldtype": "Data", "width": 210},
 	{"label": _("Qty"), "fieldname": "total_qty", "fieldtype": "Float", "width": 90},
 	{"label": _("Gross"), "fieldname": "gross_amount", "fieldtype": "Currency", "width": 130},
@@ -34,20 +52,48 @@ COLUMNS = [
 
 def _default_company() -> str:
 	return cstr(
-		frappe.defaults.get_user_default("Company")
-		or frappe.defaults.get_global_default("company")
-		or ""
+		frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company") or ""
 	)
 
 
 def _summary_cards(summary: dict) -> list[dict]:
 	return [
-		{"label": _("Gross Sales"), "value": summary.get("gross_sales") or 0, "datatype": "Currency", "tone": "info"},
-		{"label": _("Net Sales"), "value": summary.get("net_sales") or 0, "datatype": "Currency", "tone": "success"},
-		{"label": _("Sales Invoices"), "value": summary.get("total_invoices") or 0, "datatype": "Int", "tone": "neutral"},
-		{"label": _("Average Invoice"), "value": summary.get("avg_invoice_value") or 0, "datatype": "Currency", "tone": "neutral"},
-		{"label": _("Discount"), "value": summary.get("total_discount") or 0, "datatype": "Currency", "tone": "warning"},
-		{"label": _("Outstanding"), "value": summary.get("total_outstanding") or 0, "datatype": "Currency", "tone": "danger"},
+		{
+			"label": _("Gross Sales"),
+			"value": summary.get("gross_sales") or 0,
+			"datatype": "Currency",
+			"tone": "info",
+		},
+		{
+			"label": _("Net Sales"),
+			"value": summary.get("net_sales") or 0,
+			"datatype": "Currency",
+			"tone": "success",
+		},
+		{
+			"label": _("Sales Invoices"),
+			"value": summary.get("total_invoices") or 0,
+			"datatype": "Int",
+			"tone": "neutral",
+		},
+		{
+			"label": _("Average Invoice"),
+			"value": summary.get("avg_invoice_value") or 0,
+			"datatype": "Currency",
+			"tone": "neutral",
+		},
+		{
+			"label": _("Discount"),
+			"value": summary.get("total_discount") or 0,
+			"datatype": "Currency",
+			"tone": "warning",
+		},
+		{
+			"label": _("Outstanding"),
+			"value": summary.get("total_outstanding") or 0,
+			"datatype": "Currency",
+			"tone": "danger",
+		},
 	]
 
 
@@ -128,7 +174,9 @@ def get_salesperson_dashboard_data(filters=None) -> dict:
 	return _build_salesperson_dashboard_dataset(filters, export_mode=False)
 
 
-def _search_doctype(doctype: str, txt: str, *, fields: list[str] | None = None, filters=None, or_filters=None) -> list[dict]:
+def _search_doctype(
+	doctype: str, txt: str, *, fields: list[str] | None = None, filters=None, or_filters=None
+) -> list[dict]:
 	rows = frappe.get_list(
 		doctype,
 		filters=filters or {},
@@ -145,6 +193,21 @@ def _search_doctype(doctype: str, txt: str, *, fields: list[str] | None = None, 
 	return result
 
 
+def _search_branches(like: str, company: str, scope: dict | None = None) -> list[dict]:
+	scope = scope or resolve_salesperson_performance_read_scope(
+		{"company": company}, user=frappe.session.user
+	)
+	allowed = list(scope.get("_allowed_branches") or [])
+	if scope.get("_branch_scope_restricted") and not allowed:
+		return []
+	filters: list[list] = [["Branch", "name", "like", like]]
+	if scope.get("_branch_scope_restricted"):
+		filters.append(["Branch", "name", "in", allowed])
+	if frappe.get_meta("Branch").has_field("company"):
+		filters.append(["Branch", "company", "=", company])
+	return _search_doctype("Branch", like.strip("%"), filters=filters)
+
+
 @frappe.whitelist()
 def search_salesperson_dashboard_options(kind: str, txt: str = "", company: str = "") -> list[dict]:
 	assert_can_access_branch_performance(frappe.session.user)
@@ -154,15 +217,9 @@ def search_salesperson_dashboard_options(kind: str, txt: str = "", company: str 
 	like = f"%{txt}%"
 	if kind == "company":
 		return _search_doctype("Company", txt, filters={"name": ["like", like]})
+	scope = resolve_salesperson_performance_read_scope({"company": company}, user=frappe.session.user)
 	if kind == "branch":
-		scope = get_branch_query_filters("Sales Invoice", user=frappe.session.user, company=company)
-		allowed = scope.get("allowed_branches") or []
-		filters: list[list] = [["Branch", "name", "like", like]]
-		if allowed:
-			filters.append(["Branch", "name", "in", allowed])
-		if company and frappe.get_meta("Branch").has_field("company"):
-			filters.append(["Branch", "company", "=", company])
-		return _search_doctype("Branch", txt, filters=filters)
+		return _search_branches(like, company, scope)
 	if kind == "salesperson":
 		return _search_doctype("Sales Person", txt, filters={"enabled": 1, "name": ["like", like]})
 	if kind == "customer":

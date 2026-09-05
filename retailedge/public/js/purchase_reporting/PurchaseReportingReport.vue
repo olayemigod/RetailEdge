@@ -76,10 +76,22 @@
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
 			</template>
 		</EdgeReportShell>
+
+		<SimplePaymentDialog
+			v-if="reportType === 'supplier_payables'"
+			:open="supplierPaymentOpen"
+			intent="pay-supplier"
+			:initialContext="supplierPaymentContext"
+			@close="closeSupplierPayment"
+			@saved="handleSupplierPaymentSaved"
+			@open-native="openNativePayment"
+		/>
 	</EdgeAppShell>
 </template>
 
 <script>
+import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
+
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
@@ -106,7 +118,10 @@ function errorMessage(error, fallback) { return error?.message || error?.exc || 
 export default {
 	name: "PurchaseReportingReport",
 	props: { reportType: { type: String, default: "purchase_register" } },
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		SimplePaymentDialog,
+	},
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
@@ -114,6 +129,8 @@ export default {
 			supplierLabel: "", itemLabel: "", payablesAgeingDate: "",
 			filters: { company: "", from_date: "", to_date: "", as_of_date: "", branch: "", supplier: "", supplier_group: "", item_code: "", item_group: "", warehouse: "", status: "", invoice_kind: "All", ageing_bucket: "All", page_size: 50 },
 			currentPage: 1,
+			supplierPaymentOpen: false,
+			supplierPaymentContext: {},
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
 			invoiceStatuses: ["Paid", "Unpaid", "Overdue", "Partly Paid", "Return", "Credit Note"],
 		};
@@ -124,7 +141,17 @@ export default {
 		requiredReady() { return Boolean(this.filters.company && (this.reportType === "supplier_payables" || this.filters.from_date && this.filters.to_date)); },
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 0); },
-		reportColumns() { return (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: ["invoice", "supplier", "return_against"].includes(column.fieldname) })); },
+		reportColumns() {
+			const columns = (this.columns || []).filter((column) => !column.hidden).map((column) => ({
+				...column,
+				fieldtype: column.fieldtype || column.type || "Data",
+				clickable: ["invoice", "supplier", "return_against"].includes(column.fieldname),
+			}));
+			if (this.reportType === "supplier_payables") {
+				columns.push({ label: "Payment", fieldname: "payment_action", fieldtype: "Data", width: 110, clickable: true });
+			}
+			return columns;
+		},
 	},
 	created() {
 		const components = runtimeComponents();
@@ -165,7 +192,11 @@ export default {
 			try {
 				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize);
 				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
-				this.rows = result.rows || []; this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || this.payablesAgeingDate;
+				const providerRows = result.rows || [];
+				this.rows = this.reportType === "supplier_payables"
+					? providerRows.map((row) => ({ ...row, payment_action: "Pay Supplier" }))
+					: providerRows;
+				this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || this.payablesAgeingDate;
 				const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); if (this.currentPage > totalPages) this.currentPage = totalPages;
 				this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
 			} catch (error) { this.rows = []; this.columns = []; this.summary = []; this.error = errorMessage(error, `${this.config.title} failed to load.`); }
@@ -174,7 +205,31 @@ export default {
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		rowKey(row, index) { return row.invoice || `${this.reportType}:${index}`; },
-		openReportCell(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (["invoice", "return_against"].includes(column.fieldname)) frappe.set_route("Form", "Purchase Invoice", value); else if (column.fieldname === "supplier") frappe.set_route("Form", "Supplier", value); },
+		openSupplierPayment(row) {
+			if (this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
+			this.supplierPaymentContext = {
+				company: this.filters.company || "",
+				branch: row.branch || this.filters.branch || "",
+				party: row.supplier,
+				reference_name: row.invoice,
+			};
+			this.supplierPaymentOpen = true;
+		},
+		closeSupplierPayment() { this.supplierPaymentOpen = false; this.supplierPaymentContext = {}; },
+		async handleSupplierPaymentSaved(result) {
+			this.closeSupplierPayment();
+			await this.fetchData();
+			if (result?.name) frappe.set_route("Form", "Payment Entry", result.name);
+		},
+		openNativePayment() { this.closeSupplierPayment(); frappe.new_doc("Payment Entry"); },
+		openReportCell(payload) {
+			const column = payload?.column; const row = payload?.row;
+			if (!column || !row) return;
+			if (column.fieldname === "payment_action") { this.openSupplierPayment(row); return; }
+			const value = row[column.fieldname]; if (!value) return;
+			if (["invoice", "return_against"].includes(column.fieldname)) frappe.set_route("Form", "Purchase Invoice", value);
+			else if (column.fieldname === "supplier") frappe.set_route("Form", "Supplier", value);
+		},
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
 		formatValue(value, fieldtype, currency) { if (value === null || value === undefined || value === "") return "—"; if (fieldtype === "Currency") { const number = Number(value); if (!Number.isFinite(number)) return String(value); try { return frappe.format(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); } catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (fieldtype === "Float") { const number = Number(value); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 4 }) : String(value); } if (fieldtype === "Int") return Number(value).toLocaleString(); if (fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
 	},

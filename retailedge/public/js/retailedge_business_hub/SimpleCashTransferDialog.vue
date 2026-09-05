@@ -57,7 +57,7 @@
 		</form>
 		<template #footer>
 			<div class="guided-transfer-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="openFullForm">Open Full Form</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Open Full Form</button>
 				<div class="guided-transfer-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || loading" @click="saveDraft">{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}</button>
@@ -85,7 +85,10 @@ function optionValue(option) { return typeof option === "string" ? option : opti
 export default {
 	name: "SimpleCashTransferDialog",
 	components: { EdgeModal: runtimeComponents.EdgeModal, EdgeLinkField: runtimeComponents.EdgeLinkField, EdgeLoadingState: runtimeComponents.EdgeLoadingState, EdgeErrorState: runtimeComponents.EdgeErrorState },
-	props: { open: { type: Boolean, default: false } },
+	props: {
+		open: { type: Boolean, default: false },
+		nativeFallbackEnabled: { type: Boolean, default: true },
+	},
 	emits: ["close", "saved", "open-native"],
 	data() { return { loading: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues() }; },
 	computed: {
