@@ -10,6 +10,11 @@ from frappe.utils import get_datetime, now_datetime
 DOCTYPE = "RetailEdge Action Follow Up"
 MANAGEMENT_FILTER_KEYS = {"follow_up_status", "assignment_scope", "due_scope"}
 MAX_DIRECT_SCOPE_COMPANIES = 500
+ASSIGNMENT_SCOPE_ALLOWED = "allowed"
+ASSIGNMENT_SCOPE_MISSING_COMPANY = "missing_company"
+ASSIGNMENT_SCOPE_OWNER_REQUIRED = "owner_required"
+ASSIGNMENT_SCOPE_GLOBAL_REQUIRED = "global_required"
+ASSIGNMENT_SCOPE_DENIED = "scope_denied"
 
 
 def action_fingerprint(
@@ -128,6 +133,43 @@ def _has_owner_financial_access(user: str, *, company: str = "", branch: str = "
 		)
 	except (frappe.PermissionError, frappe.ValidationError):
 		return False
+
+
+def _assignment_scope_decision(
+	user: str,
+	*,
+	company: str,
+	branch: str,
+	require_global_scope: bool = False,
+	require_owner_scope: bool = False,
+) -> str:
+	"""Return one shared assignee-scope decision for search and backend validation."""
+	from retailedge.reporting_scope import validate_report_scope
+
+	company = str(company or "").strip()
+	branch = str(branch or "").strip()
+	if not company:
+		return ASSIGNMENT_SCOPE_MISSING_COMPANY
+	if require_owner_scope and not _has_owner_financial_access(
+		user,
+		company=company,
+		branch=branch,
+	):
+		return ASSIGNMENT_SCOPE_OWNER_REQUIRED
+	try:
+		scope = validate_report_scope(
+			company=company,
+			branch=branch,
+			user=user,
+			require_branch_when_restricted=False,
+		)
+	except (frappe.PermissionError, frappe.ValidationError):
+		return ASSIGNMENT_SCOPE_DENIED
+	if require_global_scope and scope.get("restricted"):
+		return ASSIGNMENT_SCOPE_GLOBAL_REQUIRED
+	if scope.get("restricted") and not branch:
+		return ASSIGNMENT_SCOPE_DENIED
+	return ASSIGNMENT_SCOPE_ALLOWED
 
 
 def _readable_companies(user: str) -> list[str]:
@@ -250,8 +292,6 @@ def _validate_assignment_user(
 	require_global_scope: bool = False,
 	require_owner_scope: bool = False,
 ) -> None:
-	from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
-
 	user = str(user or "").strip()
 	if not user:
 		return
@@ -261,24 +301,34 @@ def _validate_assignment_user(
 		frappe.throw(
 			_("Assigned user must have access to the RetailEdge Action Centre."), frappe.PermissionError
 		)
-	if require_owner_scope and not _has_owner_financial_access(user, company=company, branch=branch):
+	decision = _assignment_scope_decision(
+		user,
+		company=company,
+		branch=branch,
+		require_global_scope=require_global_scope,
+		require_owner_scope=require_owner_scope,
+	)
+	if decision == ASSIGNMENT_SCOPE_OWNER_REQUIRED:
 		frappe.throw(
 			_(
 				"Business Control financial warnings can only be assigned to users permitted to view owner-level financial intelligence for this scope."
 			),
 			frappe.PermissionError,
 		)
-	if require_global_scope and not user_has_global_branch_access(user=user):
+	if decision == ASSIGNMENT_SCOPE_GLOBAL_REQUIRED:
 		frappe.throw(
 			_(
-				"Company-level Business Control warnings can only be assigned to users with global Branch access."
+				"Company-level Business Control warnings can only be assigned to users with unrestricted Company Branch access."
 			),
 			frappe.PermissionError,
 		)
-	if branch:
-		allowed = validate_user_branch_access(branch, user=user, company=company, throw=False)
-		if not allowed.get("allowed"):
-			frappe.throw(_("Assigned user does not have access to this Branch."), frappe.PermissionError)
+	if decision == ASSIGNMENT_SCOPE_MISSING_COMPANY:
+		frappe.throw(_("Company is required before assigning this follow-up."), frappe.PermissionError)
+	if decision != ASSIGNMENT_SCOPE_ALLOWED:
+		frappe.throw(
+			_("Assigned user does not have access to this Company and Branch scope."),
+			frappe.PermissionError,
+		)
 
 
 @frappe.whitelist()

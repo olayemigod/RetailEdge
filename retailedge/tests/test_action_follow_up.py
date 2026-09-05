@@ -108,10 +108,13 @@ class TestActionFollowUp(unittest.TestCase):
 				branch="",
 			)
 
-	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=False)
+	@patch(
+		"retailedge.reporting_scope.validate_report_scope",
+		return_value={"restricted": True, "allowed_branches": ["Main"]},
+	)
 	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
 	@patch("retailedge.action_follow_up.frappe.db.get_value", return_value=1)
-	def test_company_level_r9_assignment_requires_global_branch_scope(self, _enabled, _has_role, _global):
+	def test_company_level_r9_assignment_requires_global_branch_scope(self, _enabled, _has_role, _scope):
 		with self.assertRaises(frappe.PermissionError):
 			action_follow_up._validate_assignment_user(
 				"branch.manager@example.com",
@@ -120,10 +123,13 @@ class TestActionFollowUp(unittest.TestCase):
 				require_global_scope=True,
 			)
 
-	@patch("retailedge.branch_context.user_has_global_branch_access", return_value=True)
+	@patch(
+		"retailedge.reporting_scope.validate_report_scope",
+		return_value={"restricted": False, "allowed_branches": []},
+	)
 	@patch("retailedge.action_follow_up._has_action_center_role", return_value=True)
 	@patch("retailedge.action_follow_up.frappe.db.get_value", return_value=1)
-	def test_company_level_r9_assignment_allows_global_branch_scope(self, _enabled, _has_role, _global):
+	def test_company_level_r9_assignment_allows_global_branch_scope(self, _enabled, _has_role, _scope):
 		action_follow_up._validate_assignment_user(
 			"owner@example.com",
 			company="Test Company",
