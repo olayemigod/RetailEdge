@@ -10,11 +10,9 @@ from frappe.utils import cint, date_diff, flt, getdate, nowdate
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
-	get_user_allowed_branches,
 	has_field,
-	user_has_global_branch_access,
-	validate_user_branch_access,
 )
+from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.receivables_collections import enrich_receivable_rows
 from retailedge.stock_movement_filters import branch_query
 
@@ -22,6 +20,7 @@ DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
 MAX_LINK_RESULTS = 20
 MAX_INVOICE_SCAN_ROWS = 2000
+NO_BRANCH_SCOPE_SENTINEL = "__never__"
 
 
 @frappe.whitelist()
@@ -35,16 +34,7 @@ def get_customer_receivables_context() -> dict[str, Any]:
 			or frappe.defaults.get_user_default("Branch")
 			or ""
 		).strip()
-		if candidate:
-			try:
-				validate_user_branch_access(candidate, user=user, company=company, throw=True)
-				branch = candidate
-			except (frappe.PermissionError, frappe.ValidationError):
-				branch = ""
-		if not branch and not user_has_global_branch_access(user=user):
-			allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-			if len(allowed) == 1:
-				branch = allowed[0]
+		branch = _resolve_context_branch(company=company, candidate=candidate, user=user)
 
 	today = nowdate()
 	return {
@@ -262,8 +252,16 @@ def _invoice_branch_scope(filters: frappe._dict) -> tuple[str | None, Any]:
 	fieldname = _sales_invoice_branch_field()
 	branch = str(filters.get("branch") or "").strip()
 	user = frappe.session.user
+	scope = get_operational_branch_scope(filters.company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed = _allowed_scope_branches(scope)
 	if branch:
-		validate_user_branch_access(branch, user=user, company=filters.company, throw=True)
+		_validate_receivables_branch(
+			company=filters.company,
+			branch=branch,
+			user=user,
+			scope=scope,
+		)
 		if not fieldname:
 			frappe.throw(
 				_(
@@ -272,20 +270,65 @@ def _invoice_branch_scope(filters: frappe._dict) -> tuple[str | None, Any]:
 				)
 			)
 		return fieldname, branch
-	if user_has_global_branch_access(user=user):
+	if not restricted:
 		return fieldname, None
-	allowed = list(get_user_allowed_branches(user=user, company=filters.company).get("branches") or [])
-	if allowed:
-		if not fieldname:
-			frappe.throw(
-				_(
-					"Sales Invoice branch attribution is unavailable; "
-					"branch-restricted receivables cannot be applied safely."
-				),
-				frappe.PermissionError,
+	if not fieldname:
+		frappe.throw(
+			_(
+				"Sales Invoice branch attribution is unavailable; "
+				"branch-restricted receivables cannot be applied safely."
+			),
+			frappe.PermissionError,
+		)
+	if not allowed:
+		return fieldname, NO_BRANCH_SCOPE_SENTINEL
+	if len(allowed) == 1:
+		return fieldname, allowed[0]
+	return fieldname, ["in", allowed]
+
+
+def _resolve_context_branch(*, company: str, candidate: str, user: str) -> str:
+	scope = get_operational_branch_scope(company, user=user)
+	allowed = _allowed_scope_branches(scope)
+	candidate = str(candidate or "").strip()
+	if candidate:
+		try:
+			_validate_receivables_branch(
+				company=company,
+				branch=candidate,
+				user=user,
+				scope=scope,
 			)
-		return fieldname, ["in", allowed]
-	return fieldname, None
+			return candidate
+		except (frappe.PermissionError, frappe.ValidationError):
+			pass
+	if scope.get("restricted") and len(allowed) == 1:
+		return allowed[0]
+	return ""
+
+
+def _validate_receivables_branch(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	scope: dict[str, Any] | None = None,
+) -> None:
+	scope = scope or get_operational_branch_scope(company, user=user)
+	if scope.get("restricted") and branch not in _allowed_scope_branches(scope):
+		frappe.throw(
+			_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+			frappe.PermissionError,
+		)
+	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
+
+
+def _allowed_scope_branches(scope: dict[str, Any]) -> list[str]:
+	return sorted(
+		str(branch).strip()
+		for branch in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(branch or "").strip()
+	)
 
 
 def _sales_invoice_branch_field() -> str | None:
@@ -308,11 +351,10 @@ def _assert_report_access(filters: frappe._dict) -> None:
 			_assert_named_read(doctype, filters.get(fieldname))
 	branch = str(filters.get("branch") or "").strip()
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
+		_validate_receivables_branch(
 			company=filters.company,
-			throw=True,
+			branch=branch,
+			user=frappe.session.user,
 		)
 
 

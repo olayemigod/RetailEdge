@@ -45,7 +45,8 @@ def test_stock_position_omitted_branch_already_resolves_only_permitted_warehouse
 
 def test_customer_receivables_keeps_explicit_branch_validation_and_permission_aware_query():
 	source = _read(CUSTOMER_RECEIVABLES)
-	assert "validate_user_branch_access(branch, user=user, company=filters.company, throw=True)" in source
+	assert "get_operational_branch_scope(filters.company, user=user)" in source
+	assert "validate_operating_branch(company=company, branch=branch, user=user, throw=True)" in source
 	assert 'frappe.has_permission("Sales Invoice", "read")' in source
 	assert 'frappe.get_list(\n\t\t"Sales Invoice"' in source
 	assert "ignore_permissions" not in source
