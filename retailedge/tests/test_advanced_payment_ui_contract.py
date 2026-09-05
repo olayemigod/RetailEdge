@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest import TestCase
 
-
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -44,8 +43,8 @@ class TestAdvancedPaymentUIContract(TestCase):
 		self.assertIn("function openMixedSettlement(frm)", source)
 		self.assertIn("frappe.route_options = { sales_invoice: frm.doc.name }", source)
 		self.assertIn('frappe.set_route("payment-management")', source)
-		self.assertIn('frm.doc.docstatus !== 1', source)
-		self.assertIn('Number(frm.doc.outstanding_amount || 0) <= 0', source)
+		self.assertIn("frm.doc.docstatus !== 1", source)
+		self.assertIn("Number(frm.doc.outstanding_amount || 0) <= 0", source)
 		self.assertIn('frm.add_custom_button(__("Settle Customer Invoice")', source)
 		self.assertIn('__("Payments")', source)
 		self.assertNotIn("frappe.ui.Dialog", source)
@@ -61,7 +60,9 @@ class TestAdvancedPaymentUIContract(TestCase):
 		self.assertIn('group.get("key") != "money"', source)
 		self.assertIn('item.get("target") == "Payment Entry"', source)
 		self.assertIn("_promote_payment_management(navigation_groups)", source)
-		self.assertIn('feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"', source)
+		self.assertIn(
+			'feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"', source
+		)
 		self.assertIn('feature_flags["customer_advance_reporting"] = "current_open_receipts"', source)
 
 	def test_customer_advance_register_is_bounded_and_payment_entry_backed(self):
@@ -76,4 +77,5 @@ class TestAdvancedPaymentUIContract(TestCase):
 		self.assertIn('"payment_type": "Receive"', report_py)
 		self.assertIn('"party_type": "Customer"', report_py)
 		self.assertIn('"allocated_amount": max(received - available, 0)', report_py)
-		self.assertIn("validate_user_branch_access", report_py)
+		self.assertIn("validate_report_scope", report_py)
+		self.assertNotIn("validate_user_branch_access", report_py)
