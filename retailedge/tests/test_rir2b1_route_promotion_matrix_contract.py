@@ -13,6 +13,7 @@ from retailedge.master_experience import (
 	SETUP_HUB_ITEM,
 	TRANSACTION_WORKSPACE_ITEM,
 )
+from retailedge.retailedge.page.retailedge_setup.retailedge_setup import SETUP_RESOURCES
 from retailedge.workspace_home import HOME_WORKSPACE_ITEMS
 
 
@@ -107,6 +108,15 @@ class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 		self.assertNotIn(("Page", "banking-readiness"), fallback_targets)
 		self.assertNotIn(("Page", "branch-assignments"), base_targets)
 		self.assertNotIn(("Page", "branch-assignments"), fallback_targets)
+
+	def test_branch_assignments_is_already_reachable_through_system_manager_setup(self):
+		resource = next(resource for resource in SETUP_RESOURCES if resource["key"] == "branch-assignments")
+		self.assertEqual(resource["doctype"], "RetailEdge Branch Assignment")
+		self.assertEqual(resource["page"], "branch-assignments")
+
+		setup_page = _page_definition("retailedge_setup", "retailedge_setup.json")
+		self.assertEqual(setup_page["name"], "retailedge-setup")
+		self.assertEqual({row["role"] for row in setup_page.get("roles", [])}, {"System Manager"})
 
 	def test_rir2b1_document_preserves_historical_promotion_and_deferred_decisions(self):
 		doc = (REPO_ROOT / "docs" / "retailedge_route_promotion_matrix.md").read_text()
