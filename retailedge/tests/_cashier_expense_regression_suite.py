@@ -2528,7 +2528,11 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch(
 		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all"
 	)
-	def test_daily_sales_audit_register_report_executes(self, mock_get_all):
+	@patch(
+		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.resolve_daily_sales_audit_register_read_scope",
+		return_value={"company": "Demo Company"},
+	)
+	def test_daily_sales_audit_register_report_executes(self, _mock_read_scope, mock_get_all):
 		mock_get_all.return_value = [
 			{
 				"name": "RE-DSA-2026-0001",
@@ -2558,7 +2562,11 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch(
 		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all"
 	)
-	def test_daily_sales_audit_register_report_date_presets(self, mock_get_all):
+	@patch(
+		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.resolve_daily_sales_audit_register_read_scope",
+		return_value={"company": "Demo Company"},
+	)
+	def test_daily_sales_audit_register_report_date_presets(self, _mock_read_scope, mock_get_all):
 		mock_get_all.return_value = []
 
 		# 1. Preset is accepted by backend
