@@ -108,6 +108,20 @@ jobs:
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
           bench build --app edgesuite_ui
           bench build --app retailedge
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          assets = json.loads(Path("sites/assets/assets.json").read_text())
+          required = (
+              "retailedge_edgesuite_only_operational_guard.bundle.js",
+              "retailedge_professional_selling.bundle.js",
+              "retailedge_professional_purchasing.bundle.js",
+          )
+          missing = [bundle for bundle in required if bundle not in assets]
+          if missing:
+              raise SystemExit(f"RetailEdge bundles missing from assets.json: {missing}")
+          PY
           bench --site retail-ci.localhost migrate
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
           test -f apps/edgesuite_ui/edgesuite_ui/search_ranking.py
