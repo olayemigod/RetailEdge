@@ -588,9 +588,81 @@ def get_match_account_evidence(match_name):
 	return build_match_account_evidence(match_name)
 
 
+def _assert_bank_account_readiness_scope(bank_account, company=None):
+	"""Resolve one Bank Account through permission-aware Company/Branch read scope."""
+	user = frappe.session.user
+	name = cstr(bank_account).strip()
+	requested_company = cstr(company).strip()
+	if not name:
+		frappe.throw("Bank Account is required.", frappe.ValidationError)
+	if not frappe.has_permission("Bank Account", "read", user=user):
+		frappe.throw("You do not have permission to view Bank Accounts.", frappe.PermissionError)
+	if not has_field("Bank Account", "company"):
+		frappe.throw(
+			"Bank Account Company attribution is required for Banking Readiness.",
+			frappe.ValidationError,
+		)
+
+	branch_field = "retailedge_branch" if has_field("Bank Account", "retailedge_branch") else ""
+	fields = ["name", "company"]
+	if branch_field:
+		fields.append(branch_field)
+	filters = {"name": name}
+	if requested_company:
+		filters["company"] = requested_company
+	rows = frappe.get_list(
+		"Bank Account",
+		filters=filters,
+		fields=fields,
+		limit_page_length=1,
+	)
+	if not rows:
+		frappe.throw("You do not have permission to view this Bank Account.", frappe.PermissionError)
+
+	row = frappe._dict(rows[0])
+	bank_company = cstr(row.get("company")).strip()
+	if not bank_company:
+		frappe.throw(
+			"Bank Account Company attribution is required for Banking Readiness.",
+			frappe.ValidationError,
+		)
+	scope = validate_report_scope(
+		company=bank_company,
+		branch="",
+		user=user,
+		require_branch_when_restricted=False,
+	)
+	if scope.get("restricted"):
+		allowed_branches = list(
+			dict.fromkeys(
+				cstr(branch).strip()
+				for branch in scope.get("allowed_branches") or []
+				if cstr(branch).strip()
+			)
+		)
+		if not allowed_branches:
+			frappe.throw(
+				f"Your Branch banking access is not active for Company {bank_company}.",
+				frappe.PermissionError,
+			)
+		if not branch_field:
+			frappe.throw(
+				"Bank Account Branch attribution is required for restricted Banking Readiness.",
+				frappe.ValidationError,
+			)
+		bank_branch = cstr(row.get(branch_field)).strip()
+		if not bank_branch or bank_branch not in allowed_branches:
+			frappe.throw(
+				"You do not have permission to view this Bank Account in Banking Readiness.",
+				frappe.PermissionError,
+			)
+	return row
+
+
 @frappe.whitelist()
 def get_bank_account_readiness(bank_account, company=None):
 	assert_can_access_bank_transaction_matching()
+	_assert_bank_account_readiness_scope(bank_account, company=company)
 	return evaluate_bank_account_readiness(bank_account, company=company)
 
 
