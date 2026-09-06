@@ -75,7 +75,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: b1d403be980c45baf7043515a96da327d8e86b2b
+          ref: e40ea4d7dc000d17443a0571c1e246b61bfd3e1d
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -104,10 +104,42 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "b1d403be980c45baf7043515a96da327d8e86b2b"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "e40ea4d7dc000d17443a0571c1e246b61bfd3e1d"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
+
+          # RIR2C1: keyboard commands are owned by the governed shared EdgeSuite UI runtime.
+          # RetailEdge must not revive its historical duplicate global listener.
+          test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_k_guard.js
+          test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_s_guard.js
+          grep -Fq '/assets/edgesuite_ui/js/edgeui_ctrl_k_guard.js' apps/edgesuite_ui/edgesuite_ui/hooks.py
+          grep -Fq '/assets/edgesuite_ui/js/edgeui_ctrl_s_guard.js' apps/edgesuite_ui/edgesuite_ui/hooks.py
+          grep -Fq 'openProductMenu' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_k_guard.js
+          grep -Fq '.edge-product-menu__search' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_k_guard.js
+          grep -Fq 'form.doc.docstatus' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_s_guard.js
+          grep -Fq 'await form.save()' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_s_guard.js
+          grep -Fq 'saveCurrentContext' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_s_guard.js
+          grep -Fq 'registerSaveHandler' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/interaction_runtime.js
+          grep -Fq 'edgesuite:save-request' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/interaction_runtime.js
+          ! grep -Eq 'ignore_permissions|frappe\.db\.set_value|frappe\.client\.save|form\.doc\.docstatus[[:space:]]*=' \
+            apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_s_guard.js \
+            apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/interaction_runtime.js
+
           bench build --app edgesuite_ui
           bench build --app retailedge
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          assets = json.loads(Path("sites/assets/assets.json").read_text())
+          required = (
+              "retailedge_edgesuite_only_operational_guard.bundle.js",
+              "professional_selling.bundle.js",
+              "professional_purchasing.bundle.js",
+          )
+          missing = [bundle for bundle in required if bundle not in assets]
+          if missing:
+              raise SystemExit(f"RetailEdge bundles missing from assets.json: {missing}")
+          PY
           bench --site retail-ci.localhost migrate
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
           test -f apps/edgesuite_ui/edgesuite_ui/search_ranking.py

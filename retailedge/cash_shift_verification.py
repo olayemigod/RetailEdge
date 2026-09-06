@@ -7,6 +7,13 @@ import frappe
 from frappe import _
 from frappe.utils import cint, nowdate
 
+from retailedge.cash_shift_verification_read_scope import (
+	DAILY_SALES_AUDIT_DOCTYPE,
+	assert_cash_shift_verification_read_access,
+	resolve_cash_shift_context_branch,
+	resolve_cash_shift_verification_read_scope,
+)
+from retailedge.daily_sales_audit_read_scope import NO_BRANCH_SCOPE_SENTINEL
 from retailedge.retailedge.report.retailedge_cash_shift_verification.retailedge_cash_shift_verification import (
 	get_columns,
 	get_data,
@@ -23,12 +30,18 @@ MAX_LINK_RESULTS = 20
 
 @frappe.whitelist()
 def get_cash_shift_verification_context() -> dict[str, Any]:
+	user = frappe.session.user
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
-	branch = str(
+	if company:
+		resolve_cash_shift_verification_read_scope({"company": company}, user=user)
+	else:
+		assert_cash_shift_verification_read_access()
+	candidate = str(
 		frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
 	).strip()
+	branch = resolve_cash_shift_context_branch(company=company, candidate=candidate, user=user)
 	return {
 		"default_filters": {
 			"company": company,
@@ -44,42 +57,50 @@ def get_cash_shift_verification_context() -> dict[str, Any]:
 		},
 		"tenant_name": company,
 		"branch_name": branch,
-		"user_name": frappe.db.get_value("User", frappe.session.user, "full_name") or frappe.session.user,
+		"user_name": frappe.db.get_value("User", user, "full_name") or user,
 		"limits": {"rows": MAX_SHIFT_ROWS, "page_size": MAX_PAGE_SIZE, "link_results": MAX_LINK_RESULTS},
 	}
 
 
 @frappe.whitelist()
-def search_cash_shift_verification_options(kind: str, txt: str = "", company: str = "") -> list[dict[str, str]]:
+def search_cash_shift_verification_options(
+	kind: str,
+	txt: str = "",
+	company: str = "",
+	branch: str = "",
+) -> list[dict[str, str]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(branch or "").strip()
 	if kind == "company":
+		assert_cash_shift_verification_read_access()
 		return _search_named("Company", txt)
+	if not company:
+		assert_cash_shift_verification_read_access()
+		frappe.throw(_("Company is required."), frappe.ValidationError)
+	read_scope = resolve_cash_shift_verification_read_scope(
+		{"company": company, "branch": branch},
+		user=frappe.session.user,
+	)
 	if kind == "branch":
 		rows = branch_query("Branch", txt, "name", 0, MAX_LINK_RESULTS, {"company": company})
 		return [{"value": row[0], "label": row[0]} for row in rows]
 	if kind == "cashier":
-		rows = frappe.get_list(
-			"User",
-			filters={"enabled": 1},
-			or_filters={"name": ["like", f"%{txt}%"], "full_name": ["like", f"%{txt}%"]},
-			fields=["name", "full_name"],
-			order_by="full_name asc, name asc",
-			limit=MAX_LINK_RESULTS,
-		)
-		return [{"value": row.name, "label": row.full_name or row.name, "description": row.name} for row in rows]
+		return _search_scoped_cashiers(txt=txt, read_scope=read_scope)
 	if kind == "pos_profile":
-		filters: dict[str, Any] = {"name": ["like", f"%{txt}%"]}
-		if company:
-			filters["company"] = company
-		rows = frappe.get_list("POS Profile", filters=filters, fields=["name"], order_by="name asc", limit=MAX_LINK_RESULTS)
-		return [{"value": row.name, "label": row.name} for row in rows]
+		return _search_scoped_pos_profiles(
+			txt=txt,
+			company=company,
+			read_scope=read_scope,
+		)
 	frappe.throw(_("Unsupported Cash Shift Verification search type."))
 
 
 @frappe.whitelist()
-def get_cash_shift_verification(filters: dict[str, Any] | str | None = None, page: int | str = 1, page_size: int | str = DEFAULT_PAGE_SIZE) -> dict[str, Any]:
+def get_cash_shift_verification(
+	filters: dict[str, Any] | str | None = None, page: int | str = 1, page_size: int | str = DEFAULT_PAGE_SIZE
+) -> dict[str, Any]:
 	dataset = _build_dataset(_coerce_filters(filters))
 	return _page_response(dataset, page=page, page_size=page_size)
 
@@ -87,19 +108,33 @@ def get_cash_shift_verification(filters: dict[str, Any] | str | None = None, pag
 @frappe.whitelist()
 def get_cash_shift_verification_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	dataset = _build_dataset(_coerce_filters(filters))
-	return {"title": dataset["title"], "columns": dataset["columns"], "rows": dataset["rows"], "summary": dataset["summary"], "scan": dataset["scan"]}
+	return {
+		"title": dataset["title"],
+		"columns": dataset["columns"],
+		"rows": dataset["rows"],
+		"summary": dataset["summary"],
+		"scan": dataset["scan"],
+	}
 
 
 def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
 	if not filters.get("company"):
-		frappe.throw(_("Company is required."))
+		frappe.throw(_("Company is required."), frappe.ValidationError)
 	validate_filters(filters)
-	if not frappe.has_permission("RetailEdge Daily Sales Audit", "read"):
-		frappe.throw(_("You do not have permission to view Daily Sales Audit records."), frappe.PermissionError)
 	rows = get_data(filters, limit_page_length=MAX_SHIFT_ROWS + 1)
 	if len(rows) > MAX_SHIFT_ROWS:
-		frappe.throw(_("More than {0} cash shifts match these filters. Narrow the date range or business scope before loading Cash Shift Verification.").format(MAX_SHIFT_ROWS))
-	return {"title": _("Cash Shift Verification"), "columns": get_columns(), "rows": rows, "summary": get_report_summary(rows), "scan": {"rows": len(rows), "row_limit": MAX_SHIFT_ROWS}}
+		frappe.throw(
+			_(
+				"More than {0} cash shifts match these filters. Narrow the date range or business scope before loading Cash Shift Verification."
+			).format(MAX_SHIFT_ROWS)
+		)
+	return {
+		"title": _("Cash Shift Verification"),
+		"columns": get_columns(),
+		"rows": rows,
+		"summary": get_report_summary(rows),
+		"scan": {"rows": len(rows), "row_limit": MAX_SHIFT_ROWS},
+	}
 
 
 def _page_response(dataset: dict[str, Any], *, page: int | str, page_size: int | str) -> dict[str, Any]:
@@ -110,12 +145,91 @@ def _page_response(dataset: dict[str, Any], *, page: int | str, page_size: int |
 	total_pages = max(1, ceil(total_rows / resolved_page_size))
 	resolved_page = min(resolved_page, total_pages)
 	start = (resolved_page - 1) * resolved_page_size
-	return {**dataset, "rows": rows[start : start + resolved_page_size], "pagination": {"page": resolved_page, "page_size": resolved_page_size, "total_rows": total_rows, "total_pages": total_pages, "has_previous": resolved_page > 1, "has_next": resolved_page < total_pages}}
+	return {
+		**dataset,
+		"rows": rows[start : start + resolved_page_size],
+		"pagination": {
+			"page": resolved_page,
+			"page_size": resolved_page_size,
+			"total_rows": total_rows,
+			"total_pages": total_pages,
+			"has_previous": resolved_page > 1,
+			"has_next": resolved_page < total_pages,
+		},
+	}
 
 
 def _search_named(doctype: str, txt: str) -> list[dict[str, str]]:
-	rows = frappe.get_list(doctype, filters={"name": ["like", f"%{txt}%"]}, fields=["name"], order_by="name asc", limit=MAX_LINK_RESULTS)
+	rows = frappe.get_list(
+		doctype,
+		filters={"name": ["like", f"%{txt}%"]},
+		fields=["name"],
+		order_by="name asc",
+		limit=MAX_LINK_RESULTS,
+	)
 	return [{"value": row.name, "label": row.name} for row in rows]
+
+
+def _search_scoped_cashiers(*, txt: str, read_scope: dict[str, Any]) -> list[dict[str, str]]:
+	if read_scope.get("branch") == NO_BRANCH_SCOPE_SENTINEL:
+		return []
+	candidates = frappe.get_list(
+		"User",
+		filters={"enabled": 1},
+		or_filters={"name": ["like", f"%{txt}%"], "full_name": ["like", f"%{txt}%"]},
+		fields=["name", "full_name"],
+		order_by="full_name asc, name asc",
+		limit_page_length=MAX_LINK_RESULTS,
+	)
+	allowed = _scoped_audit_values(
+		fieldname="cashier",
+		candidates=[row.name for row in candidates],
+		read_scope=read_scope,
+	)
+	return [
+		{"value": row.name, "label": row.full_name or row.name, "description": row.name}
+		for row in candidates
+		if row.name in allowed
+	]
+
+
+def _search_scoped_pos_profiles(
+	*, txt: str, company: str, read_scope: dict[str, Any]
+) -> list[dict[str, str]]:
+	if read_scope.get("branch") == NO_BRANCH_SCOPE_SENTINEL:
+		return []
+	candidates = frappe.get_list(
+		"POS Profile",
+		filters={"company": company, "name": ["like", f"%{txt}%"]},
+		fields=["name"],
+		order_by="name asc",
+		limit_page_length=MAX_LINK_RESULTS,
+	)
+	allowed = _scoped_audit_values(
+		fieldname="pos_profile",
+		candidates=[row.name for row in candidates],
+		read_scope=read_scope,
+	)
+	return [{"value": row.name, "label": row.name} for row in candidates if row.name in allowed]
+
+
+def _scoped_audit_values(
+	*,
+	fieldname: str,
+	candidates: list[str],
+	read_scope: dict[str, Any],
+) -> set[str]:
+	if not candidates:
+		return set()
+	filters = {**read_scope, fieldname: ["in", candidates]}
+	rows = frappe.get_list(
+		DAILY_SALES_AUDIT_DOCTYPE,
+		filters=filters,
+		fields=[fieldname],
+		group_by=fieldname,
+		limit_page_length=MAX_LINK_RESULTS,
+	)
+	return {str(row.get(fieldname) or "").strip() for row in rows if row.get(fieldname)}
 
 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:

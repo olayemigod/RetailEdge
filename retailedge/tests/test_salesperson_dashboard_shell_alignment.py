@@ -7,18 +7,10 @@ BACKEND = APP_ROOT / "salesperson_performance.py"
 DASHBOARD_API = APP_ROOT / "salesperson_performance_dashboard.py"
 DASHBOARD_FILES = APP_ROOT / "dashboard_files.py"
 COMPONENT = (
-	APP_ROOT
-	/ "public"
-	/ "js"
-	/ "salesperson_performance_dashboard"
-	/ "SalespersonPerformanceDashboardV2.vue"
+	APP_ROOT / "public" / "js" / "salesperson_performance_dashboard" / "SalespersonPerformanceDashboardV2.vue"
 )
 LEGACY_COMPONENT = (
-	APP_ROOT
-	/ "public"
-	/ "js"
-	/ "salesperson_performance_dashboard"
-	/ "SalespersonPerformanceDashboard.vue"
+	APP_ROOT / "public" / "js" / "salesperson_performance_dashboard" / "SalespersonPerformanceDashboard.vue"
 )
 BUNDLE = APP_ROOT / "public" / "js" / "salesperson_performance.bundle.js"
 
@@ -26,8 +18,11 @@ BUNDLE = APP_ROOT / "public" / "js" / "salesperson_performance.bundle.js"
 def test_salesperson_backend_enforces_company_and_branch_scope():
 	source = BACKEND.read_text()
 	assert 'conditions.append("si.company = %s")' in source
-	assert "company=company or None" in source
-	assert 'branch=filters.get("branch")' in source
+	assert "resolve_salesperson_performance_read_scope" in source
+	assert "get_operational_branch_scope" in source
+	assert "_salesperson_invoice_branch_predicate" in source
+	assert 'return "1=0", []' in source
+	assert "get_branch_query_filters" not in source
 	assert "MAX_PAGE_SIZE = 100" in source
 	assert "MAX_EXPORT_ROWS = 500" in source
 	assert "si.docstatus = 1" in source

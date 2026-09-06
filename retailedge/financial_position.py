@@ -6,9 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_first_day, nowdate, today
 
-from retailedge.branch_context import user_has_global_branch_access
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.owner_dashboard import get_owner_dashboard_data
+from retailedge.reporting_scope import has_unrestricted_report_scope
 
 DASHBOARD_KEY = "owner-dashboard"
 MAX_LIQUID_ACCOUNT_SCAN = 250
@@ -52,12 +52,16 @@ def get_financial_position(filters: dict[str, Any] | str | None = None) -> dict[
 		"to_date": str(filters.get("to_date") or today()),
 	}
 	owner = get_owner_dashboard_data(resolved)
-	global_branch_scope = user_has_global_branch_access(user=frappe.session.user)
-	liquid = _get_liquid_position(company=company, branch=branch, global_branch_scope=global_branch_scope)
+	unrestricted_company_scope = has_unrestricted_report_scope(company, user=frappe.session.user)
+	liquid = _get_liquid_position(
+		company=company,
+		branch=branch,
+		unrestricted_company_scope=unrestricted_company_scope,
+	)
 	return _build_snapshot(
 		owner=owner,
 		liquid=liquid,
-		allow_company_accounting=bool(not branch and global_branch_scope),
+		allow_company_accounting=bool(not branch and unrestricted_company_scope),
 	)
 
 
@@ -73,10 +77,14 @@ def _build_snapshot(
 	payables = _metric(sections, "payables", "Total Payables")
 	stock_value = _stock_value(sections)
 	accounting_net_profit = (
-		_metric_or_none(sections, "profitability", "Accounting Net Profit") if allow_company_accounting else None
+		_metric_or_none(sections, "profitability", "Accounting Net Profit")
+		if allow_company_accounting
+		else None
 	)
 	accounting_gross_profit = (
-		_metric_or_none(sections, "profitability", "Accounting Gross Profit") if allow_company_accounting else None
+		_metric_or_none(sections, "profitability", "Accounting Gross Profit")
+		if allow_company_accounting
+		else None
 	)
 	transactional_gross_profit = _metric_or_none(sections, "profitability", "Transactional Gross Profit")
 	money_in = _metric_or_none(sections, "cash", "Money In")
@@ -90,7 +98,8 @@ def _build_snapshot(
 			"Net Trade Position",
 			receivables - payables,
 			"current",
-			available=_section_available(sections, "receivables") and _section_available(sections, "payables"),
+			available=_section_available(sections, "receivables")
+			and _section_available(sections, "payables"),
 		),
 	]
 	if stock_value is not None:
@@ -149,12 +158,17 @@ def _build_snapshot(
 			"cash_movement_definition": "posted Cash/Bank General Ledger movement for the selected period; not a closing balance",
 			"trade_position_definition": "current receivables minus current payables; not accounting net assets or complete working capital",
 			"stock_value_definition": "ERPNext stock valuation exposed only when RetailEdge cost visibility permits it",
-			"branch_limit": "company accounting balances and company P&L are withheld unless the user has global Branch scope; Branch-filtered accounting remains unavailable until safe ERPNext accounting attribution exists",
+			"branch_limit": "company accounting balances and company P&L are withheld unless the user has unrestricted Company reporting scope; Branch-filtered accounting remains unavailable until safe ERPNext accounting attribution exists",
 		},
 	}
 
 
-def _get_liquid_position(*, company: str, branch: str, global_branch_scope: bool = True) -> dict[str, Any]:
+def _get_liquid_position(
+	*,
+	company: str,
+	branch: str,
+	unrestricted_company_scope: bool = True,
+) -> dict[str, Any]:
 	if branch:
 		return {
 			"available": False,
@@ -163,7 +177,7 @@ def _get_liquid_position(*, company: str, branch: str, global_branch_scope: bool
 			),
 			"accounts": [],
 		}
-	if not global_branch_scope:
+	if not unrestricted_company_scope:
 		return {
 			"available": False,
 			"reason": _(
@@ -172,7 +186,11 @@ def _get_liquid_position(*, company: str, branch: str, global_branch_scope: bool
 			"accounts": [],
 		}
 	if not frappe.has_permission("Account", "read"):
-		return {"available": False, "reason": _("You do not have permission to view accounting balances."), "accounts": []}
+		return {
+			"available": False,
+			"reason": _("You do not have permission to view accounting balances."),
+			"accounts": [],
+		}
 
 	accounts = frappe.get_list(
 		"Account",
@@ -188,9 +206,9 @@ def _get_liquid_position(*, company: str, branch: str, global_branch_scope: bool
 	)
 	if len(accounts) > MAX_LIQUID_ACCOUNT_SCAN:
 		frappe.throw(
-			_("More than {0} Cash/Bank accounts are in scope. Narrow the Company configuration before loading this snapshot.").format(
-				MAX_LIQUID_ACCOUNT_SCAN
-			)
+			_(
+				"More than {0} Cash/Bank accounts are in scope. Narrow the Company configuration before loading this snapshot."
+			).format(MAX_LIQUID_ACCOUNT_SCAN)
 		)
 
 	from erpnext.accounts.utils import get_balance_on

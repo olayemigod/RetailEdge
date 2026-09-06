@@ -8,13 +8,9 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
-from retailedge.branch_context import (
-	get_user_allowed_branches,
-	resolve_branch_from_warehouse,
-	user_has_global_branch_access,
-	validate_user_branch_access,
-)
+from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.cost_visibility import should_hide_cost_price
+from retailedge.operating_context import get_operational_branch_scope
 from retailedge.retailedge.report.retailedge_stock_movement_history.retailedge_stock_movement_history import (
 	get_branch_warehouses,
 )
@@ -25,7 +21,9 @@ MAX_PAGE_SIZE = 100
 MAX_LINK_RESULTS = 20
 MAX_WAREHOUSE_SCOPE = 500
 MAX_BIN_SCAN_ROWS = 10000
+MAX_REORDER_SCAN_ROWS = 10000
 MAX_ITEM_SCOPE = 5000
+MAX_DUE_LOCATION_SUMMARY = 5
 
 _BASE_BIN_FIELDS = (
 	"item_code",
@@ -37,6 +35,14 @@ _BASE_BIN_FIELDS = (
 	"stock_uom",
 )
 _COST_BIN_FIELDS = ("valuation_rate", "stock_value")
+_REORDER_FIELDS = (
+	"parent",
+	"warehouse",
+	"warehouse_group",
+	"warehouse_reorder_level",
+	"warehouse_reorder_qty",
+	"material_request_type",
+)
 
 
 @frappe.whitelist()
@@ -46,21 +52,17 @@ def get_stock_position_context() -> dict[str, Any]:
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	branch = ""
 	if company and frappe.has_permission("Company", "read", doc=company):
+		scope = get_operational_branch_scope(company, user=user)
+		allowed = list(scope.get("allowed_branches") or [])
 		candidate = str(
 			frappe.defaults.get_user_default("RetailEdge Branch")
 			or frappe.defaults.get_user_default("Branch")
 			or ""
 		).strip()
-		if candidate:
-			try:
-				validate_user_branch_access(candidate, user=user, company=company, throw=True)
-				branch = candidate
-			except (frappe.PermissionError, frappe.ValidationError):
-				branch = ""
-		if not branch and not user_has_global_branch_access(user=user):
-			allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-			if len(allowed) == 1:
-				branch = allowed[0]
+		if candidate and (not scope.get("restricted") or candidate in allowed):
+			branch = candidate
+		if not branch and scope.get("restricted") and len(allowed) == 1:
+			branch = allowed[0]
 
 	show_costs = not should_hide_cost_price(user=user)
 	return {
@@ -82,6 +84,7 @@ def get_stock_position_context() -> dict[str, Any]:
 		"limits": {
 			"warehouse_scope": MAX_WAREHOUSE_SCOPE,
 			"bin_scan": MAX_BIN_SCAN_ROWS,
+			"reorder_scan": MAX_REORDER_SCAN_ROWS,
 			"item_scope": MAX_ITEM_SCOPE,
 			"page_size": MAX_PAGE_SIZE,
 			"link_results": MAX_LINK_RESULTS,
@@ -178,12 +181,13 @@ def _build_stock_position_dataset(filters: frappe._dict) -> dict[str, Any]:
 	item_scope = _resolve_item_scope(filters)
 	show_costs = not should_hide_cost_price()
 
+	if item_scope is not None and not item_scope:
+		return _empty_dataset(filters, warehouses, show_costs)
+
 	bin_filters: dict[str, Any] = {"warehouse": ["in", warehouses]}
 	if filters.get("item_code"):
 		bin_filters["item_code"] = filters.item_code
 	elif item_scope is not None:
-		if not item_scope:
-			return _empty_dataset(filters, warehouses, show_costs)
 		bin_filters["item_code"] = ["in", item_scope]
 
 	fields = list(_BASE_BIN_FIELDS)
@@ -203,41 +207,60 @@ def _build_stock_position_dataset(filters: frappe._dict) -> dict[str, Any]:
 			).format(MAX_BIN_SCAN_ROWS)
 		)
 
-	item_codes = sorted({str(row.item_code) for row in bin_rows if row.item_code})
+	reorder_rows = _load_direct_reorder_rules(warehouses, filters=filters, item_scope=item_scope)
+	item_codes = sorted(
+		{str(row.item_code) for row in bin_rows if row.item_code}
+		| {str(row.parent) for row in reorder_rows if row.parent}
+	)
+	if len(item_codes) > MAX_ITEM_SCOPE:
+		frappe.throw(
+			_("More than {0} stock items match this scope. Narrow the Branch, Warehouse, Item Group, or Item first.").format(
+				MAX_ITEM_SCOPE
+			)
+		)
+
 	item_map = _get_item_metadata(item_codes)
-	aggregated: dict[str, dict[str, Any]] = {}
+	aggregated: dict[str, dict[str, Any]] = {
+		item_code: _new_stock_bucket(item)
+		for item_code, item in item_map.items()
+	}
 	locations: dict[str, set[str]] = defaultdict(set)
+	projected_by_location: dict[tuple[str, str], float] = {}
 	for row in bin_rows:
 		item = item_map.get(row.item_code)
 		if not item:
 			continue
-		bucket = aggregated.setdefault(
-			row.item_code,
-			{
-				"item_code": row.item_code,
-				"item_name": item.item_name or row.item_code,
-				"item_group": item.item_group or "",
-				"stock_uom": row.stock_uom or item.stock_uom or "",
-				"actual_qty": 0.0,
-				"reserved_qty": 0.0,
-				"available_qty": 0.0,
-				"ordered_qty": 0.0,
-				"projected_qty": 0.0,
-			},
-		)
+		bucket = aggregated[row.item_code]
+		if not bucket.get("stock_uom") and row.stock_uom:
+			bucket["stock_uom"] = row.stock_uom
 		bucket["actual_qty"] += flt(row.actual_qty)
 		bucket["reserved_qty"] += flt(row.reserved_qty)
 		bucket["ordered_qty"] += flt(row.ordered_qty)
 		bucket["projected_qty"] += flt(row.projected_qty)
+		projected_by_location[(str(row.item_code), str(row.warehouse))] = flt(row.projected_qty)
 		if show_costs:
 			bucket["stock_value"] = flt(bucket.get("stock_value")) + flt(row.stock_value)
 		locations[row.item_code].add(row.warehouse)
+
+	reorder_by_item: dict[str, list[Any]] = defaultdict(list)
+	for rule in reorder_rows:
+		if rule.parent in item_map:
+			reorder_by_item[str(rule.parent)].append(rule)
 
 	rows: list[dict[str, Any]] = []
 	for item_code, bucket in aggregated.items():
 		bucket["available_qty"] = flt(bucket["actual_qty"]) - flt(bucket["reserved_qty"])
 		bucket["location_count"] = len(locations.get(item_code) or ())
 		bucket["stock_status"] = _row_stock_status(bucket)
+		bucket.update(
+			_evaluate_direct_reorder_rules(
+				reorder_by_item.get(item_code) or [],
+				{
+					warehouse: projected_by_location.get((item_code, warehouse), 0.0)
+					for warehouse in warehouses
+				},
+			)
+		)
 		if show_costs:
 			actual = flt(bucket["actual_qty"])
 			bucket["valuation_rate"] = flt(bucket.get("stock_value")) / actual if actual else 0.0
@@ -264,6 +287,8 @@ def _build_stock_position_dataset(filters: frappe._dict) -> dict[str, Any]:
 		"scan": {
 			"bin_rows": len(bin_rows),
 			"bin_limit": MAX_BIN_SCAN_ROWS,
+			"reorder_rows": len(reorder_rows),
+			"reorder_limit": MAX_REORDER_SCAN_ROWS,
 			"warehouse_count": len(warehouses),
 			"warehouse_limit": MAX_WAREHOUSE_SCOPE,
 		},
@@ -284,8 +309,113 @@ def _empty_dataset(filters: frappe._dict, warehouses: list[str], show_costs: boo
 			"warehouse": filters.get("warehouse") or "",
 			"warehouse_count": len(warehouses),
 		},
-		"scan": {"bin_rows": 0, "bin_limit": MAX_BIN_SCAN_ROWS, "warehouse_count": len(warehouses)},
+		"scan": {
+			"bin_rows": 0,
+			"bin_limit": MAX_BIN_SCAN_ROWS,
+			"reorder_rows": 0,
+			"reorder_limit": MAX_REORDER_SCAN_ROWS,
+			"warehouse_count": len(warehouses),
+		},
 	}
+
+
+def _load_direct_reorder_rules(
+	warehouses: list[str],
+	*,
+	filters: frappe._dict,
+	item_scope: list[str] | None,
+) -> list[frappe._dict]:
+	"""Load only scope-bounded Item Reorder rows; group-availability rules are ignored later."""
+	reorder_filters: dict[str, Any] = {"warehouse": ["in", warehouses]}
+	if filters.get("item_code"):
+		reorder_filters["parent"] = filters.item_code
+	elif item_scope is not None:
+		reorder_filters["parent"] = ["in", item_scope]
+
+	rows = frappe.get_all(
+		"Item Reorder",
+		filters=reorder_filters,
+		fields=list(_REORDER_FIELDS),
+		order_by="parent asc, warehouse asc, idx asc",
+		limit=MAX_REORDER_SCAN_ROWS + 1,
+	)
+	if len(rows) > MAX_REORDER_SCAN_ROWS:
+		frappe.throw(
+			_(
+				"More than {0} direct reorder rules match this scope. Narrow the Branch, Warehouse, Item Group, or Item before loading Stock Position."
+			).format(MAX_REORDER_SCAN_ROWS)
+		)
+	return [row for row in rows if row.warehouse and not row.warehouse_group]
+
+
+def _new_stock_bucket(item: frappe._dict) -> dict[str, Any]:
+	return {
+		"item_code": item.name,
+		"item_name": item.item_name or item.name,
+		"item_group": item.item_group or "",
+		"stock_uom": item.stock_uom or "",
+		"actual_qty": 0.0,
+		"reserved_qty": 0.0,
+		"available_qty": 0.0,
+		"ordered_qty": 0.0,
+		"projected_qty": 0.0,
+	}
+
+
+def _evaluate_direct_reorder_rules(
+	rules: list[Any],
+	projected_by_warehouse: dict[str, float],
+) -> dict[str, Any]:
+	configured_count = 0
+	due_rules: list[dict[str, Any]] = []
+	for rule in rules:
+		if rule.get("warehouse_group"):
+			continue
+		warehouse = str(rule.get("warehouse") or "").strip()
+		if not warehouse or warehouse not in projected_by_warehouse:
+			continue
+		configured_count += 1
+		reorder_level = flt(rule.get("warehouse_reorder_level"))
+		reorder_qty = flt(rule.get("warehouse_reorder_qty"))
+		if not (reorder_level or reorder_qty):
+			continue
+		projected_qty = flt(projected_by_warehouse.get(warehouse))
+		if projected_qty > reorder_level:
+			continue
+		due_rules.append(
+			{
+				"warehouse": warehouse,
+				"suggested_qty": max(reorder_qty, reorder_level - projected_qty),
+				"material_request_type": str(rule.get("material_request_type") or "").strip(),
+			}
+		)
+
+	due_warehouses = sorted({rule["warehouse"] for rule in due_rules})
+	request_types = sorted({rule["material_request_type"] for rule in due_rules if rule["material_request_type"]})
+	if due_rules:
+		status = "Reorder Due"
+	elif configured_count:
+		status = "Configured"
+	else:
+		status = "No Direct Rule"
+	return {
+		"replenishment_status": status,
+		"reorder_due": int(bool(due_rules)),
+		"direct_reorder_rule_count": configured_count,
+		"reorder_due_location_count": len(due_warehouses),
+		"suggested_reorder_qty": sum(flt(rule["suggested_qty"]) for rule in due_rules),
+		"reorder_due_warehouses": _bounded_location_summary(due_warehouses),
+		"reorder_request_types": ", ".join(request_types),
+	}
+
+
+def _bounded_location_summary(warehouses: list[str]) -> str:
+	visible = warehouses[:MAX_DUE_LOCATION_SUMMARY]
+	remaining = len(warehouses) - len(visible)
+	summary = ", ".join(visible)
+	if remaining > 0:
+		return _("{0} +{1} more").format(summary, remaining)
+	return summary
 
 
 def _resolve_warehouse_scope(filters: frappe._dict) -> list[str]:
@@ -293,6 +423,21 @@ def _resolve_warehouse_scope(filters: frappe._dict) -> list[str]:
 	branch = str(filters.get("branch") or "").strip()
 	warehouse = str(filters.get("warehouse") or "").strip()
 	user = frappe.session.user
+	scope = get_operational_branch_scope(company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed_branches = {
+		str(value).strip()
+		for value in scope.get("allowed_branches") or []
+		if str(value or "").strip()
+	}
+
+	if branch:
+		_assert_branch_read_scope(
+			company=company,
+			branch=branch,
+			user=user,
+			scope=scope,
+		)
 
 	if warehouse:
 		_assert_named_read("Warehouse", warehouse)
@@ -301,30 +446,35 @@ def _resolve_warehouse_scope(filters: frappe._dict) -> list[str]:
 			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
 		if is_group:
 			frappe.throw(_("Select a non-group Warehouse."))
-		resolved_branch = resolve_branch_from_warehouse(warehouse, company=company)
+		resolved = resolve_branch_from_warehouse(warehouse, company=company)
+		resolved_branch = str((resolved or {}).get("branch") or "").strip() if isinstance(resolved, dict) else str(resolved or "").strip()
 		if resolved_branch:
-			validate_user_branch_access(resolved_branch, user=user, company=company, throw=True)
+			if restricted and resolved_branch not in allowed_branches:
+				frappe.throw(
+					_("Warehouse {0} is outside your active RetailEdge Branch scope.").format(warehouse),
+					frappe.PermissionError,
+				)
 			if branch and resolved_branch != branch:
 				frappe.throw(_("Warehouse {0} does not belong to Branch {1}.").format(warehouse, branch))
-		elif not user_has_global_branch_access(user=user):
-			allowed_scope = _allowed_branch_warehouses(company, user=user)
+		elif restricted:
+			allowed_scope = _branch_scope_warehouses(company, allowed_branches)
 			if warehouse not in allowed_scope:
 				frappe.throw(_("Warehouse {0} is outside your permitted Branch scope.").format(warehouse), frappe.PermissionError)
-		if branch:
-			validate_user_branch_access(branch, user=user, company=company, throw=True)
-			if warehouse not in get_branch_warehouses(company, branch):
-				frappe.throw(_("Warehouse {0} is outside Branch {1} scope.").format(warehouse, branch), frappe.PermissionError)
+		if branch and warehouse not in get_branch_warehouses(company, branch):
+			frappe.throw(_("Warehouse {0} is outside Branch {1} scope.").format(warehouse, branch), frappe.PermissionError)
 		return [warehouse]
 
 	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
 		candidate_scope = set(get_branch_warehouses(company, branch))
+	elif restricted:
+		if not allowed_branches:
+			frappe.throw(
+				_("Your Branch operating access is not active for Company {0}.").format(company),
+				frappe.PermissionError,
+			)
+		candidate_scope = _branch_scope_warehouses(company, allowed_branches)
 	else:
-		candidate_scope = (
-			set(_all_company_warehouses(company))
-			if user_has_global_branch_access(user=user)
-			else _allowed_branch_warehouses(company, user=user)
-		)
+		candidate_scope = set(_all_company_warehouses(company))
 	if not candidate_scope:
 		frappe.throw(_("No permitted Warehouse scope could be resolved for Stock Position."), frappe.PermissionError)
 
@@ -342,12 +492,34 @@ def _resolve_warehouse_scope(filters: frappe._dict) -> list[str]:
 	return list(permitted)
 
 
-def _allowed_branch_warehouses(company: str, *, user: str) -> set[str]:
-	branches = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-	if not branches:
-		return set()
+def _assert_branch_read_scope(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	scope: dict[str, Any] | None = None,
+) -> None:
+	branch = str(branch or "").strip()
+	if not branch:
+		return
+	scope = scope or get_operational_branch_scope(company, user=user)
+	if not scope.get("restricted"):
+		return
+	allowed = {
+		str(value).strip()
+		for value in scope.get("allowed_branches") or []
+		if str(value or "").strip()
+	}
+	if branch not in allowed:
+		frappe.throw(
+			_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+			frappe.PermissionError,
+		)
+
+
+def _branch_scope_warehouses(company: str, branches: set[str]) -> set[str]:
 	warehouses: set[str] = set()
-	for branch in branches:
+	for branch in sorted(branches):
 		warehouses.update(get_branch_warehouses(company, branch))
 	if len(warehouses) > MAX_WAREHOUSE_SCOPE:
 		frappe.throw(_("Your permitted Branch scope contains more than {0} Warehouses. Select a Branch first.").format(MAX_WAREHOUSE_SCOPE))
@@ -416,10 +588,14 @@ def _matches_stock_status(row: dict[str, Any], requested: Any) -> bool:
 		return True
 	if requested == "In Stock":
 		return flt(row.get("actual_qty")) > 0
+	if requested == "Reorder Due":
+		return bool(cint(row.get("reorder_due")))
 	return row.get("stock_status") == requested
 
 
 def _row_has_stock_signal(row: dict[str, Any], *, show_costs: bool) -> bool:
+	if cint(row.get("reorder_due")):
+		return True
 	fields = ("actual_qty", "reserved_qty", "ordered_qty", "projected_qty")
 	if any(flt(row.get(field)) for field in fields):
 		return True
@@ -429,6 +605,7 @@ def _row_has_stock_signal(row: dict[str, Any], *, show_costs: bool) -> bool:
 def _summary(rows: list[dict[str, Any]], *, show_costs: bool) -> list[dict[str, Any]]:
 	cards = [
 		{"label": _("Items in Scope"), "value": len(rows), "datatype": "Int"},
+		{"label": _("Reorder Due"), "value": sum(1 for row in rows if cint(row.get("reorder_due"))), "datatype": "Int"},
 		{"label": _("Available Items"), "value": sum(1 for row in rows if flt(row.get("available_qty")) > 0), "datatype": "Int"},
 		{"label": _("Out of Stock"), "value": sum(1 for row in rows if flt(row.get("actual_qty")) == 0), "datatype": "Int"},
 		{"label": _("Negative Stock"), "value": sum(1 for row in rows if flt(row.get("actual_qty")) < 0), "datatype": "Int"},
@@ -451,6 +628,10 @@ def _columns(currency: str, *, show_costs: bool) -> list[dict[str, Any]]:
 		{"fieldname": "ordered_qty", "label": _("Ordered Qty"), "fieldtype": "Float"},
 		{"fieldname": "projected_qty", "label": _("Projected Qty"), "fieldtype": "Float"},
 		{"fieldname": "stock_status", "label": _("Stock Status"), "fieldtype": "Data"},
+		{"fieldname": "replenishment_status", "label": _("Replenishment Status"), "fieldtype": "Data"},
+		{"fieldname": "reorder_due_location_count", "label": _("Reorder Due Locations"), "fieldtype": "Int"},
+		{"fieldname": "suggested_reorder_qty", "label": _("Suggested Reorder Qty"), "fieldtype": "Float"},
+		{"fieldname": "reorder_due_warehouses", "label": _("Due Warehouses"), "fieldtype": "Data"},
 	]
 	if show_costs:
 		columns.extend(
@@ -470,7 +651,7 @@ def _assert_report_access(filters: frappe._dict) -> None:
 		if filters.get(fieldname):
 			_assert_named_read(doctype, filters.get(fieldname))
 	if filters.get("branch"):
-		validate_user_branch_access(filters.branch, user=frappe.session.user, company=filters.company, throw=True)
+		_assert_named_read("Branch", filters.branch)
 
 
 def _assert_named_read(doctype: str, name: str) -> None:
@@ -484,7 +665,7 @@ def _validate_filters(filters: frappe._dict) -> None:
 	if not filters.get("company"):
 		frappe.throw(_("Company is required."))
 	status = str(filters.get("stock_status") or "All").strip()
-	if status not in {"All", "In Stock", "Available", "Out of Stock", "Negative", "Fully Reserved"}:
+	if status not in {"All", "In Stock", "Available", "Out of Stock", "Negative", "Fully Reserved", "Reorder Due"}:
 		frappe.throw(_("Unsupported Stock Status filter."))
 
 

@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Customer Receivables"
 			eyebrow="Customers & Receivables"
-			subtitle="Current unpaid customer invoices, overdue exposure, and ageing from ERPNext Sales Invoice accounting truth."
+			subtitle="Current unpaid customer invoices, overdue exposure, native payment requests, and dunning readiness from ERPNext accounting truth."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -64,6 +64,7 @@
 				<span>Current ERPNext outstanding balances aged at {{ currentBalanceDate || "today" }}</span>
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
+				<span>Collection handoffs prepare native drafts only · nothing is submitted automatically</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
 			</template>
 		</EdgeReportShell>
@@ -78,6 +79,9 @@ const REPORT_KEY = "customer-receivables";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject }));
+}
+function callPostMethod(method, args = {}) {
+	return new Promise((resolve, reject) => frappe.call({ method, type: "POST", args, callback: (response) => resolve(response.message || {}), error: reject }));
 }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
 
@@ -103,6 +107,7 @@ export default {
 			companyCurrency: "",
 			currentBalanceDate: "",
 			customerLabel: "",
+			actionInvoice: "",
 			filters: { company: "", branch: "", customer: "", customer_group: "", ageing_bucket: "All", page_size: 50 },
 			currentPage: 1,
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
@@ -111,7 +116,13 @@ export default {
 	computed: {
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 0); },
-		reportColumns() { return (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: ["invoice", "customer"].includes(column.fieldname) })); },
+		reportColumns() {
+			const clickable = ["invoice", "customer", "payment_request", "dunning"];
+			const columns = (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: clickable.includes(column.fieldname) }));
+			if (this.rows.some((row) => row.payment_request_action)) columns.push({ fieldname: "payment_request_action", label: "Payment Action", fieldtype: "Data", clickable: true });
+			if (this.rows.some((row) => row.dunning_action)) columns.push({ fieldname: "dunning_action", label: "Dunning Action", fieldtype: "Data", clickable: true });
+			return columns;
+		},
 	},
 	created() {
 		const components = runtimeComponents();
@@ -181,7 +192,33 @@ export default {
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		rowKey(row, index) { return row.invoice || `customer-receivables:${index}`; },
-		openReportCell(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "invoice") frappe.set_route("Form", "Sales Invoice", value); else if (column.fieldname === "customer") frappe.set_route("Form", "Customer", value); },
+		async prepareCollectionAction(row, kind) {
+			if (!row?.invoice || this.actionInvoice) return;
+			const method = kind === "payment" ? "retailedge.receivables_actions.prepare_payment_request" : "retailedge.receivables_actions.prepare_dunning";
+			this.actionInvoice = row.invoice;
+			this.error = "";
+			try {
+				const result = await callPostMethod(method, { invoice_name: row.invoice });
+				if (!result?.name || !result?.doctype) throw new Error("Collection handoff did not return a draft document.");
+				frappe.show_alert({ message: result.reused ? `${result.doctype} already exists; opening it.` : `${result.doctype} draft prepared. Review before submitting.`, indicator: "green" });
+				frappe.set_route("Form", result.doctype, result.name);
+			} catch (error) {
+				this.error = errorMessage(error, "Collection handoff could not be prepared.");
+			} finally { this.actionInvoice = ""; }
+		},
+		async openReportCell(payload) {
+			const column = payload?.column;
+			const row = payload?.row;
+			if (!column || !row) return;
+			const value = row[column.fieldname];
+			if (!value) return;
+			if (column.fieldname === "payment_request_action") return this.prepareCollectionAction(row, "payment");
+			if (column.fieldname === "dunning_action") return this.prepareCollectionAction(row, "dunning");
+			if (column.fieldname === "invoice") frappe.set_route("Form", "Sales Invoice", value);
+			else if (column.fieldname === "customer") frappe.set_route("Form", "Customer", value);
+			else if (column.fieldname === "payment_request") frappe.set_route("Form", "Payment Request", value);
+			else if (column.fieldname === "dunning") frappe.set_route("Form", "Dunning", value);
+		},
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
 		formatValue(value, fieldtype, currency) {
 			if (value === null || value === undefined || value === "") return "—";

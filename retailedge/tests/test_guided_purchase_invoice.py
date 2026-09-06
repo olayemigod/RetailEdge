@@ -63,11 +63,12 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 				with self.assertRaises(frappe.ValidationError):
 					_normalise_items(rows)
 
+	@patch("retailedge.guided_purchase_invoice.has_branch_assignments", return_value=False)
 	@patch("retailedge.guided_purchase_invoice.validate_user_branch_access")
 	@patch("retailedge.guided_purchase_invoice.get_first_existing_field", return_value="branch")
 	@patch("retailedge.guided_purchase_invoice.has_field", return_value=True)
 	def test_warehouse_search_filters_company_and_branch(
-		self, _mock_has_field, _mock_branch_field, mock_validate_access
+		self, _mock_has_field, _mock_branch_field, mock_validate_access, _mock_assignments
 	):
 		filters = _warehouse_search_filters(
 			company="Demo Company",
@@ -79,6 +80,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertEqual(filters["is_group"], 0)
 		mock_validate_access.assert_called_once()
 
+	@patch("retailedge.guided_purchase_invoice.has_branch_assignments", return_value=False)
 	@patch("retailedge.guided_purchase_invoice.resolve_purchase_item_pricing")
 	@patch("retailedge.guided_purchase_invoice.resolve_price_list_context")
 	@patch("retailedge.guided_purchase_invoice.frappe.db.get_value")
@@ -97,6 +99,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		mock_db_value,
 		mock_price_context,
 		mock_item_pricing,
+		_mock_assignments,
 	):
 		doc = _DraftPurchaseInvoice()
 		mock_new_doc.return_value = doc
@@ -147,6 +150,10 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertEqual(result["name"], doc.name)
 		self.assertEqual(result["buying_price_list"], "Retail Buying")
 
+	@patch(
+		"retailedge.guided_purchase_invoice.resolve_operational_branch",
+		return_value={"branch": ""},
+	)
 	@patch("retailedge.guided_purchase_invoice.resolve_purchase_item_pricing")
 	@patch("retailedge.guided_purchase_invoice.resolve_price_list_context")
 	@patch("retailedge.guided_purchase_invoice._assert_read_permission")
@@ -159,6 +166,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		_mock_read_permission,
 		mock_price_context,
 		mock_item_pricing,
+		_mock_resolve_branch,
 	):
 		mock_new_doc.return_value = _DraftPurchaseInvoice()
 		mock_price_context.return_value = {"price_list": "", "source": "item_fallback"}

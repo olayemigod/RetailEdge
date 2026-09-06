@@ -62,7 +62,7 @@ class TestStockMovementEdgeUIPage(unittest.TestCase):
 		for contract in (
 			"def get_stock_movement_export(",
 			"def _build_stock_movement_dataset(",
-			'result = _build_stock_movement_dataset(_coerce_filters(filters))',
+			"result = _build_stock_movement_dataset(_coerce_filters(filters))",
 			'"rows": [_public_row(row) for row in result["data"]]',
 		):
 			self.assertIn(contract, source)
@@ -94,11 +94,19 @@ class TestStockMovementEdgeUIPage(unittest.TestCase):
 			"_assert_report_access(filters)",
 			'frappe.has_permission("Stock Ledger Entry", "read")',
 			'frappe.has_permission(doctype, "read", doc=name)',
+			"get_operational_branch_scope",
+			"validate_operating_branch",
 			"branch_query(",
 			"warehouse_query(",
 			"limit=MAX_LINK_RESULTS",
 		):
 			self.assertIn(contract, source)
+		for legacy_helper in (
+			"get_user_allowed_branches",
+			"user_has_global_branch_access",
+			"validate_user_branch_access",
+		):
+			self.assertNotIn(legacy_helper, source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("frappe.db.commit()", source)
 
@@ -139,7 +147,7 @@ class TestStockMovementEdgeUIPage(unittest.TestCase):
 			"25 / page",
 			"50 / page",
 			"100 / page",
-			":hideNativeSidebar=\"true\"",
+			':hideNativeSidebar="true"',
 			"flex: 1 1 100%",
 			"grid-template-columns: repeat(4, minmax(180px, 1fr))",
 		):

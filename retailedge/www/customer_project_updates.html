@@ -1,0 +1,69 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Project Updates{% endblock %}
+
+{% block page_content %}
+<div class="customer-project-updates" data-edge-suite-ready="true">
+	<header class="customer-project-updates-hero">
+		<div>
+			<div class="customer-project-updates-kicker">{{ company_name or "Customer Portal" }}</div>
+			<h1>Project Updates</h1>
+			<p>Track current project progress and updates that have been explicitly published for your customer account.</p>
+		</div>
+		<a class="customer-project-updates-button" href="/customer_portal">Customer Portal</a>
+	</header>
+
+	{% if updates.projects %}
+	<section class="customer-project-updates-projects" aria-label="Projects">
+		{% for project in updates.projects %}
+		<a class="customer-project-updates-project{% if updates.project == project.name %} is-active{% endif %}" href="{{ project.updates_url }}">
+			<strong>{{ project.label }}</strong>
+			<span>{{ project.status or "Open" }} · {{ project.percent_complete or 0 }}% complete</span>
+		</a>
+		{% endfor %}
+		{% if updates.project %}<a class="customer-project-updates-project" href="/customer_project_updates"><strong>All Projects</strong><span>Show every published update</span></a>{% endif %}
+	</section>
+	{% endif %}
+
+	<section class="customer-project-updates-panel">
+		<header>
+			<div>
+				<span class="customer-project-updates-kicker">Published activity</span>
+				<h2>{{ updates.row_count or 0 }} update{% if updates.row_count != 1 %}s{% endif %}</h2>
+			</div>
+		</header>
+
+		{% if updates.rows %}
+		<div class="customer-project-updates-list">
+			{% for row in updates.rows %}
+			<article class="customer-project-updates-row">
+				<div class="customer-project-updates-row-head">
+					<div>
+						<strong>{{ row.project_name }}</strong>
+						<span>{{ row.status or "Open" }} · {{ row.percent_complete or 0 }}% complete</span>
+					</div>
+					<time>{% if row.published_on %}{{ frappe.utils.format_datetime(row.published_on) }}{% elif row.update_date %}{{ frappe.utils.formatdate(row.update_date) }}{% endif %}</time>
+				</div>
+				<p>{{ row.summary }}</p>
+				<div class="customer-project-updates-dates">
+					{% if row.expected_start_date %}<span>Expected start: {{ frappe.utils.formatdate(row.expected_start_date) }}</span>{% endif %}
+					{% if row.expected_end_date %}<span>Expected end: {{ frappe.utils.formatdate(row.expected_end_date) }}</span>{% endif %}
+				</div>
+			</article>
+			{% endfor %}
+		</div>
+		{% else %}
+		<div class="customer-project-updates-empty">No customer-facing project updates have been published for this selection.</div>
+		{% endif %}
+	</section>
+
+	<section class="customer-project-updates-note">
+		<strong>Customer-safe project visibility</strong>
+		<p>Progress comes from ERPNext Project. Activity shown here comes only from submitted Project Updates explicitly marked for customer publication. Internal project replies, tasks, notes, costing and accounting information are not shown.</p>
+	</section>
+</div>
+
+<style>
+.customer-project-updates{--cpu-surface:var(--edge-color-surface,#fff);--cpu-subtle:var(--edge-color-surface-muted,#f7f7f8);--cpu-border:var(--edge-color-border,#e5e7eb);--cpu-ink:var(--edge-color-ink,#111827);--cpu-muted:var(--edge-color-ink-muted,#6b7280);--cpu-accent:var(--edge-color-primary,#2563eb);display:grid;gap:1rem;color:var(--cpu-ink);padding:1rem 0 2rem}.customer-project-updates-hero,.customer-project-updates-panel,.customer-project-updates-note{background:var(--cpu-surface);border:1px solid var(--cpu-border);border-radius:14px}.customer-project-updates-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;padding:1.25rem}.customer-project-updates-hero h1,.customer-project-updates-panel h2{margin:.2rem 0 .35rem}.customer-project-updates-hero p,.customer-project-updates-note p{margin:0;color:var(--cpu-muted)}.customer-project-updates-kicker{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cpu-muted)}.customer-project-updates-button{display:inline-flex;align-items:center;justify-content:center;min-height:2.35rem;padding:.45rem .8rem;border-radius:8px;background:var(--cpu-accent);border:1px solid var(--cpu-accent);color:#fff!important;text-decoration:none;white-space:nowrap}.customer-project-updates-projects{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.customer-project-updates-project{display:grid;gap:.3rem;padding:.9rem 1rem;border:1px solid var(--cpu-border);border-radius:11px;background:var(--cpu-surface);color:var(--cpu-ink)!important;text-decoration:none}.customer-project-updates-project span{font-size:.8rem;color:var(--cpu-muted)}.customer-project-updates-project.is-active{border-color:var(--cpu-accent);box-shadow:0 0 0 1px var(--cpu-accent)}.customer-project-updates-panel{overflow:hidden}.customer-project-updates-panel>header{padding:1rem;border-bottom:1px solid var(--cpu-border)}.customer-project-updates-list{display:grid}.customer-project-updates-row{padding:1rem;border-bottom:1px solid var(--cpu-border)}.customer-project-updates-row:last-child{border-bottom:0}.customer-project-updates-row-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.customer-project-updates-row-head span,.customer-project-updates-row-head time,.customer-project-updates-dates{font-size:.8rem;color:var(--cpu-muted)}.customer-project-updates-row-head span{display:block;margin-top:.2rem}.customer-project-updates-row p{margin:.7rem 0;white-space:pre-line}.customer-project-updates-dates{display:flex;gap:1rem;flex-wrap:wrap}.customer-project-updates-empty{padding:1.25rem;color:var(--cpu-muted)}.customer-project-updates-note{padding:1rem}@media(max-width:900px){.customer-project-updates-projects{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:640px){.customer-project-updates-hero,.customer-project-updates-row-head{flex-direction:column}.customer-project-updates-projects{grid-template-columns:1fr}}
+</style>
+{% endblock %}

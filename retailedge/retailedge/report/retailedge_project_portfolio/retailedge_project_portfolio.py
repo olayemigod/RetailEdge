@@ -31,23 +31,10 @@ def execute(filters: dict[str, Any] | None = None):
 		"Project",
 		filters=project_filters,
 		fields=[
-			"name",
-			"project_name",
-			"status",
-			"project_type",
-			"customer",
-			"company",
-			"percent_complete",
-			"expected_start_date",
-			"expected_end_date",
-			"estimated_costing",
-			"total_sales_amount",
-			"total_billed_amount",
-			"total_purchase_cost",
-			"total_consumed_material_cost",
-			"total_costing_amount",
-			"gross_margin",
-			"per_gross_margin",
+			"name", "project_name", "status", "project_type", "customer", "company",
+			"percent_complete", "expected_start_date", "expected_end_date", "estimated_costing",
+			"total_sales_amount", "total_billed_amount", "total_purchase_cost",
+			"total_consumed_material_cost", "total_costing_amount", "gross_margin", "per_gross_margin",
 		],
 		order_by="status asc, expected_end_date asc, name asc",
 		limit_page_length=MAX_PROJECT_ROWS,
@@ -56,19 +43,18 @@ def execute(filters: dict[str, Any] | None = None):
 		return _columns(), [], _("No Projects match the selected filters.")
 
 	project_names = [row.name for row in projects]
-	receipts = _payment_totals(project_names, "Receive", "base_received_amount")
-	payments = _payment_totals(project_names, "Pay", "base_paid_amount")
+	cash_in = _payment_totals(project_names, "Receive", "base_received_amount")
+	cash_out = _payment_totals(project_names, "Pay", "base_paid_amount")
 	currency = str(frappe.db.get_value("Company", company, "default_currency") or "")
 
 	rows = []
 	for project in projects:
-		funds_received = receipts.get(project.name, 0.0)
-		funds_paid = payments.get(project.name, 0.0)
-		tracked_cost = (
-			flt(project.total_purchase_cost)
-			+ flt(project.total_consumed_material_cost)
-			+ flt(project.total_costing_amount)
-		)
+		project_cash_in = cash_in.get(project.name, 0.0)
+		project_cash_out = cash_out.get(project.name, 0.0)
+		purchase_cost = flt(project.total_purchase_cost)
+		consumed_material_cost = flt(project.total_consumed_material_cost)
+		timesheet_cost = flt(project.total_costing_amount)
+		tracked_cost = purchase_cost + consumed_material_cost + timesheet_cost
 		rows.append(
 			{
 				"project": project.name,
@@ -83,9 +69,12 @@ def execute(filters: dict[str, Any] | None = None):
 				"estimated_cost": flt(project.estimated_costing),
 				"sales_order_value": flt(project.total_sales_amount),
 				"billed_amount": flt(project.total_billed_amount),
-				"funds_received": funds_received,
-				"funds_paid": funds_paid,
-				"cash_funds_position": funds_received - funds_paid,
+				"project_cash_in": project_cash_in,
+				"project_cash_out": project_cash_out,
+				"net_project_cash": project_cash_in - project_cash_out,
+				"purchase_cost": purchase_cost,
+				"consumed_material_cost": consumed_material_cost,
+				"timesheet_cost": timesheet_cost,
 				"tracked_cost": tracked_cost,
 				"gross_margin": flt(project.gross_margin),
 				"gross_margin_percent": flt(project.per_gross_margin),
@@ -93,7 +82,7 @@ def execute(filters: dict[str, Any] | None = None):
 		)
 
 	message = _(
-		"Project billing, costing and margin come from ERPNext Project. Funds Received and Funds Paid are grouped submitted Payment Entries carrying the Project accounting dimension. Cash Funds Position is a management view, not a bank balance or separate ledger."
+		"Project billing, costing and margin come from ERPNext Project. Project Cash In and Project Cash Out are grouped submitted Payment Entries carrying the Project accounting dimension; they are cash movements, not revenue, expense, profit or a bank balance. Tracked Cost is the transparent sum of ERPNext Project purchase, consumed-material and timesheet costing fields."
 	)
 	return _columns(), rows, message
 
@@ -103,11 +92,7 @@ def _payment_totals(project_names: list[str], payment_type: str, amount_field: s
 		return {}
 	rows = frappe.get_list(
 		"Payment Entry",
-		filters={
-			"docstatus": 1,
-			"project": ["in", project_names],
-			"payment_type": payment_type,
-		},
+		filters={"docstatus": 1, "project": ["in", project_names], "payment_type": payment_type},
 		fields=["project", f"sum({amount_field}) as total_amount"],
 		group_by="project",
 		limit_page_length=MAX_PROJECT_ROWS,
@@ -128,9 +113,12 @@ def _columns() -> list[dict[str, Any]]:
 		{"fieldname": "currency", "label": _("Currency"), "fieldtype": "Data", "width": 75},
 		{"fieldname": "sales_order_value", "label": _("Sales Order Value"), "fieldtype": "Currency", "options": "currency", "width": 125},
 		{"fieldname": "billed_amount", "label": _("Billed"), "fieldtype": "Currency", "options": "currency", "width": 110},
-		{"fieldname": "funds_received", "label": _("Funds Received"), "fieldtype": "Currency", "options": "currency", "width": 120},
-		{"fieldname": "funds_paid", "label": _("Funds Paid"), "fieldtype": "Currency", "options": "currency", "width": 110},
-		{"fieldname": "cash_funds_position", "label": _("Cash Funds Position"), "fieldtype": "Currency", "options": "currency", "width": 135},
+		{"fieldname": "project_cash_in", "label": _("Project Cash In"), "fieldtype": "Currency", "options": "currency", "width": 120},
+		{"fieldname": "project_cash_out", "label": _("Project Cash Out"), "fieldtype": "Currency", "options": "currency", "width": 120},
+		{"fieldname": "net_project_cash", "label": _("Net Project-linked Cash"), "fieldtype": "Currency", "options": "currency", "width": 145},
+		{"fieldname": "purchase_cost", "label": _("Purchase Cost"), "fieldtype": "Currency", "options": "currency", "width": 115},
+		{"fieldname": "consumed_material_cost", "label": _("Consumed Material Cost"), "fieldtype": "Currency", "options": "currency", "width": 145},
+		{"fieldname": "timesheet_cost", "label": _("Timesheet Cost"), "fieldtype": "Currency", "options": "currency", "width": 115},
 		{"fieldname": "tracked_cost", "label": _("Tracked Cost"), "fieldtype": "Currency", "options": "currency", "width": 115},
 		{"fieldname": "gross_margin", "label": _("Gross Margin"), "fieldtype": "Currency", "options": "currency", "width": 115},
 		{"fieldname": "gross_margin_percent", "label": _("Margin %"), "fieldtype": "Percent", "width": 90},

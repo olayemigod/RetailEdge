@@ -59,7 +59,8 @@ class TestPurchaseReportingEdgeUI(unittest.TestCase):
 			"limit=MAX_INVOICE_SCAN_ROWS + 1",
 			'"parenttype": "Purchase Invoice"',
 			"limit=MAX_ITEM_SCAN_ROWS + 1",
-			"validate_user_branch_access",
+			"get_operational_branch_scope",
+			"validate_operating_branch",
 			'frappe.has_permission("Purchase Invoice", "read")',
 		):
 			self.assertIn(contract, source)
@@ -99,7 +100,7 @@ class TestPurchaseReportingEdgeUI(unittest.TestCase):
 		self.assertIn("Current outstanding", component)
 		self.assertIn("Current ERPNext outstanding balances aged at", component)
 		self.assertIn("current unpaid supplier bills", component)
-		self.assertNotIn('>As of Date<', component)
+		self.assertNotIn(">As of Date<", component)
 
 	def test_loaders_use_canonical_edgesuite_runtime(self):
 		for path in (

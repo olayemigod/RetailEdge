@@ -10,12 +10,10 @@ from frappe.utils import cint, flt, getdate, nowdate
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
-	get_user_allowed_branches,
 	has_field,
 	resolve_branch_from_warehouse,
-	user_has_global_branch_access,
-	validate_user_branch_access,
 )
+from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.stock_movement_filters import branch_query, warehouse_query
 
 DEFAULT_PAGE_SIZE = 50
@@ -24,6 +22,7 @@ MAX_LINK_RESULTS = 20
 MAX_INVOICE_SCAN_ROWS = 2000
 MAX_ITEM_SCAN_ROWS = 10000
 MAX_SALES_TEAM_ROWS = 5000
+NO_BRANCH_SCOPE_SENTINEL = "__never__"
 
 
 def _report_context_defaults() -> dict[str, Any]:
@@ -36,16 +35,7 @@ def _report_context_defaults() -> dict[str, Any]:
 			or frappe.defaults.get_user_default("Branch")
 			or ""
 		).strip()
-		if candidate:
-			try:
-				validate_user_branch_access(candidate, user=user, company=company, throw=True)
-				branch = candidate
-			except (frappe.PermissionError, frappe.ValidationError):
-				branch = ""
-		if not branch and not user_has_global_branch_access(user=user):
-			allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-			if len(allowed) == 1:
-				branch = allowed[0]
+		branch = _resolve_context_branch(company=company, candidate=candidate, user=user)
 
 	today = nowdate()
 	return {
@@ -149,7 +139,9 @@ def search_sales_reporting_options(
 			{
 				"value": row.name,
 				"label": row.item_name or row.name,
-				"description": " · ".join(value for value in (row.name, row.item_group, row.stock_uom) if value),
+				"description": " · ".join(
+					value for value in (row.name, row.item_group, row.stock_uom) if value
+				),
 				"item_group": row.item_group or "",
 			}
 			for row in rows
@@ -250,9 +242,21 @@ def _build_sales_by_item_dataset(filters: frappe._dict) -> dict[str, Any]:
 
 	currency = _company_currency(filters.company)
 	summary = [
-		{"label": _("Net Sales"), "value": sum(flt(row["net_sales"]) for row in rows), "datatype": "Currency"},
-		{"label": _("Sold Quantity"), "value": sum(flt(row["sold_qty"]) for row in rows), "datatype": "Float"},
-		{"label": _("Returned Quantity"), "value": sum(flt(row["returned_qty"]) for row in rows), "datatype": "Float"},
+		{
+			"label": _("Net Sales"),
+			"value": sum(flt(row["net_sales"]) for row in rows),
+			"datatype": "Currency",
+		},
+		{
+			"label": _("Sold Quantity"),
+			"value": sum(flt(row["sold_qty"]) for row in rows),
+			"datatype": "Float",
+		},
+		{
+			"label": _("Returned Quantity"),
+			"value": sum(flt(row["returned_qty"]) for row in rows),
+			"datatype": "Float",
+		},
 		{"label": _("Net Quantity"), "value": sum(flt(row["net_qty"]) for row in rows), "datatype": "Float"},
 		{"label": _("Items"), "value": len(rows), "datatype": "Int"},
 	]
@@ -261,7 +265,12 @@ def _build_sales_by_item_dataset(filters: frappe._dict) -> dict[str, Any]:
 		"rows": rows,
 		"summary": summary,
 		"company_currency": currency,
-		"scan": {"invoices": len(headers), "item_rows": len(items), "invoice_limit": MAX_INVOICE_SCAN_ROWS, "item_limit": MAX_ITEM_SCAN_ROWS},
+		"scan": {
+			"invoices": len(headers),
+			"item_rows": len(items),
+			"invoice_limit": MAX_INVOICE_SCAN_ROWS,
+			"item_limit": MAX_ITEM_SCAN_ROWS,
+		},
 	}
 
 
@@ -305,15 +314,29 @@ def _build_sales_invoice_register_dataset(filters: frappe._dict) -> dict[str, An
 				"return_against": row.return_against or "",
 			}
 		)
-	rows.sort(key=lambda row: (str(row.get("posting_date") or ""), str(row.get("invoice") or "")), reverse=True)
+	rows.sort(
+		key=lambda row: (str(row.get("posting_date") or ""), str(row.get("invoice") or "")), reverse=True
+	)
 
 	returns = [row for row in rows if row.get("invoice_type") == _("Return")]
 	summary = [
-		{"label": _("Net Invoiced"), "value": sum(flt(row["grand_total"]) for row in rows), "datatype": "Currency"},
+		{
+			"label": _("Net Invoiced"),
+			"value": sum(flt(row["grand_total"]) for row in rows),
+			"datatype": "Currency",
+		},
 		{"label": _("Invoices"), "value": len(rows), "datatype": "Int"},
-		{"label": _("Returns"), "value": sum(abs(flt(row["grand_total"])) for row in returns), "datatype": "Currency"},
+		{
+			"label": _("Returns"),
+			"value": sum(abs(flt(row["grand_total"])) for row in returns),
+			"datatype": "Currency",
+		},
 		{"label": _("Return Count"), "value": len(returns), "datatype": "Int"},
-		{"label": _("Net Outstanding"), "value": sum(flt(row["outstanding"]) for row in rows), "datatype": "Currency"},
+		{
+			"label": _("Net Outstanding"),
+			"value": sum(flt(row["outstanding"]) for row in rows),
+			"datatype": "Currency",
+		},
 	]
 	return {
 		"columns": _invoice_register_columns(currency),
@@ -394,7 +417,16 @@ def _get_invoice_items(invoice_names: list[str], filters: frappe._dict) -> list[
 	rows = frappe.get_all(
 		"Sales Invoice Item",
 		filters=query_filters,
-		fields=["parent", "item_code", "item_name", "item_group", "stock_uom", "qty", "base_net_amount", "warehouse"],
+		fields=[
+			"parent",
+			"item_code",
+			"item_name",
+			"item_group",
+			"stock_uom",
+			"qty",
+			"base_net_amount",
+			"warehouse",
+		],
 		order_by="parent asc, idx asc",
 		limit=MAX_ITEM_SCAN_ROWS + 1,
 	)
@@ -407,13 +439,19 @@ def _get_invoice_items(invoice_names: list[str], filters: frappe._dict) -> list[
 	return rows
 
 
-def _filter_headers_by_salesperson(headers: list[frappe._dict], salesperson: str | None) -> list[frappe._dict]:
+def _filter_headers_by_salesperson(
+	headers: list[frappe._dict], salesperson: str | None
+) -> list[frappe._dict]:
 	salesperson = str(salesperson or "").strip()
 	if not salesperson or not headers:
 		return headers
 	rows = frappe.get_all(
 		"Sales Team",
-		filters={"parenttype": "Sales Invoice", "parent": ["in", [row.name for row in headers]], "sales_person": salesperson},
+		filters={
+			"parenttype": "Sales Invoice",
+			"parent": ["in", [row.name for row in headers]],
+			"sales_person": salesperson,
+		},
 		fields=["parent"],
 		limit=MAX_SALES_TEAM_ROWS + 1,
 	)
@@ -446,19 +484,81 @@ def _invoice_branch_scope(filters: frappe._dict) -> tuple[str | None, Any]:
 	fieldname = _sales_invoice_branch_field()
 	branch = str(filters.get("branch") or "").strip()
 	user = frappe.session.user
+	scope = get_operational_branch_scope(filters.company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed = _allowed_scope_branches(scope)
 	if branch:
-		validate_user_branch_access(branch, user=user, company=filters.company, throw=True)
+		_validate_sales_branch(
+			company=filters.company,
+			branch=branch,
+			user=user,
+			scope=scope,
+		)
 		if not fieldname:
-			frappe.throw(_("Sales Invoice branch attribution is unavailable; this Branch filter cannot be applied safely."))
+			frappe.throw(
+				_(
+					"Sales Invoice branch attribution is unavailable; this Branch filter cannot be applied safely."
+				)
+			)
 		return fieldname, branch
-	if user_has_global_branch_access(user=user):
+	if not restricted:
 		return fieldname, None
-	allowed = list(get_user_allowed_branches(user=user, company=filters.company).get("branches") or [])
-	if allowed:
-		if not fieldname:
-			frappe.throw(_("Sales Invoice branch attribution is unavailable; branch-restricted reporting cannot be applied safely."), frappe.PermissionError)
-		return fieldname, ["in", allowed]
-	return fieldname, None
+	if not fieldname:
+		frappe.throw(
+			_(
+				"Sales Invoice branch attribution is unavailable; branch-restricted reporting cannot be applied safely."
+			),
+			frappe.PermissionError,
+		)
+	if not allowed:
+		return fieldname, NO_BRANCH_SCOPE_SENTINEL
+	if len(allowed) == 1:
+		return fieldname, allowed[0]
+	return fieldname, ["in", allowed]
+
+
+def _resolve_context_branch(*, company: str, candidate: str, user: str) -> str:
+	scope = get_operational_branch_scope(company, user=user)
+	allowed = _allowed_scope_branches(scope)
+	candidate = str(candidate or "").strip()
+	if candidate:
+		try:
+			_validate_sales_branch(
+				company=company,
+				branch=candidate,
+				user=user,
+				scope=scope,
+			)
+			return candidate
+		except (frappe.PermissionError, frappe.ValidationError):
+			pass
+	if scope.get("restricted") and len(allowed) == 1:
+		return allowed[0]
+	return ""
+
+
+def _validate_sales_branch(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	scope: dict[str, Any] | None = None,
+) -> None:
+	scope = scope or get_operational_branch_scope(company, user=user)
+	if scope.get("restricted") and branch not in _allowed_scope_branches(scope):
+		frappe.throw(
+			_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+			frappe.PermissionError,
+		)
+	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
+
+
+def _allowed_scope_branches(scope: dict[str, Any]) -> list[str]:
+	return sorted(
+		str(branch).strip()
+		for branch in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(branch or "").strip()
+	)
 
 
 def _sales_invoice_branch_field() -> str | None:
@@ -487,32 +587,58 @@ def _assert_report_access(filters: frappe._dict) -> None:
 			_assert_named_read(doctype, filters.get(fieldname))
 	branch = str(filters.get("branch") or "").strip()
 	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=filters.company, throw=True)
+		_validate_sales_branch(
+			company=filters.company,
+			branch=branch,
+			user=frappe.session.user,
+		)
 	warehouse = str(filters.get("warehouse") or "").strip()
 	if warehouse:
 		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
 		if warehouse_company != filters.company:
-			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, filters.company))
+			frappe.throw(
+				_("Warehouse {0} does not belong to Company {1}.").format(warehouse, filters.company)
+			)
 		resolved_branch = resolve_branch_from_warehouse(warehouse, company=filters.company)
 		if resolved_branch:
-			validate_user_branch_access(resolved_branch, user=frappe.session.user, company=filters.company, throw=True)
+			_validate_sales_branch(
+				company=filters.company,
+				branch=resolved_branch,
+				user=frappe.session.user,
+			)
 			if branch and resolved_branch != branch:
 				frappe.throw(_("Warehouse {0} does not belong to Branch {1}.").format(warehouse, branch))
 		elif branch:
-			rows = warehouse_query("Warehouse", warehouse, "name", 0, MAX_LINK_RESULTS, {"company": filters.company, "branch": branch})
+			rows = warehouse_query(
+				"Warehouse",
+				warehouse,
+				"name",
+				0,
+				MAX_LINK_RESULTS,
+				{"company": filters.company, "branch": branch},
+			)
 			if not any(row and row[0] == warehouse for row in rows):
-				frappe.throw(_("Warehouse {0} is outside Branch {1} scope.").format(warehouse, branch), frappe.PermissionError)
+				frappe.throw(
+					_("Warehouse {0} is outside Branch {1} scope.").format(warehouse, branch),
+					frappe.PermissionError,
+				)
 
 
 def _assert_named_read(doctype: str, name: str) -> None:
 	if not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
 	if not frappe.has_permission(doctype, "read", doc=name):
-		frappe.throw(_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError
+		)
 
 
 def _validate_filters(filters: frappe._dict) -> None:
-	for fieldname, label in (("company", _("Company")), ("from_date", _("From Date")), ("to_date", _("To Date"))):
+	for fieldname, label in (
+		("company", _("Company")),
+		("from_date", _("From Date")),
+		("to_date", _("To Date")),
+	):
 		if not filters.get(fieldname):
 			frappe.throw(_("{0} is required.").format(label))
 	if getdate(filters.from_date) > getdate(filters.to_date):
@@ -565,10 +691,20 @@ def _sales_by_item_columns(currency: str) -> list[dict[str, Any]]:
 		{"fieldname": "returned_qty", "label": _("Returned Qty"), "fieldtype": "Float"},
 		{"fieldname": "net_qty", "label": _("Net Qty"), "fieldtype": "Float"},
 		{"fieldname": "sales_value", "label": _("Sales Value"), "fieldtype": "Currency", "options": currency},
-		{"fieldname": "returns_value", "label": _("Returns Value"), "fieldtype": "Currency", "options": currency},
+		{
+			"fieldname": "returns_value",
+			"label": _("Returns Value"),
+			"fieldtype": "Currency",
+			"options": currency,
+		},
 		{"fieldname": "net_sales", "label": _("Net Sales"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "invoice_count", "label": _("Invoices"), "fieldtype": "Int"},
-		{"fieldname": "average_selling_price", "label": _("Avg Selling Price"), "fieldtype": "Currency", "options": currency},
+		{
+			"fieldname": "average_selling_price",
+			"label": _("Avg Selling Price"),
+			"fieldtype": "Currency",
+			"options": currency,
+		},
 	]
 
 
@@ -581,13 +717,23 @@ def _invoice_register_columns(currency: str) -> list[dict[str, Any]]:
 		{"fieldname": "branch", "label": _("Branch"), "fieldtype": "Data"},
 		{"fieldname": "salespeople", "label": _("Salespeople"), "fieldtype": "Data"},
 		{"fieldname": "invoice_type", "label": _("Type"), "fieldtype": "Data"},
-		{"fieldname": "transaction_currency", "label": _("Invoice Currency"), "fieldtype": "Link", "options": "Currency"},
+		{
+			"fieldname": "transaction_currency",
+			"label": _("Invoice Currency"),
+			"fieldtype": "Link",
+			"options": "Currency",
+		},
 		{"fieldname": "net_amount", "label": _("Net Amount"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "tax_amount", "label": _("Tax"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "grand_total", "label": _("Grand Total"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "outstanding", "label": _("Outstanding"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "status", "label": _("Status"), "fieldtype": "Data"},
-		{"fieldname": "return_against", "label": _("Return Against"), "fieldtype": "Link", "options": "Sales Invoice"},
+		{
+			"fieldname": "return_against",
+			"label": _("Return Against"),
+			"fieldtype": "Link",
+			"options": "Sales Invoice",
+		},
 	]
 
 

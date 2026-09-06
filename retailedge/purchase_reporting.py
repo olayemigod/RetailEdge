@@ -10,12 +10,10 @@ from frappe.utils import cint, date_diff, flt, getdate, nowdate
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
-	get_user_allowed_branches,
 	has_field,
 	resolve_branch_from_warehouse,
-	user_has_global_branch_access,
-	validate_user_branch_access,
 )
+from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.stock_movement_filters import branch_query, warehouse_query
 
 DEFAULT_PAGE_SIZE = 50
@@ -23,6 +21,7 @@ MAX_PAGE_SIZE = 100
 MAX_LINK_RESULTS = 20
 MAX_INVOICE_SCAN_ROWS = 2000
 MAX_ITEM_SCAN_ROWS = 10000
+NO_BRANCH_SCOPE_SENTINEL = "__never__"
 
 
 def _report_context_defaults() -> dict[str, Any]:
@@ -35,16 +34,7 @@ def _report_context_defaults() -> dict[str, Any]:
 			or frappe.defaults.get_user_default("Branch")
 			or ""
 		).strip()
-		if candidate:
-			try:
-				validate_user_branch_access(candidate, user=user, company=company, throw=True)
-				branch = candidate
-			except (frappe.PermissionError, frappe.ValidationError):
-				branch = ""
-		if not branch and not user_has_global_branch_access(user=user):
-			allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-			if len(allowed) == 1:
-				branch = allowed[0]
+		branch = _resolve_context_branch(company=company, candidate=candidate, user=user)
 
 	today = nowdate()
 	return {
@@ -145,7 +135,9 @@ def search_purchase_reporting_options(
 			{
 				"value": row.name,
 				"label": row.item_name or row.name,
-				"description": " · ".join(value for value in (row.name, row.item_group, row.stock_uom) if value),
+				"description": " · ".join(
+					value for value in (row.name, row.item_group, row.stock_uom) if value
+				),
 				"item_group": row.item_group or "",
 			}
 			for row in rows
@@ -222,13 +214,27 @@ def _build_purchase_register_dataset(filters: frappe._dict) -> dict[str, Any]:
 				"return_against": row.return_against or "",
 			}
 		)
-	rows.sort(key=lambda row: (str(row.get("posting_date") or ""), str(row.get("invoice") or "")), reverse=True)
+	rows.sort(
+		key=lambda row: (str(row.get("posting_date") or ""), str(row.get("invoice") or "")), reverse=True
+	)
 	returns = [row for row in rows if row.get("invoice_type") == _("Return")]
 	summary = [
-		{"label": _("Net Purchased"), "value": sum(flt(row["grand_total"]) for row in rows), "datatype": "Currency"},
+		{
+			"label": _("Net Purchased"),
+			"value": sum(flt(row["grand_total"]) for row in rows),
+			"datatype": "Currency",
+		},
 		{"label": _("Invoices"), "value": len(rows), "datatype": "Int"},
-		{"label": _("Returns"), "value": sum(abs(flt(row["grand_total"])) for row in returns), "datatype": "Currency"},
-		{"label": _("Outstanding"), "value": sum(flt(row["outstanding"]) for row in rows), "datatype": "Currency"},
+		{
+			"label": _("Returns"),
+			"value": sum(abs(flt(row["grand_total"])) for row in returns),
+			"datatype": "Currency",
+		},
+		{
+			"label": _("Outstanding"),
+			"value": sum(flt(row["outstanding"]) for row in rows),
+			"datatype": "Currency",
+		},
 	]
 	return {
 		"title": _("Purchase Register"),
@@ -280,9 +286,17 @@ def _build_supplier_payables_dataset(filters: frappe._dict) -> dict[str, Any]:
 	for row in rows:
 		bucket_totals[row["ageing_bucket"]] += flt(row["outstanding"])
 	summary = [
-		{"label": _("Total Payables"), "value": sum(flt(row["outstanding"]) for row in rows), "datatype": "Currency"},
+		{
+			"label": _("Total Payables"),
+			"value": sum(flt(row["outstanding"]) for row in rows),
+			"datatype": "Currency",
+		},
 		{"label": _("Open Bills"), "value": len(rows), "datatype": "Int"},
-		{"label": _("Overdue"), "value": sum(flt(row["outstanding"]) for row in rows if row["overdue_days"] > 0), "datatype": "Currency"},
+		{
+			"label": _("Overdue"),
+			"value": sum(flt(row["outstanding"]) for row in rows if row["overdue_days"] > 0),
+			"datatype": "Currency",
+		},
 		{"label": _("Over 90 Days"), "value": bucket_totals["91+ Days"], "datatype": "Currency"},
 	]
 	return {
@@ -317,9 +331,21 @@ def _get_permitted_invoice_headers(filters: frappe._dict, *, as_of: bool) -> lis
 		query_filters[branch_field] = branch_condition
 
 	fields = [
-		"name", "posting_date", "due_date", "supplier", "supplier_name", "supplier_group",
-		"currency", "conversion_rate", "base_net_total", "base_total_taxes_and_charges",
-		"base_grand_total", "outstanding_amount", "status", "is_return", "return_against",
+		"name",
+		"posting_date",
+		"due_date",
+		"supplier",
+		"supplier_name",
+		"supplier_group",
+		"currency",
+		"conversion_rate",
+		"base_net_total",
+		"base_total_taxes_and_charges",
+		"base_grand_total",
+		"outstanding_amount",
+		"status",
+		"is_return",
+		"return_against",
 	]
 	if branch_field:
 		fields.append(branch_field)
@@ -332,7 +358,9 @@ def _get_permitted_invoice_headers(filters: frappe._dict, *, as_of: bool) -> lis
 	)
 	if len(rows) > MAX_INVOICE_SCAN_ROWS:
 		frappe.throw(
-			_("More than {0} submitted Purchase Invoices match these filters. Narrow the scope before loading this report.").format(MAX_INVOICE_SCAN_ROWS)
+			_(
+				"More than {0} submitted Purchase Invoices match these filters. Narrow the scope before loading this report."
+			).format(MAX_INVOICE_SCAN_ROWS)
 		)
 	for row in rows:
 		row["branch"] = row.get(branch_field) if branch_field else ""
@@ -352,12 +380,25 @@ def _get_invoice_items(invoice_names: list[str], filters: frappe._dict) -> list[
 	rows = frappe.get_all(
 		"Purchase Invoice Item",
 		filters=query_filters,
-		fields=["parent", "item_code", "item_name", "item_group", "stock_uom", "qty", "base_net_amount", "warehouse"],
+		fields=[
+			"parent",
+			"item_code",
+			"item_name",
+			"item_group",
+			"stock_uom",
+			"qty",
+			"base_net_amount",
+			"warehouse",
+		],
 		order_by="parent asc, idx asc",
 		limit=MAX_ITEM_SCAN_ROWS + 1,
 	)
 	if len(rows) > MAX_ITEM_SCAN_ROWS:
-		frappe.throw(_("More than {0} Purchase Invoice item rows match these filters. Narrow the scope before loading this report.").format(MAX_ITEM_SCAN_ROWS))
+		frappe.throw(
+			_(
+				"More than {0} Purchase Invoice item rows match these filters. Narrow the scope before loading this report."
+			).format(MAX_ITEM_SCAN_ROWS)
+		)
 	return rows
 
 
@@ -365,19 +406,81 @@ def _invoice_branch_scope(filters: frappe._dict) -> tuple[str | None, Any]:
 	fieldname = _purchase_invoice_branch_field()
 	branch = str(filters.get("branch") or "").strip()
 	user = frappe.session.user
+	scope = get_operational_branch_scope(filters.company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed = _allowed_scope_branches(scope)
 	if branch:
-		validate_user_branch_access(branch, user=user, company=filters.company, throw=True)
+		_validate_purchase_branch(
+			company=filters.company,
+			branch=branch,
+			user=user,
+			scope=scope,
+		)
 		if not fieldname:
-			frappe.throw(_("Purchase Invoice branch attribution is unavailable; this Branch filter cannot be applied safely."))
+			frappe.throw(
+				_(
+					"Purchase Invoice branch attribution is unavailable; this Branch filter cannot be applied safely."
+				)
+			)
 		return fieldname, branch
-	if user_has_global_branch_access(user=user):
+	if not restricted:
 		return fieldname, None
-	allowed = list(get_user_allowed_branches(user=user, company=filters.company).get("branches") or [])
-	if allowed:
-		if not fieldname:
-			frappe.throw(_("Purchase Invoice branch attribution is unavailable; branch-restricted reporting cannot be applied safely."), frappe.PermissionError)
-		return fieldname, ["in", allowed]
-	return fieldname, None
+	if not fieldname:
+		frappe.throw(
+			_(
+				"Purchase Invoice branch attribution is unavailable; branch-restricted reporting cannot be applied safely."
+			),
+			frappe.PermissionError,
+		)
+	if not allowed:
+		return fieldname, NO_BRANCH_SCOPE_SENTINEL
+	if len(allowed) == 1:
+		return fieldname, allowed[0]
+	return fieldname, ["in", allowed]
+
+
+def _resolve_context_branch(*, company: str, candidate: str, user: str) -> str:
+	scope = get_operational_branch_scope(company, user=user)
+	allowed = _allowed_scope_branches(scope)
+	candidate = str(candidate or "").strip()
+	if candidate:
+		try:
+			_validate_purchase_branch(
+				company=company,
+				branch=candidate,
+				user=user,
+				scope=scope,
+			)
+			return candidate
+		except (frappe.PermissionError, frappe.ValidationError):
+			pass
+	if scope.get("restricted") and len(allowed) == 1:
+		return allowed[0]
+	return ""
+
+
+def _validate_purchase_branch(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	scope: dict[str, Any] | None = None,
+) -> None:
+	scope = scope or get_operational_branch_scope(company, user=user)
+	if scope.get("restricted") and branch not in _allowed_scope_branches(scope):
+		frappe.throw(
+			_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+			frappe.PermissionError,
+		)
+	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
+
+
+def _allowed_scope_branches(scope: dict[str, Any]) -> list[str]:
+	return sorted(
+		str(branch).strip()
+		for branch in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(branch or "").strip()
+	)
 
 
 def _purchase_invoice_branch_field() -> str | None:
@@ -396,28 +499,45 @@ def _assert_report_access(filters: frappe._dict) -> None:
 		frappe.throw(_("You do not have permission to view Purchase Invoices."), frappe.PermissionError)
 	_assert_named_read("Company", filters.company)
 	for doctype, fieldname in (
-		("Supplier", "supplier"), ("Supplier Group", "supplier_group"), ("Item", "item_code"),
-		("Item Group", "item_group"), ("Warehouse", "warehouse"),
+		("Supplier", "supplier"),
+		("Supplier Group", "supplier_group"),
+		("Item", "item_code"),
+		("Item Group", "item_group"),
+		("Warehouse", "warehouse"),
 	):
 		if filters.get(fieldname):
 			_assert_named_read(doctype, filters.get(fieldname))
 	branch = str(filters.get("branch") or "").strip()
 	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=filters.company, throw=True)
+		_validate_purchase_branch(
+			company=filters.company,
+			branch=branch,
+			user=frappe.session.user,
+		)
 	warehouse = str(filters.get("warehouse") or "").strip()
 	if warehouse:
 		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
 		if warehouse_company != filters.company:
-			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, filters.company))
+			frappe.throw(
+				_("Warehouse {0} does not belong to Company {1}.").format(warehouse, filters.company)
+			)
 		resolved_branch = resolve_branch_from_warehouse(warehouse, company=filters.company)
 		if resolved_branch:
-			validate_user_branch_access(resolved_branch, user=frappe.session.user, company=filters.company, throw=True)
+			_validate_purchase_branch(
+				company=filters.company,
+				branch=resolved_branch,
+				user=frappe.session.user,
+			)
 			if branch and resolved_branch != branch:
 				frappe.throw(_("Warehouse {0} does not belong to Branch {1}.").format(warehouse, branch))
 
 
 def _validate_purchase_filters(filters: frappe._dict) -> None:
-	for fieldname, label in (("company", _("Company")), ("from_date", _("From Date")), ("to_date", _("To Date"))):
+	for fieldname, label in (
+		("company", _("Company")),
+		("from_date", _("From Date")),
+		("to_date", _("To Date")),
+	):
 		if not filters.get(fieldname):
 			frappe.throw(_("{0} is required.").format(label))
 	if getdate(filters.from_date) > getdate(filters.to_date):
@@ -430,7 +550,14 @@ def _validate_payables_filters(filters: frappe._dict) -> None:
 	for fieldname, label in (("company", _("Company")), ("as_of_date", _("As of Date"))):
 		if not filters.get(fieldname):
 			frappe.throw(_("{0} is required.").format(label))
-	if str(filters.get("ageing_bucket") or "All") not in {"All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"}:
+	if str(filters.get("ageing_bucket") or "All") not in {
+		"All",
+		"Current",
+		"1-30 Days",
+		"31-60 Days",
+		"61-90 Days",
+		"91+ Days",
+	}:
 		frappe.throw(_("Unsupported ageing bucket."))
 
 
@@ -446,8 +573,12 @@ def _page_response(dataset: dict[str, Any], *, page: int | str, page_size: int |
 		**dataset,
 		"rows": rows[start : start + resolved_page_size],
 		"pagination": {
-			"page": resolved_page, "page_size": resolved_page_size, "total_rows": total_rows,
-			"total_pages": total_pages, "has_previous": resolved_page > 1, "has_next": resolved_page < total_pages,
+			"page": resolved_page,
+			"page_size": resolved_page_size,
+			"total_rows": total_rows,
+			"total_pages": total_pages,
+			"has_previous": resolved_page > 1,
+			"has_next": resolved_page < total_pages,
 		},
 	}
 
@@ -455,28 +586,45 @@ def _page_response(dataset: dict[str, Any], *, page: int | str, page_size: int |
 def _export_response(dataset: dict[str, Any]) -> dict[str, Any]:
 	return {
 		"title": dataset.get("title") or "",
-		"columns": dataset.get("columns") or [], "rows": dataset.get("rows") or [],
-		"summary": dataset.get("summary") or [], "company_currency": dataset.get("company_currency") or "",
+		"columns": dataset.get("columns") or [],
+		"rows": dataset.get("rows") or [],
+		"summary": dataset.get("summary") or [],
+		"company_currency": dataset.get("company_currency") or "",
 		"scan": dataset.get("scan") or {},
 	}
 
 
 def _purchase_register_columns(currency: str) -> list[dict[str, Any]]:
 	return [
-		{"fieldname": "invoice", "label": _("Purchase Invoice"), "fieldtype": "Link", "options": "Purchase Invoice"},
+		{
+			"fieldname": "invoice",
+			"label": _("Purchase Invoice"),
+			"fieldtype": "Link",
+			"options": "Purchase Invoice",
+		},
 		{"fieldname": "posting_date", "label": _("Posting Date"), "fieldtype": "Date"},
 		{"fieldname": "due_date", "label": _("Due Date"), "fieldtype": "Date"},
 		{"fieldname": "supplier", "label": _("Supplier"), "fieldtype": "Link", "options": "Supplier"},
 		{"fieldname": "supplier_name", "label": _("Supplier Name"), "fieldtype": "Data"},
 		{"fieldname": "branch", "label": _("Branch"), "fieldtype": "Data"},
 		{"fieldname": "invoice_type", "label": _("Type"), "fieldtype": "Data"},
-		{"fieldname": "transaction_currency", "label": _("Invoice Currency"), "fieldtype": "Link", "options": "Currency"},
+		{
+			"fieldname": "transaction_currency",
+			"label": _("Invoice Currency"),
+			"fieldtype": "Link",
+			"options": "Currency",
+		},
 		{"fieldname": "net_amount", "label": _("Net Amount"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "tax_amount", "label": _("Tax"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "grand_total", "label": _("Grand Total"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "outstanding", "label": _("Outstanding"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "status", "label": _("Status"), "fieldtype": "Data"},
-		{"fieldname": "return_against", "label": _("Return Against"), "fieldtype": "Link", "options": "Purchase Invoice"},
+		{
+			"fieldname": "return_against",
+			"label": _("Return Against"),
+			"fieldtype": "Link",
+			"options": "Purchase Invoice",
+		},
 	]
 
 
@@ -484,7 +632,12 @@ def _supplier_payables_columns(currency: str) -> list[dict[str, Any]]:
 	return [
 		{"fieldname": "supplier", "label": _("Supplier"), "fieldtype": "Link", "options": "Supplier"},
 		{"fieldname": "supplier_name", "label": _("Supplier Name"), "fieldtype": "Data"},
-		{"fieldname": "invoice", "label": _("Purchase Invoice"), "fieldtype": "Link", "options": "Purchase Invoice"},
+		{
+			"fieldname": "invoice",
+			"label": _("Purchase Invoice"),
+			"fieldtype": "Link",
+			"options": "Purchase Invoice",
+		},
 		{"fieldname": "branch", "label": _("Branch"), "fieldtype": "Data"},
 		{"fieldname": "posting_date", "label": _("Posting Date"), "fieldtype": "Date"},
 		{"fieldname": "due_date", "label": _("Due Date"), "fieldtype": "Date"},
@@ -524,7 +677,11 @@ def _company_currency(company: str) -> str:
 
 def _search_named(doctype: str, txt: str) -> list[dict[str, str]]:
 	rows = frappe.get_list(
-		doctype, filters={"name": ["like", f"%{txt}%"]}, fields=["name"], order_by="name asc", limit=MAX_LINK_RESULTS
+		doctype,
+		filters={"name": ["like", f"%{txt}%"]},
+		fields=["name"],
+		order_by="name asc",
+		limit=MAX_LINK_RESULTS,
 	)
 	return [{"value": row.name, "label": row.name} for row in rows]
 
@@ -533,7 +690,9 @@ def _assert_named_read(doctype: str, name: str) -> None:
 	if not frappe.db.exists(doctype, name):
 		frappe.throw(_("{0} {1} does not exist.").format(doctype, name))
 	if not frappe.has_permission(doctype, "read", doc=name):
-		frappe.throw(_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use {0} {1}.").format(doctype, name), frappe.PermissionError
+		)
 
 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:

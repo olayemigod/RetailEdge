@@ -8,12 +8,10 @@ from frappe import _
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
 	get_first_existing_field,
-	get_user_allowed_branches,
 	has_field,
-	user_has_global_branch_access,
-	validate_user_branch_access,
 )
 from retailedge.branch_profile import get_branch_profile_defaults
+from retailedge.operating_context import get_operational_branch_scope
 
 MAX_FILTER_RESULTS = 20
 PROFILE_WAREHOUSE_FIELDS = (
@@ -45,8 +43,9 @@ def branch_query(
 		query_filters.append(["Branch", "company", "=", company])
 
 	user = frappe.session.user
-	if not user_has_global_branch_access(user=user):
-		allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
+	scope = get_operational_branch_scope(company, user=user)
+	if scope.get("restricted"):
+		allowed = list(scope.get("allowed_branches") or [])
 		if not allowed:
 			return []
 		query_filters.append(["Branch", "name", "in", allowed])
@@ -80,6 +79,9 @@ def warehouse_query(
 	_assert_company_read(company)
 
 	user = frappe.session.user
+	scope = get_operational_branch_scope(company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed_branches = list(scope.get("allowed_branches") or [])
 	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
 	query_filters: list[list[Any]] = [
 		["Warehouse", "company", "=", company],
@@ -88,7 +90,11 @@ def warehouse_query(
 	]
 
 	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+		if restricted and branch not in allowed_branches:
+			frappe.throw(
+				_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+				frappe.PermissionError,
+			)
 		if branch_field:
 			query_filters.append(["Warehouse", branch_field, "=", branch])
 		else:
@@ -96,10 +102,7 @@ def warehouse_query(
 			if not allowed_names:
 				return []
 			query_filters.append(["Warehouse", "name", "in", sorted(allowed_names)])
-	elif not user_has_global_branch_access(user=user):
-		allowed_branches = list(
-			get_user_allowed_branches(user=user, company=company).get("branches") or []
-		)
+	elif restricted:
 		if not allowed_branches:
 			return []
 		if branch_field:
