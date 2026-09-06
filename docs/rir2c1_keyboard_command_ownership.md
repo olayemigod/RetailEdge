@@ -17,7 +17,7 @@ The historical `agent/edgesuite-keyboard-commands` branch contained:
 - `65d1844328fe5563c662aa229bb22bb92b11442b` — load the RetailEdge keyboard asset globally;
 - `981a6e4803373ca00df2376309c15af6ffac3a40` — source-contract tests.
 
-Those commits are classified **SUPERSEDED_SHARED_RUNTIME** for the reconciled product. They must **do not cherry-pick** into PR #55 because the governed EdgeSuite UI 1.1.0 candidate now owns the same cross-product responsibility.
+Those commits are classified **SUPERSEDED_SHARED_RUNTIME** for the reconciled product. **Do not cherry-pick** them into PR #55 because the governed EdgeSuite UI 1.1.0 candidate now owns the same cross-product responsibility.
 
 ## Current shared ownership
 

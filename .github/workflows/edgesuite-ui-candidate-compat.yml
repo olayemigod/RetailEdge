@@ -87,6 +87,20 @@ jobs:
           bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
           bench get-app --skip-assets "$GITHUB_WORKSPACE"
 
+      - name: Create standalone RetailEdge site
+        working-directory: frappe-bench
+        run: |
+          bench new-site retail-ci.localhost \
+            --db-host 127.0.0.1 \
+            --mariadb-root-password root \
+            --admin-password admin \
+            --no-mariadb-socket
+          bench --site retail-ci.localhost install-app payments
+          bench --site retail-ci.localhost install-app erpnext
+          bench --site retail-ci.localhost install-app edgesuite_ui
+          bench --site retail-ci.localhost install-app retailedge
+          bench --site retail-ci.localhost set-config allow_tests true
+
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
