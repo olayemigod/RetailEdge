@@ -12,6 +12,7 @@ from retailedge.reconciliation_handoff import (
 	get_bank_transaction_reconciliation_context,
 	get_payment_event_reconciliation_context,
 )
+from retailedge.reporting_scope import validate_report_scope
 
 READINESS_READY = "Ready"
 READINESS_WARNING = "Warning"
@@ -593,6 +594,89 @@ def get_bank_account_readiness(bank_account, company=None):
 	return evaluate_bank_account_readiness(bank_account, company=company)
 
 
+MAX_BANKING_READINESS_ROWS = 500
+
+
+def _bank_account_rows_for_readiness(company=None):
+	"""Return Bank Accounts within the current reader's Company and Branch scope."""
+	user = frappe.session.user
+	company = cstr(company).strip()
+	if not frappe.has_permission("Bank Account", "read", user=user):
+		frappe.throw("You do not have permission to view Bank Accounts.", frappe.PermissionError)
+
+	if company:
+		companies = [company]
+	else:
+		if not frappe.has_permission("Company", "read", user=user):
+			frappe.throw("You do not have permission to view Companies.", frappe.PermissionError)
+		companies = frappe.get_list(
+			"Company",
+			pluck="name",
+			order_by="name asc",
+			limit_page_length=MAX_BANKING_READINESS_ROWS,
+		)
+
+	if companies and not has_field("Bank Account", "company"):
+		frappe.throw(
+			"Bank Account Company attribution is required for Banking Readiness.",
+			frappe.ValidationError,
+		)
+
+	branch_field = (
+		"retailedge_branch" if has_field("Bank Account", "retailedge_branch") else ""
+	)
+	rows_by_name = {}
+	for allowed_company in companies:
+		allowed_company = cstr(allowed_company).strip()
+		if not allowed_company:
+			continue
+		scope = validate_report_scope(
+			company=allowed_company,
+			branch="",
+			user=user,
+			require_branch_when_restricted=False,
+		)
+		filters = {"company": allowed_company}
+		if has_field("Bank Account", "disabled"):
+			filters["disabled"] = 0
+		if scope.get("restricted"):
+			allowed_branches = list(
+				dict.fromkeys(
+					cstr(branch).strip()
+					for branch in scope.get("allowed_branches") or []
+					if cstr(branch).strip()
+				)
+			)
+			if not allowed_branches:
+				frappe.throw(
+					f"Your Branch banking access is not active for Company {allowed_company}.",
+					frappe.PermissionError,
+				)
+			if not branch_field:
+				frappe.throw(
+					"Bank Account Branch attribution is required for restricted Banking Readiness.",
+					frappe.ValidationError,
+				)
+			# Deliberately excludes blank/company-wide accounts for restricted readers.
+			filters[branch_field] = ["in", allowed_branches]
+
+		for row in frappe.get_list(
+			"Bank Account",
+			filters=filters,
+			fields=["name"],
+			order_by="name asc",
+			limit_page_length=MAX_BANKING_READINESS_ROWS,
+		):
+			name = cstr(row.get("name")).strip()
+			if name:
+				rows_by_name[name] = row
+
+	return [
+		rows_by_name[name]
+		for name in sorted(rows_by_name)[:MAX_BANKING_READINESS_ROWS]
+	]
+
+
 @frappe.whitelist()
 def get_banking_readiness(company=None):
 	assert_can_access_bank_transaction_matching()
@@ -600,18 +684,7 @@ def get_banking_readiness(company=None):
 	if not has_doctype("Bank Account"):
 		return {"company": company, "summary": {"ready": 0, "warning": 0, "blocked": 0}, "rows": []}
 
-	filters = {}
-	if company and has_field("Bank Account", "company"):
-		filters["company"] = company
-	if has_field("Bank Account", "disabled"):
-		filters["disabled"] = 0
-	rows = frappe.get_all(
-		"Bank Account",
-		filters=filters,
-		fields=["name"],
-		order_by="name asc",
-		limit_page_length=500,
-	)
+	rows = _bank_account_rows_for_readiness(company)
 	results = [evaluate_bank_account_readiness(row.get("name"), company=company) for row in rows]
 	return {
 		"company": company,
