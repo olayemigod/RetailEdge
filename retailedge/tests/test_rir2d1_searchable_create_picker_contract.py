@@ -56,7 +56,7 @@ class TestRIR2D1SearchableCreatePickerContract(unittest.TestCase):
 		self.assertIn("RIR2D1", doc)
 		self.assertIn("permission-approved `quick_actions`", doc)
 		self.assertIn("does not change creation permissions", doc)
-		self.assertIn("manual browser/persona QA remains required", doc.lower())
+		self.assertIn("manual browser/persona qa remains required", doc.lower())
 
 
 if __name__ == "__main__":
