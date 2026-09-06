@@ -105,6 +105,14 @@ CUSTOMER_ADVANCE_REPORT_ITEM: dict[str, Any] = {
 	"icon": "report",
 }
 
+BANKING_READINESS_ITEM: dict[str, Any] = {
+	"label": "Banking Setup & Readiness",
+	"description": "Review permitted Bank Accounts, branch attribution and matching readiness before reconciliation work.",
+	"target_type": "Page",
+	"target": "banking-readiness",
+	"icon": "shield-check",
+}
+
 PROJECT_OPERATIONS_ITEM: dict[str, Any] = {
 	"label": "Project Operations",
 	"description": "Manage project progress, funds, receipts and linked ERPNext transactions from one operational view.",
@@ -283,6 +291,28 @@ def _promote_payment_management(navigation_groups: list[dict[str, Any]]) -> None
 		return
 
 
+def _promote_banking_readiness(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Expose the hardened readiness Page only when the current reader may open it."""
+	if not _can_open_page(BANKING_READINESS_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "money":
+			continue
+		items = list(group.get("items") or [])
+		if any(
+			item.get("target_type") == "Page" and item.get("target") == BANKING_READINESS_ITEM["target"]
+			for item in items
+		):
+			return
+		bank_matching_index = next(
+			(index for index, item in enumerate(items) if item.get("target") == "bank-matching-reconciliation"),
+			len(items),
+		)
+		items.insert(bank_matching_index, deepcopy(BANKING_READINESS_ITEM))
+		group["items"] = items
+		return
+
+
 def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None:
 	page_available = _can_open_page(PROJECT_OPERATIONS_ITEM["target"])
 	portfolio_available = _can_open_report(PROJECT_PORTFOLIO_REPORT_ITEM["target"])
@@ -347,6 +377,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_professional_purchasing(navigation_groups)
 	_promote_document_output(navigation_groups)
 	_promote_payment_management(navigation_groups)
+	_promote_banking_readiness(navigation_groups)
 	_promote_project_operations(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
 
@@ -381,6 +412,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"
+	feature_flags["banking_readiness"] = "permission_scoped_inventory"
 	feature_flags["project_operations"] = "erpnext_native_project_funds"
 	feature_flags["project_portfolio_reporting"] = "erpnext_project_plus_payment_entries"
 	feature_flags["project_financial_control"] = "whole_project_erpnext_financial_control"
