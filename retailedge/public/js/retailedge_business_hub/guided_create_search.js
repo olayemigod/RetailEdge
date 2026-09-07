@@ -72,9 +72,10 @@ function enhanceCreateList(target, list) {
 			button.hidden = !visible;
 			if (visible) visibleCount += 1;
 		}
-		count.textContent = query
+		const nextCount = query
 			? `${visibleCount} of ${buttons.length} entries`
 			: `${buttons.length} permitted entr${buttons.length === 1 ? "y" : "ies"}`;
+		if (count.textContent !== nextCount) count.textContent = nextCount;
 		empty.hidden = !query || visibleCount > 0;
 	};
 
@@ -101,6 +102,20 @@ function enhanceCreateList(target, list) {
 	}
 }
 
+function nodeTouchesCreateList(node) {
+	if (!node || node.nodeType !== 1) return false;
+	return Boolean(
+		node.matches?.(LIST_SELECTOR) ||
+			node.matches?.(ITEM_SELECTOR) ||
+			node.querySelector?.(LIST_SELECTOR) ||
+			node.querySelector?.(ITEM_SELECTOR)
+	);
+}
+
+function mutationTouchesCreateList(mutation) {
+	return [...(mutation?.addedNodes || []), ...(mutation?.removedNodes || [])].some(nodeTouchesCreateList);
+}
+
 export function installGuidedCreateSearch(target = globalThis) {
 	const document = target?.document;
 	if (!document?.body || typeof target.MutationObserver !== "function") return () => {};
@@ -113,7 +128,10 @@ export function installGuidedCreateSearch(target = globalThis) {
 		}
 	};
 
-	const observer = new target.MutationObserver(scan);
+	const observer = new target.MutationObserver((mutations) => {
+		if (destroyed) return;
+		if (mutations.some(mutationTouchesCreateList)) scan();
+	});
 	observer.observe(document.body, { childList: true, subtree: true });
 	scan();
 

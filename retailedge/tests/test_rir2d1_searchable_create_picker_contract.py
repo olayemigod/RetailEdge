@@ -33,6 +33,14 @@ class TestRIR2D1SearchableCreatePickerContract(unittest.TestCase):
 		self.assertNotIn("frappe.new_doc", source)
 		self.assertNotIn("ignore_permissions", source)
 
+	def test_search_observer_cannot_retrigger_on_its_own_count_text(self):
+		source = HELPER.read_text()
+		self.assertIn("if (count.textContent !== nextCount) count.textContent = nextCount", source)
+		self.assertIn("function mutationTouchesCreateList(mutation)", source)
+		self.assertIn("mutations.some(mutationTouchesCreateList)", source)
+		self.assertIn("node.matches?.(ITEM_SELECTOR)", source)
+		self.assertNotIn("new target.MutationObserver(scan)", source)
+
 	def test_search_is_lifecycle_owned_by_business_hub_bundle(self):
 		source = BUNDLE.read_text()
 		self.assertIn('import { installGuidedCreateSearch } from "./retailedge_business_hub/guided_create_search"', source)
