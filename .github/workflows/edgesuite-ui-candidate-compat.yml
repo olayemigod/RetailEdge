@@ -107,6 +107,24 @@ jobs:
           test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "e40ea4d7dc000d17443a0571c1e246b61bfd3e1d"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
 
+          # RetailEdge must compile Vue SFCs against the governed EdgeSuite UI bridge,
+          # never a CoreEdge-local compatibility bridge. This keeps RetailEdge standalone
+          # and avoids shared-bench module resolution collisions.
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          expected = ["../edgesuite_ui/edgesuite_ui/public/js/edgeui/vue-bridge.js"]
+          config = json.loads(Path("apps/retailedge/tsconfig.json").read_text())
+          actual = config.get("compilerOptions", {}).get("paths", {}).get("vue")
+          if actual != expected:
+              raise SystemExit(f"RetailEdge Vue alias must target EdgeSuite UI: {actual!r}")
+          if "coreedge" in Path("apps/retailedge/tsconfig.json").read_text().lower():
+              raise SystemExit("RetailEdge tsconfig must not reference CoreEdge frontend runtime")
+          PY
+          test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/vue-bridge.js
+          grep -Fq 'export const withKeys = Vue.withKeys;' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/vue-bridge.js
+
           # RIR2C1: keyboard commands are owned by the governed shared EdgeSuite UI runtime.
           # RetailEdge must not revive its historical duplicate global listener.
           test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui_ctrl_k_guard.js
@@ -125,6 +143,14 @@ jobs:
             apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/interaction_runtime.js
 
           bench build --app edgesuite_ui
+
+          # Reproduce the shared-bench condition that exposed the stale alias: a CoreEdge
+          # bridge may exist elsewhere in apps/, but RetailEdge must ignore it completely.
+          mkdir -p apps/coreedge/coreedge/public/js/edgeui
+          cat > apps/coreedge/coreedge/public/js/edgeui/vue-bridge.js <<'JS'
+          export const createApp = () => {};
+          JS
+
           bench build --app retailedge
           python - <<'PY'
           import json
