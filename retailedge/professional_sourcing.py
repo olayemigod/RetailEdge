@@ -103,6 +103,13 @@ def _mapped_rfq_preview(request: Any, branch: str) -> tuple[Any, list[dict[str, 
 	return rfq, items
 
 
+def _validate_suppliers(suppliers: list[Any] | str | None) -> list[str]:
+	supplier_names = _coerce_supplier_names(suppliers)
+	for supplier in supplier_names:
+		_assert_read(SUPPLIER_DOCTYPE, supplier)
+	return supplier_names
+
+
 @frappe.whitelist()
 def get_request_for_quotation_preview(
 	material_request: str,
@@ -111,10 +118,7 @@ def get_request_for_quotation_preview(
 	"""Preview ERPNext's Purchase Material Request -> RFQ mapping without saving anything."""
 	request = _get_open_purchase_request(material_request)
 	_assert_create(REQUEST_FOR_QUOTATION_DOCTYPE)
-	supplier_names = _coerce_supplier_names(suppliers)
-	for supplier in supplier_names:
-		_assert_read(SUPPLIER_DOCTYPE, supplier)
-
+	supplier_names = _validate_suppliers(suppliers)
 	branch = _validate_request_scope(request)
 	rfq, items = _mapped_rfq_preview(request, branch)
 
@@ -135,4 +139,43 @@ def get_request_for_quotation_preview(
 		"source_of_truth": "ERPNext Material Request make_request_for_quotation mapper",
 		"next_phase": "RIR2F2E2 standard RFQ review/submit",
 		"mapped_doctype": str(getattr(rfq, "doctype", None) or ""),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def prepare_request_for_quotation_draft_advanced(
+	material_request: str,
+	suppliers: list[Any] | str | None = None,
+) -> dict[str, Any]:
+	"""Prepare one branch-safe ERPNext RFQ draft for an explicit Advanced ERPNext handoff."""
+	request = _get_open_purchase_request(material_request)
+	_assert_create(REQUEST_FOR_QUOTATION_DOCTYPE)
+	supplier_names = _validate_suppliers(suppliers)
+	branch = _validate_request_scope(request)
+	rfq, items = _mapped_rfq_preview(request, branch)
+
+	for supplier in supplier_names:
+		rfq.append("suppliers", {"supplier": supplier, "send_email": 0})
+
+	# ERPNext remains authoritative for RFQ validation. This advanced fallback
+	# creates a draft only; supplier email remains disabled and submission is native.
+	rfq.insert()
+	if cint(getattr(rfq, "docstatus", 0)) != 0:
+		frappe.throw(_("Advanced sourcing may prepare only a draft Request for Quotation."))
+
+	rfq_branch_field = _transaction_branch_field(REQUEST_FOR_QUOTATION_DOCTYPE)
+	return {
+		"doctype": REQUEST_FOR_QUOTATION_DOCTYPE,
+		"name": rfq.name,
+		"docstatus": cint(rfq.docstatus),
+		"material_request": request.name,
+		"company": str(rfq.company or ""),
+		"branch": str(getattr(rfq, rfq_branch_field, "") or "") if rfq_branch_field else "",
+		"item_count": len(items),
+		"supplier_count": len(supplier_names),
+		"suppliers": supplier_names,
+		"email_sending": False,
+		"status": "Draft",
+		"source_of_truth": "ERPNext Material Request make_request_for_quotation mapper",
+		"route": f"/app/request-for-quotation/{rfq.name}",
 	}
