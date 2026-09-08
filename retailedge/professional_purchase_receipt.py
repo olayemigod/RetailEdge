@@ -132,6 +132,13 @@ def _map_receipt(po: Any, branch: str) -> tuple[Any, list[dict[str, Any]], list[
 		if str(getattr(row, "purchase_order", "") or "") != po.name:
 			frappe.throw(_("Mapped Purchase Receipt contains an item outside Purchase Order {0}.").format(po.name))
 		preview, row_blockers = _receipt_item_preview(row)
+		warehouse = str(preview.get("warehouse") or "").strip()
+		if not warehouse:
+			row_blockers.append({"key": "missing_warehouse", "label": _("Receiving Stock Location is required"), "item_code": preview.get("item_code") or ""})
+		else:
+			warehouse_company = str(frappe.db.get_value("Warehouse", warehouse, "company") or "")
+			if warehouse_company != str(po.company or ""):
+				frappe.throw(_("Receiving Stock Location {0} does not belong to Company {1}.").format(warehouse, po.company))
 		items.append(preview)
 		blockers.extend(row_blockers)
 
