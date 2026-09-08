@@ -83,6 +83,7 @@ PROFESSIONAL_PURCHASING_ITEM: dict[str, Any] = {
 	"icon": "shopping-bag",
 }
 
+PURCHASE_ORDER_NATIVE_PEER_DOCTYPE = "Purchase Order"
 PURCHASE_REGISTER_PAGE_TARGET = "purchase-register"
 PURCHASE_INVOICE_NATIVE_PEER_DOCTYPE = "Purchase Invoice"
 
@@ -276,19 +277,48 @@ def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> No
 
 
 def _promote_professional_purchasing(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Make Professional Purchasing the everyday owner of Purchase Orders.
+
+	The base registry retains native ERPNext Purchase Order as a compatibility fallback.
+	Once the Professional Purchasing Page is permission-available, final RetailEdge
+	composition removes that peer route while preserving native Purchase Receipt and
+	advanced purchasing routes. ERPNext permissions and document semantics are unchanged.
+	"""
 	if not _can_open_page(PROFESSIONAL_PURCHASING_ITEM["target"]):
 		return
 	for group in navigation_groups:
 		if group.get("key") != "buy":
 			continue
 		items = list(group.get("items") or [])
-		if any(item.get("target_type") == "Page" and item.get("target") == PROFESSIONAL_PURCHASING_ITEM["target"] for item in items):
-			return
-		purchase_order_index = next(
-			(index for index, item in enumerate(items) if item.get("target_type") == "DocType" and item.get("target") == "Purchase Order"),
+		existing_page = next(
+			(
+				item
+				for item in items
+				if item.get("target_type") == "Page" and item.get("target") == PROFESSIONAL_PURCHASING_ITEM["target"]
+			),
+			None,
+		)
+		items = [
+			item
+			for item in items
+			if not (
+				item.get("target_type") == "DocType"
+				and item.get("target") == PURCHASE_ORDER_NATIVE_PEER_DOCTYPE
+			)
+			and not (
+				item.get("target_type") == "Page"
+				and item.get("target") == PROFESSIONAL_PURCHASING_ITEM["target"]
+			)
+		]
+		purchase_invoice_index = next(
+			(
+				index
+				for index, item in enumerate(items)
+				if item.get("target_type") == "DocType" and item.get("target") == PURCHASE_INVOICE_NATIVE_PEER_DOCTYPE
+			),
 			0,
 		)
-		items.insert(purchase_order_index, deepcopy(PROFESSIONAL_PURCHASING_ITEM))
+		items.insert(purchase_invoice_index, deepcopy(existing_page or PROFESSIONAL_PURCHASING_ITEM))
 		group["items"] = items
 		return
 
@@ -474,7 +504,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
 	feature_flags["professional_selling"] = "edgesuite_primary"
-	feature_flags["professional_purchasing"] = "erpnext_native_po_receipt"
+	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"
 	feature_flags["purchase_invoice_ownership"] = "edgesuite_purchase_register"
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
