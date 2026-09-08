@@ -12,40 +12,47 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 	def read_app(self, relative: str) -> str:
 		return (APP_ROOT / relative).read_text(encoding="utf-8")
 
-	def test_current_receipt_workflow_still_requires_native_completion(self):
+	def test_legacy_native_receipt_methods_remain_advanced_fallback_only(self):
 		component = self.read_app("public/js/professional_purchasing/ProfessionalPurchasing.vue")
 		self.assertIn("retailedge.professional_purchasing.prepare_purchase_receipt_draft", component)
 		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', component)
 		self.assertIn('openPurchaseReceipts() { frappe.set_route("List", "Purchase Receipt"); }', component)
 
-	def test_edgesuite_only_receipt_actions_fail_closed_before_native_handoff(self):
+	def test_edgesuite_receipt_actions_are_intercepted_before_native_handoff(self):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
 		for contract in (
 			'const PREPARE_RECEIPT_TRIGGER_LABEL = "Prepare Receipt"',
 			'const REVIEW_RECEIPT_TRIGGER_LABEL = "Review Receipt"',
 			'const PURCHASE_RECEIPTS_TRIGGER_LABEL = "Purchase Receipts"',
+			'const RECEIPT_HISTORY_TRIGGER_LABEL = "Receipt History"',
 			'const ADVANCED_PREPARE_RECEIPT_EVENT = "retailedge-advanced-prepare-purchase-receipt"',
 			'const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"',
 			"applyPurchaseReceiptParityGate(root)",
-			'button.setAttribute("data-retailedge-parity-blocked", "Purchase Receipt")',
 			'button.setAttribute("data-retailedge-receipt-preview", "true")',
+			'button.setAttribute("data-retailedge-receipt-history", "true")',
 			"OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT",
+			"OPEN_PURCHASE_RECEIPT_HISTORY_EVENT",
 			"if (!nativeDeskEnabled()) return;",
 			"event.stopImmediatePropagation()",
 		):
 			self.assertIn(contract, controller)
+		hidden = controller.split("hiddenButtonLabels:", 1)[1].split("],", 1)[0]
+		self.assertNotIn("PURCHASE_RECEIPTS_TRIGGER_LABEL", hidden)
 		self.assertIn('frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE', controller)
 
-	def test_native_receipt_handoff_is_explicitly_advanced_when_allowed(self):
+	def test_native_receipt_handoffs_are_explicitly_advanced_when_allowed(self):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
-		overlay = self.read_app("public/js/professional_purchasing/ProfessionalPurchaseReceiptPreviewOverlay.vue")
-		self.assertIn('button.setAttribute("data-retailedge-advanced-native", "Purchase Receipt")', controller)
+		preview = self.read_app("public/js/professional_purchasing/ProfessionalPurchaseReceiptPreviewOverlay.vue")
+		history = self.read_app("public/js/professional_purchasing/ProfessionalPurchaseReceiptHistoryOverlay.vue")
 		self.assertIn('const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"', controller)
 		self.assertIn('type: "POST"', controller)
 		self.assertIn("PREPARE_RECEIPT_METHOD", controller)
 		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', controller)
-		self.assertIn("Advanced: Prepare in ERPNext", overlay)
-		self.assertIn("nativeFallbackEnabled", overlay)
+		self.assertIn("Advanced: Prepare in ERPNext", preview)
+		self.assertIn("nativeFallbackEnabled", preview)
+		self.assertIn("Advanced: Purchase Receipts in ERPNext", history)
+		self.assertIn('frappe.set_route("List", "Purchase Receipt")', history)
+		self.assertIn("nativeFallbackEnabled", history)
 
 	def test_shared_guard_still_blocks_native_purchase_receipt_routes_for_edgesuite_only(self):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
@@ -55,7 +62,7 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 		self.assertIn('const RESTRICTED_MODE = "edgesuite_only"', guard)
 		self.assertIn('if (family !== "form" && family !== "list") return false;', guard)
 
-	def test_backend_remains_draft_first_erpnext_mapper_without_direct_posting(self):
+	def test_legacy_backend_remains_draft_first_without_direct_posting(self):
 		backend = self.read_app("professional_purchasing.py")
 		self.assertIn("make_purchase_receipt(po.name)", backend)
 		self.assertIn("receipt.insert()", backend)
@@ -64,7 +71,7 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 		self.assertNotIn('frappe.new_doc("GL Entry")', backend)
 		self.assertNotIn("ignore_permissions=True", backend)
 
-	def test_purchase_receipt_ownership_is_documented_as_blocked_not_promoted(self):
+	def test_historical_c_gate_remains_documented_and_native_peer_not_promoted(self):
 		doc = (REPO_ROOT / "docs" / "rir2f2c_purchase_receipt_parity_gate.md").read_text(encoding="utf-8")
 		master = self.read_app("master_experience.py")
 		self.assertIn("PARITY_BLOCKED_NATIVE_COMPLETION", doc)
