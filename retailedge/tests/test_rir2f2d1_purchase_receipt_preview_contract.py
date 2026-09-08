@@ -12,15 +12,20 @@ def _read(path: Path) -> str:
 	return path.read_text(encoding="utf-8")
 
 
+def _preview_function(source: str) -> str:
+	return source.split("def get_professional_purchase_receipt_preview", 1)[1].split("def submit_standard_purchase_receipt", 1)[0]
+
+
 def test_preview_uses_erpnext_mapper_without_persisting_or_posting():
 	source = _read(BACKEND)
-	assert "make_purchase_receipt(po.name)" in source
-	assert '"persistence": "none"' in source
-	assert '"posting_status": "Preview only"' in source
-	assert "receipt.insert(" not in source
-	assert "receipt.save(" not in source
-	assert "receipt.submit(" not in source
-	assert ".db_set(" not in source
+	preview = _preview_function(source)
+	assert "_map_receipt(po, branch)" in preview
+	assert '"persistence": "none"' in preview
+	assert '"posting_status": "Preview only"' in preview
+	assert "receipt.insert(" not in preview
+	assert "receipt.save(" not in preview
+	assert "receipt.submit(" not in preview
+	assert ".db_set(" not in preview
 
 
 def test_preview_fails_into_advanced_handling_for_stock_control_complexity():
@@ -62,14 +67,12 @@ def test_native_receipt_list_and_draft_handoff_remain_advanced_only():
 	assert 'frappe.set_route("Form", "Purchase Receipt", result.name)' in source
 
 
-def test_preview_overlay_is_edgesuite_mounted_and_has_no_post_action():
+def test_preview_overlay_remains_edgesuite_owned_after_d2():
 	overlay = _read(OVERLAY)
 	bundle = _read(BUNDLE)
 	controller = _read(CONTROLLER)
 	assert "EdgeModal" in overlay
 	assert "get_professional_purchase_receipt_preview" in overlay
-	assert "No document has been created and no stock has moved" in overlay
-	assert "submit" not in overlay.lower()
 	assert "mountRetailEdgeProfessionalPurchaseReceiptPreview" in bundle
 	assert "PURCHASE_RECEIPT_PREVIEW_ASSET" in controller
 	assert "mountRetailEdgeProfessionalPurchaseReceiptPreview" in controller
