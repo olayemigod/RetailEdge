@@ -6,27 +6,46 @@ This checkpoint characterizes the existing EdgeSuite-first operational routing b
 
 The goal is to reuse and govern existing RetailEdge workspaces rather than create duplicate sales, purchasing, payment, or stock workflows.
 
+RIR2F1 now strengthens this contract for Selling: where the Professional Selling Page is permission-available, it is the canonical everyday RetailEdge owner of Sales Invoice, Sales Order and Delivery Note navigation rather than an additive peer beside native ERPNext routes.
+
 ## Authoritative runtime layer
 
 `retailedge.edgesuite_ui.get_retailedge_business_hub_context` builds the permission-aware base navigation.
 
 `retailedge.master_experience.get_retailedge_business_hub_context` is the hooked final Business Hub context and promotes already-built RetailEdge operational Pages only when the current user can open those Pages.
 
-The final runtime therefore intentionally differs from the static base registry: the base retains native ERPNext destinations as advanced fallbacks, while the master-experience layer promotes product-owned EdgeSuite operational surfaces.
+The final runtime intentionally differs from the static base registry. The base may retain native ERPNext destinations as compatibility/advanced fallbacks; the master-experience layer owns final product composition.
 
 ## Existing promoted everyday surfaces
 
-### Selling
+### Selling — RIR2F1 contract
 
-`professional-selling` is promoted into Sell when its Page permission passes. It provides the RetailEdge guided selling workspace for Quotations, Sales Orders, Delivery Notes and Sales Invoices while ERPNext remains the document and accounting authority.
+`professional-selling` is the canonical everyday RetailEdge selling workspace when its Page permission passes. It owns the normal RetailEdge journey for Quotations, Sales Orders, Delivery Notes and Sales Invoices while ERPNext remains the document, accounting, pricing, tax, stock and submission authority.
+
+When Professional Selling is available:
+
+- `Sales Invoice`, `Sales Order` and `Delivery Note` are removed as peer everyday navigation items from the final Sell group;
+- Transaction Workspace, POS runtime and other permitted selling-management/configuration items remain;
+- ordinary Professional Selling record browsing stays inside EdgeSuite through its Recent view;
+- guided save handlers stay on Professional Selling instead of automatically opening native forms;
+- explicit `Advanced: Open in ERPNext` actions are shown only when the shared EdgeSuite access context allows Native Desk;
+- the existing EdgeSuite-only operational guard remains defence-in-depth.
+
+When Professional Selling is not available or not permitted, existing native selling routes remain as permission-safe compatibility fallback so an authorised user is not stranded.
+
+See `docs/rir2f1_selling_edgesuite_ownership.md` for the bounded implementation and QA contract.
 
 ### Purchasing
 
 `professional-purchasing` is promoted into Buy when its Page permission passes. Its Page roles remain Purchase/Accounts/System Manager oriented; this checkpoint deliberately does not add RetailEdge product roles merely to make the page visible. Product-role visibility must never broaden underlying purchasing authority.
 
+Purchasing remains additive in this checkpoint. RIR2F1 does not change Purchase Invoice, Purchase Order or Purchase Receipt ownership.
+
 ### Money
 
 `payment-management` is promoted before the native Payment Entry fallback when its Page permission passes. It covers customer advances and invoice settlement using ERPNext Payment Entry and Payment Reconciliation truth.
+
+Payment ownership is unchanged by RIR2F1.
 
 ## Deliberate non-promotion
 
@@ -34,19 +53,17 @@ The final runtime therefore intentionally differs from the static base registry:
 
 This checkpoint does not claim that browser QA is complete and does not promote that route prematurely.
 
-## EdgeSuite-only follow-up
+## Remaining EdgeSuite ownership follow-up
 
-Promotion is not the end of the access audit. The promoted pages themselves must also avoid offering actions that require native Desk to an `EdgeSuite Only` user.
+RIR2F1 resolves the bounded Selling ownership leakage. Similar ownership decisions remain to be completed separately for:
 
-The next bounded slice must review page-local native affordances such as:
+- Professional Purchasing and purchase-document peer routes;
+- Payment Management and normal payment read/management flows;
+- stock receipt/count/transfer/read ownership;
+- customer/supplier operational ownership;
+- final Business Hub MVP composition.
 
-- native View/Open Records buttons;
-- direct Form/List route opens;
-- auto-opening native forms after a guided draft is created;
-- native-only fallback buttons inside guided dialogs;
-- advanced purchasing handoffs that cannot be completed inside EdgeSuite.
-
-Advanced users with `Native Desk + EdgeSuite` may retain these handoffs where appropriate.
+Do not broaden RIR2F1 into those areas.
 
 ## Safety rules
 
@@ -56,14 +73,20 @@ Advanced users with `Native Desk + EdgeSuite` may retain these handoffs where ap
 - Keep Frappe Page permissions and normal ERPNext permissions authoritative.
 - Keep the shared EdgeSuite Desk Access selector as interface exposure only.
 - Reuse existing RetailEdge Pages and backend services before creating new workflows.
+- Native Desk availability does not make native ERPNext a peer everyday RetailEdge route.
 
 ## Validation contract
 
 Focused tests freeze that:
 
-- Professional Selling is promoted when permitted.
-- Professional Purchasing is promoted before the native Purchase Order fallback when permitted.
-- Payment Management is promoted before native Payment Entry when permitted.
+- Professional Selling replaces Sales Invoice, Sales Order and Delivery Note peer navigation when permitted.
+- Native selling peers remain when Professional Selling is unavailable/not permitted.
+- Transaction Workspace, POS and unrelated selling-management entries remain intact.
+- Professional Selling does not automatically eject guided saves or recent-record clicks into native ERPNext.
+- explicit advanced native actions depend on `can_use_native_desk`.
+- Transaction Workspace Sales Invoice read/manage routes to Professional Selling.
+- Professional Purchasing is still promoted before the native Purchase Order fallback and is otherwise unchanged.
+- Payment Management remains unchanged.
 - promoted Pages are standard and role-restricted.
 - Professional Purchasing does not gain RetailEdge Manager/Branch Manager roles in this slice.
 - Stock Movement History remains on the legacy Query Report pending its separate acceptance gate.
