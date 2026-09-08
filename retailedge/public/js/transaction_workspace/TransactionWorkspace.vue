@@ -66,7 +66,7 @@
 						<p>{{ actionDescription(action) }}</p>
 						<div class="workspace-actions">
 							<button type="button" class="edge-button edge-button--primary" @click="runTransactionAction(action)">{{ actionButtonLabel(action) }}</button>
-							<button type="button" class="edge-button edge-button--secondary" @click="openDoctype(action.doctype)">View Records</button>
+							<button type="button" class="edge-button edge-button--secondary" @click="viewTransactionRecords(action)">{{ action.doctype === "Sales Invoice" ? "View / Manage" : "View Records" }}</button>
 						</div>
 					</section>
 				</div>
@@ -286,10 +286,20 @@ export default {
 			}
 			this.createDoctype(action.doctype);
 		},
+		viewTransactionRecords(action) {
+			if (action?.doctype === "Sales Invoice") {
+				frappe.set_route("professional-selling");
+				return;
+			}
+			this.openDoctype(action?.doctype);
+		},
 		actionButtonLabel(action) {
 			return GUIDED_DOCTYPES.has(action?.doctype) ? "Guided Entry" : "Create";
 		},
 		actionDescription(action) {
+			if (action?.doctype === "Sales Invoice") {
+				return "Use the guided Sales Invoice flow here and manage selling records in Professional Selling.";
+			}
 			return GUIDED_DOCTYPES.has(action?.doctype)
 				? `Use the existing guided ${action.label} flow here, with native ERPNext as the advanced fallback.`
 				: `Create a native ERPNext ${action.label} using the current operating context and server-side RetailEdge defaults.`;
