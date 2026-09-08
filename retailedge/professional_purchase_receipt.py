@@ -14,6 +14,7 @@ from retailedge.professional_purchasing import (
 	_assert_read,
 	_document_branch,
 	_resolve_scope,
+	_transaction_branch_field,
 )
 
 PURCHASE_RECEIPT_DOCTYPE = "Purchase Receipt"
@@ -80,9 +81,6 @@ def _validate_po_scope(po: Any) -> str:
 	if branch:
 		validate_user_branch_access(branch, user=frappe.session.user, company=po.company, throw=True)
 	elif not global_access:
-		# A restricted user must never use a named-document preview to bypass the
-		# Branch Assignment contract. Blank attribution cannot prove that this PO
-		# belongs to one of the user's permitted branches.
 		frappe.throw(
 			_("Purchase Order {0} has no Branch attribution for your restricted access. Ask an authorised manager to correct the document before receiving it.").format(po.name),
 			frappe.PermissionError,
@@ -92,38 +90,36 @@ def _validate_po_scope(po: Any) -> str:
 	return branch
 
 
-@frappe.whitelist()
-def get_professional_purchase_receipt_preview(purchase_order: str) -> dict[str, Any]:
-	"""Preview ERPNext's standard PO -> Purchase Receipt mapping without saving anything."""
-	purchase_order = str(purchase_order or "").strip()
-	if not purchase_order:
-		frappe.throw(_("Purchase Order is required."))
-	if not frappe.db.exists(PURCHASE_ORDER_DOCTYPE, purchase_order):
-		frappe.throw(_("Purchase Order {0} does not exist.").format(purchase_order))
-	_assert_read(PURCHASE_ORDER_DOCTYPE, purchase_order)
-
-	po = frappe.get_doc(PURCHASE_ORDER_DOCTYPE, purchase_order)
+def _validate_open_po(po: Any) -> None:
 	if cint(po.docstatus) != 1:
-		frappe.throw(_("Only a submitted Purchase Order can be previewed for receipt."))
+		frappe.throw(_("Only a submitted Purchase Order can be received."))
 	if str(getattr(po, "status", "") or "") in CLOSED_PURCHASE_ORDER_STATUSES:
-		frappe.throw(_("Purchase Order {0} is not open for receiving.").format(purchase_order))
+		frappe.throw(_("Purchase Order {0} is not open for receiving.").format(po.name))
 	if flt(getattr(po, "per_received", 0)) >= 100:
-		frappe.throw(_("Purchase Order {0} is already fully received.").format(purchase_order))
+		frappe.throw(_("Purchase Order {0} is already fully received.").format(po.name))
+
+
+def _assert_receipt_permissions(*, require_submit: bool = False) -> None:
 	if not frappe.has_permission(PURCHASE_RECEIPT_DOCTYPE, "create"):
 		frappe.throw(_("You do not have permission to create Purchase Receipt."), frappe.PermissionError)
+	if require_submit and not frappe.has_permission(PURCHASE_RECEIPT_DOCTYPE, "submit"):
+		frappe.throw(_("You do not have permission to submit Purchase Receipt."), frappe.PermissionError)
 
-	branch = _validate_po_scope(po)
 
-	# ERPNext performs the authoritative Purchase Order -> Purchase Receipt mapping.
-	# The mapped document stays in memory only. RIR2F2D1 must not insert, save,
-	# submit, or otherwise post stock/accounting state.
+def _map_receipt(po: Any, branch: str) -> tuple[Any, list[dict[str, Any]], list[dict[str, str]]]:
 	receipt = make_purchase_receipt(po.name)
 	if not receipt or getattr(receipt, "doctype", None) != PURCHASE_RECEIPT_DOCTYPE:
-		frappe.throw(_("ERPNext could not preview a Purchase Receipt from {0}.").format(purchase_order))
+		frappe.throw(_("ERPNext could not prepare a Purchase Receipt from {0}.").format(po.name))
 	if str(getattr(receipt, "company", "") or "") != str(po.company or ""):
 		frappe.throw(_("Mapped Purchase Receipt Company does not match the Purchase Order."))
 	if str(getattr(receipt, "supplier", "") or "") != str(po.supplier or ""):
 		frappe.throw(_("Mapped Purchase Receipt Supplier does not match the Purchase Order."))
+
+	receipt_branch_field = _transaction_branch_field(PURCHASE_RECEIPT_DOCTYPE)
+	if branch and receipt_branch_field:
+		setattr(receipt, receipt_branch_field, branch)
+	elif branch and not receipt_branch_field:
+		frappe.throw(_("Purchase Receipt branch attribution is unavailable. Run site migration before receiving for this Branch."))
 
 	items: list[dict[str, Any]] = []
 	blockers: list[dict[str, str]] = []
@@ -141,9 +137,38 @@ def get_professional_purchase_receipt_preview(purchase_order: str) -> dict[str, 
 
 	if not items:
 		blockers.append({"key": "no_receivable_items", "label": _("No receivable quantity remains on this Purchase Order")})
+	return receipt, items, blockers
+
+
+def _get_purchase_order_for_receipt(purchase_order: str, *, lock: bool = False) -> Any:
+	purchase_order = str(purchase_order or "").strip()
+	if not purchase_order:
+		frappe.throw(_("Purchase Order is required."))
+	if not frappe.db.exists(PURCHASE_ORDER_DOCTYPE, purchase_order):
+		frappe.throw(_("Purchase Order {0} does not exist.").format(purchase_order))
+	_assert_read(PURCHASE_ORDER_DOCTYPE, purchase_order)
+	if lock:
+		# Serialize standard receipt posting for one Purchase Order. This prevents
+		# double-click/concurrent requests from mapping the same remaining quantity.
+		frappe.db.sql(
+			"SELECT name FROM `tabPurchase Order` WHERE name = %s FOR UPDATE",
+			(purchase_order,),
+		)
+	return frappe.get_doc(PURCHASE_ORDER_DOCTYPE, purchase_order)
+
+
+@frappe.whitelist()
+def get_professional_purchase_receipt_preview(purchase_order: str) -> dict[str, Any]:
+	"""Preview ERPNext's standard PO -> Purchase Receipt mapping without saving anything."""
+	po = _get_purchase_order_for_receipt(purchase_order)
+	_validate_open_po(po)
+	_assert_receipt_permissions()
+	branch = _validate_po_scope(po)
+	receipt, items, blockers = _map_receipt(po, branch)
 
 	return {
 		"purchase_order": po.name,
+		"purchase_order_modified": str(getattr(po, "modified", None) or ""),
 		"company": str(po.company or ""),
 		"branch": branch,
 		"supplier": str(po.supplier or ""),
@@ -152,8 +177,54 @@ def get_professional_purchase_receipt_preview(purchase_order: str) -> dict[str, 
 		"items": items,
 		"blockers": blockers,
 		"standard_receipt_eligible": not blockers,
+		"can_submit": bool(not blockers and frappe.has_permission(PURCHASE_RECEIPT_DOCTYPE, "submit")),
 		"persistence": "none",
 		"posting_status": "Preview only",
 		"source_of_truth": "ERPNext Purchase Receipt mapper",
-		"next_phase": "RIR2F2D2",
+		"next_phase": "RIR2F2D2 standard receipt posting",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_standard_purchase_receipt(
+	purchase_order: str,
+	expected_purchase_order_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Insert and submit one standard ERPNext Purchase Receipt after a fresh server-side preflight."""
+	po = _get_purchase_order_for_receipt(purchase_order, lock=True)
+	_validate_open_po(po)
+	_assert_receipt_permissions(require_submit=True)
+
+	expected_modified = str(expected_purchase_order_modified or "").strip()
+	current_modified = str(getattr(po, "modified", None) or "")
+	if not expected_modified or expected_modified != current_modified:
+		frappe.throw(_("Purchase Order {0} changed after the receipt preview. Refresh the preview before posting.").format(po.name))
+
+	branch = _validate_po_scope(po)
+	receipt, items, blockers = _map_receipt(po, branch)
+	if blockers:
+		labels = ", ".join(str(blocker.get("label") or blocker.get("key") or "") for blocker in blockers)
+		frappe.throw(_("This Purchase Receipt requires Advanced ERPNext handling: {0}").format(labels))
+
+	# ERPNext remains authoritative for receipt validation and stock posting.
+	# Insert and submit run as the current user; no ignore_permissions or direct
+	# Stock Ledger / GL Entry writes are allowed in this EdgeSuite path.
+	receipt.insert()
+	receipt.submit()
+	if cint(getattr(receipt, "docstatus", 0)) != 1:
+		frappe.throw(_("ERPNext did not submit Purchase Receipt {0}.").format(receipt.name))
+
+	receipt_branch_field = _transaction_branch_field(PURCHASE_RECEIPT_DOCTYPE)
+	return {
+		"doctype": PURCHASE_RECEIPT_DOCTYPE,
+		"name": receipt.name,
+		"docstatus": cint(receipt.docstatus),
+		"purchase_order": po.name,
+		"company": str(receipt.company or ""),
+		"supplier": str(receipt.supplier or ""),
+		"branch": str(getattr(receipt, receipt_branch_field, "") or "") if receipt_branch_field else "",
+		"item_count": len(items),
+		"posting_status": "Submitted",
+		"stock_posted_by": "ERPNext Purchase Receipt submit",
+		"source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
 	}
