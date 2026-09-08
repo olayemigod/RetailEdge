@@ -6,6 +6,8 @@ const PAGE_ROUTE = "professional-purchasing";
 const PAGE_TITLE = "Professional Purchasing";
 const OPEN_PURCHASE_ORDER_EVENT = "retailedge-open-professional-purchase-order";
 const PURCHASE_ORDER_TRIGGER_LABEL = "New Purchase Order";
+const ACCESS_MODE = "edgesuite_only";
+const ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open in ERPNext";
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {
@@ -73,6 +75,7 @@ function installRestrictedOperationalGuard() {
 			"Purchase Receipts",
 			"Material Requests",
 			"Open",
+			ADVANCED_PURCHASE_ORDER_LABEL,
 			"Open Purchase Receipt",
 			"Scorecards",
 			"New Native Scorecard",
@@ -86,6 +89,73 @@ function installRestrictedOperationalGuard() {
 
 function normaliseButtonLabel(button) {
 	return String(button?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function nativeDeskEnabled() {
+	return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE;
+}
+
+function applyPurchaseOrderOwnership(root) {
+	if (!root) return;
+	for (const row of root.querySelectorAll(".purchasing-table--orders tbody tr")) {
+		const reference = row.querySelector("td .link-button");
+		if (reference) {
+			reference.classList.remove("link-button");
+			reference.classList.add("retailedge-po-reference");
+			reference.setAttribute("aria-disabled", "true");
+			reference.setAttribute("title", __("Purchase Order reference. Use the explicit Advanced action only when native ERPNext review is required."));
+			reference.tabIndex = -1;
+		}
+		for (const button of row.querySelectorAll(".actions-cell button")) {
+			if (normaliseButtonLabel(button) !== "Open") continue;
+			if (!nativeDeskEnabled()) {
+				button.hidden = true;
+				button.setAttribute("aria-hidden", "true");
+				continue;
+			}
+			button.textContent = __(ADVANCED_PURCHASE_ORDER_LABEL);
+			button.setAttribute("title", __("Open the full ERPNext Purchase Order form for advanced review."));
+			button.setAttribute("data-retailedge-advanced-native", "Purchase Order");
+		}
+	}
+}
+
+function installPurchaseOrderOwnership(wrapper, root) {
+	if (!root || wrapper._retailedgePurchaseOrderOwnershipInstalled) return;
+	let scheduled = false;
+	const scheduleApply = () => {
+		if (scheduled) return;
+		scheduled = true;
+		window.requestAnimationFrame(() => {
+			scheduled = false;
+			applyPurchaseOrderOwnership(root);
+		});
+	};
+	const handler = (event) => {
+		const button = event.target?.closest?.("button");
+		if (!button || !root.contains(button) || !button.closest(".purchasing-table--orders")) return;
+		if (button.classList.contains("retailedge-po-reference")) {
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+			return;
+		}
+		if (normaliseButtonLabel(button) === ADVANCED_PURCHASE_ORDER_LABEL && !nativeDeskEnabled()) {
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+		}
+	};
+	root.addEventListener("click", handler, true);
+	const observer = new MutationObserver(scheduleApply);
+	observer.observe(root, { childList: true, subtree: true });
+	wrapper._retailedgePurchaseOrderOwnershipInstalled = true;
+	wrapper._retailedgePurchaseOrderOwnershipCleanup = () => {
+		observer.disconnect();
+		root.removeEventListener("click", handler, true);
+		wrapper._retailedgePurchaseOrderOwnershipInstalled = false;
+	};
+	scheduleApply();
 }
 
 function installGuidedPurchaseOrderTrigger(wrapper, root) {
@@ -141,6 +211,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		root.className = "retailedge-professional-purchasing-root";
 		page.body.append(root);
 		wrapper._retailedgeProfessionalPurchasingApp = await window.mountRetailEdgeProfessionalPurchasing(root);
+		installPurchaseOrderOwnership(wrapper, root);
 		installGuidedPurchaseOrderTrigger(wrapper, root);
 
 		const overlayRoot = document.createElement("div");
