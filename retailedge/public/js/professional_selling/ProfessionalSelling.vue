@@ -65,8 +65,8 @@
 						</div>
 						<div class="selling-actions">
 							<button v-if="document.can_create" type="button" class="edge-button edge-button--primary" @click="startCreate(document)">{{ createLabel(document) }}</button>
-							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="openNative(document)">View Records</button>
 							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="loadRecent(document)">Recent</button>
+							<button v-if="document.can_read && canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openAdvancedNative(document)">Advanced: Open in ERPNext</button>
 						</div>
 					</section>
 				</div>
@@ -82,11 +82,12 @@
 					<EdgeLoadingState v-if="recentLoading" message="Loading recent records..." />
 					<EdgeEmptyState v-else-if="!recentRows.length" title="No records found" description="No permitted records are available for this document type." />
 					<div v-else class="recent-list">
-						<button v-for="row in recentRows" :key="row.name" type="button" class="recent-row" @click="openRecord(recentDocument, row.name)">
+						<div v-for="row in recentRows" :key="row.name" class="recent-row">
 							<strong>{{ row.name }}</strong>
 							<span>{{ row.customer || row.party_name || row.status || "Draft" }}</span>
 							<span v-if="row.grand_total !== undefined">{{ row.currency || "" }} {{ row.grand_total }}</span>
-						</button>
+							<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary recent-advanced" @click="openAdvancedRecord(recentDocument, row.name)">Advanced: Open in ERPNext</button>
+						</div>
 					</div>
 				</section>
 			</div>
@@ -96,28 +97,24 @@
 				:context="sellingContext"
 				@close="quotationOpen = false"
 				@saved="handleQuotationSaved"
-				@open-native="openQuotationNative"
 			/>
 			<ProfessionalSalesOrderDialog
 				:open="salesOrderOpen"
 				:context="sellingContext"
 				@close="salesOrderOpen = false"
 				@saved="handleSalesOrderSaved"
-				@open-native="openSalesOrderNative"
 			/>
 			<ProfessionalDeliveryDialog
 				:open="deliveryOpen"
 				:context="sellingContext"
 				@close="deliveryOpen = false"
 				@saved="handleDeliverySaved"
-				@open-native="openDeliveryNative"
 			/>
 			<ProfessionalSalesInvoiceDialog
 				:open="salesInvoiceOpen"
 				:context="sellingContext"
 				@close="salesInvoiceOpen = false"
 				@saved="handleSalesInvoiceSaved"
-				@open-native="openSalesInvoiceNative"
 			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -178,6 +175,7 @@ export default {
 			shipping: {},
 			documents: [],
 			sellingContext: {},
+			canUseNativeDesk: false,
 			quotationOpen: false,
 			salesOrderOpen: false,
 			deliveryOpen: false,
@@ -220,6 +218,7 @@ export default {
 				this.userName = navigation.context?.user_name || selling.user_name || "";
 				this.pricing = selling.pricing || {};
 				this.shipping = selling.shipping || {};
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				const allDocuments = [...(Array.isArray(selling.documents) ? selling.documents : []), invoice];
 				this.documents = allDocuments.filter((row) => row?.available && (row.can_read || row.can_create));
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -264,26 +263,20 @@ export default {
 			if (document?.key === "quotation") { this.quotationOpen = true; return; }
 			if (document?.key === "sales-order") { this.salesOrderOpen = true; return; }
 			if (document?.key === "delivery-note") { this.deliveryOpen = true; return; }
-			if (document?.key === "sales-invoice") { this.salesInvoiceOpen = true; return; }
-			this.createNative(document);
+			if (document?.key === "sales-invoice") { this.salesInvoiceOpen = true; }
 		},
-		createNative(document) {
-			window.open(`/app/${doctypeSlug(document.doctype)}/new`, "_blank", "noopener,noreferrer");
-		},
-		openNative(document) {
+		openAdvancedNative(document) {
+			if (!this.canUseNativeDesk || !document?.doctype) return;
 			window.open(document.native_route || `/app/${doctypeSlug(document.doctype)}`, "_blank", "noopener,noreferrer");
 		},
-		openRecord(document, name) {
+		openAdvancedRecord(document, name) {
+			if (!this.canUseNativeDesk || !document?.doctype || !name) return;
 			window.open(`/app/${doctypeSlug(document.doctype)}/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer");
 		},
-		handleQuotationSaved(result) { this.quotationOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
-		openQuotationNative() { this.quotationOpen = false; this.createNative({ doctype: "Quotation" }); },
-		handleSalesOrderSaved(result) { this.salesOrderOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
-		openSalesOrderNative() { this.salesOrderOpen = false; this.createNative({ doctype: "Sales Order" }); },
-		handleDeliverySaved(result) { this.deliveryOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
-		openDeliveryNative() { this.deliveryOpen = false; this.createNative({ doctype: "Delivery Note" }); },
-		handleSalesInvoiceSaved(result) { this.salesInvoiceOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
-		openSalesInvoiceNative() { this.salesInvoiceOpen = false; this.createNative({ doctype: "Sales Invoice" }); },
+		handleQuotationSaved() { this.quotationOpen = false; this.loadWorkspace(); },
+		handleSalesOrderSaved() { this.salesOrderOpen = false; this.loadWorkspace(); },
+		handleDeliverySaved() { this.deliveryOpen = false; this.loadWorkspace(); },
+		handleSalesInvoiceSaved() { this.salesInvoiceOpen = false; this.loadWorkspace(); },
 		async loadRecent(document) {
 			this.recentDocument = document;
 			this.recentRows = [];
@@ -321,7 +314,9 @@ export default {
 .stage-flags, .selling-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: auto; }
 .stage-flags span { padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--subtle-fg, var(--control-bg)); color: var(--text-muted); font-size: 0.75rem; }
 .recent-list { display: grid; gap: 0.5rem; margin-top: 1rem; }
-.recent-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 1rem; text-align: left; align-items: center; width: 100%; padding: 0.75rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.6rem; background: transparent; color: inherit; }
+.recent-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 1rem; text-align: left; align-items: center; width: 100%; padding: 0.75rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.6rem; background: transparent; color: inherit; }
+.recent-advanced { justify-self: end; }
+:deep(.selling-form-footer > .edge-button:first-child) { display: none !important; }
 @media (max-width: 1100px) { .selling-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 680px) { .selling-flow { grid-template-columns: 1fr; } .selling-context, .policy-panel, .recent-heading { flex-direction: column; } .recent-row { grid-template-columns: 1fr; } }
+@media (max-width: 680px) { .selling-flow { grid-template-columns: 1fr; } .selling-context, .policy-panel, .recent-heading { flex-direction: column; } .recent-row { grid-template-columns: 1fr; } .recent-advanced { justify-self: start; } }
 </style>
