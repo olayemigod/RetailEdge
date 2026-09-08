@@ -93,6 +93,7 @@ def test_conversion_overlay_stays_inside_edgesuite_and_creates_only_draft():
 	assert "frappe.set_route" not in overlay
 	assert "frappe.new_doc" not in overlay
 	assert 'window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"))' in overlay
+	assert overlay.index('v-if="created"') < overlay.index('v-else-if="preview.existing_purchase_order"')
 
 
 def test_professional_purchasing_bundle_mounts_conversion_overlay():
