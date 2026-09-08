@@ -128,14 +128,14 @@ def _mapped_purchase_order(doc: Any, branch: str) -> tuple[Any, list[dict[str, A
 	return purchase_order, items
 
 
-def _existing_active_purchase_order(supplier_quotation: str) -> str:
+def _existing_active_purchase_order(supplier_quotation: str) -> bool:
 	rows = frappe.get_all(
 		PURCHASE_ORDER_ITEM_DOCTYPE,
 		filters={"supplier_quotation": supplier_quotation, "docstatus": ["<", 2]},
 		pluck="parent",
-		limit_page_length=20,
+		limit_page_length=1,
 	)
-	return str(rows[0] or "") if rows else ""
+	return bool(rows)
 
 
 @frappe.whitelist()
@@ -161,7 +161,7 @@ def get_supplier_quotation_purchase_order_preview(supplier_quotation: str) -> di
 		"tax_row_count": len(getattr(purchase_order, "taxes", None) or []),
 		"items": items,
 		"existing_purchase_order": existing,
-		"can_create_draft": not bool(existing),
+		"can_create_draft": not existing,
 		"persistence": "none",
 		"status": "Preview only",
 		"source_of_truth": "ERPNext Supplier Quotation make_purchase_order mapper",
@@ -193,10 +193,9 @@ def create_purchase_order_draft_from_supplier_quotation(
 	if not expected_modified or expected_modified != current_modified:
 		frappe.throw(_("Supplier Quotation {0} changed after the preview. Refresh before creating the Purchase Order.").format(doc.name))
 
-	existing = _existing_active_purchase_order(doc.name)
-	if existing:
+	if _existing_active_purchase_order(doc.name):
 		frappe.throw(
-			_("Purchase Order {0} already references Supplier Quotation {1}. Review the existing order instead of creating a duplicate.").format(existing, doc.name)
+			_("An active Purchase Order already references Supplier Quotation {0}. Review the existing order instead of creating a duplicate.").format(doc.name)
 		)
 
 	branch = _resolve_supplier_quotation_branch(doc)
