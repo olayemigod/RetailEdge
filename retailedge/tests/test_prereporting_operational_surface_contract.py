@@ -28,7 +28,7 @@ class RetailEdgePreReportingOperationalSurfaceContractTests(unittest.TestCase):
 		self.assertEqual(groups[0]["items"][0]["target_type"], "Page")
 		self.assertEqual(groups[0]["items"][0]["target"], PROFESSIONAL_SELLING_ITEM["target"])
 
-	def test_professional_purchasing_is_promoted_before_native_purchase_order(self):
+	def test_professional_purchasing_replaces_native_purchase_order_when_page_is_permitted(self):
 		groups = [
 			{
 				"key": "buy",
@@ -42,7 +42,8 @@ class RetailEdgePreReportingOperationalSurfaceContractTests(unittest.TestCase):
 			_promote_professional_purchasing(groups)
 
 		targets = [item["target"] for item in groups[0]["items"]]
-		self.assertLess(targets.index(PROFESSIONAL_PURCHASING_ITEM["target"]), targets.index("Purchase Order"))
+		self.assertIn(PROFESSIONAL_PURCHASING_ITEM["target"], targets)
+		self.assertNotIn("Purchase Order", targets)
 
 	def test_payment_management_is_promoted_before_native_payment_entry(self):
 		groups = [
