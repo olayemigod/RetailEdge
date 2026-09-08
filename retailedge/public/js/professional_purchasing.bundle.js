@@ -1,9 +1,13 @@
 import ProfessionalPurchasing from "./professional_purchasing/ProfessionalPurchasing.vue";
 import ProfessionalRfqPreviewOverlay from "./professional_purchasing/ProfessionalRfqPreviewOverlay.vue";
+import ProfessionalRfqHistoryOverlay from "./professional_purchasing/ProfessionalRfqHistoryOverlay.vue";
 
 const START_RFQ_LABEL = "Start RFQ";
+const RFQS_LABEL = "RFQs";
+const RFQ_HISTORY_LABEL = "RFQ History";
 const ADVANCED_MATERIAL_REQUEST_LABEL = "Advanced: Open in ERPNext";
 const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
+const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
 const ADVANCED_RFQ_EVENT = "retailedge-advanced-prepare-rfq";
 const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced";
 const ACCESS_MODE = "edgesuite_only";
@@ -25,6 +29,15 @@ function materialRequestFromRow(button) {
 
 function applySourcingOwnership(target) {
 	if (!target) return;
+	for (const button of target.querySelectorAll("button")) {
+		const label = normaliseButtonLabel(button);
+		if (label !== RFQS_LABEL) continue;
+		button.hidden = false;
+		button.removeAttribute("aria-hidden");
+		button.textContent = __(RFQ_HISTORY_LABEL);
+		button.setAttribute("title", __("Review Requests for Quotation inside RetailEdge."));
+		button.setAttribute("data-retailedge-rfq-history", "true");
+	}
 	for (const row of target.querySelectorAll(".sourcing-panel tbody tr")) {
 		const reference = row.querySelector("td .link-button");
 		if (reference) {
@@ -81,6 +94,13 @@ function installSourcingOwnership(target) {
 			window.dispatchEvent(new CustomEvent(OPEN_RFQ_PREVIEW_EVENT, { detail: { material_request: materialRequest } }));
 			return;
 		}
+		if ([RFQS_LABEL, RFQ_HISTORY_LABEL].includes(label) || button.getAttribute("data-retailedge-rfq-history") === "true") {
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+			window.dispatchEvent(new CustomEvent(OPEN_RFQ_HISTORY_EVENT));
+			return;
+		}
 		if (!nativeDeskEnabled() && label === ADVANCED_MATERIAL_REQUEST_LABEL) {
 			event.preventDefault();
 			event.stopPropagation();
@@ -133,6 +153,12 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 	const overlayApp = edgeUI.createEdgeApp(ProfessionalRfqPreviewOverlay);
 	overlayApp.mount(overlayRoot);
 
+	const historyRoot = document.createElement("div");
+	historyRoot.className = "retailedge-professional-rfq-history-overlay-root";
+	(target.parentNode || target).appendChild(historyRoot);
+	const historyApp = edgeUI.createEdgeApp(ProfessionalRfqHistoryOverlay);
+	historyApp.mount(historyRoot);
+
 	const cleanupSourcing = installSourcingOwnership(target);
 	const cleanupAdvanced = installAdvancedRfqHandoff();
 	const originalUnmount = typeof app.unmount === "function" ? app.unmount.bind(app) : null;
@@ -141,11 +167,14 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 			cleanupSourcing();
 			cleanupAdvanced();
 			overlayApp.unmount?.();
+			historyApp.unmount?.();
 			overlayRoot.remove();
+			historyRoot.remove();
 			originalUnmount();
 		};
 	}
 	app._retailedgeRfqPreviewApp = overlayApp;
+	app._retailedgeRfqHistoryApp = historyApp;
 	return app;
 }
 
