@@ -22,15 +22,15 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
 		for contract in (
 			'const PREPARE_RECEIPT_TRIGGER_LABEL = "Prepare Receipt"',
+			'const REVIEW_RECEIPT_TRIGGER_LABEL = "Review Receipt"',
 			'const PURCHASE_RECEIPTS_TRIGGER_LABEL = "Purchase Receipts"',
-			'const ADVANCED_PURCHASE_RECEIPT_LABEL = "Advanced: Prepare Receipt in ERPNext"',
+			'const ADVANCED_PREPARE_RECEIPT_EVENT = "retailedge-advanced-prepare-purchase-receipt"',
 			'const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"',
 			"applyPurchaseReceiptParityGate(root)",
 			'button.setAttribute("data-retailedge-parity-blocked", "Purchase Receipt")',
-			"PREPARE_RECEIPT_TRIGGER_LABEL,",
-			"PURCHASE_RECEIPTS_TRIGGER_LABEL,",
-			"ADVANCED_PURCHASE_RECEIPT_LABEL,",
-			"ADVANCED_PURCHASE_RECEIPTS_LABEL,",
+			'button.setAttribute("data-retailedge-receipt-preview", "true")',
+			"OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT",
+			"if (!nativeDeskEnabled()) return;",
 			"event.stopImmediatePropagation()",
 		):
 			self.assertIn(contract, controller)
@@ -38,9 +38,14 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 
 	def test_native_receipt_handoff_is_explicitly_advanced_when_allowed(self):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
+		overlay = self.read_app("public/js/professional_purchasing/ProfessionalPurchaseReceiptPreviewOverlay.vue")
 		self.assertIn('button.setAttribute("data-retailedge-advanced-native", "Purchase Receipt")', controller)
-		self.assertIn("Prepare the ERPNext Purchase Receipt draft, then complete and review it in Advanced ERPNext Desk.", controller)
-		self.assertIn("Open the native ERPNext Purchase Receipt list. RetailEdge receipt completion parity is not yet available.", controller)
+		self.assertIn('const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"', controller)
+		self.assertIn('type: "POST"', controller)
+		self.assertIn("PREPARE_RECEIPT_METHOD", controller)
+		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', controller)
+		self.assertIn("Advanced: Prepare in ERPNext", overlay)
+		self.assertIn("nativeFallbackEnabled", overlay)
 
 	def test_shared_guard_still_blocks_native_purchase_receipt_routes_for_edgesuite_only(self):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
