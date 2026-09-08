@@ -74,15 +74,16 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn('frappe.new_doc("GL Entry")', source)
 		self.assertNotIn('frappe.new_doc("Stock Ledger Entry")', source)
 
-	def test_business_hub_promotes_page_without_removing_native_buying_routes(self):
+	def test_business_hub_promotes_page_as_purchase_order_owner(self):
 		source = (APP_ROOT / "master_experience.py").read_text()
 
 		self.assertIn('"target": "professional-purchasing"', source)
+		self.assertIn('PURCHASE_ORDER_NATIVE_PEER_DOCTYPE = "Purchase Order"', source)
 		self.assertIn("def _promote_professional_purchasing", source)
 		self.assertIn('group.get("key") != "buy"', source)
-		self.assertIn('item.get("target") == "Purchase Order"', source)
+		self.assertIn('item.get("target") == PURCHASE_ORDER_NATIVE_PEER_DOCTYPE', source)
 		self.assertIn("_promote_professional_purchasing(navigation_groups)", source)
-		self.assertIn('feature_flags["professional_purchasing"] = "erpnext_native_po_receipt"', source)
+		self.assertIn('feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"', source)
 		self.assertNotIn('item["target"] = PROFESSIONAL_PURCHASING_ITEM["target"]', source)
 
 
