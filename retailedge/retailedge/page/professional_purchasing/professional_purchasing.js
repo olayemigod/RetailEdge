@@ -185,7 +185,7 @@ function installPurchaseOrderOwnership(wrapper, root) {
 			event.stopImmediatePropagation();
 			return;
 		}
-		if (label === REVIEW_RECEIPT_TRIGGER_LABEL || button.getAttribute("data-retailedge-receipt-preview") === "true") {
+		if ([PREPARE_RECEIPT_TRIGGER_LABEL, REVIEW_RECEIPT_TRIGGER_LABEL].includes(label) || button.getAttribute("data-retailedge-receipt-preview") === "true") {
 			const purchaseOrder = purchaseOrderFromRow(button);
 			if (!purchaseOrder) return;
 			event.preventDefault();
