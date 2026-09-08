@@ -3,15 +3,18 @@ const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bund
 const PURCHASING_ASSET = "professional_purchasing.bundle.js";
 const PURCHASE_ORDER_ASSET = "professional_purchase_order.bundle.js";
 const PURCHASE_RECEIPT_PREVIEW_ASSET = "professional_purchase_receipt_preview.bundle.js";
+const PURCHASE_RECEIPT_HISTORY_ASSET = "professional_purchase_receipt_history.bundle.js";
 const PAGE_ROUTE = "professional-purchasing";
 const PAGE_TITLE = "Professional Purchasing";
 const OPEN_PURCHASE_ORDER_EVENT = "retailedge-open-professional-purchase-order";
 const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
+const OPEN_PURCHASE_RECEIPT_HISTORY_EVENT = "retailedge-open-professional-purchase-receipt-history";
 const ADVANCED_PREPARE_RECEIPT_EVENT = "retailedge-advanced-prepare-purchase-receipt";
 const PURCHASE_ORDER_TRIGGER_LABEL = "New Purchase Order";
 const PREPARE_RECEIPT_TRIGGER_LABEL = "Prepare Receipt";
 const REVIEW_RECEIPT_TRIGGER_LABEL = "Review Receipt";
 const PURCHASE_RECEIPTS_TRIGGER_LABEL = "Purchase Receipts";
+const RECEIPT_HISTORY_TRIGGER_LABEL = "Receipt History";
 const ACCESS_MODE = "edgesuite_only";
 const ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open in ERPNext";
 const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext";
@@ -80,7 +83,6 @@ function installRestrictedOperationalGuard() {
 			"Compare Quotations",
 			"PO Analysis",
 			"Procurement Tracker",
-			PURCHASE_RECEIPTS_TRIGGER_LABEL,
 			"Material Requests",
 			"Open",
 			ADVANCED_PURCHASE_ORDER_LABEL,
@@ -150,16 +152,14 @@ function applyPurchaseReceiptParityGate(root) {
 	if (!root) return;
 	for (const button of root.querySelectorAll("button")) {
 		const label = normaliseButtonLabel(button);
-		if (label !== PURCHASE_RECEIPTS_TRIGGER_LABEL) continue;
-		if (!nativeDeskEnabled()) {
-			button.hidden = true;
-			button.setAttribute("aria-hidden", "true");
-			button.setAttribute("data-retailedge-parity-blocked", "Purchase Receipt");
-			continue;
-		}
-		button.textContent = __(ADVANCED_PURCHASE_RECEIPTS_LABEL);
-		button.setAttribute("title", __("Open the native ERPNext Purchase Receipt list. RetailEdge posting parity is still gated."));
-		button.setAttribute("data-retailedge-advanced-native", "Purchase Receipt");
+		if (![PURCHASE_RECEIPTS_TRIGGER_LABEL, RECEIPT_HISTORY_TRIGGER_LABEL].includes(label)) continue;
+		button.hidden = false;
+		button.removeAttribute("aria-hidden");
+		button.removeAttribute("data-retailedge-parity-blocked");
+		button.removeAttribute("data-retailedge-advanced-native");
+		button.textContent = __(RECEIPT_HISTORY_TRIGGER_LABEL);
+		button.setAttribute("title", __("Review submitted Purchase Receipts inside RetailEdge."));
+		button.setAttribute("data-retailedge-receipt-history", "true");
 	}
 }
 
@@ -194,7 +194,14 @@ function installPurchaseOrderOwnership(wrapper, root) {
 			window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT, { detail: { purchase_order: purchaseOrder } }));
 			return;
 		}
-		if (!nativeDeskEnabled() && [ADVANCED_PURCHASE_ORDER_LABEL, PURCHASE_RECEIPTS_TRIGGER_LABEL, ADVANCED_PURCHASE_RECEIPTS_LABEL].includes(label)) {
+		if ([PURCHASE_RECEIPTS_TRIGGER_LABEL, RECEIPT_HISTORY_TRIGGER_LABEL].includes(label) || button.getAttribute("data-retailedge-receipt-history") === "true") {
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+			window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT));
+			return;
+		}
+		if (!nativeDeskEnabled() && [ADVANCED_PURCHASE_ORDER_LABEL, ADVANCED_PURCHASE_RECEIPTS_LABEL].includes(label)) {
 			event.preventDefault();
 			event.stopPropagation();
 			event.stopImmediatePropagation();
@@ -280,10 +287,11 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(RESTRICTED_GUARD_ASSET);
 		installRestrictedOperationalGuard();
-		await Promise.all([requireAsync(PURCHASING_ASSET), requireAsync(PURCHASE_ORDER_ASSET), requireAsync(PURCHASE_RECEIPT_PREVIEW_ASSET)]);
+		await Promise.all([requireAsync(PURCHASING_ASSET), requireAsync(PURCHASE_ORDER_ASSET), requireAsync(PURCHASE_RECEIPT_PREVIEW_ASSET), requireAsync(PURCHASE_RECEIPT_HISTORY_ASSET)]);
 		if (typeof window.mountRetailEdgeProfessionalPurchasing !== "function") throw new Error("Professional Purchasing bundle is unavailable.");
 		if (typeof window.mountRetailEdgeProfessionalPurchaseOrder !== "function") throw new Error("Professional Purchase Order bundle is unavailable.");
 		if (typeof window.mountRetailEdgeProfessionalPurchaseReceiptPreview !== "function") throw new Error("Professional Purchase Receipt preview bundle is unavailable.");
+		if (typeof window.mountRetailEdgeProfessionalPurchaseReceiptHistory !== "function") throw new Error("Professional Purchase Receipt history bundle is unavailable.");
 		bootLoading.remove();
 
 		const root = document.createElement("div");
@@ -303,6 +311,11 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		receiptPreviewRoot.className = "retailedge-professional-purchase-receipt-preview-overlay-root";
 		page.body.append(receiptPreviewRoot);
 		wrapper._retailedgeProfessionalPurchaseReceiptPreviewApp = await window.mountRetailEdgeProfessionalPurchaseReceiptPreview(receiptPreviewRoot);
+
+		const receiptHistoryRoot = document.createElement("div");
+		receiptHistoryRoot.className = "retailedge-professional-purchase-receipt-history-overlay-root";
+		page.body.append(receiptHistoryRoot);
+		wrapper._retailedgeProfessionalPurchaseReceiptHistoryApp = await window.mountRetailEdgeProfessionalPurchaseReceiptHistory(receiptHistoryRoot);
 	} catch (error) {
 		bootLoading.remove();
 		renderLoadError(wrapper, error);
