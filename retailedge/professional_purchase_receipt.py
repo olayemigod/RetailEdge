@@ -12,6 +12,7 @@ from retailedge.branch_context import validate_user_branch_access
 from retailedge.professional_purchasing import (
 	PURCHASE_ORDER_DOCTYPE,
 	_assert_read,
+	_branch_scoped_filters,
 	_document_branch,
 	_resolve_scope,
 	_transaction_branch_field,
@@ -19,6 +20,7 @@ from retailedge.professional_purchasing import (
 
 PURCHASE_RECEIPT_DOCTYPE = "Purchase Receipt"
 CLOSED_PURCHASE_ORDER_STATUSES = {"Closed", "Completed", "Cancelled", "Stopped"}
+MAX_RECEIPT_HISTORY = 100
 
 
 def _item_flags(item_code: str) -> dict[str, bool]:
@@ -234,4 +236,87 @@ def submit_standard_purchase_receipt(
 		"posting_status": "Submitted",
 		"stock_posted_by": "ERPNext Purchase Receipt submit",
 		"source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
+	}
+
+
+@frappe.whitelist()
+def get_professional_purchase_receipt_history(
+	company: str | None = None,
+	branch: str | None = None,
+	supplier: str | None = None,
+	limit: int | str = 50,
+) -> dict[str, Any]:
+	"""Return a bounded, permission-aware list of submitted non-return Purchase Receipts."""
+	_assert_read(PURCHASE_RECEIPT_DOCTYPE)
+	company, branch, allowed_branches, global_branch_access = _resolve_scope(company, branch)
+	supplier = str(supplier or "").strip()
+	if supplier:
+		_assert_read("Supplier", supplier)
+
+	filters, branch_field = _branch_scoped_filters(
+		PURCHASE_RECEIPT_DOCTYPE,
+		company=company,
+		branch=branch,
+		allowed_branches=allowed_branches,
+		global_branch_access=global_branch_access,
+	)
+	filters.update({"docstatus": 1, "is_return": 0})
+	if supplier:
+		filters["supplier"] = supplier
+	row_limit = max(1, min(cint(limit) or 50, MAX_RECEIPT_HISTORY))
+	fields = [
+		"name",
+		"posting_date",
+		"posting_time",
+		"company",
+		"supplier",
+		"supplier_name",
+		"status",
+		"total_qty",
+		"modified",
+	]
+	if branch_field:
+		fields.append(branch_field)
+
+	rows = frappe.get_list(
+		PURCHASE_RECEIPT_DOCTYPE,
+		filters=filters,
+		fields=fields,
+		order_by="posting_date desc, posting_time desc, name desc",
+		limit_page_length=row_limit,
+	)
+	names = [str(row.get("name") or "") for row in rows if row.get("name")]
+	purchase_orders: dict[str, list[str]] = {name: [] for name in names}
+	if names:
+		for item in frappe.get_all(
+			"Purchase Receipt Item",
+			filters={"parent": ["in", names]},
+			fields=["parent", "purchase_order"],
+		):
+			parent = str(item.get("parent") or "")
+			purchase_order = str(item.get("purchase_order") or "")
+			if parent in purchase_orders and purchase_order and purchase_order not in purchase_orders[parent]:
+				purchase_orders[parent].append(purchase_order)
+
+	return {
+		"company": company,
+		"branch": branch,
+		"supplier": supplier,
+		"limit": row_limit,
+		"receipts": [
+			{
+				"name": str(row.get("name") or ""),
+				"posting_date": row.get("posting_date"),
+				"posting_time": row.get("posting_time"),
+				"company": str(row.get("company") or ""),
+				"branch": str(row.get(branch_field) or "") if branch_field else "",
+				"supplier": str(row.get("supplier") or ""),
+				"supplier_name": str(row.get("supplier_name") or row.get("supplier") or ""),
+				"status": str(row.get("status") or "Submitted"),
+				"total_qty": flt(row.get("total_qty")),
+				"purchase_orders": purchase_orders.get(str(row.get("name") or ""), []),
+			}
+			for row in rows
+		],
+		"source_of_truth": "ERPNext Purchase Receipt",
 	}
