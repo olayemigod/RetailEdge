@@ -45,6 +45,15 @@ def test_professional_purchasing_routes_prepare_receipt_to_edgesuite_preview():
 	assert "PREPARE_RECEIPT_TRIGGER_LABEL" not in source.split("hiddenButtonLabels:", 1)[1].split("],", 1)[0]
 
 
+def test_capture_phase_intercepts_raw_and_rewritten_receipt_labels_before_vue_handler():
+	source = _read(CONTROLLER)
+	assert "[PREPARE_RECEIPT_TRIGGER_LABEL, REVIEW_RECEIPT_TRIGGER_LABEL].includes(label)" in source
+	assert "event.preventDefault()" in source
+	assert "event.stopPropagation()" in source
+	assert "event.stopImmediatePropagation()" in source
+	assert "OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT" in source
+
+
 def test_native_receipt_list_and_draft_handoff_remain_advanced_only():
 	source = _read(CONTROLLER)
 	assert 'const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext"' in source
