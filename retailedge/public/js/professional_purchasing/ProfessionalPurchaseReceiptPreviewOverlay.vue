@@ -2,12 +2,12 @@
 	<EdgeModal
 		:open="open"
 		title="Review Purchase Receipt"
-		subtitle="Preview ERPNext's standard receipt mapping before any draft or stock movement is created."
+		subtitle="Review ERPNext's receipt mapping before stock is received."
 		size="xl"
 		@close="close"
 	>
 		<EdgeLoadingState v-if="loading" message="Preparing receipt preview..." :skeleton="true" />
-		<EdgeErrorState v-else-if="error" title="Receipt preview unavailable" :message="error" @retry="loadPreview" />
+		<EdgeErrorState v-else-if="error" title="Receipt action unavailable" :message="error" @retry="loadPreview" />
 		<div v-else-if="preview" class="receipt-preview">
 			<div class="receipt-preview__context">
 				<div><span>Purchase Order</span><strong>{{ preview.purchase_order }}</strong></div>
@@ -23,7 +23,8 @@
 			</div>
 			<div v-else class="receipt-preview__ready">
 				<strong>Standard receipt preflight passed.</strong>
-				<span>No document has been created and no stock has moved. Posting remains disabled until RIR2F2D2.</span>
+				<span v-if="preview.can_submit">Receive Stock will create and submit the ERPNext Purchase Receipt. ERPNext remains responsible for validation and stock posting.</span>
+				<span v-else>You can review this receipt, but your role cannot submit Purchase Receipts.</span>
 			</div>
 
 			<div class="table-responsive">
@@ -44,8 +45,11 @@
 
 		<template #footer>
 			<div class="receipt-preview__footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" @click="openAdvanced">Advanced: Prepare in ERPNext</button>
-				<button type="button" class="edge-button edge-button--primary" @click="close">Close Preview</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="posting" @click="openAdvanced">Advanced: Prepare in ERPNext</button>
+				<div class="receipt-preview__footer-actions">
+					<button type="button" class="edge-button" :disabled="posting" @click="close">Close</button>
+					<button v-if="canSubmitStandard" type="button" class="edge-button edge-button--primary" :disabled="posting" @click="confirmSubmit">{{ posting ? 'Receiving Stock...' : 'Receive Stock' }}</button>
+				</div>
 			</div>
 		</template>
 	</EdgeModal>
@@ -53,12 +57,13 @@
 
 <script>
 const PREVIEW_METHOD = "retailedge.professional_purchase_receipt.get_professional_purchase_receipt_preview";
+const SUBMIT_METHOD = "retailedge.professional_purchase_receipt.submit_standard_purchase_receipt";
 const OPEN_EVENT = "retailedge-open-professional-purchase-receipt-preview";
 const ACCESS_MODE = "edgesuite_only";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
-function callMethod(method, args = {}) {
-	return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject }));
+function callMethod(method, args = {}, type = undefined) {
+	return new Promise((resolve, reject) => frappe.call({ method, args, ...(type ? { type } : {}), callback: (response) => resolve(response.message || {}), error: reject }));
 }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
 
@@ -69,9 +74,10 @@ export default {
 		EdgeLoadingState: runtime.EdgeLoadingState,
 		EdgeErrorState: runtime.EdgeErrorState,
 	},
-	data() { return { open: false, purchaseOrder: "", loading: false, error: "", preview: null }; },
+	data() { return { open: false, purchaseOrder: "", loading: false, posting: false, error: "", preview: null }; },
 	computed: {
 		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE; },
+		canSubmitStandard() { return Boolean(this.preview?.standard_receipt_eligible && this.preview?.can_submit); },
 	},
 	created() {
 		this._open = (event) => {
@@ -85,17 +91,41 @@ export default {
 	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
 	methods: {
 		async loadPreview() {
-			if (!this.purchaseOrder || this.loading) return;
+			if (!this.purchaseOrder || this.loading || this.posting) return;
 			this.loading = true; this.error = ""; this.preview = null;
 			try { this.preview = await callMethod(PREVIEW_METHOD, { purchase_order: this.purchaseOrder }); }
 			catch (error) { this.error = errorMessage(error, "Unable to preview this Purchase Receipt."); }
 			finally { this.loading = false; }
 		},
-		close() { if (!this.loading) { this.open = false; this.preview = null; this.error = ""; } },
+		close() { if (!this.loading && !this.posting) { this.open = false; this.preview = null; this.error = ""; } },
 		openAdvanced() {
-			if (!this.nativeFallbackEnabled || !this.purchaseOrder) return;
+			if (!this.nativeFallbackEnabled || !this.purchaseOrder || this.posting) return;
 			this.close();
 			window.dispatchEvent(new CustomEvent("retailedge-advanced-prepare-purchase-receipt", { detail: { purchase_order: this.purchaseOrder } }));
+		},
+		confirmSubmit() {
+			if (!this.canSubmitStandard || this.posting) return;
+			frappe.confirm(
+				__("Receive the listed quantities now? This submits an ERPNext Purchase Receipt and posts stock to the shown receiving locations."),
+				() => this.submitStandardReceipt(),
+			);
+		},
+		async submitStandardReceipt() {
+			if (!this.canSubmitStandard || this.posting) return;
+			this.posting = true; this.error = "";
+			try {
+				const result = await callMethod(SUBMIT_METHOD, {
+					purchase_order: this.purchaseOrder,
+					expected_purchase_order_modified: this.preview?.purchase_order_modified || "",
+				}, "POST");
+				this.posting = false;
+				this.close();
+				frappe.show_alert({ message: __(`Purchase Receipt ${result.name || ''} submitted. Stock has been received.`), indicator: "green" }, 7);
+				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
+			} catch (error) {
+				this.posting = false;
+				this.error = errorMessage(error, "Unable to submit this Purchase Receipt.");
+			}
 		},
 		controlLabel(row) {
 			const flags = [];
@@ -115,5 +145,6 @@ export default {
 .receipt-preview__context span, .receipt-preview__table small { display: block; opacity: .72; }
 .receipt-preview__warning, .receipt-preview__ready { padding: .9rem; border: 1px solid var(--border-color, #d1d8dd); border-radius: .5rem; }
 .receipt-preview__table td { vertical-align: top; }
-.receipt-preview__footer { width: 100%; display: flex; justify-content: space-between; gap: .75rem; }
+.receipt-preview__footer { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
+.receipt-preview__footer-actions { display: flex; justify-content: flex-end; gap: .75rem; margin-left: auto; }
 </style>
