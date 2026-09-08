@@ -3,6 +3,7 @@ import ProfessionalRfqPreviewOverlay from "./professional_purchasing/Professiona
 import ProfessionalRfqHistoryOverlay from "./professional_purchasing/ProfessionalRfqHistoryOverlay.vue";
 import ProfessionalSupplierQuotationHistoryOverlay from "./professional_purchasing/ProfessionalSupplierQuotationHistoryOverlay.vue";
 import ProfessionalSupplierQuotationPurchaseOrderOverlay from "./professional_purchasing/ProfessionalSupplierQuotationPurchaseOrderOverlay.vue";
+import ProfessionalPurchaseOrderSubmitOverlay from "./professional_purchasing/ProfessionalPurchaseOrderSubmitOverlay.vue";
 
 const START_RFQ_LABEL = "Start RFQ";
 const RFQS_LABEL = "RFQs";
@@ -12,9 +13,11 @@ const SUPPLIER_QUOTATION_HISTORY_LABEL = "Supplier Quote History";
 const COMPARE_QUOTATIONS_LABEL = "Compare Quotations";
 const ADVANCED_COMPARE_QUOTATIONS_LABEL = "Advanced: Compare Quotations in ERPNext";
 const ADVANCED_MATERIAL_REQUEST_LABEL = "Advanced: Open in ERPNext";
+const PURCHASE_ORDER_SUBMIT_LABEL = "Review & Submit";
 const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
 const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
 const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
+const OPEN_PURCHASE_ORDER_SUBMIT_EVENT = "retailedge-open-purchase-order-submit";
 const ADVANCED_RFQ_EVENT = "retailedge-advanced-prepare-rfq";
 const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced";
 const ACCESS_MODE = "edgesuite_only";
@@ -32,6 +35,35 @@ function materialRequestFromRow(button) {
 	if (!row) return "";
 	const reference = row.querySelector("td .retailedge-material-request-reference, td .link-button");
 	return String(reference?.textContent || "").trim();
+}
+
+function purchaseOrderFromRow(button) {
+	const row = button?.closest?.(".purchasing-table--orders tbody tr");
+	if (!row) return "";
+	const reference = row.querySelector("td .retailedge-po-reference, td .link-button");
+	return String(reference?.textContent || "").trim();
+}
+
+function applyPurchaseOrderSubmitOwnership(target) {
+	if (!target) return;
+	for (const row of target.querySelectorAll(".purchasing-table--orders tbody tr")) {
+		const actions = row.querySelector(".actions-cell");
+		if (!actions) continue;
+		const status = normaliseButtonLabel(row.querySelector(".status-pill"));
+		const existing = actions.querySelector('[data-retailedge-po-submit="true"]');
+		if (status !== "Draft") {
+			existing?.remove();
+			continue;
+		}
+		if (existing) continue;
+		const button = document.createElement("button");
+		button.type = "button";
+		button.className = "edge-small-button edge-small-button--primary";
+		button.textContent = __(PURCHASE_ORDER_SUBMIT_LABEL);
+		button.setAttribute("title", __("Review this draft Purchase Order before standard ERPNext submission."));
+		button.setAttribute("data-retailedge-po-submit", "true");
+		actions.appendChild(button);
+	}
 }
 
 function applySourcingOwnership(target) {
@@ -91,6 +123,7 @@ function applySourcingOwnership(target) {
 			button.setAttribute("data-retailedge-advanced-native", "Material Request");
 		}
 	}
+	applyPurchaseOrderSubmitOwnership(target);
 }
 
 function installSourcingOwnership(target) {
@@ -135,6 +168,15 @@ function installSourcingOwnership(target) {
 			event.stopPropagation();
 			event.stopImmediatePropagation();
 			window.dispatchEvent(new CustomEvent(OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT));
+			return;
+		}
+		if (label === PURCHASE_ORDER_SUBMIT_LABEL || button.getAttribute("data-retailedge-po-submit") === "true") {
+			const purchaseOrder = purchaseOrderFromRow(button);
+			if (!purchaseOrder) return;
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+			window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { detail: { purchase_order: purchaseOrder } }));
 			return;
 		}
 		if (!nativeDeskEnabled() && [ADVANCED_MATERIAL_REQUEST_LABEL, COMPARE_QUOTATIONS_LABEL, ADVANCED_COMPARE_QUOTATIONS_LABEL].includes(label)) {
@@ -207,6 +249,12 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 	const supplierQuotationPurchaseOrderApp = edgeUI.createEdgeApp(ProfessionalSupplierQuotationPurchaseOrderOverlay);
 	supplierQuotationPurchaseOrderApp.mount(supplierQuotationPurchaseOrderRoot);
 
+	const purchaseOrderSubmitRoot = document.createElement("div");
+	purchaseOrderSubmitRoot.className = "retailedge-purchase-order-submit-overlay-root";
+	(target.parentNode || target).appendChild(purchaseOrderSubmitRoot);
+	const purchaseOrderSubmitApp = edgeUI.createEdgeApp(ProfessionalPurchaseOrderSubmitOverlay);
+	purchaseOrderSubmitApp.mount(purchaseOrderSubmitRoot);
+
 	const cleanupSourcing = installSourcingOwnership(target);
 	const cleanupAdvanced = installAdvancedRfqHandoff();
 	const originalUnmount = typeof app.unmount === "function" ? app.unmount.bind(app) : null;
@@ -218,10 +266,12 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 			historyApp.unmount?.();
 			supplierQuotationHistoryApp.unmount?.();
 			supplierQuotationPurchaseOrderApp.unmount?.();
+			purchaseOrderSubmitApp.unmount?.();
 			overlayRoot.remove();
 			historyRoot.remove();
 			supplierQuotationHistoryRoot.remove();
 			supplierQuotationPurchaseOrderRoot.remove();
+			purchaseOrderSubmitRoot.remove();
 			originalUnmount();
 		};
 	}
@@ -229,6 +279,7 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 	app._retailedgeRfqHistoryApp = historyApp;
 	app._retailedgeSupplierQuotationHistoryApp = supplierQuotationHistoryApp;
 	app._retailedgeSupplierQuotationPurchaseOrderApp = supplierQuotationPurchaseOrderApp;
+	app._retailedgePurchaseOrderSubmitApp = purchaseOrderSubmitApp;
 	return app;
 }
 
