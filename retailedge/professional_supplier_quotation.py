@@ -100,6 +100,13 @@ def _linked_rfq_context(parent_names: list[str]) -> tuple[dict[str, list[str]], 
 		):
 			name = str(row.get("name") or "")
 			branch_by_rfq[name] = str(row.get(rfq_branch_field) or "") if rfq_branch_field else ""
+
+	# Child-table access is used only to discover references. Never expose an RFQ
+	# name unless the current user can also read that RFQ through permission-aware
+	# frappe.get_list above.
+	readable_rfqs = set(branch_by_rfq)
+	for parent in rfqs_by_parent:
+		rfqs_by_parent[parent] = [rfq for rfq in rfqs_by_parent[parent] if rfq in readable_rfqs]
 	return rfqs_by_parent, branch_by_rfq, item_count_by_parent
 
 
