@@ -2,6 +2,7 @@ import ProfessionalPurchasing from "./professional_purchasing/ProfessionalPurcha
 import ProfessionalRfqPreviewOverlay from "./professional_purchasing/ProfessionalRfqPreviewOverlay.vue";
 import ProfessionalRfqHistoryOverlay from "./professional_purchasing/ProfessionalRfqHistoryOverlay.vue";
 import ProfessionalSupplierQuotationHistoryOverlay from "./professional_purchasing/ProfessionalSupplierQuotationHistoryOverlay.vue";
+import ProfessionalSupplierQuotationPurchaseOrderOverlay from "./professional_purchasing/ProfessionalSupplierQuotationPurchaseOrderOverlay.vue";
 
 const START_RFQ_LABEL = "Start RFQ";
 const RFQS_LABEL = "RFQs";
@@ -200,6 +201,12 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 	const supplierQuotationHistoryApp = edgeUI.createEdgeApp(ProfessionalSupplierQuotationHistoryOverlay);
 	supplierQuotationHistoryApp.mount(supplierQuotationHistoryRoot);
 
+	const supplierQuotationPurchaseOrderRoot = document.createElement("div");
+	supplierQuotationPurchaseOrderRoot.className = "retailedge-supplier-quotation-purchase-order-overlay-root";
+	(target.parentNode || target).appendChild(supplierQuotationPurchaseOrderRoot);
+	const supplierQuotationPurchaseOrderApp = edgeUI.createEdgeApp(ProfessionalSupplierQuotationPurchaseOrderOverlay);
+	supplierQuotationPurchaseOrderApp.mount(supplierQuotationPurchaseOrderRoot);
+
 	const cleanupSourcing = installSourcingOwnership(target);
 	const cleanupAdvanced = installAdvancedRfqHandoff();
 	const originalUnmount = typeof app.unmount === "function" ? app.unmount.bind(app) : null;
@@ -210,15 +217,18 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 			overlayApp.unmount?.();
 			historyApp.unmount?.();
 			supplierQuotationHistoryApp.unmount?.();
+			supplierQuotationPurchaseOrderApp.unmount?.();
 			overlayRoot.remove();
 			historyRoot.remove();
 			supplierQuotationHistoryRoot.remove();
+			supplierQuotationPurchaseOrderRoot.remove();
 			originalUnmount();
 		};
 	}
 	app._retailedgeRfqPreviewApp = overlayApp;
 	app._retailedgeRfqHistoryApp = historyApp;
 	app._retailedgeSupplierQuotationHistoryApp = supplierQuotationHistoryApp;
+	app._retailedgeSupplierQuotationPurchaseOrderApp = supplierQuotationPurchaseOrderApp;
 	return app;
 }
 
