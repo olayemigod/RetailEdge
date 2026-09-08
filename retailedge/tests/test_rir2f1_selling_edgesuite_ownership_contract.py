@@ -77,7 +77,7 @@ class RIR2F1SellingEdgeSuiteOwnershipContractTests(unittest.TestCase):
 		self.assertIn('@click="viewTransactionRecords(action)"', source)
 		self.assertIn('if (action?.doctype === "Sales Invoice")', source)
 		self.assertIn('frappe.set_route("professional-selling")', source)
-		self.assertIn("openNativePurchaseInvoice", source)
+		self.assertNotIn("openNativeSalesInvoice", source)
 		self.assertIn("openNativeStockTransfer", source)
 		self.assertIn('this.openDoctype(action?.doctype)', source)
 
