@@ -138,7 +138,7 @@
 		<template #footer>
 			<div class="guided-purchase-footer">
 				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Open Full Form
+					Advanced: Open in ERPNext
 				</button>
 				<div class="guided-purchase-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
@@ -306,7 +306,7 @@ export default {
 			this.$emit("close");
 		},
 		openFullForm() {
-			if (this.saving) return;
+			if (this.saving || !this.nativeFallbackEnabled) return;
 			this.$emit("open-native", "Purchase Invoice");
 		},
 		async searchOptions(fieldname, query) {

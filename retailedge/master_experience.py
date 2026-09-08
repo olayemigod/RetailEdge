@@ -83,6 +83,9 @@ PROFESSIONAL_PURCHASING_ITEM: dict[str, Any] = {
 	"icon": "shopping-bag",
 }
 
+PURCHASE_REGISTER_PAGE_TARGET = "purchase-register"
+PURCHASE_INVOICE_NATIVE_PEER_DOCTYPE = "Purchase Invoice"
+
 DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
 	"label": "Document Output & Sharing",
 	"description": "Print, download and share customer documents using ERPNext Print Formats and permissions.",
@@ -290,6 +293,35 @@ def _promote_professional_purchasing(navigation_groups: list[dict[str, Any]]) ->
 		return
 
 
+def _promote_purchase_invoice_ownership(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Use the EdgeSuite Purchase Register as the everyday Purchase Invoice read surface.
+
+	The native Purchase Invoice peer is removed only when the current user may open the
+	Purchase Register and that Page is already present in the Buy composition. This keeps
+	legacy/native compatibility fail-safe when the EdgeSuite owner is unavailable.
+	"""
+	if not _can_open_page(PURCHASE_REGISTER_PAGE_TARGET):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "buy":
+			continue
+		items = list(group.get("items") or [])
+		if not any(
+			item.get("target_type") == "Page" and item.get("target") == PURCHASE_REGISTER_PAGE_TARGET
+			for item in items
+		):
+			return
+		group["items"] = [
+			item
+			for item in items
+			if not (
+				item.get("target_type") == "DocType"
+				and item.get("target") == PURCHASE_INVOICE_NATIVE_PEER_DOCTYPE
+			)
+		]
+		return
+
+
 def _promote_document_output(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(DOCUMENT_OUTPUT_ITEM["target"]):
 		return
@@ -408,6 +440,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
+	_promote_purchase_invoice_ownership(navigation_groups)
 	_promote_document_output(navigation_groups)
 	_promote_payment_management(navigation_groups)
 	_promote_banking_readiness(navigation_groups)
@@ -442,6 +475,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["transaction_workspace"] = "edgesuite_host"
 	feature_flags["professional_selling"] = "edgesuite_primary"
 	feature_flags["professional_purchasing"] = "erpnext_native_po_receipt"
+	feature_flags["purchase_invoice_ownership"] = "edgesuite_purchase_register"
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"

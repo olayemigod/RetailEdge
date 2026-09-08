@@ -66,7 +66,7 @@
 						<p>{{ actionDescription(action) }}</p>
 						<div class="workspace-actions">
 							<button type="button" class="edge-button edge-button--primary" @click="runTransactionAction(action)">{{ actionButtonLabel(action) }}</button>
-							<button type="button" class="edge-button edge-button--secondary" @click="viewTransactionRecords(action)">{{ action.doctype === "Sales Invoice" ? "View / Manage" : "View Records" }}</button>
+							<button type="button" class="edge-button edge-button--secondary" @click="viewTransactionRecords(action)">{{ ["Sales Invoice", "Purchase Invoice"].includes(action.doctype) ? "View / Manage" : "View Records" }}</button>
 						</div>
 					</section>
 				</div>
@@ -80,9 +80,9 @@
 			/>
 			<SimplePurchaseInvoiceDialog
 				:open="simplePurchaseInvoiceOpen"
+				:nativeFallbackEnabled="false"
 				@close="simplePurchaseInvoiceOpen = false"
 				@saved="handleGuidedSaved"
-				@open-native="openNativePurchaseInvoice"
 			/>
 			<SimpleStockTransferDialog
 				:open="simpleStockTransferOpen"
@@ -291,6 +291,10 @@ export default {
 				frappe.set_route("professional-selling");
 				return;
 			}
+			if (action?.doctype === "Purchase Invoice") {
+				frappe.set_route("purchase-register");
+				return;
+			}
 			this.openDoctype(action?.doctype);
 		},
 		actionButtonLabel(action) {
@@ -299,6 +303,9 @@ export default {
 		actionDescription(action) {
 			if (action?.doctype === "Sales Invoice") {
 				return "Use the guided Sales Invoice flow here and manage selling records in Professional Selling.";
+			}
+			if (action?.doctype === "Purchase Invoice") {
+				return "Use the guided Purchase Invoice flow here and review submitted purchases in the Purchase Register.";
 			}
 			return GUIDED_DOCTYPES.has(action?.doctype)
 				? `Use the existing guided ${action.label} flow here, with native ERPNext as the advanced fallback.`
@@ -313,10 +320,6 @@ export default {
 		openNativeSalesInvoice() {
 			this.simpleSalesInvoiceOpen = false;
 			this.createDoctype("Sales Invoice");
-		},
-		openNativePurchaseInvoice() {
-			this.simplePurchaseInvoiceOpen = false;
-			this.createDoctype("Purchase Invoice");
 		},
 		openNativeStockTransfer() {
 			this.simpleStockTransferOpen = false;
