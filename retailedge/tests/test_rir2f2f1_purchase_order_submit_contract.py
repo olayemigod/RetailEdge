@@ -62,7 +62,7 @@ def test_submit_is_post_only_locked_stale_safe_and_erpnext_authoritative():
 	assert "changed after the review" in submit
 	assert "_standard_submit_blockers(doc)" in submit
 	assert "doc.submit()" in submit
-	assert "doc.docstatus" in submit
+	assert 'getattr(doc, "docstatus", 0)' in submit
 	assert "ignore_permissions=True" not in submit
 	assert "frappe.db.commit" not in submit
 	assert 'frappe.new_doc("GL Entry")' not in source
