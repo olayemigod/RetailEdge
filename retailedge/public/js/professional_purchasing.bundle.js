@@ -1,4 +1,123 @@
 import ProfessionalPurchasing from "./professional_purchasing/ProfessionalPurchasing.vue";
+import ProfessionalRfqPreviewOverlay from "./professional_purchasing/ProfessionalRfqPreviewOverlay.vue";
+
+const START_RFQ_LABEL = "Start RFQ";
+const ADVANCED_MATERIAL_REQUEST_LABEL = "Advanced: Open in ERPNext";
+const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
+const ADVANCED_RFQ_EVENT = "retailedge-advanced-prepare-rfq";
+const PREPARE_RFQ_METHOD = "retailedge.professional_purchasing.prepare_request_for_quotation_draft";
+const ACCESS_MODE = "edgesuite_only";
+
+function normaliseButtonLabel(button) {
+	return String(button?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function nativeDeskEnabled() {
+	return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE;
+}
+
+function materialRequestFromRow(button) {
+	const row = button?.closest?.(".sourcing-panel tbody tr");
+	if (!row) return "";
+	const reference = row.querySelector("td .retailedge-material-request-reference, td .link-button");
+	return String(reference?.textContent || "").trim();
+}
+
+function applySourcingOwnership(target) {
+	if (!target) return;
+	for (const row of target.querySelectorAll(".sourcing-panel tbody tr")) {
+		const reference = row.querySelector("td .link-button");
+		if (reference) {
+			reference.classList.remove("link-button");
+			reference.classList.add("retailedge-material-request-reference");
+			reference.setAttribute("aria-disabled", "true");
+			reference.setAttribute("title", __("Material Request reference. Use Start RFQ for the normal sourcing workflow."));
+			reference.tabIndex = -1;
+		}
+		for (const button of row.querySelectorAll(".actions-cell button")) {
+			const label = normaliseButtonLabel(button);
+			if (label !== "Open") continue;
+			if (!nativeDeskEnabled()) {
+				button.hidden = true;
+				button.setAttribute("aria-hidden", "true");
+				continue;
+			}
+			button.hidden = false;
+			button.removeAttribute("aria-hidden");
+			button.textContent = __(ADVANCED_MATERIAL_REQUEST_LABEL);
+			button.setAttribute("title", __("Open the full ERPNext Material Request form for advanced review."));
+			button.setAttribute("data-retailedge-advanced-native", "Material Request");
+		}
+	}
+}
+
+function installSourcingOwnership(target) {
+	if (!target || target._retailedgeSourcingOwnershipInstalled) return () => {};
+	let scheduled = false;
+	const scheduleApply = () => {
+		if (scheduled) return;
+		scheduled = true;
+		window.requestAnimationFrame(() => {
+			scheduled = false;
+			applySourcingOwnership(target);
+		});
+	};
+	const handler = (event) => {
+		const button = event.target?.closest?.("button");
+		if (!button || !target.contains(button)) return;
+		const label = normaliseButtonLabel(button);
+		if (button.classList.contains("retailedge-material-request-reference")) {
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+			return;
+		}
+		if (label === START_RFQ_LABEL) {
+			const materialRequest = materialRequestFromRow(button);
+			if (!materialRequest) return;
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+			window.dispatchEvent(new CustomEvent(OPEN_RFQ_PREVIEW_EVENT, { detail: { material_request: materialRequest } }));
+			return;
+		}
+		if (!nativeDeskEnabled() && label === ADVANCED_MATERIAL_REQUEST_LABEL) {
+			event.preventDefault();
+			event.stopPropagation();
+			event.stopImmediatePropagation();
+		}
+	};
+	target.addEventListener("click", handler, true);
+	const observer = new MutationObserver(scheduleApply);
+	observer.observe(target, { childList: true, subtree: true });
+	target._retailedgeSourcingOwnershipInstalled = true;
+	scheduleApply();
+	return () => {
+		observer.disconnect();
+		target.removeEventListener("click", handler, true);
+		target._retailedgeSourcingOwnershipInstalled = false;
+	};
+}
+
+function installAdvancedRfqHandoff() {
+	const handler = (event) => {
+		if (!nativeDeskEnabled()) return;
+		const materialRequest = String(event?.detail?.material_request || "").trim();
+		const suppliers = Array.isArray(event?.detail?.suppliers) ? event.detail.suppliers.filter(Boolean) : [];
+		if (!materialRequest || !suppliers.length) return;
+		frappe.call({
+			method: PREPARE_RFQ_METHOD,
+			type: "POST",
+			args: { material_request: materialRequest, suppliers },
+			callback(response) {
+				const result = response.message || {};
+				if (result.name) frappe.set_route("Form", "Request for Quotation", result.name);
+			},
+		});
+	};
+	window.addEventListener(ADVANCED_RFQ_EVENT, handler);
+	return () => window.removeEventListener(ADVANCED_RFQ_EVENT, handler);
+}
 
 function mountRetailEdgeProfessionalPurchasing(target) {
 	if (typeof window === "undefined") return null;
@@ -7,6 +126,26 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 	if (!target) throw new Error("Professional Purchasing mount target is required");
 	const app = edgeUI.createEdgeApp(ProfessionalPurchasing);
 	app.mount(target);
+
+	const overlayRoot = document.createElement("div");
+	overlayRoot.className = "retailedge-professional-rfq-preview-overlay-root";
+	(target.parentNode || target).appendChild(overlayRoot);
+	const overlayApp = edgeUI.createEdgeApp(ProfessionalRfqPreviewOverlay);
+	overlayApp.mount(overlayRoot);
+
+	const cleanupSourcing = installSourcingOwnership(target);
+	const cleanupAdvanced = installAdvancedRfqHandoff();
+	const originalUnmount = typeof app.unmount === "function" ? app.unmount.bind(app) : null;
+	if (originalUnmount) {
+		app.unmount = () => {
+			cleanupSourcing();
+			cleanupAdvanced();
+			overlayApp.unmount?.();
+			overlayRoot.remove();
+			originalUnmount();
+		};
+	}
+	app._retailedgeRfqPreviewApp = overlayApp;
 	return app;
 }
 
