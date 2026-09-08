@@ -15,6 +15,7 @@ from retailedge.professional_purchasing import (
 	SUPPLIER_DOCTYPE,
 	_assert_create,
 	_assert_read,
+	_branch_scoped_filters,
 	_coerce_supplier_names,
 	_document_branch,
 	_resolve_scope,
@@ -22,6 +23,7 @@ from retailedge.professional_purchasing import (
 )
 
 CLOSED_MATERIAL_REQUEST_STATUSES = {"Stopped", "Cancelled", "Ordered"}
+MAX_RFQ_HISTORY = 100
 
 
 def _get_open_purchase_request(material_request: str) -> Any:
@@ -110,6 +112,10 @@ def _validate_suppliers(suppliers: list[Any] | str | None) -> list[str]:
 	return supplier_names
 
 
+def _docstatus_label(value: int) -> str:
+	return {0: "Draft", 1: "Submitted", 2: "Cancelled"}.get(cint(value), "Unknown")
+
+
 @frappe.whitelist()
 def get_request_for_quotation_preview(
 	material_request: str,
@@ -178,4 +184,105 @@ def prepare_request_for_quotation_draft_advanced(
 		"status": "Draft",
 		"source_of_truth": "ERPNext Material Request make_request_for_quotation mapper",
 		"route": f"/app/request-for-quotation/{rfq.name}",
+	}
+
+
+@frappe.whitelist()
+def get_request_for_quotation_history(
+	company: str | None = None,
+	branch: str | None = None,
+	supplier: str | None = None,
+	limit: int | str = 50,
+) -> dict[str, Any]:
+	"""Return permission-aware RFQ history for the active Company/Branch scope."""
+	_assert_read(REQUEST_FOR_QUOTATION_DOCTYPE)
+	resolved_company, resolved_branch, allowed_branches, global_access = _resolve_scope(
+		company=company,
+		branch=branch,
+	)
+	filters, branch_field = _branch_scoped_filters(
+		REQUEST_FOR_QUOTATION_DOCTYPE,
+		company=resolved_company,
+		branch=resolved_branch,
+		allowed_branches=allowed_branches,
+		global_branch_access=global_access,
+	)
+
+	supplier = str(supplier or "").strip()
+	if supplier:
+		_assert_read(SUPPLIER_DOCTYPE, supplier)
+		candidate_names = frappe.get_all(
+			"Request for Quotation Supplier",
+			filters={"supplier": supplier},
+			pluck="parent",
+			limit_page_length=500,
+		)
+		filters["name"] = ["in", candidate_names or ["__no_matching_rfq__"]]
+
+	meta = frappe.get_meta(REQUEST_FOR_QUOTATION_DOCTYPE)
+	fields = ["name", "docstatus", "company", "modified"]
+	for fieldname in ("transaction_date", "schedule_date", "status"):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
+	if branch_field:
+		fields.append(branch_field)
+
+	row_limit = max(1, min(cint(limit) or 50, MAX_RFQ_HISTORY))
+	rows = frappe.get_list(
+		REQUEST_FOR_QUOTATION_DOCTYPE,
+		filters=filters,
+		fields=fields,
+		order_by="modified desc, name desc",
+		limit_page_length=row_limit,
+	)
+	parent_names = [str(row.get("name") or "") for row in rows if row.get("name")]
+	suppliers_by_parent: dict[str, list[str]] = {name: [] for name in parent_names}
+	items_by_parent: dict[str, int] = {name: 0 for name in parent_names}
+	if parent_names:
+		for row in frappe.get_all(
+			"Request for Quotation Supplier",
+			filters={"parent": ["in", parent_names]},
+			fields=["parent", "supplier"],
+			order_by="idx asc",
+		):
+			parent = str(row.get("parent") or "")
+			supplier_name = str(row.get("supplier") or "")
+			if parent in suppliers_by_parent and supplier_name:
+				suppliers_by_parent[parent].append(supplier_name)
+		for row in frappe.get_all(
+			"Request for Quotation Item",
+			filters={"parent": ["in", parent_names]},
+			fields=["parent", "name"],
+		):
+			parent = str(row.get("parent") or "")
+			if parent in items_by_parent:
+				items_by_parent[parent] += 1
+
+	result_rows = []
+	for row in rows:
+		name = str(row.get("name") or "")
+		docstatus = cint(row.get("docstatus"))
+		result_rows.append(
+			{
+				"name": name,
+				"docstatus": docstatus,
+				"status": str(row.get("status") or _docstatus_label(docstatus)),
+				"company": str(row.get("company") or ""),
+				"branch": str(row.get(branch_field) or "") if branch_field else "",
+				"transaction_date": str(row.get("transaction_date") or ""),
+				"schedule_date": str(row.get("schedule_date") or ""),
+				"modified": str(row.get("modified") or ""),
+				"suppliers": suppliers_by_parent.get(name, []),
+				"supplier_count": len(suppliers_by_parent.get(name, [])),
+				"item_count": items_by_parent.get(name, 0),
+			}
+		)
+
+	return {
+		"company": resolved_company,
+		"branch": resolved_branch,
+		"supplier": supplier,
+		"rows": result_rows,
+		"limit": row_limit,
+		"source_of_truth": REQUEST_FOR_QUOTATION_DOCTYPE,
 	}
