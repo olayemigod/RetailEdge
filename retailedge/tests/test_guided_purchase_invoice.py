@@ -229,7 +229,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertIn("Buying Price List", component)
 		self.assertIn("Buying Rate", component)
 		self.assertIn("Supplier Bill No", component)
-		self.assertIn("Open Full Form", component)
+		self.assertIn("Advanced: Open in ERPNext", component)
 		self.assertIn('this.$emit("open-native", "Purchase Invoice")', component)
 
 	def test_limits_are_small_for_guided_entry(self):
