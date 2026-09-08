@@ -19,13 +19,13 @@
 				<div><span>Mapped Items</span><strong>{{ preview.item_count || 0 }}</strong></div>
 			</div>
 
-			<div v-if="preview.existing_purchase_order" class="quotation-po-preview__blocked">
-				<strong>Purchase Order already exists.</strong>
-				<span>An active Purchase Order already references this Supplier Quotation. Review the existing order instead of creating a duplicate.</span>
-			</div>
-			<div v-else-if="created" class="quotation-po-preview__success">
+			<div v-if="created" class="quotation-po-preview__success">
 				<strong>Draft Purchase Order {{ created.name }} created.</strong>
 				<span>The order remains a draft. Review and submit it through the normal approved purchasing workflow.</span>
+			</div>
+			<div v-else-if="preview.existing_purchase_order" class="quotation-po-preview__blocked">
+				<strong>Purchase Order already exists.</strong>
+				<span>An active Purchase Order already references this Supplier Quotation. Review the existing order instead of creating a duplicate.</span>
 			</div>
 			<div v-else class="quotation-po-preview__ready">
 				<strong>ERPNext mapping preview passed.</strong>
