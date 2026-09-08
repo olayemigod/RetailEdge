@@ -112,6 +112,45 @@ def _validate_suppliers(suppliers: list[Any] | str | None) -> list[str]:
 	return supplier_names
 
 
+def _assert_rfq_submit_permission() -> None:
+	if not frappe.has_permission(REQUEST_FOR_QUOTATION_DOCTYPE, "submit"):
+		frappe.throw(_("You do not have permission to submit Request for Quotation."), frappe.PermissionError)
+
+
+def _find_existing_active_rfq(material_request: str, supplier_names: list[str]) -> str:
+	candidate_parents = frappe.get_all(
+		"Request for Quotation Item",
+		filters={"material_request": material_request},
+		pluck="parent",
+		limit_page_length=500,
+	)
+	if not candidate_parents:
+		return ""
+	active_parents = frappe.get_all(
+		REQUEST_FOR_QUOTATION_DOCTYPE,
+		filters={"name": ["in", candidate_parents], "docstatus": ["<", 2]},
+		pluck="name",
+		limit_page_length=500,
+	)
+	if not active_parents:
+		return ""
+	suppliers_by_parent: dict[str, set[str]] = {str(name): set() for name in active_parents}
+	for row in frappe.get_all(
+		"Request for Quotation Supplier",
+		filters={"parent": ["in", active_parents]},
+		fields=["parent", "supplier"],
+	):
+		parent = str(row.get("parent") or "")
+		supplier = str(row.get("supplier") or "")
+		if parent in suppliers_by_parent and supplier:
+			suppliers_by_parent[parent].add(supplier)
+	target_suppliers = set(supplier_names)
+	for parent in active_parents:
+		if suppliers_by_parent.get(str(parent), set()) == target_suppliers:
+			return str(parent)
+	return ""
+
+
 def _docstatus_label(value: int) -> str:
 	return {0: "Draft", 1: "Submitted", 2: "Cancelled"}.get(cint(value), "Unknown")
 
@@ -139,12 +178,78 @@ def get_request_for_quotation_preview(
 		"suppliers": supplier_names,
 		"supplier_count": len(supplier_names),
 		"item_count": len(items),
+		"can_submit": bool(frappe.has_permission(REQUEST_FOR_QUOTATION_DOCTYPE, "submit")),
 		"email_sending": False,
 		"persistence": "none",
 		"status": "Preview only",
 		"source_of_truth": "ERPNext Material Request make_request_for_quotation mapper",
-		"next_phase": "RIR2F2E2 standard RFQ review/submit",
+		"next_phase": "RIR2F2E3 standard RFQ submit",
 		"mapped_doctype": str(getattr(rfq, "doctype", None) or ""),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_standard_request_for_quotation(
+	material_request: str,
+	suppliers: list[Any] | str | None = None,
+	expected_material_request_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Insert and submit one standard no-email RFQ after a fresh server-side preflight."""
+	material_request = str(material_request or "").strip()
+	if not material_request:
+		frappe.throw(_("Material Request is required."))
+	if not frappe.db.exists(MATERIAL_REQUEST_DOCTYPE, material_request):
+		frappe.throw(_("Material Request {0} does not exist.").format(material_request))
+	_assert_read(MATERIAL_REQUEST_DOCTYPE, material_request)
+
+	# Serialize standard RFQ creation for one Material Request so concurrent
+	# clicks/retries cannot pass duplicate detection at the same time.
+	frappe.db.sql(
+		"SELECT name FROM `tabMaterial Request` WHERE name = %s FOR UPDATE",
+		(material_request,),
+	)
+	request = _get_open_purchase_request(material_request)
+	_assert_create(REQUEST_FOR_QUOTATION_DOCTYPE)
+	_assert_rfq_submit_permission()
+	supplier_names = _validate_suppliers(suppliers)
+
+	expected_modified = str(expected_material_request_modified or "").strip()
+	current_modified = str(getattr(request, "modified", None) or "")
+	if not expected_modified or expected_modified != current_modified:
+		frappe.throw(_("Material Request {0} changed after the RFQ preview. Refresh the preview before submitting.").format(request.name))
+
+	branch = _validate_request_scope(request)
+	existing_rfq = _find_existing_active_rfq(request.name, supplier_names)
+	if existing_rfq:
+		frappe.throw(
+			_("Request for Quotation {0} already exists for this Material Request and Supplier set. Review RFQ History instead of creating a duplicate.").format(existing_rfq)
+		)
+
+	rfq, items = _mapped_rfq_preview(request, branch)
+	for supplier in supplier_names:
+		rfq.append("suppliers", {"supplier": supplier, "send_email": 0})
+
+	# ERPNext remains authoritative for supplier eligibility, mandatory fields,
+	# status transitions and RFQ submission. Every supplier is explicitly no-email.
+	rfq.insert()
+	rfq.submit()
+	if cint(getattr(rfq, "docstatus", 0)) != 1:
+		frappe.throw(_("ERPNext did not submit Request for Quotation {0}.").format(rfq.name))
+
+	rfq_branch_field = _transaction_branch_field(REQUEST_FOR_QUOTATION_DOCTYPE)
+	return {
+		"doctype": REQUEST_FOR_QUOTATION_DOCTYPE,
+		"name": rfq.name,
+		"docstatus": cint(rfq.docstatus),
+		"material_request": request.name,
+		"company": str(rfq.company or ""),
+		"branch": str(getattr(rfq, rfq_branch_field, "") or "") if rfq_branch_field else "",
+		"item_count": len(items),
+		"supplier_count": len(supplier_names),
+		"suppliers": supplier_names,
+		"email_sending": False,
+		"status": "Submitted",
+		"source_of_truth": "ERPNext Request for Quotation submit",
 	}
 
 
