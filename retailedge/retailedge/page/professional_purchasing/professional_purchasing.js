@@ -6,8 +6,12 @@ const PAGE_ROUTE = "professional-purchasing";
 const PAGE_TITLE = "Professional Purchasing";
 const OPEN_PURCHASE_ORDER_EVENT = "retailedge-open-professional-purchase-order";
 const PURCHASE_ORDER_TRIGGER_LABEL = "New Purchase Order";
+const PREPARE_RECEIPT_TRIGGER_LABEL = "Prepare Receipt";
+const PURCHASE_RECEIPTS_TRIGGER_LABEL = "Purchase Receipts";
 const ACCESS_MODE = "edgesuite_only";
 const ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open in ERPNext";
+const ADVANCED_PURCHASE_RECEIPT_LABEL = "Advanced: Prepare Receipt in ERPNext";
+const ADVANCED_PURCHASE_RECEIPTS_LABEL = "Advanced: Purchase Receipts in ERPNext";
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {
@@ -72,10 +76,13 @@ function installRestrictedOperationalGuard() {
 			"Compare Quotations",
 			"PO Analysis",
 			"Procurement Tracker",
-			"Purchase Receipts",
+			PURCHASE_RECEIPTS_TRIGGER_LABEL,
+			PREPARE_RECEIPT_TRIGGER_LABEL,
 			"Material Requests",
 			"Open",
 			ADVANCED_PURCHASE_ORDER_LABEL,
+			ADVANCED_PURCHASE_RECEIPT_LABEL,
+			ADVANCED_PURCHASE_RECEIPTS_LABEL,
 			"Open Purchase Receipt",
 			"Scorecards",
 			"New Native Scorecard",
@@ -120,6 +127,28 @@ function applyPurchaseOrderOwnership(root) {
 	}
 }
 
+function applyPurchaseReceiptParityGate(root) {
+	if (!root) return;
+	for (const button of root.querySelectorAll("button")) {
+		const label = normaliseButtonLabel(button);
+		if (label !== PREPARE_RECEIPT_TRIGGER_LABEL && label !== PURCHASE_RECEIPTS_TRIGGER_LABEL) continue;
+		if (!nativeDeskEnabled()) {
+			button.hidden = true;
+			button.setAttribute("aria-hidden", "true");
+			button.setAttribute("data-retailedge-parity-blocked", "Purchase Receipt");
+			continue;
+		}
+		if (label === PREPARE_RECEIPT_TRIGGER_LABEL) {
+			button.textContent = __(ADVANCED_PURCHASE_RECEIPT_LABEL);
+			button.setAttribute("title", __("Prepare the ERPNext Purchase Receipt draft, then complete and review it in Advanced ERPNext Desk."));
+		} else {
+			button.textContent = __(ADVANCED_PURCHASE_RECEIPTS_LABEL);
+			button.setAttribute("title", __("Open the native ERPNext Purchase Receipt list. RetailEdge receipt completion parity is not yet available."));
+		}
+		button.setAttribute("data-retailedge-advanced-native", "Purchase Receipt");
+	}
+}
+
 function installPurchaseOrderOwnership(wrapper, root) {
 	if (!root || wrapper._retailedgePurchaseOrderOwnershipInstalled) return;
 	let scheduled = false;
@@ -129,18 +158,29 @@ function installPurchaseOrderOwnership(wrapper, root) {
 		window.requestAnimationFrame(() => {
 			scheduled = false;
 			applyPurchaseOrderOwnership(root);
+			applyPurchaseReceiptParityGate(root);
 		});
 	};
 	const handler = (event) => {
 		const button = event.target?.closest?.("button");
-		if (!button || !root.contains(button) || !button.closest(".purchasing-table--orders")) return;
-		if (button.classList.contains("retailedge-po-reference")) {
+		if (!button || !root.contains(button)) return;
+		const label = normaliseButtonLabel(button);
+		if (button.closest(".purchasing-table--orders") && button.classList.contains("retailedge-po-reference")) {
 			event.preventDefault();
 			event.stopPropagation();
 			event.stopImmediatePropagation();
 			return;
 		}
-		if (normaliseButtonLabel(button) === ADVANCED_PURCHASE_ORDER_LABEL && !nativeDeskEnabled()) {
+		if (
+			!nativeDeskEnabled()
+			&& [
+				ADVANCED_PURCHASE_ORDER_LABEL,
+				PREPARE_RECEIPT_TRIGGER_LABEL,
+				PURCHASE_RECEIPTS_TRIGGER_LABEL,
+				ADVANCED_PURCHASE_RECEIPT_LABEL,
+				ADVANCED_PURCHASE_RECEIPTS_LABEL,
+			].includes(label)
+		) {
 			event.preventDefault();
 			event.stopPropagation();
 			event.stopImmediatePropagation();
