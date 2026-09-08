@@ -119,10 +119,13 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 		):
 			self.assertIn(contract, component)
 
-	def test_native_transaction_fallbacks_remain_authoritative(self):
+	def test_sales_invoice_uses_edgesuite_while_non_selling_native_fallbacks_remain(self):
 		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
-		self.assertIn("createDoctype(action.doctype)", component)
-		self.assertIn("openDoctype(action.doctype)", component)
+		self.assertIn('if (action?.doctype === "Sales Invoice")', component)
+		self.assertIn('frappe.set_route("professional-selling")', component)
+		self.assertIn("this.openDoctype(action?.doctype)", component)
+		self.assertIn("openNativePurchaseInvoice", component)
+		self.assertIn("openNativeStockTransfer", component)
 		self.assertIn("window.open(`/app/${doctypeSlug(doctype)}/new`", component)
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.client.save", component)
