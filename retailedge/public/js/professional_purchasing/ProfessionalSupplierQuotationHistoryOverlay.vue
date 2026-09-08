@@ -38,6 +38,7 @@
 							<th><button type="button" class="sort-button" @click="sortBy('grand_total')">Total {{ sortMark('grand_total') }}</button></th>
 							<th><button type="button" class="sort-button" @click="sortBy('valid_till')">Valid Till {{ sortMark('valid_till') }}</button></th>
 							<th><button type="button" class="sort-button" @click="sortBy('status')">Status {{ sortMark('status') }}</button></th>
+							<th>Purchase Order</th>
 							<th v-if="nativeFallbackEnabled">Advanced</th>
 						</tr>
 					</thead>
@@ -51,6 +52,7 @@
 							<td>{{ formatMoney(row.grand_total, row.currency) }}</td>
 							<td>{{ formatDate(row.valid_till) }}</td>
 							<td>{{ row.status || 'Draft' }}</td>
+							<td><button v-if="canPreparePurchaseOrder(row)" type="button" class="edge-small-button edge-small-button--primary" @click="preparePurchaseOrder(row.name)">Prepare PO</button><span v-else>—</span></td>
 							<td v-if="nativeFallbackEnabled"><button type="button" class="edge-small-button" @click="openAdvanced(row.name)">Advanced: Open in ERPNext</button></td>
 						</tr>
 					</tbody>
@@ -71,6 +73,8 @@
 const HISTORY_METHOD = "retailedge.professional_supplier_quotation.get_supplier_quotation_history";
 const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_purchasing_options";
 const OPEN_EVENT = "retailedge-open-professional-supplier-quotation-history";
+const PREPARE_PO_EVENT = "retailedge-open-supplier-quotation-purchase-order";
+const REFRESH_EVENT = "retailedge-refresh-professional-supplier-quotation-history";
 const ACCESS_MODE = "edgesuite_only";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
@@ -113,9 +117,12 @@ export default {
 			});
 		},
 	},
-	created() { this._open = () => { this.open = true; this.loadHistory(); }; },
-	mounted() { window.addEventListener(OPEN_EVENT, this._open); },
-	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
+	created() {
+		this._open = () => { this.open = true; this.loadHistory(); };
+		this._refresh = () => { if (this.open) this.loadHistory(); };
+	},
+	mounted() { window.addEventListener(OPEN_EVENT, this._open); window.addEventListener(REFRESH_EVENT, this._refresh); },
+	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); window.removeEventListener(REFRESH_EVENT, this._refresh); },
 	methods: {
 		async loadHistory() {
 			if (this.loading) return;
@@ -146,6 +153,11 @@ export default {
 		clearBranch() { this.filters.branch = ""; this.loaded = false; this.loadHistory(); },
 		onSupplierSelected(option) { this.filters.supplier = option.value; this.loaded = false; this.loadHistory(); },
 		clearSupplier() { this.filters.supplier = ""; this.loaded = false; this.loadHistory(); },
+		canPreparePurchaseOrder(row) {
+			const status = String(row?.status || "");
+			return Number(row?.docstatus || 0) === 1 && !["Cancelled", "Stopped", "Expired"].includes(status);
+		},
+		preparePurchaseOrder(name) { if (name) window.dispatchEvent(new CustomEvent(PREPARE_PO_EVENT, { detail: { supplier_quotation: name } })); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; },
 		sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },
 		formatDate(value) { return value ? frappe.datetime.str_to_user(value) : "—"; },
@@ -167,6 +179,7 @@ export default {
 .supplier-quote-history__table small { display:block; opacity:.72; }
 .sort-button { border:0; background:transparent; padding:0; color:inherit; cursor:pointer; font:inherit; text-transform:inherit; letter-spacing:inherit; }
 .edge-small-button { min-height:30px; padding:0 9px; border:1px solid var(--border-color,#d1d8dd); border-radius:.5rem; background:var(--card-bg,#fff); color:inherit; cursor:pointer; white-space:nowrap; }
+.edge-small-button--primary { font-weight:600; }
 .supplier-quote-history__footer { width:100%; display:flex; justify-content:space-between; gap:.75rem; }
 @media (max-width:900px) { .supplier-quote-history__filters { grid-template-columns:1fr 1fr; } }
 @media (max-width:560px) { .supplier-quote-history__filters { grid-template-columns:1fr; } .supplier-quote-history__footer { flex-direction:column; } }
