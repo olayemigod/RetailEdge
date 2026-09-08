@@ -21,7 +21,7 @@ def _function_source(source: str, name: str, next_name: str | None = None) -> st
 
 def test_rfq_preview_uses_erpnext_mapper_without_persisting():
 	source = _read(BACKEND)
-	preview = _function_source(source, "get_request_for_quotation_preview", "prepare_request_for_quotation_draft_advanced")
+	preview = _function_source(source, "get_request_for_quotation_preview", "submit_standard_request_for_quotation")
 	assert "make_request_for_quotation(request.name)" in source
 	assert '"persistence": "none"' in preview
 	assert '"email_sending": False' in preview
@@ -74,13 +74,13 @@ def test_start_rfq_is_capture_intercepted_into_edgesuite_preview():
 	assert "OPEN_RFQ_PREVIEW_EVENT" in source
 
 
-def test_rfq_preview_overlay_selects_suppliers_without_creating_a_document():
+def test_rfq_preview_overlay_selects_suppliers_before_creating_a_document():
 	overlay = _read(OVERLAY)
 	assert "EdgeModal" in overlay
 	assert "EdgeLinkField" in overlay
 	assert "get_request_for_quotation_preview" in overlay
 	assert 'kind: "rfq_supplier"' in overlay
-	assert "No RFQ draft has been saved and no supplier email has been sent" in overlay
+	assert "No RFQ has been saved yet" in overlay
 	assert "Preview RFQ" in overlay
 	assert "rfq.insert(" not in overlay
 	assert "frappe.set_route" not in overlay
