@@ -100,6 +100,24 @@ class TestProfessionalPurchaseOrder(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertNotIn('frappe.new_doc("Purchase Order")', source)
 
+	def test_page_controller_makes_native_po_read_an_explicit_advanced_escape(self):
+		source = self.read("retailedge/page/professional_purchasing/professional_purchasing.js")
+		for contract in (
+			'const ACCESS_MODE = "edgesuite_only"',
+			'const ADVANCED_PURCHASE_ORDER_LABEL = "Advanced: Open in ERPNext"',
+			"nativeDeskEnabled()",
+			"applyPurchaseOrderOwnership(root)",
+			"installPurchaseOrderOwnership(wrapper, root)",
+			'reference.classList.add("retailedge-po-reference")',
+			'reference.setAttribute("aria-disabled", "true")',
+			'button.setAttribute("data-retailedge-advanced-native", "Purchase Order")',
+			"ADVANCED_PURCHASE_ORDER_LABEL,",
+		):
+			self.assertIn(contract, source)
+		self.assertIn('frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE', source)
+		self.assertIn('button.hidden = true', source)
+		self.assertIn('button.classList.contains("retailedge-po-reference")', source)
+
 	def test_purchase_order_bundle_is_product_local_and_compiled(self):
 		source = self.read("public/js/professional_purchase_order.bundle.js")
 		self.assertIn('ProfessionalPurchaseOrderOverlay.vue', source)
