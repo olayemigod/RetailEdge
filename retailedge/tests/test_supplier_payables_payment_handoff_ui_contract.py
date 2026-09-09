@@ -18,6 +18,7 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 		self.assertIn('v-if="reportType === \'supplier_payables\'"', component)
 		self.assertIn('intent="pay-supplier"', component)
 		self.assertIn(':initialContext="supplierPaymentContext"', component)
+		self.assertIn(':nativeFallbackEnabled="canUseNativeDesk"', component)
 		self.assertIn('fieldname: "payment_action"', component)
 		self.assertIn('payment_action: "Pay Supplier"', component)
 		self.assertIn("openSupplierPayment(row)", component)
@@ -26,7 +27,8 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 		self.assertIn('company: this.filters.company || ""', component)
 		self.assertIn('branch: row.branch || this.filters.branch || ""', component)
 		self.assertIn("handleSupplierPaymentSaved", component)
-		self.assertIn('frappe.set_route("Form", "Payment Entry", result.name)', component)
+		self.assertIn("await this.fetchData()", component)
+		self.assertNotIn('frappe.set_route("Form", "Payment Entry", result.name)', component)
 
 	def test_payment_action_is_local_to_supplier_payables_and_keeps_accounting_native(self):
 		component = (
@@ -37,6 +39,10 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 		self.assertIn('this.rows = this.reportType === "supplier_payables"', component)
 		self.assertIn('purchase_register:', component)
 		self.assertIn('supplier_payables:', component)
+		self.assertIn("canUseNativeDesk: false", component)
+		self.assertIn("retailedge.master_experience.get_master_retailedge_business_hub_context", component)
+		self.assertIn("this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);", component)
+		self.assertIn('openNativePayment() { if (!this.canUseNativeDesk) return;', component)
 		self.assertNotIn("window.EdgeUI", component)
 		self.assertNotIn("frappe.ui.Dialog", component)
 		self.assertNotIn("frappe.prompt", component)
