@@ -109,7 +109,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Sales Person Commissions", "target_type": "Report", "target": "Sales Person Commission Summary", "icon": "report"},
 			{"label": "Sales Partner Commissions", "target_type": "Report", "target": "Sales Partner Commission Summary", "icon": "report"},
 			{"label": "Sales Person Targets", "target_type": "Report", "target": "Sales Person Target Variance Based On Item Group", "icon": "chart"},
-			{"label": "Sales Partner Targets", "target_type": "Report", "target": "Sales Partner Target Variance based On Item Group", "icon": "chart"},
+			{"label": "Sales Partner Targets", "target_type": "Report", "target": "Sales Partner Target Variance based on Item Group", "icon": "chart"},
 			{"label": "POS Opening", "target_type": "DocType", "target": ERPNEXT_POS_OPENING_ENTRY, "runtime_target": "pos_opening", "icon": "calendar"},
 			{"label": "POS Closing", "target_type": "DocType", "target": ERPNEXT_POS_CLOSING_ENTRY, "runtime_target": "pos_closing", "icon": "calendar"},
 		),
