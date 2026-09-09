@@ -170,7 +170,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Cash Movement", "target_type": "Page", "target": "cash-movement", "icon": "report"},
 			{"label": "Cash Flow Outlook", "target_type": "Page", "target": "cash-flow-outlook", "icon": "chart", "required_roles": tuple(sorted(CASH_FLOW_OUTLOOK_ROLES))},
 			{"label": "Payments", "target_type": "Page", "target": "payment-management", "icon": "wallet"},
-			{"label": "Payment Reconciliation", "target_type": "DocType", "target": "Payment Reconciliation", "icon": "repeat"},
+			{"label": "Payment Reconciliation", "target_type": "DocType", "target": "Payment Reconciliation", "icon": "repeat", "mode": "native_fallback", "required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES))},
 			{"label": "Subscriptions", "target_type": "DocType", "target": "Subscription", "icon": "repeat"},
 			{"label": "Subscription Plans", "target_type": "DocType", "target": "Subscription Plan", "icon": "clipboard"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet"},
@@ -316,6 +316,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		target_cache=target_cache,
 		permission_cache=permission_cache,
 		pos_capabilities=pos_capabilities,
+		native_desk_enabled=bool(access_context.get("can_use_native_desk")),
 	)
 	quick_actions = _get_permitted_quick_actions(
 		roles=roles,
@@ -362,6 +363,7 @@ def _get_edgesuite_access_context() -> dict[str, Any]:
 def _get_permitted_navigation_groups(
 	roles: set[str], *, target_cache: dict[tuple[str, str], bool] | None = None,
 	permission_cache: dict[tuple[str, str], bool] | None = None, pos_capabilities=None,
+	native_desk_enabled: bool = True,
 ) -> list[dict[str, Any]]:
 	target_cache = target_cache if target_cache is not None else {}
 	permission_cache = permission_cache if permission_cache is not None else {}
@@ -374,11 +376,14 @@ def _get_permitted_navigation_groups(
 			continue
 		items: list[dict[str, Any]] = []
 		for item in group["items"]:
+			if item.get("mode") == "native_fallback" and not native_desk_enabled:
+				continue
 			item_required_roles = set(item.get("required_roles") or ())
 			if item_required_roles and not roles.intersection(item_required_roles):
 				continue
 			resolved = _resolve_navigation_item(item, pos_capabilities=pos_capabilities)
 			if resolved is not None and _can_open_target(resolved, target_cache=target_cache, permission_cache=permission_cache):
+				resolved.pop("mode", None)
 				resolved.pop("required_roles", None)
 				items.append(resolved)
 		if items:
