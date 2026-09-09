@@ -92,26 +92,30 @@ def test_submit_is_post_only_locked_stale_safe_and_erpnext_authoritative():
 
 def test_business_hub_supplier_payment_reviews_and_submits_without_forced_native_handoff():
 	page = _read(DIALOG)
-	assert "Supplier Payment Review" in page
 	assert "get_supplier_payment_submit_preview" in page
 	assert "submit_standard_supplier_payment" in page
+	assert 'this.intent === "pay-supplier"' in page
 	assert "expected_payment_entry_modified" in page
 	assert "Submit Payment" in page
 	assert "Open in ERPNext" in page
-	assert "saved as Draft. Review it here before submission." in page
-	assert 'this.intent === "pay-supplier"' in page
 	assert "Standard Pay Supplier supports one Purchase Invoice per payment" in page
 	supplier_creation = page[page.index("async saveDraft()"):page.index("formatAmount(value)")]
 	assert 'this.$emit("saved", result);' in supplier_creation
-	assert 'if (this.isSupplierPayment)' in supplier_creation
-	assert 'await this.loadSupplierReview(result.name);' in supplier_creation
-	assert supplier_creation.index('await this.loadSupplierReview(result.name);') < supplier_creation.index('this.$emit("saved", result);')
+	assert "if (this.isSupplierPayment)" in supplier_creation
+	assert "await this.loadSupplierReview(result.name);" in supplier_creation
+	assert supplier_creation.index("await this.loadSupplierReview(result.name);") < supplier_creation.index(
+		'this.$emit("saved", result);'
+	)
 
 
-def test_supplier_submit_closes_edgesuite_dialog_and_native_open_is_explicit():
+def test_supplier_submit_stays_standard_and_native_open_is_explicit():
 	page = _read(DIALOG)
 	assert "async submitSupplierPayment()" in page
-	assert 'frappe.confirm(' in page
-	assert 'this.$emit("close");' in page
+	assert "SUPPLIER_SUBMIT_METHOD" in page
+	assert "expected_payment_entry_modified: this.supplierReview.payment_entry_modified" in page
+	assert "frappe.confirm(" in page
+	submit = page[page.index("async submitSupplierPayment()"):page.index("async saveDraft()")]
+	assert 'this.$emit("close");' in submit
+	assert 'frappe.set_route("Form", "Payment Entry"' not in submit
+	assert "frappe.show_alert" not in submit
 	assert 'frappe.set_route("Form", "Payment Entry", paymentEntry);' in page
-	assert "Supplier payment submitted." in page
