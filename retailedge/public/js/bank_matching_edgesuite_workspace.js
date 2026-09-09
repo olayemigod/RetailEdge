@@ -106,6 +106,7 @@
 					error: "",
 					rows: [],
 					skippedCount: 0,
+					canUseNativeDesk: false,
 					sortKey: "transaction_date",
 					sortDirection: "desc",
 					filters: {
@@ -169,6 +170,23 @@
 					state.notice.tone = tone;
 				}
 
+				async function loadAccessContext() {
+					try {
+						let context = {};
+						if (typeof global.retailedgeGetBusinessHubContext === "function") {
+							context = await global.retailedgeGetBusinessHubContext();
+						} else {
+							const response = await global.frappe.call({
+								method: "retailedge.master_experience.get_master_retailedge_business_hub_context",
+							});
+							context = response?.message || {};
+						}
+						state.canUseNativeDesk = Boolean(context?.access?.can_use_native_desk);
+					} catch (_error) {
+						state.canUseNativeDesk = false;
+					}
+				}
+
 				async function refresh() {
 					state.loading = true;
 					state.error = "";
@@ -221,6 +239,11 @@
 
 				function routeToDocument(doctype, name) {
 					if (doctype && name) global.frappe.set_route("Form", doctype, name);
+				}
+
+				function routeToNativeDocument(doctype, name) {
+					if (!state.canUseNativeDesk) return;
+					routeToDocument(doctype, name);
 				}
 
 				function toggleSort(key) {
@@ -484,29 +507,36 @@
 				function renderNarration(row) {
 					const narration = row.description || row.reference || row.bank_transaction || "";
 					const meta = [row.bank_account, row.reference, rowCategory(row)].filter(Boolean).join(" · ");
-					return h("div", { class: "retailedge-bank-transaction-cell" }, [
-						h("button", {
+					const narrationNode = state.canUseNativeDesk && row.bank_transaction
+						? h("button", {
 							type: "button",
 							class: "edge-link-button retailedge-bank-narration",
 							title: narration,
-							onClick: () => routeToDocument("Bank Transaction", row.bank_transaction),
-						}, narration),
+							onClick: () => routeToNativeDocument("Bank Transaction", row.bank_transaction),
+						}, narration)
+						: h("span", { class: "retailedge-bank-narration", title: narration }, narration);
+					return h("div", { class: "retailedge-bank-transaction-cell" }, [
+						narrationNode,
 						meta ? h("small", { class: "retailedge-bank-meta" }, meta) : null,
 					]);
 				}
 
 				function renderCandidate(row) {
 					if (!row.suggested_document) return "—";
+					const label = `${row.suggested_document_type || ""} ${row.suggested_document}`;
 					const detail = [
 						row.candidate_amount == null ? null : formatMoney(row.candidate_amount, row.currency),
 						row.amount_difference == null ? null : `${t("Difference")}: ${formatMoney(row.amount_difference, row.currency)}`,
 					].filter(Boolean).join(" · ");
-					return h("div", { class: "retailedge-bank-candidate-cell" }, [
-						h("button", {
+					const documentNode = state.canUseNativeDesk && row.suggested_document
+						? h("button", {
 							type: "button",
 							class: "edge-link-button",
-							onClick: () => routeToDocument(row.suggested_document_type, row.suggested_document),
-						}, `${row.suggested_document_type || ""} ${row.suggested_document}`),
+							onClick: () => routeToNativeDocument(row.suggested_document_type, row.suggested_document),
+						}, label)
+						: h("span", label);
+					return h("div", { class: "retailedge-bank-candidate-cell" }, [
+						documentNode,
 						detail ? h("small", { class: "retailedge-bank-meta" }, detail) : null,
 					]);
 				}
@@ -689,6 +719,15 @@
 					const canRequestApproval = confirmed && approvalRequired && !approvalSatisfied && !canApprove;
 					const category = businessCategory(evidence.transaction_category, evidence.candidate_category, state.review.candidateSnapshot?.transaction_category, state.review.candidateSnapshot?.candidate_category);
 					const recordBadge = confirmed ? (doc.execution_status === "Executed" || doc.execution_status === "Already Handled" ? t("Reconciled Record") : t("Confirmed Candidate")) : t("Suggested Candidate");
+					const recordLinks = [
+						actionButton(t("Open Audit Record"), "secondary", () => routeToDocument("RetailEdge Bank Transaction Match", state.review.matchName)),
+					];
+					if (state.canUseNativeDesk && doc.bank_transaction) {
+						recordLinks.push(actionButton(t("Open Bank Transaction"), "secondary", () => routeToNativeDocument("Bank Transaction", doc.bank_transaction)));
+					}
+					if (state.canUseNativeDesk && doc.suggested_document) {
+						recordLinks.push(actionButton(t("Open Accounting Document"), "secondary", () => routeToNativeDocument(doc.suggested_document_type, doc.suggested_document)));
+					}
 
 					return h(EdgeModal, {
 						open: state.review.open,
@@ -762,11 +801,7 @@
 										"onUpdate:modelValue": (value) => { state.review.decisionNote = value; },
 									}),
 								]) : null,
-								h("div", { class: "retailedge-bank-record-links" }, [
-									actionButton(t("Open Audit Record"), "secondary", () => routeToDocument("RetailEdge Bank Transaction Match", state.review.matchName)),
-									actionButton(t("Open Bank Transaction"), "secondary", () => routeToDocument("Bank Transaction", doc.bank_transaction)),
-									doc.suggested_document ? actionButton(t("Open Accounting Document"), "secondary", () => routeToDocument(doc.suggested_document_type, doc.suggested_document)) : null,
-								]),
+								h("div", { class: "retailedge-bank-record-links" }, recordLinks),
 							],
 						footer: () => {
 							const buttons = [actionButton(t("Close"), "secondary", closeReview, { disabled: state.review.busy })];
@@ -818,7 +853,9 @@
 					});
 				}
 
-				onMounted(refresh);
+				onMounted(async () => {
+					await Promise.all([loadAccessContext(), refresh()]);
+				});
 				global.retailedgeBankingWorkspaceRefresh = refresh;
 
 				return () => h(EdgePageLayout, { class: "retailedge-bank-layout" }, {
