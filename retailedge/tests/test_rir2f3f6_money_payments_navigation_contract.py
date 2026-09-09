@@ -52,4 +52,4 @@ def test_native_payment_entry_is_only_explicit_permission_gated_history_fallback
 	assert 'v-if="canUseNativeDesk"' in panel
 	assert "Open in ERPNext" in panel
 	assert "openPaymentInERPNext" in panel
-	assert 'if (!this.canUseNativeDesk || !paymentEntry) return;' in panel
+	assert 'if (!this.canUseNativeDesk || !name) return;' in panel
