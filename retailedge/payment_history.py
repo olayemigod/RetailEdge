@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate
 
 from retailedge.advanced_payments import PAYMENT_ENTRY_DOCTYPE, _payment_branch_field
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
@@ -30,7 +30,10 @@ def _clean(value: Any) -> str:
 def _assert_read_permission(doctype: str, name: str) -> None:
 	doc = frappe.get_doc(doctype, name)
 	if not frappe.has_permission(doctype, "read", doc=doc):
-		frappe.throw(_("You do not have read permission for {0} {1}.").format(_(doctype), name), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have read permission for {0} {1}.").format(_(doctype), name),
+			frappe.PermissionError,
+		)
 
 
 def _resolve_branch_condition(company: str, branch: str = "") -> tuple[str | None, Any, dict[str, Any]]:
@@ -42,9 +45,16 @@ def _resolve_branch_condition(company: str, branch: str = "") -> tuple[str | Non
 	if branch:
 		validate_operating_branch(company=company, branch=branch, user=frappe.session.user, throw=True)
 		if scope.get("restricted") and branch not in allowed:
-			frappe.throw(_("You do not have active operational access to Branch {0}.").format(branch), frappe.PermissionError)
+			frappe.throw(
+				_("You do not have active operational access to Branch {0}.").format(branch),
+				frappe.PermissionError,
+			)
 		if not branch_field:
-			frappe.throw(_("Payment Entry branch attribution is unavailable. Run the site migration before using Branch-scoped payment history."))
+			frappe.throw(
+				_(
+					"Payment Entry branch attribution is unavailable. Run the site migration before using Branch-scoped payment history."
+				)
+			)
 		return branch_field, branch, scope
 
 	if not scope.get("restricted"):
@@ -86,6 +96,14 @@ def _validate_payment_type(value: str) -> str:
 	return value
 
 
+def _validate_dates(from_date: str, to_date: str) -> tuple[str, str]:
+	from_date = _clean(from_date)
+	to_date = _clean(to_date)
+	if from_date and to_date and getdate(from_date) > getdate(to_date):
+		frappe.throw(_("From Date cannot be after To Date."))
+	return from_date, to_date
+
+
 def _page_size(value: int | str) -> int:
 	return max(1, min(cint(value) or DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
 
@@ -115,6 +133,7 @@ def list_payment_history(
 	party_type, party = _validate_party_filters(party_type, party)
 	payment_type = _validate_payment_type(payment_type)
 	resolved_docstatus = _normalise_docstatus(docstatus)
+	from_date, to_date = _validate_dates(from_date, to_date)
 	branch_field, branch_condition, scope = _resolve_branch_condition(company, branch)
 
 	filters: dict[str, Any] = {"company": company}
@@ -130,12 +149,12 @@ def list_payment_history(
 		filters["payment_type"] = payment_type
 	if resolved_docstatus is not None:
 		filters["docstatus"] = resolved_docstatus
-	if _clean(from_date) and _clean(to_date):
-		filters["posting_date"] = ["between", [_clean(from_date), _clean(to_date)]]
-	elif _clean(from_date):
-		filters["posting_date"] = [">=", _clean(from_date)]
-	elif _clean(to_date):
-		filters["posting_date"] = ["<=", _clean(to_date)]
+	if from_date and to_date:
+		filters["posting_date"] = ["between", [from_date, to_date]]
+	elif from_date:
+		filters["posting_date"] = [">=", from_date]
+	elif to_date:
+		filters["posting_date"] = ["<=", to_date]
 
 	page_size = _page_size(page_size)
 	page = max(1, cint(page) or 1)
@@ -150,6 +169,8 @@ def list_payment_history(
 		"paid_amount",
 		"received_amount",
 		"unallocated_amount",
+		"paid_from_account_currency",
+		"paid_to_account_currency",
 		"status",
 		"docstatus",
 		"modified",
@@ -180,7 +201,16 @@ def list_payment_history(
 				"paid_amount": flt(row.paid_amount),
 				"received_amount": flt(row.received_amount),
 				"unallocated_amount": flt(row.unallocated_amount),
-				"status": row.status or ("Draft" if cint(row.docstatus) == 0 else "Cancelled" if cint(row.docstatus) == 2 else "Submitted"),
+				"paid_from_account_currency": row.paid_from_account_currency or "",
+				"paid_to_account_currency": row.paid_to_account_currency or "",
+				"status": row.status
+				or (
+					"Draft"
+					if cint(row.docstatus) == 0
+					else "Cancelled"
+					if cint(row.docstatus) == 2
+					else "Submitted"
+				),
 				"docstatus": cint(row.docstatus),
 				"modified": str(row.modified or ""),
 			}
@@ -210,9 +240,8 @@ def _assert_detail_scope(doc: Any, company: str = "", branch: str = "") -> str:
 	allowed = list(scope.get("allowed_branches") or [])
 	if _clean(branch) and payment_branch != _clean(branch):
 		frappe.throw(_("Payment Entry does not belong to the selected Branch."), frappe.PermissionError)
-	if scope.get("restricted"):
-		if not allowed or not payment_branch or payment_branch not in allowed:
-			frappe.throw(_("Payment Entry is outside your active operational Branch access."), frappe.PermissionError)
+	if scope.get("restricted") and (not allowed or not payment_branch or payment_branch not in allowed):
+		frappe.throw(_("Payment Entry is outside your active operational Branch access."), frappe.PermissionError)
 	return payment_branch
 
 
@@ -263,7 +292,7 @@ def _standard_draft_review(doc: Any, payment_branch: str) -> dict[str, Any]:
 		"kind": "advanced",
 		"advanced_only": True,
 		"review": None,
-		"blockers": [_("This Payment Entry shape is outside standard RetailEdge submission." )],
+		"blockers": [_("This Payment Entry shape is outside standard RetailEdge submission.")],
 	}
 
 
@@ -279,7 +308,10 @@ def get_payment_history_detail(
 		frappe.throw(_("Payment Entry {0} does not exist.").format(payment_entry or "(blank)"))
 	doc = frappe.get_doc(PAYMENT_ENTRY_DOCTYPE, payment_entry)
 	if not frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "read", doc=doc):
-		frappe.throw(_("You do not have read permission for Payment Entry {0}.").format(payment_entry), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have read permission for Payment Entry {0}.").format(payment_entry),
+			frappe.PermissionError,
+		)
 	payment_branch = _assert_detail_scope(doc, company=company, branch=branch)
 	classification = _standard_draft_review(doc, payment_branch)
 	references = [
@@ -302,6 +334,8 @@ def get_payment_history_detail(
 		"mode_of_payment": _clean(getattr(doc, "mode_of_payment", "")),
 		"paid_from": _clean(getattr(doc, "paid_from", "")),
 		"paid_to": _clean(getattr(doc, "paid_to", "")),
+		"paid_from_account_currency": _clean(getattr(doc, "paid_from_account_currency", "")),
+		"paid_to_account_currency": _clean(getattr(doc, "paid_to_account_currency", "")),
 		"paid_amount": flt(getattr(doc, "paid_amount", 0)),
 		"received_amount": flt(getattr(doc, "received_amount", 0)),
 		"unallocated_amount": flt(getattr(doc, "unallocated_amount", 0)),
