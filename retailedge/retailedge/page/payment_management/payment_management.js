@@ -58,11 +58,17 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(RESTRICTED_GUARD_ASSET);
 		installRestrictedOperationalGuard();
 		await requireAsync(PAYMENT_ASSET);
-		if (typeof window.mountPaymentManagementPage !== "function") throw new Error("Payment Management bundle is unavailable.");
+		if (typeof window.mountPaymentManagementPage !== "function" || typeof window.mountPaymentHistoryPanel !== "function") {
+			throw new Error("Payment Management bundle is unavailable.");
+		}
 		bootLoading.remove();
 		const root = document.createElement("div"); root.className = "retailedge-payment-management-root";
+		const managementRoot = document.createElement("div"); managementRoot.className = "retailedge-payment-management-main";
+		const historyRoot = document.createElement("div"); historyRoot.className = "retailedge-payment-history-root";
+		root.append(managementRoot, historyRoot);
 		page.body.append(root);
-		await window.mountPaymentManagementPage(root);
+		await window.mountPaymentManagementPage(managementRoot);
+		await window.mountPaymentHistoryPanel(historyRoot);
 	} catch (error) {
 		bootLoading.remove();
 		renderLoadError(wrapper, error);
