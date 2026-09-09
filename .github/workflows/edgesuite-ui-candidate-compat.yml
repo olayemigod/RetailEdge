@@ -52,6 +52,7 @@ jobs:
 
       - name: Install bench prerequisites
         run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
           sudo apt-get install -y libmariadb-dev pkg-config redis-tools
           python -m pip install --upgrade frappe-bench
