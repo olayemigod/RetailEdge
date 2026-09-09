@@ -25,7 +25,8 @@
 				<div class="native-control-badges" aria-label="Workspace authority">
 					<span>EdgeSuite workspace</span>
 					<span>{{ sourceOfTruth }} source of truth</span>
-					<span>Native lifecycle handoff</span>
+					<span v-if="canUseNativeDesk">Native lifecycle handoff</span>
+					<span v-else>Read-only EdgeSuite view</span>
 				</div>
 			</section>
 
@@ -51,11 +52,16 @@
 								<p>{{ source.description }}</p>
 							</div>
 							<div class="native-control-card-actions">
-								<button class="edge-primary-button" type="button" @click="openSource(source)">
+								<button
+									v-if="source.kind === 'page' || canUseNativeDesk"
+									class="edge-primary-button"
+									type="button"
+									@click="openSource(source)"
+								>
 									{{ source.kind === "report" ? "Open report" : source.kind === "page" ? "Open workspace" : "Open records" }}
 								</button>
 								<button
-									v-if="source.kind === 'doctype' && source.can_create"
+									v-if="canUseNativeDesk && source.kind === 'doctype' && source.can_create"
 									class="edge-secondary-button"
 									type="button"
 									@click="createSource(source)"
@@ -71,9 +77,12 @@
 					<div class="native-control-section-heading">
 						<div>
 							<h3>{{ source.label }}</h3>
-							<p>{{ source.preview_label }} permission-filtered ERPNext records. Open a row for the authoritative document.</p>
+							<p>
+								{{ source.preview_label }} permission-filtered ERPNext records.
+								{{ canUseNativeDesk ? "Open a row for the authoritative document." : "Read-only preview in EdgeSuite." }}
+							</p>
 						</div>
-						<button class="edge-secondary-button" type="button" @click="openSource(source)">View all</button>
+						<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openSource(source)">View all</button>
 					</div>
 					<div v-if="source.rows.length" class="native-control-table-wrap">
 						<table class="native-control-table">
@@ -86,7 +95,8 @@
 								<tr
 									v-for="row in source.rows"
 									:key="row.name"
-									tabindex="0"
+									:class="{ 'native-control-row--clickable': canUseNativeDesk }"
+									:tabindex="canUseNativeDesk ? 0 : undefined"
 									@click="openRow(source, row)"
 									@keydown.enter="openRow(source, row)"
 								>
@@ -155,6 +165,7 @@ export default {
 			sourceOfTruth: "ERPNext",
 			sources: [],
 			menuItems: [],
+			canUseNativeDesk: false,
 		};
 	},
 	computed: {
@@ -180,7 +191,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
 				const [workspace, navigation] = await Promise.all([
 					callMethod("retailedge.native_visual_workspaces.get_native_visual_workspace", { workspace: this.workspaceKey }),
 					navigationPromise,
@@ -194,8 +205,10 @@ export default {
 				this.pageRoute = workspace.page_route || "";
 				this.sourceOfTruth = workspace.source_of_truth || "ERPNext";
 				this.sources = Array.isArray(workspace.sources) ? workspace.sources : [];
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 			} catch (error) {
+				this.canUseNativeDesk = false;
 				this.error = errorMessage(error, "Failed to load the RetailEdge control workspace.");
 			} finally {
 				this.loading = false;
@@ -208,16 +221,17 @@ export default {
 			return "Workspace";
 		},
 		openSource(source) {
+			if (source.kind !== "page" && !this.canUseNativeDesk) return;
 			if (source.kind === "doctype") frappe.set_route("List", source.target);
 			else if (source.kind === "report") frappe.set_route("query-report", source.target);
 			else if (source.kind === "page") frappe.set_route(source.target);
 		},
 		createSource(source) {
-			if (source.kind !== "doctype" || !source.can_create) return;
+			if (!this.canUseNativeDesk || source.kind !== "doctype" || !source.can_create) return;
 			frappe.new_doc(source.target);
 		},
 		openRow(source, row) {
-			if (source.kind !== "doctype" || !row?.name) return;
+			if (!this.canUseNativeDesk || source.kind !== "doctype" || !row?.name) return;
 			frappe.set_route("Form", source.target, row.name);
 		},
 		formatValue(value, fieldname) {
@@ -228,10 +242,14 @@ export default {
 			return String(value);
 		},
 		mapNavigationGroups(groups) {
-			return (groups || []).map((group) => ({
-				...group,
-				items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })),
-			}));
+			return (groups || [])
+				.map((group) => ({
+					...group,
+					items: (group.items || [])
+						.filter((item) => this.canUseNativeDesk || !["DocType", "Report"].includes(item.target_type))
+						.map((item) => ({ ...item, route: this.routeForItem(item) })),
+				}))
+				.filter((group) => group.items.length);
 		},
 		routeForItem(item) {
 			if (item.target_type === "Page") return `/app/${item.target}`;
@@ -242,6 +260,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -348,12 +367,12 @@ export default {
 	text-align: left;
 	white-space: nowrap;
 }
-.native-control-table tbody tr {
+.native-control-table tbody tr.native-control-row--clickable {
 	cursor: pointer;
 }
-.native-control-table tbody tr:hover,
-.native-control-table tbody tr:focus-within,
-.native-control-table tbody tr:focus {
+.native-control-table tbody tr.native-control-row--clickable:hover,
+.native-control-table tbody tr.native-control-row--clickable:focus-within,
+.native-control-table tbody tr.native-control-row--clickable:focus {
 	background: var(--control-bg, var(--subtle-fg));
 	outline: none;
 }
