@@ -648,17 +648,13 @@ export default {
 
 			this.submitting = true;
 			try {
-				const result = await callMethod(SUPPLIER_SUBMIT_METHOD, {
+				await callMethod(SUPPLIER_SUBMIT_METHOD, {
 					payment_entry: this.supplierReview.payment_entry,
 					expected_payment_entry_modified: this.supplierReview.payment_entry_modified,
 					company: this.supplierReview.company,
 					supplier: this.supplierReview.supplier,
 					branch: this.supplierReview.branch,
 				});
-				frappe.show_alert?.({
-					message: `Supplier payment submitted. ${result.payment_entry}`,
-					indicator: "green",
-				}, 8);
 				this.$emit("close");
 			} catch (error) {
 				this.submitError = errorMessage(error, "Unable to submit the supplier payment.");
@@ -683,10 +679,6 @@ export default {
 				});
 				if (this.isSupplierPayment) {
 					await this.loadSupplierReview(result.name);
-					frappe.show_alert?.({
-						message: `Supplier payment ${result.name} saved as Draft. Review it here before submission.`,
-						indicator: "green",
-					}, 8);
 					return;
 				}
 				this.$emit("saved", result);
