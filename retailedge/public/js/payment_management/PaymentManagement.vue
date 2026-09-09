@@ -23,7 +23,7 @@
 					<p>Record customer advances, settle submitted Sales Invoices, and keep ERPNext Payment Entry and Payment Reconciliation as the accounting source of truth.</p>
 				</div>
 				<div class="hero-actions">
-					<button class="edge-secondary-button" type="button" @click="openPaymentEntries">Advanced ERPNext</button>
+					<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPaymentEntries">Advanced ERPNext</button>
 					<button class="edge-primary-button" type="button" :disabled="!filters.company" @click="openAdvanceDialog">Record Advance</button>
 				</div>
 			</header>
@@ -83,11 +83,11 @@
 						<article><span>Branch</span><strong>{{ draftReview.branch || "—" }}</strong></article>
 					</div>
 					<div v-if="draftReview.blockers?.length" class="draft-blockers">
-						<strong>Use Advanced ERPNext for this draft:</strong>
+						<strong>{{ canUseNativeDesk ? "Use Advanced ERPNext for this draft:" : "This draft requires an accounting manager with Advanced ERPNext access:" }}</strong>
 						<ul><li v-for="blocker in draftReview.blockers" :key="blocker">{{ blocker }}</li></ul>
 					</div>
 					<div class="draft-actions">
-						<button class="edge-secondary-button" type="button" @click="openPayment(draftReview.payment_entry)">Open in ERPNext</button>
+						<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPayment(draftReview.payment_entry)">Open in ERPNext</button>
 						<button class="edge-primary-button" type="button" :disabled="draftSubmitting || !draftReview.can_submit" @click="submitPaymentDraft">{{ draftSubmitting ? "Submitting…" : "Submit Payment" }}</button>
 					</div>
 				</div>
@@ -119,7 +119,7 @@
 				<div v-else-if="settlement.loading" class="payment-state">Loading authoritative Sales Invoice payment context…</div>
 				<template v-else-if="settlement.context.sales_invoice">
 					<div class="settlement-summary">
-						<article><span>Invoice</span><strong><button class="link-button" type="button" @click="openInvoice(settlement.context.sales_invoice)">{{ settlement.context.sales_invoice }}</button></strong></article>
+						<article><span>Invoice</span><strong><button v-if="canUseNativeDesk" class="link-button" type="button" @click="openInvoice(settlement.context.sales_invoice)">{{ settlement.context.sales_invoice }}</button><span v-else>{{ settlement.context.sales_invoice }}</span></strong></article>
 						<article><span>Customer</span><strong>{{ settlement.context.customer }}</strong></article>
 						<article><span>Authoritative Outstanding</span><strong>{{ formatCurrency(settlement.context.outstanding_amount, settlement.context.currency) }}</strong></article>
 						<article><span>Eligible Advances</span><strong>{{ formatCurrency(settlement.context.available_advance, settlement.context.currency) }}</strong></article>
@@ -140,7 +140,7 @@
 									<thead><tr><th>Payment</th><th>Date</th><th>Mode</th><th class="num">Available</th><th class="num">Apply</th></tr></thead>
 									<tbody>
 										<tr v-for="row in settlement.context.eligible_advances" :key="row.name">
-											<td><button class="link-button" type="button" @click="openPayment(row.name)">{{ row.name }}</button></td>
+											<td><button v-if="canUseNativeDesk" class="link-button" type="button" @click="openPayment(row.name)">{{ row.name }}</button><span v-else>{{ row.name }}</span></td>
 											<td>{{ formatDate(row.posting_date) }}</td>
 											<td>{{ row.mode_of_payment || "—" }}</td>
 											<td class="num">{{ formatCurrency(row.unallocated_amount, settlement.context.currency) }}</td>
@@ -200,7 +200,7 @@
 						<thead><tr><th>Payment</th><th>Date</th><th>Customer</th><th>Branch</th><th>Mode</th><th class="num">Received</th><th class="num">Available</th><th>Actions</th></tr></thead>
 						<tbody>
 							<tr v-for="row in advances" :key="row.name">
-								<td><button class="link-button" type="button" @click="openPayment(row.name)">{{ row.name }}</button></td>
+								<td><button v-if="canUseNativeDesk" class="link-button" type="button" @click="openPayment(row.name)">{{ row.name }}</button><span v-else>{{ row.name }}</span></td>
 								<td>{{ formatDate(row.posting_date) }}</td>
 								<td>{{ row.customer }}</td>
 								<td>{{ row.branch || "—" }}</td>
@@ -257,6 +257,7 @@ export default {
 			draftReview: {},
 			draftSubmitting: false,
 			menuItems: [],
+			canUseNativeDesk: false,
 			tenantName: "",
 			branchName: "",
 			userName: "",
@@ -317,7 +318,7 @@ export default {
 				const routeInvoice = String(frappe.route_options?.sales_invoice || frappe.route_options?.retailedge_sales_invoice || "").trim();
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
 				const [receivablesContext, navigation] = await Promise.all([
 					callMethod("retailedge.customer_receivables.get_customer_receivables_context"),
 					navigationPromise,
@@ -328,6 +329,7 @@ export default {
 				this.branchName = receivablesContext.branch_name || this.filters.branch;
 				this.userName = receivablesContext.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				if (routeInvoice) {
 					await this.loadSettlementInvoice(routeInvoice);
 				} else if (this.filters.company) {
@@ -620,9 +622,9 @@ export default {
 			});
 			dialog.show();
 		},
-		openPaymentEntries() { frappe.set_route("List", "Payment Entry"); },
-		openPayment(name) { frappe.set_route("Form", "Payment Entry", name); },
-		openInvoice(name) { frappe.set_route("Form", "Sales Invoice", name); },
+		openPaymentEntries() { if (!this.canUseNativeDesk) return; frappe.set_route("List", "Payment Entry"); },
+		openPayment(name) { if (!this.canUseNativeDesk) return; frappe.set_route("Form", "Payment Entry", name); },
+		openInvoice(name) { if (!this.canUseNativeDesk) return; frappe.set_route("Form", "Sales Invoice", name); },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
