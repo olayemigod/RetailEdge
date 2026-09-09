@@ -23,7 +23,7 @@
 					<p>Record customer advances, settle submitted Sales Invoices, and keep ERPNext Payment Entry and Payment Reconciliation as the accounting source of truth.</p>
 				</div>
 				<div class="hero-actions">
-					<button class="edge-secondary-button" type="button" @click="openPaymentEntries">Payment Entries</button>
+					<button class="edge-secondary-button" type="button" @click="openPaymentEntries">Advanced ERPNext</button>
 					<button class="edge-primary-button" type="button" :disabled="!filters.company" @click="openAdvanceDialog">Record Advance</button>
 				</div>
 			</header>
@@ -33,6 +33,65 @@
 				<article class="metric-card"><span>Unapplied Receipts</span><strong>{{ context.advance_count || 0 }}</strong></article>
 				<article class="metric-card"><span>Accounting Source</span><strong>ERPNext</strong></article>
 			</div>
+
+			<section ref="draftPanel" class="payment-panel">
+				<div class="panel-head">
+					<div>
+						<h3>Draft Payments Awaiting Submission</h3>
+						<p>Review standard customer receipts and advances here before ERPNext posts them. Complex payments remain available through Advanced ERPNext.</p>
+					</div>
+					<button class="edge-secondary-button" type="button" :disabled="draftLoading || !filters.company || !filters.customer" @click="loadDraftPayments">{{ draftLoading ? "Refreshing…" : "Refresh Drafts" }}</button>
+				</div>
+				<div v-if="!filters.company || !filters.customer" class="payment-state compact">Choose Company and Customer to review draft customer payments.</div>
+				<div v-else-if="draftError" class="payment-error compact">{{ draftError }}</div>
+				<div v-else-if="draftLoading" class="payment-state compact">Loading eligible draft payments…</div>
+				<div v-else-if="!draftPayments.length" class="payment-state compact">No standard draft customer payments are awaiting submission in this scope.</div>
+				<div v-else class="table-wrap">
+					<table class="payment-table draft-table">
+						<thead><tr><th>Payment</th><th>Type</th><th>Date</th><th>Branch</th><th>Invoice</th><th class="num">Received</th><th>Status</th><th>Action</th></tr></thead>
+						<tbody>
+							<tr v-for="row in draftPayments" :key="row.payment_entry">
+								<td>{{ row.payment_entry }}</td>
+								<td>{{ row.payment_kind }}</td>
+								<td>{{ formatDate(row.posting_date) }}</td>
+								<td>{{ row.branch || "—" }}</td>
+								<td>{{ row.sales_invoice || "—" }}</td>
+								<td class="num">{{ formatCurrency(row.received_amount, row.currency) }}</td>
+								<td>{{ row.can_submit ? "Ready" : "Advanced Review" }}</td>
+								<td><button class="edge-small-button" type="button" @click="reviewPaymentDraft(row.payment_entry)">Review</button></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+
+				<div v-if="draftReview.payment_entry" class="draft-review">
+					<div class="block-head">
+						<div>
+							<h4>Review {{ draftReview.payment_entry }}</h4>
+							<p>{{ draftReview.payment_kind }} · ERPNext Payment Entry remains authoritative.</p>
+						</div>
+						<strong>{{ draftReview.can_submit ? "Ready to Submit" : "Advanced Review Required" }}</strong>
+					</div>
+					<div class="draft-review-grid">
+						<article><span>Customer</span><strong>{{ draftReview.customer }}</strong></article>
+						<article><span>Posting Date</span><strong>{{ formatDate(draftReview.posting_date) }}</strong></article>
+						<article><span>Received</span><strong>{{ formatCurrency(draftReview.received_amount, draftReview.currency) }}</strong></article>
+						<article><span>Receiving Account</span><strong>{{ draftReview.paid_to || "—" }}</strong></article>
+						<article><span>Sales Invoice</span><strong>{{ draftReview.sales_invoice || "Unallocated advance" }}</strong></article>
+						<article><span>Allocated</span><strong>{{ formatCurrency(draftReview.allocated_amount, draftReview.currency) }}</strong></article>
+						<article><span>Unallocated</span><strong>{{ formatCurrency(draftReview.unallocated_amount, draftReview.currency) }}</strong></article>
+						<article><span>Branch</span><strong>{{ draftReview.branch || "—" }}</strong></article>
+					</div>
+					<div v-if="draftReview.blockers?.length" class="draft-blockers">
+						<strong>Use Advanced ERPNext for this draft:</strong>
+						<ul><li v-for="blocker in draftReview.blockers" :key="blocker">{{ blocker }}</li></ul>
+					</div>
+					<div class="draft-actions">
+						<button class="edge-secondary-button" type="button" @click="openPayment(draftReview.payment_entry)">Open in ERPNext</button>
+						<button class="edge-primary-button" type="button" :disabled="draftSubmitting || !draftReview.can_submit" @click="submitPaymentDraft">{{ draftSubmitting ? "Submitting…" : "Submit Payment" }}</button>
+					</div>
+				</div>
+			</section>
 
 			<section ref="settlementPanel" class="payment-panel settlement-panel">
 				<div class="panel-head">
@@ -113,8 +172,8 @@
 								<button class="edge-primary-button" type="button" :disabled="settlement.creatingReceipt || !canCreateReceipt" @click="createReceiptDraft">{{ settlement.creatingReceipt ? "Creating…" : "Create Draft Receipt" }}</button>
 							</div>
 							<div v-if="settlement.lastDraft.name" class="draft-notice">
-								<div><strong>Draft {{ settlement.lastDraft.name }} created.</strong><br />It is not posted yet, so the Sales Invoice outstanding above has not been reduced.</div>
-								<button class="edge-secondary-button" type="button" @click="openPayment(settlement.lastDraft.name)">Open Draft Payment</button>
+								<div><strong>Draft {{ settlement.lastDraft.name }} created.</strong><br />It is not posted yet. Review and submit it in EdgeSuite to update the Sales Invoice outstanding.</div>
+								<button class="edge-secondary-button" type="button" @click="reviewPaymentDraft(settlement.lastDraft.name)">Review Draft</button>
 							</div>
 						</div>
 					</template>
@@ -130,7 +189,7 @@
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.customer" :selectedLabel="customerLabel" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
-					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="loadAdvances">Apply Filters</button></div>
+					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="refreshPaymentContext">Apply Filters</button></div>
 				</div>
 
 				<div v-if="error" class="payment-error">{{ error }}</div>
@@ -192,6 +251,11 @@ export default {
 			error: "",
 			context: {},
 			advances: [],
+			draftPayments: [],
+			draftLoading: false,
+			draftError: "",
+			draftReview: {},
+			draftSubmitting: false,
 			menuItems: [],
 			tenantName: "",
 			branchName: "",
@@ -267,9 +331,13 @@ export default {
 				if (routeInvoice) {
 					await this.loadSettlementInvoice(routeInvoice);
 				} else if (this.filters.company) {
-					await this.loadAdvances();
+					await this.refreshPaymentContext();
 				}
 			} catch (error) { this.error = errorMessage(error, "Failed to load Payment Management controls."); }
+		},
+		async refreshPaymentContext() {
+			await this.loadAdvances();
+			await this.loadDraftPayments();
 		},
 		async loadAdvances() {
 			if (!this.filters.company) return;
@@ -286,11 +354,83 @@ export default {
 			} catch (error) { this.advances = []; this.context = {}; this.error = errorMessage(error, "Customer advances failed to load."); }
 			finally { this.loading = false; }
 		},
+		async loadDraftPayments() {
+			if (!this.filters.company || !this.filters.customer) {
+				this.draftPayments = [];
+				this.draftError = "";
+				return;
+			}
+			this.draftLoading = true;
+			this.draftError = "";
+			try {
+				const result = await callMethod("retailedge.standard_customer_payment_submit.list_standard_customer_payment_drafts", {
+					company: this.filters.company,
+					customer: this.filters.customer,
+					branch: this.filters.branch || null,
+					limit: 50,
+				});
+				this.draftPayments = Array.isArray(result) ? result : [];
+				if (this.draftReview.payment_entry && !this.draftPayments.some((row) => row.payment_entry === this.draftReview.payment_entry)) this.draftReview = {};
+			} catch (error) {
+				this.draftPayments = [];
+				this.draftError = errorMessage(error, "Draft customer payments failed to load.");
+			} finally { this.draftLoading = false; }
+		},
+		async reviewPaymentDraft(paymentEntry) {
+			if (!paymentEntry) return;
+			this.draftError = "";
+			try {
+				this.draftReview = await callMethod("retailedge.standard_customer_payment_submit.get_customer_payment_submit_preview", {
+					payment_entry: paymentEntry,
+					company: this.filters.company || null,
+					customer: this.filters.customer || null,
+					branch: this.filters.branch || null,
+				});
+				this.$nextTick(() => this.$refs.draftPanel?.scrollIntoView?.({ behavior: "smooth", block: "start" }));
+			} catch (error) {
+				this.draftReview = {};
+				this.draftError = errorMessage(error, "Payment draft review failed to load.");
+			}
+		},
+		submitPaymentDraft() {
+			const preview = this.draftReview;
+			if (!preview?.payment_entry || !preview.can_submit || this.draftSubmitting) return;
+			frappe.confirm(
+				__(`Submit Payment Entry ${preview.payment_entry}? ERPNext will post the payment and update the authoritative customer balance.`),
+				async () => {
+					this.draftSubmitting = true;
+					this.draftError = "";
+					try {
+						const result = await callMethod("retailedge.standard_customer_payment_submit.submit_standard_customer_payment", {
+							payment_entry: preview.payment_entry,
+							expected_payment_entry_modified: preview.payment_entry_modified,
+							company: this.filters.company || null,
+							customer: this.filters.customer || null,
+							branch: this.filters.branch || null,
+						});
+						this.draftReview = {};
+						frappe.show_alert({ message: __("Customer payment submitted through ERPNext."), indicator: "green" });
+						if (result.sales_invoice) await this.loadSettlementInvoice(result.sales_invoice);
+						else await this.loadAdvances();
+						await this.loadDraftPayments();
+					} catch (error) {
+						this.draftError = errorMessage(error, "Customer payment submission failed.");
+						if (preview.payment_entry) await this.reviewPaymentDraft(preview.payment_entry);
+					} finally { this.draftSubmitting = false; }
+				},
+			);
+		},
+		clearDraftState() {
+			this.draftPayments = [];
+			this.draftReview = {};
+			this.draftError = "";
+		},
 		async loadSettlementInvoice(invoiceName) {
 			if (!invoiceName) return;
 			this.settlement.loading = true;
 			this.settlement.error = "";
 			this.settlement.lastDraft = {};
+			this.clearDraftState();
 			try {
 				const result = await callMethod("retailedge.advanced_payments.get_sales_invoice_advance_context", { sales_invoice: invoiceName, limit: 100 });
 				this.settlement.context = result || {};
@@ -311,6 +451,7 @@ export default {
 				this.settlement.allocations = allocations;
 				this.settlement.receipt.amount = "";
 				await this.loadAdvances();
+				await this.loadDraftPayments();
 			} catch (error) {
 				this.settlement.context = {};
 				this.settlement.allocations = {};
@@ -343,11 +484,11 @@ export default {
 			});
 			return optionRows(result);
 		},
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.customer = ""; this.branchName = ""; this.customerLabel = ""; this.clearSettlementInvoice(); this.loadAdvances(); },
-		onBranchSelected(option) { this.filters.branch = option.value; this.branchName = option.label || option.value; this.clearSettlementInvoice(); this.loadAdvances(); },
-		clearBranch() { this.filters.branch = ""; this.branchName = ""; this.clearSettlementInvoice(); this.loadAdvances(); },
-		onCustomerSelected(option) { this.filters.customer = option.value; this.customerLabel = option.label || option.value; this.clearSettlementInvoice(); this.loadAdvances(); },
-		clearCustomer() { this.filters.customer = ""; this.customerLabel = ""; this.clearSettlementInvoice(); this.loadAdvances(); },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.customer = ""; this.branchName = ""; this.customerLabel = ""; this.clearDraftState(); this.clearSettlementInvoice(); this.refreshPaymentContext(); },
+		onBranchSelected(option) { this.filters.branch = option.value; this.branchName = option.label || option.value; this.clearDraftState(); this.clearSettlementInvoice(); this.refreshPaymentContext(); },
+		clearBranch() { this.filters.branch = ""; this.branchName = ""; this.clearDraftState(); this.clearSettlementInvoice(); this.refreshPaymentContext(); },
+		onCustomerSelected(option) { this.filters.customer = option.value; this.customerLabel = option.label || option.value; this.clearDraftState(); this.clearSettlementInvoice(); this.refreshPaymentContext(); },
+		clearCustomer() { this.filters.customer = ""; this.customerLabel = ""; this.clearDraftState(); this.clearSettlementInvoice(); this.refreshPaymentContext(); },
 		onSettlementInvoiceSelected(option) { this.loadSettlementInvoice(option.value); },
 		clearSettlementInvoice() {
 			this.settlement.invoice = "";
@@ -364,9 +505,10 @@ export default {
 			this.customerLabel = row.customer;
 			this.branchName = row.branch || "";
 			this.settlement.pendingAdvance = row.name;
+			this.clearDraftState();
 			this.clearSettlementInvoice();
 			this.settlement.pendingAdvance = row.name;
-			await this.loadAdvances();
+			await this.refreshPaymentContext();
 			this.$nextTick(() => this.$refs.settlementPanel?.scrollIntoView?.({ behavior: "smooth", block: "start" }));
 			frappe.show_alert({ message: __("Choose the Sales Invoice to settle. The selected advance will be prefilled if eligible."), indicator: "blue" });
 		},
@@ -438,11 +580,13 @@ export default {
 				});
 				this.settlement.lastDraft = result || {};
 				this.settlement.receipt.amount = "";
-				frappe.show_alert({ message: __("Draft customer Payment Entry created. It has not changed invoice outstanding."), indicator: "green" });
+				frappe.show_alert({ message: __("Draft customer Payment Entry created. Review it below before submission."), indicator: "green" });
+				await this.loadDraftPayments();
+				if (result.name) await this.reviewPaymentDraft(result.name);
 			} catch (error) { this.settlement.error = errorMessage(error, "Draft customer receipt could not be created."); }
 			finally { this.settlement.creatingReceipt = false; }
 		},
-		openAdvanceDialog() {
+		async openAdvanceDialog() {
 			const dialog = new frappe.ui.Dialog({
 				title: __("Record Customer Advance"),
 				fields: [
@@ -461,8 +605,16 @@ export default {
 					try {
 						const result = await callMethod("retailedge.advanced_payments.create_customer_advance_draft", { values });
 						dialog.hide();
-						frappe.show_alert({ message: __("Customer advance draft created."), indicator: "green" });
-						if (result.name) frappe.set_route("Form", "Payment Entry", result.name);
+						this.filters.company = result.company || this.filters.company;
+						this.filters.branch = result.branch || "";
+						this.filters.customer = result.customer || "";
+						this.branchName = result.branch || "";
+						this.customerLabel = result.customer || "";
+						this.clearSettlementInvoice();
+						frappe.show_alert({ message: __("Customer advance draft created. Review it below before submission."), indicator: "green" });
+						await this.loadAdvances();
+						await this.loadDraftPayments();
+						if (result.name) await this.reviewPaymentDraft(result.name);
 					} catch (error) { frappe.msgprint({ title: __("Could not create advance"), message: errorMessage(error, "Payment Entry draft could not be created."), indicator: "red" }); }
 				},
 			});
@@ -491,10 +643,10 @@ export default {
 .hero-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .payment-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .metric-card { padding:16px; display:flex; flex-direction:column; gap:6px; }
-.metric-card span,.settlement-summary span { color:var(--edge-text-muted,#667085); font-size:.8rem; }
+.metric-card span,.settlement-summary span,.draft-review-grid span { color:var(--edge-text-muted,#667085); font-size:.8rem; }
 .metric-card strong { color:var(--edge-text,#101828); font-size:1.25rem; }
 .payment-panel { padding:18px; }
-.panel-head,.block-head,.settlement-actions,.draft-notice { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.panel-head,.block-head,.settlement-actions,.draft-notice,.draft-actions { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
 .panel-head { margin-bottom:16px; }
 .panel-head h3,.block-head h4 { margin:0 0 4px; color:var(--edge-text,#101828); }
 .panel-head p,.block-head p,.selector-help { margin:0; color:var(--edge-text-muted,#667085); }
@@ -508,17 +660,18 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 .table-wrap { width:100%; overflow:auto; }
 .payment-table { width:100%; border-collapse:collapse; min-width:900px; }
 .settlement-table { min-width:720px; }
+.draft-table { min-width:880px; }
 .payment-table th,.payment-table td { padding:10px 9px; border-bottom:1px solid var(--edge-border,#e5e7eb); text-align:left; color:var(--edge-text,#101828); }
 .payment-table th { font-size:.76rem; color:var(--edge-text-muted,#667085); text-transform:uppercase; letter-spacing:.03em; }
 .payment-table .num { text-align:right; }
 .payment-table .strong { font-weight:700; }
 .link-button { border:0; background:transparent; color:var(--edge-primary,#0f766e); padding:0; cursor:pointer; font-weight:600; }
 .payment-state,.payment-error { padding:28px; text-align:center; color:var(--edge-text-muted,#667085); }
-.payment-state.compact { padding:16px; }
+.payment-state.compact,.payment-error.compact { padding:16px; }
 .payment-error { color:var(--edge-danger,#b42318); }
 .accounting-note { padding:14px 16px; color:var(--edge-text-muted,#667085); }
 .accounting-note strong { color:var(--edge-text,#101828); }
-.settlement-panel { scroll-margin-top:16px; }
+.settlement-panel,.payment-panel { scroll-margin-top:16px; }
 .settlement-selector { display:grid; grid-template-columns:minmax(260px,420px) 1fr; align-items:end; gap:16px; margin-bottom:16px; }
 .selector-help { font-size:.82rem; padding-bottom:8px; }
 .settlement-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:12px 0 18px; }
@@ -537,6 +690,13 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 .settlement-actions { align-items:center; margin-top:14px; color:var(--edge-text-muted,#667085); }
 .draft-notice { align-items:center; margin-top:14px; padding:12px 14px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); color:var(--edge-text-muted,#667085); }
 .draft-notice strong { color:var(--edge-text,#101828); }
-@media (max-width:900px) { .payment-hero { flex-direction:column; } .payment-cards,.settlement-summary { grid-template-columns:1fr 1fr; } .filter-grid,.receipt-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .settlement-selector { grid-template-columns:1fr; } }
-@media (max-width:560px) { .filter-grid,.receipt-grid,.payment-cards,.settlement-summary { grid-template-columns:1fr; } .receipt-remarks { grid-column:span 1; } .panel-head,.block-head,.settlement-actions,.draft-notice { flex-direction:column; } }
+.draft-review { margin-top:18px; padding-top:18px; border-top:1px solid var(--edge-border,#e5e7eb); }
+.draft-review-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.draft-review-grid article { border:1px solid var(--edge-border,#e5e7eb); border-radius:var(--edge-radius-md,8px); padding:11px; display:flex; flex-direction:column; gap:5px; min-width:0; }
+.draft-review-grid strong { color:var(--edge-text,#101828); overflow-wrap:anywhere; }
+.draft-blockers { margin-top:12px; padding:12px 14px; border:1px solid var(--edge-warning,#d97706); border-radius:var(--edge-radius-md,8px); color:var(--edge-text,#101828); }
+.draft-blockers ul { margin:6px 0 0 18px; padding:0; }
+.draft-actions { align-items:center; justify-content:flex-end; margin-top:14px; }
+@media (max-width:900px) { .payment-hero { flex-direction:column; } .payment-cards,.settlement-summary,.draft-review-grid { grid-template-columns:1fr 1fr; } .filter-grid,.receipt-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .settlement-selector { grid-template-columns:1fr; } }
+@media (max-width:560px) { .filter-grid,.receipt-grid,.payment-cards,.settlement-summary,.draft-review-grid { grid-template-columns:1fr; } .receipt-remarks { grid-column:span 1; } .panel-head,.block-head,.settlement-actions,.draft-notice,.draft-actions { flex-direction:column; } }
 </style>
