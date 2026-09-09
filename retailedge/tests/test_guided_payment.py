@@ -153,7 +153,7 @@ class TestGuidedPayment(unittest.TestCase):
 		self,
 		mock_new_doc,
 		_mock_create_permission,
-		mock_branch_access,
+		_mock_branch_access,
 		_mock_read_permission,
 		mock_party_details,
 		mock_mode_details,
