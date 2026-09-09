@@ -153,7 +153,7 @@ class TestGuidedPayment(unittest.TestCase):
 		self,
 		mock_new_doc,
 		_mock_create_permission,
-		_mock_branch_access,
+		mock_branch_access,
 		_mock_read_permission,
 		mock_party_details,
 		mock_mode_details,
@@ -255,7 +255,7 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertIn("get_simple_payment_mode_details", component)
 		self.assertIn("search_simple_payment_options", component)
 		self.assertIn("create_simple_payment_draft", component)
-		self.assertIn("Open Full Form", component)
+		self.assertIn("Open in ERPNext", component)
 		self.assertIn('this.$emit("open-native", "Payment Entry")', component)
 		self.assertNotIn("frappe.get_list", component)
 		self.assertNotIn("frappe.db.insert", component)
