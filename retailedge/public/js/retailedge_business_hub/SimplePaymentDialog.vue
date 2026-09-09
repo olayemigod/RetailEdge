@@ -1,16 +1,18 @@
 <template>
 	<EdgeModal
 		:open="open"
-		:title="supplierReview ? 'Supplier Payment Review' : (formContext.title || 'Payment')"
-		:subtitle="supplierReview
-			? 'Review the draft Payment Entry before ERPNext posts the supplier payment.'
-			: (formContext.subtitle || 'Create a Payment Entry draft using ERPNext payment and allocation controls.')"
+		:title="customerReview ? 'Customer Payment Review' : (supplierReview ? 'Supplier Payment Review' : (formContext.title || 'Payment'))"
+		:subtitle="customerReview
+			? 'Review the draft Payment Entry before ERPNext posts the customer payment.'
+			: (supplierReview
+				? 'Review the draft Payment Entry before ERPNext posts the supplier payment.'
+				: (formContext.subtitle || 'Create a Payment Entry draft using ERPNext payment and allocation controls.'))"
 		size="xl"
 		@close="requestClose"
 	>
 		<div v-if="loading || reviewLoading" class="guided-payment-state">
 			<EdgeLoadingState
-				:message="reviewLoading ? 'Preparing supplier payment review...' : 'Preparing Payment Entry...'"
+				:message="reviewLoading ? (isCustomerPayment ? 'Preparing customer payment review...' : 'Preparing supplier payment review...') : 'Preparing Payment Entry...'"
 				:skeleton="true"
 			/>
 		</div>
@@ -21,6 +23,90 @@
 				:message="loadError"
 				@retry="loadContext"
 			/>
+		</div>
+
+		<div v-else-if="customerReview" class="supplier-payment-review">
+			<div class="guided-payment-context" aria-label="Customer payment review context">
+				<div>
+					<span>Payment Entry</span>
+					<strong>{{ customerReview.payment_entry }}</strong>
+				</div>
+				<div>
+					<span>Status</span>
+					<strong>{{ customerReview.status || 'Draft' }}</strong>
+				</div>
+				<div>
+					<span>Company</span>
+					<strong>{{ customerReview.company || 'Not set' }}</strong>
+				</div>
+				<div v-if="customerReview.branch">
+					<span>Branch</span>
+					<strong>{{ customerReview.branch }}</strong>
+				</div>
+			</div>
+
+			<div v-if="submitError" class="guided-payment-error" role="alert">
+				{{ submitError }}
+			</div>
+
+			<div v-if="customerReview.blockers && customerReview.blockers.length" class="supplier-review-blockers" role="alert">
+				<strong>This draft needs Advanced ERPNext review before it can be submitted.</strong>
+				<ul>
+					<li v-for="blocker in customerReview.blockers" :key="blocker">{{ blocker }}</li>
+				</ul>
+			</div>
+
+			<div class="supplier-review-grid">
+				<div>
+					<span>Customer</span>
+					<strong>{{ customerReview.customer }}</strong>
+				</div>
+				<div>
+					<span>Posting Date</span>
+					<strong>{{ customerReview.posting_date }}</strong>
+				</div>
+				<div>
+					<span>Received Amount</span>
+					<strong>{{ formatMoney(customerReview.received_amount, customerReview.currency) }}</strong>
+				</div>
+				<div>
+					<span>Mode of Payment</span>
+					<strong>{{ customerReview.mode_of_payment || 'Not set' }}</strong>
+				</div>
+				<div>
+					<span>Customer Receivable</span>
+					<strong>{{ customerReview.paid_from }}</strong>
+				</div>
+				<div>
+					<span>Receiving Account</span>
+					<strong>{{ customerReview.paid_to }}</strong>
+				</div>
+				<div>
+					<span>Payment Kind</span>
+					<strong>{{ customerReview.payment_kind || 'Customer Receipt' }}</strong>
+				</div>
+				<div>
+					<span>Sales Invoice</span>
+					<strong>{{ customerReview.sales_invoice || 'Customer Advance' }}</strong>
+				</div>
+				<div>
+					<span>Allocated</span>
+					<strong>{{ formatMoney(customerReview.allocated_amount, customerReview.currency) }}</strong>
+				</div>
+				<div>
+					<span>Unallocated</span>
+					<strong>{{ formatMoney(customerReview.unallocated_amount, customerReview.currency) }}</strong>
+				</div>
+				<div v-if="customerReview.sales_invoice">
+					<span>Invoice Outstanding</span>
+					<strong>{{ formatMoney(customerReview.invoice_outstanding_amount, customerReview.currency) }}</strong>
+				</div>
+			</div>
+
+			<p class="guided-payment-hint">
+				Submitting uses the native ERPNext Payment Entry submit flow. RetailEdge does not directly change
+				the Sales Invoice outstanding amount, GL Entry, Payment Ledger Entry, or customer balance.
+			</p>
 		</div>
 
 		<div v-else-if="supplierReview" class="supplier-payment-review">
@@ -218,6 +304,9 @@
 			<p class="guided-payment-hint">
 				Only submitted invoices with a positive outstanding balance are offered. Multi-currency and
 				payment-term allocation cases remain on the full ERPNext Payment Entry form.
+				<template v-if="isCustomerPayment">
+					Standard Receive Customer supports one Sales Invoice receipt or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
+				</template>
 				<template v-if="isSupplierPayment">
 					Standard Pay Supplier supports one Purchase Invoice per payment; complex allocations stay in Advanced ERPNext.
 				</template>
@@ -235,7 +324,31 @@
 		</form>
 
 		<template #footer>
-			<div v-if="supplierReview" class="guided-payment-footer">
+			<div v-if="customerReview" class="guided-payment-footer">
+				<button
+					v-if="nativeFallbackEnabled"
+					type="button"
+					class="edge-button"
+					:disabled="submitting"
+					@click="openReviewedCustomerPaymentInERPNext"
+				>
+					Open in ERPNext
+				</button>
+				<div class="guided-payment-footer-actions">
+					<button type="button" class="edge-button" :disabled="submitting" @click="requestClose">
+						Close
+					</button>
+					<button
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="submitting || !customerReview.can_submit"
+						@click="submitCustomerPayment"
+					>
+						{{ submitting ? 'Submitting...' : 'Submit Payment' }}
+					</button>
+				</div>
+			</div>
+			<div v-else-if="supplierReview" class="guided-payment-footer">
 				<button
 					v-if="nativeFallbackEnabled"
 					type="button"
@@ -261,7 +374,7 @@
 			</div>
 			<div v-else class="guided-payment-footer">
 				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Open Full Form
+					Advanced ERPNext
 				</button>
 				<div class="guided-payment-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
@@ -287,6 +400,8 @@ const SEARCH_METHOD = "retailedge.guided_payment.search_simple_payment_options";
 const MODE_METHOD = "retailedge.guided_payment.get_simple_payment_mode_details";
 const REFERENCE_METHOD = "retailedge.guided_payment.get_simple_payment_reference_details";
 const CREATE_METHOD = "retailedge.guided_payment.create_simple_payment_draft";
+const CUSTOMER_PREVIEW_METHOD = "retailedge.standard_customer_payment_submit.get_customer_payment_submit_preview";
+const CUSTOMER_SUBMIT_METHOD = "retailedge.standard_customer_payment_submit.submit_standard_customer_payment";
 const SUPPLIER_PREVIEW_METHOD = "retailedge.standard_supplier_payment_submit.get_supplier_payment_submit_preview";
 const SUPPLIER_SUBMIT_METHOD = "retailedge.standard_supplier_payment_submit.submit_standard_supplier_payment";
 const runtimeComponents =
@@ -370,6 +485,7 @@ export default {
 			loadError: "",
 			saveError: "",
 			submitError: "",
+			customerReview: null,
 			supplierReview: null,
 			formContext: {},
 			modeDetails: {},
@@ -402,6 +518,9 @@ export default {
 	computed: {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
+		},
+		isCustomerPayment() {
+			return this.intent === "receive-customer-payment";
 		},
 		isSupplierPayment() {
 			return this.intent === "pay-supplier";
@@ -447,6 +566,7 @@ export default {
 			this.loadError = "";
 			this.saveError = "";
 			this.submitError = "";
+			this.customerReview = null;
 			this.supplierReview = null;
 			this.modeDetails = {};
 			try {
@@ -509,6 +629,12 @@ export default {
 			if (this.saving || this.submitting) return;
 			this.$emit("open-native", "Payment Entry");
 		},
+		openReviewedCustomerPaymentInERPNext() {
+			if (this.submitting || !this.nativeFallbackEnabled || !this.customerReview?.payment_entry) return;
+			const paymentEntry = this.customerReview.payment_entry;
+			this.$emit("close");
+			frappe.set_route("Form", "Payment Entry", paymentEntry);
+		},
 		openReviewedPaymentInERPNext() {
 			if (this.submitting || !this.nativeFallbackEnabled || !this.supplierReview?.payment_entry) return;
 			const paymentEntry = this.supplierReview.payment_entry;
@@ -541,6 +667,7 @@ export default {
 			if (this.values.party !== (next || "")) {
 				this.values.party = next || "";
 				this.values.references = [emptyReference()];
+				this.customerReview = null;
 				this.supplierReview = null;
 			}
 		},
@@ -548,6 +675,7 @@ export default {
 			if (this.values.branch !== (next || "")) {
 				this.values.branch = next || "";
 				this.values.references = [emptyReference()];
+				this.customerReview = null;
 				this.supplierReview = null;
 			}
 		},
@@ -621,6 +749,23 @@ export default {
 				throw new Error("Standard Pay Supplier must allocate the full payment amount to the selected Purchase Invoice.");
 			}
 		},
+		async loadCustomerReview(paymentEntry) {
+			this.reviewLoading = true;
+			this.submitError = "";
+			try {
+				this.customerReview = await callMethod(CUSTOMER_PREVIEW_METHOD, {
+					payment_entry: paymentEntry,
+					company: this.values.company,
+					customer: this.values.party,
+					branch: this.values.branch,
+				});
+			} catch (error) {
+				this.saveError = errorMessage(error, "Unable to prepare the customer payment review.");
+				throw error;
+			} finally {
+				this.reviewLoading = false;
+			}
+		},
 		async loadSupplierReview(paymentEntry) {
 			this.reviewLoading = true;
 			this.submitError = "";
@@ -636,6 +781,35 @@ export default {
 				throw error;
 			} finally {
 				this.reviewLoading = false;
+			}
+		},
+		async submitCustomerPayment() {
+			if (this.submitting || !this.customerReview?.can_submit) return;
+			this.submitError = "";
+			const confirmed = await confirmAction(
+				`Submit Payment Entry ${this.customerReview.payment_entry}? ERPNext will post this customer payment.`
+			);
+			if (!confirmed) return;
+
+			this.submitting = true;
+			try {
+				await callMethod(CUSTOMER_SUBMIT_METHOD, {
+					payment_entry: this.customerReview.payment_entry,
+					expected_payment_entry_modified: this.customerReview.payment_entry_modified,
+					company: this.customerReview.company,
+					customer: this.customerReview.customer,
+					branch: this.customerReview.branch,
+				});
+				this.$emit("close");
+			} catch (error) {
+				this.submitError = errorMessage(error, "Unable to submit the customer payment.");
+				try {
+					await this.loadCustomerReview(this.customerReview.payment_entry);
+				} catch (_refreshError) {
+					// Preserve the submit error. The operator can close and reopen if the draft changed.
+				}
+			} finally {
+				this.submitting = false;
 			}
 		},
 		async submitSupplierPayment() {
@@ -677,6 +851,10 @@ export default {
 					intent: this.intent,
 					values: this.values,
 				});
+				if (this.isCustomerPayment) {
+					await this.loadCustomerReview(result.name);
+					return;
+				}
 				if (this.isSupplierPayment) {
 					await this.loadSupplierReview(result.name);
 					return;
