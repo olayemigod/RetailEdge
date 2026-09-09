@@ -82,6 +82,7 @@
 			:open="supplierPaymentOpen"
 			intent="pay-supplier"
 			:initialContext="supplierPaymentContext"
+			:nativeFallbackEnabled="canUseNativeDesk"
 			@close="closeSupplierPayment"
 			@saved="handleSupplierPaymentSaved"
 			@open-native="openNativePayment"
@@ -129,6 +130,7 @@ export default {
 			supplierLabel: "", itemLabel: "", payablesAgeingDate: "",
 			filters: { company: "", from_date: "", to_date: "", as_of_date: "", branch: "", supplier: "", supplier_group: "", item_code: "", item_group: "", warehouse: "", status: "", invoice_kind: "All", ageing_bucket: "All", page_size: 50 },
 			currentPage: 1,
+			canUseNativeDesk: false,
 			supplierPaymentOpen: false,
 			supplierPaymentContext: {},
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
@@ -163,11 +165,12 @@ export default {
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {
-				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.purchase_reporting.get_purchase_reporting_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				if (this.requiredReady) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Purchase report controls."); }
 			finally { this.metadataLoading = false; }
@@ -216,12 +219,11 @@ export default {
 			this.supplierPaymentOpen = true;
 		},
 		closeSupplierPayment() { this.supplierPaymentOpen = false; this.supplierPaymentContext = {}; },
-		async handleSupplierPaymentSaved(result) {
+		async handleSupplierPaymentSaved(_result) {
 			this.closeSupplierPayment();
 			await this.fetchData();
-			if (result?.name) frappe.set_route("Form", "Payment Entry", result.name);
 		},
-		openNativePayment() { this.closeSupplierPayment(); frappe.new_doc("Payment Entry"); },
+		openNativePayment() { if (!this.canUseNativeDesk) return; this.closeSupplierPayment(); frappe.new_doc("Payment Entry"); },
 		openReportCell(payload) {
 			const column = payload?.column; const row = payload?.row;
 			if (!column || !row) return;
