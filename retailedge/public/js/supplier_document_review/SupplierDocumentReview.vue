@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Supplier Document Review"
 			eyebrow="Suppliers & Payables"
-			subtitle="Review private supplier invoices, approve advisory extraction evidence, and explicitly prepare ERPNext Purchase Invoice drafts from the authoritative Purchase Order."
+			subtitle="Review private supplier invoices, approve advisory extraction evidence, prepare ERPNext Purchase Invoice drafts from the authoritative Purchase Order, and submit reconciled standard drafts through ERPNext."
 			:summary="summaryCards"
 			:loading="loading"
 			:error="error"
@@ -130,12 +130,12 @@
 
 				<EdgeDashboardSection
 					title="Accounting safety"
-					description="The handoff is deliberately draft-only and ERPNext-first."
+					description="Draft preparation remains draft-only; standard submission uses ERPNext's normal Purchase Invoice lifecycle."
 					span="2"
 				>
 					<div class="supplier-review-safety">
 						<strong>Extraction values are review evidence only.</strong>
-						<span>Purchase Invoice items, quantities, rates, taxes and Purchase Order links come from ERPNext's native Purchase Order mapper. This workspace creates drafts only and never submits Purchase Invoices or posts payments, GL Entries or Stock Ledger Entries.</span>
+						<span>Purchase Invoice items, quantities, rates, taxes and Purchase Order links come from ERPNext's native Purchase Order mapper. Draft preparation never posts accounting. Standard submission is available only after the mapped draft reconciles to accepted extraction evidence and uses ERPNext's Purchase Invoice submit lifecycle; this workspace never creates Payment Entries, GL Entries or Stock Ledger Entries directly.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
