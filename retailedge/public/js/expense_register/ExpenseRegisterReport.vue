@@ -493,10 +493,15 @@ export default {
 			return row?.name || "";
 		},
 		openReportCell(payload) {
-			if (payload?.column?.fieldname === "name" && payload?.row) this.openExpense(payload.row);
+			if (["name", "source_reference"].includes(payload?.column?.fieldname) && payload?.row) this.openExpense(payload.row);
 		},
 		openExpense(row) {
 			if (!row) return;
+			if (row.source_doctype === "RetailEdge Business Expense" && this.hasPageTarget("business-expenses")) {
+				frappe.route_options = { business_expense: row.source_reference || "" };
+				frappe.set_route("business-expenses");
+				return;
+			}
 			if (row.source_doctype === "Purchase Invoice" && this.hasPageTarget("purchase-register")) {
 				frappe.route_options = { purchase_invoice: row.source_reference || "" };
 				frappe.set_route("purchase-register");
