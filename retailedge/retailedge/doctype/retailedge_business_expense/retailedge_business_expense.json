@@ -113,7 +113,7 @@
    "fieldname": "payee_type",
    "fieldtype": "Select",
    "label": "Payee Type",
-   "options": "Supplier\\nOther"
+   "options": "Supplier\nOther"
   },
   {
    "depends_on": "eval:doc.payee_type == 'Supplier'",
@@ -192,7 +192,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Expense Status",
-   "options": "Draft\\nSubmitted\\nApproved\\nRejected\\nPending Ledger\\nPosted\\nCancelled",
+   "options": "Draft\nSubmitted\nApproved\nRejected\nPending Ledger\nPosted\nCancelled",
    "read_only": 1
   },
   {
@@ -202,7 +202,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "Ledger Status",
-   "options": "Not Applicable\\nPending Ledger\\nPosted\\nFailed",
+   "options": "Not Applicable\nPending Ledger\nPosted\nFailed",
    "read_only": 1
   },
   {

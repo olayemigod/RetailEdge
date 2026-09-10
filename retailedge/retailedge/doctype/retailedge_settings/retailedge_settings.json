@@ -644,7 +644,7 @@
    "fieldname": "business_expense_process",
    "fieldtype": "Select",
    "label": "Business Expense Process",
-   "options": "Approval Required\\nDirect Posting"
+   "options": "Approval Required\nDirect Posting"
   },
   {
    "default": "0",
