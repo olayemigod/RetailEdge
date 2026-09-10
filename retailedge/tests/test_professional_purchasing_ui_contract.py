@@ -25,32 +25,37 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn("edgeUI.createEdgeApp(ProfessionalPurchasing)", bundle)
 		self.assertNotIn("window.EdgeUI", page_js + bundle)
 
-	def test_workspace_uses_native_sourcing_and_receipt_services_inside_edgesuite(self):
+	def test_workspace_delegates_existing_standard_ownership_to_edgesuite(self):
 		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
 
 		self.assertIn("retailedge.professional_purchasing.get_professional_purchasing_context", component)
 		self.assertIn("retailedge.professional_purchasing.search_professional_purchasing_options", component)
-		self.assertIn("retailedge.professional_purchasing.prepare_request_for_quotation_draft", component)
-		self.assertIn("retailedge.professional_purchasing.prepare_purchase_receipt_draft", component)
 		self.assertIn("EdgeLinkField", component)
 		self.assertIn("companySearch", component)
 		self.assertIn("branchSearch", component)
 		self.assertIn("supplierSearch", component)
-		self.assertIn("rfqSupplierSearch", component)
 		self.assertIn("Purchase Material Requests", component)
 		self.assertIn("Start RFQ", component)
-		self.assertIn("Prepare Draft RFQ", component)
-		self.assertIn("send_email", (APP_ROOT / "professional_purchasing.py").read_text())
-		self.assertIn('frappe.set_route("Form", "Request for Quotation", result.name)', component)
-		self.assertIn('frappe.set_route("query-report", "Supplier Quotation Comparison")', component)
 		self.assertIn("Prepare Receipt", component)
 		self.assertIn("sortBy('per_received')", component)
 		self.assertIn("sortMaterialBy('per_ordered')", component)
-		self.assertIn("frappe.new_doc(\"Purchase Order\")", component)
-		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', component)
+		self.assertIn("canUseNativeDesk: false", component)
+		self.assertIn("this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);", component)
+		for event_name in (
+			"retailedge-open-professional-purchase-order",
+			"retailedge-open-professional-rfq-preview",
+			"retailedge-open-professional-rfq-history",
+			"retailedge-open-professional-supplier-quotation-history",
+			"retailedge-open-professional-purchase-receipt-preview",
+			"retailedge-open-professional-purchase-receipt-history",
+		):
+			self.assertIn(event_name, component)
+		self.assertNotIn('frappe.new_doc("Purchase Order")', component)
+		self.assertNotIn('frappe.set_route("Form", "Request for Quotation", result.name)', component)
+		self.assertNotIn('frappe.set_route("Form", "Purchase Receipt", result.name)', component)
 
-		# New operational UX must remain inside the EdgeSuite page rather than opening
-		# a parallel Frappe dialog/prompt/toast workflow.
+		# Operational UX remains inside EdgeSuite rather than opening a parallel
+		# classic Frappe dialog/prompt/toast workflow.
 		self.assertNotIn("frappe.ui.Dialog", component)
 		self.assertNotIn("frappe.prompt", component)
 		self.assertNotIn("frappe.msgprint", component)
