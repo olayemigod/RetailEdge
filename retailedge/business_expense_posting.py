@@ -19,6 +19,7 @@ from retailedge.business_expense import (
 	get_business_expense_settings,
 	resolve_business_expense_branch,
 )
+from retailedge.workflow_readiness import _get_active_workflow
 
 POSTING_DOCUMENT_TYPE = "Journal Entry"
 BUSINESS_EXPENSE_POSTING_ROLES = {
@@ -30,6 +31,42 @@ BUSINESS_EXPENSE_POSTING_ROLES = {
 	"RetailEdge Branch Manager",
 	"RetailEdgeBranchManager",
 }
+
+
+@frappe.whitelist()
+def search_business_expense_posting_workflow_states(
+	doctype: str,
+	txt: str,
+	searchfield: str,
+	start: int,
+	page_len: int,
+	filters: dict | None = None,
+):
+	"""Return submitted states from the one active Business Expense Workflow."""
+	workflow = _get_active_workflow(BUSINESS_EXPENSE_DOCTYPE)
+	if not workflow:
+		return []
+	rows = frappe.get_all(
+		"Workflow Document State",
+		filters={
+			"parent": workflow["name"],
+			"parenttype": "Workflow",
+			"doc_status": "1",
+		},
+		fields=["state"],
+		order_by="idx asc",
+		limit_page_length=0,
+	)
+	needle = str(txt or "").strip().lower()
+	states = [
+		str(row.state or "").strip()
+		for row in rows
+		if str(row.state or "").strip()
+		and (not needle or needle in str(row.state).lower())
+	]
+	start = max(0, cint(start))
+	page_len = max(1, min(cint(page_len) or 20, 100))
+	return [[state] for state in states[start : start + page_len]]
 
 
 @frappe.whitelist()
@@ -52,10 +89,7 @@ def build_business_expense_posting_readiness(doc) -> dict[str, Any]:
 
 	if cint(getattr(doc, "docstatus", 0)) != 1:
 		reasons.append(_("Only submitted Business Expenses can be posted to accounts."))
-	if str(getattr(doc, "expense_status", None) or "") not in {"Approved", "Pending Ledger"}:
-		reasons.append(_("Business Expense must be approved before posting to accounts."))
-	if str(getattr(doc, "ledger_status", None) or "") != "Pending Ledger":
-		reasons.append(_("Business Expense must be in Pending Ledger status before posting."))
+	reasons.extend(_workflow_posting_reasons(doc, settings))
 	if flt(getattr(doc, "amount", 0)) <= 0:
 		reasons.append(_("Amount must be greater than zero before posting."))
 
@@ -135,17 +169,19 @@ def post_business_expense_to_accounts(
 	if cint(journal.docstatus) != 1:
 		frappe.throw(_("ERPNext did not submit the Journal Entry."))
 
+	result_fields = {
+		"posting_reference_type": POSTING_DOCUMENT_TYPE,
+		"posting_reference": journal.name,
+		"posting_ready": 0,
+		"posting_block_reason": None,
+		"ledger_status": "Posted",
+	}
+	if not _get_active_workflow(BUSINESS_EXPENSE_DOCTYPE):
+		result_fields["expense_status"] = "Posted"
 	frappe.db.set_value(
 		BUSINESS_EXPENSE_DOCTYPE,
 		doc.name,
-		{
-			"posting_reference_type": POSTING_DOCUMENT_TYPE,
-			"posting_reference": journal.name,
-			"posting_ready": 1,
-			"posting_block_reason": None,
-			"ledger_status": "Posted",
-			"expense_status": "Posted",
-		},
+		result_fields,
 		update_modified=True,
 	)
 	return _posting_result(
@@ -167,6 +203,55 @@ def _lock_business_expense(name: str) -> None:
 		frappe.throw(_("Business Expense {0} does not exist.").format(name))
 
 
+def _workflow_posting_reasons(doc, settings: dict[str, Any]) -> list[str]:
+	workflow = _get_active_workflow(BUSINESS_EXPENSE_DOCTYPE)
+	if not workflow:
+		reasons = []
+		if str(getattr(doc, "expense_status", None) or "") not in {
+			"Approved",
+			"Pending Ledger",
+		}:
+			reasons.append(_("Business Expense must be approved before posting to accounts."))
+		if str(getattr(doc, "ledger_status", None) or "") != "Pending Ledger":
+			reasons.append(_("Business Expense must be in Pending Ledger status before posting."))
+		return reasons
+
+	state_field = str(workflow.get("workflow_state_field") or "workflow_state").strip()
+	current_state = str(
+		getattr(doc, state_field, None)
+		or getattr(doc, "workflow_state", None)
+		or ""
+	).strip()
+	allowed_state = str(settings.get("posting_workflow_state") or "").strip()
+	if not allowed_state:
+		return [
+			_(
+				"Configure Workflow State Allowed for Accounting Posting in RetailEdge Settings before posting a workflow-controlled Business Expense."
+			)
+		]
+	if not frappe.db.exists(
+		"Workflow Document State",
+		{
+			"parent": workflow["name"],
+			"parenttype": "Workflow",
+			"state": allowed_state,
+			"doc_status": "1",
+		},
+	):
+		return [
+			_(
+				"Configured posting Workflow State {0} is not a submitted state in the active Business Expense Workflow."
+			).format(allowed_state)
+		]
+	if current_state != allowed_state:
+		return [
+			_(
+				"Business Expense must be in Workflow State {0} before accounting posting."
+			).format(allowed_state)
+		]
+	return []
+
+
 def _assert_posting_access(doc) -> None:
 	roles = set(frappe.get_roles(frappe.session.user))
 	if not roles.intersection(BUSINESS_EXPENSE_POSTING_ROLES):
@@ -177,6 +262,11 @@ def _assert_posting_access(doc) -> None:
 	if not doc.has_permission("write"):
 		frappe.throw(
 			_("You do not have permission to update this Business Expense."),
+			frappe.PermissionError,
+		)
+	if not frappe.has_permission(POSTING_DOCUMENT_TYPE, "read"):
+		frappe.throw(
+			_("You do not have permission to read Journal Entries."),
 			frappe.PermissionError,
 		)
 	if not frappe.has_permission(POSTING_DOCUMENT_TYPE, "create"):
@@ -196,18 +286,21 @@ def _posting_permissions(doc) -> dict[str, bool]:
 	role_allowed = bool(roles.intersection(BUSINESS_EXPENSE_POSTING_ROLES))
 	try:
 		write_allowed = bool(doc.has_permission("write"))
+		read_allowed = bool(frappe.has_permission(POSTING_DOCUMENT_TYPE, "read"))
 		create_allowed = bool(frappe.has_permission(POSTING_DOCUMENT_TYPE, "create"))
 		submit_allowed = bool(frappe.has_permission(POSTING_DOCUMENT_TYPE, "submit"))
 	except Exception:
 		write_allowed = False
+		read_allowed = False
 		create_allowed = False
 		submit_allowed = False
 	return {
 		"role_allowed": role_allowed,
 		"write_allowed": write_allowed,
+		"journal_read_allowed": read_allowed,
 		"journal_create_allowed": create_allowed,
 		"journal_submit_allowed": submit_allowed,
-		"can_post": role_allowed and write_allowed and create_allowed and submit_allowed,
+		"can_post": role_allowed and write_allowed and read_allowed and create_allowed and submit_allowed,
 	}
 
 

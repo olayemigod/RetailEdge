@@ -41,6 +41,7 @@
   "business_expense_posting_section",
   "enable_business_expense_accounting_posting",
   "business_expense_posting_document_type",
+  "business_expense_posting_workflow_state",
   "daily_audit_readiness_tab",
   "daily_audit_readiness_controls_section",
   "include_draft_cashier_expenses_in_daily_audit",
@@ -682,6 +683,14 @@
    "label": "Business Expense Posting Document",
    "options": "Journal Entry",
    "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.enable_business_expense_accounting_posting",
+   "description": "Required when an active Frappe Workflow controls RetailEdge Business Expense. Select the submitted Workflow State from which accounting posting is allowed.",
+   "fieldname": "business_expense_posting_workflow_state",
+   "fieldtype": "Link",
+   "label": "Workflow State Allowed for Accounting Posting",
+   "options": "Workflow State"
   }
  ],
  "issingle": 1,

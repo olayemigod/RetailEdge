@@ -25,8 +25,8 @@ The accounting action is available only when all of the following are true:
 - Business Expense accounting posting is enabled.
 - the configured posting document type is Journal Entry;
 - the Business Expense is submitted;
-- Expense Status is Approved or Pending Ledger;
-- Ledger Status is Pending Ledger;
+- when no active Frappe Workflow exists, Expense Status is Approved/Pending Ledger and Ledger Status is Pending Ledger;
+- when an active Frappe Workflow exists, the document is in the configured **Workflow State Allowed for Accounting Posting**, and that state is a submitted (`doc_status = 1`) state of the active Workflow;
 - amount is greater than zero;
 - Company and Branch remain inside the current user's operational scope;
 - Expense Account remains an active leaf Expense account in the Company;
@@ -35,10 +35,20 @@ The accounting action is available only when all of the following are true:
 - both posting accounts use the Company's default currency;
 - the user has an allowed Business Expense posting role;
 - the user has write permission on the Business Expense;
-- the user has normal ERPNext Journal Entry create and submit permissions;
+- the user has normal ERPNext Journal Entry read, create and submit permissions;
 - no unresolved accounting reference is already linked.
 
 The foreign-currency guard is intentional. Business Expense currently stores an amount in Company currency and does not capture exchange-rate semantics. A multi-currency posting therefore fails closed rather than inventing an exchange rate.
+
+## Active Frappe Workflow posting gate
+
+Frappe Workflow remains authoritative. The RetailEdge fallback statuses are evaluated only when no active Workflow exists.
+
+When an active Workflow controls `RetailEdge Business Expense`, RetailEdge Settings must name the exact **Workflow State Allowed for Accounting Posting**. The configured state must belong to that active Workflow and must have `doc_status = 1`. Posting is blocked if the setting is blank, stale, belongs to another Workflow, or the document is in a different state.
+
+The Settings Link field is filtered to submitted states from the active Business Expense Workflow, and the same relationship is revalidated server-side.
+
+Accounting finalisation updates ledger/posting metadata but never directly writes the active Workflow state field.
 
 ## Concurrency and idempotency
 
@@ -87,13 +97,13 @@ Only after ERPNext confirms the Journal Entry is submitted does RetailEdge updat
 
 - Posting Reference Type = Journal Entry
 - Posting Reference = submitted Journal Entry name
-- Posting Ready = Yes
+- Posting Ready = No
 - Ledger Status = Posted
-- Expense Status = Posted
+- Expense Status = Posted only when the RetailEdge fallback lifecycle owns that field
 
 If Journal Entry insert or submit fails, the source is not marked Posted and no posting reference is finalised.
 
-The Business Expense is operational metadata, not the accounting ledger. Updating these post-result fields does not mutate the submitted Journal Entry or its GL truth.
+The Business Expense is operational metadata, not the accounting ledger. Updating these post-result fields does not mutate the submitted Journal Entry or its GL truth. When an active Frappe Workflow controls the document, RetailEdge never directly assigns that Workflow's state field during accounting finalisation.
 
 Once a posting reference exists or Ledger Status is Posted, the Business Expense becomes terminal for workflow progression. The workflow bridge rejects further actions and workflow readiness suppresses transitions even when an active Frappe Workflow would otherwise advertise one. Corrections must use the approved accounting reversal process rather than reopening a posted operational record.
 
@@ -153,7 +163,7 @@ A correction to a posted Business Expense must use the approved accounting rever
 
 ## Migration and backward compatibility
 
-No schema change or migration is required for F3F31.
+F3F31 adds the **Workflow State Allowed for Accounting Posting** field to RetailEdge Settings. A normal site migration is required to install this additive setting.
 
 The existing Business Expense DocType already contains:
 
@@ -166,7 +176,8 @@ The existing Business Expense DocType already contains:
 RetailEdge Settings already contains:
 
 - Business Expense accounting-posting enablement;
-- posting document type.
+- posting document type;
+- Workflow State Allowed for Accounting Posting for active Frappe Workflow deployments.
 
 Existing unposted Business Expenses are unchanged. Existing accounting vouchers remain unchanged. The Expense Register continues to use posted ERPNext accounting as financial truth.
 
@@ -187,7 +198,7 @@ Automated contract coverage verifies:
 - preservation of category/branch/account context;
 - EdgeSuite Post to Accounts confirmation;
 - EdgeSuite ownership of Business Expense register references;
-- no schema migration.
+- additive Workflow posting-state configuration and normal site migration.
 
 The full governed exact-head gates remain:
 

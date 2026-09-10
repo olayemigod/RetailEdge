@@ -122,3 +122,27 @@ def test_posted_business_expense_is_terminal_for_active_and_fallback_workflows()
 	assert "posting_final" in readiness_source
 	assert "Further workflow actions are blocked" in readiness_source
 
+
+
+def test_active_workflow_posting_requires_configured_submitted_state():
+	source = inspect.getsource(business_expense_posting)
+	assert "_workflow_posting_reasons" in source
+	assert "_get_active_workflow(BUSINESS_EXPENSE_DOCTYPE)" in source
+	assert "posting_workflow_state" in source
+	assert '"doc_status": "1"' in source
+	assert "current_state != allowed_state" in source
+
+
+def test_posting_finalisation_never_directly_mutates_active_workflow_state():
+	source = inspect.getsource(business_expense_posting.post_business_expense_to_accounts)
+	assert '"posting_ready": 0' in source
+	assert 'if not _get_active_workflow(BUSINESS_EXPENSE_DOCTYPE):' in source
+	assert 'result_fields["expense_status"] = "Posted"' in source
+	assert "workflow_state" not in source
+
+
+def test_posting_requires_real_journal_read_create_submit_permissions():
+	source = inspect.getsource(business_expense_posting)
+	assert 'frappe.has_permission(POSTING_DOCUMENT_TYPE, "read")' in source
+	assert 'frappe.has_permission(POSTING_DOCUMENT_TYPE, "create")' in source
+	assert 'frappe.has_permission(POSTING_DOCUMENT_TYPE, "submit")' in source

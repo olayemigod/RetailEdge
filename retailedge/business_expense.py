@@ -70,6 +70,7 @@ def get_business_expense_settings() -> dict[str, Any]:
 			"require_attachment": False,
 			"accounting_posting_enabled": False,
 			"posting_document_type": "Journal Entry",
+			"posting_workflow_state": "",
 			"default_payment_account": "",
 		}
 
@@ -92,6 +93,10 @@ def get_business_expense_settings() -> dict[str, Any]:
 			getattr(settings, "business_expense_posting_document_type", None)
 			or "Journal Entry"
 		),
+		"posting_workflow_state": str(
+			getattr(settings, "business_expense_posting_workflow_state", None)
+			or ""
+		).strip(),
 		"default_payment_account": str(
 			getattr(settings, "default_business_expense_payment_account", None)
 			or ""
