@@ -73,6 +73,20 @@
 						@select="onCategorySelected"
 						@clear="clearCategory"
 					/>
+					<label v-if="consolidatedViewAvailable" class="edge-field">
+						<span class="edge-field-label">View</span>
+						<select v-model="filters.view_mode" class="edge-input" @change="onViewModeChanged">
+							<option value="consolidated">Consolidated business expenses</option>
+							<option value="cashier">Cashier / POS expenses only</option>
+						</select>
+					</label>
+					<label v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'" class="edge-field">
+						<span class="edge-field-label">Source</span>
+						<select v-model="filters.source_type" class="edge-input">
+							<option value="">All expense sources</option>
+							<option v-for="source in sourceTypes" :key="source" :value="source">{{ source }}</option>
+						</select>
+					</label>
 					<label class="edge-field">
 						<span class="edge-field-label">Status</span>
 						<select v-model="filters.expense_status" class="edge-input">
@@ -103,7 +117,7 @@
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
 				<span>{{ showCashier ? "Permitted cashier visibility" : "Your expenses only" }}</span>
-				<span>Source: RetailEdge Cashier Expense</span>
+				<span>{{ filters.view_mode === "consolidated" ? "Sources: Cashier/POS + posted business expenses" : "Source: RetailEdge Cashier Expense" }}</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -159,6 +173,8 @@ export default {
 			branchName: "",
 			userName: "",
 			showCashier: false,
+			consolidatedViewAvailable: false,
+			sourceTypes: [],
 			statuses: [],
 			dateRangeLimit: 366,
 			categoryLabel: "",
@@ -169,6 +185,8 @@ export default {
 				to_date: "",
 				expense_category: "",
 				expense_status: "",
+				source_type: "",
+				view_mode: "cashier",
 				page_size: 50,
 			},
 			currentPage: 1,
@@ -211,6 +229,8 @@ export default {
 				to_date: "To Date",
 				expense_category: "Expense Category",
 				expense_status: "Status",
+				source_type: "Source",
+				view_mode: "View",
 			};
 			return Object.entries(labels)
 				.map(([key, label]) => ({ label, value: this.filters[key] }))
@@ -218,7 +238,7 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Source", value: "RetailEdge Cashier Expense" },
+				{ label: "Source", value: this.filters.view_mode === "consolidated" ? "Consolidated business expenses" : "RetailEdge Cashier Expense" },
 				{ label: "Scope", value: this.scopeLabel },
 				{ label: "Cashier visibility", value: this.showCashier ? "Permitted scope" : "Current user only" },
 			];
@@ -249,6 +269,8 @@ export default {
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.showCashier = Boolean(Number(context.show_cashier));
+				this.consolidatedViewAvailable = Boolean(Number(context.consolidated_view_available));
+				this.sourceTypes = context.source_types || [];
 				this.statuses = context.statuses || [];
 				this.dateRangeLimit = Number(context.limits?.date_range_days || 366);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -314,6 +336,10 @@ export default {
 			this.categoryLabel = "";
 			this.currentPage = 1;
 		},
+		onViewModeChanged() {
+			if (this.filters.view_mode !== "consolidated") this.filters.source_type = "";
+			this.currentPage = 1;
+	},
 		onCategorySelected(option) {
 			this.filters.expense_category = option.value;
 			this.categoryLabel = option.label || option.value;

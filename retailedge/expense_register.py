@@ -9,6 +9,12 @@ from frappe.utils import cint, flt, get_first_day, getdate, today
 
 from retailedge.cashier_expense import get_cashier_roles, get_reviewer_roles
 from retailedge.cashier_expense_read_scope import apply_cashier_expense_read_scope
+from retailedge.business_expense_register import (
+	CONSOLIDATED_SOURCE_TYPES,
+	can_view_consolidated_business_expenses,
+	get_consolidated_expense_export,
+	get_consolidated_expense_register,
+)
 from retailedge.operating_context import get_operational_branch_scope
 
 EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
@@ -65,12 +71,16 @@ def get_expense_register_context() -> dict[str, Any]:
 			"to_date": today(),
 			"expense_category": "",
 			"expense_status": "",
+			"source_type": "",
+			"view_mode": "consolidated" if can_view_consolidated_business_expenses(user=user) else "cashier",
 			"page_size": DEFAULT_PAGE_SIZE,
 		},
 		"tenant_name": company,
 		"branch_name": branch,
 		"user_name": frappe.db.get_value("User", user, "full_name") or user,
 		"show_cashier": int(_can_view_other_cashiers(user=user)),
+		"consolidated_view_available": int(can_view_consolidated_business_expenses(user=user)),
+		"source_types": list(CONSOLIDATED_SOURCE_TYPES),
 		"statuses": list(_EXPENSE_STATUSES),
 		"limits": {
 			"page_size": MAX_PAGE_SIZE,
@@ -117,6 +127,12 @@ def get_expense_register(
 	page_size: int | str = DEFAULT_PAGE_SIZE,
 ) -> dict[str, Any]:
 	filters = _coerce_filters(filters)
+	if _use_consolidated_view(filters):
+		return get_consolidated_expense_register(
+			filters,
+			page=page,
+			page_size=page_size,
+		)
 	query_filters = _build_query_filters(filters)
 	page = max(1, cint(page) or 1)
 	page_size = max(
@@ -165,6 +181,8 @@ def get_expense_register(
 @frappe.whitelist()
 def get_expense_register_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	filters = _coerce_filters(filters)
+	if _use_consolidated_view(filters):
+		return get_consolidated_expense_export(filters)
 	query_filters = _build_query_filters(filters)
 	show_cashier = _can_view_other_cashiers()
 	fields = list(_BASE_ROW_FIELDS)
@@ -450,6 +468,19 @@ def _assert_company_read_access(company: str) -> None:
 		frappe.throw(
 			_("You do not have permission to use Company {0}.").format(company), frappe.PermissionError
 		)
+
+
+def _use_consolidated_view(filters: frappe._dict) -> bool:
+	requested = str(filters.get("view_mode") or "").strip().lower()
+	if requested != "consolidated":
+		return False
+	if can_view_consolidated_business_expenses():
+		return True
+	frappe.throw(
+		_("You do not have permission to view consolidated business expenses."),
+		frappe.PermissionError,
+	)
+	return False
 
 
 def _can_view_other_cashiers(user: str | None = None) -> bool:
