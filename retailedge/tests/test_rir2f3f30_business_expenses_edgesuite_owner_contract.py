@@ -18,7 +18,7 @@ def test_business_expense_backend_has_scoped_paginated_queue():
 	source = inspect.getsource(business_expense)
 	assert "def get_business_expenses" in source
 	assert "get_operational_branch_scope" in source
-	assert '"branch": ["in", allowed] if allowed else "__never__"' in source
+	assert 'query_filters["branch"] = ["in", allowed] if allowed else "__never__"' in source
 	assert "limit_start=(page - 1) * page_size" in source
 	assert "MAX_DATE_RANGE_DAYS" in source
 	assert "ignore_permissions" not in source
