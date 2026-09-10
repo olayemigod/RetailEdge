@@ -28,13 +28,21 @@ def test_review_action_remains_edgesuite_owned():
 	assert "if (!this.canReview)" in source
 
 
-def test_native_detail_columns_require_native_desk():
+def test_retailedge_owned_expense_entities_use_edgesuite_owner_pages():
 	source = _source()
-	assert 'this.canUseNativeDesk && ["name", "cashier", "expense_category"].includes(column.fieldname)' in source
-	assert "if (!this.canUseNativeDesk) return;" in source
-	assert 'frappe.set_route("Form", "RetailEdge Cashier Expense", value)' in source
-	assert 'frappe.set_route("Form", "User", value)' in source
-	assert 'frappe.set_route("Form", "RetailEdge Expense Category", value)' in source
+	assert '["name", "expense_category"].includes(column.fieldname)' in source
+	assert 'this.hasPageTarget("expense-register")' in source
+	assert 'frappe.set_route("expense-register")' in source
+	assert 'this.hasPageTarget("retailedge-setup")' in source
+	assert 'frappe.set_route("retailedge-setup")' in source
+	assert 'frappe.set_route("Form", "RetailEdge Cashier Expense", value)' not in source
+	assert 'frappe.set_route("Form", "RetailEdge Expense Category", value)' not in source
+
+
+def test_user_detail_alone_requires_native_desk():
+	source = _source()
+	assert '(this.canUseNativeDesk && column.fieldname === "cashier")' in source
+	assert 'if (column.fieldname === "cashier" && this.canUseNativeDesk) frappe.set_route("Form", "User", value);' in source
 
 
 def test_generic_native_navigation_is_defensively_gated():

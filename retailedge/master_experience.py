@@ -86,6 +86,8 @@ PROFESSIONAL_PURCHASING_ITEM: dict[str, Any] = {
 PURCHASE_ORDER_NATIVE_PEER_DOCTYPE = "Purchase Order"
 PURCHASE_REGISTER_PAGE_TARGET = "purchase-register"
 PURCHASE_INVOICE_NATIVE_PEER_DOCTYPE = "Purchase Invoice"
+EXPENSE_REGISTER_PAGE_TARGET = "expense-register"
+CASHIER_EXPENSE_NATIVE_PEER_DOCTYPE = "RetailEdge Cashier Expense"
 
 DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
 	"label": "Document Output & Sharing",
@@ -352,6 +354,36 @@ def _promote_purchase_invoice_ownership(navigation_groups: list[dict[str, Any]])
 		return
 
 
+def _promote_cashier_expense_ownership(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Use Expense Register as the everyday owner of RetailEdge Cashier Expense.
+
+	The base registry keeps the DocType for compatibility. Once the permission-aware
+	Expense Register Page is present, remove the raw DocType from normal navigation.
+	The underlying DocType remains the system of record and Native Desk access remains
+	available only through deliberate advanced paths.
+	"""
+	if not _can_open_page(EXPENSE_REGISTER_PAGE_TARGET):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "expenses":
+			continue
+		items = list(group.get("items") or [])
+		if not any(
+			item.get("target_type") == "Page" and item.get("target") == EXPENSE_REGISTER_PAGE_TARGET
+			for item in items
+		):
+			return
+		group["items"] = [
+			item
+			for item in items
+			if not (
+				item.get("target_type") == "DocType"
+				and item.get("target") == CASHIER_EXPENSE_NATIVE_PEER_DOCTYPE
+			)
+		]
+		return
+
+
 def _promote_document_output(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(DOCUMENT_OUTPUT_ITEM["target"]):
 		return
@@ -471,6 +503,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_professional_selling(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
 	_promote_purchase_invoice_ownership(navigation_groups)
+	_promote_cashier_expense_ownership(navigation_groups)
 	_promote_document_output(navigation_groups)
 	_promote_payment_management(navigation_groups)
 	_promote_banking_readiness(navigation_groups)
@@ -506,6 +539,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["professional_selling"] = "edgesuite_primary"
 	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"
 	feature_flags["purchase_invoice_ownership"] = "edgesuite_purchase_register"
+	feature_flags["cashier_expense_ownership"] = "edgesuite_expense_register"
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"
