@@ -1,0 +1,419 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-09-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "expense_details_section",
+  "naming_series",
+  "company",
+  "branch",
+  "expense_date",
+  "expense_category",
+  "amount",
+  "description",
+  "payee_evidence_section",
+  "payee_type",
+  "supplier",
+  "payee_name",
+  "reference_no",
+  "attachment",
+  "accounting_context_section",
+  "expense_account",
+  "payment_account",
+  "cost_center",
+  "project",
+  "processing_section",
+  "workflow_state",
+  "expense_status",
+  "ledger_status",
+  "requested_by",
+  "review_section",
+  "approved_by",
+  "approved_on",
+  "rejected_by",
+  "rejected_on",
+  "review_remarks",
+  "posting_section",
+  "posting_reference_type",
+  "posting_reference",
+  "posting_ready",
+  "posting_block_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "expense_details_section",
+   "fieldtype": "Section Break",
+   "label": "Business Expense"
+  },
+  {
+   "default": "RE-BE-.YYYY.-.####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "options": "RE-BE-.YYYY.-.####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "branch",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Branch",
+   "options": "Branch"
+  },
+  {
+   "fieldname": "expense_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Expense Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "expense_category",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Expense Category",
+   "options": "RetailEdge Expense Category",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "payee_evidence_section",
+   "fieldtype": "Section Break",
+   "label": "Payee & Evidence"
+  },
+  {
+   "default": "Other",
+   "fieldname": "payee_type",
+   "fieldtype": "Select",
+   "label": "Payee Type",
+   "options": "Supplier\\nOther"
+  },
+  {
+   "depends_on": "eval:doc.payee_type == 'Supplier'",
+   "fieldname": "supplier",
+   "fieldtype": "Link",
+   "label": "Supplier",
+   "options": "Supplier"
+  },
+  {
+   "depends_on": "eval:doc.payee_type == 'Other'",
+   "fieldname": "payee_name",
+   "fieldtype": "Data",
+   "label": "Payee / Merchant"
+  },
+  {
+   "fieldname": "reference_no",
+   "fieldtype": "Data",
+   "label": "Receipt / Reference No."
+  },
+  {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Receipt / Evidence"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "accounting_context_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting Context"
+  },
+  {
+   "fieldname": "expense_account",
+   "fieldtype": "Link",
+   "label": "Expense Account",
+   "options": "Account",
+   "read_only": 1
+  },
+  {
+   "description": "Cash or Bank account used to pay the expense.",
+   "fieldname": "payment_account",
+   "fieldtype": "Link",
+   "label": "Paid From",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "label": "Cost Center",
+   "options": "Cost Center"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "fieldname": "processing_section",
+   "fieldtype": "Section Break",
+   "label": "Processing Status"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "workflow_state",
+   "fieldtype": "Link",
+   "label": "Workflow State",
+   "options": "Workflow State",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Draft",
+   "fieldname": "expense_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Expense Status",
+   "options": "Draft\\nSubmitted\\nApproved\\nRejected\\nPending Ledger\\nPosted\\nCancelled",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "Not Applicable",
+   "fieldname": "ledger_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Ledger Status",
+   "options": "Not Applicable\\nPending Ledger\\nPosted\\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "review_section",
+   "fieldtype": "Section Break",
+   "label": "Review"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "rejected_by",
+   "fieldtype": "Link",
+   "label": "Rejected By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "rejected_on",
+   "fieldtype": "Datetime",
+   "label": "Rejected On",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "review_remarks",
+   "fieldtype": "Small Text",
+   "label": "Review Remarks"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "posting_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting Posting"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "posting_reference_type",
+   "fieldtype": "Data",
+   "label": "Posting Reference Type",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "posting_reference",
+   "fieldtype": "Dynamic Link",
+   "label": "Posting Reference",
+   "options": "posting_reference_type",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "default": "0",
+   "fieldname": "posting_ready",
+   "fieldtype": "Check",
+   "label": "Posting Ready",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "posting_block_reason",
+   "fieldtype": "Small Text",
+   "label": "Posting Block Reason",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-09-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "RetailEdge",
+ "name": "RetailEdge Business Expense",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeManager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Branch Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeBranchManager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdge Auditor",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "RetailEdgeAuditor",
+   "share": 1
+  },
+  {
+   "cancel": 1,
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "expense_category,payee_name,supplier,reference_no,expense_status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "expense_category",
+ "track_changes": 1
+}

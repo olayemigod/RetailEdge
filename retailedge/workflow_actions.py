@@ -7,6 +7,12 @@ from frappe import _
 from frappe.model.workflow import apply_workflow
 from frappe.utils import get_datetime
 
+from retailedge.business_expense import (
+	approve_business_expense,
+	reject_business_expense,
+	reopen_business_expense,
+	submit_business_expense,
+)
 from retailedge.cashier_expense import (
 	approve_cashier_expense,
 	reject_cashier_expense,
@@ -15,12 +21,15 @@ from retailedge.cashier_expense import (
 )
 from retailedge.workflow_readiness import (
 	_get_active_workflow,
+	_retailedge_business_expense_workflow_enabled,
 	_retailedge_cashier_workflow_enabled,
 	get_workflow_readiness,
 )
 
 CASHIER_EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
+BUSINESS_EXPENSE_DOCTYPE = "RetailEdge Business Expense"
 _CASHIER_ACTIONS = {"Submit", "Approve", "Reject", "Reopen"}
+_BUSINESS_EXPENSE_ACTIONS = {"Submit", "Approve", "Reject", "Reopen"}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -66,6 +75,12 @@ def apply_document_workflow_action(
 
 	if doctype == CASHIER_EXPENSE_DOCTYPE and _retailedge_cashier_workflow_enabled():
 		return _apply_cashier_expense_lifecycle(
+			doc=doc,
+			action=action,
+			remarks=remarks,
+		)
+	if doctype == BUSINESS_EXPENSE_DOCTYPE and _retailedge_business_expense_workflow_enabled():
+		return _apply_business_expense_lifecycle(
 			doc=doc,
 			action=action,
 			remarks=remarks,
@@ -138,6 +153,51 @@ def _apply_cashier_expense_lifecycle(*, doc, action: str, remarks: str | None) -
 		current,
 		queued=False,
 		workflow_name="RetailEdge Cashier Expense Review",
+	)
+
+
+def _apply_business_expense_lifecycle(
+	*,
+	doc,
+	action: str,
+	remarks: str | None,
+) -> dict[str, Any]:
+	if action not in _BUSINESS_EXPENSE_ACTIONS:
+		frappe.throw(
+			_("Unsupported Business Expense workflow action."),
+			frappe.ValidationError,
+		)
+
+	readiness = get_workflow_readiness(doctype=doc.doctype, doc=doc)
+	available = {
+		str(row.get("action") or "").strip()
+		for row in readiness.get("available_actions") or []
+		if str(row.get("action") or "").strip()
+	}
+	if action not in available:
+		frappe.throw(
+			_("Business Expense action {0} is not currently available.").format(
+				action
+			),
+			frappe.PermissionError,
+		)
+	if action == "Reject" and not str(remarks or "").strip():
+		frappe.throw(_("Remarks are required when rejecting a Business Expense."))
+
+	if action == "Submit":
+		submit_business_expense(doc.name)
+	elif action == "Approve":
+		approve_business_expense(doc.name, remarks=remarks)
+	elif action == "Reject":
+		reject_business_expense(doc.name, remarks=remarks)
+	elif action == "Reopen":
+		reopen_business_expense(doc.name, remarks=remarks)
+
+	current = frappe.get_doc(doc.doctype, doc.name)
+	return _result_payload(
+		current,
+		queued=False,
+		workflow_name="RetailEdge Business Expense Approval",
 	)
 
 
