@@ -94,14 +94,17 @@ def get_consolidated_expense_register(
 			"view_mode": "consolidated",
 			"branch_scope": query["branch_scope_label"],
 			"includes_unattributed": int(query["includes_unattributed"]),
+			"include_unposted_cashier_expenses": int(
+				query["include_unposted_cashier_expenses"]
+			),
 		},
 		"metadata": {
 			"view_mode": "consolidated",
 			"sources": list(query["source_types"]),
 			"accounting_voucher_types": list(query["accounting_voucher_types"]),
 			"policy": _(
-				"Cashier/POS expenses are combined with posted business expenses from "
-				"authoritative accounting vouchers. No duplicate expense ledger is maintained."
+				"Posted expenses are the financial reporting truth. Unposted Cashier Expenses "
+				"are excluded by default and appear only when explicitly included as operational exposure."
 			),
 		},
 	}
@@ -130,6 +133,9 @@ def get_consolidated_expense_export(
 			"branch": query["requested_branch"],
 			"view_mode": "consolidated",
 			"branch_scope": query["branch_scope_label"],
+			"include_unposted_cashier_expenses": int(
+				query["include_unposted_cashier_expenses"]
+			),
 		},
 		"metadata": {
 			"view_mode": "consolidated",
@@ -170,6 +176,10 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 	if source_type and source_type not in CONSOLIDATED_SOURCE_TYPES:
 		frappe.throw(_("Unsupported Expense Source."))
 
+	include_unposted_cashier_expenses = bool(
+		cint(filters.get("include_unposted_cashier_expenses") or 0)
+	)
+
 	category = str(filters.get("expense_category") or "").strip()
 	category_account = ""
 	if category:
@@ -192,6 +202,7 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		category=category,
 		status=status,
 		source_type=source_type,
+		include_unposted_cashier_expenses=include_unposted_cashier_expenses,
 		branch_scope=branch_scope,
 	)
 	ledger_where, ledger_values, voucher_types = _build_ledger_where_sql(
@@ -218,6 +229,7 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		"requested_branch": requested_branch,
 		"branch_scope_label": branch_scope["label"],
 		"includes_unattributed": branch_scope["global_access"] and not requested_branch,
+		"include_unposted_cashier_expenses": include_unposted_cashier_expenses,
 		"cashier_where": cashier_where,
 		"cashier_values": cashier_values,
 		"ledger_where": ledger_where,
@@ -278,6 +290,8 @@ def _query_summary(query: dict[str, Any]) -> dict[str, Any]:
 		return {
 			"count": 0,
 			"total_amount": 0,
+			"posted_expense_total": 0,
+			"unposted_cashier_total": 0,
 			"cashier_count": 0,
 			"business_count": 0,
 			"business_spend": 0,
@@ -290,6 +304,22 @@ def _query_summary(query: dict[str, Any]) -> dict[str, Any]:
 			SELECT
 				COUNT(*) AS count,
 				COALESCE(SUM(expense_rows.amount), 0) AS total_amount,
+				COALESCE(SUM(
+					CASE
+						WHEN expense_rows.source_type <> 'Cashier / POS'
+							OR expense_rows.ledger_status = 'Posted'
+						THEN expense_rows.amount
+						ELSE 0
+					END
+				), 0) AS posted_expense_total,
+				COALESCE(SUM(
+					CASE
+						WHEN expense_rows.source_type = 'Cashier / POS'
+							AND COALESCE(expense_rows.ledger_status, '') <> 'Posted'
+						THEN expense_rows.amount
+						ELSE 0
+					END
+				), 0) AS unposted_cashier_total,
 				COALESCE(SUM(
 					CASE WHEN expense_rows.source_type = 'Cashier / POS' THEN 1 ELSE 0 END
 				), 0) AS cashier_count,
@@ -406,6 +436,7 @@ def _build_cashier_where_sql(
 	category: str,
 	status: str,
 	source_type: str,
+	include_unposted_cashier_expenses: bool,
 	branch_scope: dict[str, Any],
 ) -> tuple[str, list[Any]]:
 	if source_type and source_type != "Cashier / POS":
@@ -427,7 +458,22 @@ def _build_cashier_where_sql(
 		clauses.extend(["ce.docstatus <> 2", "ce.expense_status = %s"])
 		values.append(status)
 	else:
-		clauses.extend(["ce.docstatus <> 2", "COALESCE(ce.expense_status, '') <> 'Cancelled'"])
+		clauses.extend(
+			[
+				"ce.docstatus <> 2",
+				"COALESCE(ce.expense_status, '') <> 'Cancelled'",
+			]
+		)
+
+	if not include_unposted_cashier_expenses:
+		if status and status != "Posted":
+			return "", []
+		clauses.extend(
+			[
+				"COALESCE(ce.ledger_status, '') = 'Posted'",
+				"COALESCE(ce.posting_reference, '') <> ''",
+			]
+		)
 	_apply_branch_sql(
 		clauses,
 		values,
@@ -719,8 +765,13 @@ def _columns() -> list[dict[str, Any]]:
 def _summary_cards(summary: dict[str, Any]) -> list[dict[str, Any]]:
 	return [
 		{
-			"label": _("Total Expenses"),
-			"value": flt(summary.get("total_amount")),
+			"label": _("Posted Expenses"),
+			"value": flt(summary.get("posted_expense_total")),
+			"type": "Currency",
+		},
+		{
+			"label": _("Unposted Cashier Exposure"),
+			"value": flt(summary.get("unposted_cashier_total")),
 			"type": "Currency",
 		},
 		{

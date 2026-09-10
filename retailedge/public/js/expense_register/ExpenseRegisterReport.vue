@@ -87,6 +87,21 @@
 							<option v-for="source in sourceTypes" :key="source" :value="source">{{ source }}</option>
 						</select>
 					</label>
+					<label
+						v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'"
+						class="edge-check-field"
+					>
+						<input
+							v-model="filters.include_unposted_cashier_expenses"
+							type="checkbox"
+							:true-value="1"
+							:false-value="0"
+						/>
+						<span>
+							<strong>Include unposted Cashier Expenses</strong>
+							<small>Show operational exposure separately from posted expense totals.</small>
+						</span>
+					</label>
 					<label class="edge-field">
 						<span class="edge-field-label">Status</span>
 						<select v-model="filters.expense_status" class="edge-input">
@@ -187,6 +202,7 @@ export default {
 				expense_status: "",
 				source_type: "",
 				view_mode: "cashier",
+				include_unposted_cashier_expenses: 0,
 				page_size: 50,
 			},
 			currentPage: 1,
@@ -231,9 +247,15 @@ export default {
 				expense_status: "Status",
 				source_type: "Source",
 				view_mode: "View",
+				include_unposted_cashier_expenses: "Include Unposted Cashier Expenses",
 			};
 			return Object.entries(labels)
-				.map(([key, label]) => ({ label, value: this.filters[key] }))
+				.map(([key, label]) => ({
+					label,
+					value: key === "include_unposted_cashier_expenses"
+						? (this.filters[key] ? "Yes" : "No")
+						: this.filters[key],
+				}))
 				.filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined);
 		},
 		exportMetadata() {
@@ -337,9 +359,12 @@ export default {
 			this.currentPage = 1;
 		},
 		onViewModeChanged() {
-			if (this.filters.view_mode !== "consolidated") this.filters.source_type = "";
+			if (this.filters.view_mode !== "consolidated") {
+				this.filters.source_type = "";
+				this.filters.include_unposted_cashier_expenses = 0;
+			}
 			this.currentPage = 1;
-	},
+		},
 		onCategorySelected(option) {
 			this.filters.expense_category = option.value;
 			this.categoryLabel = option.label || option.value;
@@ -502,6 +527,9 @@ export default {
 }
 
 .edge-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.edge-check-field { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 8px 0; }
+.edge-check-field span { display: grid; gap: 2px; }
+.edge-check-field small { color: var(--edge-text-muted, #667085); }
 .edge-field-label { font-size: 0.78rem; font-weight: 600; color: var(--edge-text-muted, #667085); }
 .edge-input,
 .primary-action,

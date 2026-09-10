@@ -73,6 +73,7 @@ def get_expense_register_context() -> dict[str, Any]:
 			"expense_status": "",
 			"source_type": "",
 			"view_mode": "consolidated" if can_view_consolidated_business_expenses(user=user) else "cashier",
+			"include_unposted_cashier_expenses": 0,
 			"page_size": DEFAULT_PAGE_SIZE,
 		},
 		"tenant_name": company,
