@@ -107,7 +107,7 @@ class TestPrereportingProcurementTrackerScope(unittest.TestCase):
 		self.assertNotIn("frappe.db.sql", source)
 		self.assertNotIn("ignore_permissions", source)
 
-	def test_native_route_and_purchasing_composition_are_unchanged(self):
+	def test_native_route_and_reconciled_purchasing_composition_remain_bounded(self):
 		component = (
 			APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue"
 		).read_text(encoding="utf-8")
@@ -115,8 +115,11 @@ class TestPrereportingProcurementTrackerScope(unittest.TestCase):
 		self.assertIn("get_procurement_tracker_handoff", component)
 		self.assertIn("frappe.route_options = { company:", component)
 		self.assertIn('frappe.set_route("query-report"', component)
-		self.assertIn("prepare_request_for_quotation_draft", component)
-		self.assertIn("prepare_purchase_receipt_draft", component)
+		self.assertIn("openProcurementTracker() { if (!this.canUseNativeDesk || !this.procurementTracker?.available) return;", component)
+		self.assertIn("retailedge-open-professional-rfq-preview", component)
+		self.assertIn("retailedge-open-professional-purchase-receipt-preview", component)
+		self.assertNotIn("prepare_request_for_quotation_draft", component)
+		self.assertNotIn("prepare_purchase_receipt_draft", component)
 
 
 if __name__ == "__main__":
