@@ -12,11 +12,13 @@ class TestRIR2F2CPurchaseReceiptParityGate(unittest.TestCase):
 	def read_app(self, relative: str) -> str:
 		return (APP_ROOT / relative).read_text(encoding="utf-8")
 
-	def test_legacy_native_receipt_methods_remain_advanced_fallback_only(self):
+	def test_standard_receipt_actions_delegate_to_existing_edgesuite_ownership(self):
 		component = self.read_app("public/js/professional_purchasing/ProfessionalPurchasing.vue")
-		self.assertIn("retailedge.professional_purchasing.prepare_purchase_receipt_draft", component)
-		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', component)
-		self.assertIn('openPurchaseReceipts() { frappe.set_route("List", "Purchase Receipt"); }', component)
+		prepare_receipt = component.split("\t\tprepareReceipt(row) {", 1)[1].split("\n\t\tasync preparePurchaseReturn()", 1)[0]
+		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", prepare_receipt)
+		self.assertNotIn("prepare_purchase_receipt_draft", prepare_receipt)
+		self.assertNotIn('frappe.set_route("Form", "Purchase Receipt", result.name)', prepare_receipt)
+		self.assertIn("openPurchaseReceipts() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT); }", component)
 
 	def test_edgesuite_receipt_actions_are_intercepted_before_native_handoff(self):
 		controller = self.read_app("retailedge/page/professional_purchasing/professional_purchasing.js")
