@@ -112,7 +112,7 @@
 				<span>{{ scopeLabel }}</span>
 				<span v-if="scan.bin_rows !== undefined">{{ scan.bin_rows }} Bin row{{ scan.bin_rows === 1 ? "" : "s" }} scanned</span>
 				<span v-if="scan.reorder_rows !== undefined">{{ scan.reorder_rows }} direct reorder rule{{ scan.reorder_rows === 1 ? "" : "s" }} scanned</span>
-				<span v-if="canCreateMaterialRequest">Select a Reorder Due status to open a prefilled native Material Request.</span>
+				<span v-if="canUseNativeDesk && canCreateMaterialRequest">Select a Reorder Due status to open a prefilled native Material Request.</span>
 				<span v-if="handoffError" class="stock-position-handoff-error">{{ handoffError }}</span>
 				<span v-if="!showCosts">Cost values hidden by RetailEdge settings</span>
 				<span v-else-if="companyCurrency">Valuation in {{ companyCurrency }}</span>
@@ -183,6 +183,7 @@ export default {
 			companyCurrency: "",
 			showCosts: false,
 			canCreateMaterialRequest: false,
+			canUseNativeDesk: false,
 			itemLabel: "",
 			filters: {
 				company: "",
@@ -213,8 +214,8 @@ export default {
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: column.fieldname === "item_code"
-					|| (column.fieldname === "replenishment_status" && this.canCreateMaterialRequest),
+				clickable: this.canUseNativeDesk && (column.fieldname === "item_code"
+					|| (column.fieldname === "replenishment_status" && this.canCreateMaterialRequest)),
 			}));
 		},
 		scopeLabel() {
@@ -280,6 +281,7 @@ export default {
 				this.companyCurrency = context.company_currency || "";
 				this.showCosts = Boolean(Number(context.show_costs));
 				this.canCreateMaterialRequest = Boolean(Number(handoffContext.can_create_material_request));
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
@@ -304,6 +306,7 @@ export default {
 			const items = this.menuItems.flatMap((group) => group.items || []);
 			const item = items.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -454,6 +457,7 @@ export default {
 			this.fetchData();
 		},
 		openReportCell(payload) {
+			if (!this.canUseNativeDesk) return;
 			if (payload?.column?.fieldname === "item_code" && payload.value) {
 				this.openItem(payload.value);
 				return;
@@ -468,7 +472,7 @@ export default {
 		},
 		async openReplenishmentMaterialRequest(row) {
 			const itemCode = String(row?.item_code || "").trim();
-			if (!itemCode || !this.canCreateMaterialRequest || this.handoffLoadingItem) return;
+			if (!this.canUseNativeDesk || !itemCode || !this.canCreateMaterialRequest || this.handoffLoadingItem) return;
 			this.handoffError = "";
 			this.handoffLoadingItem = itemCode;
 			try {
@@ -484,6 +488,7 @@ export default {
 			}
 		},
 		openNativeMaterialRequest(handoff) {
+			if (!this.canUseNativeDesk) return;
 			const items = Array.isArray(handoff?.items) ? handoff.items : [];
 			if (handoff?.handoff_mode !== "unsaved_native_form" || !handoff.company || !handoff.material_request_type || !items.length) {
 				this.handoffError = "The replenishment handoff returned incomplete Material Request context.";
@@ -503,7 +508,7 @@ export default {
 				frappe.set_route("Form", "Material Request", doc.name);
 			});
 		},
-		openItem(itemCode) { if (itemCode) frappe.set_route("Form", "Item", itemCode); },
+		openItem(itemCode) { if (this.canUseNativeDesk && itemCode) frappe.set_route("Form", "Item", itemCode); },
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
 		formatValue(value, fieldtype, currency) {
 			if (value === null || value === undefined || value === "") return "—";
