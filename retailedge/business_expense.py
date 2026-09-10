@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from math import ceil
 from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, getdate, now_datetime, today
+from frappe.utils import cint, flt, get_datetime, get_first_day, getdate, now_datetime, today
 
 from retailedge.branch_profile import (
 	get_enabled_branch_profiles,
@@ -17,6 +18,9 @@ from retailedge.utils.settings import get_retailedge_settings
 BUSINESS_EXPENSE_DOCTYPE = "RetailEdge Business Expense"
 CATEGORY_DOCTYPE = "RetailEdge Expense Category"
 MAX_LINK_RESULTS = 20
+DEFAULT_PAGE_SIZE = 25
+MAX_PAGE_SIZE = 100
+MAX_DATE_RANGE_DAYS = 366
 
 BUSINESS_EXPENSE_READ_ROLES = {
 	"System Manager",
@@ -44,7 +48,7 @@ BUSINESS_EXPENSE_ALLOWED_PROCESSES = {
 	"Direct Posting",
 }
 
-BUSINESS_EXPENSE_STATUSES = {
+BUSINESS_EXPENSE_STATUS_ORDER = (
 	"Draft",
 	"Submitted",
 	"Approved",
@@ -52,7 +56,8 @@ BUSINESS_EXPENSE_STATUSES = {
 	"Pending Ledger",
 	"Posted",
 	"Cancelled",
-}
+)
+BUSINESS_EXPENSE_STATUSES = set(BUSINESS_EXPENSE_STATUS_ORDER)
 
 
 def get_business_expense_settings() -> dict[str, Any]:
@@ -141,6 +146,17 @@ def get_business_expense_context() -> dict[str, Any]:
 			"cost_center": "",
 			"project": "",
 		},
+		"default_filters": {
+			"company": company,
+			"branch": branch,
+			"from_date": str(get_first_day(today())),
+			"to_date": today(),
+			"expense_category": "",
+			"expense_status": "",
+			"search_text": "",
+			"page_size": DEFAULT_PAGE_SIZE,
+		},
+		"statuses": list(BUSINESS_EXPENSE_STATUS_ORDER),
 		"settings": settings,
 		"capabilities": {
 			"can_create": bool(
@@ -190,6 +206,124 @@ def search_business_expense_options(
 	return []
 
 
+@frappe.whitelist()
+def get_business_expense_category_defaults(
+	expense_category: str,
+	company: str,
+) -> dict[str, Any]:
+	_assert_feature_enabled()
+	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
+	if not company:
+		frappe.throw(_("Company is required."))
+	_assert_company_access(company)
+	expense_category = str(expense_category or "").strip()
+	if not expense_category:
+		return {"expense_account": "", "cost_center": ""}
+	if not frappe.db.exists(CATEGORY_DOCTYPE, expense_category):
+		frappe.throw(_("Expense Category {0} does not exist.").format(expense_category))
+	if not frappe.has_permission(CATEGORY_DOCTYPE, "read", doc=expense_category):
+		frappe.throw(
+			_("You do not have permission to use this Expense Category."),
+			frappe.PermissionError,
+		)
+	row = frappe.db.get_value(
+		CATEGORY_DOCTYPE,
+		expense_category,
+		["company", "is_active", "expense_account", "default_cost_center", "description"],
+		as_dict=True,
+	)
+	if not row or not cint(row.is_active):
+		frappe.throw(_("Expense Category {0} is inactive.").format(expense_category))
+	if row.company and row.company != company:
+		frappe.throw(_("Expense Category {0} belongs to another Company.").format(expense_category))
+	if not row.expense_account:
+		frappe.throw(_("Expense Category {0} has no Expense Account configured.").format(expense_category))
+	_validate_expense_account(row.expense_account, company)
+	if row.default_cost_center:
+		_validate_cost_center(row.default_cost_center, company)
+	return {
+		"expense_account": row.expense_account,
+		"cost_center": row.default_cost_center or "",
+		"description": row.description or "",
+	}
+
+
+@frappe.whitelist()
+def get_business_expenses(
+	filters: dict[str, Any] | str | None = None,
+	page: int | str = 1,
+	page_size: int | str = DEFAULT_PAGE_SIZE,
+) -> dict[str, Any]:
+	_assert_feature_enabled()
+	filters = _coerce_values(filters)
+	query_filters, or_filters, scope = _build_business_expense_list_filters(filters)
+	page = max(1, cint(page) or 1)
+	page_size = max(1, min(cint(page_size) or DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
+
+	aggregate = frappe.get_list(
+		BUSINESS_EXPENSE_DOCTYPE,
+		filters=query_filters,
+		or_filters=or_filters or None,
+		fields=[
+			{"COUNT": "name", "as": "count"},
+			{"SUM": "amount", "as": "total_amount"},
+		],
+		limit_page_length=1,
+	)
+	summary_row = aggregate[0] if aggregate else frappe._dict(count=0, total_amount=0)
+	total_rows = cint(summary_row.count)
+	total_pages = max(1, ceil(total_rows / page_size)) if total_rows else 1
+	if page > total_pages:
+		page = total_pages
+
+	rows = frappe.get_list(
+		BUSINESS_EXPENSE_DOCTYPE,
+		filters=query_filters,
+		or_filters=or_filters or None,
+		fields=[
+			"name",
+			"expense_date",
+			"company",
+			"branch",
+			"expense_category",
+			"amount",
+			"payee_type",
+			"supplier",
+			"payee_name",
+			"reference_no",
+			"payment_account",
+			"cost_center",
+			"project",
+			"expense_status",
+			"ledger_status",
+			"posting_ready",
+			"posting_reference_type",
+			"posting_reference",
+			"requested_by",
+			"modified",
+		],
+		order_by="expense_date desc, modified desc, name desc",
+		limit_start=(page - 1) * page_size,
+		limit_page_length=page_size,
+	)
+	return {
+		"rows": [dict(row) for row in rows],
+		"summary": {
+			"count": total_rows,
+			"total_amount": flt(summary_row.total_amount),
+		},
+		"pagination": {
+			"page": page,
+			"page_size": page_size,
+			"total_rows": total_rows,
+			"total_pages": total_pages,
+			"has_previous": page > 1,
+			"has_next": page < total_pages,
+		},
+		"scope": scope,
+	}
+
+
 @frappe.whitelist(methods=["POST"])
 def create_business_expense_draft(
 	values: dict[str, Any] | str | None = None,
@@ -202,25 +336,62 @@ def create_business_expense_draft(
 		)
 	values = _coerce_values(values)
 	doc = frappe.new_doc(BUSINESS_EXPENSE_DOCTYPE)
-	for fieldname in (
-		"company",
-		"branch",
-		"expense_date",
-		"expense_category",
-		"description",
-		"payee_type",
-		"supplier",
-		"payee_name",
-		"reference_no",
-		"attachment",
-		"payment_account",
-		"cost_center",
-		"project",
-	):
-		if values.get(fieldname) not in (None, ""):
-			setattr(doc, fieldname, values.get(fieldname))
-	doc.amount = flt(values.get("amount"))
+	_apply_business_expense_values(doc, values)
 	doc.insert()
+	return _business_expense_payload(doc, include_workflow=True)
+
+
+@frappe.whitelist(methods=["POST"])
+def update_business_expense_draft(
+	name: str,
+	values: dict[str, Any] | str | None = None,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	_assert_feature_enabled()
+	doc = _get_business_expense_for_action(name)
+	if doc.docstatus != 0:
+		frappe.throw(_("Only draft Business Expenses can be edited."))
+	if not doc.has_permission("write"):
+		frappe.throw(
+			_("You do not have permission to edit this Business Expense."),
+			frappe.PermissionError,
+		)
+	_assert_modified(doc, expected_modified)
+	_apply_business_expense_values(doc, _coerce_values(values))
+	doc.save()
+	return _business_expense_payload(doc, include_workflow=True)
+
+
+@frappe.whitelist(methods=["POST"])
+def set_business_expense_attachment(
+	name: str,
+	file_url: str,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	_assert_feature_enabled()
+	doc = _get_business_expense_for_action(name)
+	if doc.docstatus != 0:
+		frappe.throw(_("Evidence can be changed only while the Business Expense is a draft."))
+	if not doc.has_permission("write"):
+		frappe.throw(
+			_("You do not have permission to attach evidence to this Business Expense."),
+			frappe.PermissionError,
+		)
+	_assert_modified(doc, expected_modified)
+	file_url = str(file_url or "").strip()
+	if not file_url:
+		frappe.throw(_("Uploaded evidence file is required."))
+	if not frappe.db.exists(
+		"File",
+		{
+			"file_url": file_url,
+			"attached_to_doctype": BUSINESS_EXPENSE_DOCTYPE,
+			"attached_to_name": doc.name,
+		},
+	):
+		frappe.throw(_("The uploaded file is not attached to this Business Expense."))
+	doc.attachment = file_url
+	doc.save()
 	return _business_expense_payload(doc, include_workflow=True)
 
 
@@ -237,6 +408,119 @@ def get_business_expense(name: str) -> dict[str, Any]:
 			frappe.PermissionError,
 		)
 	return _business_expense_payload(doc, include_workflow=True)
+
+
+def _apply_business_expense_values(doc, values: dict[str, Any]) -> None:
+	for fieldname in (
+		"company",
+		"branch",
+		"expense_date",
+		"expense_category",
+		"description",
+		"payee_type",
+		"supplier",
+		"payee_name",
+		"reference_no",
+		"payment_account",
+		"cost_center",
+		"project",
+	):
+		if fieldname in values:
+			setattr(doc, fieldname, values.get(fieldname) or None)
+	if "amount" in values:
+		doc.amount = flt(values.get("amount"))
+	payee_type = str(getattr(doc, "payee_type", None) or "Other")
+	if payee_type == "Supplier":
+		doc.payee_name = None
+	else:
+		doc.supplier = None
+
+
+def _build_business_expense_list_filters(
+	filters: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+	company = str(
+		filters.get("company") or frappe.defaults.get_user_default("Company") or ""
+	).strip()
+	if not company:
+		frappe.throw(_("Company is required."))
+	_assert_company_access(company)
+	query_filters: dict[str, Any] = {"company": company}
+	requested_branch = str(filters.get("branch") or "").strip()
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	allowed = [
+		str(value).strip()
+		for value in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(value or "").strip()
+	]
+	if requested_branch:
+		query_filters["branch"] = resolve_business_expense_branch(
+			company=company,
+			branch=requested_branch,
+			require_when_restricted=True,
+		)
+	elif scope.get("restricted"):
+		query_filters["branch"] = ["in", allowed] if allowed else "__never__"
+
+	from_date = getdate(filters.get("from_date")) if filters.get("from_date") else None
+	to_date = getdate(filters.get("to_date")) if filters.get("to_date") else None
+	if from_date and to_date:
+		if from_date > to_date:
+			frappe.throw(_("From Date cannot be after To Date."))
+		if (to_date - from_date).days + 1 > MAX_DATE_RANGE_DAYS:
+			frappe.throw(
+				_("Business Expenses supports up to {0} days per request.").format(
+					MAX_DATE_RANGE_DAYS
+				)
+			)
+		query_filters["expense_date"] = ["between", [from_date, to_date]]
+	elif from_date:
+		query_filters["expense_date"] = [">=", from_date]
+	elif to_date:
+		query_filters["expense_date"] = ["<=", to_date]
+
+	status = str(filters.get("expense_status") or "").strip()
+	if status:
+		if status not in BUSINESS_EXPENSE_STATUSES:
+			frappe.throw(_("Unsupported Business Expense Status."))
+		query_filters["expense_status"] = status
+
+	category = str(filters.get("expense_category") or "").strip()
+	if category:
+		query_filters["expense_category"] = category
+
+	search_text = str(filters.get("search_text") or "").strip()
+	or_filters: dict[str, Any] = {}
+	if search_text:
+		like = f"%{search_text}%"
+		or_filters = {
+			"name": ["like", like],
+			"supplier": ["like", like],
+			"payee_name": ["like", like],
+			"reference_no": ["like", like],
+			"description": ["like", like],
+		}
+
+	return query_filters, or_filters, {
+		"company": company,
+		"branch": requested_branch,
+		"restricted": int(bool(scope.get("restricted"))),
+		"allowed_branches": allowed,
+	}
+
+
+def _assert_modified(doc, expected_modified: str | None) -> None:
+	expected = str(expected_modified or "").strip()
+	if not expected:
+		return
+	try:
+		if get_datetime(expected) != get_datetime(doc.modified):
+			raise ValueError
+	except Exception:
+		frappe.throw(
+			_("This Business Expense changed after it was loaded. Refresh before continuing."),
+			frappe.TimestampMismatchError,
+		)
 
 
 def prepare_business_expense_defaults(doc) -> None:
@@ -836,6 +1120,13 @@ def _business_expense_payload(
 		"review_remarks": getattr(doc, "review_remarks", None) or "",
 		"posting_reference_type": getattr(doc, "posting_reference_type", None) or "",
 		"posting_reference": getattr(doc, "posting_reference", None) or "",
+		"posting_ready": cint(getattr(doc, "posting_ready", 0)),
+		"posting_block_reason": getattr(doc, "posting_block_reason", None) or "",
+		"can_edit": bool(
+			int(getattr(doc, "docstatus", 0) or 0) == 0
+			and doc.has_permission("write")
+		),
+		"settings": get_business_expense_settings(),
 	}
 	if include_workflow:
 		from retailedge.workflow_readiness import get_workflow_readiness

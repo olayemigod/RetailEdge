@@ -89,6 +89,16 @@ PURCHASE_INVOICE_NATIVE_PEER_DOCTYPE = "Purchase Invoice"
 EXPENSE_REGISTER_PAGE_TARGET = "expense-register"
 CASHIER_EXPENSE_NATIVE_PEER_DOCTYPE = "RetailEdge Cashier Expense"
 
+BUSINESS_EXPENSE_ITEM: dict[str, Any] = {
+	"label": "Business Expenses",
+	"description": "Record and review non-POS business spending with evidence and workflow controls.",
+	"target_type": "Page",
+	"target": "business-expenses",
+	"icon": "credit-card",
+}
+BUSINESS_EXPENSE_NATIVE_PEER_DOCTYPE = "RetailEdge Business Expense"
+EXPENSE_CATEGORY_NATIVE_PEER_DOCTYPE = "RetailEdge Expense Category"
+
 DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
 	"label": "Document Output & Sharing",
 	"description": "Print, download and share customer documents using ERPNext Print Formats and permissions.",
@@ -354,6 +364,54 @@ def _promote_purchase_invoice_ownership(navigation_groups: list[dict[str, Any]])
 		return
 
 
+def _business_expenses_enabled() -> bool:
+	try:
+		from retailedge.business_expense import get_business_expense_settings
+
+		return bool(get_business_expense_settings().get("enabled"))
+	except Exception:
+		return False
+
+
+def _promote_business_expense_ownership(navigation_groups: list[dict[str, Any]]) -> None:
+	page_available = _business_expenses_enabled() and _can_open_page(BUSINESS_EXPENSE_ITEM["target"])
+	setup_available = _can_open_page(SETUP_HUB_ITEM["target"])
+	for group in navigation_groups:
+		if group.get("key") != "expenses":
+			continue
+		items = list(group.get("items") or [])
+		if page_available:
+			items = [
+				item
+				for item in items
+				if not (
+					item.get("target_type") == "DocType"
+					and item.get("target") == BUSINESS_EXPENSE_NATIVE_PEER_DOCTYPE
+				)
+			]
+			if not any(
+				item.get("target_type") == "Page"
+				and item.get("target") == BUSINESS_EXPENSE_ITEM["target"]
+				for item in items
+			):
+				register_index = next(
+					(index for index, item in enumerate(items) if item.get("target") == EXPENSE_REGISTER_PAGE_TARGET),
+					0,
+				)
+				items.insert(register_index, deepcopy(BUSINESS_EXPENSE_ITEM))
+		if setup_available:
+			items = [
+				item
+				for item in items
+				if not (
+					item.get("target_type") == "DocType"
+					and item.get("target") == EXPENSE_CATEGORY_NATIVE_PEER_DOCTYPE
+				)
+			]
+		group["items"] = items
+		return
+
+
 def _promote_cashier_expense_ownership(navigation_groups: list[dict[str, Any]]) -> None:
 	"""Use Expense Register as the everyday owner of RetailEdge Cashier Expense.
 
@@ -503,6 +561,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_professional_selling(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
 	_promote_purchase_invoice_ownership(navigation_groups)
+	_promote_business_expense_ownership(navigation_groups)
 	_promote_cashier_expense_ownership(navigation_groups)
 	_promote_document_output(navigation_groups)
 	_promote_payment_management(navigation_groups)
@@ -540,6 +599,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"
 	feature_flags["purchase_invoice_ownership"] = "edgesuite_purchase_register"
 	feature_flags["cashier_expense_ownership"] = "edgesuite_expense_register"
+	feature_flags["business_expense_ownership"] = "edgesuite_business_expenses"
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
 	feature_flags["advanced_payment_management"] = "erpnext_native_reconciliation"
 	feature_flags["customer_advance_reporting"] = "current_open_receipts"

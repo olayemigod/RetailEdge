@@ -38,7 +38,7 @@
 		>
 			<template #actions>
 				<button type="button" class="secondary-action" @click="openExpenseCategories">Expense Categories</button>
-				<button type="button" class="primary-action" @click="recordExpense">Record Expense</button>
+				<button type="button" class="primary-action" @click="recordExpense">{{ consolidatedViewAvailable && hasPageTarget("business-expenses") ? "Record Business Expense" : "Record Cashier Expense" }}</button>
 				<EdgeExportMenu
 					v-if="rows.length"
 					:dataset="exportDataset"
@@ -136,9 +136,16 @@
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
+	<SimpleCashierExpenseDialog
+		:open="cashierExpenseOpen"
+		:nativeFallbackEnabled="false"
+		@close="cashierExpenseOpen = false"
+		@saved="handleCashierExpenseSaved"
+	/>
 </template>
 
 <script>
+import SimpleCashierExpenseDialog from "../retailedge_business_hub/SimpleCashierExpenseDialog.vue";
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
 	"EdgeReportShell",
@@ -170,7 +177,10 @@ function errorMessage(error, fallback) {
 
 export default {
 	name: "ExpenseRegisterReport",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		SimpleCashierExpenseDialog,
+	},
 	data() {
 		return {
 			edgeUIValid: true,
@@ -184,6 +194,8 @@ export default {
 			pagination: {},
 			scope: {},
 			menuItems: [],
+			canUseNativeDesk: false,
+			cashierExpenseOpen: false,
 			tenantName: "",
 			branchName: "",
 			userName: "",
@@ -281,7 +293,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.expense_register.get_expense_register_context"),
 					navigationPromise,
@@ -296,6 +308,7 @@ export default {
 				this.statuses = context.statuses || [];
 				this.dateRangeLimit = Number(context.limits?.date_range_days || 366);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load Expense Register controls.");
@@ -319,10 +332,19 @@ export default {
 			const items = this.menuItems.flatMap((group) => group.items || []);
 			const item = items.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
 			else if (item.target_type === "URL" && item.target) window.location.assign(item.target);
+		},
+		hasPageTarget(target) {
+			return Boolean(
+				target
+				&& this.menuItems
+					.flatMap((group) => group.items || [])
+					.some((item) => item.target_type === "Page" && item.target === target)
+			);
 		},
 		async searchOptions(kind, txt) {
 			const result = await callMethod("retailedge.expense_register.search_expense_register_options", {
@@ -471,16 +493,35 @@ export default {
 			return row?.name || "";
 		},
 		openReportCell(payload) {
-			if (payload?.column?.fieldname === "name" && payload.value) this.openExpense(payload.value);
+			if (payload?.column?.fieldname === "name" && payload?.row) this.openExpense(payload.row);
 		},
-		openExpense(name) {
-			if (name) frappe.set_route("Form", "RetailEdge Cashier Expense", name);
+		openExpense(row) {
+			if (!row) return;
+			if (row.source_doctype === "Purchase Invoice" && this.hasPageTarget("purchase-register")) {
+				frappe.route_options = { purchase_invoice: row.source_reference || "" };
+				frappe.set_route("purchase-register");
+				return;
+			}
+			if (this.canUseNativeDesk && row.source_doctype && row.source_reference) {
+				frappe.set_route("Form", row.source_doctype, row.source_reference);
+			}
 		},
 		recordExpense() {
-			frappe.new_doc("RetailEdge Cashier Expense");
+			if (this.consolidatedViewAvailable && this.hasPageTarget("business-expenses")) {
+				frappe.route_options = { action: "new" };
+				frappe.set_route("business-expenses");
+				return;
+			}
+			this.cashierExpenseOpen = true;
+		},
+		handleCashierExpenseSaved() {
+			this.cashierExpenseOpen = false;
+			this.fetchData();
 		},
 		openExpenseCategories() {
-			frappe.set_route("List", "RetailEdge Expense Category");
+			if (!this.hasPageTarget("retailedge-setup")) return;
+			frappe.route_options = { setup_resource: "expense-categories" };
+			frappe.set_route("retailedge-setup");
 		},
 		formatCell(value, column) {
 			if (column?.fieldname === "posting_ready") return value ? "Yes" : "No";
