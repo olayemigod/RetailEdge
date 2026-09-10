@@ -90,10 +90,26 @@ def _get_frappe_workflow_readiness(*, workflow: dict[str, Any], doc=None) -> dic
 			getattr(doc, state_field, None) or getattr(doc, "workflow_state", None) or ""
 		).strip()
 
-	actions = _get_permitted_transitions(doc) if doc is not None else []
+	posting_final = bool(
+		doc is not None
+		and getattr(doc, "doctype", None) == "RetailEdge Business Expense"
+		and (
+			str(getattr(doc, "ledger_status", None) or "") == "Posted"
+			or getattr(doc, "posting_reference", None)
+		)
+	)
+	actions = (
+		[]
+		if posting_final
+		else (_get_permitted_transitions(doc) if doc is not None else [])
+	)
 	docstatus = int(getattr(doc, "docstatus", 0) or 0) if doc is not None else 0
-	requires_action = bool(docstatus == 0 and workflow)
-	if doc is not None and actions:
+	requires_action = bool(docstatus == 0 and workflow and not posting_final)
+	if posting_final:
+		message = _(
+			"This Business Expense has completed accounting posting. Further workflow actions are blocked; use the approved accounting reversal process for corrections."
+		)
+	elif doc is not None and actions:
 		message = _(
 			"This draft is workflow-controlled. Choose the appropriate workflow action on the document before it can progress."
 		)
@@ -249,7 +265,12 @@ def _get_business_expense_workflow_readiness(doc=None) -> dict[str, Any]:
 				]
 			)
 		message = _("This Business Expense is waiting for approval.")
-	elif docstatus == 1 and state in {"Approved", "Pending Ledger"}:
+	elif (
+		docstatus == 1
+		and state in {"Approved", "Pending Ledger"}
+		and ledger_status != "Posted"
+		and not getattr(doc, "posting_reference", None)
+	):
 		message = _("This Business Expense is approved and ready for accounting posting.")
 	elif docstatus == 1 and state == "Rejected":
 		requires_action = True
@@ -262,8 +283,14 @@ def _get_business_expense_workflow_readiness(doc=None) -> dict[str, Any]:
 				}
 			)
 		message = _("This Business Expense was rejected.")
-	elif state == "Posted" or ledger_status == "Posted":
-		message = _("This Business Expense has completed accounting posting.")
+	elif (
+		state == "Posted"
+		or ledger_status == "Posted"
+		or getattr(doc, "posting_reference", None)
+	):
+		message = _(
+			"This Business Expense has completed accounting posting. Further workflow actions are blocked."
+		)
 	else:
 		message = _("This Business Expense uses the configured RetailEdge fallback process.")
 
