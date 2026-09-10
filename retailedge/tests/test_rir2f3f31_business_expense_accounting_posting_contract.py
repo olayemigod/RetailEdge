@@ -107,9 +107,10 @@ def test_expense_register_routes_business_expense_source_back_to_edgesuite_owner
 	assert 'frappe.set_route("business-expenses")' in source
 
 
-def test_slice_has_no_schema_migration_and_preserves_accounting_boundaries():
+def test_slice_has_additive_workflow_setting_and_preserves_accounting_boundaries():
 	doc = DOC.read_text(encoding="utf-8")
-	assert "No schema change or migration is required" in doc
+	assert "Workflow State Allowed for Accounting Posting" in doc
+	assert "normal site migration" in doc
 	assert "No submitted accounting document is mutated" in doc
 	assert "Supplier credit bills remain Purchase Invoice" in doc
 	assert "Cashier Expenses remain their separate POS/shift workflow" in doc
