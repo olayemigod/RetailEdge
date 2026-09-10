@@ -33,18 +33,21 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertIn("this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace()", component)
 		self.assertIn('this.returnSources = { purchaseReceipt: "", purchaseInvoice: "" }', component)
 
-	def test_success_handoff_routes_to_native_erpnext_drafts(self):
-		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
+	def test_standard_success_is_owned_by_edgesuite_review_before_legacy_draft_handler(self):
+		ownership = (APP_ROOT / "public/js/professional_purchasing/professionalPurchaseReturnOwnership.js").read_text()
+		overlay = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReturnReviewOverlay.vue").read_text()
 
-		self.assertIn("retailedge.professional_purchasing.prepare_purchase_return_draft", component)
-		self.assertIn("retailedge.professional_purchasing.prepare_supplier_debit_note_draft", component)
-		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', component)
-		self.assertIn('frappe.set_route("Form", "Purchase Invoice", result.name)', component)
-		self.assertIn("ERPNext Update Stock remains enabled", component)
-		self.assertIn("never chains a stock return and supplier debit note automatically", component)
+		self.assertIn('root.addEventListener("click", handler, true)', ownership)
+		self.assertIn("event.stopImmediatePropagation()", ownership)
+		self.assertIn("Review & Submit Return", ownership)
+		self.assertIn("Review & Submit Debit Note", ownership)
+		self.assertIn("retailedge.professional_purchase_returns.get_purchase_return_review", overlay)
+		self.assertIn("retailedge.professional_purchase_returns.submit_purchase_return_review", overlay)
+		self.assertIn("Advanced: Prepare in ERPNext", overlay)
+		self.assertIn("never chains a stock return and supplier debit note automatically", (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text())
 
 	def test_existing_professional_purchasing_flows_and_edgesuite_runtime_remain(self):
-		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
+		component = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text()
 
 		self.assertIn("Purchase Material Requests", component)
 		self.assertIn("Prepare Draft RFQ", component)
@@ -57,7 +60,7 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertNotIn("frappe.show_alert", component)
 		self.assertNotIn("window.EdgeUI", component)
 
-	def test_backend_contract_is_native_draft_first_without_direct_posting(self):
+	def test_legacy_backend_contract_remains_draft_only_for_advanced_compatibility(self):
 		source = (APP_ROOT / "professional_purchasing.py").read_text()
 
 		self.assertIn("make_purchase_return(source.name)", source)
