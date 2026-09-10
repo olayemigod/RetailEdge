@@ -8,7 +8,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen implementation head:** `8dde2a2efbfed10b3f2b7742ce4bfc8139ffbe6c`
+**Latest code-frozen implementation head:** `6412ce1f217ca5b37161c83de81460e2b6bfd2f8`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -28,6 +28,46 @@ Business Hub code is already present on the reconciled branch, but its existence
 
 ## Current Bounded Slice
 
+### `RIR2F3F13` — Stock Position native-handoff containment
+
+**State:** `CODE-FROZEN / QA-PENDING`
+
+Commits:
+
+- `5eb4d970c09f34779700a1ce46f64a7b690f6e57` — F3F13 contract/documentation
+- `983d6bc66ea3904e23e53f87870e64a173b40dca` — focused F3F13 contract tests
+- `6412ce1f217ca5b37161c83de81460e2b6bfd2f8` — implementation
+
+Material files:
+
+- `docs/rir2f3f13_stock_position_native_handoff_containment.md`
+- `retailedge/tests/test_rir2f3f13_stock_position_native_handoff_contract.py`
+- `retailedge/public/js/stock_position/StockPositionReport.vue`
+
+Contract now enforced:
+
+- Stock Position reads final `navigation.access.can_use_native_desk` into a fail-closed client capability.
+- Item detail and native Material Request replenishment actions are not presented as clickable for EdgeSuite-only users.
+- Direct native Item, Material Request, DocType, and Report handoffs are defensively blocked when Native Desk capability is unavailable.
+- Stock Position data, exports, stock status, reorder signals, branch/warehouse scope, and server-side Material Request revalidation remain unchanged.
+- Native-Desk-capable users retain existing ERPNext handoffs subject to normal Frappe/ERPNext permissions.
+- No stock valuation, Stock Ledger, accounting, reorder-calculation, Material Request lifecycle, migration, or branch-architecture semantics changed.
+
+## Governed Evidence at `6412ce1`
+
+GitHub Actions associated with the exact F3F13 implementation head are green:
+
+| Gate | Run | Result |
+| --- | ---: | --- |
+| EdgeSuite UI Candidate Compatibility | 34441475130 | PASS |
+| CI — clean Frappe v16 standalone integration | 34441475141 | PASS |
+| RetailEdge Theme Compatibility | 34441475139 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34441475131 | PASS |
+
+F3F13 introduced no migration or data patch.
+
+## Prior Code-Frozen Slices
+
 ### `RIR2F3F12` — Cash Shift native-detail containment
 
 **State:** `CODE-FROZEN / QA-PENDING`
@@ -38,24 +78,7 @@ Commits:
 - `ec34e0b601cc759f4edd6b22e84774381dab4a1c` — focused F3F12 contract tests
 - `8dde2a2efbfed10b3f2b7742ce4bfc8139ffbe6c` — implementation
 
-Material files:
-
-- `docs/rir2f3f12_cash_shift_native_detail_containment.md`
-- `retailedge/tests/test_rir2f3f12_cash_shift_native_detail_containment_contract.py`
-- `retailedge/public/js/cash_shift_verification/CashShiftVerificationReport.vue`
-
-Contract now enforced:
-
-- Cash Shift Verification fails closed on Native Desk capability before navigation context resolves.
-- Native-detail columns are not presented as clickable for EdgeSuite-only users.
-- Direct row handoffs to Daily Sales Audit, User, POS Profile, POS Opening Shift, and POS Closing Shift are blocked when Native Desk is unavailable.
-- DocType/Report menu handoffs are defensively blocked client-side in addition to server-side navigation filtering.
-- Native-Desk-capable users retain the existing handoffs subject to normal Frappe/ERPNext permissions.
-- No accounting, POS posting, branch-scope, document lifecycle, migration, or data semantics changed.
-
-## Governed Evidence at `8dde2a2`
-
-GitHub Actions associated with the exact F3F12 implementation head are green:
+Exact-head governed evidence was green:
 
 | Gate | Run | Result |
 | --- | ---: | --- |
@@ -63,10 +86,6 @@ GitHub Actions associated with the exact F3F12 implementation head are green:
 | CI — clean Frappe v16 standalone integration | 34440908315 | PASS |
 | RetailEdge Theme Compatibility | 34440908296 | PASS |
 | Linters / Semgrep / vulnerable dependency audit | 34440908311 | PASS |
-
-F3F12 introduced no migration or data patch.
-
-## Prior Code-Frozen Slice
 
 ### `RIR2F3F11` — Native visual workspace Desk handoff containment
 
@@ -94,11 +113,12 @@ Exact-head governed evidence was green:
 
 Browser/persona QA is not claimed as complete.
 
-Before F3F11/F3F12 may be represented as fully `FROZEN`, verify at minimum:
+Before F3F11/F3F12/F3F13 may be represented as fully `FROZEN`, verify at minimum:
 
 - authenticated Native Desk allowed and denied personas;
 - ordinary EdgeSuite users cannot escape through guarded DocType/Report/create/record-row handoffs;
 - Cash Shift native-detail columns do not open native forms for EdgeSuite-only users;
+- Stock Position Item and Material Request actions remain non-operational for EdgeSuite-only users;
 - permitted advanced/native-Desk users retain intended ERPNext lifecycle handoffs;
 - EdgeSuite Page destinations remain usable after containment.
 
@@ -147,14 +167,13 @@ A later regression that violates a frozen or code-frozen contract reopens the af
 
 The repository-wide native-handoff audit has identified additional bounded gaps. They must be handled independently rather than bundled into a broad rewrite.
 
-1. **Stock Position:** Item detail and reorder-due actions can still open native `Item` and unsaved `Material Request` forms without checking final EdgeSuite Native Desk capability. The backend already revalidates report scope, branch/warehouse scope, Material Request create permission, item validity, and reorder rules; the identified gap is interface exposure.
-2. **Purchase Reporting:** final Native Desk capability is loaded, but invoice/supplier/return report-cell native handoffs are not consistently gated.
-3. **Customer Receivables:** invoice/customer/payment-request/dunning detail links and draft collection handoffs can route directly to native forms without applying final Native Desk capability. This is more nuanced because collection actions prepare native drafts for review and must be handled without weakening accounting/document safeguards.
-4. **Professional Purchasing and related purchasing overlays:** multiple native lifecycle handoffs exist. Some are intentionally governed advanced fallbacks, while others require a dedicated audit before any change. Do not treat this as one blanket frontend replacement.
+1. **Purchase Reporting:** final Native Desk capability is already loaded, but invoice/supplier/return report-cell native handoffs and DocType/Report menu routes are not consistently gated. Supplier payment is already EdgeSuite-owned with Native Desk fallback separately guarded, so the gap is presentation/routing containment rather than payment redesign.
+2. **Customer Receivables:** invoice/customer/payment-request/dunning detail links and draft collection handoffs can route directly to native forms without applying final Native Desk capability. This is more nuanced because collection actions prepare native drafts for review and must be handled without weakening accounting/document safeguards.
+3. **Professional Purchasing and related purchasing overlays:** multiple native lifecycle handoffs exist. Some are intentionally governed advanced fallbacks, while others require a dedicated audit before any change. Do not treat this as one blanket frontend replacement.
 
 ## Previously Completed Hardening Context
 
-The reconciled branch contains the preceding F3 payment/banking/navigation containment sequence through F3F12. Repository history remains authoritative for exact implementation details.
+The reconciled branch contains the preceding F3 payment/banking/navigation containment sequence through F3F13. Repository history remains authoritative for exact implementation details.
 
 Notable areas include:
 
@@ -166,11 +185,12 @@ Notable areas include:
 - Bank Transaction native fallback gating;
 - recurring billing native route containment;
 - native visual workspace Desk handoff containment;
-- Cash Shift native-detail containment.
+- Cash Shift native-detail containment;
+- Stock Position native-handoff containment.
 
 ## Unresolved / Not Yet Claimed
 
-- F3F11 and F3F12 browser/persona QA remain pending.
+- F3F11, F3F12, and F3F13 browser/persona QA remain pending.
 - Overall Readiness Hardening is not complete.
 - Business Hub is not release-complete merely because implementation exists.
 - Reporting remains downstream of unresolved foundational hardening.
@@ -191,21 +211,21 @@ Do not obtain a green state by:
 
 ## Exact Next Executable Step
 
-Execute `RIR2F3F13 — Stock Position native-handoff containment` as the next bounded readiness-hardening slice.
+Execute `RIR2F3F14 — Purchase Reporting native-detail containment` as the next bounded readiness-hardening slice.
 
 Primary objective:
 
-- preserve Stock Position read/report/reorder truth while preventing EdgeSuite-only users from escaping into native `Item` or unsaved `Material Request` forms.
+- preserve Purchase Register and Supplier Payables reporting plus the EdgeSuite supplier-payment workflow while preventing EdgeSuite-only users from escaping through native invoice, supplier, return, DocType, or Report handoffs.
 
 Required implementation contract:
 
-1. Read final `navigation.access.can_use_native_desk` into a fail-closed client capability.
-2. Keep Stock Position data, stock status, reorder signals, branch/warehouse scope, and exports available according to their existing permissions.
-3. Present `Item` detail and native Material Request replenishment actions as clickable only when Native Desk capability is true.
-4. Independently guard native Item, Material Request, DocType, and Report handoffs even if a click/navigation event is triggered programmatically.
-5. Preserve the existing server-side Material Request handoff revalidation and create-permission checks; do not move security to the frontend.
-6. Do not change ERPNext stock, valuation, Stock Ledger, accounting, reorder calculations, Material Request semantics, or branch architecture.
-7. Add a focused negative-path contract test and documentation.
-8. Run the exact-head governed gates before marking the slice `CODE-FROZEN / QA-PENDING`.
+1. Reuse the existing fail-closed `canUseNativeDesk` capability already populated from `navigation.access.can_use_native_desk`.
+2. Keep supplier-payment actions operational in EdgeSuite; do not require Native Desk merely to use the existing `SimplePaymentDialog` flow.
+3. Present invoice, return-against, and supplier cells as native-detail clickable only when Native Desk capability is true.
+4. Independently guard native invoice/supplier report-cell handoffs and DocType/Report menu handoffs even if invoked programmatically.
+5. Preserve `openNativePayment()` as an advanced fallback gated by Native Desk capability.
+6. Do not change report calculations, outstanding-balance truth, payment posting, supplier-payment semantics, branch scope, accounting behavior, migrations, or data.
+7. Add focused negative-path contract tests and documentation.
+8. Run exact-head governed gates before marking the slice `CODE-FROZEN / QA-PENDING`.
 
-After F3F13, continue the repository audit in risk order rather than automatically advancing to reporting.
+After F3F14, continue the repository audit in risk order rather than advancing automatically to feature/reporting expansion.
