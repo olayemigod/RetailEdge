@@ -39,7 +39,7 @@
 						</select>
 					</label>
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading" @click="loadRows">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
-					<button class="edge-button" type="button" @click="openPurchaseInvoices">Purchase Invoices</button>
+					<button v-if="canUseNativeDesk" class="edge-button" type="button" @click="openPurchaseInvoices">Advanced: Purchase Invoices</button>
 				</div>
 			</template>
 
@@ -62,7 +62,7 @@
 									</td>
 									<td>
 										<strong>{{ row.supplier }}</strong>
-										<button class="edge-link-button" type="button" @click="openPurchaseOrder(row.purchase_order)">{{ row.purchase_order }}</button>
+										<button v-if="canUseNativeDesk" class="edge-link-button" type="button" @click="openPurchaseOrder(row.purchase_order)">{{ row.purchase_order }}</button><strong v-else>{{ row.purchase_order }}</strong>
 										<small>{{ row.company }}<template v-if="row.branch"> · {{ row.branch }}</template></small>
 									</td>
 									<td><span class="review-status" :data-status="row.intake_review_status">{{ row.intake_review_status }}</span><small v-if="row.intake_review_notes">{{ row.intake_review_notes }}</small></td>
@@ -71,7 +71,7 @@
 										<span v-else>Not recorded</span>
 									</td>
 									<td class="num">{{ formatMoney(row.extracted_total, row.extracted_currency || row.purchase_order_currency) }}</td>
-									<td><button v-if="row.purchase_invoice" class="edge-link-button" type="button" @click="openPurchaseInvoice(row.purchase_invoice)">{{ row.purchase_invoice }}</button><span v-else>—</span><small v-if="row.purchase_invoice">Draft prepared from ERPNext PO mapping</small></td>
+									<td><button v-if="row.purchase_invoice" class="edge-link-button" type="button" @click="openPurchaseInvoiceReview(row)">{{ row.purchase_invoice }}</button><span v-else>—</span><small v-if="row.purchase_invoice">Review the ERPNext PO-mapped invoice in EdgeSuite before submission</small></td>
 									<td class="supplier-review-row-actions">
 										<button v-if="row.intake_review_status === 'Pending Review'" class="edge-button edge-button--compact" type="button" @click="setIntakeStatus(row, 'In Review')">Start Review</button>
 										<button v-if="!row.extraction && !isIntakeFinal(row)" class="edge-button edge-button--compact" type="button" @click="openExtractionModal(row)">Record Extraction</button>
@@ -84,11 +84,47 @@
 											<button class="edge-button edge-button--compact danger" type="button" @click="openReviewModal('intake', row, 'Rejected')">Reject Document</button>
 										</template>
 										<button v-if="row.ready_for_draft_purchase_invoice" class="edge-button edge-button--primary edge-button--compact" type="button" @click="prepareDraft(row)">Prepare Draft PI</button>
-										<button v-if="row.purchase_invoice" class="edge-button edge-button--compact" type="button" @click="openPurchaseInvoice(row.purchase_invoice)">Open Draft</button>
+										<button v-if="row.purchase_invoice" class="edge-button edge-button--compact" type="button" @click="openPurchaseInvoiceReview(row)">Review PI</button>
+										<button v-if="row.purchase_invoice && canUseNativeDesk" class="edge-button edge-button--compact" type="button" @click="openPurchaseInvoice(row.purchase_invoice)">Advanced: Open in ERPNext</button>
 									</td>
 								</tr>
 							</tbody>
 						</table>
+					</div>
+				</EdgeDashboardSection>
+
+				<EdgeDashboardSection
+					v-if="invoiceReviewLoading || invoiceReviewError || invoiceReview"
+					title="Purchase Invoice Review"
+					description="Review the exact ERPNext Purchase Order-mapped draft before standard submission."
+					span="2"
+				>
+					<div v-if="invoiceReviewLoading" class="supplier-review-invoice-review">Loading Purchase Invoice review…</div>
+					<div v-else-if="invoiceReviewError" class="supplier-review-error">{{ invoiceReviewError }}</div>
+					<div v-else-if="invoiceReview" class="supplier-review-invoice-review">
+						<div class="supplier-review-invoice-summary">
+							<div><span>Purchase Invoice</span><strong>{{ invoiceReview.purchase_invoice }}</strong></div>
+							<div><span>Supplier</span><strong>{{ invoiceReview.supplier }}</strong></div>
+							<div><span>Mapped Total</span><strong>{{ formatMoney(invoiceReview.mapped_grand_total, invoiceReview.currency) }}</strong></div>
+							<div><span>Extracted Total</span><strong>{{ formatMoney(invoiceReview.extracted_total, invoiceReview.extracted_currency || invoiceReview.currency) }}</strong></div>
+							<div><span>Difference</span><strong>{{ formatMoney(invoiceReview.total_difference, invoiceReview.currency) }}</strong></div>
+							<div><span>Status</span><strong>{{ invoiceReview.docstatus === 1 ? "Submitted" : (invoiceReview.status || "Draft") }}</strong></div>
+						</div>
+						<div v-if="invoiceReview.blockers && invoiceReview.blockers.length" class="supplier-review-error">
+							<strong>Standard submission is blocked.</strong>
+							<ul><li v-for="blocker in invoiceReview.blockers" :key="blocker.key">{{ blocker.label }}</li></ul>
+						</div>
+						<div class="supplier-review-table-wrap">
+							<table class="supplier-review-table supplier-review-invoice-items">
+								<thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th><th>Warehouse</th></tr></thead>
+								<tbody><tr v-for="(item, index) in invoiceReview.items || []" :key="`${item.item_code}:${index}`"><td><strong>{{ item.item_code }}</strong><small>{{ item.item_name }}</small></td><td class="num">{{ item.qty }}</td><td class="num">{{ formatMoney(item.rate, invoiceReview.currency) }}</td><td class="num">{{ formatMoney(item.amount, invoiceReview.currency) }}</td><td>{{ item.warehouse || "—" }}</td></tr></tbody>
+							</table>
+						</div>
+						<div class="supplier-review-invoice-actions">
+							<button class="edge-button" type="button" :disabled="invoiceReviewSubmitting" @click="closeInvoiceReview">Close</button>
+							<button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="invoiceReviewSubmitting" @click="openPurchaseInvoice(invoiceReview.purchase_invoice)">Advanced: Open in ERPNext</button>
+							<button v-if="invoiceReview.docstatus === 0" class="edge-button edge-button--primary" type="button" :disabled="invoiceReviewSubmitting || !invoiceReview.standard_submit_eligible" @click="submitPurchaseInvoiceReview">{{ invoiceReviewSubmitting ? "Submitting…" : "Submit Purchase Invoice" }}</button>
+						</div>
 					</div>
 				</EdgeDashboardSection>
 
@@ -139,7 +175,7 @@ export default {
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 	data() {
 		return {
-			edgeUIValid: true, missingComponents: [], loading: false, error: "", rows: [], summary: {}, menuItems: [],
+			edgeUIValid: true, missingComponents: [], loading: false, error: "", rows: [], summary: {}, menuItems: [], canUseNativeDesk: false, invoiceReview: null, invoiceReviewLoading: false, invoiceReviewSubmitting: false, invoiceReviewError: "",
 			tenantName: "", branchName: "", userName: "", supplierLabel: "",
 			filters: { company: "", branch: "", supplier: "", status: "Open" },
 			modal: { type: "", row: null, decision: "", saving: false, error: "", form: {} },
@@ -173,12 +209,13 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.supplier_document_review.get_supplier_document_review_context", { status: "Open" }),
 					navigationPromise,
 				]);
 				this.applyContext(context);
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 			} catch (error) { this.error = errorMessage(error, "Supplier Document Review controls failed to load."); }
 		},
@@ -251,13 +288,41 @@ export default {
 				const result = await callMethod("retailedge.supplier_document_review.prepare_draft_purchase_invoice", { extraction_name: row.extraction });
 				frappe.show_alert({ message: result.created ? __("Draft Purchase Invoice prepared from ERPNext Purchase Order.") : __("Existing Purchase Invoice handoff reopened."), indicator: "green" });
 				await this.loadRows();
-				if (result.purchase_invoice) this.openPurchaseInvoice(result.purchase_invoice);
+				if (result.purchase_invoice) await this.openPurchaseInvoiceReview({ extraction: row.extraction });
 			} catch (error) { this.error = errorMessage(error, "Purchase Invoice draft could not be prepared."); }
 		},
+		async openPurchaseInvoiceReview(row) {
+			if (!row?.extraction) return;
+			this.invoiceReviewLoading = true; this.invoiceReviewError = "";
+			try {
+				this.invoiceReview = await callMethod("retailedge.supplier_document_review.get_supplier_document_purchase_invoice_review", { extraction_name: row.extraction });
+			} catch (error) {
+				this.invoiceReview = null;
+				this.invoiceReviewError = errorMessage(error, "Purchase Invoice review could not be loaded.");
+			} finally { this.invoiceReviewLoading = false; }
+		},
+		closeInvoiceReview() { if (!this.invoiceReviewSubmitting) { this.invoiceReview = null; this.invoiceReviewError = ""; } },
+		async submitPurchaseInvoiceReview() {
+			if (!this.invoiceReview?.extraction || this.invoiceReviewSubmitting || !this.invoiceReview.standard_submit_eligible) return;
+			this.invoiceReviewSubmitting = true; this.invoiceReviewError = "";
+			const extraction = this.invoiceReview.extraction;
+			try {
+				const result = await callMethod("retailedge.supplier_document_review.submit_supplier_document_purchase_invoice", {
+					extraction_name: extraction,
+					expected_purchase_invoice_modified: this.invoiceReview.purchase_invoice_modified,
+				});
+				frappe.show_alert({ message: __("Purchase Invoice submitted through ERPNext."), indicator: "green" });
+				await this.loadRows();
+				await this.openPurchaseInvoiceReview({ extraction });
+				return result;
+			} catch (error) {
+				this.invoiceReviewError = errorMessage(error, "Purchase Invoice could not be submitted.");
+			} finally { this.invoiceReviewSubmitting = false; }
+		},
 		openSourceFile(row) { if (row.source_file_url) window.open(row.source_file_url, "_blank", "noopener,noreferrer"); },
-		openPurchaseOrder(name) { frappe.set_route("Form", "Purchase Order", name); },
-		openPurchaseInvoices() { frappe.set_route("List", "Purchase Invoice"); },
-		openPurchaseInvoice(name) { frappe.set_route("Form", "Purchase Invoice", name); },
+		openPurchaseOrder(name) { if (this.canUseNativeDesk && name) frappe.set_route("Form", "Purchase Order", name); },
+		openPurchaseInvoices() { if (this.canUseNativeDesk) frappe.set_route("List", "Purchase Invoice"); },
+		openPurchaseInvoice(name) { if (this.canUseNativeDesk && name) frappe.set_route("Form", "Purchase Invoice", name); },
 		formatDateTime(value) { return value ? frappe.datetime.str_to_user(value) : "—"; },
 		formatMoney(value, currency) { if (value === null || value === undefined || value === "") return "—"; return format_currency(Number(value || 0), currency || undefined); },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
@@ -270,6 +335,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -281,4 +347,5 @@ export default {
 
 <style scoped>
 .supplier-review-fallback{display:grid;gap:.35rem;padding:1.5rem}.supplier-review-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto auto;gap:12px;align-items:end}.supplier-review-table-wrap{overflow-x:auto}.supplier-review-table{width:100%;border-collapse:collapse;min-width:1080px}.supplier-review-table th,.supplier-review-table td{padding:.75rem;border-bottom:1px solid var(--edge-border,var(--border-color));text-align:left;vertical-align:top}.supplier-review-table th{color:var(--edge-text-muted,var(--text-muted));font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}.supplier-review-table td{color:var(--edge-text,var(--text-color))}.supplier-review-table td>strong,.supplier-review-table td>small{display:block}.supplier-review-table .num{text-align:right;white-space:nowrap}.supplier-review-row-actions{display:flex;gap:.4rem;flex-wrap:wrap;min-width:230px}.supplier-review-empty{padding:1.25rem;text-align:center;color:var(--edge-text-muted,var(--text-muted))}.review-status{display:inline-flex;border-radius:999px;padding:.2rem .55rem;font-size:.75rem;border:1px solid var(--edge-border,var(--border-color))}.review-status[data-status="Accepted"],.review-status[data-status="Rejected"]{font-weight:700}.edge-link-button{border:0;padding:0;background:transparent;color:var(--primary);cursor:pointer;text-align:left}.danger{color:var(--red-600,#c92a2a)}.supplier-review-safety{display:grid;gap:.35rem;color:var(--edge-text-muted,var(--text-muted))}.supplier-review-safety strong{color:var(--edge-text,var(--text-color))}.supplier-review-error{margin-top:.75rem;padding:.75rem;border-radius:10px;background:var(--red-50,rgba(220,53,69,.08));color:var(--red-700,#b02a37)}.edge-modal-backdrop{position:fixed;inset:0;z-index:1050;background:rgba(0,0,0,.46);display:grid;place-items:center;padding:1rem}.edge-modal-card{width:min(760px,96vw);max-height:90vh;overflow:auto;padding:1rem;background:var(--edge-surface,var(--card-bg));border:1px solid var(--edge-border,var(--border-color));border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.24)}.edge-modal-card>header,.edge-modal-card>footer{display:flex;justify-content:space-between;gap:.75rem;align-items:center}.edge-modal-card>footer{justify-content:flex-end;margin-top:1rem}.edge-modal-card h3{margin:.2rem 0 .45rem;color:var(--edge-text,var(--text-color))}.supplier-review-eyebrow{font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--edge-text-muted,var(--text-muted))}.edge-modal-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-top:1rem}.edge-modal-form .wide{grid-column:1/-1}@media(max-width:960px){.supplier-review-filters{grid-template-columns:1fr 1fr}}@media(max-width:620px){.supplier-review-filters,.edge-modal-form{grid-template-columns:1fr}.edge-modal-form .wide{grid-column:auto}}
+.supplier-review-invoice-review{display:grid;gap:12px}.supplier-review-invoice-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.supplier-review-invoice-summary>div{display:grid;gap:2px;padding:10px 12px;border:1px solid var(--edge-border,var(--border-color));border-radius:8px}.supplier-review-invoice-summary span{font-size:.75rem;color:var(--edge-text-muted,var(--text-muted))}.supplier-review-invoice-items{min-width:760px}.supplier-review-invoice-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}@media(max-width:720px){.supplier-review-invoice-summary{grid-template-columns:1fr}}
 </style>
