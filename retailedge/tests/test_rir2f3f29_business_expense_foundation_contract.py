@@ -41,7 +41,7 @@ def test_business_expense_settings_define_simple_fallback_process():
 	assert fields["enable_business_expenses"]["default"] == "1"
 	assert (
 		fields["business_expense_process"]["options"]
-		== "Approval Required\\nDirect Posting"
+		== "Approval Required\nDirect Posting"
 	)
 	assert fields["business_expense_posting_document_type"]["options"] == "Journal Entry"
 
