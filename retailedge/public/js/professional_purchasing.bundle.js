@@ -4,6 +4,7 @@ import ProfessionalRfqHistoryOverlay from "./professional_purchasing/Professiona
 import ProfessionalSupplierQuotationHistoryOverlay from "./professional_purchasing/ProfessionalSupplierQuotationHistoryOverlay.vue";
 import ProfessionalSupplierQuotationPurchaseOrderOverlay from "./professional_purchasing/ProfessionalSupplierQuotationPurchaseOrderOverlay.vue";
 import ProfessionalPurchaseOrderSubmitOverlay from "./professional_purchasing/ProfessionalPurchaseOrderSubmitOverlay.vue";
+import { installProfessionalPurchaseReturnOwnership } from "./professional_purchasing/professionalPurchaseReturnOwnership";
 
 const START_RFQ_LABEL = "Start RFQ";
 const RFQS_LABEL = "RFQs";
@@ -257,11 +258,13 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 
 	const cleanupSourcing = installSourcingOwnership(target);
 	const cleanupAdvanced = installAdvancedRfqHandoff();
+	const cleanupReturns = installProfessionalPurchaseReturnOwnership(target);
 	const originalUnmount = typeof app.unmount === "function" ? app.unmount.bind(app) : null;
 	if (originalUnmount) {
 		app.unmount = () => {
 			cleanupSourcing();
 			cleanupAdvanced();
+			cleanupReturns();
 			overlayApp.unmount?.();
 			historyApp.unmount?.();
 			supplierQuotationHistoryApp.unmount?.();
