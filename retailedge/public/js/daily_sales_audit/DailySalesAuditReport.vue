@@ -72,7 +72,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			rows: [], columns: [], summary: [], pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", currentPage: 1,
+			rows: [], columns: [], summary: [], pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canUseNativeDesk: false, currentPage: 1,
 			filters: { company: "", branch: "", pos_profile: "", cashier: "", audit_status: "", audit_result: "", from_date: "", to_date: "", page_size: 50 },
 			auditStatuses: ["Draft", "Ready for Review", "In Review", "Balanced", "Variance Found", "Clarification Required", "Approved", "Rejected", "Cancelled", "Reopened"],
 			auditResults: ["Not Checked", "Balanced", "Shortage", "Overage", "Mixed Variance", "Requires Clarification"],
@@ -81,7 +81,7 @@ export default {
 	computed: {
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 1000); },
-		reportColumns() { return (this.columns || []).map((column) => ({ ...column, fieldtype: column.fieldtype || "Data", clickable: ["name", "cashier", "pos_profile", "pos_opening_shift", "pos_closing_shift", "submitted_for_review_by", "approved_by", "rejected_by"].includes(column.fieldname) })); },
+		reportColumns() { return (this.columns || []).map((column) => ({ ...column, fieldtype: column.fieldtype || "Data", clickable: this.canUseNativeDesk && ["name", "cashier", "pos_profile", "pos_opening_shift", "pos_closing_shift", "submitted_for_review_by", "approved_by", "rejected_by"].includes(column.fieldname) })); },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
@@ -89,16 +89,16 @@ export default {
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {
-				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.daily_sales_audit_page.get_daily_sales_audit_page_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Daily Sales Audit controls."); }
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.daily_sales_audit_page.search_daily_sales_audit_page_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); }, posProfileSearch(txt) { return this.searchOptions("pos_profile", txt); },
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.pos_profile = ""; this.branchName = ""; this.currentPage = 1; },
@@ -116,7 +116,7 @@ export default {
 			finally { this.loading = false; }
 		},
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); }, setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); }, rowKey(row, index) { return row.name || `daily-sales-audit:${index}`; },
-		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") frappe.set_route("Form", "RetailEdge Daily Sales Audit", value); else if (column.fieldname === "cashier" || ["submitted_for_review_by", "approved_by", "rejected_by"].includes(column.fieldname)) frappe.set_route("Form", "User", value); else if (column.fieldname === "pos_profile") frappe.set_route("Form", "POS Profile", value); else if (column.fieldname === "pos_opening_shift") frappe.set_route("Form", "POS Opening Shift", value); else if (column.fieldname === "pos_closing_shift") frappe.set_route("Form", "POS Closing Shift", value); },
+		handleCellClick(payload) { if (!this.canUseNativeDesk) return; const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") frappe.set_route("Form", "RetailEdge Daily Sales Audit", value); else if (column.fieldname === "cashier" || ["submitted_for_review_by", "approved_by", "rejected_by"].includes(column.fieldname)) frappe.set_route("Form", "User", value); else if (column.fieldname === "pos_profile") frappe.set_route("Form", "POS Profile", value); else if (column.fieldname === "pos_opening_shift") frappe.set_route("Form", "POS Opening Shift", value); else if (column.fieldname === "pos_closing_shift") frappe.set_route("Form", "POS Closing Shift", value); },
 		formatCell(value, column) { if (value === null || value === undefined || value === "") return "—"; if (column.fieldtype === "Currency") { try { return frappe.format(Number(value), { fieldtype: "Currency" }); } catch (_error) { return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (column.fieldtype === "Check") return Number(value) ? __("Yes") : __("No"); if (column.fieldtype === "Int") return Number(value).toLocaleString(); if (column.fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
 	},
 };
