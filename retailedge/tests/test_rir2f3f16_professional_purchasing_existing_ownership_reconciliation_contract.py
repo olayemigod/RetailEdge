@@ -42,7 +42,11 @@ def test_stale_standard_native_draft_paths_are_not_used_by_component():
 	assert 'const PREPARE_RECEIPT_METHOD = "retailedge.professional_purchasing.prepare_purchase_receipt_draft"' not in source
 	assert 'frappe.new_doc("Purchase Order")' not in source
 	assert 'frappe.set_route("Form", "Request for Quotation", result.name)' not in source
-	assert 'frappe.set_route("Form", "Purchase Receipt", result.name)' not in source
+
+	prepare_receipt = source.split("\t\tprepareReceipt(row) {", 1)[1].split("\n\t\tasync preparePurchaseReturn()", 1)[0]
+	assert "dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT" in prepare_receipt
+	assert "prepare_purchase_receipt_draft" not in prepare_receipt
+	assert 'frappe.set_route("Form", "Purchase Receipt", result.name)' not in prepare_receipt
 
 
 def test_advanced_native_methods_and_menu_routes_fail_closed():
@@ -74,3 +78,5 @@ def test_unresolved_return_and_quality_ownership_is_not_silently_removed():
 	assert "preparePurchaseReturn" in source
 	assert "prepareSupplierDebitNote" in source
 	assert "IncomingQualityInspection" in source
+	purchase_return = source.split("\t\tasync preparePurchaseReturn() {", 1)[1].split("\n\t\tasync prepareSupplierDebitNote()", 1)[0]
+	assert 'frappe.set_route("Form", "Purchase Receipt", result.name)' in purchase_return
