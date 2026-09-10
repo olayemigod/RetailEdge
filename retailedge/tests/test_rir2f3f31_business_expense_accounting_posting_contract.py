@@ -5,6 +5,8 @@ from pathlib import Path
 
 from retailedge import business_expense_posting
 from retailedge import business_expense_register
+from retailedge import workflow_actions
+from retailedge import workflow_readiness
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,3 +113,12 @@ def test_slice_has_no_schema_migration_and_preserves_accounting_boundaries():
 	assert "No submitted accounting document is mutated" in doc
 	assert "Supplier credit bills remain Purchase Invoice" in doc
 	assert "Cashier Expenses remain their separate POS/shift workflow" in doc
+
+def test_posted_business_expense_is_terminal_for_active_and_fallback_workflows():
+	action_source = inspect.getsource(workflow_actions.apply_document_workflow_action)
+	readiness_source = inspect.getsource(workflow_readiness)
+	assert "Posted Business Expenses cannot take further workflow actions" in action_source
+	assert 'getattr(doc, "posting_reference", None)' in action_source
+	assert "posting_final" in readiness_source
+	assert "Further workflow actions are blocked" in readiness_source
+
