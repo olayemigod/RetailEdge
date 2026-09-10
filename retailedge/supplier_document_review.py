@@ -8,7 +8,7 @@ from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate, now_datetime, strip_html
 
-from erpnext.buying.doctype.purchase_order.mapper import make_purchase_invoice
+from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_invoice
 
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
