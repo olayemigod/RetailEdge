@@ -18,6 +18,18 @@ BUSINESS_EXPENSE_DOCTYPE = "RetailEdge Business Expense"
 CATEGORY_DOCTYPE = "RetailEdge Expense Category"
 MAX_LINK_RESULTS = 20
 
+BUSINESS_EXPENSE_READ_ROLES = {
+	"System Manager",
+	"Accounts Manager",
+	"Accounts User",
+	"RetailEdge Manager",
+	"RetailEdgeManager",
+	"RetailEdge Branch Manager",
+	"RetailEdgeBranchManager",
+	"RetailEdge Auditor",
+	"RetailEdgeAuditor",
+}
+
 BUSINESS_EXPENSE_REVIEWER_ROLES = {
 	"System Manager",
 	"Accounts Manager",
@@ -833,6 +845,76 @@ def _business_expense_payload(
 			doc=doc,
 		)
 	return result
+
+
+def get_permission_query_conditions(user: str | None = None) -> str:
+	"""Restrict direct Business Expense reads to readable Company and Branch scope."""
+	user = user or frappe.session.user
+	if user == "Administrator":
+		return ""
+	if not set(frappe.get_roles(user)).intersection(BUSINESS_EXPENSE_READ_ROLES):
+		return "1=0"
+
+	clauses: list[str] = []
+	for company in _readable_companies(user):
+		scope = get_operational_branch_scope(company, user=user)
+		company_sql = (
+			f"`tab{BUSINESS_EXPENSE_DOCTYPE}`.`company` = "
+			f"{frappe.db.escape(company)}"
+		)
+		if not scope.get("restricted"):
+			clauses.append(f"({company_sql})")
+			continue
+		allowed = [
+			str(value).strip()
+			for value in dict.fromkeys(scope.get("allowed_branches") or [])
+			if str(value or "").strip()
+		]
+		for branch in allowed:
+			branch_sql = (
+				f"`tab{BUSINESS_EXPENSE_DOCTYPE}`.`branch` = "
+				f"{frappe.db.escape(branch)}"
+			)
+			clauses.append(f"({company_sql} AND {branch_sql})")
+	return f"({' OR '.join(clauses)})" if clauses else "1=0"
+
+
+def has_permission(
+	doc,
+	user: str | None = None,
+	permission_type: str | None = None,
+) -> bool:
+	"""Apply Company/Branch scope to direct record access in addition to role permissions."""
+	user = user or frappe.session.user
+	if user == "Administrator":
+		return True
+	if not set(frappe.get_roles(user)).intersection(BUSINESS_EXPENSE_READ_ROLES):
+		return False
+	company = str(getattr(doc, "company", None) or "").strip()
+	branch = str(getattr(doc, "branch", None) or "").strip()
+	if not company or not frappe.has_permission("Company", "read", doc=company, user=user):
+		return False
+	try:
+		scope = get_operational_branch_scope(company, user=user)
+	except (frappe.PermissionError, frappe.ValidationError):
+		return False
+	if not scope.get("restricted"):
+		return True
+	allowed = {
+		str(value).strip()
+		for value in scope.get("allowed_branches") or []
+		if str(value or "").strip()
+	}
+	return bool(branch and branch in allowed)
+
+
+def _readable_companies(user: str) -> list[str]:
+	companies = frappe.get_all("Company", pluck="name", limit_page_length=0)
+	return [
+		company
+		for company in companies
+		if frappe.has_permission("Company", "read", doc=company, user=user)
+	]
 
 
 def _coerce_values(values: dict[str, Any] | str | None) -> dict[str, Any]:

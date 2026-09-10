@@ -243,9 +243,11 @@ boot_session = "retailedge.boot.boot_session"
 # ------------------------------
 permission_query_conditions = {
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.get_permission_query_conditions",
+	"RetailEdge Business Expense": "retailedge.business_expense.get_permission_query_conditions",
 }
 has_permission = {
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
+	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }
 
 # Extend DocType Class

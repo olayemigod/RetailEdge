@@ -94,3 +94,14 @@ def test_required_evidence_blocks_submit_not_draft_save():
 	assert "require_attachment" not in validate_block
 	assert 'settings["require_attachment"]' in submit_block
 	assert "required before submitting" in submit_block
+
+
+def test_business_expense_direct_access_is_company_and_branch_scoped():
+	source = inspect.getsource(business_expense)
+	assert "def get_permission_query_conditions" in source
+	assert "def has_permission" in source
+	assert "get_operational_branch_scope(company, user=user)" in source
+	assert 'return "1=0"' in source
+	hooks = (ROOT / "hooks.py").read_text(encoding="utf-8")
+	assert '"RetailEdge Business Expense": "retailedge.business_expense.get_permission_query_conditions"' in hooks
+	assert '"RetailEdge Business Expense": "retailedge.business_expense.has_permission"' in hooks

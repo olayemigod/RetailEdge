@@ -51,7 +51,7 @@ Actual accounting posting is deliberately not implemented in this foundation.
 
 ## Smart Form / Validation Contract
 
-Backend validation is authoritative.
+Backend validation is authoritative. Direct Frappe list/form access is additionally constrained by permission query and record permission hooks, so EdgeSuite filters are not the only Branch-security boundary.
 
 - Company must exist and be readable.
 - Restricted Branch users:
