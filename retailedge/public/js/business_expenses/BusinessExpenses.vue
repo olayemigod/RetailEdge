@@ -159,9 +159,19 @@
 						</div>
 					</div>
 
-					<div v-if="current.posting_reference" class="edge-card">
-						<div class="section-heading"><div><h3>Accounting reference</h3><p>Posted accounting remains authoritative outside this operational record.</p></div></div>
-						<div class="posting-reference"><span>{{ current.posting_reference_type }}</span><strong>{{ current.posting_reference }}</strong></div>
+					<div v-if="Number(current.docstatus || 0) === 1 || current.posting_reference" class="edge-card">
+						<div class="section-heading">
+							<div><h3>Accounting posting</h3><p>ERPNext Journal Entry remains the accounting truth. This action never writes GL directly.</p></div>
+							<button v-if="postingReadiness.can_post && !current.posting_reference" type="button" class="edge-button edge-button--primary" :disabled="postingAction" @click="postToAccounts">{{ postingAction ? "Posting..." : "Post to Accounts" }}</button>
+						</div>
+						<div v-if="postingLoading" class="empty-note">Checking accounting readiness...</div>
+						<div v-else-if="current.posting_reference" class="posting-reference"><span>{{ current.posting_reference_type }}</span><strong>{{ current.posting_reference }}</strong></div>
+						<div v-else class="posting-readiness">
+							<div><span>Readiness</span><strong>{{ postingReadiness.posting_ready ? "Ready" : "Blocked" }}</strong></div>
+							<p v-if="postingReadiness.posting_block_reason">{{ postingReadiness.posting_block_reason }}</p>
+							<p v-else-if="postingReadiness.posting_ready && !postingReadiness.can_post">You do not have accounting-posting permission for this expense.</p>
+						</div>
+						<div v-if="postingError" class="error-banner">{{ postingError }}</div>
 					</div>
 				</section>
 			</template>
@@ -180,6 +190,8 @@ const UPDATE_METHOD = "retailedge.business_expense.update_business_expense_draft
 const ATTACH_METHOD = "retailedge.business_expense.set_business_expense_attachment";
 const GET_METHOD = "retailedge.business_expense.get_business_expense";
 const WORKFLOW_METHOD = "retailedge.workflow_actions.apply_document_workflow_action";
+const POSTING_READINESS_METHOD = "retailedge.business_expense_posting.get_business_expense_posting_readiness";
+const POST_METHOD = "retailedge.business_expense_posting.post_business_expense_to_accounts";
 const DOCTYPE = "RetailEdge Business Expense";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -203,6 +215,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "",
 			listLoading: false, listError: "", saving: false, formError: "", acting: false, actionError: "",
+			postingLoading: false, postingAction: false, postingError: "", postingReadiness: {},
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			canCreate: false, canReview: false, settings: {}, statuses: [], defaultValues: {},
 			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "", search_text: "", page_size: 25 },
@@ -260,11 +273,14 @@ export default {
 		selectSupplier(option) { this.values.supplier = option.value || ""; }, selectPaymentAccount(option) { this.values.payment_account = option.value || ""; },
 		selectCostCenter(option) { this.values.cost_center = option.value || ""; }, clearCostCenter() { this.values.cost_center = ""; }, selectProject(option) { this.values.project = option.value || ""; }, clearProject() { this.values.project = ""; },
 		async saveDraft() { if (this.saving) return; this.saving = true; this.formError = ""; try { let result; if (this.editingName) result = await callMethod(UPDATE_METHOD, { name: this.editingName, values: this.values, expected_modified: this.current.modified }); else result = await callMethod(CREATE_METHOD, { values: this.values }); this.current = result || {}; this.editingName = ""; this.actionRemarks = ""; this.screen = "detail"; frappe.show_alert?.({ message: "Business Expense saved as Draft", indicator: "green" }); } catch (error) { this.formError = errorMessage(error, "Unable to save the Business Expense draft."); } finally { this.saving = false; } },
-		async openExpense(name) { this.actionError = ""; this.actionRemarks = ""; this.current = await callMethod(GET_METHOD, { name }); this.settings = this.current.settings || this.settings; this.screen = "detail"; },
+		async openExpense(name) { this.actionError = ""; this.actionRemarks = ""; this.postingError = ""; this.current = await callMethod(GET_METHOD, { name }); this.settings = this.current.settings || this.settings; this.screen = "detail"; if (Number(this.current.docstatus || 0) === 1 || this.current.posting_reference) await this.loadPostingReadiness(); else this.postingReadiness = {}; },
+		async loadPostingReadiness() { if (!this.current.name) return; this.postingLoading = true; try { this.postingReadiness = await callMethod(POSTING_READINESS_METHOD, { name: this.current.name }); } catch (error) { this.postingReadiness = {}; this.postingError = errorMessage(error, "Unable to check accounting-posting readiness."); } finally { this.postingLoading = false; } },
 		editCurrent() { if (!this.current.can_edit) return; this.values = { ...blankValues(), company: this.current.company || "", branch: this.current.branch || "", expense_date: this.current.expense_date || "", expense_category: this.current.expense_category || "", amount: this.current.amount || "", description: this.current.description || "", payee_type: this.current.payee_type || "Other", supplier: this.current.supplier || "", payee_name: this.current.payee_name || "", reference_no: this.current.reference_no || "", payment_account: this.current.payment_account || "", cost_center: this.current.cost_center || "", project: this.current.project || "" }; this.categoryDefaults = { expense_account: this.current.expense_account || "", cost_center: this.current.cost_center || "" }; this.editingName = this.current.name; this.screen = "form"; },
-		returnToList() { this.screen = "list"; this.editingName = ""; this.current = {}; this.fetchList(); },
+		returnToList() { this.screen = "list"; this.editingName = ""; this.current = {}; this.postingReadiness = {}; this.postingError = ""; this.fetchList(); },
 		async uploadEvidence() { if (!this.current.name || !this.current.can_edit) return; this.actionError = ""; try { if (!frappe.ui?.FileUploader) await new Promise((resolve, reject) => { try { const pending = frappe.require("file_uploader.bundle.js", resolve); if (pending && typeof pending.then === "function") pending.then(resolve).catch(reject); } catch (error) { reject(error); } }); new frappe.ui.FileUploader({ doctype: DOCTYPE, docname: this.current.name, fieldname: "attachment", allow_multiple: false, make_attachments_public: false, on_success: async (file) => { try { this.current = await callMethod(ATTACH_METHOD, { name: this.current.name, file_url: file.file_url, expected_modified: this.current.modified }); frappe.show_alert?.({ message: "Evidence attached", indicator: "green" }); } catch (error) { this.actionError = errorMessage(error, "Evidence uploaded but could not be linked to the expense."); } } }); } catch (error) { this.actionError = errorMessage(error, "Unable to open the evidence uploader."); } },
 		async applyWorkflow(action) { if (this.acting || !action) return; this.acting = true; this.actionError = ""; try { await callMethod(WORKFLOW_METHOD, { doctype: DOCTYPE, name: this.current.name, action, expected_modified: this.current.modified, expected_state: this.current.workflow_readiness?.current_state || "", remarks: this.actionRemarks || "" }); await this.openExpense(this.current.name); frappe.show_alert?.({ message: "Workflow action applied: " + action, indicator: "green" }); } catch (error) { this.actionError = errorMessage(error, "Unable to apply the workflow action."); } finally { this.acting = false; } },
+		postToAccounts() { if (this.postingAction || !this.postingReadiness.can_post || !this.current.name) return; frappe.confirm("Post this approved Business Expense to ERPNext accounts? This will submit a Journal Entry.", () => this.confirmPostToAccounts()); },
+		async confirmPostToAccounts() { if (this.postingAction || !this.current.name) return; this.postingAction = true; this.postingError = ""; try { const result = await callMethod(POST_METHOD, { name: this.current.name, expected_modified: this.current.modified }); const expenseName = result.expense?.name || this.current.name; await this.openExpense(expenseName); frappe.show_alert?.({ message: result.idempotent ? "Business Expense was already posted" : "Business Expense posted to accounts", indicator: "green" }); } catch (error) { this.postingError = errorMessage(error, "Unable to post this Business Expense to accounts."); await this.loadPostingReadiness(); } finally { this.postingAction = false; } },
 		openExpenseRegister() { frappe.set_route("expense-register"); },
 		openExpenseCategories() { if (!this.hasPageTarget("retailedge-setup")) return; frappe.route_options = { setup_resource: "expense-categories" }; frappe.set_route("retailedge-setup"); },
 		formatAmount(value) { const amount = Number(value) || 0; try { return frappe.format(amount, { fieldtype: "Currency" }); } catch (_error) { return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
@@ -310,6 +326,9 @@ textarea.edge-input { min-height: 78px; resize: vertical; }
 .detail-description { margin: 0; padding-top: 4px; color: var(--edge-text-muted, #667085); }
 .attachment-link { word-break: break-word; }
 .workflow-meta, .posting-reference { display: flex; align-items: center; gap: 8px; }
+.posting-readiness { display: grid; gap: 8px; }
+.posting-readiness > div { display: flex; align-items: center; gap: 8px; }
+.posting-readiness p { margin: 0; white-space: pre-line; color: var(--edge-text-muted, #667085); }
 .workflow-actions { justify-content: flex-start; flex-wrap: wrap; }
 .workflow-actions .edge-button { display: inline-flex; align-items: center; gap: 8px; }
 .workflow-actions small { opacity: .85; }
