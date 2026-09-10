@@ -67,7 +67,9 @@ class TestRIR2F2APurchaseInvoiceEdgeSuiteOwnershipContract(unittest.TestCase):
 		source = (APP_ROOT / "public/js/transaction_workspace/TransactionWorkspace.vue").read_text(encoding="utf-8")
 		self.assertIn('if (action.doctype === "Purchase Invoice")', source)
 		self.assertIn("this.simplePurchaseInvoiceOpen = true", source)
-		self.assertIn('frappe.set_route("purchase-register")', source)
+		self.assertIn('if (action?.doctype === "Purchase Invoice") return "purchase-register";', source)
+		self.assertIn("const owner = this.readOwnerPage(action);", source)
+		self.assertIn("frappe.set_route(owner);", source)
 		self.assertIn(':nativeFallbackEnabled="false"', source)
 		self.assertNotIn("openNativePurchaseInvoice", source)
 

@@ -72,11 +72,13 @@ class RIR2F1SellingEdgeSuiteOwnershipContractTests(unittest.TestCase):
 		self.assertIn("openAdvancedRecord(recentDocument, row.name)", source)
 		self.assertIn(":deep(.selling-form-footer > .edge-button:first-child)", source)
 
-	def test_transaction_workspace_sales_invoice_read_path_uses_professional_selling_only(self):
+	def test_transaction_workspace_sales_invoice_read_path_uses_professional_selling_owner(self):
 		source = (APP_ROOT / "public" / "js" / "transaction_workspace" / "TransactionWorkspace.vue").read_text()
 		self.assertIn('@click="viewTransactionRecords(action)"', source)
-		self.assertIn('if (action?.doctype === "Sales Invoice")', source)
-		self.assertIn('frappe.set_route("professional-selling")', source)
+		self.assertIn('if (["Sales Invoice", "Sales Order", "Delivery Note"].includes(action?.doctype)) return "professional-selling";', source)
+		self.assertIn("const owner = this.readOwnerPage(action);", source)
+		self.assertIn("if (owner && this.hasPageTarget(owner))", source)
+		self.assertIn("frappe.set_route(owner);", source)
 		self.assertIn('this.openDoctype(action?.doctype)', source)
 
 	def test_professional_selling_feature_flag_declares_primary_ownership(self):
