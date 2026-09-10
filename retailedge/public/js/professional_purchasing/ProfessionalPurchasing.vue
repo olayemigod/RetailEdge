@@ -218,8 +218,12 @@ import IncomingQualityInspection from "./IncomingQualityInspection.vue";
 const CONTEXT_METHOD = "retailedge.professional_purchasing.get_professional_purchasing_context";
 const PROCUREMENT_TRACKER_HANDOFF_METHOD = "retailedge.procurement_tracker_handoff.get_procurement_tracker_handoff";
 const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_purchasing_options";
-const PREPARE_RFQ_METHOD = "retailedge.professional_purchasing.prepare_request_for_quotation_draft";
-const PREPARE_RECEIPT_METHOD = "retailedge.professional_purchasing.prepare_purchase_receipt_draft";
+const OPEN_PURCHASE_ORDER_EVENT = "retailedge-open-professional-purchase-order";
+const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
+const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
+const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
+const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
+const OPEN_PURCHASE_RECEIPT_HISTORY_EVENT = "retailedge-open-professional-purchase-receipt-history";
 const RETURN_CAPABILITY_METHOD = "retailedge.professional_purchasing.get_purchase_return_capability";
 const RETURN_SEARCH_METHOD = "retailedge.professional_purchasing.search_purchase_return_sources";
 const PREPARE_PURCHASE_RETURN_METHOD = "retailedge.professional_purchasing.prepare_purchase_return_draft";
@@ -233,6 +237,7 @@ function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
 function doctypeSlug(doctype) { return String(doctype || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
+function dispatchEdgeSuiteEvent(name, detail = {}) { window.dispatchEvent(new CustomEvent(name, { detail })); }
 function sortedCopy(rows, sort) {
 	const result = [...rows]; const { key, direction } = sort; const factor = direction === "asc" ? 1 : -1;
 	return result.sort((a, b) => { const av = a?.[key] ?? ""; const bv = b?.[key] ?? ""; if (typeof av === "number" || typeof bv === "number") return (Number(av || 0) - Number(bv || 0)) * factor; return String(av).localeCompare(String(bv)) * factor; });
@@ -243,7 +248,7 @@ export default {
 	components: { IncomingQualityInspection, ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])) },
 	data() {
 		return {
-			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", actionError: "", actionNotice: "", company: "", branch: "", userName: "", menuItems: [],
+			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", actionError: "", actionNotice: "", company: "", branch: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			filters: { company: "", branch: "", supplier: "" }, summary: {}, capabilities: {}, limits: {}, rows: [], materialRequests: [], serverToday: "",
 			procurementTracker: { available: false, company: "", branch: "", report: "Procurement Tracker", reason: "" },
 			returnCapabilities: { can_prepare_purchase_return: false, can_prepare_supplier_debit_note: false }, returnSources: { purchaseReceipt: "", purchaseInvoice: "" }, preparingReturn: "",
@@ -280,7 +285,7 @@ export default {
 					callMethod(RETURN_CAPABILITY_METHOD),
 					callMethod(LANDED_COST_CAPABILITY_METHOD),
 				]);
-				this.applyContext(context || {}); this.procurementTracker = procurementTracker || this.procurementTracker; this.returnCapabilities = returnCapabilities || this.returnCapabilities; this.applyLandedCostCapability(landedCostCapability || {}); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
+				this.applyContext(context || {}); this.procurementTracker = procurementTracker || this.procurementTracker; this.returnCapabilities = returnCapabilities || this.returnCapabilities; this.applyLandedCostCapability(landedCostCapability || {}); this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
 			} catch (error) { this.error = errorMessage(error, "Professional Purchasing failed to load."); } finally { this.loading = false; }
 		},
 		applyContext(context) {
@@ -311,7 +316,12 @@ export default {
 		attentionCount(key) {
 			if (key === "all") return Number(this.summary.purchase_orders || 0); if (key === "needs_review") return Number(this.summary.attention_total || 0); return Number(this.summary[key] || 0);
 		},
-		startRfq(row) { if (!row?.name || !row.can_start_rfq) return; this.clearActionFeedback(); this.rfqSupplierInput = ""; this.rfqDraft = { material_request: row.name, suppliers: [] }; },
+		startRfq(row) {
+			if (!row?.name || !row.can_start_rfq) return;
+			this.clearActionFeedback();
+			this.cancelRfq();
+			dispatchEdgeSuiteEvent(OPEN_RFQ_PREVIEW_EVENT, { material_request: row.name });
+		},
 		addRfqSupplier(option) {
 			const value = option?.value || ""; if (!value) return;
 			if (this.rfqDraft.suppliers.some((supplier) => supplier.value === value)) { this.actionError = `${value} is already selected for this RFQ.`; this.rfqSupplierInput = ""; return; }
@@ -319,15 +329,17 @@ export default {
 			this.clearActionFeedback(); this.rfqDraft.suppliers.push({ value, label: option.label || value }); this.rfqSupplierInput = "";
 		},
 		removeRfqSupplier(value) { this.rfqDraft.suppliers = this.rfqDraft.suppliers.filter((supplier) => supplier.value !== value); }, clearRfqSupplierInput() { this.rfqSupplierInput = ""; }, cancelRfq() { this.rfqSupplierInput = ""; this.rfqDraft = { material_request: "", suppliers: [] }; },
-		async prepareRfq() {
-			if (!this.rfqDraft.material_request || !this.rfqDraft.suppliers.length || this.preparingRfq) return; this.preparingRfq = true; this.clearActionFeedback();
-			try { const result = await callMethod(PREPARE_RFQ_METHOD, { material_request: this.rfqDraft.material_request, suppliers: this.rfqDraft.suppliers.map((supplier) => supplier.value) }); this.actionNotice = `Draft Request for Quotation ${result.name || ""} prepared. Supplier email remains disabled until native ERPNext review.`; this.cancelRfq(); if (result.name) frappe.set_route("Form", "Request for Quotation", result.name); }
-			catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the RFQ draft."); } finally { this.preparingRfq = false; }
+		prepareRfq() {
+			const materialRequest = String(this.rfqDraft.material_request || "").trim();
+			if (!materialRequest) return;
+			const suppliers = this.rfqDraft.suppliers.map((supplier) => supplier.value).filter(Boolean);
+			this.cancelRfq();
+			dispatchEdgeSuiteEvent(OPEN_RFQ_PREVIEW_EVENT, { material_request: materialRequest, suppliers });
 		},
-		async prepareReceipt(row) {
-			if (!row?.name || this.preparingReceipt) return; this.preparingReceipt = row.name; this.clearActionFeedback();
-			try { const result = await callMethod(PREPARE_RECEIPT_METHOD, { purchase_order: row.name }); this.actionNotice = `Draft Purchase Receipt ${result.name || ""} prepared from ERPNext Purchase Order.`; if (result.name) frappe.set_route("Form", "Purchase Receipt", result.name); }
-			catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the receipt draft."); } finally { this.preparingReceipt = ""; }
+		prepareReceipt(row) {
+			if (!row?.name) return;
+			this.clearActionFeedback();
+			dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT, { purchase_order: row.name });
 		},
 		async preparePurchaseReturn() {
 			if (!this.returnSources.purchaseReceipt || this.preparingReturn) return; this.preparingReturn = "purchase_receipt"; this.clearActionFeedback();
@@ -349,16 +361,22 @@ export default {
 				this.clearLandedCostSource(); frappe.set_route("Form", "Landed Cost Voucher", document.name);
 			} catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the Landed Cost Voucher."); } finally { this.preparingLandedCost = false; }
 		},
-		clearActionFeedback() { this.actionError = ""; this.actionNotice = ""; }, newPurchaseOrder() { frappe.new_doc("Purchase Order"); },
-		openMaterialRequest(name) { frappe.set_route("Form", "Material Request", name); }, openMaterialRequests() { frappe.set_route("List", "Material Request"); }, openRequestsForQuotation() { frappe.set_route("List", "Request for Quotation"); }, openSupplierQuotations() { frappe.set_route("List", "Supplier Quotation"); }, openSupplierQuotationComparison() { frappe.set_route("query-report", "Supplier Quotation Comparison"); },
-		openPurchaseOrderAnalysis() { frappe.route_options = { company: this.filters.company || this.company || "" }; frappe.set_route("query-report", "Purchase Order Analysis"); },
-		openProcurementTracker() { if (!this.procurementTracker?.available) return; frappe.route_options = { company: this.procurementTracker.company || this.filters.company || this.company || "" }; frappe.set_route("query-report", this.procurementTracker.report || "Procurement Tracker"); },
-		openPurchaseOrder(name) { frappe.set_route("Form", "Purchase Order", name); }, openPurchaseReceipts() { frappe.set_route("List", "Purchase Receipt"); },
+		clearActionFeedback() { this.actionError = ""; this.actionNotice = ""; },
+		newPurchaseOrder() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_EVENT); },
+		openMaterialRequest(name) { if (this.canUseNativeDesk && name) frappe.set_route("Form", "Material Request", name); },
+		openMaterialRequests() { if (this.canUseNativeDesk) frappe.set_route("List", "Material Request"); },
+		openRequestsForQuotation() { dispatchEdgeSuiteEvent(OPEN_RFQ_HISTORY_EVENT); },
+		openSupplierQuotations() { dispatchEdgeSuiteEvent(OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT); },
+		openSupplierQuotationComparison() { if (!this.canUseNativeDesk) return; frappe.set_route("query-report", "Supplier Quotation Comparison"); },
+		openPurchaseOrderAnalysis() { if (!this.canUseNativeDesk) return; frappe.route_options = { company: this.filters.company || this.company || "" }; frappe.set_route("query-report", "Purchase Order Analysis"); },
+		openProcurementTracker() { if (!this.canUseNativeDesk || !this.procurementTracker?.available) return; frappe.route_options = { company: this.procurementTracker.company || this.filters.company || this.company || "" }; frappe.set_route("query-report", this.procurementTracker.report || "Procurement Tracker"); },
+		openPurchaseOrder(name) { if (this.canUseNativeDesk && name) frappe.set_route("Form", "Purchase Order", name); },
+		openPurchaseReceipts() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; }, sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },
 		sortMaterialBy(key) { if (this.materialSort.key === key) this.materialSort.direction = this.materialSort.direction === "asc" ? "desc" : "asc"; else this.materialSort = { key, direction: "asc" }; }, materialSortMark(key) { return this.materialSort.key === key ? (this.materialSort.direction === "asc" ? "↑" : "↓") : ""; },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${doctypeSlug(item.target)}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target) window.open(item.target, "_blank", "noopener,noreferrer"); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target) window.open(item.target, "_blank", "noopener,noreferrer"); },
 		formatMoney(value, currency) { try { return format_currency(Number(value || 0), currency || frappe.boot?.sysdefaults?.currency || "NGN"); } catch (_error) { return `${currency || ""} ${Number(value || 0).toLocaleString()}`.trim(); } },
 		formatPercent(value) { return `${Number(value || 0).toFixed(1).replace(/\.0$/, "")}%`; },
 		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
