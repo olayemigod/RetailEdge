@@ -138,7 +138,7 @@ A posted Business Expense appears using its own operational context:
 - Paid From;
 - Business Expense source reference.
 
-Only Business Expenses whose linked Journal Entry still exists and is submitted are eligible for this posted-truth row.
+Only submitted Business Expenses with Ledger Status = Posted whose linked Journal Entry still exists and is submitted are eligible for this posted-truth row. Expense Status is deliberately not used as a posting-truth predicate because an active Frappe Workflow may retain its configured submitted state after accounting finalisation.
 
 The corresponding Journal Entry expense GL row is excluded through the posting-reference join. Generic Journal Entries not linked to a Business Expense continue to appear as Accounting Adjustment.
 

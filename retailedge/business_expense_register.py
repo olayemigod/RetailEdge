@@ -492,7 +492,6 @@ def _build_business_expense_where_sql(
 	clauses = [
 		"be.company = %s",
 		"be.docstatus = 1",
-		"be.expense_status = 'Posted'",
 		"be.ledger_status = 'Posted'",
 		"be.posting_reference_type = 'Journal Entry'",
 		"COALESCE(be.posting_reference, '') <> ''",

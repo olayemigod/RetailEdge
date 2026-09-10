@@ -115,6 +115,7 @@ def test_slice_has_additive_workflow_setting_and_preserves_accounting_boundaries
 	assert "Supplier credit bills remain Purchase Invoice" in doc
 	assert "Cashier Expenses remain their separate POS/shift workflow" in doc
 
+
 def test_posted_business_expense_is_terminal_for_active_and_fallback_workflows():
 	action_source = inspect.getsource(workflow_actions.apply_document_workflow_action)
 	readiness_source = inspect.getsource(workflow_readiness)
@@ -167,3 +168,13 @@ def test_workflow_posting_setting_is_smart_and_server_validated():
 	assert "search_business_expense_posting_workflow_states" in settings_js
 	assert "_validate_business_expense_posting_workflow_state" in settings_py
 	assert '"doc_status": "1"' in settings_py
+
+def test_register_uses_accounting_truth_not_fallback_expense_status_for_posted_rows():
+	source = inspect.getsource(
+		business_expense_register._build_business_expense_where_sql
+	)
+	assert '"be.ledger_status = \'Posted\'"' in source
+	assert '"be.expense_status = \'Posted\'"' not in source
+	assert '"be.posting_reference_type = \'Journal Entry\'"' in source
+	assert '"COALESCE(be.posting_reference, \'\') <> \'\'"' in source
+
