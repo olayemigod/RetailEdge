@@ -79,7 +79,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			rows: [], columns: [], summary: [], pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canReview: false, currentPage: 1,
+			rows: [], columns: [], summary: [], pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canReview: false, canUseNativeDesk: false, currentPage: 1,
 			filters: { company: "", branch: "", cashier: "", expense_category: "", expense_status: "", daily_audit_inclusion_status: "Pending Review", posting_ready: "", from_date: "", to_date: "", page_size: 50 },
 			expenseStatuses: ["Draft", "Submitted", "Pending Ledger", "Rejected", "Posted", "Cancelled"],
 		};
@@ -87,7 +87,7 @@ export default {
 	computed: {
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 5000); },
-		reportColumns() { return (this.columns || []).map((column) => ({ ...column, fieldtype: column.fieldtype || "Data", clickable: ["name", "cashier", "expense_category", "review_action"].includes(column.fieldname) })); },
+		reportColumns() { return (this.columns || []).map((column) => ({ ...column, fieldtype: column.fieldtype || "Data", clickable: column.fieldname === "review_action" ? this.canReview : this.canUseNativeDesk && ["name", "cashier", "expense_category"].includes(column.fieldname) })); },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
@@ -95,16 +95,16 @@ export default {
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {
-				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.expense_review.get_expense_review_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canReview = Boolean(context.can_review); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canReview = Boolean(context.can_review); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Expense Review controls."); }
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.expense_review.search_expense_review_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); }, categorySearch(txt) { return this.searchOptions("expense_category", txt); },
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
@@ -122,7 +122,7 @@ export default {
 			finally { this.loading = false; }
 		},
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); }, setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); }, rowKey(row, index) { return row.name || `expense-review:${index}`; },
-		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") frappe.set_route("Form", "RetailEdge Cashier Expense", value); else if (column.fieldname === "cashier") frappe.set_route("Form", "User", value); else if (column.fieldname === "expense_category") frappe.set_route("Form", "RetailEdge Expense Category", value); else if (column.fieldname === "review_action") this.openReviewDialog(row); },
+		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; if (column.fieldname === "review_action") { this.openReviewDialog(row); return; } if (!this.canUseNativeDesk) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") frappe.set_route("Form", "RetailEdge Cashier Expense", value); else if (column.fieldname === "cashier") frappe.set_route("Form", "User", value); else if (column.fieldname === "expense_category") frappe.set_route("Form", "RetailEdge Expense Category", value); },
 		openReviewDialog(row) {
 			if (!this.canReview) { frappe.msgprint({ title: __("Read-only access"), message: __("You do not have reviewer permission for cashier expense actions."), indicator: "orange" }); return; }
 			frappe.prompt([
