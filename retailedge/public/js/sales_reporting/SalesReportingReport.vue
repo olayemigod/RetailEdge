@@ -218,6 +218,7 @@ export default {
 			pagination: {},
 			scan: {},
 			menuItems: [],
+			canUseNativeDesk: false,
 			tenantName: "",
 			branchName: "",
 			userName: "",
@@ -263,7 +264,7 @@ export default {
 			return (this.columns || []).filter((column) => !column.hidden).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: ["invoice", "item_code", "customer", "return_against"].includes(column.fieldname),
+				clickable: this.canUseNativeDesk && ["invoice", "item_code", "customer", "return_against"].includes(column.fieldname),
 			}));
 		},
 		exportDataset() {
@@ -308,7 +309,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.sales_reporting.get_sales_reporting_context"),
 					navigationPromise,
@@ -319,6 +320,7 @@ export default {
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.requiredReady) await this.fetchData();
 			} catch (error) {
@@ -343,6 +345,7 @@ export default {
 			const items = this.menuItems.flatMap((group) => group.items || []);
 			const item = items.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -518,6 +521,7 @@ export default {
 		openDrilldown(column, row) {
 			const value = row?.[column.fieldname];
 			if (!value) return;
+			if (!this.canUseNativeDesk) return;
 			if (["invoice", "return_against"].includes(column.fieldname)) frappe.set_route("Form", "Sales Invoice", value);
 			else if (column.fieldname === "item_code") frappe.set_route("Form", "Item", value);
 			else if (column.fieldname === "customer") frappe.set_route("Form", "Customer", value);
