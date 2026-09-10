@@ -58,6 +58,15 @@ def apply_document_workflow_action(
 	doc = frappe.get_doc(doctype, name)
 	if not frappe.has_permission(doctype, "read", doc=doc):
 		frappe.throw(_("You do not have permission to read this document."), frappe.PermissionError)
+	if doctype == BUSINESS_EXPENSE_DOCTYPE and (
+		str(getattr(doc, "ledger_status", None) or "") == "Posted"
+		or getattr(doc, "posting_reference", None)
+	):
+		frappe.throw(
+			_(
+				"Posted Business Expenses cannot take further workflow actions. Use the approved accounting reversal process for corrections."
+			)
+		)
 
 	_assert_expected_snapshot(
 		doc,
