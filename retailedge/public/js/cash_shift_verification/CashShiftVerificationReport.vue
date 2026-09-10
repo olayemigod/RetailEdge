@@ -182,6 +182,7 @@ export default {
 			tenantName: "",
 			branchName: "",
 			userName: "",
+			canUseNativeDesk: false,
 			cashierLabel: "",
 			currentPage: 1,
 			filters: {
@@ -233,7 +234,7 @@ export default {
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || "Data",
-				clickable: [
+				clickable: this.canUseNativeDesk && [
 					"daily_sales_audit",
 					"cashier",
 					"pos_profile",
@@ -272,6 +273,7 @@ export default {
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
@@ -307,6 +309,7 @@ export default {
 				.flatMap((group) => group.items || [])
 				.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -433,6 +436,7 @@ export default {
 			);
 		},
 		handleCellClick(payload) {
+			if (!this.canUseNativeDesk) return;
 			const column = payload?.column;
 			const row = payload?.row;
 			if (!column || !row) return;
