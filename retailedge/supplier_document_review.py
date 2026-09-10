@@ -583,3 +583,259 @@ def prepare_draft_purchase_invoice(extraction_name: str) -> dict[str, Any]:
 		"source_of_truth": "ERPNext Purchase Order mapping",
 		"extraction_is_advisory": True,
 	}
+
+
+
+def _get_supplier_document_purchase_invoice_authority(
+	extraction_name: str,
+	*,
+	lock_purchase_invoice: bool = False,
+) -> tuple[str, Any, Any, Any, Any, Any, str]:
+	"""Resolve the immutable supplier-document handoff to its authoritative ERPNext draft."""
+	user = _assert_internal_review_user()
+	extraction_name = str(extraction_name or "").strip()
+	if not extraction_name or not frappe.db.exists("Supplier Document Extraction", extraction_name):
+		frappe.throw(_("Supplier Document Extraction was not found."), frappe.DoesNotExistError)
+
+	extraction = frappe.get_doc("Supplier Document Extraction", extraction_name)
+	extraction.check_permission("read")
+	intake = frappe.get_doc("Supplier Document Intake", extraction.supplier_document_intake)
+	intake.check_permission("read")
+	if intake.review_status != "Accepted" or intake.document_type != "Supplier Invoice":
+		frappe.throw(_("Only an accepted Supplier Invoice document can be completed."), frappe.ValidationError)
+
+	review_rows = frappe.get_list(
+		"Supplier Document Extraction Review",
+		filters={"extraction": extraction.name},
+		fields=["name", "decision"],
+		order_by="reviewed_on desc, creation desc",
+		limit_page_length=1,
+	)
+	if not review_rows or review_rows[0].decision != "Accepted":
+		frappe.throw(_("The latest extraction evidence must remain accepted."), frappe.ValidationError)
+
+	po = frappe.get_doc("Purchase Order", intake.purchase_order)
+	po.check_permission("read")
+	if po.docstatus != 1:
+		frappe.throw(_("The authoritative Purchase Order must remain submitted."), frappe.ValidationError)
+	if po.supplier != intake.supplier or po.company != intake.company:
+		frappe.throw(_("Supplier document authority no longer matches its Purchase Order."), frappe.ValidationError)
+	if extraction.supplier != intake.supplier or extraction.company != intake.company or extraction.purchase_order != po.name:
+		frappe.throw(_("Extraction authority no longer matches its Supplier Document Intake."), frappe.ValidationError)
+
+	handoff = _existing_handoff(extraction.name)
+	if not handoff:
+		frappe.throw(_("Prepare the Purchase Invoice draft before reviewing it for submission."), frappe.ValidationError)
+	purchase_invoice_name = str(handoff.purchase_invoice or "").strip()
+	if lock_purchase_invoice:
+		frappe.db.sql(
+			"select name from `tabPurchase Invoice` where name=%s for update",
+			(purchase_invoice_name,),
+		)
+	if not purchase_invoice_name or not frappe.db.exists("Purchase Invoice", purchase_invoice_name):
+		frappe.throw(_("The handed-off Purchase Invoice draft no longer exists."), frappe.DoesNotExistError)
+
+	purchase_invoice = frappe.get_doc("Purchase Invoice", purchase_invoice_name)
+	purchase_invoice.check_permission("read")
+	if purchase_invoice.supplier != po.supplier or purchase_invoice.company != po.company:
+		frappe.throw(_("The handed-off Purchase Invoice no longer matches Supplier or Company authority."), frappe.ValidationError)
+
+	_assert_company_read(po.company)
+	po_branch_field = _purchase_order_branch_field()
+	pi_branch_field = _purchase_invoice_branch_field()
+	po_branch = str(po.get(po_branch_field) or "") if po_branch_field else ""
+	pi_branch = str(purchase_invoice.get(pi_branch_field) or "") if pi_branch_field else ""
+	if po_branch and pi_branch and po_branch != pi_branch:
+		frappe.throw(_("The handed-off Purchase Invoice no longer matches the Purchase Order Branch."), frappe.ValidationError)
+	branch = pi_branch or po_branch
+	if branch:
+		validate_user_branch_access(branch, user=user, company=po.company, throw=True)
+
+	return user, extraction, intake, po, handoff, purchase_invoice, branch
+
+
+def _supplier_document_purchase_invoice_blockers(
+	extraction: Any,
+	po: Any,
+	purchase_invoice: Any,
+	*,
+	can_submit: bool,
+) -> list[dict[str, str]]:
+	blockers: list[dict[str, str]] = []
+	if cint(getattr(purchase_invoice, "docstatus", 0)) != 0:
+		return blockers
+
+	extracted_currency = str(getattr(extraction, "extracted_currency", "") or "").strip()
+	invoice_currency = str(getattr(purchase_invoice, "currency", "") or "").strip()
+	if not extracted_currency:
+		blockers.append({"key": "extracted_currency", "label": _("Extracted currency is required for standard submission")})
+	elif extracted_currency != invoice_currency:
+		blockers.append({"key": "currency_mismatch", "label": _("Extracted currency does not match the ERPNext draft")})
+
+	extracted_total_raw = getattr(extraction, "extracted_total", None)
+	if extracted_total_raw in (None, ""):
+		blockers.append({"key": "extracted_total", "label": _("Extracted total is required for standard submission")})
+	else:
+		total_difference = flt(getattr(purchase_invoice, "grand_total", 0)) - flt(extracted_total_raw)
+		if abs(total_difference) > 0.01:
+			blockers.append({"key": "total_difference", "label": _("Extracted total differs from the ERPNext mapped total")})
+
+	if cint(getattr(purchase_invoice, "update_stock", 0)):
+		blockers.append({"key": "update_stock", "label": _("Update Stock requires Advanced ERPNext review")})
+
+	items = list(purchase_invoice.get("items") or [])
+	if not items:
+		blockers.append({"key": "items", "label": _("The Purchase Invoice has no mapped items")})
+	elif any(str(getattr(item, "purchase_order", "") or "") != str(po.name) for item in items):
+		blockers.append({"key": "purchase_order_linkage", "label": _("One or more lines no longer match the authoritative Purchase Order")})
+
+	if not can_submit:
+		blockers.append({"key": "submit_permission", "label": _("You do not have permission to submit Purchase Invoices")})
+	return blockers
+
+
+def _supplier_document_purchase_invoice_review_payload(
+	extraction: Any,
+	po: Any,
+	handoff: Any,
+	purchase_invoice: Any,
+	branch: str,
+) -> dict[str, Any]:
+	docstatus = cint(getattr(purchase_invoice, "docstatus", 0))
+	can_submit = bool(
+		docstatus == 0
+		and frappe.has_permission("Purchase Invoice", "submit", doc=purchase_invoice.name)
+	)
+	blockers = _supplier_document_purchase_invoice_blockers(
+		extraction,
+		po,
+		purchase_invoice,
+		can_submit=can_submit,
+	)
+	extracted_total = (
+		None
+		if getattr(extraction, "extracted_total", None) in (None, "")
+		else flt(extraction.extracted_total)
+	)
+	mapped_total = flt(getattr(purchase_invoice, "grand_total", 0))
+	total_difference = mapped_total - extracted_total if extracted_total is not None else None
+	items = [
+		{
+			"item_code": str(getattr(item, "item_code", "") or ""),
+			"item_name": str(getattr(item, "item_name", "") or ""),
+			"qty": flt(getattr(item, "qty", 0)),
+			"rate": flt(getattr(item, "rate", 0)),
+			"amount": flt(getattr(item, "amount", 0)),
+			"warehouse": str(getattr(item, "warehouse", "") or ""),
+			"purchase_order": str(getattr(item, "purchase_order", "") or ""),
+		}
+		for item in (purchase_invoice.get("items") or [])
+	]
+	return {
+		"extraction": extraction.name,
+		"handoff": handoff.name,
+		"purchase_order": po.name,
+		"purchase_invoice": purchase_invoice.name,
+		"purchase_invoice_modified": str(getattr(purchase_invoice, "modified", "") or ""),
+		"docstatus": docstatus,
+		"status": str(getattr(purchase_invoice, "status", "") or ""),
+		"company": str(getattr(purchase_invoice, "company", "") or ""),
+		"branch": branch,
+		"supplier": str(getattr(purchase_invoice, "supplier", "") or ""),
+		"posting_date": getattr(purchase_invoice, "posting_date", None),
+		"bill_no": str(getattr(purchase_invoice, "bill_no", "") or ""),
+		"bill_date": getattr(purchase_invoice, "bill_date", None),
+		"currency": str(getattr(purchase_invoice, "currency", "") or ""),
+		"mapped_grand_total": mapped_total,
+		"extracted_currency": str(getattr(extraction, "extracted_currency", "") or ""),
+		"extracted_total": extracted_total,
+		"total_difference": total_difference,
+		"update_stock": cint(getattr(purchase_invoice, "update_stock", 0)),
+		"items": items,
+		"blockers": blockers,
+		"can_submit": can_submit,
+		"standard_submit_eligible": bool(docstatus == 0 and not blockers),
+		"source_of_truth": "ERPNext Purchase Invoice draft created from Purchase Order mapping",
+	}
+
+
+@frappe.whitelist(methods=["GET"])
+def get_supplier_document_purchase_invoice_review(extraction_name: str) -> dict[str, Any]:
+	"""Return a bounded read-only review of the exact handed-off ERPNext Purchase Invoice."""
+	_user, extraction, _intake, po, handoff, purchase_invoice, branch = (
+		_get_supplier_document_purchase_invoice_authority(extraction_name)
+	)
+	return _supplier_document_purchase_invoice_review_payload(
+		extraction,
+		po,
+		handoff,
+		purchase_invoice,
+		branch,
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def submit_supplier_document_purchase_invoice(
+	extraction_name: str,
+	expected_purchase_invoice_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Submit the exact handed-off Purchase Invoice through ERPNext's normal document lifecycle."""
+	_user, extraction, _intake, po, handoff, purchase_invoice, branch = (
+		_get_supplier_document_purchase_invoice_authority(
+			extraction_name,
+			lock_purchase_invoice=True,
+		)
+	)
+	docstatus = cint(getattr(purchase_invoice, "docstatus", 0))
+	if docstatus == 1:
+		return {
+			"purchase_invoice": purchase_invoice.name,
+			"docstatus": 1,
+			"status": str(getattr(purchase_invoice, "status", "") or ""),
+			"idempotent": True,
+			"source_of_truth": "ERPNext Purchase Invoice submit",
+		}
+	if docstatus != 0:
+		frappe.throw(_("Only a draft Purchase Invoice can be submitted from Supplier Document Review."), frappe.ValidationError)
+
+	expected_modified = str(expected_purchase_invoice_modified or "").strip()
+	current_modified = str(getattr(purchase_invoice, "modified", "") or "")
+	if not expected_modified or expected_modified != current_modified:
+		frappe.throw(
+			_("Purchase Invoice {0} changed after review. Refresh the review before submitting.").format(
+				purchase_invoice.name
+			),
+			frappe.ValidationError,
+		)
+
+	review = _supplier_document_purchase_invoice_review_payload(
+		extraction,
+		po,
+		handoff,
+		purchase_invoice,
+		branch,
+	)
+	if review["blockers"]:
+		labels = ", ".join(str(row.get("label") or row.get("key") or "") for row in review["blockers"])
+		frappe.throw(_("This Purchase Invoice requires Advanced ERPNext handling: {0}").format(labels), frappe.ValidationError)
+	if not review["can_submit"]:
+		frappe.throw(_("You do not have permission to submit Purchase Invoices."), frappe.PermissionError)
+
+	# ERPNext remains authoritative for validation, taxes, buying linkage, GL and
+	# any stock effects. RetailEdge never mutates submitted accounting rows directly.
+	purchase_invoice.submit()
+	if cint(getattr(purchase_invoice, "docstatus", 0)) != 1:
+		frappe.throw(_("ERPNext did not submit Purchase Invoice {0}.").format(purchase_invoice.name))
+
+	return {
+		"purchase_invoice": purchase_invoice.name,
+		"docstatus": cint(purchase_invoice.docstatus),
+		"status": str(getattr(purchase_invoice, "status", "") or ""),
+		"supplier": str(getattr(purchase_invoice, "supplier", "") or ""),
+		"company": str(getattr(purchase_invoice, "company", "") or ""),
+		"branch": branch,
+		"grand_total": flt(getattr(purchase_invoice, "grand_total", 0)),
+		"currency": str(getattr(purchase_invoice, "currency", "") or ""),
+		"idempotent": False,
+		"source_of_truth": "ERPNext Purchase Invoice submit",
+	}
