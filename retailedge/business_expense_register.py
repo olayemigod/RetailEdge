@@ -10,6 +10,7 @@ from frappe.utils import cint, flt, getdate
 from retailedge.operating_context import get_operational_branch_scope
 
 EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
+BUSINESS_EXPENSE_DOCTYPE = "RetailEdge Business Expense"
 CATEGORY_DOCTYPE = "RetailEdge Expense Category"
 
 DEFAULT_PAGE_SIZE = 50
@@ -20,6 +21,7 @@ MAX_CATEGORY_MAP_ROWS = 1000
 
 CONSOLIDATED_SOURCE_TYPES = (
 	"Cashier / POS",
+	"Business Expense",
 	"Supplier / Business",
 	"Employee Expense",
 	"Accounting Adjustment",
@@ -205,6 +207,15 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		include_unposted_cashier_expenses=include_unposted_cashier_expenses,
 		branch_scope=branch_scope,
 	)
+	business_expense_where, business_expense_values = _build_business_expense_where_sql(
+		company=company,
+		from_date=from_date,
+		to_date=to_date,
+		category=category,
+		status=status,
+		source_type=source_type,
+		branch_scope=branch_scope,
+	)
 	ledger_where, ledger_values, voucher_types = _build_ledger_where_sql(
 		company=company,
 		from_date=from_date,
@@ -219,6 +230,8 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 	source_types = []
 	if cashier_where:
 		source_types.append("Cashier / POS")
+	if business_expense_where:
+		source_types.append("Business Expense")
 	for voucher_type in voucher_types:
 		label = _ACCOUNTING_VOUCHER_TYPES[voucher_type]
 		if label not in source_types:
@@ -232,6 +245,8 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		"include_unposted_cashier_expenses": include_unposted_cashier_expenses,
 		"cashier_where": cashier_where,
 		"cashier_values": cashier_values,
+		"business_expense_where": business_expense_where,
+		"business_expense_values": business_expense_values,
 		"ledger_where": ledger_where,
 		"ledger_values": ledger_values,
 		"ledger_joins": sql_context["joins"],
@@ -391,6 +406,37 @@ def _union_sql(query: dict[str, Any]) -> tuple[str, list[Any]]:
 		)
 		values.extend(query["cashier_values"])
 
+	if query["business_expense_where"]:
+		parts.append(
+			f"""
+				SELECT
+					CONCAT('BE:', be.name) AS name,
+					be.expense_date AS expense_date,
+					COALESCE(be.branch, '') AS branch,
+					'' AS cashier,
+					COALESCE(be.expense_category, '') AS expense_category,
+					be.amount AS amount,
+					'Posted' AS expense_status,
+					'Posted' AS ledger_status,
+					1 AS posting_ready,
+					COALESCE(be.description, '') AS description,
+					'Business Expense' AS source_type,
+					'{BUSINESS_EXPENSE_DOCTYPE}' AS source_doctype,
+					be.name AS source_reference,
+					COALESCE(be.expense_account, '') AS expense_account,
+					COALESCE(be.cost_center, '') AS cost_center,
+					COALESCE(be.payment_account, '') AS payment_account,
+					be.creation AS sort_creation
+				FROM `tab{BUSINESS_EXPENSE_DOCTYPE}` be
+				INNER JOIN `tabJournal Entry` be_je
+					ON be.posting_reference_type = 'Journal Entry'
+					AND be.posting_reference = be_je.name
+					AND be_je.docstatus = 1
+				WHERE {query["business_expense_where"]}
+			"""
+		)
+		values.extend(query["business_expense_values"])
+
 	if query["ledger_where"]:
 		parts.append(
 			f"""
@@ -426,6 +472,48 @@ def _union_sql(query: dict[str, Any]) -> tuple[str, list[Any]]:
 		values.extend(query["ledger_values"])
 
 	return "\nUNION ALL\n".join(parts), values
+
+
+def _build_business_expense_where_sql(
+	*,
+	company: str,
+	from_date,
+	to_date,
+	category: str,
+	status: str,
+	source_type: str,
+	branch_scope: dict[str, Any],
+) -> tuple[str, list[Any]]:
+	if source_type and source_type != "Business Expense":
+		return "", []
+	if status and status != "Posted":
+		return "", []
+
+	clauses = [
+		"be.company = %s",
+		"be.docstatus = 1",
+		"be.expense_status = 'Posted'",
+		"be.ledger_status = 'Posted'",
+		"be.posting_reference_type = 'Journal Entry'",
+		"COALESCE(be.posting_reference, '') <> ''",
+	]
+	values: list[Any] = [company]
+	if from_date:
+		clauses.append("be.expense_date >= %s")
+		values.append(from_date)
+	if to_date:
+		clauses.append("be.expense_date <= %s")
+		values.append(to_date)
+	if category:
+		clauses.append("be.expense_category = %s")
+		values.append(category)
+	_apply_branch_sql(
+		clauses,
+		values,
+		branch_expression="COALESCE(be.branch, '')",
+		branch_scope=branch_scope,
+	)
+	return " AND ".join(clauses), values
 
 
 def _build_cashier_where_sql(
@@ -534,6 +622,8 @@ def _build_ledger_where_sql(
 
 	if _doctype_has_field(EXPENSE_DOCTYPE, "posting_reference"):
 		clauses.append("ce_post.name IS NULL")
+	if _doctype_has_field(BUSINESS_EXPENSE_DOCTYPE, "posting_reference"):
+		clauses.append("be_post.name IS NULL")
 
 	_apply_branch_sql(
 		clauses,
@@ -580,6 +670,13 @@ def _build_sql_context() -> dict[str, str]:
 			"ON ce_post.posting_reference_type = gle.voucher_type "
 			"AND ce_post.posting_reference = gle.voucher_no "
 			"AND ce_post.docstatus <> 2"
+		)
+	if _doctype_has_field(BUSINESS_EXPENSE_DOCTYPE, "posting_reference"):
+		joins.append(
+			f"LEFT JOIN `tab{BUSINESS_EXPENSE_DOCTYPE}` be_post "
+			"ON be_post.posting_reference_type = gle.voucher_type "
+			"AND be_post.posting_reference = gle.voucher_no "
+			"AND be_post.docstatus <> 2"
 		)
 
 	branch_expression = (
@@ -687,7 +784,7 @@ def _map_account_categories(
 		{
 			str(row.get("expense_account") or "").strip()
 			for row in rows
-			if row.get("source_type") != "Cashier / POS"
+			if row.get("source_type") not in {"Cashier / POS", "Business Expense"}
 			and str(row.get("expense_account") or "").strip()
 		}
 	)
@@ -716,7 +813,7 @@ def _map_account_categories(
 		if account:
 			by_account.setdefault(account, set()).add(str(category.name))
 	for row in rows:
-		if row.get("source_type") == "Cashier / POS":
+		if row.get("source_type") in {"Cashier / POS", "Business Expense"}:
 			continue
 		account = str(row.get("expense_account") or "").strip()
 		mapped = by_account.get(account) or set()
