@@ -53,15 +53,20 @@ class TestProcurementTrackerHandoffUIContract(TestCase):
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertNotIn("ignore_permissions=True", source)
 
-	def test_existing_purchasing_draft_first_flows_remain_present(self):
+	def test_existing_purchasing_edgesuite_flows_and_advanced_reports_remain_present(self):
 		component = COMPONENT.read_text()
 
-		self.assertIn("prepare_request_for_quotation_draft", component)
-		self.assertIn("prepare_purchase_receipt_draft", component)
-		self.assertIn("Prepare Draft RFQ", component)
+		self.assertIn("retailedge-open-professional-rfq-preview", component)
+		self.assertIn("retailedge-open-professional-purchase-receipt-preview", component)
+		self.assertIn("dispatchEdgeSuiteEvent(OPEN_RFQ_PREVIEW_EVENT", component)
+		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", component)
+		self.assertNotIn("prepare_request_for_quotation_draft", component)
+		self.assertNotIn("prepare_purchase_receipt_draft", component)
+		self.assertIn("Start RFQ", component)
 		self.assertIn("Prepare Receipt", component)
 		self.assertIn('frappe.set_route("query-report", "Supplier Quotation Comparison")', component)
 		self.assertIn('frappe.set_route("query-report", "Purchase Order Analysis")', component)
+		self.assertIn("if (!this.canUseNativeDesk) return;", component)
 
 
 if __name__ == "__main__":
