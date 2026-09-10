@@ -291,18 +291,19 @@ def validate_business_expense_document(doc) -> None:
 				_("You do not have permission to use this Supplier."),
 				frappe.PermissionError,
 		)
-	if settings["require_attachment"] and not getattr(doc, "attachment", None):
-		frappe.throw(
-			_("Receipt or supporting evidence is required for Business Expenses.")
-		)
+
 
 
 def prepare_business_expense_for_submit(doc) -> None:
 	from retailedge.workflow_readiness import _get_active_workflow
 
+	settings = get_business_expense_settings()
+	if settings["require_attachment"] and not getattr(doc, "attachment", None):
+		frappe.throw(
+			_("Receipt or supporting evidence is required before submitting this Business Expense.")
+		)
 	if _get_active_workflow(BUSINESS_EXPENSE_DOCTYPE):
 		return
-	settings = get_business_expense_settings()
 	if settings["process"] == "Direct Posting":
 		doc.expense_status = "Approved"
 		doc.ledger_status = "Pending Ledger"

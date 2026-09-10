@@ -82,3 +82,15 @@ def test_foundation_deliberately_does_not_post_accounting_yet():
 	doc = DOC.read_text(encoding="utf-8")
 	assert "does not create Journal Entry or GL Entry" in doc
 	assert "Cashier Expense remains a separate POS/shift workflow" in doc
+
+
+def test_required_evidence_blocks_submit_not_draft_save():
+	source = inspect.getsource(business_expense)
+	validate_start = source.index("def validate_business_expense_document")
+	submit_start = source.index("def prepare_business_expense_for_submit")
+	cancel_start = source.index("def prepare_business_expense_for_cancel")
+	validate_block = source[validate_start:submit_start]
+	submit_block = source[submit_start:cancel_start]
+	assert "require_attachment" not in validate_block
+	assert 'settings["require_attachment"]' in submit_block
+	assert "required before submitting" in submit_block

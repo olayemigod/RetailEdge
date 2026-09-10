@@ -65,7 +65,7 @@ Backend validation is authoritative.
 - Cost Center must be a valid leaf Cost Center in the Company.
 - Project, when selected, must belong to the Company.
 - Supplier is required only when Payee Type is Supplier.
-- Receipt/evidence becomes mandatory when the setting requires it.
+- Drafts may be saved before evidence is attached. Receipt/evidence becomes mandatory at submission when the setting requires it.
 
 The EdgeSuite UI will use filtered server searches in the next slice; frontend filtering will not be treated as authority.
 
