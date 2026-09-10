@@ -7,7 +7,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen implementation head:** `6479ea7bec79957758b4b611754b01a120c23921`
+**Latest code-frozen exact head:** `b9dbd8a6f273f60d0c3f7e5b4bb8166534d821d4`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -25,47 +25,71 @@ Business Hub implementation already exists, but its existence does not bypass un
 
 ## Current Code-Frozen Slice
 
+### `RIR2F3F16` — Professional Purchasing existing-ownership reconciliation
+
+**State:** `CODE-FROZEN / QA-PENDING`
+
+Primary commits:
+
+- `b45c1339b16c7b0f127790ec9c2a264c0ceb3622` — F3F16 contract/documentation
+- `2773d22b6b7d56e16b1f28beb85bb29e2e386000` — focused F3F16 contract tests
+- `0dafe3b2a95e02de901fdb46f128f3a189ab2571` — initial stale Professional Purchasing UI test reconciliation
+- `7a31415a42073e6a2cd0fcc650ce4e953fce92c3` — runtime implementation
+
+Governed-suite recovery commits:
+
+- `21bef4aa960c3ffee88bd87547e4c27126c84295` — reconcile Purchase Receipt parity test with EdgeSuite ownership
+- `45f9f288a5c05f5e341e03bd08ac3a290a02f45c` — reconcile Procurement Tracker handoff test
+- `d1b0ec9fbb1555b228ce771e305a25c0d6f3d039` — reconcile prereporting Procurement Tracker composition test
+- `44451caa53fc64ce92bf739641bb0a472670d483` — scope Professional Purchasing standard-receipt assertions without removing Purchase Return completion
+- `b9dbd8a6f273f60d0c3f7e5b4bb8166534d821d4` — explicitly preserve the F3F16 Purchase Return ownership gap in the focused contract
+
+Material files:
+
+- `docs/rir2f3f16_professional_purchasing_existing_ownership_reconciliation.md`
+- `retailedge/tests/test_rir2f3f16_professional_purchasing_existing_ownership_reconciliation_contract.py`
+- `retailedge/public/js/professional_purchasing/ProfessionalPurchasing.vue`
+- existing Professional Purchasing page controller and RIR2F2 overlay bundles remain defence in depth
+
+Contract now enforced:
+
+- New Purchase Order delegates to the existing EdgeSuite Professional Purchase Order overlay rather than `frappe.new_doc("Purchase Order")`.
+- Start RFQ and the legacy RFQ preparation entrypoint delegate to the existing EdgeSuite RFQ preview flow and no longer issue the stale direct RFQ draft POST from the main component.
+- RFQ history and Supplier Quotation history delegate to their existing EdgeSuite overlays.
+- Prepare Receipt delegates to the existing EdgeSuite Purchase Receipt preview flow and no longer issues the stale direct receipt-draft POST from the main component.
+- Purchase Receipt history delegates to the existing EdgeSuite receipt-history overlay.
+- Material Request detail/list, Purchase Order detail, Supplier Quotation Comparison, Purchase Order Analysis, Procurement Tracker, and generic DocType/Report menu handoffs fail closed without final Native Desk capability.
+- `canUseNativeDesk` defaults false and is populated only from final navigation access capability.
+- Page-controller and bundle interception remain in place as compatibility and defence in depth.
+- Purchase Return / Supplier Debit Note and Incoming Quality Inspection remain explicit `OWNERSHIP_GAP` workflows; F3F16 does not hide or remove their only native completion paths.
+- Landed Cost remains an explicit advanced/native fallback pending a later ownership decision.
+- No backend accounting, GL, stock posting, Stock Ledger, valuation, branch, migration, patch, or ERPNext document-lifecycle semantics changed.
+
+The first integration attempt at runtime head `7a31415a` exposed four stale source-contract assertions. Both integration environments failed only in the RetailEdge test step while setup/build/runtime preparation succeeded. The failures required superseded inline RFQ/receipt draft paths or globally prohibited the Purchase Receipt native route even though F3F16 explicitly preserves the Purchase Return ownership gap. Recovery changed tests only; runtime implementation remained unchanged.
+
+## Governed Evidence at `b9dbd8a6`
+
+GitHub Actions associated with the exact F3F16 freeze head are green:
+
+| Gate | Run | Result |
+| --- | ---: | --- |
+| EdgeSuite UI Candidate Compatibility | 34448567476 | PASS |
+| CI — clean Frappe v16 standalone integration | 34448567467 | PASS |
+| RetailEdge Theme Compatibility | 34448567527 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34448567489 | PASS |
+
+F3F16 introduced no migration or data patch.
+
+## Prior Code-Frozen Slices
+
 ### `RIR2F3F15` — Customer Receivables native-review containment
 
 **State:** `CODE-FROZEN / QA-PENDING`
 
-Commits:
-
-- `e5f628eb5dca150fe1a86d039d9eb5223115786b` — F3F15 contract/documentation
-- `5642a05dcf7e4fdb9e41fffcb0b1cccc174fc4b2` — focused F3F15 contract tests
-- `6479ea7bec79957758b4b611754b01a120c23921` — implementation
-
-Material files:
-
-- `docs/rir2f3f15_customer_receivables_native_review_containment.md`
-- `retailedge/tests/test_rir2f3f15_customer_receivables_native_review_containment_contract.py`
-- `retailedge/public/js/customer_receivables/CustomerReceivablesReport.vue`
-
-Contract now enforced:
-
-- Customer Receivables reads final `navigation.access.can_use_native_desk` into a fail-closed client capability.
-- Sales Invoice, Customer, Payment Request, and Dunning detail cells are only presented as clickable when Native Desk is available.
-- Payment Request and Dunning draft-preparation actions are only exposed when Native Desk is available because their lifecycle requires native ERPNext review/submission.
-- `prepareCollectionAction()` fails before the POST when Native Desk is unavailable, preventing unreachable native drafts from being created for EdgeSuite-only users.
-- DocType/Report menu routes and programmatic report-cell native routes fail closed without Native Desk capability.
-- Native-Desk-capable users retain the existing native draft preparation/review flow.
-- Backend accounting safety, branch validation, permission checks, duplicate prevention, submitted/outstanding invoice checks, and draft-only behavior remain unchanged.
-- No accounting, GL, Sales Invoice mutation, migration, patch, or data semantics changed.
-
-## Governed Evidence at `6479ea7`
-
-GitHub Actions associated with the exact F3F15 implementation head are green:
-
-| Gate | Run | Result |
-| --- | ---: | --- |
-| EdgeSuite UI Candidate Compatibility | 34442787460 | PASS |
-| CI — clean Frappe v16 standalone integration | 34442787457 | PASS |
-| RetailEdge Theme Compatibility | 34442787458 | PASS |
-| Linters / Semgrep / vulnerable dependency audit | 34442787463 | PASS |
-
-F3F15 introduced no migration or data patch.
-
-## Prior Code-Frozen Slices
+- Contract: `e5f628eb5dca150fe1a86d039d9eb5223115786b`
+- Tests: `5642a05dcf7e4fdb9e41fffcb0b1cccc174fc4b2`
+- Implementation: `6479ea7bec79957758b4b611754b01a120c23921`
+- Exact-head gates: EdgeSuite `34442787460`, CI `34442787457`, Theme `34442787458`, Linters `34442787463` — all PASS.
 
 ### `RIR2F3F14` — Purchase Reporting native-detail containment
 
@@ -105,7 +129,7 @@ F3F15 introduced no migration or data patch.
 
 ## Deferred QA
 
-Browser/persona QA is not claimed as complete. Before F3F11–F3F15 may be represented as fully `FROZEN`, verify at minimum:
+Browser/persona QA is not claimed as complete. Before F3F11–F3F16 may be represented as fully `FROZEN`, verify at minimum:
 
 - authenticated Native Desk allowed and denied personas;
 - ordinary EdgeSuite users cannot escape through guarded DocType/Report/create/record-row handoffs;
@@ -114,7 +138,9 @@ Browser/persona QA is not claimed as complete. Before F3F11–F3F15 may be repre
 - Purchase Reporting native invoice/supplier detail links remain unavailable for EdgeSuite-only users while EdgeSuite supplier payment still works;
 - Customer Receivables does not expose native detail/draft actions or issue collection POSTs for denied Native Desk users;
 - Native-Desk-capable Customer Receivables users retain Payment Request/Dunning draft review flow;
-- permitted advanced/native-Desk users retain intended ERPNext lifecycle handoffs;
+- Professional Purchasing ordinary users enter the existing EdgeSuite PO, RFQ, Supplier Quotation, and Purchase Receipt flows rather than stale main-component native draft paths;
+- Professional Purchasing advanced users retain intended Material Request, PO detail, comparison/analysis/tracker, and other authorized native fallbacks;
+- Purchase Return / Supplier Debit Note and Incoming Quality Inspection remain recognized ownership gaps and are not accidentally made unreachable before replacement completion exists;
 - EdgeSuite Page destinations remain usable after containment.
 
 ## Frozen Product Baseline
@@ -145,15 +171,29 @@ Routine contract-preserving fixes, tests, documentation, regression correction, 
 - `CODE-FROZEN / QA-PENDING` — implementation and applicable automated gates are green, but required manual/browser/persona evidence remains outstanding.
 - `FROZEN` — implementation, applicable automated gates, required QA evidence, documentation, and migration requirements are complete.
 
-## Successor Audit Finding — Professional Purchasing
+## Successor Ownership Gaps — Professional Purchasing
 
-Professional Purchasing is not equivalent to the simple native-detail leaks already contained in F3F11–F3F15. The main page includes multiple end-to-end operational flows that deliberately prepare ERPNext drafts and then rely on native forms/reports for completion or review, including RFQ, Purchase Receipt, purchase returns, supplier debit notes, Landed Cost Voucher, Purchase Order, Material Request, Supplier Quotation, Purchase Order Analysis, Procurement Tracker, and Purchase Receipt navigation.
+F3F16 reconciled purchasing actions that already had complete EdgeSuite ownership. It deliberately did not pretend that every purchasing workflow is complete.
 
-The repository also contains newer Professional Purchasing overlays/components from the earlier RIR2F2 sequence. The next task must determine which native handoffs are already superseded by EdgeSuite-owned overlays, which are intentional advanced fallbacks, and which represent unfinished EdgeSuite operational ownership. Do not blanket-disable them before this reconciliation because that could remove core purchasing capability from ordinary users.
+Current unresolved classifications:
+
+1. **Purchase Return / Supplier Debit Note — `OWNERSHIP_GAP`**
+   - current user flow prepares native Purchase Receipt return / Purchase Invoice debit-note drafts and relies on native ERPNext review;
+   - no complete EdgeSuite review/completion overlay has yet been proven on this branch;
+   - do not simply hide or route-block the native completion path after draft creation.
+2. **Incoming Quality Inspection — `OWNERSHIP_GAP`**
+   - current flow prepares native Quality Inspection drafts and relies on native ERPNext readings/acceptance workflow;
+   - presentation guards do not undo an already-created draft;
+   - no complete EdgeSuite review/acceptance replacement has yet been proven on this branch.
+3. **Landed Cost Voucher — `ADVANCED_NATIVE_FALLBACK` for now**
+   - current handoff prepares an unsaved native voucher and the panel is already hidden in EdgeSuite-only mode;
+   - lower immediate side-effect risk than Return/QI, but later ownership may still be required for MVP completeness.
 
 ## Unresolved / Not Yet Claimed
 
-- F3F11–F3F15 browser/persona QA remain pending.
+- F3F11–F3F16 browser/persona QA remain pending.
+- Purchase Return / Supplier Debit Note and Incoming Quality Inspection still require ownership resolution.
+- Landed Cost remains advanced/native fallback pending later MVP ownership review.
 - Overall Readiness Hardening is not complete.
 - Business Hub is not release-complete merely because implementation exists.
 - Reporting expansion remains downstream of unresolved foundational hardening.
@@ -165,17 +205,13 @@ Do not obtain a green state by disabling meaningful tests, weakening valid asser
 
 ## Exact Next Executable Step
 
-Perform a dedicated **Professional Purchasing ownership reconciliation audit** before defining another implementation slice.
+Perform a bounded repository audit of the two remaining Professional Purchasing `OWNERSHIP_GAP` workflows, beginning with **Purchase Return / Supplier Debit Note** because it currently creates a persisted native draft before native review.
 
-Required audit:
+Required next audit:
 
-1. Map each user-facing purchasing action in `ProfessionalPurchasing.vue` to its backend API, native ERPNext destination, and any existing EdgeSuite overlay/component.
-2. Inspect the RIR2F2 purchase-invoice, purchase-receipt, RFQ, supplier-quotation, and purchase-order ownership components/tests/docs already present on the branch.
-3. Classify each action as:
-   - `EDGESUITE_OWNED` — ordinary-user workflow is already complete in EdgeSuite;
-   - `ADVANCED_NATIVE_FALLBACK` — native ERPNext is intentionally retained only for authorized advanced users;
-   - `OWNERSHIP_GAP` — ordinary-user workflow still depends on native Desk and requires EdgeSuite completion before containment;
-   - `READ_ONLY_NATIVE_DETAIL` — native detail/navigation only and safe to contain separately.
-4. Do not remove a native handoff that is currently the only viable completion path for an ordinary-user purchasing workflow.
-5. If repository evidence identifies a bounded ownership gap with an existing EdgeSuite replacement, define the smallest next F3 slice and implement it with focused tests.
-6. If a workflow requires material product/architecture change rather than reconciliation, record the gap and escalate under the mandatory stop boundary rather than silently redesigning purchasing.
+1. Trace the Purchase Return and Supplier Debit Note UI actions through frontend methods, backend APIs, ERPNext mapper/document creation, permissions, branch checks, duplicate/idempotency behavior, and native completion route.
+2. Inspect all existing return/debit-note tests, components, overlays, bundles, and earlier RIR2F2 artifacts before defining new code.
+3. Determine whether an existing EdgeSuite review/completion surface can be reused safely or whether a bounded new review surface is required.
+4. Preserve ERPNext return/debit-note stock and accounting truth; do not reimplement Stock Ledger, valuation, GL, taxes, or submitted-document semantics.
+5. Do not remove the current native completion path until an ordinary EdgeSuite user has a complete replacement path.
+6. Define the smallest next F3 slice only from repository evidence, with focused tests and the same exact-head governed freeze gates.
