@@ -147,7 +147,7 @@ export default {
 			const columns = (this.columns || []).filter((column) => !column.hidden).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: ["invoice", "supplier", "return_against"].includes(column.fieldname),
+				clickable: this.canUseNativeDesk && ["invoice", "supplier", "return_against"].includes(column.fieldname),
 			}));
 			if (this.reportType === "supplier_payables") {
 				columns.push({ label: "Payment", fieldname: "payment_action", fieldtype: "Data", width: 110, clickable: true });
@@ -177,7 +177,7 @@ export default {
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.purchase_reporting.search_purchase_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, supplierSearch(txt) { return this.searchOptions("supplier", txt); }, supplierGroupSearch(txt) { return this.searchOptions("supplier_group", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, warehouseSearch(txt) { return this.searchOptions("warehouse", txt); },
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.warehouse = ""; this.branchName = ""; this.currentPage = 1; },
@@ -228,6 +228,7 @@ export default {
 			const column = payload?.column; const row = payload?.row;
 			if (!column || !row) return;
 			if (column.fieldname === "payment_action") { this.openSupplierPayment(row); return; }
+			if (!this.canUseNativeDesk) return;
 			const value = row[column.fieldname]; if (!value) return;
 			if (["invoice", "return_against"].includes(column.fieldname)) frappe.set_route("Form", "Purchase Invoice", value);
 			else if (column.fieldname === "supplier") frappe.set_route("Form", "Supplier", value);
