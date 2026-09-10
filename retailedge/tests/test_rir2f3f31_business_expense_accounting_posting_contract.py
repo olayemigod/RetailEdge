@@ -96,7 +96,7 @@ def test_edgesuite_exposes_confirmed_post_action_without_native_handoff():
 	assert "Post to Accounts" in source
 	assert "frappe.confirm(" in source
 	assert "expected_modified: this.current.modified" in source
-	assert "This will submit a Journal Entry." in source
+	assert "This will create and submit the accounting entry." in source
 	assert 'frappe.set_route("Form", "RetailEdge Business Expense"' not in source
 
 
