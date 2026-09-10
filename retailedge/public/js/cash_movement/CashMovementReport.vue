@@ -37,7 +37,7 @@
 			@cell-click="openReportCell"
 		>
 			<template #actions>
-				<button type="button" class="secondary-action" @click="openPayments">Payments</button>
+				<button v-if="canOpenPayments" type="button" class="secondary-action" @click="openPayments">{{ paymentsButtonLabel }}</button>
 				<EdgeExportMenu
 					v-if="rows.length"
 					:dataset="exportDataset"
@@ -162,6 +162,7 @@ export default {
 			movementTypes: [],
 			dateRangeLimit: 366,
 			accountLabel: "",
+			canUseNativeDesk: false,
 			filters: {
 				company: "",
 				branch: "",
@@ -184,8 +185,17 @@ export default {
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: column.fieldname === "voucher_no",
+				clickable: this.canUseNativeDesk && column.fieldname === "voucher_no",
 			}));
+		},
+		paymentManagementAvailable() {
+			return this.hasPageTarget("payment-management");
+		},
+		canOpenPayments() {
+			return this.paymentManagementAvailable || this.canUseNativeDesk;
+		},
+		paymentsButtonLabel() {
+			return this.paymentManagementAvailable ? "Payments" : "Advanced: Payments in ERPNext";
 		},
 		scopeLabel() {
 			if (this.filters.branch) return `Branch: ${this.filters.branch}`;
@@ -239,7 +249,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.cash_movement.get_cash_movement_context"),
 					navigationPromise,
@@ -251,6 +261,7 @@ export default {
 				this.movementTypes = context.movement_types || [];
 				this.dateRangeLimit = Number(context.limits?.date_range_days || 366);
 				this.dataPolicy = context.data_policy || {};
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
@@ -275,10 +286,14 @@ export default {
 			const items = this.menuItems.flatMap((group) => group.items || []);
 			const item = items.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
 			else if (item.target_type === "URL" && item.target) window.location.assign(item.target);
+		},
+		hasPageTarget(target) {
+			return Boolean(target && this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target));
 		},
 		async searchOptions(kind, txt) {
 			const result = await callMethod("retailedge.cash_movement.search_cash_movement_options", {
@@ -408,13 +423,19 @@ export default {
 			return `${row?.voucher_type || ""}-${row?.voucher_no || ""}-${row?.account || ""}-${index}`;
 		},
 		openReportCell(payload) {
+			if (!this.canUseNativeDesk) return;
 			if (payload?.column?.fieldname === "voucher_no") this.openSource(payload.row);
 		},
 		openSource(row) {
+			if (!this.canUseNativeDesk) return;
 			if (row?.voucher_type && row?.voucher_no) frappe.set_route("Form", row.voucher_type, row.voucher_no);
 		},
 		openPayments() {
-			frappe.set_route("List", "Payment Entry");
+			if (this.paymentManagementAvailable) {
+				frappe.set_route("payment-management");
+				return;
+			}
+			if (this.canUseNativeDesk) frappe.set_route("List", "Payment Entry");
 		},
 		formatCell(value, column, row) {
 			const fieldname = column?.fieldname || column?.key;
