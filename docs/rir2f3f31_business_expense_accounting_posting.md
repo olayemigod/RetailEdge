@@ -95,6 +95,8 @@ If Journal Entry insert or submit fails, the source is not marked Posted and no 
 
 The Business Expense is operational metadata, not the accounting ledger. Updating these post-result fields does not mutate the submitted Journal Entry or its GL truth.
 
+Once a posting reference exists or Ledger Status is Posted, the Business Expense becomes terminal for workflow progression. The workflow bridge rejects further actions and workflow readiness suppresses transitions even when an active Frappe Workflow would otherwise advertise one. Corrections must use the approved accounting reversal process rather than reopening a posted operational record.
+
 ## EdgeSuite experience
 
 The Business Expenses detail view now shows an Accounting Posting card for submitted records.
