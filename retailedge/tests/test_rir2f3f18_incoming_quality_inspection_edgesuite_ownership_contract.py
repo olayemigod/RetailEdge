@@ -35,8 +35,7 @@ class TestRIR2F3F18IncomingQualityInspectionOwnershipContract(TestCase):
 		self.assertIn("manual_inspection", source)
 		self.assertIn("Advanced ERPNext", source)
 		self.assertIn("reading_value", source)
-		for index in range(1, 11):
-			self.assertIn(f'"reading_{index}"', source)
+		self.assertIn('f"reading_{index}" for index in range(1, 11)', source)
 		self.assertNotIn('value.get("status")', source)
 		self.assertNotIn('value.get("min_value")', source)
 		self.assertNotIn('value.get("max_value")', source)
@@ -53,7 +52,8 @@ class TestRIR2F3F18IncomingQualityInspectionOwnershipContract(TestCase):
 		self.assertIn("Advanced: Prepare in ERPNext", component)
 		self.assertIn("expected_source_modified", component)
 		self.assertIn("reading_value", component)
-		self.assertIn("reading_1", component)
+		self.assertIn("Array.from({ length: 10 }", component)
+		self.assertIn("`reading_${index + 1}`", component)
 		self.assertNotIn("Create Draft Quality Inspections", component)
 		self.assertNotIn("then continue readings and submission on the native Quality Inspection forms", component)
 
