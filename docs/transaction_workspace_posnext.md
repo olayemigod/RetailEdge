@@ -22,7 +22,7 @@ The workspace reuses existing guided components for:
 - Purchase Invoice
 - Stock Transfer
 
-Sales Order, Delivery Note, Purchase Order and Purchase Receipt remain native ERPNext full-form flows until their dedicated professional transaction implementation. This avoids duplicate editors and preserves ERPNext workflow/accounting truth.
+Sales Order and Delivery Note now delegate to Professional Selling, while Purchase Order and Purchase Receipt delegate to Professional Purchasing when those permission-aware EdgeSuite owner Pages are available. Transaction Workspace does not duplicate those editors. If an owner Page is unavailable, only a Native Desk-authorised user receives the ERPNext compatibility fallback.
 
 ## POS provider boundary
 
@@ -77,7 +77,9 @@ Transaction Workspace is a RetailEdge-owned Page and must remain EdgeSuite-based
 - No `ignore_permissions` in the transaction workspace backend.
 - No manual DB commit.
 - No direct Sales Invoice/Stock Entry insert/save/submit from the workspace backend.
-- Explicit native ERPNext full forms remain available as advanced fallbacks.
+- Explicit native ERPNext full forms remain available only as Native Desk-capability-gated advanced fallbacks.
+- Sales Order/Delivery Note and Purchase Order/Purchase Receipt use their established EdgeSuite owners when permission-available.
+- Transaction Workspace does not promote Stock Movement History; its separate parity hold remains authoritative.
 - Submitted ERPNext accounting/stock documents are never mutated by this feature.
 
 ## Manual QA
@@ -114,5 +116,7 @@ Transaction Workspace is a RetailEdge-owned Page and must remain EdgeSuite-based
 
 1. Open guided Sales Invoice, Purchase Invoice and Stock Transfer from Transaction Workspace.
 2. Confirm the existing guided-entry components load the same context/defaults as Business Hub.
-3. Confirm Open Full Form/native fallback remains available.
-4. Confirm Sales Order, Delivery Note, Purchase Order and Purchase Receipt continue to open native ERPNext forms.
+3. Confirm Open Full Form/native fallback is visible only to an authorised Native Desk user.
+4. Confirm Sales Order and Delivery Note route to Professional Selling when that Page is available.
+5. Confirm Purchase Order and Purchase Receipt route to Professional Purchasing when that Page is available.
+6. Confirm an EdgeSuite-only user is not given a native DocType/Report fallback when an owner Page is unavailable.
