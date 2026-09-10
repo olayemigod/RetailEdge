@@ -147,3 +147,23 @@ def test_posting_requires_real_journal_read_create_submit_permissions():
 	assert 'frappe.has_permission(POSTING_DOCUMENT_TYPE, "read")' in source
 	assert 'frappe.has_permission(POSTING_DOCUMENT_TYPE, "create")' in source
 	assert 'frappe.has_permission(POSTING_DOCUMENT_TYPE, "submit")' in source
+
+
+def test_workflow_posting_setting_is_smart_and_server_validated():
+	settings_json = (
+		ROOT
+		/ "retailedge/doctype/retailedge_settings/retailedge_settings.json"
+	).read_text(encoding="utf-8")
+	settings_js = (
+		ROOT
+		/ "retailedge/doctype/retailedge_settings/retailedge_settings.js"
+	).read_text(encoding="utf-8")
+	settings_py = (
+		ROOT
+		/ "retailedge/doctype/retailedge_settings/retailedge_settings.py"
+	).read_text(encoding="utf-8")
+	assert "business_expense_posting_workflow_state" in settings_json
+	assert "Workflow State Allowed for Accounting Posting" in settings_json
+	assert "search_business_expense_posting_workflow_states" in settings_js
+	assert "_validate_business_expense_posting_workflow_state" in settings_py
+	assert '"doc_status": "1"' in settings_py
