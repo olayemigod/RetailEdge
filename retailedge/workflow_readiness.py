@@ -4,6 +4,9 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.utils import cint
+
+from retailedge.utils.settings import get_retailedge_settings
 
 
 @frappe.whitelist()
@@ -62,7 +65,7 @@ def get_doctype_workflow_summary(doctype: str) -> dict[str, Any]:
 			"workflow": workflow.get("name") or "",
 			"state_field": str(workflow.get("workflow_state_field") or "workflow_state").strip(),
 		}
-	if doctype == "RetailEdge Cashier Expense":
+	if doctype == "RetailEdge Cashier Expense" and _retailedge_cashier_workflow_enabled():
 		return {
 			"enabled": True,
 			"source": "retailedge",
@@ -108,7 +111,7 @@ def _get_frappe_workflow_readiness(*, workflow: dict[str, Any], doc=None) -> dic
 
 
 def _get_retailedge_workflow_readiness(*, doctype: str, doc=None) -> dict[str, Any] | None:
-	if doctype != "RetailEdge Cashier Expense":
+	if doctype != "RetailEdge Cashier Expense" or not _retailedge_cashier_workflow_enabled():
 		return None
 	if doc is None:
 		return {
@@ -176,6 +179,14 @@ def _get_retailedge_workflow_readiness(*, doctype: str, doc=None) -> dict[str, A
 		"ledger_status": ledger_status,
 		"message": message,
 	}
+
+
+def _retailedge_cashier_workflow_enabled() -> bool:
+	try:
+		settings = get_retailedge_settings()
+	except Exception:
+		return False
+	return bool(cint(getattr(settings, "enable_cashier_expense_workflow", 0)))
 
 
 def _get_active_workflow(doctype: str) -> dict[str, Any] | None:
