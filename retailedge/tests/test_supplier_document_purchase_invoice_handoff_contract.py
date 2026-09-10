@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import inspect
 import unittest
 from pathlib import Path
+
+from retailedge import supplier_document_review
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestSupplierDocumentPurchaseInvoiceHandoffContract(unittest.TestCase):
 	def test_handoff_reuses_erpnext_purchase_order_mapper_and_is_draft_only(self):
-		source = (APP_ROOT / "supplier_document_review.py").read_text()
-		self.assertIn("from erpnext.buying.doctype.purchase_order.mapper import make_purchase_invoice", source)
+		module_source = (APP_ROOT / "supplier_document_review.py").read_text()
+		source = inspect.getsource(supplier_document_review.prepare_draft_purchase_invoice)
+		self.assertIn("from erpnext.buying.doctype.purchase_order.mapper import make_purchase_invoice", module_source)
 		self.assertIn("purchase_invoice = make_purchase_invoice(po.name)", source)
 		self.assertIn("purchase_invoice.insert()", source)
 		self.assertIn("purchase_invoice.docstatus != 0", source)
