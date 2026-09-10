@@ -7,7 +7,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen implementation head:** `71624838c4320e1eda8e51630452ea988da4fa3b`
+**Latest code-frozen implementation head:** `6479ea7bec79957758b4b611754b01a120c23921`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -25,46 +25,56 @@ Business Hub implementation already exists, but its existence does not bypass un
 
 ## Current Code-Frozen Slice
 
-### `RIR2F3F14` — Purchase Reporting native-detail containment
+### `RIR2F3F15` — Customer Receivables native-review containment
 
 **State:** `CODE-FROZEN / QA-PENDING`
 
 Commits:
 
-- `c072afa97e349504f55fc946d689987c0843518d` — F3F14 contract/documentation
-- `a63a558bce82ff384c95460ad95800515ff1fd05` — focused F3F14 contract tests
-- `71624838c4320e1eda8e51630452ea988da4fa3b` — implementation
+- `e5f628eb5dca150fe1a86d039d9eb5223115786b` — F3F15 contract/documentation
+- `5642a05dcf7e4fdb9e41fffcb0b1cccc174fc4b2` — focused F3F15 contract tests
+- `6479ea7bec79957758b4b611754b01a120c23921` — implementation
 
 Material files:
 
-- `docs/rir2f3f14_purchase_reporting_native_detail_containment.md`
-- `retailedge/tests/test_rir2f3f14_purchase_reporting_native_detail_containment_contract.py`
-- `retailedge/public/js/purchase_reporting/PurchaseReportingReport.vue`
+- `docs/rir2f3f15_customer_receivables_native_review_containment.md`
+- `retailedge/tests/test_rir2f3f15_customer_receivables_native_review_containment_contract.py`
+- `retailedge/public/js/customer_receivables/CustomerReceivablesReport.vue`
 
 Contract now enforced:
 
-- Purchase Reporting continues to use the fail-closed `canUseNativeDesk` capability sourced from final EdgeSuite navigation access context.
-- Purchase Invoice, return-against, and Supplier cells are only presented as native-detail clickable when Native Desk is available.
-- DocType/Report menu handoffs fail closed without Native Desk capability.
-- Programmatic report-cell events fail closed before native Purchase Invoice/Supplier routing.
-- The EdgeSuite supplier-payment `payment_action` remains operational regardless of Native Desk capability.
-- The explicit native Payment Entry fallback remains separately gated by Native Desk capability.
-- No report calculation, outstanding balance, payment posting, branch scope, accounting, migration, or data semantics changed.
+- Customer Receivables reads final `navigation.access.can_use_native_desk` into a fail-closed client capability.
+- Sales Invoice, Customer, Payment Request, and Dunning detail cells are only presented as clickable when Native Desk is available.
+- Payment Request and Dunning draft-preparation actions are only exposed when Native Desk is available because their lifecycle requires native ERPNext review/submission.
+- `prepareCollectionAction()` fails before the POST when Native Desk is unavailable, preventing unreachable native drafts from being created for EdgeSuite-only users.
+- DocType/Report menu routes and programmatic report-cell native routes fail closed without Native Desk capability.
+- Native-Desk-capable users retain the existing native draft preparation/review flow.
+- Backend accounting safety, branch validation, permission checks, duplicate prevention, submitted/outstanding invoice checks, and draft-only behavior remain unchanged.
+- No accounting, GL, Sales Invoice mutation, migration, patch, or data semantics changed.
 
-## Governed Evidence at `7162483`
+## Governed Evidence at `6479ea7`
 
-GitHub Actions associated with the exact F3F14 implementation head are green:
+GitHub Actions associated with the exact F3F15 implementation head are green:
 
 | Gate | Run | Result |
 | --- | ---: | --- |
-| EdgeSuite UI Candidate Compatibility | 34442297752 | PASS |
-| CI — clean Frappe v16 standalone integration | 34442297749 | PASS |
-| RetailEdge Theme Compatibility | 34442297743 | PASS |
-| Linters / Semgrep / vulnerable dependency audit | 34442297744 | PASS |
+| EdgeSuite UI Candidate Compatibility | 34442787460 | PASS |
+| CI — clean Frappe v16 standalone integration | 34442787457 | PASS |
+| RetailEdge Theme Compatibility | 34442787458 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34442787463 | PASS |
 
-F3F14 introduced no migration or data patch.
+F3F15 introduced no migration or data patch.
 
 ## Prior Code-Frozen Slices
+
+### `RIR2F3F14` — Purchase Reporting native-detail containment
+
+**State:** `CODE-FROZEN / QA-PENDING`
+
+- Contract: `c072afa97e349504f55fc946d689987c0843518d`
+- Tests: `a63a558bce82ff384c95460ad95800515ff1fd05`
+- Implementation: `71624838c4320e1eda8e51630452ea988da4fa3b`
+- Exact-head gates: EdgeSuite `34442297752`, CI `34442297749`, Theme `34442297743`, Linters `34442297744` — all PASS.
 
 ### `RIR2F3F13` — Stock Position native-handoff containment
 
@@ -95,13 +105,15 @@ F3F14 introduced no migration or data patch.
 
 ## Deferred QA
 
-Browser/persona QA is not claimed as complete. Before F3F11–F3F14 may be represented as fully `FROZEN`, verify at minimum:
+Browser/persona QA is not claimed as complete. Before F3F11–F3F15 may be represented as fully `FROZEN`, verify at minimum:
 
 - authenticated Native Desk allowed and denied personas;
 - ordinary EdgeSuite users cannot escape through guarded DocType/Report/create/record-row handoffs;
 - Cash Shift native-detail columns do not open native forms for EdgeSuite-only users;
 - Stock Position Item and Material Request actions remain non-operational for EdgeSuite-only users;
 - Purchase Reporting native invoice/supplier detail links remain unavailable for EdgeSuite-only users while EdgeSuite supplier payment still works;
+- Customer Receivables does not expose native detail/draft actions or issue collection POSTs for denied Native Desk users;
+- Native-Desk-capable Customer Receivables users retain Payment Request/Dunning draft review flow;
 - permitted advanced/native-Desk users retain intended ERPNext lifecycle handoffs;
 - EdgeSuite Page destinations remain usable after containment.
 
@@ -133,14 +145,15 @@ Routine contract-preserving fixes, tests, documentation, regression correction, 
 - `CODE-FROZEN / QA-PENDING` — implementation and applicable automated gates are green, but required manual/browser/persona evidence remains outstanding.
 - `FROZEN` — implementation, applicable automated gates, required QA evidence, documentation, and migration requirements are complete.
 
-## Successor Audit Findings
+## Successor Audit Finding — Professional Purchasing
 
-1. **Customer Receivables:** invoice/customer/payment-request/dunning detail links and native-draft collection actions do not apply final Native Desk capability. The backend is already strong: submitted/outstanding invoice checks, company permission, branch revalidation, native create/read permission, duplicate prevention, and draft-only behavior are enforced. The identified gap is frontend exposure. EdgeSuite-only users must be stopped before the POST that creates a native draft they cannot review.
-2. **Professional Purchasing and related overlays:** multiple draft-creation and review workflows deliberately terminate in native ERPNext forms/reports. This is a larger ownership boundary and must receive a dedicated audit rather than a blanket route-guard patch.
+Professional Purchasing is not equivalent to the simple native-detail leaks already contained in F3F11–F3F15. The main page includes multiple end-to-end operational flows that deliberately prepare ERPNext drafts and then rely on native forms/reports for completion or review, including RFQ, Purchase Receipt, purchase returns, supplier debit notes, Landed Cost Voucher, Purchase Order, Material Request, Supplier Quotation, Purchase Order Analysis, Procurement Tracker, and Purchase Receipt navigation.
+
+The repository also contains newer Professional Purchasing overlays/components from the earlier RIR2F2 sequence. The next task must determine which native handoffs are already superseded by EdgeSuite-owned overlays, which are intentional advanced fallbacks, and which represent unfinished EdgeSuite operational ownership. Do not blanket-disable them before this reconciliation because that could remove core purchasing capability from ordinary users.
 
 ## Unresolved / Not Yet Claimed
 
-- F3F11–F3F14 browser/persona QA remain pending.
+- F3F11–F3F15 browser/persona QA remain pending.
 - Overall Readiness Hardening is not complete.
 - Business Hub is not release-complete merely because implementation exists.
 - Reporting expansion remains downstream of unresolved foundational hardening.
@@ -152,17 +165,17 @@ Do not obtain a green state by disabling meaningful tests, weakening valid asser
 
 ## Exact Next Executable Step
 
-Execute `RIR2F3F15 — Customer Receivables native-review containment`.
+Perform a dedicated **Professional Purchasing ownership reconciliation audit** before defining another implementation slice.
 
-Required implementation contract:
+Required audit:
 
-1. Add a fail-closed `canUseNativeDesk` capability populated from final `navigation.access.can_use_native_desk`.
-2. Native Sales Invoice, Customer, Payment Request, and Dunning detail columns must only be clickable when Native Desk is available.
-3. Native-draft collection action columns (`Prepare Payment Request`, `Prepare Dunning`) must only be exposed when Native Desk is available because those actions require native review/submission.
-4. `prepareCollectionAction()` must fail closed before the POST when Native Desk is unavailable; do not create an unreachable draft as a side effect.
-5. `openReportCell()` and DocType/Report menu handoffs must independently fail closed before native routing.
-6. Preserve all current backend accounting, duplicate-prevention, branch, permission, draft-only, and invoice-safety checks; no backend semantic rewrite is required.
-7. Native-Desk-capable users retain the current draft preparation and ERPNext review flow.
-8. Add focused negative-path tests and documentation, then run all exact-head governed gates before marking F3F15 `CODE-FROZEN / QA-PENDING`.
-
-After F3F15, audit Professional Purchasing ownership as a separate bounded decision before any implementation there.
+1. Map each user-facing purchasing action in `ProfessionalPurchasing.vue` to its backend API, native ERPNext destination, and any existing EdgeSuite overlay/component.
+2. Inspect the RIR2F2 purchase-invoice, purchase-receipt, RFQ, supplier-quotation, and purchase-order ownership components/tests/docs already present on the branch.
+3. Classify each action as:
+   - `EDGESUITE_OWNED` — ordinary-user workflow is already complete in EdgeSuite;
+   - `ADVANCED_NATIVE_FALLBACK` — native ERPNext is intentionally retained only for authorized advanced users;
+   - `OWNERSHIP_GAP` — ordinary-user workflow still depends on native Desk and requires EdgeSuite completion before containment;
+   - `READ_ONLY_NATIVE_DETAIL` — native detail/navigation only and safe to contain separately.
+4. Do not remove a native handoff that is currently the only viable completion path for an ordinary-user purchasing workflow.
+5. If repository evidence identifies a bounded ownership gap with an existing EdgeSuite replacement, define the smallest next F3 slice and implement it with focused tests.
+6. If a workflow requires material product/architecture change rather than reconciliation, record the gap and escalate under the mandatory stop boundary rather than silently redesigning purchasing.
