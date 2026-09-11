@@ -97,10 +97,15 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			"validate_operating_branch",
 		):
 			self.assertIn(contract, guided)
-		for contract in ("get_allowed_operating_branches", "validate_operating_branch"):
+		for contract in (
+			"get_allowed_operating_branches",
+			"get_operational_branch_scope",
+			"resolve_operational_branch",
+		):
 			self.assertIn(contract, professional)
 
-		self.assertIn("validate_operating_branch", resolver)
+		self.assertIn("get_operational_branch_scope", resolver)
+		self.assertIn("resolve_operational_branch", resolver)
 		self.assertIn("validate_operating_branch", preview)
 
 	def test_new_policy_keeps_accounting_and_document_safety_boundaries(self):
