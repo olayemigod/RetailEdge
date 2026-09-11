@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import inspect
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
 import frappe
-import pytest
 
 from retailedge import cash_custody
 from retailedge import guided_cash_transfer as cash_transfer
@@ -21,6 +21,15 @@ from retailedge.retailedge.doctype.retailedge_cashier_expense import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@contextmanager
+def _raises(error_type):
+	try:
+		yield
+	except error_type:
+		return
+	raise AssertionError(f"Expected {error_type.__name__} to be raised")
 
 
 def _restricted(branches):
@@ -68,25 +77,25 @@ def test_guided_payment_restricted_single_blank_can_auto_resolve():
 	resolve_branch.assert_called_once_with("Demo Company", "", user="pay@example.com")
 
 
-@pytest.mark.parametrize("branches", [[], ["Lagos", "Abuja"]])
-def test_guided_payment_ambiguous_or_zero_blank_write_fails_closed(branches):
-	with (
-		patch.object(payment, "get_operational_branch_scope", return_value=_restricted(branches)),
-		patch.object(
-			payment,
-			"resolve_operational_branch",
-			side_effect=frappe.PermissionError("branch required"),
-		) as resolve_branch,
-		pytest.raises(frappe.PermissionError),
-	):
-		payment._resolve_guided_payment_branch(
-			company="Demo Company",
-			branch="",
-			user="pay@example.com",
-			require_when_restricted=True,
-		)
+def test_guided_payment_ambiguous_or_zero_blank_write_fails_closed():
+	for branches in ([], ["Lagos", "Abuja"]):
+		with (
+			patch.object(payment, "get_operational_branch_scope", return_value=_restricted(branches)),
+			patch.object(
+				payment,
+				"resolve_operational_branch",
+				side_effect=frappe.PermissionError("branch required"),
+			) as resolve_branch,
+			_raises(frappe.PermissionError),
+		):
+			payment._resolve_guided_payment_branch(
+				company="Demo Company",
+				branch="",
+				user="pay@example.com",
+				require_when_restricted=True,
+			)
 
-	resolve_branch.assert_called_once_with("Demo Company", "", user="pay@example.com")
+		resolve_branch.assert_called_once_with("Demo Company", "", user="pay@example.com")
 
 
 def test_guided_payment_reference_paths_revalidate_operational_scope():
@@ -171,16 +180,16 @@ def test_cashier_expense_document_revalidates_derived_branch_operationally():
 	assert "self.validate_operational_branch_scope()" in validate_source
 
 
-@pytest.mark.parametrize("module", [customer_submit, supplier_submit])
-def test_standard_payment_completion_uses_operational_scope_not_legacy_branch_gate(module):
-	source = inspect.getsource(module)
-	assert "get_operational_branch_scope" in source
-	assert "resolve_operational_branch" in source
-	assert "user_has_global_branch_access" not in source
-	assert "validate_user_branch_access" not in source
-	validate_source = inspect.getsource(module._validate_payment_branch)
-	assert "resolve_operational_branch(" in validate_source
-	assert "has no Branch attribution for your restricted access" in validate_source
+def test_standard_payment_completion_uses_operational_scope_not_legacy_branch_gate():
+	for module in (customer_submit, supplier_submit):
+		source = inspect.getsource(module)
+		assert "get_operational_branch_scope" in source
+		assert "resolve_operational_branch" in source
+		assert "user_has_global_branch_access" not in source
+		assert "validate_user_branch_access" not in source
+		validate_source = inspect.getsource(module._validate_payment_branch)
+		assert "resolve_operational_branch(" in validate_source
+		assert "has no Branch attribution for your restricted access" in validate_source
 
 
 def test_mapped_selling_paths_revalidate_explicit_branch_with_operational_authority():
