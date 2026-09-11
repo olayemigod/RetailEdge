@@ -43,8 +43,15 @@
 				</div>
 			</div>
 
-			<div v-if="error" class="alert alert-danger customer-360-error">{{ error }}</div>
-			<div v-else-if="loading" class="customer-360-loading">Loading customer intelligence…</div>
+			<EdgeErrorState v-if="metadataError" title="Customer 360 could not start" :message="metadataError" @retry="fetchMetadata" />
+			<EdgeLoadingState v-else-if="metadataLoading" message="Loading Customer 360 controls…" :skeleton="true" />
+			<EdgeErrorState v-else-if="dataError" title="Customer 360 could not load" :message="dataError" @retry="fetchData" />
+			<EdgeLoadingState v-else-if="loading" message="Loading customer intelligence…" :skeleton="true" />
+			<EdgeEmptyState
+				v-else-if="!filters.customer"
+				title="Select a customer"
+				description="Choose a Company, optional Branch and Customer to load Customer 360."
+			/>
 			<div v-else-if="data.customer" class="customer-360-content">
 				<section class="customer-profile-card">
 					<div>
@@ -122,7 +129,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
@@ -138,7 +145,7 @@ export default {
 	data() {
 		const today = window.frappe?.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
 		return {
-			edgeUIValid: true, missingComponents: [], loading: false, error: "", data: {}, menuItems: [], tenantName: "", branchName: "", userName: "", customerLabel: "",
+			edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "", loading: false, dataError: "", data: {}, menuItems: [], tenantName: "", branchName: "", userName: "", customerLabel: "",
 			filters: { company: "", branch: "", customer: "", from_date: `${today.slice(0, 7)}-01`, to_date: today },
 		};
 	},
@@ -169,6 +176,8 @@ export default {
 	mounted() { this.fetchMetadata(); },
 	methods: {
 		async fetchMetadata() {
+			this.metadataLoading = true;
+			this.metadataError = "";
 			try {
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.sales_reporting.get_sales_reporting_context"),
@@ -190,7 +199,11 @@ export default {
 					frappe.route_options = null;
 					await this.fetchData();
 				}
-			} catch (error) { this.error = errorMessage(error, "Failed to load Customer 360 controls."); }
+			} catch (error) {
+				this.metadataError = errorMessage(error, "Failed to load Customer 360 controls.");
+			} finally {
+				this.metadataLoading = false;
+			}
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) {
@@ -213,12 +226,12 @@ export default {
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); },
 		onCompanySelected(option) { this.filters.company = option?.value || ""; this.filters.branch = ""; this.clearCustomer(); },
 		onBranchSelected(option) { this.filters.branch = option?.value || ""; this.clearCustomer(); }, clearBranch() { this.filters.branch = ""; this.clearCustomer(); },
-		onCustomerSelected(option) { this.filters.customer = option?.value || ""; this.customerLabel = option?.label || this.filters.customer; }, clearCustomer() { this.filters.customer = ""; this.customerLabel = ""; this.data = {}; },
+		onCustomerSelected(option) { this.filters.customer = option?.value || ""; this.customerLabel = option?.label || this.filters.customer; }, clearCustomer() { this.filters.customer = ""; this.customerLabel = ""; this.data = {}; this.dataError = ""; },
 		async fetchData() {
 			if (!this.filters.company || !this.filters.customer) return;
-			this.loading = true; this.error = "";
+			this.loading = true; this.dataError = "";
 			try { this.data = await callMethod("retailedge.customer_360.get_customer_360", { filters: this.filters }); }
-			catch (error) { this.data = {}; this.error = errorMessage(error, "Failed to load Customer 360."); }
+			catch (error) { this.data = {}; this.dataError = errorMessage(error, "Failed to load Customer 360."); }
 			finally { this.loading = false; }
 		},
 		openCustomer() { if (this.data.customer?.name) this.openDoc("Customer", this.data.customer.name); },

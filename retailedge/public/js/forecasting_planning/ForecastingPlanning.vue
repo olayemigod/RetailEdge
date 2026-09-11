@@ -50,8 +50,11 @@
 				</div>
 			</section>
 
-			<div v-if="error" class="alert error">{{ error }}</div>
-			<div v-if="loading || metadataLoading" class="panel muted">Building forecast and plan…</div>
+			<EdgeErrorState v-if="metadataError" title="Forecasting & Planning could not start" :message="metadataError" @retry="bootstrap" />
+			<EdgeLoadingState v-else-if="metadataLoading" message="Loading Forecasting & Planning controls…" :skeleton="true" />
+			<EdgeErrorState v-else-if="dataError" title="Forecasting & Planning could not load" :message="dataError" @retry="fetchData" />
+			<EdgeLoadingState v-else-if="loading" message="Building forecast and plan…" :skeleton="true" />
+			<EdgeEmptyState v-else-if="!filters.company" title="Select a company" description="Choose a Company to build a governed forecast and operating plan." />
 
 			<template v-else>
 				<section v-if="summary.length" class="metric-grid">
@@ -94,9 +97,10 @@
 
 				<section v-if="scenarioName" class="panel">
 					<div class="panel-heading"><div><p class="eyebrow">Forecast vs Actual</p><h3>{{ scenarioLabel || scenarioName }}</h3></div><button class="edge-button" type="button" @click="openScenario">Open Scenario</button></div>
-					<div v-if="performanceLoading" class="empty">Loading scenario performance…</div>
-					<div v-else-if="performanceError" class="alert error">{{ performanceError }}</div>
-					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div v-if="performanceRows.length" class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ row.period_start }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div><div v-else class="empty">No forecast months in this scenario have completed actuals yet.</div></template>
+					<EdgeLoadingState v-if="performanceLoading" message="Loading scenario performance…" :skeleton="true" />
+					<EdgeErrorState v-else-if="performanceError" title="Scenario performance could not load" :message="performanceError" @retry="fetchPerformance" />
+					<EdgeEmptyState v-else-if="!performanceRows.length" title="No completed scenario periods" description="No forecast months in this scenario have completed actuals yet." />
+					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ row.period_start }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div></template>
 				</section>
 			</template>
 		</div>
@@ -104,7 +108,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeExportMenu", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState"];
 function components() { return window.EdgeSuiteUI?.components || {}; }
 function call(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (r) => resolve(r.message ?? {}), error: reject })); }
 function message(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -114,7 +118,7 @@ export default {
 	props: { pageMethod: { type: String, required: true }, exportMethod: { type: String, required: true } },
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, components()[name]])),
 	data() { return {
-		edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
+		edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "", loading: false, dataError: "",
 		rows: [], columns: [], summary: [], domains: {}, scope: {}, metadata: {}, companyCurrency: "",
 		tenantName: "", branchName: "", userName: "", menuItems: [], canCreateScenario: false,
 		scenarioName: "", scenarioLabel: "", performanceRows: [], performanceSummary: [], performanceLoading: false, performanceError: "",
@@ -138,6 +142,7 @@ export default {
 	methods: {
 		async bootstrap() {
 			this.metadataLoading = true;
+			this.metadataError = "";
 			try {
 				const [context, navigation] = await Promise.all([call("retailedge.sales_reporting.get_sales_reporting_context"), call("retailedge.edgesuite_ui.get_retailedge_business_hub_context")]);
 				this.filters.company = context.default_filters?.company || ""; this.filters.branch = context.default_filters?.branch || ""; this.filters.as_of_date = frappe.datetime.get_today();
@@ -145,7 +150,7 @@ export default {
 				this.menuItems = this.mapNavigation(navigation.navigation_groups || []);
 				const opts = frappe.route_options || {}; if (opts.company) this.filters.company = opts.company; if (opts.branch !== undefined) this.filters.branch = opts.branch || "";
 				if (opts.scenario) { this.scenarioName = opts.scenario; await this.loadScenario(opts.scenario); } else if (this.filters.company) await this.fetchData();
-			} catch (e) { this.error = message(e, "Failed to load Forecasting & Planning controls."); }
+			} catch (e) { this.metadataError = message(e, "Failed to load Forecasting & Planning controls."); }
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigation(groups) { return groups.map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeFor(item) })) })); },
@@ -158,7 +163,7 @@ export default {
 		async onScenarioSelected(option) { this.scenarioName = option?.value || ""; this.scenarioLabel = option?.label || this.scenarioName; if (this.scenarioName) await this.loadScenario(this.scenarioName); },
 		clearScenario() { this.scenarioName = ""; this.scenarioLabel = ""; this.performanceRows = []; this.performanceSummary = []; this.performanceError = ""; },
 		async loadScenario(name) { const doc = await call("frappe.client.get", { doctype: "RetailEdge Planning Scenario", name }); this.scenarioName = doc.name; this.scenarioLabel = doc.scenario_name || doc.name; this.filters = { ...this.filters, company: doc.company, branch: doc.branch || "", as_of_date: doc.as_of_date, history_months: Number(doc.history_months || 6), forecast_months: Number(doc.horizon_months || 3), sales_adjustment_percent: Number(doc.sales_adjustment_percent || 0), expense_adjustment_percent: Number(doc.expense_adjustment_percent || 0), cash_adjustment_percent: Number(doc.cash_adjustment_percent || 0), inventory_safety_percent: Number(doc.inventory_safety_percent || 0) }; await Promise.all([this.fetchData(), this.fetchPerformance()]); },
-		async fetchData() { if (!this.filters.company) return; this.loading = true; this.error = ""; try { const result = await call(this.pageMethod, { filters: { ...this.filters } }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.domains = result.domains || {}; this.scope = result.scope || {}; this.metadata = result.metadata || {}; this.companyCurrency = result.company_currency || this.companyCurrency; } catch (e) { this.error = message(e, "Failed to build Forecasting & Planning data."); } finally { this.loading = false; } },
+		async fetchData() { if (!this.filters.company) return; this.loading = true; this.dataError = ""; try { const result = await call(this.pageMethod, { filters: { ...this.filters } }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.domains = result.domains || {}; this.scope = result.scope || {}; this.metadata = result.metadata || {}; this.companyCurrency = result.company_currency || this.companyCurrency; } catch (e) { this.dataError = message(e, "Failed to build Forecasting & Planning data."); } finally { this.loading = false; } },
 		async fetchPerformance() { if (!this.scenarioName) return; this.performanceLoading = true; this.performanceError = ""; try { const result = await call("retailedge.scenario_performance.get_scenario_performance", { scenario: this.scenarioName }); this.performanceRows = result.rows || []; this.performanceSummary = result.summary || []; } catch (e) { this.performanceError = message(e, "Failed to load forecast-vs-actual performance."); } finally { this.performanceLoading = false; } },
 		newScenario() {
 			if (!this.canCreateScenario || !this.filters.company) return;
