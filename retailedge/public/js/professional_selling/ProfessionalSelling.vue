@@ -88,6 +88,7 @@
 							<span v-if="row.grand_total !== undefined">{{ row.currency || "" }} {{ row.grand_total }}</span>
 							<button v-if="canReviewCompletion(row)" type="button" class="edge-button edge-button--primary recent-completion" @click="openRecentCompletion(row)">Review Completion</button>
 							<button v-if="canReviewDeliveryCompletion(row)" type="button" class="edge-button edge-button--primary recent-completion" @click="openRecentDeliveryCompletion(row)">Review Delivery</button>
+							<button v-if="canReviewSalesInvoiceCompletion(row)" type="button" class="edge-button edge-button--primary recent-completion" @click="openRecentSalesInvoiceCompletion(row)">Review Invoice</button>
 							<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary recent-advanced" @click="openAdvancedRecord(recentDocument, row.name)">Advanced: Open in ERPNext</button>
 						</div>
 					</div>
@@ -134,6 +135,14 @@
 				@changed="handleDeliveryCompletionChanged"
 				@completed="handleDeliveryCompletionCompleted"
 			/>
+			<StandardSalesInvoiceCompletionDialog
+				:open="salesInvoiceCompletionOpen"
+				:document="salesInvoiceCompletionDocument"
+				:canUseNativeDesk="canUseNativeDesk"
+				@close="closeSalesInvoiceCompletion"
+				@changed="handleSalesInvoiceCompletionChanged"
+				@completed="handleSalesInvoiceCompletionCompleted"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
@@ -145,6 +154,7 @@ import ProfessionalDeliveryDialog from "./ProfessionalDeliveryDialog.vue";
 import ProfessionalSalesInvoiceDialog from "./ProfessionalSalesInvoiceDialog.vue";
 import StandardSellingCompletionDialog from "./StandardSellingCompletionDialog.vue";
 import StandardDeliveryCompletionDialog from "./StandardDeliveryCompletionDialog.vue";
+import StandardSalesInvoiceCompletionDialog from "./StandardSalesInvoiceCompletionDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability";
@@ -181,6 +191,7 @@ export default {
 		ProfessionalSalesInvoiceDialog,
 		StandardSellingCompletionDialog,
 		StandardDeliveryCompletionDialog,
+		StandardSalesInvoiceCompletionDialog,
 	},
 	data() {
 		return {
@@ -209,6 +220,8 @@ export default {
 			completionDocument: null,
 			deliveryCompletionOpen: false,
 			deliveryCompletionDocument: null,
+			salesInvoiceCompletionOpen: false,
+			salesInvoiceCompletionDocument: null,
 		};
 	},
 	created() {
@@ -314,7 +327,13 @@ export default {
 			if (result?.name) this.openDeliveryCompletion({ doctype: "Delivery Note", name: result.name });
 			this.loadWorkspace();
 		},
-		handleSalesInvoiceSaved() { this.salesInvoiceOpen = false; this.loadWorkspace(); },
+		handleSalesInvoiceSaved(result) {
+			this.salesInvoiceOpen = false;
+			if (result?.name && !result?.is_return) {
+				this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name });
+			}
+			this.loadWorkspace();
+		},
 		async loadRecent(document) {
 			this.recentDocument = document;
 			this.recentRows = [];
@@ -380,6 +399,32 @@ export default {
 		},
 		handleDeliveryCompletionCompleted() {
 			this.closeDeliveryCompletion();
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		canReviewSalesInvoiceCompletion(row) {
+			return this.recentDocument?.key === "sales-invoice"
+				&& Number(row?.docstatus || 0) === 0;
+		},
+		openRecentSalesInvoiceCompletion(row) {
+			if (!this.canReviewSalesInvoiceCompletion(row) || !row?.name) return;
+			this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });
+		},
+		openSalesInvoiceCompletion(document) {
+			if (document?.doctype !== "Sales Invoice" || !document?.name) return;
+			this.salesInvoiceCompletionDocument = { doctype: "Sales Invoice", name: document.name };
+			this.salesInvoiceCompletionOpen = true;
+		},
+		closeSalesInvoiceCompletion() {
+			this.salesInvoiceCompletionOpen = false;
+			this.salesInvoiceCompletionDocument = null;
+		},
+		handleSalesInvoiceCompletionChanged() {
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		handleSalesInvoiceCompletionCompleted() {
+			this.closeSalesInvoiceCompletion();
 			this.loadWorkspace();
 			if (this.recentDocument) this.loadRecent(this.recentDocument);
 		},
