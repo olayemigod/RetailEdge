@@ -18,7 +18,7 @@ from erpnext.stock.doctype.delivery_note.delivery_note import (
 	make_sales_invoice as erpnext_make_sales_invoice_from_delivery,
 )
 
-from retailedge.branch_context import resolve_branch_from_warehouse, validate_user_branch_access
+from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.guided_sales_invoice import create_simple_sales_invoice_draft
 from retailedge.loyalty_rewards import apply_loyalty_redemption_to_draft
 from retailedge.operating_context import get_operating_context
@@ -30,6 +30,7 @@ from retailedge.professional_selling import (
 	_operating_document_filters,
 	_permission,
 	_validate_context,
+	_validate_stored_operational_branch,
 )
 from retailedge.quotation_invoice_conversion import (
 	complete_quotation_conversion,
@@ -116,9 +117,11 @@ def _validate_source_context(source, *, source_label: str) -> tuple[str, str]:
 		frappe.throw(_("The {0} has no Company.").format(source_label))
 	_assert_read("Company", company)
 
-	branch = _source_branch(source)
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+	branch = _validate_stored_operational_branch(
+		company=company,
+		branch=_source_branch(source),
+		label=_("{0} source").format(source_label),
+	)
 
 	operating = get_operating_context() or {}
 	operating_company = str(operating.get("company") or "").strip()
@@ -150,11 +153,10 @@ def _validate_invoice_stock_context(target, *, company: str, source_branch: str)
 		resolved = resolve_branch_from_warehouse(warehouse, company=company)
 		warehouse_branch = str(resolved.get("branch") or "").strip()
 		if warehouse_branch:
-			validate_user_branch_access(
-				warehouse_branch,
-				user=frappe.session.user,
+			warehouse_branch = _validate_stored_operational_branch(
 				company=company,
-				throw=True,
+				branch=warehouse_branch,
+				label=_("Sales Invoice Stock Location"),
 			)
 			resolved_branches.add(warehouse_branch)
 
