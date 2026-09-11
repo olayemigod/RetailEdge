@@ -119,6 +119,31 @@ def _document_capability(definition: dict[str, Any]) -> dict[str, Any]:
 	}
 
 
+def _validate_stored_operational_branch(
+	*,
+	company: str,
+	branch: str,
+	label: str,
+) -> str:
+	branch = str(branch or "").strip()
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	if branch:
+		return str(
+			resolve_operational_branch(
+				company,
+				branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
+	if scope["restricted"]:
+		frappe.throw(
+			_("{0} has no Branch attribution for your restricted access.").format(label),
+			frappe.PermissionError,
+		)
+	return ""
+
+
 def _coerce_values(values: dict | str | None) -> dict[str, Any]:
 	if isinstance(values, str):
 		values = frappe.parse_json(values)
