@@ -502,12 +502,12 @@ export default {
 			dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT, { purchase_order: row.name });
 		},
 		async preparePurchaseReturn() {
-			if (!this.returnSources.purchaseReceipt || this.preparingReturn) return; this.preparingReturn = "purchase_receipt"; this.clearActionFeedback();
+			if (!this.canUseNativeDesk || !this.returnSources.purchaseReceipt || this.preparingReturn) return; this.preparingReturn = "purchase_receipt"; this.clearActionFeedback();
 			try { const result = await callMethod(PREPARE_PURCHASE_RETURN_METHOD, { purchase_receipt: this.returnSources.purchaseReceipt }); this.actionNotice = `Draft Purchase Receipt return ${result.name || ""} prepared. Review native ERPNext quantities, warehouses and stock details before submission.`; this.clearReturnSources(); if (result.name) frappe.set_route("Form", "Purchase Receipt", result.name); }
 			catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the Purchase Receipt return draft."); } finally { this.preparingReturn = ""; }
 		},
 		async prepareSupplierDebitNote() {
-			if (!this.returnSources.purchaseInvoice || this.preparingReturn) return; this.preparingReturn = "purchase_invoice"; this.clearActionFeedback();
+			if (!this.canUseNativeDesk || !this.returnSources.purchaseInvoice || this.preparingReturn) return; this.preparingReturn = "purchase_invoice"; this.clearActionFeedback();
 			try { const result = await callMethod(PREPARE_DEBIT_NOTE_METHOD, { purchase_invoice: this.returnSources.purchaseInvoice }); this.actionNotice = result.update_stock ? `Draft supplier Debit Note ${result.name || ""} prepared. ERPNext Update Stock remains enabled; review stock and accounting effects before submission.` : `Draft supplier Debit Note ${result.name || ""} prepared. Review native ERPNext tax, value and accounting details before submission.`; this.clearReturnSources(); if (result.name) frappe.set_route("Form", "Purchase Invoice", result.name); }
 			catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the supplier Debit Note draft."); } finally { this.preparingReturn = ""; }
 		},
