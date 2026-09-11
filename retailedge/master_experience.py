@@ -88,6 +88,8 @@ PURCHASE_REGISTER_PAGE_TARGET = "purchase-register"
 PURCHASE_INVOICE_NATIVE_PEER_DOCTYPE = "Purchase Invoice"
 EXPENSE_REGISTER_PAGE_TARGET = "expense-register"
 CASHIER_EXPENSE_NATIVE_PEER_DOCTYPE = "RetailEdge Cashier Expense"
+STOCK_MOVEMENT_HISTORY_REPORT_TARGET = "RetailEdge Stock Movement History"
+STOCK_MOVEMENT_HISTORY_PAGE_TARGET = "stock-movement-history"
 
 BUSINESS_EXPENSE_ITEM: dict[str, Any] = {
 	"label": "Business Expenses",
@@ -364,6 +366,24 @@ def _promote_purchase_invoice_ownership(navigation_groups: list[dict[str, Any]])
 		return
 
 
+
+def _promote_stock_movement_history(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Use the hardened EdgeSuite Page as the everyday Stock Movement History owner."""
+	if not _can_open_page(STOCK_MOVEMENT_HISTORY_PAGE_TARGET):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "stock":
+			continue
+		for item in group.get("items") or []:
+			if (
+				item.get("target_type") == "Report"
+				and item.get("target") == STOCK_MOVEMENT_HISTORY_REPORT_TARGET
+			):
+				item["target_type"] = "Page"
+				item["target"] = STOCK_MOVEMENT_HISTORY_PAGE_TARGET
+				return
+		return
+
 def _business_expenses_enabled() -> bool:
 	try:
 		from retailedge.business_expense import get_business_expense_settings
@@ -561,6 +581,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_professional_selling(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
 	_promote_purchase_invoice_ownership(navigation_groups)
+	_promote_stock_movement_history(navigation_groups)
 	_promote_business_expense_ownership(navigation_groups)
 	_promote_cashier_expense_ownership(navigation_groups)
 	_promote_document_output(navigation_groups)
@@ -598,6 +619,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["professional_selling"] = "edgesuite_primary"
 	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"
 	feature_flags["purchase_invoice_ownership"] = "edgesuite_purchase_register"
+	feature_flags["stock_movement_history_ownership"] = "edgesuite_page"
 	feature_flags["cashier_expense_ownership"] = "edgesuite_expense_register"
 	feature_flags["business_expense_ownership"] = "edgesuite_business_expenses"
 	feature_flags["document_output_sharing"] = "erpnext_native_output"
