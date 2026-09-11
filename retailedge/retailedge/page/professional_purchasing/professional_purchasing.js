@@ -93,7 +93,7 @@ function installRestrictedOperationalGuard() {
 			"Open Native Scorecard",
 			"Open Full Form",
 		],
-		hiddenSelectors: [".landed-cost-panel", ".quality-created-links"],
+		hiddenSelectors: [".quality-created-links"],
 		neutralizeSelectors: [".link-button"],
 	});
 }
