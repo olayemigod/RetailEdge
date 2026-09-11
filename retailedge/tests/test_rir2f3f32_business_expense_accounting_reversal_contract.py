@@ -165,3 +165,14 @@ def test_contract_preserves_accounting_truth_and_defers_partial_reversal():
 	assert "partial reversal is out of scope" in doc
 	assert "normal site migration is required" in doc
 	assert "Manual browser/persona QA remains deferred" in doc
+
+def test_posted_business_expense_native_workflow_state_is_server_terminal():
+	source = inspect.getsource(
+		business_expense._assert_posted_business_expense_workflow_terminal
+	)
+	validate_source = inspect.getsource(business_expense.validate_business_expense_document)
+	assert "_assert_posted_business_expense_workflow_terminal(doc)" in validate_source
+	assert '"posting_reference", "workflow_state"' in source
+	assert "previous.posting_reference" in source
+	assert "cannot move to another Workflow State" in source
+
