@@ -148,6 +148,14 @@
 				@saved="handleSimpleCashDepositSaved"
 				@open-native="openNativeCashDeposit"
 			/>
+			<StandardInternalTransferCompletionDialog
+				:open="internalTransferCompletionOpen"
+				:document="internalTransferCompletionDocument"
+				:canUseNativeDesk="nativeFallbackEnabled"
+				@close="closeInternalTransferCompletion"
+				@changed="handleInternalTransferCompletionChanged"
+				@completed="handleInternalTransferCompletionCompleted"
+			/>
 
 			<SimpleCashTransferDialog
 				:open="simpleCashTransferOpen"
@@ -194,6 +202,7 @@
 
 <script>
 import SimpleCashDepositDialog from "./SimpleCashDepositDialog.vue";
+import StandardInternalTransferCompletionDialog from "./StandardInternalTransferCompletionDialog.vue";
 import SimpleCashTransferDialog from "./SimpleCashTransferDialog.vue";
 import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
@@ -279,6 +288,7 @@ export default {
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
 		SimpleCashDepositDialog,
+		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
 		SimpleCashierExpenseDialog,
 		SimplePaymentDialog,
@@ -299,6 +309,8 @@ export default {
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
 			simpleCashDepositOpen: false,
+			internalTransferCompletionOpen: false,
+			internalTransferCompletionDocument: null,
 			simpleCashTransferOpen: false,
 			simplePurchaseInvoiceOpen: false,
 			simpleCashierExpenseOpen: false,
@@ -515,7 +527,9 @@ export default {
 		},
 		handleSimpleCashDepositSaved(result) {
 			this.simpleCashDepositOpen = false;
-			this.notifyGuidedDraftSaved(result, "Payment Entry", "Cash Deposit");
+			if (result?.name) {
+				this.openInternalTransferCompletion({ doctype: "Payment Entry", name: result.name });
+			}
 		},
 		openNativeCashDeposit(doctype = "Payment Entry") {
 			this.simpleCashDepositOpen = false;
@@ -526,7 +540,25 @@ export default {
 		},
 		handleSimpleCashTransferSaved(result) {
 			this.simpleCashTransferOpen = false;
-			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
+			if (result?.name) {
+				this.openInternalTransferCompletion({ doctype: "Payment Entry", name: result.name });
+			}
+		},
+		openInternalTransferCompletion(document) {
+			if (document?.doctype !== "Payment Entry" || !document?.name) return;
+			this.internalTransferCompletionDocument = { doctype: "Payment Entry", name: document.name };
+			this.internalTransferCompletionOpen = true;
+		},
+		closeInternalTransferCompletion() {
+			this.internalTransferCompletionOpen = false;
+			this.internalTransferCompletionDocument = null;
+		},
+		handleInternalTransferCompletionChanged() {
+			this.refreshContext({ force: true });
+		},
+		handleInternalTransferCompletionCompleted() {
+			this.closeInternalTransferCompletion();
+			this.refreshContext({ force: true });
 		},
 		openNativeCashTransfer(doctype = "Payment Entry") {
 			this.simpleCashTransferOpen = false;
