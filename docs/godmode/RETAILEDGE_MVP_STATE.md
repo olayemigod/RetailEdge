@@ -7,7 +7,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen exact head:** `738800bc087124f598dcdd1f22b2d30b0b78561d`
+**Latest code-frozen exact head:** `82d621d2795db0052b1f7b7b482d7e625c69e70e`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -25,52 +25,64 @@ Business Hub implementation already exists, but its existence does not bypass un
 
 ## Current Code-Frozen Slice
 
-### `RIR2F3F39` — Purchase Return / Supplier Debit Note Workflow Precedence
+### `RIR2F3F40` — Incoming Quality Inspection EdgeSuite Ownership Hardening
 
 **State:** `CODE-FROZEN / QA-PENDING`
 
 Frozen exact head:
 
-- `738800bc087124f598dcdd1f22b2d30b0b78561d`
+- `82d621d2795db0052b1f7b7b482d7e625c69e70e`
 
 Primary contract/runtime files:
 
-- `docs/rir2f3f39_purchase_return_workflow_precedence.md`
-- `retailedge/professional_purchase_returns.py`
-- `retailedge/public/js/professional_purchasing/ProfessionalPurchaseReturnReviewOverlay.vue`
-- `retailedge/tests/test_rir2f3f39_purchase_return_workflow_precedence_contract.py`
-- `retailedge/tests/test_rir2f3f17_purchase_return_supplier_debit_note_edgesuite_ownership_contract.py` — preview-boundary reconciliation only
+- `docs/rir2f3f40_incoming_quality_inspection_workflow_ownership.md`
+- `retailedge/incoming_quality_inspection.py`
+- `retailedge/public/js/professional_purchasing/IncomingQualityInspection.vue`
+- `retailedge/tests/test_rir2f3f40_incoming_quality_inspection_workflow_ownership_contract.py`
 
 Contract now enforced:
 
-- Purchase Return and Supplier Debit Note remain separate explicit intents;
-- active Purchase Receipt / Purchase Invoice Frappe Workflow is authoritative for the corresponding mapped return target;
-- preview remains persistence-free and continues to use ERPNext canonical return/debit-note mappers;
-- no-Workflow sites preserve the existing F3F17 direct standard insert + submit path;
-- Workflow mode persists or idempotently reuses exactly one canonical linked return draft before actions are possible;
-- multiple, unreadable or non-standard linked drafts fail closed;
-- saved return drafts must continue to match current ERPNext return truth for return linkage, Company, Supplier, Branch, Update Stock where applicable, negative quantities, source item identity, Item, warehouse, rate and conversion factor;
-- Serial Number and Batch-controlled stock returns remain advanced;
-- saved-draft workflow actions row-lock and revalidate source and target, stale snapshots, exact single-draft identity, current ERPNext mapping, standard blockers and expected workflow state;
-- the shared F3F27 bridge delegates to Frappe `apply_workflow()`; EdgeSuite does not assign workflow state or docstatus directly;
-- ERPNext alone owns stock, valuation, tax, payable and accounting effects;
+- the F3F18 persistence-free review and ERPNext template/readings authority remain intact;
+- no-Workflow sites retain the existing standard Quality Inspection insert + submit path;
+- active Frappe Workflow blocks direct submission and exposes Start Inspection Approval;
+- workflow start row-locks/revalidates the Purchase Receipt, Branch/Company scope, current ERPNext inspection requirement, stale source snapshot, template/specifications and submitted readings;
+- exactly one matching readable draft per Purchase Receipt child row may be reused idempotently; multiple, unreadable, foreign or non-standard drafts fail closed;
+- ERPNext's native Quality Inspection source-link update is accounted for in lost-response retry handling without allowing unrelated stale source edits;
+- saved-draft workflow actions row-lock/revalidate both source and inspection, exact linkage, standard inspection equivalence, stale source/target snapshots and expected workflow state;
+- all transitions delegate through the shared F3F27 bridge to Frappe `apply_workflow()`;
+- ERPNext remains authoritative for final Accepted/Rejected status and Purchase Receipt Quality Inspection linkage;
+- EdgeSuite does not assign workflow state, inspection status or docstatus directly;
+- Advanced: Prepare in ERPNext remains capability-gated to Native-Desk-capable users;
 - no schema migration is required.
 
-## Governed Evidence at `738800bc`
+## Governed Evidence at `82d621d2`
 
-GitHub Actions associated with the exact F3F39 freeze head are green:
+GitHub Actions associated with the exact F3F40 freeze head are green:
 
 | Gate | Run | Result |
 | --- | ---: | --- |
-| EdgeSuite UI Candidate Compatibility | 34579395120 | PASS |
-| CI — clean Frappe v16 standalone integration | 34579395000 | PASS |
-| RetailEdge Theme Compatibility | 34579395023 | PASS |
-| Linters / Semgrep / vulnerable dependency audit | 34579395156 | PASS |
+| EdgeSuite UI Candidate Compatibility | 34588724646 | PASS |
+| CI — clean Frappe v16 standalone integration | 34588724581 | PASS |
+| RetailEdge Theme Compatibility | 34588724571 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34588724624 | PASS |
 
-F3F39 is an atomic 5-commit / 5-effective-file descendant of the F3F38 ledger checkpoint. The only prior test changed was the F3F17 persistence-free preview split boundary so newly inserted workflow functions were not incorrectly included in the old preview-only source slice.
+F3F40 is a bounded descendant of the F3F39 code-freeze. The intervening pre-F3F40 repository-state commit touched only this ledger; F3F40 itself adds the contract/test plus the existing Incoming Quality Inspection backend and EdgeSuite component changes.
+
 
 
 ## Prior Code-Frozen Slices
+
+### `RIR2F3F39` — Purchase Return / Supplier Debit Note Workflow Precedence
+
+**State:** `CODE-FROZEN / QA-PENDING`
+
+- Frozen exact head: `738800bc087124f598dcdd1f22b2d30b0b78561d`
+- Exact-head gates: EdgeSuite `34579395120`, CI `34579395000`, Theme `34579395023`, Linters `34579395156` — all PASS.
+- Active Purchase Receipt / Purchase Invoice Workflow owns the corresponding standard return/debit-note progression.
+- Preview remains persistence-free; Workflow mode persists or idempotently reuses exactly one standard return draft.
+- ERPNext remains authoritative for stock, valuation, tax, payable and accounting consequences.
+- No schema migration.
+
 
 ### `RIR2F3F38` — Purchase Invoice Workflow Precedence
 
@@ -216,24 +228,21 @@ Routine contract-preserving fixes, tests, documentation, regression correction, 
 
 ## Successor Ownership Gaps — Professional Purchasing
 
-F3F16 reconciled purchasing actions that already had complete EdgeSuite ownership. F3F17 has now closed the Purchase Return / Supplier Debit Note standard-completion gap at code level, subject to deferred browser/persona QA.
+F3F16–F3F40 now provide EdgeSuite ownership for the standard Professional Purchasing path through purchase order, receipt, invoice handoff, return/debit note, payment workflow parity, expense operations and incoming quality inspection, subject to deferred browser/persona QA.
 
-Current unresolved classifications:
+Current unresolved classification:
 
-1. **Incoming Quality Inspection — `OWNERSHIP_GAP`**
-   - current flow prepares native Quality Inspection drafts and relies on native ERPNext readings/acceptance workflow;
-   - presentation guards do not undo an already-created draft;
-   - no complete EdgeSuite readings/review/acceptance replacement has yet been proven on this branch;
-   - do not merely route-hide the existing completion path after a draft side effect.
-2. **Landed Cost Voucher — `ADVANCED_NATIVE_FALLBACK` for now**
-   - current handoff prepares an unsaved native voucher and the panel is already hidden in EdgeSuite-only mode;
-   - lower immediate side-effect risk than Incoming Quality Inspection, but later ownership may still be required for MVP completeness.
+1. **Landed Cost Voucher — `ADVANCED_NATIVE_FALLBACK / MVP OWNERSHIP REVIEW REQUIRED`**
+   - the current handoff prepares an unsaved native Landed Cost Voucher and the panel is hidden in EdgeSuite-only mode;
+   - no submitted accounting or stock document is mutated merely by opening the current handoff, so risk is lower than the former Quality Inspection draft-first gap;
+   - however RetailEdge MVP intends EdgeSuite to be the normal operational experience, so a bounded ownership audit is required to decide whether standard Landed Cost allocation needs an EdgeSuite review/create path and what cases must remain Advanced ERPNext;
+   - ERPNext valuation/reposting/accounting truth must remain authoritative.
+
 
 ## Unresolved / Not Yet Claimed
 
 - F3F11–F3F17 browser/persona QA remain pending.
-- Incoming Quality Inspection still requires ownership resolution.
-- Landed Cost remains advanced/native fallback pending later MVP ownership review.
+- Landed Cost remains advanced/native fallback pending the next bounded MVP ownership review.
 - Overall Readiness Hardening is not complete.
 - Business Hub is not release-complete merely because implementation exists.
 - Reporting expansion remains downstream of unresolved foundational hardening.
@@ -243,6 +252,21 @@ Current unresolved classifications:
 
 Do not obtain a green state by disabling meaningful tests, weakening valid assertions, suppressing real errors, converting restricted-zero into unrestricted access, relying on frontend-only security for protected business rules, mutating submitted accounting documents, duplicating ERPNext accounting/stock/planning truth, or bypassing execution order with non-blocking features.
 
+## Exact Next Executable Step
+
+Perform a bounded repository audit for **RIR2F3F41 — Landed Cost Voucher EdgeSuite Ownership Review**.
+
+Required next audit:
+
+1. Trace the complete current Landed Cost flow in Professional Purchasing, including source Purchase Receipts/Purchase Invoices, charge capture, allocation, any native mapper/handoff and persistence side effects.
+2. Confirm whether the current handoff is truly unsaved/persistence-free and whether any source document is modified before native submission.
+3. Identify the smallest standard EdgeSuite-owned flow that can safely review and create/submit a Landed Cost Voucher if MVP ownership is warranted.
+4. Preserve ERPNext Landed Cost Voucher allocation, valuation reposting, stock ledger and accounting truth; never duplicate those calculations in RetailEdge.
+5. Apply Company/Branch/source-document filtering and backend validation so users can select only permitted compatible receipts/invoices.
+6. Reuse F3F27 workflow precedence if Landed Cost Voucher has an active Frappe Workflow; do not invent a RetailEdge workflow.
+7. Fail closed to Advanced ERPNext for unsupported multi-company, incompatible source, complex tax/accounting override, cancellation/amendment or other advanced cases.
+8. Keep reporting expansion, unrelated purchasing redesign and manual browser/persona QA outside this slice.
+9. Define the smallest F3F41 contract from repository evidence, add focused tests, implement only the approved standard path, then run the same four governed exact-head gates before freeze.
 ## Exact Next Executable Step
 
 Perform a bounded repository audit for **RIR2F3F40 — Incoming Quality Inspection EdgeSuite Ownership**.
