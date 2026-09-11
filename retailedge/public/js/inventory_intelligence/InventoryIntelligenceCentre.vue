@@ -91,7 +91,7 @@
 
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
-				<span v-if="scope.from_date && scope.to_date">Demand evidence: {{ scope.from_date }} to {{ scope.to_date }}</span>
+				<span v-if="scope.from_date && scope.to_date">Demand evidence: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span v-if="Number(scan.synthetic_zero_items || 0) > 0">{{ Number(scan.synthetic_zero_items) }} zero-balance item(s) retained from demand/reorder evidence</span>
 				<span>Replenishment uses ERPNext Item Reorder configuration</span>
 				<span>Stock cover is historical estimation, not a forecast</span>
@@ -231,6 +231,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";

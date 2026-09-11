@@ -171,7 +171,7 @@ export default {
 	computed: {
 		comparisonDescription() {
 			if (!this.comparison.previous_from_date) return "Selected period compared with the immediately preceding equal-length period.";
-			return `${this.comparison.previous_from_date} to ${this.comparison.previous_to_date}`;
+			return `${this.formatDate(this.comparison.previous_from_date)} to ${this.formatDate(this.comparison.previous_to_date)}`;
 		},
 		reconciliationDescription() {
 			if (!this.reconciliation.available) return this.reconciliation.reason || "ERPNext accounting reconciliation is unavailable for this scope.";
@@ -193,6 +193,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {

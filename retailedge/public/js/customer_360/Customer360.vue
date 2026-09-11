@@ -242,7 +242,7 @@ export default {
 		},
 		formatCurrency(value) { const number = Number(value || 0); return this.currency ? `${this.currency} ${number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); },
 		formatNumber(value) { return value == null ? "—" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 }); },
-		formatDate(value) { return value || "—"; }, valueOrDash(value) { return value == null ? "—" : value; },
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } }, valueOrDash(value) { return value == null ? "—" : value; },
 	},
 };
 </script>

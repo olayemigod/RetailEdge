@@ -66,7 +66,7 @@
 					<div v-if="!rows.length" class="empty">No planning rows are available for this scope.</div>
 					<div v-else class="table-wrap">
 						<table><thead><tr><th>Month</th><th>Domain</th><th>Type</th><th class="num">Actual</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Plan vs Forecast</th></tr></thead>
-						<tbody><tr v-for="row in rows" :key="`${row.period_start}-${row.domain}-${row.row_type}`"><td>{{ row.period_start }}</td><td>{{ row.domain }}</td><td>{{ row.row_type }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.variance) }}</td></tr></tbody></table>
+						<tbody><tr v-for="row in rows" :key="`${row.period_start}-${row.domain}-${row.row_type}`"><td>{{ formatDate(row.period_start) }}</td><td>{{ row.domain }}</td><td>{{ row.row_type }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.variance) }}</td></tr></tbody></table>
 					</div>
 				</section>
 
@@ -78,7 +78,7 @@
 				<section class="panel">
 					<div class="panel-heading"><div><p class="eyebrow">Cash Planning</p><h3>Known due commitments</h3></div><span class="muted">Shown separately from the behaviour-based cash forecast; collection/payment is not assumed.</span></div>
 					<div v-if="cashCommitmentReason" class="empty">{{ cashCommitmentReason }}</div>
-					<div v-else-if="cashCommitments.length" class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Receivables Due</th><th class="num">Payables Due</th><th class="num">Net Known Due</th></tr></thead><tbody><tr v-for="row in cashCommitments" :key="row.period_start"><td>{{ row.period_start }}</td><td class="num">{{ money(row.receivables_due) }}</td><td class="num">{{ money(row.payables_due) }}</td><td class="num">{{ money(row.net_known_due) }}</td></tr></tbody></table></div>
+					<div v-else-if="cashCommitments.length" class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Receivables Due</th><th class="num">Payables Due</th><th class="num">Net Known Due</th></tr></thead><tbody><tr v-for="row in cashCommitments" :key="row.period_start"><td>{{ formatDate(row.period_start) }}</td><td class="num">{{ money(row.receivables_due) }}</td><td class="num">{{ money(row.payables_due) }}</td><td class="num">{{ money(row.net_known_due) }}</td></tr></tbody></table></div>
 					<div v-else class="empty">No known due commitments fall inside this forecast horizon.</div>
 				</section>
 
@@ -91,7 +91,7 @@
 				<section class="panel">
 					<div class="panel-heading"><div><p class="eyebrow">Inventory Planning</p><h3>Cumulative demand vs projected stock</h3></div><span class="muted">No Material Request is created.</span></div>
 					<div v-if="inventoryReason" class="empty">{{ inventoryReason }}</div>
-					<div v-else-if="inventoryRows.length" class="table-wrap"><table><thead><tr><th>Month</th><th>Item</th><th class="num">Forecast Demand</th><th class="num">Plan + Safety</th><th class="num">Cumulative Plan</th><th class="num">Projected Stock</th><th class="num">Shortfall</th><th>Status</th></tr></thead><tbody><tr v-for="row in inventoryRows" :key="`${row.period_start}-${row.item_code}`"><td>{{ row.period_start }}</td><td><strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small></td><td class="num">{{ qty(row.forecast_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.planned_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.cumulative_planned_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.current_projected_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.coverage_shortfall_qty, row.stock_uom) }}</td><td><span :class="['pill', row.coverage_risk ? 'risk' : 'ok']">{{ row.coverage_risk ? "Coverage risk" : "Covered" }}</span></td></tr></tbody></table></div>
+					<div v-else-if="inventoryRows.length" class="table-wrap"><table><thead><tr><th>Month</th><th>Item</th><th class="num">Forecast Demand</th><th class="num">Plan + Safety</th><th class="num">Cumulative Plan</th><th class="num">Projected Stock</th><th class="num">Shortfall</th><th>Status</th></tr></thead><tbody><tr v-for="row in inventoryRows" :key="`${row.period_start}-${row.item_code}`"><td>{{ formatDate(row.period_start) }}</td><td><strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small></td><td class="num">{{ qty(row.forecast_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.planned_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.cumulative_planned_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.current_projected_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.coverage_shortfall_qty, row.stock_uom) }}</td><td><span :class="['pill', row.coverage_risk ? 'risk' : 'ok']">{{ row.coverage_risk ? "Coverage risk" : "Covered" }}</span></td></tr></tbody></table></div>
 					<div v-else class="empty">No observed inventory demand is available for this scope.</div>
 				</section>
 
@@ -100,7 +100,7 @@
 					<EdgeLoadingState v-if="performanceLoading" message="Loading scenario performance…" :skeleton="true" />
 					<EdgeErrorState v-else-if="performanceError" title="Scenario performance could not load" :message="performanceError" @retry="fetchPerformance" />
 					<EdgeEmptyState v-else-if="!performanceRows.length" title="No completed scenario periods" description="No forecast months in this scenario have completed actuals yet." />
-					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ row.period_start }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div></template>
+					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ formatDate(row.period_start) }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div></template>
 				</section>
 			</template>
 		</div>
@@ -140,6 +140,7 @@ export default {
 	created() { const c = components(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !c[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.canCreateScenario = Boolean(frappe.model?.can_create?.("RetailEdge Planning Scenario")); this.bootstrap(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async bootstrap() {
 			this.metadataLoading = true;
 			this.metadataError = "";

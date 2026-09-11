@@ -73,7 +73,7 @@
 
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
-				<span v-if="scope.from_date && scope.to_date">Sales period: {{ scope.from_date }} to {{ scope.to_date }}</span>
+				<span v-if="scope.from_date && scope.to_date">Sales period: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span>New/returning uses first submitted sale in the same permitted company/branch scope</span>
 				<span>Outstanding values are current ERPNext receivable exposure, not historical period-end balances</span>
 				<span v-if="!showProfitability">Profitability hidden by RetailEdge cost-visibility settings</span>
@@ -199,6 +199,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";

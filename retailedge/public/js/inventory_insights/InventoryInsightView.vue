@@ -97,7 +97,7 @@
 				<span v-if="isAgeingView && scope.age_ranges">Bands: {{ scope.age_ranges.join ? scope.age_ranges.join(", ") : scope.age_ranges }} days · aged threshold {{ scope.aged_threshold_days }} days</span>
 				<span v-if="isTransferView">Suggestions are advisory and never create or submit Stock Entries automatically</span>
 				<span v-if="isProfitabilityView">Profitability classifications come from R8; R10 does not recalculate margin</span>
-				<span v-if="isProfitabilityView && scope.from_date && scope.to_date">Profitability period: {{ scope.from_date }} to {{ scope.to_date }}</span>
+				<span v-if="isProfitabilityView && scope.from_date && scope.to_date">Profitability period: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span v-if="isTransferView && selectedRow">Selected: {{ selectedRow.item_code }} · {{ selectedRow.source_warehouse }} → {{ selectedRow.target_warehouse }} · suggested {{ selectedRow.suggested_transfer_qty }}</span>
 			</template>
 		</EdgeReportShell>
@@ -307,6 +307,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";

@@ -53,8 +53,8 @@
 			</template>
 
 			<template #resultMeta>
-				<span>History: {{ scope.history_from_date || "—" }} to {{ scope.history_to_date || "—" }}</span>
-				<span>Forecast starts: {{ scope.forecast_start || "—" }}</span>
+				<span>History: {{ formatDate(scope.history_from_date) }} to {{ formatDate(scope.history_to_date) }}</span>
+				<span>Forecast starts: {{ formatDate(scope.forecast_start) }}</span>
 				<span>{{ metadata.history_policy || "Completed calendar months only." }}</span>
 				<span>{{ forecastMethod }}</span>
 				<span>{{ metadata.profit_truth || "ERPNext Profit & Loss remains financial profit truth." }}</span>
@@ -94,6 +94,7 @@ export default {
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {

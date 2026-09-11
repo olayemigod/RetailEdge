@@ -62,8 +62,8 @@
 			</template>
 
 			<template #resultMeta>
-				<span v-if="scope.current_from_date && scope.current_to_date">Current: {{ scope.current_from_date }} to {{ scope.current_to_date }}</span>
-				<span v-if="scope.prior_from_date && scope.prior_to_date">Prior: {{ scope.prior_from_date }} to {{ scope.prior_to_date }}</span>
+				<span v-if="scope.current_from_date && scope.current_to_date">Current: {{ formatDate(scope.current_from_date) }} to {{ formatDate(scope.current_to_date) }}</span>
+				<span v-if="scope.prior_from_date && scope.prior_to_date">Prior: {{ formatDate(scope.prior_from_date) }} to {{ formatDate(scope.prior_to_date) }}</span>
 				<span>Threshold: {{ scope.change_threshold_percent || filters.change_threshold_percent }}%</span>
 				<span>Signals describe observed comparable-period behaviour; RetailEdge does not call these customers churned</span>
 				<span>Outstanding and overdue values are current ERPNext receivable exposure</span>
@@ -167,6 +167,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
