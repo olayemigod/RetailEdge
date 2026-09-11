@@ -18,6 +18,8 @@ from retailedge.branch_context import (
 	validate_user_branch_access,
 )
 from retailedge.stock_movement_filters import branch_query
+from retailedge.workflow_actions import apply_document_workflow_action
+from retailedge.workflow_readiness import get_workflow_readiness
 
 INTERNAL_REVIEW_ROLES = {
 	"System Manager",
@@ -654,12 +656,24 @@ def _get_supplier_document_purchase_invoice_authority(
 	return user, extraction, intake, po, handoff, purchase_invoice, branch
 
 
+def _purchase_invoice_workflow_blocker(workflow_readiness: dict[str, Any]) -> dict[str, str] | None:
+	if str(workflow_readiness.get("source") or "") != "frappe":
+		return None
+	return {
+		"key": "workflow",
+		"label": _(
+			"Purchase Invoice is controlled by active Workflow {0}. Use the available workflow action in EdgeSuite."
+		).format(workflow_readiness.get("workflow") or _("Purchase Invoice Workflow")),
+	}
+
+
 def _supplier_document_purchase_invoice_blockers(
 	extraction: Any,
 	po: Any,
 	purchase_invoice: Any,
 	*,
 	can_submit: bool,
+	workflow_readiness: dict[str, Any] | None = None,
 ) -> list[dict[str, str]]:
 	blockers: list[dict[str, str]] = []
 	if cint(getattr(purchase_invoice, "docstatus", 0)) != 0:
@@ -689,7 +703,14 @@ def _supplier_document_purchase_invoice_blockers(
 	elif any(str(getattr(item, "purchase_order", "") or "") != str(po.name) for item in items):
 		blockers.append({"key": "purchase_order_linkage", "label": _("One or more lines no longer match the authoritative Purchase Order")})
 
-	if not can_submit:
+	workflow_readiness = workflow_readiness or get_workflow_readiness(
+		doctype="Purchase Invoice",
+		doc=purchase_invoice,
+	)
+	workflow_blocker = _purchase_invoice_workflow_blocker(workflow_readiness)
+	if workflow_blocker:
+		blockers.append(workflow_blocker)
+	elif not can_submit:
 		blockers.append({"key": "submit_permission", "label": _("You do not have permission to submit Purchase Invoices")})
 	return blockers
 
@@ -702,8 +723,14 @@ def _supplier_document_purchase_invoice_review_payload(
 	branch: str,
 ) -> dict[str, Any]:
 	docstatus = cint(getattr(purchase_invoice, "docstatus", 0))
+	workflow_readiness = get_workflow_readiness(
+		doctype="Purchase Invoice",
+		doc=purchase_invoice,
+	)
+	workflow_controlled = str(workflow_readiness.get("source") or "") == "frappe"
 	can_submit = bool(
 		docstatus == 0
+		and not workflow_controlled
 		and frappe.has_permission("Purchase Invoice", "submit", doc=purchase_invoice.name)
 	)
 	blockers = _supplier_document_purchase_invoice_blockers(
@@ -711,6 +738,12 @@ def _supplier_document_purchase_invoice_review_payload(
 		po,
 		purchase_invoice,
 		can_submit=can_submit,
+		workflow_readiness=workflow_readiness,
+	)
+	workflow_eligible = bool(
+		workflow_controlled
+		and docstatus == 0
+		and not [row for row in blockers if row.get("key") != "workflow"]
 	)
 	extracted_total = (
 		None
@@ -755,6 +788,8 @@ def _supplier_document_purchase_invoice_review_payload(
 		"blockers": blockers,
 		"can_submit": can_submit,
 		"standard_submit_eligible": bool(docstatus == 0 and not blockers),
+		"workflow_readiness": workflow_readiness,
+		"workflow_eligible": workflow_eligible,
 		"source_of_truth": "ERPNext Purchase Invoice draft created from Purchase Order mapping",
 	}
 
@@ -771,6 +806,62 @@ def get_supplier_document_purchase_invoice_review(extraction_name: str) -> dict[
 		handoff,
 		purchase_invoice,
 		branch,
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_supplier_document_purchase_invoice_workflow_action(
+	extraction_name: str,
+	action: str,
+	expected_purchase_invoice_modified: str | None = None,
+	expected_workflow_state: str | None = None,
+) -> dict[str, Any]:
+	"""Apply one permitted Frappe Workflow action to the exact handed-off Purchase Invoice."""
+	action = str(action or "").strip()
+	if not action:
+		frappe.throw(_("Purchase Invoice workflow action is required."), frappe.ValidationError)
+
+	_user, extraction, _intake, po, handoff, purchase_invoice, branch = (
+		_get_supplier_document_purchase_invoice_authority(
+			extraction_name,
+			lock_purchase_invoice=True,
+		)
+	)
+	if cint(getattr(purchase_invoice, "docstatus", 0)) != 0:
+		frappe.throw(
+			_("Only a draft Purchase Invoice can use the standard EdgeSuite workflow action path."),
+			frappe.ValidationError,
+		)
+
+	expected_modified = str(expected_purchase_invoice_modified or "").strip()
+	current_modified = str(getattr(purchase_invoice, "modified", "") or "")
+	if not expected_modified or expected_modified != current_modified:
+		frappe.throw(
+			_("Purchase Invoice {0} changed after review. Refresh before applying a workflow action.").format(
+				purchase_invoice.name
+			),
+			frappe.ValidationError,
+		)
+
+	review = _supplier_document_purchase_invoice_review_payload(
+		extraction,
+		po,
+		handoff,
+		purchase_invoice,
+		branch,
+	)
+	if not review.get("workflow_eligible"):
+		frappe.throw(
+			_("This Purchase Invoice is not eligible for a standard EdgeSuite workflow action."),
+			frappe.ValidationError,
+		)
+
+	return apply_document_workflow_action(
+		doctype="Purchase Invoice",
+		name=purchase_invoice.name,
+		action=action,
+		expected_modified=expected_modified,
+		expected_state=str(expected_workflow_state or ""),
 	)
 
 
@@ -815,6 +906,11 @@ def submit_supplier_document_purchase_invoice(
 		purchase_invoice,
 		branch,
 	)
+	if str((review.get("workflow_readiness") or {}).get("source") or "") == "frappe":
+		frappe.throw(
+			_("Purchase Invoice is controlled by an active Frappe Workflow. Use the available workflow action in EdgeSuite."),
+			frappe.ValidationError,
+		)
 	if review["blockers"]:
 		labels = ", ".join(str(row.get("label") or row.get("key") or "") for row in review["blockers"])
 		frappe.throw(_("This Purchase Invoice requires Advanced ERPNext handling: {0}").format(labels), frappe.ValidationError)
