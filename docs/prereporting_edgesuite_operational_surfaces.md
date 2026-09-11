@@ -47,11 +47,11 @@ Purchasing remains additive in this checkpoint. RIR2F1 does not change Purchase 
 
 Payment ownership is unchanged by RIR2F1.
 
-## Deliberate non-promotion
+## Stock Movement History ownership
 
-`stock-movement-history` already exists as an EdgeSuite Page, but normal navigation still uses the `RetailEdge Stock Movement History` Query Report. This remains deliberate until the separate parity/export/mobile/browser acceptance gate is completed.
+RIR2F3F42 supersedes the earlier temporary non-promotion hold. The hardened `stock-movement-history` EdgeSuite Page is now the everyday RetailEdge navigation owner when the Page is permission-available.
 
-This checkpoint does not claim that browser QA is complete and does not promote that route prematurely.
+The legacy `RetailEdge Stock Movement History` Query Report remains installed as a Native Desk compatibility/reference surface. F3F42 does not claim browser/persona acceptance; that remains part of consolidated RIR2E QA.
 
 ## Remaining EdgeSuite ownership follow-up
 
@@ -89,4 +89,4 @@ Focused tests freeze that:
 - Payment Management remains unchanged.
 - promoted Pages are standard and role-restricted.
 - Professional Purchasing does not gain RetailEdge Manager/Branch Manager roles in this slice.
-- Stock Movement History remains on the legacy Query Report pending its separate acceptance gate.
+- Stock Movement History uses the hardened EdgeSuite Page when permitted; the legacy Query Report remains installed as compatibility/reference fallback.
