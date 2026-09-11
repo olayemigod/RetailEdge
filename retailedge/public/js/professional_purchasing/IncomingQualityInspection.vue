@@ -116,9 +116,34 @@
 				</article>
 
 				<div class="quality-actions quality-actions--review">
-					<button type="button" class="edge-button edge-button--secondary" :disabled="submitting || advancedPreparing" @click="cancelReview">Back</button>
-					<button v-if="nativeFallbackEnabled" type="button" class="edge-button edge-button--secondary" :disabled="submitting || advancedPreparing" @click="prepareAdvanced">{{ advancedPreparing ? "Preparing…" : "Advanced: Prepare in ERPNext" }}</button>
-					<button v-if="canSubmitReview" type="button" class="edge-button edge-button--primary" :disabled="submitting || advancedPreparing" @click="confirmSubmit">{{ submitting ? "Submitting…" : "Submit Quality Inspections" }}</button>
+					<button type="button" class="edge-button edge-button--secondary" :disabled="submitting || workflowStarting || workflowApplying || advancedPreparing" @click="cancelReview">Back</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button edge-button--secondary" :disabled="submitting || workflowStarting || workflowApplying || advancedPreparing" @click="prepareAdvanced">{{ advancedPreparing ? "Preparing…" : "Advanced: Prepare in ERPNext" }}</button>
+					<button v-if="canStartWorkflowReview" type="button" class="edge-button edge-button--primary" :disabled="workflowStarting || advancedPreparing" @click="startApproval">{{ workflowStarting ? "Starting Approval…" : "Start Inspection Approval" }}</button>
+					<button v-if="canSubmitReview" type="button" class="edge-button edge-button--primary" :disabled="submitting || workflowStarting || advancedPreparing" @click="confirmSubmit">{{ submitting ? "Submitting…" : "Submit Quality Inspections" }}</button>
+				</div>
+			</div>
+
+			<div v-if="workflowInspections.length" class="quality-results">
+				<strong>Quality Inspection Approval</strong>
+				<div v-for="inspection in workflowInspections" :key="inspection.name" class="quality-workflow-row">
+					<div class="quality-workflow-row__summary">
+						<span>{{ inspection.name }}</span>
+						<strong>{{ inspection.workflow_readiness?.current_state || inspection.status || (inspection.docstatus === 1 ? "Submitted" : "Draft") }}</strong>
+					</div>
+					<p v-if="inspection.workflow_readiness?.message" class="quality-help">{{ inspection.workflow_readiness.message }}</p>
+					<div v-if="inspection.docstatus === 0 && inspection.workflow_readiness?.available_actions?.length" class="quality-actions">
+						<button
+							v-for="action in inspection.workflow_readiness?.available_actions || []"
+							:key="`${inspection.name}-${action.action}`"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="workflowApplying"
+							@click="applyWorkflow(inspection, action.action)"
+						>
+							{{ workflowApplying ? "Applying…" : action.action }}
+						</button>
+					</div>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-small-button" @click="openInspection(inspection.name)">Open</button>
 				</div>
 			</div>
 
@@ -143,6 +168,8 @@ const SEARCH_METHOD = "retailedge.incoming_quality_inspection.search_incoming_qu
 const CONTEXT_METHOD = "retailedge.incoming_quality_inspection.get_incoming_quality_receipt_context";
 const REVIEW_METHOD = "retailedge.incoming_quality_inspection.get_incoming_quality_inspection_review";
 const SUBMIT_METHOD = "retailedge.incoming_quality_inspection.submit_incoming_quality_inspection_review";
+const START_WORKFLOW_METHOD = "retailedge.incoming_quality_inspection.start_incoming_quality_inspection_approval";
+const WORKFLOW_ACTION_METHOD = "retailedge.incoming_quality_inspection.apply_incoming_quality_inspection_workflow_action";
 const CREATE_METHOD = "retailedge.incoming_quality_inspection.create_incoming_quality_inspections";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -176,6 +203,10 @@ export default {
 			review: null,
 			readingValues: {},
 			submitting: false,
+			workflowStarting: false,
+			workflowApplying: false,
+			workflowInspections: [],
+			workflowSourceModified: "",
 			advancedPreparing: false,
 			error: "",
 			notice: "",
@@ -185,7 +216,8 @@ export default {
 	computed: {
 		selectedCount() { return Object.values(this.selected).filter(Boolean).length; },
 		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== "edgesuite_only"; },
-		canSubmitReview() { return Boolean(this.review?.standard_submit_eligible && this.review?.can_submit && (this.review?.items || []).length); },
+		canSubmitReview() { return Boolean(this.review?.standard_submit_eligible && !this.review?.workflow_controlled && this.review?.can_submit && (this.review?.items || []).length); },
+		canStartWorkflowReview() { return Boolean(this.review?.standard_submit_eligible && this.review?.workflow_controlled && this.review?.can_start_workflow && (this.review?.items || []).length); },
 	},
 	watch: {
 		company() { this.resetForScopeChange(); },
@@ -203,7 +235,7 @@ export default {
 		},
 		async onReceiptSelected(value) { this.source = linkValue(value) || this.source; await this.loadReceiptContext(); },
 		clearReceipt() {
-			this.source = ""; this.context = {}; this.selected = {}; this.sampleSizes = {}; this.review = null; this.readingValues = {}; this.error = ""; this.notice = ""; this.submitted = [];
+			this.source = ""; this.context = {}; this.selected = {}; this.sampleSizes = {}; this.review = null; this.readingValues = {}; this.error = ""; this.notice = ""; this.submitted = []; this.workflowInspections = []; this.workflowSourceModified = "";
 		},
 		resetForScopeChange() { if (this.source || this.context.purchase_receipt) this.clearReceipt(); },
 		async loadReceiptContext() {
@@ -224,7 +256,7 @@ export default {
 		},
 		async reviewInspections() {
 			if (!this.source || !this.selectedCount || this.reviewLoading) return;
-			this.reviewLoading = true; this.error = ""; this.notice = ""; this.submitted = [];
+			this.reviewLoading = true; this.error = ""; this.notice = ""; this.submitted = []; this.workflowInspections = []; this.workflowSourceModified = "";
 			try {
 				this.review = await callMethod(REVIEW_METHOD, { purchase_receipt: this.source, selections: this.selectedRows() });
 				this.initialiseReadingValues();
@@ -257,7 +289,54 @@ export default {
 				})),
 			}));
 		},
-		cancelReview() { if (this.submitting || this.advancedPreparing) return; this.review = null; this.readingValues = {}; this.error = ""; },
+		cancelReview() { if (this.submitting || this.workflowStarting || this.workflowApplying || this.advancedPreparing) return; this.review = null; this.readingValues = {}; this.error = ""; },
+		async startApproval() {
+			if (!this.canStartWorkflowReview || this.workflowStarting) return;
+			this.workflowStarting = true; this.error = ""; this.notice = "";
+			try {
+				const result = await callMethod(START_WORKFLOW_METHOD, {
+					purchase_receipt: this.source,
+					expected_source_modified: this.review?.source_modified || "",
+					selections: this.submissionRows(),
+				}, "POST");
+				this.workflowInspections = Array.isArray(result?.inspections) ? result.inspections : [];
+				this.workflowSourceModified = result?.source_modified || "";
+				this.notice = `${result?.created_count || this.workflowInspections.length} Quality Inspection approval${(result?.created_count || this.workflowInspections.length) === 1 ? "" : "s"} ready in EdgeSuite.`;
+				this.review = null;
+				this.readingValues = {};
+				this.selected = {};
+			} catch (error) {
+				this.error = errorMessage(error, "ERPNext could not start Quality Inspection approval.");
+			} finally {
+				this.workflowStarting = false;
+			}
+		},
+		async applyWorkflow(inspection, action) {
+			if (!inspection?.name || !action || this.workflowApplying) return;
+			this.workflowApplying = true; this.error = ""; this.notice = "";
+			try {
+				const result = await callMethod(WORKFLOW_ACTION_METHOD, {
+					purchase_receipt: this.source,
+					quality_inspection: inspection.name,
+					action,
+					expected_source_modified: this.workflowSourceModified || "",
+					expected_quality_inspection_modified: inspection.modified || "",
+					expected_workflow_state: inspection.workflow_readiness?.current_state || "",
+				}, "POST");
+				const current = result?.quality_inspection;
+				if (current?.name) {
+					this.workflowInspections = this.workflowInspections.map((row) => row.name === current.name ? current : row);
+				}
+				this.workflowSourceModified = result?.source_modified || this.workflowSourceModified;
+				this.notice = Number(current?.docstatus || 0) === 1
+					? `Quality Inspection ${current.name} was submitted through the configured Workflow.`
+					: `Quality Inspection ${current?.name || inspection.name} moved through Workflow action ${action}.`;
+			} catch (error) {
+				this.error = errorMessage(error, "ERPNext could not apply the Quality Inspection workflow action.");
+			} finally {
+				this.workflowApplying = false;
+			}
+		},
 		confirmSubmit() {
 			if (!this.canSubmitReview || this.submitting) return;
 			frappe.confirm(__("Submit these Quality Inspections now? ERPNext will calculate Accepted/Rejected status from the configured inspection criteria."), () => this.submitInspections());
@@ -325,6 +404,8 @@ export default {
 .quality-reading__inputs span, .quality-reading__value span { font-size: 0.78rem; opacity: 0.7; }
 .quality-results { padding-top: 4px; }
 .quality-result-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--edge-border-subtle, var(--border-color)); }
+.quality-workflow-row { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--edge-border-subtle, var(--border-color)); }
+.quality-workflow-row__summary { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 @media (max-width: 800px) {
 	.quality-heading, .quality-review-card__heading, .quality-reading__criteria { display: grid; }
 	.quality-context-summary { grid-template-columns: 1fr; }
