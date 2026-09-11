@@ -410,12 +410,14 @@ export default {
 			this.draftSubmitting = true;
 			this.draftError = "";
 			try {
-				const result = await callMethod("retailedge.workflow_actions.apply_document_workflow_action", {
-					doctype: "Payment Entry",
-					name: preview.payment_entry,
+				const result = await callMethod("retailedge.standard_customer_payment_submit.apply_standard_customer_payment_workflow_action", {
+					payment_entry: preview.payment_entry,
 					action,
-					expected_modified: preview.payment_entry_modified,
-					expected_state: preview.workflow_readiness?.current_state || "",
+					expected_payment_entry_modified: preview.payment_entry_modified,
+					expected_workflow_state: preview.workflow_readiness?.current_state || "",
+					company: this.filters.company || null,
+					customer: this.filters.customer || null,
+					branch: this.filters.branch || null,
 				});
 				frappe.show_alert({ message: __("Payment workflow action applied: " + action), indicator: "green" });
 				if (preview.sales_invoice && Number(result.docstatus || 0) === 1) await this.loadSettlementInvoice(preview.sales_invoice);
