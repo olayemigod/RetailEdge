@@ -55,6 +55,7 @@ BUSINESS_EXPENSE_STATUS_ORDER = (
 	"Rejected",
 	"Pending Ledger",
 	"Posted",
+	"Reversed",
 	"Cancelled",
 )
 BUSINESS_EXPENSE_STATUSES = set(BUSINESS_EXPENSE_STATUS_ORDER)
@@ -1127,6 +1128,12 @@ def _business_expense_payload(
 		"posting_reference": getattr(doc, "posting_reference", None) or "",
 		"posting_ready": cint(getattr(doc, "posting_ready", 0)),
 		"posting_block_reason": getattr(doc, "posting_block_reason", None) or "",
+		"reversal_reference_type": getattr(doc, "reversal_reference_type", None) or "",
+		"reversal_reference": getattr(doc, "reversal_reference", None) or "",
+		"reversal_posting_date": getattr(doc, "reversal_posting_date", None),
+		"reversal_reason": getattr(doc, "reversal_reason", None) or "",
+		"reversed_by": getattr(doc, "reversed_by", None) or "",
+		"reversed_on": getattr(doc, "reversed_on", None),
 		"can_edit": bool(
 			int(getattr(doc, "docstatus", 0) or 0) == 0
 			and doc.has_permission("write")
