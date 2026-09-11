@@ -15,6 +15,7 @@ from retailedge.advanced_payments import (
 	_payment_branch_field,
 )
 from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
+from retailedge.workflow_readiness import get_workflow_readiness
 
 MAX_DRAFT_ROWS = 50
 
@@ -140,7 +141,19 @@ def _reference_preview(doc: Any, payment_branch: str) -> tuple[dict[str, Any] | 
 	}, blockers
 
 
-def _standard_submit_blockers(doc: Any, payment_branch: str) -> tuple[list[str], dict[str, Any] | None]:
+def _workflow_submit_blocker(workflow_readiness: dict[str, Any]) -> str:
+	if str(workflow_readiness.get("source") or "") != "frappe":
+		return ""
+	return _(
+		"Payment Entry is controlled by active Workflow {0}. Use the available workflow action in EdgeSuite."
+	).format(workflow_readiness.get("workflow") or _("Payment Entry Workflow"))
+
+
+def _standard_submit_blockers(
+	doc: Any,
+	payment_branch: str,
+	workflow_readiness: dict[str, Any] | None = None,
+) -> tuple[list[str], dict[str, Any] | None]:
 	blockers: list[str] = []
 	if cint(getattr(doc, "docstatus", 0)) != 0:
 		blockers.append(_("Only draft Payment Entries can use standard EdgeSuite submission."))
@@ -168,7 +181,14 @@ def _standard_submit_blockers(doc: Any, payment_branch: str) -> tuple[list[str],
 
 	reference, reference_blockers = _reference_preview(doc, payment_branch)
 	blockers.extend(reference_blockers)
-	if not frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "submit", doc=doc):
+	workflow_readiness = workflow_readiness or get_workflow_readiness(
+		doctype=PAYMENT_ENTRY_DOCTYPE,
+		doc=doc,
+	)
+	workflow_blocker = _workflow_submit_blocker(workflow_readiness)
+	if workflow_blocker:
+		blockers.append(workflow_blocker)
+	elif not frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "submit", doc=doc):
 		blockers.append(_("You do not have permission to submit this Payment Entry."))
 	return blockers, reference
 
@@ -181,7 +201,20 @@ def _build_preview(
 ) -> dict[str, Any]:
 	payment_branch = _validate_payment_branch(doc)
 	_validate_selected_context(doc, payment_branch, company=company, customer=customer, selected_branch=branch)
-	blockers, reference = _standard_submit_blockers(doc, payment_branch)
+	workflow_readiness = get_workflow_readiness(
+		doctype=PAYMENT_ENTRY_DOCTYPE,
+		doc=doc,
+	)
+	blockers, reference = _standard_submit_blockers(
+		doc,
+		payment_branch,
+		workflow_readiness=workflow_readiness,
+	)
+	workflow_blocker = _workflow_submit_blocker(workflow_readiness)
+	workflow_eligible = bool(
+		workflow_blocker
+		and not [blocker for blocker in blockers if blocker != workflow_blocker]
+	)
 	allocated_amount = flt(reference.get("allocated_amount")) if reference else 0
 	received_amount = flt(getattr(doc, "received_amount", 0))
 	return {
@@ -205,6 +238,8 @@ def _build_preview(
 		"status": "Draft" if cint(getattr(doc, "docstatus", 0)) == 0 else str(getattr(doc, "status", "") or "Submitted"),
 		"blockers": blockers,
 		"can_submit": not blockers,
+		"workflow_readiness": workflow_readiness,
+		"workflow_eligible": workflow_eligible,
 		"persistence": "none",
 		"source_of_truth": "ERPNext Payment Entry",
 		"route": f"/app/payment-entry/{doc.name}",
