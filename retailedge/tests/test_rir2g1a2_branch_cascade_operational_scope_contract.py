@@ -172,7 +172,8 @@ def test_frontend_payment_branch_change_invalidates_reference_and_review_state()
 	end = source.index("async setModeOfPayment", start)
 	method = source[start:end]
 	assert "this.values.references = [emptyReference()]" in method
-	assert "this.clearReview()" in method
+	assert "this.customerReview = null" in method
+	assert "this.supplierReview = null" in method
 
 
 def test_frontend_cash_transfer_does_not_fake_branch_exclusive_accounts():
