@@ -571,6 +571,31 @@ def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> No
 	setup_group["items"] = items
 
 
+def _contain_native_navigation_for_edgesuite_only(context: dict[str, Any]) -> None:
+	"""Remove native Desk routes from final ordinary-user composition.
+
+	The base registry already applies permission and access filtering. This final sweep
+	protects against native DocType/Report routes appended by later master promotions.
+	It changes presentation only; underlying Frappe permissions and native routes remain.
+	"""
+	access = dict(context.get("access") or {})
+	if bool(access.get("can_use_native_desk")):
+		return
+
+	contained_groups: list[dict[str, Any]] = []
+	for group in context.get("navigation_groups") or []:
+		items = [
+			item
+			for item in list(group.get("items") or [])
+			if item.get("target_type") not in {"DocType", "Report"}
+		]
+		if not items:
+			continue
+		group["items"] = items
+		contained_groups.append(group)
+	context["navigation_groups"] = contained_groups
+
+
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context = deepcopy(_base_business_hub_context() or {})
@@ -589,6 +614,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_banking_readiness(navigation_groups)
 	_promote_project_operations(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
+	_contain_native_navigation_for_edgesuite_only(context)
 
 	quick_actions = list(context.get("quick_actions") or [])
 	existing_keys = {action.get("key") for action in quick_actions}
