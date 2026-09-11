@@ -32,6 +32,7 @@ _EXPENSE_STATUSES = (
 	"Pending Ledger",
 	"Rejected",
 	"Posted",
+	"Reversed",
 	"Cancelled",
 )
 _BASE_ROW_FIELDS = (
