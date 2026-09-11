@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import frappe
 
+from retailedge import bank_account_policy
 from retailedge import cash_custody
 from retailedge import guided_cash_transfer as cash_transfer
 from retailedge import guided_payment as payment
@@ -157,6 +158,16 @@ def test_guided_cash_transfer_branch_search_and_write_use_operational_scope():
 	assert "require_when_restricted=True" in create_source
 
 
+def test_bank_account_branch_scope_uses_operational_authority_without_forcing_company_wide_accounts():
+	source = inspect.getsource(bank_account_policy)
+	assert "resolve_operational_branch" in source
+	assert "validate_user_branch_access" not in source
+	resolver_source = inspect.getsource(bank_account_policy.resolve_retailedge_bank_account)
+	assert "_validate_bank_account_operational_branch(" in resolver_source
+	assert "company-wide" in resolver_source
+	assert "strict_branch_scope" in resolver_source
+
+
 def test_cash_deposit_revalidates_shift_branch_with_operational_authority():
 	source = inspect.getsource(cash_custody)
 	assert "_validate_cash_custody_branch" in source
@@ -246,6 +257,7 @@ def test_branch_cascade_hardening_does_not_write_accounting_or_stock_truth_direc
 	for module in (
 		payment,
 		cash_transfer,
+		bank_account_policy,
 		cash_custody,
 		customer_submit,
 		supplier_submit,
