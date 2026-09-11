@@ -87,7 +87,7 @@ def test_purchase_order_overlay_renders_only_returned_workflow_actions():
 	assert "apply_standard_purchase_order_workflow_action" in source
 	assert "preview.workflow_eligible" in source
 	assert "preview.workflow_readiness?.available_actions" in source
-	assert "@click="applyWorkflow(action.action)"" in source
+	assert '@click="applyWorkflow(action.action)"' in source
 	assert "expected_purchase_order_modified: this.preview.purchase_order_modified" in source
 	assert 'expected_workflow_state: this.preview.workflow_readiness?.current_state || ""' in source
 
