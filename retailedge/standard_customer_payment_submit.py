@@ -15,6 +15,7 @@ from retailedge.advanced_payments import (
 	_payment_branch_field,
 )
 from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
+from retailedge.workflow_actions import apply_document_workflow_action
 from retailedge.workflow_readiness import get_workflow_readiness
 
 MAX_DRAFT_ROWS = 50
@@ -308,6 +309,68 @@ def list_standard_customer_payment_drafts(
 		)
 		for row in rows
 	]
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_standard_customer_payment_workflow_action(
+	payment_entry: str,
+	action: str,
+	expected_payment_entry_modified: str | None = None,
+	expected_workflow_state: str | None = None,
+	company: str | None = None,
+	customer: str | None = None,
+	branch: str | None = None,
+) -> dict[str, Any]:
+	payment_entry = str(payment_entry or "").strip()
+	action = str(action or "").strip()
+	if not payment_entry or not action:
+		frappe.throw(_("Payment Entry and workflow action are required."))
+	if not frappe.db.exists(PAYMENT_ENTRY_DOCTYPE, payment_entry):
+		frappe.throw(_("Payment Entry {0} does not exist.").format(payment_entry))
+
+	frappe.db.sql(
+		"SELECT name FROM `tabPayment Entry` WHERE name = %s FOR UPDATE",
+		(payment_entry,),
+	)
+	doc = _get_payment_entry(payment_entry)
+	payment_branch = _validate_payment_branch(doc)
+	_validate_selected_context(
+		doc,
+		payment_branch,
+		company=company,
+		customer=customer,
+		selected_branch=branch,
+	)
+
+	expected_modified = str(expected_payment_entry_modified or "").strip()
+	current_modified = str(getattr(doc, "modified", "") or "")
+	if not expected_modified or expected_modified != current_modified:
+		frappe.throw(
+			_("Payment Entry {0} changed after the review. Refresh before applying the workflow action.").format(
+				doc.name
+			)
+		)
+
+	preview = _build_preview(
+		doc,
+		company=company,
+		customer=customer,
+		branch=branch,
+	)
+	if not preview.get("workflow_eligible"):
+		frappe.throw(
+			_(
+				"This Payment Entry cannot use the standard EdgeSuite workflow path. Review the current blockers or use Advanced ERPNext."
+			)
+		)
+
+	return apply_document_workflow_action(
+		doctype=PAYMENT_ENTRY_DOCTYPE,
+		name=doc.name,
+		action=action,
+		expected_modified=expected_modified,
+		expected_state=str(expected_workflow_state or ""),
+	)
 
 
 @frappe.whitelist(methods=["POST"])
