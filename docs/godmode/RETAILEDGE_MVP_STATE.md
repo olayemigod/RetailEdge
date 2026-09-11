@@ -7,7 +7,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen exact head:** `7dc71c8d0632b5855cbbfcfe6624eb40162b49c8`
+**Latest code-frozen exact head:** `6b1830f92ead4af23e0123b7959b23e5156bb8dd`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -29,43 +29,52 @@ Phase 3 now audits the actual ordinary-user EdgeSuite experience: remaining Nati
 
 ## Current Code-Frozen Slice
 
-### `RIR2G2A` — EdgeSuite-Only Native Navigation Containment
+### `RIR2G2B` — Guided Purchase Invoice Completion Continuity
 
 **State:** `CODE-FROZEN / QA-PENDING`
 
-Frozen exact code head:
+Frozen exact governed head:
 
-- `7dc71c8d0632b5855cbbfcfe6624eb40162b49c8`
+- `6b1830f92ead4af23e0123b7959b23e5156bb8dd`
 
 Primary contract/runtime areas:
 
-- `docs/rir2g2_edgesuite_ui_completion_reconciliation_audit.md`
-- `docs/rir2g2a_edgesuite_only_native_navigation_containment.md`
-- `retailedge/edgesuite_ui.py`
-- `retailedge/master_experience.py`
+- `docs/rir2g2b_guided_purchase_invoice_completion_continuity.md`
+- `retailedge/standard_purchase_invoice_completion.py`
+- `retailedge/public/js/professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue`
 - `retailedge/public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue`
-- focused RIR2G2A access/navigation tests.
+- `retailedge/public/js/professional_purchasing/ProfessionalPurchasing.vue`
+- focused RIR2G2B contract/regression tests.
 
 Frozen result:
 
-- EdgeSuite-only users no longer receive raw DocType/Query Report routes from the base navigation registry;
-- containment runs after runtime route resolution, so dynamic native targets cannot escape;
-- final master composition repeats containment after all promotions/additions;
-- Pages and approved URLs remain available;
-- Native-Desk-capable users retain permission-allowed native forms/reports;
-- Business Hub independently filters and blocks native routes and all native-form fallback methods fail closed without capability;
-- no underlying ERPNext permission, role, DocType, Report, accounting, stock or workflow behavior changed.
+- Business Hub Record Purchase no longer strands an EdgeSuite-only user at a generic Purchase Invoice draft;
+- Guided Purchase Invoice creation remains draft-only;
+- a separate completion owner handles safe source-less direct Purchase Invoice drafts;
+- PO/Receipt-linked and Supplier Document-owned Purchase Invoices fail closed to their existing governed owners;
+- accounting-only and safe update-stock modes are distinguished;
+- update-stock Warehouse/Company/Branch context is server-revalidated and Serial/Batch/subcontracting complexity remains advanced;
+- active Frappe Workflow has precedence through F3F27;
+- no-Workflow completion row-locks/stale-checks/revalidates and delegates only to ERPNext native `doc.submit()`;
+- Professional Purchasing exposes a bounded resumable direct Purchase Invoice draft queue;
+- no direct GL/SLE/Payment Ledger mutation, `ignore_permissions`, manual DB commit or schema change was introduced.
 
 Governed exact-head gates:
 
 | Gate | Run | Result |
 | --- | ---: | --- |
-| EdgeSuite UI Candidate Compatibility | 34625515613 / #850 | PASS |
-| CI — clean Frappe v16 standalone integration | 34625515589 / #2612 | PASS |
-| RetailEdge Theme Compatibility | 34625515548 / #753 | PASS |
-| Linters / Semgrep / vulnerable dependency audit | 34625515549 / #2594 | PASS |
+| EdgeSuite UI Candidate Compatibility | 34627136913 / #858 | PASS |
+| CI — clean Frappe v16 standalone integration | 34627137381 / #2620 | PASS |
+| RetailEdge Theme Compatibility | 34627136928 / #761 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34627136991 / #2602 | PASS |
 
-RIR2G2 remains **ACTIVE**. The next confirmed UI-continuity blocker is generic Guided Purchase Invoice completion.
+RIR2G2 remains **ACTIVE**.
+
+### Prior Phase-3 frozen checkpoint — `RIR2G2A`
+
+- Frozen exact runtime head: `7dc71c8d0632b5855cbbfcfe6624eb40162b49c8`.
+- EdgeSuite-only native DocType/Query Report navigation containment is CODE-FROZEN / QA-PENDING.
+- Exact-head Theme #753, Linters #2594, CI #2612 and EdgeSuite Candidate #850 all PASS.
 
 ### Prior Phase-3 starting point
 
@@ -323,30 +332,27 @@ Do not obtain a green state by disabling meaningful tests, weakening valid asser
 
 ## Exact Next Executable Step
 
-Implement **RIR2G2B — Guided Purchase Invoice Completion Continuity**.
+Start **RIR2G2C — Operational Table Sorting Consistency**.
 
-Confirmed repository evidence:
+Current audit evidence:
 
-- Business Hub exposes **Record Purchase** as an ordinary guided action;
-- `retailedge.guided_purchase_invoice.create_simple_purchase_invoice_draft` inserts only a draft;
-- Business Hub currently closes the dialog and falls back to a generic draft/workflow notice;
-- F3F38 explicitly states that generic Guided Purchase Invoice remains draft-only and defers generic completion to a future ownership decision;
-- therefore an EdgeSuite-only user can create the ordinary Purchase Invoice draft but cannot complete it from that flow.
+- most EdgeSuite report pages use shared `EdgeReportShell`; do not duplicate shared table behavior locally without inspecting the shared contract;
+- `ProfessionalPurchasing.vue` already provides product-local sortable headers and is the local reference pattern;
+- `BusinessExpenses.vue` has a raw server-paginated operational table with no sorting controls;
+- `PaymentManagement.vue` has three bounded raw operational tables with no sorting controls;
+- the new Professional Purchasing direct Purchase Invoice draft table is raw and currently unsorted.
 
-Required bounded contract:
+Required bounded audit/implementation:
 
-1. Keep Guided Purchase Invoice creation draft-only.
-2. Add a separate standard completion owner for the generic guided Purchase Invoice draft.
-3. Scope standard completion to safe ordinary direct-purchase shapes; do not overlap Supplier Document→Purchase Invoice or advanced Professional Purchasing source workflows.
-4. Preserve Frappe Workflow precedence.
-5. No-Workflow completion must row-lock, stale-check, revalidate Company/Branch/Supplier/accounts/stock context as applicable, then call only ERPNext native `doc.submit()`.
-6. Distinguish accounting-only from `update_stock` Purchase Invoices; stock-updating cases require Warehouse/Branch safety and advanced Serial/Batch/subcontracting complexity must fail closed.
-7. Returns/debit notes, amendments, inter-company/internal supplier, advance allocation and other advanced accounting cases remain outside the generic standard contract.
-8. Business Hub **Record Purchase** must open the completion review immediately after draft creation.
-9. Provide a resumable EdgeSuite review path for an eligible generic guided Purchase Invoice draft without depending on Native Desk.
-10. Do not weaken or replace the existing Supplier Document Purchase Invoice handoff/completion contract.
-11. ERPNext remains authoritative for payable, tax, GL, Payment Ledger, Stock Ledger, valuation, outstanding and document lifecycle.
-12. Add focused contract/regression tests before runtime changes.
-13. Freeze only when Theme, Linters/Semgrep/dependency audit, clean Frappe v16 CI and EdgeSuite UI Candidate Compatibility pass on one exact SHA.
+1. Inspect the actual shared `EdgeReportShell` sorting contract from the governed EdgeSuite UI candidate before deciding whether shared report pages have a gap.
+2. Do not patch individual EdgeReportShell report pages if sorting already belongs to the shared component.
+3. For server-paginated Business Expenses, implement backend-aware sorting only through a strict allowlist of business-safe fields and directions; never sort only the current page while implying whole-result sorting.
+4. For bounded in-memory Payment Management tables, add explicit sortable headers using deterministic local sorting without changing ERPNext data truth.
+5. For the bounded direct Purchase Invoice draft queue, add deterministic local sorting or server allowlisted ordering consistent with its small bounded result contract.
+6. Preserve action columns as non-sortable.
+7. Keep default business ordering unchanged until the user explicitly changes sort.
+8. Preserve pagination/filter/Branch/permission semantics.
+9. Add focused tests before runtime changes.
+10. Freeze only after Theme, Linters/Semgrep/dependency audit, clean Frappe v16 CI and EdgeSuite UI Candidate Compatibility pass on one exact head.
 
-After G2B, continue RIR2G2 with quick-action continuity, table sorting/common table behavior, date consistency, Link-field cascades and per-surface native detail containment.
+After G2C, continue RIR2G2 with date presentation, Link-field cascade/stale dependent-value audit, document identity/status usability and per-surface Native Desk detail containment.
