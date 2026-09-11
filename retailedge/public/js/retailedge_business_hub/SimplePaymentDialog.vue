@@ -438,7 +438,8 @@ const CUSTOMER_PREVIEW_METHOD = "retailedge.standard_customer_payment_submit.get
 const CUSTOMER_SUBMIT_METHOD = "retailedge.standard_customer_payment_submit.submit_standard_customer_payment";
 const SUPPLIER_PREVIEW_METHOD = "retailedge.standard_supplier_payment_submit.get_supplier_payment_submit_preview";
 const SUPPLIER_SUBMIT_METHOD = "retailedge.standard_supplier_payment_submit.submit_standard_supplier_payment";
-const WORKFLOW_METHOD = "retailedge.workflow_actions.apply_document_workflow_action";
+const CUSTOMER_WORKFLOW_METHOD = "retailedge.standard_customer_payment_submit.apply_standard_customer_payment_workflow_action";
+const SUPPLIER_WORKFLOW_METHOD = "retailedge.standard_supplier_payment_submit.apply_standard_supplier_payment_workflow_action";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -823,12 +824,16 @@ export default {
 			this.submitError = "";
 			this.submitting = true;
 			try {
-				const result = await callMethod(WORKFLOW_METHOD, {
-					doctype: "Payment Entry",
-					name: review.payment_entry,
+				const method = kind === "customer" ? CUSTOMER_WORKFLOW_METHOD : SUPPLIER_WORKFLOW_METHOD;
+				const result = await callMethod(method, {
+					payment_entry: review.payment_entry,
 					action,
-					expected_modified: review.payment_entry_modified,
-					expected_state: review.workflow_readiness?.current_state || "",
+					expected_payment_entry_modified: review.payment_entry_modified,
+					expected_workflow_state: review.workflow_readiness?.current_state || "",
+					company: review.company || null,
+					customer: kind === "customer" ? (review.customer || null) : null,
+					supplier: kind === "supplier" ? (review.supplier || null) : null,
+					branch: review.branch || null,
 				});
 				frappe.show_alert?.({ message: `Payment workflow action applied: ${action}`, indicator: "green" });
 				if (Number(result.docstatus || 0) !== 0) {
