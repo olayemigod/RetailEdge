@@ -83,9 +83,17 @@
 					<EdgeEmptyState v-else-if="!draftPurchaseInvoices.length" title="No direct purchase drafts awaiting completion" description="Eligible source-less Purchase Invoice drafts in the current Company, Branch and Supplier scope will appear here." />
 					<div v-else class="table-wrap">
 						<table class="purchasing-table draft-invoice-table">
-							<thead><tr><th>Purchase Invoice</th><th>Date</th><th>Supplier</th><th>Branch</th><th>Mode</th><th class="num">Total</th><th>Action</th></tr></thead>
+							<thead><tr>
+								<th><button type="button" class="sort-button" @click="sortDraftInvoicesBy('name')">Purchase Invoice {{ draftInvoiceSortMark('name') }}</button></th>
+								<th><button type="button" class="sort-button" @click="sortDraftInvoicesBy('posting_date')">Date {{ draftInvoiceSortMark('posting_date') }}</button></th>
+								<th><button type="button" class="sort-button" @click="sortDraftInvoicesBy('supplier_name')">Supplier {{ draftInvoiceSortMark('supplier_name') }}</button></th>
+								<th><button type="button" class="sort-button" @click="sortDraftInvoicesBy('branch')">Branch {{ draftInvoiceSortMark('branch') }}</button></th>
+								<th><button type="button" class="sort-button" @click="sortDraftInvoicesBy('update_stock')">Mode {{ draftInvoiceSortMark('update_stock') }}</button></th>
+								<th class="num"><button type="button" class="sort-button" @click="sortDraftInvoicesBy('grand_total')">Total {{ draftInvoiceSortMark('grand_total') }}</button></th>
+								<th>Action</th>
+							</tr></thead>
 							<tbody>
-								<tr v-for="row in draftPurchaseInvoices" :key="row.name">
+								<tr v-for="row in sortedDraftPurchaseInvoices" :key="row.name">
 									<td><strong>{{ row.name }}</strong></td>
 									<td>{{ formatDate(row.posting_date) }}</td>
 									<td>{{ row.supplier_name || row.supplier }}</td>
@@ -343,8 +351,10 @@ function errorMessage(error, fallback) { return error?.message || error?.exc || 
 function doctypeSlug(doctype) { return String(doctype || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 function dispatchEdgeSuiteEvent(name, detail = {}) { window.dispatchEvent(new CustomEvent(name, { detail })); }
 function sortedCopy(rows, sort) {
-	const result = [...rows]; const { key, direction } = sort; const factor = direction === "asc" ? 1 : -1;
-	return result.sort((a, b) => { const av = a?.[key] ?? ""; const bv = b?.[key] ?? ""; if (typeof av === "number" || typeof bv === "number") return (Number(av || 0) - Number(bv || 0)) * factor; return String(av).localeCompare(String(bv)) * factor; });
+	const result = [...(rows || [])];
+	if (!sort?.key) return result;
+	const { key, direction } = sort; const factor = direction === "asc" ? 1 : -1;
+	return result.sort((a, b) => { const av = a?.[key] ?? ""; const bv = b?.[key] ?? ""; if (typeof av === "number" || typeof bv === "number" || typeof av === "boolean" || typeof bv === "boolean") return (Number(av || 0) - Number(bv || 0)) * factor; return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: "base" }) * factor; });
 }
 
 export default {
@@ -354,7 +364,7 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", actionError: "", actionNotice: "", company: "", branch: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			filters: { company: "", branch: "", supplier: "" }, summary: {}, capabilities: {}, limits: {}, rows: [], materialRequests: [], serverToday: "",
-			draftPurchaseInvoices: [], loadingDraftPurchaseInvoices: false, purchaseInvoiceCompletionOpen: false, purchaseInvoiceCompletionDocument: null,
+			draftPurchaseInvoices: [], draftInvoiceSort: null, loadingDraftPurchaseInvoices: false, purchaseInvoiceCompletionOpen: false, purchaseInvoiceCompletionDocument: null,
 			procurementTracker: { available: false, company: "", branch: "", report: "Procurement Tracker", reason: "" },
 			returnCapabilities: { can_prepare_purchase_return: false, can_prepare_supplier_debit_note: false }, returnSources: { purchaseReceipt: "", purchaseInvoice: "" }, preparingReturn: "",
 			landedCostCapability: { can_prepare_landed_cost: false, can_use_purchase_receipt: false, can_use_purchase_invoice: false },
@@ -377,6 +387,7 @@ export default {
 			return this.sortedRows.filter((row) => (row.attention_flags || []).some((flag) => flag.key === this.attentionFilter));
 		},
 		sortedMaterialRequests() { return sortedCopy(this.materialRequests, this.materialSort); },
+		sortedDraftPurchaseInvoices() { return sortedCopy(this.draftPurchaseInvoices, this.draftInvoiceSort); },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; this._onPageShow = () => this.loadWorkspace(); },
 	mounted() { window.addEventListener("retailedge-professional-purchasing-page-show", this._onPageShow); if (this.edgeUIValid) this.loadWorkspace(); },
@@ -555,6 +566,15 @@ export default {
 		openPurchaseReceipts() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; }, sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },
 		sortMaterialBy(key) { if (this.materialSort.key === key) this.materialSort.direction = this.materialSort.direction === "asc" ? "desc" : "asc"; else this.materialSort = { key, direction: "asc" }; }, materialSortMark(key) { return this.materialSort.key === key ? (this.materialSort.direction === "asc" ? "↑" : "↓") : ""; },
+		sortDraftInvoicesBy(key) {
+			if (!this.draftInvoiceSort || this.draftInvoiceSort.key !== key) this.draftInvoiceSort = { key, direction: "asc" };
+			else if (this.draftInvoiceSort.direction === "asc") this.draftInvoiceSort = { key, direction: "desc" };
+			else this.draftInvoiceSort = null;
+		},
+		draftInvoiceSortMark(key) {
+			if (!this.draftInvoiceSort || this.draftInvoiceSort.key !== key) return "↕";
+			return this.draftInvoiceSort.direction === "asc" ? "↑" : "↓";
+		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${doctypeSlug(item.target)}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target) window.open(item.target, "_blank", "noopener,noreferrer"); },
