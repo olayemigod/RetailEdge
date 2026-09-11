@@ -214,14 +214,10 @@ def _validate_source_and_stock_context(
 
 	warehouse_branch = next(iter(resolved_branches), "") if len(resolved_branches) == 1 else ""
 	effective_branch = branch or source_branch or warehouse_branch
-	for candidate, label in (
-		(source_branch, _("source Sales Order")),
-		(warehouse_branch, _("Stock Location")),
-	):
-		if candidate and effective_branch and candidate != effective_branch:
-			blockers.append(
-				_("The {0} Branch does not match the Delivery Note Branch.").format(label)
-			)
+	if source_branch and effective_branch and source_branch != effective_branch:
+		blockers.append(_("The source Sales Order Branch does not match the Delivery Note Branch."))
+	if warehouse_branch and effective_branch and warehouse_branch != effective_branch:
+		blockers.append(_("The Stock Location Branch does not match the Delivery Note Branch."))
 
 	operating = get_operating_context() or {}
 	operating_branch = _clean(operating.get("branch"))
