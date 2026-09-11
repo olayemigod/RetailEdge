@@ -86,6 +86,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeErrorState",
 	"EdgeEmptyState",
 	"EdgeStatusBadge",
+	"EdgeLinkField",
 ];
 
 function runtimeComponents() {
@@ -221,7 +222,7 @@ export default {
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
 		openResource(resource) {
-			if (resource?.key === "expense-categories") {
+			if (resource?.manager === "expense-categories") {
 				this.openExpenseCategoryManager("list");
 				return;
 			}
@@ -234,7 +235,7 @@ export default {
 		},
 		createResource(resource) {
 			if (!resource?.doctype || !resource.can_create || resource.singleton) return;
-			if (resource.key === "expense-categories") {
+			if (resource.manager === "expense-categories") {
 				this.openExpenseCategoryManager("new");
 				return;
 			}
