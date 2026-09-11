@@ -7,6 +7,7 @@ from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt
 
+from erpnext.stock.doctype.landed_cost_voucher.landed_cost_voucher import get_lcv_dimension_fields
 from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_lcv
 
 from retailedge.professional_purchasing import (
@@ -242,6 +243,13 @@ def _native_landed_cost_voucher(
 	return landed_cost_voucher
 
 
+def _dimension_values(row: Any) -> dict[str, str]:
+	return {
+		fieldname: str(getattr(row, fieldname, "") or "")
+		for fieldname in get_lcv_dimension_fields()
+	}
+
+
 def _assert_standard_landed_cost_shape(
 	landed_cost_voucher: Any,
 	*,
@@ -273,6 +281,15 @@ def _assert_standard_landed_cost_shape(
 	for item in items:
 		if cint(getattr(item, "is_fixed_asset", 0)):
 			frappe.throw(_("Fixed-asset landed cost requires Advanced ERPNext."))
+		item_dimensions = _dimension_values(item)
+		if any(
+			value
+			for fieldname, value in item_dimensions.items()
+			if fieldname != "cost_center"
+		):
+			frappe.throw(
+				_("Custom Landed Cost item dimensions require Advanced ERPNext.")
+			)
 		if (
 			str(getattr(item, "receipt_document_type", "") or "") != source_doctype
 			or str(getattr(item, "receipt_document", "") or "") != source_name
@@ -289,6 +306,10 @@ def _assert_standard_landed_cost_shape(
 		account = str(getattr(tax, "expense_account", "") or "").strip()
 		description = str(getattr(tax, "description", "") or "").strip()
 		amount = flt(getattr(tax, "amount", 0))
+		if any(_dimension_values(tax).values()):
+			frappe.throw(
+				_("Landed Cost charge accounting-dimension overrides require Advanced ERPNext.")
+			)
 		if not account or not description or amount <= 0:
 			frappe.throw(_("The Landed Cost Voucher contains a non-standard charge row."))
 		_validate_standard_charge_account(account, company)
@@ -328,6 +349,7 @@ def _standard_landed_cost_signature(landed_cost_voucher: Any) -> dict[str, Any]:
 				"rate": flt(getattr(row, "rate", 0), 9),
 				"amount": flt(getattr(row, "amount", 0), 9),
 				"cost_center": str(getattr(row, "cost_center", "") or ""),
+				"dimensions": _dimension_values(row),
 				"is_fixed_asset": cint(getattr(row, "is_fixed_asset", 0)),
 				"applicable_charges": flt(
 					getattr(row, "applicable_charges", 0),
@@ -346,6 +368,7 @@ def _standard_landed_cost_signature(landed_cost_voucher: Any) -> dict[str, Any]:
 				"base_amount": flt(getattr(row, "base_amount", 0), 9),
 				"cost_center": str(getattr(row, "cost_center", "") or ""),
 				"project": str(getattr(row, "project", "") or ""),
+				"dimensions": _dimension_values(row),
 			}
 			for row in list(getattr(landed_cost_voucher, "taxes", None) or [])
 		],
