@@ -156,9 +156,13 @@ def get_sales_by_item(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import apply_materialized_report_sort
+
 	filters = _coerce_filters(filters)
 	dataset = _build_sales_by_item_dataset(filters)
+	apply_materialized_report_sort(dataset, sort, "sales-by-item")
 	return _page_response(dataset, page=page, page_size=page_size)
 
 
@@ -174,9 +178,13 @@ def get_sales_invoice_register(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import apply_materialized_report_sort
+
 	filters = _coerce_filters(filters)
 	dataset = _build_sales_invoice_register_dataset(filters)
+	apply_materialized_report_sort(dataset, sort, "sales-invoice-register")
 	return _page_response(dataset, page=page, page_size=page_size)
 
 

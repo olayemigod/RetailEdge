@@ -100,10 +100,13 @@ def search_customer_receivables_options(
 def get_customer_receivables(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
-	page_size: int | str = DEFAULT_PAGE_SIZE,
-) -> dict[str, Any]:
+	page_size: int | str = DEFAULT_PAGE_SIZE,,
+	sort: dict[str, Any] | str | None = None,
+)
+	from retailedge.report_sorting import apply_materialized_report_sort
 	resolved = _coerce_filters(filters)
 	dataset = _build_customer_receivables_dataset(resolved)
+	apply_materialized_report_sort(dataset, sort, "customer-receivables")
 	return _page_response(dataset, page=page, page_size=page_size)
 
 

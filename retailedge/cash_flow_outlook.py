@@ -398,10 +398,17 @@ def _build_dataset(filters: frappe._dict) -> dict[str, Any]:
 
 
 @frappe.whitelist()
-def get_cash_flow_outlook(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+def get_cash_flow_outlook(
+	filters: dict[str, Any] | str | None = None,
+	sort: dict[str, Any] | str | None = None,
+) -> dict[str, Any]:
+	from retailedge.report_sorting import apply_materialized_report_sort
+
 	if isinstance(filters, str):
 		filters = frappe.parse_json(filters)
-	return _build_dataset(frappe._dict(filters or {}))
+	dataset = _build_dataset(frappe._dict(filters or {}))
+	apply_materialized_report_sort(dataset, sort, "cash-flow-outlook")
+	return dataset
 
 
 def get_cash_flow_outlook_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:

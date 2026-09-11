@@ -152,10 +152,13 @@ def search_stock_position_options(
 def get_stock_position(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
-	page_size: int | str = DEFAULT_PAGE_SIZE,
-) -> dict[str, Any]:
+	page_size: int | str = DEFAULT_PAGE_SIZE,,
+	sort: dict[str, Any] | str | None = None,
+)
+	from retailedge.report_sorting import apply_materialized_report_sort
 	filters = _coerce_filters(filters)
 	dataset = _build_stock_position_dataset(filters)
+	apply_materialized_report_sort(dataset, sort, "stock-position")
 	return _page_response(dataset, page=page, page_size=page_size)
 
 

@@ -99,9 +99,12 @@ def search_cash_shift_verification_options(
 
 @frappe.whitelist()
 def get_cash_shift_verification(
-	filters: dict[str, Any] | str | None = None, page: int | str = 1, page_size: int | str = DEFAULT_PAGE_SIZE
-) -> dict[str, Any]:
+	filters: dict[str, Any] | str | None = None, page: int | str = 1, page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
+)
+	from retailedge.report_sorting import apply_materialized_report_sort
 	dataset = _build_dataset(_coerce_filters(filters))
+	apply_materialized_report_sort(dataset, sort, "cash-shift-verification")
 	return _page_response(dataset, page=page, page_size=page_size)
 
 
