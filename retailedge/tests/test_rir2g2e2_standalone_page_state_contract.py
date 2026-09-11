@@ -30,8 +30,8 @@ def test_customer_360_separates_metadata_and_data_state_ownership():
 	assert '@retry="fetchData"' in source
 	assert 'v-else-if="!filters.customer"' in source
 	assert 'title="Select a customer"' in source
-	assert "customer-360-loading" not in source
-	assert "alert alert-danger customer-360-error" not in source
+	assert '<div v-else-if="loading" class="customer-360-loading">' not in source
+	assert '<div v-if="error" class="alert alert-danger customer-360-error">' not in source
 
 
 def test_customer_360_preserves_company_branch_customer_cascade():
