@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 import inspect
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
-import pytest
 
 from retailedge import guided_entry_context as cascade
 from retailedge import professional_selling as selling
+
+
+@contextmanager
+def _raises(error_type):
+	try:
+		yield
+	except error_type:
+		return
+	raise AssertionError(f"Expected {error_type.__name__} to be raised")
 
 
 def _restricted(branches):
@@ -27,7 +36,7 @@ def test_shared_resolver_restricted_zero_rejects_unmapped_warehouse():
 		patch.object(cascade, "resolve_branch_from_warehouse", return_value={"branch": ""}),
 		patch.object(cascade, "get_branch_profile", return_value=None),
 		patch.object(cascade, "get_operational_branch_scope", return_value=_restricted([])),
-		pytest.raises(frappe.PermissionError),
+		_raises(frappe.PermissionError),
 	):
 		cascade.resolve_branch_warehouse_selection(
 			company="Demo Company",
@@ -127,7 +136,7 @@ def test_professional_selling_warehouse_branch_is_revalidated_server_side():
 			"resolve_operational_branch",
 			side_effect=frappe.PermissionError("not permitted"),
 		) as resolve_branch,
-		pytest.raises(frappe.PermissionError),
+		_raises(frappe.PermissionError),
 	):
 		selling._validate_context(
 			{
