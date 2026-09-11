@@ -50,10 +50,16 @@
 			</div>
 
 			<div v-if="customerReview.blockers && customerReview.blockers.length" class="supplier-review-blockers" role="alert">
-				<strong>This draft needs Advanced ERPNext review before it can be submitted.</strong>
+				<strong v-if="customerReview.workflow_eligible">This Payment Entry is controlled by {{ customerReview.workflow_readiness?.workflow || 'Frappe Workflow' }}.</strong>
+				<strong v-else>This draft needs Advanced ERPNext review before it can be submitted.</strong>
 				<ul>
 					<li v-for="blocker in customerReview.blockers" :key="blocker">{{ blocker }}</li>
 				</ul>
+			</div>
+
+			<div v-if="customerReview.workflow_eligible" class="supplier-review-blockers">
+				<strong>{{ customerReview.workflow_readiness?.message || 'Choose an available workflow action.' }}</strong>
+				<div>Current state: {{ customerReview.workflow_readiness?.current_state || '—' }}</div>
 			</div>
 
 			<div class="supplier-review-grid">
@@ -134,10 +140,16 @@
 			</div>
 
 			<div v-if="supplierReview.blockers && supplierReview.blockers.length" class="supplier-review-blockers" role="alert">
-				<strong>This draft needs Advanced ERPNext review before it can be submitted.</strong>
+				<strong v-if="supplierReview.workflow_eligible">This Payment Entry is controlled by {{ supplierReview.workflow_readiness?.workflow || 'Frappe Workflow' }}.</strong>
+				<strong v-else>This draft needs Advanced ERPNext review before it can be submitted.</strong>
 				<ul>
 					<li v-for="blocker in supplierReview.blockers" :key="blocker">{{ blocker }}</li>
 				</ul>
+			</div>
+
+			<div v-if="supplierReview.workflow_eligible" class="supplier-review-blockers">
+				<strong>{{ supplierReview.workflow_readiness?.message || 'Choose an available workflow action.' }}</strong>
+				<div>Current state: {{ supplierReview.workflow_readiness?.current_state || '—' }}</div>
 			</div>
 
 			<div class="supplier-review-grid">
@@ -339,6 +351,17 @@
 						Close
 					</button>
 					<button
+						v-for="action in customerReview.workflow_eligible ? (customerReview.workflow_readiness?.available_actions || []) : []"
+						:key="action.action"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="submitting"
+						@click="applyPaymentWorkflow(customerReview, action.action, 'customer')"
+					>
+						{{ submitting ? 'Applying...' : action.action }}<span v-if="action.next_state"> → {{ action.next_state }}</span>
+					</button>
+					<button
+						v-if="!customerReview.workflow_eligible"
 						type="button"
 						class="edge-button edge-button--primary"
 						:disabled="submitting || !customerReview.can_submit"
@@ -363,6 +386,17 @@
 						Close
 					</button>
 					<button
+						v-for="action in supplierReview.workflow_eligible ? (supplierReview.workflow_readiness?.available_actions || []) : []"
+						:key="action.action"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="submitting"
+						@click="applyPaymentWorkflow(supplierReview, action.action, 'supplier')"
+					>
+						{{ submitting ? 'Applying...' : action.action }}<span v-if="action.next_state"> → {{ action.next_state }}</span>
+					</button>
+					<button
+						v-if="!supplierReview.workflow_eligible"
 						type="button"
 						class="edge-button edge-button--primary"
 						:disabled="submitting || !supplierReview.can_submit"
@@ -404,6 +438,7 @@ const CUSTOMER_PREVIEW_METHOD = "retailedge.standard_customer_payment_submit.get
 const CUSTOMER_SUBMIT_METHOD = "retailedge.standard_customer_payment_submit.submit_standard_customer_payment";
 const SUPPLIER_PREVIEW_METHOD = "retailedge.standard_supplier_payment_submit.get_supplier_payment_submit_preview";
 const SUPPLIER_SUBMIT_METHOD = "retailedge.standard_supplier_payment_submit.submit_standard_supplier_payment";
+const WORKFLOW_METHOD = "retailedge.workflow_actions.apply_document_workflow_action";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -781,6 +816,37 @@ export default {
 				throw error;
 			} finally {
 				this.reviewLoading = false;
+			}
+		},
+		async applyPaymentWorkflow(review, action, kind) {
+			if (this.submitting || !review?.workflow_eligible || !review.payment_entry || !action) return;
+			this.submitError = "";
+			this.submitting = true;
+			try {
+				const result = await callMethod(WORKFLOW_METHOD, {
+					doctype: "Payment Entry",
+					name: review.payment_entry,
+					action,
+					expected_modified: review.payment_entry_modified,
+					expected_state: review.workflow_readiness?.current_state || "",
+				});
+				frappe.show_alert?.({ message: `Payment workflow action applied: ${action}`, indicator: "green" });
+				if (Number(result.docstatus || 0) !== 0) {
+					this.$emit("close");
+					return;
+				}
+				if (kind === "customer") await this.loadCustomerReview(review.payment_entry);
+				else await this.loadSupplierReview(review.payment_entry);
+			} catch (error) {
+				this.submitError = errorMessage(error, "Unable to apply the Payment Entry workflow action.");
+				try {
+					if (kind === "customer") await this.loadCustomerReview(review.payment_entry);
+					else await this.loadSupplierReview(review.payment_entry);
+				} catch (_refreshError) {
+					// Preserve the workflow error if the document changed or left the draft queue.
+				}
+			} finally {
+				this.submitting = false;
 			}
 		},
 		async submitCustomerPayment() {
