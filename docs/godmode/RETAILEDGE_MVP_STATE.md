@@ -267,22 +267,3 @@ Required next audit:
 7. Fail closed to Advanced ERPNext for unsupported multi-company, incompatible source, complex tax/accounting override, cancellation/amendment or other advanced cases.
 8. Keep reporting expansion, unrelated purchasing redesign and manual browser/persona QA outside this slice.
 9. Define the smallest F3F41 contract from repository evidence, add focused tests, implement only the approved standard path, then run the same four governed exact-head gates before freeze.
-## Exact Next Executable Step
-
-Perform a bounded repository audit for **RIR2F3F40 — Incoming Quality Inspection EdgeSuite Ownership**.
-
-Required next audit:
-
-1. Trace the complete current Incoming Quality Inspection flow in Professional Purchasing, including source document selection, any Quality Inspection draft creation, readings entry, acceptance/rejection, references, and native Desk handoff.
-2. Confirm every side effect that currently occurs before the Native Desk handoff. Do not solve the gap by route-hiding a draft that has already been created.
-3. Identify the smallest standard EdgeSuite flow that can safely own:
-   - preparing or reusing the correct Quality Inspection;
-   - entering required inspection readings;
-   - validation/result status;
-   - submission or active Frappe Workflow progression where configured.
-4. Preserve ERPNext Quality Inspection semantics, Item/Specification truth, Purchase Receipt/Purchase Order linkage, stock acceptance/rejection behavior, permissions, Branch/Company scope and any downstream stock controls.
-5. Apply ProcessEdge smart-form rules: inspection template/specification/readings must be filtered to the selected Item/reference context and validated server-side.
-6. Reuse the shared F3F27 workflow bridge if Quality Inspection has an active Frappe Workflow; do not invent RetailEdge workflow state.
-7. Define strict idempotency if the existing flow already persists a draft before completion.
-8. Keep Landed Cost Voucher, advanced laboratory-style inspection redesign, unrelated stock posting and reporting expansion out of scope.
-9. Define the smallest F3F40 contract from repository evidence, add focused tests, then run the same four governed exact-head gates before freeze.
