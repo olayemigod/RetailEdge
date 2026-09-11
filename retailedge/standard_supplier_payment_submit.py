@@ -12,7 +12,10 @@ from retailedge.advanced_payments import (
 	_invoice_branch,
 	_payment_branch_field,
 )
-from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
+from retailedge.operating_context import (
+	get_operational_branch_scope,
+	resolve_operational_branch,
+)
 from retailedge.workflow_actions import apply_document_workflow_action
 from retailedge.workflow_readiness import get_workflow_readiness
 
@@ -48,20 +51,23 @@ def _payment_branch(doc: Any) -> str:
 
 def _validate_payment_branch(doc: Any) -> str:
 	branch = _payment_branch(doc)
-	global_access = user_has_global_branch_access(user=frappe.session.user)
+	company = str(getattr(doc, "company", "") or "").strip()
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
-			company=doc.company,
-			throw=True,
-		)
-	elif not global_access:
+		return str(
+			resolve_operational_branch(
+				company,
+				branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
+	if scope["restricted"]:
 		frappe.throw(
 			_("Payment Entry {0} has no Branch attribution for your restricted access.").format(doc.name),
 			frappe.PermissionError,
 		)
-	return branch
+	return ""
 
 
 def _validate_selected_context(
@@ -121,12 +127,24 @@ def _reference_preview(doc: Any, payment_branch: str) -> tuple[dict[str, Any] | 
 	invoice = frappe.get_doc(PURCHASE_INVOICE_DOCTYPE, invoice_name)
 	_assert_permission(PURCHASE_INVOICE_DOCTYPE, "read", invoice)
 	invoice_branch = _invoice_branch(invoice)
+	invoice_scope = get_operational_branch_scope(
+		str(getattr(invoice, "company", "") or ""),
+		user=frappe.session.user,
+	)
 	if invoice_branch:
-		validate_user_branch_access(
-			invoice_branch,
-			user=frappe.session.user,
-			company=invoice.company,
-			throw=True,
+		invoice_branch = str(
+			resolve_operational_branch(
+				invoice.company,
+				invoice_branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
+	elif invoice_scope["restricted"]:
+		blockers.append(
+			_("Referenced Purchase Invoice {0} has no Branch attribution for your restricted access.").format(
+				invoice_name
+			)
 		)
 
 	if cint(getattr(invoice, "docstatus", 0)) != 1:
@@ -313,10 +331,25 @@ def list_standard_supplier_payment_drafts(
 	_assert_permission("Company", "read", frappe.get_doc("Company", company))
 	_assert_permission(SUPPLIER_DOCTYPE, "read", frappe.get_doc(SUPPLIER_DOCTYPE, supplier))
 
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
-	elif not user_has_global_branch_access(user=frappe.session.user):
-		frappe.throw(_("Choose a Branch before reviewing draft payments for restricted access."), frappe.PermissionError)
+		branch = str(
+			resolve_operational_branch(
+				company,
+				branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
+	elif scope["restricted"]:
+		branch = str(
+			resolve_operational_branch(
+				company,
+				"",
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
 
 	filters: dict[str, Any] = {
 		"docstatus": 0,
