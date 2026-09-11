@@ -67,7 +67,15 @@
 					<div v-if="listError" class="error-banner">{{ listError }}</div>
 					<div class="table-wrap">
 						<table class="expense-table">
-							<thead><tr><th>Date</th><th>Expense</th><th>Payee</th><th>Branch</th><th>Status</th><th>Ledger</th><th class="amount">Amount</th></tr></thead>
+							<thead><tr>
+								<th><button type="button" class="sort-button" @click='sortBusinessExpenses("expense_date")'>Date {{ sortBusinessExpenseMark("expense_date") }}</button></th>
+								<th><button type="button" class="sort-button" @click='sortBusinessExpenses("expense_category")'>Expense {{ sortBusinessExpenseMark("expense_category") }}</button></th>
+								<th><button type="button" class="sort-button" @click='sortBusinessExpenses("payee_name")'>Payee {{ sortBusinessExpenseMark("payee_name") }}</button></th>
+								<th><button type="button" class="sort-button" @click='sortBusinessExpenses("branch")'>Branch {{ sortBusinessExpenseMark("branch") }}</button></th>
+								<th><button type="button" class="sort-button" @click='sortBusinessExpenses("expense_status")'>Status {{ sortBusinessExpenseMark("expense_status") }}</button></th>
+								<th><button type="button" class="sort-button" @click='sortBusinessExpenses("ledger_status")'>Ledger {{ sortBusinessExpenseMark("ledger_status") }}</button></th>
+								<th class="amount"><button type="button" class="sort-button sort-button--amount" @click='sortBusinessExpenses("amount")'>Amount {{ sortBusinessExpenseMark("amount") }}</button></th>
+							</tr></thead>
 							<tbody>
 								<tr v-for="row in rows" :key="row.name" class="expense-row" @click="openExpense(row.name)">
 									<td>{{ formatDate(row.expense_date) }}</td>
@@ -232,7 +240,7 @@ export default {
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			canCreate: false, canReview: false, settings: {}, statuses: [], defaultValues: {},
 			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "", search_text: "", page_size: 25 },
-			rows: [], summary: {}, pagination: {}, scope: {}, screen: "list", values: blankValues(),
+			rows: [], summary: {}, pagination: {}, scope: {}, listSort: null, screen: "list", values: blankValues(),
 			categoryDefaults: {}, current: {}, editingName: "", actionRemarks: "",
 		};
 	},
@@ -276,7 +284,19 @@ export default {
 		selectFilterBranch(option) { this.filters.branch = option.value || ""; }, clearFilterBranch() { this.filters.branch = ""; },
 		selectFilterCategory(option) { this.filters.expense_category = option.value || ""; }, clearFilterCategory() { this.filters.expense_category = ""; },
 		applyFilters() { this.pagination.page = 1; this.fetchList(1); },
-		async fetchList(page = this.pagination.page || 1) { if (!this.filters.company) return; this.listLoading = true; this.listError = ""; try { const result = await callMethod(LIST_METHOD, { filters: this.filters, page, page_size: this.filters.page_size || 25 }); this.rows = result.rows || []; this.summary = result.summary || {}; this.pagination = result.pagination || {}; this.scope = result.scope || {}; } catch (error) { this.rows = []; this.listError = errorMessage(error, "Unable to load Business Expenses."); } finally { this.listLoading = false; } },
+		async fetchList(page = this.pagination.page || 1) { if (!this.filters.company) return; this.listLoading = true; this.listError = ""; try { const result = await callMethod(LIST_METHOD, { filters: this.filters, page, page_size: this.filters.page_size || 25, sort: this.listSort }); this.rows = result.rows || []; this.summary = result.summary || {}; this.pagination = result.pagination || {}; this.scope = result.scope || {}; this.listSort = result.sort || null; } catch (error) { this.rows = []; this.listError = errorMessage(error, "Unable to load Business Expenses."); } finally { this.listLoading = false; } },
+		sortBusinessExpenses(field) {
+			const current = this.listSort;
+			if (!current || current.field !== field) this.listSort = { field, direction: "asc" };
+			else if (current.direction === "asc") this.listSort = { field, direction: "desc" };
+			else this.listSort = null;
+			this.pagination.page = 1;
+			this.fetchList(1);
+		},
+		sortBusinessExpenseMark(field) {
+			if (!this.listSort || this.listSort.field !== field) return "↕";
+			return this.listSort.direction === "desc" ? "↓" : "↑";
+		},
 		goToPage(page) { if (page > 0) this.fetchList(page); },
 		openNewExpense() { if (!this.canCreate) return; this.values = { ...this.defaultValues }; this.categoryDefaults = {}; this.editingName = ""; this.formError = ""; this.screen = "form"; },
 		selectCompany(option) { this.values.company = option.value || ""; this.values.branch = ""; this.values.expense_category = ""; this.values.payment_account = ""; this.values.cost_center = ""; this.values.project = ""; this.categoryDefaults = {}; },
@@ -328,6 +348,9 @@ textarea.edge-input { min-height: 78px; resize: vertical; }
 .queue-summary > div, .derived-context > div, .detail-grid > div { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--edge-border, #e5e7eb); border-radius: 8px; background: var(--edge-surface-muted, #f8fafc); }
 .table-wrap { overflow-x: auto; border: 1px solid var(--edge-border, #e5e7eb); border-radius: 9px; }
 .expense-table { width: 100%; border-collapse: collapse; min-width: 840px; }
+.sort-button { width: 100%; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.sort-button--amount { text-align: right; }
+.sort-button:hover, .sort-button:focus-visible { color: var(--edge-primary, #155eef); text-decoration: underline; text-underline-offset: 3px; }
 .expense-table th, .expense-table td { padding: 10px 12px; border-bottom: 1px solid var(--edge-border, #e5e7eb); text-align: left; vertical-align: top; }
 .expense-table th { font-size: .75rem; color: var(--edge-text-muted, #667085); background: var(--edge-surface-muted, #f8fafc); }
 .expense-table td small { display: block; margin-top: 2px; color: var(--edge-text-muted, #667085); }
