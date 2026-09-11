@@ -123,6 +123,14 @@
 				@saved="handleSimpleSalesInvoiceSaved"
 				@open-native="openNativeSalesInvoice"
 			/>
+			<StandardSalesInvoiceCompletionDialog
+				:open="salesInvoiceCompletionOpen"
+				:document="salesInvoiceCompletionDocument"
+				:canUseNativeDesk="nativeFallbackEnabled"
+				@close="closeSalesInvoiceCompletion"
+				@changed="handleSalesInvoiceCompletionChanged"
+				@completed="handleSalesInvoiceCompletionCompleted"
+			/>
 
 			<SimplePaymentDialog
 				:open="simplePaymentOpen"
@@ -191,6 +199,7 @@ import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
 import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
+import StandardSalesInvoiceCompletionDialog from "../professional_selling/StandardSalesInvoiceCompletionDialog.vue";
 import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import { openQuickEntryMaster } from "./guidedEntryUtils";
@@ -275,6 +284,7 @@ export default {
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
 		SimpleSalesInvoiceDialog,
+		StandardSalesInvoiceCompletionDialog,
 		SimpleStockAdjustmentDialog,
 		SimpleStockTransferDialog,
 	},
@@ -284,6 +294,8 @@ export default {
 			error: "",
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
+			salesInvoiceCompletionOpen: false,
+			salesInvoiceCompletionDocument: null,
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
 			simpleCashDepositOpen: false,
@@ -461,7 +473,25 @@ export default {
 		},
 		handleSimpleSalesInvoiceSaved(result) {
 			this.simpleSalesInvoiceOpen = false;
-			this.notifyGuidedDraftSaved(result, "Sales Invoice", "Sales Invoice");
+			if (result?.name) {
+				this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name });
+			}
+		},
+		openSalesInvoiceCompletion(document) {
+			if (document?.doctype !== "Sales Invoice" || !document?.name) return;
+			this.salesInvoiceCompletionDocument = { doctype: "Sales Invoice", name: document.name };
+			this.salesInvoiceCompletionOpen = true;
+		},
+		closeSalesInvoiceCompletion() {
+			this.salesInvoiceCompletionOpen = false;
+			this.salesInvoiceCompletionDocument = null;
+		},
+		handleSalesInvoiceCompletionChanged() {
+			this.refreshContext({ force: true });
+		},
+		handleSalesInvoiceCompletionCompleted() {
+			this.closeSalesInvoiceCompletion();
+			this.refreshContext({ force: true });
 		},
 		openNativeSalesInvoice(doctype = "Sales Invoice") {
 			this.simpleSalesInvoiceOpen = false;
