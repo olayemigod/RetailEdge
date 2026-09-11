@@ -7,7 +7,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen exact head:** `e17fe96a690e035567d6c7f519c76a9fecdd8543`
+**Latest code-frozen exact head:** `f9d9b51b5dd46e3fd74e8ea63373b0e651e49310`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -27,46 +27,50 @@ Phase 2 now audits whether the already-built operational workflows form a comple
 
 ## Current Code-Frozen Slice
 
-### `RIR2G1A2` — End-to-End Branch Cascade / Operational Scope Hardening
+### `RIR2G1B` — Standard Quotation + Sales Order Completion
 
 **State:** `CODE-FROZEN / QA-PENDING`
 
 Frozen exact code head:
 
-- `e17fe96a690e035567d6c7f519c76a9fecdd8543`
+- `f9d9b51b5dd46e3fd74e8ea63373b0e651e49310`
 
 Primary contract/runtime areas:
 
-- `docs/rir2g1a2_branch_cascade_operational_scope_hardening.md`
-- guided Customer/Supplier Payment and Cash/Bank Transfer;
-- standard Customer/Supplier Payment completion;
-- Cash Deposit and Cashier Expense custody context;
-- Branch-scoped Bank Account policy;
-- Professional Selling and mapped Sales Order / Delivery / Sales Invoice Branch revalidation;
-- frontend Branch→Warehouse/pricing/reference invalidation contracts.
+- `docs/rir2g1b_standard_quotation_sales_order_completion.md`
+- `retailedge/standard_selling_completion.py`
+- `retailedge/public/js/professional_selling/StandardSellingCompletionDialog.vue`
+- `retailedge/public/js/professional_selling/ProfessionalSelling.vue`
+- focused RIR2G1B contract/regression tests.
 
 Frozen result:
 
-- frontend cascade remains dependency-aware rather than clearing every field indiscriminately;
-- restricted-zero Branch scope fails closed;
-- restricted multi-Branch blank writes fail closed where Branch is business-sensitive;
-- restricted single-Branch may auto-resolve where the workflow allows;
-- unrestricted blank-Branch Company-wide compatibility remains preserved;
-- Branch-scoped Bank Accounts use operational Branch authority while company-wide accounts retain their existing compatibility;
-- source documents, invoices and Warehouse-derived Branches are revalidated server-side;
-- no frontend filter is treated as authorization;
-- no accounting/GL, Stock Ledger, valuation, submitted-document mutation, schema migration, `ignore_permissions`, or manual commit was introduced.
+- standard Customer Quotation and standard Sales Order can be completed from EdgeSuite without Native Desk;
+- completion preview is persistence-free, Company/Branch-safe, immutable-snapshot-aware and Workflow-aware;
+- active Frappe Workflow has precedence and only Frappe-returned actions may progress the document;
+- no-Workflow sites use ERPNext native `doc.submit()` only after row lock, stale check, revalidation and submit permission;
+- EdgeSuite does not assign workflow state, docstatus, GL, Stock Ledger or status truth directly;
+- Delivery Note and Sales Invoice submission remain separate later checkpoints because they carry stock/accounting consequences;
+- no schema migration, `ignore_permissions`, manual DB commit or submitted-source mutation was introduced.
 
 Governed exact-head gates:
 
 | Gate | Run | Result |
 | --- | ---: | --- |
-| EdgeSuite UI Candidate Compatibility | 34616285751 / #816 | PASS |
-| CI — clean Frappe v16 standalone integration | 34616285761 / #2578 | PASS |
-| RetailEdge Theme Compatibility | 34616285855 / #719 | PASS |
-| Linters / Semgrep / vulnerable dependency audit | 34616285844 / #2560 | PASS |
+| EdgeSuite UI Candidate Compatibility | 34617578533 / #823 | PASS |
+| CI — clean Frappe v16 standalone integration | 34617578521 / #2585 | PASS |
+| RetailEdge Theme Compatibility | 34617578518 / #726 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34617578527 / #2567 | PASS |
 
-RIR2G1 remains **ACTIVE**. The next bounded workflow blocker is the already-approved RIR2G1B standard Quotation + Sales Order completion contract.
+RIR2G1 remains **ACTIVE**. The next bounded audit target is the separate Delivery Note stock-submission boundary.
+
+### Prior Phase-2 frozen checkpoint — `RIR2G1A2`
+
+- Frozen exact code head: `e17fe96a690e035567d6c7f519c76a9fecdd8543`.
+- Branch cascade and operational scope hardening is CODE-FROZEN / QA-PENDING.
+- Exact-head Theme #719, Linters #2560, CI #2578 and EdgeSuite Candidate #816 all PASS.
+- Frontend Branch cascade remains dependency-aware; backend Branch-sensitive writes/reads now use operational Branch authority.
+- Restricted-zero fails closed, restricted-multi requires explicit Branch where appropriate, and unrestricted Company-wide compatibility remains preserved.
 
 ## Prior Phase Closure Reference
 
@@ -319,21 +323,21 @@ Do not obtain a green state by disabling meaningful tests, weakening valid asser
 
 ## Exact Next Executable Step
 
-Resume **RIR2G1B — Standard Quotation + Sales Order Completion** from the frozen contract at `docs/rir2g1b_standard_quotation_sales_order_completion.md`.
+Audit and, if required, implement **RIR2G1C — Standard Delivery Note Completion** as a separate stock-posting checkpoint.
 
-Goal: remove the ordinary EdgeSuite dead end after creating a standard Customer Quotation or Sales Order draft while preserving ERPNext/Frappe as lifecycle authority.
+Goal: determine whether an ordinary EdgeSuite user can complete the normal Sales Order → Delivery Note journey without Native Desk while preserving ERPNext stock-ledger and valuation truth.
 
-Required implementation:
+Required audit/implementation rules:
 
-1. Support exactly standard Customer Quotation and standard Sales Order.
-2. Add persistence-free completion preview with Company/Branch revalidation, immutable `modified` snapshot, Workflow readiness and standard-shape blockers.
-3. If no active Frappe Workflow exists, allow native ERPNext `doc.submit()` only after row lock, stale check, permission check and full revalidation.
-4. If an active Frappe Workflow exists, direct submit must fail closed and only Frappe-returned workflow actions may be executed through the shared F3F27 workflow bridge.
-5. EdgeSuite Professional Selling must expose completion review for newly-created and permitted recent draft Quotation/Sales Order records.
-6. Do not expose RIR2G1B completion controls for Delivery Note or Sales Invoice; those remain later, higher-risk checkpoints.
-7. Preserve advanced/native fallback only for documented advanced cases and only when Native Desk capability exists.
-8. No direct `docstatus` / `workflow_state` assignment, no submitted-source mutation, no GL/SLE write, no `ignore_permissions`, no manual commit and no schema migration.
-9. Add focused backend/UI/regression tests first, implement the smallest safe slice, then rerun all four governed exact-head gates.
-10. Freeze RIR2G1B only when Theme, Linters/Semgrep/dependency audit, clean Frappe v16 CI and EdgeSuite UI Candidate Compatibility all pass on the same exact SHA.
+1. Support only a standard draft Delivery Note created from the existing Professional Selling path.
+2. Reuse persistence-free completion preview, immutable `modified` snapshot, Company/Branch/warehouse revalidation and Frappe Workflow precedence.
+3. If no active Frappe Workflow exists, any direct submit path must row-lock, stale-check, revalidate standard shape and permissions, then delegate only to ERPNext native `doc.submit()`.
+4. If active Workflow exists, direct submit must fail closed and only Frappe-returned workflow actions may progress the Delivery Note through the shared F3F27 bridge.
+5. Do not write Stock Ledger, valuation or stock status directly; ERPNext submit remains authoritative.
+6. Serial/Batch, packed items, subcontracting, returns, internal transfer or other advanced/non-standard delivery cases must fail closed to Advanced ERPNext unless the existing standard mapper proves they are safely supported.
+7. Sales Invoice accounting submission remains a separate later checkpoint.
+8. No schema migration, `ignore_permissions`, manual DB commit, direct docstatus/workflow-state assignment or submitted-source mutation.
+9. Add focused contract/regression tests before runtime changes.
+10. Freeze only when Theme, Linters/Semgrep/dependency audit, clean Frappe v16 CI and EdgeSuite UI Candidate Compatibility all pass on one exact SHA.
 
-After RIR2G1B freeze, continue RIR2G1 to the separate Delivery Note stock-submission boundary rather than combining it into this checkpoint.
+After RIR2G1C freeze, continue RIR2G1 to the separate Sales Invoice accounting-submission boundary or another higher-priority journey blocker identified by repository evidence.
