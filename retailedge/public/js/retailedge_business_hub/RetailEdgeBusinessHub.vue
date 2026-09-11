@@ -172,6 +172,14 @@
 				@saved="handleSimplePurchaseInvoiceSaved"
 				@open-native="openNativePurchaseInvoice"
 			/>
+			<StandardPurchaseInvoiceCompletionDialog
+				:open="purchaseInvoiceCompletionOpen"
+				:document="purchaseInvoiceCompletionDocument"
+				:canUseNativeDesk="nativeFallbackEnabled"
+				@close="closePurchaseInvoiceCompletion"
+				@changed="handlePurchaseInvoiceCompletionChanged"
+				@completed="handlePurchaseInvoiceCompletionCompleted"
+			/>
 
 			<SimpleCashierExpenseDialog
 				:open="simpleCashierExpenseOpen"
@@ -207,6 +215,7 @@ import SimpleCashTransferDialog from "./SimpleCashTransferDialog.vue";
 import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
+import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
 import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
 import StandardSalesInvoiceCompletionDialog from "../professional_selling/StandardSalesInvoiceCompletionDialog.vue";
 import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
@@ -293,6 +302,7 @@ export default {
 		SimpleCashierExpenseDialog,
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
+		StandardPurchaseInvoiceCompletionDialog,
 		SimpleSalesInvoiceDialog,
 		StandardSalesInvoiceCompletionDialog,
 		SimpleStockAdjustmentDialog,
@@ -313,6 +323,8 @@ export default {
 			internalTransferCompletionDocument: null,
 			simpleCashTransferOpen: false,
 			simplePurchaseInvoiceOpen: false,
+			purchaseInvoiceCompletionOpen: false,
+			purchaseInvoiceCompletionDocument: null,
 			simpleCashierExpenseOpen: false,
 			simpleStockTransferOpen: false,
 			simpleStockAdjustmentOpen: false,
@@ -574,7 +586,25 @@ export default {
 		},
 		handleSimplePurchaseInvoiceSaved(result) {
 			this.simplePurchaseInvoiceOpen = false;
-			this.notifyGuidedDraftSaved(result, "Purchase Invoice", "Purchase Invoice");
+			if (result?.name) {
+				this.openPurchaseInvoiceCompletion({ doctype: "Purchase Invoice", name: result.name });
+			}
+		},
+		openPurchaseInvoiceCompletion(document) {
+			if (document?.doctype !== "Purchase Invoice" || !document?.name) return;
+			this.purchaseInvoiceCompletionDocument = { doctype: "Purchase Invoice", name: document.name };
+			this.purchaseInvoiceCompletionOpen = true;
+		},
+		closePurchaseInvoiceCompletion() {
+			this.purchaseInvoiceCompletionOpen = false;
+			this.purchaseInvoiceCompletionDocument = null;
+		},
+		handlePurchaseInvoiceCompletionChanged() {
+			this.refreshContext({ force: true });
+		},
+		handlePurchaseInvoiceCompletionCompleted() {
+			this.closePurchaseInvoiceCompletion();
+			this.refreshContext({ force: true });
 		},
 		openNativePurchaseInvoice(doctype = "Purchase Invoice") {
 			if (!this.nativeFallbackEnabled) return;
