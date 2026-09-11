@@ -91,6 +91,7 @@ def test_reversal_validates_exact_original_two_line_posting_contract():
 	assert "_same_amount(row.credit_in_account_currency, amount)" in source
 	assert "expense_row.cost_center != doc.cost_center" in source
 	assert "expense_row.project != doc.project" in source
+	assert 'journal.has_permission("read")' in source
 	assert 'meta.has_field("retailedge_branch")' in source
 
 
