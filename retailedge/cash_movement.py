@@ -121,7 +121,10 @@ def get_cash_movement(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import build_report_order_by, mark_report_columns
+
 	filters = _coerce_filters(filters)
 	query = _prepare_query(filters)
 	page = max(1, cint(page) or 1)
@@ -135,9 +138,28 @@ def get_cash_movement(
 	total_pages = max(1, ceil(total_rows / page_size)) if total_rows else 1
 	if page > total_pages:
 		page = total_pages
-	rows = _query_rows(query, limit=page_size, offset=(page - 1) * page_size)
+	normalized_sort, order_by = build_report_order_by(
+		sort,
+		"cash-movement",
+		{
+			"posting_date": "gle.posting_date",
+			"account": "gle.account",
+			"branch": "branch",
+			"movement_type": "movement_type",
+			"payment_method": "payment_method",
+			"money_in": "gle.debit",
+			"money_out": "gle.credit",
+			"net_change": "(gle.debit - gle.credit)",
+			"voucher_type": "gle.voucher_type",
+			"voucher_no": "gle.voucher_no",
+		},
+		default_order="gle.posting_date DESC, gle.creation DESC, gle.name DESC",
+		tie_breakers=("gle.posting_date DESC", "gle.creation DESC", "gle.name DESC"),
+	)
+	rows = _query_rows(query, limit=page_size, offset=(page - 1) * page_size, order_by=order_by)
 	return {
-		"columns": _columns(),
+		"columns": mark_report_columns(_columns(), "cash-movement"),
+		"sort": normalized_sort,
 		"rows": rows,
 		"summary": _summary_cards(summary, currency=query["currency"]),
 		"pagination": {
@@ -238,7 +260,13 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 	}
 
 
-def _query_rows(query: dict[str, Any], *, limit: int, offset: int) -> list[dict[str, Any]]:
+def _query_rows(
+	query: dict[str, Any],
+	*,
+	limit: int,
+	offset: int,
+	order_by: str = "gle.posting_date DESC, gle.creation DESC, gle.name DESC",
+) -> list[dict[str, Any]]:
 	sql = f"""
 		SELECT
 			gle.posting_date,
@@ -255,7 +283,7 @@ def _query_rows(query: dict[str, Any], *, limit: int, offset: int) -> list[dict[
 		INNER JOIN `tabAccount` acc ON acc.name = gle.account
 		{query["joins"]}
 		WHERE {query["where_sql"]}
-		ORDER BY gle.posting_date DESC, gle.creation DESC, gle.name DESC
+		ORDER BY {order_by}
 		LIMIT %s OFFSET %s
 	"""
 	rows = frappe.db.sql(

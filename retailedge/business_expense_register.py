@@ -67,7 +67,10 @@ def get_consolidated_expense_register(
 	*,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import build_report_order_by, mark_report_columns
+
 	query = _prepare_query(_coerce_filters(filters))
 	page = max(1, cint(page) or 1)
 	page_size = max(1, min(cint(page_size) or DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
@@ -77,10 +80,34 @@ def get_consolidated_expense_register(
 	total_pages = max(1, ceil(total_rows / page_size)) if total_rows else 1
 	if page > total_pages:
 		page = total_pages
-	rows = _query_rows(query, limit=page_size, offset=(page - 1) * page_size)
+	normalized_sort, order_by = build_report_order_by(
+		sort,
+		"expense-register",
+		{
+			"name": "expense_rows.name",
+			"expense_date": "expense_rows.expense_date",
+			"branch": "expense_rows.branch",
+			"cashier": "expense_rows.cashier",
+			"expense_category": "expense_rows.expense_category",
+			"amount": "expense_rows.amount",
+			"expense_status": "expense_rows.expense_status",
+			"ledger_status": "expense_rows.ledger_status",
+			"posting_ready": "expense_rows.posting_ready",
+			"description": "expense_rows.description",
+			"source_type": "expense_rows.source_type",
+			"source_reference": "expense_rows.source_reference",
+			"expense_account": "expense_rows.expense_account",
+			"cost_center": "expense_rows.cost_center",
+			"payment_account": "expense_rows.payment_account",
+		},
+		default_order="expense_rows.expense_date DESC, expense_rows.sort_creation DESC, expense_rows.name DESC",
+		tie_breakers=("expense_rows.sort_creation DESC", "expense_rows.name DESC"),
+	)
+	rows = _query_rows(query, limit=page_size, offset=(page - 1) * page_size, order_by=order_by)
 	rows = _map_account_categories(rows, company=query["company"])
 	return {
-		"columns": _columns(),
+		"columns": mark_report_columns(_columns(), "expense-register"),
+		"sort": normalized_sort,
 		"rows": rows,
 		"summary": _summary_cards(summary),
 		"pagination": {
@@ -280,6 +307,7 @@ def _query_rows(
 	*,
 	limit: int,
 	offset: int,
+	order_by: str = "expense_rows.expense_date DESC, expense_rows.sort_creation DESC, expense_rows.name DESC",
 ) -> list[dict[str, Any]]:
 	union_sql, values = _union_sql(query)
 	if not union_sql:
@@ -304,10 +332,7 @@ def _query_rows(
 				expense_rows.cost_center,
 				expense_rows.payment_account
 			FROM ({union_sql}) expense_rows
-			ORDER BY
-				expense_rows.expense_date DESC,
-				expense_rows.sort_creation DESC,
-				expense_rows.name DESC
+			ORDER BY {order_by}
 			LIMIT %s OFFSET %s
 		""",
 		values=[*values, cint(limit), cint(offset)],

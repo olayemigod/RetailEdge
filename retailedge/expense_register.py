@@ -127,13 +127,17 @@ def get_expense_register(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import build_report_order_by, mark_report_columns
+
 	filters = _coerce_filters(filters)
 	if _use_consolidated_view(filters):
 		return get_consolidated_expense_register(
 			filters,
 			page=page,
 			page_size=page_size,
+			sort=sort,
 		)
 	query_filters = _build_query_filters(filters)
 	page = max(1, cint(page) or 1)
@@ -151,18 +155,37 @@ def get_expense_register(
 	fields = list(_BASE_ROW_FIELDS)
 	if show_cashier:
 		fields.insert(3, "cashier")
+	normalized_sort, order_by = build_report_order_by(
+		sort,
+		"expense-register",
+		{
+			"name": "name",
+			"expense_date": "expense_date",
+			"branch": "branch",
+			"cashier": "cashier",
+			"expense_category": "expense_category",
+			"amount": "amount",
+			"expense_status": "expense_status",
+			"ledger_status": "ledger_status",
+			"posting_ready": "posting_ready",
+			"description": "description",
+		},
+		default_order="expense_date desc, creation desc",
+		tie_breakers=("creation DESC", "name DESC"),
+	)
 	rows = frappe.get_list(
 		EXPENSE_DOCTYPE,
 		filters=query_filters,
 		fields=fields,
-		order_by="expense_date desc, creation desc",
+		order_by=order_by,
 		limit_start=(page - 1) * page_size,
 		limit_page_length=page_size,
 	)
 	rows = [_serialise_row(row, show_cashier=show_cashier) for row in rows]
 	return {
-		"columns": _columns(show_cashier=show_cashier),
+		"columns": mark_report_columns(_columns(show_cashier=show_cashier), "expense-register"),
 		"rows": rows,
+		"sort": normalized_sort,
 		"summary": _summary_cards(summary),
 		"pagination": {
 			"page": page,
