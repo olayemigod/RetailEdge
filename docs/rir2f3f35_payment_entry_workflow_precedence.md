@@ -81,19 +81,26 @@ The two owning UI surfaces are:
 - Payment Management customer draft review;
 - Business Hub Simple Payment review for customer and supplier payments.
 
-Both delegate actions to:
+The UIs do not call the generic workflow bridge directly.
 
-`retailedge.workflow_actions.apply_document_workflow_action`
+They call scoped Payment Entry workflow endpoints:
 
-Each call supplies:
+- `apply_standard_customer_payment_workflow_action`;
+- `apply_standard_supplier_payment_workflow_action`.
 
-- `doctype = Payment Entry`;
-- document name;
-- selected Workflow action;
-- expected `modified`;
-- expected Workflow state.
+Each scoped endpoint:
 
-The shared F3F27 bridge then revalidates the snapshot, checks the action is currently permitted and calls Frappe's own `apply_workflow()`.
+1. row-locks the Payment Entry;
+2. re-reads normal Payment Entry permissions;
+3. revalidates current RetailEdge Company/Branch/party scope;
+4. revalidates the same supported standard-payment shape;
+5. checks the displayed `modified` snapshot;
+6. confirms the draft is still workflow-eligible;
+7. delegates to `retailedge.workflow_actions.apply_document_workflow_action`.
+
+The shared F3F27 bridge then revalidates the Workflow state/action and calls Frappe's own `apply_workflow()`.
+
+This extra wrapper is required because Branch Assignment scope is a RetailEdge business boundary and must be rechecked at action time, not only when the preview was first loaded.
 
 EdgeSuite never writes `workflow_state` or `docstatus` directly.
 
@@ -184,9 +191,11 @@ Focused contract coverage verifies:
 - active Workflow blocks direct supplier submit;
 - submit permission is consulted only for the direct no-Workflow path;
 - Workflow eligibility requires no additional standard-shape blockers;
-- Payment Management uses the shared workflow-action bridge;
-- Business Hub customer review uses the same bridge;
-- Business Hub supplier review uses the same bridge;
+- customer workflow wrapper re-locks and revalidates RetailEdge scope/shape;
+- supplier workflow wrapper re-locks and revalidates RetailEdge scope/shape;
+- Payment Management uses the scoped customer workflow endpoint;
+- Business Hub customer review uses the scoped customer endpoint;
+- Business Hub supplier review uses the scoped supplier endpoint;
 - stale `modified` and expected Workflow state are passed;
 - direct Submit Payment is hidden when Workflow owns the document;
 - UI does not assign state/docstatus directly;
