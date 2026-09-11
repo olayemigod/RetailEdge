@@ -181,7 +181,7 @@ def _purchase_receipt_workflow_summary() -> dict[str, Any]:
 def _linked_draft_receipt_names(purchase_order: str) -> list[str]:
 	rows = frappe.db.sql(
 		"""
-		SELECT DISTINCT pr.name
+		SELECT DISTINCT pr.name, pr.modified
 		FROM `tabPurchase Receipt` pr
 		INNER JOIN `tabPurchase Receipt Item` pri ON pri.parent = pr.name
 		WHERE pr.docstatus = 0
