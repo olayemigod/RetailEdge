@@ -7,7 +7,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen exact head:** `17e6031a211e6a893c767f46569a826bb13f1ed1`
+**Latest code-frozen exact head:** `04d50f3805d132fb8abaef0dfd1a35a2f33d04dd`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -17,71 +17,82 @@ The current repository, governed tests, migrations, and this execution ledger ar
 
 ## Current MVP Phase
 
-**Phase 2 — Core Operational Workflows**
+**Phase 3 — EdgeSuite UI Completion**
 
 Phase 1 Readiness Hardening is **CODE-COMPLETE / CONSOLIDATED QA-PENDING** at F3F42. The authoritative reconciled line has no remaining automated/code-level Readiness blocker currently identified from repository evidence.
 
 Browser/persona acceptance remains deferred to consolidated RIR2E. That deferred QA does not silently become complete and must still pass before final release/MVP freeze.
 
-Phase 2 now audits whether the already-built operational workflows form a complete, coherent MVP path before any further EdgeSuite UI completion, Business Hub completion or reporting expansion.
+Phase 2 Core Operational Workflows is now **CODE-COMPLETE / CONSOLIDATED QA-PENDING** through RIR2G1E and the final RIR2G1 reconciliation. Standard selling, purchasing, customer/supplier payments, expenses and standard cash-movement journeys have governed completion owners or an explicitly frozen Advanced ERPNext/system-of-record boundary.
+
+Phase 3 now audits the actual ordinary-user EdgeSuite experience: remaining Native Desk dependencies, incomplete operational surfaces, dead-end actions, inconsistent UI ownership and shared EdgeSuite usability gaps. This is a reconciliation phase first; already-complete F3/G1 workflows must not be rebuilt.
 
 ## Current Code-Frozen Slice
 
-### `RIR2G1D` — Standard Sales Invoice Completion
+### `RIR2G1E` — Standard Internal Transfer Completion
 
 **State:** `CODE-FROZEN / QA-PENDING`
 
 Frozen exact code head:
 
-- `17e6031a211e6a893c767f46569a826bb13f1ed1`
+- `04d50f3805d132fb8abaef0dfd1a35a2f33d04dd`
 
 Primary contract/runtime areas:
 
-- `docs/rir2g1d_standard_sales_invoice_completion.md`
-- `retailedge/standard_sales_invoice_completion.py`
-- `retailedge/public/js/professional_selling/StandardSalesInvoiceCompletionDialog.vue`
-- `retailedge/public/js/professional_selling/ProfessionalSelling.vue`
+- `docs/rir2g1e_standard_internal_transfer_completion.md`
+- `retailedge/standard_internal_transfer_completion.py`
+- `retailedge/public/js/retailedge_business_hub/StandardInternalTransferCompletionDialog.vue`
 - `retailedge/public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue`
-- focused RIR2G1D contract/regression tests.
+- focused RIR2G1E contract/regression tests.
 
 Frozen result:
 
-- Professional Selling and Business Hub Simple Sales Invoice now use one shared EdgeSuite completion authority;
-- accounting-only invoices remain free of unnecessary Warehouse requirements;
-- `update_stock` invoices receive additional Warehouse/Branch stock-safety validation;
-- returns, POS/consolidated/inter-company, write-off/advance and advanced Serial/Batch/Product Bundle cases fail closed to Advanced ERPNext;
-- active Frappe Workflow has precedence and only server-returned actions may progress through F3F27;
-- no-Workflow completion row-locks/stale-checks/revalidates the exact draft before delegating only to ERPNext native `doc.submit()`;
-- ERPNext remains authoritative for GL, receivable, tax, outstanding, source billing status, Stock Ledger and valuation;
-- no direct GL/SLE/outstanding mutation, submitted-source mutation, `ignore_permissions`, manual DB commit or schema migration was introduced.
+- Deposit Cash and guided Cash / Bank Transfer no longer stop at a draft-only EdgeSuite dead end;
+- both use one shared standard Internal Transfer completion review;
+- standard shape is restricted to Company-currency Bank/Cash Internal Transfers with no party allocations, deductions or exchange differences;
+- marked Cash Deposits retain cashier/POS-shift attribution, Cash→Bank direction, approved Bank Account policy and current custody review;
+- existing Payment Entry `before_submit` custody validator remains the final serialized Cash Deposit authority;
+- active Frappe Workflow has precedence through F3F27;
+- no-Workflow completion row-locks/stale-checks/revalidates and delegates only to ERPNext native `doc.submit()`;
+- no GL/Payment Ledger creation, manual balance mutation, `ignore_permissions`, manual DB commit or schema migration was introduced.
 
 Governed exact-head gates:
 
 | Gate | Run | Result |
 | --- | ---: | --- |
-| EdgeSuite UI Candidate Compatibility | 34621490821 / #837 | PASS |
-| CI — clean Frappe v16 standalone integration | 34621490880 / #2599 | PASS |
-| RetailEdge Theme Compatibility | 34621490789 / #740 | PASS |
-| Linters / Semgrep / vulnerable dependency audit | 34621490811 / #2581 | PASS |
+| EdgeSuite UI Candidate Compatibility | 34624336472 / #843 | PASS |
+| CI — clean Frappe v16 standalone integration | 34624336527 / #2605 | PASS |
+| RetailEdge Theme Compatibility | 34624336567 / #746 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34624336491 / #2587 | PASS |
 
-RIR2G1 remains **ACTIVE**. The next bounded audit target is the remaining customer payment / receivables sales-to-cash boundary.
+### Phase 2 closure — `RIR2G1`
 
-### Prior Phase-2 frozen checkpoint — `RIR2G1C`
+**State:** `CORE OPERATIONAL WORKFLOWS — CODE-COMPLETE / CONSOLIDATED QA-PENDING`
 
-- Frozen exact code head: `9a737a43a85db0bfc5b33df9458546a741893aca`.
-- Standard Delivery Note completion is CODE-FROZEN / QA-PENDING.
-- Exact-head Theme #733, Linters #2574, CI #2592 and EdgeSuite Candidate #830 all PASS.
-- ERPNext remains sole Stock Ledger/valuation authority.
+Final reconciliation is recorded in:
 
-### Earlier Phase-2 frozen checkpoint — `RIR2G1B`
+- `docs/rir2g1_core_operational_workflows_completion_audit.md`
 
-- Frozen exact code head: `f9d9b51b5dd46e3fd74e8ea63373b0e651e49310`.
-- Standard Customer Quotation and Sales Order completion is CODE-FROZEN / QA-PENDING.
+Closure result:
 
-### Earlier Phase-2 safety checkpoint — `RIR2G1A2`
+- Quote → Sales Order → Delivery → Sales Invoice is standard EdgeSuite-owned through G1B–G1D;
+- customer receipt/advance/application and supplier payment completion were reconciled as already governed;
+- purchase, return/debit-note, expense and standard cash flows are governed;
+- Stock Transfer/Adjustment, Payment Reconciliation, Payment Request/Dunning, POS shift lifecycle and other specialist cases retain their explicitly approved Advanced ERPNext/system-of-record boundaries;
+- no unresolved code-level ordinary-user blocker remains inside the approved Phase-2 standard-workflow contract;
+- browser/persona and cross-workflow QA remain deferred to consolidated RIR2E.
 
-- Frozen exact code head: `e17fe96a690e035567d6c7f519c76a9fecdd8543`.
-- End-to-end Branch cascade / operational scope hardening is CODE-FROZEN / QA-PENDING.
+### Prior Phase-2 frozen checkpoint — `RIR2G1D`
+
+- Frozen exact code head: `17e6031a211e6a893c767f46569a826bb13f1ed1`.
+- Standard Sales Invoice completion is CODE-FROZEN / QA-PENDING.
+- Exact-head Theme #740, Linters #2581, CI #2599 and EdgeSuite Candidate #837 all PASS.
+
+### Earlier Phase-2 frozen checkpoints
+
+- `RIR2G1C`: `9a737a43a85db0bfc5b33df9458546a741893aca` — Delivery Note completion.
+- `RIR2G1B`: `f9d9b51b5dd46e3fd74e8ea63373b0e651e49310` — Quotation + Sales Order completion.
+- `RIR2G1A2`: `e17fe96a690e035567d6c7f519c76a9fecdd8543` — Branch cascade / operational-scope hardening.
 
 ## Prior Phase Closure Reference
 
@@ -334,19 +345,36 @@ Do not obtain a green state by disabling meaningful tests, weakening valid asser
 
 ## Exact Next Executable Step
 
-Audit the remaining **customer payment / receivables sales-to-cash boundary** inside RIR2G1 before defining the next implementation checkpoint.
+Start **RIR2G2 — EdgeSuite UI Completion Reconciliation Audit**.
 
-Required audit questions:
+Goal: prove that an ordinary RetailEdge user can operate the approved MVP through EdgeSuite surfaces without accidental Native Desk dependencies, dead-end actions or incomplete UI ownership, while preserving deliberate Advanced ERPNext specialist boundaries.
 
-1. Can an ordinary EdgeSuite user move from a submitted Sales Invoice into a standard Customer Payment Entry and complete that payment without Native Desk?
-2. Does the existing guided payment path create only a draft, and if so, is there an EdgeSuite submit / Workflow-completion owner for that exact draft?
-3. Are customer-payment source invoice, Payment Entry, Company, Branch, account, amount and allocation revalidated server-side at completion time?
-4. Are active Frappe Workflows authoritative for Payment Entry progression?
-5. Are multi-currency, deductions/write-offs, advance allocation, Payment Reconciliation and other advanced treasury/accounting cases clearly separated from the standard collection path?
-6. Does Customer Receivables provide an actionable EdgeSuite collection path without reopening deliberate Native Desk Payment Request/Dunning review surfaces?
-7. Does any existing standard Customer Payment completion implementation already close this gap? Reconcile before adding code.
-8. Preserve ERPNext as the only GL/receivable/payment-allocation authority.
-9. If a true blocker exists, define the smallest next governed checkpoint with focused tests first.
-10. Do not start reporting, Business Hub expansion or later release stages until Phase 2 Core Operational Workflows is reconciled complete.
+Required audit:
 
-RIR2G1 must remain active until the standard sales-to-cash and remaining core operational journeys have no ordinary-user completion dead ends.
+1. Inventory final Business Hub navigation, quick actions and programme experiences after all F3/G1 promotions.
+2. Inventory the main operational EdgeSuite surfaces:
+   - Professional Selling;
+   - Professional Purchasing;
+   - Payment Management / Simple Payment;
+   - Business Expenses / Cashier Expenses;
+   - Stock movement / guided stock actions;
+   - Banking / Bank Matching;
+   - Customer Receivables / Supplier Payables;
+   - Daily Sales Audit / Cash Shift Verification;
+   - standard masters and Quick Entry.
+3. Classify every ordinary-user handoff as:
+   - `EDGESUITE_OWNED`;
+   - `INTENTIONAL_ADVANCED_NATIVE`;
+   - `UI_COMPLETION_BLOCKER`;
+   - `DEFERRED_NON_MVP`.
+4. Treat an action as a blocker when EdgeSuite presents it as an ordinary operational action but an EdgeSuite-only user cannot complete or meaningfully continue it.
+5. Preserve all deliberate specialist boundaries already frozen in Phase 1/2; do not convert every ERPNext report/form into an EdgeSuite page.
+6. Check that Native Desk detail links, full-form actions and fallback buttons are consistently gated by final `can_use_native_desk` capability.
+7. Check that EdgeSuite-only users still have usable document identity/status/details where native record links are hidden.
+8. Audit common UI behavior that affects MVP usability across owned surfaces, including table sorting, responsive tables, loading/error/empty states, date presentation, Link-field filtering/cascade, stale dependent values and permission-safe option search.
+9. Reconcile existing tests/docs before adding code; many UI surfaces were already hardened in F3 and must not be duplicated.
+10. If blockers are found, fix only the smallest highest-priority bounded slice and run the four governed exact-head gates.
+11. Do not expand Business Hub feature scope yet; Phase 4 Business Hub completion follows Phase 3.
+12. Browser/persona acceptance remains consolidated RIR2E and is not silently marked complete.
+
+Phase 3 closes only when the ordinary MVP EdgeSuite experience has no unresolved code-level UI ownership blocker and all intentional Native Desk boundaries are explicit and capability-gated.
