@@ -54,6 +54,13 @@ def test_standard_prepare_uses_native_make_lcv_and_native_validate():
 	assert "frappe.new_doc("Stock Ledger Entry")" not in source
 
 
+def test_standard_shape_fails_unrepresented_accounting_dimension_overrides_closed():
+	source = inspect.getsource(landed._assert_standard_landed_cost_shape)
+	assert "_dimension_values" in source
+	assert "Custom Landed Cost item dimensions require Advanced ERPNext." in source
+	assert "Landed Cost charge accounting-dimension overrides require Advanced ERPNext." in source
+
+
 def test_start_is_locked_duplicate_safe_and_reuses_only_standard_equivalent_draft():
 	source = inspect.getsource(landed.start_standard_landed_cost_voucher)
 	assert "FOR UPDATE" in source
