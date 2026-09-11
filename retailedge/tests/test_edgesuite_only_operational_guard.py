@@ -121,7 +121,8 @@ class EdgeSuiteOnlyOperationalGuardTests(unittest.TestCase):
 			self.assertIn(f'"{doctype}"', self.purchasing_page)
 		for report in ("Supplier Quotation Comparison", "Purchase Order Analysis", "Procurement Tracker"):
 			self.assertIn(f'"{report}"', self.purchasing_page)
-		self.assertIn('hiddenSelectors: [".quality-created-links"]', self.purchasing_page)\n\t\tself.assertNotIn('".landed-cost-panel"', self.purchasing_page)
+		self.assertIn('hiddenSelectors: [".quality-created-links"]', self.purchasing_page)
+		self.assertNotIn('".landed-cost-panel"', self.purchasing_page)
 		self.assertIn('neutralizeSelectors: [".link-button"]', self.purchasing_page)
 		self.assertIn('"Open Purchase Receipt"', self.purchasing_page)
 		self.assertIn('"New Native Scorecard"', self.purchasing_page)
