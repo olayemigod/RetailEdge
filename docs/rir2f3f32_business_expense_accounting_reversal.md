@@ -118,6 +118,8 @@ Ledger Status gains **Reversed**.
 
 For the RetailEdge fallback lifecycle, Expense Status may also become Reversed. When an active Frappe Workflow controls the document, RetailEdge does not directly write the Workflow state field.
 
+A server-side document validation guard also blocks any later native Frappe Workflow state change once an original Posting Reference exists. This makes the posted/reversed Business Expense terminal even when a privileged user reaches the native document surface.
+
 The original Posting Reference is never removed or replaced.
 
 ## EdgeSuite experience
