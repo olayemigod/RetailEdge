@@ -57,7 +57,7 @@
 								<td>{{ row.branch || "—" }}</td>
 								<td>{{ row.sales_invoice || "—" }}</td>
 								<td class="num">{{ formatCurrency(row.received_amount, row.currency) }}</td>
-								<td>{{ row.can_submit ? "Ready" : "Advanced Review" }}</td>
+								<td>{{ row.workflow_eligible ? "Workflow" : (row.can_submit ? "Ready" : "Advanced Review") }}</td>
 								<td><button class="edge-small-button" type="button" @click="reviewPaymentDraft(row.payment_entry)">Review</button></td>
 							</tr>
 						</tbody>
@@ -70,7 +70,7 @@
 							<h4>Review {{ draftReview.payment_entry }}</h4>
 							<p>{{ draftReview.payment_kind }} · ERPNext Payment Entry remains authoritative.</p>
 						</div>
-						<strong>{{ draftReview.can_submit ? "Ready to Submit" : "Advanced Review Required" }}</strong>
+						<strong>{{ draftReview.workflow_eligible ? "Workflow Action Required" : (draftReview.can_submit ? "Ready to Submit" : "Advanced Review Required") }}</strong>
 					</div>
 					<div class="draft-review-grid">
 						<article><span>Customer</span><strong>{{ draftReview.customer }}</strong></article>
@@ -83,12 +83,22 @@
 						<article><span>Branch</span><strong>{{ draftReview.branch || "—" }}</strong></article>
 					</div>
 					<div v-if="draftReview.blockers?.length" class="draft-blockers">
-						<strong>{{ canUseNativeDesk ? "Use Advanced ERPNext for this draft:" : "This draft requires an accounting manager with Advanced ERPNext access:" }}</strong>
+						<strong v-if="draftReview.workflow_eligible">This Payment Entry is controlled by {{ draftReview.workflow_readiness?.workflow || "Frappe Workflow" }}:</strong>
+						<strong v-else>{{ canUseNativeDesk ? "Use Advanced ERPNext for this draft:" : "This draft requires an accounting manager with Advanced ERPNext access:" }}</strong>
 						<ul><li v-for="blocker in draftReview.blockers" :key="blocker">{{ blocker }}</li></ul>
+					</div>
+					<div v-if="draftReview.workflow_eligible" class="draft-blockers">
+						<strong>{{ draftReview.workflow_readiness?.message || "Choose an available workflow action." }}</strong>
+						<div class="draft-actions">
+							<button v-for="action in draftReview.workflow_readiness?.available_actions || []" :key="action.action" class="edge-primary-button" type="button" :disabled="draftSubmitting" @click="applyPaymentWorkflow(action.action)">
+								{{ draftSubmitting ? "Applying…" : action.action }}<span v-if="action.next_state"> → {{ action.next_state }}</span>
+							</button>
+							<span v-if="!(draftReview.workflow_readiness?.available_actions || []).length">No workflow action is currently available to this user.</span>
+						</div>
 					</div>
 					<div class="draft-actions">
 						<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openPayment(draftReview.payment_entry)">Open in ERPNext</button>
-						<button class="edge-primary-button" type="button" :disabled="draftSubmitting || !draftReview.can_submit" @click="submitPaymentDraft">{{ draftSubmitting ? "Submitting…" : "Submit Payment" }}</button>
+						<button v-if="!draftReview.workflow_eligible" class="edge-primary-button" type="button" :disabled="draftSubmitting || !draftReview.can_submit" @click="submitPaymentDraft">{{ draftSubmitting ? "Submitting…" : "Submit Payment" }}</button>
 					</div>
 				</div>
 			</section>
@@ -393,6 +403,30 @@ export default {
 				this.draftReview = {};
 				this.draftError = errorMessage(error, "Payment draft review failed to load.");
 			}
+		},
+		async applyPaymentWorkflow(action) {
+			const preview = this.draftReview;
+			if (!preview?.payment_entry || !preview.workflow_eligible || !action || this.draftSubmitting) return;
+			this.draftSubmitting = true;
+			this.draftError = "";
+			try {
+				const result = await callMethod("retailedge.workflow_actions.apply_document_workflow_action", {
+					doctype: "Payment Entry",
+					name: preview.payment_entry,
+					action,
+					expected_modified: preview.payment_entry_modified,
+					expected_state: preview.workflow_readiness?.current_state || "",
+				});
+				frappe.show_alert({ message: __("Payment workflow action applied: " + action), indicator: "green" });
+				if (preview.sales_invoice && Number(result.docstatus || 0) === 1) await this.loadSettlementInvoice(preview.sales_invoice);
+				else await this.loadAdvances();
+				await this.loadDraftPayments();
+				if (this.draftPayments.some((row) => row.payment_entry === preview.payment_entry)) await this.reviewPaymentDraft(preview.payment_entry);
+				else this.draftReview = {};
+			} catch (error) {
+				this.draftError = errorMessage(error, "Payment workflow action failed.");
+				if (preview.payment_entry) await this.reviewPaymentDraft(preview.payment_entry);
+			} finally { this.draftSubmitting = false; }
 		},
 		submitPaymentDraft() {
 			const preview = this.draftReview;
