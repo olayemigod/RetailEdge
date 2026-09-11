@@ -47,11 +47,11 @@ def test_standard_review_is_persistence_free_and_native_validated():
 def test_standard_prepare_uses_native_make_lcv_and_native_validate():
 	source = inspect.getsource(landed._prepare_standard_landed_cost_voucher)
 	assert "make_lcv(" in source or "_native_landed_cost_voucher" in source
-	assert "run_method("validate")" in source
+	assert 'run_method("validate")' in source
 	assert "_validate_standard_charge_account" in source
 	assert "update_landed_cost(" not in source
-	assert "frappe.new_doc("GL Entry")" not in source
-	assert "frappe.new_doc("Stock Ledger Entry")" not in source
+	assert 'frappe.new_doc("GL Entry")' not in source
+	assert 'frappe.new_doc("Stock Ledger Entry")' not in source
 
 
 def test_standard_shape_fails_unrepresented_accounting_dimension_overrides_closed():
