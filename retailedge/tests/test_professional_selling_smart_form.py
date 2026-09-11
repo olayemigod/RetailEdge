@@ -20,8 +20,8 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 			'"disabled": 0',
 			'"shipping_rule_type": "Selling"',
 			'"company": company',
-			"get_user_allowed_branches",
-			"validate_user_branch_access",
+			"get_operational_branch_scope",
+			"resolve_operational_branch",
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("frappe.get_all", source)
