@@ -7,6 +7,7 @@ from unittest.mock import patch
 import frappe
 import pytest
 
+from retailedge import cash_custody
 from retailedge import guided_cash_transfer as cash_transfer
 from retailedge import guided_payment as payment
 from retailedge import professional_delivery as delivery
@@ -14,6 +15,9 @@ from retailedge import professional_sales_invoice as sales_invoice
 from retailedge import professional_sales_order as sales_order
 from retailedge import standard_customer_payment_submit as customer_submit
 from retailedge import standard_supplier_payment_submit as supplier_submit
+from retailedge.retailedge.doctype.retailedge_cashier_expense import (
+	retailedge_cashier_expense as cashier_expense_doc,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -144,6 +148,29 @@ def test_guided_cash_transfer_branch_search_and_write_use_operational_scope():
 	assert "require_when_restricted=True" in create_source
 
 
+def test_cash_deposit_revalidates_shift_branch_with_operational_authority():
+	source = inspect.getsource(cash_custody)
+	assert "_validate_cash_custody_branch" in source
+	assert "resolve_operational_branch" in source
+	assert "get_operational_branch_scope" in source
+	assert "validate_user_branch_access" not in source
+	for target in (
+		cash_custody.get_cash_deposit_context,
+		cash_custody.create_cash_deposit_draft,
+		cash_custody.validate_cash_deposit_before_submit,
+	):
+		assert "_validate_cash_custody_branch(" in inspect.getsource(target)
+
+
+def test_cashier_expense_document_revalidates_derived_branch_operationally():
+	source = inspect.getsource(cashier_expense_doc)
+	assert "get_operational_branch_scope" in source
+	assert "resolve_operational_branch" in source
+	assert "validate_operational_branch_scope" in source
+	validate_source = inspect.getsource(cashier_expense_doc.RetailEdgeCashierExpense.validate)
+	assert "self.validate_operational_branch_scope()" in validate_source
+
+
 @pytest.mark.parametrize("module", [customer_submit, supplier_submit])
 def test_standard_payment_completion_uses_operational_scope_not_legacy_branch_gate(module):
 	source = inspect.getsource(module)
@@ -210,6 +237,7 @@ def test_branch_cascade_hardening_does_not_write_accounting_or_stock_truth_direc
 	for module in (
 		payment,
 		cash_transfer,
+		cash_custody,
 		customer_submit,
 		supplier_submit,
 		sales_order,
