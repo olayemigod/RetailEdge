@@ -7,7 +7,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen exact head:** `a1ebc536c99cd609e4179f49bf73f7eb88f98b94`
+**Latest code-frozen exact head:** `738800bc087124f598dcdd1f22b2d30b0b78561d`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -25,49 +25,63 @@ Business Hub implementation already exists, but its existence does not bypass un
 
 ## Current Code-Frozen Slice
 
-### `RIR2F3F38` — Purchase Invoice Workflow Precedence
+### `RIR2F3F39` — Purchase Return / Supplier Debit Note Workflow Precedence
 
 **State:** `CODE-FROZEN / QA-PENDING`
 
 Frozen exact head:
 
-- `a1ebc536c99cd609e4179f49bf73f7eb88f98b94`
+- `738800bc087124f598dcdd1f22b2d30b0b78561d`
 
 Primary contract/runtime files:
 
-- `docs/rir2f3f38_purchase_invoice_workflow_precedence.md`
-- `retailedge/supplier_document_review.py`
-- `retailedge/public/js/supplier_document_review/SupplierDocumentReview.vue`
-- `retailedge/tests/test_rir2f3f38_purchase_invoice_workflow_precedence_contract.py`
+- `docs/rir2f3f39_purchase_return_workflow_precedence.md`
+- `retailedge/professional_purchase_returns.py`
+- `retailedge/public/js/professional_purchasing/ProfessionalPurchaseReturnReviewOverlay.vue`
+- `retailedge/tests/test_rir2f3f39_purchase_return_workflow_precedence_contract.py`
+- `retailedge/tests/test_rir2f3f17_purchase_return_supplier_debit_note_edgesuite_ownership_contract.py` — preview-boundary reconciliation only
 
 Contract now enforced:
 
-- active Frappe Workflow on Purchase Invoice is authoritative for the F3F20 Supplier Document → Purchase Invoice completion path;
-- generic Guided Purchase Invoice remains draft-only and was not expanded into a second submit engine;
-- the immutable Supplier Document Purchase Invoice Handoff remains the exact standard completion boundary;
-- direct Submit Purchase Invoice is available only when no active Purchase Invoice Workflow exists and the existing F3F20 reconciliation contract passes;
-- active Workflow is separated from real business-shape blockers so an otherwise-standard invoice can expose only Frappe-permitted workflow actions;
-- workflow action calls row-lock and revalidate the exact handed-off Purchase Invoice, Supplier Document authority, Company/Branch/Supplier/PO linkage, stale `modified`, standard reconciliation and expected workflow state before delegation;
+- Purchase Return and Supplier Debit Note remain separate explicit intents;
+- active Purchase Receipt / Purchase Invoice Frappe Workflow is authoritative for the corresponding mapped return target;
+- preview remains persistence-free and continues to use ERPNext canonical return/debit-note mappers;
+- no-Workflow sites preserve the existing F3F17 direct standard insert + submit path;
+- Workflow mode persists or idempotently reuses exactly one canonical linked return draft before actions are possible;
+- multiple, unreadable or non-standard linked drafts fail closed;
+- saved return drafts must continue to match current ERPNext return truth for return linkage, Company, Supplier, Branch, Update Stock where applicable, negative quantities, source item identity, Item, warehouse, rate and conversion factor;
+- Serial Number and Batch-controlled stock returns remain advanced;
+- saved-draft workflow actions row-lock and revalidate source and target, stale snapshots, exact single-draft identity, current ERPNext mapping, standard blockers and expected workflow state;
 - the shared F3F27 bridge delegates to Frappe `apply_workflow()`; EdgeSuite does not assign workflow state or docstatus directly;
-- Update Stock, extraction mismatch, broken PO linkage and other existing F3F20 advanced cases remain fail-closed;
-- ERPNext alone owns Purchase Invoice tax, payable, GL, Payment Ledger, outstanding and legitimate stock consequences;
+- ERPNext alone owns stock, valuation, tax, payable and accounting effects;
 - no schema migration is required.
 
-## Governed Evidence at `a1ebc536`
+## Governed Evidence at `738800bc`
 
-GitHub Actions associated with the exact F3F38 freeze head are green:
+GitHub Actions associated with the exact F3F39 freeze head are green:
 
 | Gate | Run | Result |
 | --- | ---: | --- |
-| EdgeSuite UI Candidate Compatibility | 34578567764 | PASS |
-| CI — clean Frappe v16 standalone integration | 34578567779 | PASS |
-| RetailEdge Theme Compatibility | 34578567789 | PASS |
-| Linters / Semgrep / vulnerable dependency audit | 34578567830 | PASS |
+| EdgeSuite UI Candidate Compatibility | 34579395120 | PASS |
+| CI — clean Frappe v16 standalone integration | 34579395000 | PASS |
+| RetailEdge Theme Compatibility | 34579395023 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34579395156 | PASS |
 
-F3F38 is an atomic 4-commit / 4-effective-file descendant of the recovered F3F37 ledger head. No reconciled composition, accounting engine, stock engine, migration or unrelated workflow ownership was changed.
+F3F39 is an atomic 5-commit / 5-effective-file descendant of the F3F38 ledger checkpoint. The only prior test changed was the F3F17 persistence-free preview split boundary so newly inserted workflow functions were not incorrectly included in the old preview-only source slice.
 
 
 ## Prior Code-Frozen Slices
+
+### `RIR2F3F38` — Purchase Invoice Workflow Precedence
+
+**State:** `CODE-FROZEN / QA-PENDING`
+
+- Frozen exact head: `a1ebc536c99cd609e4179f49bf73f7eb88f98b94`
+- Exact-head gates: EdgeSuite `34578567764`, CI `34578567779`, Theme `34578567789`, Linters `34578567830` — all PASS.
+- Active Purchase Invoice Workflow owns F3F20 Supplier Document → Purchase Invoice progression; generic Guided Purchase Invoice remains draft-only.
+- Direct F3F20 submit remains only for sites without an active Workflow; active Workflow exposes only Frappe-permitted actions on the exact immutable handed-off draft.
+- ERPNext remains authoritative for Purchase Invoice accounting/payable effects.
+- No schema migration.
 
 ### `RIR2F3F37` — Purchase Receipt Workflow Precedence
 
@@ -231,18 +245,20 @@ Do not obtain a green state by disabling meaningful tests, weakening valid asser
 
 ## Exact Next Executable Step
 
-Perform a bounded repository audit for **RIR2F3F39 — Purchase Return / Supplier Debit Note Workflow Precedence**.
+Perform a bounded repository audit for **RIR2F3F40 — Incoming Quality Inspection EdgeSuite Ownership**.
 
 Required next audit:
 
-1. Re-open the F3F17 standard Purchase Return and Supplier Debit Note EdgeSuite completion contract and trace its preview, persistence and submit endpoints.
-2. Determine how active Frappe Workflow on the mapped target DocType behaves for:
-   - Purchase Receipt return;
-   - Purchase Invoice return / Supplier Debit Note.
-3. Preserve the F3F17 rule that Purchase Return and Supplier Debit Note are separate explicit intents; never auto-chain them.
-4. Do not apply Workflow to an unsaved mapper result. If workflow progression requires a persisted target draft, define strict single-draft idempotency before creating anything.
-5. Preserve all existing F3F17 standard/advanced blockers, including Serial/Batch and source/target Company, Supplier, Branch, `return_against`, negative-quantity and stale-source checks.
-6. Reuse the shared F3F27 readiness/action bridge; do not assign workflow state or docstatus directly.
-7. Preserve ERPNext return, stock, valuation, tax, payable and accounting truth; no direct GL/SLE/payment mutation.
-8. Keep cancellation/amendment, advanced serial/batch capture and unrelated purchasing workflow redesign out of scope.
-9. Define the smallest F3F39 contract from repository evidence, add focused tests, then run the same four governed exact-head gates before freeze.
+1. Trace the complete current Incoming Quality Inspection flow in Professional Purchasing, including source document selection, any Quality Inspection draft creation, readings entry, acceptance/rejection, references, and native Desk handoff.
+2. Confirm every side effect that currently occurs before the Native Desk handoff. Do not solve the gap by route-hiding a draft that has already been created.
+3. Identify the smallest standard EdgeSuite flow that can safely own:
+   - preparing or reusing the correct Quality Inspection;
+   - entering required inspection readings;
+   - validation/result status;
+   - submission or active Frappe Workflow progression where configured.
+4. Preserve ERPNext Quality Inspection semantics, Item/Specification truth, Purchase Receipt/Purchase Order linkage, stock acceptance/rejection behavior, permissions, Branch/Company scope and any downstream stock controls.
+5. Apply ProcessEdge smart-form rules: inspection template/specification/readings must be filtered to the selected Item/reference context and validated server-side.
+6. Reuse the shared F3F27 workflow bridge if Quality Inspection has an active Frappe Workflow; do not invent RetailEdge workflow state.
+7. Define strict idempotency if the existing flow already persists a draft before completion.
+8. Keep Landed Cost Voucher, advanced laboratory-style inspection redesign, unrelated stock posting and reporting expansion out of scope.
+9. Define the smallest F3F40 contract from repository evidence, add focused tests, then run the same four governed exact-head gates before freeze.
