@@ -557,6 +557,7 @@ def prepare_business_expense_defaults(doc) -> None:
 
 
 def validate_business_expense_document(doc) -> None:
+	_assert_posted_business_expense_workflow_terminal(doc)
 	settings = get_business_expense_settings()
 	if not settings["enabled"]:
 		frappe.throw(_("Business Expenses are disabled in RetailEdge Settings."))
@@ -594,6 +595,27 @@ def validate_business_expense_document(doc) -> None:
 				frappe.PermissionError,
 		)
 
+
+
+def _assert_posted_business_expense_workflow_terminal(doc) -> None:
+	if not getattr(doc, "name", None) or getattr(doc, "is_new", lambda: False)():
+		return
+	previous = frappe.db.get_value(
+		BUSINESS_EXPENSE_DOCTYPE,
+		doc.name,
+		["posting_reference", "workflow_state"],
+		as_dict=True,
+	)
+	if not previous or not previous.posting_reference:
+		return
+	if str(getattr(doc, "workflow_state", None) or "") != str(
+		previous.workflow_state or ""
+	):
+		frappe.throw(
+			_(
+				"Posted Business Expenses cannot move to another Workflow State. Use the approved accounting reversal process for corrections."
+			)
+		)
 
 
 def prepare_business_expense_for_submit(doc) -> None:
