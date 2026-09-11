@@ -11,6 +11,7 @@ EXPENSE_CATEGORY_DOCTYPE = "RetailEdge Expense Category"
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
 MAX_SEARCH_RESULTS = 20
+MAX_CATEGORY_ROWS = 1000
 
 
 @frappe.whitelist()
@@ -79,11 +80,21 @@ def get_expense_categories(
 			MAX_PAGE_SIZE,
 		),
 	)
-	total = frappe.db.count(
+	matching = frappe.get_list(
 		EXPENSE_CATEGORY_DOCTYPE,
 		filters=query_filters,
 		or_filters=or_filters,
+		fields=["name"],
+		order_by="name asc",
+		limit_page_length=MAX_CATEGORY_ROWS + 1,
 	)
+	if len(matching) > MAX_CATEGORY_ROWS:
+		frappe.throw(
+			_(
+				"More than {0} Expense Categories match this view. Narrow Company, status, or search filters first."
+			).format(MAX_CATEGORY_ROWS)
+		)
+	total = len(matching)
 	total_pages = max(1, ceil(total / page_size)) if total else 1
 	page = min(page, total_pages)
 	rows = frappe.get_list(
