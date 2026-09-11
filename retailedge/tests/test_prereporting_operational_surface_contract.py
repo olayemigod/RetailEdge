@@ -11,6 +11,7 @@ from retailedge.master_experience import (
 	PROFESSIONAL_SELLING_ITEM,
 	PROMOTED_R4_PAGE_TARGETS,
 	_promote_browser_approved_r4_pages,
+	_promote_stock_movement_history,
 	_promote_payment_management,
 	_promote_professional_purchasing,
 	_promote_professional_selling,
@@ -64,7 +65,7 @@ class RetailEdgePreReportingOperationalSurfaceContractTests(unittest.TestCase):
 		targets = [item["target"] for item in groups[0]["items"]]
 		self.assertLess(targets.index(PAYMENT_MANAGEMENT_ITEM["target"]), targets.index("Payment Entry"))
 
-	def test_stock_movement_history_remains_on_legacy_report_until_its_parity_gate(self):
+	def test_stock_movement_history_uses_hardened_page_when_permitted(self):
 		groups = [
 			{
 				"key": "stock",
@@ -79,10 +80,13 @@ class RetailEdgePreReportingOperationalSurfaceContractTests(unittest.TestCase):
 		]
 
 		_promote_browser_approved_r4_pages(groups)
+		with patch("retailedge.master_experience._can_open_page", return_value=True):
+			_promote_stock_movement_history(groups)
 
 		self.assertNotIn("Stock Movement History", PROMOTED_R4_PAGE_TARGETS)
-		self.assertEqual(groups[0]["items"][0]["target_type"], "Report")
-		self.assertEqual(groups[0]["items"][0]["target"], "RetailEdge Stock Movement History")
+		self.assertEqual(groups[0]["items"][0]["target_type"], "Page")
+		self.assertEqual(groups[0]["items"][0]["target"], "stock-movement-history")
+
 
 	def test_promoted_pages_are_standard_and_role_restricted(self):
 		page_paths = {
