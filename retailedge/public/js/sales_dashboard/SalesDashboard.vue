@@ -53,7 +53,7 @@
 				<EdgeDashboardSection title="Recent Invoices" description="Latest submitted invoices in the selected period.">
 					<div v-if="recentInvoices.length" class="sales-list">
 						<button v-for="row in recentInvoices" :key="row.invoice" type="button" class="sales-list-row" @click="openInvoice(row.invoice)">
-							<span><strong>{{ row.invoice }}</strong><small>{{ row.customer_name || row.customer }} · {{ row.posting_date }}</small></span>
+							<span><strong>{{ row.invoice }}</strong><small>{{ row.customer_name || row.customer }} · {{ formatDate(row.posting_date) }}</small></span>
 							<strong>{{ formatCurrency(row.grand_total) }}</strong>
 						</button>
 					</div>
@@ -198,6 +198,7 @@ export default {
 		openInvoice(name) { if (name) frappe.set_route("Form", "Sales Invoice", name); },
 		formatValue(card) { try { return frappe.format(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
 		formatCurrency(value) { try { return frappe.format(value, { fieldtype: "Currency" }); } catch (_error) { return value ?? "—"; } },
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(String(value)); } catch (_error) { return String(value); } },
 	},
 };
 </script>
