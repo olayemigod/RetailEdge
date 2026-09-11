@@ -49,7 +49,7 @@ def _lock_supported_document(doctype: str, name: str) -> None:
 		frappe.throw(_("Unsupported selling completion document."), frappe.ValidationError)
 	table = _LOCK_TABLES[doctype]
 	rows = frappe.db.sql(
-		f"SELECT name FROM \`{table}\` WHERE name = %s FOR UPDATE",
+		f"SELECT name FROM `{table}` WHERE name = %s FOR UPDATE",
 		(_clean(name),),
 	)
 	if not rows:
