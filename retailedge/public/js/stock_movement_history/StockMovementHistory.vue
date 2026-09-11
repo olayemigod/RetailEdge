@@ -195,7 +195,8 @@
 									<td>{{ formatDateTime(row.posting_datetime) }}</td>
 									<td class="movement-type">{{ row.movement_type || "—" }}</td>
 									<td>
-										<a href="#" class="doc-link" @click.prevent="openDoc('Item', row.item_code)">{{ row.item_code }}</a>
+										<a v-if="nativeFallbackEnabled" href="#" class="doc-link" @click.prevent="openDoc('Item', row.item_code)">{{ row.item_code }}</a>
+										<span v-else class="doc-identity">{{ row.item_code }}</span>
 										<div class="subtle">{{ row.item_name || row.stock_uom || "" }}</div>
 									</td>
 									<td class="number">{{ formatQuantity(row.in_quantity) }}</td>
@@ -205,7 +206,8 @@
 									<td>{{ row.source_warehouse || "—" }}</td>
 									<td>{{ row.destination_warehouse || "—" }}</td>
 									<td>
-										<a v-if="row.voucher_type && row.voucher_no" href="#" class="doc-link" @click.prevent="openDoc(row.voucher_type, row.voucher_no)">{{ row.voucher_no }}</a>
+										<a v-if="nativeFallbackEnabled && row.voucher_type && row.voucher_no" href="#" class="doc-link" @click.prevent="openDoc(row.voucher_type, row.voucher_no)">{{ row.voucher_no }}</a>
+										<span v-else-if="row.voucher_type && row.voucher_no" class="doc-identity">{{ row.voucher_no }}</span>
 										<span v-else>—</span>
 										<div v-if="row.voucher_type" class="subtle">{{ row.voucher_type }}</div>
 									</td>
@@ -300,6 +302,7 @@ export default {
 			branchName: "",
 			userName: "",
 			itemLabel: "",
+			nativeFallbackEnabled: false,
 			filters: {
 				company: "",
 				date_range_preset: "This Month",
@@ -396,6 +399,7 @@ export default {
 				this.tenantName = context.tenant_name || context.default_filters?.company || "";
 				this.branchName = context.branch_name || context.default_filters?.branch || "";
 				this.userName = context.user_name || "";
+				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load Stock Movement controls.");
@@ -419,6 +423,7 @@ export default {
 			const items = this.menuItems.flatMap((group) => group.items || []);
 			const item = items.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.nativeFallbackEnabled) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -598,6 +603,7 @@ export default {
 			this.fetchData();
 		},
 		openDoc(doctype, name) {
+			if (!this.nativeFallbackEnabled) return;
 			if (doctype && name) frappe.set_route("Form", doctype, name);
 		},
 		rowKey(row, index) {
@@ -786,6 +792,10 @@ export default {
 
 .doc-link:hover {
 	text-decoration: underline;
+}
+
+.doc-identity {
+	font-weight: 600;
 }
 
 .subtle {
