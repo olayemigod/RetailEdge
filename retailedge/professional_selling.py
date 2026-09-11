@@ -17,6 +17,7 @@ from retailedge.branch_context import (
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.operating_context import (
+	get_allowed_operating_branches,
 	get_operating_context,
 	get_operational_branch_scope,
 	resolve_operational_branch,
@@ -256,12 +257,9 @@ def _branch_filters(company: str) -> dict[str, Any]:
 	if has_field("Branch", "company"):
 		filters["company"] = company
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
-	if scope["restricted"]:
-		filters["name"] = (
-			["in", scope["allowed_branches"]]
-			if scope["allowed_branches"]
-			else "__never__"
-		)
+	allowed = get_allowed_operating_branches(company=company, user=frappe.session.user)
+	if scope["restricted"] or allowed:
+		filters["name"] = ["in", allowed] if allowed else "__never__"
 	return filters
 
 def _warehouse_filters(company: str, branch: str) -> dict[str, Any] | None:
