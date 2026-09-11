@@ -42,7 +42,8 @@ class TestLandedCostAllocationUIContract(TestCase):
 		self.assertIn("Distribution basis", component)
 		self.assertIn('value="Amount"', component)
 		self.assertIn('value="Qty"', component)
-		self.assertNotIn('<option value="Distribute Manually">', component)\n\t\tself.assertIn("Advanced: Prepare in ERPNext", component)
+		self.assertNotIn('<option value="Distribute Manually">', component)
+		self.assertIn("Advanced: Prepare in ERPNext", component)
 
 	def test_advanced_native_handoff_stays_unsaved_and_permission_safe(self):
 		source = inspect.getsource(landed.prepare_landed_cost_voucher_draft)
