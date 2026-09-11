@@ -28,6 +28,9 @@
 				</div>
 			</header>
 
+			<EdgeLoadingState v-if="metadataLoading" message="Loading Payment Management…" />
+			<EdgeErrorState v-else-if="metadataError" title="Payment Management failed to load" :message="metadataError" actionLabel="Retry" @retry="loadMetadata" />
+			<template v-else>
 			<div class="payment-cards">
 				<article class="metric-card"><span>Available Advances</span><strong>{{ formatCurrency(context.available_advance || 0) }}</strong></article>
 				<article class="metric-card"><span>Unapplied Receipts</span><strong>{{ context.advance_count || 0 }}</strong></article>
@@ -43,9 +46,9 @@
 					<button class="edge-secondary-button" type="button" :disabled="draftLoading || !filters.company || !filters.customer" @click="loadDraftPayments">{{ draftLoading ? "Refreshing…" : "Refresh Drafts" }}</button>
 				</div>
 				<div v-if="!filters.company || !filters.customer" class="payment-state compact">Choose Company and Customer to review draft customer payments.</div>
-				<div v-else-if="draftError" class="payment-error compact">{{ draftError }}</div>
-				<div v-else-if="draftLoading" class="payment-state compact">Loading eligible draft payments…</div>
-				<div v-else-if="!draftPayments.length" class="payment-state compact">No standard draft customer payments are awaiting submission in this scope.</div>
+				<EdgeErrorState v-else-if="draftLoadError" title="Draft payments failed to load" :message="draftLoadError" actionLabel="Refresh" @retry="loadDraftPayments" />
+				<EdgeLoadingState v-else-if="draftLoading" message="Loading eligible draft payments…" />
+				<EdgeEmptyState v-else-if="!draftPayments.length" title="No draft payments awaiting submission" description="No standard draft customer payments are awaiting submission in this scope." />
 				<div v-else class="table-wrap">
 					<table class="payment-table draft-table">
 						<thead><tr>
@@ -71,6 +74,7 @@
 						</tbody>
 					</table>
 				</div>
+				<div v-if="draftError" class="payment-error compact" role="alert">{{ draftError }}</div>
 
 				<div v-if="draftReview.payment_entry" class="draft-review">
 					<div class="block-head">
@@ -133,9 +137,10 @@
 					<div class="selector-help">Choose Company and Customer above first when starting from Payment Management. Opening from a Sales Invoice preloads this context.</div>
 				</div>
 
-				<div v-if="settlement.error" class="payment-error">{{ settlement.error }}</div>
-				<div v-else-if="settlement.loading" class="payment-state">Loading authoritative Sales Invoice payment context…</div>
+				<EdgeErrorState v-if="settlement.loadError" title="Settlement context failed to load" :message="settlement.loadError" actionLabel="Retry" @retry="loadSettlementInvoice(settlement.invoice)" />
+				<EdgeLoadingState v-else-if="settlement.loading" message="Loading authoritative Sales Invoice payment context…" />
 				<template v-else-if="settlement.context.sales_invoice">
+					<div v-if="settlement.actionError" class="payment-error" role="alert">{{ settlement.actionError }}</div>
 					<div class="settlement-summary">
 						<article><span>Invoice</span><strong><button v-if="canUseNativeDesk" class="link-button" type="button" @click="openInvoice(settlement.context.sales_invoice)">{{ settlement.context.sales_invoice }}</button><span v-else>{{ settlement.context.sales_invoice }}</span></strong></article>
 						<article><span>Customer</span><strong>{{ settlement.context.customer }}</strong></article>
@@ -152,7 +157,7 @@
 								<div><h4>1. Apply Existing Advances</h4><p>Enter only the amounts to apply. Blank or zero rows are ignored.</p></div>
 								<div class="allocation-total">Selected: <strong>{{ formatCurrency(selectedAdvanceTotal, settlement.context.currency) }}</strong></div>
 							</div>
-							<div v-if="!settlement.context.eligible_advances?.length" class="payment-state compact">No eligible submitted customer advances are available for this invoice.</div>
+							<EdgeEmptyState v-if="!settlement.context.eligible_advances?.length" title="No eligible customer advances" description="No eligible submitted customer advances are available for this invoice." />
 							<div v-else class="table-wrap">
 								<table class="payment-table settlement-table">
 									<thead><tr>
@@ -216,9 +221,9 @@
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="refreshPaymentContext">Apply Filters</button></div>
 				</div>
 
-				<div v-if="error" class="payment-error">{{ error }}</div>
-				<div v-else-if="loading" class="payment-state">Loading customer advances…</div>
-				<div v-else-if="!advances.length" class="payment-state">No unapplied customer advances match the current scope.</div>
+				<EdgeErrorState v-if="advanceLoadError" title="Customer advances failed to load" :message="advanceLoadError" actionLabel="Retry" @retry="loadAdvances" />
+				<EdgeLoadingState v-else-if="loading" message="Loading customer advances…" />
+				<EdgeEmptyState v-else-if="!advances.length" title="No unapplied customer advances" description="No unapplied customer advances match the current scope." />
 				<div v-else class="table-wrap">
 					<table class="payment-table">
 						<thead><tr>
@@ -250,12 +255,13 @@
 			<div class="accounting-note">
 				<strong>Accounting safety:</strong> RetailEdge does not maintain a separate customer wallet or advance ledger. Submitted Payment Entry <code>unallocated_amount</code>, Sales Invoice <code>outstanding_amount</code>, ERPNext Payment Reconciliation, and standard Payment Entry submission remain authoritative.
 			</div>
+			</template>
 		</section>
 	</EdgeAppShell>
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState"];
 const RECEIVE_INTENT = "receive-customer-payment";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
@@ -321,12 +327,15 @@ export default {
 		return {
 			edgeUIValid: true,
 			missingComponents: [],
+			metadataLoading: true,
+			metadataError: "",
 			loading: false,
-			error: "",
+			advanceLoadError: "",
 			context: {},
 			advances: [],
 			draftPayments: [],
 			draftLoading: false,
+			draftLoadError: "",
 			draftError: "",
 			draftReview: {},
 			draftSubmitting: false,
@@ -349,7 +358,8 @@ export default {
 				loading: false,
 				applying: false,
 				creatingReceipt: false,
-				error: "",
+				loadError: "",
+				actionError: "",
 				lastDraft: {},
 				receipt: {
 					mode_of_payment: "",
@@ -401,6 +411,8 @@ export default {
 			return sort.direction === "desc" ? "↓" : "↑";
 		},
 		async loadMetadata() {
+			this.metadataLoading = true;
+			this.metadataError = "";
 			try {
 				const routeInvoice = String(frappe.route_options?.sales_invoice || frappe.route_options?.retailedge_sales_invoice || "").trim();
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
@@ -422,7 +434,11 @@ export default {
 				} else if (this.filters.company) {
 					await this.refreshPaymentContext();
 				}
-			} catch (error) { this.error = errorMessage(error, "Failed to load Payment Management controls."); }
+			} catch (error) {
+				this.metadataError = errorMessage(error, "Failed to load Payment Management controls.");
+			} finally {
+				this.metadataLoading = false;
+			}
 		},
 		async refreshPaymentContext() {
 			await this.loadAdvances();
@@ -430,7 +446,8 @@ export default {
 		},
 		async loadAdvances() {
 			if (!this.filters.company) return;
-			this.loading = true; this.error = "";
+			this.loading = true;
+			this.advanceLoadError = "";
 			try {
 				const result = await callMethod("retailedge.advanced_payments.get_customer_advance_context", {
 					customer: this.filters.customer || null,
@@ -440,16 +457,21 @@ export default {
 				});
 				this.context = result || {};
 				this.advances = result.advances || [];
-			} catch (error) { this.advances = []; this.context = {}; this.error = errorMessage(error, "Customer advances failed to load."); }
-			finally { this.loading = false; }
+			} catch (error) {
+				this.advances = [];
+				this.context = {};
+				this.advanceLoadError = errorMessage(error, "Customer advances failed to load.");
+			} finally { this.loading = false; }
 		},
 		async loadDraftPayments() {
 			if (!this.filters.company || !this.filters.customer) {
 				this.draftPayments = [];
+				this.draftLoadError = "";
 				this.draftError = "";
 				return;
 			}
 			this.draftLoading = true;
+			this.draftLoadError = "";
 			this.draftError = "";
 			try {
 				const result = await callMethod("retailedge.standard_customer_payment_submit.list_standard_customer_payment_drafts", {
@@ -462,7 +484,7 @@ export default {
 				if (this.draftReview.payment_entry && !this.draftPayments.some((row) => row.payment_entry === this.draftReview.payment_entry)) this.draftReview = {};
 			} catch (error) {
 				this.draftPayments = [];
-				this.draftError = errorMessage(error, "Draft customer payments failed to load.");
+				this.draftLoadError = errorMessage(error, "Draft customer payments failed to load.");
 			} finally { this.draftLoading = false; }
 		},
 		async reviewPaymentDraft(paymentEntry) {
@@ -538,12 +560,14 @@ export default {
 		clearDraftState() {
 			this.draftPayments = [];
 			this.draftReview = {};
+			this.draftLoadError = "";
 			this.draftError = "";
 		},
 		async loadSettlementInvoice(invoiceName) {
 			if (!invoiceName) return;
 			this.settlement.loading = true;
-			this.settlement.error = "";
+			this.settlement.loadError = "";
+			this.settlement.actionError = "";
 			this.settlement.lastDraft = {};
 			this.clearDraftState();
 			try {
@@ -570,7 +594,7 @@ export default {
 			} catch (error) {
 				this.settlement.context = {};
 				this.settlement.allocations = {};
-				this.settlement.error = errorMessage(error, "Sales Invoice settlement context failed to load.");
+				this.settlement.loadError = errorMessage(error, "Sales Invoice settlement context failed to load.");
 			} finally { this.settlement.loading = false; }
 		},
 		async searchOptions(kind, txt) {
@@ -610,7 +634,8 @@ export default {
 			this.settlement.invoiceLabel = "";
 			this.settlement.context = {};
 			this.settlement.allocations = {};
-			this.settlement.error = "";
+			this.settlement.loadError = "";
+			this.settlement.actionError = "";
 			this.settlement.lastDraft = {};
 		},
 		async prepareSettlement(row) {
@@ -631,18 +656,18 @@ export default {
 			const outstanding = Number(this.settlement.context.outstanding_amount || 0);
 			if (!this.selectedSettlementAllocations.length) return;
 			if (this.selectedAdvanceTotal > outstanding + 0.005) {
-				this.settlement.error = __("Selected advance allocations cannot exceed the current invoice outstanding amount.");
+				this.settlement.actionError = __("Selected advance allocations cannot exceed the current invoice outstanding amount.");
 				return;
 			}
 			const byName = new Map((this.settlement.context.eligible_advances || []).map((row) => [row.name, row]));
 			for (const allocation of this.selectedSettlementAllocations) {
 				if (allocation.allocated_amount > Number(byName.get(allocation.payment_entry)?.unallocated_amount || 0) + 0.005) {
-					this.settlement.error = __(`Allocation for ${allocation.payment_entry} exceeds its available advance.`);
+					this.settlement.actionError = __(`Allocation for ${allocation.payment_entry} exceeds its available advance.`);
 					return;
 				}
 			}
 			this.settlement.applying = true;
-			this.settlement.error = "";
+			this.settlement.actionError = "";
 			try {
 				await callMethod("retailedge.payment_application.apply_customer_advances", {
 					sales_invoice: this.settlement.invoice,
@@ -650,7 +675,7 @@ export default {
 				});
 				frappe.show_alert({ message: __("Selected advances applied through ERPNext Payment Reconciliation."), indicator: "green" });
 				await this.loadSettlementInvoice(this.settlement.invoice);
-			} catch (error) { this.settlement.error = errorMessage(error, "Customer advance reconciliation failed."); }
+			} catch (error) { this.settlement.actionError = errorMessage(error, "Customer advance reconciliation failed."); }
 			finally { this.settlement.applying = false; }
 		},
 		async onPaymentModeSelected(option) {
@@ -658,6 +683,7 @@ export default {
 			this.settlement.receipt.modeLabel = option.label || option.value;
 			this.settlement.receipt.referenceRequired = false;
 			this.settlement.receipt.reference_no = "";
+			this.settlement.actionError = "";
 			try {
 				const details = await callMethod("retailedge.guided_payment.get_simple_payment_mode_details", {
 					intent: RECEIVE_INTENT,
@@ -665,7 +691,7 @@ export default {
 					mode_of_payment: option.value,
 				});
 				this.settlement.receipt.referenceRequired = Boolean(details.reference_required);
-			} catch (error) { this.settlement.error = errorMessage(error, "Payment mode details could not be loaded."); }
+			} catch (error) { this.settlement.actionError = errorMessage(error, "Payment mode details could not be loaded."); }
 		},
 		clearPaymentMode() {
 			this.settlement.receipt.mode_of_payment = "";
@@ -676,11 +702,11 @@ export default {
 		async createReceiptDraft() {
 			if (!this.canCreateReceipt) return;
 			if (this.selectedSettlementAllocations.length) {
-				this.settlement.error = __("Apply or clear the selected advances before creating the draft receipt so the receipt uses the latest authoritative outstanding balance.");
+				this.settlement.actionError = __("Apply or clear the selected advances before creating the draft receipt so the receipt uses the latest authoritative outstanding balance.");
 				return;
 			}
 			this.settlement.creatingReceipt = true;
-			this.settlement.error = "";
+			this.settlement.actionError = "";
 			try {
 				const result = await callMethod("retailedge.payment_application.create_sales_invoice_payment_draft", {
 					sales_invoice: this.settlement.invoice,
@@ -698,7 +724,7 @@ export default {
 				frappe.show_alert({ message: __("Draft customer Payment Entry created. Review it below before submission."), indicator: "green" });
 				await this.loadDraftPayments();
 				if (result.name) await this.reviewPaymentDraft(result.name);
-			} catch (error) { this.settlement.error = errorMessage(error, "Draft customer receipt could not be created."); }
+			} catch (error) { this.settlement.actionError = errorMessage(error, "Draft customer receipt could not be created."); }
 			finally { this.settlement.creatingReceipt = false; }
 		},
 		async openAdvanceDialog() {
