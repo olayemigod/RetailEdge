@@ -18,6 +18,7 @@ from retailedge.branch_context import (
 	resolve_retailedge_operational_defaults,
 )
 from retailedge.operating_context import (
+	get_allowed_operating_branches,
 	get_operational_branch_scope,
 	resolve_operational_branch,
 )
@@ -551,12 +552,9 @@ def _branch_search_filters(company: str, user: str) -> dict[str, Any]:
 	if has_field("Branch", "company"):
 		filters["company"] = company
 	scope = get_operational_branch_scope(company, user=user)
-	if scope["restricted"]:
-		filters["name"] = (
-			["in", scope["allowed_branches"]]
-			if scope["allowed_branches"]
-			else "__never__"
-		)
+	allowed = get_allowed_operating_branches(company=company, user=user)
+	if scope["restricted"] or allowed:
+		filters["name"] = ["in", allowed] if allowed else "__never__"
 	return filters
 
 
