@@ -835,7 +835,6 @@ export default {
 					supplier: kind === "supplier" ? (review.supplier || null) : null,
 					branch: review.branch || null,
 				});
-				frappe.show_alert?.({ message: `Payment workflow action applied: ${action}`, indicator: "green" });
 				if (Number(result.docstatus || 0) !== 0) {
 					this.$emit("close");
 					return;
