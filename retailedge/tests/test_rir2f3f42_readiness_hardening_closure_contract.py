@@ -141,4 +141,3 @@ def test_f3f42_does_not_change_accounting_or_stock_backend_truth():
 	assert "ignore_permissions" not in inspect.getsource(master_experience._promote_stock_movement_history)
 	assert "Stock Ledger Entry" not in inspect.getsource(master_experience._promote_stock_movement_history)
 	assert "GL Entry" not in inspect.getsource(master_experience._promote_stock_movement_history)
-assert source
