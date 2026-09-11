@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from unittest import TestCase
+
+from retailedge import landed_cost_allocation as landed
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -41,23 +44,28 @@ class TestLandedCostAllocationUIContract(TestCase):
 		self.assertIn('value="Qty"', component)
 		self.assertIn('value="Distribute Manually"', component)
 
-	def test_backend_uses_native_unsaved_lcv_without_posting_or_permission_bypass(self):
-		source = (APP_ROOT / "landed_cost_allocation.py").read_text()
+	def test_advanced_native_handoff_stays_unsaved_and_permission_safe(self):
+		source = inspect.getsource(landed.prepare_landed_cost_voucher_draft)
 
-		self.assertIn("make_lcv(doctype, source.name)", source)
+		self.assertIn("_native_landed_cost_voucher", source)
 		self.assertIn('"persisted": False', source)
 		self.assertIn('"posting_status": "Unsaved Draft"', source)
-		self.assertIn('filters.update({"docstatus": 1, "is_return": 0})', source)
-		self.assertIn('filters["update_stock"] = 1', source)
-		self.assertIn("MAX_LINK_RESULTS", source)
 		self.assertNotIn(".insert(", source)
 		self.assertNotIn(".save(", source)
 		self.assertNotIn(".submit(", source)
+
+	def test_landed_cost_module_never_bypasses_erpnext_accounting_or_stock_truth(self):
+		source = (APP_ROOT / "landed_cost_allocation.py").read_text()
+
+		self.assertIn('filters.update({"docstatus": 1, "is_return": 0})', source)
+		self.assertIn('filters["update_stock"] = 1', source)
+		self.assertIn("MAX_LINK_RESULTS", source)
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("update_landed_cost(", source)
 		self.assertNotIn('frappe.new_doc("GL Entry")', source)
 		self.assertNotIn('frappe.new_doc("Stock Ledger Entry")', source)
+
 
 
 if __name__ == "__main__":
