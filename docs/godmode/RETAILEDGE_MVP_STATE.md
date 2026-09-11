@@ -7,7 +7,7 @@
 **Active PR:** #55 — `QA reconciliation: clean E16 composition into consolidated RetailEdge candidate`  
 **Branch:** `qa/retailedge-reconciled-20260902`  
 **PR base:** `qa/retailedge-consolidated-20260829`  
-**Latest code-frozen exact head:** `5ee298346a133ffeec202c343bc70aa2fd3869dd`
+**Latest code-frozen exact head:** `5a5c0b234993fde8c31baa8ce32a0191588edb48`
 
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
@@ -17,60 +17,75 @@ The current repository, governed tests, migrations, and this execution ledger ar
 
 ## Current MVP Phase
 
-**Phase 1 — Readiness Hardening**
+**Phase 2 — Core Operational Workflows**
 
-Current focus is EdgeSuite-first operational ownership, Native Desk containment, permission-safe navigation, and preservation of reconciled branch/access contracts before reporting expansion proceeds.
+Phase 1 Readiness Hardening is **CODE-COMPLETE / CONSOLIDATED QA-PENDING** at F3F42. The authoritative reconciled line has no remaining automated/code-level Readiness blocker currently identified from repository evidence.
 
-Business Hub implementation already exists, but its existence does not bypass unfinished hardening, QA, security, or release gates.
+Browser/persona acceptance remains deferred to consolidated RIR2E. That deferred QA does not silently become complete and must still pass before final release/MVP freeze.
+
+Phase 2 now audits whether the already-built operational workflows form a complete, coherent MVP path before any further EdgeSuite UI completion, Business Hub completion or reporting expansion.
 
 ## Current Code-Frozen Slice
 
-### `RIR2F3F41` — Landed Cost Voucher EdgeSuite Ownership
+### `RIR2F3F42` — Readiness Hardening Closure Audit
 
 **State:** `CODE-FROZEN / QA-PENDING`
 
 Frozen exact head:
 
-- `5ee298346a133ffeec202c343bc70aa2fd3869dd`
+- `5a5c0b234993fde8c31baa8ce32a0191588edb48`
 
 Primary contract/runtime files:
 
-- `docs/rir2f3f41_landed_cost_voucher_edgesuite_ownership.md`
-- `retailedge/landed_cost_allocation.py`
-- `retailedge/public/js/professional_purchasing/ProfessionalPurchasing.vue`
-- `retailedge/retailedge/page/professional_purchasing/professional_purchasing.js`
-- focused F3F41 backend/UI/operational-guard contract tests
+- `docs/rir2f3f42_readiness_hardening_closure_audit.md`
+- `retailedge/master_experience.py`
+- `retailedge/public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue`
+- `retailedge/public/js/retailedge_business_hub/guidedEntryUtils.js`
+- focused F3F42 closure and operational-surface tests
 
-Contract now enforced:
+Closure contract now enforced:
 
-- one permitted submitted Purchase Receipt or stock-updating Purchase Invoice is supported by the standard EdgeSuite flow;
-- standard allocation supports Amount or Qty; manual distribution remains Advanced ERPNext;
-- standard charge input is limited to Company-valid ERPNext-compatible expense account, description and positive amount;
-- ERPNext native Landed Cost Voucher validation remains authoritative for currency, exchange rate, base amount, totals, proportional allocation, cost centres and mandatory dimensions;
-- review is persistence-free;
-- draft start is source-locked, stale-protected and duplicate-safe, reusing at most one standard-equivalent linked draft;
-- native submit remains authoritative where no active Frappe Workflow exists; active Workflow delegates through F3F27 and Frappe `apply_workflow()`;
-- submitted retry is idempotent on the exact named voucher;
-- fixed assets, vendor-invoice claims, multi-source, manual allocation, custom dimension overrides, cancellation/amendment and unsupported source types fail closed to Advanced ERPNext;
-- EdgeSuite-only users can complete the standard flow while native Landed Cost Voucher routes remain guarded;
-- no schema migration, direct GL/SLE mutation, direct `update_landed_cost()`, `ignore_permissions` or manual commit was introduced.
+- final RetailEdge composition promotes the existing hardened `stock-movement-history` EdgeSuite Page when the current user may open it;
+- the legacy Stock Movement History Query Report remains installed as Native Desk compatibility/reference fallback;
+- Business Hub New Customer, New Supplier and New Product actions reuse the existing permission-governed Frappe Quick Entry path and no longer require Native Desk;
+- master quick-entry mapping uses fixed action keys and fixed DocTypes rather than arbitrary browser-supplied DocTypes;
+- existing guided Sales/Purchase search-prefilled Quick Entry behavior remains intact;
+- unknown/non-guided actions still fail closed without Native Desk;
+- deliberate advanced-native accounting, treasury, stock and setup routes remain unchanged;
+- no schema migration, accounting/stock lifecycle rewrite, submitted-document mutation, `ignore_permissions` or manual commit was introduced.
 
-## Governed Evidence at `5ee29834`
+Phase 1 closure result:
 
-GitHub Actions associated with the exact F3F41 freeze head are green:
+- **READINESS HARDENING — CODE-COMPLETE / CONSOLIDATED QA-PENDING**
+
+## Governed Evidence at `5a5c0b23`
+
+GitHub Actions associated with the exact F3F42 freeze head are green:
 
 | Gate | Run | Result |
 | --- | ---: | --- |
-| EdgeSuite UI Candidate Compatibility | 34608209861 | PASS |
-| CI — clean Frappe v16 standalone integration | 34608209941 | PASS |
-| RetailEdge Theme Compatibility | 34608209835 | PASS |
-| Linters / Semgrep / vulnerable dependency audit | 34608209866 | PASS |
+| EdgeSuite UI Candidate Compatibility | 34611158669 | PASS |
+| CI — clean Frappe v16 standalone integration | 34611158665 | PASS |
+| RetailEdge Theme Compatibility | 34611158681 | PASS |
+| Linters / Semgrep / vulnerable dependency audit | 34611158686 | PASS |
 
-The first two F3F41 validation attempts exposed only malformed/stale contract-test assertions. Those test-only defects were corrected without weakening runtime assertions. The final exact head above passed the complete governed suite.
+F3F42 closed the two remaining code-level readiness defects found by the bounded closure audit without expanding product scope or replacing deliberate Advanced ERPNext workflows.
 
 
 
 ## Prior Code-Frozen Slices
+
+### `RIR2F3F41` — Landed Cost Voucher EdgeSuite Ownership
+
+**State:** `CODE-FROZEN / QA-PENDING`
+
+- Frozen exact head: `5ee298346a133ffeec202c343bc70aa2fd3869dd`
+- Exact-head gates: EdgeSuite `34608209861`, CI `34608209941`, Theme `34608209835`, Linters `34608209866` — all PASS.
+- Standard one-source Landed Cost is EdgeSuite-owned for permitted Purchase Receipts and stock-updating Purchase Invoices.
+- Amount/Qty distribution is standard; manual distribution and advanced cases remain Advanced ERPNext.
+- ERPNext remains authoritative for allocation, valuation, Stock Ledger and GL consequences.
+- No schema migration.
+
 
 ### `RIR2F3F40` — Incoming Quality Inspection EdgeSuite Ownership Hardening
 
@@ -250,9 +265,9 @@ No additional Professional Purchasing ownership gap is currently claimed from re
 
 - F3F11–F3F17 browser/persona QA remain pending.
 - Professional Purchasing automated ownership hardening is complete through F3F41; consolidated browser/persona acceptance remains pending.
-- Overall Readiness Hardening is not complete.
+- Phase 1 Readiness Hardening code is complete through F3F42; consolidated browser/persona acceptance remains pending.
 - Business Hub is not release-complete merely because implementation exists.
-- Reporting expansion remains downstream of unresolved foundational hardening.
+- Reporting expansion remains downstream of Phase 2 Core Operational Workflows, Phase 3 EdgeSuite UI Completion and Phase 4 Business Hub completion.
 - Fresh-install, upgrade, cross-workflow, release-hardening, rollback, and final MVP freeze gates remain later MVP requirements unless repository evidence explicitly freezes them.
 
 ## Prohibited Shortcuts
@@ -261,27 +276,44 @@ Do not obtain a green state by disabling meaningful tests, weakening valid asser
 
 ## Exact Next Executable Step
 
-Perform **RIR2F3F42 — Readiness Hardening Closure Audit** before starting reporting or treating Phase 1 as complete.
+Perform **RIR2G1 — Core Operational Workflows Completion Audit**.
+
+Goal: prove that RetailEdge's MVP operational journeys are complete and coherent from initiation through ERPNext-owned completion, without rebuilding workflows that already exist.
 
 Required audit:
 
-1. Reconcile every original Readiness Hardening blocker against the current authoritative branch, governed tests and EdgeSuite routing:
-   - branch composition / authoritative reconciled line;
-   - ordinary-role Desk access and EdgeSuite-only runtime;
-   - guided Stock Transfer branch enforcement;
-   - EdgeSuite operational page ownership;
-   - Native Desk containment;
-   - workflow precedence;
-   - standard Professional Purchasing completion through F3F41.
-2. Inventory all remaining native DocType/report/form handoffs reachable from ordinary EdgeSuite personas and classify each as:
-   - `EDGESUITE_OWNED`;
-   - `INTENTIONAL_ADVANCED_NATIVE`;
-   - `READINESS_BLOCKER`;
+1. Inventory the MVP's core operating journeys and map their current EdgeSuite owner, backend authority, draft/submit boundary, workflow precedence and advanced fallback:
+   - quote/order/delivery/invoice;
+   - customer receipt/advance/application;
+   - purchasing/order/receipt/invoice;
+   - supplier payment;
+   - purchase return/supplier debit note;
+   - stock transfer/count/adjustment;
+   - cashier close/deposit/transfer/expense;
+   - business expense;
+   - bank matching/reconciliation handoff;
+   - customer receivables/supplier payables follow-up.
+2. For every journey classify the current state as:
+   - `COMPLETE_STANDARD_MVP`;
+   - `COMPLETE_WITH_ADVANCED_FALLBACK`;
+   - `WORKFLOW_GAP`;
    - `DEFERRED_NON_MVP`.
-3. Inspect Business Hub only for readiness dependency/composition; do not expand Business Hub features in this audit.
-4. Verify restricted-zero and Branch/Company fail-closed contracts remain server-side across the operational surfaces used by Phase 1.
-5. Verify no submitted accounting/stock document is mutated by standard EdgeSuite preparation/review flows outside normal ERPNext lifecycle methods.
-6. Identify stale tests/docs/guards that still describe superseded ownership and reconcile them only where repository evidence proves the new contract.
-7. Produce a bounded F3F42 closure matrix and automated contract checks. Do not invent feature work merely to eliminate deliberate Advanced ERPNext fallbacks.
-8. If any true P0/P1 Readiness blocker is found, fix the smallest blocker first and rerun the four governed exact-head gates.
-9. If no automated blocker remains, mark Phase 1 **CODE-COMPLETE / CONSOLIDATED QA-PENDING**, preserve the deferred browser/persona checklist for RIR2E, and select the next MVP phase strictly from the Godmode execution order.
+3. Verify active Frappe Workflow precedence is respected anywhere ERPNext/Frappe Workflow exists; EdgeSuite must not create a parallel approval engine.
+4. Verify Company/Branch scope, restricted-zero behavior, permissions and backend validation survive each multi-step journey.
+5. Verify submitted accounting/stock documents remain immutable except through normal ERPNext lifecycle documents/actions.
+6. Identify any ordinary-user journey that can start in EdgeSuite but cannot reach a valid operational completion state without an unintended Native Desk escape.
+7. Distinguish true MVP blockers from deliberate advanced cases such as complex serial/batch handling, treasury controls, manual landed-cost allocation and specialist accounting.
+8. Produce a bounded RIR2G1 completion matrix and focused tests first.
+9. If a true workflow blocker exists, fix only the smallest blocker, rerun the four governed exact-head gates, then continue the audit.
+10. If no code-level workflow blocker remains, mark Phase 2 **CODE-COMPLETE / CONSOLIDATED QA-PENDING** and advance strictly to Phase 3 — EdgeSuite UI Completion.
+
+Out of scope for RIR2G1:
+
+- reporting expansion;
+- Business Hub redesign;
+- broad UI restyling;
+- replacing deliberate Advanced ERPNext workflows;
+- tenancy/branch architecture changes;
+- accounting/GL or stock-valuation semantic changes;
+- manual browser/persona acceptance before consolidated QA;
+- merge/release/final MVP freeze.
