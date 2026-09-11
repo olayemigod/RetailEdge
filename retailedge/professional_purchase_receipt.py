@@ -217,8 +217,10 @@ def _get_single_linked_draft_receipt(po: Any) -> Any | None:
 	return draft
 
 
-def _receipt_item_signature(rows: list[Any]) -> list[tuple[str, str, float, str]]:
-	result: list[tuple[str, str, float, str]] = []
+def _receipt_item_signature(
+	rows: list[Any],
+) -> list[tuple[str, str, float, str, float, float, float]]:
+	result: list[tuple[str, str, float, str, float, float, float]] = []
 	for row in rows:
 		qty = flt(getattr(row, "qty", 0))
 		if qty <= 0:
@@ -229,6 +231,9 @@ def _receipt_item_signature(rows: list[Any]) -> list[tuple[str, str, float, str]
 				str(getattr(row, "item_code", None) or ""),
 				round(qty, 6),
 				str(getattr(row, "warehouse", None) or ""),
+				round(flt(getattr(row, "rejected_qty", 0)), 6),
+				round(flt(getattr(row, "rate", 0)), 6),
+				round(flt(getattr(row, "conversion_factor", 0)), 6),
 			)
 		)
 	return sorted(result)
@@ -254,8 +259,10 @@ def _validate_standard_receipt_draft(
 	receipt_branch_field = _transaction_branch_field(PURCHASE_RECEIPT_DOCTYPE)
 	if branch and not receipt_branch_field:
 		blockers.append({"key": "branch_field_missing", "label": _("Purchase Receipt Branch attribution is unavailable")})
-	elif branch and str(getattr(draft, receipt_branch_field, "") or "") != branch:
-		blockers.append({"key": "branch_mismatch", "label": _("Draft Purchase Receipt Branch does not match the Purchase Order")})
+	elif receipt_branch_field:
+		expected_branch = str(getattr(expected_receipt, receipt_branch_field, "") or branch or "")
+		if str(getattr(draft, receipt_branch_field, "") or "") != expected_branch:
+			blockers.append({"key": "branch_mismatch", "label": _("Draft Purchase Receipt Branch does not match ERPNext's current standard mapping")})
 
 	items: list[dict[str, Any]] = []
 	for row in getattr(draft, "items", None) or []:
