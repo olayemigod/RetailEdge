@@ -103,7 +103,12 @@ class TestCashMovement(unittest.TestCase):
 		mock_rows.return_value = []
 		result = get_cash_movement(filters={}, page=1, page_size=500)
 		self.assertEqual(result["pagination"]["page_size"], MAX_PAGE_SIZE)
-		mock_rows.assert_called_once_with(mock_prepare.return_value, limit=MAX_PAGE_SIZE, offset=0)
+		mock_rows.assert_called_once_with(
+			mock_prepare.return_value,
+			limit=MAX_PAGE_SIZE,
+			offset=0,
+			order_by="gle.posting_date DESC, gle.creation DESC, gle.name DESC",
+		)
 
 	def test_limits_are_explicit(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
