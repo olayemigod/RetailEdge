@@ -17,6 +17,11 @@ from retailedge.professional_purchasing import (
 	_resolve_scope,
 	_transaction_branch_field,
 )
+from retailedge.workflow_actions import apply_document_workflow_action
+from retailedge.workflow_readiness import (
+	get_doctype_workflow_summary,
+	get_workflow_readiness,
+)
 
 PURCHASE_RECEIPT_DOCTYPE = "Purchase Receipt"
 CLOSED_PURCHASE_ORDER_STATUSES = {"Closed", "Completed", "Cancelled", "Stopped"}
@@ -164,6 +169,164 @@ def _get_purchase_order_for_receipt(purchase_order: str, *, lock: bool = False) 
 			(purchase_order,),
 		)
 	return frappe.get_doc(PURCHASE_ORDER_DOCTYPE, purchase_order)
+
+
+def _purchase_receipt_workflow_summary() -> dict[str, Any]:
+	summary = get_doctype_workflow_summary(PURCHASE_RECEIPT_DOCTYPE)
+	if summary.get("enabled") and summary.get("source") == "frappe":
+		return summary
+	return {"enabled": False, "source": "none", "workflow": "", "state_field": ""}
+
+
+def _linked_draft_receipt_names(purchase_order: str) -> list[str]:
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT pr.name
+		FROM `tabPurchase Receipt` pr
+		INNER JOIN `tabPurchase Receipt Item` pri ON pri.parent = pr.name
+		WHERE pr.docstatus = 0
+			AND COALESCE(pr.is_return, 0) = 0
+			AND pri.purchase_order = %s
+		ORDER BY pr.modified DESC, pr.name DESC
+		LIMIT 3
+		""",
+		(purchase_order,),
+		as_dict=True,
+	)
+	return [str(row.get("name") or "") for row in rows if row.get("name")]
+
+
+def _get_single_linked_draft_receipt(po: Any) -> Any | None:
+	names = _linked_draft_receipt_names(po.name)
+	if len(names) > 1:
+		frappe.throw(
+			_(
+				"Multiple draft Purchase Receipts already exist for Purchase Order {0}. Use Advanced ERPNext review before continuing."
+			).format(po.name)
+		)
+	if not names:
+		return None
+	draft = frappe.get_doc(PURCHASE_RECEIPT_DOCTYPE, names[0])
+	if not frappe.has_permission(PURCHASE_RECEIPT_DOCTYPE, "read", doc=draft):
+		frappe.throw(
+			_(
+				"A draft Purchase Receipt already exists for this Purchase Order, but you do not have permission to review it."
+			),
+			frappe.PermissionError,
+		)
+	return draft
+
+
+def _receipt_item_signature(rows: list[Any]) -> list[tuple[str, str, float, str]]:
+	result: list[tuple[str, str, float, str]] = []
+	for row in rows:
+		qty = flt(getattr(row, "qty", 0))
+		if qty <= 0:
+			continue
+		result.append(
+			(
+				str(getattr(row, "purchase_order_item", None) or ""),
+				str(getattr(row, "item_code", None) or ""),
+				round(qty, 6),
+				str(getattr(row, "warehouse", None) or ""),
+			)
+		)
+	return sorted(result)
+
+
+def _validate_standard_receipt_draft(
+	*,
+	draft: Any,
+	po: Any,
+	branch: str,
+	expected_receipt: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+	blockers: list[dict[str, str]] = []
+	if cint(getattr(draft, "docstatus", 0)) != 0:
+		blockers.append({"key": "not_draft", "label": _("Purchase Receipt is no longer a draft")})
+	if cint(getattr(draft, "is_return", 0)):
+		blockers.append({"key": "return_receipt", "label": _("Purchase Return requires Advanced ERPNext")})
+	if str(getattr(draft, "company", "") or "") != str(po.company or ""):
+		blockers.append({"key": "company_mismatch", "label": _("Draft Purchase Receipt Company does not match the Purchase Order")})
+	if str(getattr(draft, "supplier", "") or "") != str(po.supplier or ""):
+		blockers.append({"key": "supplier_mismatch", "label": _("Draft Purchase Receipt Supplier does not match the Purchase Order")})
+
+	receipt_branch_field = _transaction_branch_field(PURCHASE_RECEIPT_DOCTYPE)
+	if branch and not receipt_branch_field:
+		blockers.append({"key": "branch_field_missing", "label": _("Purchase Receipt Branch attribution is unavailable")})
+	elif branch and str(getattr(draft, receipt_branch_field, "") or "") != branch:
+		blockers.append({"key": "branch_mismatch", "label": _("Draft Purchase Receipt Branch does not match the Purchase Order")})
+
+	items: list[dict[str, Any]] = []
+	for row in getattr(draft, "items", None) or []:
+		if flt(getattr(row, "qty", 0)) <= 0:
+			continue
+		if str(getattr(row, "purchase_order", "") or "") != po.name:
+			blockers.append({"key": "multiple_purchase_orders", "label": _("Draft Purchase Receipt contains an item outside the selected Purchase Order")})
+		preview, row_blockers = _receipt_item_preview(row)
+		warehouse = str(preview.get("warehouse") or "").strip()
+		if not warehouse:
+			row_blockers.append({"key": "missing_warehouse", "label": _("Receiving Stock Location is required"), "item_code": preview.get("item_code") or ""})
+		else:
+			warehouse_company = str(frappe.db.get_value("Warehouse", warehouse, "company") or "")
+			if warehouse_company != str(po.company or ""):
+				row_blockers.append({"key": "warehouse_company", "label": _("Receiving Stock Location belongs to another Company"), "item_code": preview.get("item_code") or ""})
+		items.append(preview)
+		blockers.extend(row_blockers)
+
+	if not items:
+		blockers.append({"key": "no_receivable_items", "label": _("Draft Purchase Receipt has no standard positive-quantity items")})
+
+	if _receipt_item_signature(list(getattr(draft, "items", None) or [])) != _receipt_item_signature(
+		list(getattr(expected_receipt, "items", None) or [])
+	):
+		blockers.append(
+			{
+				"key": "mapped_quantity_changed",
+				"label": _(
+					"Draft Purchase Receipt no longer matches ERPNext's current standard PO receipt mapping"
+				),
+			}
+		)
+	return items, blockers
+
+
+def _workflow_draft_payload(
+	*,
+	po: Any,
+	branch: str,
+	draft: Any,
+	items: list[dict[str, Any]],
+	blockers: list[dict[str, str]],
+	idempotent: bool,
+) -> dict[str, Any]:
+	readiness = get_workflow_readiness(
+		doctype=PURCHASE_RECEIPT_DOCTYPE,
+		doc=draft,
+	)
+	return {
+		"purchase_order": po.name,
+		"purchase_order_modified": str(getattr(po, "modified", None) or ""),
+		"company": str(po.company or ""),
+		"branch": branch,
+		"supplier": str(po.supplier or ""),
+		"supplier_name": str(getattr(po, "supplier_name", None) or po.supplier or ""),
+		"posting_date": str(getattr(draft, "posting_date", None) or ""),
+		"items": items,
+		"blockers": blockers,
+		"standard_receipt_eligible": not blockers,
+		"can_submit": False,
+		"workflow_controlled": True,
+		"can_start_workflow": False,
+		"workflow_started": True,
+		"workflow_readiness": readiness,
+		"purchase_receipt": draft.name,
+		"purchase_receipt_modified": str(getattr(draft, "modified", "") or ""),
+		"idempotent": idempotent,
+		"persistence": "draft",
+		"posting_status": "Workflow draft",
+		"source_of_truth": "ERPNext Purchase Receipt",
+	}
 
 
 @frappe.whitelist()
