@@ -78,24 +78,56 @@ def test_payment_workflow_blocker_identifies_active_frappe_workflow():
 		assert module._workflow_submit_blocker({"source": "none"}) == ""
 
 
-def test_payment_management_executes_shared_workflow_bridge_with_stale_snapshot():
+def test_customer_workflow_wrapper_revalidates_scope_shape_and_stale_state():
+	source = inspect.getsource(
+		customer_submit.apply_standard_customer_payment_workflow_action
+	)
+	assert "FOR UPDATE" in source
+	assert "_validate_payment_branch(doc)" in source
+	assert "_validate_selected_context(" in source
+	assert "changed after the review" in source
+	assert "_build_preview(" in source
+	assert 'if not preview.get("workflow_eligible"):' in source
+	assert "apply_document_workflow_action(" in source
+	assert "expected_modified=expected_modified" in source
+	assert 'expected_state=str(expected_workflow_state or "")' in source
+
+
+def test_supplier_workflow_wrapper_revalidates_scope_shape_and_stale_state():
+	source = inspect.getsource(
+		supplier_submit.apply_standard_supplier_payment_workflow_action
+	)
+	assert "FOR UPDATE" in source
+	assert "_validate_payment_branch(doc)" in source
+	assert "_validate_selected_context(" in source
+	assert "changed after the review" in source
+	assert "_build_preview(" in source
+	assert 'if not preview.get("workflow_eligible"):' in source
+	assert "apply_document_workflow_action(" in source
+	assert "expected_modified=expected_modified" in source
+	assert 'expected_state=str(expected_workflow_state or "")' in source
+
+
+def test_payment_management_executes_scoped_customer_workflow_action():
 	source = PAYMENT_MANAGEMENT.read_text(encoding="utf-8")
-	assert "retailedge.workflow_actions.apply_document_workflow_action" in source
+	assert "apply_standard_customer_payment_workflow_action" in source
 	assert "async applyPaymentWorkflow(action)" in source
-	assert 'doctype: "Payment Entry"' in source
-	assert "expected_modified: preview.payment_entry_modified" in source
-	assert 'expected_state: preview.workflow_readiness?.current_state || ""' in source
+	assert "expected_payment_entry_modified: preview.payment_entry_modified" in source
+	assert 'expected_workflow_state: preview.workflow_readiness?.current_state || ""' in source
+	assert "company: this.filters.company || null" in source
+	assert "customer: this.filters.customer || null" in source
+	assert "branch: this.filters.branch || null" in source
 	assert "draftReview.workflow_eligible" in source
 	assert 'v-if="!draftReview.workflow_eligible"' in source
 
 
-def test_business_hub_customer_and_supplier_reviews_execute_same_workflow_bridge():
+def test_business_hub_customer_and_supplier_reviews_use_scoped_workflow_actions():
 	source = SIMPLE_PAYMENT.read_text(encoding="utf-8")
-	assert 'const WORKFLOW_METHOD = "retailedge.workflow_actions.apply_document_workflow_action"' in source
+	assert "apply_standard_customer_payment_workflow_action" in source
+	assert "apply_standard_supplier_payment_workflow_action" in source
 	assert "async applyPaymentWorkflow(review, action, kind)" in source
-	assert 'doctype: "Payment Entry"' in source
-	assert "expected_modified: review.payment_entry_modified" in source
-	assert 'expected_state: review.workflow_readiness?.current_state || ""' in source
+	assert "expected_payment_entry_modified: review.payment_entry_modified" in source
+	assert 'expected_workflow_state: review.workflow_readiness?.current_state || ""' in source
 	assert "customerReview.workflow_eligible" in source
 	assert "supplierReview.workflow_eligible" in source
 	assert 'v-if="!customerReview.workflow_eligible"' in source
@@ -107,7 +139,9 @@ def test_payment_ui_does_not_assign_workflow_state_or_docstatus_directly():
 		source = path.read_text(encoding="utf-8")
 		assert ".workflow_state =" not in source
 		assert ".docstatus =" not in source
-		assert "apply_document_workflow_action" in source
+	assert "apply_standard_customer_payment_workflow_action" in PAYMENT_MANAGEMENT.read_text(encoding="utf-8")
+	assert "apply_standard_customer_payment_workflow_action" in SIMPLE_PAYMENT.read_text(encoding="utf-8")
+	assert "apply_standard_supplier_payment_workflow_action" in SIMPLE_PAYMENT.read_text(encoding="utf-8")
 
 
 def test_shared_workflow_bridge_keeps_frappe_authoritative():
