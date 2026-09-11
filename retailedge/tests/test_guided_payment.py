@@ -72,7 +72,7 @@ class TestGuidedPayment(unittest.TestCase):
 	@patch("retailedge.guided_payment.get_simple_payment_mode_details")
 	@patch("retailedge.guided_payment.get_party_details")
 	@patch("retailedge.guided_payment._assert_read_permission")
-	@patch("retailedge.guided_payment.validate_user_branch_access")
+	@patch("retailedge.guided_payment._resolve_guided_payment_branch", return_value="Lagos")
 	@patch("retailedge.guided_payment._assert_can_create_payment_entry")
 	@patch("retailedge.guided_payment.frappe.new_doc")
 	def test_receive_customer_payment_assembles_draft_once(
@@ -146,7 +146,7 @@ class TestGuidedPayment(unittest.TestCase):
 	@patch("retailedge.guided_payment.get_simple_payment_mode_details")
 	@patch("retailedge.guided_payment.get_party_details")
 	@patch("retailedge.guided_payment._assert_read_permission")
-	@patch("retailedge.guided_payment.validate_user_branch_access")
+	@patch("retailedge.guided_payment._resolve_guided_payment_branch", return_value="Lagos")
 	@patch("retailedge.guided_payment._assert_can_create_payment_entry")
 	@patch("retailedge.guided_payment.frappe.new_doc")
 	def test_pay_supplier_reverses_party_and_bank_account_direction(
@@ -202,7 +202,7 @@ class TestGuidedPayment(unittest.TestCase):
 	@patch("retailedge.guided_payment.get_simple_payment_mode_details")
 	@patch("retailedge.guided_payment.get_party_details")
 	@patch("retailedge.guided_payment._assert_read_permission")
-	@patch("retailedge.guided_payment.validate_user_branch_access")
+	@patch("retailedge.guided_payment._resolve_guided_payment_branch", return_value="Lagos")
 	@patch("retailedge.guided_payment._assert_can_create_payment_entry")
 	def test_multi_currency_payment_is_redirected_to_full_form(self, _mock_create_permission, _mock_branch_access, _mock_read_permission, mock_party_details, mock_mode_details, _mock_db_value):
 		mock_party_details.return_value = frappe._dict(party_account="Debtors USD - DC", party_account_currency="USD")
