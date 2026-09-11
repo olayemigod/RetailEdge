@@ -24,6 +24,14 @@
 			<EdgeLoadingState v-if="loading && !loaded" />
 			<EdgeErrorState v-else-if="error" :message="error" @retry="loadSetup" />
 
+			<ExpenseCategoryManager
+				v-else-if="activeManager === 'expense-categories'"
+				:key="managerKey"
+				:initialAction="managerAction"
+				:initialName="managerName"
+				@back="closeManager"
+			/>
+
 			<div v-else class="setup-content">
 				<section class="edge-panel setup-guidance">
 					<div>
@@ -68,6 +76,8 @@
 </template>
 
 <script>
+import ExpenseCategoryManager from "./ExpenseCategoryManager.vue";
+
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
 	"EdgePageLayout",
@@ -103,7 +113,10 @@ function doctypeSlug(doctype) {
 
 export default {
 	name: "RetailEdgeSetup",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		ExpenseCategoryManager,
+	},
 	data() {
 		return {
 			edgeUIValid: true,
@@ -116,22 +129,54 @@ export default {
 			tenantName: "",
 			branchName: "",
 			userName: "",
+			activeManager: "",
+			managerAction: "list",
+			managerName: "",
+			managerKey: 0,
 		};
 	},
 	created() {
 		const components = runtimeComponents();
 		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
 		this.edgeUIValid = this.missingComponents.length === 0;
-		this._onPageShow = () => this.loadSetup();
+		this._onPageShow = () => {
+			this.consumeRouteOptions();
+			this.loadSetup();
+		};
 	},
 	mounted() {
 		window.addEventListener("retailedge-setup-page-show", this._onPageShow);
+		this.consumeRouteOptions();
 		if (this.edgeUIValid) this.loadSetup();
 	},
 	beforeUnmount() {
 		window.removeEventListener("retailedge-setup-page-show", this._onPageShow);
 	},
 	methods: {
+		consumeRouteOptions() {
+			const options = frappe.route_options || {};
+			if (options.setup_resource === "expense-categories") {
+				this.openExpenseCategoryManager(
+					options.expense_category ? "edit" : (options.setup_action || "list"),
+					options.expense_category || "",
+				);
+				frappe.route_options = null;
+			}
+		},
+		openExpenseCategoryManager(action = "list", name = "") {
+			this.activeManager = "expense-categories";
+			this.managerAction = action === "new" ? "new" : "list";
+			this.managerName = name || "";
+			this.managerKey += 1;
+		},
+		closeManager() {
+			this.activeManager = "";
+			this.managerAction = "list";
+			this.managerName = "";
+			this.managerKey += 1;
+			frappe.route_options = null;
+			this.loadSetup();
+		},
 		async loadSetup() {
 			if (this.loading) return;
 			this.loading = true;
@@ -176,6 +221,10 @@ export default {
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
 		openResource(resource) {
+			if (resource?.key === "expense-categories") {
+				this.openExpenseCategoryManager("list");
+				return;
+			}
 			if (resource?.page) {
 				frappe.set_route(resource.page);
 				return;
@@ -185,6 +234,10 @@ export default {
 		},
 		createResource(resource) {
 			if (!resource?.doctype || !resource.can_create || resource.singleton) return;
+			if (resource.key === "expense-categories") {
+				this.openExpenseCategoryManager("new");
+				return;
+			}
 			window.open(`/app/${doctypeSlug(resource.doctype)}/new`, "_blank", "noopener,noreferrer");
 		},
 		openOperatingContext() {
