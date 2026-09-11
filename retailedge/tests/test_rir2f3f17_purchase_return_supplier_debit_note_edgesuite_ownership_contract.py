@@ -38,7 +38,7 @@ class TestRIR2F3F17PurchaseReturnSupplierDebitNoteEdgeSuiteOwnershipContract(uni
 
 	def test_preview_uses_canonical_mappers_without_persistence(self):
 		backend = (APP_ROOT / "professional_purchase_returns.py").read_text(encoding="utf-8")
-		preview_body = backend.split("def get_purchase_return_review", 1)[1].split("def submit_purchase_return_review", 1)[0]
+		preview_body = backend.split("def get_purchase_return_review", 1)[1].split("def start_purchase_return_workflow", 1)[0]
 
 		self.assertIn("make_purchase_return(source.name)", backend)
 		self.assertIn("make_debit_note(source.name)", backend)
