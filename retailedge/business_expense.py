@@ -21,6 +21,19 @@ MAX_LINK_RESULTS = 20
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 100
 MAX_DATE_RANGE_DAYS = 366
+BUSINESS_EXPENSE_SORT_FIELDS = {
+	"expense_date",
+	"expense_category",
+	"payee_name",
+	"branch",
+	"expense_status",
+	"ledger_status",
+	"amount",
+	"modified",
+	"name",
+}
+BUSINESS_EXPENSE_SORT_DIRECTIONS = {"asc", "desc"}
+DEFAULT_BUSINESS_EXPENSE_ORDER = "expense_date desc, modified desc, name desc"
 
 BUSINESS_EXPENSE_READ_ROLES = {
 	"System Manager",
@@ -254,17 +267,43 @@ def get_business_expense_category_defaults(
 	}
 
 
+def _normalise_business_expense_sort(
+	sort: dict[str, Any] | str | None,
+) -> tuple[dict[str, str] | None, str]:
+	if isinstance(sort, str):
+		try:
+			sort = frappe.parse_json(sort)
+		except Exception:
+			return None, DEFAULT_BUSINESS_EXPENSE_ORDER
+	if not isinstance(sort, dict):
+		return None, DEFAULT_BUSINESS_EXPENSE_ORDER
+
+	field = str(sort.get("field") or sort.get("fieldname") or sort.get("key") or "").strip()
+	direction = str(sort.get("direction") or sort.get("order") or "").strip().lower()
+	if field not in BUSINESS_EXPENSE_SORT_FIELDS or direction not in BUSINESS_EXPENSE_SORT_DIRECTIONS:
+		return None, DEFAULT_BUSINESS_EXPENSE_ORDER
+
+	order_parts = [f"{field} {direction}"]
+	if field != "modified":
+		order_parts.append("modified desc")
+	if field != "name":
+		order_parts.append("name desc")
+	return {"field": field, "direction": direction}, ", ".join(order_parts)
+
+
 @frappe.whitelist()
 def get_business_expenses(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
 	_assert_feature_enabled()
 	filters = _coerce_values(filters)
 	query_filters, or_filters, scope = _build_business_expense_list_filters(filters)
 	page = max(1, cint(page) or 1)
 	page_size = max(1, min(cint(page_size) or DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
+	normalized_sort, order_by = _normalise_business_expense_sort(sort)
 
 	aggregate = frappe.get_list(
 		BUSINESS_EXPENSE_DOCTYPE,
@@ -308,7 +347,7 @@ def get_business_expenses(
 			"requested_by",
 			"modified",
 		],
-		order_by="expense_date desc, modified desc, name desc",
+		order_by=order_by,
 		limit_start=(page - 1) * page_size,
 		limit_page_length=page_size,
 	)
@@ -327,6 +366,7 @@ def get_business_expenses(
 			"has_next": page < total_pages,
 		},
 		"scope": scope,
+		"sort": normalized_sort,
 	}
 
 
