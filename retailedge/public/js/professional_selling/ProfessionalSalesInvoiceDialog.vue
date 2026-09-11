@@ -314,6 +314,7 @@ export default {
 		async setBranch(next) {
 			this.values.branch = next || "";
 			this.values.warehouse = "";
+			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			if (!this.values.branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
