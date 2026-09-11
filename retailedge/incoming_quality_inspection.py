@@ -23,6 +23,8 @@ from retailedge.professional_purchasing import (
 	_permission,
 	_resolve_scope,
 )
+from retailedge.workflow_actions import apply_document_workflow_action
+from retailedge.workflow_readiness import get_workflow_readiness
 
 QUALITY_INSPECTION_DOCTYPE = "Quality Inspection"
 MAX_QUALITY_INSPECTION_ROWS = 50
@@ -297,6 +299,211 @@ def _quality_inspection_for_candidate(
 	return quality_inspection
 
 
+def _find_linked_draft_quality_inspections(
+	receipt_name: str,
+	child_row_reference: str,
+) -> list[dict[str, Any]]:
+	"""Return a small exact set of draft inspections already linked to one source row."""
+	return list(
+		frappe.get_all(
+			QUALITY_INSPECTION_DOCTYPE,
+			filters={
+				"reference_type": PURCHASE_RECEIPT_DOCTYPE,
+				"reference_name": receipt_name,
+				"child_row_reference": child_row_reference,
+				"docstatus": 0,
+			},
+			fields=["name", "modified"],
+			order_by="modified asc",
+			limit=3,
+		)
+		or []
+	)
+
+
+def _candidate_for_reviewed_row(
+	receipt: Any,
+	child_row_reference: str,
+	*,
+	allowed_quality_inspection: str = "",
+) -> tuple[dict[str, Any], Any]:
+	"""Rebuild one source row even when an idempotently reusable draft is already linked."""
+	row = next(
+		(
+			item
+			for item in list(getattr(receipt, "items", None) or [])
+			if str(getattr(item, "name", "") or "").strip() == child_row_reference
+		),
+		None,
+	)
+	if row is None:
+		frappe.throw(
+			_("Purchase Receipt row {0} no longer exists. Refresh before continuing.").format(
+				child_row_reference
+			)
+		)
+
+	item_code = str(getattr(row, "item_code", "") or "").strip()
+	qty = flt(getattr(row, "qty", 0))
+	if not item_code or qty <= 0:
+		frappe.throw(
+			_("Purchase Receipt row {0} is no longer eligible for Incoming Quality Inspection.").format(
+				child_row_reference
+			)
+		)
+
+	current_quality_inspection = str(getattr(row, "quality_inspection", "") or "").strip()
+	if current_quality_inspection and current_quality_inspection != str(
+		allowed_quality_inspection or ""
+	).strip():
+		frappe.throw(
+			_("Purchase Receipt row {0} is already linked to another Quality Inspection.").format(
+				child_row_reference
+			)
+		)
+
+	candidate = {
+		"item_code": item_code,
+		"item_name": str(getattr(row, "item_name", "") or item_code),
+		"qty": qty,
+		"description": str(getattr(row, "description", "") or ""),
+		"serial_no": str(getattr(row, "serial_no", "") or ""),
+		"batch_no": str(getattr(row, "batch_no", "") or ""),
+		"child_row_reference": child_row_reference,
+		"quality_inspection": "",
+	}
+	eligible = list(
+		check_item_quality_inspection(
+			PURCHASE_RECEIPT_DOCTYPE,
+			cint(getattr(receipt, "docstatus", 0)),
+			[candidate],
+		)
+		or []
+	)
+	if child_row_reference not in {
+		str(value.get("child_row_reference") or "").strip()
+		for value in eligible
+		if value.get("child_row_reference")
+	}:
+		frappe.throw(
+			_("Purchase Receipt row {0} is no longer eligible for Incoming Quality Inspection.").format(
+				child_row_reference
+			)
+		)
+	return candidate, row
+
+
+def _reading_input_payload(quality_inspection: Any) -> list[dict[str, Any]]:
+	values: list[dict[str, Any]] = []
+	for idx, reading in enumerate(
+		list(getattr(quality_inspection, "readings", None) or []),
+		start=1,
+	):
+		value: dict[str, Any] = {
+			"idx": idx,
+			"specification": str(getattr(reading, "specification", "") or ""),
+			"reading_value": getattr(reading, "reading_value", None),
+		}
+		for fieldname in _READING_INPUT_FIELDS:
+			if fieldname == "reading_value":
+				continue
+			value[fieldname] = getattr(reading, fieldname, None)
+		values.append(value)
+	return values
+
+
+def _standard_quality_inspection_signature(quality_inspection: Any) -> dict[str, Any]:
+	readings: list[dict[str, Any]] = []
+	for reading in list(getattr(quality_inspection, "readings", None) or []):
+		readings.append(
+			{
+				"specification": str(getattr(reading, "specification", "") or ""),
+				"numeric": cint(getattr(reading, "numeric", 0)),
+				"formula_based_criteria": cint(
+					getattr(reading, "formula_based_criteria", 0)
+				),
+				"manual_inspection": cint(getattr(reading, "manual_inspection", 0)),
+				"min_value": flt(getattr(reading, "min_value", 0), 9),
+				"max_value": flt(getattr(reading, "max_value", 0), 9),
+				"value": str(getattr(reading, "value", "") or ""),
+				"acceptance_formula": str(
+					getattr(reading, "acceptance_formula", "") or ""
+				),
+				"reading_value": str(getattr(reading, "reading_value", "") or ""),
+				**{
+					f"reading_{number}": str(
+						getattr(reading, f"reading_{number}", "") or ""
+					)
+					for number in range(1, 11)
+				},
+			}
+		)
+	return {
+		"company": str(getattr(quality_inspection, "company", "") or ""),
+		"inspection_type": str(
+			getattr(quality_inspection, "inspection_type", "") or ""
+		),
+		"reference_type": str(
+			getattr(quality_inspection, "reference_type", "") or ""
+		),
+		"reference_name": str(
+			getattr(quality_inspection, "reference_name", "") or ""
+		),
+		"child_row_reference": str(
+			getattr(quality_inspection, "child_row_reference", "") or ""
+		),
+		"item_code": str(getattr(quality_inspection, "item_code", "") or ""),
+		"sample_size": flt(getattr(quality_inspection, "sample_size", 0), 9),
+		"batch_no": str(getattr(quality_inspection, "batch_no", "") or ""),
+		"item_serial_no": str(
+			getattr(quality_inspection, "item_serial_no", "") or ""
+		),
+		"quality_inspection_template": str(
+			getattr(quality_inspection, "quality_inspection_template", "") or ""
+		),
+		"readings": readings,
+	}
+
+
+def _assert_standard_quality_inspection_equivalence(
+	existing: Any,
+	expected: Any,
+) -> None:
+	if cint(getattr(existing, "docstatus", 0)) != 0:
+		frappe.throw(
+			_("Quality Inspection {0} is no longer a draft. Refresh before continuing.").format(
+				existing.name
+			)
+		)
+	if _standard_quality_inspection_signature(existing) != _standard_quality_inspection_signature(
+		expected
+	):
+		frappe.throw(
+			_(
+				"Quality Inspection {0} no longer matches the current Purchase Receipt, template, sample or readings. Use Advanced ERPNext review."
+			).format(existing.name)
+		)
+
+
+def _workflow_inspection_payload(quality_inspection: Any) -> dict[str, Any]:
+	readiness = get_workflow_readiness(
+		doctype=QUALITY_INSPECTION_DOCTYPE,
+		doc=quality_inspection,
+	)
+	return {
+		"doctype": QUALITY_INSPECTION_DOCTYPE,
+		"name": quality_inspection.name,
+		"modified": str(getattr(quality_inspection, "modified", "") or ""),
+		"docstatus": cint(getattr(quality_inspection, "docstatus", 0)),
+		"status": str(getattr(quality_inspection, "status", "") or ""),
+		"child_row_reference": str(
+			getattr(quality_inspection, "child_row_reference", "") or ""
+		),
+		"item_code": str(getattr(quality_inspection, "item_code", "") or ""),
+		"workflow_readiness": readiness,
+	}
+
+
 def _inspection_blockers(quality_inspection: Any) -> list[dict[str, str]]:
 	item_code = str(getattr(quality_inspection, "item_code", "") or "")
 	if not str(getattr(quality_inspection, "quality_inspection_template", "") or "").strip():
@@ -548,6 +755,11 @@ def get_incoming_quality_inspection_review(
 		items.append(item_review)
 		blockers.extend(item_review["blockers"])
 
+	workflow_readiness = get_workflow_readiness(
+		doctype=QUALITY_INSPECTION_DOCTYPE,
+		doc=None,
+	)
+	workflow_controlled = str(workflow_readiness.get("source") or "") == "frappe"
 	return {
 		"purchase_receipt": receipt.name,
 		"source_modified": str(getattr(receipt, "modified", "") or ""),
@@ -558,7 +770,14 @@ def get_incoming_quality_inspection_review(
 		"items": items,
 		"blockers": blockers,
 		"standard_submit_eligible": not blockers,
-		"can_submit": bool(not blockers and _permission(QUALITY_INSPECTION_DOCTYPE, "submit")),
+		"workflow_readiness": workflow_readiness,
+		"workflow_controlled": workflow_controlled,
+		"can_start_workflow": bool(not blockers and workflow_controlled),
+		"can_submit": bool(
+			not blockers
+			and not workflow_controlled
+			and _permission(QUALITY_INSPECTION_DOCTYPE, "submit")
+		),
 		"persistence": "none",
 		"posting_status": "Preview only",
 		"source_of_truth": "ERPNext Quality Inspection template",
@@ -573,6 +792,17 @@ def submit_incoming_quality_inspection_review(
 ) -> dict[str, Any]:
 	"""Insert and submit the reviewed standard Quality Inspections using ERPNext lifecycle rules."""
 	normalised = _normalise_review_submissions(selections)
+	_assert_quality_permissions()
+	workflow_readiness = get_workflow_readiness(
+		doctype=QUALITY_INSPECTION_DOCTYPE,
+		doc=None,
+	)
+	if str(workflow_readiness.get("source") or "") == "frappe":
+		frappe.throw(
+			_(
+				"Quality Inspection is controlled by an active Frappe Workflow. Use Start Inspection Approval in EdgeSuite."
+			)
+		)
 	_assert_quality_submit_permission()
 	receipt = _get_receipt(purchase_receipt, lock=True)
 	company, branch = _validate_draft_receipt(receipt)
@@ -640,6 +870,248 @@ def submit_incoming_quality_inspection_review(
 		"created_count": len(created),
 		"posting_status": "Submitted",
 		"source_of_truth": "ERPNext Quality Inspection validate and submit",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def start_incoming_quality_inspection_approval(
+	purchase_receipt: str,
+	expected_source_modified: str | None = None,
+	selections: list[Any] | str | None = None,
+) -> dict[str, Any]:
+	"""Persist or idempotently reuse standard Quality Inspection drafts for Frappe Workflow."""
+	normalised = _normalise_review_submissions(selections)
+	_assert_quality_permissions()
+	workflow_summary = get_workflow_readiness(
+		doctype=QUALITY_INSPECTION_DOCTYPE,
+		doc=None,
+	)
+	if str(workflow_summary.get("source") or "") != "frappe":
+		frappe.throw(
+			_(
+				"No active Frappe Workflow controls Quality Inspection. Use standard EdgeSuite submission instead."
+			)
+		)
+
+	receipt = _get_receipt(purchase_receipt, lock=True)
+	company, branch = _validate_draft_receipt(receipt)
+	expected_modified = str(expected_source_modified or "").strip()
+	current_modified = str(getattr(receipt, "modified", "") or "")
+
+	drafts_by_row = {
+		selection["child_row_reference"]: _find_linked_draft_quality_inspections(
+			receipt.name,
+			selection["child_row_reference"],
+		)
+		for selection in normalised
+	}
+	if not expected_modified:
+		frappe.throw(_("The Purchase Receipt review version is required."))
+	if expected_modified != current_modified:
+		all_single = all(
+			len(drafts_by_row[value["child_row_reference"]]) == 1
+			for value in normalised
+		)
+		draft_modified_values = {
+			str(draft.get("modified") or "")
+			for drafts in drafts_by_row.values()
+			for draft in drafts
+		}
+		if not all_single or current_modified not in draft_modified_values:
+			frappe.throw(
+				_(
+					"Purchase Receipt {0} changed after the Quality Inspection review. Refresh before starting approval."
+				).format(receipt.name)
+			)
+
+	created: list[dict[str, Any]] = []
+	for selection in normalised:
+		row_name = selection["child_row_reference"]
+		drafts = drafts_by_row[row_name]
+		if len(drafts) > 1:
+			frappe.throw(
+				_(
+					"More than one draft Quality Inspection is linked to Purchase Receipt row {0}. Use Advanced ERPNext review."
+				).format(row_name)
+			)
+
+		existing = None
+		allowed_quality_inspection = ""
+		if drafts:
+			allowed_quality_inspection = str(drafts[0].get("name") or "")
+			_assert_read(QUALITY_INSPECTION_DOCTYPE, allowed_quality_inspection)
+			existing = frappe.get_doc(
+				QUALITY_INSPECTION_DOCTYPE,
+				allowed_quality_inspection,
+			)
+
+		candidate, _row = _candidate_for_reviewed_row(
+			receipt,
+			row_name,
+			allowed_quality_inspection=allowed_quality_inspection,
+		)
+		sample_size = _validate_sample_size(
+			candidate,
+			flt(selection["sample_size"]),
+		)
+		expected = _quality_inspection_for_candidate(
+			receipt,
+			candidate,
+			sample_size=sample_size,
+		)
+		blockers = _inspection_blockers(expected)
+		if blockers:
+			labels = ", ".join(
+				str(blocker.get("label") or blocker.get("key") or "")
+				for blocker in blockers
+			)
+			frappe.throw(
+				_("This Quality Inspection requires Advanced ERPNext handling: {0}").format(
+					labels
+				)
+			)
+		_apply_review_readings(expected, selection["readings"])
+
+		if existing is not None:
+			_assert_standard_quality_inspection_equivalence(existing, expected)
+			quality_inspection = existing
+		else:
+			quality_inspection = expected
+			quality_inspection.insert()
+
+		readiness = get_workflow_readiness(
+			doctype=QUALITY_INSPECTION_DOCTYPE,
+			doc=quality_inspection,
+		)
+		if str(readiness.get("source") or "") != "frappe":
+			frappe.throw(
+				_(
+					"Quality Inspection Workflow changed while approval was starting. Refresh before continuing."
+				)
+			)
+		created.append(_workflow_inspection_payload(quality_inspection))
+
+	refreshed_receipt = frappe.get_doc(PURCHASE_RECEIPT_DOCTYPE, receipt.name)
+	return {
+		"purchase_receipt": refreshed_receipt.name,
+		"source_modified": str(getattr(refreshed_receipt, "modified", "") or ""),
+		"company": company,
+		"branch": branch,
+		"inspections": created,
+		"created_count": len(created),
+		"posting_status": "Workflow Draft",
+		"source_of_truth": "ERPNext Quality Inspection and Frappe Workflow",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_incoming_quality_inspection_workflow_action(
+	purchase_receipt: str,
+	quality_inspection: str,
+	action: str,
+	expected_source_modified: str | None = None,
+	expected_quality_inspection_modified: str | None = None,
+	expected_workflow_state: str | None = None,
+) -> dict[str, Any]:
+	"""Apply one saved standard Quality Inspection transition through F3F27."""
+	purchase_receipt = str(purchase_receipt or "").strip()
+	quality_inspection = str(quality_inspection or "").strip()
+	action = str(action or "").strip()
+	if not purchase_receipt or not quality_inspection or not action:
+		frappe.throw(
+			_("Purchase Receipt, Quality Inspection and workflow action are required.")
+		)
+
+	_assert_read(PURCHASE_RECEIPT_DOCTYPE, purchase_receipt)
+	_assert_read(QUALITY_INSPECTION_DOCTYPE, quality_inspection)
+	frappe.db.sql(
+		"SELECT name FROM `tabPurchase Receipt` WHERE name = %s FOR UPDATE",
+		(purchase_receipt,),
+	)
+	frappe.db.sql(
+		"SELECT name FROM `tabQuality Inspection` WHERE name = %s FOR UPDATE",
+		(quality_inspection,),
+	)
+
+	receipt = frappe.get_doc(PURCHASE_RECEIPT_DOCTYPE, purchase_receipt)
+	_validate_draft_receipt(receipt)
+	inspection = frappe.get_doc(QUALITY_INSPECTION_DOCTYPE, quality_inspection)
+	if cint(getattr(inspection, "docstatus", 0)) != 0:
+		frappe.throw(
+			_("Only draft Quality Inspections can take a standard EdgeSuite workflow action.")
+		)
+	if (
+		str(getattr(inspection, "reference_type", "") or "")
+		!= PURCHASE_RECEIPT_DOCTYPE
+		or str(getattr(inspection, "reference_name", "") or "") != receipt.name
+	):
+		frappe.throw(
+			_("The selected Quality Inspection is not linked to this Purchase Receipt.")
+		)
+
+	expected_source = str(expected_source_modified or "").strip()
+	current_source = str(getattr(receipt, "modified", "") or "")
+	if not expected_source or expected_source != current_source:
+		frappe.throw(
+			_(
+				"Purchase Receipt {0} changed after approval was loaded. Refresh before continuing."
+			).format(receipt.name)
+		)
+	expected_quality = str(expected_quality_inspection_modified or "").strip()
+	current_quality = str(getattr(inspection, "modified", "") or "")
+	if not expected_quality or expected_quality != current_quality:
+		frappe.throw(
+			_(
+				"Quality Inspection {0} changed after approval was loaded. Refresh before continuing."
+			).format(inspection.name)
+		)
+
+	row_name = str(getattr(inspection, "child_row_reference", "") or "").strip()
+	candidate, _row = _candidate_for_reviewed_row(
+		receipt,
+		row_name,
+		allowed_quality_inspection=inspection.name,
+	)
+	expected = _quality_inspection_for_candidate(
+		receipt,
+		candidate,
+		sample_size=flt(getattr(inspection, "sample_size", 0)),
+	)
+	blockers = _inspection_blockers(expected)
+	if blockers:
+		frappe.throw(
+			_("This Quality Inspection now requires Advanced ERPNext review.")
+		)
+	_apply_review_readings(expected, _reading_input_payload(inspection))
+	_assert_standard_quality_inspection_equivalence(inspection, expected)
+
+	readiness = get_workflow_readiness(
+		doctype=QUALITY_INSPECTION_DOCTYPE,
+		doc=inspection,
+	)
+	if str(readiness.get("source") or "") != "frappe":
+		frappe.throw(
+			_("No active Frappe Workflow controls this Quality Inspection.")
+		)
+
+	result = apply_document_workflow_action(
+		doctype=QUALITY_INSPECTION_DOCTYPE,
+		name=inspection.name,
+		action=action,
+		expected_modified=expected_quality_inspection_modified,
+		expected_state=str(expected_workflow_state or ""),
+	)
+	refreshed_inspection = frappe.get_doc(
+		QUALITY_INSPECTION_DOCTYPE,
+		inspection.name,
+	)
+	refreshed_receipt = frappe.get_doc(PURCHASE_RECEIPT_DOCTYPE, receipt.name)
+	return {
+		**result,
+		"purchase_receipt": refreshed_receipt.name,
+		"source_modified": str(getattr(refreshed_receipt, "modified", "") or ""),
+		"quality_inspection": _workflow_inspection_payload(refreshed_inspection),
+		"source_of_truth": "Frappe apply_workflow and ERPNext Quality Inspection",
 	}
 
 
