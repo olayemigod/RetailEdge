@@ -48,9 +48,17 @@
 				<div v-else-if="!draftPayments.length" class="payment-state compact">No standard draft customer payments are awaiting submission in this scope.</div>
 				<div v-else class="table-wrap">
 					<table class="payment-table draft-table">
-						<thead><tr><th>Payment</th><th>Type</th><th>Date</th><th>Branch</th><th>Invoice</th><th class="num">Received</th><th>Status</th><th>Action</th></tr></thead>
+						<thead><tr>
+							<th><button type="button" class="table-sort-button" @click='sortDraftPaymentsBy("payment_entry")'>Payment {{ localSortMark(draftPaymentSort, "payment_entry") }}</button></th>
+							<th><button type="button" class="table-sort-button" @click='sortDraftPaymentsBy("payment_kind")'>Type {{ localSortMark(draftPaymentSort, "payment_kind") }}</button></th>
+							<th><button type="button" class="table-sort-button" @click='sortDraftPaymentsBy("posting_date")'>Date {{ localSortMark(draftPaymentSort, "posting_date") }}</button></th>
+							<th><button type="button" class="table-sort-button" @click='sortDraftPaymentsBy("branch")'>Branch {{ localSortMark(draftPaymentSort, "branch") }}</button></th>
+							<th><button type="button" class="table-sort-button" @click='sortDraftPaymentsBy("sales_invoice")'>Invoice {{ localSortMark(draftPaymentSort, "sales_invoice") }}</button></th>
+							<th class="num"><button type="button" class="table-sort-button table-sort-button--num" @click='sortDraftPaymentsBy("received_amount")'>Received {{ localSortMark(draftPaymentSort, "received_amount") }}</button></th>
+							<th>Status</th><th>Action</th>
+						</tr></thead>
 						<tbody>
-							<tr v-for="row in draftPayments" :key="row.payment_entry">
+							<tr v-for="row in sortedDraftPayments" :key="row.payment_entry">
 								<td>{{ row.payment_entry }}</td>
 								<td>{{ row.payment_kind }}</td>
 								<td>{{ formatDate(row.posting_date) }}</td>
@@ -147,9 +155,15 @@
 							<div v-if="!settlement.context.eligible_advances?.length" class="payment-state compact">No eligible submitted customer advances are available for this invoice.</div>
 							<div v-else class="table-wrap">
 								<table class="payment-table settlement-table">
-									<thead><tr><th>Payment</th><th>Date</th><th>Mode</th><th class="num">Available</th><th class="num">Apply</th></tr></thead>
+									<thead><tr>
+										<th><button type="button" class="table-sort-button" @click='sortSettlementAdvancesBy("name")'>Payment {{ localSortMark(settlementAdvanceSort, "name") }}</button></th>
+										<th><button type="button" class="table-sort-button" @click='sortSettlementAdvancesBy("posting_date")'>Date {{ localSortMark(settlementAdvanceSort, "posting_date") }}</button></th>
+										<th><button type="button" class="table-sort-button" @click='sortSettlementAdvancesBy("mode_of_payment")'>Mode {{ localSortMark(settlementAdvanceSort, "mode_of_payment") }}</button></th>
+										<th class="num"><button type="button" class="table-sort-button table-sort-button--num" @click='sortSettlementAdvancesBy("unallocated_amount")'>Available {{ localSortMark(settlementAdvanceSort, "unallocated_amount") }}</button></th>
+										<th class="num">Apply</th>
+									</tr></thead>
 									<tbody>
-										<tr v-for="row in settlement.context.eligible_advances" :key="row.name">
+										<tr v-for="row in sortedSettlementAdvances" :key="row.name">
 											<td><button v-if="canUseNativeDesk" class="link-button" type="button" @click="openPayment(row.name)">{{ row.name }}</button><span v-else>{{ row.name }}</span></td>
 											<td>{{ formatDate(row.posting_date) }}</td>
 											<td>{{ row.mode_of_payment || "—" }}</td>
@@ -207,9 +221,18 @@
 				<div v-else-if="!advances.length" class="payment-state">No unapplied customer advances match the current scope.</div>
 				<div v-else class="table-wrap">
 					<table class="payment-table">
-						<thead><tr><th>Payment</th><th>Date</th><th>Customer</th><th>Branch</th><th>Mode</th><th class="num">Received</th><th class="num">Available</th><th>Actions</th></tr></thead>
+						<thead><tr>
+							<th><button type="button" class="table-sort-button" @click='sortCustomerAdvancesBy("name")'>Payment {{ localSortMark(customerAdvanceSort, "name") }}</button></th>
+							<th><button type="button" class="table-sort-button" @click='sortCustomerAdvancesBy("posting_date")'>Date {{ localSortMark(customerAdvanceSort, "posting_date") }}</button></th>
+							<th><button type="button" class="table-sort-button" @click='sortCustomerAdvancesBy("customer")'>Customer {{ localSortMark(customerAdvanceSort, "customer") }}</button></th>
+							<th><button type="button" class="table-sort-button" @click='sortCustomerAdvancesBy("branch")'>Branch {{ localSortMark(customerAdvanceSort, "branch") }}</button></th>
+							<th><button type="button" class="table-sort-button" @click='sortCustomerAdvancesBy("mode_of_payment")'>Mode {{ localSortMark(customerAdvanceSort, "mode_of_payment") }}</button></th>
+							<th class="num"><button type="button" class="table-sort-button table-sort-button--num" @click='sortCustomerAdvancesBy("received_amount")'>Received {{ localSortMark(customerAdvanceSort, "received_amount") }}</button></th>
+							<th class="num"><button type="button" class="table-sort-button table-sort-button--num" @click='sortCustomerAdvancesBy("unallocated_amount")'>Available {{ localSortMark(customerAdvanceSort, "unallocated_amount") }}</button></th>
+							<th>Actions</th>
+						</tr></thead>
 						<tbody>
-							<tr v-for="row in advances" :key="row.name">
+							<tr v-for="row in sortedCustomerAdvances" :key="row.name">
 								<td><button v-if="canUseNativeDesk" class="link-button" type="button" @click="openPayment(row.name)">{{ row.name }}</button><span v-else>{{ row.name }}</span></td>
 								<td>{{ formatDate(row.posting_date) }}</td>
 								<td>{{ row.customer }}</td>
@@ -249,6 +272,47 @@ function optionRows(result) {
 		: [];
 }
 
+function comparableValue(value) {
+	if (value === null || value === undefined || value === "") return { kind: "empty", value: null };
+	if (typeof value === "number" && Number.isFinite(value)) return { kind: "number", value };
+	const text = String(value).trim();
+	if (/^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/.test(text)) {
+		const timestamp = Date.parse(text);
+		if (Number.isFinite(timestamp)) return { kind: "date", value: timestamp };
+	}
+	if (/^[-+]?\d+(?:\.\d+)?$/.test(text)) {
+		const number = Number(text);
+		if (Number.isFinite(number)) return { kind: "number", value: number };
+	}
+	return { kind: "text", value: text.toLocaleLowerCase() };
+}
+
+function nextLocalSort(current, field) {
+	if (!current || current.field !== field) return { field, direction: "asc" };
+	if (current.direction === "asc") return { field, direction: "desc" };
+	return null;
+}
+
+function sortedCopy(rows, sort) {
+	const result = [...(rows || [])];
+	if (!sort?.field) return result;
+	const factor = sort.direction === "desc" ? -1 : 1;
+	return result
+		.map((row, index) => ({ row, index }))
+		.sort((left, right) => {
+			const a = comparableValue(left.row?.[sort.field]);
+			const b = comparableValue(right.row?.[sort.field]);
+			if (a.kind === "empty" && b.kind === "empty") return left.index - right.index;
+			if (a.kind === "empty") return 1;
+			if (b.kind === "empty") return -1;
+			let comparison = 0;
+			if (a.kind === b.kind && ["number", "date"].includes(a.kind)) comparison = a.value - b.value;
+			else comparison = String(a.value).localeCompare(String(b.value), undefined, { numeric: true, sensitivity: "base" });
+			return comparison ? comparison * factor : left.index - right.index;
+		})
+		.map(({ row }) => row);
+}
+
 export default {
 	name: "PaymentManagement",
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
@@ -266,6 +330,9 @@ export default {
 			draftError: "",
 			draftReview: {},
 			draftSubmitting: false,
+			draftPaymentSort: null,
+			settlementAdvanceSort: null,
+			customerAdvanceSort: null,
 			menuItems: [],
 			canUseNativeDesk: false,
 			tenantName: "",
@@ -298,6 +365,9 @@ export default {
 		};
 	},
 	computed: {
+		sortedDraftPayments() { return sortedCopy(this.draftPayments, this.draftPaymentSort); },
+		sortedSettlementAdvances() { return sortedCopy(this.settlement.context.eligible_advances || [], this.settlementAdvanceSort); },
+		sortedCustomerAdvances() { return sortedCopy(this.advances, this.customerAdvanceSort); },
 		selectedSettlementAllocations() {
 			const eligible = new Map((this.settlement.context.eligible_advances || []).map((row) => [row.name, row]));
 			return Object.entries(this.settlement.allocations || {})
@@ -323,6 +393,13 @@ export default {
 	},
 	mounted() { this.loadMetadata(); },
 	methods: {
+		sortDraftPaymentsBy(field) { this.draftPaymentSort = nextLocalSort(this.draftPaymentSort, field); },
+		sortSettlementAdvancesBy(field) { this.settlementAdvanceSort = nextLocalSort(this.settlementAdvanceSort, field); },
+		sortCustomerAdvancesBy(field) { this.customerAdvanceSort = nextLocalSort(this.customerAdvanceSort, field); },
+		localSortMark(sort, field) {
+			if (!sort || sort.field !== field) return "↕";
+			return sort.direction === "desc" ? "↓" : "↑";
+		},
 		async loadMetadata() {
 			try {
 				const routeInvoice = String(frappe.route_options?.sales_invoice || frappe.route_options?.retailedge_sales_invoice || "").trim();
@@ -701,6 +778,9 @@ button:disabled { opacity:.55; cursor:not-allowed; }
 .draft-table { min-width:880px; }
 .payment-table th,.payment-table td { padding:10px 9px; border-bottom:1px solid var(--edge-border,#e5e7eb); text-align:left; color:var(--edge-text,#101828); }
 .payment-table th { font-size:.76rem; color:var(--edge-text-muted,#667085); text-transform:uppercase; letter-spacing:.03em; }
+.table-sort-button { width:100%; border:0; padding:0; background:transparent; color:inherit; font:inherit; font-weight:700; text-align:left; cursor:pointer; text-transform:inherit; letter-spacing:inherit; }
+.table-sort-button--num { text-align:right; }
+.table-sort-button:hover,.table-sort-button:focus-visible { color:var(--edge-primary,#0f766e); text-decoration:underline; text-underline-offset:3px; }
 .payment-table .num { text-align:right; }
 .payment-table .strong { font-weight:700; }
 .link-button { border:0; background:transparent; color:var(--edge-primary,#0f766e); padding:0; cursor:pointer; font-weight:600; }
