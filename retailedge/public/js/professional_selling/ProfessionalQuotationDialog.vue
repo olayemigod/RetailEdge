@@ -198,6 +198,7 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
+			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			if (!branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
