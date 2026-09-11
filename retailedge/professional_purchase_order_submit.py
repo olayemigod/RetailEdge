@@ -13,20 +13,10 @@ from retailedge.professional_purchasing import (
 	_document_branch,
 	_permission,
 )
+from retailedge.workflow_actions import apply_document_workflow_action
+from retailedge.workflow_readiness import get_workflow_readiness
 
 BLOCKED_DRAFT_STATUSES = {"On Hold", "Closed", "Cancelled"}
-
-
-def _active_purchase_order_workflow() -> str:
-	return str(
-		frappe.db.get_value(
-			"Workflow",
-			{"document_type": PURCHASE_ORDER_DOCTYPE, "is_active": 1},
-			"name",
-		)
-		or ""
-	)
-
 
 def _get_purchase_order(name: str) -> Any:
 	name = str(name or "").strip()
@@ -56,7 +46,18 @@ def _validate_purchase_order_branch(doc: Any) -> str:
 	return branch
 
 
-def _standard_submit_blockers(doc: Any) -> list[str]:
+def _workflow_submit_blocker(workflow_readiness: dict[str, Any]) -> str:
+	if str(workflow_readiness.get("source") or "") != "frappe":
+		return ""
+	return _(
+		"Purchase Order is controlled by active Workflow {0}. Use the available workflow action in EdgeSuite."
+	).format(workflow_readiness.get("workflow") or _("Purchase Order Workflow"))
+
+
+def _standard_submit_blockers(
+	doc: Any,
+	workflow_readiness: dict[str, Any] | None = None,
+) -> list[str]:
 	blockers: list[str] = []
 	if cint(doc.docstatus) != 0:
 		blockers.append(_("Only draft Purchase Orders can use standard EdgeSuite submission."))
@@ -67,12 +68,14 @@ def _standard_submit_blockers(doc: Any) -> list[str]:
 		blockers.append(_("Subcontracting Purchase Orders require Advanced ERPNext review."))
 	if cint(getattr(doc, "is_internal_supplier", 0)) or str(getattr(doc, "inter_company_order_reference", "") or ""):
 		blockers.append(_("Inter-company Purchase Orders require Advanced ERPNext review."))
-	workflow = _active_purchase_order_workflow()
-	if workflow:
-		blockers.append(
-			_("Purchase Order approval Workflow {0} is active. Use the workflow-aware ERPNext approval path.").format(workflow)
-		)
-	if not _permission(PURCHASE_ORDER_DOCTYPE, "submit", doc.name):
+	workflow_readiness = workflow_readiness or get_workflow_readiness(
+		doctype=PURCHASE_ORDER_DOCTYPE,
+		doc=doc,
+	)
+	workflow_blocker = _workflow_submit_blocker(workflow_readiness)
+	if workflow_blocker:
+		blockers.append(workflow_blocker)
+	elif not _permission(PURCHASE_ORDER_DOCTYPE, "submit", doc.name):
 		blockers.append(_("You do not have permission to submit this Purchase Order."))
 	return blockers
 
@@ -100,13 +103,22 @@ def _item_preview(doc: Any) -> list[dict[str, Any]]:
 	return items
 
 
-@frappe.whitelist()
-def get_purchase_order_submit_preview(purchase_order: str) -> dict[str, Any]:
-	"""Review one draft PO before standard ERPNext submission; no writes occur."""
-	doc = _get_purchase_order(purchase_order)
+def _build_preview(doc: Any) -> dict[str, Any]:
 	branch = _validate_purchase_order_branch(doc)
 	items = _item_preview(doc)
-	blockers = _standard_submit_blockers(doc)
+	workflow_readiness = get_workflow_readiness(
+		doctype=PURCHASE_ORDER_DOCTYPE,
+		doc=doc,
+	)
+	blockers = _standard_submit_blockers(
+		doc,
+		workflow_readiness=workflow_readiness,
+	)
+	workflow_blocker = _workflow_submit_blocker(workflow_readiness)
+	workflow_eligible = bool(
+		workflow_blocker
+		and not [blocker for blocker in blockers if blocker != workflow_blocker]
+	)
 
 	return {
 		"purchase_order": doc.name,
@@ -123,10 +135,65 @@ def get_purchase_order_submit_preview(purchase_order: str) -> dict[str, Any]:
 		"items": items,
 		"blockers": blockers,
 		"can_submit": not blockers,
+		"workflow_readiness": workflow_readiness,
+		"workflow_eligible": workflow_eligible,
 		"persistence": "none",
 		"status": "Review only",
 		"source_of_truth": "ERPNext Purchase Order",
 	}
+
+
+@frappe.whitelist()
+def get_purchase_order_submit_preview(purchase_order: str) -> dict[str, Any]:
+	"""Review one Purchase Order before standard submit/workflow action; no writes occur."""
+	return _build_preview(_get_purchase_order(purchase_order))
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_standard_purchase_order_workflow_action(
+	purchase_order: str,
+	action: str,
+	expected_purchase_order_modified: str | None = None,
+	expected_workflow_state: str | None = None,
+) -> dict[str, Any]:
+	purchase_order = str(purchase_order or "").strip()
+	action = str(action or "").strip()
+	if not purchase_order or not action:
+		frappe.throw(_("Purchase Order and workflow action are required."))
+	if not frappe.db.exists(PURCHASE_ORDER_DOCTYPE, purchase_order):
+		frappe.throw(_("Purchase Order {0} does not exist.").format(purchase_order))
+	_assert_read(PURCHASE_ORDER_DOCTYPE, purchase_order)
+
+	frappe.db.sql(
+		"SELECT name FROM `tabPurchase Order` WHERE name = %s FOR UPDATE",
+		(purchase_order,),
+	)
+	doc = _get_purchase_order(purchase_order)
+	_validate_purchase_order_branch(doc)
+	_item_preview(doc)
+
+	expected_modified = str(expected_purchase_order_modified or "").strip()
+	current_modified = str(getattr(doc, "modified", "") or "")
+	if not expected_modified or expected_modified != current_modified:
+		frappe.throw(
+			_("Purchase Order {0} changed after the review. Refresh before applying a workflow action.").format(
+				doc.name
+			)
+		)
+
+	preview = _build_preview(doc)
+	if not preview.get("workflow_eligible"):
+		frappe.throw(
+			_("This Purchase Order is not eligible for a standard EdgeSuite workflow action.")
+		)
+
+	return apply_document_workflow_action(
+		doctype=PURCHASE_ORDER_DOCTYPE,
+		name=doc.name,
+		action=action,
+		expected_modified=expected_modified,
+		expected_state=str(expected_workflow_state or ""),
+	)
 
 
 @frappe.whitelist(methods=["POST"])
