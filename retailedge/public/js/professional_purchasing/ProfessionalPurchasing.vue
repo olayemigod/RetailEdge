@@ -70,6 +70,35 @@
 					<button type="button" class="edge-small-button" @click="clearActionFeedback">Dismiss</button>
 				</section>
 
+				<section class="edge-panel draft-invoice-panel">
+					<div class="panel-heading">
+						<div>
+							<span class="purchasing-kicker">Direct purchase continuity</span>
+							<h3>Draft Purchase Invoices Awaiting Completion</h3>
+							<p>Source-less direct Purchase Invoice drafts that can continue through the standard EdgeSuite completion contract. PO/Receipt-linked and Supplier Document invoices stay with their existing workflows.</p>
+						</div>
+						<button type="button" class="edge-button edge-button--secondary" :disabled="loadingDraftPurchaseInvoices" @click="refreshDraftPurchaseInvoices">{{ loadingDraftPurchaseInvoices ? "Refreshing…" : "Refresh Drafts" }}</button>
+					</div>
+					<EdgeLoadingState v-if="loadingDraftPurchaseInvoices && !draftPurchaseInvoices.length" message="Refreshing Purchase Invoice drafts..." />
+					<EdgeEmptyState v-else-if="!draftPurchaseInvoices.length" title="No direct purchase drafts awaiting completion" description="Eligible source-less Purchase Invoice drafts in the current Company, Branch and Supplier scope will appear here." />
+					<div v-else class="table-wrap">
+						<table class="purchasing-table draft-invoice-table">
+							<thead><tr><th>Purchase Invoice</th><th>Date</th><th>Supplier</th><th>Branch</th><th>Mode</th><th class="num">Total</th><th>Action</th></tr></thead>
+							<tbody>
+								<tr v-for="row in draftPurchaseInvoices" :key="row.name">
+									<td><strong>{{ row.name }}</strong></td>
+									<td>{{ formatDate(row.posting_date) }}</td>
+									<td>{{ row.supplier_name || row.supplier }}</td>
+									<td>{{ row.branch || "Company-wide" }}</td>
+									<td>{{ row.update_stock ? "Accounting + Stock" : "Accounting only" }}</td>
+									<td class="num strong">{{ formatMoney(row.grand_total, row.currency) }}</td>
+									<td><button type="button" class="edge-small-button edge-small-button--primary" @click="openPurchaseInvoiceCompletion(row)">Review & Complete</button></td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</section>
+
 				<section v-if="returnCapabilities.can_prepare_purchase_return || returnCapabilities.can_prepare_supplier_debit_note" class="edge-panel returns-panel">
 					<div class="panel-heading">
 						<div>
@@ -268,12 +297,21 @@
 
 				<section class="edge-panel safety-note"><strong>Draft-first procurement safety.</strong><span>RFQ, receipt, physical-return, supplier-debit-note and incoming-quality actions delegate to ERPNext native workflows and create drafts only. Landed Cost delegates to ERPNext's native unsaved voucher handoff so mandatory charge/accounting rows are reviewed before the first save. Supplier email, submission, quality readings and acceptance, stock movement, detailed PO analysis and accounting consequences remain standard ERPNext workflows.</span></section>
 			</div>
+			<StandardPurchaseInvoiceCompletionDialog
+				:open="purchaseInvoiceCompletionOpen"
+				:document="purchaseInvoiceCompletionDocument"
+				:canUseNativeDesk="canUseNativeDesk"
+				@close="closePurchaseInvoiceCompletion"
+				@changed="handlePurchaseInvoiceCompletionChanged"
+				@completed="handlePurchaseInvoiceCompletionCompleted"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
 
 <script>
 import IncomingQualityInspection from "./IncomingQualityInspection.vue";
+import StandardPurchaseInvoiceCompletionDialog from "./StandardPurchaseInvoiceCompletionDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_purchasing.get_professional_purchasing_context";
 const PROCUREMENT_TRACKER_HANDOFF_METHOD = "retailedge.procurement_tracker_handoff.get_procurement_tracker_handoff";
@@ -296,6 +334,7 @@ const START_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.start_standa
 const SUBMIT_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.submit_standard_landed_cost_voucher";
 const LANDED_COST_WORKFLOW_METHOD = "retailedge.landed_cost_allocation.apply_landed_cost_workflow_action";
 const PREPARE_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.prepare_landed_cost_voucher_draft";
+const PURCHASE_INVOICE_QUEUE_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_queue";
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeLinkField"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -310,11 +349,12 @@ function sortedCopy(rows, sort) {
 
 export default {
 	name: "RetailEdgeProfessionalPurchasing",
-	components: { IncomingQualityInspection, ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])) },
+	components: { IncomingQualityInspection, StandardPurchaseInvoiceCompletionDialog, ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])) },
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", actionError: "", actionNotice: "", company: "", branch: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			filters: { company: "", branch: "", supplier: "" }, summary: {}, capabilities: {}, limits: {}, rows: [], materialRequests: [], serverToday: "",
+			draftPurchaseInvoices: [], loadingDraftPurchaseInvoices: false, purchaseInvoiceCompletionOpen: false, purchaseInvoiceCompletionDocument: null,
 			procurementTracker: { available: false, company: "", branch: "", report: "Procurement Tracker", reason: "" },
 			returnCapabilities: { can_prepare_purchase_return: false, can_prepare_supplier_debit_note: false }, returnSources: { purchaseReceipt: "", purchaseInvoice: "" }, preparingReturn: "",
 			landedCostCapability: { can_prepare_landed_cost: false, can_use_purchase_receipt: false, can_use_purchase_invoice: false },
@@ -346,20 +386,49 @@ export default {
 			if (this.loading) return; this.loading = true; this.error = "";
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
-				const [context, navigation, procurementTracker, returnCapabilities, landedCostCapability] = await Promise.all([
+				const [context, navigation, procurementTracker, returnCapabilities, landedCostCapability, purchaseInvoiceQueue] = await Promise.all([
 					callMethod(CONTEXT_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null, limit: 200 }),
 					navigationPromise,
 					callMethod(PROCUREMENT_TRACKER_HANDOFF_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null }),
 					callMethod(RETURN_CAPABILITY_METHOD),
 					callMethod(LANDED_COST_CAPABILITY_METHOD),
+					callMethod(PURCHASE_INVOICE_QUEUE_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null, limit: 20 }).catch(() => ({ rows: [] })),
 				]);
-				this.applyContext(context || {}); this.procurementTracker = procurementTracker || this.procurementTracker; this.returnCapabilities = returnCapabilities || this.returnCapabilities; this.applyLandedCostCapability(landedCostCapability || {}); this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
+				this.applyContext(context || {}); this.procurementTracker = procurementTracker || this.procurementTracker; this.returnCapabilities = returnCapabilities || this.returnCapabilities; this.applyLandedCostCapability(landedCostCapability || {}); this.draftPurchaseInvoices = purchaseInvoiceQueue?.rows || []; this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
 			} catch (error) { this.error = errorMessage(error, "Professional Purchasing failed to load."); } finally { this.loading = false; }
 		},
 		applyContext(context) {
 			this.company = context.company || this.filters.company || ""; this.branch = context.branch || this.filters.branch || "";
 			if (!this.filters.company) this.filters.company = this.company; if (!this.filters.branch) this.filters.branch = this.branch;
 			this.userName = context.user_name || this.userName; this.rows = context.rows || []; this.materialRequests = context.material_requests || []; this.summary = context.summary || {}; this.capabilities = context.capabilities || {}; this.limits = context.limits || {}; this.serverToday = context.server_today || "";
+		},
+		async refreshDraftPurchaseInvoices() {
+			if (this.loadingDraftPurchaseInvoices) return;
+			this.loadingDraftPurchaseInvoices = true;
+			try {
+				const result = await callMethod(PURCHASE_INVOICE_QUEUE_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null, limit: 20 });
+				this.draftPurchaseInvoices = result?.rows || [];
+			} catch (error) {
+				this.actionError = errorMessage(error, "Unable to refresh direct Purchase Invoice drafts.");
+			} finally {
+				this.loadingDraftPurchaseInvoices = false;
+			}
+		},
+		openPurchaseInvoiceCompletion(row) {
+			if (!row?.name) return;
+			this.purchaseInvoiceCompletionDocument = { doctype: "Purchase Invoice", name: row.name };
+			this.purchaseInvoiceCompletionOpen = true;
+		},
+		closePurchaseInvoiceCompletion() {
+			this.purchaseInvoiceCompletionOpen = false;
+			this.purchaseInvoiceCompletionDocument = null;
+		},
+		async handlePurchaseInvoiceCompletionChanged() {
+			await this.refreshDraftPurchaseInvoices();
+		},
+		async handlePurchaseInvoiceCompletionCompleted() {
+			this.closePurchaseInvoiceCompletion();
+			await this.refreshDraftPurchaseInvoices();
 		},
 		applyLandedCostCapability(capability) {
 			this.landedCostCapability = { ...this.landedCostCapability, ...(capability || {}) };
@@ -499,7 +568,7 @@ export default {
 <style scoped>
 .purchasing-fallback,.edge-panel { border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-lg,10px); background:var(--edge-surface,#fff); }
 .purchasing-fallback { margin:20px; padding:24px; display:flex; flex-direction:column; gap:8px; }.purchasing-content { display:flex; flex-direction:column; gap:var(--edge-space-lg,20px); padding-bottom:24px; }
-.purchasing-hero,.panel-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }.purchasing-hero,.filter-panel,.orders-panel,.sourcing-panel,.rfq-panel,.returns-panel,.landed-cost-panel,.safety-note,.action-feedback { padding:18px; }
+.purchasing-hero,.panel-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }.purchasing-hero,.filter-panel,.orders-panel,.sourcing-panel,.rfq-panel,.returns-panel,.landed-cost-panel,.draft-invoice-panel,.safety-note,.action-feedback { padding:18px; }
 .purchasing-hero h3,.panel-heading h3 { margin:3px 0 6px; color:var(--edge-text,#101828); }.purchasing-hero p,.panel-heading p,.filter-help { margin:0; max-width:820px; color:var(--edge-text-muted,#667085); }.filter-help { margin-top:10px; font-size:.82rem; }
 .purchasing-kicker { font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--edge-primary,#0f766e); }.hero-actions,.actions-cell { display:flex; gap:8px; flex-wrap:wrap; }
 .filter-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:end; }.filter-action { display:flex; }.metric-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }.metric-card { padding:16px; display:flex; flex-direction:column; gap:6px; }.metric-card span { color:var(--edge-text-muted,#667085); font-size:.8rem; }.metric-card strong { color:var(--edge-text,#101828); font-size:1.2rem; }
