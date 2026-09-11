@@ -51,7 +51,7 @@ def test_preview_is_permission_aware_branch_safe_and_persistence_free():
 def test_standard_shape_fails_closed_for_advanced_quotation_and_sales_order():
 	source = _read(SERVICE)
 	for contract in (
-		'quotation_to") or "") != "Customer"',
+		'_clean(doc.get("quotation_to")) != "Customer"',
 		"amended_from",
 		"order_type",
 		"is_internal_customer",
@@ -73,7 +73,7 @@ def test_direct_submit_locks_stale_checks_revalidates_and_delegates_to_erpnext()
 		"_validate_standard_context",
 		"_standard_shape_blockers",
 		"get_workflow_readiness",
-		'get("source") or "") == "frappe"',
+		'_clean(workflow_readiness.get("source")) == "frappe"',
 		'frappe.has_permission(doctype, "submit", doc=doc)',
 		"doc.submit()",
 	):
@@ -92,7 +92,7 @@ def test_workflow_action_locks_stale_checks_and_uses_f3f27_bridge():
 		"_validate_standard_context",
 		"_standard_shape_blockers",
 		"get_workflow_readiness",
-		'get("source") or "") != "frappe"',
+		'_clean(workflow_readiness.get("source")) != "frappe"',
 		"apply_document_workflow_action(",
 		"expected_modified=expected_modified",
 		"expected_state=str(expected_workflow_state or",
