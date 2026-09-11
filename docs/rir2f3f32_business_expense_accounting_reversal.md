@@ -55,6 +55,7 @@ A Business Expense can be reversed only when:
 - the current user has an allowed accounting role;
 - the current user can write the Business Expense;
 - the current user has normal Journal Entry read, create and submit permissions;
+- the specific original Journal Entry also passes document-level read permission/user-permission checks;
 - the original Journal Entry still matches the exact two-line RetailEdge direct-spend posting contract.
 
 If an existing reversal reference is draft, cancelled, missing, or otherwise inconsistent, automatic reversal fails closed for accountant review.
