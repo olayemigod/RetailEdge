@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="handleCellClick"
 		>
 			<template #filters>
@@ -79,7 +81,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			rows: [], columns: [], summary: [], pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canReview: false, canUseNativeDesk: false, currentPage: 1,
+			rows: [], columns: [], summary: [], reportSort: null, pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canReview: false, canUseNativeDesk: false, currentPage: 1,
 			filters: { company: "", branch: "", cashier: "", expense_category: "", expense_status: "", daily_audit_inclusion_status: "Pending Review", posting_ready: "", from_date: "", to_date: "", page_size: 50 },
 			expenseStatuses: ["Draft", "Submitted", "Pending Ledger", "Rejected", "Posted", "Cancelled"],
 		};
@@ -117,11 +119,12 @@ export default {
 			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The shared EdgeSuite Expense Review provider is unavailable."; return; }
 			this.loading = true; this.error = "";
 			try {
-				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
-				this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.scan = result.metadata?.scan || {}; this.canReview = Boolean(result.metadata?.can_review ?? this.canReview); const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
+				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
+				this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; this.canReview = Boolean(result.metadata?.can_review ?? this.canReview); const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
 			} catch (error) { this.rows = []; this.columns = []; this.summary = []; this.error = errorMessage(error, "Expense Review failed to load."); }
 			finally { this.loading = false; }
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); }, setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); }, rowKey(row, index) { return row.name || `expense-review:${index}`; },
 		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; if (column.fieldname === "review_action") { this.openReviewDialog(row); return; } const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name" && this.hasPageTarget("expense-register")) { frappe.route_options = { expense_name: value }; frappe.set_route("expense-register"); return; } if (column.fieldname === "expense_category" && this.hasPageTarget("retailedge-setup")) { frappe.route_options = { setup_resource: "expense-categories", expense_category: value }; frappe.set_route("retailedge-setup"); return; } if (column.fieldname === "cashier" && this.canUseNativeDesk) frappe.set_route("Form", "User", value); },
 		openReviewDialog(row) {

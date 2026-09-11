@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="openReportCell"
 		>
 			<template #actions>
@@ -190,7 +192,7 @@ export default {
 			error: "",
 			rows: [],
 			columns: [],
-			summary: [],
+			summary: [], reportSort: null,
 			pagination: {},
 			scope: {},
 			menuItems: [],
@@ -419,11 +421,11 @@ export default {
 				const result = await this.reportProvider.load({
 					filters: this.providerFilters(),
 					start,
-					page_length: pageSize,
+					page_length: pageSize, sort: this.reportSort,
 				});
 				this.rows = result.rows || [];
 				this.columns = result.columns || [];
-				this.summary = result.summary || [];
+				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.scope = result.metadata?.scope || {};
 				const totalRows = Number(result.total || this.rows.length);
 				const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
@@ -478,6 +480,7 @@ export default {
 				datatype: card.datatype || card.type || "Data",
 			}));
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) {
 			const next = Math.max(1, Number(page || 1));
 			if (next === this.currentPage) return;

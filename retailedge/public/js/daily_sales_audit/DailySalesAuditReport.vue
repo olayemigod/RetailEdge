@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="handleCellClick"
 		>
 			<template #filters>
@@ -72,7 +74,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			rows: [], columns: [], summary: [], pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canUseNativeDesk: false, currentPage: 1,
+			rows: [], columns: [], summary: [], reportSort: null, pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canUseNativeDesk: false, currentPage: 1,
 			filters: { company: "", branch: "", pos_profile: "", cashier: "", audit_status: "", audit_result: "", from_date: "", to_date: "", page_size: 50 },
 			auditStatuses: ["Draft", "Ready for Review", "In Review", "Balanced", "Variance Found", "Clarification Required", "Approved", "Rejected", "Cancelled", "Reopened"],
 			auditResults: ["Not Checked", "Balanced", "Shortage", "Overage", "Mixed Variance", "Requires Clarification"],
@@ -110,11 +112,12 @@ export default {
 			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The shared EdgeSuite Daily Sales Audit provider is unavailable."; return; }
 			this.loading = true; this.error = "";
 			try {
-				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
-				this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.scan = result.metadata?.scan || {}; const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
+				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
+				this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
 			} catch (error) { this.rows = []; this.columns = []; this.summary = []; this.error = errorMessage(error, "Daily Sales Audit failed to load."); }
 			finally { this.loading = false; }
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); }, setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); }, rowKey(row, index) { return row.name || `daily-sales-audit:${index}`; },
 		handleCellClick(payload) { if (!this.canUseNativeDesk) return; const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") frappe.set_route("Form", "RetailEdge Daily Sales Audit", value); else if (column.fieldname === "cashier" || ["submitted_for_review_by", "approved_by", "rejected_by"].includes(column.fieldname)) frappe.set_route("Form", "User", value); else if (column.fieldname === "pos_profile") frappe.set_route("Form", "POS Profile", value); else if (column.fieldname === "pos_opening_shift") frappe.set_route("Form", "POS Opening Shift", value); else if (column.fieldname === "pos_closing_shift") frappe.set_route("Form", "POS Closing Shift", value); },
 		formatCell(value, column) { if (value === null || value === undefined || value === "") return "—"; if (column.fieldtype === "Currency") { try { return frappe.format(Number(value), { fieldtype: "Currency" }); } catch (_error) { return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (column.fieldtype === "Check") return Number(value) ? __("Yes") : __("No"); if (column.fieldtype === "Int") return Number(value).toLocaleString(); if (column.fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },

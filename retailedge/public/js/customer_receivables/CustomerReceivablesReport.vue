@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="openReportCell"
 		>
 			<template #filters>
@@ -97,7 +99,7 @@ export default {
 			error: "",
 			rows: [],
 			columns: [],
-			summary: [],
+			summary: [], reportSort: null,
 			pagination: {},
 			scan: {},
 			menuItems: [],
@@ -173,10 +175,10 @@ export default {
 			try {
 				const pageSize = Number(this.filters.page_size || 50);
 				const start = Math.max(0, (this.currentPage - 1) * pageSize);
-				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
+				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
 				this.rows = result.rows || [];
 				this.columns = (result.columns || []).filter((column) => !column.hidden);
-				this.summary = result.summary || [];
+				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.scan = result.metadata?.scan || {};
 				this.companyCurrency = result.metadata?.company_currency || this.companyCurrency;
 				this.currentBalanceDate = result.metadata?.current_balance_date || this.currentBalanceDate;
@@ -191,6 +193,7 @@ export default {
 				this.error = errorMessage(error, "Customer Receivables failed to load.");
 			} finally { this.loading = false; }
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		rowKey(row, index) { return row.invoice || `customer-receivables:${index}`; },

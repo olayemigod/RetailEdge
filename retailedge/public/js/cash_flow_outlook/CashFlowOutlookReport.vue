@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:loading="loading || metadataLoading"
 			:error="error"
 			:rowKey="rowKey"
@@ -30,6 +31,7 @@
 			emptyDescription="No current invoice payment schedules fall within this scope."
 			loadingMessage="Building 13-week cash commitments…"
 			@retry="fetchData"
+			@sort-change="handleSortChange"
 		>
 			<template #filters>
 				<div class="outlook-filter-grid">
@@ -72,7 +74,7 @@ export default {
 			error: "",
 			rows: [],
 			columns: [],
-			summary: [],
+			summary: [], reportSort: null,
 			menuItems: [],
 			tenantName: "",
 			branchName: "",
@@ -177,10 +179,10 @@ export default {
 			this.loading = true;
 			this.error = "";
 			try {
-				const result = await this.reportProvider.load({ filters: { ...this.filters }, start: 0, page_length: 25 });
+				const result = await this.reportProvider.load({ filters: { ...this.filters }, start: 0, page_length: 25, sort: this.reportSort });
 				this.rows = result.rows || [];
 				this.columns = result.columns || [];
-				this.summary = result.summary || [];
+				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.companyCurrency = result.metadata?.company_currency || this.companyCurrency;
 				this.asOfDate = result.metadata?.as_of_date || this.asOfDate;
 				this.horizonWeeks = Number(result.metadata?.horizon_weeks || this.horizonWeeks || 13);
@@ -193,6 +195,7 @@ export default {
 				this.loading = false;
 			}
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; return this.fetchData(); },
 		rowKey(row, index) { return row.bucket || `cash-flow-outlook:${index}`; },
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
 		formatValue(value, fieldtype, currency) {

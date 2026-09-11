@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="openReportCell"
 		>
 			<template #actions>
@@ -172,7 +174,7 @@ export default {
 			handoffLoadingItem: "",
 			rows: [],
 			columns: [],
-			summary: [],
+			summary: [], reportSort: null,
 			pagination: {},
 			scan: {},
 			scope: {},
@@ -402,10 +404,10 @@ export default {
 			try {
 				const pageSize = Number(this.filters.page_size || 50);
 				const start = Math.max(0, (this.currentPage - 1) * pageSize);
-				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
+				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
 				this.rows = result.rows || [];
 				this.columns = result.columns || [];
-				this.summary = result.summary || [];
+				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.scan = result.metadata?.scan || {};
 				this.scope = result.metadata?.scope || {};
 				this.companyCurrency = result.metadata?.company_currency || "";
@@ -445,6 +447,7 @@ export default {
 				].concat(result.company_currency ? [{ label: "Company Currency", value: result.company_currency }] : []),
 			};
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) {
 			const next = Math.max(1, Number(page || 1));
 			if (next === this.currentPage) return;
