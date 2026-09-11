@@ -30,6 +30,8 @@ def get_expense_period_context(filters: dict[str, Any] | str | None = None) -> d
 		"branch": branch,
 		"expense_category": filters.get("expense_category") or "",
 		"expense_status": filters.get("expense_status") or "",
+		"view_mode": "consolidated",
+		"include_unposted_cashier_expenses": 0,
 	}
 	mtd = _load_period({**common, "from_date": str(mtd_start), "to_date": str(anchor)})
 	ytd = _load_period({**common, "from_date": str(ytd_start), "to_date": str(anchor)})
@@ -44,6 +46,8 @@ def get_expense_period_context(filters: dict[str, Any] | str | None = None) -> d
 		},
 		"metadata": {
 			"source": "RetailEdge Expense Register",
+			"view_mode": "consolidated",
+			"include_unposted_cashier_expenses": 0,
 			"time_basis": "as_of_selected_to_date",
 			"ytd_basis": "calendar_year",
 		},
