@@ -382,7 +382,11 @@ def _get_permitted_navigation_groups(
 			if item_required_roles and not roles.intersection(item_required_roles):
 				continue
 			resolved = _resolve_navigation_item(item, pos_capabilities=pos_capabilities)
-			if resolved is not None and _can_open_target(resolved, target_cache=target_cache, permission_cache=permission_cache):
+			if resolved is None:
+				continue
+			if not native_desk_enabled and resolved.get("target_type") in {"DocType", "Report"}:
+				continue
+			if _can_open_target(resolved, target_cache=target_cache, permission_cache=permission_cache):
 				resolved.pop("mode", None)
 				resolved.pop("required_roles", None)
 				items.append(resolved)
