@@ -109,10 +109,16 @@
 							<div><span>Extracted Total</span><strong>{{ formatMoney(invoiceReview.extracted_total, invoiceReview.extracted_currency || invoiceReview.currency) }}</strong></div>
 							<div><span>Difference</span><strong>{{ formatMoney(invoiceReview.total_difference, invoiceReview.currency) }}</strong></div>
 							<div><span>Status</span><strong>{{ invoiceReview.docstatus === 1 ? "Submitted" : (invoiceReview.status || "Draft") }}</strong></div>
+							<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'"><span>Workflow</span><strong>{{ invoiceReview.workflow_readiness.workflow || "Purchase Invoice Workflow" }}</strong></div>
+							<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'"><span>Workflow State</span><strong>{{ invoiceReview.workflow_readiness.current_state || "Not set" }}</strong></div>
 						</div>
-						<div v-if="invoiceReview.blockers && invoiceReview.blockers.length" class="supplier-review-error">
-							<strong>Standard submission is blocked.</strong>
-							<ul><li v-for="blocker in invoiceReview.blockers" :key="blocker.key">{{ blocker.label }}</li></ul>
+						<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'" class="supplier-review-safety">
+							<strong>{{ invoiceReview.workflow_readiness.message }}</strong>
+							<span>Only actions currently permitted by Frappe Workflow are available here. RetailEdge does not assign workflow state directly.</span>
+						</div>
+						<div v-if="invoiceReview.blockers && invoiceReview.blockers.some((row) => row.key !== 'workflow')" class="supplier-review-error">
+							<strong>Standard completion is blocked.</strong>
+							<ul><li v-for="blocker in invoiceReview.blockers.filter((row) => row.key !== 'workflow')" :key="blocker.key">{{ blocker.label }}</li></ul>
 						</div>
 						<div class="supplier-review-table-wrap">
 							<table class="supplier-review-table supplier-review-invoice-items">
@@ -123,7 +129,15 @@
 						<div class="supplier-review-invoice-actions">
 							<button class="edge-button" type="button" :disabled="invoiceReviewSubmitting" @click="closeInvoiceReview">Close</button>
 							<button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="invoiceReviewSubmitting" @click="openPurchaseInvoice(invoiceReview.purchase_invoice)">Advanced: Open in ERPNext</button>
-							<button v-if="invoiceReview.docstatus === 0" class="edge-button edge-button--primary" type="button" :disabled="invoiceReviewSubmitting || !invoiceReview.standard_submit_eligible" @click="submitPurchaseInvoiceReview">{{ invoiceReviewSubmitting ? "Submitting…" : "Submit Purchase Invoice" }}</button>
+							<button
+								v-for="action in (invoiceReview.workflow_eligible ? (invoiceReview.workflow_readiness?.available_actions || []) : [])"
+								:key="action.action"
+								class="edge-button edge-button--primary"
+								type="button"
+								:disabled="invoiceReviewSubmitting"
+								@click="applyPurchaseInvoiceWorkflow(action)"
+							>{{ invoiceReviewSubmitting ? "Applying…" : action.action }}<template v-if="action.next_state"> → {{ action.next_state }}</template></button>
+							<button v-if="invoiceReview.docstatus === 0 && invoiceReview.workflow_readiness?.source !== 'frappe'" class="edge-button edge-button--primary" type="button" :disabled="invoiceReviewSubmitting || !invoiceReview.standard_submit_eligible" @click="submitPurchaseInvoiceReview">{{ invoiceReviewSubmitting ? "Submitting…" : "Submit Purchase Invoice" }}</button>
 						</div>
 					</div>
 				</EdgeDashboardSection>
@@ -302,6 +316,28 @@ export default {
 			} finally { this.invoiceReviewLoading = false; }
 		},
 		closeInvoiceReview() { if (!this.invoiceReviewSubmitting) { this.invoiceReview = null; this.invoiceReviewError = ""; } },
+		async applyPurchaseInvoiceWorkflow(action) {
+			if (!this.invoiceReview?.extraction || !action?.action || this.invoiceReviewSubmitting || !this.invoiceReview.workflow_eligible) return;
+			this.invoiceReviewSubmitting = true; this.invoiceReviewError = "";
+			const extraction = this.invoiceReview.extraction;
+			try {
+				const result = await callMethod("retailedge.supplier_document_review.apply_supplier_document_purchase_invoice_workflow_action", {
+					extraction_name: extraction,
+					action: action.action,
+					expected_purchase_invoice_modified: this.invoiceReview.purchase_invoice_modified,
+					expected_workflow_state: this.invoiceReview.workflow_readiness?.current_state || "",
+				});
+				frappe.show_alert({
+					message: Number(result.docstatus || 0) === 1 ? __("Purchase Invoice submitted through Frappe Workflow.") : __(`Purchase Invoice workflow action ${action.action} applied.`),
+					indicator: "green",
+				});
+				await this.loadRows();
+				await this.openPurchaseInvoiceReview({ extraction });
+				return result;
+			} catch (error) {
+				this.invoiceReviewError = errorMessage(error, "Purchase Invoice workflow action could not be applied.");
+			} finally { this.invoiceReviewSubmitting = false; }
+		},
 		async submitPurchaseInvoiceReview() {
 			if (!this.invoiceReview?.extraction || this.invoiceReviewSubmitting || !this.invoiceReview.standard_submit_eligible) return;
 			this.invoiceReviewSubmitting = true; this.invoiceReviewError = "";
