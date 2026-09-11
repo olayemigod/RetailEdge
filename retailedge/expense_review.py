@@ -87,9 +87,9 @@ def search_expense_review_options(
 def get_expense_review(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
-	page_size: int | str = DEFAULT_PAGE_SIZE,,
+	page_size: int | str = DEFAULT_PAGE_SIZE,
 	sort: dict[str, Any] | str | None = None,
-)
+) -> dict[str, Any]:
 	from retailedge.report_sorting import apply_materialized_report_sort
 	dataset = _build_expense_review_dataset(_coerce_filters(filters))
 	apply_materialized_report_sort(dataset, sort, "expense-review")

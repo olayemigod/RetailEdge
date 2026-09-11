@@ -149,9 +149,9 @@ def search_purchase_reporting_options(
 def get_purchase_register(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
-	page_size: int | str = DEFAULT_PAGE_SIZE,,
+	page_size: int | str = DEFAULT_PAGE_SIZE,
 	sort: dict[str, Any] | str | None = None,
-)
+) -> dict[str, Any]:
 	from retailedge.report_sorting import apply_materialized_report_sort
 	filters = _coerce_filters(filters)
 	dataset = _build_purchase_register_dataset(filters)

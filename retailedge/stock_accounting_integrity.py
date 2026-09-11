@@ -111,9 +111,9 @@ def search_stock_accounting_integrity_options(
 def get_stock_accounting_integrity(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
-	page_size: int | str = DEFAULT_PAGE_SIZE,,
+	page_size: int | str = DEFAULT_PAGE_SIZE,
 	sort: dict[str, Any] | str | None = None,
-)
+) -> dict[str, Any]:
 	from retailedge.report_sorting import apply_materialized_report_sort
 	dataset = _build_stock_accounting_integrity_dataset(_coerce_filters(filters))
 	apply_materialized_report_sort(dataset, sort, "stock-accounting-integrity")
