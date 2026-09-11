@@ -68,6 +68,16 @@ Consequences under Branch Assignment history:
 
 Draft creation validates Branch only when a Branch is supplied. A restricted user can POST a blank Branch and create a Company-wide Payment Entry draft.
 
+### Cash Deposit / Cashier Expense custody context
+
+Cash Deposit and Cashier Expense derive Branch from an existing cashier/POS-shift context rather than from a free user selector. That is the correct frontend model, but the derived/stored Branch is still validated through the older generic Branch helper.
+
+Because the source is an existing operational context, this checkpoint must not silently invent a Branch for a shift that has no attribution. For restricted users:
+
+- a populated shift/document Branch must pass current operational Branch authority;
+- a missing shift/document Branch must fail closed;
+- unrestricted legacy sites may preserve blank-Branch compatibility.
+
 ### Standard Customer / Supplier Payment completion
 
 Payment Entry and invoice Branch revalidation still use the legacy branch helper. A stored explicit Branch outside active Branch Assignment scope can therefore be incorrectly accepted when the legacy allowed-Branch list is empty.
@@ -108,6 +118,8 @@ Runtime:
 
 - `retailedge/guided_payment.py`
 - `retailedge/guided_cash_transfer.py`
+- `retailedge/cash_custody.py`
+- `retailedge/retailedge/doctype/retailedge_cashier_expense/retailedge_cashier_expense.py`
 - `retailedge/standard_customer_payment_submit.py`
 - `retailedge/standard_supplier_payment_submit.py`
 - `retailedge/professional_selling.py` only for existing in-flight cascade hardening
@@ -156,19 +168,21 @@ Backend contracts:
 12. Guided Cash Transfer restricted-zero/multi blank-Branch write fails closed;
 13. Guided Cash Transfer restricted-single blank Branch safely resolves;
 14. unrestricted Cash Transfer blank Branch preserves Company-wide compatibility;
-15. standard Customer/Supplier Payment explicit stored Branch is validated with operational Branch authority;
-16. restricted Payment Entry with missing Branch attribution fails closed;
-17. mapped Selling source Branch and Warehouse-derived Branch use operational Branch authority;
-18. restricted-zero recent Selling read does not become Company-wide;
-19. no endpoint uses frontend filtering as its only protection.
+15. Cash Deposit revalidates the active shift Branch and fails closed for restricted missing attribution;
+16. Cashier Expense revalidates its stored/derived Branch and fails closed for restricted missing attribution;
+17. standard Customer/Supplier Payment explicit stored Branch is validated with operational Branch authority;
+18. restricted Payment Entry with missing Branch attribution fails closed;
+19. mapped Selling source Branch and Warehouse-derived Branch use operational Branch authority;
+20. restricted-zero recent Selling read does not become Company-wide;
+21. no endpoint uses frontend filtering as its only protection.
 
 Safety:
 
-20. no `ignore_permissions`;
-21. no manual database commit;
-22. no direct GL/SLE write;
-23. no submitted accounting/stock document mutation;
-24. no schema migration.
+22. no `ignore_permissions`;
+23. no manual database commit;
+24. no direct GL/SLE write;
+25. no submitted accounting/stock document mutation;
+26. no schema migration.
 
 ## Freeze Rule
 
