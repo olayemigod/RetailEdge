@@ -7,16 +7,37 @@ from frappe import _
 from frappe.utils import cint, flt, getdate, nowdate
 
 from retailedge.branch_context import (
-	get_user_allowed_branches,
 	has_doctype,
 	has_field,
 	resolve_retailedge_operational_defaults,
-	user_has_global_branch_access,
-	validate_user_branch_access,
+)
+from retailedge.operating_context import (
+	get_operational_branch_scope,
+	resolve_operational_branch,
 )
 
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 MAX_LINK_RESULTS = 20
+
+
+def _resolve_cash_transfer_branch(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	require_when_restricted: bool,
+) -> str:
+	branch = str(branch or "").strip()
+	scope = get_operational_branch_scope(company, user=user)
+	if branch:
+		return str(resolve_operational_branch(company, branch, user=user).get("branch") or "").strip()
+	if not scope["restricted"]:
+		return ""
+	if len(scope["allowed_branches"]) == 1:
+		return str(resolve_operational_branch(company, "", user=user).get("branch") or "").strip()
+	if require_when_restricted:
+		return str(resolve_operational_branch(company, "", user=user).get("branch") or "").strip()
+	return ""
 
 
 @frappe.whitelist()
@@ -39,8 +60,12 @@ def get_simple_cash_transfer_context() -> dict[str, Any]:
 	if not company:
 		frappe.throw(_("Set a default Company before recording a Cash/Bank Transfer."))
 	_assert_read_permission("Company", company)
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+	branch = _resolve_cash_transfer_branch(
+		company=company,
+		branch=branch,
+		user=user,
+		require_when_restricted=False,
+	)
 
 	return {
 		"title": _("Cash / Bank Transfer"),
@@ -100,9 +125,12 @@ def create_simple_cash_transfer_draft(values: dict | str | None = None) -> dict[
 	if not company_currency:
 		frappe.throw(_("Company {0} has no default currency configured.").format(company))
 
-	branch = str(values.get("branch") or "").strip()
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+	branch = _resolve_cash_transfer_branch(
+		company=company,
+		branch=str(values.get("branch") or "").strip(),
+		user=user,
+		require_when_restricted=True,
+	)
 
 	from_account = str(values.get("from_account") or "").strip()
 	to_account = str(values.get("to_account") or "").strip()
@@ -200,18 +228,23 @@ def _search_bank_cash_accounts(*, company: str, txt: str, limit: int) -> list[di
 
 
 def _search_branches(*, company: str, txt: str, limit: int) -> list[dict[str, Any]]:
-	if not has_doctype("Branch"):
+	if not has_doctype("Branch") or not company:
 		return []
 	filters: dict[str, Any] = {}
-	if company and has_field("Branch", "company"):
+	if has_field("Branch", "company"):
 		filters["company"] = company
-	if not user_has_global_branch_access(user=frappe.session.user):
-		allowed = get_user_allowed_branches(user=frappe.session.user, company=company or None).get("branches") or []
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	if scope["restricted"]:
+		allowed = list(scope["allowed_branches"])
 		if not allowed:
 			return []
+		if txt:
+			allowed = [name for name in allowed if txt.lower() in name.lower()]
+			if not allowed:
+				return []
 		filters["name"] = ["in", allowed]
-	if txt:
-		filters["name"] = ["like", f"%{txt}%"] if "name" not in filters else ["in", [name for name in filters["name"][1] if txt.lower() in name.lower()]]
+	elif txt:
+		filters["name"] = ["like", f"%{txt}%"]
 	rows = frappe.get_list(
 		"Branch",
 		filters=filters,
