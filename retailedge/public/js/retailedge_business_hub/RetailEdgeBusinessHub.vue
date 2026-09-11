@@ -193,6 +193,7 @@ import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
 import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
 import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
+import { openQuickEntryMaster } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
 const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
@@ -204,6 +205,11 @@ const GUIDED_PURCHASE_ACTION = "record-purchase";
 const GUIDED_EXPENSE_ACTION = "record-expense";
 const GUIDED_STOCK_TRANSFER_ACTION = "transfer-stock";
 const GUIDED_STOCK_ADJUSTMENT_ACTION = "adjust-stock";
+const QUICK_ENTRY_MASTER_ACTIONS = Object.freeze({
+	"new-customer": "Customer",
+	"new-supplier": "Supplier",
+	"new-item": "Item",
+});
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -394,6 +400,24 @@ export default {
 			}
 			if (action.key === GUIDED_STOCK_ADJUSTMENT_ACTION) {
 				this.simpleStockAdjustmentOpen = true;
+				return;
+			}
+			const quickEntryDoctype = QUICK_ENTRY_MASTER_ACTIONS[action.key];
+			if (quickEntryDoctype) {
+				openQuickEntryMaster(quickEntryDoctype)
+					.then((created) => {
+						if (!created?.value) return;
+						frappe.show_alert?.({
+							message: `${created.label || created.value} created`,
+							indicator: "green",
+						});
+					})
+					.catch((error) => {
+						frappe.show_alert?.({
+							message: error?.message || `Unable to create ${quickEntryDoctype}.`,
+							indicator: "red",
+						}, 7);
+					});
 				return;
 			}
 			if (!this.nativeFallbackEnabled) {
