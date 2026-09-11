@@ -9,7 +9,7 @@ DIALOG = ROOT / "public/js/professional_purchasing/StandardPurchaseInvoiceComple
 HUB = ROOT / "public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue"
 PURCHASING = ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue"
 GUIDED = ROOT / "guided_purchase_invoice.py"
-HANDOFF = ROOT / "retailedge/doctype/supplier_document_purchase_invoice_handoff/supplier_document_purchase_invoice_handoff.py"
+HANDOFF = ROOT / "supplier_document_review.py"
 CONTRACT = ROOT.parent / "docs/rir2g2b_guided_purchase_invoice_completion_continuity.md"
 
 
