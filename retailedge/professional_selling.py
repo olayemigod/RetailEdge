@@ -11,17 +11,15 @@ from frappe.utils.user import get_user_fullname
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
 	get_first_existing_field,
-	get_user_allowed_branches,
 	has_field,
 	resolve_branch_from_warehouse,
-	validate_user_branch_access,
 )
-from retailedge.branch_profile import get_branch_profile_defaults
+from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.operating_context import (
-	get_allowed_operating_branches,
 	get_operating_context,
-	validate_operating_branch,
+	get_operational_branch_scope,
+	resolve_operational_branch,
 )
 
 
@@ -127,7 +125,11 @@ def _coerce_values(values: dict | str | None) -> dict[str, Any]:
 	return dict(values or {})
 
 
-def _validate_context(values: dict[str, Any]) -> tuple[str, str, str]:
+def _validate_context(
+	values: dict[str, Any],
+	*,
+	allow_unresolved_branch: bool = False,
+) -> tuple[str, str, str]:
 	operating = get_operating_context() or {}
 	company = str(
 		values.get("company")
@@ -135,85 +137,132 @@ def _validate_context(values: dict[str, Any]) -> tuple[str, str, str]:
 		or frappe.defaults.get_user_default("Company")
 		or ""
 	).strip()
-	branch = str(values.get("branch") or operating.get("branch") or "").strip()
+	branch_supplied = "branch" in values
+	branch = str(
+		values.get("branch")
+		if branch_supplied
+		else (operating.get("branch") or "")
+	).strip()
 	warehouse = str(values.get("warehouse") or "").strip()
 	if not company:
 		frappe.throw(_("Choose an Operating Company before starting a selling document."))
 	_assert_read("Company", company)
+
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
-			company=company,
-			throw=True,
-		)
-		validate_operating_branch(
-			company=company,
-			branch=branch,
-			user=frappe.session.user,
-			throw=True,
-		)
+		branch = resolve_operational_branch(company, branch, user=frappe.session.user)["branch"]
+	elif scope["restricted"]:
+		if allow_unresolved_branch and len(scope["allowed_branches"]) != 1:
+			branch = ""
+		else:
+			branch = resolve_operational_branch(company, "", user=frappe.session.user)["branch"]
+
 	if warehouse:
 		_assert_read("Warehouse", warehouse)
 		warehouse_company = str(frappe.db.get_value("Warehouse", warehouse, "company") or "").strip()
 		if warehouse_company and warehouse_company != company:
 			frappe.throw(_("Stock Location {0} does not belong to Company {1}.").format(warehouse, company))
+
 		resolved = resolve_branch_from_warehouse(warehouse, company=company)
 		warehouse_branch = str(resolved.get("branch") or "").strip()
-		if branch and warehouse_branch and warehouse_branch != branch:
-			frappe.throw(_("Stock Location {0} does not belong to Branch {1}.").format(warehouse, branch))
+		if warehouse_branch:
+			warehouse_branch = resolve_operational_branch(
+				company,
+				warehouse_branch,
+				user=frappe.session.user,
+			)["branch"]
+			if branch and warehouse_branch != branch:
+				frappe.throw(_("Stock Location {0} does not belong to Branch {1}.").format(warehouse, branch))
+			branch = branch or warehouse_branch
+		elif branch:
+			profile = get_branch_profile(
+				company=company,
+				branch=branch,
+				user=frappe.session.user,
+				warehouse=warehouse,
+				active_only=True,
+			)
+			if not profile:
+				frappe.throw(
+					_("Stock Location {0} is not configured for Branch {1}.").format(warehouse, branch)
+				)
+		elif scope["restricted"]:
+			if allow_unresolved_branch and len(scope["allowed_branches"]) != 1:
+				frappe.throw(_("Choose a Branch before selecting a Stock Location."))
+			branch = resolve_operational_branch(company, "", user=frappe.session.user)["branch"]
+			profile = get_branch_profile(
+				company=company,
+				branch=branch,
+				user=frappe.session.user,
+				warehouse=warehouse,
+				active_only=True,
+			)
+			if not profile:
+				frappe.throw(
+					_("Stock Location {0} is not configured for Branch {1}.").format(warehouse, branch)
+				)
 	return company, branch, warehouse
-
 
 def _operating_document_filters(doctype: str, *, company: str, branch: str) -> dict[str, Any]:
 	filters: dict[str, Any] = {}
 	meta = frappe.get_meta(doctype)
 	if company and meta.has_field("company"):
 		filters["company"] = company
+
+	branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
-			company=company or None,
-			throw=True,
-		)
-		branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+		branch = resolve_operational_branch(company, branch, user=frappe.session.user)["branch"]
 		if branch_field:
 			filters[branch_field] = branch
-	return filters
+		return filters
 
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	if scope["restricted"]:
+		if not scope["allowed_branches"] or not branch_field:
+			filters["name"] = "__never__"
+		else:
+			filters[branch_field] = ["in", scope["allowed_branches"]]
+	return filters
 
 def _branch_filters(company: str) -> dict[str, Any]:
+	if not company:
+		return {"name": "__never__"}
 	filters: dict[str, Any] = {}
-	if company and has_field("Branch", "company"):
+	if has_field("Branch", "company"):
 		filters["company"] = company
-	allowed = get_allowed_operating_branches(company=company, user=frappe.session.user)
-	filters["name"] = ["in", allowed] if allowed else ["in", ["__no_permitted_branch__"]]
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	if scope["restricted"]:
+		filters["name"] = (
+			["in", scope["allowed_branches"]]
+			if scope["allowed_branches"]
+			else "__never__"
+		)
 	return filters
 
-
 def _warehouse_filters(company: str, branch: str) -> dict[str, Any] | None:
+	if not company:
+		return None
 	filters: dict[str, Any] = {"is_group": 0}
-	if company and has_field("Warehouse", "company"):
+	if has_field("Warehouse", "company"):
 		filters["company"] = company
+
+	branch = str(branch or "").strip()
 	if not branch:
-		return filters
-	validate_user_branch_access(
-		branch,
-		user=frappe.session.user,
-		company=company or None,
-		throw=True,
-	)
-	validate_operating_branch(
-		company=company,
-		branch=branch,
-		user=frappe.session.user,
-		throw=True,
-	)
+		scope = get_operational_branch_scope(company, user=frappe.session.user)
+		if not scope["restricted"]:
+			return filters
+		if not scope["allowed_branches"]:
+			filters["name"] = "__never__"
+			return filters
+		if len(scope["allowed_branches"]) > 1:
+			return None
+	branch = resolve_operational_branch(company, branch, user=frappe.session.user)["branch"]
+
 	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
 	if branch_field:
 		filters[branch_field] = branch
 		return filters
+
 	defaults = get_branch_profile_defaults(
 		company=company or None,
 		branch=branch,
@@ -296,7 +345,7 @@ def search_professional_selling_options(
 			frappe.PermissionError,
 		)
 	values = _coerce_values(values)
-	company, branch, _warehouse = _validate_context(values)
+	company, branch, _warehouse = _validate_context(values, allow_unresolved_branch=True)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
 	customer = str(values.get("customer") or values.get("party_name") or "").strip()
 
