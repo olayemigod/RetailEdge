@@ -15,6 +15,9 @@
 				<div><span>Company</span><strong>{{ review.company }}</strong></div>
 				<div><span>Branch</span><strong>{{ review.branch || 'Company-wide' }}</strong></div>
 				<div v-if="sourceType === 'purchase_invoice'"><span>Update Stock</span><strong>{{ review.update_stock ? 'Yes' : 'No' }}</strong></div>
+				<div v-if="review.workflow_controlled"><span>Workflow</span><strong>{{ review.workflow_readiness?.workflow || review.target_doctype + ' Workflow' }}</strong></div>
+				<div v-if="review.workflow_started"><span>Workflow State</span><strong>{{ review.workflow_readiness?.current_state || 'Not set' }}</strong></div>
+				<div v-if="review.workflow_started"><span>Return Draft</span><strong>{{ review.target_name }}</strong></div>
 			</div>
 
 			<div v-if="review.blockers?.length" class="return-review__warning" role="alert">
@@ -28,7 +31,12 @@
 			</div>
 			<div v-else class="return-review__ready">
 				<strong>Standard return preflight passed.</strong>
-				<span v-if="review.can_submit">Submission will use ERPNext's canonical return document and standard posting lifecycle.</span>
+				<template v-if="review.workflow_controlled">
+					<span>{{ review.workflow_readiness?.message || 'This return is controlled by Frappe Workflow.' }}</span>
+					<span v-if="!review.workflow_started">Starting approval saves one canonical ERPNext return draft; it does not post stock or accounting.</span>
+					<span v-else>Only workflow actions currently permitted by Frappe are available below.</span>
+				</template>
+				<span v-else-if="review.can_submit">Submission will use ERPNext's canonical return document and standard posting lifecycle.</span>
 				<span v-else>You can review this return, but your role cannot submit the target document.</span>
 			</div>
 
@@ -55,6 +63,19 @@
 				</button>
 				<div class="return-review__footer-actions">
 					<button type="button" class="edge-button" :disabled="submitting" @click="close">Close</button>
+					<button v-if="canStartWorkflow" type="button" class="edge-button edge-button--primary" :disabled="submitting" @click="startWorkflow">
+						{{ submitting ? 'Starting...' : startWorkflowLabel }}
+					</button>
+					<button
+						v-for="action in workflowActions"
+						:key="action.action"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="submitting"
+						@click="applyWorkflow(action)"
+					>
+						{{ submitting ? 'Applying...' : action.action }}<template v-if="action.next_state"> → {{ action.next_state }}</template>
+					</button>
 					<button v-if="canSubmitStandard" type="button" class="edge-button edge-button--primary" :disabled="submitting" @click="confirmSubmit">
 						{{ submitting ? 'Submitting...' : submitLabel }}
 					</button>
@@ -67,6 +88,8 @@
 <script>
 const REVIEW_METHOD = "retailedge.professional_purchase_returns.get_purchase_return_review";
 const SUBMIT_METHOD = "retailedge.professional_purchase_returns.submit_purchase_return_review";
+const START_WORKFLOW_METHOD = "retailedge.professional_purchase_returns.start_purchase_return_workflow";
+const WORKFLOW_ACTION_METHOD = "retailedge.professional_purchase_returns.apply_purchase_return_workflow_action";
 const PREPARE_PURCHASE_RETURN_METHOD = "retailedge.professional_purchasing.prepare_purchase_return_draft";
 const PREPARE_DEBIT_NOTE_METHOD = "retailedge.professional_purchasing.prepare_supplier_debit_note_draft";
 const OPEN_EVENT = "retailedge-open-professional-purchase-return-review";
@@ -103,7 +126,13 @@ export default {
 		title() { return this.isDebitNote ? "Review Supplier Debit Note" : "Review Purchase Return"; },
 		subtitle() { return this.isDebitNote ? "Review ERPNext's supplier Debit Note mapping before accounting or stock effects are posted." : "Review ERPNext's Purchase Receipt return mapping before stock is posted out."; },
 		submitLabel() { return this.isDebitNote ? "Submit Supplier Debit Note" : "Submit Purchase Return"; },
-		canSubmitStandard() { return Boolean(this.review?.standard_return_eligible && this.review?.can_submit); },
+		startWorkflowLabel() { return this.isDebitNote ? "Start Debit Note Approval" : "Start Return Approval"; },
+		canSubmitStandard() { return Boolean(this.review?.standard_return_eligible && this.review?.can_submit && !this.review?.workflow_controlled); },
+		canStartWorkflow() { return Boolean(this.review?.standard_return_eligible && this.review?.workflow_controlled && !this.review?.workflow_started && this.review?.can_start_workflow); },
+		workflowActions() {
+			if (!this.review?.standard_return_eligible || !this.review?.workflow_started) return [];
+			return this.review?.workflow_readiness?.available_actions || [];
+		},
 	},
 	created() {
 		this._open = (event) => {
@@ -137,6 +166,53 @@ export default {
 			this.open = false;
 			this.review = null;
 			this.error = "";
+		},
+		async startWorkflow() {
+			if (!this.canStartWorkflow || this.submitting) return;
+			this.submitting = true;
+			this.error = "";
+			try {
+				this.review = await callMethod(START_WORKFLOW_METHOD, {
+					source_type: this.sourceType,
+					source_name: this.sourceName,
+					expected_source_modified: this.review?.source_modified || "",
+				}, "POST");
+				frappe.show_alert({ message: __(this.isDebitNote ? "Debit Note approval started." : "Purchase Return approval started."), indicator: "green" }, 7);
+			} catch (error) {
+				this.error = errorMessage(error, "Unable to start return approval.");
+			} finally {
+				this.submitting = false;
+			}
+		},
+		async applyWorkflow(action) {
+			if (!action?.action || !this.review?.workflow_started || this.submitting) return;
+			this.submitting = true;
+			this.error = "";
+			try {
+				const result = await callMethod(WORKFLOW_ACTION_METHOD, {
+					source_type: this.sourceType,
+					source_name: this.sourceName,
+					target_name: this.review.target_name,
+					action: action.action,
+					expected_source_modified: this.review.source_modified || "",
+					expected_target_modified: this.review.target_modified || "",
+					expected_workflow_state: this.review.workflow_readiness?.current_state || "",
+				}, "POST");
+				if (Number(result.docstatus || 0) === 1) {
+					this.submitting = false;
+					this.close();
+					const label = this.isDebitNote ? __("Supplier Debit Note") : __("Purchase Return");
+					frappe.show_alert({ message: __(`${label} ${result.name || ''} submitted through Frappe Workflow.`), indicator: "green" }, 7);
+					window.dispatchEvent(new CustomEvent(REFRESH_EVENT));
+					return;
+				}
+				this.submitting = false;
+				await this.loadReview();
+				frappe.show_alert({ message: __(`Workflow action ${action.action} applied.`), indicator: "green" }, 7);
+			} catch (error) {
+				this.submitting = false;
+				this.error = errorMessage(error, "Unable to apply the return workflow action.");
+			}
 		},
 		confirmSubmit() {
 			if (!this.canSubmitStandard || this.submitting) return;
