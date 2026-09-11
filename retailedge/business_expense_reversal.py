@@ -292,6 +292,11 @@ def _journal_reference_state(reference_type, reference) -> dict[str, Any]:
 
 
 def _validate_original_posting_contract(doc, journal) -> None:
+	if not journal.has_permission("read"):
+		frappe.throw(
+			_("You do not have permission to read the original accounting entry."),
+			frappe.PermissionError,
+		)
 	if cint(journal.docstatus) != 1:
 		frappe.throw(_("Original accounting entry is not submitted."))
 	if str(journal.company or "") != str(doc.company or ""):
