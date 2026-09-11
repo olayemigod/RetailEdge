@@ -344,6 +344,7 @@ export default {
 					icon: group.icon || "layers",
 					defaultCollapsed: group.key !== "home",
 					items: (group.items || [])
+						.filter((item) => this.nativeFallbackEnabled || !["DocType", "Report"].includes(item.target_type))
 						.map((item) => ({
 							label: item.label,
 							description: item.description || "",
@@ -506,6 +507,7 @@ export default {
 			this.refreshContext({ force: true });
 		},
 		openNativeSalesInvoice(doctype = "Sales Invoice") {
+			if (!this.nativeFallbackEnabled) return;
 			this.simpleSalesInvoiceOpen = false;
 			frappe.new_doc(doctype);
 		},
@@ -518,6 +520,7 @@ export default {
 			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
 		},
 		openNativePayment(doctype = "Payment Entry") {
+			if (!this.nativeFallbackEnabled) return;
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
 			frappe.new_doc(doctype);
@@ -532,6 +535,7 @@ export default {
 			}
 		},
 		openNativeCashDeposit(doctype = "Payment Entry") {
+			if (!this.nativeFallbackEnabled) return;
 			this.simpleCashDepositOpen = false;
 			frappe.new_doc(doctype, { payment_type: "Internal Transfer" });
 		},
@@ -561,6 +565,7 @@ export default {
 			this.refreshContext({ force: true });
 		},
 		openNativeCashTransfer(doctype = "Payment Entry") {
+			if (!this.nativeFallbackEnabled) return;
 			this.simpleCashTransferOpen = false;
 			frappe.new_doc(doctype, { payment_type: "Internal Transfer" });
 		},
@@ -572,6 +577,7 @@ export default {
 			this.notifyGuidedDraftSaved(result, "Purchase Invoice", "Purchase Invoice");
 		},
 		openNativePurchaseInvoice(doctype = "Purchase Invoice") {
+			if (!this.nativeFallbackEnabled) return;
 			this.simplePurchaseInvoiceOpen = false;
 			frappe.new_doc(doctype);
 		},
@@ -583,6 +589,7 @@ export default {
 			this.notifyGuidedDraftSaved(result, "RetailEdge Cashier Expense", "Cashier Expense");
 		},
 		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
+			if (!this.nativeFallbackEnabled) return;
 			this.simpleCashierExpenseOpen = false;
 			frappe.new_doc(doctype);
 		},
@@ -594,6 +601,7 @@ export default {
 			this.notifyGuidedDraftSaved(result, "Stock Entry", "Stock Transfer");
 		},
 		openNativeStockTransfer(doctype = "Stock Entry") {
+			if (!this.nativeFallbackEnabled) return;
 			this.simpleStockTransferOpen = false;
 			frappe.new_doc(doctype, { stock_entry_type: "Material Transfer" });
 		},
@@ -605,6 +613,7 @@ export default {
 			this.notifyGuidedDraftSaved(result, "Stock Reconciliation", "Stock Reconciliation");
 		},
 		openNativeStockAdjustment(doctype = "Stock Reconciliation") {
+			if (!this.nativeFallbackEnabled) return;
 			this.simpleStockAdjustmentOpen = false;
 			frappe.new_doc(doctype, { purpose: "Stock Reconciliation" });
 		},
@@ -620,6 +629,7 @@ export default {
 		},
 		openTarget(item) {
 			if (!item) return;
+			if (!this.nativeFallbackEnabled && ["DocType", "Report"].includes(item?.target_type)) return;
 			if (item.target_type === "URL") {
 				window.location.assign(item.target);
 				return;
@@ -636,6 +646,7 @@ export default {
 		},
 		routeForTarget(item) {
 			if (!item) return "";
+			if (!this.nativeFallbackEnabled && ["DocType", "Report"].includes(item?.target_type)) return "";
 			if (item.target_type === "URL") return item.target;
 			if (item.target_type === "DocType") return `/app/${frappe.router.slug(item.target)}`;
 			if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
