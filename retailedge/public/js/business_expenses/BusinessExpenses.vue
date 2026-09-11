@@ -162,16 +162,26 @@
 					<div v-if="Number(current.docstatus || 0) === 1 || current.posting_reference" class="edge-card">
 						<div class="section-heading">
 							<div><h3>Accounting posting</h3><p>Accounting entries remain the financial truth. This action never writes the ledger directly.</p></div>
-							<button v-if="postingReadiness.can_post && !current.posting_reference" type="button" class="edge-button edge-button--primary" :disabled="postingAction" @click="postToAccounts">{{ postingAction ? "Posting..." : "Post to Accounts" }}</button>
+							<div class="header-actions">
+								<button v-if="reversalReadiness.can_reverse && current.posting_reference && !current.reversal_reference" type="button" class="edge-button" :disabled="reversing" @click="openReversalDialog">{{ reversing ? "Reversing..." : "Reverse Accounting" }}</button>
+								<button v-if="postingReadiness.can_post && !current.posting_reference" type="button" class="edge-button edge-button--primary" :disabled="postingAction" @click="postToAccounts">{{ postingAction ? "Posting..." : "Post to Accounts" }}</button>
+							</div>
 						</div>
 						<div v-if="postingLoading" class="empty-note">Checking accounting readiness...</div>
-						<div v-else-if="current.posting_reference" class="posting-reference"><span>{{ current.posting_reference_type }}</span><strong>{{ current.posting_reference }}</strong></div>
+						<div v-else-if="current.posting_reference" class="posting-readiness">
+							<div class="posting-reference"><span>Original accounting reference</span><strong>{{ current.posting_reference }}</strong></div>
+							<div v-if="current.reversal_reference" class="posting-reference"><span>Reversal accounting reference</span><strong>{{ current.reversal_reference }}</strong></div>
+							<div v-if="current.reversal_posting_date"><span>Reversal date</span><strong>{{ formatDate(current.reversal_posting_date) }}</strong></div>
+							<p v-if="current.reversal_reason">{{ current.reversal_reason }}</p>
+							<p v-else-if="reversalReadiness.reversal_block_reason && !current.reversal_reference">{{ reversalReadiness.reversal_block_reason }}</p>
+						</div>
 						<div v-else class="posting-readiness">
 							<div><span>Readiness</span><strong>{{ postingReadiness.posting_ready ? "Ready" : "Blocked" }}</strong></div>
 							<p v-if="postingReadiness.posting_block_reason">{{ postingReadiness.posting_block_reason }}</p>
 							<p v-else-if="postingReadiness.posting_ready && !postingReadiness.can_post">You do not have accounting-posting permission for this expense.</p>
 						</div>
 						<div v-if="postingError" class="error-banner">{{ postingError }}</div>
+						<div v-if="reversalError" class="error-banner">{{ reversalError }}</div>
 					</div>
 				</section>
 			</template>
@@ -192,6 +202,8 @@ const GET_METHOD = "retailedge.business_expense.get_business_expense";
 const WORKFLOW_METHOD = "retailedge.workflow_actions.apply_document_workflow_action";
 const POSTING_READINESS_METHOD = "retailedge.business_expense_posting.get_business_expense_posting_readiness";
 const POST_METHOD = "retailedge.business_expense_posting.post_business_expense_to_accounts";
+const REVERSAL_READINESS_METHOD = "retailedge.business_expense_reversal.get_business_expense_reversal_readiness";
+const REVERSE_METHOD = "retailedge.business_expense_reversal.reverse_business_expense_posting";
 const DOCTYPE = "RetailEdge Business Expense";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -216,6 +228,7 @@ export default {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "",
 			listLoading: false, listError: "", saving: false, formError: "", acting: false, actionError: "",
 			postingLoading: false, postingAction: false, postingError: "", postingReadiness: {},
+			reversing: false, reversalError: "", reversalReadiness: {},
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			canCreate: false, canReview: false, settings: {}, statuses: [], defaultValues: {},
 			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "", search_text: "", page_size: 25 },
@@ -273,14 +286,16 @@ export default {
 		selectSupplier(option) { this.values.supplier = option.value || ""; }, selectPaymentAccount(option) { this.values.payment_account = option.value || ""; },
 		selectCostCenter(option) { this.values.cost_center = option.value || ""; }, clearCostCenter() { this.values.cost_center = ""; }, selectProject(option) { this.values.project = option.value || ""; }, clearProject() { this.values.project = ""; },
 		async saveDraft() { if (this.saving) return; this.saving = true; this.formError = ""; try { let result; if (this.editingName) result = await callMethod(UPDATE_METHOD, { name: this.editingName, values: this.values, expected_modified: this.current.modified }); else result = await callMethod(CREATE_METHOD, { values: this.values }); this.current = result || {}; this.editingName = ""; this.actionRemarks = ""; this.screen = "detail"; frappe.show_alert?.({ message: "Business Expense saved as Draft", indicator: "green" }); } catch (error) { this.formError = errorMessage(error, "Unable to save the Business Expense draft."); } finally { this.saving = false; } },
-		async openExpense(name) { this.actionError = ""; this.actionRemarks = ""; this.postingError = ""; this.current = await callMethod(GET_METHOD, { name }); this.settings = this.current.settings || this.settings; this.screen = "detail"; if (Number(this.current.docstatus || 0) === 1 || this.current.posting_reference) await this.loadPostingReadiness(); else this.postingReadiness = {}; },
-		async loadPostingReadiness() { if (!this.current.name) return; this.postingLoading = true; try { this.postingReadiness = await callMethod(POSTING_READINESS_METHOD, { name: this.current.name }); } catch (error) { this.postingReadiness = {}; this.postingError = errorMessage(error, "Unable to check accounting-posting readiness."); } finally { this.postingLoading = false; } },
+		async openExpense(name) { this.actionError = ""; this.actionRemarks = ""; this.postingError = ""; this.reversalError = ""; this.current = await callMethod(GET_METHOD, { name }); this.settings = this.current.settings || this.settings; this.screen = "detail"; if (Number(this.current.docstatus || 0) === 1 || this.current.posting_reference) await this.loadPostingReadiness(); else { this.postingReadiness = {}; this.reversalReadiness = {}; } },
+		async loadPostingReadiness() { if (!this.current.name) return; this.postingLoading = true; try { this.postingReadiness = await callMethod(POSTING_READINESS_METHOD, { name: this.current.name }); } catch (error) { this.postingReadiness = {}; this.postingError = errorMessage(error, "Unable to check accounting-posting readiness."); } try { this.reversalReadiness = this.current.posting_reference ? await callMethod(REVERSAL_READINESS_METHOD, { name: this.current.name }) : {}; } catch (error) { this.reversalReadiness = {}; this.reversalError = errorMessage(error, "Unable to check accounting-reversal readiness."); } finally { this.postingLoading = false; } },
 		editCurrent() { if (!this.current.can_edit) return; this.values = { ...blankValues(), company: this.current.company || "", branch: this.current.branch || "", expense_date: this.current.expense_date || "", expense_category: this.current.expense_category || "", amount: this.current.amount || "", description: this.current.description || "", payee_type: this.current.payee_type || "Other", supplier: this.current.supplier || "", payee_name: this.current.payee_name || "", reference_no: this.current.reference_no || "", payment_account: this.current.payment_account || "", cost_center: this.current.cost_center || "", project: this.current.project || "" }; this.categoryDefaults = { expense_account: this.current.expense_account || "", cost_center: this.current.cost_center || "" }; this.editingName = this.current.name; this.screen = "form"; },
-		returnToList() { this.screen = "list"; this.editingName = ""; this.current = {}; this.postingReadiness = {}; this.postingError = ""; this.fetchList(); },
+		returnToList() { this.screen = "list"; this.editingName = ""; this.current = {}; this.postingReadiness = {}; this.postingError = ""; this.reversalReadiness = {}; this.reversalError = ""; this.fetchList(); },
 		async uploadEvidence() { if (!this.current.name || !this.current.can_edit) return; this.actionError = ""; try { if (!frappe.ui?.FileUploader) await new Promise((resolve, reject) => { try { const pending = frappe.require("file_uploader.bundle.js", resolve); if (pending && typeof pending.then === "function") pending.then(resolve).catch(reject); } catch (error) { reject(error); } }); new frappe.ui.FileUploader({ doctype: DOCTYPE, docname: this.current.name, fieldname: "attachment", allow_multiple: false, make_attachments_public: false, on_success: async (file) => { try { this.current = await callMethod(ATTACH_METHOD, { name: this.current.name, file_url: file.file_url, expected_modified: this.current.modified }); frappe.show_alert?.({ message: "Evidence attached", indicator: "green" }); } catch (error) { this.actionError = errorMessage(error, "Evidence uploaded but could not be linked to the expense."); } } }); } catch (error) { this.actionError = errorMessage(error, "Unable to open the evidence uploader."); } },
 		async applyWorkflow(action) { if (this.acting || !action) return; this.acting = true; this.actionError = ""; try { await callMethod(WORKFLOW_METHOD, { doctype: DOCTYPE, name: this.current.name, action, expected_modified: this.current.modified, expected_state: this.current.workflow_readiness?.current_state || "", remarks: this.actionRemarks || "" }); await this.openExpense(this.current.name); frappe.show_alert?.({ message: "Workflow action applied: " + action, indicator: "green" }); } catch (error) { this.actionError = errorMessage(error, "Unable to apply the workflow action."); } finally { this.acting = false; } },
 		postToAccounts() { if (this.postingAction || !this.postingReadiness.can_post || !this.current.name) return; frappe.confirm("Post this approved Business Expense to accounts? This will create and submit the accounting entry.", () => this.confirmPostToAccounts()); },
 		async confirmPostToAccounts() { if (this.postingAction || !this.current.name) return; this.postingAction = true; this.postingError = ""; try { const result = await callMethod(POST_METHOD, { name: this.current.name, expected_modified: this.current.modified }); const expenseName = result.expense?.name || this.current.name; await this.openExpense(expenseName); frappe.show_alert?.({ message: result.idempotent ? "Business Expense was already posted" : "Business Expense posted to accounts", indicator: "green" }); } catch (error) { this.postingError = errorMessage(error, "Unable to post this Business Expense to accounts."); await this.loadPostingReadiness(); } finally { this.postingAction = false; } },
+		openReversalDialog() { if (this.reversing || !this.reversalReadiness.can_reverse || !this.current.name) return; const dialog = new frappe.ui.Dialog({ title: "Reverse Business Expense", fields: [{ fieldname: "posting_date", fieldtype: "Date", label: "Reversal Posting Date", reqd: 1, default: this.reversalReadiness.default_posting_date || frappe.datetime.get_today() }, { fieldname: "reason", fieldtype: "Small Text", label: "Reversal Reason", reqd: 1, description: "Explain why this posted expense must be reversed. The original accounting entry remains unchanged." }], primary_action_label: "Reverse Accounting", primary_action: (values) => { dialog.hide(); this.confirmReverse(values || {}); } }); dialog.show(); },
+		async confirmReverse(values) { if (this.reversing || !this.current.name) return; this.reversing = true; this.reversalError = ""; try { const result = await callMethod(REVERSE_METHOD, { name: this.current.name, reason: values.reason || "", posting_date: values.posting_date || "", expected_modified: this.current.modified }); const expenseName = result.expense?.name || this.current.name; await this.openExpense(expenseName); frappe.show_alert?.({ message: result.idempotent ? "Business Expense was already reversed" : "Business Expense accounting reversed", indicator: "green" }); } catch (error) { this.reversalError = errorMessage(error, "Unable to reverse this Business Expense accounting."); await this.loadPostingReadiness(); } finally { this.reversing = false; } },
 		openExpenseRegister() { frappe.set_route("expense-register"); },
 		openExpenseCategories() { if (!this.hasPageTarget("retailedge-setup")) return; frappe.route_options = { setup_resource: "expense-categories" }; frappe.set_route("retailedge-setup"); },
 		formatAmount(value) { const amount = Number(value) || 0; try { return frappe.format(amount, { fieldtype: "Currency" }); } catch (_error) { return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
