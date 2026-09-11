@@ -97,7 +97,7 @@
 						<div>
 							<span class="purchasing-kicker">True inventory cost</span>
 							<h3>Allocate Landed Cost</h3>
-							<p>Prepare ERPNext's native Landed Cost Voucher from received stock. Freight, clearing, customs duty, insurance, expense accounts and final allocation stay on the native voucher; nothing is saved or posted by this guided handoff.</p>
+							<p>Review freight, clearing, duty, insurance and similar acquisition charges in EdgeSuite. ERPNext remains authoritative for exchange rates, allocation, stock valuation and all Stock Ledger / General Ledger reposting.</p>
 						</div>
 					</div>
 					<div class="landed-cost-source-types" aria-label="Landed cost source type">
@@ -115,15 +115,75 @@
 						/>
 						<label class="edge-select-field">
 							<span>Distribution basis</span>
-							<select v-model="landedCost.distributionMethod">
+							<select v-model="landedCost.distributionMethod" @change="clearLandedCostProgress">
 								<option value="Amount">Amount</option>
 								<option value="Qty">Quantity</option>
-								<option value="Distribute Manually">Distribute Manually</option>
 							</select>
 						</label>
-						<button type="button" class="edge-button edge-button--primary" :disabled="preparingLandedCost || !landedCost.source" @click="prepareLandedCost">{{ preparingLandedCost ? "Preparing…" : "Prepare Landed Cost Draft" }}</button>
 					</div>
-					<p class="landed-cost-help">The prepared voucher remains unsaved until you enter the mandatory landed-cost charges on ERPNext's Landed Cost Voucher form. Valuation, Stock Ledger and General Ledger changes occur only through standard ERPNext submission.</p>
+
+					<div class="landed-cost-charges">
+						<div class="landed-cost-subheading">
+							<div><strong>Landed-cost charges</strong><span>Expense accounts are filtered to the selected Company and ERPNext-compatible landed-cost account types.</span></div>
+							<button type="button" class="edge-small-button" :disabled="landedCost.charges.length >= Number(landedCostCapability.max_standard_charges || 20)" @click="addLandedCostCharge">Add Charge</button>
+						</div>
+						<div v-for="(charge, index) in landedCost.charges" :key="index" class="landed-cost-charge-row">
+							<EdgeLinkField
+								v-model="charge.expense_account"
+								label="Expense Account"
+								placeholder="Search permitted account"
+								:searcher="landedCostExpenseAccountSearch"
+								@select="setLandedCostExpenseAccount(index, $event)"
+								@clear="clearLandedCostExpenseAccount(index)"
+							/>
+							<label class="edge-input-field"><span>Description</span><input v-model="charge.description" type="text" maxlength="140" placeholder="e.g. Freight" @input="clearLandedCostProgress" /></label>
+							<label class="edge-input-field"><span>Amount</span><input v-model="charge.amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" @input="clearLandedCostProgress" /></label>
+							<button type="button" class="edge-small-button" :disabled="landedCost.charges.length <= 1" @click="removeLandedCostCharge(index)">Remove</button>
+						</div>
+					</div>
+
+					<div class="landed-cost-actions">
+						<button type="button" class="edge-button edge-button--primary" :disabled="reviewingLandedCost || savingLandedCost || !landedCost.source" @click="reviewLandedCost">{{ reviewingLandedCost ? "Reviewing…" : "Review Landed Cost" }}</button>
+						<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary" :disabled="preparingLandedCost || !landedCost.source" @click="prepareAdvancedLandedCost">{{ preparingLandedCost ? "Preparing…" : "Advanced: Prepare in ERPNext" }}</button>
+					</div>
+
+					<div v-if="landedCostReview" class="landed-cost-review">
+						<div class="landed-cost-review-summary">
+							<div><span>Posting date</span><strong>{{ formatDate(landedCostReview.review?.posting_date) }}</strong></div>
+							<div><span>Total landed cost</span><strong>{{ formatMoney(landedCostReview.review?.total_taxes_and_charges || 0) }}</strong></div>
+							<div><span>Mode</span><strong>{{ landedCostReview.workflow_controlled ? "Workflow-controlled" : "Standard submit" }}</strong></div>
+						</div>
+						<div class="table-wrap">
+							<table class="purchasing-table landed-cost-table">
+								<thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Receipt amount</th><th class="num">ERPNext allocation</th></tr></thead>
+								<tbody><tr v-for="(item, index) in landedCostReview.review?.items || []" :key="`${item.item_code}-${index}`"><td>{{ item.item_code }}<small v-if="item.description" class="row-subtitle">{{ item.description }}</small></td><td class="num">{{ Number(item.qty || 0).toLocaleString() }}</td><td class="num">{{ formatMoney(item.amount || 0) }}</td><td class="num strong">{{ formatMoney(item.applicable_charges || 0) }}</td></tr></tbody>
+							</table>
+						</div>
+						<div class="landed-cost-actions">
+							<button v-if="!landedCostDraft" type="button" class="edge-button edge-button--primary" :disabled="savingLandedCost" @click="saveLandedCostDraft">{{ savingLandedCost ? "Saving…" : "Prepare Landed Cost Draft" }}</button>
+						</div>
+					</div>
+
+					<div v-if="landedCostDraft" class="landed-cost-draft">
+						<div class="landed-cost-review-summary">
+							<div><span>Voucher</span><strong>{{ landedCostDraft.name }}</strong></div>
+							<div><span>Status</span><strong>{{ landedCostDraft.docstatus === 1 ? "Submitted" : (landedCostDraft.workflow_readiness?.current_state || "Draft") }}</strong></div>
+							<div><span>Total landed cost</span><strong>{{ formatMoney(landedCostDraft.total_taxes_and_charges || 0) }}</strong></div>
+						</div>
+						<p v-if="landedCostDraft.workflow_readiness?.message" class="landed-cost-help">{{ landedCostDraft.workflow_readiness.message }}</p>
+						<div v-if="landedCostDraft.docstatus === 0" class="landed-cost-actions">
+							<button v-if="landedCostDraft.can_submit" type="button" class="edge-button edge-button--primary" :disabled="submittingLandedCost" @click="submitLandedCostDraft">{{ submittingLandedCost ? "Submitting…" : "Submit Landed Cost Voucher" }}</button>
+							<button
+								v-for="action in landedCostDraft.workflow_readiness?.available_actions || []"
+								:key="action.action"
+								type="button"
+								class="edge-button edge-button--primary"
+								:disabled="applyingLandedCostWorkflow"
+								@click="applyLandedCostWorkflow(action.action)"
+							>{{ applyingLandedCostWorkflow ? "Applying…" : action.action }}</button>
+						</div>
+					</div>
+					<p class="landed-cost-help">Standard EdgeSuite ownership supports one permitted receipt/invoice, Amount or Quantity distribution, and ordinary positive charge rows. Manual allocation, fixed assets, vendor-invoice claims, custom accounting dimensions and other advanced cases remain in ERPNext.</p>
 				</section>
 
 				<IncomingQualityInspection :company="filters.company" :branch="filters.branch" :supplier="filters.supplier" />
@@ -230,6 +290,11 @@ const PREPARE_PURCHASE_RETURN_METHOD = "retailedge.professional_purchasing.prepa
 const PREPARE_DEBIT_NOTE_METHOD = "retailedge.professional_purchasing.prepare_supplier_debit_note_draft";
 const LANDED_COST_CAPABILITY_METHOD = "retailedge.landed_cost_allocation.get_landed_cost_capability";
 const LANDED_COST_SEARCH_METHOD = "retailedge.landed_cost_allocation.search_landed_cost_sources";
+const LANDED_COST_ACCOUNT_SEARCH_METHOD = "retailedge.landed_cost_allocation.search_landed_cost_expense_accounts";
+const REVIEW_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.review_standard_landed_cost_allocation";
+const START_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.start_standard_landed_cost_voucher";
+const SUBMIT_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.submit_standard_landed_cost_voucher";
+const LANDED_COST_WORKFLOW_METHOD = "retailedge.landed_cost_allocation.apply_landed_cost_workflow_action";
 const PREPARE_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.prepare_landed_cost_voucher_draft";
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeLinkField"];
 
@@ -252,7 +317,10 @@ export default {
 			filters: { company: "", branch: "", supplier: "" }, summary: {}, capabilities: {}, limits: {}, rows: [], materialRequests: [], serverToday: "",
 			procurementTracker: { available: false, company: "", branch: "", report: "Procurement Tracker", reason: "" },
 			returnCapabilities: { can_prepare_purchase_return: false, can_prepare_supplier_debit_note: false }, returnSources: { purchaseReceipt: "", purchaseInvoice: "" }, preparingReturn: "",
-			landedCostCapability: { can_prepare_landed_cost: false, can_use_purchase_receipt: false, can_use_purchase_invoice: false }, landedCost: { sourceType: "purchase_receipt", source: "", distributionMethod: "Amount" }, preparingLandedCost: false,
+			landedCostCapability: { can_prepare_landed_cost: false, can_use_purchase_receipt: false, can_use_purchase_invoice: false },
+			landedCost: { sourceType: "purchase_receipt", source: "", distributionMethod: "Amount", charges: [{ expense_account: "", description: "Freight / clearing", amount: "" }] },
+			landedCostReview: null, landedCostDraft: null, landedCostSourceModified: "",
+			reviewingLandedCost: false, savingLandedCost: false, submittingLandedCost: false, applyingLandedCostWorkflow: false, preparingLandedCost: false,
 			preparingReceipt: "", preparingRfq: false, rfqSupplierInput: "", rfqDraft: { material_request: "", suppliers: [] },
 			sort: { key: "transaction_date", direction: "desc" }, materialSort: { key: "transaction_date", direction: "desc" }, attentionFilter: "all",
 			attentionOptions: [
@@ -301,8 +369,9 @@ export default {
 		async searchOptions(kind, txt) { const result = await callMethod(SEARCH_METHOD, { kind, txt, company: this.filters.company || null }); return Array.isArray(result) ? result : []; },
 		async searchReturnSources(kind, txt) { const result = await callMethod(RETURN_SEARCH_METHOD, { kind, txt, company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null }); return Array.isArray(result) ? result : []; },
 		async searchLandedCostSources(txt) { const result = await callMethod(LANDED_COST_SEARCH_METHOD, { source_type: this.landedCost.sourceType, txt, company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null }); return Array.isArray(result) ? result : []; },
+		async searchLandedCostExpenseAccounts(txt) { const result = await callMethod(LANDED_COST_ACCOUNT_SEARCH_METHOD, { txt, company: this.filters.company || null }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, supplierSearch(txt) { return this.searchOptions("supplier", txt); }, rfqSupplierSearch(txt) { return this.searchOptions("rfq_supplier", txt); },
-		purchaseReturnSourceSearch(txt) { return this.searchReturnSources("purchase_receipt", txt); }, debitNoteSourceSearch(txt) { return this.searchReturnSources("purchase_invoice", txt); }, landedCostSourceSearch(txt) { return this.searchLandedCostSources(txt); },
+		purchaseReturnSourceSearch(txt) { return this.searchReturnSources("purchase_receipt", txt); }, debitNoteSourceSearch(txt) { return this.searchReturnSources("purchase_invoice", txt); }, landedCostSourceSearch(txt) { return this.searchLandedCostSources(txt); }, landedCostExpenseAccountSearch(txt) { return this.searchLandedCostExpenseAccounts(txt); },
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.supplier = ""; this.branch = ""; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace(); },
 		onBranchSelected(option) { this.filters.branch = option.value; this.branch = option.label || option.value; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace(); },
 		clearBranch() { this.filters.branch = ""; this.branch = ""; this.attentionFilter = "all"; this.cancelRfq(); this.clearReturnSources(); this.clearLandedCostSource(); this.loadWorkspace(); },
@@ -311,7 +380,18 @@ export default {
 		onDebitNoteSourceSelected(option) { this.returnSources.purchaseInvoice = option?.value || ""; }, clearDebitNoteSource() { this.returnSources.purchaseInvoice = ""; },
 		clearReturnSources() { this.returnSources = { purchaseReceipt: "", purchaseInvoice: "" }; },
 		setLandedCostSourceType(sourceType) { if (this.landedCost.sourceType === sourceType) return; this.landedCost.sourceType = sourceType; this.clearLandedCostSource(); },
-		onLandedCostSourceSelected(option) { this.landedCost.source = option?.value || ""; }, clearLandedCostSource() { this.landedCost.source = ""; },
+		onLandedCostSourceSelected(option) { this.landedCost.source = option?.value || ""; this.clearLandedCostProgress(); },
+		clearLandedCostSource() { this.landedCost.source = ""; this.clearLandedCostProgress(); },
+		clearLandedCostProgress() { this.landedCostReview = null; this.landedCostDraft = null; this.landedCostSourceModified = ""; },
+		addLandedCostCharge() {
+			const maximum = Number(this.landedCostCapability.max_standard_charges || 20);
+			if (this.landedCost.charges.length >= maximum) { this.actionError = `A standard Landed Cost Voucher can include at most ${maximum} charges.`; return; }
+			this.clearActionFeedback(); this.landedCost.charges.push({ expense_account: "", description: "", amount: "" }); this.clearLandedCostProgress();
+		},
+		removeLandedCostCharge(index) { if (this.landedCost.charges.length <= 1) return; this.landedCost.charges.splice(index, 1); this.clearLandedCostProgress(); },
+		setLandedCostExpenseAccount(index, option) { if (!this.landedCost.charges[index]) return; this.landedCost.charges[index].expense_account = option?.value || ""; this.clearLandedCostProgress(); },
+		clearLandedCostExpenseAccount(index) { if (!this.landedCost.charges[index]) return; this.landedCost.charges[index].expense_account = ""; this.clearLandedCostProgress(); },
+		landedCostChargePayload() { return this.landedCost.charges.map((row) => ({ expense_account: String(row.expense_account || "").trim(), description: String(row.description || "").trim(), amount: Number(row.amount || 0) })); },
 		setAttentionFilter(key) { this.attentionFilter = key || "all"; },
 		attentionCount(key) {
 			if (key === "all") return Number(this.summary.purchase_orders || 0); if (key === "needs_review") return Number(this.summary.attention_total || 0); return Number(this.summary[key] || 0);
@@ -351,15 +431,47 @@ export default {
 			try { const result = await callMethod(PREPARE_DEBIT_NOTE_METHOD, { purchase_invoice: this.returnSources.purchaseInvoice }); this.actionNotice = result.update_stock ? `Draft supplier Debit Note ${result.name || ""} prepared. ERPNext Update Stock remains enabled; review stock and accounting effects before submission.` : `Draft supplier Debit Note ${result.name || ""} prepared. Review native ERPNext tax, value and accounting details before submission.`; this.clearReturnSources(); if (result.name) frappe.set_route("Form", "Purchase Invoice", result.name); }
 			catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the supplier Debit Note draft."); } finally { this.preparingReturn = ""; }
 		},
-		async prepareLandedCost() {
-			if (!this.landedCost.source || this.preparingLandedCost) return; this.preparingLandedCost = true; this.clearActionFeedback();
+		async reviewLandedCost() {
+			if (!this.landedCost.source || this.reviewingLandedCost) return; this.reviewingLandedCost = true; this.clearActionFeedback(); this.landedCostDraft = null;
+			try {
+				const result = await callMethod(REVIEW_LANDED_COST_METHOD, { source_type: this.landedCost.sourceType, source_name: this.landedCost.source, distribution_method: this.landedCost.distributionMethod, charges: this.landedCostChargePayload() });
+				this.landedCostReview = result || null; this.landedCostSourceModified = result?.source_modified || "";
+				this.actionNotice = "Landed cost reviewed with ERPNext. No voucher has been saved or posted.";
+			} catch (error) { this.landedCostReview = null; this.landedCostSourceModified = ""; this.actionError = errorMessage(error, "ERPNext could not review the standard Landed Cost Voucher."); } finally { this.reviewingLandedCost = false; }
+		},
+		async saveLandedCostDraft() {
+			if (!this.landedCostReview || this.savingLandedCost) return; this.savingLandedCost = true; this.clearActionFeedback();
+			try {
+				const result = await callMethod(START_LANDED_COST_METHOD, { source_type: this.landedCost.sourceType, source_name: this.landedCost.source, expected_source_modified: this.landedCostSourceModified, expected_posting_date: this.landedCostReview?.review?.posting_date || "", distribution_method: this.landedCost.distributionMethod, charges: this.landedCostChargePayload() });
+				this.landedCostDraft = result?.landed_cost_voucher || null; this.landedCostSourceModified = result?.source_modified || this.landedCostSourceModified;
+				this.actionNotice = result?.reused ? `Existing Landed Cost Voucher ${this.landedCostDraft?.name || ""} reused safely.` : `Landed Cost Voucher ${this.landedCostDraft?.name || ""} saved as a draft.`;
+			} catch (error) { this.actionError = errorMessage(error, "ERPNext could not save the standard Landed Cost Voucher draft."); } finally { this.savingLandedCost = false; }
+		},
+		async submitLandedCostDraft() {
+			if (!this.landedCostDraft?.name || !this.landedCostDraft?.can_submit || this.submittingLandedCost) return; this.submittingLandedCost = true; this.clearActionFeedback();
+			try {
+				const result = await callMethod(SUBMIT_LANDED_COST_METHOD, { source_type: this.landedCost.sourceType, source_name: this.landedCost.source, landed_cost_voucher_name: this.landedCostDraft.name, expected_landed_cost_modified: this.landedCostDraft.modified || "" });
+				this.landedCostDraft = result?.landed_cost_voucher || this.landedCostDraft; this.landedCostSourceModified = result?.source_modified || this.landedCostSourceModified;
+				this.actionNotice = result?.already_submitted ? `Landed Cost Voucher ${this.landedCostDraft?.name || ""} was already submitted.` : `Landed Cost Voucher ${this.landedCostDraft?.name || ""} submitted through ERPNext. Valuation and stock/accounting reposting remain ERPNext-controlled.`;
+			} catch (error) { this.actionError = errorMessage(error, "ERPNext could not submit the Landed Cost Voucher."); } finally { this.submittingLandedCost = false; }
+		},
+		async applyLandedCostWorkflow(action) {
+			if (!this.landedCostDraft?.name || !action || this.applyingLandedCostWorkflow) return; this.applyingLandedCostWorkflow = true; this.clearActionFeedback();
+			try {
+				const result = await callMethod(LANDED_COST_WORKFLOW_METHOD, { source_type: this.landedCost.sourceType, source_name: this.landedCost.source, landed_cost_voucher_name: this.landedCostDraft.name, action, expected_source_modified: this.landedCostSourceModified, expected_landed_cost_modified: this.landedCostDraft.modified || "", expected_workflow_state: this.landedCostDraft.workflow_readiness?.current_state || "" });
+				this.landedCostDraft = result?.landed_cost_voucher || this.landedCostDraft; this.landedCostSourceModified = result?.source_modified || this.landedCostSourceModified;
+				this.actionNotice = Number(this.landedCostDraft?.docstatus || 0) === 1 ? `Landed Cost Voucher ${this.landedCostDraft.name} submitted through the configured Workflow.` : `Landed Cost Voucher ${this.landedCostDraft?.name || ""} moved through Workflow action ${action}.`;
+			} catch (error) { this.actionError = errorMessage(error, "ERPNext could not apply the Landed Cost Voucher workflow action."); } finally { this.applyingLandedCostWorkflow = false; }
+		},
+		async prepareAdvancedLandedCost() {
+			if (!this.canUseNativeDesk || !this.landedCost.source || this.preparingLandedCost) return; this.preparingLandedCost = true; this.clearActionFeedback();
 			try {
 				const result = await callMethod(PREPARE_LANDED_COST_METHOD, { source_type: this.landedCost.sourceType, source_name: this.landedCost.source, distribution_method: this.landedCost.distributionMethod });
 				const synced = frappe.model.sync(result.document || {}); const document = Array.isArray(synced) ? synced[0] : null;
 				if (!document?.name) throw new Error("ERPNext did not return an unsaved Landed Cost Voucher document.");
-				this.actionNotice = `Unsaved Landed Cost Voucher prepared from ${result.source_type || "purchase source"}. Enter and review landed-cost charges on the native ERPNext form before saving or submitting.`;
-				this.clearLandedCostSource(); frappe.set_route("Form", "Landed Cost Voucher", document.name);
-			} catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the Landed Cost Voucher."); } finally { this.preparingLandedCost = false; }
+				this.actionNotice = `Unsaved Landed Cost Voucher prepared from ${result.source_type || "purchase source"} for Advanced ERPNext review.`;
+				frappe.set_route("Form", "Landed Cost Voucher", document.name);
+			} catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the Advanced Landed Cost Voucher."); } finally { this.preparingLandedCost = false; }
 		},
 		clearActionFeedback() { this.actionError = ""; this.actionNotice = ""; },
 		newPurchaseOrder() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_EVENT); },
@@ -392,12 +504,12 @@ export default {
 .purchasing-kicker { font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--edge-primary,#0f766e); }.hero-actions,.actions-cell { display:flex; gap:8px; flex-wrap:wrap; }
 .filter-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; align-items:end; }.filter-action { display:flex; }.metric-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }.metric-card { padding:16px; display:flex; flex-direction:column; gap:6px; }.metric-card span { color:var(--edge-text-muted,#667085); font-size:.8rem; }.metric-card strong { color:var(--edge-text,#101828); font-size:1.2rem; }
 .return-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }.return-card { border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); padding:16px; display:flex; flex-direction:column; gap:14px; background:var(--edge-surface-subtle,#f8fafc); }.return-card h4 { margin:0 0 6px; color:var(--edge-text,#101828); }.return-card p { margin:0; color:var(--edge-text-muted,#667085); }
-.landed-cost-source-types { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }.landed-cost-controls { display:grid; grid-template-columns:minmax(260px,1.5fr) minmax(180px,.8fr) auto; gap:14px; align-items:end; }.edge-select-field { display:flex; flex-direction:column; gap:6px; color:var(--edge-text-muted,#667085); font-size:.82rem; font-weight:600; }.edge-select-field select { min-height:40px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); background:var(--edge-surface,#fff); color:var(--edge-text,#101828); padding:0 10px; }.landed-cost-help { margin:12px 0 0; color:var(--edge-text-muted,#667085); font-size:.82rem; max-width:900px; }
+.landed-cost-source-types { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }.landed-cost-controls { display:grid; grid-template-columns:minmax(260px,1.5fr) minmax(180px,.8fr); gap:14px; align-items:end; }.edge-select-field,.edge-input-field { display:flex; flex-direction:column; gap:6px; color:var(--edge-text-muted,#667085); font-size:.82rem; font-weight:600; }.edge-select-field select,.edge-input-field input { min-height:40px; border:1px solid var(--edge-border,#d9d9d9); border-radius:var(--edge-radius-md,8px); background:var(--edge-surface,#fff); color:var(--edge-text,#101828); padding:0 10px; }.landed-cost-help { margin:12px 0 0; color:var(--edge-text-muted,#667085); font-size:.82rem; max-width:900px; }.landed-cost-charges,.landed-cost-review,.landed-cost-draft { margin-top:16px; padding-top:16px; border-top:1px solid var(--edge-border,#e5e7eb); }.landed-cost-subheading { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:10px; }.landed-cost-subheading div { display:flex; flex-direction:column; gap:3px; }.landed-cost-subheading span { color:var(--edge-text-muted,#667085); font-size:.8rem; }.landed-cost-charge-row { display:grid; grid-template-columns:minmax(220px,1.4fr) minmax(220px,1.5fr) minmax(130px,.6fr) auto; gap:10px; align-items:end; margin-top:10px; }.landed-cost-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }.landed-cost-review-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:12px; }.landed-cost-review-summary > div { display:flex; flex-direction:column; gap:3px; padding:10px; border:1px solid var(--edge-border,#e5e7eb); border-radius:var(--edge-radius-md,8px); background:var(--edge-surface-subtle,#f8fafc); }.landed-cost-review-summary span { color:var(--edge-text-muted,#667085); font-size:.76rem; }.landed-cost-table { min-width:720px; }
 .panel-heading { margin-bottom:14px; }.panel-heading h3 { margin-bottom:0; }.table-wrap { width:100%; overflow:auto; }.purchasing-table { width:100%; min-width:850px; border-collapse:collapse; }.purchasing-table--orders { min-width:1120px; }.purchasing-table th,.purchasing-table td { padding:10px 9px; border-bottom:1px solid var(--edge-border,#e5e7eb); text-align:left; vertical-align:top; }.purchasing-table th { color:var(--edge-text-muted,#667085); font-size:.76rem; text-transform:uppercase; letter-spacing:.04em; }.purchasing-table .num { text-align:right; }.purchasing-table .strong { font-weight:700; }.row-subtitle { display:block; margin-top:3px; color:var(--edge-text-muted,#667085); max-width:260px; }
 .sort-button,.link-button { border:0; background:transparent; padding:0; color:inherit; cursor:pointer; font:inherit; text-transform:inherit; letter-spacing:inherit; }.link-button { color:var(--edge-primary,#0f766e); font-weight:600; }.status-pill { display:inline-flex; padding:3px 8px; border:1px solid var(--edge-border,#d9d9d9); border-radius:999px; font-size:.75rem; }
 .edge-button,.edge-small-button { min-height:38px; border-radius:var(--edge-radius-md,8px); padding:0 12px; font-weight:600; cursor:pointer; border:1px solid var(--edge-border,#d9d9d9); background:var(--edge-surface,#fff); color:var(--edge-text,#101828); }.edge-button--primary,.edge-small-button--primary { border-color:var(--edge-primary,#0f766e); background:var(--edge-primary,#0f766e); color:#fff; }.edge-small-button { min-height:30px; padding:0 9px; font-size:.78rem; }button:disabled { opacity:.55; cursor:not-allowed; }
 .rfq-controls { display:grid; grid-template-columns:minmax(240px,1fr) minmax(280px,2fr) auto; gap:14px; align-items:end; }.supplier-selection { min-height:42px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }.selection-empty { color:var(--edge-text-muted,#667085); }.supplier-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border:1px solid var(--edge-border,#d9d9d9); border-radius:999px; background:var(--edge-surface-subtle,#f8fafc); }.supplier-chip button { border:0; background:transparent; color:inherit; cursor:pointer; font-size:1rem; line-height:1; }
 .attention-controls,.attention-badges { display:flex; gap:7px; flex-wrap:wrap; }.attention-controls { margin:0 0 14px; }.attention-chip { min-height:32px; padding:0 10px; border:1px solid var(--edge-border,#d9d9d9); border-radius:999px; background:var(--edge-surface,#fff); color:var(--edge-text,#101828); cursor:pointer; }.attention-chip--active { border-color:var(--edge-primary,#0f766e); box-shadow:inset 0 0 0 1px var(--edge-primary,#0f766e); }.attention-badges { display:flex; gap:7px; flex-wrap:wrap; }.attention-badge { display:inline-flex; padding:3px 7px; border-radius:999px; border:1px solid var(--edge-border,#d9d9d9); font-size:.72rem; white-space:nowrap; }.attention-badge--exception { border-color:var(--edge-danger,#b42318); color:var(--edge-danger,#b42318); }.attention-badge--review { border-color:var(--edge-warning,#b54708); color:var(--edge-warning,#b54708); }.attention-badge--readiness { border-color:var(--edge-primary,#0f766e); color:var(--edge-primary,#0f766e); }.attention-badge--clear { color:var(--edge-text-muted,#667085); }
 .action-feedback { display:flex; align-items:center; gap:10px; flex-wrap:wrap; color:var(--edge-text-muted,#667085); }.action-feedback strong { color:var(--edge-text,#101828); }.action-feedback--error { border-color:var(--edge-danger,#b42318); }.action-feedback--error strong,.action-feedback--error span { color:var(--edge-danger,#b42318); }.inline-error { padding:18px; color:var(--edge-danger,#b42318); text-align:center; }.safety-note { display:flex; gap:8px; flex-wrap:wrap; color:var(--edge-text-muted,#667085); }.safety-note strong { color:var(--edge-text,#101828); }
-@media (max-width:1100px) { .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.rfq-controls,.return-grid,.landed-cost-controls { grid-template-columns:1fr; } } @media (max-width:980px) { .filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.purchasing-hero,.panel-heading { flex-direction:column; } } @media (max-width:560px) { .metric-grid,.filter-grid { grid-template-columns:1fr; } }
+@media (max-width:1100px) { .metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.rfq-controls,.return-grid,.landed-cost-controls,.landed-cost-charge-row { grid-template-columns:1fr; } } @media (max-width:980px) { .filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.purchasing-hero,.panel-heading { flex-direction:column; }.landed-cost-review-summary { grid-template-columns:1fr; } } @media (max-width:560px) { .metric-grid,.filter-grid { grid-template-columns:1fr; } }
 </style>
