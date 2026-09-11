@@ -22,6 +22,7 @@ MAX_CATEGORY_MAP_ROWS = 1000
 CONSOLIDATED_SOURCE_TYPES = (
 	"Cashier / POS",
 	"Business Expense",
+	"Business Expense Reversal",
 	"Supplier / Business",
 	"Employee Expense",
 	"Accounting Adjustment",
@@ -51,6 +52,7 @@ _EXPENSE_STATUSES = {
 	"Pending Ledger",
 	"Rejected",
 	"Posted",
+	"Reversed",
 	"Cancelled",
 }
 
@@ -216,6 +218,17 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		source_type=source_type,
 		branch_scope=branch_scope,
 	)
+	business_expense_reversal_where, business_expense_reversal_values = (
+		_build_business_expense_reversal_where_sql(
+			company=company,
+			from_date=from_date,
+			to_date=to_date,
+			category=category,
+			status=status,
+			source_type=source_type,
+			branch_scope=branch_scope,
+		)
+	)
 	ledger_where, ledger_values, voucher_types = _build_ledger_where_sql(
 		company=company,
 		from_date=from_date,
@@ -232,6 +245,8 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		source_types.append("Cashier / POS")
 	if business_expense_where:
 		source_types.append("Business Expense")
+	if business_expense_reversal_where:
+		source_types.append("Business Expense Reversal")
 	for voucher_type in voucher_types:
 		label = _ACCOUNTING_VOUCHER_TYPES[voucher_type]
 		if label not in source_types:
@@ -247,6 +262,8 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		"cashier_values": cashier_values,
 		"business_expense_where": business_expense_where,
 		"business_expense_values": business_expense_values,
+		"business_expense_reversal_where": business_expense_reversal_where,
+		"business_expense_reversal_values": business_expense_reversal_values,
 		"ledger_where": ledger_where,
 		"ledger_values": ledger_values,
 		"ledger_joins": sql_context["joins"],
@@ -437,6 +454,37 @@ def _union_sql(query: dict[str, Any]) -> tuple[str, list[Any]]:
 		)
 		values.extend(query["business_expense_values"])
 
+	if query["business_expense_reversal_where"]:
+		parts.append(
+			f"""
+				SELECT
+					CONCAT('BER:', be.name) AS name,
+					be.reversal_posting_date AS expense_date,
+					COALESCE(be.branch, '') AS branch,
+					'' AS cashier,
+					COALESCE(be.expense_category, '') AS expense_category,
+					(0 - be.amount) AS amount,
+					'Reversed' AS expense_status,
+					'Reversed' AS ledger_status,
+					0 AS posting_ready,
+					CONCAT('Reversal: ', COALESCE(be.reversal_reason, '')) AS description,
+					'Business Expense Reversal' AS source_type,
+					'{BUSINESS_EXPENSE_DOCTYPE}' AS source_doctype,
+					be.name AS source_reference,
+					COALESCE(be.expense_account, '') AS expense_account,
+					COALESCE(be.cost_center, '') AS cost_center,
+					COALESCE(be.payment_account, '') AS payment_account,
+					COALESCE(be.reversed_on, be.modified) AS sort_creation
+				FROM `tab{BUSINESS_EXPENSE_DOCTYPE}` be
+				INNER JOIN `tabJournal Entry` be_rje
+					ON be.reversal_reference_type = 'Journal Entry'
+					AND be.reversal_reference = be_rje.name
+					AND be_rje.docstatus = 1
+				WHERE {query["business_expense_reversal_where"]}
+			"""
+		)
+		values.extend(query["business_expense_reversal_values"])
+
 	if query["ledger_where"]:
 		parts.append(
 			f"""
@@ -492,7 +540,7 @@ def _build_business_expense_where_sql(
 	clauses = [
 		"be.company = %s",
 		"be.docstatus = 1",
-		"be.ledger_status = 'Posted'",
+		"be.ledger_status IN ('Posted', 'Reversed')",
 		"be.posting_reference_type = 'Journal Entry'",
 		"COALESCE(be.posting_reference, '') <> ''",
 	]
@@ -502,6 +550,48 @@ def _build_business_expense_where_sql(
 		values.append(from_date)
 	if to_date:
 		clauses.append("be.expense_date <= %s")
+		values.append(to_date)
+	if category:
+		clauses.append("be.expense_category = %s")
+		values.append(category)
+	_apply_branch_sql(
+		clauses,
+		values,
+		branch_expression="COALESCE(be.branch, '')",
+		branch_scope=branch_scope,
+	)
+	return " AND ".join(clauses), values
+
+
+def _build_business_expense_reversal_where_sql(
+	*,
+	company: str,
+	from_date,
+	to_date,
+	category: str,
+	status: str,
+	source_type: str,
+	branch_scope: dict[str, Any],
+) -> tuple[str, list[Any]]:
+	if source_type and source_type != "Business Expense Reversal":
+		return "", []
+	if status and status != "Reversed":
+		return "", []
+
+	clauses = [
+		"be.company = %s",
+		"be.docstatus = 1",
+		"be.ledger_status = 'Reversed'",
+		"be.reversal_reference_type = 'Journal Entry'",
+		"COALESCE(be.reversal_reference, '') <> ''",
+		"be.reversal_posting_date IS NOT NULL",
+	]
+	values: list[Any] = [company]
+	if from_date:
+		clauses.append("be.reversal_posting_date >= %s")
+		values.append(from_date)
+	if to_date:
+		clauses.append("be.reversal_posting_date <= %s")
 		values.append(to_date)
 	if category:
 		clauses.append("be.expense_category = %s")
@@ -623,6 +713,8 @@ def _build_ledger_where_sql(
 		clauses.append("ce_post.name IS NULL")
 	if _doctype_has_field(BUSINESS_EXPENSE_DOCTYPE, "posting_reference"):
 		clauses.append("be_post.name IS NULL")
+	if _doctype_has_field(BUSINESS_EXPENSE_DOCTYPE, "reversal_reference"):
+		clauses.append("be_reverse.name IS NULL")
 
 	_apply_branch_sql(
 		clauses,
@@ -676,6 +768,13 @@ def _build_sql_context() -> dict[str, str]:
 			"ON be_post.posting_reference_type = gle.voucher_type "
 			"AND be_post.posting_reference = gle.voucher_no "
 			"AND be_post.docstatus <> 2"
+		)
+	if _doctype_has_field(BUSINESS_EXPENSE_DOCTYPE, "reversal_reference"):
+		joins.append(
+			f"LEFT JOIN `tab{BUSINESS_EXPENSE_DOCTYPE}` be_reverse "
+			"ON be_reverse.reversal_reference_type = gle.voucher_type "
+			"AND be_reverse.reversal_reference = gle.voucher_no "
+			"AND be_reverse.docstatus <> 2"
 		)
 
 	branch_expression = (
@@ -783,7 +882,8 @@ def _map_account_categories(
 		{
 			str(row.get("expense_account") or "").strip()
 			for row in rows
-			if row.get("source_type") not in {"Cashier / POS", "Business Expense"}
+			if row.get("source_type")
+			not in {"Cashier / POS", "Business Expense", "Business Expense Reversal"}
 			and str(row.get("expense_account") or "").strip()
 		}
 	)
@@ -812,7 +912,11 @@ def _map_account_categories(
 		if account:
 			by_account.setdefault(account, set()).add(str(category.name))
 	for row in rows:
-		if row.get("source_type") in {"Cashier / POS", "Business Expense"}:
+		if row.get("source_type") in {
+			"Cashier / POS",
+			"Business Expense",
+			"Business Expense Reversal",
+		}:
 			continue
 		account = str(row.get("expense_account") or "").strip()
 		mapped = by_account.get(account) or set()
