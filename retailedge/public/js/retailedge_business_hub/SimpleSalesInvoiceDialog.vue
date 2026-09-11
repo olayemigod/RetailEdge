@@ -294,7 +294,7 @@ export default {
 			this.$emit("close");
 		},
 		openFullForm() {
-			if (this.saving) return;
+			if (this.saving || !this.nativeFallbackEnabled) return;
 			this.$emit("open-native", "Sales Invoice");
 		},
 		async searchOptions(fieldname, query) {

@@ -290,7 +290,7 @@ export default {
 			this.$emit("close");
 		},
 		openFullForm() {
-			if (this.saving) return;
+			if (this.saving || !this.nativeFallbackEnabled) return;
 			this.$emit("open-native", "Stock Entry");
 		},
 		async searchOptions(fieldname, query) {

@@ -217,7 +217,7 @@ export default {
 			if (!this.saving) this.$emit("close");
 		},
 		openFullForm() {
-			if (!this.saving) this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry");
+			if (!this.saving && this.nativeFallbackEnabled) this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry");
 		},
 		async saveDraft() {
 			if (this.saving || this.loading) return;

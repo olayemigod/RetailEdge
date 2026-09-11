@@ -137,7 +137,7 @@ export default {
 			finally { this.loading = false; }
 		},
 		requestClose() { if (!this.saving) this.$emit("close"); },
-		openFullForm() { if (!this.saving) this.$emit("open-native", "Stock Reconciliation"); },
+		openFullForm() { if (!this.saving && this.nativeFallbackEnabled) this.$emit("open-native", "Stock Reconciliation"); },
 		async searchOptions(fieldname, query) {
 			const result = await callMethod(SEARCH_METHOD, { fieldname, txt: query || "", values: { ...this.values, items: undefined }, limit: 20 });
 			return Array.isArray(result) ? result : [];

@@ -116,7 +116,7 @@ export default {
 		setFromAccount(option) { this.values.from_account = optionValue(option); if (this.values.to_account === this.values.from_account) this.values.to_account = ""; },
 		setToAccount(option) { this.values.to_account = optionValue(option); if (this.values.from_account === this.values.to_account) this.values.from_account = ""; },
 		requestClose() { if (!this.saving) this.$emit("close"); },
-		openFullForm() { if (!this.saving) this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry"); },
+		openFullForm() { if (!this.saving && this.nativeFallbackEnabled) this.$emit("open-native", this.formContext.full_form_doctype || "Payment Entry"); },
 		async saveDraft() {
 			if (this.saving || this.loading) return;
 			if (!this.values.company || !this.values.from_account || !this.values.to_account || Number(this.values.amount || 0) <= 0) { this.saveError = "Company, From Account, To Account and a positive Amount are required."; return; }

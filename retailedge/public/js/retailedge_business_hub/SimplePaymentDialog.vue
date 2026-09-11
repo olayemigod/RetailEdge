@@ -663,7 +663,7 @@ export default {
 			this.$emit("close");
 		},
 		openFullForm() {
-			if (this.saving || this.submitting) return;
+			if (this.saving || this.submitting || !this.nativeFallbackEnabled) return;
 			this.$emit("open-native", "Payment Entry");
 		},
 		openReviewedCustomerPaymentInERPNext() {
