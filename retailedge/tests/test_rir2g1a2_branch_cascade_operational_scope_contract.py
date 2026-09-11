@@ -159,7 +159,7 @@ def test_standard_payment_completion_uses_operational_scope_not_legacy_branch_ga
 def test_mapped_selling_paths_revalidate_explicit_branch_with_operational_authority():
 	for module in (sales_order, delivery, sales_invoice):
 		source = inspect.getsource(module)
-		assert "resolve_operational_branch" in source
+		assert "_validate_stored_operational_branch" in source
 		assert "validate_user_branch_access" not in source
 
 
