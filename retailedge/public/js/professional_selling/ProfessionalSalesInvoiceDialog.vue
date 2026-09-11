@@ -99,7 +99,7 @@
 						<div><span>Point Value</span><strong>{{ loyaltyStatus.currency || "" }} {{ loyaltyStatus.conversion_factor || 0 }}</strong></div>
 						<div><span>Available Value</span><strong>{{ loyaltyStatus.currency || "" }} {{ loyaltyStatus.available_redemption_value || 0 }}</strong></div>
 					</div>
-					<p v-if="loyaltyStatus.from_date || loyaltyStatus.to_date" class="selling-form-hint">Programme validity: {{ loyaltyStatus.from_date || "No start limit" }} – {{ loyaltyStatus.to_date || "No end limit" }}</p>
+					<p v-if="loyaltyStatus.from_date || loyaltyStatus.to_date" class="selling-form-hint">Programme validity: {{ formatDate(loyaltyStatus.from_date, "No start limit") }} – {{ formatDate(loyaltyStatus.to_date, "No end limit") }}</p>
 					<label class="selling-field">
 						<span>Points to Redeem</span>
 						<input v-model.number="values.loyalty_points" class="form-control" type="number" min="0" step="1" :max="loyaltyStatus.available_points || 0" placeholder="0" />
@@ -251,6 +251,7 @@ export default {
 		},
 	},
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		setMode(mode) { if (!this.saving) { this.mode = mode; this.sourceDocument = ""; this.saveError = ""; } },
 		requestClose() { if (!this.saving) this.$emit("close"); },
 		searchOptions(fieldname, query) {

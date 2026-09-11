@@ -41,7 +41,7 @@
 				</div>
 			</template>
 			<template #resultMeta>
-				<span>As of {{ asOfDate || "today" }} · {{ horizonWeeks }}-week horizon</span>
+				<span>As of {{ formatDate(asOfDate, "today") }} · {{ horizonWeeks }}-week horizon</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
 				<span>ERPNext current outstanding allocated by native payment terms and due dates</span>
 				<span>This is a known-commitments schedule, not a behavioural forecast or projected bank balance</span>
@@ -100,6 +100,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";

@@ -61,7 +61,7 @@
 									<td><strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small></td>
 									<td class="text-right">{{ row.qty }}</td>
 									<td>{{ row.uom || '—' }}</td>
-									<td>{{ row.schedule_date || '—' }}</td>
+									<td>{{ formatDate(row.schedule_date) }}</td>
 									<td>{{ row.warehouse || '—' }}</td>
 								</tr>
 							</tbody>
@@ -150,6 +150,7 @@ export default {
 	mounted() { window.addEventListener(OPEN_EVENT, this._open); },
 	beforeUnmount() { window.removeEventListener(OPEN_EVENT, this._open); },
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async supplierSearch(txt) {
 			const result = await callMethod(SEARCH_METHOD, { kind: "rfq_supplier", txt });
 			return Array.isArray(result) ? result : [];

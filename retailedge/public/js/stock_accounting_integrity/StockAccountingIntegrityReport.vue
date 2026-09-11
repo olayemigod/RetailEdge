@@ -99,7 +99,7 @@
 			<template #resultMeta>
 				<span>Company-wide accounting control · no Branch allocation</span>
 				<span v-if="scope.account">Stock Account: {{ scope.account }}</span>
-				<span v-if="scope.from_date && scope.as_on_date">{{ scope.from_date }} to {{ scope.as_on_date }}</span>
+				<span v-if="scope.from_date && scope.as_on_date">{{ formatDate(scope.from_date) }} to {{ formatDate(scope.as_on_date) }}</span>
 				<span v-if="scan.mismatch_rows !== undefined">{{ scan.mismatch_rows }} ERPNext exception row{{ scan.mismatch_rows === 1 ? "" : "s" }}</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
 				<span>Read-only review: corrections and reposting remain in authorised ERPNext workflows.</span>
@@ -214,6 +214,7 @@ export default {
 		this.fetchMetadata();
 	},
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";

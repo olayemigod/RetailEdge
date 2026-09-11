@@ -63,7 +63,7 @@
 				</details>
 			</template>
 			<template #resultMeta>
-				<span>Current ERPNext outstanding balances aged at {{ currentBalanceDate || "today" }}</span>
+				<span>Current ERPNext outstanding balances aged at {{ formatDate(currentBalanceDate, "today") }}</span>
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
 				<span v-if="canUseNativeDesk">Collection handoffs prepare native drafts only · nothing is submitted automatically</span>
@@ -134,6 +134,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";

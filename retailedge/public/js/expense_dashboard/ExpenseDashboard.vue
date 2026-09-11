@@ -56,13 +56,13 @@
 							<span>{{ periodContext.mtd?.label || "Month to Date" }}</span>
 							<strong>{{ money(periodContext.mtd?.total_expenses) }}</strong>
 							<small>{{ periodContext.mtd?.expense_count || 0 }} expenses · avg {{ money(periodContext.mtd?.average_expense) }}</small>
-							<small>{{ periodContext.mtd?.from_date || "—" }} to {{ periodContext.mtd?.to_date || "—" }}</small>
+							<small>{{ formatDate(periodContext.mtd?.from_date) }} to {{ formatDate(periodContext.mtd?.to_date) }}</small>
 						</div>
 						<div class="expense-period-card">
 							<span>{{ periodContext.ytd?.label || "Calendar Year to Date" }}</span>
 							<strong>{{ money(periodContext.ytd?.total_expenses) }}</strong>
 							<small>{{ periodContext.ytd?.expense_count || 0 }} expenses · avg {{ money(periodContext.ytd?.average_expense) }}</small>
-							<small>{{ periodContext.ytd?.from_date || "—" }} to {{ periodContext.ytd?.to_date || "—" }}</small>
+							<small>{{ formatDate(periodContext.ytd?.from_date) }} to {{ formatDate(periodContext.ytd?.to_date) }}</small>
 						</div>
 					</div>
 				</EdgeDashboardSection>
@@ -128,7 +128,7 @@
 				<EdgeDashboardSection title="Recent Expenses" description="Latest rows from the same permission-aware Expense Register dataset." span="2">
 					<div class="expense-recent-list">
 						<button v-for="row in recentExpenses" :key="row.name" class="expense-recent-row" type="button" @click="openExpense(row)">
-							<span><strong>{{ row.expense_category || "Uncategorised" }}</strong><small>{{ row.expense_date }} · {{ row.branch || "No branch" }}<template v-if="row.cashier"> · {{ row.cashier }}</template></small></span>
+							<span><strong>{{ row.expense_category || "Uncategorised" }}</strong><small>{{ formatDate(row.expense_date) }} · {{ row.branch || "No branch" }}<template v-if="row.cashier"> · {{ row.cashier }}</template></small></span>
 							<strong>{{ money(row.amount) }}</strong>
 						</button>
 					</div>
@@ -176,8 +176,9 @@ export default {
 		},
 		budgetedCategories() { return (this.budgetInsight.category_targets || []).filter((row) => row.actual || row.target || row.ambiguous).slice(0, 10); },
 		periodContextDescription() {
-			const anchor = this.periodContext.anchor_date || this.filters.to_date || "the selected To Date";
-			return `Month-to-date and calendar-year-to-date spend as of ${anchor}, using the same branch/category/status permissions as Expense Register.`;
+			const anchor = this.periodContext.anchor_date || this.filters.to_date || "";
+			const displayAnchor = anchor ? this.formatDate(anchor) : "the selected To Date";
+			return `Month-to-date and calendar-year-to-date spend as of ${displayAnchor}, using the same branch/category/status permissions as Expense Register.`;
 		},
 		budgetDescription() {
 			if (!this.budgetInsight.available) return "Native ERPNext Budget targets are shown only when your permissions and account/cost-centre mappings allow a reliable comparison.";
@@ -208,6 +209,7 @@ export default {
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {

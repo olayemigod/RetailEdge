@@ -47,7 +47,7 @@
 					</template>
 					<div v-else class="edge-field">
 						<span class="edge-field-label">Balance Basis</span>
-						<div class="edge-input edge-input--readonly">Current outstanding · {{ filters.as_of_date || "Today" }}</div>
+						<div class="edge-input edge-input--readonly">Current outstanding · {{ formatDate(filters.as_of_date, "Today") }}</div>
 					</div>
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.supplier" :selectedLabel="supplierLabel" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
@@ -73,7 +73,7 @@
 			</template>
 			<template #resultMeta>
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
-				<span v-if="reportType === 'supplier_payables'">Current ERPNext outstanding balances aged at {{ payablesAgeingDate || filters.as_of_date || "today" }}</span>
+				<span v-if="reportType === 'supplier_payables'">Current ERPNext outstanding balances aged at {{ formatDate(payablesAgeingDate || filters.as_of_date, "today") }}</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
 			</template>
@@ -164,6 +164,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {

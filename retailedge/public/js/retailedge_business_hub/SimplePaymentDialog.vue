@@ -69,7 +69,7 @@
 				</div>
 				<div>
 					<span>Posting Date</span>
-					<strong>{{ customerReview.posting_date }}</strong>
+					<strong>{{ formatDate(customerReview.posting_date) }}</strong>
 				</div>
 				<div>
 					<span>Received Amount</span>
@@ -159,7 +159,7 @@
 				</div>
 				<div>
 					<span>Posting Date</span>
-					<strong>{{ supplierReview.posting_date }}</strong>
+					<strong>{{ formatDate(supplierReview.posting_date) }}</strong>
 				</div>
 				<div>
 					<span>Payment Amount</span>
@@ -596,6 +596,7 @@ export default {
 		if (this.open) this.loadContext();
 	},
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async loadContext() {
 			if (!this.intent) return;
 			this.loading = true;
