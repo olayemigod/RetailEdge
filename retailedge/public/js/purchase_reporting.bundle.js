@@ -4,11 +4,11 @@ const REPORT_PRODUCT = "RetailEdge";
 const GOVERNED_EXPORT_METHOD = "retailedge.reporting_actions.get_report_export_data";
 const PURCHASE_VERIFICATION_METHOD = "retailedge.purchase_cycle_verification.get_purchase_cycle_verification";
 const PURCHASE_VERIFICATION_COLUMNS = Object.freeze([
-	{ fieldname: "verification_status", label: "Verification", fieldtype: "Data", width: 120 },
-	{ fieldname: "po_links", label: "PO Links", fieldtype: "Data", width: 90 },
-	{ fieldname: "receipt_links", label: "Receipt Links", fieldtype: "Data", width: 100 },
-	{ fieldname: "review_flags", label: "Review Flags", fieldtype: "Int", width: 90 },
-	{ fieldname: "review_reason", label: "Review Reason", fieldtype: "Data", width: 260 },
+	{ fieldname: "verification_status", label: "Verification", fieldtype: "Data", width: 120, sortable: false },
+	{ fieldname: "po_links", label: "PO Links", fieldtype: "Data", width: 90, sortable: false },
+	{ fieldname: "receipt_links", label: "Receipt Links", fieldtype: "Data", width: 100, sortable: false },
+	{ fieldname: "review_flags", label: "Review Flags", fieldtype: "Int", width: 90, sortable: false },
+	{ fieldname: "review_reason", label: "Review Reason", fieldtype: "Data", width: 260, sortable: false },
 ]);
 const PURCHASE_REPORT_PROVIDERS = Object.freeze({
 	purchase_register: {
@@ -69,13 +69,14 @@ function registerPurchaseReportingProviders(target = window) {
 			defaultPageLength: 50,
 			maxPageLength: 100,
 			maxDatasetRows: config.maxDatasetRows,
-			loadPage: async ({ filters = {}, start = 0, page_length = 50 } = {}) => {
+			loadPage: async ({ filters = {}, start = 0, page_length = 50, sort = null } = {}) => {
 				const safeLength = Math.max(1, Number(page_length || 50));
 				const page = Math.floor(Math.max(0, Number(start || 0)) / safeLength) + 1;
 				const rawResult = await callMethod(config.pageMethod, {
 					filters: { ...filters, page_size: safeLength },
 					page,
 					page_size: safeLength,
+					sort,
 				});
 				const result = config.key === "purchase-register" ? await enrichPurchaseRegister(rawResult) : rawResult;
 				const pagination = result.pagination || {};

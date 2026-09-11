@@ -27,8 +27,8 @@ function registerCashFlowOutlookProvider(target = window) {
 		defaultPageLength: 25,
 		maxPageLength: 25,
 		maxDatasetRows: 14,
-		loadPage: async ({ filters = {}, start = 0, page_length = 25 } = {}) => {
-			const result = await callMethod(PAGE_METHOD, { filters: { ...filters } });
+		loadPage: async ({ filters = {}, start = 0, page_length = 25, sort = null } = {}) => {
+			const result = await callMethod(PAGE_METHOD, { filters: { ...filters }, sort });
 			const rows = Array.isArray(result.rows) ? result.rows : [];
 			const safeStart = Math.max(0, Number(start || 0));
 			const safeLength = Math.max(1, Math.min(25, Number(page_length || 25)));

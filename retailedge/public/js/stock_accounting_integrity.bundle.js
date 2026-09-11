@@ -28,13 +28,14 @@ function registerStockAccountingIntegrityProvider(target = window) {
 		defaultPageLength: 50,
 		maxPageLength: 100,
 		maxDatasetRows: 5000,
-		loadPage: async ({ filters = {}, start = 0, page_length = 50 } = {}) => {
+		loadPage: async ({ filters = {}, start = 0, page_length = 50, sort = null } = {}) => {
 			const safeLength = Math.max(1, Number(page_length || 50));
 			const page = Math.floor(Math.max(0, Number(start || 0)) / safeLength) + 1;
 			const result = await callMethod(PAGE_METHOD, {
 				filters: { ...filters },
 				page,
 				page_size: safeLength,
+				sort,
 			});
 			const pagination = result.pagination || {};
 			return {
