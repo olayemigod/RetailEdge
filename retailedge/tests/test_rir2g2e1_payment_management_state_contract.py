@@ -50,7 +50,7 @@ def test_settlement_load_failure_is_separate_from_action_feedback():
 	assert 'actionError: ""' in source
 	assert "settlement.error" not in source
 	assert 'this.settlement.loadError = errorMessage(error, "Sales Invoice settlement context failed to load.");' in source
-	assert "this.settlement.actionError = __("Selected advance allocations cannot exceed the current invoice outstanding amount.");" in source
+	assert 'this.settlement.actionError = __("Selected advance allocations cannot exceed the current invoice outstanding amount.");' in source
 
 
 def test_primary_empty_states_use_shared_component():
