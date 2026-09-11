@@ -87,6 +87,7 @@
 							<span>{{ row.customer || row.party_name || row.status || "Draft" }}</span>
 							<span v-if="row.grand_total !== undefined">{{ row.currency || "" }} {{ row.grand_total }}</span>
 							<button v-if="canReviewCompletion(row)" type="button" class="edge-button edge-button--primary recent-completion" @click="openRecentCompletion(row)">Review Completion</button>
+							<button v-if="canReviewDeliveryCompletion(row)" type="button" class="edge-button edge-button--primary recent-completion" @click="openRecentDeliveryCompletion(row)">Review Delivery</button>
 							<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary recent-advanced" @click="openAdvancedRecord(recentDocument, row.name)">Advanced: Open in ERPNext</button>
 						</div>
 					</div>
@@ -125,6 +126,14 @@
 				@changed="handleCompletionChanged"
 				@completed="handleCompletionCompleted"
 			/>
+			<StandardDeliveryCompletionDialog
+				:open="deliveryCompletionOpen"
+				:document="deliveryCompletionDocument"
+				:canUseNativeDesk="canUseNativeDesk"
+				@close="closeDeliveryCompletion"
+				@changed="handleDeliveryCompletionChanged"
+				@completed="handleDeliveryCompletionCompleted"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
@@ -135,6 +144,7 @@ import ProfessionalSalesOrderDialog from "./ProfessionalSalesOrderDialog.vue";
 import ProfessionalDeliveryDialog from "./ProfessionalDeliveryDialog.vue";
 import ProfessionalSalesInvoiceDialog from "./ProfessionalSalesInvoiceDialog.vue";
 import StandardSellingCompletionDialog from "./StandardSellingCompletionDialog.vue";
+import StandardDeliveryCompletionDialog from "./StandardDeliveryCompletionDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability";
@@ -170,6 +180,7 @@ export default {
 		ProfessionalDeliveryDialog,
 		ProfessionalSalesInvoiceDialog,
 		StandardSellingCompletionDialog,
+		StandardDeliveryCompletionDialog,
 	},
 	data() {
 		return {
@@ -196,6 +207,8 @@ export default {
 			recentLoading: false,
 			completionOpen: false,
 			completionDocument: null,
+			deliveryCompletionOpen: false,
+			deliveryCompletionDocument: null,
 		};
 	},
 	created() {
@@ -296,7 +309,11 @@ export default {
 			if (result?.name) this.openStandardCompletion({ doctype: "Sales Order", name: result.name });
 			this.loadWorkspace();
 		},
-		handleDeliverySaved() { this.deliveryOpen = false; this.loadWorkspace(); },
+		handleDeliverySaved(result) {
+			this.deliveryOpen = false;
+			if (result?.name) this.openDeliveryCompletion({ doctype: "Delivery Note", name: result.name });
+			this.loadWorkspace();
+		},
 		handleSalesInvoiceSaved() { this.salesInvoiceOpen = false; this.loadWorkspace(); },
 		async loadRecent(document) {
 			this.recentDocument = document;
@@ -337,6 +354,32 @@ export default {
 		},
 		handleCompletionCompleted() {
 			this.closeStandardCompletion();
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		canReviewDeliveryCompletion(row) {
+			return this.recentDocument?.key === "delivery-note"
+				&& Number(row?.docstatus || 0) === 0;
+		},
+		openRecentDeliveryCompletion(row) {
+			if (!this.canReviewDeliveryCompletion(row) || !row?.name) return;
+			this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name });
+		},
+		openDeliveryCompletion(document) {
+			if (document?.doctype !== "Delivery Note" || !document?.name) return;
+			this.deliveryCompletionDocument = { doctype: "Delivery Note", name: document.name };
+			this.deliveryCompletionOpen = true;
+		},
+		closeDeliveryCompletion() {
+			this.deliveryCompletionOpen = false;
+			this.deliveryCompletionDocument = null;
+		},
+		handleDeliveryCompletionChanged() {
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		handleDeliveryCompletionCompleted() {
+			this.closeDeliveryCompletion();
 			this.loadWorkspace();
 			if (this.recentDocument) this.loadRecent(this.recentDocument);
 		},
