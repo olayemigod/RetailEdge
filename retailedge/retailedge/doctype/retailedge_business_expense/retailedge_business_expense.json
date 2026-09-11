@@ -40,7 +40,14 @@
   "posting_reference_type",
   "posting_reference",
   "posting_ready",
-  "posting_block_reason"
+  "posting_block_reason",
+  "reversal_section",
+  "reversal_reference_type",
+  "reversal_reference",
+  "reversal_posting_date",
+  "reversal_reason",
+  "reversed_by",
+  "reversed_on"
  ],
  "fields": [
   {
@@ -192,7 +199,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Expense Status",
-   "options": "Draft\nSubmitted\nApproved\nRejected\nPending Ledger\nPosted\nCancelled",
+   "options": "Draft\nSubmitted\nApproved\nRejected\nPending Ledger\nPosted\nCancelled\nReversed",
    "read_only": 1
   },
   {
@@ -202,7 +209,7 @@
    "fieldtype": "Select",
    "in_standard_filter": 1,
    "label": "Ledger Status",
-   "options": "Not Applicable\nPending Ledger\nPosted\nFailed",
+   "options": "Not Applicable\nPending Ledger\nPosted\nFailed\nReversed",
    "read_only": 1
   },
   {
@@ -289,6 +296,56 @@
    "fieldtype": "Small Text",
    "label": "Posting Block Reason",
    "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "reversal_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting Reversal"
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversal_reference_type",
+   "fieldtype": "Data",
+   "label": "Reversal Reference Type",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversal_reference",
+   "fieldtype": "Dynamic Link",
+   "label": "Reversal Reference",
+   "options": "reversal_reference_type",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversal_posting_date",
+   "fieldtype": "Date",
+   "label": "Reversal Posting Date",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversal_reason",
+   "fieldtype": "Small Text",
+   "label": "Reversal Reason",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversed_by",
+   "fieldtype": "Link",
+   "label": "Reversed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "allow_on_submit": 1,
+   "fieldname": "reversed_on",
+   "fieldtype": "Datetime",
+   "label": "Reversed On",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
@@ -296,7 +353,7 @@
  "issingle": 0,
  "istable": 0,
  "links": [],
- "modified": "2026-09-10 00:00:00.000000",
+ "modified": "2026-09-11 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "RetailEdge",
  "name": "RetailEdge Business Expense",
