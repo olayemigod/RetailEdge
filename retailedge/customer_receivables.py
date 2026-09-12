@@ -19,6 +19,7 @@ from retailedge.stock_movement_filters import branch_query
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
 MAX_LINK_RESULTS = 20
+MAX_CUSTOMER_OPTION_SCAN = 60
 MAX_INVOICE_SCAN_ROWS = 2000
 NO_BRANCH_SCOPE_SENTINEL = "__never__"
 
@@ -60,15 +61,91 @@ def get_customer_receivables_context() -> dict[str, Any]:
 	}
 
 
+def _receivable_customer_invoice_filters(
+	*,
+	company: str,
+	branch: str = "",
+	customer_group: str = "",
+) -> dict[str, Any]:
+	if not company:
+		frappe.throw(_("Company is required."), frappe.ValidationError)
+
+	scope_filters = frappe._dict(
+		company=company,
+		branch=branch,
+		customer_group=customer_group,
+	)
+	_assert_report_access(scope_filters)
+	branch_field, branch_condition = _invoice_branch_scope(scope_filters)
+
+	filters: dict[str, Any] = {
+		"docstatus": 1,
+		"company": company,
+		"is_return": 0,
+		"outstanding_amount": [">", 0],
+	}
+	if customer_group:
+		filters["customer_group"] = customer_group
+	if branch_field and branch_condition is not None:
+		filters[branch_field] = branch_condition
+	return filters
+
+
+def _search_receivable_customers(
+	txt: str,
+	invoice_filters: dict[str, Any],
+) -> list[dict[str, str]]:
+	like = f"%{txt}%"
+	invoice_rows = frappe.get_list(
+		"Sales Invoice",
+		filters=invoice_filters,
+		or_filters={
+			"customer": ["like", like],
+			"customer_name": ["like", like],
+		},
+		fields=["customer", "customer_name", "customer_group"],
+		group_by="customer, customer_name, customer_group",
+		order_by="customer_name asc, customer asc",
+		limit_page_length=MAX_CUSTOMER_OPTION_SCAN,
+	)
+	customers = [
+		str(row.get("customer") or "").strip()
+		for row in invoice_rows
+		if str(row.get("customer") or "").strip()
+	]
+	if not customers:
+		return []
+
+	rows = frappe.get_list(
+		"Customer",
+		filters={"name": ["in", customers]},
+		fields=["name", "customer_name", "customer_group"],
+		order_by="customer_name asc, name asc",
+		limit_page_length=MAX_LINK_RESULTS,
+	)
+	return [
+		{
+			"value": row.name,
+			"label": row.customer_name or row.name,
+			"description": " · ".join(value for value in (row.name, row.customer_group) if value),
+		}
+		for row in rows
+	]
+
+
 @frappe.whitelist()
 def search_customer_receivables_options(
 	kind: str,
 	txt: str = "",
 	company: str = "",
+	branch: str = "",
+	customer_group: str = "",
 ) -> list[dict[str, str]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(branch or "").strip()
+	customer_group = str(customer_group or "").strip()
 
 	if kind == "company":
 		return _search_named("Company", txt)
@@ -78,21 +155,12 @@ def search_customer_receivables_options(
 	if kind == "customer_group":
 		return _search_named("Customer Group", txt)
 	if kind == "customer":
-		rows = frappe.get_list(
-			"Customer",
-			or_filters={"name": ["like", f"%{txt}%"], "customer_name": ["like", f"%{txt}%"]},
-			fields=["name", "customer_name", "customer_group"],
-			order_by="name asc",
-			limit=MAX_LINK_RESULTS,
+		invoice_filters = _receivable_customer_invoice_filters(
+			company=company,
+			branch=branch,
+			customer_group=customer_group,
 		)
-		return [
-			{
-				"value": row.name,
-				"label": row.customer_name or row.name,
-				"description": " · ".join(value for value in (row.name, row.customer_group) if value),
-			}
-			for row in rows
-		]
+		return _search_receivable_customers(txt, invoice_filters)
 	frappe.throw(_("Unsupported Customer Receivables search type."))
 
 
