@@ -116,6 +116,30 @@
 					</div>
 				</section>
 
+				<section v-if="homeQuickActions.length" class="home-quick-actions-section">
+					<div class="section-heading">
+						<div>
+							<p class="section-kicker">Quick actions</p>
+							<h3>Do the next business task</h3>
+						</div>
+					</div>
+					<div class="home-quick-actions-grid">
+						<button
+							v-for="shortcut in homeQuickActions"
+							:key="shortcut.key"
+							type="button"
+							class="home-quick-action"
+							@click="runHomeQuickAction(shortcut)"
+						>
+							<span class="home-quick-action-icon">{{ iconText(shortcut.icon) }}</span>
+							<span>
+								<strong>{{ shortcut.label }}</strong>
+								<small>{{ shortcut.description }}</small>
+							</span>
+						</button>
+					</div>
+				</section>
+
 				<section>
 					<div class="section-heading">
 						<div>
@@ -433,6 +457,48 @@ export default {
 				this.featureFlags.native_document_fallback_enabled !== false
 			);
 		},
+		homeQuickActions() {
+			const byKey = new Map((this.quickActions || []).map((action) => [action.key, action]));
+			const pageTargets = new Set(
+				(this.navigationGroups || [])
+					.flatMap((group) => group.items || [])
+					.filter((item) => item.target_type === "Page")
+					.map((item) => item.target)
+			);
+			const shortcuts = [];
+			const addAction = (key, label = "") => {
+				const action = byKey.get(key);
+				if (!action) return;
+				shortcuts.push({
+					key: `action:${key}`,
+					kind: "action",
+					label: label || action.label,
+					description: action.description || "",
+					icon: action.icon || "zap",
+					action,
+				});
+			};
+			const addPage = (target, label, description, icon) => {
+				if (!pageTargets.has(target)) return;
+				shortcuts.push({
+					key: `page:${target}`,
+					kind: "page",
+					target,
+					label,
+					description,
+					icon,
+				});
+			};
+			addAction("new-sales-invoice", "Make Sale");
+			addAction("receive-customer-payment");
+			addAction("pay-supplier");
+			addAction("record-expense");
+			addPage("professional-purchasing", "Receive Stock", "Open ready-to-receive Purchase Orders and prepare Purchase Receipts.", "download");
+			addAction("transfer-stock");
+			addAction("record-purchase");
+			addPage("bank-matching-reconciliation", "Match Bank Transactions", "Review imported bank transactions, suggestions and reconciliation queues.", "repeat");
+			return shortcuts;
+		},
 		shellMenuItems() {
 			return this.navigationGroups
 				.map((group) => ({
@@ -533,6 +599,16 @@ export default {
 		closeCreatePicker() {
 			this.createPickerOpen = false;
 		},
+		runHomeQuickAction(shortcut) {
+			if (!shortcut) return;
+			if (shortcut.kind === "action" && shortcut.action) {
+				this.runQuickAction(shortcut.action);
+				return;
+			}
+			if (shortcut.kind === "page" && shortcut.target) {
+				frappe.set_route(shortcut.target);
+			}
+		},
 		runQuickAction(action) {
 			if (!action || !action.doctype) return;
 			this.closeCreatePicker();
@@ -558,6 +634,11 @@ export default {
 				return;
 			}
 			if (action.key === GUIDED_EXPENSE_ACTION) {
+				if (action.doctype === "RetailEdge Business Expense" || action.target === "business-expenses") {
+					frappe.route_options = { action: "new" };
+					frappe.set_route("business-expenses");
+					return;
+				}
 				this.simpleCashierExpenseOpen = true;
 				return;
 			}
@@ -834,6 +915,7 @@ export default {
 			return "";
 		},
 		actionModeLabel(action) {
+			if (action?.mode === "page") return "EdgeSuite";
 			return action?.mode === "available" ? "Guided entry" : "Full form";
 		},
 		iconText(icon) {
@@ -1023,6 +1105,38 @@ export default {
 .home-attention-item.tone-warning {
 	border-color: var(--edge-warning, #f79009);
 }
+.home-quick-actions-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+}
+.home-quick-action {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: start;
+	gap: 10px;
+	padding: 14px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 12px;
+	background: var(--edge-surface, #ffffff);
+	text-align: left;
+	cursor: pointer;
+}
+.home-quick-action:hover,
+.home-quick-action:focus-visible {
+	border-color: var(--edge-primary, #2563eb);
+}
+.home-quick-action > span:last-child {
+	display: grid;
+	gap: 4px;
+}
+.home-quick-action small {
+	color: var(--edge-text-muted, #667085);
+	line-height: 1.35;
+}
+.home-quick-action-icon {
+	font-size: 1.15rem;
+}
 .experience-grid {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1094,6 +1208,7 @@ export default {
 	.home-kpi-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
+	.home-quick-actions-grid,
 	.experience-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
@@ -1114,6 +1229,7 @@ export default {
 	.home-kpi-grid,
 	.home-signal-grid,
 	.home-signal-list,
+	.home-quick-actions-grid,
 	.experience-grid {
 		grid-template-columns: 1fr;
 	}
