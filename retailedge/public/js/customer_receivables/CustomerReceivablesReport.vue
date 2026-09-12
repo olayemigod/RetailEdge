@@ -54,7 +54,7 @@
 				<details class="advanced-filters">
 					<summary>More filters</summary>
 					<div class="receivables-filter-grid advanced-grid">
-						<EdgeLinkField v-model="filters.customer_group" label="Customer Group" placeholder="All customer groups" :searcher="customerGroupSearch" />
+						<EdgeLinkField v-model="filters.customer_group" label="Customer Group" placeholder="All customer groups" :searcher="customerGroupSearch" @select="onCustomerGroupSelected" @clear="clearCustomerGroup" />
 						<label class="edge-field">
 							<span class="edge-field-label">Balance Basis</span>
 							<input value="Current outstanding" class="edge-input" type="text" readonly />
@@ -156,14 +156,16 @@ export default {
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.customer_receivables.search_customer_receivables_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.customer_receivables.search_customer_receivables_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, customer_group: this.filters.customer_group }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); },
 		branchSearch(txt) { return this.searchOptions("branch", txt); },
 		customerSearch(txt) { return this.searchOptions("customer", txt); },
 		customerGroupSearch(txt) { return this.searchOptions("customer_group", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
-		onBranchSelected(option) { this.filters.branch = option.value; this.branchName = option.label || option.value; this.currentPage = 1; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.clearCustomer(); this.branchName = ""; this.currentPage = 1; },
+		onBranchSelected(option) { this.filters.branch = option.value; this.clearCustomer(); this.branchName = option.label || option.value; this.currentPage = 1; },
 		clearBranch() { this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
+		onCustomerGroupSelected(option) { this.filters.customer_group = option?.value || ""; this.clearCustomer(); this.currentPage = 1; },
+		clearCustomerGroup() { this.filters.customer_group = ""; this.clearCustomer(); this.currentPage = 1; },
 		onCustomerSelected(option) { this.filters.customer = option.value; this.customerLabel = option.label || option.value; this.currentPage = 1; },
 		clearCustomer() { this.filters.customer = ""; this.customerLabel = ""; this.currentPage = 1; },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
