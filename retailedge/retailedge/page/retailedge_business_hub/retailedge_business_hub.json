@@ -46,6 +46,18 @@
     },
     {
       "role": "RetailEdgeCashier"
+    },
+    {
+      "role": "Sales Manager"
+    },
+    {
+      "role": "Sales User"
+    },
+    {
+      "role": "Purchase Manager"
+    },
+    {
+      "role": "Purchase User"
     }
   ],
   "script": null,
