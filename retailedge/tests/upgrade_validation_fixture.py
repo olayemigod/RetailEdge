@@ -13,6 +13,7 @@ CUSTOMER_GROUP = "RetailEdge Upgrade Customers"
 TERRITORY = "RetailEdge Upgrade Territory"
 ITEM = "RE-UPGRADE-SERVICE"
 ITEM_GROUP = "RetailEdge Upgrade Items"
+PRICE_LIST = "RetailEdge Upgrade Selling"
 SNAPSHOT_PATH = Path("/tmp/retailedge-upgrade-before.json")
 
 
@@ -91,6 +92,21 @@ def _ensure_uom(name: str) -> None:
 	).insert()
 
 
+def _ensure_price_list() -> None:
+	if frappe.db.exists("Price List", PRICE_LIST):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Price List",
+			"price_list_name": PRICE_LIST,
+			"currency": "NGN",
+			"selling": 1,
+			"buying": 0,
+			"enabled": 1,
+		}
+	).insert()
+
+
 def _ensure_transaction_masters() -> None:
 	_ensure_tree_master(
 		"Customer Group",
@@ -114,6 +130,7 @@ def _ensure_transaction_masters() -> None:
 		"parent_item_group",
 	)
 	_ensure_uom("Nos")
+	_ensure_price_list()
 
 
 def _ensure_company():
@@ -229,6 +246,10 @@ def seed_upgrade_fixture() -> dict:
 				"posting_date": nowdate(),
 				"due_date": add_days(nowdate(), 30),
 				"currency": company.default_currency or "NGN",
+				"conversion_rate": 1,
+				"selling_price_list": PRICE_LIST,
+				"price_list_currency": "NGN",
+				"plc_conversion_rate": 1,
 				"debit_to": receivable,
 				"remarks": "RetailEdge upgrade validation invariant",
 				"items": [
