@@ -19,6 +19,7 @@ from retailedge.stock_movement_filters import branch_query, warehouse_query
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
 MAX_LINK_RESULTS = 20
+MAX_SUPPLIER_OPTION_SCAN = 60
 MAX_INVOICE_SCAN_ROWS = 2000
 MAX_ITEM_SCAN_ROWS = 10000
 NO_BRANCH_SCOPE_SENTINEL = "__never__"
@@ -75,6 +76,105 @@ def get_purchase_reporting_context() -> dict[str, Any]:
 	}
 
 
+def _purchase_supplier_invoice_filters(
+	*,
+	company: str,
+	branch: str = "",
+	supplier_group: str = "",
+	report_type: str = "purchase_register",
+	from_date: str = "",
+	to_date: str = "",
+	as_of_date: str = "",
+	invoice_kind: str = "All",
+	status: str = "",
+) -> dict[str, Any]:
+	if not company:
+		frappe.throw(_("Company is required."), frappe.ValidationError)
+
+	report_type = str(report_type or "purchase_register").strip().lower()
+	if report_type not in {"purchase_register", "supplier_payables"}:
+		frappe.throw(_("Unsupported Purchase Reporting type."), frappe.ValidationError)
+
+	scope_filters = frappe._dict(
+		company=company,
+		branch=branch,
+		supplier_group=supplier_group,
+	)
+	_assert_report_access(scope_filters)
+	branch_field, branch_condition = _invoice_branch_scope(scope_filters)
+
+	filters: dict[str, Any] = {"docstatus": 1, "company": company}
+	if supplier_group:
+		filters["supplier_group"] = supplier_group
+	if status:
+		filters["status"] = status
+
+	if report_type == "purchase_register":
+		if bool(from_date) != bool(to_date):
+			frappe.throw(_("From Date and To Date must both be supplied for Purchase Register Supplier search."))
+		if from_date and to_date:
+			if getdate(from_date) > getdate(to_date):
+				frappe.throw(_("From Date cannot be after To Date."))
+			filters["posting_date"] = ["between", [from_date, to_date]]
+		invoice_kind = str(invoice_kind or "All").strip()
+		if invoice_kind == "Purchases":
+			filters["is_return"] = 0
+		elif invoice_kind == "Returns":
+			filters["is_return"] = 1
+		elif invoice_kind != "All":
+			frappe.throw(_("Invoice Type must be All, Purchases, or Returns."))
+	else:
+		filters["posting_date"] = ["<=", as_of_date or nowdate()]
+		filters["outstanding_amount"] = [">", 0]
+		filters["is_return"] = 0
+
+	if branch_field and branch_condition is not None:
+		filters[branch_field] = branch_condition
+	return filters
+
+
+def _search_purchase_suppliers(
+	txt: str,
+	invoice_filters: dict[str, Any],
+) -> list[dict[str, str]]:
+	like = f"%{txt}%"
+	invoice_rows = frappe.get_list(
+		"Purchase Invoice",
+		filters=invoice_filters,
+		or_filters={
+			"supplier": ["like", like],
+			"supplier_name": ["like", like],
+		},
+		fields=["supplier", "supplier_name", "supplier_group"],
+		group_by="supplier, supplier_name, supplier_group",
+		order_by="supplier_name asc, supplier asc",
+		limit_page_length=MAX_SUPPLIER_OPTION_SCAN,
+	)
+	suppliers = [
+		str(row.get("supplier") or "").strip()
+		for row in invoice_rows
+		if str(row.get("supplier") or "").strip()
+	]
+	if not suppliers:
+		return []
+
+	rows = frappe.get_list(
+		"Supplier",
+		filters={"name": ["in", suppliers]},
+		fields=["name", "supplier_name", "supplier_group"],
+		order_by="supplier_name asc, name asc",
+		limit_page_length=MAX_LINK_RESULTS,
+	)
+	return [
+		{
+			"value": row.name,
+			"label": row.supplier_name or row.name,
+			"description": " · ".join(value for value in (row.name, row.supplier_group) if value),
+		}
+		for row in rows
+	]
+
+
 @frappe.whitelist()
 def search_purchase_reporting_options(
 	kind: str,
@@ -82,12 +182,25 @@ def search_purchase_reporting_options(
 	company: str = "",
 	branch: str = "",
 	item_group: str = "",
+	supplier_group: str = "",
+	report_type: str = "purchase_register",
+	from_date: str = "",
+	to_date: str = "",
+	as_of_date: str = "",
+	invoice_kind: str = "All",
+	status: str = "",
 ) -> list[dict[str, str]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
 	branch = str(branch or "").strip()
 	item_group = str(item_group or "").strip()
+	supplier_group = str(supplier_group or "").strip()
+	from_date = str(from_date or "").strip()
+	to_date = str(to_date or "").strip()
+	as_of_date = str(as_of_date or "").strip()
+	invoice_kind = str(invoice_kind or "All").strip()
+	status = str(status or "").strip()
 
 	if kind == "company":
 		return _search_named("Company", txt)
@@ -102,21 +215,18 @@ def search_purchase_reporting_options(
 	if kind == "supplier_group":
 		return _search_named("Supplier Group", txt)
 	if kind == "supplier":
-		rows = frappe.get_list(
-			"Supplier",
-			or_filters={"name": ["like", f"%{txt}%"], "supplier_name": ["like", f"%{txt}%"]},
-			fields=["name", "supplier_name", "supplier_group"],
-			order_by="name asc",
-			limit=MAX_LINK_RESULTS,
+		invoice_filters = _purchase_supplier_invoice_filters(
+			company=company,
+			branch=branch,
+			supplier_group=supplier_group,
+			report_type=report_type,
+			from_date=from_date,
+			to_date=to_date,
+			as_of_date=as_of_date,
+			invoice_kind=invoice_kind,
+			status=status,
 		)
-		return [
-			{
-				"value": row.name,
-				"label": row.supplier_name or row.name,
-				"description": " · ".join(value for value in (row.name, row.supplier_group) if value),
-			}
-			for row in rows
-		]
+		return _search_purchase_suppliers(txt, invoice_filters)
 	if kind == "item_group":
 		return _search_named("Item Group", txt)
 	if kind == "item":
@@ -143,7 +253,6 @@ def search_purchase_reporting_options(
 			for row in rows
 		]
 	frappe.throw(_("Unsupported Purchase reporting search type."))
-
 
 @frappe.whitelist()
 def get_purchase_register(
