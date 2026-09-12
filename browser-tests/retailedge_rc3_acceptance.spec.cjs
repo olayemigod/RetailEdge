@@ -60,6 +60,29 @@ async function openProductPage(page, route, title) {
 	}
 }
 
+async function setAppearance(page, user, appearance) {
+	await page.evaluate(
+		({ storageUser, storageAppearance }) => {
+			localStorage.setItem(
+				`edgeui:theme:v1:${storageUser}`,
+				JSON.stringify({
+					palette: "edge-blue",
+					appearance: storageAppearance,
+					autoLightStart: "06:00",
+					autoDarkStart: "18:00",
+				})
+			);
+		},
+		{ storageUser: user, storageAppearance: appearance }
+	);
+}
+
+async function assertResolvedAppearance(page, appearance) {
+	await expect
+		.poll(() => page.evaluate(() => document.documentElement.dataset.edgeAppearance || ""))
+		.toBe(appearance);
+}
+
 async function apiGet(context, method, params = {}) {
 	const query = new URLSearchParams(params).toString();
 	const response = await context.request.get(
@@ -91,7 +114,7 @@ test("RC3 searchable Create is permission-derived, focused and Escape-safe", asy
 		await expect(page.locator(".guided-create-search-count")).toContainText("permitted");
 
 		await search.fill("stock");
-		const visibleItems = items.filter({ visible: true });
+		const visibleItems = page.locator(".create-picker-item:visible");
 		const visibleCount = await visibleItems.count();
 		expect(visibleCount).toBeGreaterThan(0);
 		for (let index = 0; index < visibleCount; index += 1) {
@@ -278,6 +301,25 @@ test("RC3 advanced native persona retains authorised Setup fallback", async ({ b
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
 		await openProductPage(page, "retailedge-setup", "Setup");
+	} finally {
+		await context.close();
+	}
+});
+
+test("RC3 representative core Pages render in supported light and dark appearance", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+
+		await setAppearance(page, USERS.manager, "dark");
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await assertResolvedAppearance(page, "dark");
+		await openProductPage(page, "action-center", "Action Centre");
+		await assertResolvedAppearance(page, "dark");
+
+		await setAppearance(page, USERS.manager, "light");
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await assertResolvedAppearance(page, "light");
 	} finally {
 		await context.close();
 	}
