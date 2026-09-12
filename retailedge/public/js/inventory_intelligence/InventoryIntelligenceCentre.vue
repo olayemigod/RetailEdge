@@ -148,6 +148,7 @@ export default {
 			tenantName: "",
 			branchName: "",
 			userName: "",
+			canUseNativeDesk: false,
 			companyCurrency: "",
 			showCosts: false,
 			itemLabel: "",
@@ -183,7 +184,7 @@ export default {
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: column.fieldname === "item_code",
+				clickable: this.canUseNativeDesk && column.fieldname === "item_code",
 				sortable: true,
 			}));
 		},
@@ -259,6 +260,7 @@ export default {
 				this.companyCurrency = context.company_currency || "";
 				this.showCosts = Boolean(Number(context.show_costs));
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load Inventory Intelligence controls.");
@@ -281,6 +283,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
@@ -394,6 +397,7 @@ export default {
 		goToPage(page) { this.currentPage = Math.max(1, Number(page || 1)); this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		openReportCell(payload) {
+			if (!this.canUseNativeDesk) return;
 			if (payload?.column?.fieldname === "item_code" && payload.value) {
 				window.open(`/app/item/${encodeURIComponent(payload.value)}`, "_blank", "noopener,noreferrer");
 			}
