@@ -166,8 +166,10 @@ jobs:
         with:
           name: retailedge-browser-persona-evidence
           path: |
-            playwright-report
-            test-results
+            browser-tests/playwright-report
+            browser-tests/test-results
             /tmp/retailedge-browser-server.log
+            frappe-bench/logs/web.log
+            frappe-bench/logs/web.error.log
           if-no-files-found: ignore
           retention-days: 7
