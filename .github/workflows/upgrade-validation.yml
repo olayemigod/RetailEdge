@@ -43,10 +43,14 @@ jobs:
 
     env:
       PRIOR_RETAILEDGE_SHA: 6a06153742610f38e48b3ffb683f497944999105
+      CURRENT_RETAILEDGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Check out current RetailEdge candidate
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -101,7 +105,9 @@ jobs:
       - name: Install frozen pre-MVP RetailEdge baseline
         working-directory: frappe-bench
         run: |
+          git -C apps/retailedge fetch --no-tags "$GITHUB_WORKSPACE" "$PRIOR_RETAILEDGE_SHA"
           git -C apps/retailedge checkout --force "$PRIOR_RETAILEDGE_SHA"
+          test "$(git -C apps/retailedge rev-parse HEAD)" = "$PRIOR_RETAILEDGE_SHA"
 
           bench new-site retail-upgrade.localhost             --db-host 127.0.0.1             --mariadb-root-password root             --admin-password admin             --no-mariadb-socket
 
@@ -125,8 +131,9 @@ jobs:
         working-directory: frappe-bench
         run: |
           git -C apps/retailedge reset --hard
-          git -C apps/retailedge checkout --force "$GITHUB_SHA"
-          test "$(git -C apps/retailedge rev-parse HEAD)" = "$GITHUB_SHA"
+          git -C apps/retailedge fetch --no-tags "$GITHUB_WORKSPACE" "$CURRENT_RETAILEDGE_SHA"
+          git -C apps/retailedge checkout --force "$CURRENT_RETAILEDGE_SHA"
+          test "$(git -C apps/retailedge rev-parse HEAD)" = "$CURRENT_RETAILEDGE_SHA"
 
       - name: Build and migrate upgraded site twice
         working-directory: frappe-bench
