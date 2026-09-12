@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import frappe
-from frappe.utils import add_days, flt, nowdate
+from frappe.utils import add_days, flt, getdate, nowdate
 
 COMPANY = "RetailEdge Upgrade CI"
 ABBR = "REU"
@@ -131,6 +131,29 @@ def _ensure_company():
 	).insert()
 
 
+def _ensure_fiscal_year(company: str) -> str:
+	today = getdate(nowdate())
+	year = str(today.year)
+	if frappe.db.exists("Fiscal Year", year):
+		doc = frappe.get_doc("Fiscal Year", year)
+		if not any(str(row.company or "") == company for row in (doc.companies or [])):
+			doc.append("companies", {"company": company})
+			doc.disabled = 0
+			doc.save()
+		return year
+	frappe.get_doc(
+		{
+			"doctype": "Fiscal Year",
+			"year": year,
+			"year_start_date": f"{today.year}-01-01",
+			"year_end_date": f"{today.year}-12-31",
+			"disabled": 0,
+			"companies": [{"company": company}],
+		}
+	).insert()
+	return year
+
+
 def _ensure_customer() -> None:
 	if frappe.db.exists("Customer", CUSTOMER):
 		return
@@ -180,6 +203,7 @@ def _ledger_snapshot(invoice: str) -> dict:
 def seed_upgrade_fixture() -> dict:
 	"""Create representative setup + submitted accounting truth on the frozen pre-MVP baseline."""
 	company = _ensure_company()
+	_ensure_fiscal_year(COMPANY)
 	_ensure_transaction_masters()
 	_ensure_customer()
 	_ensure_item()
