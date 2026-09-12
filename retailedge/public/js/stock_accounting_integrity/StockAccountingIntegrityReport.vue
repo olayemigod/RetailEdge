@@ -44,9 +44,11 @@
 						v-if="canOpenNativeReport"
 						class="edge-secondary-button"
 						type="button"
+						:disabled="!canUseNativeDesk"
+						:title="canUseNativeDesk ? 'Open ERPNext Stock and Account Value Comparison' : 'Advanced workflow: Native Desk access is required'"
 						@click="openNativeReport"
 					>
-						Open ERPNext Advanced Report
+						{{ canUseNativeDesk ? "Open ERPNext Advanced Report" : "Advanced: ERPNext Report" }}
 					</button>
 					<EdgeExportMenu
 						v-if="rows.length"
@@ -155,6 +157,7 @@ export default {
 			accountLabel: "",
 			nativeReportName: "Stock and Account Value Comparison",
 			canOpenNativeReport: false,
+			canUseNativeDesk: false,
 			filters: {
 				company: "",
 				account: "",
@@ -175,7 +178,7 @@ export default {
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: ["name", "voucher_no"].includes(column.fieldname),
+				clickable: this.canUseNativeDesk && ["name", "voucher_no"].includes(column.fieldname),
 			}));
 		},
 		exportDataset() {
@@ -232,6 +235,7 @@ export default {
 				this.companyCurrency = context.company_currency || "";
 				this.nativeReportName = context.native_report_name || this.nativeReportName;
 				this.canOpenNativeReport = Boolean(Number(context.can_open_native_report));
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
@@ -255,6 +259,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -372,6 +377,7 @@ export default {
 			this.fetchData();
 		},
 		openReportCell(payload) {
+			if (!this.canUseNativeDesk) return;
 			if (payload?.column?.fieldname === "voucher_no" && payload?.row?.voucher_type && payload.value) {
 				frappe.set_route("Form", payload.row.voucher_type, payload.value);
 				return;
@@ -381,7 +387,7 @@ export default {
 			}
 		},
 		openNativeReport() {
-			if (!this.canOpenNativeReport || !this.nativeReportName) return;
+			if (!this.canUseNativeDesk || !this.canOpenNativeReport || !this.nativeReportName) return;
 			frappe.route_options = {
 				company: this.filters.company,
 				account: this.filters.account || undefined,
