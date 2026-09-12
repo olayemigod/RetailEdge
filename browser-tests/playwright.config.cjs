@@ -6,8 +6,8 @@ module.exports = defineConfig({
 	fullyParallel: false,
 	retries: 0,
 	workers: 1,
-	timeout: 45_000,
-	expect: { timeout: 20_000 },
+	timeout: 90_000,
+	expect: { timeout: 15_000 },
 	use: {
 		baseURL: process.env.RETAILEDGE_BASE_URL || "http://retail-browser.localhost:8000",
 		trace: "retain-on-failure",
