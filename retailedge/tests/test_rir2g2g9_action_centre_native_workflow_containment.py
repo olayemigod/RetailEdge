@@ -8,7 +8,7 @@ PAGE = ROOT / "public/js/action_center/ActionCenter.vue"
 
 
 def _method_block(source: str, name: str, size: int = 1500) -> str:
-	start = source.index(f"{name}(")
+	start = source.index(f"\t\t{name}(")
 	return source[start : start + size]
 
 
