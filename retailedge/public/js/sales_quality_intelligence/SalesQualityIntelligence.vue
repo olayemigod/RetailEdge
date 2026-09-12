@@ -83,13 +83,13 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			rows: [], columns: [], summary: [], pagination: {}, metadata: {}, menuItems: [], tenantName: "", branchName: "", userName: "", showCosts: false,
+			rows: [], columns: [], summary: [], pagination: {}, metadata: {}, menuItems: [], tenantName: "", branchName: "", userName: "", showCosts: false, canUseNativeDesk: false,
 			page: 1, pageSize: 50,
 			filters: { company: "", branch: "", from_date: "", to_date: "", customer: "", salesperson: "", item_group: "", item_code: "", warehouse: "", high_reduction_percent: 10, low_margin_percent: 10 },
 		};
 	},
 	computed: {
-		reportColumns() { return (this.columns || []).map((column) => ({ ...column, clickable: ["invoice", "customer"].includes(column.fieldname), sortable: false })); },
+		reportColumns() { return (this.columns || []).map((column) => ({ ...column, clickable: this.canUseNativeDesk && ["invoice", "customer"].includes(column.fieldname), sortable: false })); },
 		exportDataset() { return { title: "Discount & Sales Quality", filename: `RetailEdge Discount Sales Quality ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() {
 			const labels = { company: "Company", branch: "Branch", from_date: "From Date", to_date: "To Date", customer: "Customer", salesperson: "Salesperson", item_group: "Item Group", item_code: "Item", warehouse: "Warehouse", high_reduction_percent: "High Reduction Threshold (%)", low_margin_percent: "Low Margin Threshold (%)" };
@@ -111,13 +111,14 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}), item_code: "", item_group: "", salesperson: "", warehouse: "", high_reduction_percent: 10, low_margin_percent: 10 };
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Discount & Sales Quality controls."); }
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer"); else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer"); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer"); else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer"); },
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.sales_reporting.search_sales_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); }, salespersonSearch(txt) { return this.searchOptions("salesperson", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, warehouseSearch(txt) { return this.searchOptions("warehouse", txt); },
 		onCompanySelected(option) { this.filters.company = option?.value || ""; this.filters.branch = ""; this.filters.customer = ""; this.filters.salesperson = ""; this.filters.item_group = ""; this.filters.item_code = ""; this.filters.warehouse = ""; this.page = 1; },
@@ -130,7 +131,7 @@ export default {
 		resetAndFetch() { this.page = 1; this.fetchData(); }, changePage(direction) { this.page = Math.max(1, this.page + direction); this.fetchData(); },
 		async fetchData() { if (!this.filters.company) return; this.loading = true; this.error = ""; try { const result = await callMethod(this.pageMethod, { filters: { ...this.filters }, page: this.page, page_size: this.pageSize }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.pagination = result.pagination || {}; this.metadata = result.metadata || {}; this.showCosts = Boolean(result.show_costs); } catch (error) { this.rows = []; this.summary = []; this.error = errorMessage(error, "Discount & Sales Quality failed to load."); } finally { this.loading = false; } },
 		async loadExportDataset() { return callMethod(this.exportMethod, { filters: { ...this.filters } }); },
-		openReportCell(payload) { const row = payload?.row || {}; const field = payload?.column?.fieldname; if (field === "invoice" && row.invoice) window.open(`/app/sales-invoice/${encodeURIComponent(row.invoice)}`, "_blank", "noopener,noreferrer"); if (field === "customer" && row.customer) window.open(`/app/customer/${encodeURIComponent(row.customer)}`, "_blank", "noopener,noreferrer"); },
+		openReportCell(payload) { if (!this.canUseNativeDesk) return; const row = payload?.row || {}; const field = payload?.column?.fieldname; if (field === "invoice" && row.invoice) window.open(`/app/sales-invoice/${encodeURIComponent(row.invoice)}`, "_blank", "noopener,noreferrer"); if (field === "customer" && row.customer) window.open(`/app/customer/${encodeURIComponent(row.customer)}`, "_blank", "noopener,noreferrer"); },
 		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (column?.fieldtype === "Percent") return `${Number(value || 0).toFixed(1)}%`; if (column?.fieldtype === "Date" && value) { try { return frappe.datetime.str_to_user(value); } catch (_error) { return String(value); } } if (value === null || value === undefined || value === "") return "—"; return String(value); },
 	},

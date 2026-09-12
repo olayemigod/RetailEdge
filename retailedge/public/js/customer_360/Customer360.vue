@@ -59,7 +59,7 @@
 						<h3>{{ data.customer.customer_name || data.customer.name }}</h3>
 						<p>{{ [data.customer.name, data.customer.customer_group, data.customer.territory].filter(Boolean).join(" · ") }}</p>
 					</div>
-					<button type="button" class="edge-secondary-button" @click="openCustomer">Open Customer</button>
+					<button v-if="canUseNativeDesk" type="button" class="edge-secondary-button" @click="openCustomer">Advanced: Open Customer</button>
 				</section>
 
 				<section class="customer-360-metrics">
@@ -99,7 +99,7 @@
 							<thead><tr><th>Item</th><th>Group</th><th>Net Qty</th><th>Invoices</th><th>Net Sales</th></tr></thead>
 							<tbody>
 								<tr v-for="row in data.top_items || []" :key="row.item_code">
-									<td><button class="customer-360-link" type="button" @click="openDoc('Item', row.item_code)">{{ row.item_name || row.item_code }}</button></td>
+									<td><button v-if="canUseNativeDesk" class="customer-360-link" type="button" @click="openDoc('Item', row.item_code)">{{ row.item_name || row.item_code }}</button><span v-else>{{ row.item_name || row.item_code }}</span></td>
 									<td>{{ row.item_group || "—" }}</td><td>{{ formatNumber(row.net_qty) }}</td><td>{{ row.invoice_count }}</td><td>{{ formatCurrency(row.net_sales) }}</td>
 								</tr>
 								<tr v-if="!(data.top_items || []).length"><td colspan="5">No item activity in this period.</td></tr>
@@ -115,7 +115,7 @@
 							<thead><tr><th>Invoice</th><th>Date</th><th>Type</th><th>Net Amount</th><th>Outstanding</th><th>Status</th></tr></thead>
 							<tbody>
 								<tr v-for="row in data.recent_invoices || []" :key="row.invoice">
-									<td><button class="customer-360-link" type="button" @click="openDoc('Sales Invoice', row.invoice)">{{ row.invoice }}</button></td>
+									<td><button v-if="canUseNativeDesk" class="customer-360-link" type="button" @click="openDoc('Sales Invoice', row.invoice)">{{ row.invoice }}</button><span v-else>{{ row.invoice }}</span></td>
 									<td>{{ formatDate(row.posting_date) }}</td><td>{{ row.type }}</td><td>{{ formatCurrency(row.net_amount) }}</td><td>{{ formatCurrency(row.outstanding) }}</td><td>{{ row.status || "—" }}</td>
 								</tr>
 								<tr v-if="!(data.recent_invoices || []).length"><td colspan="6">No submitted invoices in this period.</td></tr>
@@ -145,7 +145,7 @@ export default {
 	data() {
 		const today = window.frappe?.datetime?.get_today?.() || new Date().toISOString().slice(0, 10);
 		return {
-			edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "", loading: false, dataError: "", data: {}, menuItems: [], tenantName: "", branchName: "", userName: "", customerLabel: "",
+			edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "", loading: false, dataError: "", data: {}, menuItems: [], tenantName: "", branchName: "", userName: "", customerLabel: "", canUseNativeDesk: false,
 			filters: { company: "", branch: "", customer: "", from_date: `${today.slice(0, 7)}-01`, to_date: today },
 		};
 	},
@@ -188,6 +188,7 @@ export default {
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				const routeOptions = frappe.route_options || {};
 				if (routeOptions.customer) {
 					this.filters.customer = routeOptions.customer;
@@ -215,6 +216,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
@@ -236,7 +238,7 @@ export default {
 		},
 		openCustomer() { if (this.data.customer?.name) this.openDoc("Customer", this.data.customer.name); },
 		openDoc(doctype, name) {
-			if (!name) return;
+			if (!this.canUseNativeDesk || !name) return;
 			const slug = String(doctype).toLowerCase().replace(/\s+/g, "-");
 			window.open(`/app/${slug}/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer");
 		},
