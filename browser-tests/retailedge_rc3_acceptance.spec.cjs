@@ -172,12 +172,19 @@ test("RC3 one-Branch authority resolves exactly one permitted Branch", async ({ 
 		});
 		expect(current.response.ok(), current.text).toBeTruthy();
 		expect(current.payload.message.branch).toBe(LAGOS);
+
+		const transfer = await apiGet(context, "retailedge.guided_stock_transfer.get_simple_stock_transfer_context", {
+			company: COMPANY,
+		});
+		expect(transfer.response.ok(), transfer.text).toBeTruthy();
+		expect(transfer.payload.message.defaults.source_branch).toBe(LAGOS);
+		expect(transfer.payload.message.defaults.target_branch).toBe(LAGOS);
 	} finally {
 		await context.close();
 	}
 });
 
-test("RC3 multi-Branch authority requires explicit Branch choice", async ({ browser }) => {
+test("RC3 multi-Branch authority requires explicit Branch choice for Stock Transfer", async ({ browser }) => {
 	const { context } = await newPersona(browser, USERS.multiBranch);
 	try {
 		const allowed = await apiGet(context, "retailedge.operating_context.get_allowed_operating_contexts", {
@@ -185,18 +192,19 @@ test("RC3 multi-Branch authority requires explicit Branch choice", async ({ brow
 		});
 		expect(allowed.response.ok(), allowed.text).toBeTruthy();
 		expect(new Set(allowed.payload.message.branches)).toEqual(new Set([IKEJA, LAGOS]));
-		const current = await apiGet(context, "retailedge.operating_context.get_operating_context", {
+
+		const transfer = await apiGet(context, "retailedge.guided_stock_transfer.get_simple_stock_transfer_context", {
 			company: COMPANY,
 		});
-		expect(current.response.ok(), current.text).toBeTruthy();
-		expect(current.payload.message.branch).toBe("");
-		expect(String(current.payload.message.source || "")).toMatch(/branch assignment/i);
+		expect(transfer.response.ok(), transfer.text).toBeTruthy();
+		expect(transfer.payload.message.defaults.source_branch).toBe("");
+		expect(transfer.payload.message.defaults.target_branch).toBe("");
 	} finally {
 		await context.close();
 	}
 });
 
-test("RC3 restricted-zero history fails closed with no company-wide fallback", async ({ browser }) => {
+test("RC3 restricted-zero history fails closed on a guided Stock Transfer", async ({ browser }) => {
 	const { context } = await newPersona(browser, USERS.zeroBranch);
 	try {
 		const current = await apiGet(context, "retailedge.operating_context.get_operating_context", {
@@ -206,11 +214,11 @@ test("RC3 restricted-zero history fails closed with no company-wide fallback", a
 		expect(current.payload.message.branch).toBe("");
 		expect(String(current.payload.message.source || "")).toMatch(/branch assignment/i);
 
-		const forced = await apiGet(context, "retailedge.operating_context.get_allowed_operating_contexts", {
+		const transfer = await apiGet(context, "retailedge.guided_stock_transfer.get_simple_stock_transfer_context", {
 			company: COMPANY,
 		});
-		expect(forced.response.ok()).toBeFalsy();
-		expect(forced.text).toMatch(/do not have access|PermissionError|not permitted/i);
+		expect(transfer.response.ok()).toBeFalsy();
+		expect(transfer.text).toMatch(/not active|PermissionError|not permitted/i);
 	} finally {
 		await context.close();
 	}
