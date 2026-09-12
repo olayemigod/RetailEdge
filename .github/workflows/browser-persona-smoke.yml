@@ -124,7 +124,7 @@ jobs:
       - name: Seed browser personas
         working-directory: frappe-bench
         run: |
-          bench --site retail-browser.localhost execute retailedge.tests.browser_persona_fixture.seed_browser_personas
+          bench --site retail-browser.localhost execute retailedge.tests.rc3_browser_fixture.seed_rc3_personas
           bench --site retail-browser.localhost clear-cache
 
       - name: Build browser candidate assets
