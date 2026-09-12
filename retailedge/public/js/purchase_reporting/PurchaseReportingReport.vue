@@ -42,8 +42,8 @@
 				<div class="purchase-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<template v-if="reportType === 'purchase_register'">
-						<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-						<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+						<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onPurchaseDateChange" /></label>
+						<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onPurchaseDateChange" /></label>
 					</template>
 					<div v-else class="edge-field">
 						<span class="edge-field-label">Balance Basis</span>
@@ -62,12 +62,12 @@
 				<details class="advanced-filters">
 					<summary>More filters</summary>
 					<div class="purchase-filter-grid advanced-grid">
-						<EdgeLinkField v-model="filters.supplier_group" label="Supplier Group" placeholder="All supplier groups" :searcher="supplierGroupSearch" />
+						<EdgeLinkField v-model="filters.supplier_group" label="Supplier Group" placeholder="All supplier groups" :searcher="supplierGroupSearch" @select="onSupplierGroupSelected" @clear="clearSupplierGroup" />
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.item_code" :selectedLabel="itemLabel" label="Item" placeholder="All items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.warehouse" label="Warehouse" placeholder="All warehouses in scope" :searcher="warehouseSearch" @select="onWarehouseSelected" @clear="filters.warehouse = ''" />
-						<label v-if="reportType === 'purchase_register'" class="edge-field"><span class="edge-field-label">Invoice Type</span><select v-model="filters.invoice_kind" class="edge-input"><option value="All">All</option><option value="Purchases">Purchases</option><option value="Returns">Returns</option></select></label>
-						<label class="edge-field"><span class="edge-field-label">Invoice Status</span><select v-model="filters.status" class="edge-input"><option value="">All statuses</option><option v-for="status in invoiceStatuses" :key="status" :value="status">{{ status }}</option></select></label>
+						<label v-if="reportType === 'purchase_register'" class="edge-field"><span class="edge-field-label">Invoice Type</span><select v-model="filters.invoice_kind" class="edge-input" @change="onSupplierFacetChange"><option value="All">All</option><option value="Purchases">Purchases</option><option value="Returns">Returns</option></select></label>
+						<label class="edge-field"><span class="edge-field-label">Invoice Status</span><select v-model="filters.status" class="edge-input" @change="onSupplierFacetChange"><option value="">All statuses</option><option v-for="status in invoiceStatuses" :key="status" :value="status">{{ status }}</option></select></label>
 					</div>
 				</details>
 			</template>
@@ -181,15 +181,19 @@ export default {
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.purchase_reporting.search_purchase_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group }); return Array.isArray(result) ? result : []; },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.purchase_reporting.search_purchase_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group, supplier_group: this.filters.supplier_group, report_type: this.reportType, from_date: this.filters.from_date, to_date: this.filters.to_date, as_of_date: this.filters.as_of_date, invoice_kind: this.filters.invoice_kind, status: this.filters.status }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, supplierSearch(txt) { return this.searchOptions("supplier", txt); }, supplierGroupSearch(txt) { return this.searchOptions("supplier_group", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, warehouseSearch(txt) { return this.searchOptions("warehouse", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.warehouse = ""; this.branchName = ""; this.currentPage = 1; },
-		onBranchSelected(option) { this.filters.branch = option.value; this.filters.warehouse = ""; this.branchName = option.label || option.value; this.currentPage = 1; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.warehouse = ""; this.clearSupplier(); this.branchName = ""; this.currentPage = 1; },
+		onBranchSelected(option) { this.filters.branch = option.value; this.filters.warehouse = ""; this.clearSupplier(); this.branchName = option.label || option.value; this.currentPage = 1; },
 		clearBranch() { this.filters.branch = ""; this.filters.warehouse = ""; this.branchName = ""; this.currentPage = 1; },
+		onPurchaseDateChange() { this.clearSupplier(); this.currentPage = 1; },
+		onSupplierFacetChange() { this.clearSupplier(); this.currentPage = 1; },
+		onSupplierGroupSelected(option) { this.filters.supplier_group = option?.value || ""; this.clearSupplier(); this.currentPage = 1; },
+		clearSupplierGroup() { this.filters.supplier_group = ""; this.clearSupplier(); this.currentPage = 1; },
 		onSupplierSelected(option) { this.filters.supplier = option.value; this.supplierLabel = option.label || option.value; this.currentPage = 1; }, clearSupplier() { this.filters.supplier = ""; this.supplierLabel = ""; this.currentPage = 1; },
 		onItemGroupSelected(option) { this.filters.item_group = option.value; this.filters.item_code = ""; this.itemLabel = ""; this.currentPage = 1; }, clearItemGroup() { this.filters.item_group = ""; this.filters.item_code = ""; this.itemLabel = ""; this.currentPage = 1; },
 		onItemSelected(option) { this.filters.item_code = option.value; this.itemLabel = option.label || option.value; if (!this.filters.item_group && option.raw?.item_group) this.filters.item_group = option.raw.item_group; this.currentPage = 1; }, clearItem() { this.filters.item_code = ""; this.itemLabel = ""; this.currentPage = 1; },
-		async onWarehouseSelected(option) { this.filters.warehouse = option.value; this.currentPage = 1; if (!this.filters.company) return; try { const resolved = await callMethod("retailedge.guided_entry_context.resolve_branch_warehouse_selection", { company: this.filters.company, branch: this.filters.branch, warehouse: this.filters.warehouse, preference: "default" }); if (resolved.branch) { this.filters.branch = resolved.branch; this.branchName = resolved.branch; } } catch (error) { this.filters.warehouse = ""; this.error = errorMessage(error, "The selected Warehouse is not valid for this purchase context."); } },
+		async onWarehouseSelected(option) { this.filters.warehouse = option.value; this.currentPage = 1; if (!this.filters.company) return; const previousBranch = this.filters.branch; try { const resolved = await callMethod("retailedge.guided_entry_context.resolve_branch_warehouse_selection", { company: this.filters.company, branch: this.filters.branch, warehouse: this.filters.warehouse, preference: "default" }); if (resolved.branch) { this.filters.branch = resolved.branch; this.branchName = resolved.branch; if (resolved.branch !== previousBranch) this.clearSupplier(); } } catch (error) { this.filters.warehouse = ""; this.error = errorMessage(error, "The selected Warehouse is not valid for this purchase context."); } },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; if (this.reportType === "supplier_payables") { delete filters.from_date; delete filters.to_date; delete filters.item_code; delete filters.item_group; delete filters.warehouse; delete filters.invoice_kind; } else { delete filters.as_of_date; delete filters.ageing_bucket; } return filters; },
 		async fetchData() {
