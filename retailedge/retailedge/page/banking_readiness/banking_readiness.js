@@ -225,7 +225,8 @@
 				}
 
 				onMounted(async () => {
-					await Promise.all([loadShellContext(), refresh()]);
+					await loadShellContext();
+					await refresh();
 				});
 
 				return () => h(EdgeAppShell, {
