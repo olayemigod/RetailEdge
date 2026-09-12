@@ -14,6 +14,7 @@ from retailedge.cashier_expense_audit import (
 	mark_cashier_expense_included_for_daily_audit,
 	mark_cashier_expense_needs_clarification,
 )
+from retailedge.cashier_expense_read_scope import apply_cashier_expense_read_scope
 from retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_cashier_expense_review import (
 	build_review_summary,
 )
@@ -23,6 +24,7 @@ DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
 MAX_REVIEW_ROWS = 5000
 MAX_LINK_RESULTS = 20
+MAX_CASHIER_OPTION_SCAN = 200
 
 
 @frappe.whitelist()
@@ -54,30 +56,100 @@ def get_expense_review_context() -> dict[str, Any]:
 	}
 
 
+def _expense_review_cashier_filters(
+	*,
+	company: str,
+	branch: str = "",
+	from_date: str = "",
+	to_date: str = "",
+) -> dict[str, Any]:
+	if not company:
+		frappe.throw(_("Company is required."), frappe.ValidationError)
+
+	filters: dict[str, Any] = {"company": company}
+	if branch:
+		filters["branch"] = branch
+	if from_date and to_date:
+		if getdate(from_date) > getdate(to_date):
+			frappe.throw(_("From Date cannot be after To Date."), frappe.ValidationError)
+		filters["expense_date"] = ["between", [from_date, to_date]]
+	elif from_date:
+		filters["expense_date"] = [">=", from_date]
+	elif to_date:
+		filters["expense_date"] = ["<=", to_date]
+
+	return apply_cashier_expense_read_scope(filters)
+
+
+def _search_scoped_expense_cashiers(
+	txt: str,
+	expense_filters: dict[str, Any],
+) -> list[dict[str, str]]:
+	expense_rows = frappe.get_list(
+		"RetailEdge Cashier Expense",
+		filters=expense_filters,
+		fields=["cashier"],
+		group_by="cashier",
+		order_by="cashier asc",
+		limit_page_length=MAX_CASHIER_OPTION_SCAN + 1,
+	)
+	if len(expense_rows) > MAX_CASHIER_OPTION_SCAN:
+		frappe.throw(
+			_(
+				"More than {0} cashiers match this Expense Review scope. Narrow the Branch or date range before searching."
+			).format(MAX_CASHIER_OPTION_SCAN)
+		)
+	cashiers = [
+		str(row.get("cashier") or "").strip()
+		for row in expense_rows
+		if str(row.get("cashier") or "").strip()
+	]
+	if not cashiers:
+		return []
+
+	like = f"%{txt}%"
+	rows = frappe.get_list(
+		"User",
+		filters={"enabled": 1, "name": ["in", cashiers]},
+		or_filters={"name": ["like", like], "full_name": ["like", like]},
+		fields=["name", "full_name"],
+		order_by="full_name asc, name asc",
+		limit_page_length=MAX_LINK_RESULTS,
+	)
+	return [
+		{"value": row.name, "label": row.full_name or row.name, "description": row.name}
+		for row in rows
+	]
+
+
 @frappe.whitelist()
 def search_expense_review_options(
 	kind: str,
 	txt: str = "",
 	company: str = "",
+	branch: str = "",
+	from_date: str = "",
+	to_date: str = "",
 ) -> list[dict[str, str]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(branch or "").strip()
+	from_date = str(from_date or "").strip()
+	to_date = str(to_date or "").strip()
 	if kind == "company":
 		return _search_named("Company", txt)
 	if kind == "branch":
 		rows = branch_query("Branch", txt, "name", 0, MAX_LINK_RESULTS, {"company": company})
 		return [{"value": row[0], "label": row[0]} for row in rows]
 	if kind == "cashier":
-		rows = frappe.get_list(
-			"User",
-			filters={"enabled": 1},
-			or_filters={"name": ["like", f"%{txt}%"], "full_name": ["like", f"%{txt}%"]},
-			fields=["name", "full_name"],
-			order_by="full_name asc, name asc",
-			limit=MAX_LINK_RESULTS,
+		expense_filters = _expense_review_cashier_filters(
+			company=company,
+			branch=branch,
+			from_date=from_date,
+			to_date=to_date,
 		)
-		return [{"value": row.name, "label": row.full_name or row.name, "description": row.name} for row in rows]
+		return _search_scoped_expense_cashiers(txt, expense_filters)
 	if kind == "expense_category":
 		return _search_named("RetailEdge Expense Category", txt)
 	frappe.throw(_("Unsupported Expense Review search type."))
