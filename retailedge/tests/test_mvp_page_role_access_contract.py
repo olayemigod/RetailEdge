@@ -14,7 +14,13 @@ def _roles(relative_path: str) -> set[str]:
 
 def test_business_hub_accepts_canonical_retailedge_personas():
 	roles = _roles("retailedge/page/retailedge_business_hub/retailedge_business_hub.json")
-	for role in ("RetailEdgeManager", "RetailEdgeBranchManager", "RetailEdgeCashier"):
+	for role in (
+		"RetailEdgeManager",
+		"RetailEdgeBranchManager",
+		"RetailEdgeCashier",
+		"Sales User",
+		"Purchase User",
+	):
 		assert role in roles
 
 
