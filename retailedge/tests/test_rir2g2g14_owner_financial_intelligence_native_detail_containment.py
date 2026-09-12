@@ -26,7 +26,7 @@ def test_profitability_evidence_keeps_identity_and_contains_native_invoice_actio
 	source = PROFITABILITY.read_text(encoding="utf-8")
 	assert '{ fieldtype: "Select", fieldname: "invoice", label: __("Sales Invoice")' in source
 	assert "...(this.canUseNativeDesk ? {" in source
-	assert 'primary_action_label: __("Open Salesriel Invoice")'.replace("Salesriel", "Sales") in source
+	assert 'primary_action_label: __("Open Sales Invoice")' in source
 	assert "if (!this.canUseNativeDesk) return" in source
 	assert 'if (selected?.route) window.open(selected.route, "_blank", "noopener,noreferrer")' in source
 
