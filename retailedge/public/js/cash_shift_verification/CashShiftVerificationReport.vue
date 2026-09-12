@@ -61,6 +61,8 @@
 						label="POS Profile"
 						placeholder="All POS profiles"
 						:searcher="posProfileSearch"
+						@select="onPosProfileSelected"
+						@clear="clearPosProfile"
 					/>
 					<EdgeLinkField
 						v-model="filters.cashier"
@@ -321,7 +323,7 @@ export default {
 		async searchOptions(kind, txt) {
 			const result = await callMethod(
 				"retailedge.cash_shift_verification.search_cash_shift_verification_options",
-				{ kind, txt, company: this.filters.company, branch: this.filters.branch }
+				{ kind, txt, company: this.filters.company, branch: this.filters.branch, pos_profile: this.filters.pos_profile }
 			);
 			return Array.isArray(result) ? result : [];
 		},
@@ -360,6 +362,16 @@ export default {
 			this.filters.cashier = "";
 			this.branchName = "";
 			this.cashierLabel = "";
+			this.currentPage = 1;
+		},
+		onPosProfileSelected(option) {
+			this.filters.pos_profile = option?.value || "";
+			this.clearCashier();
+			this.currentPage = 1;
+		},
+		clearPosProfile() {
+			this.filters.pos_profile = "";
+			this.clearCashier();
 			this.currentPage = 1;
 		},
 		onCashierSelected(option) {
