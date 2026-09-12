@@ -256,6 +256,8 @@ export default {
 				txt,
 				company: this.filters.company,
 				branch: this.filters.branch,
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
 			});
 			return Array.isArray(result) ? result : [];
 		},

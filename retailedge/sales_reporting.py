@@ -82,6 +82,8 @@ def search_sales_reporting_options(
 	company: str = "",
 	branch: str = "",
 	item_group: str = "",
+	from_date: str = "",
+	to_date: str = "",
 ) -> list[dict[str, str]]:
 	"""Permission-aware, bounded Link searches for Sales reporting pages."""
 	kind = str(kind or "").strip().lower()
@@ -89,6 +91,8 @@ def search_sales_reporting_options(
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
 	branch = str(branch or "").strip()
 	item_group = str(item_group or "").strip()
+	from_date = str(from_date or "").strip()
+	to_date = str(to_date or "").strip()
 
 	if kind == "branch":
 		rows = branch_query("Branch", txt, "name", 0, MAX_LINK_RESULTS, {"company": company})
@@ -105,22 +109,18 @@ def search_sales_reporting_options(
 		return [{"value": row[0], "label": row[0]} for row in rows]
 	if kind == "company":
 		return _search_named("Company", txt)
-	if kind == "customer":
-		rows = frappe.get_list(
-			"Customer",
-			or_filters={"name": ["like", f"%{txt}%"], "customer_name": ["like", f"%{txt}%"]},
-			fields=["name", "customer_name", "customer_group"],
-			order_by="name asc",
-			limit=MAX_LINK_RESULTS,
+	if kind in {"customer", "salesperson"}:
+		if not company:
+			return []
+		scope_filters = _sales_option_invoice_filters(
+			company=company,
+			branch=branch,
+			from_date=from_date,
+			to_date=to_date,
 		)
-		return [
-			{
-				"value": row.name,
-				"label": row.customer_name or row.name,
-				"description": " · ".join(value for value in (row.name, row.customer_group) if value),
-			}
-			for row in rows
-		]
+		if kind == "customer":
+			return _search_sales_customers(txt, scope_filters)
+		return _search_salespeople(txt, scope_filters)
 	if kind == "item_group":
 		return _search_named("Item Group", txt)
 	if kind == "item":
@@ -146,9 +146,124 @@ def search_sales_reporting_options(
 			}
 			for row in rows
 		]
-	if kind == "salesperson":
-		return _search_named("Sales Person", txt)
 	frappe.throw(_("Unsupported Sales reporting search type."))
+
+
+def _sales_option_invoice_filters(
+	*,
+	company: str,
+	branch: str = "",
+	from_date: str = "",
+	to_date: str = "",
+) -> dict[str, Any]:
+	"""Return permission-safe Sales Invoice scope shared by Customer/Salesperson selectors."""
+	_assert_named_read("Company", company)
+	scope = frappe._dict({"company": company, "branch": branch})
+	branch_field, branch_condition = _invoice_branch_scope(scope)
+	filters: dict[str, Any] = {"docstatus": 1, "company": company}
+	if bool(from_date) != bool(to_date):
+		frappe.throw(_("From Date and To Date must both be supplied for scoped Sales options."))
+	if from_date and to_date:
+		if getdate(from_date) > getdate(to_date):
+			frappe.throw(_("From Date cannot be after To Date."))
+		filters["posting_date"] = ["between", [from_date, to_date]]
+	if branch_field and branch_condition is not None:
+		filters[branch_field] = branch_condition
+	return filters
+
+
+def _search_sales_customers(txt: str, invoice_filters: dict[str, Any]) -> list[dict[str, str]]:
+	"""Search only Customers visible through permission-filtered submitted Sales Invoices."""
+	rows = frappe.get_list(
+		"Sales Invoice",
+		filters=invoice_filters,
+		or_filters={
+			"customer": ["like", f"%{txt}%"],
+			"customer_name": ["like", f"%{txt}%"],
+		},
+		fields=["customer", "customer_name"],
+		group_by="customer, customer_name",
+		order_by="customer_name asc, customer asc",
+		limit=MAX_LINK_RESULTS,
+	)
+	names = [str(row.customer or "").strip() for row in rows if row.get("customer")]
+	if not names:
+		return []
+	customer_rows = frappe.get_list(
+		"Customer",
+		filters={"name": ["in", names]},
+		fields=["name", "customer_name", "customer_group"],
+		order_by="customer_name asc, name asc",
+		limit=MAX_LINK_RESULTS,
+	)
+	permitted = {row.name: row for row in customer_rows}
+	result: list[dict[str, str]] = []
+	for row in rows:
+		customer = str(row.customer or "").strip()
+		master = permitted.get(customer)
+		if not master:
+			continue
+		label = master.customer_name or row.customer_name or customer
+		result.append(
+			{
+				"value": customer,
+				"label": label,
+				"description": " · ".join(
+					value for value in (customer, master.customer_group) if value
+				),
+			}
+		)
+	return result[:MAX_LINK_RESULTS]
+
+
+def _search_salespeople(txt: str, invoice_filters: dict[str, Any]) -> list[dict[str, str]]:
+	"""Search Sales Team members only after permission-filtered Sales Invoice parents are known."""
+	invoices = frappe.get_list(
+		"Sales Invoice",
+		filters=invoice_filters,
+		fields=["name"],
+		order_by="posting_date desc, name desc",
+		limit=MAX_INVOICE_SCAN_ROWS + 1,
+	)
+	if len(invoices) > MAX_INVOICE_SCAN_ROWS:
+		frappe.throw(
+			_(
+				"More than {0} submitted Sales Invoices match this Salesperson option scope. Narrow the date range before searching."
+			).format(MAX_INVOICE_SCAN_ROWS)
+		)
+	invoice_names = [row.name for row in invoices]
+	if not invoice_names:
+		return []
+	team_rows = frappe.get_all(
+		"Sales Team",
+		filters={
+			"parenttype": "Sales Invoice",
+			"parent": ["in", invoice_names],
+			"sales_person": ["like", f"%{txt}%"],
+		},
+		fields=["sales_person"],
+		group_by="sales_person",
+		order_by="sales_person asc",
+		limit=MAX_LINK_RESULTS * 3,
+	)
+	candidates = [
+		str(row.sales_person or "").strip()
+		for row in team_rows
+		if row.get("sales_person")
+	]
+	if not candidates:
+		return []
+	salespeople = frappe.get_list(
+		"Sales Person",
+		filters=[
+			["Sales Person", "name", "in", candidates],
+			["Sales Person", "enabled", "=", 1],
+		],
+		fields=["name"],
+		order_by="name asc",
+		limit=MAX_LINK_RESULTS,
+	)
+	return [{"value": row.name, "label": row.name} for row in salespeople]
 
 
 @frappe.whitelist()

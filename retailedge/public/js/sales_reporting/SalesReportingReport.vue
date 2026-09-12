@@ -355,7 +355,7 @@ export default {
 		},
 		async searchOptions(kind, txt) {
 			const result = await callMethod("retailedge.sales_reporting.search_sales_reporting_options", {
-				kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group,
+				kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group, from_date: this.filters.from_date, to_date: this.filters.to_date,
 			});
 			return Array.isArray(result) ? result : [];
 		},
@@ -369,12 +369,18 @@ export default {
 		onCompanySelected(option) {
 			this.filters.company = option.value;
 			this.filters.branch = "";
+			this.filters.customer = "";
+			this.customerLabel = "";
+			this.filters.salesperson = "";
 			this.filters.warehouse = "";
 			this.branchName = "";
 			this.currentPage = 1;
 		},
 		onBranchSelected(option) {
 			this.filters.branch = option.value;
+			this.filters.customer = "";
+			this.customerLabel = "";
+			this.filters.salesperson = "";
 			this.filters.warehouse = "";
 			this.branchName = option.label || option.value;
 			this.currentPage = 1;
