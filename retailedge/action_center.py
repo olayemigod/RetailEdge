@@ -429,9 +429,9 @@ def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]
 			"danger",
 			_("Bank reconciliation has blocked or failed items"),
 			"bank_reconciliation_exception",
-			"/app/query-report/RetailEdge Reconciliation Handoff",
-			"Report",
-			"RetailEdge Reconciliation Handoff",
+			"/app/bank-matching-reconciliation",
+			"Page",
+			"bank-matching-reconciliation",
 			"exceptions",
 		),
 		(
@@ -439,9 +439,9 @@ def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]
 			"warning",
 			_("Bank matches are waiting for review"),
 			"bank_match_review",
-			"/app/retail-edge-bank-transaction-match",
-			"DocType",
-			"RetailEdge Bank Transaction Match",
+			"/app/bank-matching-reconciliation",
+			"Page",
+			"bank-matching-reconciliation",
 			"needs_review",
 		),
 		(
@@ -449,9 +449,9 @@ def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]
 			"warning",
 			_("Confirmed bank matches are ready for reconciliation"),
 			"bank_ready_for_reconciliation",
-			"/app/query-report/RetailEdge Bank Match Reconciliation Readiness",
-			"Report",
-			"RetailEdge Bank Match Reconciliation Readiness",
+			"/app/bank-matching-reconciliation",
+			"Page",
+			"bank-matching-reconciliation",
 			"ready",
 		),
 	):
@@ -471,7 +471,6 @@ def _append_bank_exceptions(items: list[dict[str, Any]], payload: dict[str, Any]
 				semantic_key=kind,
 				target_type=target_type,
 				target=target,
-				open_mode="new_tab",
 				age_days=int(oldest.get(age_key) or 0),
 			)
 		)
