@@ -18,28 +18,40 @@
 		return global.EdgeSuiteUI || global.EdgeUI || null;
 	}
 
-	let nativeDeskAccessPromise = null;
+	let businessHubContextPromise = null;
+
+	async function resolveBusinessHubContext() {
+		if (!businessHubContextPromise) {
+			businessHubContextPromise = (async () => {
+				if (typeof global.retailedgeGetBusinessHubContext === "function") {
+					return (await global.retailedgeGetBusinessHubContext()) || {};
+				}
+				const response = await global.frappe.call({
+					method: "retailedge.edgesuite_ui.get_retailedge_business_hub_context",
+				});
+				return response?.message || {};
+			})().catch(() => ({}));
+		}
+		return businessHubContextPromise;
+	}
 
 	async function resolveNativeDeskAccess() {
-		if (!nativeDeskAccessPromise) {
-			nativeDeskAccessPromise = (async () => {
-				try {
-					let context = {};
-					if (typeof global.retailedgeGetBusinessHubContext === "function") {
-						context = await global.retailedgeGetBusinessHubContext();
-					} else {
-						const response = await global.frappe.call({
-							method: "retailedge.master_experience.get_master_retailedge_business_hub_context",
-						});
-						context = response?.message || {};
-					}
-					return Boolean(context?.access?.can_use_native_desk);
-				} catch (_error) {
-					return false;
-				}
-			})();
-		}
-		return nativeDeskAccessPromise;
+		const context = await resolveBusinessHubContext();
+		return Boolean(context?.access?.can_use_native_desk);
+	}
+
+	function routeForNavigationItem(item) {
+		if (item?.target_type === "Page") return `/app/${item.target}`;
+		if (item?.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
+		if (item?.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`;
+		return item?.target || "";
+	}
+
+	function mapNavigationGroups(groups) {
+		return (groups || []).map((group) => ({
+			...group,
+			items: (group.items || []).map((item) => ({ ...item, route: routeForNavigationItem(item) })),
+		}));
 	}
 
 	function t(text, args) {
@@ -105,6 +117,7 @@
 
 	function createWorkspaceComponent(runtime, page) {
 		const { defineComponent, h, onMounted, reactive, computed } = runtime.Vue;
+		const EdgeAppShell = runtime.getComponent("EdgeAppShell");
 		const EdgePageLayout = runtime.getComponent("EdgePageLayout");
 		const EdgePageHeader = runtime.getComponent("EdgePageHeader");
 		const EdgeActionBar = runtime.getComponent("EdgeActionBar");
@@ -131,6 +144,10 @@
 					rows: [],
 					skippedCount: 0,
 					canUseNativeDesk: false,
+					menuItems: [],
+					tenantName: "",
+					branchName: "",
+					userName: "",
 					sortKey: "transaction_date",
 					sortDirection: "desc",
 					filters: {
@@ -194,8 +211,24 @@
 					state.notice.tone = tone;
 				}
 
-				async function loadAccessContext() {
-					state.canUseNativeDesk = await resolveNativeDeskAccess();
+				async function loadShellContext() {
+					const context = await resolveBusinessHubContext();
+					state.canUseNativeDesk = Boolean(context.access?.can_use_native_desk);
+					state.menuItems = mapNavigationGroups(context.navigation_groups || []);
+					state.tenantName = context.context?.company || "";
+					state.branchName = context.context?.branch || "";
+					state.userName = context.context?.user_name || context.context?.user || "";
+					if (!state.filters.company) state.filters.company = context.context?.company || "";
+					if (!state.filters.branch) state.filters.branch = context.context?.branch || "";
+				}
+
+				function handleNavigation(route) {
+					const item = state.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
+					if (!item) return;
+					if (["DocType", "Report"].includes(item.target_type) && !state.canUseNativeDesk) return;
+					if (item.target_type === "Page") global.frappe.set_route(item.target);
+					else if (item.target_type === "Report") global.frappe.set_route("query-report", item.target);
+					else if (item.target_type === "DocType") global.frappe.set_route("List", item.target);
 				}
 
 				async function refresh() {
@@ -862,39 +895,51 @@
 				}
 
 				onMounted(async () => {
-					await Promise.all([loadAccessContext(), refresh()]);
+					await Promise.all([loadShellContext(), refresh()]);
 				});
 				global.retailedgeBankingWorkspaceRefresh = refresh;
 
-				return () => h(EdgePageLayout, { class: "retailedge-bank-layout" }, {
-					header: () => h(EdgePageHeader, {
-						eyebrow: t("RetailEdge Banking"),
-						title: t("Bank Matching & Reconciliation"),
-						subtitle: t("Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking."),
-					}, {
-						actions: () => [
-							actionButton(t("Banking Setup & Readiness"), "secondary", () => global.frappe.set_route("banking-readiness")),
-							actionButton(t("Refresh"), "primary", refresh, { disabled: state.loading }),
+				return () => h(EdgeAppShell, {
+					product: "RetailEdge",
+					title: t("Bank Matching & Reconciliation"),
+					tenantName: state.tenantName || state.filters.company,
+					branchName: state.filters.branch || state.branchName,
+					userName: state.userName,
+					menuItems: state.menuItems,
+					activeRoute: "/app/bank-matching-reconciliation",
+					hideNativeSidebar: true,
+					onNavigate: handleNavigation,
+				}, {
+					default: () => h(EdgePageLayout, { class: "retailedge-bank-layout" }, {
+						header: () => h(EdgePageHeader, {
+							eyebrow: t("RetailEdge Banking"),
+							title: t("Bank Matching & Reconciliation"),
+							subtitle: t("Match bank inflows and outflows to valid ERPNext accounting events, then reconcile through ERPNext Banking."),
+						}, {
+							actions: () => [
+								actionButton(t("Banking Setup & Readiness"), "secondary", () => global.frappe.set_route("banking-readiness")),
+								actionButton(t("Refresh"), "primary", refresh, { disabled: state.loading }),
+							],
+						}),
+						filters: renderFilters,
+						default: () => [
+							renderNotice(),
+							renderStats(),
+							selectorBar("Direction", DIRECTIONS, state.direction, (value) => { state.direction = value; refresh(); }),
+							selectorBar("Workflow Status", QUEUES, state.queue, (value) => { state.queue = value; refresh(); }),
+							state.loading ? h(EdgeLoadingState, { message: t("Loading banking queue...") }) : null,
+							state.error ? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh }) : null,
+							!state.loading && !state.error && !state.rows.length ? h(EdgeEmptyState, {
+								title: t("No transactions in this queue"),
+								description: t("Adjust the direction or filters, or refresh after new bank transactions are imported."),
+							}) : null,
+							!state.loading && !state.error && state.rows.length ? renderTable() : null,
+							state.skippedCount ? h("p", { class: "retailedge-bank-skipped-note" }, t("{0} row(s) were skipped because their banking context could not be resolved safely.", [state.skippedCount])) : null,
+							renderCandidateModal(),
+							renderReviewModal(),
+							renderReconciliationModal(),
 						],
 					}),
-					filters: renderFilters,
-					default: () => [
-						renderNotice(),
-						renderStats(),
-						selectorBar("Direction", DIRECTIONS, state.direction, (value) => { state.direction = value; refresh(); }),
-						selectorBar("Workflow Status", QUEUES, state.queue, (value) => { state.queue = value; refresh(); }),
-						state.loading ? h(EdgeLoadingState, { message: t("Loading banking queue...") }) : null,
-						state.error ? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh }) : null,
-						!state.loading && !state.error && !state.rows.length ? h(EdgeEmptyState, {
-							title: t("No transactions in this queue"),
-							description: t("Adjust the direction or filters, or refresh after new bank transactions are imported."),
-						}) : null,
-						!state.loading && !state.error && state.rows.length ? renderTable() : null,
-						state.skippedCount ? h("p", { class: "retailedge-bank-skipped-note" }, t("{0} row(s) were skipped because their banking context could not be resolved safely.", [state.skippedCount])) : null,
-						renderCandidateModal(),
-						renderReviewModal(),
-						renderReconciliationModal(),
-					],
 				});
 			},
 		});
@@ -911,7 +956,7 @@
 		if (!runtime?.createEdgeApp || !runtime?.Vue) {
 			global.frappe.throw(t("EdgeSuite UI runtime is required for Bank Matching & Reconciliation."));
 		}
-		const required = ["EdgePageLayout", "EdgePageHeader", "EdgeFilterBar", "EdgeLinkField", "EdgeInput", "EdgeDropdown", "EdgeStatCard", "EdgeStatusBadge", "EdgeModal", "EdgeTextarea"];
+		const required = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeFilterBar", "EdgeLinkField", "EdgeInput", "EdgeDropdown", "EdgeStatCard", "EdgeStatusBadge", "EdgeModal", "EdgeTextarea"];
 		const missing = required.filter((name) => !runtime.getComponent(name));
 		if (missing.length) global.frappe.throw(t("EdgeSuite UI is missing required banking components: {0}", [missing.join(", ")]));
 
