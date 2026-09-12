@@ -10,7 +10,7 @@
 - **Target QA site:** `retail.local`
 - **Release status:** **BLOCKED** until RC3 and the release upgrade gate pass
 
-This is the single execution record for the final reconciliation browser/persona gate. It consolidates the current PR #55 contracts and reuses useful detail from earlier module-specific browser QA documents without inheriting their obsolete PR #23 branch assumptions or superseded promotion decisions.
+This is the single execution record for the final reconciliation browser/persona gate. It must be executed only after the second MVP audit in `docs/retailedge_mvp_second_audit_20260912.md` is implementation-green. It consolidates the current PR #55 contracts and reuses useful detail from earlier module-specific browser QA documents without inheriting their obsolete PR #23 branch assumptions or superseded promotion decisions.
 
 Actual QA results must be recorded against the exact commit deployed to `retail.local`. Automated green checks do not substitute for this browser gate.
 
@@ -36,7 +36,7 @@ When an older browser document conflicts with the current route matrix or later 
 - Banking Readiness is permission-aware in the Business Hub Money group and appears before Bank Matching.
 - `branch-assignments` remains System Manager-only through consolidated RetailEdge Setup; it must not appear as a general operator route.
 - Daily Sales Audit, Expense Review and Cash Shift Verification are current Business Hub Pages with native/report fallback retained where defined by the route matrix.
-- Stock Movement History remains on its existing Query Report as the normal route until its explicit Page parity gate is separately completed.
+- Stock Movement History now uses the hardened EdgeSuite Page `stock-movement-history` in final master composition when Page permission is available; native Item/Voucher drill-through remains capability-gated.
 - The current Business Hub MVP Home is in scope. QA must verify the Today command centre, permitted KPI cards, Stock/Banking/Branch/Cash Shift sections, Attention items, quick actions, and graceful degradation for personas without management-dashboard permissions.
 
 ## Exact-head preflight
@@ -48,8 +48,9 @@ Before testing:
 3. Build RetailEdge and governed EdgeSuite UI assets.
 4. Run `bench --site retail.local migrate` and clear browser/server cache as required.
 5. Confirm the operational-guard bundle is served successfully and the Professional Selling/Purchasing pages load without the previous Frappe-v16 fullname/runtime error.
-6. Confirm Theme Compatibility, Linters, full Frappe/RetailEdge CI and EdgeSuite UI Candidate Compatibility are green on the same exact head.
-7. Keep browser console and network panels available during QA. Missing assets, uncaught exceptions and 403/permission failures must be captured with the persona and route.
+6. Confirm Frappe v16 Desk routing is handled correctly: an `/app/<page>` request may resolve to `/desk/<page>`; acceptance waits for the Desk shell and target RetailEdge Page mount rather than assuming the visible URL remains under `/app`.
+7. Confirm Theme Compatibility, Linters, full Frappe/RetailEdge CI and EdgeSuite UI Candidate Compatibility are green on the same exact head.
+8. Keep browser console and network panels available during QA. Missing assets, uncaught exceptions and 403/permission failures must be captured with the persona and route.
 
 Execution record:
 
@@ -208,9 +209,20 @@ Run representative core surfaces in Light and Dark modes and at desktop plus nar
 - Create search and product-menu search remain keyboard usable;
 - no uncaught browser exception or missing required asset remains unresolved.
 
-## Explicit parity hold
+## Current Stock Movement History acceptance
 
-Do **not** use RIR2E to promote `/app/stock-movement-history`. The current Query Report remains the normal route until its dedicated Page-vs-Report parity/export/mobile/browser gate passes. If that separate parity QA is run during the same local session, record it independently and do not change navigation without a bounded reviewed slice.
+Stock Movement History is now part of the EdgeSuite-owned 1.0 composition when the current user can open the `stock-movement-history` Page.
+
+RIR2E must verify:
+
+- the Page loads under the shared RetailEdge shell;
+- Company/Branch/Warehouse scope matches the hardened Stock Ledger read contract;
+- restricted-zero remains fail-closed;
+- Item/Voucher identity remains visible for EdgeSuite-only users without exposing native Form links;
+- authorised Native Desk users retain capability-gated Item/Voucher drill-through;
+- page/export values reconcile with the underlying authoritative Stock Ledger dataset.
+
+Do not demote the Page back to the Query Report during RC3 unless the second MVP audit identifies a correctness blocker.
 
 The older Owner Dashboard browser checklist may be used for preview validation, but Owner Dashboard navigation promotion/redesign is not part of this reconciliation gate.
 
