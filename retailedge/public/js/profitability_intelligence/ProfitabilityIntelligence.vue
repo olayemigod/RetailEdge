@@ -164,7 +164,7 @@ export default {
 			exportBusy: false, printBusy: false, evidenceBusy: "",
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
-			summary: [], topContributors: [], marginLeakage: [], missingCostRows: [], dimensions: {}, comparison: {}, reconciliation: {}, menuItems: [], tenantName: "", userName: "", companyCurrency: "",
+			summary: [], topContributors: [], marginLeakage: [], missingCostRows: [], dimensions: {}, comparison: {}, reconciliation: {}, menuItems: [], tenantName: "", userName: "", companyCurrency: "", canUseNativeDesk: false,
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
 	},
@@ -203,6 +203,7 @@ export default {
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load profitability controls."); }
 			finally { this.metadataLoading = false; }
@@ -288,11 +289,14 @@ export default {
 					{ fieldtype: "Percent", fieldname: "effective_discount_percent", label: __("Effective Discount vs Price List"), read_only: 1 },
 					{ fieldtype: "Check", fieldname: "missing_recorded_cost", label: __("Missing Recorded Cost"), read_only: 1 },
 				],
-				primary_action_label: __("Open Sales Invoice"),
-				primary_action: (values) => {
-					const selected = rows.find((candidate) => candidate.invoice === values.invoice);
-					if (selected?.route) window.open(selected.route, "_blank", "noopener,noreferrer");
-				},
+				...(this.canUseNativeDesk ? {
+					primary_action_label: __("Open Sales Invoice"),
+					primary_action: (values) => {
+						if (!this.canUseNativeDesk) return;
+						const selected = rows.find((candidate) => candidate.invoice === values.invoice);
+						if (selected?.route) window.open(selected.route, "_blank", "noopener,noreferrer");
+					},
+				} : {}),
 			});
 			const sync = () => {
 				const invoice = dialog.get_value("invoice");
@@ -305,7 +309,7 @@ export default {
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		money(value) { try { return frappe.format(value, { fieldtype: "Currency", options: this.companyCurrency }); } catch (_error) { return value ?? "—"; } },
 		percent(value) { return `${Number(value || 0).toFixed(1)}%`; },
 		formatMetric(value, datatype) { return datatype === "Percent" ? this.percent(value) : this.money(value); },

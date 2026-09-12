@@ -79,6 +79,7 @@ export default {
 			tenantName: "",
 			branchName: "",
 			userName: "",
+			canUseNativeDesk: false,
 			companyCurrency: "",
 			asOfDate: "",
 			horizonWeeks: 13,
@@ -120,6 +121,7 @@ export default {
 				this.asOfDate = context.as_of_date || "";
 				this.horizonWeeks = Number(context.outlook_weeks || 13);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load 13-Week Cash Commitments controls.");
@@ -142,6 +144,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
