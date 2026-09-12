@@ -68,11 +68,13 @@ def search_cash_shift_verification_options(
 	txt: str = "",
 	company: str = "",
 	branch: str = "",
+	pos_profile: str = "",
 ) -> list[dict[str, str]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
 	branch = str(branch or "").strip()
+	pos_profile = str(pos_profile or "").strip()
 	if kind == "company":
 		assert_cash_shift_verification_read_access()
 		return _search_named("Company", txt)
@@ -87,7 +89,11 @@ def search_cash_shift_verification_options(
 		rows = branch_query("Branch", txt, "name", 0, MAX_LINK_RESULTS, {"company": company})
 		return [{"value": row[0], "label": row[0]} for row in rows]
 	if kind == "cashier":
-		return _search_scoped_cashiers(txt=txt, read_scope=read_scope)
+		return _search_scoped_cashiers(
+			txt=txt,
+			read_scope=read_scope,
+			pos_profile=pos_profile,
+		)
 	if kind == "pos_profile":
 		return _search_scoped_pos_profiles(
 			txt=txt,
@@ -175,9 +181,23 @@ def _search_named(doctype: str, txt: str) -> list[dict[str, str]]:
 	return [{"value": row.name, "label": row.name} for row in rows]
 
 
-def _search_scoped_cashiers(*, txt: str, read_scope: dict[str, Any]) -> list[dict[str, str]]:
+def _search_scoped_cashiers(
+	*,
+	txt: str,
+	read_scope: dict[str, Any],
+	pos_profile: str = "",
+) -> list[dict[str, str]]:
 	if read_scope.get("branch") == NO_BRANCH_SCOPE_SENTINEL:
 		return []
+	pos_profile = str(pos_profile or "").strip()
+	if pos_profile:
+		allowed_profiles = _scoped_audit_values(
+			fieldname="pos_profile",
+			candidates=[pos_profile],
+			read_scope=read_scope,
+		)
+		if pos_profile not in allowed_profiles:
+			return []
 	candidates = frappe.get_list(
 		"User",
 		filters={"enabled": 1},
@@ -190,6 +210,7 @@ def _search_scoped_cashiers(*, txt: str, read_scope: dict[str, Any]) -> list[dic
 		fieldname="cashier",
 		candidates=[row.name for row in candidates],
 		read_scope=read_scope,
+		extra_filters={"pos_profile": pos_profile} if pos_profile else None,
 	)
 	return [
 		{"value": row.name, "label": row.full_name or row.name, "description": row.name}
@@ -223,10 +244,11 @@ def _scoped_audit_values(
 	fieldname: str,
 	candidates: list[str],
 	read_scope: dict[str, Any],
+	extra_filters: dict[str, Any] | None = None,
 ) -> set[str]:
 	if not candidates:
 		return set()
-	filters = {**read_scope, fieldname: ["in", candidates]}
+	filters = {**read_scope, **(extra_filters or {}), fieldname: ["in", candidates]}
 	rows = frappe.get_list(
 		DAILY_SALES_AUDIT_DOCTYPE,
 		filters=filters,
