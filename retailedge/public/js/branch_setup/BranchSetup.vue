@@ -90,7 +90,7 @@
 									<td>{{ row.default_warehouse || "—" }}</td>
 									<td class="row-actions">
 										<button type="button" class="edge-button edge-button--secondary edge-button--small" @click="openEdit(row)">{{ canWrite ? "Edit" : "View" }}</button>
-										<button type="button" class="edge-button edge-button--secondary edge-button--small" @click="openNative(row.name)">Full Form</button>
+										<button type="button" class="edge-button edge-button--secondary edge-button--small" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the full Branch Setup form' : 'Advanced workflow: Native Desk access is required'" @click="openNative(row.name)">{{ canUseNativeDesk ? "Full Form" : "Advanced: Full Form" }}</button>
 									</td>
 								</tr>
 								<tr v-if="!sortedProfiles.length"><td colspan="8" class="empty-cell">No Branch Setup records match the current filters.</td></tr>
@@ -183,7 +183,7 @@
 		</div>
 		<template #footer>
 			<div class="modal-footer-actions">
-				<button v-if="editor.name" type="button" class="edge-button" :disabled="saving" @click="openNative(editor.name)">Open Full Form</button>
+				<button v-if="editor.name" type="button" class="edge-button" :disabled="saving || !canUseNativeDesk" :title="canUseNativeDesk ? 'Open the full Branch Setup form' : 'Advanced workflow: Native Desk access is required'" @click="openNative(editor.name)">{{ canUseNativeDesk ? "Open Full Form" : "Advanced: Open Full Form" }}</button>
 				<div class="footer-right">
 					<button type="button" class="edge-button" :disabled="saving" @click="closeEditor">Cancel</button>
 					<button v-if="canWrite || !editor.name" type="button" class="edge-button edge-button--primary" :disabled="saving" @click="saveEditor">{{ saving ? "Saving…" : "Save Branch Setup" }}</button>
@@ -267,7 +267,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", profiles: [], canCreate: false, canWrite: false, canCreateBranch: false,
-		filters: { company: "", branch: "", enabled: "" }, sortKey: "company", sortDirection: "asc", userName: "", menuItems: [],
+		filters: { company: "", branch: "", enabled: "" }, sortKey: "company", sortDirection: "asc", userName: "", menuItems: [], canUseNativeDesk: false,
 		editorOpen: false, editorLoading: false, saving: false, editorError: "", editor: blankEditor(), state: {}, activeTab: "identity",
 		reassignOpen: false, reassigning: false, reassignError: "", reassign: { company: "", branch: "" },
 		tabs: [{ key: "identity", label: "Identity" }, { key: "operations", label: "POS & Stock" }, { key: "accounting", label: "Accounting" }, { key: "controls", label: "Controls" }],
@@ -303,6 +303,7 @@ export default {
 				const navigation = typeof window.retailedgeGetBusinessHubContext === "function" ? await window.retailedgeGetBusinessHubContext() : await callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				this.menuItems = (navigation.navigation_groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) }));
 				this.userName = navigation.context?.user_name || "";
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 			} catch (error) { this.menuItems = []; }
 		},
 		routeForItem(item) {
@@ -314,6 +315,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 		},
@@ -405,7 +407,7 @@ export default {
 			finally { this.reassigning = false; }
 		},
 		openAssignments() { frappe.set_route("branch-assignments"); },
-		openNative(name) { if (name) window.open(`/app/retailedge-branch-profile/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer"); },
+		openNative(name) { if (this.canUseNativeDesk && name) window.open(`/app/retailedge-branch-profile/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer"); },
 	},
 };
 </script>

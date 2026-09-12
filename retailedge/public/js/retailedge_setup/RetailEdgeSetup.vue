@@ -63,10 +63,10 @@
 							<span>visible record{{ Number(resource.count) === 1 ? "" : "s" }}</span>
 						</div>
 						<div class="setup-actions">
-							<button type="button" class="edge-button edge-button--primary" @click="openResource(resource)">
-								{{ resource.singleton ? "Open Settings" : "View Records" }}
+							<button type="button" class="edge-button edge-button--primary" :disabled="resourceUsesNativeDesk(resource) && !canUseNativeDesk" :title="resourceUsesNativeDesk(resource) && !canUseNativeDesk ? 'Advanced workflow: Native Desk access is required' : ''" @click="openResource(resource)">
+								{{ resourceActionLabel(resource) }}
 							</button>
-							<button v-if="resource.can_create" type="button" class="edge-button edge-button--secondary" @click="createResource(resource)">Add New</button>
+							<button v-if="resource.can_create" type="button" class="edge-button edge-button--secondary" :disabled="resourceUsesNativeDesk(resource) && !canUseNativeDesk" :title="resourceUsesNativeDesk(resource) && !canUseNativeDesk ? 'Advanced workflow: Native Desk access is required' : ''" @click="createResource(resource)">{{ resourceUsesNativeDesk(resource) && !canUseNativeDesk ? "Advanced: Add New" : "Add New" }}</button>
 						</div>
 					</section>
 				</div>
@@ -130,6 +130,7 @@ export default {
 			tenantName: "",
 			branchName: "",
 			userName: "",
+			canUseNativeDesk: false,
 			activeManager: "",
 			managerAction: "list",
 			managerName: "",
@@ -195,6 +196,7 @@ export default {
 				this.tenantName = navigation.context?.company || "";
 				this.branchName = navigation.context?.branch || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.loaded = true;
 			} catch (error) {
 				this.error = error?.message || error?.exc || "RetailEdge Setup failed to load.";
@@ -217,10 +219,13 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
+		resourceUsesNativeDesk(resource) { return Boolean(resource?.doctype && resource?.manager !== "expense-categories" && !resource?.page); },
+		resourceActionLabel(resource) { const label = resource?.singleton ? "Open Settings" : "View Records"; return this.resourceUsesNativeDesk(resource) && !this.canUseNativeDesk ? `Advanced: ${label}` : label; },
 		openResource(resource) {
 			if (resource?.manager === "expense-categories") {
 				this.openExpenseCategoryManager("list");
@@ -230,7 +235,7 @@ export default {
 				frappe.set_route(resource.page);
 				return;
 			}
-			if (!resource?.doctype) return;
+			if (!resource?.doctype || !this.canUseNativeDesk) return;
 			window.open(`/app/${doctypeSlug(resource.doctype)}`, "_blank", "noopener,noreferrer");
 		},
 		createResource(resource) {
@@ -239,6 +244,7 @@ export default {
 				this.openExpenseCategoryManager("new");
 				return;
 			}
+			if (!this.canUseNativeDesk) return;
 			window.open(`/app/${doctypeSlug(resource.doctype)}/new`, "_blank", "noopener,noreferrer");
 		},
 		openOperatingContext() {
