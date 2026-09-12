@@ -262,6 +262,14 @@
 				@saved="handleSimpleStockAdjustmentSaved"
 				@open-native="openNativeStockAdjustment"
 			/>
+			<StandardStockCompletionDialog
+				:open="stockCompletionOpen"
+				:document="stockCompletionDocument"
+				:canUseNativeDesk="nativeFallbackEnabled"
+				@close="closeStockCompletion"
+				@changed="handleStockCompletionChanged"
+				@completed="handleStockCompletionCompleted"
+			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
@@ -278,6 +286,7 @@ import SimpleSalesInvoiceDialog from "./SimpleSalesInvoiceDialog.vue";
 import StandardSalesInvoiceCompletionDialog from "../professional_selling/StandardSalesInvoiceCompletionDialog.vue";
 import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
+import StandardStockCompletionDialog from "./StandardStockCompletionDialog.vue";
 import { openQuickEntryMaster } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
@@ -377,6 +386,7 @@ export default {
 		StandardSalesInvoiceCompletionDialog,
 		SimpleStockAdjustmentDialog,
 		SimpleStockTransferDialog,
+		StandardStockCompletionDialog,
 	},
 	data() {
 		return {
@@ -401,6 +411,8 @@ export default {
 			simpleCashierExpenseOpen: false,
 			simpleStockTransferOpen: false,
 			simpleStockAdjustmentOpen: false,
+			stockCompletionOpen: false,
+			stockCompletionDocument: null,
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
@@ -746,7 +758,9 @@ export default {
 		},
 		handleSimpleStockTransferSaved(result) {
 			this.simpleStockTransferOpen = false;
-			this.notifyGuidedDraftSaved(result, "Stock Entry", "Stock Transfer");
+			if (result?.name) {
+				this.openStockCompletion({ doctype: "Stock Entry", name: result.name });
+			}
 		},
 		openNativeStockTransfer(doctype = "Stock Entry") {
 			if (!this.nativeFallbackEnabled) return;
@@ -758,7 +772,25 @@ export default {
 		},
 		handleSimpleStockAdjustmentSaved(result) {
 			this.simpleStockAdjustmentOpen = false;
-			this.notifyGuidedDraftSaved(result, "Stock Reconciliation", "Stock Reconciliation");
+			if (result?.name) {
+				this.openStockCompletion({ doctype: "Stock Reconciliation", name: result.name });
+			}
+		},
+		openStockCompletion(document) {
+			if (!["Stock Entry", "Stock Reconciliation"].includes(document?.doctype) || !document?.name) return;
+			this.stockCompletionDocument = { doctype: document.doctype, name: document.name };
+			this.stockCompletionOpen = true;
+		},
+		closeStockCompletion() {
+			this.stockCompletionOpen = false;
+			this.stockCompletionDocument = null;
+		},
+		handleStockCompletionChanged() {
+			this.refreshHomeSnapshot();
+		},
+		handleStockCompletionCompleted() {
+			this.closeStockCompletion();
+			this.refreshContext({ force: true });
 		},
 		openNativeStockAdjustment(doctype = "Stock Reconciliation") {
 			if (!this.nativeFallbackEnabled) return;
