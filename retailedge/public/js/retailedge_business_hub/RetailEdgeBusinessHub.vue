@@ -58,6 +58,64 @@
 					</div>
 				</section>
 
+				<section class="home-command-centre">
+					<div class="section-heading">
+						<div>
+							<p class="section-kicker">Today</p>
+							<h3>Business at a glance</h3>
+						</div>
+						<span v-if="homeSnapshot.as_of_date" class="home-as-of">As of {{ homeSnapshot.as_of_date }}</span>
+					</div>
+					<EdgeLoadingState v-if="homeLoading" message="Loading today's business position..." :skeleton="true" />
+					<EdgeErrorState v-else-if="homeError" title="Business snapshot unavailable" :message="homeError" @retry="refreshHomeSnapshot" />
+					<div v-else>
+						<div v-if="homeSnapshot.cards.length" class="home-kpi-grid">
+							<button
+								v-for="card in homeSnapshot.cards"
+								:key="card.label"
+								type="button"
+								class="home-kpi-card"
+								@click="openHomeRoute(card.route)"
+							>
+								<span>{{ card.label }}</span>
+								<strong>{{ formatHomeValue(card) }}</strong>
+								<small>{{ card.time_basis === "current" ? "Current position" : "Today" }}</small>
+							</button>
+						</div>
+						<EdgeEmptyState
+							v-else
+							title="No management cards available"
+							description="Your current role can still use the permitted operational actions and pages from the RetailEdge menu."
+							icon="bar-chart-2"
+						/>
+						<div class="home-signal-grid">
+							<article v-for="key in ['stock', 'banking', 'branch', 'cash_shift']" :key="key" class="home-signal-card">
+								<div class="home-signal-heading">
+									<h4>{{ homeSection(key).label || key }}</h4>
+									<button v-if="homeSection(key).route && homeSection(key).available" type="button" class="home-link" @click="openHomeRoute(homeSection(key).route)">Open</button>
+								</div>
+								<div v-if="homeSection(key).available && homeSection(key).summary.length" class="home-signal-list">
+									<div v-for="card in homeSection(key).summary.slice(0, 4)" :key="card.label">
+										<span>{{ card.label }}</span>
+										<strong>{{ formatHomeValue(card) }}</strong>
+									</div>
+								</div>
+								<p v-else class="home-unavailable">{{ homeSection(key).reason || "No signal is available for this scope." }}</p>
+							</article>
+							<article class="home-signal-card home-attention-card">
+								<div class="home-signal-heading"><h4>Attention</h4><span>{{ homeSnapshot.attention.length }}</span></div>
+								<div v-if="homeSnapshot.attention.length" class="home-attention-list">
+									<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeRoute(item.route)">
+										<span>{{ item.label }}</span>
+										<strong>{{ formatHomeValue(item) }}</strong>
+									</button>
+								</div>
+								<p v-else class="home-unavailable">No current attention items were found in the permitted scope.</p>
+							</article>
+						</div>
+					</div>
+				</section>
+
 				<section>
 					<div class="section-heading">
 						<div>
@@ -223,6 +281,7 @@ import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import { openQuickEntryMaster } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home_snapshot";
 const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
@@ -285,6 +344,17 @@ function fetchSharedContext({ force = false } = {}) {
 	return request;
 }
 
+function fetchHomeSnapshot(company, branch) {
+	return new Promise((resolve, reject) => {
+		frappe.call({
+			method: HOME_SNAPSHOT_METHOD,
+			args: { company: company || "", branch: branch || "" },
+			callback: (response) => resolve(response.message || {}),
+			error: (error) => reject(error),
+		});
+	});
+}
+
 export default {
 	name: "RetailEdgeBusinessHub",
 	components: {
@@ -312,6 +382,9 @@ export default {
 		return {
 			loading: true,
 			error: "",
+			homeLoading: false,
+			homeError: "",
+			homeSnapshot: { as_of_date: "", cards: [], sections: {}, attention: [] },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
 			salesInvoiceCompletionOpen: false,
@@ -388,13 +461,58 @@ export default {
 			this.loading = true;
 			this.error = "";
 			return fetchSharedContext({ force })
-				.then((data) => this.applyContext(data || {}))
+				.then((data) => {
+					this.applyContext(data || {});
+					return this.refreshHomeSnapshot();
+				})
 				.catch((error) => {
 					this.error = error?.message || "Unable to load Business Hub context.";
 				})
 				.finally(() => {
 					this.loading = false;
 				});
+		},
+		refreshHomeSnapshot() {
+			if (!this.context.company) {
+				this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, attention: [] };
+				return Promise.resolve();
+			}
+			this.homeLoading = true;
+			this.homeError = "";
+			return fetchHomeSnapshot(this.context.company, this.context.branch)
+				.then((snapshot) => {
+					this.homeSnapshot = {
+						as_of_date: snapshot.as_of_date || "",
+						cards: snapshot.cards || [],
+						sections: snapshot.sections || {},
+						attention: snapshot.attention || [],
+					};
+				})
+				.catch((error) => {
+					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, attention: [] };
+					this.homeError = error?.message || "Unable to load the current business snapshot.";
+				})
+				.finally(() => {
+					this.homeLoading = false;
+				});
+		},
+		homeSection(key) {
+			return this.homeSnapshot.sections?.[key] || { available: false, label: key, summary: [], route: "", reason: "" };
+		},
+		formatHomeValue(card) {
+			const value = card?.value ?? 0;
+			const datatype = card?.datatype || card?.type || "Data";
+			if (datatype === "Currency") {
+				try { return frappe.format(value, { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(); }
+			}
+			if (datatype === "Percent") return `${Number(value || 0).toLocaleString()}%`;
+			if (datatype === "Int" || datatype === "Float") return Number(value || 0).toLocaleString();
+			return String(value ?? "");
+		},
+		openHomeRoute(route) {
+			if (!route) return;
+			const normalized = String(route).replace(/^\/app\//, "");
+			frappe.set_route(...normalized.split("/").filter(Boolean));
 		},
 		openCreatePicker() {
 			if (!this.quickActions.length) return;
@@ -771,6 +889,108 @@ export default {
 .section-heading h3 {
 	margin: 2px 0 0;
 }
+.home-as-of {
+	font-size: 0.78rem;
+	color: var(--edge-text-muted, #667085);
+}
+.home-kpi-grid {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 12px;
+	margin-bottom: 14px;
+}
+.home-kpi-card,
+.home-signal-card {
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 12px;
+	background: var(--edge-surface, #ffffff);
+}
+.home-kpi-card {
+	display: grid;
+	gap: 6px;
+	padding: 16px;
+	text-align: left;
+	cursor: pointer;
+}
+.home-kpi-card:hover,
+.home-kpi-card:focus-visible {
+	border-color: var(--edge-primary, #2563eb);
+}
+.home-kpi-card span,
+.home-kpi-card small,
+.home-signal-list span,
+.home-unavailable {
+	color: var(--edge-text-muted, #667085);
+}
+.home-kpi-card strong {
+	font-size: 1.2rem;
+}
+.home-kpi-card small {
+	font-size: 0.72rem;
+}
+.home-signal-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+.home-signal-card {
+	padding: 16px;
+}
+.home-signal-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+.home-signal-heading h4 {
+	margin: 0;
+}
+.home-link {
+	border: 0;
+	background: transparent;
+	color: var(--edge-primary, #2563eb);
+	font-weight: 600;
+	cursor: pointer;
+}
+.home-signal-list {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+.home-signal-list > div {
+	display: grid;
+	gap: 3px;
+	padding: 10px;
+	border-radius: 9px;
+	background: var(--edge-surface-muted, #f8fafc);
+}
+.home-unavailable {
+	margin: 0;
+	font-size: 0.84rem;
+}
+.home-attention-list {
+	display: grid;
+	gap: 8px;
+}
+.home-attention-item {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	width: 100%;
+	padding: 9px 10px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 9px;
+	background: var(--edge-surface, #ffffff);
+	text-align: left;
+	cursor: pointer;
+}
+.home-attention-item.tone-danger {
+	border-color: var(--edge-danger, #d92d20);
+}
+.home-attention-item.tone-warning {
+	border-color: var(--edge-warning, #f79009);
+}
 .experience-grid {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -839,6 +1059,9 @@ export default {
 	white-space: nowrap;
 }
 @media (max-width: 1200px) {
+	.home-kpi-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
 	.experience-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
@@ -856,6 +1079,9 @@ export default {
 	.hub-banner-side {
 		width: 100%;
 	}
+	.home-kpi-grid,
+	.home-signal-grid,
+	.home-signal-list,
 	.experience-grid {
 		grid-template-columns: 1fr;
 	}
