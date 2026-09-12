@@ -53,7 +53,7 @@ def test_basket_affinity_existing_company_branch_and_product_cascades_remain():
 
 def test_basket_affinity_native_item_detail_remains_capability_gated():
 	source = VUE.read_text(encoding="utf-8")
-	open_start = source.lastindex("openReportCell(payload)") if False else source.rindex("openReportCell(payload)")
+	open_start = source.rindex("openReportCell(payload)")
 	open_block = source[open_start : open_start + 500]
 	assert "if (!this.canUseNativeDesk) return;" in open_block
 	assert "/app/item/" in open_block
