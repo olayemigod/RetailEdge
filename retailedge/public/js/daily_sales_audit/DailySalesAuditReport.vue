@@ -42,7 +42,7 @@
 				<div class="audit-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
-					<EdgeLinkField v-model="filters.pos_profile" label="POS Profile" placeholder="All POS profiles" :searcher="posProfileSearch" />
+					<EdgeLinkField v-model="filters.pos_profile" label="POS Profile" placeholder="All POS profiles" :searcher="posProfileSearch" @select="onPosProfileSelected" @clear="clearPosProfile" />
 					<EdgeLinkField v-model="filters.cashier" :selectedLabel="cashierLabel" label="Cashier" placeholder="All cashiers" :searcher="cashierSearch" @select="onCashierSelected" @clear="clearCashier" />
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
@@ -101,10 +101,13 @@ export default {
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.daily_sales_audit_page.search_daily_sales_audit_page_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.daily_sales_audit_page.search_daily_sales_audit_page_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, pos_profile: this.filters.pos_profile }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); }, posProfileSearch(txt) { return this.searchOptions("pos_profile", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.pos_profile = ""; this.branchName = ""; this.currentPage = 1; },
-		onBranchSelected(option) { this.filters.branch = option.value; this.branchName = option.label || option.value; this.currentPage = 1; }, clearBranch() { this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.pos_profile = ""; this.clearCashier(); this.branchName = ""; this.currentPage = 1; },
+		onBranchSelected(option) { this.filters.branch = option.value; this.filters.pos_profile = ""; this.clearCashier(); this.branchName = option.label || option.value; this.currentPage = 1; },
+		clearBranch() { this.filters.branch = ""; this.filters.pos_profile = ""; this.clearCashier(); this.branchName = ""; this.currentPage = 1; },
+		onPosProfileSelected(option) { this.filters.pos_profile = option?.value || ""; this.clearCashier(); this.currentPage = 1; },
+		clearPosProfile() { this.filters.pos_profile = ""; this.clearCashier(); this.currentPage = 1; },
 		onCashierSelected(option) { this.filters.cashier = option.value; this.cashierLabel = option.label || option.value; this.currentPage = 1; }, clearCashier() { this.filters.cashier = ""; this.cashierLabel = ""; this.currentPage = 1; },
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; return filters; },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
