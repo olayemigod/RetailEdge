@@ -69,6 +69,7 @@
 				:supplierLoading="supplierControlLoading"
 				:supplierError="supplierControlError"
 				:budget="earlyWarning.budget_spend || {}"
+				:canOpenNative="canUseNativeDesk"
 				@load-receivables="loadReceivablesControl"
 				@load-suppliers="loadSupplierControl"
 			/>
@@ -76,14 +77,14 @@
 			<EdgeDashboardGrid minColumnWidth="23rem">
 				<EdgeDashboardSection title="Critical Controls" description="Highest-priority operational or financial conditions requiring management attention.">
 					<div v-if="critical.length" class="control-list">
-						<BusinessControlRow v-for="item in critical" :key="itemKey(item)" :item="item" :busy="isMutating(item)" @open="openWorkflow" @follow-up="handleFollowUp" />
+						<BusinessControlRow v-for="item in critical" :key="itemKey(item)" :item="item" :busy="isMutating(item)" :canOpen="canOpenWorkflow(item)" @open="openWorkflow" @follow-up="handleFollowUp" />
 					</div>
 					<div v-else class="control-empty">No critical controls match the current scope and follow-up filters.</div>
 				</EdgeDashboardSection>
 
 				<EdgeDashboardSection title="Needs Attention" description="Warnings, early signals and operational exceptions that should be reviewed before they become critical.">
 					<div v-if="warnings.length" class="control-list">
-						<BusinessControlRow v-for="item in warnings" :key="itemKey(item)" :item="item" :busy="isMutating(item)" @open="openWorkflow" @follow-up="handleFollowUp" />
+						<BusinessControlRow v-for="item in warnings" :key="itemKey(item)" :item="item" :busy="isMutating(item)" :canOpen="canOpenWorkflow(item)" @open="openWorkflow" @follow-up="handleFollowUp" />
 					</div>
 					<div v-else class="control-empty">No warning controls match the current scope and follow-up filters.</div>
 				</EdgeDashboardSection>
@@ -107,7 +108,7 @@
 				<EdgeDashboardSection title="Control rules" description="Management follow-up never changes the accounting or operational truth." span="2">
 					<div class="control-note">
 						<strong>Follow-up is tracking, not resolution.</strong>
-						<span>Acknowledge, assignment, follow-up date and snooze update only the separate RetailEdge Action Follow Up record. Resolve the underlying condition in its owning RetailEdge workflow or authoritative ERPNext record/report. Native ERPNext/Frappe drill-through opens in a new tab.</span>
+						<span>Acknowledge, assignment, follow-up date and snooze update only the separate RetailEdge Action Follow Up record. Resolve the underlying condition in its owning RetailEdge workflow or authoritative ERPNext record/report. Authorised Advanced Native Desk users can open retained ERPNext/Frappe drill-through in a new tab.</span>
 					</div>
 				</EdgeDashboardSection>
 			</EdgeDashboardGrid>
@@ -165,6 +166,7 @@ export default {
 			supplierControlLoading: false,
 			supplierControlError: "",
 			menuItems: [],
+			canUseNativeDesk: false,
 			tenantName: "",
 			userName: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", follow_up_status: "All", assignment_scope: "all", due_scope: "all" },
@@ -200,6 +202,7 @@ export default {
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Business Control Centre controls."); }
 			finally { this.metadataLoading = false; }
@@ -329,7 +332,9 @@ export default {
 			], (values) => this.updateFollowUp(item, "snooze", values), "Snooze action", "Snooze");
 		},
 		isMutating(item) { return this.mutatingFingerprint === item.fingerprint; },
+		canOpenWorkflow(item) { return !["DocType", "Report"].includes(item?.target_type) || this.canUseNativeDesk; },
 		openWorkflow(item) {
+			if (!this.canOpenWorkflow(item)) return;
 			const route = item?.route;
 			if (!route) return;
 			if (item.open_mode === "new_tab") {
@@ -343,7 +348,7 @@ export default {
 		formatValue(value, datatype) { try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 	},
 };
 </script>

@@ -13,7 +13,7 @@
 			<span v-if="followUpStatus === 'Snoozed' && followUp.snoozed_until">Snoozed until: {{ formatDateTime(followUp.snoozed_until) }}</span>
 		</div>
 		<div class="control-actions">
-			<button class="edge-button edge-button--primary" type="button" :title="workflowTitle" @click="$emit('open', item)">Open workflow</button>
+			<button class="edge-button edge-button--primary" type="button" :disabled="!canOpen" :title="workflowTitle" @click="$emit('open', item)">{{ canOpen ? "Open workflow" : "Advanced workflow" }}</button>
 			<template v-if="item.follow_up_supported !== false && item.fingerprint">
 				<button v-if="followUpStatus !== 'Acknowledged'" class="edge-button" type="button" :disabled="busy" @click="$emit('follow-up', item, 'acknowledge')">Acknowledge</button>
 				<button class="edge-button" type="button" :disabled="busy" @click="$emit('follow-up', item, 'assign')">Assign</button>
@@ -31,12 +31,13 @@ export default {
 	props: {
 		item: { type: Object, required: true },
 		busy: { type: Boolean, default: false },
+		canOpen: { type: Boolean, default: true },
 	},
 	emits: ["open", "follow-up"],
 	computed: {
 		followUp() { return this.item.follow_up || { status: "Open", effective_status: "Open" }; },
 		followUpStatus() { return this.followUp.effective_status || this.followUp.status || "Open"; },
-		workflowTitle() { return this.item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open RetailEdge workflow"; },
+		workflowTitle() { if (!this.canOpen) return "Advanced Native Desk access is required for this workflow"; return this.item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open RetailEdge workflow"; },
 	},
 	methods: {
 		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
