@@ -75,6 +75,55 @@ async function apiGet(context, method, params = {}) {
 	return { response, payload, text };
 }
 
+test("RC3 searchable Create is permission-derived, focused and Escape-safe", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await page.getByRole("button", { name: "+ Create", exact: true }).click();
+
+		const search = page.getByRole("searchbox", { name: "Search permitted Create entries" });
+		await expect(search).toBeVisible();
+		await expect(search).toBeFocused();
+
+		const items = page.locator(".create-picker-item");
+		const permittedCount = await items.count();
+		expect(permittedCount).toBeGreaterThan(0);
+		await expect(page.locator(".guided-create-search-count")).toContainText("permitted");
+
+		await search.fill("stock");
+		const visibleItems = items.filter({ visible: true });
+		const visibleCount = await visibleItems.count();
+		expect(visibleCount).toBeGreaterThan(0);
+		for (let index = 0; index < visibleCount; index += 1) {
+			expect((await visibleItems.nth(index).innerText()).toLowerCase()).toContain("stock");
+		}
+
+		await search.fill("definitely-no-such-create-entry");
+		await expect(page.locator(".guided-create-search-empty")).toBeVisible();
+
+		await search.fill("stock");
+		await search.press("Escape");
+		await expect(search).toHaveValue("");
+		await expect(search).toBeVisible();
+		expect(await page.locator(".create-picker-item:not([hidden])").count()).toBe(permittedCount);
+	} finally {
+		await context.close();
+	}
+});
+
+test("RC3 Ctrl+K belongs to the permission-aware EdgeSuite product menu", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await page.keyboard.press("Control+K");
+		const search = page.locator("#edge-product-menu-dropdown:not([hidden]) .edge-product-menu__search");
+		await expect(search).toBeVisible();
+		await expect(search).toBeFocused();
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 owner/manager reaches the product Home and Action Centre", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
