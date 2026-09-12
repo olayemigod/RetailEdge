@@ -130,9 +130,15 @@ jobs:
       - name: Build browser candidate assets
         working-directory: frappe-bench
         run: |
-          bench build --app edgesuite_ui
-          bench build --app retailedge
+          # This bench was intentionally created with --skip-assets while apps
+          # were fetched. Browser acceptance needs the complete Frappe/ERPNext
+          # Desk runtime as well as EdgeSuite UI and RetailEdge bundles.
+          bench build
           bench --site retail-browser.localhost migrate
+
+          # Fail before Playwright if the native Desk shell was not built.
+          compgen -G "sites/assets/frappe/dist/js/desk.bundle*.js" > /dev/null
+          compgen -G "sites/assets/frappe/dist/css/desk.bundle*.css" > /dev/null
 
       - name: Install Playwright Chromium
         run: |
