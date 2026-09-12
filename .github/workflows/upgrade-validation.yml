@@ -1,0 +1,174 @@
+name: RetailEdge Upgrade Validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/upgrade-validation.yml"
+      - "retailedge/tests/upgrade_validation_fixture.py"
+      - "retailedge/patches.txt"
+      - "retailedge/patches/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    name: Frozen pre-MVP to current candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PRIOR_RETAILEDGE_SHA: 6a06153742610f38e48b3ffb683f497944999105
+
+    steps:
+      - name: Check out current RetailEdge candidate
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          check-latest: true
+
+      - name: Install bench prerequisites
+        run: |
+          for source in /etc/apt/sources.list.d/*; do
+            if sudo grep -q 'dl.google.com/linux/chrome-stable' "$source" 2>/dev/null; then
+              sudo rm -f "$source"
+            fi
+          done
+          sudo apt-get update
+          sudo apt-get install -y libmariadb-dev pkg-config redis-tools
+          python -m pip install --upgrade frappe-bench
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Create clean Frappe v16 bench
+        run: |
+          bench init             --frappe-branch version-16             --python "$(command -v python)"             --skip-assets             --skip-redis-config-generation             frappe-bench
+
+          cd frappe-bench
+          bench set-config -g db_host 127.0.0.1
+          bench set-config -g redis_cache redis://127.0.0.1:6379
+          bench set-config -g redis_queue redis://127.0.0.1:6379
+          bench set-config -g redis_socketio redis://127.0.0.1:6379
+
+      - name: Check out governed EdgeSuite UI candidate
+        uses: actions/checkout@v6
+        with:
+          repository: olayemigod/processedge-edge-suite-ui
+          ref: agent/reporting-standard-v1
+          token: ${{ secrets.EDGESUITE_UI_TOKEN }}
+          path: edgesuite-ui-source
+
+      - name: Fetch application set
+        working-directory: frappe-bench
+        run: |
+          bench get-app --branch version-16 --skip-assets https://github.com/frappe/erpnext.git
+          bench get-app --branch develop --skip-assets https://github.com/frappe/payments.git
+          bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
+          bench get-app --skip-assets "$GITHUB_WORKSPACE"
+
+      - name: Install frozen pre-MVP RetailEdge baseline
+        working-directory: frappe-bench
+        run: |
+          git -C apps/retailedge checkout --force "$PRIOR_RETAILEDGE_SHA"
+
+          bench new-site retail-upgrade.localhost             --db-host 127.0.0.1             --mariadb-root-password root             --admin-password admin             --no-mariadb-socket
+
+          bench --site retail-upgrade.localhost install-app payments
+          bench --site retail-upgrade.localhost install-app erpnext
+          bench --site retail-upgrade.localhost install-app edgesuite_ui
+          bench --site retail-upgrade.localhost install-app retailedge
+          bench --site retail-upgrade.localhost set-config allow_tests true
+
+      - name: Seed representative pre-upgrade accounting data
+        working-directory: frappe-bench
+        run: |
+          cp             "$GITHUB_WORKSPACE/retailedge/tests/upgrade_validation_fixture.py"             apps/retailedge/retailedge/tests/upgrade_validation_fixture.py
+
+          bench --site retail-upgrade.localhost execute             retailedge.tests.upgrade_validation_fixture.seed_upgrade_fixture
+
+          test -s /tmp/retailedge-upgrade-before.json
+          cat /tmp/retailedge-upgrade-before.json
+
+      - name: Switch RetailEdge to exact current candidate
+        working-directory: frappe-bench
+        run: |
+          git -C apps/retailedge reset --hard
+          git -C apps/retailedge checkout --force "$GITHUB_SHA"
+          test "$(git -C apps/retailedge rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Build and migrate upgraded site twice
+        working-directory: frappe-bench
+        run: |
+          bench build --app edgesuite_ui
+          bench build --app retailedge
+          bench --site retail-upgrade.localhost migrate
+          bench --site retail-upgrade.localhost migrate
+
+      - name: Verify submitted accounting truth survived migration
+        working-directory: frappe-bench
+        run: |
+          bench --site retail-upgrade.localhost execute             retailedge.tests.upgrade_validation_fixture.verify_upgrade_fixture
+
+      - name: Verify upgraded application set
+        working-directory: frappe-bench
+        run: |
+          bench --site retail-upgrade.localhost list-apps | tee /tmp/upgrade-installed-apps.txt
+          grep -Eq '^frappe[[:space:]]' /tmp/upgrade-installed-apps.txt
+          grep -Eq '^payments[[:space:]]' /tmp/upgrade-installed-apps.txt
+          grep -Eq '^erpnext[[:space:]]' /tmp/upgrade-installed-apps.txt
+          grep -Eq '^edgesuite_ui[[:space:]]' /tmp/upgrade-installed-apps.txt
+          grep -Eq '^retailedge[[:space:]]' /tmp/upgrade-installed-apps.txt
+          if grep -Eq '^coreedge[[:space:]]' /tmp/upgrade-installed-apps.txt; then
+            echo "CoreEdge must not be installed in standalone RetailEdge upgrade validation."
+            exit 1
+          fi
+
+      - name: Run current RetailEdge suite on upgraded site
+        working-directory: frappe-bench
+        shell: bash
+        run: |
+          set -o pipefail
+          bench --site retail-upgrade.localhost run-tests --app retailedge 2>&1 | tee /tmp/retailedge-upgrade-tests.log
+
+      - name: Preserve upgrade failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retailedge-upgrade-validation-failure
+          path: |
+            /tmp/retailedge-upgrade-before.json
+            /tmp/retailedge-upgrade-tests.log
+          if-no-files-found: ignore
+          retention-days: 3
