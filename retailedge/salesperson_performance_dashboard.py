@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import cstr
+from frappe.utils import cstr, getdate
+
+from retailedge.branch_context import has_field
 
 from retailedge.branch_performance import assert_can_access_branch_performance
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.reporting.date_ranges import get_preset_dates
+from retailedge.sales_reporting import MAX_INVOICE_SCAN_ROWS
 from retailedge.salesperson_performance import (
 	MAX_EXPORT_ROWS,
 	MAX_LINK_RESULTS,
@@ -208,27 +211,162 @@ def _search_branches(like: str, company: str, scope: dict | None = None) -> list
 	return _search_doctype("Branch", like.strip("%"), filters=filters)
 
 
+def _salesperson_option_invoice_filters(
+	*,
+	company: str,
+	branch: str = "",
+	from_date: str = "",
+	to_date: str = "",
+) -> dict | None:
+	"""Return submitted Sales Invoice filters under the dashboard's existing read-scope authority."""
+	scope = resolve_salesperson_performance_read_scope(
+		{"company": company, "branch": branch},
+		user=frappe.session.user,
+	)
+	filters: dict = {"docstatus": 1, "company": scope.get("company")}
+
+	if bool(from_date) != bool(to_date):
+		frappe.throw(_("From Date and To Date must both be supplied for scoped Salesperson options."))
+	if from_date and to_date:
+		if getdate(from_date) > getdate(to_date):
+			frappe.throw(_("From Date cannot be after To Date."))
+		filters["posting_date"] = ["between", [from_date, to_date]]
+
+	branch_field = (
+		"retailedge_branch"
+		if has_field("Sales Invoice", "retailedge_branch")
+		else ("branch" if has_field("Sales Invoice", "branch") else None)
+	)
+	resolved_branch = cstr(scope.get("branch") or "").strip()
+	restricted = bool(scope.get("_branch_scope_restricted"))
+	allowed = list(scope.get("_allowed_branches") or [])
+
+	if resolved_branch:
+		if not branch_field:
+			return None
+		filters[branch_field] = resolved_branch
+	elif restricted:
+		if not branch_field or not allowed:
+			return None
+		filters[branch_field] = ["in", allowed]
+
+	return filters
+
+
+def _search_scoped_customers(txt: str, invoice_filters: dict | None) -> list[dict]:
+	if not invoice_filters:
+		return []
+	like = f"%{txt}%"
+	rows = frappe.get_list(
+		"Sales Invoice",
+		filters=invoice_filters,
+		or_filters={
+			"customer": ["like", like],
+			"customer_name": ["like", like],
+		},
+		fields=["customer", "customer_name"],
+		group_by="customer, customer_name",
+		order_by="customer_name asc, customer asc",
+		limit_page_length=MAX_LINK_RESULTS,
+	)
+	customers = [cstr(row.get("customer")).strip() for row in rows if cstr(row.get("customer")).strip()]
+	if not customers:
+		return []
+	return _search_doctype(
+		"Customer",
+		txt,
+		fields=["name", "customer_name"],
+		filters={"name": ["in", customers]},
+	)
+
+
+def _search_scoped_salespeople(txt: str, invoice_filters: dict | None) -> list[dict]:
+	if not invoice_filters:
+		return []
+	invoices = frappe.get_list(
+		"Sales Invoice",
+		filters=invoice_filters,
+		fields=["name"],
+		order_by="posting_date desc, creation desc, name desc",
+		limit_page_length=MAX_INVOICE_SCAN_ROWS + 1,
+	)
+	if len(invoices) > MAX_INVOICE_SCAN_ROWS:
+		frappe.throw(
+			_(
+				"More than {0} submitted Sales Invoices match this Salesperson option scope. Narrow the date range before searching."
+			).format(MAX_INVOICE_SCAN_ROWS)
+		)
+	invoice_names = [row.get("name") for row in invoices if row.get("name")]
+	if not invoice_names:
+		return []
+
+	team_rows = frappe.get_all(
+		"Sales Team",
+		filters={
+			"parenttype": "Sales Invoice",
+			"parent": ["in", invoice_names],
+			"sales_person": ["like", f"%{txt}%"],
+		},
+		fields=["sales_person"],
+		group_by="sales_person",
+		order_by="sales_person asc",
+		limit_page_length=MAX_LINK_RESULTS * 3,
+	)
+	candidates = [
+		cstr(row.get("sales_person")).strip()
+		for row in team_rows
+		if cstr(row.get("sales_person")).strip()
+	]
+	if not candidates:
+		return []
+	return _search_doctype(
+		"Sales Person",
+		txt,
+		filters=[
+			["Sales Person", "enabled", "=", 1],
+			["Sales Person", "name", "in", candidates],
+		],
+	)
+
+
 @frappe.whitelist()
-def search_salesperson_dashboard_options(kind: str, txt: str = "", company: str = "") -> list[dict]:
+def search_salesperson_dashboard_options(
+	kind: str,
+	txt: str = "",
+	company: str = "",
+	branch: str = "",
+	from_date: str = "",
+	to_date: str = "",
+) -> list[dict]:
 	assert_can_access_branch_performance(frappe.session.user)
 	kind = cstr(kind).strip().lower()
 	txt = cstr(txt).strip()
 	company = cstr(company or _default_company()).strip()
+	branch = cstr(branch).strip()
+	from_date = cstr(from_date).strip()
+	to_date = cstr(to_date).strip()
 	like = f"%{txt}%"
+
 	if kind == "company":
 		return _search_doctype("Company", txt, filters={"name": ["like", like]})
-	scope = resolve_salesperson_performance_read_scope({"company": company}, user=frappe.session.user)
 	if kind == "branch":
-		return _search_branches(like, company, scope)
-	if kind == "salesperson":
-		return _search_doctype("Sales Person", txt, filters={"enabled": 1, "name": ["like", like]})
-	if kind == "customer":
-		return _search_doctype(
-			"Customer",
-			txt,
-			fields=["name", "customer_name"],
-			or_filters={"name": ["like", like], "customer_name": ["like", like]},
+		scope = resolve_salesperson_performance_read_scope(
+			{"company": company},
+			user=frappe.session.user,
 		)
+		return _search_branches(like, company, scope)
+	if kind in {"salesperson", "customer"}:
+		invoice_filters = _salesperson_option_invoice_filters(
+			company=company,
+			branch=branch,
+			from_date=from_date,
+			to_date=to_date,
+		)
+		if kind == "salesperson":
+			return _search_scoped_salespeople(txt, invoice_filters)
+		return _search_scoped_customers(txt, invoice_filters)
+
+	resolve_salesperson_performance_read_scope({"company": company}, user=frappe.session.user)
 	if kind == "item":
 		return _search_doctype(
 			"Item",
