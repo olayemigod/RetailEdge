@@ -37,7 +37,20 @@ def _first_cost_center(company: str) -> str:
 	return str(name)
 
 
+def _ensure_warehouse_type(name: str) -> None:
+	if frappe.db.exists("Warehouse Type", name):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "Warehouse Type",
+			"name": name,
+			"description": f"Upgrade validation prerequisite: {name}",
+		}
+	).insert()
+
+
 def _ensure_company():
+	_ensure_warehouse_type("Transit")
 	if frappe.db.exists("Company", COMPANY):
 		return frappe.get_doc("Company", COMPANY)
 	return frappe.get_doc(
