@@ -18,6 +18,30 @@
 		return global.EdgeSuiteUI || global.EdgeUI || null;
 	}
 
+	let nativeDeskAccessPromise = null;
+
+	async function resolveNativeDeskAccess() {
+		if (!nativeDeskAccessPromise) {
+			nativeDeskAccessPromise = (async () => {
+				try {
+					let context = {};
+					if (typeof global.retailedgeGetBusinessHubContext === "function") {
+						context = await global.retailedgeGetBusinessHubContext();
+					} else {
+						const response = await global.frappe.call({
+							method: "retailedge.master_experience.get_master_retailedge_business_hub_context",
+						});
+						context = response?.message || {};
+					}
+					return Boolean(context?.access?.can_use_native_desk);
+				} catch (_error) {
+					return false;
+				}
+			})();
+		}
+		return nativeDeskAccessPromise;
+	}
+
 	function t(text, args) {
 		return typeof global.__ === "function" ? global.__(text, args) : text;
 	}
@@ -171,20 +195,7 @@
 				}
 
 				async function loadAccessContext() {
-					try {
-						let context = {};
-						if (typeof global.retailedgeGetBusinessHubContext === "function") {
-							context = await global.retailedgeGetBusinessHubContext();
-						} else {
-							const response = await global.frappe.call({
-								method: "retailedge.master_experience.get_master_retailedge_business_hub_context",
-							});
-							context = response?.message || {};
-						}
-						state.canUseNativeDesk = Boolean(context?.access?.can_use_native_desk);
-					} catch (_error) {
-						state.canUseNativeDesk = false;
-					}
+					state.canUseNativeDesk = await resolveNativeDeskAccess();
 				}
 
 				async function refresh() {
@@ -237,13 +248,9 @@
 					refresh();
 				}
 
-				function routeToDocument(doctype, name) {
-					if (doctype && name) global.frappe.set_route("Form", doctype, name);
-				}
-
 				function routeToNativeDocument(doctype, name) {
 					if (!state.canUseNativeDesk) return;
-					routeToDocument(doctype, name);
+					if (doctype && name) global.frappe.set_route("Form", doctype, name);
 				}
 
 				function toggleSort(key) {
@@ -719,9 +726,10 @@
 					const canRequestApproval = confirmed && approvalRequired && !approvalSatisfied && !canApprove;
 					const category = businessCategory(evidence.transaction_category, evidence.candidate_category, state.review.candidateSnapshot?.transaction_category, state.review.candidateSnapshot?.candidate_category);
 					const recordBadge = confirmed ? (doc.execution_status === "Executed" || doc.execution_status === "Already Handled" ? t("Reconciled Record") : t("Confirmed Candidate")) : t("Suggested Candidate");
-					const recordLinks = [
-						actionButton(t("Open Audit Record"), "secondary", () => routeToDocument("RetailEdge Bank Transaction Match", state.review.matchName)),
-					];
+					const recordLinks = [];
+					if (state.canUseNativeDesk && state.review.matchName) {
+						recordLinks.push(actionButton(t("Open Audit Record"), "secondary", () => routeToNativeDocument("RetailEdge Bank Transaction Match", state.review.matchName)));
+					}
 					if (state.canUseNativeDesk && doc.bank_transaction) {
 						recordLinks.push(actionButton(t("Open Bank Transaction"), "secondary", () => routeToNativeDocument("Bank Transaction", doc.bank_transaction)));
 					}
@@ -892,6 +900,12 @@
 		});
 	}
 
+	async function configureNativeReportMenu(page) {
+		if (!(await resolveNativeDeskAccess())) return;
+		page.add_menu_item(t("Open Matching Report"), () => global.frappe.set_route("query-report", "RetailEdge Bank Transaction Matching"));
+		page.add_menu_item(t("Open Reconciliation Readiness Report"), () => global.frappe.set_route("query-report", "RetailEdge Bank Match Reconciliation Readiness"));
+	}
+
 	function boot(wrapper) {
 		const runtime = edgeRuntime();
 		if (!runtime?.createEdgeApp || !runtime?.Vue) {
@@ -906,8 +920,7 @@
 			title: t("Bank Matching & Reconciliation"),
 			single_column: true,
 		});
-		page.add_menu_item(t("Open Matching Report"), () => global.frappe.set_route("query-report", "RetailEdge Bank Transaction Matching"));
-		page.add_menu_item(t("Open Reconciliation Readiness Report"), () => global.frappe.set_route("query-report", "RetailEdge Bank Match Reconciliation Readiness"));
+		void configureNativeReportMenu(page);
 		const app = runtime.createEdgeApp(createWorkspaceComponent(runtime, page));
 		app.mount(page.main[0]);
 		wrapper.retailedgeBankingApp = app;
