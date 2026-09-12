@@ -147,6 +147,32 @@ test("RC3 Ctrl+K belongs to the permission-aware EdgeSuite product menu", async 
 	}
 });
 
+test("RC3 Ctrl+S is consumed by the EdgeSuite save safety guard on non-form Pages", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const beforeUrl = page.url();
+		await page.evaluate(() => {
+			window.__retailedgeRc3CtrlSLeak = false;
+			window.addEventListener(
+				"keydown",
+				(event) => {
+					if (event.ctrlKey && String(event.key || "").toLowerCase() === "s") {
+						window.__retailedgeRc3CtrlSLeak = true;
+					}
+				},
+				true
+			);
+		});
+		await page.keyboard.press("Control+S");
+		await page.waitForTimeout(150);
+		expect(await page.evaluate(() => window.__retailedgeRc3CtrlSLeak)).toBeFalsy();
+		expect(page.url()).toBe(beforeUrl);
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 owner/manager reaches the product Home and Action Centre", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
