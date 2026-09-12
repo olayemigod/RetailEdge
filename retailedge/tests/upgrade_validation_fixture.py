@@ -9,7 +9,10 @@ from frappe.utils import add_days, flt, nowdate
 COMPANY = "RetailEdge Upgrade CI"
 ABBR = "REU"
 CUSTOMER = "RetailEdge Upgrade Customer"
+CUSTOMER_GROUP = "RetailEdge Upgrade Customers"
+TERRITORY = "RetailEdge Upgrade Territory"
 ITEM = "RE-UPGRADE-SERVICE"
+ITEM_GROUP = "RetailEdge Upgrade Items"
 SNAPSHOT_PATH = Path("/tmp/retailedge-upgrade-before.json")
 
 
@@ -49,6 +52,70 @@ def _ensure_warehouse_type(name: str) -> None:
 	).insert()
 
 
+def _ensure_tree_master(
+	doctype: str,
+	name_field: str,
+	root_name: str,
+	leaf_name: str,
+	parent_field: str,
+) -> None:
+	if not frappe.db.exists(doctype, root_name):
+		frappe.get_doc(
+			{
+				"doctype": doctype,
+				name_field: root_name,
+				"is_group": 1,
+			}
+		).insert()
+	if not frappe.db.exists(doctype, leaf_name):
+		frappe.get_doc(
+			{
+				"doctype": doctype,
+				name_field: leaf_name,
+				parent_field: root_name,
+				"is_group": 0,
+			}
+		).insert()
+
+
+def _ensure_uom(name: str) -> None:
+	if frappe.db.exists("UOM", name):
+		return
+	frappe.get_doc(
+		{
+			"doctype": "UOM",
+			"uom_name": name,
+			"enabled": 1,
+			"must_be_whole_number": 1 if name == "Nos" else 0,
+		}
+	).insert()
+
+
+def _ensure_transaction_masters() -> None:
+	_ensure_tree_master(
+		"Customer Group",
+		"customer_group_name",
+		"All Customer Groups",
+		CUSTOMER_GROUP,
+		"parent_customer_group",
+	)
+	_ensure_tree_master(
+		"Territory",
+		"territory_name",
+		"All Territories",
+		TERRITORY,
+		"parent_territory",
+	)
+	_ensure_tree_master(
+		"Item Group",
+		"item_group_name",
+		"All Item Groups",
+		ITEM_GROUP,
+		"parent_item_group",
+	)
+	_ensure_uom("Nos")
+
+
 def _ensure_company():
 	_ensure_warehouse_type("Transit")
 	if frappe.db.exists("Company", COMPANY):
@@ -72,8 +139,8 @@ def _ensure_customer() -> None:
 			"doctype": "Customer",
 			"customer_name": CUSTOMER,
 			"customer_type": "Company",
-			"customer_group": "All Customer Groups",
-			"territory": "All Territories",
+			"customer_group": CUSTOMER_GROUP,
+			"territory": TERRITORY,
 		}
 	).insert()
 
@@ -86,7 +153,7 @@ def _ensure_item() -> None:
 			"doctype": "Item",
 			"item_code": ITEM,
 			"item_name": "RetailEdge Upgrade Service",
-			"item_group": "All Item Groups",
+			"item_group": ITEM_GROUP,
 			"stock_uom": "Nos",
 			"is_stock_item": 0,
 		}
@@ -113,6 +180,7 @@ def _ledger_snapshot(invoice: str) -> dict:
 def seed_upgrade_fixture() -> dict:
 	"""Create representative setup + submitted accounting truth on the frozen pre-MVP baseline."""
 	company = _ensure_company()
+	_ensure_transaction_masters()
 	_ensure_customer()
 	_ensure_item()
 
