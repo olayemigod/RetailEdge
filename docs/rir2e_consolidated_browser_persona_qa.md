@@ -1,15 +1,14 @@
-# RetailEdge RIR2E — Consolidated browser/persona QA
+# RetailEdge MVP RC3 — Consolidated exact-head browser/persona QA
 
 ## Authority and status
 
 - **Authoritative PR:** #55
 - **Authoritative branch:** `qa/retailedge-reconciled-20260902`
-- **Preflight source baseline:** `aa5d37a53b7a6b79eed1637769e3b85617e0fa29`
-- **Stage:** RIR2E — consolidated local browser/persona QA
+- **MVP candidate:** current PR #55 exact head deployed to `retail.local`
+- **Stage:** RC3 — consolidated local browser/persona acceptance
 - **Execution status:** **NOT RUN**
 - **Target QA site:** `retail.local`
-- **Reporting:** remains blocked
-- **B4B26:** remains paused until this browser/persona gate is completed and the reconciled baseline is frozen
+- **Release status:** **BLOCKED** until RC3 and the release upgrade gate pass
 
 This is the single execution record for the final reconciliation browser/persona gate. It consolidates the current PR #55 contracts and reuses useful detail from earlier module-specific browser QA documents without inheriting their obsolete PR #23 branch assumptions or superseded promotion decisions.
 
@@ -38,7 +37,7 @@ When an older browser document conflicts with the current route matrix or later 
 - `branch-assignments` remains System Manager-only through consolidated RetailEdge Setup; it must not appear as a general operator route.
 - Daily Sales Audit, Expense Review and Cash Shift Verification are current Business Hub Pages with native/report fallback retained where defined by the route matrix.
 - Stock Movement History remains on its existing Query Report as the normal route until its explicit Page parity gate is separately completed.
-- The current Business Hub remains product Home for this reconciliation stage. A later MVP Business Hub/Home enhancement is outside this QA gate.
+- The current Business Hub MVP Home is in scope. QA must verify the Today command centre, permitted KPI cards, Stock/Banking/Branch/Cash Shift sections, Attention items, quick actions, and graceful degradation for personas without management-dashboard permissions.
 
 ## Exact-head preflight
 
@@ -87,6 +86,7 @@ The branch fixtures must exercise the current authority rule: once Branch Assign
 For each applicable persona:
 
 - Business Hub loads as the normal RetailEdge Home with one EdgeSuite shell and no competing native sidebar.
+- Business Hub Today cards and Stock/Banking/Branch/Cash Shift/Attention signals load within the selected Company/Branch scope; unavailable management sections degrade independently without disabling permitted operational actions.
 - Product menu and sidebar expose only routes permitted for that user.
 - Direct URL access does not bypass Frappe Page/DocType/report permissions or EdgeSuite-only restrictions.
 - Everyday EdgeSuite-only users are not forced into Native Desk for flows already declared supported in RetailEdge.
@@ -129,9 +129,14 @@ For every creation flow:
 
 - Company/Branch/dependent Link fields cascade to permitted values only.
 - Server validation rejects manipulated or stale dependent values.
-- The result is an ERPNext/RetailEdge **draft** or normal Quick Entry record according to the existing workflow contract.
-- No guided UI silently submits, posts, reconciles, mutates GL/SLE, bypasses permissions or changes submitted documents.
-- Advanced completion opens native ERPNext only where the current access-mode contract explicitly permits it.
+- Guided entry first creates an ERPNext/RetailEdge **draft** or normal Quick Entry record according to the existing workflow contract.
+- Where RetailEdge owns a standard completion surface, the saved draft must continue into EdgeSuite review rather than stranding an EdgeSuite-only user.
+- Sales Invoice, Purchase Invoice, internal Cash/Bank Transfer, Stock Transfer, and Stock Adjustment completion must show server-authoritative blockers/readiness before any transition.
+- Active Frappe Workflow must take precedence; only server-returned workflow actions may be applied.
+- Direct standard completion may submit only through the normal ERPNext document `submit()` path with normal submit permission and stale-version protection.
+- Serial/Batch-managed, amended, specialist valuation, or otherwise advanced stock cases must remain explicit Advanced ERPNext boundaries.
+- No guided or completion UI may directly mutate GL/SLE, valuation truth, docstatus/workflow state, bypass permissions, or change submitted documents.
+- Advanced ERPNext fallback appears only where the current Native Desk capability contract explicitly permits it.
 
 ### Stock Transfer branch cases
 
@@ -222,7 +227,9 @@ RIR2E cannot pass with any unresolved defect in these classes:
 7. Universal `+ Create` or its searchable Create picker missing/broken for a persona that should have it;
 8. guided action exposing an action/Company/Branch/Warehouse/account the server does not permit;
 9. Professional Selling/Purchasing operational guard missing at runtime;
-10. required asset 404, uncaught runtime exception or shell failure preventing a core persona workflow.
+10. required asset 404, uncaught runtime exception or shell failure preventing a core persona workflow;
+11. Business Hub management cards, attention counts, or drill-through reveal another Company/Branch or break the ordinary user's permitted quick actions;
+12. a standard guided Stock Transfer/Stock Adjustment leaves an EdgeSuite-only user with no completion path, or its completion bypasses Frappe Workflow / ERPNext stock authority.
 
 Blocker-only fixes found during this stage must remain narrowly scoped, preserve the reconciled branch composition, receive regression coverage where practical, and rerun the exact-head automated gates before browser retest.
 
@@ -271,4 +278,4 @@ RIR2E may be frozen only when:
 - no unresolved permission, branch-scope, runtime/asset, route-composition or submitted-document safety defect remains;
 - the final PASS record identifies the exact tested SHA.
 
-Until then PR #55 remains draft/open/unmerged, reporting stays blocked and B4B26 remains paused.
+Until then PR #55 remains draft/open/unmerged and the RetailEdge MVP must not be tagged or released.
