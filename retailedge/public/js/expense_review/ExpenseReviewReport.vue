@@ -44,8 +44,8 @@
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.cashier" :selectedLabel="cashierLabel" label="Cashier" placeholder="All cashiers" :searcher="cashierSearch" @select="onCashierSelected" @clear="clearCashier" />
 					<EdgeLinkField v-model="filters.expense_category" label="Expense Category" placeholder="All categories" :searcher="categorySearch" />
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onReviewDateChange" /></label>
+					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onReviewDateChange" /></label>
 					<label class="edge-field"><span class="edge-field-label">Review Status</span><select v-model="filters.daily_audit_inclusion_status" class="edge-input"><option value="">All</option><option value="Pending Review">Pending Review</option><option value="Included">Included</option><option value="Excluded">Excluded</option><option value="Needs Clarification">Needs Clarification</option></select></label>
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
@@ -108,10 +108,12 @@ export default {
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
 		hasPageTarget(target) { return Boolean(target && this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target)); },
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.expense_review.search_expense_review_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.expense_review.search_expense_review_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, from_date: this.filters.from_date, to_date: this.filters.to_date }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); }, categorySearch(txt) { return this.searchOptions("expense_category", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
-		onBranchSelected(option) { this.filters.branch = option.value; this.branchName = option.label || option.value; this.currentPage = 1; }, clearBranch() { this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.clearCashier(); this.branchName = ""; this.currentPage = 1; },
+		onBranchSelected(option) { this.filters.branch = option.value; this.clearCashier(); this.branchName = option.label || option.value; this.currentPage = 1; },
+		clearBranch() { this.filters.branch = ""; this.clearCashier(); this.branchName = ""; this.currentPage = 1; },
+		onReviewDateChange() { this.clearCashier(); this.currentPage = 1; },
 		onCashierSelected(option) { this.filters.cashier = option.value; this.cashierLabel = option.label || option.value; this.currentPage = 1; }, clearCashier() { this.filters.cashier = ""; this.cashierLabel = ""; this.currentPage = 1; },
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; return filters; },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
