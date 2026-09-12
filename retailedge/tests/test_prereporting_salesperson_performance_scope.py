@@ -153,7 +153,7 @@ class TestPrereportingSalespersonPerformanceReadScope(unittest.TestCase):
 			) as resolve_scope,
 			patch.object(dashboard, "_search_doctype", return_value=[]) as search,
 		):
-			dashboard.search_salesperson_dashboard_options("salesperson", "Ada", company="Scope Co")
+			dashboard.search_salesperson_dashboard_options("item", "Widget", company="Scope Co")
 
 		resolve_scope.assert_called_once_with({"company": "Scope Co"}, user=frappe.session.user)
 		search.assert_called_once()
