@@ -89,11 +89,13 @@ def search_cash_shift_verification_options(
 		rows = branch_query("Branch", txt, "name", 0, MAX_LINK_RESULTS, {"company": company})
 		return [{"value": row[0], "label": row[0]} for row in rows]
 	if kind == "cashier":
-		return _search_scoped_cashiers(
-			txt=txt,
-			read_scope=read_scope,
-			pos_profile=pos_profile,
-		)
+		if pos_profile:
+			return _search_scoped_cashiers(
+				txt=txt,
+				read_scope=read_scope,
+				pos_profile=pos_profile,
+			)
+		return _search_scoped_cashiers(txt=txt, read_scope=read_scope)
 	if kind == "pos_profile":
 		return _search_scoped_pos_profiles(
 			txt=txt,
