@@ -895,7 +895,8 @@
 				}
 
 				onMounted(async () => {
-					await Promise.all([loadShellContext(), refresh()]);
+					await loadShellContext();
+					await refresh();
 				});
 				global.retailedgeBankingWorkspaceRefresh = refresh;
 
