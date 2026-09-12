@@ -101,6 +101,18 @@ BUSINESS_EXPENSE_ITEM: dict[str, Any] = {
 BUSINESS_EXPENSE_NATIVE_PEER_DOCTYPE = "RetailEdge Business Expense"
 EXPENSE_CATEGORY_NATIVE_PEER_DOCTYPE = "RetailEdge Expense Category"
 
+BUSINESS_EXPENSE_QUICK_ACTION: dict[str, Any] = {
+	"key": "record-expense",
+	"label": "Record Expense",
+	"description": "Record a non-POS business expense with evidence, approval and accounting controls.",
+	"doctype": BUSINESS_EXPENSE_NATIVE_PEER_DOCTYPE,
+	"icon": "credit-card",
+	"experience": "act",
+	"mode": "page",
+	"target_type": "Page",
+	"target": "business-expenses",
+}
+
 DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
 	"label": "Document Output & Sharing",
 	"description": "Print, download and share customer documents using ERPNext Print Formats and permissions.",
@@ -617,6 +629,19 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_contain_native_navigation_for_edgesuite_only(context)
 
 	quick_actions = list(context.get("quick_actions") or [])
+	if (
+		_business_expenses_enabled()
+		and _can_open_page(BUSINESS_EXPENSE_ITEM["target"])
+		and frappe.db.exists("DocType", BUSINESS_EXPENSE_NATIVE_PEER_DOCTYPE)
+		and frappe.has_permission(BUSINESS_EXPENSE_NATIVE_PEER_DOCTYPE, "create")
+	):
+		quick_actions = [
+			deepcopy(BUSINESS_EXPENSE_QUICK_ACTION)
+			if action.get("key") == "record-expense"
+			else action
+			for action in quick_actions
+		]
+
 	existing_keys = {action.get("key") for action in quick_actions}
 	for action in MASTER_ACTIONS:
 		if action["key"] in existing_keys or not _can_create_master(action["doctype"]):
