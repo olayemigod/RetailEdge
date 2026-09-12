@@ -27,9 +27,9 @@
 						class="edge-button"
 						type="button"
 						@click="newScenario"
-						:disabled="!filters.company || !canCreateScenario"
-						:title="canCreateScenario ? 'Save the current assumptions as a Planning Scenario' : 'You do not have permission to create Planning Scenarios'"
-					>Save as Scenario</button>
+						:disabled="!filters.company || !canCreateScenario || !canUseNativeDesk"
+						:title="!canUseNativeDesk ? 'Advanced workflow: Native Desk access is required to save Planning Scenarios' : (canCreateScenario ? 'Save the current assumptions as a Planning Scenario' : 'You do not have permission to create Planning Scenarios')"
+					>{{ canUseNativeDesk ? "Save as Scenario" : "Advanced: Save Scenario" }}</button>
 					<EdgeExportMenu v-if="rows.length" :dataset="exportDataset" :loadDataset="loadExportDataset" />
 				</div>
 			</header>
@@ -96,7 +96,7 @@
 				</section>
 
 				<section v-if="scenarioName" class="panel">
-					<div class="panel-heading"><div><p class="eyebrow">Forecast vs Actual</p><h3>{{ scenarioLabel || scenarioName }}</h3></div><button class="edge-button" type="button" @click="openScenario">Open Scenario</button></div>
+					<div class="panel-heading"><div><p class="eyebrow">Forecast vs Actual</p><h3>{{ scenarioLabel || scenarioName }}</h3></div><button class="edge-button" type="button" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the Planning Scenario record' : 'Advanced workflow: Native Desk access is required to open Planning Scenario records'" @click="openScenario">{{ canUseNativeDesk ? "Open Scenario" : "Advanced: Open Scenario" }}</button></div>
 					<EdgeLoadingState v-if="performanceLoading" message="Loading scenario performance…" :skeleton="true" />
 					<EdgeErrorState v-else-if="performanceError" title="Scenario performance could not load" :message="performanceError" @retry="fetchPerformance" />
 					<EdgeEmptyState v-else-if="!performanceRows.length" title="No completed scenario periods" description="No forecast months in this scenario have completed actuals yet." />
@@ -120,7 +120,7 @@ export default {
 	data() { return {
 		edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "", loading: false, dataError: "",
 		rows: [], columns: [], summary: [], domains: {}, scope: {}, metadata: {}, companyCurrency: "",
-		tenantName: "", branchName: "", userName: "", menuItems: [], canCreateScenario: false,
+		tenantName: "", branchName: "", userName: "", menuItems: [], canCreateScenario: false, canUseNativeDesk: false,
 		scenarioName: "", scenarioLabel: "", performanceRows: [], performanceSummary: [], performanceLoading: false, performanceError: "",
 		filters: { company: "", branch: "", as_of_date: "", history_months: 6, forecast_months: 3, sales_adjustment_percent: 0, expense_adjustment_percent: 0, cash_adjustment_percent: 0, inventory_safety_percent: 10 },
 	}; },
@@ -149,6 +149,7 @@ export default {
 				this.filters.company = context.default_filters?.company || ""; this.filters.branch = context.default_filters?.branch || ""; this.filters.as_of_date = frappe.datetime.get_today();
 				this.tenantName = context.tenant_name || this.filters.company; this.branchName = context.branch_name || this.filters.branch; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigation(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				const opts = frappe.route_options || {}; if (opts.company) this.filters.company = opts.company; if (opts.branch !== undefined) this.filters.branch = opts.branch || "";
 				if (opts.scenario) { this.scenarioName = opts.scenario; await this.loadScenario(opts.scenario); } else if (this.filters.company) await this.fetchData();
 			} catch (e) { this.metadataError = message(e, "Failed to load Forecasting & Planning controls."); }
@@ -156,7 +157,7 @@ export default {
 		},
 		mapNavigation(groups) { return groups.map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeFor(item) })) })); },
 		routeFor(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((g) => g.items || []).find((x) => x.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else window.open(route, "_blank", "noopener,noreferrer"); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((g) => g.items || []).find((x) => x.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else window.open(route, "_blank", "noopener,noreferrer"); },
 		async searchOptions(kind, txt) { const result = await call("retailedge.sales_reporting.search_sales_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); },
 		async scenarioSearch(txt) { if (!this.filters.company) return []; const rows = await call("retailedge.planning_scenario_api.search_planning_scenarios", { txt: txt || "", company: this.filters.company, branch: this.filters.branch || "" }); return Array.isArray(rows) ? rows : []; },
@@ -167,7 +168,7 @@ export default {
 		async fetchData() { if (!this.filters.company) return; this.loading = true; this.dataError = ""; try { const result = await call(this.pageMethod, { filters: { ...this.filters } }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.domains = result.domains || {}; this.scope = result.scope || {}; this.metadata = result.metadata || {}; this.companyCurrency = result.company_currency || this.companyCurrency; } catch (e) { this.dataError = message(e, "Failed to build Forecasting & Planning data."); } finally { this.loading = false; } },
 		async fetchPerformance() { if (!this.scenarioName) return; this.performanceLoading = true; this.performanceError = ""; try { const result = await call("retailedge.scenario_performance.get_scenario_performance", { scenario: this.scenarioName }); this.performanceRows = result.rows || []; this.performanceSummary = result.summary || []; } catch (e) { this.performanceError = message(e, "Failed to load forecast-vs-actual performance."); } finally { this.performanceLoading = false; } },
 		newScenario() {
-			if (!this.canCreateScenario || !this.filters.company) return;
+			if (!this.canUseNativeDesk || !this.canCreateScenario || !this.filters.company) return;
 			frappe.new_doc("RetailEdge Planning Scenario", {
 				company: this.filters.company,
 				branch: this.filters.branch,
@@ -180,7 +181,7 @@ export default {
 				inventory_safety_percent: this.filters.inventory_safety_percent,
 			});
 		},
-		openScenario() { if (this.scenarioName) frappe.set_route("Form", "RetailEdge Planning Scenario", this.scenarioName); },
+		openScenario() { if (this.canUseNativeDesk && this.scenarioName) frappe.set_route("Form", "RetailEdge Planning Scenario", this.scenarioName); },
 		loadExportDataset() { return call(this.exportMethod, { filters: { ...this.filters } }); },
 		money(value) { return value === null || value === undefined || value === "" ? "—" : format_currency(Number(value || 0), this.companyCurrency || undefined); },
 		percent(value) { return value === null || value === undefined || value === "" ? "—" : `${Number(value).toFixed(1)}%`; },

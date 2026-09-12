@@ -76,7 +76,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			rows: [], columns: [], summary: [], metadata: {}, scope: {}, menuItems: [], tenantName: "", branchName: "", userName: "",
+			rows: [], columns: [], summary: [], metadata: {}, scope: {}, menuItems: [], tenantName: "", branchName: "", userName: "", canUseNativeDesk: false,
 			filters: { company: "", branch: "", as_of_date: "", history_months: 6, forecast_months: 3, customer: "", salesperson: "", item_group: "", item_code: "", warehouse: "" },
 			historyOptions: [3, 6, 9, 12, 18, 24],
 		};
@@ -104,13 +104,14 @@ export default {
 				this.filters.company = defaults.company || ""; this.filters.branch = defaults.branch || ""; this.filters.as_of_date = defaults.to_date || frappe.datetime.get_today();
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Sales Forecast controls."); }
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer"); else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer"); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer"); else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer"); },
 		openPlanningWorkspace() { frappe.set_route("forecasting-planning"); },
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.sales_reporting.search_sales_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); }, salespersonSearch(txt) { return this.searchOptions("salesperson", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, warehouseSearch(txt) { return this.searchOptions("warehouse", txt); },
