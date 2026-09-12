@@ -89,12 +89,11 @@ class TestActionCenter(unittest.TestCase):
 		self.assertEqual(payable_action["exposure"], 220000)
 		self.assertEqual(bank_exception["severity"], "danger")
 		self.assertEqual(bank_exception["age_days"], 12)
-		self.assertEqual(bank_exception["target_type"], "Report")
-		self.assertEqual(bank_exception["open_mode"], "new_tab")
-		self.assertEqual(bank_review["target_type"], "DocType")
-		self.assertEqual(bank_review["open_mode"], "new_tab")
-		self.assertEqual(bank_ready["target_type"], "Report")
-		self.assertEqual(bank_ready["open_mode"], "new_tab")
+		for bank_action in (bank_exception, bank_review, bank_ready):
+			self.assertEqual(bank_action["target_type"], "Page")
+			self.assertEqual(bank_action["target"], "bank-matching-reconciliation")
+			self.assertEqual(bank_action["route"], "/app/bank-matching-reconciliation")
+			self.assertEqual(bank_action["open_mode"], "same_tab")
 		self.assertEqual(result["items"][0]["severity"], "danger")
 
 		stock.assert_called_once()
