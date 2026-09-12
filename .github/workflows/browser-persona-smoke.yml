@@ -162,9 +162,12 @@ jobs:
           cat /tmp/retailedge-browser-server.log
           exit 1
 
-      - name: Run RetailEdge MVP browser persona smoke
+      - name: Run RetailEdge RC3 browser persona acceptance
         run: |
-          npx playwright test             browser-tests/retailedge_mvp_smoke.spec.cjs             --config=browser-tests/playwright.config.cjs
+          npx playwright test \
+            browser-tests/retailedge_mvp_smoke.spec.cjs \
+            browser-tests/retailedge_rc3_acceptance.spec.cjs \
+            --config=browser-tests/playwright.config.cjs
 
       - name: Preserve browser QA evidence
         if: always()
