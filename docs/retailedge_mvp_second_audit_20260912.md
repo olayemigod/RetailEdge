@@ -6,54 +6,58 @@
 - Release target: **1.0.0**
 - Authoritative PR: #55
 - Authoritative branch: `qa/retailedge-reconciled-20260902`
-- Audit head: `7e5d1c8b79e5bb1edea783114d86a9825623fe16`
+- Validated second-audit gap-closure head: `4ac9734f91fdd1c7a05e0539ce5a03ddd12873c8`
 - Date: 2026-09-12
-- Purpose: perform the agreed second MVP re-audit **before** final browser/persona acceptance.
+- Audit state: **FROZEN — IMPLEMENTATION GREEN / RC3 ACCEPTANCE READY**
+- Purpose: perform and freeze the agreed second MVP re-audit **before** final browser/persona acceptance.
 
-This audit supersedes the assumption that RC3 is the immediate next step. RC3 must not be treated as release acceptance until all P0/P1 findings below are reconciled.
+This audit supersedes the earlier assumption that RC3 could begin before a second full MVP re-audit. That re-audit is now complete, its P1 gaps are closed, and the governed implementation gates on the exact gap-closure head are green.
+
+RC3 remains a separate acceptance phase. Automatically triggered browser smoke runs before or during the freeze do **not** count as RC3 acceptance.
 
 ## Governing conclusion
 
-RetailEdge 1.0 is no longer missing a major business workflow. Core sales, purchasing, payments, expenses, stock, banking, reporting and management services are present and retain ERPNext accounting/stock truth.
+RetailEdge 1.0 is not missing a major MVP business workflow. Core sales, purchasing, payments, expenses, stock, banking, reporting and management services are present and retain ERPNext accounting/stock truth.
 
-The remaining pre-test work is **composition and contract reconciliation**, not another broad feature phase.
+The second audit found three genuine P1 pre-test gaps. All three are now closed:
 
-## Twelve-area MVP review
+1. Business Hub expense ownership/routing;
+2. approved Business Hub Home shortcuts;
+3. RC3 acceptance-contract alignment for Stock Movement History and Frappe v16 Desk routing.
 
-| # | Review area | Status | Second-audit conclusion |
+The second MVP audit is therefore frozen as **implementation-green / acceptance-ready**. The next governed phase is RC3 browser/persona acceptance.
+
+## Twelve-area MVP review — frozen result
+
+| # | Review area | Frozen status | Second-audit conclusion |
 |---|---|---|---|
 | 1 | Reconciled product baseline / branch composition | GREEN | PR #55 remains the authoritative consolidated candidate. No divergent product branch is required. |
 | 2 | Role model / EdgeSuite access model | GREEN | Canonical compact RetailEdge roles remain authoritative. Frappe roles intentionally remain Desk-enabled System User roles; EdgeSuite UI access mode independently controls `edgesuite_only` vs Native Desk. Canonical Page-role gaps on Business Hub/Banking were corrected before this audit. |
 | 3 | Sales / customer operational workflow | GREEN | Standard Quotation → Sales Order → Delivery → Sales Invoice, customer receipt/advance and standard Sales Invoice completion are code-complete with Frappe Workflow precedence and ERPNext lifecycle authority. |
-| 4 | Purchasing / stock receiving / supplier workflow | GREEN WITH HOME-SHORTCUT GAP | Professional Purchasing owns Purchase Order → Receipt → Purchase Invoice, returns/debit notes, supplier payment and standard completion. “Receive Stock” exists operationally through Ready-to-Receive Purchase Orders, but is not yet surfaced as the approved Business Hub shortcut. |
-| 5 | Payments / cash / banking | GREEN WITH HOME-SHORTCUT GAP | Payment Management, Cash Movement, internal transfer, banking readiness and Bank Matching are implemented; Banking pages now use the shared RetailEdge shell. “Match Bank Transactions” is not yet surfaced as the approved Business Hub shortcut. |
-| 6 | Expenses | AMBER — P1 COMPOSITION GAP | Cashier Expense and modern Business Expense workflows are both implemented. Business Expenses are enabled by default and accounting posting is enabled by default. However Business Hub `record-expense` still opens only the Cashier/POS Expense dialog for every eligible user, rather than routing owner/manager/accounts users to the approved non-POS Business Expenses flow. |
+| 4 | Purchasing / stock receiving / supplier workflow | GREEN | Professional Purchasing owns Purchase Order → Receipt → Purchase Invoice, returns/debit notes, supplier payment and standard completion. **Receive Stock** is now exposed from the approved Home shortcut contract while retaining Professional Purchasing as workflow owner. |
+| 5 | Payments / cash / banking | GREEN | Payment Management, Cash Movement, internal transfer, banking readiness and Bank Matching are implemented; Banking pages use the shared RetailEdge shell. **Match Bank Transactions** is now exposed from the approved Home shortcut contract. |
+| 6 | Expenses | GREEN | Cashier Expense and modern Business Expense workflows are both implemented. Owner/Manager/Accounts users with Business Expense create permission now receive **Record Expense** into the modern Business Expenses workflow; cashier-only contexts retain Cashier/POS Expense. |
 | 7 | Stock operations | GREEN | Guided Stock Transfer and Stock Adjustment retain ERPNext draft truth; RC2 standard completion provides EdgeSuite completion for ordinary supported cases. Complex serial/batch/valuation cases remain deliberate advanced boundaries. |
-| 8 | Business Hub / Home command centre | AMBER — P1 COMPOSITION GAP | Today KPIs, Stock/Banking/Branch/Cash Shift signals, Attention and permission-aware Create are implemented. Before 1.0 acceptance, Home must reconcile its approved quick-action contract: non-POS Record Expense for eligible users, Receive Stock, and Match Bank Transactions. |
-| 9 | Action Centre / review ownership | GREEN | Action Centre is EdgeSuite-owned, uses the shared shell, and banking exceptions now route to canonical Bank Matching rather than native reports/DocTypes. Queue-specific deep-linking is convenience-only and does not block 1.0. |
+| 8 | Business Hub / Home command centre | GREEN | Today KPIs, Stock/Banking/Branch/Cash Shift signals, Attention and permission-aware Create are implemented. The approved Home shortcut contract is reconciled: Make Sale, Receive Payment, Pay Supplier, Record Expense, Receive Stock, Transfer Stock, Record Purchase, and Match Bank Transactions. |
+| 9 | Action Centre / review ownership | GREEN | Action Centre is EdgeSuite-owned, uses the shared shell, and banking exceptions route to canonical Bank Matching rather than native reports/DocTypes. Queue-specific deep-linking is convenience-only and does not block 1.0. |
 | 10 | Reporting / management visibility | GREEN FOR MVP | Sales, purchase, receivables, payables, stock, expense, cash, branch, salesperson, daily audit and management signals are sufficient for MVP. Additional analytics remain post-1.0 unless a correctness defect is found. |
-| 11 | Security / branch isolation / install / upgrade | GREEN AUTOMATED, MANUAL ACCEPTANCE PENDING | Branch Assignment authority, restricted-zero fail-closed, server-side Company/Branch checks, Native Desk containment, clean install and real upgrade validation are covered. Manual persona/browser isolation evidence remains RC3. |
-| 12 | Acceptance contract / release hardening | AMBER — PRE-TEST RECONCILIATION REQUIRED | The RC3 runbook still contains stale Stock Movement History “Query Report hold” wording even though current master composition promotes the hardened EdgeSuite Page. Browser smoke also must account for Frappe v16 `/app/... → /desk/...` runtime routing. Version remains pre-release until RC3 passes. |
+| 11 | Security / branch isolation / install / upgrade | GREEN AUTOMATED, RC3 PENDING | Branch Assignment authority, restricted-zero fail-closed, server-side Company/Branch checks, Native Desk containment, clean install and real upgrade validation are covered. Manual/browser persona isolation evidence remains an RC3 acceptance responsibility. |
+| 12 | Acceptance contract / release hardening | GREEN FOR RC3 ENTRY | RC3 now matches the current Stock Movement History EdgeSuite ownership and Frappe v16 `/app/... → /desk/...` routing behavior. Version remains pre-release until RC3 passes. |
 
-## P1 findings that must close before RC3
+## P1 closure record
 
-### P1-A — Business Hub expense intent
+### P1-A — Business Hub expense intent — CLOSED
 
-Current state:
+Implemented 1.0 behavior:
 
-- base quick action key `record-expense` is labelled **Record Cashier Expense**;
-- Business Hub maps that key directly to `SimpleCashierExpenseDialog`;
-- therefore manager/accounts users are not guided to the modern Business Expenses owner from the main Home create/action surface.
+- Cashier/POS context keeps the governed Cashier Expense flow.
+- Users who can open/create Business Expenses receive **Record Expense** into `business-expenses` new-entry mode.
+- No duplicate ledger or accounting path was introduced.
+- Permission-derived routing determines which expense experience is exposed.
 
-Required 1.0 behavior:
+### P1-B — Approved Home operational shortcuts — CLOSED
 
-- Cashier/POS context keeps the governed Cashier Expense flow;
-- users who can open/create Business Expenses should receive **Record Expense** into `business-expenses` new-entry mode;
-- no duplicate ledger or accounting path is introduced.
-
-### P1-B — Approved Home operational shortcuts
-
-The approved Home contract included actionable shortcuts for:
+The approved Home contract now exposes compact permission-aware shortcuts for:
 
 - Make Sale;
 - Receive Payment;
@@ -61,24 +65,30 @@ The approved Home contract included actionable shortcuts for:
 - Record Expense;
 - Receive Stock;
 - Transfer Stock;
-- Create/Record Purchase;
+- Record Purchase;
 - Match Bank Transactions.
 
-Current Business Hub has permission-aware `+ Create`, but:
+These shortcuts route to existing governed workflow owners; they do not duplicate backend accounting or stock logic.
 
-- Receive Stock is only discoverable inside Professional Purchasing;
-- Match Bank Transactions is only discoverable through Banking/menu/signal cards;
-- Record Expense resolves to Cashier Expense rather than Business Expense for eligible non-cashier roles.
+### P1-C — Acceptance contract reconciliation — CLOSED
 
-Before RC3, Home should expose these as compact permission-aware shortcuts without duplicating backend workflows.
+The RC3 runbook now matches the exact candidate:
 
-### P1-C — Acceptance contract reconciliation
+- Stock Movement History is part of the EdgeSuite-owned 1.0 composition when permission-available; the obsolete Query Report hold was removed.
+- Frappe v16 Desk routing is handled correctly; `/app/...` may resolve to `/desk/...` and acceptance waits for the actual Desk/page mount.
+- Automated browser smoke remains supplemental; full RC3 still requires the restricted one/multiple/zero Branch personas and consolidated cross-workflow checks.
 
-The RC3 runbook must match the current exact candidate:
+## Freeze evidence
 
-- Stock Movement History is now an EdgeSuite Page in final master composition when permission-available; remove the obsolete “must remain Query Report” acceptance hold.
-- Browser automation must follow Frappe v16 Desk routing (`/app/... ` may resolve to `/desk/...`) and wait for actual Desk/page mount before asserting.
-- Automated browser smoke remains supplemental; full RC3 still requires the restricted one/multiple/zero Branch personas and cross-workflow checks in the consolidated runbook.
+The exact second-audit gap-closure head `4ac9734f91fdd1c7a05e0539ce5a03ddd12873c8` completed the normal governed implementation gates successfully:
+
+- RetailEdge Theme Compatibility — run #896 — **PASS**
+- Linters — run #2737 — **PASS**
+- Clean Frappe v16 CI — run #2755 — **PASS**
+- EdgeSuite UI Candidate Compatibility — run #993 — **PASS**
+- RetailEdge Upgrade Validation — run #27 — **PASS**
+
+A Browser Persona Smoke workflow was also automatically triggered. It is explicitly **not** counted as RC3 acceptance merely because it ran from GitHub triggers.
 
 ## Explicitly not reopened by this audit
 
@@ -92,17 +102,18 @@ Do not restart or expand these unless a P0/P1 defect is found:
 - specialist Payment Reconciliation / multi-currency accounting;
 - cosmetic-only report enhancements.
 
-## Pre-test execution order
+## Governed release order from this freeze
 
-1. Close P1-A Business Hub expense ownership.
-2. Close P1-B Business Hub approved shortcuts.
-3. Close P1-C RC3 runbook / Frappe v16 route contract.
-4. Rerun exact-head governed gates.
-5. Freeze this second MVP audit as **implementation-green / acceptance-ready**.
-6. Only then execute RC3 browser/persona acceptance.
-7. Fix only P0/P1 defects discovered by RC3.
-8. Set RetailEdge version to `1.0.0`, update README/release/upgrade notes, rerun release gates, and tag `v1.0.0`.
+1. **Second full MVP re-audit — COMPLETE**
+2. **Close second-audit P1 gaps — COMPLETE**
+3. **Freeze second audit as implementation-green / acceptance-ready — COMPLETE**
+4. Execute RC3 browser/persona acceptance on the authoritative PR #55 line.
+5. Fix **only** P0/P1 defects discovered by RC3.
+6. Set RetailEdge version to `1.0.0`, update README/release/upgrade notes, and rerun final release gates.
+7. Tag `v1.0.0` only after all required release gates are green.
 
 ## Release rule
 
-RetailEdge 1.0 must not be tagged while any second-audit P1 finding or RC3 stop-the-line defect remains open.
+RetailEdge 1.0 must not be tagged while any RC3 stop-the-line defect remains open.
+
+The second MVP audit is frozen. New feature work or non-blocking polish must not be inserted between this freeze and RC3 acceptance.
