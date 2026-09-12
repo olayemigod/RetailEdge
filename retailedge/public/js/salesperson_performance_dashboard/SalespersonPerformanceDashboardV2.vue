@@ -50,8 +50,8 @@
 							<option v-for="preset in datePresets" :key="preset" :value="preset">{{ preset }}</option>
 						</select>
 					</label>
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="filters.date_range_preset = 'Custom Period'" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="filters.date_range_preset = 'Custom Period'" /></label>
+					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onCustomDateChange" /></label>
+					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onCustomDateChange" /></label>
 					<label class="edge-field">
 						<span class="edge-field-label">Rows per page</span>
 						<select v-model.number="filters.limit" class="edge-input" @change="resetAndFetch"><option :value="25">25</option><option :value="50">50</option><option :value="100">100</option></select>
@@ -160,10 +160,18 @@ export default {
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.salesperson_performance_dashboard.search_salesperson_dashboard_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.salesperson_performance_dashboard.search_salesperson_dashboard_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, from_date: this.filters.from_date, to_date: this.filters.to_date }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, salespersonSearch(txt) { return this.searchOptions("salesperson", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.offset = 0; }, onBranchSelected(option) { this.filters.branch = option.value; this.filters.offset = 0; }, clearBranch() { this.filters.branch = ""; this.filters.offset = 0; }, onSalespersonSelected(option) { this.filters.salesperson = option.value; this.filters.offset = 0; }, clearSalesperson() { this.filters.salesperson = ""; this.filters.offset = 0; }, onCustomerSelected(option) { this.filters.customer = option.value; this.filters.offset = 0; }, clearCustomer() { this.filters.customer = ""; this.filters.offset = 0; }, onItemSelected(option) { this.filters.item = option.value; this.filters.offset = 0; }, clearItem() { this.filters.item = ""; this.filters.offset = 0; }, onItemGroupSelected(option) { this.filters.item_group = option.value; this.filters.offset = 0; }, clearItemGroup() { this.filters.item_group = ""; this.filters.offset = 0; },
-		onPresetChange() { if (this.filters.date_range_preset === "Custom Period") return; const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset); if (dates) { this.filters.from_date = dates.from_date || ""; this.filters.to_date = dates.to_date || ""; } this.filters.offset = 0; },
+		clearScopedPeopleFilters() { this.filters.salesperson = ""; this.filters.customer = ""; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.clearScopedPeopleFilters(); this.filters.offset = 0; },
+		onBranchSelected(option) { this.filters.branch = option.value; this.clearScopedPeopleFilters(); this.filters.offset = 0; },
+		clearBranch() { this.filters.branch = ""; this.filters.offset = 0; },
+		onSalespersonSelected(option) { this.filters.salesperson = option.value; this.filters.offset = 0; }, clearSalesperson() { this.filters.salesperson = ""; this.filters.offset = 0; },
+		onCustomerSelected(option) { this.filters.customer = option.value; this.filters.offset = 0; }, clearCustomer() { this.filters.customer = ""; this.filters.offset = 0; },
+		onItemSelected(option) { this.filters.item = option.value; this.filters.offset = 0; }, clearItem() { this.filters.item = ""; this.filters.offset = 0; },
+		onItemGroupSelected(option) { this.filters.item_group = option.value; this.filters.offset = 0; }, clearItemGroup() { this.filters.item_group = ""; this.filters.offset = 0; },
+		onCustomDateChange() { this.filters.date_range_preset = "Custom Period"; this.clearScopedPeopleFilters(); this.filters.offset = 0; },
+		onPresetChange() { if (this.filters.date_range_preset === "Custom Period") return; const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset); if (dates) { this.filters.from_date = dates.from_date || ""; this.filters.to_date = dates.to_date || ""; } this.clearScopedPeopleFilters(); this.filters.offset = 0; },
 		resetAndFetch() { this.filters.offset = 0; this.fetchData(); },
 		async fetchData() {
 			if (!this.filters.company) return;
