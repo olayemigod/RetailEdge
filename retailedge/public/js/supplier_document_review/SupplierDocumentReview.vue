@@ -32,12 +32,7 @@
 					<EdgeLinkField v-model="filters.company" label="Company" placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.supplier" :selectedLabel="supplierLabel" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
-					<label class="edge-field">
-						<span class="edge-field-label">Status</span>
-						<select v-model="filters.status" class="edge-input" @change="loadRows">
-							<option>Open</option><option>Pending Review</option><option>In Review</option><option>Accepted</option><option>Rejected</option><option>All</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.status" :options="['Open', 'Pending Review', 'In Review', 'Accepted', 'Rejected', 'All']" label="Status" @change="loadRows" />
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading" @click="loadRows">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 					<button v-if="canUseNativeDesk" class="edge-button" type="button" @click="openPurchaseInvoices">Advanced: Purchase Invoices</button>
 				</div>
@@ -179,7 +174,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeLinkField", "EdgeDropdown"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
