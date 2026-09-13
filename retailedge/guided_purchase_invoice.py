@@ -233,7 +233,10 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 	_assert_read_permission("Supplier", supplier)
 
 	items = _normalise_items(values.get("items"))
+	configured_branches = get_guided_branch_names(company, user=user)
 	update_stock = cint(values.get("update_stock") or 0)
+	if update_stock and configured_branches and not branch:
+		frappe.throw(_("Choose a Branch before saving a stock-updating Purchase Invoice."))
 	if update_stock and not warehouse:
 		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
 
@@ -356,6 +359,9 @@ def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple
 	)
 
 	warehouse = str(values.get("warehouse") or "").strip()
+	configured_branches = get_guided_branch_names(company, user=user)
+	if warehouse and configured_branches and not branch:
+		frappe.throw(_("Choose a Branch before selecting a Receiving Stock Location."))
 	if warehouse:
 		_assert_read_permission("Warehouse", warehouse)
 		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
