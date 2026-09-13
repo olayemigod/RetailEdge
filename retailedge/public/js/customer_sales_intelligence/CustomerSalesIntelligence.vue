@@ -57,12 +57,7 @@
 						<input v-model="filters.to_date" class="edge-input" type="date" />
 					</label>
 					<EdgeLinkField v-model="filters.customer" :selectedLabel="customerLabel" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
-					<label class="edge-field">
-						<span class="edge-field-label">Customer Segment</span>
-						<select v-model="filters.segment" class="edge-input">
-							<option v-for="segment in segments" :key="segment" :value="segment">{{ segment }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.segment" :options="segments" label="Customer Segment" />
 					<div class="filter-action">
 						<button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">
 							{{ loading ? "Loading…" : "Apply Filters" }}
@@ -84,7 +79,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
