@@ -2,6 +2,40 @@
 
 RetailEdge is a retail operations app for Frappe / ERPNext v16 that is designed to work alongside POSNext. It provides a clean foundation for POS control, sales audit, payment verification, branch workflows, and future retail intelligence capabilities without modifying Frappe, ERPNext, or POSNext core files.
 
+## RetailEdge 1.0.0
+
+RetailEdge 1.0.0 is the first governed MVP release target. The product is now in release hardening: RC3 browser/persona acceptance is frozen green, upgrade validation is green, and the final tag is created only after the 1.0.0 hardening head passes all governed gates and is promoted to the release branch.
+
+### 1.0 MVP coverage
+
+- Business Hub command centre and Action Centre
+- sales, receivables and customer payment operations
+- purchasing, supplier payables and supplier payment operations
+- stock position, stock movement, guided transfer and adjustment
+- cashier and non-POS business expense workflows
+- banking readiness, statement/matching workflows and reconciliation controls
+- Company/Branch-aware operational scope with Branch Assignment authority
+- management, branch, salesperson, cash, expense and operational reporting
+- EdgeSuite-first everyday operation with explicit advanced ERPNext boundaries
+- Frappe Workflow and ERPNext accounting/stock truth preserved
+
+### Runtime contract
+
+- Frappe / ERPNext v16
+- ProcessEdge EdgeSuite UI is a required app/runtime dependency
+- POSNext is supported for POS workflows but is not a hard install dependency of RetailEdge
+- CoreEdge is not required for the standalone 1.0 deployment contract
+- submitted accounting and stock documents are never mutated to simulate corrections
+
+See:
+
+- docs/retailedge_1_0_install_upgrade.md
+- docs/retailedge_1_0_release_notes.md
+- docs/retailedge_1_0_release_checklist.md
+- docs/rir2e_consolidated_browser_persona_qa.md
+
+> The detailed sections below are retained as historical implementation notes. The 1.0 documents above are authoritative for release/deployment.
+
 ## Target Stack
 
 - Frappe / ERPNext v16

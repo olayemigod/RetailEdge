@@ -11,11 +11,9 @@ from frappe.utils import add_days, flt, get_datetime, getdate, strip_html
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
 	get_first_existing_field,
-	get_user_allowed_branches,
 	has_field,
-	user_has_global_branch_access,
-	validate_user_branch_access,
 )
+from retailedge.operating_context import get_operational_branch_scope
 
 REPORT_NAME = "RetailEdge Stock Movement History"
 BRANCH_PROFILE_WAREHOUSE_FIELDS = (
@@ -162,16 +160,29 @@ def get_columns(filters):
 def resolve_warehouse_scope(filters):
 	company, branch, warehouse = filters.company, filters.get("branch"), filters.warehouse
 	user = frappe.session.user
-	allowed_branches = (
-		[]
-		if user_has_global_branch_access(user=user)
-		else list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-	)
+	scope = get_operational_branch_scope(company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed_branches = {
+		str(value).strip()
+		for value in scope.get("allowed_branches") or []
+		if str(value or "").strip()
+	}
 	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+		if restricted and branch not in allowed_branches:
+			frappe.throw(
+				_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+				frappe.PermissionError,
+			)
 		branches = [branch]
+	elif restricted:
+		if not allowed_branches:
+			frappe.throw(
+				_("Your Branch operating access is not active for Company {0}.").format(company),
+				frappe.PermissionError,
+			)
+		branches = sorted(allowed_branches)
 	else:
-		branches = allowed_branches
+		branches = []
 
 	branch_warehouses = set()
 	for branch_name in branches:

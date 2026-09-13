@@ -71,7 +71,7 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 		source = self.read("professional_sales_invoice.py")
 		for contract in (
 			"get_operating_context",
-			"validate_user_branch_access",
+			"_validate_stored_operational_branch",
 			"resolve_branch_from_warehouse",
 			"Stock Location",
 			"multiple Branches",

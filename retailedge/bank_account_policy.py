@@ -7,12 +7,27 @@ from frappe import _
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 from frappe.utils import cint
 
-from retailedge.branch_context import has_doctype, has_field, validate_user_branch_access
+from retailedge.branch_context import has_doctype, has_field
+from retailedge.operating_context import resolve_operational_branch
 
 BANK_ACCOUNT_DOCTYPE = "Bank Account"
 BRANCH_FIELD = "retailedge_branch"
 MAX_LINK_RESULTS = 20
 MAX_SEARCH_SCAN = 100
+
+
+def _validate_bank_account_operational_branch(*, company: str, branch: str) -> str:
+	branch = str(branch or "").strip()
+	if not branch:
+		return ""
+	return str(
+		resolve_operational_branch(
+			company,
+			branch,
+			user=frappe.session.user,
+		).get("branch")
+		or ""
+	).strip()
 
 
 def ensure_bank_account_branch_custom_field():
@@ -51,7 +66,7 @@ def validate_bank_account_branch(doc, method=None):
 	if not company:
 		frappe.throw(_("Company is required when a RetailEdge Branch is set on a Bank Account."))
 	_assert_branch_belongs_to_company(branch, company)
-	validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+	_validate_bank_account_operational_branch(company=company, branch=branch)
 
 
 @frappe.whitelist()
@@ -81,7 +96,7 @@ def search_retailedge_bank_accounts(
 		frappe.throw(_("You do not have permission to view Bank Accounts."), frappe.PermissionError)
 	if branch:
 		_assert_branch_belongs_to_company(branch, company)
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+		branch = _validate_bank_account_operational_branch(company=company, branch=branch)
 
 	fields = ["name", "account", "account_name", "bank", "bank_account_no", "company", "disabled", "is_company_account"]
 	if has_field(BANK_ACCOUNT_DOCTYPE, BRANCH_FIELD):
@@ -147,7 +162,13 @@ def resolve_retailedge_bank_account(
 		frappe.throw(_("Bank Account {0} is not linked to an ERPNext Bank ledger account.").format(bank_account))
 
 	configured_branch = str(row.get(BRANCH_FIELD) or "").strip()
+	if branch:
+		branch = _validate_bank_account_operational_branch(company=company, branch=branch)
 	if configured_branch:
+		configured_branch = _validate_bank_account_operational_branch(
+			company=company,
+			branch=configured_branch,
+		)
 		if not branch or configured_branch != branch:
 			frappe.throw(
 				_("Bank Account {0} is restricted to branch {1} and is not available in the current branch.").format(
@@ -155,9 +176,7 @@ def resolve_retailedge_bank_account(
 				),
 				frappe.PermissionError,
 			)
-		validate_user_branch_access(configured_branch, user=frappe.session.user, company=company, throw=True)
 	elif branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
 		if strict_branch_scope:
 			frappe.throw(
 				_("Bank Account {0} is company-wide and cannot be selected while branch {1} is active. Select a branch-specific Bank Account or clear the Branch filter.").format(

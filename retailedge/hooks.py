@@ -184,6 +184,9 @@ doc_events = {
 	"Payment Request": {
 		"validate": "retailedge.transaction_branch_attribution.apply_transaction_branch_attribution",
 	},
+	"Project Update": {
+		"validate": "retailedge.customer_project_updates.validate_customer_project_update_publication",
+	},
 	"Material Request": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
 	},
@@ -228,8 +231,10 @@ doc_events = {
 after_migrate = [
 	"retailedge.setup_roles.ensure_retailedge_roles",
 	"retailedge.transaction_branch_attribution.ensure_transaction_branch_custom_fields",
+	"retailedge.coexistence.ensure_neutral_branch_field_labels",
 	"retailedge.cash_custody.ensure_cash_custody_custom_fields",
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
+	"retailedge.customer_project_updates.ensure_customer_project_update_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
 ]
 boot_session = "retailedge.boot.boot_session"
@@ -238,9 +243,11 @@ boot_session = "retailedge.boot.boot_session"
 # ------------------------------
 permission_query_conditions = {
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.get_permission_query_conditions",
+	"RetailEdge Business Expense": "retailedge.business_expense.get_permission_query_conditions",
 }
 has_permission = {
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
+	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }
 
 # Extend DocType Class

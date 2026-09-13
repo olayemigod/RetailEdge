@@ -2,26 +2,47 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import cstr
+from frappe.utils import cstr, getdate
 
-from retailedge.branch_context import get_branch_query_filters
+from retailedge.branch_context import has_field
+
 from retailedge.branch_performance import assert_can_access_branch_performance
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.reporting.date_ranges import get_preset_dates
+from retailedge.sales_reporting import MAX_INVOICE_SCAN_ROWS
 from retailedge.salesperson_performance import (
 	MAX_EXPORT_ROWS,
 	MAX_LINK_RESULTS,
 	get_salesperson_performance,
+	resolve_salesperson_performance_read_scope,
 )
 
 DASHBOARD_KEY = "salesperson-performance"
 
 COLUMNS = [
-	{"label": _("Salesperson"), "fieldname": "salesperson", "fieldtype": "Link", "options": "Sales Person", "width": 170},
+	{
+		"label": _("Salesperson"),
+		"fieldname": "salesperson",
+		"fieldtype": "Link",
+		"options": "Sales Person",
+		"width": 170,
+	},
 	{"label": _("Allocation"), "fieldname": "allocation_percentage", "fieldtype": "Percent", "width": 105},
-	{"label": _("Sales Invoice"), "fieldname": "sales_invoice", "fieldtype": "Link", "options": "Sales Invoice", "width": 160},
+	{
+		"label": _("Sales Invoice"),
+		"fieldname": "sales_invoice",
+		"fieldtype": "Link",
+		"options": "Sales Invoice",
+		"width": 160,
+	},
 	{"label": _("Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 105},
-	{"label": _("Customer"), "fieldname": "customer", "fieldtype": "Link", "options": "Customer", "width": 180},
+	{
+		"label": _("Customer"),
+		"fieldname": "customer",
+		"fieldtype": "Link",
+		"options": "Customer",
+		"width": 180,
+	},
 	{"label": _("Items Sold"), "fieldname": "items", "fieldtype": "Data", "width": 210},
 	{"label": _("Qty"), "fieldname": "total_qty", "fieldtype": "Float", "width": 90},
 	{"label": _("Gross"), "fieldname": "gross_amount", "fieldtype": "Currency", "width": 130},
@@ -34,20 +55,48 @@ COLUMNS = [
 
 def _default_company() -> str:
 	return cstr(
-		frappe.defaults.get_user_default("Company")
-		or frappe.defaults.get_global_default("company")
-		or ""
+		frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company") or ""
 	)
 
 
 def _summary_cards(summary: dict) -> list[dict]:
 	return [
-		{"label": _("Gross Sales"), "value": summary.get("gross_sales") or 0, "datatype": "Currency", "tone": "info"},
-		{"label": _("Net Sales"), "value": summary.get("net_sales") or 0, "datatype": "Currency", "tone": "success"},
-		{"label": _("Sales Invoices"), "value": summary.get("total_invoices") or 0, "datatype": "Int", "tone": "neutral"},
-		{"label": _("Average Invoice"), "value": summary.get("avg_invoice_value") or 0, "datatype": "Currency", "tone": "neutral"},
-		{"label": _("Discount"), "value": summary.get("total_discount") or 0, "datatype": "Currency", "tone": "warning"},
-		{"label": _("Outstanding"), "value": summary.get("total_outstanding") or 0, "datatype": "Currency", "tone": "danger"},
+		{
+			"label": _("Gross Sales"),
+			"value": summary.get("gross_sales") or 0,
+			"datatype": "Currency",
+			"tone": "info",
+		},
+		{
+			"label": _("Net Sales"),
+			"value": summary.get("net_sales") or 0,
+			"datatype": "Currency",
+			"tone": "success",
+		},
+		{
+			"label": _("Sales Invoices"),
+			"value": summary.get("total_invoices") or 0,
+			"datatype": "Int",
+			"tone": "neutral",
+		},
+		{
+			"label": _("Average Invoice"),
+			"value": summary.get("avg_invoice_value") or 0,
+			"datatype": "Currency",
+			"tone": "neutral",
+		},
+		{
+			"label": _("Discount"),
+			"value": summary.get("total_discount") or 0,
+			"datatype": "Currency",
+			"tone": "warning",
+		},
+		{
+			"label": _("Outstanding"),
+			"value": summary.get("total_outstanding") or 0,
+			"datatype": "Currency",
+			"tone": "danger",
+		},
 	]
 
 
@@ -128,7 +177,9 @@ def get_salesperson_dashboard_data(filters=None) -> dict:
 	return _build_salesperson_dashboard_dataset(filters, export_mode=False)
 
 
-def _search_doctype(doctype: str, txt: str, *, fields: list[str] | None = None, filters=None, or_filters=None) -> list[dict]:
+def _search_doctype(
+	doctype: str, txt: str, *, fields: list[str] | None = None, filters=None, or_filters=None
+) -> list[dict]:
 	rows = frappe.get_list(
 		doctype,
 		filters=filters or {},
@@ -145,33 +196,177 @@ def _search_doctype(doctype: str, txt: str, *, fields: list[str] | None = None, 
 	return result
 
 
+def _search_branches(like: str, company: str, scope: dict | None = None) -> list[dict]:
+	scope = scope or resolve_salesperson_performance_read_scope(
+		{"company": company}, user=frappe.session.user
+	)
+	allowed = list(scope.get("_allowed_branches") or [])
+	if scope.get("_branch_scope_restricted") and not allowed:
+		return []
+	filters: list[list] = [["Branch", "name", "like", like]]
+	if scope.get("_branch_scope_restricted"):
+		filters.append(["Branch", "name", "in", allowed])
+	if frappe.get_meta("Branch").has_field("company"):
+		filters.append(["Branch", "company", "=", company])
+	return _search_doctype("Branch", like.strip("%"), filters=filters)
+
+
+def _salesperson_option_invoice_filters(
+	*,
+	company: str,
+	branch: str = "",
+	from_date: str = "",
+	to_date: str = "",
+) -> dict | None:
+	"""Return submitted Sales Invoice filters under the dashboard's existing read-scope authority."""
+	scope = resolve_salesperson_performance_read_scope(
+		{"company": company, "branch": branch},
+		user=frappe.session.user,
+	)
+	filters: dict = {"docstatus": 1, "company": scope.get("company")}
+
+	if bool(from_date) != bool(to_date):
+		frappe.throw(_("From Date and To Date must both be supplied for scoped Salesperson options."))
+	if from_date and to_date:
+		if getdate(from_date) > getdate(to_date):
+			frappe.throw(_("From Date cannot be after To Date."))
+		filters["posting_date"] = ["between", [from_date, to_date]]
+
+	branch_field = (
+		"retailedge_branch"
+		if has_field("Sales Invoice", "retailedge_branch")
+		else ("branch" if has_field("Sales Invoice", "branch") else None)
+	)
+	resolved_branch = cstr(scope.get("branch") or "").strip()
+	restricted = bool(scope.get("_branch_scope_restricted"))
+	allowed = list(scope.get("_allowed_branches") or [])
+
+	if resolved_branch:
+		if not branch_field:
+			return None
+		filters[branch_field] = resolved_branch
+	elif restricted:
+		if not branch_field or not allowed:
+			return None
+		filters[branch_field] = ["in", allowed]
+
+	return filters
+
+
+def _search_scoped_customers(txt: str, invoice_filters: dict | None) -> list[dict]:
+	if not invoice_filters:
+		return []
+	like = f"%{txt}%"
+	rows = frappe.get_list(
+		"Sales Invoice",
+		filters=invoice_filters,
+		or_filters={
+			"customer": ["like", like],
+			"customer_name": ["like", like],
+		},
+		fields=["customer", "customer_name"],
+		group_by="customer, customer_name",
+		order_by="customer_name asc, customer asc",
+		limit_page_length=MAX_LINK_RESULTS,
+	)
+	customers = [cstr(row.get("customer")).strip() for row in rows if cstr(row.get("customer")).strip()]
+	if not customers:
+		return []
+	return _search_doctype(
+		"Customer",
+		txt,
+		fields=["name", "customer_name"],
+		filters={"name": ["in", customers]},
+	)
+
+
+def _search_scoped_salespeople(txt: str, invoice_filters: dict | None) -> list[dict]:
+	if not invoice_filters:
+		return []
+	invoices = frappe.get_list(
+		"Sales Invoice",
+		filters=invoice_filters,
+		fields=["name"],
+		order_by="posting_date desc, creation desc, name desc",
+		limit_page_length=MAX_INVOICE_SCAN_ROWS + 1,
+	)
+	if len(invoices) > MAX_INVOICE_SCAN_ROWS:
+		frappe.throw(
+			_(
+				"More than {0} submitted Sales Invoices match this Salesperson option scope. Narrow the date range before searching."
+			).format(MAX_INVOICE_SCAN_ROWS)
+		)
+	invoice_names = [row.get("name") for row in invoices if row.get("name")]
+	if not invoice_names:
+		return []
+
+	team_rows = frappe.get_all(
+		"Sales Team",
+		filters={
+			"parenttype": "Sales Invoice",
+			"parent": ["in", invoice_names],
+			"sales_person": ["like", f"%{txt}%"],
+		},
+		fields=["sales_person"],
+		group_by="sales_person",
+		order_by="sales_person asc",
+		limit_page_length=MAX_LINK_RESULTS * 3,
+	)
+	candidates = [
+		cstr(row.get("sales_person")).strip()
+		for row in team_rows
+		if cstr(row.get("sales_person")).strip()
+	]
+	if not candidates:
+		return []
+	return _search_doctype(
+		"Sales Person",
+		txt,
+		filters=[
+			["Sales Person", "enabled", "=", 1],
+			["Sales Person", "name", "in", candidates],
+		],
+	)
+
+
 @frappe.whitelist()
-def search_salesperson_dashboard_options(kind: str, txt: str = "", company: str = "") -> list[dict]:
+def search_salesperson_dashboard_options(
+	kind: str,
+	txt: str = "",
+	company: str = "",
+	branch: str = "",
+	from_date: str = "",
+	to_date: str = "",
+) -> list[dict]:
 	assert_can_access_branch_performance(frappe.session.user)
 	kind = cstr(kind).strip().lower()
 	txt = cstr(txt).strip()
 	company = cstr(company or _default_company()).strip()
+	branch = cstr(branch).strip()
+	from_date = cstr(from_date).strip()
+	to_date = cstr(to_date).strip()
 	like = f"%{txt}%"
+
 	if kind == "company":
 		return _search_doctype("Company", txt, filters={"name": ["like", like]})
 	if kind == "branch":
-		scope = get_branch_query_filters("Sales Invoice", user=frappe.session.user, company=company)
-		allowed = scope.get("allowed_branches") or []
-		filters: list[list] = [["Branch", "name", "like", like]]
-		if allowed:
-			filters.append(["Branch", "name", "in", allowed])
-		if company and frappe.get_meta("Branch").has_field("company"):
-			filters.append(["Branch", "company", "=", company])
-		return _search_doctype("Branch", txt, filters=filters)
-	if kind == "salesperson":
-		return _search_doctype("Sales Person", txt, filters={"enabled": 1, "name": ["like", like]})
-	if kind == "customer":
-		return _search_doctype(
-			"Customer",
-			txt,
-			fields=["name", "customer_name"],
-			or_filters={"name": ["like", like], "customer_name": ["like", like]},
+		scope = resolve_salesperson_performance_read_scope(
+			{"company": company},
+			user=frappe.session.user,
 		)
+		return _search_branches(like, company, scope)
+	if kind in {"salesperson", "customer"}:
+		invoice_filters = _salesperson_option_invoice_filters(
+			company=company,
+			branch=branch,
+			from_date=from_date,
+			to_date=to_date,
+		)
+		if kind == "salesperson":
+			return _search_scoped_salespeople(txt, invoice_filters)
+		return _search_scoped_customers(txt, invoice_filters)
+
+	resolve_salesperson_performance_read_scope({"company": company}, user=frappe.session.user)
 	if kind == "item":
 		return _search_doctype(
 			"Item",

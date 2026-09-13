@@ -14,16 +14,22 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 class RetailEdgeR9BackendSecurityAuditTests(unittest.TestCase):
 	@patch("retailedge.business_control_center.get_control_early_warning")
-	def test_business_control_center_isolates_owner_permission_failure_from_legacy_action_center(self, warning_loader):
+	def test_business_control_center_isolates_owner_permission_failure_from_legacy_action_center(
+		self, warning_loader
+	):
 		warning_loader.side_effect = frappe.PermissionError("owner intelligence denied")
-		result = _safe_early_warning(frappe._dict(company="Demo", branch="Aba", from_date="2026-08-01", to_date="2026-08-22"))
+		result = _safe_early_warning(
+			frappe._dict(company="Demo", branch="Aba", from_date="2026-08-01", to_date="2026-08-22")
+		)
 		self.assertFalse(result["available"])
 		self.assertEqual(result["warnings"], [])
 		self.assertTrue(result["metadata"]["permission_isolated"])
 
-	@patch("retailedge.control_early_warning.user_has_global_branch_access", return_value=False)
+	@patch("retailedge.control_early_warning.has_unrestricted_report_scope", return_value=False)
 	@patch("retailedge.control_early_warning.get_accounting_profitability")
-	def test_restricted_blank_branch_scope_does_not_execute_company_profitability(self, accounting, _global_scope):
+	def test_restricted_blank_branch_scope_does_not_execute_company_profitability(
+		self, accounting, _global_scope
+	):
 		result = _profitability_trend(
 			frappe._dict(company="Demo", branch="", from_date="2026-08-01", to_date="2026-08-22")
 		)

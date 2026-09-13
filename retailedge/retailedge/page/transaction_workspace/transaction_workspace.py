@@ -120,7 +120,7 @@ def get_transaction_workspace_context() -> dict[str, Any]:
 			"embedded": False,
 		},
 		"actions": actions,
-		"user_name": frappe.get_user().get_fullname() if getattr(frappe, "session", None) else "",
+		"user_name": frappe.utils.get_fullname(frappe.session.user) if getattr(frappe, "session", None) else "",
 	}
 
 

@@ -59,7 +59,7 @@ def create_project_receipt_draft(values: dict | str | None = None) -> dict[str, 
 		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
 		if not branch_field:
 			frappe.throw(
-				_("RetailEdge Payment Entry branch attribution is not available. Run bench migrate before recording a Branch-scoped Project Receipt."),
+				_("Payment Entry branch attribution is not available. Run bench migrate before recording a Branch-scoped Project Receipt."),
 			)
 
 	posting_date = getdate(values.get("posting_date") or nowdate())

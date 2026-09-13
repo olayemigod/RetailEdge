@@ -16,7 +16,7 @@ def assert_conversion_registry_available() -> None:
 		return
 	frappe.throw(
 		_(
-			"RetailEdge direct Quotation to Sales Invoice tracking is not installed on this site. "
+			"Direct Quotation to Sales Invoice tracking is not installed on this site. "
 			"Run bench migrate before using direct quotation invoicing."
 		)
 	)
@@ -71,9 +71,6 @@ def reserve_quotation_conversion(source, *, company: str, branch: str) -> Any:
 		sales_invoice = str(existing.get("sales_invoice") or "").strip()
 		if sales_invoice and frappe.db.exists("Sales Invoice", sales_invoice):
 			_throw_already_converted(source.name, sales_invoice)
-		# A user may legitimately delete an unwanted draft Sales Invoice. Because
-		# the target reference is audit data rather than a Link, a stale registry
-		# row can be retired safely before reserving a replacement conversion.
 		with _conversion_write_scope():
 			frappe.get_doc(CONVERSION_DOCTYPE, existing["name"]).delete()
 
@@ -94,9 +91,9 @@ def reserve_quotation_conversion(source, *, company: str, branch: str) -> Any:
 
 def complete_quotation_conversion(tracker, sales_invoice: str) -> None:
 	if not tracker or tracker.doctype != CONVERSION_DOCTYPE:
-		frappe.throw(_("RetailEdge could not complete the quotation conversion audit record."))
+		frappe.throw(_("The quotation conversion audit record could not be completed."))
 	if not frappe.db.exists("Sales Invoice", sales_invoice):
-		frappe.throw(_("RetailEdge could not find the Sales Invoice created from this quotation."))
+		frappe.throw(_("The Sales Invoice created from this quotation could not be found."))
 	with _conversion_write_scope():
 		tracker.sales_invoice = sales_invoice
 		tracker.save()
@@ -134,7 +131,7 @@ def _throw_already_converted(quotation: str, sales_invoice: str | None) -> None:
 		)
 	frappe.throw(
 		_(
-			"Quotation {0} already has a RetailEdge direct-invoice conversion reservation. "
+			"Quotation {0} already has a direct-invoice conversion reservation. "
 			"Do not create a second invoice from the same quotation."
 		).format(quotation)
 	)

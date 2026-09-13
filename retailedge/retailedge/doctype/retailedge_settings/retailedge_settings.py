@@ -1,3 +1,5 @@
+import frappe
+from frappe import _
 from frappe.model.document import Document
 
 from retailedge.utils.settings import clear_retailedge_settings_cache
@@ -6,9 +8,47 @@ from retailedge.utils.settings import clear_retailedge_settings_cache
 class RetailEdgeSettings(Document):
 	def validate(self):
 		self._set_bank_auto_match_guidance()
+		self._validate_business_expense_posting_workflow_state()
 
 	def on_update(self):
 		clear_retailedge_settings_cache()
+
+	def _validate_business_expense_posting_workflow_state(self):
+		state = str(
+			getattr(self, "business_expense_posting_workflow_state", None) or ""
+		).strip()
+		if not state:
+			return
+		workflows = frappe.get_all(
+			"Workflow",
+			filters={
+				"document_type": "RetailEdge Business Expense",
+				"is_active": 1,
+			},
+			pluck="name",
+			limit=2,
+		)
+		if len(workflows) != 1:
+			frappe.throw(
+				_(
+					"Workflow State Allowed for Accounting Posting requires exactly one active Workflow for RetailEdge Business Expense."
+				)
+			)
+		if not frappe.db.exists(
+			"Workflow Document State",
+			{
+				"parent": workflows[0],
+				"parenttype": "Workflow",
+				"state": state,
+				"doc_status": "1",
+			},
+		):
+			frappe.throw(
+				_(
+					"Workflow State {0} is not a submitted state in the active RetailEdge Business Expense Workflow."
+				).format(state)
+			)
+
 
 	def _set_bank_auto_match_guidance(self):
 		enable_auto_match = int(getattr(self, "enable_bank_auto_match", 0) or 0)

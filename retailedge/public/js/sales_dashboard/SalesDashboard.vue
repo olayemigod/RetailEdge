@@ -52,10 +52,16 @@
 
 				<EdgeDashboardSection title="Recent Invoices" description="Latest submitted invoices in the selected period.">
 					<div v-if="recentInvoices.length" class="sales-list">
-						<button v-for="row in recentInvoices" :key="row.invoice" type="button" class="sales-list-row" @click="openInvoice(row.invoice)">
-							<span><strong>{{ row.invoice }}</strong><small>{{ row.customer_name || row.customer }} · {{ row.posting_date }}</small></span>
-							<strong>{{ formatCurrency(row.grand_total) }}</strong>
-						</button>
+						<template v-for="row in recentInvoices" :key="row.invoice">
+							<button v-if="nativeFallbackEnabled" type="button" class="sales-list-row" @click="openInvoice(row.invoice)">
+								<span><strong>{{ row.invoice }}</strong><small>{{ row.customer_name || row.customer }} · {{ formatDate(row.posting_date) }}</small></span>
+								<strong>{{ formatCurrency(row.grand_total) }}</strong>
+							</button>
+							<div v-else class="sales-list-row sales-list-row--static">
+								<span><strong>{{ row.invoice }}</strong><small>{{ row.customer_name || row.customer }} · {{ formatDate(row.posting_date) }}</small></span>
+								<strong>{{ formatCurrency(row.grand_total) }}</strong>
+							</div>
+						</template>
 					</div>
 					<div v-else class="sales-empty">No submitted invoices matched this period.</div>
 					<button type="button" class="edge-button edge-button--secondary sales-open" @click="openRoute(routes.invoice_register)">Open Sales Invoice Register</button>
@@ -119,6 +125,7 @@ export default {
 			menuItems: [],
 			tenantName: "",
 			userName: "",
+			nativeFallbackEnabled: false,
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
 		};
 	},
@@ -144,6 +151,7 @@ export default {
 				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
+				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
@@ -193,11 +201,12 @@ export default {
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.nativeFallbackEnabled) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		openRoute(route) { if (route) window.location.assign(route); },
-		openInvoice(name) { if (name) frappe.set_route("Form", "Sales Invoice", name); },
+		openInvoice(name) { if (!this.nativeFallbackEnabled) return; if (name) frappe.set_route("Form", "Sales Invoice", name); },
 		formatValue(card) { try { return frappe.format(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
 		formatCurrency(value) { try { return frappe.format(value, { fieldtype: "Currency" }); } catch (_error) { return value ?? "—"; } },
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(String(value)); } catch (_error) { return String(value); } },
 	},
 };
 </script>

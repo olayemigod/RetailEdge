@@ -1,0 +1,318 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Customer Portal{% endblock %}
+
+{% block page_content %}
+<div class="edge-portal-shell" data-edge-suite-ready="true">
+	<section class="edge-portal-hero">
+		<div>
+			<div class="edge-portal-kicker">{{ company_name or "Customer Portal" }}</div>
+			<h1>Welcome, {{ user_full_name or customer_label }}</h1>
+			<p>View quotations, orders, invoices, deliveries, payments, statements and project updates linked to your customer account.</p>
+		</div>
+		<div class="edge-portal-identity">
+			<span>Account</span>
+			<strong>{{ customer_label }}</strong>
+		</div>
+	</section>
+
+	<section class="edge-portal-metrics">
+		<article class="edge-portal-card">
+			<span>Invoices</span>
+			<strong>{{ portal.invoice_summary.count or 0 }}</strong>
+		</article>
+		<article class="edge-portal-card">
+			<span>Outstanding</span>
+			<strong>{{ frappe.utils.fmt_money(portal.invoice_summary.outstanding or 0, currency=portal.invoice_summary.currency or None) }}</strong>
+		</article>
+		<article class="edge-portal-card{% if portal.invoice_summary.overdue_count %} edge-portal-card-alert{% endif %}">
+			<span>Overdue</span>
+			<strong>{{ frappe.utils.fmt_money(portal.invoice_summary.overdue_amount or 0, currency=portal.invoice_summary.currency or None) }}</strong>
+			<small>{{ portal.invoice_summary.overdue_count or 0 }} invoice{% if portal.invoice_summary.overdue_count != 1 %}s{% endif %}</small>
+		</article>
+		<article class="edge-portal-card">
+			<span>Total Billed</span>
+			<strong>{{ frappe.utils.fmt_money(portal.invoice_summary.billed or 0, currency=portal.invoice_summary.currency or None) }}</strong>
+		</article>
+		<article class="edge-portal-card">
+			<span>Payments Received</span>
+			<strong>{{ portal.payment_summary.count or 0 }}</strong>
+		</article>
+	</section>
+
+	<section class="edge-portal-grid">
+		{% for section in portal.sections %}
+		<article class="edge-portal-panel">
+			<header>
+				<div>
+					<span class="edge-portal-kicker">{{ section.label }}</span>
+					<h2>{{ section.count or 0 }} records</h2>
+				</div>
+				<a class="edge-portal-button" href="{{ section.route }}">View all</a>
+			</header>
+
+			{% if section.recent %}
+			<div class="edge-portal-list">
+				{% for row in section.recent %}
+				<div class="edge-portal-row{% if row.is_overdue %} edge-portal-row-overdue{% endif %}">
+					<a class="edge-portal-row-main" href="{{ section.route }}/{{ row.name }}">
+						<div>
+							<strong>{{ row.project_name or row.name }}</strong>
+							<span>{{ row.status or "Open" }}{% if row.date %} · {{ frappe.utils.formatdate(row.date) }}{% endif %}{% if row.valid_till %} · Valid till {{ frappe.utils.formatdate(row.valid_till) }}{% endif %}{% if row.is_overdue and row.due_date %} · Overdue since {{ frappe.utils.formatdate(row.due_date) }}{% endif %}{% if row.payment_request_status %} · Payment {{ row.payment_request_status }}{% endif %}{% if row.quotation_response %} · Response {{ row.quotation_response }}{% endif %}{% if row.quotation_message_count %} · {{ row.quotation_message_count }} message{% if row.quotation_message_count != 1 %}s{% endif %}{% endif %}{% if row.expected_start_date %} · Starts {{ frappe.utils.formatdate(row.expected_start_date) }}{% endif %}{% if row.expected_end_date %} · Target {{ frappe.utils.formatdate(row.expected_end_date) }}{% endif %}{% if row.project_update_count %} · {{ row.project_update_count }} published update{% if row.project_update_count != 1 %}s{% endif %}{% endif %}</span>
+						</div>
+						<div class="edge-portal-row-value">
+							{% if row.grand_total %}{{ frappe.utils.fmt_money(row.grand_total, currency=row.currency or None) }}{% elif row.project_name %}{{ row.percent_complete or 0 }}%{% elif row.percent_complete %}{{ row.percent_complete }}%{% endif %}
+							{% if row.outstanding_amount %}<small>Outstanding {{ frappe.utils.fmt_money(row.outstanding_amount, currency=row.currency or None) }}</small>{% endif %}
+						</div>
+					</a>
+					{% if row.download_url or row.can_pay_online or row.can_respond_to_quotation or row.can_message_quotation or row.project_updates_url %}
+					<div class="edge-portal-row-actions">
+						{% if row.download_url %}<a class="edge-portal-download" href="{{ row.download_url }}" aria-label="Download {{ row.name }} PDF">Download PDF</a>{% endif %}
+						{% if row.can_pay_online %}<button class="edge-portal-pay" type="button" data-invoice-name="{{ row.name }}">{{ row.payment_action_label or "Pay Invoice" }}</button>{% endif %}
+						{% if row.can_respond_to_quotation %}
+						<button class="edge-portal-quote-action edge-portal-quote-accept{% if row.quotation_response == 'Accepted' %} is-current{% endif %}" type="button" data-quotation-name="{{ row.name }}" data-activity-type="Accepted">Accept</button>
+						<button class="edge-portal-quote-action edge-portal-quote-decline{% if row.quotation_response == 'Declined' %} is-current{% endif %}" type="button" data-quotation-name="{{ row.name }}" data-activity-type="Declined">Decline</button>
+						{% endif %}
+						{% if row.can_message_quotation %}<button class="edge-portal-quote-action edge-portal-quote-message" type="button" data-quotation-name="{{ row.name }}" data-activity-type="Message">Message</button>{% endif %}
+						{% if row.project_updates_url %}<a class="edge-portal-download" href="{{ row.project_updates_url }}">Project Updates</a>{% endif %}
+					</div>
+					{% endif %}
+					{% if row.quotation_response_note %}<div class="edge-portal-response-note"><strong>Response note:</strong> {{ row.quotation_response_note }}</div>{% endif %}
+					{% if row.latest_project_update %}<div class="edge-portal-response-note"><strong>Latest project update{% if row.latest_project_update_on %} · {{ frappe.utils.format_datetime(row.latest_project_update_on) }}{% endif %}:</strong> {{ row.latest_project_update }}</div>{% endif %}
+				</div>
+				{% endfor %}
+			</div>
+			{% else %}
+			<div class="edge-portal-empty">No records available.</div>
+			{% endif %}
+		</article>
+		{% endfor %}
+
+		<article class="edge-portal-panel">
+			<header>
+				<div>
+					<span class="edge-portal-kicker">Payments</span>
+					<h2>{{ portal.payment_summary.count or 0 }} received</h2>
+				</div>
+			</header>
+			{% if portal.payment_summary.recent %}
+			<div class="edge-portal-list">
+				{% for row in portal.payment_summary.recent %}
+				<div class="edge-portal-row edge-portal-row-static">
+					<div>
+						<strong>{{ row.mode_of_payment or "Payment" }}</strong>
+						<span>{{ frappe.utils.formatdate(row.posting_date) }}{% if row.reference_no %} · Ref {{ row.reference_no }}{% endif %}</span>
+					</div>
+					<div class="edge-portal-row-value">{{ frappe.utils.fmt_money(row.amount, currency=row.currency or None) }}</div>
+				</div>
+				{% endfor %}
+			</div>
+			{% else %}
+			<div class="edge-portal-empty">No submitted customer payments found.</div>
+			{% endif %}
+			<div class="edge-portal-panel-note">{{ portal.payment_summary.scope_note }}</div>
+		</article>
+
+		<article class="edge-portal-panel">
+			<header>
+				<div>
+					<span class="edge-portal-kicker">Advances & Statements</span>
+					<h2>{{ portal.advance_summary.balance_count or 0 }} available balance{% if portal.advance_summary.balance_count != 1 %}s{% endif %}</h2>
+				</div>
+				<a class="edge-portal-button" href="{{ portal.routes.account_statement }}">Account Statement</a>
+			</header>
+			{% if portal.advance_summary.balances %}
+			<div class="edge-portal-list">
+				{% for balance in portal.advance_summary.balances %}
+				<div class="edge-portal-row edge-portal-row-static">
+					<div>
+						<strong>{{ balance.company }}</strong>
+						<span>{{ balance.count }} unallocated payment{% if balance.count != 1 %}s{% endif %}</span>
+					</div>
+					<div class="edge-portal-row-value">{{ frappe.utils.fmt_money(balance.available_advance or 0, currency=balance.currency or None) }}</div>
+				</div>
+				{% endfor %}
+			</div>
+			{% else %}
+			<div class="edge-portal-empty">No available customer advances found.</div>
+			{% endif %}
+			<div class="edge-portal-panel-note">{{ portal.advance_summary.scope_note or "Available advances are read-only ERPNext payment balances and are not a wallet." }}</div>
+		</article>
+	</section>
+
+	<section class="edge-portal-note">
+		<strong>Secure document, financial and project access</strong>
+		<p>Document pages and PDF downloads use ERPNext customer website permissions. Quotation responses are recorded separately and do not alter the submitted quotation. Invoice payment actions are revalidated on the server. Available advances remain ERPNext unallocated Payment Entry amounts, statements come from the receivable Payment Ledger, and project activity shows only submitted Project Updates explicitly approved for customer publication.</p>
+	</section>
+</div>
+
+<div class="edge-portal-dialog-backdrop" id="edge-portal-activity-dialog" hidden>
+	<div class="edge-portal-dialog" role="dialog" aria-modal="true" aria-labelledby="edge-portal-activity-title">
+		<form id="edge-portal-activity-form">
+			<div class="edge-portal-dialog-header">
+				<div>
+					<span class="edge-portal-kicker">Quotation response</span>
+					<h2 id="edge-portal-activity-title">Customer activity</h2>
+				</div>
+				<button type="button" class="edge-portal-dialog-close" aria-label="Close">×</button>
+			</div>
+			<p id="edge-portal-activity-help" class="edge-portal-dialog-help"></p>
+			<label class="edge-portal-dialog-field">
+				<span id="edge-portal-activity-message-label">Optional note</span>
+				<textarea id="edge-portal-activity-message" maxlength="2000" rows="5" placeholder="Add a note"></textarea>
+			</label>
+			<div class="edge-portal-dialog-actions">
+				<button type="button" class="edge-portal-dialog-cancel">Cancel</button>
+				<button type="submit" class="edge-portal-dialog-submit">Save response</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+<style>
+.edge-portal-shell{--edge-portal-surface:var(--edge-color-surface,#fff);--edge-portal-subtle:var(--edge-color-surface-muted,#f7f7f8);--edge-portal-border:var(--edge-color-border,#e5e7eb);--edge-portal-ink:var(--edge-color-ink,#111827);--edge-portal-muted:var(--edge-color-ink-muted,#6b7280);--edge-portal-accent:var(--edge-color-primary,#2563eb);--edge-portal-danger:var(--edge-color-danger,#b91c1c);display:grid;gap:1rem;color:var(--edge-portal-ink);padding:1rem 0 2rem}.edge-portal-hero,.edge-portal-panel,.edge-portal-card,.edge-portal-note{background:var(--edge-portal-surface);border:1px solid var(--edge-portal-border);border-radius:14px}.edge-portal-hero{display:flex;justify-content:space-between;gap:1rem;padding:1.25rem}.edge-portal-hero h1,.edge-portal-panel h2{margin:.2rem 0 .35rem}.edge-portal-hero p,.edge-portal-note p{margin:0;color:var(--edge-portal-muted)}.edge-portal-kicker{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--edge-portal-muted)}.edge-portal-identity{display:grid;align-content:start;min-width:12rem;text-align:right}.edge-portal-identity span,.edge-portal-card span,.edge-portal-card small{font-size:.8rem;color:var(--edge-portal-muted)}.edge-portal-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1rem}.edge-portal-card{display:grid;gap:.35rem;padding:1rem}.edge-portal-card strong{font-size:1.4rem}.edge-portal-card-alert{border-color:var(--edge-portal-danger)}.edge-portal-card-alert strong{color:var(--edge-portal-danger)}.edge-portal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.edge-portal-panel{overflow:hidden}.edge-portal-panel>header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;padding:1rem;border-bottom:1px solid var(--edge-portal-border)}.edge-portal-button,.edge-portal-download,.edge-portal-pay,.edge-portal-quote-action{display:inline-flex;align-items:center;justify-content:center;min-height:2.25rem;padding:.45rem .75rem;border-radius:8px;text-decoration:none;font:inherit}.edge-portal-button,.edge-portal-pay,.edge-portal-quote-accept{background:var(--edge-portal-accent);color:#fff!important;border:1px solid var(--edge-portal-accent)}.edge-portal-pay,.edge-portal-quote-action{cursor:pointer}.edge-portal-pay:disabled,.edge-portal-quote-action:disabled{cursor:progress;opacity:.65}.edge-portal-download,.edge-portal-quote-message{border:1px solid var(--edge-portal-border);color:var(--edge-portal-ink)!important;background:var(--edge-portal-surface);white-space:nowrap}.edge-portal-quote-decline{border:1px solid var(--edge-portal-danger);color:var(--edge-portal-danger);background:var(--edge-portal-surface)}.edge-portal-quote-action.is-current{box-shadow:0 0 0 2px var(--edge-portal-surface),0 0 0 4px currentColor}.edge-portal-list{display:grid}.edge-portal-row{display:flex;gap:.75rem;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--edge-portal-border);flex-wrap:wrap}.edge-portal-row:last-child{border-bottom:0}.edge-portal-row:hover{background:var(--edge-portal-subtle)}.edge-portal-row-static:hover{background:transparent}.edge-portal-row-overdue{border-left:3px solid var(--edge-portal-danger)}.edge-portal-row-main{display:flex;justify-content:space-between;gap:1rem;align-items:center;min-width:0;flex:1;color:var(--edge-portal-ink)!important;text-decoration:none}.edge-portal-row span,.edge-portal-row-value small{display:block;margin-top:.2rem;font-size:.8rem;color:var(--edge-portal-muted)}.edge-portal-row-value{text-align:right;font-weight:600}.edge-portal-row-actions{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}.edge-portal-response-note{flex-basis:100%;padding:.55rem .7rem;border-radius:8px;background:var(--edge-portal-subtle);font-size:.82rem;color:var(--edge-portal-muted)}.edge-portal-empty{padding:1.25rem;color:var(--edge-portal-muted)}.edge-portal-panel-note{padding:.75rem 1rem;border-top:1px solid var(--edge-portal-border);font-size:.8rem;color:var(--edge-portal-muted)}.edge-portal-note{padding:1rem}.edge-portal-dialog-backdrop{position:fixed;inset:0;z-index:1050;background:rgba(15,23,42,.48);display:grid;place-items:center;padding:1rem}.edge-portal-dialog-backdrop[hidden]{display:none}.edge-portal-dialog{width:min(34rem,100%);background:var(--edge-color-surface,#fff);color:var(--edge-color-ink,#111827);border:1px solid var(--edge-color-border,#e5e7eb);border-radius:14px;box-shadow:0 24px 70px rgba(15,23,42,.24);padding:1.1rem}.edge-portal-dialog-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}.edge-portal-dialog-header h2{margin:.2rem 0 0}.edge-portal-dialog-close{border:0;background:transparent;font-size:1.8rem;line-height:1;cursor:pointer;color:var(--edge-color-ink-muted,#6b7280)}.edge-portal-dialog-help{color:var(--edge-color-ink-muted,#6b7280);margin:.8rem 0}.edge-portal-dialog-field{display:grid;gap:.4rem;font-weight:600}.edge-portal-dialog-field textarea{width:100%;resize:vertical;border:1px solid var(--edge-color-border,#d1d5db);border-radius:9px;padding:.7rem;background:var(--edge-color-surface,#fff);color:var(--edge-color-ink,#111827);font:inherit}.edge-portal-dialog-actions{display:flex;justify-content:flex-end;gap:.6rem;margin-top:1rem}.edge-portal-dialog-cancel,.edge-portal-dialog-submit{min-height:2.35rem;border-radius:8px;padding:.45rem .85rem;font:inherit;cursor:pointer}.edge-portal-dialog-cancel{border:1px solid var(--edge-color-border,#d1d5db);background:var(--edge-color-surface,#fff);color:var(--edge-color-ink,#111827)}.edge-portal-dialog-submit{border:1px solid var(--edge-portal-accent,#2563eb);background:var(--edge-portal-accent,#2563eb);color:#fff}.edge-portal-dialog-submit:disabled{opacity:.65;cursor:progress}@media(max-width:1100px){.edge-portal-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:900px){.edge-portal-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.edge-portal-row{align-items:stretch;flex-direction:column}.edge-portal-row-actions{align-self:flex-start}}@media(max-width:800px){.edge-portal-hero{flex-direction:column}.edge-portal-identity{text-align:left}.edge-portal-grid{grid-template-columns:1fr}}@media(max-width:520px){.edge-portal-metrics{grid-template-columns:1fr}.edge-portal-row-main{align-items:flex-start;flex-direction:column}.edge-portal-row-value{text-align:left}.edge-portal-dialog-actions{flex-direction:column-reverse}.edge-portal-dialog-cancel,.edge-portal-dialog-submit{width:100%}}
+</style>
+
+<script>
+(function() {
+	const dialog = document.getElementById("edge-portal-activity-dialog");
+	const form = document.getElementById("edge-portal-activity-form");
+	const title = document.getElementById("edge-portal-activity-title");
+	const help = document.getElementById("edge-portal-activity-help");
+	const label = document.getElementById("edge-portal-activity-message-label");
+	const message = document.getElementById("edge-portal-activity-message");
+	const submit = dialog && dialog.querySelector(".edge-portal-dialog-submit");
+	let quotationName = "";
+	let activityType = "";
+
+	function closeActivityDialog() {
+		if (!dialog) return;
+		dialog.hidden = true;
+		quotationName = "";
+		activityType = "";
+		if (message) message.value = "";
+		if (submit) { submit.disabled = false; submit.textContent = "Save response"; }
+	}
+
+	function openActivityDialog(button) {
+		if (!dialog || !form || !button) return;
+		quotationName = button.dataset.quotationName || "";
+		activityType = button.dataset.activityType || "";
+		if (!quotationName || !activityType) return;
+		const copy = {
+			Accepted: {
+				title: `Accept ${quotationName}`,
+				help: "Record your acceptance of this quotation. This records your response without changing the submitted quotation.",
+				label: "Optional note",
+				placeholder: "Add any note for the business",
+				submit: "Record acceptance",
+			},
+			Declined: {
+				title: `Decline ${quotationName}`,
+				help: "Record that you do not wish to proceed with this quotation. You may add a reason or note.",
+				label: "Optional note",
+				placeholder: "Add a reason or note",
+				submit: "Record decline",
+			},
+			Message: {
+				title: `Message about ${quotationName}`,
+				help: "Send a message linked to this quotation without changing the quotation itself.",
+				label: "Message",
+				placeholder: "Enter your message",
+				submit: "Send message",
+			},
+		};
+		const selected = copy[activityType] || copy.Message;
+		title.textContent = selected.title;
+		help.textContent = selected.help;
+		label.textContent = selected.label;
+		message.placeholder = selected.placeholder;
+		message.required = activityType === "Message";
+		submit.textContent = selected.submit;
+		dialog.hidden = false;
+		window.setTimeout(() => message.focus(), 0);
+	}
+
+	document.addEventListener("click", function(event) {
+		const paymentButton = event.target.closest(".edge-portal-pay");
+		if (paymentButton) {
+			const invoiceName = paymentButton.dataset.invoiceName;
+			if (!invoiceName || paymentButton.disabled) return;
+			const originalLabel = paymentButton.textContent;
+			paymentButton.disabled = true;
+			paymentButton.textContent = "Opening payment…";
+			if (!window.frappe || typeof window.frappe.call !== "function") {
+				paymentButton.disabled = false;
+				paymentButton.textContent = originalLabel;
+				window.alert("Payment could not be started. Please refresh the page and try again.");
+				return;
+			}
+			window.frappe.call({
+				method: "retailedge.customer_portal_payment.request_invoice_payment",
+				type: "POST",
+				args: { invoice_name: invoiceName },
+			}).then(function(response) {
+				const result = response && response.message;
+				if (!result || !result.payment_url) throw new Error("Payment link was not returned.");
+				window.location.assign(result.payment_url);
+			}).catch(function(error) {
+				paymentButton.disabled = false;
+				paymentButton.textContent = originalLabel;
+				const text = error && (error.message || error.exc) || "Payment could not be started. Please try again.";
+				if (window.frappe && typeof window.frappe.msgprint === "function") window.frappe.msgprint(text);
+				else window.alert(text);
+			});
+			return;
+		}
+
+		const activityButton = event.target.closest(".edge-portal-quote-action");
+		if (activityButton) {
+			openActivityDialog(activityButton);
+			return;
+		}
+		if (event.target.closest(".edge-portal-dialog-close") || event.target.closest(".edge-portal-dialog-cancel")) {
+			closeActivityDialog();
+			return;
+		}
+		if (event.target === dialog) closeActivityDialog();
+	});
+
+	if (form) form.addEventListener("submit", function(event) {
+		event.preventDefault();
+		if (!quotationName || !activityType || !submit || submit.disabled) return;
+		if (activityType === "Message" && !message.value.trim()) {
+			message.focus();
+			return;
+		}
+		if (!window.frappe || typeof window.frappe.call !== "function") {
+			window.alert("Your response could not be recorded. Please refresh the page and try again.");
+			return;
+		}
+		const originalLabel = submit.textContent;
+		submit.disabled = true;
+		submit.textContent = "Saving…";
+		window.frappe.call({
+			method: "retailedge.customer_portal_collaboration.record_quotation_activity",
+			type: "POST",
+			args: {
+				quotation_name: quotationName,
+				activity_type: activityType,
+				message: message.value,
+			},
+		}).then(function() {
+			window.location.reload();
+		}).catch(function(error) {
+			submit.disabled = false;
+			submit.textContent = originalLabel;
+			const text = error && (error.message || error.exc) || "Your response could not be recorded. Please try again.";
+			if (window.frappe && typeof window.frappe.msgprint === "function") window.frappe.msgprint(text);
+			else window.alert(text);
+		});
+	});
+
+	document.addEventListener("keydown", function(event) {
+		if (event.key === "Escape" && dialog && !dialog.hidden) closeActivityDialog();
+	});
+})();
+</script>
+{% endblock %}

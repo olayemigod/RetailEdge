@@ -8,9 +8,9 @@ from frappe import _
 from frappe.utils import date_diff, flt, getdate
 
 from retailedge.accounting_profitability import get_accounting_profitability
-from retailedge.branch_context import user_has_global_branch_access
 from retailedge.budget_spend_control import get_budget_spend_control
 from retailedge.liquidity_control import get_liquidity_control
+from retailedge.reporting_scope import has_unrestricted_report_scope
 
 
 @frappe.whitelist()
@@ -30,7 +30,11 @@ def get_control_early_warning(filters: dict[str, Any] | str | None = None) -> di
 
 
 def _profitability_trend(filters: frappe._dict) -> dict[str, Any]:
-	if filters.get("branch") or not user_has_global_branch_access(user=frappe.session.user):
+	company = str(filters.get("company") or "").strip()
+	if filters.get("branch") or not has_unrestricted_report_scope(
+		company,
+		user=frappe.session.user,
+	):
 		return {
 			"available": False,
 			"reason": _(
@@ -50,7 +54,8 @@ def _profitability_trend(filters: frappe._dict) -> dict[str, Any]:
 	if not current.get("available"):
 		return {
 			"available": False,
-			"reason": current.get("reason") or _("Accounting profitability trend is unavailable for this scope."),
+			"reason": current.get("reason")
+			or _("Accounting profitability trend is unavailable for this scope."),
 			"current": current,
 			"previous": {},
 		}
@@ -105,21 +110,68 @@ def _build_control_early_warning(
 	overdue_payables = flt(current_liquidity.get("overdue_payables"))
 
 	if cash_available and immediate_coverage is not None and immediate_coverage < 1:
-		warnings.append(_warning("critical", "Liquidity", "Cash and bank balance does not cover supplier obligations due within the control horizon", immediate_coverage, "Float", "/app/supplier-payables"))
+		warnings.append(
+			_warning(
+				"critical",
+				"Liquidity",
+				"Cash and bank balance does not cover supplier obligations due within the control horizon",
+				immediate_coverage,
+				"Float",
+				"/app/supplier-payables",
+			)
+		)
 	elif cash_available and immediate_coverage is not None and immediate_coverage < 1.25:
-		warnings.append(_warning("warning", "Liquidity", "Immediate supplier-obligation coverage is tight", immediate_coverage, "Float", "/app/supplier-payables"))
+		warnings.append(
+			_warning(
+				"warning",
+				"Liquidity",
+				"Immediate supplier-obligation coverage is tight",
+				immediate_coverage,
+				"Float",
+				"/app/supplier-payables",
+			)
+		)
 	if cash_available and indicative_gap is not None and indicative_gap < 0:
-		warnings.append(_warning("warning", "Liquidity", "Cash plus receivables due within the horizon remains below supplier obligations due", indicative_gap, "Currency", "/app/supplier-payables"))
+		warnings.append(
+			_warning(
+				"warning",
+				"Liquidity",
+				"Cash plus receivables due within the horizon remains below supplier obligations due",
+				indicative_gap,
+				"Currency",
+				"/app/supplier-payables",
+			)
+		)
 	if overdue_receivables > 0:
-		warnings.append(_warning("warning", "Collections", "Overdue customer receivables require collection attention", overdue_receivables, "Currency", "/app/customer-receivables"))
+		warnings.append(
+			_warning(
+				"warning",
+				"Collections",
+				"Overdue customer receivables require collection attention",
+				overdue_receivables,
+				"Currency",
+				"/app/customer-receivables",
+			)
+		)
 	if overdue_payables > 0:
-		warnings.append(_warning("warning", "Supplier Obligations", "Overdue supplier obligations require payment attention", overdue_payables, "Currency", "/app/supplier-payables"))
+		warnings.append(
+			_warning(
+				"warning",
+				"Supplier Obligations",
+				"Overdue supplier obligations require payment attention",
+				overdue_payables,
+				"Currency",
+				"/app/supplier-payables",
+			)
+		)
 
 	profit_signal = _profitability_warning(profitability)
 	if profit_signal:
 		warnings.append(profit_signal)
 
-	warnings.sort(key=lambda item: (0 if item["severity"] == "critical" else 1, item["family"], item["label"]))
+	warnings.sort(
+		key=lambda item: (0 if item["severity"] == "critical" else 1, item["family"], item["label"])
+	)
 	return {
 		"title": _("Control Trends & Early Warning"),
 		"warnings": warnings,
@@ -148,12 +200,33 @@ def _profitability_warning(profitability: dict[str, Any]) -> dict[str, Any] | No
 	current_margin = _optional_float(current.get("gross_margin_percent"))
 	previous_margin = _optional_float(previous.get("gross_margin_percent"))
 	if current_profit < 0:
-		return _warning("critical", "Profitability", "ERPNext accounting net profit is negative for the selected period", current_profit, "Currency", str(current.get("route") or "/app/query-report/Profit%20and%20Loss%20Statement"))
+		return _warning(
+			"critical",
+			"Profitability",
+			"ERPNext accounting net profit is negative for the selected period",
+			current_profit,
+			"Currency",
+			str(current.get("route") or "/app/query-report/Profit%20and%20Loss%20Statement"),
+		)
 	if previous_profit > 0 and current_profit < previous_profit * 0.8:
 		change_pct = (current_profit - previous_profit) / previous_profit * 100.0
-		return _warning("warning", "Profitability", "Accounting net profit declined materially versus the previous equal period", change_pct, "Percent", str(current.get("route") or "/app/query-report/Profit%20and%20Loss%20Statement"))
+		return _warning(
+			"warning",
+			"Profitability",
+			"Accounting net profit declined materially versus the previous equal period",
+			change_pct,
+			"Percent",
+			str(current.get("route") or "/app/query-report/Profit%20and%20Loss%20Statement"),
+		)
 	if current_margin is not None and previous_margin is not None and current_margin < previous_margin - 5:
-		return _warning("warning", "Profitability", "Gross margin declined by more than 5 percentage points versus the previous equal period", current_margin - previous_margin, "Percent", str(current.get("route") or "/app/query-report/Profit%20and%20Loss%20Statement"))
+		return _warning(
+			"warning",
+			"Profitability",
+			"Gross margin declined by more than 5 percentage points versus the previous equal period",
+			current_margin - previous_margin,
+			"Percent",
+			str(current.get("route") or "/app/query-report/Profit%20and%20Loss%20Statement"),
+		)
 	return None
 
 

@@ -47,8 +47,8 @@
 					<div v-if="posLaunchError" class="pos-launch-error" role="alert">{{ posLaunchError }}</div>
 					<div class="workspace-actions">
 						<button v-if="canStartPos" type="button" class="edge-button edge-button--primary" :disabled="posStarting" @click="startPos">{{ posStarting ? "Checking POS..." : "Start POS" }}</button>
-						<button v-if="pos?.opening_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.opening_doctype)">POS Opening</button>
-						<button v-if="pos?.closing_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.closing_doctype)">POS Closing</button>
+						<button v-if="canUseNativeDesk && pos?.opening_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.opening_doctype)">Advanced: POS Opening</button>
+						<button v-if="canUseNativeDesk && pos?.closing_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.closing_doctype)">Advanced: POS Closing</button>
 					</div>
 					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. When online, RetailEdge validates the current operating context before launch. If the device is offline, RetailEdge does not make its preflight a hard dependency; POSNext keeps control of its own offline runtime and sync behaviour.</p>
 				</section>
@@ -65,8 +65,8 @@
 						<h3>{{ action.label }}</h3>
 						<p>{{ actionDescription(action) }}</p>
 						<div class="workspace-actions">
-							<button type="button" class="edge-button edge-button--primary" @click="runTransactionAction(action)">{{ actionButtonLabel(action) }}</button>
-							<button type="button" class="edge-button edge-button--secondary" @click="openDoctype(action.doctype)">View Records</button>
+							<button v-if="canRunTransactionAction(action)" type="button" class="edge-button edge-button--primary" @click="runTransactionAction(action)">{{ actionButtonLabel(action) }}</button>
+							<button v-if="canViewTransactionRecords(action)" type="button" class="edge-button edge-button--secondary" @click="viewTransactionRecords(action)">{{ viewButtonLabel(action) }}</button>
 						</div>
 					</section>
 				</div>
@@ -74,18 +74,20 @@
 
 			<SimpleSalesInvoiceDialog
 				:open="simpleSalesInvoiceOpen"
+				:nativeFallbackEnabled="canUseNativeDesk"
 				@close="simpleSalesInvoiceOpen = false"
 				@saved="handleGuidedSaved"
 				@open-native="openNativeSalesInvoice"
 			/>
 			<SimplePurchaseInvoiceDialog
 				:open="simplePurchaseInvoiceOpen"
+				:nativeFallbackEnabled="false"
 				@close="simplePurchaseInvoiceOpen = false"
 				@saved="handleGuidedSaved"
-				@open-native="openNativePurchaseInvoice"
 			/>
 			<SimpleStockTransferDialog
 				:open="simpleStockTransferOpen"
+				:nativeFallbackEnabled="canUseNativeDesk"
 				@close="simpleStockTransferOpen = false"
 				@saved="handleGuidedSaved"
 				@open-native="openNativeStockTransfer"
@@ -165,6 +167,7 @@ export default {
 			simpleSalesInvoiceOpen: false,
 			simplePurchaseInvoiceOpen: false,
 			simpleStockTransferOpen: false,
+			canUseNativeDesk: false,
 		};
 	},
 	computed: {
@@ -212,6 +215,7 @@ export default {
 				this.branchName = workspace.operating?.branch || navigation.context?.branch || "";
 				this.posProfile = workspace.operating?.default_pos_profile || "";
 				this.userName = navigation.context?.user_name || workspace.user_name || "";
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.loaded = true;
 			} catch (error) {
@@ -235,9 +239,33 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
+		},
+		hasPageTarget(target) {
+			return Boolean(target && this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target));
+		},
+		createOwnerPage(action) {
+			if (["Sales Order", "Delivery Note"].includes(action?.doctype)) return "professional-selling";
+			if (["Purchase Order", "Purchase Receipt"].includes(action?.doctype)) return "professional-purchasing";
+			return "";
+		},
+		readOwnerPage(action) {
+			if (["Sales Invoice", "Sales Order", "Delivery Note"].includes(action?.doctype)) return "professional-selling";
+			if (action?.doctype === "Purchase Invoice") return "purchase-register";
+			if (["Purchase Order", "Purchase Receipt"].includes(action?.doctype)) return "professional-purchasing";
+			return "";
+		},
+		canRunTransactionAction(action) {
+			if (GUIDED_DOCTYPES.has(action?.doctype)) return true;
+			const owner = this.createOwnerPage(action);
+			return Boolean((owner && this.hasPageTarget(owner)) || this.canUseNativeDesk);
+		},
+		canViewTransactionRecords(action) {
+			const owner = this.readOwnerPage(action);
+			return Boolean((owner && this.hasPageTarget(owner)) || this.canUseNativeDesk);
 		},
 		launchPosTarget(launch) {
 			if (launch?.start_link_type === "Page" && launch.start_target) {
@@ -284,15 +312,47 @@ export default {
 				this.simpleStockTransferOpen = true;
 				return;
 			}
+			const owner = this.createOwnerPage(action);
+			if (owner && this.hasPageTarget(owner)) {
+				frappe.set_route(owner);
+				return;
+			}
 			this.createDoctype(action.doctype);
 		},
+		viewTransactionRecords(action) {
+			const owner = this.readOwnerPage(action);
+			if (owner && this.hasPageTarget(owner)) {
+				frappe.set_route(owner);
+				return;
+			}
+			this.openDoctype(action?.doctype);
+		},
 		actionButtonLabel(action) {
-			return GUIDED_DOCTYPES.has(action?.doctype) ? "Guided Entry" : "Create";
+			if (GUIDED_DOCTYPES.has(action?.doctype)) return "Guided Entry";
+			const owner = this.createOwnerPage(action);
+			if (owner === "professional-selling" && this.hasPageTarget(owner)) return "Open Selling";
+			if (owner === "professional-purchasing" && this.hasPageTarget(owner)) return "Open Purchasing";
+			return "Advanced: Create in ERPNext";
+		},
+		viewButtonLabel(action) {
+			return this.readOwnerPage(action) && this.hasPageTarget(this.readOwnerPage(action)) ? "View / Manage" : "Advanced: View in ERPNext";
 		},
 		actionDescription(action) {
+			if (action?.doctype === "Sales Invoice") {
+				return "Use the guided Sales Invoice flow here and manage selling records in Professional Selling.";
+			}
+			if (action?.doctype === "Purchase Invoice") {
+				return "Use the guided Purchase Invoice flow here and review submitted purchases in the Purchase Register.";
+			}
+			if (["Sales Order", "Delivery Note"].includes(action?.doctype)) {
+				return "Continue this routine workflow in Professional Selling, where EdgeSuite owns guided selling operations and ERPNext remains authoritative.";
+			}
+			if (["Purchase Order", "Purchase Receipt"].includes(action?.doctype)) {
+				return "Continue this routine workflow in Professional Purchasing, where EdgeSuite owns the standard purchasing path and ERPNext remains authoritative.";
+			}
 			return GUIDED_DOCTYPES.has(action?.doctype)
-				? `Use the existing guided ${action.label} flow here, with native ERPNext as the advanced fallback.`
-				: `Create a native ERPNext ${action.label} using the current operating context and server-side RetailEdge defaults.`;
+				? `Use the existing guided ${action.label} flow here, with native ERPNext as an explicit advanced fallback.`
+				: `Use the authorised advanced ERPNext ${action.label} workflow.`;
 		},
 		handleGuidedSaved() {
 			this.simpleSalesInvoiceOpen = false;
@@ -301,23 +361,21 @@ export default {
 			this.loadWorkspace();
 		},
 		openNativeSalesInvoice() {
+			if (!this.canUseNativeDesk) return;
 			this.simpleSalesInvoiceOpen = false;
 			this.createDoctype("Sales Invoice");
 		},
-		openNativePurchaseInvoice() {
-			this.simplePurchaseInvoiceOpen = false;
-			this.createDoctype("Purchase Invoice");
-		},
 		openNativeStockTransfer() {
+			if (!this.canUseNativeDesk) return;
 			this.simpleStockTransferOpen = false;
 			this.createDoctype("Stock Entry");
 		},
 		openDoctype(doctype) {
-			if (!doctype) return;
+			if (!this.canUseNativeDesk || !doctype) return;
 			window.open(`/app/${doctypeSlug(doctype)}`, "_blank", "noopener,noreferrer");
 		},
 		createDoctype(doctype) {
-			if (!doctype) return;
+			if (!this.canUseNativeDesk || !doctype) return;
 			window.open(`/app/${doctypeSlug(doctype)}/new`, "_blank", "noopener,noreferrer");
 		},
 		openOperatingContext() {

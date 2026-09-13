@@ -28,7 +28,11 @@ class TestAdvancedPaymentBranchSafety(unittest.TestCase):
 			)
 
 		mock_branch_access.assert_called_once()
-		mock_get_list.assert_not_called()
+		payment_entry_queries = [
+			call for call in mock_get_list.call_args_list
+			if call.args and call.args[0] == "Payment Entry"
+		]
+		self.assertEqual(payment_entry_queries, [])
 
 
 if __name__ == "__main__":

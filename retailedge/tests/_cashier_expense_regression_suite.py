@@ -991,8 +991,9 @@ class CashierExpenseServiceTests(unittest.TestCase):
 		self.assertEqual(result["expense_status"], "Submitted")
 		self.assertEqual(result["ledger_status"], "Not Applicable")
 
+	@patch("retailedge.cashier_expense.get_branch_query_filters", return_value={"filters": {}})
 	@patch("retailedge.cashier_expense.frappe.get_all")
-	def test_summary_groups_by_status(self, mock_get_all):
+	def test_summary_groups_by_status(self, mock_get_all, _mock_branch_filters):
 		mock_get_all.return_value = [
 			SimpleNamespace(expense_status="Submitted", amount=100),
 			SimpleNamespace(expense_status="Submitted", amount=50),
@@ -1800,7 +1801,11 @@ class DailySalesAuditTests(unittest.TestCase):
 			return None
 
 		mock_coerce_doc.side_effect = _coerce
-		resolved = resolve_daily_sales_audit_context_from_selection({"pos_opening_shift": "OPEN-1"})
+		with patch(
+			"retailedge.daily_sales_audit.validate_daily_sales_audit_read_context",
+			side_effect=lambda context, **_kwargs: context,
+		):
+			resolved = resolve_daily_sales_audit_context_from_selection({"pos_opening_shift": "OPEN-1"})
 		self.assertEqual(resolved["company"], "Demo Company")
 		self.assertEqual(resolved["pos_profile"], "Testing")
 		self.assertEqual(resolved["cashier"], "cashier@example.com")
@@ -2087,16 +2092,20 @@ class DailySalesAuditTests(unittest.TestCase):
 			"source_map": {"branch": "POS Opening Shift"},
 		}
 		mock_expenses.return_value = []
-		get_daily_sales_audit_context(
-			{
-				"company": "Demo Company",
-				"branch": "Airport Branch",
-				"pos_profile": "Airport",
-				"cashier": "cashier@example.com",
-				"pos_opening_shift": "OPEN-1",
-				"pos_closing_shift": "CLOSE-1",
-			}
-		)
+		with patch(
+			"retailedge.daily_sales_audit.validate_daily_sales_audit_read_context",
+			side_effect=lambda context, **_kwargs: context,
+		):
+			get_daily_sales_audit_context(
+				{
+					"company": "Demo Company",
+					"branch": "Airport Branch",
+					"pos_profile": "Airport",
+					"cashier": "cashier@example.com",
+					"pos_opening_shift": "OPEN-1",
+					"pos_closing_shift": "CLOSE-1",
+				}
+			)
 		expense_filters = mock_expenses.call_args.kwargs["filters"]
 		self.assertEqual(expense_filters["branch"], "HQ")
 
@@ -2466,13 +2475,17 @@ class DailySalesAuditTests(unittest.TestCase):
 
 		mock_get_doc.side_effect = _get_doc
 
-		context = get_daily_sales_audit_context(
-			{
-				"company": "Demo Company",
-				"audit_date": "2026-05-14",
-				"pos_profile": "Testing",
-			}
-		)
+		with patch(
+			"retailedge.daily_sales_audit.validate_daily_sales_audit_read_context",
+			side_effect=lambda context, **_kwargs: context,
+		):
+			context = get_daily_sales_audit_context(
+				{
+					"company": "Demo Company",
+					"audit_date": "2026-05-14",
+					"pos_profile": "Testing",
+				}
+			)
 		self.assertEqual(len(context["invoice_lines"]), 1)
 		self.assertEqual(context["invoice_lines"][0]["remarks"], "POS Invoice")
 		self.assertEqual(len(context["payment_lines"]), 2)
@@ -2515,7 +2528,11 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch(
 		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all"
 	)
-	def test_daily_sales_audit_register_report_executes(self, mock_get_all):
+	@patch(
+		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.resolve_daily_sales_audit_register_read_scope",
+		return_value={"company": "Demo Company"},
+	)
+	def test_daily_sales_audit_register_report_executes(self, _mock_read_scope, mock_get_all):
 		mock_get_all.return_value = [
 			{
 				"name": "RE-DSA-2026-0001",
@@ -2545,7 +2562,11 @@ class DailySalesAuditTests(unittest.TestCase):
 	@patch(
 		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.frappe.get_all"
 	)
-	def test_daily_sales_audit_register_report_date_presets(self, mock_get_all):
+	@patch(
+		"retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register.resolve_daily_sales_audit_register_read_scope",
+		return_value={"company": "Demo Company"},
+	)
+	def test_daily_sales_audit_register_report_date_presets(self, _mock_read_scope, mock_get_all):
 		mock_get_all.return_value = []
 
 		# 1. Preset is accepted by backend
@@ -3390,7 +3411,7 @@ class TransactionBranchAttributionTests(unittest.TestCase):
 			if not field.get("hidden") and field.get("fieldtype") not in {"Section Break", "Column Break"}
 		]
 		self.assertEqual(visible_fields, ["retailedge_branch"])
-		self.assertEqual(by_fieldname["retailedge_branch"].get("label"), "RetailEdge Branch")
+		self.assertEqual(by_fieldname["retailedge_branch"].get("label"), "Operating Branch")
 		self.assertNotIn("retailedge_branch_attribution_section", by_fieldname)
 		self.assertEqual(by_fieldname["retailedge_branch_source"].get("hidden"), 1)
 		self.assertEqual(by_fieldname["retailedge_branch_resolved_on"].get("hidden"), 1)

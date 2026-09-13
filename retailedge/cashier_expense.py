@@ -6,8 +6,13 @@ from types import SimpleNamespace
 import frappe
 from frappe.utils import flt, now_datetime
 
-from retailedge.branch_context import get_branch_query_filters
+from retailedge.branch_context import get_branch_query_filters as _legacy_get_branch_query_filters
+from retailedge.cashier_expense_read_scope import apply_cashier_expense_read_scope
 from retailedge.utils.settings import get_retailedge_settings
+
+# Compatibility module attribute for older tests/extensions that monkeypatch the
+# legacy helper. Cashier Expense read builders below no longer use it.
+get_branch_query_filters = _legacy_get_branch_query_filters
 
 
 def get_reviewer_roles() -> set[str]:
@@ -383,17 +388,17 @@ def _status_payload(doc):
 
 def _build_summary_filters(filters):
 	query_filters = {}
-	query_filters.update(
-		(get_branch_query_filters(
-			"RetailEdge Cashier Expense",
-			user=getattr(getattr(frappe, "session", None), "user", "Administrator"),
-			company=filters.get("company"),
-			branch=filters.get("branch"),
-		).get("filters") or {})
-	)
-	for fieldname in ("company", "branch", "pos_profile", "cashier", "linked_pos_opening_shift", "expense_category", "expense_status"):
+	for fieldname in (
+		"company",
+		"branch",
+		"pos_profile",
+		"cashier",
+		"linked_pos_opening_shift",
+		"expense_category",
+		"expense_status",
+	):
 		value = filters.get(fieldname)
-		if value and fieldname not in query_filters:
+		if value:
 			query_filters[fieldname] = value
 	if filters.get("from_date"):
 		query_filters["expense_date"] = [">=", filters["from_date"]]
@@ -402,32 +407,24 @@ def _build_summary_filters(filters):
 			query_filters["expense_date"] = ["between", [filters["from_date"], filters["to_date"]]]
 		else:
 			query_filters["expense_date"] = ["<=", filters["to_date"]]
-	return query_filters
+	return apply_cashier_expense_read_scope(query_filters)
 
 
 def _coerce_cashier_expense_filters(filters):
 	if not filters:
-		return {}
+		return apply_cashier_expense_read_scope({})
 	parsed = frappe.parse_json(filters) if isinstance(filters, str) else filters
 	if isinstance(parsed, list):
-		return parsed
+		return apply_cashier_expense_read_scope(parsed)
 	if isinstance(parsed, frappe._dict):
 		parsed = dict(parsed)
 	if isinstance(parsed, dict):
 		return _build_summary_filters(parsed)
-	return {}
+	return apply_cashier_expense_read_scope({})
 
 
 def _build_variance_filters(filters, include_rejected=True, include_draft=True):
 	query_filters = {"docstatus": ["!=", 2], "expense_status": ["!=", "Cancelled"]}
-	query_filters.update(
-		(get_branch_query_filters(
-			"RetailEdge Cashier Expense",
-			user=getattr(getattr(frappe, "session", None), "user", "Administrator"),
-			company=filters.get("company"),
-			branch=filters.get("branch"),
-		).get("filters") or {})
-	)
 	for fieldname in (
 		"company",
 		"branch",
@@ -438,7 +435,7 @@ def _build_variance_filters(filters, include_rejected=True, include_draft=True):
 		"expense_category",
 	):
 		value = filters.get(fieldname)
-		if value and fieldname not in query_filters:
+		if value:
 			query_filters[fieldname] = value
 	if filters.get("expense_status"):
 		if isinstance(filters["expense_status"], (list, tuple)):
@@ -461,7 +458,7 @@ def _build_variance_filters(filters, include_rejected=True, include_draft=True):
 		query_filters["expense_date"] = [">=", filters["from_date"]]
 	elif filters.get("to_date"):
 		query_filters["expense_date"] = ["<=", filters["to_date"]]
-	return query_filters
+	return apply_cashier_expense_read_scope(query_filters)
 
 
 def _safe_variance_settings():

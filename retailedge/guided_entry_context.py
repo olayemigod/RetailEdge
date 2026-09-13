@@ -7,7 +7,11 @@ from frappe import _
 
 from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
-from retailedge.operating_context import get_effective_operating_context, validate_operating_branch
+from retailedge.operating_context import (
+	get_effective_operating_context,
+	get_operational_branch_scope,
+	resolve_operational_branch,
+)
 
 
 WAREHOUSE_PREFERENCES: dict[str, tuple[str, ...]] = {
@@ -69,7 +73,15 @@ def resolve_branch_warehouse_selection(
 			resolved_branch = str(getattr(profile, "branch", None) or "").strip() if profile else ""
 
 		if resolved_branch:
-			validate_operating_branch(company=company, branch=resolved_branch, user=user, throw=True)
+			resolved_branch = resolve_operational_branch(
+				company,
+				resolved_branch,
+				user=user,
+			)["branch"]
+			if branch and branch != resolved_branch:
+				frappe.throw(
+					_("Stock Location {0} does not belong to Branch {1}.").format(warehouse, branch)
+				)
 			return {
 				"company": company,
 				"branch": resolved_branch,
@@ -78,7 +90,13 @@ def resolve_branch_warehouse_selection(
 			}
 
 		if branch:
-			validate_operating_branch(company=company, branch=branch, user=user, throw=True)
+			branch = resolve_operational_branch(company, branch, user=user)["branch"]
+		else:
+			scope = get_operational_branch_scope(company, user=user)
+			if scope["restricted"]:
+				branch = resolve_operational_branch(company, "", user=user)["branch"]
+
+		if branch:
 			profile = get_branch_profile(
 				company=company,
 				branch=branch,
@@ -100,7 +118,7 @@ def resolve_branch_warehouse_selection(
 	if not branch:
 		return {"company": company, "branch": "", "warehouse": "", "source": "empty"}
 
-	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
+	branch = resolve_operational_branch(company, branch, user=user)["branch"]
 	defaults = get_branch_profile_defaults(company=company, branch=branch, user=user)
 	candidate = ""
 	for fieldname in WAREHOUSE_PREFERENCES.get(preference, WAREHOUSE_PREFERENCES["default"]):

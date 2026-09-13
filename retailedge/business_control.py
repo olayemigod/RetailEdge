@@ -6,9 +6,9 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_first_day, today
 
-from retailedge.branch_context import user_has_global_branch_access
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.owner_dashboard import get_owner_dashboard_data
+from retailedge.reporting_scope import has_unrestricted_report_scope
 
 DASHBOARD_KEY = "owner-dashboard"
 
@@ -52,7 +52,7 @@ def get_business_control_data(filters: dict[str, Any] | str | None = None) -> di
 	}
 	owner = get_owner_dashboard_data(resolved)
 	allow_company_accounting = bool(
-		not branch and user_has_global_branch_access(user=frappe.session.user)
+		not branch and has_unrestricted_report_scope(company, user=frappe.session.user)
 	)
 	return _build_control_snapshot(owner, allow_company_accounting=allow_company_accounting)
 
@@ -74,9 +74,7 @@ def _build_control_snapshot(
 	net_cash_change = _metric(sections, "cash", "Net Change")
 	expenses = _metric(sections, "expenses", "Total Expenses")
 	accounting_net_profit = (
-		_metric(sections, "profitability", "Accounting Net Profit")
-		if allow_company_accounting
-		else None
+		_metric(sections, "profitability", "Accounting Net Profit") if allow_company_accounting else None
 	)
 	transactional_gross_profit = _metric(sections, "profitability", "Transactional Gross Profit")
 
@@ -119,25 +117,109 @@ def _build_control_snapshot(
 			"accounting_truth": "ERPNext remains authoritative; RetailEdge derives control signals from existing permission-aware reporting engines.",
 			"trade_position_definition": "current receivables minus current payables; not cash, working capital or accounting net assets",
 			"cash_basis": "selected-period posted Cash/Bank GL movement, not closing cash balance",
-			"branch_accounting_limit": "company accounting profit is withheld unless the user has global Branch scope; branch accounting conclusions remain limited by valid ERPNext branch/accounting attribution",
+			"branch_accounting_limit": "company accounting profit is withheld unless the user has unrestricted Company reporting scope; branch accounting conclusions remain limited by valid ERPNext branch/accounting attribution",
 		},
 	}
 
 
 def _control_items(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 	rules = (
-		("receivables", "Over 90 Days", "critical", "Collections", "Customer debt is more than 90 days overdue", "/app/customer-receivables"),
-		("receivables", "Overdue", "warning", "Collections", "Customer balances are overdue", "/app/customer-receivables"),
-		("payables", "Over 90 Days", "critical", "Supplier Obligations", "Supplier balances are more than 90 days overdue", "/app/supplier-payables"),
-		("payables", "Overdue", "warning", "Supplier Obligations", "Supplier balances are overdue", "/app/supplier-payables"),
-		("profitability", "Negative Margin Items", "critical", "Margin", "Items are selling at negative margin", "/app/profitability-intelligence"),
-		("profitability", "Low Margin Items", "warning", "Margin", "Items are below the configured margin threshold", "/app/profitability-intelligence"),
-		("profitability", "Items Missing Recorded Cost", "warning", "Cost Integrity", "Sold items have no recorded item cost", "/app/profitability-intelligence"),
-		("expenses", "Posting Blocked", "critical", "Expense Control", "Expense posting is blocked", "/app/expense-register"),
-		("expenses", "Submitted for Review", "warning", "Expense Control", "Expenses are awaiting review", "/app/expense-register"),
-		("stock", "Negative Stock", "critical", "Stock Control", "Items have negative stock", "/app/stock-position"),
-		("stock", "Out of Stock", "warning", "Stock Control", "Items are out of stock", "/app/stock-position"),
-		("stock", "Fully Reserved", "warning", "Stock Control", "Stock is fully reserved", "/app/stock-position"),
+		(
+			"receivables",
+			"Over 90 Days",
+			"critical",
+			"Collections",
+			"Customer debt is more than 90 days overdue",
+			"/app/customer-receivables",
+		),
+		(
+			"receivables",
+			"Overdue",
+			"warning",
+			"Collections",
+			"Customer balances are overdue",
+			"/app/customer-receivables",
+		),
+		(
+			"payables",
+			"Over 90 Days",
+			"critical",
+			"Supplier Obligations",
+			"Supplier balances are more than 90 days overdue",
+			"/app/supplier-payables",
+		),
+		(
+			"payables",
+			"Overdue",
+			"warning",
+			"Supplier Obligations",
+			"Supplier balances are overdue",
+			"/app/supplier-payables",
+		),
+		(
+			"profitability",
+			"Negative Margin Items",
+			"critical",
+			"Margin",
+			"Items are selling at negative margin",
+			"/app/profitability-intelligence",
+		),
+		(
+			"profitability",
+			"Low Margin Items",
+			"warning",
+			"Margin",
+			"Items are below the configured margin threshold",
+			"/app/profitability-intelligence",
+		),
+		(
+			"profitability",
+			"Items Missing Recorded Cost",
+			"warning",
+			"Cost Integrity",
+			"Sold items have no recorded item cost",
+			"/app/profitability-intelligence",
+		),
+		(
+			"expenses",
+			"Posting Blocked",
+			"critical",
+			"Expense Control",
+			"Expense posting is blocked",
+			"/app/expense-register",
+		),
+		(
+			"expenses",
+			"Submitted for Review",
+			"warning",
+			"Expense Control",
+			"Expenses are awaiting review",
+			"/app/expense-register",
+		),
+		(
+			"stock",
+			"Negative Stock",
+			"critical",
+			"Stock Control",
+			"Items have negative stock",
+			"/app/stock-position",
+		),
+		(
+			"stock",
+			"Out of Stock",
+			"warning",
+			"Stock Control",
+			"Items are out of stock",
+			"/app/stock-position",
+		),
+		(
+			"stock",
+			"Fully Reserved",
+			"warning",
+			"Stock Control",
+			"Stock is fully reserved",
+			"/app/stock-position",
+		),
 	)
 	items: list[dict[str, Any]] = []
 	seen: set[tuple[str, str]] = set()
@@ -159,7 +241,9 @@ def _control_items(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
 				"time_basis": "current" if section_key in {"receivables", "payables", "stock"} else "period",
 			}
 		)
-	items.sort(key=lambda item: (0 if item["severity"] == "critical" else 1, -abs(flt(item["value"])), item["key"]))
+	items.sort(
+		key=lambda item: (0 if item["severity"] == "critical" else 1, -abs(flt(item["value"])), item["key"])
+	)
 	return items
 
 

@@ -18,10 +18,11 @@
 		<EdgeReportShell
 			title="Customer Receivables"
 			eyebrow="Customers & Receivables"
-			subtitle="Current unpaid customer invoices, overdue exposure, and ageing from ERPNext Sales Invoice accounting truth."
+			subtitle="Current unpaid customer invoices, overdue exposure, native payment requests, and dunning readiness from ERPNext accounting truth."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="openReportCell"
 		>
 			<template #filters>
@@ -52,7 +54,7 @@
 				<details class="advanced-filters">
 					<summary>More filters</summary>
 					<div class="receivables-filter-grid advanced-grid">
-						<EdgeLinkField v-model="filters.customer_group" label="Customer Group" placeholder="All customer groups" :searcher="customerGroupSearch" />
+						<EdgeLinkField v-model="filters.customer_group" label="Customer Group" placeholder="All customer groups" :searcher="customerGroupSearch" @select="onCustomerGroupSelected" @clear="clearCustomerGroup" />
 						<label class="edge-field">
 							<span class="edge-field-label">Balance Basis</span>
 							<input value="Current outstanding" class="edge-input" type="text" readonly />
@@ -61,9 +63,10 @@
 				</details>
 			</template>
 			<template #resultMeta>
-				<span>Current ERPNext outstanding balances aged at {{ currentBalanceDate || "today" }}</span>
+				<span>Current ERPNext outstanding balances aged at {{ formatDate(currentBalanceDate, "today") }}</span>
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
+				<span v-if="canUseNativeDesk">Collection handoffs prepare native drafts only · nothing is submitted automatically</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
 			</template>
 		</EdgeReportShell>
@@ -79,6 +82,9 @@ function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject }));
 }
+function callPostMethod(method, args = {}) {
+	return new Promise((resolve, reject) => frappe.call({ method, type: "POST", args, callback: (response) => resolve(response.message || {}), error: reject }));
+}
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
 
 export default {
@@ -93,7 +99,7 @@ export default {
 			error: "",
 			rows: [],
 			columns: [],
-			summary: [],
+			summary: [], reportSort: null,
 			pagination: {},
 			scan: {},
 			menuItems: [],
@@ -103,6 +109,8 @@ export default {
 			companyCurrency: "",
 			currentBalanceDate: "",
 			customerLabel: "",
+			actionInvoice: "",
+			canUseNativeDesk: false,
 			filters: { company: "", branch: "", customer: "", customer_group: "", ageing_bucket: "All", page_size: 50 },
 			currentPage: 1,
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
@@ -111,7 +119,13 @@ export default {
 	computed: {
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 0); },
-		reportColumns() { return (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: ["invoice", "customer"].includes(column.fieldname) })); },
+		reportColumns() {
+			const clickable = ["invoice", "customer", "payment_request", "dunning"];
+			const columns = (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: this.canUseNativeDesk && clickable.includes(column.fieldname) }));
+			if (this.canUseNativeDesk && this.rows.some((row) => row.payment_request_action)) columns.push({ fieldname: "payment_request_action", label: "Payment Action", fieldtype: "Data", clickable: true });
+			if (this.canUseNativeDesk && this.rows.some((row) => row.dunning_action)) columns.push({ fieldname: "dunning_action", label: "Dunning Action", fieldtype: "Data", clickable: true });
+			return columns;
+		},
 	},
 	created() {
 		const components = runtimeComponents();
@@ -120,6 +134,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
@@ -132,6 +147,7 @@ export default {
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
 				this.currentBalanceDate = context.current_balance_date || "";
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Customer Receivables controls."); }
@@ -139,15 +155,17 @@ export default {
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.customer_receivables.search_customer_receivables_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.customer_receivables.search_customer_receivables_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, customer_group: this.filters.customer_group }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); },
 		branchSearch(txt) { return this.searchOptions("branch", txt); },
 		customerSearch(txt) { return this.searchOptions("customer", txt); },
 		customerGroupSearch(txt) { return this.searchOptions("customer_group", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
-		onBranchSelected(option) { this.filters.branch = option.value; this.branchName = option.label || option.value; this.currentPage = 1; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.clearCustomer(); this.branchName = ""; this.currentPage = 1; },
+		onBranchSelected(option) { this.filters.branch = option.value; this.clearCustomer(); this.branchName = option.label || option.value; this.currentPage = 1; },
 		clearBranch() { this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
+		onCustomerGroupSelected(option) { this.filters.customer_group = option?.value || ""; this.clearCustomer(); this.currentPage = 1; },
+		clearCustomerGroup() { this.filters.customer_group = ""; this.clearCustomer(); this.currentPage = 1; },
 		onCustomerSelected(option) { this.filters.customer = option.value; this.customerLabel = option.label || option.value; this.currentPage = 1; },
 		clearCustomer() { this.filters.customer = ""; this.customerLabel = ""; this.currentPage = 1; },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
@@ -160,10 +178,10 @@ export default {
 			try {
 				const pageSize = Number(this.filters.page_size || 50);
 				const start = Math.max(0, (this.currentPage - 1) * pageSize);
-				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
+				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
 				this.rows = result.rows || [];
 				this.columns = (result.columns || []).filter((column) => !column.hidden);
-				this.summary = result.summary || [];
+				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.scan = result.metadata?.scan || {};
 				this.companyCurrency = result.metadata?.company_currency || this.companyCurrency;
 				this.currentBalanceDate = result.metadata?.current_balance_date || this.currentBalanceDate;
@@ -178,10 +196,38 @@ export default {
 				this.error = errorMessage(error, "Customer Receivables failed to load.");
 			} finally { this.loading = false; }
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		rowKey(row, index) { return row.invoice || `customer-receivables:${index}`; },
-		openReportCell(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "invoice") frappe.set_route("Form", "Sales Invoice", value); else if (column.fieldname === "customer") frappe.set_route("Form", "Customer", value); },
+		async prepareCollectionAction(row, kind) {
+			if (!this.canUseNativeDesk || !row?.invoice || this.actionInvoice) return;
+			const method = kind === "payment" ? "retailedge.receivables_actions.prepare_payment_request" : "retailedge.receivables_actions.prepare_dunning";
+			this.actionInvoice = row.invoice;
+			this.error = "";
+			try {
+				const result = await callPostMethod(method, { invoice_name: row.invoice });
+				if (!result?.name || !result?.doctype) throw new Error("Collection handoff did not return a draft document.");
+				frappe.show_alert({ message: result.reused ? `${result.doctype} already exists; opening it.` : `${result.doctype} draft prepared. Review before submitting.`, indicator: "green" });
+				frappe.set_route("Form", result.doctype, result.name);
+			} catch (error) {
+				this.error = errorMessage(error, "Collection handoff could not be prepared.");
+			} finally { this.actionInvoice = ""; }
+		},
+		async openReportCell(payload) {
+			const column = payload?.column;
+			const row = payload?.row;
+			if (!column || !row) return;
+			if (!this.canUseNativeDesk) return;
+			const value = row[column.fieldname];
+			if (!value) return;
+			if (column.fieldname === "payment_request_action") return this.prepareCollectionAction(row, "payment");
+			if (column.fieldname === "dunning_action") return this.prepareCollectionAction(row, "dunning");
+			if (column.fieldname === "invoice") frappe.set_route("Form", "Sales Invoice", value);
+			else if (column.fieldname === "customer") frappe.set_route("Form", "Customer", value);
+			else if (column.fieldname === "payment_request") frappe.set_route("Form", "Payment Request", value);
+			else if (column.fieldname === "dunning") frappe.set_route("Form", "Dunning", value);
+		},
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
 		formatValue(value, fieldtype, currency) {
 			if (value === null || value === undefined || value === "") return "—";

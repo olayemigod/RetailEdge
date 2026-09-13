@@ -1,4 +1,4 @@
-__version__ = "0.0.1"
+__version__ = "1.0.0"
 
 # Internal Transfer Payment Entries legitimately produce two distinct bank
 # statement legs. Install the narrow leg-aware duplicate/conflict policy once

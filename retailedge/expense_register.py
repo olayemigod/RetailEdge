@@ -7,13 +7,15 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_first_day, getdate, today
 
-from retailedge.branch_context import (
-	get_branch_query_filters,
-	get_user_allowed_branches,
-	user_has_global_branch_access,
-	validate_user_branch_access,
-)
 from retailedge.cashier_expense import get_cashier_roles, get_reviewer_roles
+from retailedge.cashier_expense_read_scope import apply_cashier_expense_read_scope
+from retailedge.business_expense_register import (
+	CONSOLIDATED_SOURCE_TYPES,
+	can_view_consolidated_business_expenses,
+	get_consolidated_expense_export,
+	get_consolidated_expense_register,
+)
+from retailedge.operating_context import get_operational_branch_scope
 
 EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
 CATEGORY_DOCTYPE = "RetailEdge Expense Category"
@@ -30,6 +32,7 @@ _EXPENSE_STATUSES = (
 	"Pending Ledger",
 	"Rejected",
 	"Posted",
+	"Reversed",
 	"Cancelled",
 )
 _BASE_ROW_FIELDS = (
@@ -54,22 +57,12 @@ def get_expense_register_context() -> dict[str, Any]:
 	if company:
 		_assert_company_read_access(company)
 
-	branch = ""
 	candidate = str(
 		frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
 	).strip()
-	if company and candidate:
-		try:
-			validate_user_branch_access(candidate, user=user, company=company, throw=True)
-			branch = candidate
-		except (frappe.PermissionError, frappe.ValidationError):
-			branch = ""
-	if company and not branch and not user_has_global_branch_access(user=user):
-		allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-		if len(allowed) == 1:
-			branch = allowed[0]
+	branch = _resolve_context_branch(company=company, candidate=candidate, user=user)
 
 	return {
 		"default_filters": {
@@ -79,12 +72,17 @@ def get_expense_register_context() -> dict[str, Any]:
 			"to_date": today(),
 			"expense_category": "",
 			"expense_status": "",
+			"source_type": "",
+			"view_mode": "consolidated" if can_view_consolidated_business_expenses(user=user) else "cashier",
+			"include_unposted_cashier_expenses": 0,
 			"page_size": DEFAULT_PAGE_SIZE,
 		},
 		"tenant_name": company,
 		"branch_name": branch,
 		"user_name": frappe.db.get_value("User", user, "full_name") or user,
 		"show_cashier": int(_can_view_other_cashiers(user=user)),
+		"consolidated_view_available": int(can_view_consolidated_business_expenses(user=user)),
+		"source_types": list(CONSOLIDATED_SOURCE_TYPES),
 		"statuses": list(_EXPENSE_STATUSES),
 		"limits": {
 			"page_size": MAX_PAGE_SIZE,
@@ -110,10 +108,15 @@ def search_expense_register_options(
 
 	if kind == "company":
 		return _search_companies(txt)
-	if company:
-		_assert_company_read_access(company)
+	if not company:
+		frappe.throw(_("Company is required."), frappe.ValidationError)
+	_assert_company_read_access(company)
 	if kind == "branch":
-		return _search_branches(txt=txt, company=company)
+		return _search_branches(
+			txt=txt,
+			company=company,
+			scope=get_operational_branch_scope(company, user=frappe.session.user),
+		)
 	if kind == "expense_category":
 		return _search_categories(txt=txt, company=company)
 	frappe.throw(_("Unsupported Expense Register search type."))
@@ -124,11 +127,23 @@ def get_expense_register(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import build_report_order_by, mark_report_columns
+
 	filters = _coerce_filters(filters)
+	if _use_consolidated_view(filters):
+		return get_consolidated_expense_register(
+			filters,
+			page=page,
+			page_size=page_size,
+			sort=sort,
+		)
 	query_filters = _build_query_filters(filters)
 	page = max(1, cint(page) or 1)
-	page_size = max(1, min(cint(page_size) or cint(filters.get("page_size")) or DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE))
+	page_size = max(
+		1, min(cint(page_size) or cint(filters.get("page_size")) or DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+	)
 	show_cashier = _can_view_other_cashiers()
 
 	summary = _get_summary(query_filters)
@@ -140,18 +155,37 @@ def get_expense_register(
 	fields = list(_BASE_ROW_FIELDS)
 	if show_cashier:
 		fields.insert(3, "cashier")
+	normalized_sort, order_by = build_report_order_by(
+		sort,
+		"expense-register",
+		{
+			"name": "name",
+			"expense_date": "expense_date",
+			"branch": "branch",
+			"cashier": "cashier",
+			"expense_category": "expense_category",
+			"amount": "amount",
+			"expense_status": "expense_status",
+			"ledger_status": "ledger_status",
+			"posting_ready": "posting_ready",
+			"description": "description",
+		},
+		default_order="expense_date desc, creation desc",
+		tie_breakers=("creation DESC", "name DESC"),
+	)
 	rows = frappe.get_list(
 		EXPENSE_DOCTYPE,
 		filters=query_filters,
 		fields=fields,
-		order_by="expense_date desc, creation desc",
+		order_by=order_by,
 		limit_start=(page - 1) * page_size,
 		limit_page_length=page_size,
 	)
 	rows = [_serialise_row(row, show_cashier=show_cashier) for row in rows]
 	return {
-		"columns": _columns(show_cashier=show_cashier),
+		"columns": mark_report_columns(_columns(show_cashier=show_cashier), "expense-register"),
 		"rows": rows,
+		"sort": normalized_sort,
 		"summary": _summary_cards(summary),
 		"pagination": {
 			"page": page,
@@ -172,6 +206,8 @@ def get_expense_register(
 @frappe.whitelist()
 def get_expense_register_export(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	filters = _coerce_filters(filters)
+	if _use_consolidated_view(filters):
+		return get_consolidated_expense_export(filters)
 	query_filters = _build_query_filters(filters)
 	show_cashier = _can_view_other_cashiers()
 	fields = list(_BASE_ROW_FIELDS)
@@ -186,9 +222,9 @@ def get_expense_register_export(filters: dict[str, Any] | str | None = None) -> 
 	)
 	if len(rows) > MAX_EXPORT_ROWS:
 		frappe.throw(
-			_("More than {0} expenses match this export. Narrow the date, Branch, Category, or Status filters first.").format(
-				MAX_EXPORT_ROWS
-			)
+			_(
+				"More than {0} expenses match this export. Narrow the date, Branch, Category, or Status filters first."
+			).format(MAX_EXPORT_ROWS)
 		)
 	summary = _get_summary(query_filters)
 	return {
@@ -203,22 +239,16 @@ def _build_query_filters(filters: frappe._dict) -> dict[str, Any]:
 	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	branch = str(filters.get("branch") or "").strip()
 	if not company:
-		frappe.throw(_("Company is required."))
+		frappe.throw(_("Company is required."), frappe.ValidationError)
 	_assert_company_read_access(company)
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
 
 	query_filters: dict[str, Any] = {"company": company}
-	branch_scope = get_branch_query_filters(
-		EXPENSE_DOCTYPE,
-		user=frappe.session.user,
-		company=company,
-		branch=branch or None,
-		strict=True,
-	)
-	query_filters.update(branch_scope.get("filters") or {})
 	if branch:
 		query_filters["branch"] = branch
+	query_filters = apply_cashier_expense_read_scope(
+		query_filters,
+		user=frappe.session.user,
+	)
 
 	from_date = getdate(filters.get("from_date")) if filters.get("from_date") else None
 	to_date = getdate(filters.get("to_date")) if filters.get("to_date") else None
@@ -312,7 +342,11 @@ def _summary_cards(summary: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _serialise_row(row, *, show_cashier: bool) -> dict[str, Any]:
-	status = "Cancelled" if cint(row.docstatus) == 2 else str(row.expense_status or ("Submitted" if cint(row.docstatus) == 1 else "Draft"))
+	status = (
+		"Cancelled"
+		if cint(row.docstatus) == 2
+		else str(row.expense_status or ("Submitted" if cint(row.docstatus) == 1 else "Draft"))
+	)
 	result = {
 		"name": row.name,
 		"expense_date": row.expense_date,
@@ -361,14 +395,14 @@ def _search_companies(txt: str) -> list[dict[str, str]]:
 	return [{"value": row.name, "label": row.company_name or row.name} for row in rows]
 
 
-def _search_branches(*, txt: str, company: str) -> list[dict[str, str]]:
-	if not company:
+def _search_branches(*, txt: str, company: str, scope: dict[str, Any]) -> list[dict[str, str]]:
+	allowed = _clean_allowed_branches(scope)
+	if scope.get("restricted") and not allowed:
 		return []
-	filters: dict[str, Any] = {"company": company}
-	if not user_has_global_branch_access(user=frappe.session.user):
-		allowed = list(get_user_allowed_branches(user=frappe.session.user, company=company).get("branches") or [])
-		if not allowed:
-			return []
+	filters: dict[str, Any] = {}
+	if frappe.get_meta("Branch").has_field("company"):
+		filters["company"] = company
+	if scope.get("restricted"):
 		filters["name"] = ["in", allowed]
 	rows = frappe.get_list(
 		"Branch",
@@ -379,6 +413,26 @@ def _search_branches(*, txt: str, company: str) -> list[dict[str, str]]:
 		limit_page_length=MAX_LINK_RESULTS,
 	)
 	return [{"value": row.name, "label": row.name} for row in rows]
+
+
+def _resolve_context_branch(*, company: str, candidate: str, user: str) -> str:
+	if not company:
+		return ""
+	scope = get_operational_branch_scope(company, user=user)
+	if not scope.get("restricted"):
+		return candidate
+	allowed = _clean_allowed_branches(scope)
+	if candidate in allowed:
+		return candidate
+	return allowed[0] if len(allowed) == 1 else ""
+
+
+def _clean_allowed_branches(scope: dict[str, Any]) -> list[str]:
+	return [
+		str(value).strip()
+		for value in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(value or "").strip()
+	]
 
 
 def _search_categories(*, txt: str, company: str) -> list[dict[str, str]]:
@@ -413,12 +467,18 @@ def _assert_category_in_company_scope(*, category: str, company: str) -> None:
 	if not frappe.db.exists(CATEGORY_DOCTYPE, category):
 		frappe.throw(_("Expense Category {0} does not exist.").format(category))
 	if not frappe.has_permission(CATEGORY_DOCTYPE, "read", doc=category):
-		frappe.throw(_("You do not have permission to use Expense Category {0}.").format(category), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use Expense Category {0}.").format(category),
+			frappe.PermissionError,
+		)
 	row = frappe.db.get_value(CATEGORY_DOCTYPE, category, ["company", "is_active"], as_dict=True)
 	if not row or not cint(row.is_active):
 		frappe.throw(_("Expense Category {0} is inactive.").format(category))
 	if row.company and row.company != company:
-		frappe.throw(_("Expense Category {0} is outside Company {1}.").format(category, company), frappe.PermissionError)
+		frappe.throw(
+			_("Expense Category {0} is outside Company {1}.").format(category, company),
+			frappe.PermissionError,
+		)
 
 
 def _assert_expense_read_access() -> None:
@@ -430,7 +490,22 @@ def _assert_company_read_access(company: str) -> None:
 	if not frappe.db.exists("Company", company):
 		frappe.throw(_("Company {0} does not exist.").format(company))
 	if not frappe.has_permission("Company", "read", doc=company):
-		frappe.throw(_("You do not have permission to use Company {0}.").format(company), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to use Company {0}.").format(company), frappe.PermissionError
+		)
+
+
+def _use_consolidated_view(filters: frappe._dict) -> bool:
+	requested = str(filters.get("view_mode") or "").strip().lower()
+	if requested != "consolidated":
+		return False
+	if can_view_consolidated_business_expenses():
+		return True
+	frappe.throw(
+		_("You do not have permission to view consolidated business expenses."),
+		frappe.PermissionError,
+	)
+	return False
 
 
 def _can_view_other_cashiers(user: str | None = None) -> bool:

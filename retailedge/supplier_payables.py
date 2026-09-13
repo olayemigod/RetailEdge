@@ -40,9 +40,13 @@ def get_supplier_payables(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = purchase_reporting.DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import apply_materialized_report_sort
+
 	resolved = _current_filters(filters)
 	dataset = purchase_reporting._build_supplier_payables_dataset(resolved)
+	apply_materialized_report_sort(dataset, sort, "supplier-payables")
 	return _with_current_balance_metadata(
 		purchase_reporting._page_response(dataset, page=page, page_size=page_size)
 	)

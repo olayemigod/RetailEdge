@@ -7,12 +7,8 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, nowdate
 
-from retailedge.branch_context import (
-	get_user_allowed_branches,
-	user_has_global_branch_access,
-	validate_user_branch_access,
-)
 from retailedge.guided_entry_context import resolve_branch_warehouse_selection
+from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.retailedge.report.retailedge_stock_movement_history.retailedge_stock_movement_history import (
 	apply_display_filters,
 	build_movement_rows,
@@ -91,17 +87,7 @@ def get_stock_movement_page_context() -> dict[str, Any]:
 			or frappe.defaults.get_user_default("Branch")
 			or ""
 		).strip()
-		if candidate:
-			try:
-				validate_user_branch_access(candidate, user=user, company=company, throw=True)
-				branch = candidate
-			except (frappe.PermissionError, frappe.ValidationError):
-				branch = ""
-
-		if not branch and not user_has_global_branch_access(user=user):
-			allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-			if len(allowed) == 1:
-				branch = allowed[0]
+		branch = _resolve_context_branch(company=company, candidate=candidate, user=user)
 
 		if branch:
 			resolved = resolve_branch_warehouse_selection(
@@ -135,6 +121,50 @@ def get_stock_movement_page_context() -> dict[str, Any]:
 		"scan_limit": MAX_SCAN_ROWS,
 		"max_page_size": MAX_PAGE_SIZE,
 	}
+
+
+def _resolve_context_branch(*, company: str, candidate: str, user: str) -> str:
+	scope = get_operational_branch_scope(company, user=user)
+	allowed = _allowed_scope_branches(scope)
+	candidate = str(candidate or "").strip()
+	if candidate:
+		try:
+			_validate_stock_movement_branch(
+				company=company,
+				branch=candidate,
+				user=user,
+				scope=scope,
+			)
+			return candidate
+		except (frappe.PermissionError, frappe.ValidationError):
+			pass
+	if scope.get("restricted") and len(allowed) == 1:
+		return allowed[0]
+	return ""
+
+
+def _validate_stock_movement_branch(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	scope: dict[str, Any] | None = None,
+) -> None:
+	scope = scope or get_operational_branch_scope(company, user=user)
+	if scope.get("restricted") and branch not in _allowed_scope_branches(scope):
+		frappe.throw(
+			_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+			frappe.PermissionError,
+		)
+	validate_operating_branch(company=company, branch=branch, user=user, throw=True)
+
+
+def _allowed_scope_branches(scope: dict[str, Any]) -> list[str]:
+	return sorted(
+		str(branch).strip()
+		for branch in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(branch or "").strip()
+	)
 
 
 @frappe.whitelist()
@@ -247,10 +277,7 @@ def search_stock_movement_options(
 			order_by="name asc",
 			limit=MAX_LINK_RESULTS,
 		)
-		return [
-			{"value": row.name, "label": row.name, "description": row.item or ""}
-			for row in rows
-		]
+		return [{"value": row.name, "label": row.name, "description": row.item or ""} for row in rows]
 	frappe.throw(_("Unsupported Stock Movement search type."))
 
 
@@ -323,11 +350,7 @@ def _get_bounded_stock_ledger_rows(filters: frappe._dict) -> list[frappe._dict]:
 				"Narrow the date range before loading Stock Movement History."
 			).format(MAX_SCAN_ROWS)
 		)
-	return [
-		row
-		for row in raw_rows
-		if flt(row.actual_qty) or row.voucher_type == "Stock Reconciliation"
-	]
+	return [row for row in raw_rows if flt(row.actual_qty) or row.voucher_type == "Stock Reconciliation"]
 
 
 def _assert_report_access(filters: frappe._dict) -> None:

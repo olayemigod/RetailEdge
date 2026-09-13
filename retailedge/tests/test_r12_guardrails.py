@@ -23,20 +23,48 @@ APP_DIR = Path(__file__).resolve().parents[1]
 
 
 class TestR12PlanningScope(FrappeTestCase):
-	@patch("retailedge.planning_scope.user_has_global_branch_access", return_value=False)
-	@patch("retailedge.planning_scope.get_user_allowed_branches", return_value={"branches": ["Branch A"]})
-	def test_blank_branch_resolves_single_restricted_branch(self, allowed, global_access):
+	@patch("retailedge.operating_context.validate_operating_branch")
+	@patch(
+		"retailedge.operating_context.get_operational_branch_scope",
+		return_value={
+			"company": "Test Company",
+			"restricted": True,
+			"allowed_branches": ["Branch A"],
+			"source": "branch_assignment",
+		},
+	)
+	def test_blank_branch_resolves_single_restricted_branch(self, operational_scope, validate_branch):
 		self.assertEqual(resolve_planning_branch_scope("Test Company", "", user="branch@example.com"), "Branch A")
+		validate_branch.assert_called_once_with(
+			company="Test Company",
+			branch="Branch A",
+			user="branch@example.com",
+			throw=True,
+		)
 
-	@patch("retailedge.planning_scope.user_has_global_branch_access", return_value=False)
-	@patch("retailedge.planning_scope.get_user_allowed_branches", return_value={"branches": ["Branch A", "Branch B"]})
-	def test_blank_branch_fails_closed_for_multiple_restricted_branches(self, allowed, global_access):
-		with self.assertRaises(frappe.PermissionError):
+	@patch(
+		"retailedge.operating_context.get_operational_branch_scope",
+		return_value={
+			"company": "Test Company",
+			"restricted": True,
+			"allowed_branches": ["Branch A", "Branch B"],
+			"source": "branch_assignment",
+		},
+	)
+	def test_blank_branch_fails_closed_for_multiple_restricted_branches(self, operational_scope):
+		with self.assertRaises(frappe.ValidationError):
 			resolve_planning_branch_scope("Test Company", "", user="branch@example.com")
 
-	@patch("retailedge.planning_scope.user_has_global_branch_access", return_value=False)
-	@patch("retailedge.planning_scope.get_user_allowed_branches", return_value={"branches": []})
-	def test_blank_branch_preserves_existing_unrestricted_convention(self, allowed, global_access):
+	@patch(
+		"retailedge.operating_context.get_operational_branch_scope",
+		return_value={
+			"company": "Test Company",
+			"restricted": False,
+			"allowed_branches": [],
+			"source": "unrestricted_legacy",
+		},
+	)
+	def test_blank_branch_preserves_existing_unrestricted_convention(self, operational_scope):
 		self.assertEqual(resolve_planning_branch_scope("Test Company", "", user="user@example.com"), "")
 
 

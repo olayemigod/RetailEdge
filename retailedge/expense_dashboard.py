@@ -51,7 +51,7 @@ def get_expense_dashboard_data(filters: dict[str, Any] | str | None = None) -> d
 	breakdowns = {
 		"category": _aggregate(rows, "expense_category"),
 		"branch": _aggregate(rows, "branch"),
-		"cashier": _aggregate(rows, "cashier") if any("cashier" in row for row in rows) else [],
+		"cashier": _aggregate_nonempty(rows, "cashier"),
 		"funding_source": _aggregate_account_context(account_context, "payment_account"),
 		"expense_account": _aggregate_account_context(account_context, "expense_account"),
 		"cost_center": _aggregate_account_context(account_context, "cost_center"),
@@ -70,7 +70,9 @@ def get_expense_dashboard_data(filters: dict[str, Any] | str | None = None) -> d
 			"expense_review": "/app/expense-review",
 		},
 		"metadata": {
-			"composition": "existing_expense_register_engine",
+			"composition": "consolidated_posted_truth_expense_register",
+			"financial_view_mode": "consolidated",
+			"include_unposted_cashier_expenses": 0,
 			"account_context_visible": bool(account_context),
 			"judgement_basis": "trend_concentration_and_control_signals_not_budget_compliance",
 			"budget_note": _("Budget compliance is not inferred unless an explicit budget or target is configured."),
@@ -150,6 +152,8 @@ def _period_filters(filters: frappe._dict, *, company: str, branch: str) -> dict
 		"to_date": filters.get("to_date"),
 		"expense_category": filters.get("expense_category") or "",
 		"expense_status": filters.get("expense_status") or "",
+		"view_mode": "consolidated",
+		"include_unposted_cashier_expenses": 0,
 	}
 
 
@@ -219,20 +223,30 @@ def _aggregate(rows: list[dict[str, Any]], fieldname: str) -> list[dict[str, Any
 def _account_context(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 	if not rows or not frappe.has_permission("Account", "read"):
 		return []
-	names = [str(row.get("name") or "").strip() for row in rows if row.get("name")]
-	if not names:
-		return []
-	context_rows = frappe.get_list(
-		"RetailEdge Cashier Expense",
-		filters={"name": ["in", names]},
-		fields=["name", "amount", "payment_account", "expense_account", "cost_center"],
-		limit_page_length=min(len(names), 5000),
-	)
-	return [dict(row) for row in context_rows]
+	return [
+		dict(row)
+		for row in rows
+		if any(
+			str(row.get(fieldname) or "").strip()
+			for fieldname in ("payment_account", "expense_account", "cost_center")
+		)
+	]
+
+
+def _aggregate_nonempty(
+	rows: list[dict[str, Any]],
+	fieldname: str,
+) -> list[dict[str, Any]]:
+	filtered = [
+		row
+		for row in rows
+		if str(row.get(fieldname) or "").strip()
+	]
+	return _aggregate(filtered, fieldname) if filtered else []
 
 
 def _aggregate_account_context(rows: list[dict[str, Any]], fieldname: str) -> list[dict[str, Any]]:
-	return _aggregate(rows, fieldname) if rows else []
+	return _aggregate_nonempty(rows, fieldname) if rows else []
 
 
 def _headline_summary(source: dict[str, Any], rows: list[dict[str, Any]], comparison: dict[str, Any]) -> list[dict[str, Any]]:

@@ -25,11 +25,25 @@ class TestProjectPortfolioReportContract(TestCase):
 		self.assertIn('group_by="project"', report_py)
 		self.assertIn('"docstatus": 1', report_py)
 		self.assertIn("MAX_PROJECT_ROWS = 500", report_py)
-		self.assertIn("not a bank balance or separate ledger", report_py)
+
+	def test_report_uses_accounting_safe_cash_and_cost_labels(self):
+		report_py = (APP_ROOT / "retailedge" / "report" / "retailedge_project_portfolio" / "retailedge_project_portfolio.py").read_text()
+
+		self.assertIn('"project_cash_in"', report_py)
+		self.assertIn('"project_cash_out"', report_py)
+		self.assertIn('"net_project_cash"', report_py)
+		self.assertIn('"label": _("Project Cash In")', report_py)
+		self.assertIn('"label": _("Project Cash Out")', report_py)
+		self.assertIn('"label": _("Net Project-linked Cash")', report_py)
+		self.assertIn('"purchase_cost"', report_py)
+		self.assertIn('"consumed_material_cost"', report_py)
+		self.assertIn('"timesheet_cost"', report_py)
+		self.assertIn("not revenue, expense, profit or a bank balance", report_py)
+		self.assertNotIn('"funds_received"', report_py)
+		self.assertNotIn('"cash_funds_position"', report_py)
 
 	def test_report_is_governed_in_projects_navigation(self):
 		source = (APP_ROOT / "master_experience.py").read_text()
-
 		self.assertIn('"target": "RetailEdge Project Portfolio"', source)
 		self.assertIn("PROJECT_PORTFOLIO_REPORT_ITEM", source)
 		self.assertIn('feature_flags["project_portfolio_reporting"] = "erpnext_project_plus_payment_entries"', source)

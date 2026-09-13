@@ -65,8 +65,8 @@
 						</div>
 						<div class="selling-actions">
 							<button v-if="document.can_create" type="button" class="edge-button edge-button--primary" @click="startCreate(document)">{{ createLabel(document) }}</button>
-							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="openNative(document)">View Records</button>
 							<button v-if="document.can_read" type="button" class="edge-button edge-button--secondary" @click="loadRecent(document)">Recent</button>
+							<button v-if="document.can_read && canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openAdvancedNative(document)">Advanced: Open in ERPNext</button>
 						</div>
 					</section>
 				</div>
@@ -82,11 +82,15 @@
 					<EdgeLoadingState v-if="recentLoading" message="Loading recent records..." />
 					<EdgeEmptyState v-else-if="!recentRows.length" title="No records found" description="No permitted records are available for this document type." />
 					<div v-else class="recent-list">
-						<button v-for="row in recentRows" :key="row.name" type="button" class="recent-row" @click="openRecord(recentDocument, row.name)">
+						<div v-for="row in recentRows" :key="row.name" class="recent-row">
 							<strong>{{ row.name }}</strong>
 							<span>{{ row.customer || row.party_name || row.status || "Draft" }}</span>
 							<span v-if="row.grand_total !== undefined">{{ row.currency || "" }} {{ row.grand_total }}</span>
-						</button>
+							<button v-if="canReviewCompletion(row)" type="button" class="edge-button edge-button--primary recent-completion" @click="openRecentCompletion(row)">Review Completion</button>
+							<button v-if="canReviewDeliveryCompletion(row)" type="button" class="edge-button edge-button--primary recent-completion" @click="openRecentDeliveryCompletion(row)">Review Delivery</button>
+							<button v-if="canReviewSalesInvoiceCompletion(row)" type="button" class="edge-button edge-button--primary recent-completion" @click="openRecentSalesInvoiceCompletion(row)">Review Invoice</button>
+							<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary recent-advanced" @click="openAdvancedRecord(recentDocument, row.name)">Advanced: Open in ERPNext</button>
+						</div>
 					</div>
 				</section>
 			</div>
@@ -96,28 +100,48 @@
 				:context="sellingContext"
 				@close="quotationOpen = false"
 				@saved="handleQuotationSaved"
-				@open-native="openQuotationNative"
 			/>
 			<ProfessionalSalesOrderDialog
 				:open="salesOrderOpen"
 				:context="sellingContext"
 				@close="salesOrderOpen = false"
 				@saved="handleSalesOrderSaved"
-				@open-native="openSalesOrderNative"
 			/>
 			<ProfessionalDeliveryDialog
 				:open="deliveryOpen"
 				:context="sellingContext"
 				@close="deliveryOpen = false"
 				@saved="handleDeliverySaved"
-				@open-native="openDeliveryNative"
 			/>
 			<ProfessionalSalesInvoiceDialog
 				:open="salesInvoiceOpen"
 				:context="sellingContext"
 				@close="salesInvoiceOpen = false"
 				@saved="handleSalesInvoiceSaved"
-				@open-native="openSalesInvoiceNative"
+			/>
+			<StandardSellingCompletionDialog
+				:open="completionOpen"
+				:document="completionDocument"
+				:canUseNativeDesk="canUseNativeDesk"
+				@close="closeStandardCompletion"
+				@changed="handleCompletionChanged"
+				@completed="handleCompletionCompleted"
+			/>
+			<StandardDeliveryCompletionDialog
+				:open="deliveryCompletionOpen"
+				:document="deliveryCompletionDocument"
+				:canUseNativeDesk="canUseNativeDesk"
+				@close="closeDeliveryCompletion"
+				@changed="handleDeliveryCompletionChanged"
+				@completed="handleDeliveryCompletionCompleted"
+			/>
+			<StandardSalesInvoiceCompletionDialog
+				:open="salesInvoiceCompletionOpen"
+				:document="salesInvoiceCompletionDocument"
+				:canUseNativeDesk="canUseNativeDesk"
+				@close="closeSalesInvoiceCompletion"
+				@changed="handleSalesInvoiceCompletionChanged"
+				@completed="handleSalesInvoiceCompletionCompleted"
 			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -128,6 +152,9 @@ import ProfessionalQuotationDialog from "./ProfessionalQuotationDialog.vue";
 import ProfessionalSalesOrderDialog from "./ProfessionalSalesOrderDialog.vue";
 import ProfessionalDeliveryDialog from "./ProfessionalDeliveryDialog.vue";
 import ProfessionalSalesInvoiceDialog from "./ProfessionalSalesInvoiceDialog.vue";
+import StandardSellingCompletionDialog from "./StandardSellingCompletionDialog.vue";
+import StandardDeliveryCompletionDialog from "./StandardDeliveryCompletionDialog.vue";
+import StandardSalesInvoiceCompletionDialog from "./StandardSalesInvoiceCompletionDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability";
@@ -162,6 +189,9 @@ export default {
 		ProfessionalSalesOrderDialog,
 		ProfessionalDeliveryDialog,
 		ProfessionalSalesInvoiceDialog,
+		StandardSellingCompletionDialog,
+		StandardDeliveryCompletionDialog,
+		StandardSalesInvoiceCompletionDialog,
 	},
 	data() {
 		return {
@@ -178,6 +208,7 @@ export default {
 			shipping: {},
 			documents: [],
 			sellingContext: {},
+			canUseNativeDesk: false,
 			quotationOpen: false,
 			salesOrderOpen: false,
 			deliveryOpen: false,
@@ -185,6 +216,12 @@ export default {
 			recentDocument: null,
 			recentRows: [],
 			recentLoading: false,
+			completionOpen: false,
+			completionDocument: null,
+			deliveryCompletionOpen: false,
+			deliveryCompletionDocument: null,
+			salesInvoiceCompletionOpen: false,
+			salesInvoiceCompletionDocument: null,
 		};
 	},
 	created() {
@@ -220,6 +257,7 @@ export default {
 				this.userName = navigation.context?.user_name || selling.user_name || "";
 				this.pricing = selling.pricing || {};
 				this.shipping = selling.shipping || {};
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				const allDocuments = [...(Array.isArray(selling.documents) ? selling.documents : []), invoice];
 				this.documents = allDocuments.filter((row) => row?.available && (row.can_read || row.can_create));
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -264,26 +302,38 @@ export default {
 			if (document?.key === "quotation") { this.quotationOpen = true; return; }
 			if (document?.key === "sales-order") { this.salesOrderOpen = true; return; }
 			if (document?.key === "delivery-note") { this.deliveryOpen = true; return; }
-			if (document?.key === "sales-invoice") { this.salesInvoiceOpen = true; return; }
-			this.createNative(document);
+			if (document?.key === "sales-invoice") { this.salesInvoiceOpen = true; }
 		},
-		createNative(document) {
-			window.open(`/app/${doctypeSlug(document.doctype)}/new`, "_blank", "noopener,noreferrer");
-		},
-		openNative(document) {
+		openAdvancedNative(document) {
+			if (!this.canUseNativeDesk || !document?.doctype) return;
 			window.open(document.native_route || `/app/${doctypeSlug(document.doctype)}`, "_blank", "noopener,noreferrer");
 		},
-		openRecord(document, name) {
+		openAdvancedRecord(document, name) {
+			if (!this.canUseNativeDesk || !document?.doctype || !name) return;
 			window.open(`/app/${doctypeSlug(document.doctype)}/${encodeURIComponent(name)}`, "_blank", "noopener,noreferrer");
 		},
-		handleQuotationSaved(result) { this.quotationOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
-		openQuotationNative() { this.quotationOpen = false; this.createNative({ doctype: "Quotation" }); },
-		handleSalesOrderSaved(result) { this.salesOrderOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
-		openSalesOrderNative() { this.salesOrderOpen = false; this.createNative({ doctype: "Sales Order" }); },
-		handleDeliverySaved(result) { this.deliveryOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
-		openDeliveryNative() { this.deliveryOpen = false; this.createNative({ doctype: "Delivery Note" }); },
-		handleSalesInvoiceSaved(result) { this.salesInvoiceOpen = false; this.loadWorkspace(); if (result?.route) window.open(result.route, "_blank", "noopener,noreferrer"); },
-		openSalesInvoiceNative() { this.salesInvoiceOpen = false; this.createNative({ doctype: "Sales Invoice" }); },
+		handleQuotationSaved(result) {
+			this.quotationOpen = false;
+			if (result?.name) this.openStandardCompletion({ doctype: "Quotation", name: result.name });
+			this.loadWorkspace();
+		},
+		handleSalesOrderSaved(result) {
+			this.salesOrderOpen = false;
+			if (result?.name) this.openStandardCompletion({ doctype: "Sales Order", name: result.name });
+			this.loadWorkspace();
+		},
+		handleDeliverySaved(result) {
+			this.deliveryOpen = false;
+			if (result?.name) this.openDeliveryCompletion({ doctype: "Delivery Note", name: result.name });
+			this.loadWorkspace();
+		},
+		handleSalesInvoiceSaved(result) {
+			this.salesInvoiceOpen = false;
+			if (result?.name && !result?.is_return) {
+				this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name });
+			}
+			this.loadWorkspace();
+		},
 		async loadRecent(document) {
 			this.recentDocument = document;
 			this.recentRows = [];
@@ -298,6 +348,85 @@ export default {
 			} finally {
 				this.recentLoading = false;
 			}
+		},
+		canReviewCompletion(row) {
+			return ["quotation", "sales-order"].includes(this.recentDocument?.key)
+				&& Number(row?.docstatus || 0) === 0;
+		},
+		openRecentCompletion(row) {
+			if (!this.canReviewCompletion(row) || !row?.name) return;
+			const doctype = this.recentDocument?.key === "quotation" ? "Quotation" : "Sales Order";
+			this.openStandardCompletion({ doctype, name: row.name });
+		},
+		openStandardCompletion(document) {
+			if (!["Quotation", "Sales Order"].includes(document?.doctype) || !document?.name) return;
+			this.completionDocument = { doctype: document.doctype, name: document.name };
+			this.completionOpen = true;
+		},
+		closeStandardCompletion() {
+			this.completionOpen = false;
+			this.completionDocument = null;
+		},
+		handleCompletionChanged() {
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		handleCompletionCompleted() {
+			this.closeStandardCompletion();
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		canReviewDeliveryCompletion(row) {
+			return this.recentDocument?.key === "delivery-note"
+				&& Number(row?.docstatus || 0) === 0;
+		},
+		openRecentDeliveryCompletion(row) {
+			if (!this.canReviewDeliveryCompletion(row) || !row?.name) return;
+			this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name });
+		},
+		openDeliveryCompletion(document) {
+			if (document?.doctype !== "Delivery Note" || !document?.name) return;
+			this.deliveryCompletionDocument = { doctype: "Delivery Note", name: document.name };
+			this.deliveryCompletionOpen = true;
+		},
+		closeDeliveryCompletion() {
+			this.deliveryCompletionOpen = false;
+			this.deliveryCompletionDocument = null;
+		},
+		handleDeliveryCompletionChanged() {
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		handleDeliveryCompletionCompleted() {
+			this.closeDeliveryCompletion();
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		canReviewSalesInvoiceCompletion(row) {
+			return this.recentDocument?.key === "sales-invoice"
+				&& Number(row?.docstatus || 0) === 0;
+		},
+		openRecentSalesInvoiceCompletion(row) {
+			if (!this.canReviewSalesInvoiceCompletion(row) || !row?.name) return;
+			this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });
+		},
+		openSalesInvoiceCompletion(document) {
+			if (document?.doctype !== "Sales Invoice" || !document?.name) return;
+			this.salesInvoiceCompletionDocument = { doctype: "Sales Invoice", name: document.name };
+			this.salesInvoiceCompletionOpen = true;
+		},
+		closeSalesInvoiceCompletion() {
+			this.salesInvoiceCompletionOpen = false;
+			this.salesInvoiceCompletionDocument = null;
+		},
+		handleSalesInvoiceCompletionChanged() {
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		handleSalesInvoiceCompletionCompleted() {
+			this.closeSalesInvoiceCompletion();
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
 		},
 		clearRecent() { this.recentDocument = null; this.recentRows = []; },
 		openOperatingContext() { frappe.set_route("operating-context"); },
@@ -321,7 +450,9 @@ export default {
 .stage-flags, .selling-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: auto; }
 .stage-flags span { padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--subtle-fg, var(--control-bg)); color: var(--text-muted); font-size: 0.75rem; }
 .recent-list { display: grid; gap: 0.5rem; margin-top: 1rem; }
-.recent-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 1rem; text-align: left; align-items: center; width: 100%; padding: 0.75rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.6rem; background: transparent; color: inherit; }
+.recent-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto auto; gap: 1rem; text-align: left; align-items: center; width: 100%; padding: 0.75rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.6rem; background: transparent; color: inherit; }
+.recent-advanced { justify-self: end; }
+:deep(.selling-form-footer > .edge-button:first-child) { display: none !important; }
 @media (max-width: 1100px) { .selling-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 680px) { .selling-flow { grid-template-columns: 1fr; } .selling-context, .policy-panel, .recent-heading { flex-direction: column; } .recent-row { grid-template-columns: 1fr; } }
+@media (max-width: 680px) { .selling-flow { grid-template-columns: 1fr; } .selling-context, .policy-panel, .recent-heading { flex-direction: column; } .recent-row { grid-template-columns: 1fr; } .recent-advanced { justify-self: start; } }
 </style>

@@ -33,23 +33,21 @@ class RetailEdgeCustomerReceivablesTests(unittest.TestCase):
 	def test_current_outstanding_is_not_presented_as_historical_reconstruction(self):
 		source = (APP_ROOT / "customer_receivables.py").read_text()
 		component = (
-			APP_ROOT
-			/ "public"
-			/ "js"
-			/ "customer_receivables"
-			/ "CustomerReceivablesReport.vue"
+			APP_ROOT / "public" / "js" / "customer_receivables" / "CustomerReceivablesReport.vue"
 		).read_text()
 		self.assertIn("current ERPNext outstanding balances only", source)
 		self.assertIn("Historical balances require ledger reconstruction", source)
 		self.assertIn("Balance Basis", component)
 		self.assertIn("Current outstanding", component)
-		self.assertNotIn('>As of Date<', component)
+		self.assertNotIn(">As of Date<", component)
 
 	def test_branch_scope_is_server_authoritative(self):
 		source = (APP_ROOT / "customer_receivables.py").read_text()
-		self.assertIn("validate_user_branch_access", source)
-		self.assertIn("get_user_allowed_branches", source)
-		self.assertIn("user_has_global_branch_access", source)
+		self.assertIn("get_operational_branch_scope", source)
+		self.assertIn("validate_operating_branch", source)
+		self.assertNotIn("validate_user_branch_access", source)
+		self.assertNotIn("get_user_allowed_branches", source)
+		self.assertNotIn("user_has_global_branch_access", source)
 		self.assertIn("branch-restricted receivables cannot be applied safely", source)
 
 

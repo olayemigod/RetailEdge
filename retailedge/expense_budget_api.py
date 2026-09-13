@@ -22,6 +22,8 @@ def get_expense_budget_insight(filters: dict[str, Any] | str | None = None) -> d
 		"to_date": resolved.get("to_date"),
 		"expense_category": resolved.get("expense_category") or "",
 		"expense_status": resolved.get("expense_status") or "",
+		"view_mode": "consolidated",
+		"include_unposted_cashier_expenses": 0,
 	}
 	actual = get_expense_register_export(period_filters)
 	return build_expense_budget_insight(

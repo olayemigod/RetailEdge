@@ -17,6 +17,7 @@ class TestDocumentOutput(unittest.TestCase):
 			'"doctype": "Sales Order"',
 			'"doctype": "Delivery Note"',
 			'"doctype": "Sales Invoice"',
+			'"doctype": "POS Invoice"',
 			'"print_engine": "erpnext_native"',
 			'"print_formats": "erpnext_native"',
 			'"letterhead": "erpnext_native"',
@@ -75,6 +76,21 @@ class TestDocumentOutput(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
+	def test_share_defaults_use_document_company_not_product_brand(self):
+		source = self.read("document_output.py")
+		for contract in (
+			"def _default_share_copy",
+			'company = str(summary.get("company") or "").strip()',
+			'"default_email_subject": share_copy["subject"]',
+			'"default_email_message": share_copy["message"]',
+			'"visible_identity": "document_company_and_letterhead"',
+			'identity = company or _("Your supplier")',
+		):
+			self.assertIn(contract, source)
+		self.assertNotIn("from RetailEdge", source)
+		self.assertNotIn("from ProcessEdge", source)
+		self.assertNotIn("secure RetailEdge", source)
+
 	def test_whatsapp_is_user_initiated_without_public_document_link(self):
 		source = self.read("document_output.py")
 		for contract in (
@@ -82,6 +98,7 @@ class TestDocumentOutput(unittest.TestCase):
 			'"requires_manual_attachment": True',
 			'"public_pdf_link": False',
 			'"whatsapp": "user_initiated_handoff"',
+			'"company": company',
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("graph.facebook.com", source)

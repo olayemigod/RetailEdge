@@ -2,97 +2,101 @@
 
 ## Stack dependency
 
-This work is intentionally stacked on PR #42 (`agent/advanced-payment-management`).
-
-Predecessor head at branch creation:
-
-`2795da2c4d0f9cadff6eec4cb14d157a64f7ccf1`
-
-Do not retarget this branch to `version-16` until PR #42 and its predecessor stack have been merged or explicitly reconciled.
+This work remains intentionally stacked on PR #42 (`agent/advanced-payment-management`). ERPNext remains authoritative throughout.
 
 ## Business goal
 
-Provide an EdgeSuite operational view for project-based businesses while preserving ERPNext as the source of truth for project, accounting, purchasing, stock and payment records.
+Provide an EdgeSuite operational and financial-control layer for project-based businesses without creating parallel project, task, budget, purchasing, stock, cash or accounting ledgers.
 
-RetailEdge must support:
+## Sources of truth
 
-- project operational summary;
-- project customer/company context;
-- project receipts;
-- project cash funds position;
-- ERPNext billing/cost/margin visibility;
-- project expenses/purchases/stock links and later guided workflows;
-- project portfolio and financial reporting.
+- **ERPNext Project** — identity, company/customer, progress, sales value, billing, purchase cost, consumed-material cost, timesheet costing and gross margin.
+- **ERPNext Task** — project tasks, hierarchy, progress and milestones.
+- **ERPNext Budget** — Project-targeted budgets and native Stop/Warn/Ignore spend controls.
+- **ERPNext Payment Entry** — submitted project-linked cash movements.
+- **ERPNext Sales/Purchase/Stock documents** — operational transactions.
+- **ERPNext GL / Payment Ledger / Stock Ledger** — final accounting, settlement and stock truth.
 
-## Source-of-truth contract
+Submitted accounting documents are never mutated by RetailEdge.
 
-RetailEdge does not create a project wallet or independent project ledger.
+## Project and Branch context
 
-Authoritative sources are:
+Project search is permission-aware and bounded. Branch is a smart EdgeSuite Link field filtered by the selected Project Company and RetailEdge branch-access rules. Changing Project clears stale Branch state. Project Receipt inherits the validated selected Branch as read-only context.
 
-- ERPNext `Project` for project identity, customer, company, dates, costing, billing and gross-margin totals;
-- ERPNext `Payment Entry.project` for project-attributed receipts and payments;
-- ERPNext Sales Invoice / Sales Order for project revenue and billing;
-- ERPNext Purchase Invoice / Expense Claim / Journal Entry / Stock Entry and their native Project accounting dimensions for costs and operational postings;
-- ERPNext GL / Payment Ledger / Stock Ledger for accounting and stock truth.
+Branch scope applies only to branch-attributed Payment Entries and timeline documents. ERPNext Project totals, Task/Milestone records and Project Budgets remain whole-project values. Documents without usable Branch attribution are omitted from Branch-scoped timeline results rather than widening scope.
 
-Submitted accounting documents are not mutated by RetailEdge.
+## Project cash semantics
 
-## Implemented foundation
+`Project Cash In`, `Project Cash Out` and `Net Project-linked Cash` are derived from submitted Payment Entries carrying the Project dimension. They are cash movement measures, not revenue, expense, profit, bank balance or a RetailEdge wallet balance.
 
-### `retailedge.project_operations.get_project_funds_context`
+Legacy API aliases remain temporarily available for compatibility, but map to the same project-linked Payment Entry movements.
 
-Returns a permission-aware project snapshot containing:
+## Project cost semantics
 
-- Project status, dates and completion;
-- ERPNext Project estimated cost;
-- Sales Order value;
-- billed amount;
-- purchase cost;
-- consumed material cost;
-- timesheet costing;
-- ERPNext gross margin;
-- submitted project-linked customer receipts;
-- submitted project-linked outgoing Payment Entries;
-- cash funds received;
-- cash funds paid out;
-- cash funds position;
-- unapplied project receipt amount.
+`Tracked Cost` is the transparent sum of distinct ERPNext Project fields:
 
-Branch-scoped requests fail closed if RetailEdge Payment Entry branch attribution is unavailable.
+1. purchase cost;
+2. consumed material cost;
+3. timesheet costing.
 
-### `retailedge.project_receipts.create_project_receipt_draft`
+Each component is exposed separately. RetailEdge does not post a separate expense or recalculate accounting truth.
 
-Creates a standard draft ERPNext Payment Entry with:
+## Tasks and milestones
 
-- `payment_type = Receive`;
-- Project Customer;
-- Project Company;
-- native `project` accounting dimension;
-- Project default Cost Center where configured;
-- RetailEdge Branch attribution where requested;
-- company-currency validation;
-- Mode of Payment account resolution.
+Project Operations reads native ERPNext `Task` records filtered by Project, excludes templates, respects Task read permission and bounds results. Milestones use the native `is_milestone` flag. Users with Task create permission can open native Task creation with the Project prefilled.
 
-The receipt is never auto-submitted. ERPNext remains responsible for review, validation, submission and later invoice allocation/reconciliation.
+## Project Budget governance
+
+Project Operations reads ERPNext `Budget` records where `budget_against = Project`, scoped by Project and Company. It exposes draft/submitted amounts and configured controls for Material Request, Purchase Order, actual expenses and cumulative expense.
+
+RetailEdge never duplicates or bypasses ERPNext Budget Stop/Warn/Ignore enforcement. New budgets open the native ERPNext Budget form.
+
+## Project receipts
+
+`Record Project Receipt` creates a **draft** standard ERPNext Receive Payment Entry. Server-side validation enforces Project Customer, Project Company, Project dimension, optional validated Branch, company-currency support, Mode of Payment/account resolution and normal Frappe permissions. RetailEdge never auto-submits the Payment Entry or writes GL directly.
+
+## Spend, procurement and materials
+
+The route provider exposes only installed native DocTypes the current user can create. Supported routes include, where installed and permitted:
+
+1. Material Request — plan/request project materials;
+2. Purchase Order — order project goods/services;
+3. Purchase Receipt — receive project materials/goods;
+4. Purchase Invoice — book supplier/service/project cost;
+5. Stock Entry — consume/transfer project materials;
+6. Expense Claim — employee reimbursement when HRMS is installed;
+7. Journal Entry — accounting-adjustment fallback only.
+
+Project/Company/Cost Center defaults are supplied only where the installed parent DocType supports those fields. The route provider never creates, inserts or submits transactions.
+
+## Reports
+
+### RetailEdge Project Portfolio
+
+Whole-project management view of sales value, billing, project cash movements, native cost components, tracked cost, margin and progress. Cash labels deliberately avoid implying revenue/expense/bank-balance semantics.
+
+### RetailEdge Project Financial Control
+
+Whole-project control report combining:
+
+- submitted Project Budget when readable;
+- sales/order and billed values;
+- submitted Sales Invoice receivable outstanding;
+- submitted Purchase Invoice payable outstanding;
+- Project Cash In/Out and net project-linked cash;
+- purchase/material/timesheet costs and Tracked Cost;
+- budget remaining against tracked cost;
+- ERPNext Project gross margin.
+
+Branch filtering is intentionally not offered because mixing branch-scoped cash with whole-project billing, AR/AP, costing and margin would be misleading.
 
 ## Safety rules
 
 - No custom Project Funds balance DocType.
-- No direct GL Entry write.
-- No direct Sales Invoice outstanding mutation.
-- No submitted Payment Entry mutation outside ERPNext reconciliation mechanisms.
-- Project Customer and Project Company cannot be silently replaced by guided receipt input.
-- Branch-scoped flows fail closed without branch attribution.
-- Multi-currency cases fall back to native ERPNext forms until explicitly covered.
-- Queries are bounded.
-
-## Next work in this same PR
-
-1. EdgeSuite Project Operations page.
-2. Governed navigation and Project entry point.
-3. Project transaction timeline from native ERPNext documents.
-4. Guided project expense routing using the correct native ERPNext source document instead of a custom expense ledger.
-5. Project Funds / Project Portfolio reporting.
-6. Focused UI/source contract tests.
-7. CI, migration and manual browser/accounting QA.
+- No direct GL, Payment Ledger or Stock Ledger writes.
+- No direct submitted-document mutation.
+- No bypass of ERPNext Budget enforcement.
+- No broad Branch widening when attribution is unavailable.
+- No project-linked cash presented as revenue, expense, profit or bank balance.
+- Permission-aware, bounded reads only.
+- Optional HRMS/ERPNext routes are exposed only when installed and permitted.

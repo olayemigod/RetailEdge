@@ -64,7 +64,7 @@ class TestProfessionalSalesOrder(unittest.TestCase):
 		source = self.read("professional_sales_order.py")
 		for contract in (
 			"get_operating_context",
-			"validate_user_branch_access",
+			"_validate_stored_operational_branch",
 			"Change Operating Context before creating its Sales Order.",
 			"does not match the current Operating Branch.",
 		):
@@ -75,7 +75,7 @@ class TestProfessionalSalesOrder(unittest.TestCase):
 		for contract in (
 			"_preserve_source_quotation_context(source, target)",
 			'source.get("branch") or source.get("retailedge_branch")',
-			"validate_user_branch_access(source_branch",
+			"_validate_stored_operational_branch(",
 			"mapped Sales Order Company does not match the submitted Quotation",
 			"mapped Sales Order Branch does not match the submitted Quotation Branch",
 			"_set_branch_if_supported(target, source_branch)",

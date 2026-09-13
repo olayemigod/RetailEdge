@@ -226,5 +226,30 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(payload["count"], 3)
 
 
+    @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_workspace._get_review_queue_rows")
+    @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
+    @patch("retailedge.banking_workspace.frappe.has_permission", return_value=False)
+    def test_workspace_returns_safe_empty_dataset_without_native_bank_transaction_read(
+        self, has_permission, unmatched_rows, review_rows, assert_access
+    ):
+        payload = get_banking_workspace_rows(direction="Outflow", queue=QUEUE_TO_MATCH)
+
+        assert_access.assert_called_once_with()
+        has_permission.assert_called_once_with("Bank Transaction", "read")
+        unmatched_rows.assert_not_called()
+        review_rows.assert_not_called()
+        self.assertEqual(
+            payload,
+            {
+                "direction": "Outflow",
+                "queue": QUEUE_TO_MATCH,
+                "rows": [],
+                "count": 0,
+                "skipped_count": 0,
+            },
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

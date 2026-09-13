@@ -80,7 +80,7 @@
 									<td><EdgeStatusBadge :status="statusBadge(row.status)" /> <span class="status-text">{{ row.status }}</span></td>
 									<td class="row-actions">
 										<button v-if="canWrite && row.status === 'Active'" type="button" class="edge-button edge-button--secondary edge-button--small" @click="openTransfer(row)">Transfer</button>
-										<button type="button" class="edge-button edge-button--secondary edge-button--small" @click="openNative(row)">Full Form</button>
+										<button type="button" class="edge-button edge-button--secondary edge-button--small" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the full Branch Assignment form' : 'Advanced workflow: Native Desk access is required'" @click="openNative(row)">{{ canUseNativeDesk ? "Full Form" : "Advanced: Full Form" }}</button>
 									</td>
 								</tr>
 								<tr v-if="!sortedAssignments.length"><td colspan="8" class="empty-cell">No Branch Assignments match the current filters.</td></tr>
@@ -172,7 +172,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", assignments: [], canCreate: false, canWrite: false,
-		filters: { user: "", company: "", branch: "", status: "" }, sortKey: "effective_from", sortDirection: "desc", userName: "", menuItems: [],
+		filters: { user: "", company: "", branch: "", status: "" }, sortKey: "effective_from", sortDirection: "desc", userName: "", menuItems: [], canUseNativeDesk: false,
 		assignOpen: false, transferOpen: false, saving: false, assignError: "", transferError: "", assign: blankAssign(), transfer: blankTransfer(), transferRow: {}, roles: ROLES,
 		columns: [{ key: "user", label: "User" }, { key: "company", label: "Company" }, { key: "branch", label: "Branch" }, { key: "branch_role", label: "Role" }, { key: "effective_from", label: "From" }, { key: "effective_to", label: "To" }, { key: "status", label: "Status" }],
 		};
@@ -189,11 +189,11 @@ export default {
 		async loadNavigation() {
 			try {
 				const navigation = typeof window.retailedgeGetBusinessHubContext === "function" ? await window.retailedgeGetBusinessHubContext() : await callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
-				this.menuItems = (navigation.navigation_groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); this.userName = navigation.context?.user_name || "";
+				this.menuItems = (navigation.navigation_groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); this.userName = navigation.context?.user_name || ""; this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 			} catch (error) { this.menuItems = []; }
 		},
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer"); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer"); },
 		async loadAssignments() {
 			if (this.loading) return; this.loading = true; this.error = "";
 			try { const data = await callMethod(CONTEXT_METHOD, { filters: this.filters }); this.assignments = Array.isArray(data.assignments) ? data.assignments : []; this.canCreate = Boolean(data.can_create); this.canWrite = Boolean(data.can_write); this.userName = this.userName || data.user_name || ""; this.loaded = true; }
@@ -227,7 +227,7 @@ export default {
 			catch (error) { this.transferError = extractServerMessage(error, __("Branch transfer could not be recorded.")); }
 			finally { this.saving = false; }
 		},
-		openNative(row) { if (row?.name) window.open(`/app/retailedge-branch-assignment/${encodeURIComponent(row.name)}`, "_blank", "noopener,noreferrer"); },
+		openNative(row) { if (this.canUseNativeDesk && row?.name) window.open(`/app/retailedge-branch-assignment/${encodeURIComponent(row.name)}`, "_blank", "noopener,noreferrer"); },
 		openBranchSetup() { frappe.set_route("branch-setup"); },
 	},
 };

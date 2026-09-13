@@ -7,11 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_first_day, getdate, today
 
-from retailedge.branch_context import (
-	get_user_allowed_branches,
-	user_has_global_branch_access,
-	validate_user_branch_access,
-)
+from retailedge.operating_context import get_operational_branch_scope
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
@@ -47,16 +43,16 @@ def get_cash_movement_context() -> dict[str, Any]:
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	if company:
 		_assert_company_read_access(company)
-	branch_scope = _resolve_branch_scope(company=company, requested_branch="") if company else _empty_branch_scope()
+	branch_scope = (
+		_resolve_branch_scope(company=company, requested_branch="") if company else _empty_branch_scope()
+	)
 	default_branch = str(
 		frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
 	).strip()
-	if default_branch and company:
-		try:
-			validate_user_branch_access(default_branch, user=user, company=company, throw=True)
-		except (frappe.PermissionError, frappe.ValidationError):
+	if default_branch and branch_scope["restricted"]:
+		if default_branch not in branch_scope["allowed_branches"]:
 			default_branch = ""
 	if not default_branch and len(branch_scope["allowed_branches"]) == 1:
 		default_branch = branch_scope["allowed_branches"][0]
@@ -125,7 +121,10 @@ def get_cash_movement(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import build_report_order_by, mark_report_columns
+
 	filters = _coerce_filters(filters)
 	query = _prepare_query(filters)
 	page = max(1, cint(page) or 1)
@@ -139,9 +138,28 @@ def get_cash_movement(
 	total_pages = max(1, ceil(total_rows / page_size)) if total_rows else 1
 	if page > total_pages:
 		page = total_pages
-	rows = _query_rows(query, limit=page_size, offset=(page - 1) * page_size)
+	normalized_sort, order_by = build_report_order_by(
+		sort,
+		"cash-movement",
+		{
+			"posting_date": "gle.posting_date",
+			"account": "gle.account",
+			"branch": "branch",
+			"movement_type": "movement_type",
+			"payment_method": "payment_method",
+			"money_in": "gle.debit",
+			"money_out": "gle.credit",
+			"net_change": "(gle.debit - gle.credit)",
+			"voucher_type": "gle.voucher_type",
+			"voucher_no": "gle.voucher_no",
+		},
+		default_order="gle.posting_date DESC, gle.creation DESC, gle.name DESC",
+		tie_breakers=("gle.posting_date DESC", "gle.creation DESC", "gle.name DESC"),
+	)
+	rows = _query_rows(query, limit=page_size, offset=(page - 1) * page_size, order_by=order_by)
 	return {
-		"columns": _columns(),
+		"columns": mark_report_columns(_columns(), "cash-movement"),
+		"sort": normalized_sort,
 		"rows": rows,
 		"summary": _summary_cards(summary, currency=query["currency"]),
 		"pagination": {
@@ -242,24 +260,30 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 	}
 
 
-def _query_rows(query: dict[str, Any], *, limit: int, offset: int) -> list[dict[str, Any]]:
+def _query_rows(
+	query: dict[str, Any],
+	*,
+	limit: int,
+	offset: int,
+	order_by: str = "gle.posting_date DESC, gle.creation DESC, gle.name DESC",
+) -> list[dict[str, Any]]:
 	sql = f"""
 		SELECT
 			gle.posting_date,
 			gle.account,
 			gle.voucher_type,
 			gle.voucher_no,
-			{query['branch_expression']} AS branch,
-			{query['movement_expression']} AS movement_type,
-			{query['payment_method_expression']} AS payment_method,
+			{query["branch_expression"]} AS branch,
+			{query["movement_expression"]} AS movement_type,
+			{query["payment_method_expression"]} AS payment_method,
 			gle.debit AS money_in,
 			gle.credit AS money_out,
 			(gle.debit - gle.credit) AS net_change
 		FROM `tabGL Entry` gle
 		INNER JOIN `tabAccount` acc ON acc.name = gle.account
-		{query['joins']}
-		WHERE {query['where_sql']}
-		ORDER BY gle.posting_date DESC, gle.creation DESC, gle.name DESC
+		{query["joins"]}
+		WHERE {query["where_sql"]}
+		ORDER BY {order_by}
 		LIMIT %s OFFSET %s
 	"""
 	rows = frappe.db.sql(
@@ -294,8 +318,8 @@ def _query_summary(query: dict[str, Any]) -> dict[str, Any]:
 			COUNT(DISTINCT gle.account) AS account_count
 		FROM `tabGL Entry` gle
 		INNER JOIN `tabAccount` acc ON acc.name = gle.account
-		{query['joins']}
-		WHERE {query['where_sql']}
+		{query["joins"]}
+		WHERE {query["where_sql"]}
 	"""
 	rows = frappe.db.sql(sql, values=query["values"], as_dict=True)
 	return (
@@ -412,43 +436,45 @@ def _build_where_sql(
 
 def _resolve_branch_scope(*, company: str, requested_branch: str) -> dict[str, Any]:
 	user = frappe.session.user
-	global_access = user_has_global_branch_access(user=user)
-	if global_access:
-		if requested_branch:
-			validate_user_branch_access(requested_branch, user=user, company=company, throw=True)
-		return {
-			"global_access": True,
-			"allowed_branches": [],
-			"effective_branches": [requested_branch] if requested_branch else [],
-			"label": requested_branch or _("Company-wide"),
-		}
-
+	scope = get_operational_branch_scope(company, user=user)
+	restricted = bool(scope.get("restricted"))
 	allowed = sorted(
-		str(branch)
-		for branch in (get_user_allowed_branches(user=user, company=company).get("branches") or [])
-		if branch
+		str(branch).strip()
+		for branch in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(branch or "").strip()
 	)
 	if requested_branch:
-		validate_user_branch_access(requested_branch, user=user, company=company, throw=True)
+		if restricted and requested_branch not in allowed:
+			frappe.throw(
+				_("You do not have active RetailEdge Branch access to Branch {0}.").format(requested_branch),
+				frappe.PermissionError,
+			)
 		effective = [requested_branch]
 		label = requested_branch
+	elif not restricted:
+		effective = []
+		label = _("Company-wide")
 	else:
 		effective = allowed
-		label = _("Permitted branches") if len(allowed) != 1 else allowed[0]
+		label = allowed[0] if len(allowed) == 1 else _("Permitted branches")
 	return {
-		"global_access": False,
+		"global_access": not restricted,
+		"restricted": restricted,
 		"allowed_branches": allowed,
 		"effective_branches": effective,
 		"label": label,
+		"source": scope.get("source"),
 	}
 
 
 def _empty_branch_scope() -> dict[str, Any]:
 	return {
 		"global_access": False,
+		"restricted": True,
 		"allowed_branches": [],
 		"effective_branches": [],
 		"label": "",
+		"source": "no_company",
 	}
 
 
@@ -600,8 +626,7 @@ def _doctype_has_field(doctype: str, fieldname: str) -> bool:
 	if key not in cache:
 		try:
 			cache[key] = bool(
-				frappe.db.exists("DocType", doctype)
-				and frappe.get_meta(doctype).has_field(fieldname)
+				frappe.db.exists("DocType", doctype) and frappe.get_meta(doctype).has_field(fieldname)
 			)
 		except Exception:
 			cache[key] = False

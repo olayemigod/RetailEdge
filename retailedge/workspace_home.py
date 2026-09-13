@@ -69,7 +69,7 @@ HOME_WORKSPACE_ITEMS: tuple[WorkspaceHomeItem, ...] = (
 	WorkspaceHomeItem("Payments", "DocType", "Payment Entry", "Money", 10, "bank_ops", "ERPNext Link"),
 	WorkspaceHomeItem("Bank Transactions", "DocType", "Bank Transaction", "Money", 20, "bank_ops", "ERPNext Link"),
 	WorkspaceHomeItem("Import Bank Statement", "DocType", "RetailEdge Payment Statement Import", "Money", 30, "bank_ops", "RetailEdge Native", "Blue"),
-	WorkspaceHomeItem("Bank Matching", "Report", "RetailEdge Bank Transaction Matching", "Money", 40, "bank_ops", "RetailEdge Native", "Blue"),
+	WorkspaceHomeItem("Bank Matching", "Page", "bank-matching-reconciliation", "Money", 40, "bank_ops", "RetailEdge Native", "Blue"),
 	WorkspaceHomeItem("Cashier Expenses", "DocType", "RetailEdge Cashier Expense", "Expenses", 10, "cashier", "RetailEdge Native", "Green"),
 	WorkspaceHomeItem("Customers", "DocType", "Customer", "Customers", 10, "operations", "ERPNext Link"),
 	WorkspaceHomeItem("Customer Receivables", "Page", "customer-receivables", "Customers", 20, "accounts", "RetailEdge Native", "Blue"),

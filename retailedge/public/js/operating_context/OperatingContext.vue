@@ -147,6 +147,7 @@ export default {
 			menuItems: [],
 			tenantName: "",
 			userName: "",
+			canUseNativeDesk: false,
 		};
 	},
 	computed: {
@@ -178,6 +179,7 @@ export default {
 					? await window.retailedgeGetBusinessHubContext()
 					: await callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.tenantName = navigation.context?.company || "";
 				this.userName = navigation.context?.user_name || "";
 			} catch (error) {
@@ -199,6 +201,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");

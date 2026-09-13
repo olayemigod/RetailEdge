@@ -33,7 +33,7 @@
 			@print="handlePrint"
 		>
 			<template #actions>
-				<button type="button" class="edge-button edge-button--secondary" @click="openDetailReport">
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button edge-button--secondary" @click="openDetailReport">
 					Detailed Report
 				</button>
 			</template>
@@ -112,7 +112,7 @@ export default {
 			exportBusy: false, printBusy: false,
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
-			rows: [], columns: [], summary: [], messages: [], menuItems: [], tenantName: "", userName: "", paymentMethods: [],
+			rows: [], columns: [], summary: [], messages: [], menuItems: [], tenantName: "", userName: "", paymentMethods: [], nativeFallbackEnabled: false,
 			datePresets: ["This Month", "Today", "Yesterday", "This Week", "This Quarter", "This Year", "Last Week", "Last Month", "Last Quarter", "Last Year", "Custom Period", "Full Branch History"],
 			filters: { company: "", branch: "", pos_profile: "", cashier: "", date_range_preset: "This Month", from_date: "", to_date: "", payment_method: "", only_pos_invoices: 0, include_unattributed: 1, include_fallback_branch_resolution: 0 },
 		};
@@ -141,6 +141,7 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.paymentMethods = context.payment_methods || [];
+				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Branch Performance controls."); }
@@ -148,10 +149,10 @@ export default {
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.branch_performance_dashboard.search_branch_performance_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.nativeFallbackEnabled) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.branch_performance_dashboard.search_branch_performance_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, pos_profile: this.filters.pos_profile }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, posProfileSearch(txt) { return this.searchOptions("pos_profile", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.pos_profile = ""; }, onBranchSelected(option) { this.filters.branch = option.value; }, clearBranch() { this.filters.branch = ""; }, onPosProfileSelected(option) { this.filters.pos_profile = option.value; }, clearPosProfile() { this.filters.pos_profile = ""; }, onCashierSelected(option) { this.filters.cashier = option.value; }, clearCashier() { this.filters.cashier = ""; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.pos_profile = ""; this.filters.cashier = ""; }, onBranchSelected(option) { this.filters.branch = option.value; this.filters.pos_profile = ""; this.filters.cashier = ""; }, clearBranch() { this.filters.branch = ""; this.filters.pos_profile = ""; this.filters.cashier = ""; }, onPosProfileSelected(option) { this.filters.pos_profile = option.value; this.filters.cashier = ""; }, clearPosProfile() { this.filters.pos_profile = ""; this.filters.cashier = ""; }, onCashierSelected(option) { this.filters.cashier = option.value; }, clearCashier() { this.filters.cashier = ""; },
 		onPresetChange() { if (this.filters.date_range_preset === "Custom Period") return; const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset); if (dates) { this.filters.from_date = dates.from_date || ""; this.filters.to_date = dates.to_date || ""; } },
 		async fetchData() {
 			if (!this.filters.company) return;
@@ -167,9 +168,9 @@ export default {
 		},
 		async handleExport(options) { if (!this.capabilities.can_export) return; this.exportBusy = true; try { await exportDashboard(DASHBOARD_KEY, this.filters, options); } catch (error) { frappe.msgprint({ title: __("Dashboard Export Failed"), message: errorMessage(error, "The dashboard could not be exported."), indicator: "red" }); } finally { this.exportBusy = false; } },
 		async handlePrint() { if (!this.capabilities.can_print) return; this.printBusy = true; try { await printDashboard(DASHBOARD_KEY, this.filters); } catch (error) { frappe.msgprint({ title: __("Dashboard Print Failed"), message: errorMessage(error, "The dashboard print view could not be prepared."), indicator: "red" }); } finally { this.printBusy = false; } },
-		focusBranch(branch) { this.filters.branch = branch === "Unattributed" ? "" : branch; this.fetchData(); },
+		focusBranch(branch) { this.filters.branch = branch === "Unattributed" ? "" : branch; this.filters.pos_profile = ""; this.filters.cashier = ""; this.fetchData(); },
 		openCell(payload) { if (payload?.column?.fieldname === "branch") this.focusBranch(payload.value); },
-		openDetailReport() { frappe.set_route("query-report", "RetailEdge Branch Performance Summary"); },
+		openDetailReport() { if (!this.nativeFallbackEnabled) return; frappe.set_route("query-report", "RetailEdge Branch Performance Summary"); },
 		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (value === null || value === undefined || value === "") return "—"; return String(value); },
 	},

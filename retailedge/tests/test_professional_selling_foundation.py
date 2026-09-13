@@ -76,17 +76,20 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		self.assertNotIn("<iframe", component.lower())
 		self.assertNotIn("frappe-card", component)
 
-	def test_ui_preserves_erpnext_shipping_and_native_document_truth(self):
+	def test_ui_preserves_erpnext_shipping_and_advanced_document_truth(self):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		for contract in (
 			"ERPNext pricing, taxes, Shipping Rules, stock and accounting remain authoritative",
 			"Selling Price List",
 			"Shipping Rule",
-			"createNative(document)",
-			"openNative(document)",
+			"canUseNativeDesk",
+			"openAdvancedNative(document)",
+			"Advanced: Open in ERPNext",
 		):
 			self.assertIn(contract, component)
 		for forbidden in (
+			"createNative(document)",
+			"openNative(document)",
 			"frappe.client.insert",
 			"frappe.client.save",
 			"shipping_charge_ledger",

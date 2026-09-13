@@ -56,7 +56,7 @@
 								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
-								<button class="edge-button edge-button--primary" type="button" :title="workflowTitle(item)" @click="openWorkflow(item)">Open workflow</button>
+								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">{{ canOpenWorkflow(item) ? "Open workflow" : "Advanced workflow" }}</button>
 								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
@@ -85,7 +85,7 @@
 								<span v-if="followUpStatus(item) === 'Snoozed' && followUp(item).snoozed_until">Snoozed until: {{ formatDateTime(followUp(item).snoozed_until) }}</span>
 							</div>
 							<div class="action-controls">
-								<button class="edge-button edge-button--primary" type="button" :title="workflowTitle(item)" @click="openWorkflow(item)">Open workflow</button>
+								<button class="edge-button edge-button--primary" type="button" :disabled="!canOpenWorkflow(item)" :title="workflowTitle(item)" @click="openWorkflow(item)">{{ canOpenWorkflow(item) ? "Open workflow" : "Advanced workflow" }}</button>
 								<button v-if="followUpStatus(item) !== 'Acknowledged'" class="edge-button" type="button" :disabled="isMutating(item)" @click="acknowledge(item)">Acknowledge</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptAssignment(item)">Assign</button>
 								<button class="edge-button" type="button" :disabled="isMutating(item)" @click="promptSchedule(item)">Follow-up</button>
@@ -126,7 +126,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "", mutatingFingerprint: "",
-			summary: [], items: [], sources: {}, metadata: {}, menuItems: [], tenantName: "", userName: "",
+			summary: [], items: [], sources: {}, metadata: {}, menuItems: [], tenantName: "", userName: "", canUseNativeDesk: false,
 			filters: { company: "", branch: "", from_date: "", to_date: "", follow_up_status: "All", assignment_scope: "all", due_scope: "all" },
 		};
 	},
@@ -143,7 +143,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.action_center.get_action_center_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Action Centre controls."); }
 			finally { this.metadataLoading = false; }
@@ -195,8 +195,10 @@ export default {
 		isMutating(item) { return this.mutatingFingerprint === item.fingerprint; },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
+		canOpenWorkflow(item) { return !["DocType", "Report"].includes(item?.target_type) || this.canUseNativeDesk; },
 		openWorkflow(item) {
+			if (!this.canOpenWorkflow(item)) return;
 			const route = item?.route;
 			if (!route) return;
 			if (item.open_mode === "new_tab") {
@@ -205,7 +207,7 @@ export default {
 			}
 			window.location.assign(route);
 		},
-		workflowTitle(item) { return item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open workflow"; },
+		workflowTitle(item) { if (!this.canOpenWorkflow(item)) return "Advanced Native Desk access is required for this workflow"; return item?.open_mode === "new_tab" ? "Open authoritative workflow in a new tab" : "Open workflow"; },
 		itemKey(item) { return item.fingerprint || `${item.source}:${item.semantic_key || item.kind}:${item.route}`; },
 		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
 		basisLabel(value) { return value === "current" ? "Current position" : "Selected period"; },

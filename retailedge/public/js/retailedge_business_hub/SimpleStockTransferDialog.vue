@@ -121,7 +121,7 @@
 
 		<template #footer>
 			<div class="guided-stock-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="openFullForm">
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
 					Open Full Form
 				</button>
 				<div class="guided-stock-footer-actions">
@@ -181,6 +181,7 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
 	props: {
+		nativeFallbackEnabled: { type: Boolean, default: true },
 		open: { type: Boolean, default: false },
 		prefill: { type: Object, default: () => ({}) },
 	},
@@ -289,7 +290,7 @@ export default {
 			this.$emit("close");
 		},
 		openFullForm() {
-			if (this.saving) return;
+			if (this.saving || !this.nativeFallbackEnabled) return;
 			this.$emit("open-native", "Stock Entry");
 		},
 		async searchOptions(fieldname, query) {

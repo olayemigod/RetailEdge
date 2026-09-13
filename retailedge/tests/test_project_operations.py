@@ -64,15 +64,58 @@ class TestProjectOperations(unittest.TestCase):
 		with patch("retailedge.project_operations._payment_branch_field", return_value=None):
 			context = get_project_funds_context("PROJ-0001")
 
+		self.assertEqual(context["project_cash_in"], 200000)
+		self.assertEqual(context["project_cash_out"], 40000)
+		self.assertEqual(context["net_project_cash"], 160000)
+		self.assertEqual(context["customer_cash_in"], 200000)
+		self.assertEqual(context["supplier_cash_out"], 40000)
+		self.assertEqual(context["project_cash_in_rows"][0]["party_type"], "Customer")
+		self.assertEqual(context["project_cash_out_rows"][0]["party_type"], "Supplier")
 		self.assertEqual(context["funds_received"], 200000)
 		self.assertEqual(context["funds_paid_out"], 40000)
 		self.assertEqual(context["cash_funds_position"], 160000)
 		self.assertEqual(context["unallocated_receipts"], 50000)
+		self.assertEqual(context["purchase_cost"], 60000)
+		self.assertEqual(context["consumed_material_cost"], 20000)
+		self.assertEqual(context["timesheet_cost"], 10000)
 		self.assertEqual(context["tracked_cost"], 90000)
+		self.assertIn("purchase + consumed material + timesheet", context["tracked_cost_basis"])
 		self.assertEqual(context["billed_amount"], 300000)
 		self.assertEqual(context["source_of_truth"]["project"], "Project")
 		self.assertEqual(context["source_of_truth"]["cash"], "Payment Entry")
-		self.assertIn("no RetailEdge project wallet", context["source_of_truth"]["ledger_policy"])
+		self.assertIn("not revenue, expense, profit, or a bank balance", context["source_of_truth"]["cash_policy"])
+		self.assertIn("no custom project wallet or shadow ledger", context["source_of_truth"]["ledger_policy"])
+		self.assertNotIn("RetailEdge", context["source_of_truth"]["ledger_policy"])
+		self.assertEqual(context["scope"]["project_totals"], "Whole Project across all branches")
+
+	@patch("retailedge.project_operations._project_company_currency", return_value="NGN")
+	@patch("retailedge.project_operations._project_timeline_rows", return_value=[])
+	@patch("retailedge.project_operations._project_payment_rows", return_value=[])
+	@patch("retailedge.project_operations._assert_read")
+	@patch("retailedge.project_operations.validate_user_branch_access")
+	@patch("retailedge.project_operations.frappe.get_doc")
+	def test_branch_scope_is_explicitly_limited_to_cash_and_timeline(
+		self,
+		mock_get_doc,
+		_mock_branch_access,
+		_mock_read,
+		_mock_payment_rows,
+		_mock_timeline_rows,
+		_mock_currency,
+	):
+		mock_get_doc.return_value = SimpleNamespace(
+			name="PROJ-0001", project_name="Lagos Rollout", status="Open", project_type="Implementation",
+			company="Demo Company", customer="CUST-001", cost_center="Main - DC", percent_complete=40,
+			expected_start_date="2026-08-01", expected_end_date="2026-10-31", estimated_costing=100000,
+			total_sales_amount=500000, total_billed_amount=300000, total_billable_amount=0,
+			total_purchase_cost=60000, total_consumed_material_cost=20000, total_costing_amount=10000,
+			gross_margin=210000, per_gross_margin=70,
+		)
+		with patch("retailedge.project_operations._payment_branch_field", return_value="retailedge_branch"):
+			context = get_project_funds_context("PROJ-0001", branch="Lagos")
+
+		self.assertEqual(context["scope"]["cash_and_timeline"], "Branch Lagos")
+		self.assertIn("Project billing, costing and margin totals remain whole-project values", context["scope"]["branch_scope_note"])
 
 	@patch("retailedge.project_operations._payment_branch_field", return_value=None)
 	@patch("retailedge.project_operations._assert_read")

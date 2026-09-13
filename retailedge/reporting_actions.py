@@ -8,6 +8,7 @@ from frappe import _
 from frappe.utils import cstr
 
 from retailedge.reporting_capabilities import require_report_action
+from retailedge.reporting_scope import constrain_report_filters
 
 
 def _coerce_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
@@ -46,6 +47,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.stock_movement_page import get_stock_movement_export
 
 		return get_stock_movement_export
+	if key == "stock-accounting-integrity":
+		from retailedge.stock_accounting_integrity import get_stock_accounting_integrity_export
+
+		return get_stock_accounting_integrity_export
 	if key == "expense-register":
 		from retailedge.expense_register import get_expense_register_export
 
@@ -66,6 +71,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.cash_movement import get_cash_movement_export
 
 		return get_cash_movement_export
+	if key == "cash-flow-outlook":
+		from retailedge.cash_flow_outlook import get_cash_flow_outlook_export
+
+		return get_cash_flow_outlook_export
 	frappe.throw(_("Unsupported RetailEdge report export scope."))
 
 
@@ -79,7 +88,12 @@ def get_report_dataset(report_key: str, filters: dict[str, Any] | str | None = N
 @frappe.whitelist()
 def get_report_export_data(report_key: str, filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
 	"""Return a permission-checked bounded export dataset for one RetailEdge report."""
-	resolved_filters = _coerce_filters(filters)
+	resolved_filters = frappe._dict(
+		constrain_report_filters(
+			_coerce_filters(filters),
+			require_branch_when_restricted=True,
+		)
+	)
 	company = cstr(resolved_filters.get("company") or "").strip()
 	branch = cstr(resolved_filters.get("branch") or "").strip()
 	require_report_action(report_key, action="export", company=company, branch=branch)

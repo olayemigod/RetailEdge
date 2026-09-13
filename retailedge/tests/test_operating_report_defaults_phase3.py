@@ -48,22 +48,32 @@ class TestOperatingReportDefaultsPhase3(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
-	def test_branch_setup_membership_restricts_non_global_report_scope_and_fails_closed(self):
-		source = self.read("operating_report_defaults.py")
+	def test_branch_scope_is_centralized_and_operating_wrappers_fail_closed_through_it(self):
+		wrapper = self.read("operating_report_defaults.py")
+		scope = self.read("reporting_scope.py")
+		for contract in (
+			"from retailedge.reporting_scope import constrain_report_filters, get_report_branch_scope, validate_report_scope",
+			"def _constrain_report_filters(",
+			"return constrain_report_filters(",
+			"def _constrain_search_scope(",
+			"get_report_branch_scope(company)",
+			"validate_report_scope(",
+			"def _filter_branch_options(",
+		):
+			self.assertIn(contract, wrapper)
 		for contract in (
 			"user_has_global_branch_access",
+			"has_branch_assignments",
 			"get_user_branch_profiles",
-			"def _assigned_profile_scope(company: str)",
-			'row.get("enabled")',
-			"Your assigned Branch reporting scope could not be verified",
-			"You do not have an active Branch Setup assignment for this Company",
-			"def _constrain_report_filters(",
+			"get_allowed_operating_branches",
+			"validate_operating_branch",
+			"Your Branch reporting access is not active for Company {0}",
 			"Choose one of your assigned Branches",
 			"Cross-branch reporting is available only to authorized managers",
 			"You do not have reporting access to Branch {0}",
-			"def _filter_branch_options(",
 		):
-			self.assertIn(contract, source)
+			self.assertIn(contract, scope)
+		self.assertNotIn("def _assigned_profile_scope(company: str)", wrapper)
 
 	def test_sales_purchase_and_stock_keep_user_clearable_branch_controls(self):
 		for relative in (

@@ -22,12 +22,17 @@ class TestGuidedCreateFoundation(unittest.TestCase):
 				"cash-transfer",
 				"record-expense",
 				"record-purchase",
+				"new-warranty-claim",
 				"transfer-stock",
 				"adjust-stock",
 			],
 		)
 		self.assertTrue(all(action.get("doctype") for action in QUICK_ACTIONS))
-		self.assertTrue(all(action.get("mode") == "available" for action in QUICK_ACTIONS))
+		self.assertTrue(
+			all(action.get("mode") in {"available", "native_fallback"} for action in QUICK_ACTIONS)
+		)
+		warranty_action = next(action for action in QUICK_ACTIONS if action["key"] == "new-warranty-claim")
+		self.assertEqual(warranty_action["mode"], "native_fallback")
 
 	def test_business_hub_exposes_one_permission_filtered_create_picker(self):
 		component = (

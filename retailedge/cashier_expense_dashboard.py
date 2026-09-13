@@ -3,8 +3,10 @@ from __future__ import annotations
 import frappe
 from frappe.utils import flt
 
-from retailedge.branch_context import get_branch_query_filters
 from retailedge.cashier_expense import get_effective_expense_status, user_has_any_role
+from retailedge.operating_context import get_operational_branch_scope
+
+NO_BRANCH_SCOPE_SENTINEL = "__never__"
 
 
 def get_cashier_expense_dashboard_roles() -> set[str]:
@@ -140,18 +142,46 @@ def _build_dashboard_filters(filters):
 	if not isinstance(filters, dict):
 		return {}
 
-	query_filters = {}
-	query_filters.update(
-		(get_branch_query_filters(
-			"RetailEdge Cashier Expense",
-			user=getattr(getattr(frappe, "session", None), "user", "Administrator"),
-			company=filters.get("company"),
-			branch=filters.get("branch"),
-		).get("filters") or {})
-	)
-	for fieldname in ("company", "branch", "pos_profile", "cashier"):
+	company = str(
+		filters.get("company") or frappe.defaults.get_user_default("Company") or ""
+	).strip()
+	if not company:
+		frappe.throw(
+			"Company is required before loading the RetailEdge Cashier Expense dashboard.",
+			frappe.ValidationError,
+		)
+
+	user = getattr(getattr(frappe, "session", None), "user", "Administrator")
+	scope = get_operational_branch_scope(company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed_branches = [
+		str(value).strip()
+		for value in dict.fromkeys(scope.get("allowed_branches") or [])
+		if str(value or "").strip()
+	]
+	requested_branch = str(filters.get("branch") or "").strip()
+
+	if requested_branch and restricted and requested_branch not in allowed_branches:
+		frappe.throw(
+			frappe._("You do not have active RetailEdge Branch access to Branch {0}.").format(
+				requested_branch
+			),
+			frappe.PermissionError,
+		)
+
+	query_filters = {"company": company}
+	if requested_branch:
+		query_filters["branch"] = requested_branch
+	elif restricted and len(allowed_branches) == 1:
+		query_filters["branch"] = allowed_branches[0]
+	elif restricted and allowed_branches:
+		query_filters["branch"] = ["in", allowed_branches]
+	elif restricted:
+		query_filters["branch"] = NO_BRANCH_SCOPE_SENTINEL
+
+	for fieldname in ("pos_profile", "cashier"):
 		value = filters.get(fieldname)
-		if value and fieldname not in query_filters:
+		if value:
 			query_filters[fieldname] = value
 
 	if filters.get("from_date") and filters.get("to_date"):

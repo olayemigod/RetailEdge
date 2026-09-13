@@ -100,7 +100,7 @@ def ensure_transaction_branch_custom_fields():
 
 def resolve_transaction_branch(doc):
 	if not getattr(doc, "doctype", None):
-		return _new_resolution(note="Unsupported document for RetailEdge transaction branch attribution.")
+		return _new_resolution(note="Unsupported document for transaction branch attribution.")
 
 	resolution = _new_resolution()
 	explicit_branch = _get_explicit_transaction_branch(doc)
@@ -139,12 +139,10 @@ def resolve_transaction_branch(doc):
 
 def apply_transaction_branch_attribution(doc, method=None, overwrite=False):
 	if getattr(doc, "doctype", None) not in TARGET_DOCTYPE_ORDER:
-		return _new_resolution(
-			note="RetailEdge transaction branch attribution is not enabled for this DocType."
-		)
+		return _new_resolution(note="Transaction branch attribution is not enabled for this DocType.")
 
 	if not has_field(doc.doctype, "retailedge_branch"):
-		return _new_resolution(note="RetailEdge attribution fields are not available on this DocType.")
+		return _new_resolution(note="Operating Branch attribution fields are not available on this DocType.")
 
 	current_branch = getattr(doc, "retailedge_branch", None)
 	if current_branch and not overwrite:
@@ -156,7 +154,7 @@ def apply_transaction_branch_attribution(doc, method=None, overwrite=False):
 			"source": getattr(doc, "retailedge_branch_source", None),
 			"resolved_on": getattr(doc, "retailedge_branch_resolved_on", None),
 			"note": getattr(doc, "retailedge_branch_resolution_note", None),
-			"messages": ["RetailEdge branch attribution already exists on this document."],
+			"messages": ["Operating Branch attribution already exists on this document."],
 		}
 
 	resolution = resolve_transaction_branch(doc)
@@ -241,7 +239,7 @@ def run_transaction_branch_backfill(
 						row.name,
 						_new_resolution(),
 						action="skipped",
-						note="Existing RetailEdge branch preserved.",
+						note="Existing Operating Branch attribution preserved.",
 					)
 					summary["skipped"] += 1
 					doctype_summary["skipped"] += 1
@@ -315,29 +313,29 @@ def _get_field_defs_for_doctype(doctype):
 	field_defs = [
 		{
 			"fieldname": "retailedge_branch",
-			"label": "RetailEdge Branch",
+			"label": "Operating Branch",
 			"fieldtype": "Link",
 			"options": "Branch",
 			"read_only": 1,
 			"in_standard_filter": 1,
 			"insert_after": layout_insert_after,
-			"description": "Branch attributed by RetailEdge for filtering/reporting.",
+			"description": "Branch attributed for operating context, filtering and reporting.",
 		}
 	]
 	insert_after = "retailedge_branch"
 	for fieldname, label, fieldtype in (
-		("retailedge_branch_source", "RetailEdge Branch Source", "Data"),
-		("retailedge_branch_resolved_on", "RetailEdge Branch Resolved On", "Datetime"),
-		("retailedge_branch_resolution_note", "RetailEdge Branch Resolution Note", "Small Text"),
+		("retailedge_branch_source", "Operating Branch Source", "Data"),
+		("retailedge_branch_resolved_on", "Operating Branch Resolved On", "Datetime"),
+		("retailedge_branch_resolution_note", "Operating Branch Resolution Note", "Small Text"),
 	):
 		field_defs.append(_hidden_attribution_field(fieldname, label, fieldtype, insert_after=insert_after))
 		insert_after = fieldname
 
 	if doctype in MOVEMENT_DOCTYPES:
 		for fieldname, label in (
-			("retailedge_source_branch", "RetailEdge Source Branch"),
-			("retailedge_target_branch", "RetailEdge Target Branch"),
-			("retailedge_warehouse_branch", "RetailEdge Warehouse Branch"),
+			("retailedge_source_branch", "Source Branch"),
+			("retailedge_target_branch", "Target Branch"),
+			("retailedge_warehouse_branch", "Warehouse Branch"),
 		):
 			field_defs.append(
 				_hidden_attribution_field(
@@ -676,8 +674,8 @@ def _resolve_pos_context_branch(doc, resolution):
 	)
 	if defaults.get("branch"):
 		resolution["branch"] = defaults["branch"]
-		resolution["source"] = defaults.get("source") or "RetailEdge Branch Profile"
-		resolution["note"] = "Resolved from RetailEdge operational defaults."
+		resolution["source"] = defaults.get("source") or "Operating Branch Profile"
+		resolution["note"] = "Resolved from operating defaults."
 
 
 def _apply_context_branch(resolution, context):

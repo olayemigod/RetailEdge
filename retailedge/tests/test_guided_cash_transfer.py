@@ -31,7 +31,7 @@ class TestGuidedCashTransfer(unittest.TestCase):
 	@patch("retailedge.guided_cash_transfer._get_transfer_account")
 	@patch("retailedge.guided_cash_transfer.frappe.db.get_value", return_value="NGN")
 	@patch("retailedge.guided_cash_transfer._assert_read_permission")
-	@patch("retailedge.guided_cash_transfer.validate_user_branch_access")
+	@patch("retailedge.guided_cash_transfer._resolve_cash_transfer_branch", return_value="Lagos")
 	@patch("retailedge.guided_cash_transfer._assert_can_create_payment_entry")
 	@patch("retailedge.guided_cash_transfer.frappe.new_doc")
 	def test_cash_to_cash_creates_internal_transfer_draft(
@@ -76,7 +76,7 @@ class TestGuidedCashTransfer(unittest.TestCase):
 	@patch("retailedge.guided_cash_transfer._get_transfer_account")
 	@patch("retailedge.guided_cash_transfer.frappe.db.get_value", return_value="NGN")
 	@patch("retailedge.guided_cash_transfer._assert_read_permission")
-	@patch("retailedge.guided_cash_transfer.validate_user_branch_access")
+	@patch("retailedge.guided_cash_transfer._resolve_cash_transfer_branch", return_value="Lagos")
 	@patch("retailedge.guided_cash_transfer._assert_can_create_payment_entry")
 	@patch("retailedge.guided_cash_transfer.frappe.new_doc")
 	def test_bank_transfer_requires_reference_number(

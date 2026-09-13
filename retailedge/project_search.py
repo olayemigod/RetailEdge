@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
-from retailedge.branch_context import get_user_allowed_branches, user_has_global_branch_access
+from retailedge.operating_context import get_operational_branch_scope
 
 MAX_RESULTS = 50
 
@@ -62,7 +62,9 @@ def search_projects(
 
 
 @frappe.whitelist()
-def search_project_branches(txt: str | None = None, company: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+def search_project_branches(
+	txt: str | None = None, company: str | None = None, limit: int = 20
+) -> list[dict[str, Any]]:
 	"""Return bounded Branch options that respect the current user's branch access.
 
 	ERPNext v16 Branch is not company-bound. Where RetailEdge Branch Setup records
@@ -73,18 +75,30 @@ def search_project_branches(txt: str | None = None, company: str | None = None, 
 	if not frappe.has_permission("Branch", "read"):
 		frappe.throw(_("You do not have permission to read Branches."), frappe.PermissionError)
 
+	company = str(company or "").strip()
+	if not company:
+		return []
+	if not frappe.has_permission("Company", "read", doc=company):
+		frappe.throw(_("You do not have permission to read this Company."), frappe.PermissionError)
+
 	text = str(txt or "").strip()
 	page_length = max(1, min(cint(limit) or 20, MAX_RESULTS))
-	allowed_info = get_user_allowed_branches(user=frappe.session.user, company=company or None)
-	allowed = list(allowed_info.get("branches") or [])
-	global_access = user_has_global_branch_access(user=frappe.session.user)
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	restricted = bool(scope.get("restricted"))
+	allowed = list(
+		dict.fromkeys(
+			str(name or "").strip() for name in scope.get("allowed_branches") or [] if str(name or "").strip()
+		)
+	)
+	if restricted and not allowed:
+		return []
 
 	company_branches: list[str] = []
-	if company and frappe.db.exists("DocType", "RetailEdge Branch Profile"):
+	if frappe.db.exists("DocType", "RetailEdge Branch Profile"):
 		# Branch Setup is operational context, not accounting truth. Use it only to
 		# narrow options when the caller can read the setup records.
 		if frappe.has_permission("RetailEdge Branch Profile", "read"):
-			company_branches = list(
+			profile_branches = (
 				frappe.get_list(
 					"RetailEdge Branch Profile",
 					filters={"company": company, "enabled": 1},
@@ -93,17 +107,28 @@ def search_project_branches(txt: str | None = None, company: str | None = None, 
 				)
 				or []
 			)
+			company_branches = list(
+				dict.fromkeys(str(name or "").strip() for name in profile_branches if str(name or "").strip())
+			)
 
 	filters: dict[str, Any] = {}
 	candidate_names: list[str] = []
 	if company_branches:
-		candidate_names = company_branches if global_access or not allowed else [name for name in company_branches if name in allowed]
-	elif allowed and not global_access:
+		candidate_names = (
+			[name for name in company_branches if name in allowed] if restricted else company_branches
+		)
+	elif restricted:
 		candidate_names = allowed
+	if restricted and not candidate_names:
+		return []
 	if candidate_names:
 		filters["name"] = ["in", candidate_names]
 	if text:
-		filters["name"] = ["like", f"%{text}%"] if not candidate_names else ["in", [name for name in candidate_names if text.lower() in name.lower()]]
+		filters["name"] = (
+			["like", f"%{text}%"]
+			if not candidate_names
+			else ["in", [name for name in candidate_names if text.lower() in name.lower()]]
+		)
 
 	if candidate_names and text and not filters["name"][1]:
 		return []
@@ -119,7 +144,7 @@ def search_project_branches(txt: str | None = None, company: str | None = None, 
 		{
 			"value": row.name,
 			"label": row.name,
-			"description": company or "",
+			"description": company,
 		}
 		for row in rows
 	]

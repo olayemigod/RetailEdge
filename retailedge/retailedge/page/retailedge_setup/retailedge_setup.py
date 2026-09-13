@@ -33,8 +33,9 @@ SETUP_RESOURCES = (
 	{
 		"key": "expense-categories",
 		"label": "Expense Categories",
-		"description": "Maintain the controlled categories used by Cashier Expense and expense reporting.",
+		"description": "Maintain the controlled categories used by Business Expenses, Cashier Expenses and expense reporting.",
 		"doctype": "RetailEdge Expense Category",
+		"manager": "expense-categories",
 		"singleton": False,
 		"icon": "file-text",
 	},
@@ -94,8 +95,9 @@ def get_setup_context() -> dict:
 	"""Return the permission-aware resources for the EdgeSuite Setup hub.
 
 	The hub intentionally does not duplicate native DocType persistence. RetailEdge
-	uses the existing Frappe/ERPNext forms as authoritative editors and advanced
-	fallbacks, while this Page provides one coherent customer-facing setup entry.
+	keeps the existing DocTypes and controllers authoritative while selected
+	RetailEdge-owned masters can be managed through bounded EdgeSuite managers.
+	Other resources may still use native validated forms as advanced setup surfaces.
 	"""
 	resources = []
 	for definition in SETUP_RESOURCES:

@@ -13,12 +13,36 @@ from retailedge.bank_account_policy import (
 	search_retailedge_bank_accounts,
 	validate_cash_deposit_bank_destination,
 )
-from retailedge.branch_context import has_doctype, has_field, validate_user_branch_access
+from retailedge.branch_context import has_doctype, has_field
 from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.operating_context import (
+	get_operational_branch_scope,
+	resolve_operational_branch,
+)
 
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 CASH_DEPOSIT_TYPE = "Cash Deposit"
 MAX_LINK_RESULTS = 20
+
+
+def _validate_cash_custody_branch(*, company: str, branch: str, label: str) -> str:
+	branch = str(branch or "").strip()
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	if branch:
+		return str(
+			resolve_operational_branch(
+				company,
+				branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
+	if scope["restricted"]:
+		frappe.throw(
+			_("{0} has no Branch attribution for your restricted access.").format(label),
+			frappe.PermissionError,
+		)
+	return ""
 
 CUSTODY_FIELD_DEFS = {
 	"retailedge_cash_custody_type": {
@@ -72,8 +96,11 @@ def get_cash_deposit_context() -> dict[str, Any]:
 	cash_account = str(context.get("payment_account") or "").strip()
 	if not company or not cash_account:
 		frappe.throw(_("RetailEdge could not resolve the active shift company and cash account."))
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+	branch = _validate_cash_custody_branch(
+		company=company,
+		branch=branch,
+		label=_("Active POS shift"),
+	)
 	_snapshot = get_cash_custody_snapshot(
 		opening_shift=shift,
 		company=company,
@@ -138,8 +165,11 @@ def create_cash_deposit_draft(values: dict | str | None = None) -> dict[str, Any
 		frappe.throw(_("The selected company no longer matches the active cashier shift. Refresh Deposit Cash."))
 	if values.get("from_account") and str(values.get("from_account")).strip() != from_account:
 		frappe.throw(_("The source cash account is controlled by the active cashier shift and cannot be changed."))
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+	branch = _validate_cash_custody_branch(
+		company=company,
+		branch=branch,
+		label=_("Active POS shift"),
+	)
 
 	from_details = _get_account(company, from_account, expected_type="Cash")
 	bank_account = str(values.get("to_bank_account") or "").strip()
@@ -312,6 +342,11 @@ def validate_cash_deposit_before_submit(doc, method=None):
 	company = str(getattr(doc, "company", None) or "").strip()
 	if not opening_shift or not cashier or not company:
 		frappe.throw(_("RetailEdge cash deposits require cashier, company, and POS opening shift attribution."))
+	_validate_cash_custody_branch(
+		company=company,
+		branch=str(getattr(doc, "retailedge_branch", None) or "").strip(),
+		label=_("Cash Deposit"),
+	)
 	if not has_doctype("POS Opening Shift") or not frappe.db.exists("POS Opening Shift", opening_shift):
 		frappe.throw(_("The linked POS opening shift no longer exists."))
 

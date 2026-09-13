@@ -462,6 +462,14 @@ def get_banking_workspace_rows(
     assert_can_access_bank_transaction_matching()
     direction = normalize_direction(direction)
     queue = _normalize_queue(queue)
+    if not frappe.has_permission("Bank Transaction", "read"):
+        return {
+            "direction": direction,
+            "queue": queue,
+            "rows": [],
+            "count": 0,
+            "skipped_count": 0,
+        }
     limit = max(1, min(cint(limit or 100), 500))
     filters = frappe._dict(
         {
