@@ -63,13 +63,11 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 				with self.assertRaises(frappe.ValidationError):
 					_normalise_items(rows)
 
-	@patch("retailedge.guided_purchase_invoice.has_branch_assignments", return_value=False)
-	@patch("retailedge.guided_purchase_invoice.validate_user_branch_access")
-	@patch("retailedge.guided_purchase_invoice.get_first_existing_field", return_value="branch")
-	@patch("retailedge.guided_purchase_invoice.has_field", return_value=True)
-	def test_warehouse_search_filters_company_and_branch(
-		self, _mock_has_field, _mock_branch_field, mock_validate_access, _mock_assignments
-	):
+	@patch(
+		"retailedge.guided_purchase_invoice.get_guided_warehouse_search_filters",
+		return_value={"company": "Demo Company", "branch": "Lagos", "is_group": 0},
+	)
+	def test_warehouse_search_filters_company_and_branch(self, mock_filters):
 		filters = _warehouse_search_filters(
 			company="Demo Company",
 			branch="Lagos",
@@ -78,32 +76,27 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertEqual(filters["company"], "Demo Company")
 		self.assertEqual(filters["branch"], "Lagos")
 		self.assertEqual(filters["is_group"], 0)
-		mock_validate_access.assert_called_once()
+		mock_filters.assert_called_once_with("Demo Company", "Lagos", user="buyer@example.com")
 
-	@patch("retailedge.guided_purchase_invoice.has_branch_assignments", return_value=False)
 	@patch("retailedge.guided_purchase_invoice.resolve_purchase_item_pricing")
 	@patch("retailedge.guided_purchase_invoice.resolve_price_list_context")
-	@patch("retailedge.guided_purchase_invoice.frappe.db.get_value")
-	@patch("retailedge.guided_purchase_invoice._validate_branch_warehouse")
+	@patch("retailedge.guided_purchase_invoice.get_guided_branch_names", return_value=["Lagos"])
+	@patch("retailedge.guided_purchase_invoice._validate_transaction_context", return_value=("Demo Company", "Lagos", "Lagos Stores - DC"))
 	@patch("retailedge.guided_purchase_invoice._assert_read_permission")
-	@patch("retailedge.guided_purchase_invoice.validate_user_branch_access")
 	@patch("retailedge.guided_purchase_invoice._assert_can_create_purchase_invoice")
 	@patch("retailedge.guided_purchase_invoice.frappe.new_doc")
 	def test_create_draft_resolves_blank_buying_rate_before_insert(
 		self,
 		mock_new_doc,
 		_mock_create_permission,
-		mock_branch_access,
 		_mock_read_permission,
-		mock_validate_warehouse,
-		mock_db_value,
+		_mock_context,
+		_mock_branches,
 		mock_price_context,
 		mock_item_pricing,
-		_mock_assignments,
 	):
 		doc = _DraftPurchaseInvoice()
 		mock_new_doc.return_value = doc
-		mock_db_value.return_value = "Demo Company"
 		mock_price_context.return_value = {
 			"price_list": "Retail Buying",
 			"source": "user_default",
@@ -132,8 +125,6 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		)
 
 		mock_new_doc.assert_called_once_with("Purchase Invoice")
-		mock_branch_access.assert_called_once()
-		mock_validate_warehouse.assert_called_once()
 		self.assertEqual(doc.insert_calls, 1)
 		self.assertEqual(doc.company, "Demo Company")
 		self.assertEqual(doc.supplier, "SUP-001")
@@ -150,12 +141,10 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertEqual(result["name"], doc.name)
 		self.assertEqual(result["buying_price_list"], "Retail Buying")
 
-	@patch(
-		"retailedge.guided_purchase_invoice.resolve_operational_branch",
-		return_value={"branch": ""},
-	)
 	@patch("retailedge.guided_purchase_invoice.resolve_purchase_item_pricing")
 	@patch("retailedge.guided_purchase_invoice.resolve_price_list_context")
+	@patch("retailedge.guided_purchase_invoice.get_guided_branch_names", return_value=[])
+	@patch("retailedge.guided_purchase_invoice._validate_transaction_context", return_value=("Demo Company", "", ""))
 	@patch("retailedge.guided_purchase_invoice._assert_read_permission")
 	@patch("retailedge.guided_purchase_invoice._assert_can_create_purchase_invoice")
 	@patch("retailedge.guided_purchase_invoice.frappe.new_doc")
@@ -164,9 +153,10 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		mock_new_doc,
 		_mock_create_permission,
 		_mock_read_permission,
+		_mock_context,
+		_mock_branches,
 		mock_price_context,
 		mock_item_pricing,
-		_mock_resolve_branch,
 	):
 		mock_new_doc.return_value = _DraftPurchaseInvoice()
 		mock_price_context.return_value = {"price_list": "", "source": "item_fallback"}
