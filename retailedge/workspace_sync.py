@@ -25,7 +25,7 @@ from retailedge.workspace_home import (
 )
 
 BUSINESS_HUB_PAGE = "retailedge-business-hub"
-BUSINESS_HUB_LABEL = "RetailEdge Business Hub"
+BUSINESS_HUB_LABEL = "Business Hub"
 DASHBOARD_SECTION_LABEL = "Dashboard"
 SALES_POS_SECTION_LABEL = "Sales & POS"
 STOCK_MOVEMENT_REPORT = "RetailEdge Stock Movement History"

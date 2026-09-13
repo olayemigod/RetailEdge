@@ -1103,10 +1103,10 @@ class ReconciliationBridgeTests(unittest.TestCase):
 	def test_readiness_unsupported_candidate_type_returns_blocked(self):
 		payload = build_reconciliation_readiness_result(
 			self._ready_payment_entry_match(
-				suggested_document_type="Journal Entry",
-				suggested_document="ACC-JV-2026-00001",
-				candidate_doctype="Journal Entry",
-				candidate_name="ACC-JV-2026-00001",
+				suggested_document_type="Purchase Invoice",
+				suggested_document="ACC-PINV-2026-00001",
+				candidate_doctype="Purchase Invoice",
+				candidate_name="ACC-PINV-2026-00001",
 			)
 		)
 
@@ -1262,7 +1262,8 @@ class ReconciliationBridgeTests(unittest.TestCase):
 		self.assertFalse(payload["dry_run"])
 		self.assertFalse(payload["execution_attempted"])
 		self.assertTrue(payload["execution_deferred"])
-		self.assertIn("deferred in R6.0", payload["notes"])
+		self.assertIn("execution gate", payload["notes"].lower())
+		self.assertIn("final confirmation", payload["notes"].lower())
 
 	def test_api_wrapper_exposes_safe_preflight_output(self):
 		with (

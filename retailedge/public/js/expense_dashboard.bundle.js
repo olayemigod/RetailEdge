@@ -1,0 +1,19 @@
+import ExpenseDashboard from "./expense_dashboard/ExpenseDashboard.vue";
+
+function mountExpenseDashboard(target) {
+	if (typeof window === "undefined") return null;
+	const edgeUI = window.EdgeSuiteUI || window.EdgeUI;
+	if (!edgeUI?.createEdgeApp) throw new Error("EdgeSuite UI runtime compatibility error: createEdgeApp is missing");
+	if (!target) throw new Error("Expenses Dashboard mount target is required");
+	const app = edgeUI.createEdgeApp(ExpenseDashboard);
+	app.mount(target);
+	return app;
+}
+
+if (typeof window !== "undefined") {
+	window.ExpenseDashboard = ExpenseDashboard;
+	window.mountExpenseDashboard = mountExpenseDashboard;
+}
+
+export { mountExpenseDashboard };
+export default ExpenseDashboard;

@@ -4,6 +4,7 @@ import frappe
 from frappe.model.document import Document
 
 from retailedge.branch_context import apply_branch_context_to_doc
+from retailedge.cash_deposit_audit import apply_submitted_deposits_to_daily_sales_audit
 from retailedge.daily_sales_audit import (
 	_assert_opening_shift_not_already_audited,
 	append_daily_sales_audit_action_log,
@@ -28,6 +29,7 @@ class RetailEdgeDailySalesAudit(Document):
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=True)
 		_assert_opening_shift_not_already_audited(self.pos_opening_shift, exclude_name=self.name)
 		calculate_daily_sales_audit_variance(self)
+		apply_submitted_deposits_to_daily_sales_audit(self)
 		refresh_daily_sales_audit_review_summary(self)
 		self._validate_context_consistency()
 

@@ -22,6 +22,8 @@ from retailedge.bank_transaction_matching import (
 )
 from retailedge.invoice_payment_audit import get_sales_invoice_payment_rows
 
+SUPPORTED_REVIEW_DOCUMENT_TYPES = {"Sales Invoice", "Payment Entry", "Journal Entry"}
+
 
 class RetailEdgeBankTransactionMatch(Document):
 	def validate(self):
@@ -80,10 +82,12 @@ class RetailEdgeBankTransactionMatch(Document):
 			frappe.throw("Bank Transaction is required.")
 		if not self.suggested_document_type or not self.suggested_document:
 			frappe.throw(
-				"Cannot save Bank Match Review because no Sales Invoice, Payment Entry, or payment event candidate was found."
+				"Cannot save Bank Match Review because no Sales Invoice, Payment Entry, Journal Entry, or payment event candidate was found."
 			)
-		if self.suggested_document_type not in {"Sales Invoice", "Payment Entry"}:
-			frappe.throw("Suggested Document Type must be either Sales Invoice or Payment Entry.")
+		if self.suggested_document_type not in SUPPORTED_REVIEW_DOCUMENT_TYPES:
+			frappe.throw(
+				"Suggested Document Type must be Sales Invoice, Payment Entry, or Journal Entry."
+			)
 		if not frappe.db.exists(self.suggested_document_type, self.suggested_document):
 			frappe.throw(f"{self.suggested_document_type} {self.suggested_document} does not exist.")
 		candidate_context = getattr(self, "_retailedge_candidate_context", None) or {}
@@ -145,6 +149,9 @@ class RetailEdgeBankTransactionMatch(Document):
 			self.review_status = "Reopened"
 		elif status == "Needs Review":
 			self.review_status = "Needs Review"
+		elif getattr(self, "suggested_document_type", None) == "Journal Entry":
+			# Journal Entry matching is manual-review-first even when the score is strong.
+			self.review_status = "Needs Review"
 		elif (
 			getattr(self, "match_confidence", None) == "Strong Match"
 			and abs(flt(self.amount_difference)) <= 0.01
@@ -153,7 +160,9 @@ class RetailEdgeBankTransactionMatch(Document):
 		else:
 			self.review_status = "Pending Review"
 
-		if (
+		if getattr(self, "suggested_document_type", None) == "Journal Entry":
+			self.risk_level = "Medium"
+		elif (
 			getattr(self, "match_confidence", None) == "Strong Match"
 			and abs(flt(self.amount_difference)) <= 0.01
 		):
@@ -277,7 +286,7 @@ def _resolve_manual_candidate_context(
 	if not suggested_document_type or not suggested_document:
 		return {"doc_values": {}, "details": {}, "block_reason": "No match candidate found."}
 	candidate = None
-	if bank_transaction:
+	if bank_transaction and suggested_document_type != "Journal Entry":
 		candidate = _resolve_matching_candidate(
 			bank_transaction_name=bank_transaction,
 			suggested_document_type=suggested_document_type,
@@ -292,8 +301,11 @@ def _resolve_manual_candidate_context(
 			or cstr(candidate.get("document_name")).strip() != suggested_document
 		):
 			candidate = None
+	bank_context = _build_bank_transaction_context(bank_transaction) if bank_transaction else {}
 	if not candidate:
-		candidate = _build_source_candidate_context(suggested_document_type, suggested_document)
+		candidate = _build_source_candidate_context(
+			suggested_document_type, suggested_document, bank_context=bank_context
+		)
 	if not candidate:
 		if suggested_document_type == "Sales Invoice":
 			return {
@@ -301,13 +313,18 @@ def _resolve_manual_candidate_context(
 				"details": {},
 				"block_reason": "Sales Invoice is context only; payment event evidence is required for review creation and auto-match.",
 			}
+		if suggested_document_type == "Journal Entry":
+			return {
+				"doc_values": {},
+				"details": {},
+				"block_reason": "Journal Entry does not contain a submitted bank-ledger row compatible with this Bank Transaction.",
+			}
 		return {
 			"doc_values": {},
 			"details": {},
-			"block_reason": "Cannot create review record because no Sales Invoice, Payment Entry, or payment event candidate was found.",
+			"block_reason": "Cannot create review record because no Sales Invoice, Payment Entry, Journal Entry, or payment event candidate was found.",
 		}
 	candidate = frappe._dict(candidate)
-	bank_context = _build_bank_transaction_context(bank_transaction) if bank_transaction else {}
 	account_payload = _resolve_account_match_payload(bank_context, candidate) if bank_context else {}
 	details = {
 		"candidate_category": candidate.get("candidate_category"),
@@ -378,15 +395,17 @@ def _resolve_manual_candidate_context(
 	return {"doc_values": doc_values, "details": details, "candidate": candidate, "block_reason": None}
 
 
-def _build_source_candidate_context(suggested_document_type, suggested_document):
+def _build_source_candidate_context(suggested_document_type, suggested_document, bank_context=None):
 	if suggested_document_type == "Payment Entry":
-		return _build_payment_entry_source_candidate(suggested_document)
+		return _build_payment_entry_source_candidate(suggested_document, bank_context=bank_context)
 	if suggested_document_type == "Sales Invoice":
 		return _build_sales_invoice_source_candidate(suggested_document)
+	if suggested_document_type == "Journal Entry":
+		return _build_journal_entry_source_candidate(suggested_document, bank_context=bank_context)
 	return None
 
 
-def _build_payment_entry_source_candidate(payment_entry_name):
+def _build_payment_entry_source_candidate(payment_entry_name, bank_context=None):
 	fields = [
 		"name",
 		"posting_date",
@@ -408,9 +427,32 @@ def _build_payment_entry_source_candidate(payment_entry_name):
 	payload = frappe.db.get_value("Payment Entry", payment_entry_name, fields, as_dict=True)
 	if not payload:
 		return None
-	account = cstr(payload.get("paid_to") or payload.get("paid_from")).strip()
 	if cstr(payload.get("mode_of_payment")).strip().lower() == "cash":
 		return None
+
+	bank_context = frappe._dict(bank_context or {})
+	direction = cstr(bank_context.get("bank_direction")).strip()
+	payment_type = cstr(payload.get("payment_type")).strip()
+	paid_from = cstr(payload.get("paid_from")).strip()
+	paid_to = cstr(payload.get("paid_to")).strip()
+	if direction == "Outflow":
+		account = paid_from
+		candidate_amount = flt(payload.get("paid_amount"))
+	elif direction == "Inflow":
+		account = paid_to
+		candidate_amount = flt(payload.get("received_amount"))
+	elif payment_type == "Pay":
+		account = paid_from
+		candidate_amount = flt(payload.get("paid_amount"))
+	elif payment_type == "Receive":
+		account = paid_to
+		candidate_amount = flt(payload.get("received_amount"))
+	else:
+		# Internal Transfer is ambiguous without the Bank Transaction direction.
+		return None
+	if not account or candidate_amount <= 0:
+		return None
+
 	return {
 		"document_type": "Payment Entry",
 		"document_name": payment_entry_name,
@@ -420,14 +462,14 @@ def _build_payment_entry_source_candidate(payment_entry_name):
 		"customer": payload.get("party"),
 		"party": payload.get("party"),
 		"party_type": payload.get("party_type") or "Customer",
-		"candidate_amount": flt(payload.get("received_amount") or payload.get("paid_amount")),
+		"candidate_amount": candidate_amount,
 		"candidate_category": "payment_entry_match",
 		"payment_event_source": "Payment Entry",
 		"payment_mode": payload.get("mode_of_payment"),
 		"payment_account": account,
 		"account": account,
 		"reference": payload.get("reference_no") or payload.get("name"),
-		"payment_entry_paid_amount": flt(payload.get("received_amount") or payload.get("paid_amount")),
+		"payment_entry_paid_amount": candidate_amount,
 		"amount_scenario": "Submitted Payment Entry Amount",
 		"confidence": "Possible Match",
 		"score": 0,
@@ -479,6 +521,69 @@ def _build_sales_invoice_source_candidate(invoice_name):
 		"confidence": "Possible Match",
 		"score": 0,
 		"reasons": [_("Matched invoice payment row.")],
+	}
+
+
+def _build_journal_entry_source_candidate(journal_entry_name, bank_context=None):
+	bank_context = frappe._dict(bank_context or {})
+	payload = frappe.db.get_value(
+		"Journal Entry",
+		journal_entry_name,
+		["name", "posting_date", "company", "voucher_type", "cheque_no", "user_remark", "docstatus"],
+		as_dict=True,
+	)
+	if not payload or cint(payload.get("docstatus")) != 1:
+		return None
+
+	bank_ledger = cstr(bank_context.get("resolved_bank_account")).strip()
+	direction = cstr(bank_context.get("bank_direction")).strip()
+	if not bank_ledger or direction not in {"Inflow", "Outflow"}:
+		return None
+
+	rows = frappe.get_all(
+		"Journal Entry Account",
+		filters={"parent": journal_entry_name, "account": bank_ledger},
+		fields=[
+			"account",
+			"debit_in_account_currency",
+			"credit_in_account_currency",
+			"party_type",
+			"party",
+		],
+		limit_page_length=5,
+	)
+	if len(rows) != 1:
+		return None
+	bank_row = frappe._dict(rows[0])
+	candidate_amount = flt(
+		bank_row.get("debit_in_account_currency")
+		if direction == "Inflow"
+		else bank_row.get("credit_in_account_currency")
+	)
+	if candidate_amount <= 0:
+		return None
+
+	return {
+		"document_type": "Journal Entry",
+		"document_name": journal_entry_name,
+		"posting_date": payload.get("posting_date"),
+		"company": payload.get("company"),
+		"party": bank_row.get("party"),
+		"party_type": bank_row.get("party_type"),
+		"candidate_amount": candidate_amount,
+		"candidate_category": "journal_entry_match",
+		"payment_event_source": "Journal Entry",
+		"payment_account": bank_ledger,
+		"account": bank_ledger,
+		"reference": payload.get("cheque_no") or journal_entry_name,
+		"description": payload.get("user_remark"),
+		"amount_scenario": "Submitted Journal Entry Bank Ledger Amount",
+		"confidence": "Possible Match",
+		"score": 0,
+		"reasons": [
+			_("Matched submitted Journal Entry bank-ledger row."),
+			_("Journal Entry matches require explicit manual review before confirmation."),
+		],
 	}
 
 

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import getdate
+from frappe.utils import flt, getdate
 
-from retailedge.branch_context import get_branch_query_filters
+from retailedge.cash_deposit_audit import get_submitted_deposit_totals
+from retailedge.daily_sales_audit_register_read_scope import (
+	resolve_daily_sales_audit_register_read_scope,
+)
 
 
 def execute(filters=None):
@@ -84,6 +87,12 @@ def get_columns():
 			"width": 130,
 		},
 		{
+			"label": _("Cash Deposits"),
+			"fieldname": "cash_deposit_amount",
+			"fieldtype": "Currency",
+			"width": 125,
+		},
+		{
 			"label": _("Expected Cash"),
 			"fieldname": "expected_cash_amount",
 			"fieldtype": "Currency",
@@ -148,28 +157,18 @@ def get_columns():
 	]
 
 
-def get_data(filters):
-	query_filters = {}
-	query_filters.update(
-		get_branch_query_filters(
-			"RetailEdge Daily Sales Audit",
-			user=frappe.session.user,
-			company=filters.get("company"),
-			branch=filters.get("branch"),
-		).get("filters")
-		or {}
+def get_data(filters, limit_page_length=0):
+	query_filters = resolve_daily_sales_audit_register_read_scope(
+		filters,
+		user=frappe.session.user,
 	)
-	for fieldname in ("company", "branch", "pos_profile", "cashier", "audit_status", "audit_result"):
-		value = filters.get(fieldname)
-		if value and fieldname not in query_filters:
-			query_filters[fieldname] = value
 	if filters.get("from_date") and filters.get("to_date"):
 		query_filters["audit_date"] = ["between", [filters["from_date"], filters["to_date"]]]
 	elif filters.get("from_date"):
 		query_filters["audit_date"] = [">=", filters["from_date"]]
 	elif filters.get("to_date"):
 		query_filters["audit_date"] = ["<=", filters["to_date"]]
-	return frappe.get_all(
+	rows = frappe.get_all(
 		"RetailEdge Daily Sales Audit",
 		filters=query_filters,
 		fields=[
@@ -199,6 +198,24 @@ def get_data(filters):
 			"rejected_on",
 			"review_required",
 		],
-		limit_page_length=0,
+		limit_page_length=limit_page_length,
 		order_by="audit_date desc, creation desc",
 	)
+	deposit_totals = get_submitted_deposit_totals(
+		[row.get("pos_opening_shift") for row in rows],
+		company=filters.get("company"),
+	)
+	for row in rows:
+		deposit_amount = flt(deposit_totals.get(row.get("pos_opening_shift")))
+		row["cash_deposit_amount"] = deposit_amount
+		row["expected_cash_amount"] = (
+			flt(row.get("opening_cash_amount"))
+			+ flt(row.get("cash_sales_amount"))
+			- flt(row.get("cashier_expense_amount"))
+			- deposit_amount
+		)
+		row["cash_variance_amount"] = flt(row.get("actual_closing_cash_amount")) - flt(
+			row.get("expected_cash_amount")
+		)
+		row["net_variance_amount"] = flt(row.get("cash_variance_amount"))
+	return rows

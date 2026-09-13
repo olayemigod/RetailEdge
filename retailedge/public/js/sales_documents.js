@@ -94,9 +94,28 @@
 		setTimeout(() => hideGrid(frm), 500);
 	}
 
+	function openMixedSettlement(frm) {
+		frappe.route_options = { sales_invoice: frm.doc.name };
+		frappe.set_route("payment-management");
+	}
+
+	function addSettlementAction(frm) {
+		if (
+			frm.doctype !== "Sales Invoice"
+			|| frm.doc.docstatus !== 1
+			|| frm.doc.is_return
+			|| Number(frm.doc.outstanding_amount || 0) <= 0
+			|| !frm.doc.customer
+		) return;
+		frm.add_custom_button(__("Settle Customer Invoice"), () => openMixedSettlement(frm), __("Payments"));
+	}
+
 	["Sales Invoice", "Delivery Note", "Sales Order", "Quotation"].forEach((doctype) => {
 		frappe.ui.form.on(doctype, {
-			refresh(frm) { apply(frm); },
+			refresh(frm) {
+				apply(frm);
+				if (doctype === "Sales Invoice") addSettlementAction(frm);
+			},
 			onload_post_render(frm) { apply(frm); },
 			items_on_form_rendered(frm) { apply(frm); },
 			items_add(frm) { apply(frm); },

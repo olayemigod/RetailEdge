@@ -1,0 +1,126 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="edge-supplier-portal-shell" data-edge-suite-ready="true">
+	<section class="edge-supplier-hero">
+		<div>
+			<span class="edge-supplier-kicker">Supplier workspace</span>
+			<h1>{{ company_name or "Supplier Portal" }}</h1>
+			<p>{{ supplier_label }}{% if user_full_name %} · {{ user_full_name }}{% endif %}</p>
+		</div>
+		<a class="edge-supplier-button" href="{{ portal.routes.account_statement }}">Account Statement</a>
+	</section>
+
+	<section class="edge-supplier-metrics">
+		{% for balance in portal.payables.balances %}
+		<article class="edge-supplier-card{% if balance.overdue_count %} edge-supplier-card-alert{% endif %}">
+			<span>{{ balance.company }}{% if balance.currency %} · {{ balance.currency }}{% endif %}</span>
+			<strong>{{ frappe.utils.fmt_money(balance.outstanding or 0, currency=balance.currency or None) }}</strong>
+			<small>{{ balance.invoice_count }} open invoice{% if balance.invoice_count != 1 %}s{% endif %}{% if balance.overdue_count %} · {{ balance.overdue_count }} overdue{% endif %}</small>
+		</article>
+		{% endfor %}
+		{% if not portal.payables.balances %}
+		<article class="edge-supplier-card"><span>Open payables</span><strong>0</strong><small>No outstanding supplier invoices found.</small></article>
+		{% endif %}
+	</section>
+
+	<section class="edge-supplier-grid">
+		{% for section in portal.sections %}
+		<article class="edge-supplier-panel">
+			<header>
+				<div>
+					<span class="edge-supplier-kicker">Native ERPNext</span>
+					<h2>{{ section.label }}</h2>
+				</div>
+				<a class="edge-supplier-button" href="{{ section.route }}">Open</a>
+			</header>
+			{% if section.recent %}
+			<div class="edge-supplier-list">
+				{% for row in section.recent %}
+				<div class="edge-supplier-row">
+					<a class="edge-supplier-row-main" href="{{ row.document_url }}">
+						<div>
+							<strong>{{ row.name }}</strong>
+							<span>{{ row.status or section.label }}{% if row.date %} · {{ frappe.utils.formatdate(row.date) }}{% endif %}</span>
+						</div>
+						{% if row.grand_total %}
+						<div class="edge-supplier-row-value">{{ frappe.utils.fmt_money(row.grand_total, currency=row.currency or None) }}</div>
+						{% endif %}
+					</a>
+					{% if section.doctype == "Purchase Order" %}
+					<div class="edge-supplier-row-actions">
+						{% if row.acknowledged %}
+						<span class="edge-supplier-state">Acknowledged{% if row.acknowledged_on %} · {{ frappe.utils.format_datetime(row.acknowledged_on) }}{% endif %}</span>
+						{% elif row.can_acknowledge %}
+						<button type="button" class="edge-supplier-action edge-supplier-ack" data-po-name="{{ row.name }}" data-activity-type="Acknowledged">Acknowledge</button>
+						{% endif %}
+						<button type="button" class="edge-supplier-action edge-supplier-message" data-po-name="{{ row.name }}" data-activity-type="Message">Message</button>
+					</div>
+					{% if row.acknowledgement_note %}<div class="edge-supplier-note"><strong>Acknowledgement note:</strong> {{ row.acknowledgement_note }}</div>{% endif %}
+					{% if row.recent_messages %}<div class="edge-supplier-note"><strong>Latest message:</strong> {{ row.recent_messages[0].message }}</div>{% endif %}
+					{% endif %}
+				</div>
+				{% endfor %}
+			</div>
+			{% else %}
+			<div class="edge-supplier-empty">No records available.</div>
+			{% endif %}
+		</article>
+		{% endfor %}
+
+		<article class="edge-supplier-panel">
+			<header><div><span class="edge-supplier-kicker">Payments</span><h2>Recent supplier payments</h2></div></header>
+			{% if portal.payables.recent_payments %}
+			<div class="edge-supplier-list">
+				{% for row in portal.payables.recent_payments %}
+				<div class="edge-supplier-row edge-supplier-row-static">
+					<div><strong>{{ row.payment_entry }}</strong><span>{{ frappe.utils.formatdate(row.posting_date) }}{% if row.mode_of_payment %} · {{ row.mode_of_payment }}{% endif %}{% if row.reference_no %} · Ref {{ row.reference_no }}{% endif %}</span></div>
+					<div class="edge-supplier-row-value">{{ frappe.utils.fmt_money(row.amount, currency=row.currency or None) }}</div>
+				</div>
+				{% endfor %}
+			</div>
+			{% else %}<div class="edge-supplier-empty">No submitted supplier payments found.</div>{% endif %}
+			<div class="edge-supplier-panel-note">{{ portal.payables.scope_note }}</div>
+		</article>
+	</section>
+
+	<section class="edge-supplier-safety">
+		<strong>ERPNext remains the transaction authority</strong>
+		<p>Requests for Quotation, Supplier Quotations, Purchase Orders and Purchase Invoices use ERPNext's native Supplier portal permissions. Acknowledgements and messages are recorded separately and never change submitted Purchase Orders. Payables and payment context are read-only ERPNext accounting data.</p>
+	</section>
+</div>
+
+<div class="edge-supplier-dialog-backdrop" id="edge-supplier-activity-dialog" hidden>
+	<div class="edge-supplier-dialog" role="dialog" aria-modal="true" aria-labelledby="edge-supplier-activity-title">
+		<form id="edge-supplier-activity-form">
+			<div class="edge-supplier-dialog-header"><div><span class="edge-supplier-kicker">Purchase Order activity</span><h2 id="edge-supplier-activity-title">Supplier activity</h2></div><button type="button" class="edge-supplier-dialog-close" aria-label="Close">×</button></div>
+			<p id="edge-supplier-activity-help"></p>
+			<label><span id="edge-supplier-activity-message-label">Optional note</span><textarea id="edge-supplier-activity-message" maxlength="2000" rows="5" placeholder="Add a note"></textarea></label>
+			<div class="edge-supplier-dialog-actions"><button type="button" class="edge-supplier-dialog-cancel">Cancel</button><button type="submit" class="edge-supplier-dialog-submit">Save</button></div>
+		</form>
+	</div>
+</div>
+
+<style>
+.edge-supplier-portal-shell{--edge-supplier-surface:var(--edge-color-surface,#fff);--edge-supplier-subtle:var(--edge-color-surface-muted,#f7f7f8);--edge-supplier-border:var(--edge-color-border,#e5e7eb);--edge-supplier-ink:var(--edge-color-ink,#111827);--edge-supplier-muted:var(--edge-color-ink-muted,#6b7280);--edge-supplier-accent:var(--edge-color-primary,#2563eb);--edge-supplier-danger:var(--edge-color-danger,#b91c1c);display:grid;gap:1rem;color:var(--edge-supplier-ink);padding:1rem 0 2rem}.edge-supplier-hero,.edge-supplier-panel,.edge-supplier-card,.edge-supplier-safety{background:var(--edge-supplier-surface);border:1px solid var(--edge-supplier-border);border-radius:14px}.edge-supplier-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;padding:1.25rem}.edge-supplier-hero h1,.edge-supplier-panel h2{margin:.2rem 0 .35rem}.edge-supplier-hero p,.edge-supplier-safety p{margin:0;color:var(--edge-supplier-muted)}.edge-supplier-kicker{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--edge-supplier-muted)}.edge-supplier-button,.edge-supplier-action{display:inline-flex;align-items:center;justify-content:center;min-height:2.25rem;padding:.45rem .75rem;border-radius:8px;text-decoration:none;font:inherit}.edge-supplier-button,.edge-supplier-ack,.edge-supplier-dialog-submit{background:var(--edge-supplier-accent);color:#fff!important;border:1px solid var(--edge-supplier-accent)}.edge-supplier-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.edge-supplier-card{display:grid;gap:.35rem;padding:1rem}.edge-supplier-card strong{font-size:1.35rem}.edge-supplier-card span,.edge-supplier-card small,.edge-supplier-row span,.edge-supplier-panel-note,.edge-supplier-note{color:var(--edge-supplier-muted)}.edge-supplier-card-alert{border-color:var(--edge-supplier-danger)}.edge-supplier-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.edge-supplier-panel{overflow:hidden}.edge-supplier-panel>header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;padding:1rem;border-bottom:1px solid var(--edge-supplier-border)}.edge-supplier-list{display:grid}.edge-supplier-row{display:flex;gap:.75rem;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--edge-supplier-border);flex-wrap:wrap}.edge-supplier-row:last-child{border-bottom:0}.edge-supplier-row-main{display:flex;justify-content:space-between;gap:1rem;align-items:center;min-width:0;flex:1;color:var(--edge-supplier-ink)!important;text-decoration:none}.edge-supplier-row span{display:block;margin-top:.2rem;font-size:.8rem}.edge-supplier-row-value{text-align:right;font-weight:600}.edge-supplier-row-actions{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}.edge-supplier-action{cursor:pointer}.edge-supplier-message{border:1px solid var(--edge-supplier-border);background:var(--edge-supplier-surface);color:var(--edge-supplier-ink)}.edge-supplier-state{font-size:.8rem;font-weight:600}.edge-supplier-note{flex-basis:100%;padding:.55rem .7rem;border-radius:8px;background:var(--edge-supplier-subtle);font-size:.82rem}.edge-supplier-empty,.edge-supplier-panel-note,.edge-supplier-safety{padding:1rem}.edge-supplier-panel-note{border-top:1px solid var(--edge-supplier-border);font-size:.8rem}.edge-supplier-dialog-backdrop{position:fixed;inset:0;z-index:1050;background:rgba(15,23,42,.48);display:grid;place-items:center;padding:1rem}.edge-supplier-dialog-backdrop[hidden]{display:none}.edge-supplier-dialog{width:min(34rem,100%);background:var(--edge-supplier-surface,#fff);color:var(--edge-supplier-ink,#111827);border:1px solid var(--edge-supplier-border,#e5e7eb);border-radius:14px;padding:1.1rem}.edge-supplier-dialog-header{display:flex;justify-content:space-between;gap:1rem}.edge-supplier-dialog-header h2{margin:.2rem 0 0}.edge-supplier-dialog-close{border:0;background:transparent;font-size:1.8rem;cursor:pointer;color:var(--edge-supplier-muted)}.edge-supplier-dialog label{display:grid;gap:.4rem;font-weight:600}.edge-supplier-dialog textarea{width:100%;resize:vertical;border:1px solid var(--edge-supplier-border);border-radius:9px;padding:.7rem;background:var(--edge-supplier-surface);color:var(--edge-supplier-ink);font:inherit}.edge-supplier-dialog-actions{display:flex;justify-content:flex-end;gap:.6rem;margin-top:1rem}.edge-supplier-dialog-cancel,.edge-supplier-dialog-submit{min-height:2.35rem;border-radius:8px;padding:.45rem .85rem;font:inherit;cursor:pointer}.edge-supplier-dialog-cancel{border:1px solid var(--edge-supplier-border);background:var(--edge-supplier-surface);color:var(--edge-supplier-ink)}@media(max-width:900px){.edge-supplier-metrics,.edge-supplier-grid{grid-template-columns:1fr}.edge-supplier-row{align-items:stretch;flex-direction:column}.edge-supplier-row-main{align-items:flex-start}}@media(max-width:520px){.edge-supplier-hero{flex-direction:column}.edge-supplier-dialog-actions{flex-direction:column-reverse}.edge-supplier-dialog-cancel,.edge-supplier-dialog-submit{width:100%}}
+</style>
+
+<script>
+(function() {
+	const dialog = document.getElementById("edge-supplier-activity-dialog");
+	const form = document.getElementById("edge-supplier-activity-form");
+	const title = document.getElementById("edge-supplier-activity-title");
+	const help = document.getElementById("edge-supplier-activity-help");
+	const label = document.getElementById("edge-supplier-activity-message-label");
+	const message = document.getElementById("edge-supplier-activity-message");
+	const submit = dialog && dialog.querySelector(".edge-supplier-dialog-submit");
+	let purchaseOrderName = "";
+	let activityType = "";
+	function closeDialog(){if(!dialog)return;dialog.hidden=true;purchaseOrderName="";activityType="";if(message)message.value="";if(submit){submit.disabled=false;submit.textContent="Save";}}
+	function openDialog(button){if(!dialog||!button)return;purchaseOrderName=button.dataset.poName||"";activityType=button.dataset.activityType||"";if(!purchaseOrderName||!activityType)return;const acknowledgement=activityType==="Acknowledged";title.textContent=acknowledgement?`Acknowledge ${purchaseOrderName}`:`Message about ${purchaseOrderName}`;help.textContent=acknowledgement?"Record that you have received and acknowledged this Purchase Order. This does not change the Purchase Order.":"Send a message linked to this Purchase Order without changing the Purchase Order.";label.textContent=acknowledgement?"Optional note":"Message";message.required=!acknowledgement;message.placeholder=acknowledgement?"Add an optional acknowledgement note":"Enter your message";submit.textContent=acknowledgement?"Record acknowledgement":"Send message";dialog.hidden=false;window.setTimeout(()=>message.focus(),0);}
+	document.addEventListener("click",function(event){const button=event.target.closest(".edge-supplier-action");if(button){openDialog(button);return;}if(event.target.closest(".edge-supplier-dialog-close")||event.target.closest(".edge-supplier-dialog-cancel")){closeDialog();return;}if(event.target===dialog)closeDialog();});
+	if(form)form.addEventListener("submit",function(event){event.preventDefault();if(!purchaseOrderName||!activityType||!submit||submit.disabled)return;if(activityType==="Message"&&!message.value.trim()){message.focus();return;}if(!window.frappe||typeof window.frappe.call!=="function"){window.alert("Your activity could not be recorded. Please refresh the page and try again.");return;}const originalLabel=submit.textContent;submit.disabled=true;submit.textContent="Saving…";window.frappe.call({method:"retailedge.supplier_portal_collaboration.record_purchase_order_activity",type:"POST",args:{purchase_order_name:purchaseOrderName,activity_type:activityType,message:message.value}}).then(function(){window.location.reload();}).catch(function(error){submit.disabled=false;submit.textContent=originalLabel;const text=error&&(error.message||error.exc)||"Your activity could not be recorded. Please try again.";if(window.frappe&&typeof window.frappe.msgprint==="function")window.frappe.msgprint(text);else window.alert(text);});});
+	document.addEventListener("keydown",function(event){if(event.key==="Escape"&&dialog&&!dialog.hidden)closeDialog();});
+})();
+</script>
+{% endblock %}

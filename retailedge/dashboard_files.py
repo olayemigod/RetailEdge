@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+
+import frappe
+from frappe import _
+from frappe.utils import cint
+from frappe.utils.pdf import get_pdf
+
+from retailedge.branch_performance_dashboard import get_branch_performance_dashboard_data
+from retailedge.business_control_center import build_business_control_export_dataset
+from retailedge.dashboard_capabilities import require_dashboard_action
+from retailedge.expense_dashboard_export import build_expense_dashboard_export_with_budget
+from retailedge.money_dashboard import build_money_dashboard_export_dataset
+from retailedge.owner_dashboard import build_owner_dashboard_export_dataset
+from retailedge.profitability_export import build_profitability_export_dataset
+from retailedge.reporting_files import (
+	MIME_TYPES,
+	_csv_bytes,
+	_normalise_dataset,
+	_normalize_options,
+	_report_html,
+	_select_columns,
+	_set_download_response,
+	_table_matrix,
+	_xlsx_bytes,
+)
+from retailedge.sales_dashboard import build_sales_dashboard_export_dataset
+from retailedge.salesperson_performance_dashboard import _build_salesperson_dashboard_dataset
+
+DashboardHandler = Callable[[dict, bool], dict]
+
+
+def _dashboard_handler(scope_key: str) -> DashboardHandler:
+	handlers: dict[str, DashboardHandler] = {
+		"owner-dashboard": lambda filters, _all_filtered: build_owner_dashboard_export_dataset(filters),
+		"business-control-center": lambda filters, _all_filtered: build_business_control_export_dataset(filters),
+		"profitability-intelligence": lambda filters, all_filtered: build_profitability_export_dataset(
+			filters,
+			all_filtered=all_filtered,
+		),
+		"sales-overview": lambda filters, _all_filtered: build_sales_dashboard_export_dataset(filters),
+		"money-overview": lambda filters, _all_filtered: build_money_dashboard_export_dataset(filters),
+		"expense-overview": lambda filters, _all_filtered: build_expense_dashboard_export_with_budget(filters),
+		"branch-performance": lambda filters, _all_filtered: get_branch_performance_dashboard_data(
+			filters=filters
+		),
+		"salesperson-performance": lambda filters, all_filtered: _build_salesperson_dashboard_dataset(
+			filters,
+			export_mode=all_filtered,
+		),
+	}
+	handler = handlers.get(scope_key)
+	if not handler:
+		frappe.throw(_("Unsupported RetailEdge dashboard export scope."))
+	return handler
+
+
+def _capability_scope(scope_key: str) -> str:
+	# Business Control Centre may remain visible to operational Action Centre users,
+	# but its export/print can contain owner-level financial intelligence. Reuse the
+	# stricter Owner Dashboard capability contract for file generation.
+	return "owner-dashboard" if scope_key == "business-control-center" else scope_key
+
+
+def get_dashboard_dataset(scope_key: str, filters: dict, *, all_filtered: bool = True) -> dict:
+	return _dashboard_handler(scope_key)(filters, all_filtered)
+
+
+@frappe.whitelist()
+def download_dashboard(scope_key: str, filters=None, options=None):
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else dict(filters or {})
+	options = _normalize_options(options)
+	require_dashboard_action(
+		_capability_scope(scope_key),
+		"export",
+		company=filters.get("company"),
+		branch=filters.get("branch"),
+	)
+	dataset = get_dashboard_dataset(
+		scope_key,
+		filters,
+		all_filtered=options["scope"] == "all_filtered",
+	)
+	columns, rows, summary = _normalise_dataset(dataset)
+	columns = _select_columns(columns, options["columns"])
+	title = str(dataset.get("title") or scope_key.replace("-", " ").title())
+	matrix, header_index = _table_matrix(title, filters, columns, rows, summary, options)
+	file_format = options["format"]
+	if file_format == "csv":
+		content = _csv_bytes(matrix)
+	elif file_format == "xlsx":
+		content = _xlsx_bytes(matrix, title, header_index, options["include_filters"])
+	else:
+		pdf_html = _report_html(title, filters, columns, rows, summary, options)
+		orientation = "Landscape" if options["orientation"] == "landscape" else "Portrait"
+		content = get_pdf(pdf_html, options={"orientation": orientation})
+	_set_download_response(content, scope_key, file_format)
+	frappe.local.response.content_type = MIME_TYPES[file_format]
+
+
+@frappe.whitelist()
+def get_dashboard_print_html(scope_key: str, filters=None) -> dict:
+	filters = frappe.parse_json(filters) if isinstance(filters, str) else dict(filters or {})
+	require_dashboard_action(
+		_capability_scope(scope_key),
+		"print",
+		company=filters.get("company"),
+		branch=filters.get("branch"),
+	)
+	dataset = get_dashboard_dataset(scope_key, filters, all_filtered=True)
+	columns, rows, summary = _normalise_dataset(dataset)
+	options = {
+		"include_title": True,
+		"include_generated_metadata": True,
+		"include_filters": True,
+		"include_summary": True,
+		"include_letterhead": True,
+		"repeat_table_headings": True,
+	}
+	title = str(dataset.get("title") or scope_key.replace("-", " ").title())
+	return {
+		"html": _report_html(title, filters, _select_columns(columns, []), rows, summary, options),
+		"title": title,
+		"row_count": cint(len(rows)),
+	}

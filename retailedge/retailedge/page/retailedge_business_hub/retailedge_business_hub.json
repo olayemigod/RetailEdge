@@ -11,19 +11,58 @@
   "owner": "Administrator",
   "page_name": "retailedge-business-hub",
   "roles": [
-    {"role": "System Manager"},
-    {"role": "Accounts Manager"},
-    {"role": "Accounts User"},
-    {"role": "Stock Manager"},
-    {"role": "Stock User"},
-    {"role": "RetailEdge Manager"},
-    {"role": "RetailEdge Branch Manager"},
-    {"role": "RetailEdge Cashier"},
-    {"role": "RetailEdge Accounts Reviewer"}
+    {
+      "role": "System Manager"
+    },
+    {
+      "role": "Accounts Manager"
+    },
+    {
+      "role": "Accounts User"
+    },
+    {
+      "role": "Stock Manager"
+    },
+    {
+      "role": "Stock User"
+    },
+    {
+      "role": "RetailEdge Manager"
+    },
+    {
+      "role": "RetailEdge Branch Manager"
+    },
+    {
+      "role": "RetailEdge Cashier"
+    },
+    {
+      "role": "RetailEdge Accounts Reviewer"
+    },
+    {
+      "role": "RetailEdgeManager"
+    },
+    {
+      "role": "RetailEdgeBranchManager"
+    },
+    {
+      "role": "RetailEdgeCashier"
+    },
+    {
+      "role": "Sales Manager"
+    },
+    {
+      "role": "Sales User"
+    },
+    {
+      "role": "Purchase Manager"
+    },
+    {
+      "role": "Purchase User"
+    }
   ],
   "script": null,
   "standard": "Yes",
   "style": null,
   "system_page": 0,
-  "title": "RetailEdge Business Hub"
+  "title": "Business Hub"
 }

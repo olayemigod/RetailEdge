@@ -1,0 +1,617 @@
+from __future__ import annotations
+
+from typing import Any
+
+import frappe
+from frappe import _
+from frappe.utils import cint, flt, getdate, today
+
+from retailedge.inventory_demand import (
+	DEFAULT_LOOKBACK_DAYS,
+	get_historical_inventory_demand,
+)
+from retailedge.inventory_intelligence import (
+	MovementThresholds,
+	classify_movement,
+	classify_stock_cover_review,
+	stock_cover_days,
+)
+from retailedge.inventory_location_exceptions import get_hidden_inventory_location_exceptions
+from retailedge.inventory_replenishment import get_inventory_replenishment
+from retailedge.reporting_capabilities import require_report_action
+from retailedge.stock_position import (
+	DEFAULT_PAGE_SIZE,
+	_build_stock_position_dataset,
+	_coerce_filters,
+	_matches_stock_status,
+	_page_response,
+	_summary as _stock_summary,
+	_validate_filters,
+)
+
+DEFAULT_SLOW_DAYS = 30
+DEFAULT_NON_MOVING_DAYS = 90
+NUMERIC_FIELDTYPES = {"Currency", "Float", "Int", "Percent", "Check"}
+MOVEMENT_CLASSES = {
+	"All",
+	"Fast",
+	"Normal",
+	"Slow",
+	"Non-moving",
+	"No demand in window",
+}
+REPLENISHMENT_STATUSES = {
+	"All",
+	"Reorder Now",
+	"Review warehouse group",
+	"Healthy",
+	"No reorder rule",
+}
+
+
+@frappe.whitelist()
+def get_inventory_health(
+	filters: dict[str, Any] | str | None = None,
+	page: int | str = 1,
+	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort_field: str = "",
+	sort_direction: str = "",
+) -> dict[str, Any]:
+	"""Compose current ERPNext Bin, demand, and reorder intelligence."""
+	dataset = _apply_sort(
+		_build_inventory_health_dataset(filters),
+		sort_field=sort_field,
+		sort_direction=sort_direction,
+	)
+	return _page_response(dataset, page=page, page_size=page_size)
+
+
+@frappe.whitelist()
+def get_inventory_health_export(
+	filters: dict[str, Any] | str | None = None,
+	sort_field: str = "",
+	sort_direction: str = "",
+) -> dict[str, Any]:
+	"""Return the bounded R10 dataset after reusing Stock Position export entitlement."""
+	filters = _normalise_health_filters(filters)
+	require_report_action(
+		"stock-position",
+		action="export",
+		company=str(filters.get("company") or ""),
+		branch=str(filters.get("branch") or ""),
+	)
+	return _apply_sort(
+		_build_inventory_health_dataset(filters),
+		sort_field=sort_field,
+		sort_direction=sort_direction,
+	)
+
+
+@frappe.whitelist()
+def get_inventory_action_summary(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return Action Centre stock alerts with independent optional enrichment layers.
+
+	Current Bin stock is the required foundation. ERPNext reorder, warehouse-location,
+	and historical movement intelligence are evaluated independently so a bounded or
+	unsupported enrichment cannot suppress legacy current-stock alerts.
+	"""
+	filters = _normalise_health_filters(filters)
+	_validate_filters(filters)
+	stock_filters = frappe._dict(dict(filters))
+	stock_filters.stock_status = "All"
+	stock_filters.include_zero = 1
+	stock = _build_stock_position_dataset(stock_filters)
+	stock_rows = list(stock.get("rows") or [])
+	show_costs = bool(stock.get("show_costs"))
+
+	location_exceptions: dict[str, Any] = {}
+	location_status: dict[str, Any] = {"available": True}
+	try:
+		location_exceptions = get_hidden_inventory_location_exceptions(
+			filters,
+			aggregate_rows=stock_rows,
+		)
+	except (frappe.PermissionError, frappe.ValidationError):
+		location_status = {
+			"available": False,
+			"reason": "Warehouse-level stock exceptions could not be evaluated safely for this scope.",
+		}
+
+	replenishment: dict[str, Any] = {}
+	replenishment_status: dict[str, Any] = {"available": True}
+	try:
+		replenishment = get_inventory_replenishment(filters)
+	except (frappe.PermissionError, frappe.ValidationError):
+		replenishment_status = {
+			"available": False,
+			"reason": "ERPNext reorder intelligence could not be evaluated safely for this scope.",
+		}
+	replenishment_by_item = {
+		str(row.get("item_code")): row
+		for row in replenishment.get("items") or []
+		if row.get("item_code")
+	}
+	if replenishment_by_item:
+		stock_rows = _with_zero_balance_intelligence_rows(
+			stock_rows,
+			demand_by_item={},
+			replenishment_by_item=replenishment_by_item,
+			show_costs=show_costs,
+		)[0]
+
+	summary = _stock_summary(stock_rows, show_costs=False)
+	summary.extend(_location_action_summary(location_exceptions))
+	summary.extend(_replenishment_action_summary(replenishment))
+
+	movement_status: dict[str, Any] = {"available": True}
+	try:
+		demand = get_historical_inventory_demand(filters)
+		demand_by_item = {
+			str(row.get("item_code")): row
+			for row in demand.get("rows") or []
+			if row.get("item_code")
+		}
+		movement_rows = _with_zero_balance_intelligence_rows(
+			stock_rows,
+			demand_by_item=demand_by_item,
+			replenishment_by_item=replenishment_by_item,
+			show_costs=show_costs,
+		)[0]
+		lookback_days = cint(demand.get("scope", {}).get("lookback_days")) or DEFAULT_LOOKBACK_DAYS
+		thresholds = _movement_thresholds(filters)
+		enriched = [
+			_enrich_stock_row(
+				row,
+				demand=demand_by_item.get(str(row.get("item_code") or "")),
+				replenishment=replenishment_by_item.get(str(row.get("item_code") or "")),
+				lookback_days=lookback_days,
+				thresholds=thresholds,
+			)
+			for row in movement_rows
+		]
+		# Demand evidence can safely add sold-out items with no current Bin row. Rebuild
+		# the legacy stock cards from that complete current-stock set when available.
+		summary = (
+			_stock_summary(movement_rows, show_costs=False)
+			+ _location_action_summary(location_exceptions)
+			+ _replenishment_action_summary(replenishment)
+		)
+		summary.append(
+			{
+				"label": _("Non-moving"),
+				"value": sum(1 for row in enriched if row.get("movement_class") == "Non-moving"),
+				"datatype": "Int",
+			}
+		)
+	except (frappe.PermissionError, frappe.ValidationError):
+		movement_status = {
+			"available": False,
+			"reason": "Historical movement intelligence could not be evaluated safely for this scope.",
+		}
+
+	return {
+		"summary": summary,
+		"scope": {
+			**dict(stock.get("scope") or {}),
+			"lookback_days": cint(filters.get("lookback_days")) or DEFAULT_LOOKBACK_DAYS,
+		},
+		"metadata": {
+			"current_stock_truth": "ERPNext Bin",
+			"current_stock_available": True,
+			"location_exceptions": location_status,
+			"replenishment": replenishment_status,
+			"movement": movement_status,
+			"degraded": not (
+				bool(location_status.get("available"))
+				and bool(replenishment_status.get("available"))
+				and bool(movement_status.get("available"))
+			),
+			"read_only": True,
+			"persistent_derived_truth": False,
+		},
+	}
+
+
+def _location_action_summary(location_exceptions: dict[str, Any]) -> list[dict[str, Any]]:
+	counts = dict(location_exceptions.get("summary") or {})
+	return [
+		{
+			"label": _("Negative Stock Locations Hidden by Aggregate"),
+			"value": cint(counts.get("hidden_negative_location_count")),
+			"datatype": "Int",
+		},
+		{
+			"label": _("Fully Reserved Locations Hidden by Aggregate"),
+			"value": cint(counts.get("hidden_fully_reserved_location_count")),
+			"datatype": "Int",
+		},
+	]
+
+
+def _replenishment_action_summary(replenishment: dict[str, Any]) -> list[dict[str, Any]]:
+	items = list(replenishment.get("items") or [])
+	return [
+		{
+			"label": _("Items Requiring Reorder"),
+			"value": sum(1 for row in items if row.get("replenishment_status") == "Reorder Now"),
+			"datatype": "Int",
+		},
+		{
+			"label": _("Reorder Rules Requiring Review"),
+			"value": sum(1 for row in items if cint(row.get("unavailable_rule_count")) > 0),
+			"datatype": "Int",
+		},
+	]
+
+
+def _apply_sort(
+	dataset: dict[str, Any],
+	*,
+	sort_field: str,
+	sort_direction: str,
+) -> dict[str, Any]:
+	result = dict(dataset)
+	columns = list(result.get("columns") or [])
+	resolved_sort = _resolve_sort(
+		columns,
+		sort_field=sort_field,
+		sort_direction=sort_direction,
+	)
+	if resolved_sort:
+		result["rows"] = _sort_rows(list(result.get("rows") or []), resolved_sort)
+	metadata = dict(result.get("metadata") or {})
+	metadata["sort"] = resolved_sort
+	result["metadata"] = metadata
+	return result
+
+
+def _resolve_sort(
+	columns: list[dict[str, Any]],
+	*,
+	sort_field: str,
+	sort_direction: str,
+) -> dict[str, str] | None:
+	field = str(sort_field or "").strip()
+	direction = str(sort_direction or "").strip().lower()
+	if not field and not direction:
+		return None
+	if not field or direction not in {"asc", "desc"}:
+		frappe.throw(_("Invalid Inventory Intelligence sort request."))
+	by_field = {
+		str(column.get("fieldname") or ""): column
+		for column in columns
+		if column.get("fieldname")
+	}
+	column = by_field.get(field)
+	if not column:
+		frappe.throw(_("Unsupported Inventory Intelligence sort field."))
+	return {
+		"field": field,
+		"direction": direction,
+		"fieldtype": str(column.get("fieldtype") or "Data"),
+	}
+
+
+def _sort_rows(rows: list[dict[str, Any]], sort: dict[str, str]) -> list[dict[str, Any]]:
+	field = sort["field"]
+	fieldtype = sort.get("fieldtype") or "Data"
+	reverse = sort.get("direction") == "desc"
+	present = [row for row in rows if row.get(field) not in (None, "")]
+	missing = [row for row in rows if row.get(field) in (None, "")]
+
+	def key(row: dict[str, Any]):
+		value = row.get(field)
+		if fieldtype in NUMERIC_FIELDTYPES:
+			return flt(value)
+		return str(value or "").casefold()
+
+	return [*sorted(present, key=key, reverse=reverse), *missing]
+
+
+def _build_inventory_health_dataset(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	filters = _normalise_health_filters(filters)
+	_validate_filters(filters)
+	requested_stock_status = str(filters.get("stock_status") or "All").strip()
+	stock_filters = frappe._dict(dict(filters))
+	stock_filters.stock_status = "All"
+	stock = _build_stock_position_dataset(stock_filters)
+	demand = get_historical_inventory_demand(filters)
+	replenishment = get_inventory_replenishment(filters)
+	thresholds = _movement_thresholds(filters)
+	lookback_days = cint(demand.get("scope", {}).get("lookback_days")) or DEFAULT_LOOKBACK_DAYS
+	demand_by_item = {
+		str(row.get("item_code")): row for row in demand.get("rows") or [] if row.get("item_code")
+	}
+	replenishment_by_item = {
+		str(row.get("item_code")): row
+		for row in replenishment.get("items") or []
+		if row.get("item_code")
+	}
+	show_costs = bool(stock.get("show_costs"))
+	stock_rows = list(stock.get("rows") or [])
+	synthetic_zero_items = 0
+	if cint(filters.get("include_zero")):
+		stock_rows, synthetic_zero_items = _with_zero_balance_intelligence_rows(
+			stock_rows,
+			demand_by_item=demand_by_item,
+			replenishment_by_item=replenishment_by_item,
+			show_costs=show_costs,
+		)
+
+	rows = [
+		_enrich_stock_row(
+			row,
+			demand=demand_by_item.get(str(row.get("item_code") or "")),
+			replenishment=replenishment_by_item.get(str(row.get("item_code") or "")),
+			lookback_days=lookback_days,
+			thresholds=thresholds,
+		)
+		for row in stock_rows
+	]
+	if requested_stock_status not in {"", "All"}:
+		rows = [row for row in rows if _matches_stock_status(row, requested_stock_status)]
+
+	movement_class = str(filters.get("movement_class") or "All").strip()
+	if movement_class not in MOVEMENT_CLASSES:
+		frappe.throw(_("Unsupported Movement Class filter."))
+	if movement_class != "All":
+		rows = [row for row in rows if row.get("movement_class") == movement_class]
+
+	replenishment_status = str(filters.get("replenishment_status") or "All").strip()
+	if replenishment_status not in REPLENISHMENT_STATUSES:
+		frappe.throw(_("Unsupported Replenishment Status filter."))
+	if replenishment_status != "All":
+		rows = [row for row in rows if row.get("replenishment_status") == replenishment_status]
+
+	return {
+		"columns": _columns(stock.get("columns") or []),
+		"rows": rows,
+		"summary": _summary(rows, show_costs=show_costs),
+		"company_currency": stock.get("company_currency") or "",
+		"show_costs": int(show_costs),
+		"scope": {
+			**dict(stock.get("scope") or {}),
+			"lookback_days": lookback_days,
+			"from_date": demand.get("scope", {}).get("from_date"),
+			"to_date": demand.get("scope", {}).get("to_date"),
+			"stock_status": requested_stock_status,
+			"movement_class": movement_class,
+			"replenishment_status": replenishment_status,
+			"high_cover_review_threshold_days": lookback_days,
+			"include_zero": cint(filters.get("include_zero")),
+		},
+		"scan": {
+			"stock": stock.get("scan") or {},
+			"demand": demand.get("scan") or {},
+			"replenishment": replenishment.get("scan") or {},
+			"synthetic_zero_items": synthetic_zero_items,
+		},
+		"metadata": {
+			"current_stock_truth": "ERPNext Bin",
+			"historical_demand_truth": demand.get("metadata") or {},
+			"replenishment_truth": replenishment.get("metadata") or {},
+			"stock_cover_basis": "current available stock divided by observed average daily demand",
+			"stock_cover_is_forecast": False,
+			"stock_cover_review_contract": (
+				"High Cover Review means demand-backed estimated stock cover exceeds the selected evidence window. It is an advisory review flag, not an overstock assertion or demand forecast."
+			),
+			"zero_balance_contract": (
+				"When zero-stock intelligence is enabled, a permission-visible demand/reorder item with no current Bin balance in the unfiltered resolved warehouse scope is represented as current quantity zero. Stock Status is applied only after this composition and no balance is persisted."
+			),
+			"movement_thresholds": {
+				"slow_days": thresholds.slow_days,
+				"non_moving_days": thresholds.non_moving_days,
+				"fast_daily_demand": thresholds.fast_daily_demand,
+			},
+			"read_only": True,
+			"persistent_derived_truth": False,
+			"export_authorization_scope": "stock-position",
+		},
+	}
+
+
+def _normalise_health_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
+	filters = _coerce_filters(filters)
+	if "lookback_days" not in filters or filters.get("lookback_days") in (None, ""):
+		filters.lookback_days = DEFAULT_LOOKBACK_DAYS
+	requested_as_of = filters.get("as_of_date")
+	if requested_as_of and getdate(requested_as_of) != getdate(today()):
+		frappe.throw(
+			_(
+				"Inventory Health uses current ERPNext Bin stock. Historical As Of dates are not supported on this current-position view."
+			)
+		)
+	filters.as_of_date = today()
+	if "slow_days" not in filters or filters.get("slow_days") in (None, ""):
+		filters.slow_days = DEFAULT_SLOW_DAYS
+	if "non_moving_days" not in filters or filters.get("non_moving_days") in (None, ""):
+		filters.non_moving_days = DEFAULT_NON_MOVING_DAYS
+	if "replenishment_status" not in filters or filters.get("replenishment_status") in (None, ""):
+		filters.replenishment_status = "All"
+	if "include_zero" not in filters or filters.get("include_zero") in (None, ""):
+		filters.include_zero = 1
+	return filters
+
+
+def _movement_thresholds(filters: frappe._dict) -> MovementThresholds:
+	fast = filters.get("fast_daily_demand")
+	fast = None if fast in (None, "") else flt(fast)
+	try:
+		return MovementThresholds(
+			slow_days=cint(filters.get("slow_days")),
+			non_moving_days=cint(filters.get("non_moving_days")),
+			fast_daily_demand=fast,
+		)
+	except ValueError as exc:
+		frappe.throw(_("Invalid inventory movement thresholds: {0}").format(str(exc)))
+
+
+def _with_zero_balance_intelligence_rows(
+	stock_rows: list[dict[str, Any]],
+	*,
+	demand_by_item: dict[str, dict[str, Any]],
+	replenishment_by_item: dict[str, dict[str, Any]],
+	show_costs: bool,
+) -> tuple[list[dict[str, Any]], int]:
+	rows = [dict(row) for row in stock_rows]
+	existing = {str(row.get("item_code") or "") for row in rows if row.get("item_code")}
+	candidate_codes = sorted((set(demand_by_item) | set(replenishment_by_item)) - existing)
+	added = 0
+	for item_code in candidate_codes:
+		evidence = demand_by_item.get(item_code) or replenishment_by_item.get(item_code) or {}
+		row: dict[str, Any] = {
+			"item_code": item_code,
+			"item_name": evidence.get("item_name") or item_code,
+			"item_group": evidence.get("item_group") or "",
+			"stock_uom": evidence.get("stock_uom") or "",
+			"actual_qty": 0.0,
+			"reserved_qty": 0.0,
+			"available_qty": 0.0,
+			"ordered_qty": 0.0,
+			"projected_qty": 0.0,
+			"location_count": 0,
+			"stock_status": "Out of Stock",
+		}
+		if show_costs:
+			row["valuation_rate"] = 0.0
+			row["stock_value"] = 0.0
+		rows.append(row)
+		added += 1
+	rows.sort(key=lambda row: (str(row.get("item_group") or ""), str(row.get("item_code") or "")))
+	return rows, added
+
+
+def _enrich_stock_row(
+	stock_row: dict[str, Any],
+	*,
+	demand: dict[str, Any] | None,
+	replenishment: dict[str, Any] | None,
+	lookback_days: int,
+	thresholds: MovementThresholds,
+) -> dict[str, Any]:
+	result = dict(stock_row)
+	demand = demand or {}
+	replenishment = replenishment or {}
+	demand_qty = flt(demand.get("demand_qty"))
+	daily_demand = flt(demand.get("average_daily_demand"))
+	days_since_demand = demand.get("days_since_demand")
+	cover_days = stock_cover_days(result.get("available_qty"), daily_demand)
+	result.update(
+		{
+			"observed_demand_qty": demand_qty,
+			"average_daily_demand": daily_demand,
+			"last_demand_on": demand.get("last_demand_on"),
+			"days_since_demand": days_since_demand,
+			"stock_cover_days": cover_days,
+			"stock_cover_review": classify_stock_cover_review(
+				cover_days=cover_days,
+				daily_demand=daily_demand,
+				evidence_window_days=lookback_days,
+			),
+			"movement_class": classify_movement(
+				demand_qty=demand_qty,
+				lookback_days=lookback_days,
+				days_since_demand=days_since_demand,
+				thresholds=thresholds,
+			),
+			"configured_reorder_locations": cint(replenishment.get("configured_location_count")),
+			"reorder_triggered_locations": cint(replenishment.get("triggered_location_count")),
+			"reorder_rule_review_count": cint(replenishment.get("unavailable_rule_count")),
+			"recommended_reorder_qty": flt(replenishment.get("recommended_reorder_qty")),
+			"replenishment_status": replenishment.get("replenishment_status") or "No reorder rule",
+		}
+	)
+	return result
+
+
+def _columns(stock_columns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+	return [
+		*stock_columns,
+		{
+			"fieldname": "observed_demand_qty",
+			"label": _("Observed Demand"),
+			"fieldtype": "Float",
+		},
+		{
+			"fieldname": "average_daily_demand",
+			"label": _("Avg Daily Demand"),
+			"fieldtype": "Float",
+		},
+		{
+			"fieldname": "last_demand_on",
+			"label": _("Last Demand"),
+			"fieldtype": "Date",
+		},
+		{
+			"fieldname": "days_since_demand",
+			"label": _("Days Since Demand"),
+			"fieldtype": "Int",
+		},
+		{
+			"fieldname": "stock_cover_days",
+			"label": _("Estimated Stock Cover (Days)"),
+			"fieldtype": "Float",
+		},
+		{
+			"fieldname": "stock_cover_review",
+			"label": _("Stock Cover Review"),
+			"fieldtype": "Data",
+		},
+		{
+			"fieldname": "movement_class",
+			"label": _("Movement Class"),
+			"fieldtype": "Data",
+		},
+		{
+			"fieldname": "replenishment_status",
+			"label": _("Replenishment Status"),
+			"fieldtype": "Data",
+		},
+		{
+			"fieldname": "reorder_triggered_locations",
+			"label": _("Reorder Locations"),
+			"fieldtype": "Int",
+		},
+		{
+			"fieldname": "recommended_reorder_qty",
+			"label": _("Recommended Reorder Qty"),
+			"fieldtype": "Float",
+		},
+	]
+
+
+def _summary(rows: list[dict[str, Any]], *, show_costs: bool) -> list[dict[str, Any]]:
+	cards = _stock_summary(rows, show_costs=show_costs)
+	for movement_class, label in (
+		("Fast", _("Fast-moving")),
+		("Slow", _("Slow-moving")),
+		("Non-moving", _("Non-moving")),
+		("No demand in window", _("No Demand in Window")),
+	):
+		cards.append(
+			{
+				"label": label,
+				"value": sum(1 for row in rows if row.get("movement_class") == movement_class),
+				"datatype": "Int",
+			}
+		)
+	cards.extend(
+		[
+			{
+				"label": _("High Cover Review"),
+				"value": sum(1 for row in rows if row.get("stock_cover_review") == "High Cover Review"),
+				"datatype": "Int",
+			},
+			{
+				"label": _("Items Requiring Reorder"),
+				"value": sum(1 for row in rows if row.get("replenishment_status") == "Reorder Now"),
+				"datatype": "Int",
+			},
+			{
+				"label": _("Reorder Rules Requiring Review"),
+				"value": sum(1 for row in rows if cint(row.get("reorder_rule_review_count")) > 0),
+				"datatype": "Int",
+			},
+		]
+	)
+	return cards

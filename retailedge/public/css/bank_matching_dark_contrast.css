@@ -1,0 +1,99 @@
+/* Dark-mode contrast completion for the standalone Bank Matching EdgeSuite page.
+   The page keeps Frappe Desk chrome, while all RetailEdge workspace surfaces use
+   the shared EdgeSuite theme tokens. */
+
+/* Complete the standalone EdgeSuite canvas without globally restyling Frappe
+   Desk. These selectors only affect Frappe containers that actually contain the
+   RetailEdge Bank Matching workspace. */
+:root[data-edge-appearance="dark"] :is(
+	.page-container,
+	.page-body,
+	.page-body > .container,
+	.layout-main,
+	.layout-main-section-wrapper,
+	.layout-main-section,
+	.page-content
+):has(.retailedge-bank-layout) {
+	background: var(--edge-color-surface-soft, var(--edge-color-surface-muted, var(--edge-color-surface))) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout {
+	--text-color: var(--edge-color-ink-950);
+	--heading-color: var(--edge-color-ink-950);
+	color: var(--edge-color-ink-800);
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout :is(h1, h2, h3, h4, h5, h6),
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-filter-bar label,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-action-bar__content,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table th,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table td {
+	color: var(--edge-color-ink-950) !important;
+}
+
+/* Sortable table headers are buttons inside <th>; give them their own explicit
+   dark-mode foreground because button defaults can otherwise override the th. */
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-sort {
+	color: var(--edge-color-ink-950) !important;
+	background: transparent !important;
+	border-color: transparent !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-sort:hover,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-sort:focus-visible,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-sort.is-active {
+	color: var(--edge-color-ink-950) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-reset-link,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table .edge-link-button {
+	color: var(--edge-color-ink-950) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table .edge-link-button:hover,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table .edge-link-button:focus-visible,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-reset-link:hover,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-reset-link:focus-visible {
+	color: var(--edge-color-ink-950) !important;
+	text-decoration: underline;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-meta,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-skipped-note,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-page-header__subtitle,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-link-field__helper,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .edge-stat-card__helper {
+	color: var(--edge-color-ink-600) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table {
+	--bs-table-hover-bg: var(--edge-color-surface-muted, var(--edge-color-surface));
+	--bs-table-hover-color: var(--edge-color-ink-950);
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table thead th {
+	background: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
+	border-color: var(--edge-color-border) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody td {
+	border-color: var(--edge-color-border) !important;
+}
+
+/* Frappe/Bootstrap table-hover state can inject a light state layer through
+   table variables or cell box-shadows. Pin both pointer hover and keyboard focus
+   to a dark EdgeSuite surface so row content never loses contrast. */
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody tr:hover,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody tr:focus-within {
+	background: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
+}
+
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody tr:hover > *,
+:root[data-edge-appearance="dark"] .retailedge-bank-layout .retailedge-bank-table tbody tr:focus-within > * {
+	--bs-table-accent-bg: transparent;
+	--bs-table-bg-state: transparent;
+	--bs-table-color-state: var(--edge-color-ink-950);
+	background-color: var(--edge-color-surface-muted, var(--edge-color-surface)) !important;
+	color: var(--edge-color-ink-950) !important;
+	box-shadow: none !important;
+}
