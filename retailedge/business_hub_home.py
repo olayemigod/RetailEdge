@@ -5,7 +5,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import flt, nowdate
+from frappe.utils import add_days, flt, get_first_day, getdate, nowdate
 
 from retailedge.bank_exception_summary import get_bank_exception_summary
 from retailedge.cash_shift_verification import get_cash_shift_verification
@@ -14,7 +14,7 @@ from retailedge.owner_dashboard import get_owner_dashboard_data
 
 
 @frappe.whitelist()
-def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[str, Any]:
+def get_business_hub_home_snapshot(company: str = "", branch: str = "", date_preset: str = "Today") -> dict[str, Any]:
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
 	branch = str(
 		branch
@@ -25,6 +25,7 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[
 	if not company:
 		frappe.throw(_("Company is required."))
 
+	period = _resolve_period(date_preset)
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	allowed = [str(value or "").strip() for value in scope.get("allowed_branches") or [] if str(value or "").strip()]
 	if branch:
@@ -39,18 +40,24 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[
 			return _unavailable_scope_snapshot(
 				company=company,
 				reason=_("Your RetailEdge Branch access is not active for this Company."),
+				period=period,
 			)
 		else:
 			return _unavailable_scope_snapshot(
 				company=company,
 				reason=_("Choose a Branch to load scoped business signals."),
 				allowed_branches=allowed,
+				period=period,
 			)
 	elif not frappe.has_permission("Company", "read", doc=company):
 		frappe.throw(_("You do not have permission to view this Company."), frappe.PermissionError)
 
-	today = nowdate()
-	period_filters = {"company": company, "branch": branch, "from_date": today, "to_date": today}
+	period_filters = {
+		"company": company,
+		"branch": branch,
+		"from_date": period["from_date"],
+		"to_date": period["to_date"],
+	}
 
 	owner = _safe_payload(lambda: get_owner_dashboard_data(period_filters), _("Business summary"))
 	banking = _safe_payload(lambda: get_bank_exception_summary(period_filters), _("Banking exceptions"))
@@ -67,7 +74,8 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[
 		"cash_shift": _cash_shift_section(cash_shift),
 	}
 	return {
-		"as_of_date": today,
+		"as_of_date": period["to_date"],
+		"period": period,
 		"company": company,
 		"branch": branch,
 		"scope": {
@@ -80,14 +88,42 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[
 	}
 
 
+
+def _resolve_period(date_preset: str) -> dict[str, str]:
+	preset = str(date_preset or "Today").strip() or "Today"
+	today = getdate(nowdate())
+	if preset == "Today":
+		from_date = today
+	elif preset == "Yesterday":
+		from_date = getdate(add_days(today, -1))
+		today = from_date
+	elif preset == "This Week":
+		from_date = getdate(add_days(today, -today.weekday()))
+	elif preset == "This Month":
+		from_date = getdate(get_first_day(today))
+	elif preset == "Last 7 Days":
+		from_date = getdate(add_days(today, -6))
+	elif preset == "Last 30 Days":
+		from_date = getdate(add_days(today, -29))
+	else:
+		frappe.throw(_("Unsupported Business Hub period."))
+
+	return {
+		"preset": preset,
+		"label": preset,
+		"from_date": str(from_date),
+		"to_date": str(today),
+	}
+
 def _unavailable_scope_snapshot(
 	*,
 	company: str,
 	reason: str,
 	allowed_branches: list[str] | None = None,
+	period: dict[str, str] | None = None,
 ) -> dict[str, Any]:
 	"""Return a no-data Home state when restricted scope cannot be resolved safely."""
-	today = nowdate()
+	period = period or _resolve_period("Today")
 	def unavailable(label: str, route: str = "") -> dict[str, Any]:
 		return {
 			"available": False,
@@ -97,7 +133,8 @@ def _unavailable_scope_snapshot(
 			"reason": reason,
 		}
 	return {
-		"as_of_date": today,
+		"as_of_date": period["to_date"],
+		"period": period,
 		"company": company,
 		"branch": "",
 		"scope": {
