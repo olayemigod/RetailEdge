@@ -84,7 +84,7 @@ def test_update_stock_invoice_revalidates_stock_context_and_blocks_advanced_stoc
 		'row.get("warehouse")',
 		'_assert_read("Warehouse", warehouse)',
 		'frappe.db.get_value("Warehouse", warehouse, "company")',
-		"resolve_branch_from_warehouse",
+		"resolve_branch_warehouse_selection",
 		"serial_no",
 		"batch_no",
 		"serial_and_batch_bundle",
