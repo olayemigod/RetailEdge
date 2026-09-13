@@ -74,8 +74,9 @@
 					:modelValue="values.warehouse"
 					label="Receiving Stock Location"
 					placeholder="Search receiving stock location"
-					description="Selecting an assigned stock location resolves its Branch automatically."
+					description="Receiving Stock Locations are limited to the selected Company and enabled Branch Setup."
 					:required="Boolean(values.update_stock)"
+					:disabled="requiresBranchSelection && !values.branch"
 					:searcher="searchWarehouse"
 					:context="searchContext"
 					@update:modelValue="setWarehouse"
@@ -251,6 +252,9 @@ export default {
 	computed: {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
+		},
+		requiresBranchSelection() {
+			return Boolean(this.formContext.capabilities?.requires_branch_selection);
 		},
 		canCreateSupplier() {
 			return Boolean(this.formContext.capabilities?.can_create_supplier);
