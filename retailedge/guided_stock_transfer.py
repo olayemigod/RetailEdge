@@ -35,8 +35,7 @@ def get_simple_stock_transfer_context(company: str = "", branch: str = "") -> di
 	company = resolve_guided_company(requested_company, user=user)
 	requested_branch = str(branch or "").strip()
 	legacy_default_branch = str(
-		requested_branch
-		or (
+		(
 			operating.get("branch")
 			if not requested_company or operating.get("company") == company
 			else ""
@@ -51,11 +50,14 @@ def get_simple_stock_transfer_context(company: str = "", branch: str = "") -> di
 		frappe.throw(_("Set a default Company before creating a Stock Transfer."))
 
 	scope = get_operational_branch_scope(company, user=user)
-	branch = resolve_guided_default_branch(
-		company,
-		legacy_default_branch,
-		user=user,
-	)
+	if requested_branch:
+		branch = resolve_guided_branch(company, requested_branch, user=user)
+	else:
+		branch = resolve_guided_default_branch(
+			company,
+			legacy_default_branch,
+			user=user,
+		)
 
 	defaults = resolve_retailedge_operational_defaults(
 		company=company or None,
