@@ -44,13 +44,7 @@
 						:required="true"
 						@select="onCompanySelected"
 					/>
-
-					<div class="edge-field">
-						<label class="edge-field-label">Date Range</label>
-						<select v-model="filters.date_range_preset" class="edge-input" @change="onPresetChange">
-							<option v-for="preset in datePresets" :key="preset" :value="preset">{{ preset }}</option>
-						</select>
-					</div>
+					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range" @change="onPresetChange" />
 
 					<div class="edge-field">
 						<label class="edge-field-label">From Date</label>
@@ -99,14 +93,7 @@
 						placeholder="Optional comparison UOM"
 						:searcher="uomSearch"
 					/>
-
-					<div class="edge-field">
-						<label class="edge-field-label">Movement Type</label>
-						<select v-model="filters.movement_type" class="edge-input">
-							<option value="">All Movement Types</option>
-							<option v-for="movement in movementTypes" :key="movement" :value="movement">{{ movement }}</option>
-						</select>
-					</div>
+					<EdgeDropdown v-model="filters.movement_type" :options="movementTypes" label="Movement Type" placeholder="All Movement Types" />
 
 					<div class="filter-action">
 						<button class="edge-primary-button" type="button" :disabled="loading || !requiredReady" @click="applyFilters">
@@ -225,11 +212,7 @@
 							<span class="subtle">· {{ pagination.total_rows || 0 }} rows</span>
 						</div>
 						<div class="pagination-actions">
-							<select v-model.number="filters.page_size" class="page-size" @change="changePageSize">
-								<option :value="25">25 / page</option>
-								<option :value="50">50 / page</option>
-								<option :value="100">100 / page</option>
-							</select>
+							<EdgeDropdown :modelValue="String(filters.page_size)" :options="[{ value: '25', label: '25 / page' }, { value: '50', label: '50 / page' }, { value: '100', label: '100 / page' }]" label="Rows" @change="filters.page_size = Number($event?.value || $event || 50); changePageSize()" />
 							<button type="button" class="page-button" :disabled="!pagination.has_previous" @click="changePage(-1)">Previous</button>
 							<button type="button" class="page-button" :disabled="!pagination.has_next" @click="changePage(1)">Next</button>
 						</div>
@@ -260,6 +243,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeErrorState",
 	"EdgeLinkField",
 	"EdgeExportMenu",
+	"EdgeDropdown",
 ];
 
 const HIDDEN_SUMMARY_LABELS = new Set(["Distinct Items", "Distinct Warehouses"]);
