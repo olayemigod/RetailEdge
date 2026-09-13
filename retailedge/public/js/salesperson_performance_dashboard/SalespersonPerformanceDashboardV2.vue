@@ -44,18 +44,10 @@
 					<EdgeLinkField v-model="filters.customer" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeLinkField v-model="filters.item" label="Item" placeholder="All items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
 					<EdgeLinkField v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
-					<label class="edge-field">
-						<span class="edge-field-label">Date Range Preset</span>
-						<select v-model="filters.date_range_preset" class="edge-input" @change="onPresetChange">
-							<option v-for="preset in datePresets" :key="preset" :value="preset">{{ preset }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range Preset" @change="onPresetChange" />
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onCustomDateChange" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onCustomDateChange" /></label>
-					<label class="edge-field">
-						<span class="edge-field-label">Rows per page</span>
-						<select v-model.number="filters.limit" class="edge-input" @change="resetAndFetch"><option :value="25">25</option><option :value="50">50</option><option :value="100">100</option></select>
-					</label>
+					<EdgeDropdown :modelValue="String(filters.limit)" :options="['25', '50', '100']" label="Rows per page" @change="filters.limit = Number($event?.value || $event || 50); resetAndFetch()" />
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="resetAndFetch">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
 			</template>
@@ -95,7 +87,7 @@ import {
 	printDashboard,
 } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField", "EdgeDropdown"];
 const DASHBOARD_KEY = "salesperson-performance";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -198,7 +190,7 @@ export default {
 		},
 		openSalesInvoices() { if (this.canUseNativeDesk) openNative("Sales Invoice"); },
 		rowKey(row, index) { return `${row.salesperson || "salesperson"}-${row.sales_invoice || index}`; },
-		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
+		formatCurrency(value) { try { return window.retailedge.formatPlainValue(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (column?.fieldtype === "Percent") return value === null || value === undefined ? "—" : `${Number(value || 0).toFixed(1)}%`; if (column?.fieldtype === "Date" && value) { try { return frappe.datetime.str_to_user(value); } catch (_error) { return String(value); } } if (value === null || value === undefined || value === "") return "—"; return String(value); },
 	},
 };
