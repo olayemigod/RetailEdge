@@ -10,6 +10,7 @@ from retailedge.guided_entry_context import (
 	get_guided_branch_names,
 	get_guided_warehouse_search_filters,
 	resolve_guided_branch,
+	resolve_guided_company,
 	validate_guided_branch_warehouse,
 )
 
@@ -28,6 +29,15 @@ SETTINGS = ROOT / "retailedge/doctype/retailedge_settings/retailedge_settings.js
 
 
 class TestPhase2GuidedContextContract(unittest.TestCase):
+
+	@patch(
+		"retailedge.guided_entry_context.get_operating_context",
+		return_value={"company": "RetailEdge Consulting", "branch": "Lagos"},
+	)
+	def test_active_operating_company_rejects_cross_company_guided_request(self, _mock_context):
+		with self.assertRaises(frappe.PermissionError):
+			resolve_guided_company("Another Company", user="user@example.com")
+
 	@patch(
 		"retailedge.guided_entry_context.get_operational_branch_scope",
 		return_value={"restricted": True, "allowed_branches": ["Lagos", "Abuja"]},
