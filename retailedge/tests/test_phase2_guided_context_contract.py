@@ -11,6 +11,7 @@ from retailedge.guided_entry_context import (
 	get_guided_warehouse_search_filters,
 	resolve_guided_branch,
 	resolve_guided_company,
+	resolve_guided_default_branch,
 	validate_guided_branch_warehouse,
 )
 
@@ -82,6 +83,67 @@ class TestPhase2GuidedContextContract(unittest.TestCase):
 		return_value=["Lagos", "Abuja"],
 	)
 	@patch("retailedge.guided_entry_context.has_field", return_value=True)
+	def test_restricted_single_branch_default_auto_resolves(self):
+		with (
+			patch(
+				"retailedge.guided_entry_context.get_guided_branch_names",
+				return_value=["Lagos"],
+			),
+			patch(
+				"retailedge.guided_entry_context.get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": ["Lagos"]},
+			),
+		):
+			self.assertEqual(
+				resolve_guided_default_branch(
+					"RetailEdge Consulting",
+					"Abuja",
+					user="user@example.com",
+				),
+				"Lagos",
+			)
+
+	def test_restricted_multi_branch_default_requires_explicit_selection(self):
+		with (
+			patch(
+				"retailedge.guided_entry_context.get_guided_branch_names",
+				return_value=["Abuja", "Lagos"],
+			),
+			patch(
+				"retailedge.guided_entry_context.get_operational_branch_scope",
+				return_value={
+					"restricted": True,
+					"allowed_branches": ["Abuja", "Lagos"],
+				},
+			),
+		):
+			self.assertEqual(
+				resolve_guided_default_branch(
+					"RetailEdge Consulting",
+					"Lagos",
+					user="user@example.com",
+				),
+				"",
+			)
+
+	def test_restricted_zero_branch_default_fails_closed(self):
+		with (
+			patch(
+				"retailedge.guided_entry_context.get_guided_branch_names",
+				return_value=[],
+			),
+			patch(
+				"retailedge.guided_entry_context.get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": []},
+			),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				resolve_guided_default_branch(
+					"RetailEdge Consulting",
+					"Lagos",
+					user="user@example.com",
+				)
+
 	def test_warehouse_search_stays_closed_until_branch_is_selected(
 		self, _mock_has_field, _mock_branches
 	):
