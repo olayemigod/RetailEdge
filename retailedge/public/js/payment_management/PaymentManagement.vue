@@ -417,7 +417,7 @@ export default {
 				const routeInvoice = String(frappe.route_options?.sales_invoice || frappe.route_options?.retailedge_sales_invoice || "").trim();
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [receivablesContext, navigation] = await Promise.all([
 					callMethod("retailedge.customer_receivables.get_customer_receivables_context"),
 					navigationPromise,

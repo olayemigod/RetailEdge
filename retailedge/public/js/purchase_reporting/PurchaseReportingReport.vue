@@ -168,7 +168,7 @@ export default {
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {
-				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.purchase_reporting.get_purchase_reporting_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";

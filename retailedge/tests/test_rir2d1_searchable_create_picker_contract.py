@@ -55,9 +55,11 @@ class TestRIR2D1SearchableCreatePickerContract(unittest.TestCase):
 			".guided-create-search-input",
 			".guided-create-search-count",
 			".guided-create-search-empty",
+			".create-picker-item[hidden]",
 		):
 			with self.subTest(class_name=class_name):
 				self.assertIn(class_name, css)
+		self.assertIn("display: none !important;", css)
 
 	def test_decision_document_keeps_scope_bounded(self):
 		doc = DECISION_DOC.read_text()

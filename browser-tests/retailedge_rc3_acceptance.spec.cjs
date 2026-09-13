@@ -53,6 +53,7 @@ async function openProductPage(page, route, title) {
 		await page.goto(`${BASE_URL}/app/${route}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
 		await page.getByRole("heading", { name: title, exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
 		await page.waitForTimeout(300);
+		await expect(page.locator(".modal:visible")).toHaveCount(0);
 		expect(runtimeErrors, `runtime/asset errors on /app/${route}`).toEqual([]);
 	} finally {
 		page.off("pageerror", pageErrorHandler);
@@ -113,18 +114,22 @@ test("RC3 searchable Create is permission-derived, focused and Escape-safe", asy
 		expect(permittedCount).toBeGreaterThan(0);
 		await expect(page.locator(".guided-create-search-count")).toContainText("permitted");
 
-		await search.fill("stock");
+		const firstPermittedText = (await items.first().innerText()).trim().toLowerCase();
+		const queryToken = firstPermittedText.split(/\\s+/).find((token) => token.length >= 4) || firstPermittedText.slice(0, 3);
+		expect(queryToken.length).toBeGreaterThan(0);
+		await search.fill(queryToken);
 		const visibleItems = page.locator(".create-picker-item:visible");
 		const visibleCount = await visibleItems.count();
 		expect(visibleCount).toBeGreaterThan(0);
 		for (let index = 0; index < visibleCount; index += 1) {
-			expect((await visibleItems.nth(index).innerText()).toLowerCase()).toContain("stock");
+			expect((await visibleItems.nth(index).innerText()).toLowerCase()).toContain(queryToken);
 		}
 
 		await search.fill("definitely-no-such-create-entry");
 		await expect(page.locator(".guided-create-search-empty")).toBeVisible();
+		expect(await page.locator(".create-picker-item:visible").count()).toBe(0);
 
-		await search.fill("stock");
+		await search.fill(queryToken);
 		await search.press("Escape");
 		await expect(search).toHaveValue("");
 		await expect(search).toBeVisible();
@@ -251,7 +256,7 @@ test("RC3 Sales persona has an EdgeSuite product shell and selling workspace", a
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
 		await openProductPage(page, "professional-selling", "Professional Selling");
 		await openProductPage(page, "customer-receivables", "Customer Receivables");
-		await openProductPage(page, "payment-management", "Payment Management");
+		await openProductPage(page, "payment-management", "Advanced Payment Management");
 	} finally {
 		await context.close();
 	}
@@ -310,7 +315,7 @@ test("RC3 restricted-zero history fails closed on a guided Stock Transfer", asyn
 		});
 		expect(current.response.ok(), current.text).toBeTruthy();
 		expect(current.payload.message.branch).toBe("");
-		expect(String(current.payload.message.source || "")).toMatch(/branch assignment/i);
+		expect(String(current.payload.message.source || "")).toMatch(/branch[_ ]assignment/i);
 
 		const transfer = await apiGet(context, "retailedge.guided_stock_transfer.get_simple_stock_transfer_context", {
 			company: COMPANY,

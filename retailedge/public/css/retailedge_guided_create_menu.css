@@ -163,6 +163,10 @@
 	width: 100%;
 }
 
+.edge-modal:has(.create-picker-list) .create-picker-item[hidden] {
+	display: none !important;
+}
+
 .edge-modal:has(.create-picker-list) .create-picker-item:hover {
 	background: var(--edge-color-surface-muted, var(--control-bg, #f6f8fa)) !important;
 }
