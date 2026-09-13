@@ -24,8 +24,6 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[
 	).strip()
 	if not company:
 		frappe.throw(_("Company is required."))
-	if not frappe.has_permission("Company", "read", doc=company):
-		frappe.throw(_("You do not have permission to view this Company."), frappe.PermissionError)
 
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	allowed = [str(value or "").strip() for value in scope.get("allowed_branches") or [] if str(value or "").strip()]
@@ -33,8 +31,21 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[
 		if scope.get("restricted") and branch not in allowed:
 			frappe.throw(_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch), frappe.PermissionError)
 		validate_operating_branch(company=company, branch=branch, user=frappe.session.user, throw=True)
-	elif scope.get("restricted") and not allowed:
-		frappe.throw(_("Your RetailEdge Branch access is not active for this Company."), frappe.PermissionError)
+	elif scope.get("restricted"):
+		if len(allowed) == 1:
+			branch = allowed[0]
+			validate_operating_branch(company=company, branch=branch, user=frappe.session.user, throw=True)
+		elif not allowed:
+			return _unavailable_scope_snapshot(
+				company=company,
+				reason=_("Your RetailEdge Branch access is not active for this Company."),
+			)
+		else:
+			return _unavailable_scope_snapshot(
+				company=company,
+				reason=_("Choose a Branch to load scoped business signals."),
+				allowed_branches=allowed,
+			)
 
 	today = nowdate()
 	period_filters = {"company": company, "branch": branch, "from_date": today, "to_date": today}
@@ -64,6 +75,41 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[
 		"cards": _headline_cards(owner),
 		"sections": sections,
 		"attention": _attention(owner, banking, cash_shift),
+	}
+
+
+def _unavailable_scope_snapshot(
+	*,
+	company: str,
+	reason: str,
+	allowed_branches: list[str] | None = None,
+) -> dict[str, Any]:
+	"""Return a no-data Home state when restricted scope cannot be resolved safely."""
+	today = nowdate()
+	unavailable = lambda label, route="": {
+		"available": False,
+		"label": label,
+		"summary": [],
+		"route": route,
+		"reason": reason,
+	}
+	return {
+		"as_of_date": today,
+		"company": company,
+		"branch": "",
+		"scope": {
+			"restricted": True,
+			"allowed_branches": list(allowed_branches or []),
+		},
+		"cards": [],
+		"sections": {
+			"today": unavailable(_("Today")),
+			"stock": unavailable(_("Stock")),
+			"branch": unavailable(_("Branch")),
+			"banking": unavailable(_("Banking"), "/app/bank-matching-reconciliation"),
+			"cash_shift": unavailable(_("Cash Shift"), "/app/cash-shift-verification"),
+		},
+		"attention": [],
 	}
 
 
