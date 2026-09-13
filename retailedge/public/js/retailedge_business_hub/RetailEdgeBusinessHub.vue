@@ -754,10 +754,10 @@ export default {
 			}
 			frappe.new_doc(action.doctype);
 		},
-		notifyGuidedDraftSaved(result, fallbackDoctype, label) {
+		notifyGuidedDraftSaved(result, fallbackDoctype, label, { stayInEdgeSuite = false } = {}) {
 			if (!result?.name) return;
 			const doctype = result.doctype || fallbackDoctype;
-			if (this.nativeFallbackEnabled) {
+			if (this.nativeFallbackEnabled && !stayInEdgeSuite) {
 				frappe.set_route("Form", doctype, result.name);
 			}
 			frappe.call({
@@ -907,7 +907,13 @@ export default {
 		},
 		handleSimpleCashierExpenseSaved(result) {
 			this.simpleCashierExpenseOpen = false;
-			this.notifyGuidedDraftSaved(result, "RetailEdge Cashier Expense", "Cashier Expense");
+			this.notifyGuidedDraftSaved(
+				result,
+				"RetailEdge Cashier Expense",
+				"Cashier Expense",
+				{ stayInEdgeSuite: true },
+			);
+			this.refreshHomeSnapshot();
 		},
 		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
 			if (!this.nativeFallbackEnabled) return;
