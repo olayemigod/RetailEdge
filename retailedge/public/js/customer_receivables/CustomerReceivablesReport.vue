@@ -231,7 +231,7 @@ export default {
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
 		formatValue(value, fieldtype, currency) {
 			if (value === null || value === undefined || value === "") return "—";
-			if (fieldtype === "Currency") { const number = Number(value); if (!Number.isFinite(number)) return String(value); try { return frappe.format(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); } catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } }
+			if (fieldtype === "Currency") { const number = Number(value); if (!Number.isFinite(number)) return String(value); try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); } catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } }
 			if (fieldtype === "Int") return Number(value).toLocaleString();
 			if (fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } }
 			return String(value);
