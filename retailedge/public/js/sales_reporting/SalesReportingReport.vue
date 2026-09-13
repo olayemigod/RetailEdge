@@ -63,12 +63,7 @@
 						dateOrder="DMY"
 						@resolved="onSmartDateResolved"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">Date Range</span>
-						<select v-model="filters.date_range_preset" class="edge-input" @change="onPresetChange">
-							<option v-for="preset in datePresets" :key="preset" :value="preset">{{ preset }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range" @change="onPresetChange" />
 					<label class="edge-field">
 						<span class="edge-field-label">From Date</span>
 						<input v-model="filters.from_date" type="date" class="edge-input" @change="onDateChange" />
@@ -94,14 +89,7 @@
 						@select="onCustomerSelected"
 						@clear="clearCustomer"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">Invoice Type</span>
-						<select v-model="filters.invoice_kind" class="edge-input">
-							<option value="All">All</option>
-							<option value="Sales">Sales</option>
-							<option value="Returns">Returns</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.invoice_kind" :options="['All', 'Sales', 'Returns']" label="Invoice Type" />
 					<div class="filter-action">
 						<button class="edge-primary-button" type="button" :disabled="loading || !requiredReady" @click="applyFilters">
 							{{ loading ? "Loading…" : "Apply Filters" }}
@@ -143,13 +131,7 @@
 							@select="onWarehouseSelected"
 							@clear="filters.warehouse = ''"
 						/>
-						<label class="edge-field">
-							<span class="edge-field-label">Invoice Status</span>
-							<select v-model="filters.status" class="edge-input">
-								<option value="">All statuses</option>
-								<option v-for="status in invoiceStatuses" :key="status" :value="status">{{ status }}</option>
-							</select>
-						</label>
+						<EdgeDropdown v-model="filters.status" :options="invoiceStatuses" label="Invoice Status" placeholder="All statuses" />
 					</div>
 				</details>
 			</template>
@@ -165,7 +147,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
 	sales_by_item: {
