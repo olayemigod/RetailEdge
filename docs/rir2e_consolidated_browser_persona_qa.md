@@ -119,7 +119,9 @@ Exercise every action available to the tested persona, including as applicable:
 - Deposit Cash
 - Cash / Bank Transfer
 - Record Purchase
-- Record Cashier Expense
+- Record Expense:
+  - permitted Owner/Manager/Accounts contexts must enter the modern **Business Expenses** flow;
+  - cashier-only contexts must retain the governed **Cashier/POS Expense** flow;
 - Transfer Stock
 - Stock Adjustment
 - Customer Quick Entry
