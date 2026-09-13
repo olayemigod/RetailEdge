@@ -5,7 +5,7 @@ import frappe
 from retailedge.cost_visibility import get_cost_price_visibility_context
 from retailedge.integrations.coreedge import get_coreedge_status
 from retailedge.posting_date_control import get_posting_date_context
-from retailedge.operating_context import get_allowed_operating_contexts, get_operating_context
+from retailedge.operating_context import get_allowed_operating_branches, get_operating_context
 from retailedge.utils.settings import get_retailedge_settings
 
 
@@ -32,7 +32,7 @@ def _populate_edgesuite_identity(bootinfo) -> None:
 		company = operating.get("company") or frappe.defaults.get_user_default("Company") or ""
 		branch = operating.get("branch") or ""
 		identity = _company_identity(company)
-		allowed = get_allowed_operating_contexts(company=company) if company else {}
+		branches = get_allowed_operating_branches(company=company) if company else []
 		payload = {
 			"product_code": "retailedge",
 			"product_name": "RetailEdge",
@@ -45,8 +45,8 @@ def _populate_edgesuite_identity(bootinfo) -> None:
 			"tenant_subtitle": "Business workspace",
 			"active_company": company,
 			"active_branch": branch,
-			"branch_options": list(allowed.get("branches") or []),
-			"can_switch_branch": bool(allowed.get("can_switch_branch")),
+			"branch_options": list(branches),
+			"can_switch_branch": len(branches) > 1,
 		}
 		bootinfo["retailedge_ui_identity"] = payload
 		shared = bootinfo.get("edgesuite_ui_identity") or {}
