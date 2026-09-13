@@ -117,6 +117,7 @@ def _unavailable_scope_snapshot(
 
 
 def _safe_payload(loader: Callable[[], dict[str, Any]], label: str) -> dict[str, Any]:
+	previous_messages = list(getattr(frappe.local, "message_log", []) or [])
 	try:
 		return {"available": True, "payload": loader() or {}, "reason": ""}
 	except (frappe.PermissionError, frappe.ValidationError) as exc:
@@ -128,6 +129,8 @@ def _safe_payload(loader: Callable[[], dict[str, Any]], label: str) -> dict[str,
 			"payload": {},
 			"reason": _("This section is temporarily unavailable."),
 		}
+	finally:
+		frappe.local.message_log = previous_messages
 
 
 def _owner_section(owner: dict[str, Any], key: str) -> dict[str, Any]:
