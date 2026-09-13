@@ -41,8 +41,8 @@
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<label class="edge-field"><span class="edge-field-label">As of Date</span><input v-model="filters.as_of_date" class="edge-input" type="date" /></label>
-					<label class="edge-field"><span class="edge-field-label">History Months</span><select v-model.number="filters.history_months" class="edge-input"><option v-for="n in historyOptions" :key="n" :value="n">{{ n }}</option></select></label>
-					<label class="edge-field"><span class="edge-field-label">Forecast Months</span><select v-model.number="filters.forecast_months" class="edge-input"><option v-for="n in 12" :key="n" :value="n">{{ n }}</option></select></label>
+					<EdgeDropdown :modelValue="String(filters.history_months)" :options="historyOptions.map(String)" label="History Months" @update:modelValue="filters.history_months = Number($event || 12)" />
+					<EdgeDropdown :modelValue="String(filters.forecast_months)" :options="Array.from({ length: 12 }, (_, index) => String(index + 1))" label="Forecast Months" @update:modelValue="filters.forecast_months = Number($event || 1)" />
 					<EdgeLinkField v-model="filters.customer" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeLinkField v-model="filters.salesperson" label="Salesperson" placeholder="All salespeople" :searcher="salespersonSearch" @select="onSalespersonSelected" @clear="clearSalesperson" />
 					<EdgeLinkField v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
@@ -64,7 +64,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -124,7 +124,7 @@ export default {
 		onWarehouseSelected(option) { this.filters.warehouse = option?.value || ""; }, clearWarehouse() { this.filters.warehouse = ""; },
 		async fetchData() { if (!this.filters.company) return; this.loading = true; this.error = ""; try { const result = await callMethod(this.pageMethod, { filters: { ...this.filters } }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.metadata = result.metadata || {}; this.scope = result.scope || {}; } catch (error) { this.rows = []; this.summary = []; this.error = errorMessage(error, "Sales Forecast failed to load."); } finally { this.loading = false; } },
 		async loadExportDataset() { return callMethod(this.exportMethod, { filters: { ...this.filters } }); },
-		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
+		formatCurrency(value) { try { return window.retailedge.formatPlainValue(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatCell(value, column) { if (column?.fieldtype === "Currency") return value === null || value === undefined ? "—" : this.formatCurrency(value); if (column?.fieldtype === "Date" && value) { try { return frappe.datetime.str_to_user(value); } catch (_error) { return String(value); } } if (value === null || value === undefined || value === "") return "—"; return String(value); },
 	},
 };
