@@ -150,13 +150,7 @@
 							@select="onLandedCostSourceSelected"
 							@clear="clearLandedCostSource"
 						/>
-						<label class="edge-select-field">
-							<span>Distribution basis</span>
-							<select v-model="landedCost.distributionMethod" @change="clearLandedCostProgress">
-								<option value="Amount">Amount</option>
-								<option value="Qty">Quantity</option>
-							</select>
-						</label>
+						<EdgeDropdown v-model="landedCost.distributionMethod" :options="[{ value: 'Amount', label: 'Amount' }, { value: 'Qty', label: 'Quantity' }]" label="Distribution basis" @change="clearLandedCostProgress" />
 					</div>
 
 					<div class="landed-cost-charges">
@@ -343,7 +337,7 @@ const SUBMIT_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.submit_stan
 const LANDED_COST_WORKFLOW_METHOD = "retailedge.landed_cost_allocation.apply_landed_cost_workflow_action";
 const PREPARE_LANDED_COST_METHOD = "retailedge.landed_cost_allocation.prepare_landed_cost_voucher_draft";
 const PURCHASE_INVOICE_QUEUE_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_queue";
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeLinkField", "EdgeDropdown"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
