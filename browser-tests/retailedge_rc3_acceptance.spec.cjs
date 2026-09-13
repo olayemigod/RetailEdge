@@ -51,7 +51,7 @@ async function openProductPage(page, route, title) {
 	page.on("response", responseHandler);
 	try {
 		await page.goto(`${BASE_URL}/app/${route}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
-		await page.getByText(title, { exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
+		await page.getByRole("heading", { name: title, exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
 		await page.waitForTimeout(300);
 		expect(runtimeErrors, `runtime/asset errors on /app/${route}`).toEqual([]);
 	} finally {
