@@ -146,16 +146,19 @@ body.edge-suite-product-retailedge .edge-context-chip,
 }
 
 /* RetailEdge shell identity: company left, working Branch centred, user actions right. */
+body.edge-suite-product-retailedge .edge-topbar__brand,
 [data-edge-product="retailedge"] .edge-topbar__brand {
 	min-width: min(22rem, 32vw);
 }
 
+body.edge-suite-product-retailedge .edge-topbar__mark.edge-identity-mark--image,
 [data-edge-product="retailedge"] .edge-topbar__mark.edge-identity-mark--image {
 	background: #fff;
 	border: 1px solid var(--retailedge-border);
 	overflow: hidden;
 }
 
+body.edge-suite-product-retailedge .edge-topbar__mark .edge-identity-logo,
 [data-edge-product="retailedge"] .edge-topbar__mark .edge-identity-logo {
 	display: block;
 	width: 100%;
@@ -163,21 +166,26 @@ body.edge-suite-product-retailedge .edge-context-chip,
 	object-fit: contain;
 }
 
+body.edge-suite-product-retailedge .edge-topbar-context,
 [data-edge-product="retailedge"] .edge-topbar-context {
 	flex: 1 1 auto;
 	justify-content: center;
 	min-width: 12rem;
 }
 
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher,
 [data-edge-product="retailedge"] .retailedge-topbar-branch-switcher {
 	width: min(25rem, 100%);
 }
 
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__label,
 [data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__label,
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__helper,
 [data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__helper {
 	display: none;
 }
 
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__trigger,
 [data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger {
 	min-height: 2.35rem;
 	border-color: #c7d5dd;
@@ -189,12 +197,15 @@ body.edge-suite-product-retailedge .edge-context-chip,
 	padding-inline: 0.9rem;
 }
 
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__trigger:hover,
 [data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger:hover,
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown.is-open .edge-dropdown__trigger,
 [data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown.is-open .edge-dropdown__trigger {
 	border-color: var(--retailedge-brand);
 	background: var(--retailedge-brand-soft);
 }
 
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__menu,
 [data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__menu {
 	left: 50%;
 	right: auto;
