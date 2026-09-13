@@ -496,7 +496,7 @@ export default {
 			});
 		},
 		async saveDraft() {
-			if (this.saving || this.loading) return;
+			if (this.saving || this.loading || !this.transactionContextReady) return;
 			this.saveError = "";
 			this.saving = true;
 			try {
