@@ -4,6 +4,7 @@
 		:menuItems="shellMenuItems"
 		activeRoute="/app/retailedge-business-hub"
 		title="RetailEdge"
+		subtitle="Retail operations & control"
 		:tenantName="context.company"
 		:branchName="context.branch"
 		:userName="context.user_name"
