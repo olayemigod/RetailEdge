@@ -137,7 +137,6 @@ def search_simple_sales_invoice_options(
 	_assert_can_create_sales_invoice()
 	values = _coerce_values(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
-	operating = get_operating_context() or {}
 	company = resolve_guided_company(values.get("company") or "", user=frappe.session.user)
 	branch = values.get("branch") or ""
 	customer = values.get("customer") or ""
@@ -347,7 +346,6 @@ def _resolve_guided_branch(*, company: str, branch: str, user: str) -> str:
 
 
 def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple[str, str, str]:
-	operating = get_operating_context() or {}
 	company = resolve_guided_company(values.get("company") or "", user=user)
 	if not company:
 		frappe.throw(_("Company is required."))
