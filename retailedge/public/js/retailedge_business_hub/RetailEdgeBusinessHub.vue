@@ -12,30 +12,6 @@
 		@navigate="navigateFromShell"
 	>
 		<EdgePageLayout>
-			<section class="retailedge-context-bar" aria-label="RetailEdge operating context">
-				<div class="retailedge-company-identity">
-					<img v-if="context.company_logo" :src="context.company_logo" :alt="`${context.company_label || context.company} logo`" />
-					<span v-else class="retailedge-company-mark"><EdgeIcon name="building" size="sm" /></span>
-					<span class="retailedge-company-copy">
-						<small>Company</small>
-						<strong>{{ context.company_label || context.company || "Retail business" }}</strong>
-					</span>
-				</div>
-				<div class="retailedge-branch-switcher">
-					<EdgeDropdown
-						v-model="selectedBranch"
-						:options="context.branch_options || []"
-						label="Working branch"
-						placeholder="Select branch"
-						:disabled="branchSwitching || !context.can_switch_branch"
-						@change="switchBranch"
-					/>
-				</div>
-				<div class="retailedge-product-context">
-					<small>Product</small>
-					<strong>RetailEdge</strong>
-				</div>
-			</section>
 			<template #header>
 				<EdgePageHeader
 					title="Business Hub"
@@ -436,7 +412,6 @@ export default {
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
-		EdgeDropdown: runtimeComponents.EdgeDropdown,
 		EdgeIcon: runtimeComponents.EdgeIcon,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
@@ -479,9 +454,7 @@ export default {
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
-			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "", branch_options: [], can_switch_branch: false },
-			selectedBranch: "",
-			branchSwitching: false,
+			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "" },
 			featureFlags: {},
 			accessContext: { mode: "native_desk", restricted_to_edgesuite: false, can_use_native_desk: true },
 		};
@@ -572,7 +545,6 @@ export default {
 			this.navigationGroups = data.navigation_groups || [];
 			this.quickActions = data.quick_actions || [];
 			this.context = { ...this.context, ...(data.context || {}) };
-			this.selectedBranch = this.context.branch || "";
 			this.featureFlags = data.feature_flags || {};
 			this.accessContext = { ...this.accessContext, ...(data.access || {}) };
 			if (!this.quickActions.length) this.createPickerOpen = false;
@@ -647,30 +619,6 @@ export default {
 				branch: "building",
 				cash_shift: "credit-card",
 			}[String(key || "")] || "chart";
-		},
-		async switchBranch(option) {
-			const branch = option?.value || this.selectedBranch;
-			if (!branch || !this.context.company || branch === this.context.branch || this.branchSwitching) return;
-			this.branchSwitching = true;
-			try {
-				await frappe.call({
-					method: "retailedge.operating_context.switch_operating_context",
-					args: { company: this.context.company, branch },
-				});
-				window.__retailedgeBusinessHubContextCache = null;
-				window.__retailedgeBusinessHubContextRequest = null;
-				await this.refreshContext({ force: true });
-				frappe.show_alert?.({ message: __("Working branch updated."), indicator: "green" });
-			} catch (error) {
-				this.selectedBranch = this.context.branch || "";
-				frappe.msgprint({
-					title: __("Unable to switch branch"),
-					message: error?.message || __("The selected Branch could not be activated."),
-					indicator: "red",
-				});
-			} finally {
-				this.branchSwitching = false;
-			}
 		},
 		openHomeRoute(route) {
 			if (!route) return;
@@ -1024,61 +972,6 @@ export default {
 </script>
 
 <style scoped>
-.retailedge-context-bar {
-	display: grid;
-	grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 26rem) minmax(8rem, auto);
-	align-items: center;
-	gap: 16px;
-	padding: 12px 14px;
-	border: 1px solid var(--edge-color-border, #dfe6ec);
-	border-radius: 10px;
-	background: var(--edge-color-surface, #fff);
-}
-.retailedge-company-identity {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	min-width: 0;
-}
-.retailedge-company-identity img,
-.retailedge-company-mark {
-	width: 34px;
-	height: 34px;
-	border-radius: 8px;
-	object-fit: contain;
-	background: var(--edge-color-brand-50, #eef7ff);
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	flex: 0 0 auto;
-}
-.retailedge-company-copy,
-.retailedge-product-context {
-	display: grid;
-	gap: 2px;
-	min-width: 0;
-}
-.retailedge-company-copy small,
-.retailedge-product-context small {
-	font-size: 0.68rem;
-	font-weight: 750;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--edge-color-ink-500, #617589);
-}
-.retailedge-company-copy strong {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.retailedge-branch-switcher {
-	justify-self: center;
-	width: min(100%, 26rem);
-}
-.retailedge-product-context {
-	justify-self: end;
-	text-align: right;
-}
 .create-product-menu {
 	border: 1px solid var(--edge-color-border, #dfe6ec);
 	border-radius: 12px;
@@ -1436,16 +1329,6 @@ export default {
 	}
 }
 @media (max-width: 760px) {
-	.retailedge-context-bar {
-		grid-template-columns: 1fr;
-		align-items: stretch;
-	}
-	.retailedge-branch-switcher,
-	.retailedge-product-context {
-		justify-self: stretch;
-		width: 100%;
-		text-align: left;
-	}
 	.create-picker-list {
 		grid-template-columns: 1fr;
 	}
