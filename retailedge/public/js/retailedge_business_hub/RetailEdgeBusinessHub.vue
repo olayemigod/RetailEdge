@@ -135,7 +135,7 @@
 							class="home-quick-action"
 							@click="runHomeQuickAction(shortcut)"
 						>
-							<span class="home-quick-action-icon"><EdgeIcon :name="shortcut.icon || 'zap'" size="sm" /></span>
+							<span class="home-quick-action-icon"><EdgeIcon :name="displayIcon(shortcut.icon)" size="sm" /></span>
 							<span>
 								<strong>{{ shortcut.label }}</strong>
 								<small>{{ shortcut.description }}</small>
@@ -158,7 +158,7 @@
 							class="experience-card"
 						>
 							<div class="experience-card-top">
-								<span class="experience-icon"><EdgeIcon :name="experience.icon || 'grid'" size="sm" /></span>
+								<span class="experience-icon"><EdgeIcon :name="displayIcon(experience.icon)" size="sm" /></span>
 								<EdgeStatusBadge :label="experience.status" :status="experience.status" />
 							</div>
 							<h4>{{ experience.label }}</h4>
@@ -178,7 +178,7 @@
 				<div v-if="quickActions.length" class="create-product-menu">
 					<header class="create-product-menu-header edge-product-menu__header">
 						<div class="edge-product-menu__brand">
-							<span class="create-product-menu-mark edge-product-menu__brand-mark"><EdgeIcon name="plus" size="sm" /></span>
+							<span class="create-product-menu-mark edge-product-menu__brand-mark"><EdgeIcon name="clipboard" size="sm" /></span>
 							<span>
 								<strong>Create</strong>
 								<small>RetailEdge business actions</small>
@@ -187,7 +187,7 @@
 					</header>
 					<section class="edge-product-menu__section" aria-label="Permitted business actions">
 						<div class="edge-product-menu__section-heading">
-							<span class="edge-product-menu__section-icon"><EdgeIcon name="zap" size="sm" /></span>
+							<span class="edge-product-menu__section-icon"><EdgeIcon name="activity" size="sm" /></span>
 							<span>
 								<h3>Business actions</h3>
 								<p>Only entries permitted for your current role and context are shown.</p>
@@ -202,7 +202,7 @@
 								role="menuitem"
 								@click="runQuickAction(action)"
 							>
-								<span class="create-picker-icon edge-product-menu__item-icon"><EdgeIcon :name="action.icon || 'plus'" size="sm" /></span>
+								<span class="create-picker-icon edge-product-menu__item-icon"><EdgeIcon :name="displayIcon(action.icon)" size="sm" /></span>
 								<span class="create-picker-copy edge-product-menu__item-copy">
 									<strong>{{ action.label }}</strong>
 									<small>{{ action.description }}</small>
@@ -615,21 +615,36 @@ export default {
 			if (datatype === "Int" || datatype === "Float") return Number(value || 0).toLocaleString();
 			return window.retailedge?.toPlainText?.(value) ?? String(value ?? "");
 		},
+		displayIcon(icon) {
+			return {
+				"file-text": "report",
+				download: "wallet",
+				upload: "wallet",
+				"credit-card": "wallet",
+				"shopping-bag": "layers",
+				"shopping-cart": "grid",
+				repeat: "activity",
+				zap: "activity",
+				plus: "clipboard",
+				stock: "layers",
+				"bar-chart-2": "chart",
+			}[String(icon || "")] || icon || "list";
+		},
 		kpiIcon(label) {
 			return {
-				Sales: "shopping-cart",
-				Expenses: "credit-card",
-				Receivables: "download",
-				Payables: "upload",
-				"Stock Value": "stock",
+				Sales: "chart",
+				Expenses: "wallet",
+				Receivables: "report",
+				Payables: "wallet",
+				"Stock Value": "layers",
 			}[String(label || "")] || "chart";
 		},
 		signalIcon(key) {
 			return {
-				stock: "stock",
+				stock: "layers",
 				banking: "wallet",
 				branch: "building",
-				cash_shift: "credit-card",
+				cash_shift: "wallet",
 			}[String(key || "")] || "chart";
 		},
 		openHomeRoute(route) {
