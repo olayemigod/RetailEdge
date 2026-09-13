@@ -27,6 +27,16 @@ def test_business_hub_home_exposes_mvp_command_centre_sections():
 	assert "refreshHomeSnapshot" in source
 
 
+def test_business_hub_home_never_falls_back_to_company_wide_data_for_restricted_blank_scope():
+	source = BACKEND.read_text()
+	assert "if len(allowed) == 1:" in source
+	assert "branch = allowed[0]" in source
+	assert "_unavailable_scope_snapshot" in source
+	assert "Choose a Branch to load scoped business signals." in source
+	assert '"cards": []' in source
+	assert '"attention": []' in source
+
+
 def test_business_hub_keeps_existing_guided_entry_ownership():
 	source = FRONTEND.read_text()
 	for token in (
