@@ -29,6 +29,22 @@ WAREHOUSE_PREFERENCES: dict[str, tuple[str, ...]] = {
 
 
 
+
+def resolve_guided_company(requested: str = "", *, user: str | None = None) -> str:
+	"""Keep guided entries inside the active RetailEdge operating Company."""
+	requested = str(requested or "").strip()
+	operating = get_operating_context() or {}
+	active = str(operating.get("company") or "").strip()
+	if active and requested and requested != active:
+		frappe.throw(
+			_("Change Operating Company before creating an entry for Company {0}.").format(requested),
+			frappe.PermissionError,
+		)
+	company = active or requested or str(frappe.defaults.get_user_default("Company") or "").strip()
+	if not company:
+		frappe.throw(_("Set an Operating Company before using this guided entry."))
+	return company
+
 def get_guided_branch_names(company: str, *, user: str | None = None) -> list[str]:
 	"""Return enabled Branch Setup names permitted in one Company.
 
