@@ -10,9 +10,12 @@ module.exports = defineConfig({
 	expect: { timeout: 15_000 },
 	use: {
 		baseURL: process.env.RETAILEDGE_BASE_URL || "http://retail-browser.localhost:8000",
-		trace: "retain-on-failure",
-		screenshot: "only-on-failure",
-		video: "retain-on-failure",
+		// RC3 is a reviewed acceptance gate, not only an automated pass/fail gate.
+		// Preserve successful-run evidence so the exact-head persona journeys can
+		// be inspected independently before the release is promoted.
+		trace: "on",
+		screenshot: "on",
+		video: "on",
 	},
 	reporter: [
 		["line"],
