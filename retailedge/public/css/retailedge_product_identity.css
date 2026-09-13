@@ -145,6 +145,63 @@ body.edge-suite-product-retailedge .edge-context-chip,
 	color: var(--retailedge-brand-strong);
 }
 
+/* RetailEdge shell identity: company left, working Branch centred, user actions right. */
+[data-edge-product="retailedge"] .edge-topbar__brand {
+	min-width: min(22rem, 32vw);
+}
+
+[data-edge-product="retailedge"] .edge-topbar__mark.edge-identity-mark--image {
+	background: #fff;
+	border: 1px solid var(--retailedge-border);
+	overflow: hidden;
+}
+
+[data-edge-product="retailedge"] .edge-topbar__mark .edge-identity-logo {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+[data-edge-product="retailedge"] .edge-topbar-context {
+	flex: 1 1 auto;
+	justify-content: center;
+	min-width: 12rem;
+}
+
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher {
+	width: min(25rem, 100%);
+}
+
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__label,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__helper {
+	display: none;
+}
+
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger {
+	min-height: 2.35rem;
+	border-color: #c7d5dd;
+	border-radius: 999px;
+	background: var(--retailedge-surface-muted);
+	box-shadow: none;
+	font-size: 0.82rem;
+	font-weight: 700;
+	padding-inline: 0.9rem;
+}
+
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger:hover,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown.is-open .edge-dropdown__trigger {
+	border-color: var(--retailedge-brand);
+	background: var(--retailedge-brand-soft);
+}
+
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__menu {
+	left: 50%;
+	right: auto;
+	width: min(25rem, calc(100vw - 2rem));
+	transform: translateX(-50%);
+}
+
 /* Denser page hierarchy: retail users scan figures and exceptions first. */
 body.edge-suite-product-retailedge .edge-page-layout,
 [data-edge-product="retailedge"] .edge-page-layout {
@@ -407,6 +464,28 @@ html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-repor
 	body.edge-suite-product-retailedge .edge-stat-card,
 	[data-edge-product="retailedge"] .edge-stat-card {
 		min-height: 6.25rem;
+	}
+}
+
+@media (max-width: 760px) {
+	[data-edge-product="retailedge"] .edge-topbar__brand {
+		min-width: 0;
+	}
+
+	[data-edge-product="retailedge"] .edge-topbar__title-copy small {
+		display: none;
+	}
+
+	[data-edge-product="retailedge"] .edge-topbar-context {
+		min-width: 0;
+	}
+
+	[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher {
+		width: min(15rem, 100%);
+	}
+
+	[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger {
+		padding-inline: 0.7rem;
 	}
 }
 
