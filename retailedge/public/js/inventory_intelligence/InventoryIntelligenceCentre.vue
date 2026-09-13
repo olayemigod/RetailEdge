@@ -53,30 +53,15 @@
 					<EdgeLinkField v-model="filters.warehouse" label="Warehouse" placeholder="All warehouses in scope" :searcher="warehouseSearch" @select="onWarehouseSelected" @clear="clearWarehouse" />
 					<EdgeLinkField v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
 					<EdgeLinkField v-model="filters.item_code" :selectedLabel="itemLabel" label="Item" placeholder="All stock items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
-					<label class="edge-field">
-						<span class="edge-field-label">Stock Status</span>
-						<select v-model="filters.stock_status" class="edge-input">
-							<option v-for="status in stockStatuses" :key="status" :value="status">{{ status }}</option>
-						</select>
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">Movement Class</span>
-						<select v-model="filters.movement_class" class="edge-input">
-							<option v-for="movement in movementClasses" :key="movement" :value="movement">{{ movement }}</option>
-						</select>
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">Replenishment Status</span>
-						<select v-model="filters.replenishment_status" class="edge-input">
-							<option v-for="status in replenishmentStatuses" :key="status" :value="status">{{ status }}</option>
-						</select>
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">Evidence Window</span>
-						<select v-model.number="filters.lookback_days" class="edge-input">
-							<option v-for="days in lookbackOptions" :key="days" :value="days">Last {{ days }} days</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.stock_status" :options="stockStatuses" label="Stock Status" />
+					<EdgeDropdown v-model="filters.movement_class" :options="movementClasses" label="Movement Class" />
+					<EdgeDropdown v-model="filters.replenishment_status" :options="replenishmentStatuses" label="Replenishment Status" />
+					<EdgeDropdown
+						:modelValue="String(filters.lookback_days)"
+						:options="lookbackOptions.map((days) => ({ value: String(days), label: `Last ${days} days` }))"
+						label="Evidence Window"
+						@update:modelValue="filters.lookback_days = Number($event || 90)"
+					/>
 					<label class="include-zero-field">
 						<input v-model="includeZero" type="checkbox" />
 						<span><strong>Include zero-stock items</strong><small>Recommended so sold-out demand and reorder items remain visible.</small></span>
@@ -103,7 +88,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -408,7 +393,7 @@ export default {
 			if (fieldtype === "Currency") {
 				const number = Number(value);
 				if (!Number.isFinite(number)) return String(value);
-				try { return frappe.format(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); }
+				try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); }
 				catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 			}
 			if (fieldtype === "Float") {
