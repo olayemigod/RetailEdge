@@ -14,7 +14,7 @@
 					<div class="detail-subsection">
 						<strong>Collection priorities</strong>
 						<div v-if="(receivables.collection_priorities || []).length" class="detail-list">
-							<button v-for="row in receivables.collection_priorities.slice(0, 8)" :key="row.invoice" class="detail-row detail-row--button" type="button" @click="openSalesInvoice(row.invoice)">
+							<button v-for="row in receivables.collection_priorities.slice(0, 8)" :key="row.invoice" class="detail-row detail-row--button" type="button" :disabled="!canOpenNative" :title="nativeDetailTitle" @click="openSalesInvoice(row.invoice)">
 								<span><strong>{{ row.customer_name || row.customer }}</strong><small>{{ row.invoice }} · {{ row.overdue_days }} days overdue · {{ row.priority }}</small></span>
 								<strong>{{ formatValue(row.outstanding, 'Currency') }}</strong>
 							</button>
@@ -48,7 +48,7 @@
 					<div class="detail-subsection">
 						<strong>Payment-attention priorities</strong>
 						<div v-if="(supplier.payment_priorities || []).length" class="detail-list">
-							<button v-for="row in supplier.payment_priorities.slice(0, 8)" :key="row.invoice" class="detail-row detail-row--button" type="button" @click="openPurchaseInvoice(row)">
+							<button v-for="row in supplier.payment_priorities.slice(0, 8)" :key="row.invoice" class="detail-row detail-row--button" type="button" :disabled="!canOpenNative" :title="nativeDetailTitle" @click="openPurchaseInvoice(row)">
 								<span><strong>{{ row.supplier_name || row.supplier }}</strong><small>{{ row.invoice }} · {{ row.overdue_days }} days overdue · {{ row.priority }}</small></span>
 								<strong>{{ formatValue(row.outstanding, 'Currency') }}</strong>
 							</button>
@@ -120,13 +120,17 @@ export default {
 		supplierLoading: Boolean,
 		supplierError: { type: String, default: "" },
 		budget: { type: Object, default: () => ({}) },
+		canOpenNative: { type: Boolean, default: false },
 	},
 	emits: ["load-receivables", "load-suppliers"],
+	computed: {
+		nativeDetailTitle() { return this.canOpenNative ? "Open the authoritative ERPNext document" : "Advanced Native Desk access is required to open this document"; },
+	},
 	methods: {
 		formatValue(value, datatype) { if (value === null || value === undefined) return "—"; try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value; } },
 		formatPercent(value) { return value === null || value === undefined ? "—" : `${Number(value).toFixed(1)}%`; },
-		openSalesInvoice(invoice) { if (invoice) window.open(`/app/sales-invoice/${encodeURIComponent(invoice)}`, "_blank", "noopener,noreferrer"); },
-		openPurchaseInvoice(row) { const route = row?.route || (row?.invoice ? `/app/purchase-invoice/${encodeURIComponent(row.invoice)}` : ""); if (route) window.open(route, "_blank", "noopener,noreferrer"); },
+		openSalesInvoice(invoice) { if (!this.canOpenNative) return; if (invoice) window.open(`/app/sales-invoice/${encodeURIComponent(invoice)}`, "_blank", "noopener,noreferrer"); },
+		openPurchaseInvoice(row) { if (!this.canOpenNative) return; const route = row?.route || (row?.invoice ? `/app/purchase-invoice/${encodeURIComponent(row.invoice)}` : ""); if (route) window.open(route, "_blank", "noopener,noreferrer"); },
 	},
 };
 </script>

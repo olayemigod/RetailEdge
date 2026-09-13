@@ -10,6 +10,7 @@ from erpnext.accounts.doctype.payment_entry.payment_entry import get_party_detai
 
 from retailedge.branch_context import has_field, validate_user_branch_access
 from retailedge.guided_payment import get_simple_payment_mode_details
+from retailedge.operating_context import get_operating_context
 
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
@@ -40,7 +41,7 @@ def _require_payment_branch_field(branch: str | None) -> str | None:
 	if branch and not field:
 		frappe.throw(
 			_(
-				"Payment Entry branch attribution is unavailable. Run the RetailEdge migration before using a Branch-scoped advance workflow."
+				"Payment Entry branch attribution is unavailable. Run the site migration before using a Branch-scoped advance workflow."
 			)
 		)
 	return field
@@ -54,6 +55,28 @@ def _normalise_limit(limit: int | str | None) -> int:
 	return max(1, min(cint(limit) or 50, MAX_ADVANCE_ROWS))
 
 
+def _resolve_advance_scope(company: str | None, branch: str | None) -> tuple[str, str]:
+	operating = get_operating_context() or {}
+	operating_company = str(operating.get("company") or "").strip()
+	operating_branch = str(operating.get("branch") or "").strip()
+	resolved_company = str(company or operating_company or frappe.defaults.get_user_default("Company") or "").strip()
+	if not resolved_company:
+		frappe.throw(_("Choose an Operating Company before viewing customer advances."))
+	_assert_read("Company", resolved_company)
+
+	resolved_branch = str(branch or "").strip()
+	if not resolved_branch and (not company or resolved_company == operating_company):
+		resolved_branch = operating_branch
+	if resolved_branch:
+		validate_user_branch_access(
+			resolved_branch,
+			user=frappe.session.user,
+			company=resolved_company,
+			throw=True,
+		)
+	return resolved_company, resolved_branch
+
+
 @frappe.whitelist()
 def get_customer_advance_context(
 	customer: str | None = None,
@@ -63,22 +86,19 @@ def get_customer_advance_context(
 ) -> dict[str, Any]:
 	"""Return an operational view of authoritative ERPNext customer advances.
 
-	The balance is never maintained by RetailEdge. Submitted Payment Entry
+	The balance is never maintained by the product. Submitted Payment Entry
 	``unallocated_amount`` remains the source of truth.
 	"""
 	_assert_read(PAYMENT_ENTRY_DOCTYPE)
+	company, branch = _resolve_advance_scope(company, branch)
 	if customer:
 		_assert_read(CUSTOMER_DOCTYPE, customer)
-	if company:
-		_assert_read("Company", company)
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
 
-	rows = list_customer_advances(customer=customer, company=company, branch=branch, limit=limit)
+	rows = list_customer_advances(customer=customer, company=company, branch=branch or None, limit=limit)
 	return {
 		"customer": customer or "",
-		"company": company or "",
-		"branch": branch or "",
+		"company": company,
+		"branch": branch,
 		"currency": _company_currency(company),
 		"available_advance": sum(flt(row.get("unallocated_amount")) for row in rows),
 		"advance_count": len(rows),
@@ -97,23 +117,19 @@ def list_customer_advances(
 ) -> list[dict[str, Any]]:
 	"""List submitted Receive Payment Entries that still have unapplied value."""
 	_assert_read(PAYMENT_ENTRY_DOCTYPE)
+	company, branch = _resolve_advance_scope(company, branch)
 	if customer:
 		_assert_read(CUSTOMER_DOCTYPE, customer)
-	if company:
-		_assert_read("Company", company)
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
 
 	filters: dict[str, Any] = {
 		"docstatus": 1,
 		"payment_type": "Receive",
 		"party_type": CUSTOMER_DOCTYPE,
 		"unallocated_amount": [">", 0],
+		"company": company,
 	}
 	if customer:
 		filters["party"] = customer
-	if company:
-		filters["company"] = company
 
 	branch_field = _require_payment_branch_field(branch)
 	if branch and branch_field:
@@ -250,9 +266,6 @@ def create_customer_advance_draft(values: dict | str | None = None) -> dict[str,
 		doc.custom_remarks = 1
 		doc.remarks = str(values.get("remarks")).strip()
 
-	# Insert only. The user must review and submit the ERPNext Payment Entry.
-	# There are deliberately no reference rows, so a submitted receipt remains
-	# available as a standard ERPNext customer advance until reconciled.
 	doc.insert()
 	return {
 		"doctype": doc.doctype,
@@ -277,7 +290,7 @@ def get_sales_invoice_advance_context(sales_invoice: str, limit: int = 50) -> di
 	"""Return advances eligible by customer/company/currency/branch context.
 
 	This endpoint is read-only. Applying an advance must use ERPNext's supported
-	advance/reconciliation workflow; RetailEdge must not mutate submitted invoices.
+	advance/reconciliation workflow; submitted invoices are never mutated directly.
 	"""
 	_assert_read(SALES_INVOICE_DOCTYPE, sales_invoice)
 	invoice = frappe.get_doc(SALES_INVOICE_DOCTYPE, sales_invoice)

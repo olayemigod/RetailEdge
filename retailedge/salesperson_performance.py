@@ -9,8 +9,9 @@ import frappe
 from frappe import _
 from frappe.utils import cstr, flt, get_first_day, nowdate
 
-from retailedge.branch_context import get_branch_query_filters, has_field
+from retailedge.branch_context import has_field
 from retailedge.branch_performance import assert_can_access_branch_performance
+from retailedge.operating_context import get_operational_branch_scope
 from retailedge.sales_reporting import MAX_INVOICE_SCAN_ROWS, MAX_ITEM_SCAN_ROWS
 from retailedge.sales_team_allocation import get_sales_team_allocations, resolve_sales_team_allocations
 
@@ -21,20 +22,99 @@ MAX_LINK_RESULTS = 20
 
 def _default_company() -> str:
 	return cstr(
-		frappe.defaults.get_user_default("Company")
-		or frappe.defaults.get_global_default("company")
-		or ""
+		frappe.defaults.get_user_default("Company") or frappe.defaults.get_global_default("company") or ""
 	)
 
 
-def _assert_company_access(company: str) -> None:
-	if company and not frappe.has_permission("Company", "read", doc=company):
+def _assert_company_access(company: str, *, user: str | None = None) -> None:
+	if not company:
+		frappe.throw(
+			_("Company is required before loading Salesperson Performance."),
+			frappe.ValidationError,
+		)
+	if not frappe.has_permission("Company", "read", doc=company, user=user or frappe.session.user):
 		frappe.throw(_("You do not have access to this Company."), frappe.PermissionError)
+
+
+def resolve_salesperson_performance_read_scope(filters=None, *, user: str | None = None) -> frappe._dict:
+	"""Bind Salesperson Performance reads to the current reader's Company/Branch scope."""
+	user = user or getattr(getattr(frappe, "session", None), "user", "Administrator")
+	value = frappe.parse_json(filters) if isinstance(filters, str) else dict(filters or {})
+	company = cstr(value.get("company") or _default_company()).strip()
+	branch = cstr(value.get("branch") or "").strip()
+	_assert_company_access(company, user=user)
+
+	scope = get_operational_branch_scope(company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed_branches = list(
+		dict.fromkeys(
+			cstr(candidate).strip()
+			for candidate in scope.get("allowed_branches") or []
+			if cstr(candidate).strip()
+		)
+	)
+	if branch and restricted and branch not in allowed_branches:
+		frappe.throw(
+			_("You do not have active RetailEdge Branch access to Branch {0}.").format(branch),
+			frappe.PermissionError,
+		)
+
+	value["company"] = company
+	value["branch"] = branch
+	value["_branch_scope_restricted"] = restricted
+	value["_allowed_branches"] = allowed_branches
+	value["_branch_scope_source"] = scope.get("source")
+	if not branch and restricted and len(allowed_branches) == 1:
+		value["branch"] = allowed_branches[0]
+	return frappe._dict(value)
+
+
+def _salesperson_invoice_branch_predicate(filters, *, alias: str = "si") -> tuple[str, list[str]]:
+	branch_field = (
+		"retailedge_branch"
+		if has_field("Sales Invoice", "retailedge_branch")
+		else ("branch" if has_field("Sales Invoice", "branch") else None)
+	)
+	branch = cstr(filters.get("branch") or "").strip()
+	restricted = bool(filters.get("_branch_scope_restricted"))
+	allowed_branches = list(filters.get("_allowed_branches") or [])
+
+	if branch:
+		if not branch_field:
+			return "1=0", []
+		return f"{alias}.`{branch_field}` = %s", [branch]
+	if not restricted:
+		return "", []
+	if not branch_field or not allowed_branches:
+		return "1=0", []
+	placeholders = ", ".join(["%s"] * len(allowed_branches))
+	return f"{alias}.`{branch_field}` IN ({placeholders})", allowed_branches
+
+
+def get_salesperson_performance_branch_options(company: str = "", *, user: str | None = None) -> list[str]:
+	"""Return Branch options under the same scope authority as the aggregate query."""
+	user = user or getattr(getattr(frappe, "session", None), "user", "Administrator")
+	scoped = resolve_salesperson_performance_read_scope({"company": company}, user=user)
+	if scoped.get("_branch_scope_restricted"):
+		return list(scoped.get("_allowed_branches") or [])
+	if not frappe.db.exists("DocType", "Branch"):
+		return []
+	query_filters = {}
+	if frappe.get_meta("Branch").has_field("company"):
+		query_filters["company"] = scoped.get("company")
+	rows = frappe.get_list(
+		"Branch",
+		filters=query_filters,
+		fields=["name"],
+		order_by="name asc",
+		limit_page_length=0,
+	)
+	return [cstr(row.get("name")).strip() for row in rows if cstr(row.get("name")).strip()]
 
 
 @frappe.whitelist()
 def get_salesperson_performance(filters=None):
-	"""Aggregate salesperson performance from submitted, permission-scoped Sales Invoices.
+	"""Aggregate salesperson performance from submitted, Company/Branch-scoped Sales Invoices.
 
 	R11 uses the same Sales Team allocation contract as profitability intelligence. Invoice
 	amounts are allocated in Python after a bounded invoice scan so missing allocation
@@ -54,8 +134,8 @@ def get_salesperson_performance(filters=None):
 
 	from_date = filters.get("from_date") or get_first_day(nowdate())
 	to_date = filters.get("to_date") or nowdate()
-	company = cstr(filters.get("company") or _default_company()).strip()
-	_assert_company_access(company)
+	filters = resolve_salesperson_performance_read_scope(filters)
+	company = filters.get("company")
 
 	conditions = ["si.docstatus = 1"]
 	params: list[Any] = []
@@ -72,26 +152,10 @@ def get_salesperson_performance(filters=None):
 		conditions.append("si.customer = %s")
 		params.append(filters.get("customer"))
 
-	scope = get_branch_query_filters(
-		"Sales Invoice",
-		user=frappe.session.user,
-		company=company or None,
-		branch=filters.get("branch"),
-	)
-	branch_field = (
-		"retailedge_branch"
-		if has_field("Sales Invoice", "retailedge_branch")
-		else ("branch" if has_field("Sales Invoice", "branch") else None)
-	)
-	effective_branch = filters.get("branch") or scope.get("branch")
-	if branch_field and effective_branch:
-		conditions.append(f"si.{branch_field} = %s")
-		params.append(effective_branch)
-	elif branch_field and scope.get("allowed_branches"):
-		allowed = [branch for branch in scope.get("allowed_branches") if branch]
-		if allowed:
-			conditions.append(f"si.{branch_field} in ({', '.join(['%s'] * len(allowed))})")
-			params.extend(allowed)
+	branch_condition, branch_params = _salesperson_invoice_branch_predicate(filters)
+	if branch_condition:
+		conditions.append(branch_condition)
+		params.extend(branch_params)
 
 	if filters.get("item"):
 		conditions.append(
@@ -130,9 +194,9 @@ def get_salesperson_performance(filters=None):
 	invoices = frappe.db.sql(invoice_query, [*params, MAX_INVOICE_SCAN_ROWS + 1], as_dict=True)
 	if len(invoices) > MAX_INVOICE_SCAN_ROWS:
 		frappe.throw(
-			_("More than {0} submitted Sales Invoices match this salesperson scope. Narrow the date range or filters.").format(
-				MAX_INVOICE_SCAN_ROWS
-			)
+			_(
+				"More than {0} submitted Sales Invoices match this salesperson scope. Narrow the date range or filters."
+			).format(MAX_INVOICE_SCAN_ROWS)
 		)
 
 	invoice_names = [str(row.name) for row in invoices]
@@ -192,9 +256,9 @@ def _get_invoice_item_context(
 	)
 	if len(rows) > MAX_ITEM_SCAN_ROWS:
 		frappe.throw(
-			_("More than {0} Sales Invoice Item rows match this salesperson scope. Narrow the date range or filters.").format(
-				MAX_ITEM_SCAN_ROWS
-			)
+			_(
+				"More than {0} Sales Invoice Item rows match this salesperson scope. Narrow the date range or filters."
+			).format(MAX_ITEM_SCAN_ROWS)
 		)
 	context: dict[str, dict[str, Any]] = {}
 	for row in rows:
@@ -268,10 +332,8 @@ def _salesperson_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def get_salesperson_dashboard_options():
 	"""Return backward-compatible dashboard defaults without broad master preloading."""
 	assert_can_access_branch_performance(frappe.session.user)
-	from retailedge.branch_performance import get_candidate_branches
-
-	branches = get_candidate_branches()
 	company = _default_company() or "RetailEdge Tenant"
+	branches = get_salesperson_performance_branch_options(company) if company != "RetailEdge Tenant" else []
 	default_filters = {
 		"company": company if company != "RetailEdge Tenant" else "",
 		"date_range_preset": "This Month",

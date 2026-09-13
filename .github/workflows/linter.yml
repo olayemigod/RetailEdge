@@ -1,6 +1,9 @@
 name: Linters
 
 on:
+  push:
+    branches:
+      - qa/retailedge-reconciled-20260902
   pull_request:
   workflow_dispatch:
 
@@ -15,7 +18,7 @@ jobs:
   linter:
     name: 'Frappe Linter'
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v6
@@ -34,8 +37,8 @@ jobs:
         id: precommit
         continue-on-error: true
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           mapfile -d '' changed_files < <(
             git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA"
@@ -68,8 +71,8 @@ jobs:
         id: semgrep
         continue-on-error: true
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           mapfile -d '' changed_files < <(
             git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" "$HEAD_SHA"

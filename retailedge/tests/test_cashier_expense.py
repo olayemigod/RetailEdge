@@ -1,9 +1,29 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import retailedge.tests._cashier_expense_regression_suite as _legacy
-from retailedge.tests._cashier_expense_regression_suite import *  # noqa: F403,F405
+from retailedge.tests._cashier_expense_regression_suite import *
+
+
+def _set_up_cashier_expense_service_read_permission(self):
+	self._cashier_expense_read_permission = patch(
+		"retailedge.cashier_expense_read_scope.frappe.has_permission",
+		return_value=True,
+	)
+	self._cashier_expense_global_branch_access = patch(
+		"retailedge.cashier_expense_read_scope.user_has_global_branch_access",
+		return_value=True,
+	)
+	self._cashier_expense_read_permission.start()
+	self._cashier_expense_global_branch_access.start()
+	self.addCleanup(self._cashier_expense_global_branch_access.stop)
+	self.addCleanup(self._cashier_expense_read_permission.stop)
+
+
+_legacy.CashierExpenseServiceTests.setUp = _set_up_cashier_expense_service_read_permission
+
 
 R2_NATIVE_SECTIONS = [
 	"Home",
@@ -78,11 +98,7 @@ class BranchProfileTests(_legacy.BranchProfileTests):
 			self.assertEqual(by_label[label].get("link_type"), link_type)
 			self.assertEqual(by_label[label].get("link_to"), target)
 
-		targets = [
-			(row.get("link_type"), row.get("link_to"))
-			for row in link_rows
-			if row.get("link_to")
-		]
+		targets = [(row.get("link_type"), row.get("link_to")) for row in link_rows if row.get("link_to")]
 		self.assertEqual(len(targets), len(set(targets)))
 		self.assertFalse(R2_FORBIDDEN_NATIVE_TARGETS.intersection({target for _, target in targets}))
 		self.assertFalse(
@@ -117,7 +133,9 @@ class BranchProfileTests(_legacy.BranchProfileTests):
 		self.assertEqual(sections, R2_NATIVE_SECTIONS)
 		for row in items:
 			if row.get("type") == "Section Break":
-				self.assertEqual(row.get("keep_closed"), 1, f"Sidebar section {row.get('label')} must start collapsed.")
+				self.assertEqual(
+					row.get("keep_closed"), 1, f"Sidebar section {row.get('label')} must start collapsed."
+				)
 
 		self.assertEqual(items[0].get("label"), "Home")
 		self.assertEqual(items[0].get("link_type"), "Workspace")
@@ -130,11 +148,7 @@ class BranchProfileTests(_legacy.BranchProfileTests):
 			self.assertEqual(by_label[label].get("link_type"), link_type)
 			self.assertEqual(by_label[label].get("link_to"), target)
 
-		targets = [
-			(row.get("link_type"), row.get("link_to"))
-			for row in link_rows
-			if row.get("link_to")
-		]
+		targets = [(row.get("link_type"), row.get("link_to")) for row in link_rows if row.get("link_to")]
 		self.assertEqual(len(targets), len(set(targets)))
 		self.assertFalse(R2_FORBIDDEN_NATIVE_TARGETS.intersection({target for _, target in targets}))
 		self.assertFalse(

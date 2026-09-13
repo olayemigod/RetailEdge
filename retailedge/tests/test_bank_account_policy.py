@@ -30,7 +30,7 @@ class TestBankAccountPolicy(unittest.TestCase):
 
 		self.assertEqual(filters, [{BRANCH_FIELD: ["in", ["", None]]}])
 
-	@patch("retailedge.bank_account_policy.validate_user_branch_access")
+	@patch("retailedge.bank_account_policy._validate_bank_account_operational_branch", return_value="Aba")
 	@patch("retailedge.bank_account_policy._assert_branch_belongs_to_company")
 	@patch("retailedge.bank_account_policy.frappe.has_permission", return_value=True)
 	@patch("retailedge.bank_account_policy.has_doctype", return_value=True)

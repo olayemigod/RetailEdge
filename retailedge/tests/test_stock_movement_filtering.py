@@ -18,14 +18,18 @@ class TestStockMovementFiltering(unittest.TestCase):
 		source = (APP_ROOT / "stock_movement_filters.py").read_text(encoding="utf-8")
 		for contract in (
 			"MAX_FILTER_RESULTS = 20",
-			"validate_user_branch_access",
-			"get_user_allowed_branches",
-			"user_has_global_branch_access",
+			"get_operational_branch_scope",
 			"get_branch_profile_defaults",
 			"frappe.get_list(",
 			"limit_page_length=_page_len(page_len)",
 		):
 			self.assertIn(contract, source)
+		for legacy_helper in (
+			"validate_user_branch_access",
+			"get_user_allowed_branches",
+			"user_has_global_branch_access",
+		):
+			self.assertNotIn(legacy_helper, source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("limit_page_length=0", source)
 

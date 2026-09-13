@@ -10,14 +10,15 @@ from frappe.utils import cint, flt, getdate, nowdate
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
 	get_first_existing_field,
-	get_user_allowed_branches,
 	has_doctype,
 	has_field,
 	resolve_retailedge_operational_defaults,
-	user_has_global_branch_access,
-	validate_user_branch_access,
 )
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
+from retailedge.operating_context import (
+	get_operational_branch_scope,
+	resolve_operational_branch,
+)
 
 ACTION_KEY = "adjust-stock"
 STOCK_RECONCILIATION_DOCTYPE = "Stock Reconciliation"
@@ -30,26 +31,42 @@ MAX_ITEMS = 50
 def get_simple_stock_adjustment_context() -> dict[str, Any]:
 	_assert_can_create_stock_reconciliation()
 	user = frappe.session.user
-	company = frappe.defaults.get_user_default("Company") or ""
-	branch = (
+	company = str(frappe.defaults.get_user_default("Company") or "").strip()
+	legacy_default_branch = str(
 		frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
-	)
+	).strip()
+	if not company:
+		frappe.throw(_("Set a default Company before creating a Stock Adjustment."))
+	_assert_read_permission("Company", company)
+
+	scope = get_operational_branch_scope(company, user=user)
+	if scope["restricted"]:
+		if len(scope["allowed_branches"]) <= 1:
+			branch = resolve_operational_branch(company, "", user=user)["branch"]
+		else:
+			branch = ""
+	else:
+		branch = legacy_default_branch
+		if branch:
+			branch = resolve_operational_branch(company, branch, user=user)["branch"]
+
 	defaults = resolve_retailedge_operational_defaults(
 		company=company or None,
 		branch=branch or None,
 		user=user,
 	)
 	company = defaults.get("company") or company
-	branch = defaults.get("branch") or branch
-	if not company:
-		frappe.throw(_("Set a default Company before creating a Stock Adjustment."))
 	_assert_read_permission("Company", company)
 	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+		branch = resolve_operational_branch(company, branch, user=user)["branch"]
+	elif not scope["restricted"] and defaults.get("branch"):
+		branch = resolve_operational_branch(company, defaults.get("branch") or "", user=user)["branch"]
 
 	warehouse = defaults.get("default_warehouse") or defaults.get("default_source_warehouse") or ""
+	if scope["restricted"] and not branch:
+		warehouse = ""
 	if warehouse and branch:
 		_validate_branch_warehouse(
 			branch=branch,
@@ -144,8 +161,7 @@ def create_simple_stock_adjustment_draft(values: dict | str | None = None) -> di
 	_assert_read_permission("Company", company)
 
 	branch = str(values.get("branch") or "").strip()
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+	branch = resolve_operational_branch(company, branch, user=user)["branch"]
 
 	warehouse = str(values.get("warehouse") or "").strip()
 	if not warehouse:
@@ -245,12 +261,24 @@ def _assert_simple_stock_item(item_code: str) -> None:
 
 
 def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str, Any] | None:
+	if not company:
+		return None
 	filters: dict[str, Any] = {"is_group": 0, "disabled": 0}
-	if company and has_field("Warehouse", "company"):
+	if has_field("Warehouse", "company"):
 		filters["company"] = company
+
+	branch = str(branch or "").strip()
 	if not branch:
-		return filters
-	validate_user_branch_access(branch, user=user, company=company or None, throw=True)
+		scope = get_operational_branch_scope(company, user=user)
+		if not scope["restricted"]:
+			return filters
+		if not scope["allowed_branches"]:
+			filters["name"] = "__never__"
+			return filters
+		if len(scope["allowed_branches"]) > 1:
+			return None
+	branch = resolve_operational_branch(company, branch, user=user)["branch"]
+
 	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
 	if branch_field:
 		filters[branch_field] = branch
@@ -270,18 +298,20 @@ def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str,
 	filters["name"] = ["in", warehouses]
 	return filters
 
-
 def _branch_search_filters(company: str, user: str) -> dict[str, Any]:
+	if not company:
+		return {"name": "__never__"}
 	filters: dict[str, Any] = {}
-	if company and has_field("Branch", "company"):
+	if has_field("Branch", "company"):
 		filters["company"] = company
-	if user_has_global_branch_access(user=user):
-		return filters
-	allowed = get_user_allowed_branches(user=user, company=company or None).get("branches") or []
-	if allowed:
-		filters["name"] = ["in", allowed]
+	scope = get_operational_branch_scope(company, user=user)
+	if scope["restricted"]:
+		filters["name"] = (
+			["in", scope["allowed_branches"]]
+			if scope["allowed_branches"]
+			else "__never__"
+		)
 	return filters
-
 
 def _validate_branch_warehouse(*, branch: str, warehouse: str, company: str, user: str) -> None:
 	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)

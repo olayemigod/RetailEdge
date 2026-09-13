@@ -49,7 +49,10 @@ class BankingReadinessPageContractTests(IntegrationTestCase):
         self.assertIn("/app/bank-account/", self.readiness_js)
 
     def test_banking_pages_link_to_each_other(self):
-        self.assertIn('frappe.set_route("bank-matching-reconciliation")', self.readiness_js)
+        self.assertIn(
+            'global.frappe.set_route("bank-matching-reconciliation")',
+            self.readiness_js,
+        )
         self.assertIn(
             'global.frappe.set_route("banking-readiness")',
             self.matching_workspace_js,

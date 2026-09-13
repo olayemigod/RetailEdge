@@ -73,7 +73,7 @@
 
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
-				<span v-if="scope.from_date && scope.to_date">Sales period: {{ scope.from_date }} to {{ scope.to_date }}</span>
+				<span v-if="scope.from_date && scope.to_date">Sales period: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span>New/returning uses first submitted sale in the same permitted company/branch scope</span>
 				<span>Outstanding values are current ERPNext receivable exposure, not historical period-end balances</span>
 				<span v-if="!showProfitability">Profitability hidden by RetailEdge cost-visibility settings</span>
@@ -126,6 +126,7 @@ export default {
 			scope: {},
 			metadata: {},
 			menuItems: [],
+			canUseNativeDesk: false,
 			tenantName: "",
 			branchName: "",
 			userName: "",
@@ -199,6 +200,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
@@ -220,6 +222,7 @@ export default {
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load Customer & Sales Intelligence controls.");
@@ -242,6 +245,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
@@ -252,6 +256,8 @@ export default {
 				txt,
 				company: this.filters.company,
 				branch: this.filters.branch,
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
 			});
 			return Array.isArray(result) ? result : [];
 		},

@@ -27,9 +27,9 @@
 						class="edge-button"
 						type="button"
 						@click="newScenario"
-						:disabled="!filters.company || !canCreateScenario"
-						:title="canCreateScenario ? 'Save the current assumptions as a Planning Scenario' : 'You do not have permission to create Planning Scenarios'"
-					>Save as Scenario</button>
+						:disabled="!filters.company || !canCreateScenario || !canUseNativeDesk"
+						:title="!canUseNativeDesk ? 'Advanced workflow: Native Desk access is required to save Planning Scenarios' : (canCreateScenario ? 'Save the current assumptions as a Planning Scenario' : 'You do not have permission to create Planning Scenarios')"
+					>{{ canUseNativeDesk ? "Save as Scenario" : "Advanced: Save Scenario" }}</button>
 					<EdgeExportMenu v-if="rows.length" :dataset="exportDataset" :loadDataset="loadExportDataset" />
 				</div>
 			</header>
@@ -50,8 +50,11 @@
 				</div>
 			</section>
 
-			<div v-if="error" class="alert error">{{ error }}</div>
-			<div v-if="loading || metadataLoading" class="panel muted">Building forecast and plan…</div>
+			<EdgeErrorState v-if="metadataError" title="Forecasting & Planning could not start" :message="metadataError" @retry="bootstrap" />
+			<EdgeLoadingState v-else-if="metadataLoading" message="Loading Forecasting & Planning controls…" :skeleton="true" />
+			<EdgeErrorState v-else-if="dataError" title="Forecasting & Planning could not load" :message="dataError" @retry="fetchData" />
+			<EdgeLoadingState v-else-if="loading" message="Building forecast and plan…" :skeleton="true" />
+			<EdgeEmptyState v-else-if="!filters.company" title="Select a company" description="Choose a Company to build a governed forecast and operating plan." />
 
 			<template v-else>
 				<section v-if="summary.length" class="metric-grid">
@@ -63,7 +66,7 @@
 					<div v-if="!rows.length" class="empty">No planning rows are available for this scope.</div>
 					<div v-else class="table-wrap">
 						<table><thead><tr><th>Month</th><th>Domain</th><th>Type</th><th class="num">Actual</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Plan vs Forecast</th></tr></thead>
-						<tbody><tr v-for="row in rows" :key="`${row.period_start}-${row.domain}-${row.row_type}`"><td>{{ row.period_start }}</td><td>{{ row.domain }}</td><td>{{ row.row_type }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.variance) }}</td></tr></tbody></table>
+						<tbody><tr v-for="row in rows" :key="`${row.period_start}-${row.domain}-${row.row_type}`"><td>{{ formatDate(row.period_start) }}</td><td>{{ row.domain }}</td><td>{{ row.row_type }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.variance) }}</td></tr></tbody></table>
 					</div>
 				</section>
 
@@ -75,7 +78,7 @@
 				<section class="panel">
 					<div class="panel-heading"><div><p class="eyebrow">Cash Planning</p><h3>Known due commitments</h3></div><span class="muted">Shown separately from the behaviour-based cash forecast; collection/payment is not assumed.</span></div>
 					<div v-if="cashCommitmentReason" class="empty">{{ cashCommitmentReason }}</div>
-					<div v-else-if="cashCommitments.length" class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Receivables Due</th><th class="num">Payables Due</th><th class="num">Net Known Due</th></tr></thead><tbody><tr v-for="row in cashCommitments" :key="row.period_start"><td>{{ row.period_start }}</td><td class="num">{{ money(row.receivables_due) }}</td><td class="num">{{ money(row.payables_due) }}</td><td class="num">{{ money(row.net_known_due) }}</td></tr></tbody></table></div>
+					<div v-else-if="cashCommitments.length" class="table-wrap"><table><thead><tr><th>Month</th><th class="num">Receivables Due</th><th class="num">Payables Due</th><th class="num">Net Known Due</th></tr></thead><tbody><tr v-for="row in cashCommitments" :key="row.period_start"><td>{{ formatDate(row.period_start) }}</td><td class="num">{{ money(row.receivables_due) }}</td><td class="num">{{ money(row.payables_due) }}</td><td class="num">{{ money(row.net_known_due) }}</td></tr></tbody></table></div>
 					<div v-else class="empty">No known due commitments fall inside this forecast horizon.</div>
 				</section>
 
@@ -88,15 +91,16 @@
 				<section class="panel">
 					<div class="panel-heading"><div><p class="eyebrow">Inventory Planning</p><h3>Cumulative demand vs projected stock</h3></div><span class="muted">No Material Request is created.</span></div>
 					<div v-if="inventoryReason" class="empty">{{ inventoryReason }}</div>
-					<div v-else-if="inventoryRows.length" class="table-wrap"><table><thead><tr><th>Month</th><th>Item</th><th class="num">Forecast Demand</th><th class="num">Plan + Safety</th><th class="num">Cumulative Plan</th><th class="num">Projected Stock</th><th class="num">Shortfall</th><th>Status</th></tr></thead><tbody><tr v-for="row in inventoryRows" :key="`${row.period_start}-${row.item_code}`"><td>{{ row.period_start }}</td><td><strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small></td><td class="num">{{ qty(row.forecast_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.planned_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.cumulative_planned_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.current_projected_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.coverage_shortfall_qty, row.stock_uom) }}</td><td><span :class="['pill', row.coverage_risk ? 'risk' : 'ok']">{{ row.coverage_risk ? "Coverage risk" : "Covered" }}</span></td></tr></tbody></table></div>
+					<div v-else-if="inventoryRows.length" class="table-wrap"><table><thead><tr><th>Month</th><th>Item</th><th class="num">Forecast Demand</th><th class="num">Plan + Safety</th><th class="num">Cumulative Plan</th><th class="num">Projected Stock</th><th class="num">Shortfall</th><th>Status</th></tr></thead><tbody><tr v-for="row in inventoryRows" :key="`${row.period_start}-${row.item_code}`"><td>{{ formatDate(row.period_start) }}</td><td><strong>{{ row.item_code }}</strong><small>{{ row.item_name }}</small></td><td class="num">{{ qty(row.forecast_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.planned_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.cumulative_planned_demand_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.current_projected_qty, row.stock_uom) }}</td><td class="num">{{ qty(row.coverage_shortfall_qty, row.stock_uom) }}</td><td><span :class="['pill', row.coverage_risk ? 'risk' : 'ok']">{{ row.coverage_risk ? "Coverage risk" : "Covered" }}</span></td></tr></tbody></table></div>
 					<div v-else class="empty">No observed inventory demand is available for this scope.</div>
 				</section>
 
 				<section v-if="scenarioName" class="panel">
-					<div class="panel-heading"><div><p class="eyebrow">Forecast vs Actual</p><h3>{{ scenarioLabel || scenarioName }}</h3></div><button class="edge-button" type="button" @click="openScenario">Open Scenario</button></div>
-					<div v-if="performanceLoading" class="empty">Loading scenario performance…</div>
-					<div v-else-if="performanceError" class="alert error">{{ performanceError }}</div>
-					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div v-if="performanceRows.length" class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ row.period_start }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div><div v-else class="empty">No forecast months in this scenario have completed actuals yet.</div></template>
+					<div class="panel-heading"><div><p class="eyebrow">Forecast vs Actual</p><h3>{{ scenarioLabel || scenarioName }}</h3></div><button class="edge-button" type="button" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the Planning Scenario record' : 'Advanced workflow: Native Desk access is required to open Planning Scenario records'" @click="openScenario">{{ canUseNativeDesk ? "Open Scenario" : "Advanced: Open Scenario" }}</button></div>
+					<EdgeLoadingState v-if="performanceLoading" message="Loading scenario performance…" :skeleton="true" />
+					<EdgeErrorState v-else-if="performanceError" title="Scenario performance could not load" :message="performanceError" @retry="fetchPerformance" />
+					<EdgeEmptyState v-else-if="!performanceRows.length" title="No completed scenario periods" description="No forecast months in this scenario have completed actuals yet." />
+					<template v-else><div class="metric-grid compact"><div v-for="card in performanceSummary" :key="card.key || card.label" class="metric-card"><span>{{ card.label }}</span><strong>{{ formatCard(card) }}</strong></div></div><div class="table-wrap"><table><thead><tr><th>Month</th><th>Domain</th><th class="num">Forecast</th><th class="num">Plan</th><th class="num">Actual</th><th class="num">Forecast Accuracy</th><th class="num">Plan Accuracy</th></tr></thead><tbody><tr v-for="row in performanceRows" :key="`${row.period_start}-${row.domain}`"><td>{{ formatDate(row.period_start) }}</td><td>{{ row.domain }}</td><td class="num">{{ money(row.forecast) }}</td><td class="num">{{ money(row.plan) }}</td><td class="num">{{ money(row.actual) }}</td><td class="num">{{ percent(row.forecast_accuracy_percent) }}</td><td class="num">{{ percent(row.plan_accuracy_percent) }}</td></tr></tbody></table></div></template>
 				</section>
 			</template>
 		</div>
@@ -104,7 +108,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeExportMenu", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState"];
 function components() { return window.EdgeSuiteUI?.components || {}; }
 function call(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (r) => resolve(r.message ?? {}), error: reject })); }
 function message(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -114,9 +118,9 @@ export default {
 	props: { pageMethod: { type: String, required: true }, exportMethod: { type: String, required: true } },
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, components()[name]])),
 	data() { return {
-		edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
+		edgeUIValid: true, missingComponents: [], metadataLoading: true, metadataError: "", loading: false, dataError: "",
 		rows: [], columns: [], summary: [], domains: {}, scope: {}, metadata: {}, companyCurrency: "",
-		tenantName: "", branchName: "", userName: "", menuItems: [], canCreateScenario: false,
+		tenantName: "", branchName: "", userName: "", menuItems: [], canCreateScenario: false, canUseNativeDesk: false,
 		scenarioName: "", scenarioLabel: "", performanceRows: [], performanceSummary: [], performanceLoading: false, performanceError: "",
 		filters: { company: "", branch: "", as_of_date: "", history_months: 6, forecast_months: 3, sales_adjustment_percent: 0, expense_adjustment_percent: 0, cash_adjustment_percent: 0, inventory_safety_percent: 10 },
 	}; },
@@ -136,32 +140,35 @@ export default {
 	created() { const c = components(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !c[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.canCreateScenario = Boolean(frappe.model?.can_create?.("RetailEdge Planning Scenario")); this.bootstrap(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async bootstrap() {
 			this.metadataLoading = true;
+			this.metadataError = "";
 			try {
 				const [context, navigation] = await Promise.all([call("retailedge.sales_reporting.get_sales_reporting_context"), call("retailedge.edgesuite_ui.get_retailedge_business_hub_context")]);
 				this.filters.company = context.default_filters?.company || ""; this.filters.branch = context.default_filters?.branch || ""; this.filters.as_of_date = frappe.datetime.get_today();
 				this.tenantName = context.tenant_name || this.filters.company; this.branchName = context.branch_name || this.filters.branch; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigation(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				const opts = frappe.route_options || {}; if (opts.company) this.filters.company = opts.company; if (opts.branch !== undefined) this.filters.branch = opts.branch || "";
 				if (opts.scenario) { this.scenarioName = opts.scenario; await this.loadScenario(opts.scenario); } else if (this.filters.company) await this.fetchData();
-			} catch (e) { this.error = message(e, "Failed to load Forecasting & Planning controls."); }
+			} catch (e) { this.metadataError = message(e, "Failed to load Forecasting & Planning controls."); }
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigation(groups) { return groups.map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeFor(item) })) })); },
 		routeFor(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((g) => g.items || []).find((x) => x.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else window.open(route, "_blank", "noopener,noreferrer"); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((g) => g.items || []).find((x) => x.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else window.open(route, "_blank", "noopener,noreferrer"); },
 		async searchOptions(kind, txt) { const result = await call("retailedge.sales_reporting.search_sales_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); },
-		async scenarioSearch(txt) { if (!this.filters.company) return []; const rows = await call("frappe.client.get_list", { doctype: "RetailEdge Planning Scenario", filters: { company: this.filters.company }, fields: ["name", "scenario_name"], limit_page_length: 20, order_by: "modified desc" }); return (Array.isArray(rows) ? rows : []).filter((r) => !txt || `${r.name} ${r.scenario_name || ""}`.toLowerCase().includes(String(txt).toLowerCase())).map((r) => ({ value: r.name, label: r.scenario_name || r.name })); },
+		async scenarioSearch(txt) { if (!this.filters.company) return []; const rows = await call("retailedge.planning_scenario_api.search_planning_scenarios", { txt: txt || "", company: this.filters.company, branch: this.filters.branch || "" }); return Array.isArray(rows) ? rows : []; },
 		onCompanySelected(option) { this.filters.company = option?.value || ""; this.filters.branch = ""; this.clearScenario(); }, onBranchSelected(option) { this.filters.branch = option?.value || ""; this.clearScenario(); }, clearBranch() { this.filters.branch = ""; this.clearScenario(); },
 		async onScenarioSelected(option) { this.scenarioName = option?.value || ""; this.scenarioLabel = option?.label || this.scenarioName; if (this.scenarioName) await this.loadScenario(this.scenarioName); },
 		clearScenario() { this.scenarioName = ""; this.scenarioLabel = ""; this.performanceRows = []; this.performanceSummary = []; this.performanceError = ""; },
-		async loadScenario(name) { const doc = await call("frappe.client.get", { doctype: "RetailEdge Planning Scenario", name }); this.scenarioName = doc.name; this.scenarioLabel = doc.scenario_name || doc.name; this.filters = { ...this.filters, company: doc.company, branch: doc.branch || "", as_of_date: doc.as_of_date, history_months: Number(doc.history_months || 6), forecast_months: Number(doc.horizon_months || 3), sales_adjustment_percent: Number(doc.sales_adjustment_percent || 0), expense_adjustment_percent: Number(doc.expense_adjustment_percent || 0), cash_adjustment_percent: Number(doc.cash_adjustment_percent || 0), inventory_safety_percent: Number(doc.inventory_safety_percent || 0) }; await Promise.all([this.fetchData(), this.fetchPerformance()]); },
-		async fetchData() { if (!this.filters.company) return; this.loading = true; this.error = ""; try { const result = await call(this.pageMethod, { filters: { ...this.filters } }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.domains = result.domains || {}; this.scope = result.scope || {}; this.metadata = result.metadata || {}; this.companyCurrency = result.company_currency || this.companyCurrency; } catch (e) { this.error = message(e, "Failed to build Forecasting & Planning data."); } finally { this.loading = false; } },
+		async loadScenario(name) { const doc = await call("retailedge.planning_scenario_api.get_planning_scenario", { name }); this.scenarioName = doc.name; this.scenarioLabel = doc.scenario_name || doc.name; this.filters = { ...this.filters, company: doc.company, branch: doc.branch || "", as_of_date: doc.as_of_date, history_months: Number(doc.history_months || 6), forecast_months: Number(doc.horizon_months || 3), sales_adjustment_percent: Number(doc.sales_adjustment_percent || 0), expense_adjustment_percent: Number(doc.expense_adjustment_percent || 0), cash_adjustment_percent: Number(doc.cash_adjustment_percent || 0), inventory_safety_percent: Number(doc.inventory_safety_percent || 0) }; await Promise.all([this.fetchData(), this.fetchPerformance()]); },
+		async fetchData() { if (!this.filters.company) return; this.loading = true; this.dataError = ""; try { const result = await call(this.pageMethod, { filters: { ...this.filters } }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.domains = result.domains || {}; this.scope = result.scope || {}; this.metadata = result.metadata || {}; this.companyCurrency = result.company_currency || this.companyCurrency; } catch (e) { this.dataError = message(e, "Failed to build Forecasting & Planning data."); } finally { this.loading = false; } },
 		async fetchPerformance() { if (!this.scenarioName) return; this.performanceLoading = true; this.performanceError = ""; try { const result = await call("retailedge.scenario_performance.get_scenario_performance", { scenario: this.scenarioName }); this.performanceRows = result.rows || []; this.performanceSummary = result.summary || []; } catch (e) { this.performanceError = message(e, "Failed to load forecast-vs-actual performance."); } finally { this.performanceLoading = false; } },
 		newScenario() {
-			if (!this.canCreateScenario || !this.filters.company) return;
+			if (!this.canUseNativeDesk || !this.canCreateScenario || !this.filters.company) return;
 			frappe.new_doc("RetailEdge Planning Scenario", {
 				company: this.filters.company,
 				branch: this.filters.branch,
@@ -174,7 +181,7 @@ export default {
 				inventory_safety_percent: this.filters.inventory_safety_percent,
 			});
 		},
-		openScenario() { if (this.scenarioName) frappe.set_route("Form", "RetailEdge Planning Scenario", this.scenarioName); },
+		openScenario() { if (this.canUseNativeDesk && this.scenarioName) frappe.set_route("Form", "RetailEdge Planning Scenario", this.scenarioName); },
 		loadExportDataset() { return call(this.exportMethod, { filters: { ...this.filters } }); },
 		money(value) { return value === null || value === undefined || value === "" ? "—" : format_currency(Number(value || 0), this.companyCurrency || undefined); },
 		percent(value) { return value === null || value === undefined || value === "" ? "—" : `${Number(value).toFixed(1)}%`; },

@@ -1,0 +1,187 @@
+name: RetailEdge Browser Persona Smoke
+
+on:
+  push:
+    branches:
+      - qa/retailedge-reconciled-20260902
+  pull_request:
+    paths:
+      - ".github/workflows/browser-persona-smoke.yml"
+      - "browser-tests/**"
+      - "retailedge/**"
+      - "docs/rir2e_consolidated_browser_persona_qa.md"
+  workflow_dispatch:
+
+concurrency:
+  group: retailedge-browser-persona-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  browser-smoke:
+    name: Exact-head browser persona smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RETAILEDGE_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      RETAILEDGE_BASE_URL: http://retail-browser.localhost:8000
+      RETAILEDGE_BROWSER_PASSWORD: RetailEdgeBrowser1!
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Check out exact RetailEdge candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        run: test "$(git rev-parse HEAD)" = "$RETAILEDGE_CANDIDATE_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          check-latest: true
+
+      - name: Install bench prerequisites
+        run: |
+          for source in /etc/apt/sources.list.d/*; do
+            if sudo grep -q 'dl.google.com/linux/chrome-stable' "$source" 2>/dev/null; then
+              sudo rm -f "$source"
+            fi
+          done
+          sudo apt-get update
+          sudo apt-get install -y libmariadb-dev pkg-config redis-tools
+          python -m pip install --upgrade frappe-bench
+          redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Create clean Frappe v16 bench
+        run: |
+          bench init             --frappe-branch version-16             --python "$(command -v python)"             --skip-assets             --skip-redis-config-generation             frappe-bench
+
+          cd frappe-bench
+          bench set-config -g db_host 127.0.0.1
+          bench set-config -g redis_cache redis://127.0.0.1:6379
+          bench set-config -g redis_queue redis://127.0.0.1:6379
+          bench set-config -g redis_socketio redis://127.0.0.1:6379
+
+      - name: Check out governed EdgeSuite UI
+        uses: actions/checkout@v6
+        with:
+          repository: olayemigod/processedge-edge-suite-ui
+          ref: agent/reporting-standard-v1
+          token: ${{ secrets.EDGESUITE_UI_TOKEN }}
+          path: edgesuite-ui-source
+
+      - name: Fetch application set
+        working-directory: frappe-bench
+        run: |
+          bench get-app --branch version-16 --skip-assets https://github.com/frappe/erpnext.git
+          bench get-app --branch develop --skip-assets https://github.com/frappe/payments.git
+          bench get-app --skip-assets "$GITHUB_WORKSPACE/edgesuite-ui-source"
+          bench get-app --skip-assets "$GITHUB_WORKSPACE"
+          test "$(git -C apps/retailedge rev-parse HEAD)" = "$RETAILEDGE_CANDIDATE_SHA"
+
+      - name: Create browser QA site
+        working-directory: frappe-bench
+        run: |
+          bench new-site retail-browser.localhost             --db-host 127.0.0.1             --mariadb-root-password root             --admin-password admin             --no-mariadb-socket
+
+          bench --site retail-browser.localhost install-app payments
+          bench --site retail-browser.localhost install-app erpnext
+          bench --site retail-browser.localhost install-app edgesuite_ui
+          bench --site retail-browser.localhost install-app retailedge
+          bench --site retail-browser.localhost set-config allow_tests true
+          bench --site retail-browser.localhost migrate
+
+      - name: Seed browser personas
+        working-directory: frappe-bench
+        run: |
+          bench --site retail-browser.localhost execute retailedge.tests.rc3_browser_fixture.seed_rc3_personas
+          bench --site retail-browser.localhost clear-cache
+
+      - name: Build browser candidate assets
+        working-directory: frappe-bench
+        run: |
+          # This bench was intentionally created with --skip-assets while apps
+          # were fetched. Browser acceptance needs the complete Frappe/ERPNext
+          # Desk runtime as well as EdgeSuite UI and RetailEdge bundles.
+          bench build
+          bench --site retail-browser.localhost migrate
+
+          # Fail before Playwright if the native Desk shell was not built.
+          compgen -G "sites/assets/frappe/dist/js/desk.bundle*.js" > /dev/null
+          compgen -G "sites/assets/frappe/dist/css/desk.bundle*.css" > /dev/null
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save --package-lock=false @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start Frappe web server
+        working-directory: frappe-bench
+        run: |
+          echo "127.0.0.1 retail-browser.localhost" | sudo tee -a /etc/hosts
+          nohup bench serve --port 8000 --noreload > /tmp/retailedge-browser-server.log 2>&1 &
+          echo $! > /tmp/retailedge-browser-server.pid
+
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error "$RETAILEDGE_BASE_URL/login" > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          cat /tmp/retailedge-browser-server.log
+          exit 1
+
+      - name: Run RetailEdge RC3 browser persona acceptance
+        run: |
+          npx playwright test \
+            browser-tests/retailedge_mvp_smoke.spec.cjs \
+            browser-tests/retailedge_rc3_acceptance.spec.cjs \
+            --config=browser-tests/playwright.config.cjs
+
+      - name: Preserve browser QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retailedge-browser-persona-evidence
+          path: |
+            browser-tests/playwright-report
+            browser-tests/test-results
+            /tmp/retailedge-browser-server.log
+            frappe-bench/logs/web.log
+            frappe-bench/logs/web.error.log
+          if-no-files-found: ignore
+          retention-days: 7

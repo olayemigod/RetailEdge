@@ -61,8 +61,9 @@ class TestWorkflowReadiness(unittest.TestCase):
 		self.assertEqual(result["available_actions"], [])
 		self.assertIn("authorised user", result["message"])
 
+	@patch("retailedge.workflow_readiness._retailedge_cashier_workflow_enabled", return_value=True)
 	@patch("retailedge.workflow_readiness._get_active_workflow", return_value=None)
-	def test_cashier_expense_draft_exposes_retailedge_submit_lifecycle(self, _mock_workflow):
+	def test_cashier_expense_draft_exposes_retailedge_submit_lifecycle(self, _mock_workflow, _mock_enabled):
 		doc = _ExpenseDoc(docstatus=0, expense_status="Draft", ledger_status="Not Applicable")
 		result = get_workflow_readiness(doctype="RetailEdge Cashier Expense", doc=doc)
 
@@ -73,15 +74,29 @@ class TestWorkflowReadiness(unittest.TestCase):
 		self.assertEqual(result["available_actions"][0]["action"], "Submit")
 		self.assertIn("review and ledger posting", result["message"])
 
+	@patch("retailedge.workflow_readiness._retailedge_cashier_workflow_enabled", return_value=True)
 	@patch("retailedge.workflow_readiness._get_active_workflow", return_value=None)
 	@patch("retailedge.cashier_expense.user_is_reviewer", return_value=True)
-	def test_submitted_cashier_expense_exposes_review_actions(self, _mock_reviewer, _mock_workflow):
+	def test_submitted_cashier_expense_exposes_review_actions(self, _mock_reviewer, _mock_workflow, _mock_enabled):
 		doc = _ExpenseDoc(docstatus=1, expense_status="Submitted", ledger_status="Not Applicable")
 		result = get_workflow_readiness(doctype="RetailEdge Cashier Expense", doc=doc)
 
 		self.assertEqual([row["action"] for row in result["available_actions"]], ["Approve", "Reject"])
 		self.assertTrue(result["requires_action"])
 		self.assertIn("requires RetailEdge review", result["message"])
+
+	@patch("retailedge.workflow_readiness._retailedge_cashier_workflow_enabled", return_value=False)
+	@patch("retailedge.workflow_readiness._get_active_workflow", return_value=None)
+	def test_cashier_expense_without_enabled_retailedge_workflow_uses_normal_document_rules(
+		self, _mock_workflow, _mock_enabled
+	):
+		doc = _ExpenseDoc(docstatus=0, expense_status="Draft", ledger_status="Not Applicable")
+		result = get_workflow_readiness(doctype="RetailEdge Cashier Expense", doc=doc)
+
+		self.assertFalse(result["enabled"])
+		self.assertEqual(result["source"], "none")
+		self.assertEqual(result["available_actions"], [])
+
 
 	@patch("retailedge.workflow_readiness.frappe.get_all")
 	@patch("retailedge.workflow_readiness.frappe.db.exists", return_value=True)

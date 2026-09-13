@@ -7,7 +7,7 @@ from frappe import _
 from frappe.utils import flt, getdate
 
 from retailedge.advanced_payments import _require_payment_branch_field
-from retailedge.branch_context import validate_user_branch_access
+from retailedge.reporting_scope import validate_report_scope
 
 MAX_ROWS = 2000
 
@@ -20,11 +20,12 @@ def execute(filters: dict[str, Any] | None = None):
 	if not frappe.has_permission("Payment Entry", "read"):
 		frappe.throw(_("You do not have permission to read Payment Entries."), frappe.PermissionError)
 	if not frappe.has_permission("Company", "read", doc=company):
-		frappe.throw(_("You do not have permission to read Company {0}.").format(company), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to read Company {0}.").format(company), frappe.PermissionError
+		)
 
 	branch = str(filters.get("branch") or "").strip()
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+	branch_field, branch_filter = _payment_branch_scope(company=company, branch=branch)
 
 	query_filters: dict[str, Any] = {
 		"docstatus": 1,
@@ -44,9 +45,8 @@ def execute(filters: dict[str, Any] | None = None):
 	elif filters.get("to_date"):
 		query_filters["posting_date"] = ["<=", filters.to_date]
 
-	branch_field = _require_payment_branch_field(branch)
-	if branch and branch_field:
-		query_filters[branch_field] = branch
+	if branch_filter is not None:
+		query_filters[branch_field] = branch_filter
 
 	fields = [
 		"name",
@@ -91,18 +91,87 @@ def execute(filters: dict[str, Any] | None = None):
 		)
 
 	columns = [
-		{"fieldname": "payment_entry", "label": _("Payment Entry"), "fieldtype": "Link", "options": "Payment Entry", "width": 180},
+		{
+			"fieldname": "payment_entry",
+			"label": _("Payment Entry"),
+			"fieldtype": "Link",
+			"options": "Payment Entry",
+			"width": 180,
+		},
 		{"fieldname": "posting_date", "label": _("Posting Date"), "fieldtype": "Date", "width": 105},
-		{"fieldname": "customer", "label": _("Customer"), "fieldtype": "Link", "options": "Customer", "width": 180},
+		{
+			"fieldname": "customer",
+			"label": _("Customer"),
+			"fieldtype": "Link",
+			"options": "Customer",
+			"width": 180,
+		},
 		{"fieldname": "branch", "label": _("Branch"), "fieldtype": "Data", "width": 140},
 		{"fieldname": "currency", "label": _("Currency"), "fieldtype": "Data", "width": 85},
-		{"fieldname": "received_amount", "label": _("Receipt Amount"), "fieldtype": "Currency", "options": "currency", "width": 130},
-		{"fieldname": "allocated_amount", "label": _("Allocated"), "fieldtype": "Currency", "options": "currency", "width": 120},
-		{"fieldname": "available_amount", "label": _("Available Advance"), "fieldtype": "Currency", "options": "currency", "width": 140},
-		{"fieldname": "mode_of_payment", "label": _("Mode of Payment"), "fieldtype": "Link", "options": "Mode of Payment", "width": 130},
+		{
+			"fieldname": "received_amount",
+			"label": _("Receipt Amount"),
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 130,
+		},
+		{
+			"fieldname": "allocated_amount",
+			"label": _("Allocated"),
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 120,
+		},
+		{
+			"fieldname": "available_amount",
+			"label": _("Available Advance"),
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 140,
+		},
+		{
+			"fieldname": "mode_of_payment",
+			"label": _("Mode of Payment"),
+			"fieldtype": "Link",
+			"options": "Mode of Payment",
+			"width": 130,
+		},
 		{"fieldname": "reference_no", "label": _("Reference No"), "fieldtype": "Data", "width": 120},
 		{"fieldname": "reference_date", "label": _("Reference Date"), "fieldtype": "Date", "width": 105},
 	]
 
-	message = _("Showing current submitted customer receipts with unapplied value. Allocated is the already-consumed portion of each currently open receipt; fully consumed receipts are intentionally excluded.")
+	message = _(
+		"Showing current submitted customer receipts with unapplied value. Allocated is the already-consumed portion of each currently open receipt; fully consumed receipts are intentionally excluded."
+	)
 	return columns, rows, message
+
+
+def _payment_branch_scope(*, company: str, branch: str) -> tuple[str | None, Any]:
+	scope = validate_report_scope(
+		company=company,
+		branch=branch,
+		user=frappe.session.user,
+		require_branch_when_restricted=False,
+	)
+	restricted = bool(scope.get("restricted"))
+	allowed = list(
+		dict.fromkeys(
+			str(name or "").strip() for name in scope.get("allowed_branches") or [] if str(name or "").strip()
+		)
+	)
+	if restricted and not allowed:
+		frappe.throw(
+			_("Your Branch reporting access is not active for this Company."),
+			frappe.PermissionError,
+		)
+
+	# A restricted blank-Branch read still requires an attributable Payment Entry
+	# field so its authoritative allowed Branches can be applied safely.
+	branch_field = _require_payment_branch_field(branch or (allowed[0] if restricted else None))
+	if branch:
+		return branch_field, str(scope.get("branch") or branch)
+	if not restricted:
+		return branch_field, None
+	if len(allowed) == 1:
+		return branch_field, allowed[0]
+	return branch_field, ["in", allowed]

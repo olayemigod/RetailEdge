@@ -87,6 +87,12 @@
 			return wrapper._retailedgeBusinessHubBootPromise;
 		}
 
+		const mountedComponent = getMountedComponent(wrapper);
+		if (mountedComponent) {
+			enforceCreateVisibility(wrapper._retailedgeBusinessHubRoot?.[0]);
+			return Promise.resolve(wrapper._retailedgeBusinessHub);
+		}
+
 		wrapper._retailedgeBusinessHubBootPromise = mountBusinessHub(wrapper).finally(() => {
 			wrapper._retailedgeBusinessHubBootPromise = null;
 		});

@@ -121,7 +121,7 @@
 
 		<template #footer>
 			<div class="guided-invoice-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="openFullForm">
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
 					Open Full Form
 				</button>
 				<div class="guided-invoice-footer-actions">
@@ -195,6 +195,7 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
 	props: {
+		nativeFallbackEnabled: { type: Boolean, default: true },
 		open: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
@@ -293,7 +294,7 @@ export default {
 			this.$emit("close");
 		},
 		openFullForm() {
-			if (this.saving) return;
+			if (this.saving || !this.nativeFallbackEnabled) return;
 			this.$emit("open-native", "Sales Invoice");
 		},
 		async searchOptions(fieldname, query) {
@@ -348,6 +349,7 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
+			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			this.pricingCache.clear();
 			if (!branch || !this.values.company) return;
 			const token = ++this.cascadeToken;

@@ -22,25 +22,24 @@ def _is_assignable_user(
 	require_global_scope: bool,
 	require_owner_scope: bool,
 ) -> bool:
-	from retailedge.action_follow_up import _has_action_center_role, _has_owner_financial_access
-	from retailedge.branch_context import user_has_global_branch_access, validate_user_branch_access
+	from retailedge.action_follow_up import (
+		ASSIGNMENT_SCOPE_ALLOWED,
+		_assignment_scope_decision,
+		_has_action_center_role,
+	)
 
 	if not user or not _has_action_center_role(user):
 		return False
-	if require_owner_scope and not _has_owner_financial_access(user, company=company, branch=branch):
-		return False
-	if require_global_scope:
-		return bool(user_has_global_branch_access(user=user))
-	if branch:
-		return bool(
-			validate_user_branch_access(
-				branch,
-				user=user,
-				company=company or None,
-				throw=False,
-			).get("allowed")
+	return (
+		_assignment_scope_decision(
+			user,
+			company=company,
+			branch=branch,
+			require_global_scope=require_global_scope,
+			require_owner_scope=require_owner_scope,
 		)
-	return True
+		== ASSIGNMENT_SCOPE_ALLOWED
+	)
 
 
 @frappe.whitelist()
@@ -63,7 +62,9 @@ def get_assignable_users(
 	require_global_scope = bool(int(filters.get("require_global_scope") or 0))
 	# Existing UI already identifies company-level R9 warnings through the global-scope flag.
 	# Treat that flag as owner-financial scope too, while preserving legacy Action Centre queries.
-	require_owner_scope = bool(int(filters.get("require_owner_scope") or filters.get("require_global_scope") or 0))
+	require_owner_scope = bool(
+		int(filters.get("require_owner_scope") or filters.get("require_global_scope") or 0)
+	)
 	needle = f"%{str(txt or '').strip()}%"
 
 	query_filters: dict[str, Any] = {"enabled": 1, "user_type": "System User"}

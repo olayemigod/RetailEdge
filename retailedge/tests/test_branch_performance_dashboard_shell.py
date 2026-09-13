@@ -93,7 +93,8 @@ def test_dashboard_capability_matrix_reuses_reporting_master_switches():
 	assert '"scope_type": "dashboard"' in source
 	assert '"can_print": can_print' in source
 	assert '"can_export": can_export' in source
-	assert "validate_user_branch_access" in source
+	assert "get_operational_branch_scope" in source
+	assert "validate_operating_branch" in source
 	assert "ignore_permissions" not in source
 
 
@@ -121,8 +122,7 @@ def test_primary_navigation_routes_branch_performance_to_dashboard_page():
 	edge_navigation = EDGE_NAVIGATION.read_text()
 	assert (
 		'{"label": "Branch Performance", "target_type": "Page", '
-		'"target": "branch-performance-dashboard", "icon": "chart"}'
-		in edge_navigation
+		'"target": "branch-performance-dashboard", "icon": "chart"}' in edge_navigation
 	)
 
 	workspace = json.loads(WORKSPACE.read_text())

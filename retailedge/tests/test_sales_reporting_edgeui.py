@@ -36,7 +36,11 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 	def test_pages_are_role_gated_and_use_business_titles(self):
 		cases = (
 			(SALES_BY_ITEM_PAGE / "sales_by_item.json", "sales-by-item", "Sales by Item"),
-			(INVOICE_REGISTER_PAGE / "sales_invoice_register.json", "sales-invoice-register", "Sales Invoice Register"),
+			(
+				INVOICE_REGISTER_PAGE / "sales_invoice_register.json",
+				"sales-invoice-register",
+				"Sales Invoice Register",
+			),
 		)
 		for path, name, title in cases:
 			payload = json.loads(self.read(path))
@@ -61,8 +65,9 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 			"limit=MAX_INVOICE_SCAN_ROWS + 1",
 			'"parent": ["in", invoice_names]',
 			"limit=MAX_ITEM_SCAN_ROWS + 1",
-			"validate_user_branch_access",
-			"frappe.has_permission(\"Sales Invoice\", \"read\")",
+			"get_operational_branch_scope",
+			"validate_operating_branch",
+			'frappe.has_permission("Sales Invoice", "read")',
 		):
 			self.assertIn(contract, source)
 		self.assertNotIn("ignore_permissions=True", source)
@@ -90,7 +95,7 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 		component = self.read(COMPONENT)
 		for contract in (
 			"EdgeExportMenu",
-			":loadDataset=\"loadExportDataset\"",
+			':loadDataset="loadExportDataset"',
 			'providerKey: "sales-by-item"',
 			'providerKey: "sales-invoice-register"',
 			"window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey)",
@@ -98,7 +103,7 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 			"search_sales_reporting_options",
 			"resolve_branch_warehouse_selection",
 			':pageSizes="[25, 50, 100]"',
-			":hideNativeSidebar=\"true\"",
+			':hideNativeSidebar="true"',
 		):
 			self.assertIn(contract, component)
 		for forbidden in ("new Blob", "createObjectURL", "text/csv", "application/vnd", "window.print"):
@@ -133,7 +138,10 @@ class TestSalesReportingEdgeUI(unittest.TestCase):
 				"renderLoadError",
 			):
 				self.assertIn(contract, loader)
-			self.assertLess(loader.index("await requireAsync(EDGEUI_ASSET)"), loader.index("await requireAsync(SALES_REPORTING_ASSET)"))
+			self.assertLess(
+				loader.index("await requireAsync(EDGEUI_ASSET)"),
+				loader.index("await requireAsync(SALES_REPORTING_ASSET)"),
+			)
 
 		bundle = self.read(BUNDLE)
 		self.assertIn("window.EdgeSuiteUI", bundle)

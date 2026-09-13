@@ -1,4 +1,5 @@
 const EDGEUI_ASSET = "edgeui.bundle.js";
+const RESTRICTED_GUARD_ASSET = "retailedge_edgesuite_only_operational_guard.bundle.js";
 const SELLING_ASSET = "professional_selling.bundle.js";
 const PAGE_ROUTE = "professional-selling";
 const PAGE_TITLE = "Professional Selling";
@@ -30,6 +31,20 @@ function hideNativePageSidebar(wrapper) {
 	}
 }
 
+function installRestrictedOperationalGuard() {
+	if (typeof window.retailedgeInstallEdgesuiteOnlyOperationalGuard !== "function") {
+		throw new Error("RetailEdge EdgeSuite-only operational guard is unavailable.");
+	}
+	window.retailedgeInstallEdgesuiteOnlyOperationalGuard({
+		pageRoute: PAGE_ROUTE,
+		rootSelector: ".retailedge-professional-selling-root",
+		nativeDoctypes: ["Quotation", "Sales Order", "Delivery Note", "Sales Invoice"],
+		nativePathSlugs: ["quotation", "sales-order", "delivery-note", "sales-invoice"],
+		hiddenButtonLabels: ["View Records", "Open Full Form"],
+		neutralizeSelectors: [".recent-row"],
+	});
+}
+
 function renderLoadError(wrapper, error) {
 	const node = document.createElement("div");
 	node.className = "professional-selling-load-error alert alert-danger p-6 text-center";
@@ -53,6 +68,8 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
 		if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
+		await requireAsync(RESTRICTED_GUARD_ASSET);
+		installRestrictedOperationalGuard();
 		await requireAsync(SELLING_ASSET);
 		if (typeof window.mountRetailEdgeProfessionalSelling !== "function") throw new Error("Professional Selling bundle is unavailable.");
 		bootLoading.remove();
@@ -68,5 +85,6 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
 	hideNativePageSidebar(wrapper);
+	installRestrictedOperationalGuard();
 	window.dispatchEvent(new CustomEvent("retailedge-professional-selling-page-show"));
 };

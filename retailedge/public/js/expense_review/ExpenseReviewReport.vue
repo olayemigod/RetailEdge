@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="handleCellClick"
 		>
 			<template #filters>
@@ -42,8 +44,8 @@
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.cashier" :selectedLabel="cashierLabel" label="Cashier" placeholder="All cashiers" :searcher="cashierSearch" @select="onCashierSelected" @clear="clearCashier" />
 					<EdgeLinkField v-model="filters.expense_category" label="Expense Category" placeholder="All categories" :searcher="categorySearch" />
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
+					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onReviewDateChange" /></label>
+					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onReviewDateChange" /></label>
 					<label class="edge-field"><span class="edge-field-label">Review Status</span><select v-model="filters.daily_audit_inclusion_status" class="edge-input"><option value="">All</option><option value="Pending Review">Pending Review</option><option value="Included">Included</option><option value="Excluded">Excluded</option><option value="Needs Clarification">Needs Clarification</option></select></label>
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
@@ -79,7 +81,7 @@ export default {
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			rows: [], columns: [], summary: [], pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canReview: false, currentPage: 1,
+			rows: [], columns: [], summary: [], reportSort: null, pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", cashierLabel: "", canReview: false, canUseNativeDesk: false, currentPage: 1,
 			filters: { company: "", branch: "", cashier: "", expense_category: "", expense_status: "", daily_audit_inclusion_status: "Pending Review", posting_ready: "", from_date: "", to_date: "", page_size: 50 },
 			expenseStatuses: ["Draft", "Submitted", "Pending Ledger", "Rejected", "Posted", "Cancelled"],
 		};
@@ -87,7 +89,7 @@ export default {
 	computed: {
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 5000); },
-		reportColumns() { return (this.columns || []).map((column) => ({ ...column, fieldtype: column.fieldtype || "Data", clickable: ["name", "cashier", "expense_category", "review_action"].includes(column.fieldname) })); },
+		reportColumns() { return (this.columns || []).map((column) => ({ ...column, fieldtype: column.fieldtype || "Data", clickable: column.fieldname === "review_action" ? this.canReview : ["name", "expense_category"].includes(column.fieldname) || (this.canUseNativeDesk && column.fieldname === "cashier") })); },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
@@ -95,20 +97,23 @@ export default {
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {
-				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.expense_review.get_expense_review_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canReview = Boolean(context.can_review); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canReview = Boolean(context.can_review); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Expense Review controls."); }
 			finally { this.metadataLoading = false; }
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.expense_review.search_expense_review_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); else if (item.target_type === "URL" && item.target) window.location.assign(item.target); },
+		hasPageTarget(target) { return Boolean(target && this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target)); },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.expense_review.search_expense_review_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, from_date: this.filters.from_date, to_date: this.filters.to_date }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, cashierSearch(txt) { return this.searchOptions("cashier", txt); }, categorySearch(txt) { return this.searchOptions("expense_category", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
-		onBranchSelected(option) { this.filters.branch = option.value; this.branchName = option.label || option.value; this.currentPage = 1; }, clearBranch() { this.filters.branch = ""; this.branchName = ""; this.currentPage = 1; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.clearCashier(); this.branchName = ""; this.currentPage = 1; },
+		onBranchSelected(option) { this.filters.branch = option.value; this.clearCashier(); this.branchName = option.label || option.value; this.currentPage = 1; },
+		clearBranch() { this.filters.branch = ""; this.clearCashier(); this.branchName = ""; this.currentPage = 1; },
+		onReviewDateChange() { this.clearCashier(); this.currentPage = 1; },
 		onCashierSelected(option) { this.filters.cashier = option.value; this.cashierLabel = option.label || option.value; this.currentPage = 1; }, clearCashier() { this.filters.cashier = ""; this.cashierLabel = ""; this.currentPage = 1; },
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; return filters; },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
@@ -116,13 +121,14 @@ export default {
 			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The shared EdgeSuite Expense Review provider is unavailable."; return; }
 			this.loading = true; this.error = "";
 			try {
-				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
-				this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.scan = result.metadata?.scan || {}; this.canReview = Boolean(result.metadata?.can_review ?? this.canReview); const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
+				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
+				this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; this.canReview = Boolean(result.metadata?.can_review ?? this.canReview); const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
 			} catch (error) { this.rows = []; this.columns = []; this.summary = []; this.error = errorMessage(error, "Expense Review failed to load."); }
 			finally { this.loading = false; }
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); }, setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); }, rowKey(row, index) { return row.name || `expense-review:${index}`; },
-		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") frappe.set_route("Form", "RetailEdge Cashier Expense", value); else if (column.fieldname === "cashier") frappe.set_route("Form", "User", value); else if (column.fieldname === "expense_category") frappe.set_route("Form", "RetailEdge Expense Category", value); else if (column.fieldname === "review_action") this.openReviewDialog(row); },
+		handleCellClick(payload) { const column = payload?.column; const row = payload?.row; if (!column || !row) return; if (column.fieldname === "review_action") { this.openReviewDialog(row); return; } const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name" && this.hasPageTarget("expense-register")) { frappe.route_options = { expense_name: value }; frappe.set_route("expense-register"); return; } if (column.fieldname === "expense_category" && this.hasPageTarget("retailedge-setup")) { frappe.route_options = { setup_resource: "expense-categories", expense_category: value }; frappe.set_route("retailedge-setup"); return; } if (column.fieldname === "cashier" && this.canUseNativeDesk) frappe.set_route("Form", "User", value); },
 		openReviewDialog(row) {
 			if (!this.canReview) { frappe.msgprint({ title: __("Read-only access"), message: __("You do not have reviewer permission for cashier expense actions."), indicator: "orange" }); return; }
 			frappe.prompt([

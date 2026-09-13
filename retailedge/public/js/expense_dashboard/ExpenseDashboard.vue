@@ -56,13 +56,13 @@
 							<span>{{ periodContext.mtd?.label || "Month to Date" }}</span>
 							<strong>{{ money(periodContext.mtd?.total_expenses) }}</strong>
 							<small>{{ periodContext.mtd?.expense_count || 0 }} expenses · avg {{ money(periodContext.mtd?.average_expense) }}</small>
-							<small>{{ periodContext.mtd?.from_date || "—" }} to {{ periodContext.mtd?.to_date || "—" }}</small>
+							<small>{{ formatDate(periodContext.mtd?.from_date) }} to {{ formatDate(periodContext.mtd?.to_date) }}</small>
 						</div>
 						<div class="expense-period-card">
 							<span>{{ periodContext.ytd?.label || "Calendar Year to Date" }}</span>
 							<strong>{{ money(periodContext.ytd?.total_expenses) }}</strong>
 							<small>{{ periodContext.ytd?.expense_count || 0 }} expenses · avg {{ money(periodContext.ytd?.average_expense) }}</small>
-							<small>{{ periodContext.ytd?.from_date || "—" }} to {{ periodContext.ytd?.to_date || "—" }}</small>
+							<small>{{ formatDate(periodContext.ytd?.from_date) }} to {{ formatDate(periodContext.ytd?.to_date) }}</small>
 						</div>
 					</div>
 				</EdgeDashboardSection>
@@ -127,8 +127,8 @@
 
 				<EdgeDashboardSection title="Recent Expenses" description="Latest rows from the same permission-aware Expense Register dataset." span="2">
 					<div class="expense-recent-list">
-						<button v-for="row in recentExpenses" :key="row.name" class="expense-recent-row" type="button" @click="openExpense(row.name)">
-							<span><strong>{{ row.expense_category || "Uncategorised" }}</strong><small>{{ row.expense_date }} · {{ row.branch || "No branch" }}<template v-if="row.cashier"> · {{ row.cashier }}</template></small></span>
+						<button v-for="row in recentExpenses" :key="row.name" class="expense-recent-row" type="button" @click="openExpense(row)">
+							<span><strong>{{ row.expense_category || "Uncategorised" }}</strong><small>{{ formatDate(row.expense_date) }} · {{ row.branch || "No branch" }}<template v-if="row.cashier"> · {{ row.cashier }}</template></small></span>
 							<strong>{{ money(row.amount) }}</strong>
 						</button>
 					</div>
@@ -158,8 +158,8 @@ export default {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			exportBusy: false, printBusy: false, capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(), headlineSummary: [], attention: [], breakdowns: {}, comparison: {}, recentExpenses: [], metadata: {},
-			budgetInsight: { available: false, reason: "", category_targets: [] }, periodContext: { mtd: {}, ytd: {}, metadata: {} }, menuItems: [], tenantName: "", userName: "",
-			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "" },
+			budgetInsight: { available: false, reason: "", category_targets: [] }, periodContext: { mtd: {}, ytd: {}, metadata: {} }, menuItems: [], tenantName: "", userName: "", canUseNativeDesk: false,
+			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "", view_mode: "consolidated", include_unposted_cashier_expenses: 0 },
 		};
 	},
 	computed: {
@@ -176,8 +176,9 @@ export default {
 		},
 		budgetedCategories() { return (this.budgetInsight.category_targets || []).filter((row) => row.actual || row.target || row.ambiguous).slice(0, 10); },
 		periodContextDescription() {
-			const anchor = this.periodContext.anchor_date || this.filters.to_date || "the selected To Date";
-			return `Month-to-date and calendar-year-to-date spend as of ${anchor}, using the same branch/category/status permissions as Expense Register.`;
+			const anchor = this.periodContext.anchor_date || this.filters.to_date || "";
+			const displayAnchor = anchor ? this.formatDate(anchor) : "the selected To Date";
+			return `Month-to-date and calendar-year-to-date spend as of ${displayAnchor}, using the same branch/category/status permissions as Expense Register.`;
 		},
 		budgetDescription() {
 			if (!this.budgetInsight.available) return "Native ERPNext Budget targets are shown only when your permissions and account/cost-centre mappings allow a reliable comparison.";
@@ -208,13 +209,15 @@ export default {
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; },
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.expense_dashboard.get_expense_dashboard_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.capabilities = context.capabilities || this.capabilities;
-				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
+				this.filters.view_mode = "consolidated"; this.filters.include_unposted_cashier_expenses = 0;
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Expenses Dashboard controls."); }
 			finally { this.metadataLoading = false; }
@@ -239,9 +242,10 @@ export default {
 		async handlePrint() { if (!this.capabilities.can_print) return; this.printBusy = true; try { await printDashboard(DASHBOARD_KEY, this.filters); } finally { this.printBusy = false; } },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
+		hasPageTarget(target) { return Boolean(target && this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target)); },
+		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		openRoute(route) { if (route) window.location.assign(route); },
-		openExpense(name) { if (name) frappe.set_route("Form", "RetailEdge Cashier Expense", name); },
+		openExpense(row) { if (!row) return; if (row.source_doctype === "RetailEdge Business Expense" && this.hasPageTarget("business-expenses")) { frappe.route_options = { business_expense: row.source_reference || "" }; frappe.set_route("business-expenses"); return; } if (row.source_doctype === "Purchase Invoice" && this.hasPageTarget("purchase-register")) { frappe.route_options = { purchase_invoice: row.source_reference || "" }; frappe.set_route("purchase-register"); return; } if (this.canUseNativeDesk && row.source_doctype && row.source_reference) frappe.set_route("Form", row.source_doctype, row.source_reference); },
 		money(value) { try { return frappe.format(value || 0, { fieldtype: "Currency" }); } catch (_error) { return value ?? "—"; } },
 		percent(value) { if (value == null) return "—"; return `${Number(value).toFixed(1)}%`; },
 		formatValue(value, datatype) { if (datatype === "Percent") return this.percent(value); try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },

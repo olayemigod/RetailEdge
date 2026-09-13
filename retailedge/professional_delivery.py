@@ -7,10 +7,14 @@ from frappe import _
 
 from erpnext.selling.doctype.sales_order.sales_order import make_delivery_note as erpnext_make_delivery_note
 
-from retailedge.branch_context import resolve_branch_from_warehouse, validate_user_branch_access
+from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_quotation import _validate_shipping_rule
-from retailedge.professional_selling import _assert_read, _permission
+from retailedge.professional_selling import (
+	_assert_read,
+	_permission,
+	_validate_stored_operational_branch,
+)
 
 
 def _source_branch(doc) -> str:
@@ -23,9 +27,11 @@ def _validate_source_against_operating_context(source) -> tuple[str, str]:
 		frappe.throw(_("The Sales Order has no Company."))
 	_assert_read("Company", company)
 
-	branch = _source_branch(source)
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+	branch = _validate_stored_operational_branch(
+		company=company,
+		branch=_source_branch(source),
+		label=_("Submitted Sales Order"),
+	)
 
 	operating = get_operating_context() or {}
 	operating_company = str(operating.get("company") or "").strip()
@@ -54,7 +60,11 @@ def _validate_mapped_delivery_stock_context(target, *, company: str, source_bran
 		resolved = resolve_branch_from_warehouse(warehouse, company=company)
 		warehouse_branch = str(resolved.get("branch") or "").strip()
 		if warehouse_branch:
-			validate_user_branch_access(warehouse_branch, user=frappe.session.user, company=company, throw=True)
+			warehouse_branch = _validate_stored_operational_branch(
+				company=company,
+				branch=warehouse_branch,
+				label=_("Delivery Stock Location"),
+			)
 			resolved_branches.add(warehouse_branch)
 
 	if len(resolved_branches) > 1:

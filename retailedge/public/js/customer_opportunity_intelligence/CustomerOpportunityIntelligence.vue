@@ -62,8 +62,8 @@
 			</template>
 
 			<template #resultMeta>
-				<span v-if="scope.current_from_date && scope.current_to_date">Current: {{ scope.current_from_date }} to {{ scope.current_to_date }}</span>
-				<span v-if="scope.prior_from_date && scope.prior_to_date">Prior: {{ scope.prior_from_date }} to {{ scope.prior_to_date }}</span>
+				<span v-if="scope.current_from_date && scope.current_to_date">Current: {{ formatDate(scope.current_from_date) }} to {{ formatDate(scope.current_to_date) }}</span>
+				<span v-if="scope.prior_from_date && scope.prior_to_date">Prior: {{ formatDate(scope.prior_from_date) }} to {{ formatDate(scope.prior_to_date) }}</span>
 				<span>Threshold: {{ scope.change_threshold_percent || filters.change_threshold_percent }}%</span>
 				<span>Signals describe observed comparable-period behaviour; RetailEdge does not call these customers churned</span>
 				<span>Outstanding and overdue values are current ERPNext receivable exposure</span>
@@ -103,6 +103,7 @@ export default {
 			scope: {},
 			metadata: {},
 			menuItems: [],
+			canUseNativeDesk: false,
 			tenantName: "",
 			branchName: "",
 			userName: "",
@@ -167,6 +168,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
@@ -184,6 +186,7 @@ export default {
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load retention and opportunity controls.");
@@ -206,6 +209,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");

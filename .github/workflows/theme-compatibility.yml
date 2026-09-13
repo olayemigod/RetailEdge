@@ -1,6 +1,9 @@
 name: RetailEdge Theme Compatibility
 
 on:
+  push:
+    branches:
+      - qa/retailedge-reconciled-20260902
   pull_request:
     paths:
       - "retailedge/public/css/**"

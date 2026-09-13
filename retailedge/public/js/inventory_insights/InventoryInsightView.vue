@@ -53,9 +53,11 @@
 					v-if="isTransferView && selectedRow"
 					type="button"
 					class="edge-button edge-button--primary"
+					:disabled="selectedRow.requires_full_stock_entry && !canUseNativeDesk"
+					:title="selectedRow.requires_full_stock_entry && !canUseNativeDesk ? 'Advanced workflow: Native Desk access is required for this transfer' : ''"
 					@click="openSelectedTransferWorkflow"
 				>
-					{{ selectedRow.requires_full_stock_entry ? "Open Stock Entry" : "Open Guided Transfer" }}
+					{{ selectedRow.requires_full_stock_entry ? (canUseNativeDesk ? "Open Stock Entry" : "Advanced: Open Stock Entry") : "Open Guided Transfer" }}
 				</button>
 			</template>
 
@@ -97,7 +99,7 @@
 				<span v-if="isAgeingView && scope.age_ranges">Bands: {{ scope.age_ranges.join ? scope.age_ranges.join(", ") : scope.age_ranges }} days · aged threshold {{ scope.aged_threshold_days }} days</span>
 				<span v-if="isTransferView">Suggestions are advisory and never create or submit Stock Entries automatically</span>
 				<span v-if="isProfitabilityView">Profitability classifications come from R8; R10 does not recalculate margin</span>
-				<span v-if="isProfitabilityView && scope.from_date && scope.to_date">Profitability period: {{ scope.from_date }} to {{ scope.to_date }}</span>
+				<span v-if="isProfitabilityView && scope.from_date && scope.to_date">Profitability period: {{ formatDate(scope.from_date) }} to {{ formatDate(scope.to_date) }}</span>
 				<span v-if="isTransferView && selectedRow">Selected: {{ selectedRow.item_code }} · {{ selectedRow.source_warehouse }} → {{ selectedRow.target_warehouse }} · suggested {{ selectedRow.suggested_transfer_qty }}</span>
 			</template>
 		</EdgeReportShell>
@@ -106,6 +108,7 @@
 			v-if="isTransferView"
 			:open="guidedTransferOpen"
 			:prefill="guidedTransferPrefill"
+			:nativeFallbackEnabled="canUseNativeDesk"
 			@close="guidedTransferOpen = false"
 			@saved="handleGuidedTransferSaved"
 			@open-native="openNativeStockEntry"
@@ -197,6 +200,7 @@ export default {
 			tenantName: "",
 			branchName: "",
 			userName: "",
+			canUseNativeDesk: false,
 			itemLabel: "",
 			selectedRow: null,
 			guidedTransferOpen: false,
@@ -238,7 +242,7 @@ export default {
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: ["item_code", "source_warehouse", "target_warehouse"].includes(column.fieldname),
+				clickable: this.canUseNativeDesk && ["item_code", "source_warehouse", "target_warehouse"].includes(column.fieldname),
 				sortable: true,
 			}));
 		},
@@ -307,6 +311,7 @@ export default {
 	},
 	mounted() { this.fetchMetadata(); },
 	methods: {
+		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
@@ -330,6 +335,7 @@ export default {
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				await this.fetchExportCapabilities();
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
@@ -372,6 +378,7 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
@@ -487,7 +494,7 @@ export default {
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.selectedRow = null; this.fetchData(); },
 		selectRow(row) { if (this.isTransferView) this.selectedRow = row || null; },
 		openReportCell(payload) {
-			if (!payload?.value) return;
+			if (!this.canUseNativeDesk || !payload?.value) return;
 			if (payload.column?.fieldname === "item_code") window.open(`/app/item/${encodeURIComponent(payload.value)}`, "_blank", "noopener,noreferrer");
 			if (["source_warehouse", "target_warehouse"].includes(payload.column?.fieldname)) window.open(`/app/warehouse/${encodeURIComponent(payload.value)}`, "_blank", "noopener,noreferrer");
 		},
@@ -496,6 +503,7 @@ export default {
 			const row = this.selectedRow;
 			if (!row) return;
 			if (row.requires_full_stock_entry) {
+				if (!this.canUseNativeDesk) return;
 				this.openNativeStockEntry();
 				return;
 			}
@@ -504,10 +512,11 @@ export default {
 		handleGuidedTransferSaved(result) {
 			this.guidedTransferOpen = false;
 			if (!result?.name) return;
-			frappe.set_route("Form", result.doctype || "Stock Entry", result.name);
+			if (this.canUseNativeDesk) frappe.set_route("Form", result.doctype || "Stock Entry", result.name);
 			frappe.show_alert?.({ message: `Stock Transfer ${result.name} saved as Draft`, indicator: "green" });
 		},
 		openNativeStockEntry() {
+			if (!this.canUseNativeDesk) return;
 			this.guidedTransferOpen = false;
 			window.open("/app/stock-entry", "_blank", "noopener,noreferrer");
 		},

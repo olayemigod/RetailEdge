@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import frappe
 from frappe.utils import flt, getdate, now_datetime
 
-from retailedge.branch_context import get_branch_query_filters, has_field, resolve_retailedge_branch_context
+from retailedge.branch_context import has_field, resolve_retailedge_branch_context
 from retailedge.cashier_context import (
 	_coerce_doc,
 	_get_doc_value,
@@ -16,6 +16,13 @@ from retailedge.cashier_context import (
 )
 from retailedge.cashier_expense import user_has_any_role
 from retailedge.cashier_expense_audit import get_cashier_expenses_for_daily_audit
+from retailedge.daily_sales_audit_read_scope import (
+	apply_daily_sales_audit_query_branch_scope,
+	get_daily_sales_audit_branch_options,
+	get_daily_sales_audit_branch_scope,
+	get_daily_sales_audit_reader,
+	validate_daily_sales_audit_read_context,
+)
 from retailedge.utils.settings import get_retailedge_settings
 
 
@@ -52,7 +59,14 @@ NON_CANCELLED_AUDIT_STATUSES = {
 	"Reopened",
 }
 
-BRANCH_FIELD_CANDIDATES = ["branch", "set_branch", "service_branch", "retail_branch", "default_branch"]
+BRANCH_FIELD_CANDIDATES = [
+	"branch",
+	"retailedge_branch",
+	"set_branch",
+	"service_branch",
+	"retail_branch",
+	"default_branch",
+]
 POS_PROFILE_FIELD_CANDIDATES = ["pos_profile"]
 CASHIER_FIELD_CANDIDATES = ["cashier", "user", "owner"]
 OPENING_SHIFT_LINK_CANDIDATES = ["pos_opening_shift", "opening_shift", "linked_pos_opening_shift"]
@@ -107,7 +121,7 @@ def resolve_daily_sales_audit_context_from_selection(filters=None):
 		cashier=filters.get("cashier"),
 		pos_opening_shift=filters.get("pos_opening_shift"),
 		pos_closing_shift=filters.get("pos_closing_shift"),
-		user=filters.get("cashier"),
+		user=get_daily_sales_audit_reader(),
 	)
 	result = {key: filters.get(key) for key in _context_keys()}
 	result["source_map"] = dict(branch_context.get("source_map") or {})
@@ -176,7 +190,15 @@ def resolve_daily_sales_audit_context_from_selection(filters=None):
 				_apply_context_from_pos_opening_shift(result, opening_doc, overwrite=False)
 
 	if result.get("pos_opening_shift") and not result.get("pos_closing_shift"):
-		closing_candidates = _list_closing_shifts({"pos_opening_shift": result.get("pos_opening_shift")})
+		closing_candidates = _list_closing_shifts(
+			{
+				"company": result.get("company") or filters.get("company"),
+				"branch": result.get("branch") or filters.get("branch"),
+				"pos_profile": result.get("pos_profile") or filters.get("pos_profile"),
+				"cashier": result.get("cashier") or filters.get("cashier"),
+				"pos_opening_shift": result.get("pos_opening_shift"),
+			}
+		)
 		if len(closing_candidates) == 1:
 			result["pos_closing_shift"] = closing_candidates[0]
 			result["source_map"]["pos_closing_shift"] = "Opening Shift Match"
@@ -200,7 +222,11 @@ def resolve_daily_sales_audit_context_from_selection(filters=None):
 	if not result.get("audit_date"):
 		result["audit_date"] = filters.get("audit_date")
 
-	return result
+	return validate_daily_sales_audit_read_context(
+		result,
+		selection=filters,
+		require_branch=False,
+	)
 
 
 def get_daily_sales_audit_settings():
@@ -248,6 +274,7 @@ def assert_daily_sales_audit_reviewer(user: str | None = None):
 
 def get_daily_sales_audit_context(filters=None):
 	filters = _coerce_filters(filters)
+	selection = dict(filters)
 	resolved_filters = resolve_daily_sales_audit_context_from_selection(filters)
 	if (
 		(filters.get("pos_opening_shift") or filters.get("pos_closing_shift"))
@@ -271,11 +298,16 @@ def get_daily_sales_audit_context(filters=None):
 		cashier=filters.get("cashier"),
 		pos_opening_shift=filters.get("pos_opening_shift"),
 		pos_closing_shift=filters.get("pos_closing_shift"),
-		user=filters.get("cashier"),
+		user=get_daily_sales_audit_reader(),
 	)
 	for key in ("company", "branch", "pos_profile", "cashier", "pos_opening_shift", "pos_closing_shift"):
 		if branch_context.get(key) and not filters.get(key):
 			filters[key] = branch_context.get(key)
+	filters = validate_daily_sales_audit_read_context(
+		filters,
+		selection=selection,
+		require_branch=True,
+	)
 	settings = get_daily_sales_audit_settings()
 	context = {
 		"company": filters.get("company"),
@@ -872,13 +904,19 @@ def _build_query_filters(doctype, filters):
 	if not meta:
 		return None
 	query_filters = {}
-	branch_scope = get_branch_query_filters(
-		doctype,
-		user=filters.get("cashier") or getattr(getattr(frappe, "session", None), "user", "Administrator"),
-		company=filters.get("company"),
-		branch=filters.get("branch"),
+	branch_field = _find_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+	pos_profile_scope_field = (
+		"name" if doctype == "POS Profile" else _find_existing_field(doctype, POS_PROFILE_FIELD_CANDIDATES)
 	)
-	query_filters.update(branch_scope.get("filters") or {})
+	branch_scope = apply_daily_sales_audit_query_branch_scope(
+		doctype,
+		filters,
+		branch_field=branch_field,
+		pos_profile_scope_field=pos_profile_scope_field,
+	)
+	if branch_scope is None:
+		return None
+	query_filters.update(branch_scope)
 	if meta.has_field("docstatus"):
 		if doctype in {"POS Opening Shift", "POS Closing Shift"}:
 			query_filters["docstatus"] = 1
@@ -888,13 +926,14 @@ def _build_query_filters(doctype, filters):
 	if filters.get("company") and meta.has_field("company"):
 		query_filters["company"] = filters.get("company")
 	if filters.get("pos_profile"):
-		pos_profile_field = _find_existing_field(doctype, POS_PROFILE_FIELD_CANDIDATES)
-		if pos_profile_field:
-			query_filters[pos_profile_field] = filters.get("pos_profile")
-	if filters.get("branch"):
-		branch_field = _find_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
-		if branch_field and branch_field not in query_filters:
-			query_filters[branch_field] = filters.get("branch")
+		if doctype == "POS Profile":
+			query_filters["name"] = filters.get("pos_profile")
+		else:
+			pos_profile_field = _find_existing_field(doctype, POS_PROFILE_FIELD_CANDIDATES)
+			if pos_profile_field:
+				query_filters[pos_profile_field] = filters.get("pos_profile")
+	if filters.get("branch") and branch_field and branch_field not in query_filters:
+		query_filters[branch_field] = filters.get("branch")
 	if filters.get("cashier"):
 		cashier_field = _find_existing_field(doctype, CASHIER_FIELD_CANDIDATES)
 		if cashier_field:
@@ -923,24 +962,27 @@ def _list_companies(filters):
 
 
 def _list_branches(filters):
-	if not _has_doctype("Branch"):
+	company = filters.get("company")
+	if not company:
 		return []
-	query_filters = {}
-	branch_meta = _get_meta("Branch")
-	if branch_meta and branch_meta.has_field("company") and filters.get("company"):
-		query_filters["company"] = filters.get("company")
-	try:
-		return [row.name for row in frappe.get_all("Branch", filters=query_filters, fields=["name"], limit_page_length=0, order_by="name asc")]
-	except Exception:
-		return []
+	branches = get_daily_sales_audit_branch_options(company)
+	selected_branch = filters.get("branch")
+	if not selected_branch:
+		return branches
+	validated = validate_daily_sales_audit_read_context(
+		{"company": company, "branch": selected_branch},
+		selection=filters,
+		require_branch=False,
+	)
+	return [validated.get("branch")] if validated.get("branch") in branches else []
 
 
 def _list_pos_profiles(filters):
 	if not _has_doctype("POS Profile"):
 		return []
-	if filters.get("branch") and not _find_existing_field("POS Profile", BRANCH_FIELD_CANDIDATES):
-		return _list_pos_profiles_from_shift_context(filters)
-	query_filters = _build_query_filters("POS Profile", filters) or {}
+	query_filters = _build_query_filters("POS Profile", filters)
+	if query_filters is None:
+		return []
 	try:
 		return [
 			row.name
@@ -1033,9 +1075,14 @@ def _list_closing_shifts(filters):
 
 
 def _list_cashiers(filters):
-	profile_users = _list_pos_profile_users(filters.get("pos_profile"))
-	if profile_users:
-		return profile_users
+	profile = filters.get("pos_profile")
+	if profile:
+		scoped_profiles = _list_pos_profiles({key: value for key, value in filters.items() if key != "cashier"})
+		if profile not in scoped_profiles:
+			return []
+		profile_users = _list_pos_profile_users(profile)
+		if profile_users:
+			return profile_users
 
 	cashiers = []
 	seen = set()
@@ -1086,26 +1133,7 @@ def _list_pos_profile_users(pos_profile):
 @frappe.validate_and_sanitize_search_inputs
 def search_daily_sales_audit_cashiers(doctype, txt, searchfield, start, page_len, filters):
 	filters = _coerce_filters(filters)
-	users = _list_pos_profile_users(filters.get("pos_profile"))
-	if users:
-		return _search_named_values(users, txt, start, page_len)
-
-	user_filters = {}
-	user_meta = _get_meta("User")
-	if user_meta and user_meta.has_field("enabled"):
-		user_filters["enabled"] = 1
-	if txt:
-		user_filters["name"] = ["like", f"%{txt}%"]
-	rows = frappe.get_all(
-		"User",
-		filters=user_filters,
-		fields=["name"],
-		limit_start=start,
-		limit_page_length=page_len,
-		order_by="name asc",
-	)
-	values = [row.name for row in rows if _matches_search(row.name, txt)]
-	return [(value,) for value in values[:page_len]]
+	return _search_named_values(_list_cashiers(filters), txt, start, page_len)
 
 
 @frappe.whitelist()
@@ -1139,7 +1167,9 @@ def _search_daily_sales_audit_shifts(shift_doctype, txt, start, page_len, filter
 	if not _has_doctype(shift_doctype):
 		return []
 
-	query_filters = _build_query_filters(shift_doctype, filters) or {}
+	query_filters = _build_query_filters(shift_doctype, filters)
+	if query_filters is None:
+		return []
 	status_field = _find_existing_field(shift_doctype, ["status"])
 	if status_field and exclude_statuses:
 		query_filters[status_field] = ["not in", list(exclude_statuses)]

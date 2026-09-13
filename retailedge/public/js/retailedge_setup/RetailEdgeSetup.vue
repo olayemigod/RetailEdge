@@ -24,6 +24,14 @@
 			<EdgeLoadingState v-if="loading && !loaded" />
 			<EdgeErrorState v-else-if="error" :message="error" @retry="loadSetup" />
 
+			<ExpenseCategoryManager
+				v-else-if="activeManager === 'expense-categories'"
+				:key="managerKey"
+				:initialAction="managerAction"
+				:initialName="managerName"
+				@back="closeManager"
+			/>
+
 			<div v-else class="setup-content">
 				<section class="edge-panel setup-guidance">
 					<div>
@@ -55,10 +63,10 @@
 							<span>visible record{{ Number(resource.count) === 1 ? "" : "s" }}</span>
 						</div>
 						<div class="setup-actions">
-							<button type="button" class="edge-button edge-button--primary" @click="openResource(resource)">
-								{{ resource.singleton ? "Open Settings" : "View Records" }}
+							<button type="button" class="edge-button edge-button--primary" :disabled="resourceUsesNativeDesk(resource) && !canUseNativeDesk" :title="resourceUsesNativeDesk(resource) && !canUseNativeDesk ? 'Advanced workflow: Native Desk access is required' : ''" @click="openResource(resource)">
+								{{ resourceActionLabel(resource) }}
 							</button>
-							<button v-if="resource.can_create" type="button" class="edge-button edge-button--secondary" @click="createResource(resource)">Add New</button>
+							<button v-if="resource.can_create" type="button" class="edge-button edge-button--secondary" :disabled="resourceUsesNativeDesk(resource) && !canUseNativeDesk" :title="resourceUsesNativeDesk(resource) && !canUseNativeDesk ? 'Advanced workflow: Native Desk access is required' : ''" @click="createResource(resource)">{{ resourceUsesNativeDesk(resource) && !canUseNativeDesk ? "Advanced: Add New" : "Add New" }}</button>
 						</div>
 					</section>
 				</div>
@@ -68,6 +76,8 @@
 </template>
 
 <script>
+import ExpenseCategoryManager from "./ExpenseCategoryManager.vue";
+
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
 	"EdgePageLayout",
@@ -76,6 +86,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeErrorState",
 	"EdgeEmptyState",
 	"EdgeStatusBadge",
+	"EdgeLinkField",
 ];
 
 function runtimeComponents() {
@@ -103,7 +114,10 @@ function doctypeSlug(doctype) {
 
 export default {
 	name: "RetailEdgeSetup",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		ExpenseCategoryManager,
+	},
 	data() {
 		return {
 			edgeUIValid: true,
@@ -116,22 +130,55 @@ export default {
 			tenantName: "",
 			branchName: "",
 			userName: "",
+			canUseNativeDesk: false,
+			activeManager: "",
+			managerAction: "list",
+			managerName: "",
+			managerKey: 0,
 		};
 	},
 	created() {
 		const components = runtimeComponents();
 		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
 		this.edgeUIValid = this.missingComponents.length === 0;
-		this._onPageShow = () => this.loadSetup();
+		this._onPageShow = () => {
+			this.consumeRouteOptions();
+			this.loadSetup();
+		};
 	},
 	mounted() {
 		window.addEventListener("retailedge-setup-page-show", this._onPageShow);
+		this.consumeRouteOptions();
 		if (this.edgeUIValid) this.loadSetup();
 	},
 	beforeUnmount() {
 		window.removeEventListener("retailedge-setup-page-show", this._onPageShow);
 	},
 	methods: {
+		consumeRouteOptions() {
+			const options = frappe.route_options || {};
+			if (options.setup_resource === "expense-categories") {
+				this.openExpenseCategoryManager(
+					options.expense_category ? "edit" : (options.setup_action || "list"),
+					options.expense_category || "",
+				);
+				frappe.route_options = null;
+			}
+		},
+		openExpenseCategoryManager(action = "list", name = "") {
+			this.activeManager = "expense-categories";
+			this.managerAction = action === "new" ? "new" : "list";
+			this.managerName = name || "";
+			this.managerKey += 1;
+		},
+		closeManager() {
+			this.activeManager = "";
+			this.managerAction = "list";
+			this.managerName = "";
+			this.managerKey += 1;
+			frappe.route_options = null;
+			this.loadSetup();
+		},
 		async loadSetup() {
 			if (this.loading) return;
 			this.loading = true;
@@ -149,6 +196,7 @@ export default {
 				this.tenantName = navigation.context?.company || "";
 				this.branchName = navigation.context?.branch || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.loaded = true;
 			} catch (error) {
 				this.error = error?.message || error?.exc || "RetailEdge Setup failed to load.";
@@ -171,20 +219,32 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
+		resourceUsesNativeDesk(resource) { return Boolean(resource?.doctype && resource?.manager !== "expense-categories" && !resource?.page); },
+		resourceActionLabel(resource) { const label = resource?.singleton ? "Open Settings" : "View Records"; return this.resourceUsesNativeDesk(resource) && !this.canUseNativeDesk ? `Advanced: ${label}` : label; },
 		openResource(resource) {
+			if (resource?.manager === "expense-categories") {
+				this.openExpenseCategoryManager("list");
+				return;
+			}
 			if (resource?.page) {
 				frappe.set_route(resource.page);
 				return;
 			}
-			if (!resource?.doctype) return;
+			if (!resource?.doctype || !this.canUseNativeDesk) return;
 			window.open(`/app/${doctypeSlug(resource.doctype)}`, "_blank", "noopener,noreferrer");
 		},
 		createResource(resource) {
 			if (!resource?.doctype || !resource.can_create || resource.singleton) return;
+			if (resource.manager === "expense-categories") {
+				this.openExpenseCategoryManager("new");
+				return;
+			}
+			if (!this.canUseNativeDesk) return;
 			window.open(`/app/${doctypeSlug(resource.doctype)}/new`, "_blank", "noopener,noreferrer");
 		},
 		openOperatingContext() {

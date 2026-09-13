@@ -14,19 +14,32 @@ class TestFinancialPosition(unittest.TestCase):
 		owner = {
 			"filters": {"company": "Demo", "branch": "", "from_date": "2026-08-01", "to_date": "2026-08-22"},
 			"sections": {
-				"receivables": {"available": True, "summary": [{"label": "Total Receivables", "value": 1200}]},
+				"receivables": {
+					"available": True,
+					"summary": [{"label": "Total Receivables", "value": 1200}],
+				},
 				"payables": {"available": True, "summary": [{"label": "Total Payables", "value": 700}]},
-				"stock": {"available": True, "show_costs": True, "summary": [{"label": "Stock Value", "value": 5000}]},
-				"profitability": {"available": True, "summary": [
-					{"label": "Accounting Gross Profit", "value": 900},
-					{"label": "Accounting Net Profit", "value": 650},
-					{"label": "Transactional Gross Profit", "value": 1000},
-				]},
-				"cash": {"available": True, "summary": [
-					{"label": "Money In", "value": 3000},
-					{"label": "Money Out", "value": 2100},
-					{"label": "Net Change", "value": 900},
-				]},
+				"stock": {
+					"available": True,
+					"show_costs": True,
+					"summary": [{"label": "Stock Value", "value": 5000}],
+				},
+				"profitability": {
+					"available": True,
+					"summary": [
+						{"label": "Accounting Gross Profit", "value": 900},
+						{"label": "Accounting Net Profit", "value": 650},
+						{"label": "Transactional Gross Profit", "value": 1000},
+					],
+				},
+				"cash": {
+					"available": True,
+					"summary": [
+						{"label": "Money In", "value": 3000},
+						{"label": "Money Out", "value": 2100},
+						{"label": "Net Change", "value": 900},
+					],
+				},
 			},
 		}
 		result = _build_snapshot(owner=owner, liquid={"available": True, "balance": 4000, "accounts": []})
@@ -46,11 +59,14 @@ class TestFinancialPosition(unittest.TestCase):
 			"sections": {
 				"receivables": {"available": True, "summary": []},
 				"payables": {"available": True, "summary": []},
-				"profitability": {"available": True, "summary": [
-					{"label": "Accounting Gross Profit", "value": 900},
-					{"label": "Accounting Net Profit", "value": 650},
-					{"label": "Transactional Gross Profit", "value": 1000},
-				]},
+				"profitability": {
+					"available": True,
+					"summary": [
+						{"label": "Accounting Gross Profit", "value": 900},
+						{"label": "Accounting Net Profit", "value": 650},
+						{"label": "Transactional Gross Profit", "value": 1000},
+					],
+				},
 			},
 		}
 		result = _build_snapshot(
@@ -70,7 +86,11 @@ class TestFinancialPosition(unittest.TestCase):
 			"sections": {
 				"receivables": {"available": True, "summary": []},
 				"payables": {"available": True, "summary": []},
-				"stock": {"available": True, "show_costs": False, "summary": [{"label": "Stock Value", "value": 9999}]},
+				"stock": {
+					"available": True,
+					"show_costs": False,
+					"summary": [{"label": "Stock Value", "value": 9999}],
+				},
 			},
 		}
 		result = _build_snapshot(owner=owner, liquid={"available": True, "balance": 100, "accounts": []})
@@ -83,24 +103,40 @@ class TestFinancialPosition(unittest.TestCase):
 		self.assertEqual(result["accounts"], [])
 
 	def test_restricted_blank_branch_scope_cannot_see_company_cash_balance(self):
-		result = _get_liquid_position(company="Demo", branch="", global_branch_scope=False)
+		result = _get_liquid_position(
+			company="Demo",
+			branch="",
+			unrestricted_company_scope=False,
+		)
 		self.assertFalse(result["available"])
 		self.assertIn("Branch access is restricted", result["reason"])
 		self.assertEqual(result["accounts"], [])
 
-	@patch("retailedge.financial_position.user_has_global_branch_access", return_value=True)
+	@patch("retailedge.financial_position.has_unrestricted_report_scope", return_value=True)
 	@patch("retailedge.financial_position.require_dashboard_action", return_value={"can_view": True})
-	@patch("retailedge.financial_position._get_liquid_position", return_value={"available": True, "balance": 500, "accounts": []})
+	@patch(
+		"retailedge.financial_position._get_liquid_position",
+		return_value={"available": True, "balance": 500, "accounts": []},
+	)
 	@patch("retailedge.financial_position.get_owner_dashboard_data")
-	def test_service_composes_existing_reporting_services(self, owner_dashboard, liquid, capability, _global_scope):
+	def test_service_composes_existing_reporting_services(self, owner_dashboard, liquid, capability, _scope):
 		owner_dashboard.return_value = {
 			"filters": {"company": "Demo", "branch": ""},
-			"sections": {"receivables": {"available": True, "summary": []}, "payables": {"available": True, "summary": []}},
+			"sections": {
+				"receivables": {"available": True, "summary": []},
+				"payables": {"available": True, "summary": []},
+			},
 		}
-		result = get_financial_position({"company": "Demo", "from_date": "2026-08-01", "to_date": "2026-08-22"})
+		result = get_financial_position(
+			{"company": "Demo", "from_date": "2026-08-01", "to_date": "2026-08-22"}
+		)
 		self.assertEqual(result["title"], "Financial Position Snapshot")
 		owner_dashboard.assert_called_once()
-		liquid.assert_called_once_with(company="Demo", branch="", global_branch_scope=True)
+		liquid.assert_called_once_with(
+			company="Demo",
+			branch="",
+			unrestricted_company_scope=True,
+		)
 		capability.assert_called_once_with("owner-dashboard", "view", company="Demo", branch="")
 
 	def test_source_contract_uses_erpnext_balance_helper_without_direct_sql(self):
@@ -109,7 +145,7 @@ class TestFinancialPosition(unittest.TestCase):
 		self.assertNotIn("ignore_permissions", source)
 		self.assertIn("get_balance_on", source)
 		self.assertIn("get_owner_dashboard_data", source)
-		self.assertIn("user_has_global_branch_access", source)
+		self.assertIn("has_unrestricted_report_scope", source)
 		self.assertIn("MAX_LIQUID_ACCOUNT_SCAN", source)
 
 

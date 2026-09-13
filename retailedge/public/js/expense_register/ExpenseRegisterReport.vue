@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,11 +35,12 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="openReportCell"
 		>
 			<template #actions>
 				<button type="button" class="secondary-action" @click="openExpenseCategories">Expense Categories</button>
-				<button type="button" class="primary-action" @click="recordExpense">Record Expense</button>
+				<button type="button" class="primary-action" @click="recordExpense">{{ consolidatedViewAvailable && hasPageTarget("business-expenses") ? "Record Business Expense" : "Record Cashier Expense" }}</button>
 				<EdgeExportMenu
 					v-if="rows.length"
 					:dataset="exportDataset"
@@ -73,6 +75,35 @@
 						@select="onCategorySelected"
 						@clear="clearCategory"
 					/>
+					<label v-if="consolidatedViewAvailable" class="edge-field">
+						<span class="edge-field-label">View</span>
+						<select v-model="filters.view_mode" class="edge-input" @change="onViewModeChanged">
+							<option value="consolidated">Consolidated business expenses</option>
+							<option value="cashier">Cashier / POS expenses only</option>
+						</select>
+					</label>
+					<label v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'" class="edge-field">
+						<span class="edge-field-label">Source</span>
+						<select v-model="filters.source_type" class="edge-input">
+							<option value="">All expense sources</option>
+							<option v-for="source in sourceTypes" :key="source" :value="source">{{ source }}</option>
+						</select>
+					</label>
+					<label
+						v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'"
+						class="edge-check-field"
+					>
+						<input
+							v-model="filters.include_unposted_cashier_expenses"
+							type="checkbox"
+							:true-value="1"
+							:false-value="0"
+						/>
+						<span>
+							<strong>Include unposted Cashier Expenses</strong>
+							<small>Show operational exposure separately from posted expense totals.</small>
+						</span>
+					</label>
 					<label class="edge-field">
 						<span class="edge-field-label">Status</span>
 						<select v-model="filters.expense_status" class="edge-input">
@@ -103,13 +134,20 @@
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
 				<span>{{ showCashier ? "Permitted cashier visibility" : "Your expenses only" }}</span>
-				<span>Source: RetailEdge Cashier Expense</span>
+				<span>{{ filters.view_mode === "consolidated" ? "Sources: Cashier/POS + posted business expenses" : "Source: RetailEdge Cashier Expense" }}</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
+	<SimpleCashierExpenseDialog
+		:open="cashierExpenseOpen"
+		:nativeFallbackEnabled="false"
+		@close="cashierExpenseOpen = false"
+		@saved="handleCashierExpenseSaved"
+	/>
 </template>
 
 <script>
+import SimpleCashierExpenseDialog from "../retailedge_business_hub/SimpleCashierExpenseDialog.vue";
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
 	"EdgeReportShell",
@@ -141,7 +179,10 @@ function errorMessage(error, fallback) {
 
 export default {
 	name: "ExpenseRegisterReport",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		SimpleCashierExpenseDialog,
+	},
 	data() {
 		return {
 			edgeUIValid: true,
@@ -151,14 +192,18 @@ export default {
 			error: "",
 			rows: [],
 			columns: [],
-			summary: [],
+			summary: [], reportSort: null,
 			pagination: {},
 			scope: {},
 			menuItems: [],
+			canUseNativeDesk: false,
+			cashierExpenseOpen: false,
 			tenantName: "",
 			branchName: "",
 			userName: "",
 			showCashier: false,
+			consolidatedViewAvailable: false,
+			sourceTypes: [],
 			statuses: [],
 			dateRangeLimit: 366,
 			categoryLabel: "",
@@ -169,6 +214,9 @@ export default {
 				to_date: "",
 				expense_category: "",
 				expense_status: "",
+				source_type: "",
+				view_mode: "cashier",
+				include_unposted_cashier_expenses: 0,
 				page_size: 50,
 			},
 			currentPage: 1,
@@ -211,14 +259,22 @@ export default {
 				to_date: "To Date",
 				expense_category: "Expense Category",
 				expense_status: "Status",
+				source_type: "Source",
+				view_mode: "View",
+				include_unposted_cashier_expenses: "Include Unposted Cashier Expenses",
 			};
 			return Object.entries(labels)
-				.map(([key, label]) => ({ label, value: this.filters[key] }))
+				.map(([key, label]) => ({
+					label,
+					value: key === "include_unposted_cashier_expenses"
+						? (this.filters[key] ? "Yes" : "No")
+						: this.filters[key],
+				}))
 				.filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined);
 		},
 		exportMetadata() {
 			return [
-				{ label: "Source", value: "RetailEdge Cashier Expense" },
+				{ label: "Source", value: this.filters.view_mode === "consolidated" ? "Consolidated business expenses" : "RetailEdge Cashier Expense" },
 				{ label: "Scope", value: this.scopeLabel },
 				{ label: "Cashier visibility", value: this.showCashier ? "Permitted scope" : "Current user only" },
 			];
@@ -239,7 +295,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.expense_register.get_expense_register_context"),
 					navigationPromise,
@@ -249,9 +305,12 @@ export default {
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.showCashier = Boolean(Number(context.show_cashier));
+				this.consolidatedViewAvailable = Boolean(Number(context.consolidated_view_available));
+				this.sourceTypes = context.source_types || [];
 				this.statuses = context.statuses || [];
 				this.dateRangeLimit = Number(context.limits?.date_range_days || 366);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load Expense Register controls.");
@@ -275,10 +334,19 @@ export default {
 			const items = this.menuItems.flatMap((group) => group.items || []);
 			const item = items.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
 			else if (item.target_type === "URL" && item.target) window.location.assign(item.target);
+		},
+		hasPageTarget(target) {
+			return Boolean(
+				target
+				&& this.menuItems
+					.flatMap((group) => group.items || [])
+					.some((item) => item.target_type === "Page" && item.target === target)
+			);
 		},
 		async searchOptions(kind, txt) {
 			const result = await callMethod("retailedge.expense_register.search_expense_register_options", {
@@ -314,6 +382,13 @@ export default {
 			this.categoryLabel = "";
 			this.currentPage = 1;
 		},
+		onViewModeChanged() {
+			if (this.filters.view_mode !== "consolidated") {
+				this.filters.source_type = "";
+				this.filters.include_unposted_cashier_expenses = 0;
+			}
+			this.currentPage = 1;
+		},
 		onCategorySelected(option) {
 			this.filters.expense_category = option.value;
 			this.categoryLabel = option.label || option.value;
@@ -346,11 +421,11 @@ export default {
 				const result = await this.reportProvider.load({
 					filters: this.providerFilters(),
 					start,
-					page_length: pageSize,
+					page_length: pageSize, sort: this.reportSort,
 				});
 				this.rows = result.rows || [];
 				this.columns = result.columns || [];
-				this.summary = result.summary || [];
+				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.scope = result.metadata?.scope || {};
 				const totalRows = Number(result.total || this.rows.length);
 				const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
@@ -405,6 +480,7 @@ export default {
 				datatype: card.datatype || card.type || "Data",
 			}));
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) {
 			const next = Math.max(1, Number(page || 1));
 			if (next === this.currentPage) return;
@@ -420,16 +496,40 @@ export default {
 			return row?.name || "";
 		},
 		openReportCell(payload) {
-			if (payload?.column?.fieldname === "name" && payload.value) this.openExpense(payload.value);
+			if (["name", "source_reference"].includes(payload?.column?.fieldname) && payload?.row) this.openExpense(payload.row);
 		},
-		openExpense(name) {
-			if (name) frappe.set_route("Form", "RetailEdge Cashier Expense", name);
+		openExpense(row) {
+			if (!row) return;
+			if (row.source_doctype === "RetailEdge Business Expense" && this.hasPageTarget("business-expenses")) {
+				frappe.route_options = { business_expense: row.source_reference || "" };
+				frappe.set_route("business-expenses");
+				return;
+			}
+			if (row.source_doctype === "Purchase Invoice" && this.hasPageTarget("purchase-register")) {
+				frappe.route_options = { purchase_invoice: row.source_reference || "" };
+				frappe.set_route("purchase-register");
+				return;
+			}
+			if (this.canUseNativeDesk && row.source_doctype && row.source_reference) {
+				frappe.set_route("Form", row.source_doctype, row.source_reference);
+			}
 		},
 		recordExpense() {
-			frappe.new_doc("RetailEdge Cashier Expense");
+			if (this.consolidatedViewAvailable && this.hasPageTarget("business-expenses")) {
+				frappe.route_options = { action: "new" };
+				frappe.set_route("business-expenses");
+				return;
+			}
+			this.cashierExpenseOpen = true;
+		},
+		handleCashierExpenseSaved() {
+			this.cashierExpenseOpen = false;
+			this.fetchData();
 		},
 		openExpenseCategories() {
-			frappe.set_route("List", "RetailEdge Expense Category");
+			if (!this.hasPageTarget("retailedge-setup")) return;
+			frappe.route_options = { setup_resource: "expense-categories" };
+			frappe.set_route("retailedge-setup");
 		},
 		formatCell(value, column) {
 			if (column?.fieldname === "posting_ready") return value ? "Yes" : "No";
@@ -476,6 +576,9 @@ export default {
 }
 
 .edge-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.edge-check-field { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding: 8px 0; }
+.edge-check-field span { display: grid; gap: 2px; }
+.edge-check-field small { color: var(--edge-text-muted, #667085); }
 .edge-field-label { font-size: 0.78rem; font-weight: 600; color: var(--edge-text-muted, #667085); }
 .edge-input,
 .primary-action,

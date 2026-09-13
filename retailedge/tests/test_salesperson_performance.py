@@ -108,7 +108,9 @@ class TestSalespersonPerformance(FrappeTestCase):
 		self.assertIn("renderLoadError", content)
 		self.assertIn("wrapper.appendChild(errorDiv)", content)
 		self.assertIn("Salesperson Performance Dashboard failed to load", content)
-		page_catch = content.find("\n\t} catch (error) {", content.find("frappe.pages[PAGE_ROUTE].on_page_load"))
+		page_catch = content.find(
+			"\n\t} catch (error) {", content.find("frappe.pages[PAGE_ROUTE].on_page_load")
+		)
 		self.assertNotEqual(page_catch, -1)
 		catch_block = content[page_catch : page_catch + 300]
 		self.assertNotIn("frappe.require", catch_block)
@@ -130,12 +132,22 @@ class TestSalespersonPerformance(FrappeTestCase):
 	def test_aggregation_api_returns_structured_data(self):
 		from retailedge.salesperson_performance import get_salesperson_performance
 
-		try:
+		with (
+			patch("retailedge.salesperson_performance._assert_company_access"),
+			patch(
+				"retailedge.salesperson_performance.get_operational_branch_scope",
+				return_value={"restricted": False, "allowed_branches": [], "source": "global"},
+			),
+		):
 			res = get_salesperson_performance(
-				{"from_date": "2026-07-01", "to_date": "2026-07-06", "limit": 5, "offset": 0}
+				{
+					"company": "RetailEdge Test Company",
+					"from_date": "2026-07-01",
+					"to_date": "2026-07-06",
+					"limit": 5,
+					"offset": 0,
+				}
 			)
-		except frappe.PermissionError:
-			return
 
 		for key in ("summary", "rows", "limit", "offset"):
 			self.assertIn(key, res)
@@ -304,5 +316,19 @@ class TestSalespersonPerformance(FrappeTestCase):
 	def test_salesperson_performance_api_date_presets(self, mock_sql):
 		from retailedge.salesperson_performance import get_salesperson_performance
 
-		get_salesperson_performance({"date_range_preset": "This Month", "limit": 5, "offset": 0})
+		with (
+			patch("retailedge.salesperson_performance._assert_company_access"),
+			patch(
+				"retailedge.salesperson_performance.get_operational_branch_scope",
+				return_value={"restricted": False, "allowed_branches": [], "source": "global"},
+			),
+		):
+			get_salesperson_performance(
+				{
+					"company": "RetailEdge Test Company",
+					"date_range_preset": "This Month",
+					"limit": 5,
+					"offset": 0,
+				}
+			)
 		mock_sql.assert_called()

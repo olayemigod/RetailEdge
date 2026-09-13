@@ -1,4 +1,5 @@
 import RetailEdgeBusinessHub from "./retailedge_business_hub/RetailEdgeBusinessHub.vue";
+import { installGuidedCreateSearch } from "./retailedge_business_hub/guided_create_search";
 
 function mountRetailEdgeBusinessHub(target) {
 	if (typeof window === "undefined" || !window.EdgeSuiteUI) {
@@ -13,6 +14,12 @@ function mountRetailEdgeBusinessHub(target) {
 
 	const app = window.EdgeSuiteUI.createEdgeApp(RetailEdgeBusinessHub);
 	app.mount(target);
+	const destroyGuidedCreateSearch = installGuidedCreateSearch(window);
+	const originalUnmount = app.unmount.bind(app);
+	app.unmount = () => {
+		destroyGuidedCreateSearch();
+		originalUnmount();
+	};
 	return app;
 }
 

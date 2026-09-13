@@ -18,10 +18,11 @@
 		<EdgeReportShell
 			title="Stock Position"
 			eyebrow="Stock Intelligence"
-			subtitle="See current on-hand, reserved, available, ordered and projected stock across your permitted Branch or Warehouse scope."
+			subtitle="See current and projected stock together with ERPNext direct-warehouse replenishment signals across your permitted Branch or Warehouse scope."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="openReportCell"
 		>
 			<template #actions>
@@ -97,7 +99,7 @@
 						<input v-model="includeZero" type="checkbox" />
 						<span>
 							<strong>Include zero rows</strong>
-							<small>Show items whose current and projected quantities are all zero.</small>
+							<small>Show zero-stock rows. Reorder-due items remain visible even when this is off.</small>
 						</span>
 					</label>
 					<div class="filter-action">
@@ -111,9 +113,12 @@
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
 				<span v-if="scan.bin_rows !== undefined">{{ scan.bin_rows }} Bin row{{ scan.bin_rows === 1 ? "" : "s" }} scanned</span>
+				<span v-if="scan.reorder_rows !== undefined">{{ scan.reorder_rows }} direct reorder rule{{ scan.reorder_rows === 1 ? "" : "s" }} scanned</span>
+				<span v-if="canUseNativeDesk && canCreateMaterialRequest">Select a Reorder Due status to open a prefilled native Material Request.</span>
+				<span v-if="handoffError" class="stock-position-handoff-error">{{ handoffError }}</span>
 				<span v-if="!showCosts">Cost values hidden by RetailEdge settings</span>
 				<span v-else-if="companyCurrency">Valuation in {{ companyCurrency }}</span>
-				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} Bin-row cap</span>
+				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} export-row cap</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -139,6 +144,18 @@ function callMethod(method, args = {}) {
 	});
 }
 
+function callPostMethod(method, args = {}) {
+	return new Promise((resolve, reject) => {
+		frappe.call({
+			type: "POST",
+			method,
+			args,
+			callback: (response) => resolve(response.message || {}),
+			error: (error) => reject(error),
+		});
+	});
+}
+
 function errorMessage(error, fallback) {
 	return error?.message || error?.exc || error?.exception || fallback;
 }
@@ -153,9 +170,11 @@ export default {
 			metadataLoading: true,
 			loading: false,
 			error: "",
+			handoffError: "",
+			handoffLoadingItem: "",
 			rows: [],
 			columns: [],
-			summary: [],
+			summary: [], reportSort: null,
 			pagination: {},
 			scan: {},
 			scope: {},
@@ -165,6 +184,8 @@ export default {
 			userName: "",
 			companyCurrency: "",
 			showCosts: false,
+			canCreateMaterialRequest: false,
+			canUseNativeDesk: false,
 			itemLabel: "",
 			filters: {
 				company: "",
@@ -177,7 +198,7 @@ export default {
 				page_size: 50,
 			},
 			currentPage: 1,
-			stockStatuses: ["All", "In Stock", "Available", "Out of Stock", "Negative", "Fully Reserved"],
+			stockStatuses: ["All", "In Stock", "Available", "Out of Stock", "Negative", "Fully Reserved", "Reorder Due"],
 		};
 	},
 	computed: {
@@ -195,7 +216,8 @@ export default {
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: column.fieldname === "item_code",
+				clickable: this.canUseNativeDesk && (column.fieldname === "item_code"
+					|| (column.fieldname === "replenishment_status" && this.canCreateMaterialRequest)),
 			}));
 		},
 		scopeLabel() {
@@ -229,7 +251,7 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Source", value: "ERPNext Bin current stock" },
+				{ label: "Source", value: "ERPNext Bin + direct Item Reorder rules" },
 				{ label: "Warehouse Scope", value: this.scopeLabel },
 				{ label: "Cost Visibility", value: this.showCosts ? "Included" : "Hidden by RetailEdge settings" },
 			].concat(this.showCosts && this.companyCurrency ? [{ label: "Company Currency", value: this.companyCurrency }] : []);
@@ -249,9 +271,10 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
-				const [context, navigation] = await Promise.all([
+				const [context, navigation, handoffContext] = await Promise.all([
 					callMethod("retailedge.stock_position.get_stock_position_context"),
 					navigationPromise,
+					callMethod("retailedge.operating_report_defaults.get_replenishment_handoff_context"),
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				this.tenantName = context.tenant_name || this.filters.company || "";
@@ -259,6 +282,8 @@ export default {
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
 				this.showCosts = Boolean(Number(context.show_costs));
+				this.canCreateMaterialRequest = Boolean(Number(handoffContext.can_create_material_request));
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
@@ -283,6 +308,7 @@ export default {
 			const items = this.menuItems.flatMap((group) => group.items || []);
 			const item = items.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -358,7 +384,11 @@ export default {
 			this.currentPage = 1;
 		},
 		clearItem() { this.filters.item_code = ""; this.itemLabel = ""; this.currentPage = 1; },
-		applyFilters() { this.currentPage = 1; return this.fetchData(); },
+		applyFilters() {
+			this.handoffError = "";
+			this.currentPage = 1;
+			return this.fetchData();
+		},
 		providerFilters() {
 			const { page_size: _pageSize, ...filters } = this.filters;
 			return filters;
@@ -374,10 +404,10 @@ export default {
 			try {
 				const pageSize = Number(this.filters.page_size || 50);
 				const start = Math.max(0, (this.currentPage - 1) * pageSize);
-				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
+				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
 				this.rows = result.rows || [];
 				this.columns = result.columns || [];
-				this.summary = result.summary || [];
+				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.scan = result.metadata?.scan || {};
 				this.scope = result.metadata?.scope || {};
 				this.companyCurrency = result.metadata?.company_currency || "";
@@ -411,12 +441,13 @@ export default {
 				rows: result.rows || [],
 				summary: result.summary || this.summary,
 				metadata: [
-					{ label: "Source", value: "ERPNext Bin current stock" },
+					{ label: "Source", value: "ERPNext Bin + direct Item Reorder rules" },
 					{ label: "Warehouse Scope", value: this.scopeLabel },
 					{ label: "Cost Visibility", value: Number(result.show_costs) ? "Included" : "Hidden by RetailEdge settings" },
 				].concat(result.company_currency ? [{ label: "Company Currency", value: result.company_currency }] : []),
 			};
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) {
 			const next = Math.max(1, Number(page || 1));
 			if (next === this.currentPage) return;
@@ -429,9 +460,58 @@ export default {
 			this.fetchData();
 		},
 		openReportCell(payload) {
-			if (payload?.column?.fieldname === "item_code" && payload.value) this.openItem(payload.value);
+			if (!this.canUseNativeDesk) return;
+			if (payload?.column?.fieldname === "item_code" && payload.value) {
+				this.openItem(payload.value);
+				return;
+			}
+			if (
+				payload?.column?.fieldname === "replenishment_status"
+				&& this.canCreateMaterialRequest
+				&& Number(payload?.row?.reorder_due)
+			) {
+				this.openReplenishmentMaterialRequest(payload.row);
+			}
 		},
-		openItem(itemCode) { if (itemCode) frappe.set_route("Form", "Item", itemCode); },
+		async openReplenishmentMaterialRequest(row) {
+			const itemCode = String(row?.item_code || "").trim();
+			if (!this.canUseNativeDesk || !itemCode || !this.canCreateMaterialRequest || this.handoffLoadingItem) return;
+			this.handoffError = "";
+			this.handoffLoadingItem = itemCode;
+			try {
+				const handoff = await callPostMethod(
+					"retailedge.operating_report_defaults.get_replenishment_material_request_handoff",
+					{ item_code: itemCode, filters: this.providerFilters() },
+				);
+				this.openNativeMaterialRequest(handoff);
+			} catch (error) {
+				this.handoffError = errorMessage(error, "Could not start the Material Request. Refresh Stock Position and try again.");
+			} finally {
+				this.handoffLoadingItem = "";
+			}
+		},
+		openNativeMaterialRequest(handoff) {
+			if (!this.canUseNativeDesk) return;
+			const items = Array.isArray(handoff?.items) ? handoff.items : [];
+			if (handoff?.handoff_mode !== "unsaved_native_form" || !handoff.company || !handoff.material_request_type || !items.length) {
+				this.handoffError = "The replenishment handoff returned incomplete Material Request context.";
+				return;
+			}
+			frappe.model.with_doctype("Material Request", () => {
+				const doc = frappe.model.get_new_doc("Material Request");
+				doc.company = handoff.company;
+				doc.material_request_type = handoff.material_request_type;
+				doc.transaction_date = handoff.transaction_date;
+				doc.schedule_date = handoff.schedule_date;
+				if (handoff.branch && frappe.meta.has_field("Material Request", "branch")) doc.branch = handoff.branch;
+				items.forEach((item) => {
+					const child = frappe.model.add_child(doc, "Material Request Item", "items");
+					Object.assign(child, item);
+				});
+				frappe.set_route("Form", "Material Request", doc.name);
+			});
+		},
+		openItem(itemCode) { if (this.canUseNativeDesk && itemCode) frappe.set_route("Form", "Item", itemCode); },
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
 		formatValue(value, fieldtype, currency) {
 			if (value === null || value === undefined || value === "") return "—";
@@ -486,6 +566,7 @@ export default {
 .include-zero-field input { width: 18px; height: 18px; }
 .include-zero-field span { display: flex; flex-direction: column; gap: 2px; }
 .include-zero-field small { color: var(--edge-text-muted, #667085); font-size: 0.72rem; }
+.stock-position-handoff-error { color: var(--edge-danger, #b42318); font-weight: 600; }
 .edge-primary-button { border: 0; background: var(--edge-primary, #2563eb); color: #fff; font-weight: 600; padding: 8px 14px; }
 @media (max-width: 72rem) { .stock-position-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 54rem) { .stock-position-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

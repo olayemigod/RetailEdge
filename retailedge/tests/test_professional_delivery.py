@@ -42,7 +42,7 @@ class TestProfessionalDelivery(unittest.TestCase):
 		source = self.read("professional_delivery.py")
 		for contract in (
 			"get_operating_context",
-			"validate_user_branch_access",
+			"_validate_stored_operational_branch",
 			"resolve_branch_from_warehouse",
 			"Stock Location",
 			"multiple Branches",

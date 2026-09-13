@@ -33,7 +33,7 @@
 			@print="handlePrint"
 		>
 			<template #actions>
-				<button type="button" class="edge-button edge-button--secondary" @click="openSalesInvoices">Sales Invoices</button>
+				<button type="button" class="edge-button edge-button--secondary" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open Sales Invoices' : 'Advanced workflow: Native Desk access is required'" @click="openSalesInvoices">{{ canUseNativeDesk ? "Sales Invoices" : "Advanced: Sales Invoices" }}</button>
 			</template>
 
 			<template #filters>
@@ -50,8 +50,8 @@
 							<option v-for="preset in datePresets" :key="preset" :value="preset">{{ preset }}</option>
 						</select>
 					</label>
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="filters.date_range_preset = 'Custom Period'" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="filters.date_range_preset = 'Custom Period'" /></label>
+					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onCustomDateChange" /></label>
+					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onCustomDateChange" /></label>
 					<label class="edge-field">
 						<span class="edge-field-label">Rows per page</span>
 						<select v-model.number="filters.limit" class="edge-input" @change="resetAndFetch"><option :value="25">25</option><option :value="50">50</option><option :value="100">100</option></select>
@@ -120,14 +120,14 @@ export default {
 			exportBusy: false, printBusy: false,
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
-			rows: [], columns: [], summary: [], pagination: {}, menuItems: [], tenantName: "", userName: "", exportRowCap: 500,
+			rows: [], columns: [], summary: [], pagination: {}, menuItems: [], tenantName: "", userName: "", exportRowCap: 500, canUseNativeDesk: false,
 			datePresets: ["This Month", "Today", "Yesterday", "This Week", "This Quarter", "This Year", "Last Week", "Last Month", "Last Quarter", "Last Year", "Custom Period"],
 			filters: { company: "", date_range_preset: "This Month", from_date: "", to_date: "", branch: "", salesperson: "", customer: "", item: "", item_group: "", limit: 50, offset: 0 },
 		};
 	},
 	computed: {
 		currentPage() { return Math.floor(Number(this.filters.offset || 0) / Number(this.filters.limit || 50)) + 1; },
-		tableColumns() { return (this.columns || []).map((column) => ({ ...column, clickable: ["salesperson", "sales_invoice", "customer"].includes(column.fieldname) })); },
+		tableColumns() { return (this.columns || []).map((column) => ({ ...column, clickable: this.canUseNativeDesk && ["salesperson", "sales_invoice", "customer"].includes(column.fieldname) })); },
 	},
 	created() {
 		const components = runtimeComponents();
@@ -145,6 +145,7 @@ export default {
 				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Salesperson Performance controls."); }
 			finally { this.metadataLoading = false; }
@@ -154,14 +155,23 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer");
 			else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
-		async searchOptions(kind, txt) { const result = await callMethod("retailedge.salesperson_performance_dashboard.search_salesperson_dashboard_options", { kind, txt, company: this.filters.company }); return Array.isArray(result) ? result : []; },
+		async searchOptions(kind, txt) { const result = await callMethod("retailedge.salesperson_performance_dashboard.search_salesperson_dashboard_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, from_date: this.filters.from_date, to_date: this.filters.to_date }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, salespersonSearch(txt) { return this.searchOptions("salesperson", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); },
-		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.offset = 0; }, onBranchSelected(option) { this.filters.branch = option.value; this.filters.offset = 0; }, clearBranch() { this.filters.branch = ""; this.filters.offset = 0; }, onSalespersonSelected(option) { this.filters.salesperson = option.value; this.filters.offset = 0; }, clearSalesperson() { this.filters.salesperson = ""; this.filters.offset = 0; }, onCustomerSelected(option) { this.filters.customer = option.value; this.filters.offset = 0; }, clearCustomer() { this.filters.customer = ""; this.filters.offset = 0; }, onItemSelected(option) { this.filters.item = option.value; this.filters.offset = 0; }, clearItem() { this.filters.item = ""; this.filters.offset = 0; }, onItemGroupSelected(option) { this.filters.item_group = option.value; this.filters.offset = 0; }, clearItemGroup() { this.filters.item_group = ""; this.filters.offset = 0; },
-		onPresetChange() { if (this.filters.date_range_preset === "Custom Period") return; const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset); if (dates) { this.filters.from_date = dates.from_date || ""; this.filters.to_date = dates.to_date || ""; } this.filters.offset = 0; },
+		clearScopedPeopleFilters() { this.filters.salesperson = ""; this.filters.customer = ""; },
+		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.clearScopedPeopleFilters(); this.filters.offset = 0; },
+		onBranchSelected(option) { this.filters.branch = option.value; this.clearScopedPeopleFilters(); this.filters.offset = 0; },
+		clearBranch() { this.filters.branch = ""; this.filters.offset = 0; },
+		onSalespersonSelected(option) { this.filters.salesperson = option.value; this.filters.offset = 0; }, clearSalesperson() { this.filters.salesperson = ""; this.filters.offset = 0; },
+		onCustomerSelected(option) { this.filters.customer = option.value; this.filters.offset = 0; }, clearCustomer() { this.filters.customer = ""; this.filters.offset = 0; },
+		onItemSelected(option) { this.filters.item = option.value; this.filters.offset = 0; }, clearItem() { this.filters.item = ""; this.filters.offset = 0; },
+		onItemGroupSelected(option) { this.filters.item_group = option.value; this.filters.offset = 0; }, clearItemGroup() { this.filters.item_group = ""; this.filters.offset = 0; },
+		onCustomDateChange() { this.filters.date_range_preset = "Custom Period"; this.clearScopedPeopleFilters(); this.filters.offset = 0; },
+		onPresetChange() { if (this.filters.date_range_preset === "Custom Period") return; const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset); if (dates) { this.filters.from_date = dates.from_date || ""; this.filters.to_date = dates.to_date || ""; } this.clearScopedPeopleFilters(); this.filters.offset = 0; },
 		resetAndFetch() { this.filters.offset = 0; this.fetchData(); },
 		async fetchData() {
 			if (!this.filters.company) return;
@@ -179,13 +189,14 @@ export default {
 		async handleExport(options) { if (!this.capabilities.can_export) return; this.exportBusy = true; try { await exportDashboard(DASHBOARD_KEY, this.filters, options); } catch (error) { frappe.msgprint({ title: __("Dashboard Export Failed"), message: errorMessage(error, "The dashboard could not be exported."), indicator: "red" }); } finally { this.exportBusy = false; } },
 		async handlePrint() { if (!this.capabilities.can_print) return; this.printBusy = true; try { await printDashboard(DASHBOARD_KEY, this.filters); } catch (error) { frappe.msgprint({ title: __("Dashboard Print Failed"), message: errorMessage(error, "The dashboard print view could not be prepared."), indicator: "red" }); } finally { this.printBusy = false; } },
 		openCell(payload) {
+			if (!this.canUseNativeDesk) return;
 			const row = payload?.row || {};
 			const field = payload?.column?.fieldname;
 			if (field === "salesperson" && row.salesperson && !String(row.salesperson).startsWith("Unallocated") && !String(row.salesperson).startsWith("Unassigned")) openNative("Sales Person", row.salesperson);
 			if (field === "sales_invoice" && row.sales_invoice) openNative("Sales Invoice", row.sales_invoice);
 			if (field === "customer" && row.customer) openNative("Customer", row.customer);
 		},
-		openSalesInvoices() { openNative("Sales Invoice"); },
+		openSalesInvoices() { if (this.canUseNativeDesk) openNative("Sales Invoice"); },
 		rowKey(row, index) { return `${row.salesperson || "salesperson"}-${row.sales_invoice || index}`; },
 		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (column?.fieldtype === "Percent") return value === null || value === undefined ? "—" : `${Number(value || 0).toFixed(1)}%`; if (column?.fieldtype === "Date" && value) { try { return frappe.datetime.str_to_user(value); } catch (_error) { return String(value); } } if (value === null || value === undefined || value === "") return "—"; return String(value); },

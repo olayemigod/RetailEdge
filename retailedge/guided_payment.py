@@ -11,17 +11,42 @@ from erpnext.accounts.doctype.journal_entry.journal_entry import get_default_ban
 from erpnext.accounts.doctype.payment_entry.payment_entry import get_party_details, get_reference_details
 
 from retailedge.branch_context import (
-	get_user_allowed_branches,
+	BRANCH_FIELD_CANDIDATES,
+	get_first_existing_field,
 	has_doctype,
 	has_field,
 	resolve_retailedge_operational_defaults,
-	user_has_global_branch_access,
-	validate_user_branch_access,
+)
+from retailedge.operating_context import (
+	get_allowed_operating_branches,
+	get_operational_branch_scope,
+	resolve_operational_branch,
 )
 
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 MAX_LINK_RESULTS = 20
 MAX_REFERENCES = 20
+
+def _resolve_guided_payment_branch(
+	*,
+	company: str,
+	branch: str,
+	user: str,
+	require_when_restricted: bool,
+) -> str:
+	branch = str(branch or "").strip()
+	scope = get_operational_branch_scope(company, user=user)
+	if branch:
+		return str(resolve_operational_branch(company, branch, user=user).get("branch") or "").strip()
+	if not scope["restricted"]:
+		return ""
+	if len(scope["allowed_branches"]) == 1:
+		return str(resolve_operational_branch(company, "", user=user).get("branch") or "").strip()
+	if require_when_restricted:
+		# Let the shared resolver produce the authoritative restricted-zero / ambiguous message.
+		return str(resolve_operational_branch(company, "", user=user).get("branch") or "").strip()
+	return ""
+
 
 PAYMENT_INTENTS: dict[str, dict[str, str]] = {
 	"receive-customer-payment": {
@@ -64,8 +89,12 @@ def get_simple_payment_context(intent: str) -> dict[str, Any]:
 	if not company:
 		frappe.throw(_("Set a default Company before creating a Payment Entry."))
 	_assert_read_permission("Company", company)
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+	branch = _resolve_guided_payment_branch(
+		company=company,
+		branch=branch,
+		user=user,
+		require_when_restricted=False,
+	)
 
 	return {
 		"intent": intent,
@@ -141,7 +170,7 @@ def search_simple_payment_options(
 			filters=_branch_search_filters(company=company, user=frappe.session.user),
 			page_length=limit,
 			reference_doctype=PAYMENT_ENTRY_DOCTYPE,
-			link_fieldname="retailedge_branch",
+			link_fieldname=get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES) or "branch",
 		)
 	if fieldname == "reference_name":
 		if not party:
@@ -194,13 +223,20 @@ def get_simple_payment_reference_details(
 ) -> dict[str, Any]:
 	config = _get_intent(intent)
 	_assert_can_create_payment_entry()
+	_assert_read_permission("Company", company)
 	_assert_read_permission(config["party_type"], party)
+	resolved_branch = _resolve_guided_payment_branch(
+		company=company,
+		branch=branch or "",
+		user=frappe.session.user,
+		require_when_restricted=True,
+	)
 	return _get_reference_snapshot(
 		config=config,
 		company=company,
 		party=party,
 		reference_name=reference_name,
-		branch=branch or "",
+		branch=resolved_branch,
 	)
 
 
@@ -218,9 +254,12 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 	if not company_currency:
 		frappe.throw(_("Company {0} has no default currency configured.").format(company))
 
-	branch = values.get("branch") or ""
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+	branch = _resolve_guided_payment_branch(
+		company=company,
+		branch=values.get("branch") or "",
+		user=user,
+		require_when_restricted=True,
+	)
 
 	party = str(values.get("party") or "").strip()
 	if not party:
@@ -282,7 +321,7 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 	if total_allocated > amount:
 		frappe.throw(_("Total allocated amount cannot exceed the payment amount."))
 	if len(resolved_branches) > 1:
-		frappe.throw(_("All selected invoices must belong to the same RetailEdge Branch."))
+		frappe.throw(_("All selected invoices must belong to the same Branch."))
 	if branch and resolved_branches and branch not in resolved_branches:
 		frappe.throw(_("Selected invoices do not belong to Branch {0}.").format(branch))
 
@@ -301,8 +340,9 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 	else:
 		doc.paid_from = bank_account
 		doc.paid_to = party_account
-	if branch:
-		doc.branch = branch
+	payment_branch_field = get_first_existing_field(PAYMENT_ENTRY_DOCTYPE, BRANCH_FIELD_CANDIDATES)
+	if branch and payment_branch_field:
+		doc.set(payment_branch_field, branch)
 
 	if mode_details["reference_required"]:
 		reference_no = str(values.get("reference_no") or "").strip()
@@ -339,7 +379,7 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 		"party_type": doc.party_type,
 		"party": doc.party,
 		"company": doc.company,
-		"branch": getattr(doc, "retailedge_branch", None) or branch,
+		"branch": getattr(doc, payment_branch_field, None) if payment_branch_field else "",
 		"paid_amount": doc.paid_amount,
 		"unallocated_amount": getattr(doc, "unallocated_amount", None),
 		"route": f"/app/payment-entry/{doc.name}",
@@ -356,6 +396,13 @@ def _search_outstanding_references(
 	limit: int,
 ) -> list[dict[str, Any]]:
 	_assert_read_permission(config["party_type"], party)
+	branch = _resolve_guided_payment_branch(
+		company=company,
+		branch=branch,
+		user=frappe.session.user,
+		require_when_restricted=False,
+	)
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	filters: dict[str, Any] = {
 		"company": company,
 		config["party_type"].lower(): party,
@@ -364,9 +411,13 @@ def _search_outstanding_references(
 	}
 	if txt:
 		filters["name"] = ["like", f"%{txt}%"]
-	if branch and has_field(config["reference_doctype"], "retailedge_branch"):
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
-		filters["retailedge_branch"] = branch
+	branch_field = get_first_existing_field(config["reference_doctype"], BRANCH_FIELD_CANDIDATES)
+	if scope["restricted"] and not branch:
+		return []
+	if scope["restricted"] and not branch_field:
+		return []
+	if branch and branch_field:
+		filters[branch_field] = branch
 
 	fields = ["name", "posting_date", "outstanding_amount", "currency"]
 	if has_field(config["reference_doctype"], "due_date"):
@@ -400,8 +451,9 @@ def _get_reference_snapshot(
 	_assert_read_permission(reference_doctype, reference_name)
 	party_field = config["party_type"].lower()
 	fields = ["company", party_field, "docstatus", "currency", "payment_terms_template"]
-	if has_field(reference_doctype, "retailedge_branch"):
-		fields.append("retailedge_branch")
+	branch_field = get_first_existing_field(reference_doctype, BRANCH_FIELD_CANDIDATES)
+	if branch_field:
+		fields.append(branch_field)
 	row = frappe.db.get_value(reference_doctype, reference_name, fields, as_dict=True)
 	if not row or row.company != company or row.get(party_field) != party or cint(row.docstatus) != 1:
 		frappe.throw(_("{0} {1} is not a submitted outstanding invoice for this party and company.").format(reference_doctype, reference_name))
@@ -435,7 +487,29 @@ def _get_reference_snapshot(
 	if outstanding <= 0:
 		frappe.throw(_("{0} has no positive outstanding amount.").format(reference_name))
 
-	reference_branch = row.get("retailedge_branch") if "retailedge_branch" in row else None
+	reference_branch = str(row.get(branch_field) or "").strip() if branch_field else ""
+	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	if scope["restricted"] and not branch_field:
+		frappe.throw(
+			_("Branch attribution is unavailable for {0}; use Advanced ERPNext review.").format(reference_doctype),
+			frappe.PermissionError,
+		)
+	if reference_branch:
+		reference_branch = str(
+			resolve_operational_branch(
+				company,
+				reference_branch,
+				user=frappe.session.user,
+			).get("branch")
+			or ""
+		).strip()
+	elif scope["restricted"]:
+		frappe.throw(
+			_("{0} {1} has no Branch attribution for your restricted access.").format(
+				reference_doctype, reference_name
+			),
+			frappe.PermissionError,
+		)
 	if branch and reference_branch and reference_branch != branch:
 		frappe.throw(_("{0} belongs to Branch {1}, not Branch {2}.").format(reference_name, reference_branch, branch))
 	return {
@@ -472,14 +546,15 @@ def _normalise_references(references: Any) -> list[dict[str, Any]]:
 
 
 def _branch_search_filters(company: str, user: str) -> dict[str, Any]:
+	if not company:
+		return {"name": "__never__"}
 	filters: dict[str, Any] = {}
-	if company and has_field("Branch", "company"):
+	if has_field("Branch", "company"):
 		filters["company"] = company
-	if user_has_global_branch_access(user=user):
-		return filters
-	allowed = get_user_allowed_branches(user=user, company=company or None).get("branches") or []
-	if allowed:
-		filters["name"] = ["in", allowed]
+	scope = get_operational_branch_scope(company, user=user)
+	allowed = get_allowed_operating_branches(company=company, user=user)
+	if scope["restricted"] or allowed:
+		filters["name"] = ["in", allowed] if allowed else "__never__"
 	return filters
 
 

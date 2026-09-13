@@ -7,7 +7,6 @@ import frappe
 from frappe.utils import flt, get_first_day, getdate, nowdate
 
 from retailedge.branch_context import (
-	get_branch_query_filters,
 	get_first_existing_field,
 	has_doctype,
 	has_field,
@@ -16,6 +15,7 @@ from retailedge.branch_context import (
 	resolve_retailedge_branch_context,
 )
 from retailedge.cashier_expense import user_has_any_role
+from retailedge.operating_context import get_operational_branch_scope
 
 BRANCH_PERFORMANCE_ROLES = {
 	"System Manager",
@@ -112,6 +112,7 @@ def debug_branch_performance_cashier_filter(filters=None, **kwargs):
 		payload.update(kwargs)
 		filters = payload
 	filters = _coerce_filters(filters)
+	filters = _resolve_branch_scope(filters)["filters"]
 	query_parts = _sales_invoice_query_parts(
 		filters, alias="si", include_branch_filter=True, need_cashier=True
 	)
@@ -490,19 +491,30 @@ def get_branch_stock_activity_summary(filters=None):
 
 
 def _resolve_branch_scope(filters):
-	scope = get_branch_query_filters(
-		"RetailEdge Daily Sales Audit",
-		user=getattr(getattr(frappe, "session", None), "user", "Administrator"),
-		company=filters.get("company"),
-		branch=filters.get("branch"),
-	)
+	user = getattr(getattr(frappe, "session", None), "user", "Administrator")
+	scope = get_operational_branch_scope(filters.get("company"), user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed_branches = list(dict.fromkeys(scope.get("allowed_branches") or []))
+	requested_branch = filters.get("branch")
+	if requested_branch and restricted and requested_branch not in allowed_branches:
+		frappe.throw(
+			frappe._("You do not have active RetailEdge Branch access to Branch {0}.").format(
+				requested_branch
+			),
+			frappe.PermissionError,
+		)
+
 	effective = dict(filters)
-	if not effective.get("branch") and scope.get("branch"):
-		effective["branch"] = scope.get("branch")
+	effective["_branch_scope_restricted"] = restricted
+	effective["_allowed_branches"] = allowed_branches
+	if not requested_branch and restricted and len(allowed_branches) == 1:
+		effective["branch"] = allowed_branches[0]
 	return {
 		"filters": frappe._dict(effective),
-		"messages": scope.get("messages") or [],
-		"allowed_branches": scope.get("allowed_branches") or [],
+		"messages": [],
+		"allowed_branches": allowed_branches,
+		"restricted": restricted,
+		"source": scope.get("source"),
 	}
 
 
@@ -511,8 +523,8 @@ def get_candidate_branches(filters=None):
 	scope = _resolve_branch_scope(filters)
 	if scope["filters"].get("branch"):
 		return [scope["filters"]["branch"]]
-	if scope.get("allowed_branches"):
-		return list(scope["allowed_branches"])
+	if scope.get("restricted"):
+		return list(scope.get("allowed_branches") or [])
 	if not has_doctype("Branch"):
 		return []
 	query_filters = {}
@@ -565,7 +577,8 @@ def get_branch_performance_debug_summary(filters=None, **kwargs):
 		payload.update(kwargs)
 		filters = payload
 	filters = _coerce_filters(filters)
-	sales_where_sql, sales_params = _sales_invoice_where_sql(filters, alias="si", include_branch_filter=False)
+	filters = _resolve_branch_scope(filters)["filters"]
+	sales_where_sql, sales_params = _sales_invoice_where_sql(filters, alias="si", include_branch_filter=True)
 	submitted_sales_invoice_count = 0
 	sales_invoice_with_retailedge_branch_count = 0
 	if has_doctype("Sales Invoice"):
@@ -653,7 +666,7 @@ def _doctype_debug_count(doctype, filters, date_candidates):
 	if not has_doctype(doctype):
 		return 0
 	where_sql, params = _doctype_where_sql(
-		doctype, filters, alias="doc", date_candidates=date_candidates, include_branch_filter=False
+		doctype, filters, alias="doc", date_candidates=date_candidates, include_branch_filter=True
 	)
 	return frappe.db.sql(f"SELECT COUNT(doc.name) FROM `tab{doctype}` doc WHERE {where_sql}", params)[0][0]
 
@@ -703,6 +716,14 @@ def _sales_invoice_query_parts(filters, alias="si", include_branch_filter=True, 
 	if include_branch_filter and filters.get("branch"):
 		conditions.append(f"{branch_expr} = %s")
 		params.append(filters.get("branch"))
+	elif include_branch_filter and filters.get("_branch_scope_restricted"):
+		allowed_branches = list(filters.get("_allowed_branches") or [])
+		if allowed_branches:
+			placeholders = ", ".join(["%s"] * len(allowed_branches))
+			conditions.append(f"{branch_expr} IN ({placeholders})")
+			params.extend(allowed_branches)
+		else:
+			conditions.append("1=0")
 	elif include_branch_filter and not filters.get("include_unattributed"):
 		conditions.append(f"{branch_expr} IS NOT NULL")
 
@@ -741,6 +762,14 @@ def _doctype_where_sql(
 	if include_branch_filter and filters.get("branch"):
 		conditions.append(f"{branch_expr} = %s")
 		params.append(filters.get("branch"))
+	elif include_branch_filter and filters.get("_branch_scope_restricted"):
+		allowed_branches = list(filters.get("_allowed_branches") or [])
+		if allowed_branches:
+			placeholders = ", ".join(["%s"] * len(allowed_branches))
+			conditions.append(f"{branch_expr} IN ({placeholders})")
+			params.extend(allowed_branches)
+		else:
+			conditions.append("1=0")
 	elif include_branch_filter and not filters.get("include_unattributed"):
 		conditions.append(f"{branch_expr} IS NOT NULL")
 	return " AND ".join(conditions), params
@@ -915,6 +944,8 @@ def _get_unattributed_sales_invoice_rows(filters, only_with_payments=False):
 		as_dict=True,
 	)
 	resolved_rows = []
+	allowed_branches = set(filters.get("_allowed_branches") or [])
+	restricted = bool(filters.get("_branch_scope_restricted"))
 	for row in rows:
 		context = resolve_retailedge_branch_context(
 			doctype="Sales Invoice",
@@ -925,6 +956,8 @@ def _get_unattributed_sales_invoice_rows(filters, only_with_payments=False):
 			user=row.get("owner") or filters.get("cashier"),
 		)
 		branch = context.get("branch")
+		if restricted and branch not in allowed_branches:
+			continue
 		if not branch and not filters.get("include_unattributed"):
 			continue
 		row["resolved_branch"] = branch

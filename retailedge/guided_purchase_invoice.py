@@ -7,18 +7,18 @@ from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate, nowdate
 
+from retailedge.branch_assignment import has_branch_assignments
 from retailedge.branch_context import (
 	BRANCH_FIELD_CANDIDATES,
 	get_first_existing_field,
-	get_user_allowed_branches,
 	has_doctype,
 	has_field,
 	resolve_retailedge_operational_defaults,
-	user_has_global_branch_access,
 	validate_user_branch_access,
 )
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
 from retailedge.guided_pricing import resolve_price_list_context, resolve_purchase_item_pricing
+from retailedge.operating_context import get_operational_branch_scope, resolve_operational_branch
 
 ACTION_KEY = "record-purchase"
 PURCHASE_INVOICE_DOCTYPE = "Purchase Invoice"
@@ -31,23 +31,41 @@ def get_simple_purchase_invoice_context() -> dict[str, Any]:
 	_assert_can_create_purchase_invoice()
 	user = frappe.session.user
 	company = frappe.defaults.get_user_default("Company") or ""
-	branch = (
+	legacy_default_branch = (
 		frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
 	)
+	if not company:
+		frappe.throw(_("Set a default Company before creating a Purchase Invoice."))
+	_assert_read_permission("Company", company)
+
+	scope = get_operational_branch_scope(company, user=user)
+	if scope["restricted"]:
+		if len(scope["allowed_branches"]) <= 1:
+			branch = _resolve_guided_branch(company=company, branch="", user=user)
+		else:
+			branch = ""
+	else:
+		branch = str(legacy_default_branch or "").strip()
+		if branch:
+			branch = _resolve_guided_branch(company=company, branch=branch, user=user)
+
 	defaults = resolve_retailedge_operational_defaults(
 		company=company or None,
 		branch=branch or None,
 		user=user,
 	)
 	company = defaults.get("company") or company
-	branch = defaults.get("branch") or branch
-	if not company:
-		frappe.throw(_("Set a default Company before creating a Purchase Invoice."))
 	_assert_read_permission("Company", company)
 	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+		branch = _resolve_guided_branch(company=company, branch=branch, user=user)
+	elif not scope["restricted"] and defaults.get("branch"):
+		branch = _resolve_guided_branch(
+			company=company,
+			branch=defaults.get("branch") or "",
+			user=user,
+		)
 
 	warehouse = (
 		defaults.get("default_target_warehouse")
@@ -55,6 +73,8 @@ def get_simple_purchase_invoice_context() -> dict[str, Any]:
 		or defaults.get("warehouse")
 		or ""
 	)
+	if scope["restricted"] and not branch:
+		warehouse = ""
 	if warehouse and branch:
 		_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
 
@@ -295,15 +315,28 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 	return result
 
 
+def _resolve_guided_branch(*, company: str, branch: str, user: str) -> str:
+	branch = str(branch or "").strip()
+	# Explicit Branch values keep the established legacy validation path until a
+	# user has Branch Assignment history. Assignment-backed users and every blank-
+	# Branch write use the explicit operational-scope resolver.
+	if branch and not has_branch_assignments(user=user):
+		validate_user_branch_access(branch, user=user, company=company, throw=True)
+		return branch
+	return str(resolve_operational_branch(company, branch, user=user).get("branch") or "").strip()
+
+
 def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple[str, str, str]:
 	company = str(values.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."))
 	_assert_read_permission("Company", company)
 
-	branch = str(values.get("branch") or "").strip()
-	if branch:
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
+	branch = _resolve_guided_branch(
+		company=company,
+		branch=str(values.get("branch") or "").strip(),
+		user=user,
+	)
 
 	warehouse = str(values.get("warehouse") or "").strip()
 	if warehouse:
@@ -317,12 +350,22 @@ def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple
 
 
 def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str, Any] | None:
+	if not company:
+		return None
 	filters: dict[str, Any] = {"is_group": 0}
-	if company and has_field("Warehouse", "company"):
+	if has_field("Warehouse", "company"):
 		filters["company"] = company
+	branch = str(branch or "").strip()
+	if not branch:
+		scope = get_operational_branch_scope(company, user=user)
+		if not scope["restricted"]:
+			return filters
+		if len(scope["allowed_branches"]) > 1:
+			return None
+	branch = _resolve_guided_branch(company=company, branch=branch, user=user)
 	if not branch:
 		return filters
-	validate_user_branch_access(branch, user=user, company=company or None, throw=True)
+
 	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
 	if branch_field:
 		filters[branch_field] = branch
@@ -344,14 +387,14 @@ def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str,
 
 
 def _branch_search_filters(company: str, user: str) -> dict[str, Any]:
+	if not company:
+		return {"name": "__never__"}
 	filters: dict[str, Any] = {}
-	if company and has_field("Branch", "company"):
+	if has_field("Branch", "company"):
 		filters["company"] = company
-	if user_has_global_branch_access(user=user):
-		return filters
-	allowed = get_user_allowed_branches(user=user, company=company or None).get("branches") or []
-	if allowed:
-		filters["name"] = ["in", allowed]
+	scope = get_operational_branch_scope(company, user=user)
+	if scope["restricted"]:
+		filters["name"] = ["in", scope["allowed_branches"]] if scope["allowed_branches"] else "__never__"
 	return filters
 
 

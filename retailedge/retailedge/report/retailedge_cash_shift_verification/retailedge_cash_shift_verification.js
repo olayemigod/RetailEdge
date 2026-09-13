@@ -68,6 +68,8 @@ frappe.query_reports["RetailEdge Cash Shift Verification"] = {
 			label: __("Company"),
 			fieldtype: "Link",
 			options: "Company",
+			default: frappe.defaults.get_user_default("Company"),
+			reqd: 1,
 		},
 		{
 			fieldname: "branch",
@@ -91,13 +93,15 @@ frappe.query_reports["RetailEdge Cash Shift Verification"] = {
 			fieldname: "cash_status",
 			label: __("Cash Status"),
 			fieldtype: "Select",
-			options: "\nBalanced\nShortage\nOverage\nNeeds Review\nMissing Closing Shift\nMissing Opening Shift",
+			options:
+				"\nBalanced\nShortage\nOverage\nNeeds Review\nMissing Closing Shift\nMissing Opening Shift",
 		},
 		{
 			fieldname: "review_status",
 			label: __("Review Status"),
 			fieldtype: "Select",
-			options: "\nDraft\nReady for Review\nIn Review\nBalanced\nVariance Found\nClarification Required\nApproved\nRejected\nCancelled\nReopened",
+			options:
+				"\nDraft\nReady for Review\nIn Review\nBalanced\nVariance Found\nClarification Required\nApproved\nRejected\nCancelled\nReopened",
 		},
 		{
 			fieldname: "only_unsynced",

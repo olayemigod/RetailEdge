@@ -6,11 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, cstr
 
-from retailedge.branch_context import (
-	get_user_allowed_branches,
-	user_has_global_branch_access,
-	validate_user_branch_access,
-)
+from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.reporting_capabilities import EXPORT_SETTING, PRINT_SETTING
 from retailedge.utils.settings import RETAILEDGE_SETTINGS_DOCTYPE
 
@@ -63,7 +59,9 @@ _DASHBOARD_SPECS = {
 	"sales-overview": DashboardCapabilitySpec(
 		key="sales-overview",
 		label="Sales Overview",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		ref_doctype="Sales Invoice",
@@ -71,7 +69,9 @@ _DASHBOARD_SPECS = {
 	"money-overview": DashboardCapabilitySpec(
 		key="money-overview",
 		label="Money Overview",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		ref_doctype="Account",
@@ -79,7 +79,9 @@ _DASHBOARD_SPECS = {
 	"expense-overview": DashboardCapabilitySpec(
 		key="expense-overview",
 		label="Expenses Dashboard",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		ref_doctype="RetailEdge Cashier Expense",
@@ -87,7 +89,9 @@ _DASHBOARD_SPECS = {
 	"branch-performance": DashboardCapabilitySpec(
 		key="branch-performance",
 		label="Branch Performance",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		view_roles=_roles(
+			_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES
+		),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		ref_doctype="Branch",
@@ -131,31 +135,34 @@ def _spec(scope_key: str) -> DashboardCapabilitySpec:
 	return spec
 
 
-def _company_branch_count(company: str) -> int:
-	if not company or not frappe.db.exists("DocType", "Branch"):
-		return 0
-	meta = frappe.get_meta("Branch")
-	if not meta.has_field("company"):
-		return 0
-	return int(frappe.db.count("Branch", filters={"company": company}) or 0)
-
-
 def _validate_scope(*, company: str = "", branch: str = "", user: str) -> None:
 	company = cstr(company or "").strip()
 	branch = cstr(branch or "").strip()
 	if company and not frappe.has_permission("Company", "read", doc=company, user=user):
 		frappe.throw(_("You do not have access to this Company."), frappe.PermissionError)
+	if branch and not company:
+		frappe.throw(_("Company is required when selecting a Branch."), frappe.PermissionError)
+	if not company:
+		return
+
+	scope = get_operational_branch_scope(company, user=user)
+	restricted = bool(scope.get("restricted"))
+	allowed = {
+		cstr(value or "").strip()
+		for value in scope.get("allowed_branches") or []
+		if cstr(value or "").strip()
+	}
 	if branch:
-		validate_user_branch_access(branch, user=user, company=company or None, throw=True)
+		if restricted and branch not in allowed:
+			frappe.throw(
+				_("You do not have active dashboard access to Branch {0}.").format(branch),
+				frappe.PermissionError,
+			)
+		validate_operating_branch(company=company, branch=branch, user=user, throw=True)
 		return
-	if not company or user_has_global_branch_access(user=user):
-		return
-	if _company_branch_count(company) <= 1:
-		return
-	allowed = list(get_user_allowed_branches(user=user, company=company).get("branches") or [])
-	if not allowed:
+	if restricted and not allowed:
 		frappe.throw(
-			_("Your Branch access is not configured for this multi-branch Company."),
+			_("Your Branch dashboard access is not active for Company {0}.").format(company),
 			frappe.PermissionError,
 		)
 
@@ -210,11 +217,15 @@ def require_dashboard_action(
 	if action not in {"view", "print", "export"}:
 		frappe.throw(_("Unsupported RetailEdge dashboard action."))
 	frappe.throw(
-		_("You are not permitted to {0} this dashboard, or the capability is disabled in RetailEdge Settings.").format(action),
+		_(
+			"You are not permitted to {0} this dashboard, or the capability is disabled in RetailEdge Settings."
+		).format(action),
 		frappe.PermissionError,
 	)
 
 
 @frappe.whitelist()
-def get_dashboard_shell_capabilities(scope_key: str, company: str = "", branch: str = "") -> dict[str, object]:
+def get_dashboard_shell_capabilities(
+	scope_key: str, company: str = "", branch: str = ""
+) -> dict[str, object]:
 	return get_dashboard_capabilities(scope_key, company=company, branch=branch)

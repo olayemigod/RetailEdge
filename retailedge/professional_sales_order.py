@@ -8,11 +8,16 @@ from frappe.utils import getdate, nowdate
 
 from erpnext.selling.doctype.quotation.quotation import make_sales_order as erpnext_make_sales_order
 
-from retailedge.branch_context import validate_user_branch_access
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_quotation import _normalise_items, _validate_shipping_rule
-from retailedge.professional_selling import _assert_read, _coerce_values, _permission, _validate_context
+from retailedge.professional_selling import (
+	_assert_read,
+	_coerce_values,
+	_permission,
+	_validate_context,
+	_validate_stored_operational_branch,
+)
 
 
 def _set_branch_if_supported(doc, branch: str) -> None:
@@ -32,9 +37,11 @@ def _assert_mapped_sales_order_context(doc) -> tuple[str, str]:
 		frappe.throw(_("The mapped Sales Order has no Company."))
 	_assert_read("Company", company)
 
-	branch = str(doc.get("branch") or doc.get("retailedge_branch") or "").strip()
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+	branch = _validate_stored_operational_branch(
+		company=company,
+		branch=str(doc.get("branch") or doc.get("retailedge_branch") or "").strip(),
+		label=_("Mapped Sales Order"),
+	)
 
 	operating = get_operating_context() or {}
 	operating_company = str(operating.get("company") or "").strip()
@@ -53,10 +60,13 @@ def _preserve_source_quotation_context(source, target) -> None:
 	if source_company and target_company != source_company:
 		frappe.throw(_("The mapped Sales Order Company does not match the submitted Quotation."))
 
-	source_branch = str(source.get("branch") or source.get("retailedge_branch") or "").strip()
+	source_branch = _validate_stored_operational_branch(
+		company=source_company or target_company,
+		branch=str(source.get("branch") or source.get("retailedge_branch") or "").strip(),
+		label=_("Submitted Quotation"),
+	)
 	if not source_branch:
 		return
-	validate_user_branch_access(source_branch, user=frappe.session.user, company=source_company or target_company, throw=True)
 	target_branch = str(target.get("branch") or target.get("retailedge_branch") or "").strip()
 	if target_branch and target_branch != source_branch:
 		frappe.throw(_("The mapped Sales Order Branch does not match the submitted Quotation Branch."))

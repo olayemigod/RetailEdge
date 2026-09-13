@@ -12,12 +12,7 @@ class TestQuotationInvoiceConversion(unittest.TestCase):
 		return (APP_ROOT / relative).read_text(encoding="utf-8")
 
 	def test_registry_is_unique_per_quotation_and_auditable(self):
-		definition = json.loads(
-			self.read(
-				"retailedge/doctype/retailedge_quotation_invoice_conversion/"
-				"retailedge_quotation_invoice_conversion.json"
-			)
-		)
+		definition = json.loads(self.read("retailedge/doctype/retailedge_quotation_invoice_conversion/retailedge_quotation_invoice_conversion.json"))
 		self.assertEqual(definition["name"], "RetailEdge Quotation Invoice Conversion")
 		self.assertEqual(definition["autoname"], "field:quotation")
 		fields = {row["fieldname"]: row for row in definition["fields"]}
@@ -29,30 +24,17 @@ class TestQuotationInvoiceConversion(unittest.TestCase):
 		self.assertEqual(fields["converted_on"].get("fieldtype"), "Datetime")
 
 	def test_registry_internal_writes_do_not_narrow_erpnext_custom_roles(self):
-		definition = json.loads(
-			self.read(
-				"retailedge/doctype/retailedge_quotation_invoice_conversion/"
-				"retailedge_quotation_invoice_conversion.json"
-			)
-		)
+		definition = json.loads(self.read("retailedge/doctype/retailedge_quotation_invoice_conversion/retailedge_quotation_invoice_conversion.json"))
 		all_role = next(row for row in definition["permissions"] if row.get("role") == "All")
 		self.assertEqual(all_role.get("create"), 1)
 		self.assertEqual(all_role.get("write"), 1)
 		self.assertEqual(all_role.get("delete"), 1)
 		self.assertFalse(bool(all_role.get("read")))
-		# Controller authorization still blocks direct/manual writes. The broad
-		# internal write permission therefore does not expose the audit registry.
-		controller = self.read(
-			"retailedge/doctype/retailedge_quotation_invoice_conversion/"
-			"retailedge_quotation_invoice_conversion.py"
-		)
+		controller = self.read("retailedge/doctype/retailedge_quotation_invoice_conversion/retailedge_quotation_invoice_conversion.py")
 		self.assertIn("conversion_write_authorized()", controller)
 
 	def test_registry_blocks_manual_mutation(self):
-		controller = self.read(
-			"retailedge/doctype/retailedge_quotation_invoice_conversion/"
-			"retailedge_quotation_invoice_conversion.py"
-		)
+		controller = self.read("retailedge/doctype/retailedge_quotation_invoice_conversion/retailedge_quotation_invoice_conversion.py")
 		self.assertIn("conversion_write_authorized()", controller)
 		self.assertIn("cannot be edited manually", controller)
 		self.assertIn("cannot be deleted manually", controller)
@@ -61,23 +43,18 @@ class TestQuotationInvoiceConversion(unittest.TestCase):
 
 	def test_registry_reservation_is_transactional_and_race_safe(self):
 		source = self.read("quotation_invoice_conversion.py")
-		for contract in (
-			"reserve_quotation_conversion",
-			"frappe.DuplicateEntryError",
-			"tracker.insert()",
-			"complete_quotation_conversion",
-			"tracker.save()",
-			"no manual commit is performed",
-		):
+		for contract in ("reserve_quotation_conversion", "frappe.DuplicateEntryError", "tracker.insert()", "complete_quotation_conversion", "tracker.save()", "no manual commit is performed"):
 			self.assertIn(contract, source)
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertNotIn("ignore_permissions=True", source)
 
 	def test_deleted_draft_can_retire_stale_registry_without_weakening_cancelled_invoice_safety(self):
 		source = self.read("quotation_invoice_conversion.py")
-		self.assertIn('frappe.db.exists("Sales Invoice", sales_invoice)', source)
-		self.assertIn('frappe.get_doc(CONVERSION_DOCTYPE, existing["name"]).delete()', source)
-		self.assertIn("A user may legitimately delete an unwanted draft Sales Invoice", source)
+		exists_check = source.index('frappe.db.exists("Sales Invoice", sales_invoice)')
+		stale_delete = source.index('frappe.get_doc(CONVERSION_DOCTYPE, existing["name"]).delete()', exists_check)
+		reserve_insert = source.index("tracker.insert()", stale_delete)
+		self.assertLess(exists_check, stale_delete)
+		self.assertLess(stale_delete, reserve_insert)
 		self.assertIn("use ERPNext Amend", source)
 
 	def test_direct_invoice_reserves_before_invoice_insert_and_completes_after(self):

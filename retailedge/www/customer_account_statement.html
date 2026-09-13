@@ -1,0 +1,100 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Account Statement{% endblock %}
+
+{% block page_content %}
+<div class="edge-statement-shell" data-edge-suite-ready="true">
+	<section class="edge-statement-hero">
+		<div>
+			<div class="edge-statement-kicker">{{ company_name or "Account Statement" }}</div>
+			<h1>Account Statement</h1>
+			<p>Receivable activity from the ERPNext payment ledger for your customer account.</p>
+		</div>
+		<a class="edge-statement-back" href="/customer_portal">Back to Customer Portal</a>
+	</section>
+
+	<form class="edge-statement-filters" method="get" action="/customer_account_statement">
+		<label>
+			<span>Company</span>
+			<select name="company"{% if not statement.companies %} disabled{% endif %}>
+				{% for company in statement.companies %}
+				<option value="{{ company }}"{% if company == statement.company %} selected{% endif %}>{{ company }}</option>
+				{% endfor %}
+			</select>
+		</label>
+		<label>
+			<span>From Date</span>
+			<input type="date" name="from_date" value="{{ statement.from_date }}" required>
+		</label>
+		<label>
+			<span>To Date</span>
+			<input type="date" name="to_date" value="{{ statement.to_date }}" required>
+		</label>
+		<button type="submit"{% if not statement.companies %} disabled{% endif %}>Apply</button>
+	</form>
+
+	<section class="edge-statement-metrics">
+		<article><span>Opening Balance</span><strong>{{ frappe.utils.fmt_money(statement.opening_balance or 0, currency=statement.currency or None) }}</strong></article>
+		<article><span>Charges / Debits</span><strong>{{ frappe.utils.fmt_money(statement.total_debit or 0, currency=statement.currency or None) }}</strong></article>
+		<article><span>Payments / Credits</span><strong>{{ frappe.utils.fmt_money(statement.total_credit or 0, currency=statement.currency or None) }}</strong></article>
+		<article><span>Closing Balance</span><strong>{{ frappe.utils.fmt_money(statement.closing_balance or 0, currency=statement.currency or None) }}</strong></article>
+	</section>
+
+	<section class="edge-statement-panel">
+		<header>
+			<div>
+				<div class="edge-statement-kicker">Statement period</div>
+				<h2>{{ frappe.utils.formatdate(statement.from_date) }} – {{ frappe.utils.formatdate(statement.to_date) }}</h2>
+			</div>
+			<div class="edge-statement-meta">
+				<span>{{ statement.row_count or 0 }} entries</span>
+				{% if statement.currency %}<span>{{ statement.currency }}</span>{% endif %}
+			</div>
+		</header>
+
+		{% if statement.rows %}
+		<div class="edge-statement-table-wrap">
+			<table class="edge-statement-table">
+				<thead>
+					<tr>
+						<th>Date</th>
+						<th>Customer</th>
+						<th>Transaction</th>
+						<th>Against</th>
+						<th>Remarks</th>
+						<th class="edge-num">Debit</th>
+						<th class="edge-num">Credit</th>
+						<th class="edge-num">Balance</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for row in statement.rows %}
+					<tr>
+						<td>{{ frappe.utils.formatdate(row.posting_date) }}</td>
+						<td>{{ row.customer }}</td>
+						<td><strong>{{ row.voucher_no or "—" }}</strong>{% if row.voucher_type %}<small>{{ row.voucher_type }}</small>{% endif %}</td>
+						<td>{{ row.against_voucher_no or "—" }}{% if row.against_voucher_type %}<small>{{ row.against_voucher_type }}</small>{% endif %}</td>
+						<td class="edge-statement-remarks">{{ row.remarks or "—" }}</td>
+						<td class="edge-num">{% if row.debit %}{{ frappe.utils.fmt_money(row.debit, currency=statement.currency or None) }}{% else %}—{% endif %}</td>
+						<td class="edge-num">{% if row.credit %}{{ frappe.utils.fmt_money(row.credit, currency=statement.currency or None) }}{% else %}—{% endif %}</td>
+						<td class="edge-num"><strong>{{ frappe.utils.fmt_money(row.balance, currency=statement.currency or None) }}</strong></td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}
+		<div class="edge-statement-empty">No receivable ledger entries were found for this period.</div>
+		{% endif %}
+	</section>
+
+	<section class="edge-statement-note">
+		<strong>Accounting source</strong>
+		<p>This statement is a read-only view of ERPNext Payment Ledger Entry receivable activity. It does not create, reconcile or change invoices, payments, credits or ledger entries.</p>
+	</section>
+</div>
+
+<style>
+.edge-statement-shell{--edge-statement-surface:var(--edge-color-surface,#fff);--edge-statement-subtle:var(--edge-color-surface-muted,#f7f7f8);--edge-statement-border:var(--edge-color-border,#e5e7eb);--edge-statement-ink:var(--edge-color-ink,#111827);--edge-statement-muted:var(--edge-color-ink-muted,#6b7280);--edge-statement-accent:var(--edge-color-primary,#2563eb);display:grid;gap:1rem;color:var(--edge-statement-ink);padding:1rem 0 2rem}.edge-statement-hero,.edge-statement-filters,.edge-statement-panel,.edge-statement-metrics article,.edge-statement-note{background:var(--edge-statement-surface);border:1px solid var(--edge-statement-border);border-radius:14px}.edge-statement-hero{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;padding:1.25rem}.edge-statement-hero h1,.edge-statement-panel h2{margin:.2rem 0 .35rem}.edge-statement-hero p,.edge-statement-note p{margin:0;color:var(--edge-statement-muted)}.edge-statement-kicker{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--edge-statement-muted)}.edge-statement-back{display:inline-flex;align-items:center;justify-content:center;min-height:2.35rem;padding:.45rem .8rem;border:1px solid var(--edge-statement-border);border-radius:8px;color:var(--edge-statement-ink)!important;text-decoration:none;white-space:nowrap}.edge-statement-filters{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:.8rem;align-items:end;padding:1rem}.edge-statement-filters label{display:grid;gap:.35rem}.edge-statement-filters label span{font-size:.78rem;font-weight:600;color:var(--edge-statement-muted)}.edge-statement-filters select,.edge-statement-filters input,.edge-statement-filters button{min-height:2.45rem;border:1px solid var(--edge-statement-border);border-radius:8px;padding:.45rem .65rem;background:var(--edge-statement-surface);color:var(--edge-statement-ink);font:inherit}.edge-statement-filters button{background:var(--edge-statement-accent);border-color:var(--edge-statement-accent);color:#fff;font-weight:600;cursor:pointer}.edge-statement-filters button:disabled{opacity:.55;cursor:not-allowed}.edge-statement-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}.edge-statement-metrics article{display:grid;gap:.35rem;padding:1rem}.edge-statement-metrics span{font-size:.8rem;color:var(--edge-statement-muted)}.edge-statement-metrics strong{font-size:1.15rem}.edge-statement-panel{overflow:hidden}.edge-statement-panel>header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;padding:1rem;border-bottom:1px solid var(--edge-statement-border)}.edge-statement-meta{display:flex;gap:.5rem;flex-wrap:wrap}.edge-statement-meta span{padding:.25rem .5rem;border-radius:999px;background:var(--edge-statement-subtle);font-size:.75rem;color:var(--edge-statement-muted)}.edge-statement-table-wrap{overflow:auto}.edge-statement-table{width:100%;border-collapse:collapse;min-width:980px}.edge-statement-table th,.edge-statement-table td{padding:.7rem .8rem;border-bottom:1px solid var(--edge-statement-border);vertical-align:top;text-align:left}.edge-statement-table th{position:sticky;top:0;background:var(--edge-statement-subtle);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--edge-statement-muted);z-index:1}.edge-statement-table tr:last-child td{border-bottom:0}.edge-statement-table small{display:block;margin-top:.15rem;color:var(--edge-statement-muted);font-size:.74rem}.edge-statement-table .edge-num{text-align:right;white-space:nowrap}.edge-statement-remarks{max-width:24rem;color:var(--edge-statement-muted);font-size:.82rem}.edge-statement-empty{padding:1.5rem;color:var(--edge-statement-muted)}.edge-statement-note{padding:1rem}@media(max-width:900px){.edge-statement-filters{grid-template-columns:1fr 1fr}.edge-statement-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.edge-statement-hero{flex-direction:column}.edge-statement-filters,.edge-statement-metrics{grid-template-columns:1fr}.edge-statement-back{width:100%}}
+</style>
+{% endblock %}

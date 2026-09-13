@@ -22,6 +22,7 @@
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
+			:sort="reportSort"
 			:pagination="pagination"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -34,6 +35,7 @@
 			@retry="fetchData"
 			@page-change="goToPage"
 			@page-size-change="setPageSize"
+			@sort-change="handleSortChange"
 			@cell-click="openReportCell"
 		>
 			<template #actions>
@@ -214,10 +216,11 @@ export default {
 			error: "",
 			rows: [],
 			columns: [],
-			summary: [],
+			summary: [], reportSort: null,
 			pagination: {},
 			scan: {},
 			menuItems: [],
+			canUseNativeDesk: false,
 			tenantName: "",
 			branchName: "",
 			userName: "",
@@ -263,7 +266,7 @@ export default {
 			return (this.columns || []).filter((column) => !column.hidden).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: ["invoice", "item_code", "customer", "return_against"].includes(column.fieldname),
+				clickable: this.canUseNativeDesk && ["invoice", "item_code", "customer", "return_against"].includes(column.fieldname),
 			}));
 		},
 		exportDataset() {
@@ -308,7 +311,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+					: callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.sales_reporting.get_sales_reporting_context"),
 					navigationPromise,
@@ -319,6 +322,7 @@ export default {
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
+				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.requiredReady) await this.fetchData();
 			} catch (error) {
@@ -343,6 +347,7 @@ export default {
 			const items = this.menuItems.flatMap((group) => group.items || []);
 			const item = items.find((candidate) => candidate.route === route);
 			if (!item) return;
+			if ((item.target_type === "DocType" || item.target_type === "Report") && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
 			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
@@ -350,7 +355,7 @@ export default {
 		},
 		async searchOptions(kind, txt) {
 			const result = await callMethod("retailedge.sales_reporting.search_sales_reporting_options", {
-				kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group,
+				kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group, from_date: this.filters.from_date, to_date: this.filters.to_date,
 			});
 			return Array.isArray(result) ? result : [];
 		},
@@ -364,12 +369,18 @@ export default {
 		onCompanySelected(option) {
 			this.filters.company = option.value;
 			this.filters.branch = "";
+			this.filters.customer = "";
+			this.customerLabel = "";
+			this.filters.salesperson = "";
 			this.filters.warehouse = "";
 			this.branchName = "";
 			this.currentPage = 1;
 		},
 		onBranchSelected(option) {
 			this.filters.branch = option.value;
+			this.filters.customer = "";
+			this.customerLabel = "";
+			this.filters.salesperson = "";
 			this.filters.warehouse = "";
 			this.branchName = option.label || option.value;
 			this.currentPage = 1;
@@ -457,10 +468,10 @@ export default {
 			try {
 				const pageSize = Number(this.filters.page_size || 50);
 				const start = Math.max(0, (this.currentPage - 1) * pageSize);
-				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize });
+				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
 				this.rows = result.rows || [];
 				this.columns = (result.columns || []).filter((column) => !column.hidden);
-				this.summary = result.summary || [];
+				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.scan = result.metadata?.scan || {};
 				this.companyCurrency = result.metadata?.company_currency || this.companyCurrency;
 				const totalRows = Number(result.total || this.rows.length);
@@ -497,6 +508,7 @@ export default {
 				],
 			};
 		},
+		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) {
 			const next = Math.max(1, Number(page || 1));
 			if (next === this.currentPage) return;
@@ -518,6 +530,7 @@ export default {
 		openDrilldown(column, row) {
 			const value = row?.[column.fieldname];
 			if (!value) return;
+			if (!this.canUseNativeDesk) return;
 			if (["invoice", "return_against"].includes(column.fieldname)) frappe.set_route("Form", "Sales Invoice", value);
 			else if (column.fieldname === "item_code") frappe.set_route("Form", "Item", value);
 			else if (column.fieldname === "customer") frappe.set_route("Form", "Customer", value);

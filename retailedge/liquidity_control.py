@@ -6,11 +6,11 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, cint, flt, getdate, nowdate
 
-from retailedge.branch_context import user_has_global_branch_access
 from retailedge.cash_movement import get_cash_movement
 from retailedge.customer_receivables import get_customer_receivables_export
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.financial_position import _get_liquid_position
+from retailedge.reporting_scope import has_unrestricted_report_scope
 from retailedge.supplier_payables import get_supplier_payables_export
 
 DEFAULT_HORIZON_DAYS = 30
@@ -19,7 +19,9 @@ DASHBOARD_KEY = "owner-dashboard"
 
 
 @frappe.whitelist()
-def get_liquidity_control(filters: dict[str, Any] | str | None = None, horizon_days: int | str = DEFAULT_HORIZON_DAYS) -> dict[str, Any]:
+def get_liquidity_control(
+	filters: dict[str, Any] | str | None = None, horizon_days: int | str = DEFAULT_HORIZON_DAYS
+) -> dict[str, Any]:
 	resolved = _coerce_filters(filters)
 	horizon = max(1, min(cint(horizon_days) or DEFAULT_HORIZON_DAYS, MAX_HORIZON_DAYS))
 	company = str(resolved.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
@@ -32,7 +34,10 @@ def get_liquidity_control(filters: dict[str, Any] | str | None = None, horizon_d
 	liquid = _get_liquid_position(
 		company=company,
 		branch=branch,
-		global_branch_scope=user_has_global_branch_access(user=frappe.session.user),
+		unrestricted_company_scope=has_unrestricted_report_scope(
+			company,
+			user=frappe.session.user,
+		),
 	)
 	cash = get_cash_movement(resolved, page=1, page_size=1)
 	position = _lightweight_liquidity_position(liquid=liquid, cash=cash)
@@ -104,7 +109,9 @@ def _build_liquidity_control(
 	)
 
 	immediate_coverage = _ratio(cash_balance, obligations_due) if cash_available else None
-	indicative_coverage = _ratio((cash_balance or 0.0) + collections_due, obligations_due) if cash_available else None
+	indicative_coverage = (
+		_ratio((cash_balance or 0.0) + collections_due, obligations_due) if cash_available else None
+	)
 	indicative_gap = ((cash_balance or 0.0) + collections_due - obligations_due) if cash_available else None
 	period = {str(card.get("label") or ""): card for card in position.get("selected_period") or []}
 

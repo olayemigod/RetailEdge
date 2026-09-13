@@ -7,6 +7,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, nowdate
 
+from retailedge.branch_performance_dashboard import (
+	_resolve_option_branch_scope as _resolve_pos_option_branch_scope,
+	_search_cashiers as _search_scoped_cashiers,
+	_search_pos_profiles as _search_scoped_pos_profiles,
+)
 from retailedge.retailedge.report.retailedge_daily_sales_audit_register.retailedge_daily_sales_audit_register import (
 	get_columns,
 	get_data,
@@ -48,37 +53,34 @@ def get_daily_sales_audit_page_context() -> dict[str, Any]:
 
 
 @frappe.whitelist()
-def search_daily_sales_audit_page_options(kind: str, txt: str = "", company: str = "") -> list[dict[str, str]]:
+def search_daily_sales_audit_page_options(
+	kind: str,
+	txt: str = "",
+	company: str = "",
+	branch: str = "",
+	pos_profile: str = "",
+) -> list[dict[str, str]]:
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(branch or "").strip()
+	pos_profile = str(pos_profile or "").strip()
+	like = f"%{txt}%"
 	if kind == "company":
 		return _search_named("Company", txt)
 	if kind == "branch":
 		rows = branch_query("Branch", txt, "name", 0, MAX_LINK_RESULTS, {"company": company})
 		return [{"value": row[0], "label": row[0]} for row in rows]
-	if kind == "cashier":
-		rows = frappe.get_list(
-			"User",
-			filters={"enabled": 1},
-			or_filters={"name": ["like", f"%{txt}%"], "full_name": ["like", f"%{txt}%"]},
-			fields=["name", "full_name"],
-			order_by="full_name asc, name asc",
-			limit=MAX_LINK_RESULTS,
+	if kind in {"pos_profile", "cashier"}:
+		branch_scope = _resolve_pos_option_branch_scope(company, branch)
+		if kind == "pos_profile":
+			return _search_scoped_pos_profiles(like, company, branch_scope)
+		return _search_scoped_cashiers(
+			like,
+			company,
+			branch_scope,
+			pos_profile=pos_profile,
 		)
-		return [{"value": row.name, "label": row.full_name or row.name, "description": row.name} for row in rows]
-	if kind == "pos_profile":
-		filters: dict[str, Any] = {"name": ["like", f"%{txt}%"]}
-		if company:
-			filters["company"] = company
-		rows = frappe.get_list(
-			"POS Profile",
-			filters=filters,
-			fields=["name"],
-			order_by="name asc",
-			limit=MAX_LINK_RESULTS,
-		)
-		return [{"value": row.name, "label": row.name} for row in rows]
 	frappe.throw(_("Unsupported Daily Sales Audit search type."))
 
 
@@ -87,8 +89,11 @@ def get_daily_sales_audit_page(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
 	page_size: int | str = DEFAULT_PAGE_SIZE,
+	sort: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
+	from retailedge.report_sorting import apply_materialized_report_sort
 	dataset = _build_dataset(_coerce_filters(filters))
+	apply_materialized_report_sort(dataset, sort, "daily-sales-audit")
 	return _page_response(dataset, page=page, page_size=page_size)
 
 

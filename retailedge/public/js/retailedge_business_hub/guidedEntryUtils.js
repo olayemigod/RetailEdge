@@ -136,10 +136,7 @@ function displayLabel(doc) {
 	);
 }
 
-export function quickCreateMaster(doctype, query, initialValues = {}) {
-	const value = String(query || "").trim();
-	if (!value) return Promise.resolve(null);
-
+export function openQuickEntryMaster(doctype, initialValues = {}) {
 	return new Promise((resolve, reject) => {
 		let settled = false;
 		const finish = (result) => {
@@ -183,6 +180,12 @@ export function quickCreateMaster(doctype, query, initialValues = {}) {
 			fail(error);
 		}
 	});
+}
+
+export function quickCreateMaster(doctype, query, initialValues = {}) {
+	const value = String(query || "").trim();
+	if (!value) return Promise.resolve(null);
+	return openQuickEntryMaster(doctype, initialValues);
 }
 
 export function quickCreateCustomer(query) {

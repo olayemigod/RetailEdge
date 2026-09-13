@@ -7,6 +7,10 @@ from frappe.utils import cint, flt, today
 
 from retailedge.branch_context import apply_branch_context_to_doc
 from retailedge.cashier_context import get_current_cashier_context, get_shift_cash_snapshot
+from retailedge.operating_context import (
+	get_operational_branch_scope,
+	resolve_operational_branch,
+)
 from retailedge.cashier_expense import append_cashier_expense_action_log
 from retailedge.cashier_expense_posting import (
 	build_cashier_expense_posting_preview,
@@ -24,6 +28,7 @@ class RetailEdgeCashierExpense(Document):
 
 	def validate(self):
 		apply_branch_context_to_doc(self, overwrite=False, validate_access=True)
+		self.validate_operational_branch_scope()
 		self.validate_expense_category()
 		self.validate_open_shift_requirement()
 		self.validate_cash_account_requirement()
@@ -120,6 +125,27 @@ class RetailEdgeCashierExpense(Document):
 		self.expense_account = category.get("expense_account")
 		if category.get("default_cost_center") and self._should_use_category_cost_center(category.get("default_cost_center")):
 			self.cost_center = category["default_cost_center"]
+
+	def validate_operational_branch_scope(self):
+		company = str(self.company or "").strip()
+		branch = str(self.branch or "").strip()
+		if not company:
+			return
+		scope = get_operational_branch_scope(company, user=frappe.session.user)
+		if branch:
+			self.branch = str(
+				resolve_operational_branch(
+					company,
+					branch,
+					user=frappe.session.user,
+				).get("branch")
+				or ""
+			).strip()
+		elif scope["restricted"]:
+			frappe.throw(
+				_("Cashier Expense has no Branch attribution for your restricted access."),
+				frappe.PermissionError,
+			)
 
 	def validate_expense_category(self):
 		if not self.expense_category:
