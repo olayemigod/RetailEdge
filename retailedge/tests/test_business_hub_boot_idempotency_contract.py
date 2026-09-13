@@ -50,6 +50,6 @@ def test_route_bridge_preserves_mounted_hub_across_browser_history():
 	non_active_start = bridge.index("if (!isActiveRoute())")
 	non_active_end = bridge.index("\n\t\t}", non_active_start)
 	non_active = bridge[non_active_start:non_active_end]
-	self.assertNotIn("retailedgeTeardownBusinessHubPage", non_active)
+	assert "retailedgeTeardownBusinessHubPage" not in non_active
 	for event_name in ("popstate", "hashchange", "pageshow"):
-		self.assertIn(event_name, bridge)
+		assert event_name in bridge
