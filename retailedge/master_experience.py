@@ -194,10 +194,10 @@ SETUP_MANAGED_DOCTYPES = {
 
 
 def _promote_browser_approved_r4_pages(navigation_groups: list[dict[str, Any]]) -> None:
-	"""Promote only R4 pages that completed local browser QA.
+	"""Promote the R4 pages already accepted into final RetailEdge composition.
 
-	Stock Movement History deliberately remains on its native Query Report until
-	its separate parity/export/mobile promotion gate is completed.
+	Stock Movement History is promoted separately by _promote_stock_movement_history()
+	because its hardened Page now owns the 1.0 everyday experience when permitted.
 	"""
 	for group in navigation_groups:
 		for item in group.get("items") or []:
