@@ -140,7 +140,6 @@ def search_simple_stock_transfer_options(
 	_assert_can_create_stock_entry()
 	values = _coerce_values(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
-	operating = get_operating_context() or {}
 	company = resolve_guided_company(values.get("company") or "", user=frappe.session.user)
 	source_branch = values.get("source_branch") or ""
 	target_branch = values.get("target_branch") or ""
@@ -188,7 +187,6 @@ def create_simple_stock_transfer_draft(values: dict | str | None = None) -> dict
 	_assert_can_create_stock_entry()
 	values = _coerce_values(values)
 	user = frappe.session.user
-	operating = get_operating_context() or {}
 	company = resolve_guided_company(values.get("company") or "", user=user)
 	if not company:
 		frappe.throw(_("Company is required."))
