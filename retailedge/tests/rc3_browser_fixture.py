@@ -48,9 +48,50 @@ def _ensure_branch(branch_name: str) -> None:
 	branch.insert(ignore_permissions=True)
 
 
-def _ensure_branch_profile(branch_name: str, *, is_default: bool = False) -> None:
+def _ensure_warehouse(branch_name: str) -> str:
+	warehouse_name = f"{branch_name} Stock"
+	existing = frappe.db.get_value(
+		"Warehouse",
+		{"warehouse_name": warehouse_name, "company": COMPANY},
+		"name",
+	)
+	if existing:
+		return str(existing)
+
+	parent_warehouse = frappe.db.get_value(
+		"Warehouse",
+		{"company": COMPANY, "is_group": 1},
+		"name",
+		order_by="lft asc",
+	)
+	if not parent_warehouse:
+		frappe.throw(f"No Warehouse root exists for {COMPANY}.")
+
+	warehouse = frappe.get_doc(
+		{
+			"doctype": "Warehouse",
+			"warehouse_name": warehouse_name,
+			"company": COMPANY,
+			"parent_warehouse": parent_warehouse,
+			"is_group": 0,
+			"disabled": 0,
+		}
+	).insert(ignore_permissions=True)
+	return str(warehouse.name)
+
+
+def _ensure_branch_profile(
+	branch_name: str,
+	*,
+	default_warehouse: str,
+	is_default: bool = False,
+) -> None:
 	profile_name = f"RC3 {branch_name}"
 	if frappe.db.exists("RetailEdge Branch Profile", profile_name):
+		profile = frappe.get_doc("RetailEdge Branch Profile", profile_name)
+		if profile.default_warehouse != default_warehouse:
+			profile.default_warehouse = default_warehouse
+			profile.save(ignore_permissions=True)
 		return
 	frappe.get_doc(
 		{
@@ -60,6 +101,7 @@ def _ensure_branch_profile(branch_name: str, *, is_default: bool = False) -> Non
 			"company": COMPANY,
 			"branch": branch_name,
 			"is_default_for_company": 1 if is_default else 0,
+			"default_warehouse": default_warehouse,
 			"notes": "Deterministic RC3 browser/persona fixture.",
 		}
 	).insert(ignore_permissions=True)
@@ -104,9 +146,15 @@ def seed_rc3_personas() -> dict:
 	for email, (first_name, roles) in EXTRA_PERSONAS.items():
 		_ensure_user(email, first_name, roles)
 
+	warehouses = {}
 	for index, branch_name in enumerate(BRANCHES):
 		_ensure_branch(branch_name)
-		_ensure_branch_profile(branch_name, is_default=index == 0)
+		warehouses[branch_name] = _ensure_warehouse(branch_name)
+		_ensure_branch_profile(
+			branch_name,
+			default_warehouse=warehouses[branch_name],
+			is_default=index == 0,
+		)
 
 	for email, assignments in ACTIVE_ASSIGNMENTS.items():
 		for branch_name, branch_role, is_primary in assignments:
@@ -132,6 +180,7 @@ def seed_rc3_personas() -> dict:
 	return {
 		**base,
 		"branches": list(BRANCHES),
+		"warehouses": warehouses,
 		"extra_users": {email: list(roles) for email, (_name, roles) in EXTRA_PERSONAS.items()},
 		"active_assignments": {
 			email: [branch for branch, _role, _primary in assignments]

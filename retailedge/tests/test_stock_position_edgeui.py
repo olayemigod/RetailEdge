@@ -13,6 +13,7 @@ BACKEND = APP_ROOT / "stock_position.py"
 BUNDLE = APP_ROOT / "public" / "js" / "stock_position.bundle.js"
 COMPONENT = APP_ROOT / "public" / "js" / "stock_position" / "StockPositionReport.vue"
 PAGE_ROOT = APP_ROOT / "retailedge" / "page" / "stock_position"
+RC3_FIXTURE = APP_ROOT / "tests" / "rc3_browser_fixture.py"
 
 
 class TestStockPositionEdgeUI(unittest.TestCase):
@@ -29,6 +30,17 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 			PAGE_ROOT / "stock_position.py",
 		):
 			self.assertTrue(path.exists(), path)
+
+	def test_rc3_fixture_seeds_branch_warehouse_scope(self):
+		source = self.read(RC3_FIXTURE)
+		for contract in (
+			"def _ensure_warehouse(branch_name: str) -> str:",
+			'"parent_warehouse": parent_warehouse',
+			'"default_warehouse": default_warehouse',
+			"profile.default_warehouse = default_warehouse",
+			"warehouses[branch_name] = _ensure_warehouse(branch_name)",
+		):
+			self.assertIn(contract, source)
 
 	def test_page_is_stock_and_retailedge_role_gated(self):
 		payload = json.loads(self.read(PAGE_ROOT / "stock_position.json"))
