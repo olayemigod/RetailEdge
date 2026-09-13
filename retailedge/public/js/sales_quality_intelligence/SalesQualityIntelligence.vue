@@ -49,7 +49,7 @@
 					<EdgeLinkField v-model="filters.warehouse" label="Warehouse" placeholder="All permitted warehouses" :searcher="warehouseSearch" @select="onWarehouseSelected" @clear="clearWarehouse" />
 					<label class="edge-field"><span class="edge-field-label">High Reduction Threshold (%)</span><input v-model.number="filters.high_reduction_percent" class="edge-input" type="number" min="0" max="100" step="1" /></label>
 					<label v-if="showCosts" class="edge-field"><span class="edge-field-label">Low Margin Threshold (%)</span><input v-model.number="filters.low_margin_percent" class="edge-input" type="number" min="-100" max="100" step="1" /></label>
-					<label class="edge-field"><span class="edge-field-label">Rows per page</span><select v-model.number="pageSize" class="edge-input" @change="resetAndFetch"><option :value="25">25</option><option :value="50">50</option><option :value="100">100</option></select></label>
+					<EdgeDropdown :modelValue="String(pageSize)" :options="['25', '50', '100']" label="Rows per page" @change="pageSize = Number($event?.value || $event || 50); resetAndFetch()" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="resetAndFetch">{{ loading ? "Reviewing…" : "Apply / Refresh" }}</button></div>
 				</div>
 			</template>
@@ -71,7 +71,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -133,7 +133,7 @@ export default {
 		async fetchData() { if (!this.filters.company) return; this.loading = true; this.error = ""; try { const result = await callMethod(this.pageMethod, { filters: { ...this.filters }, page: this.page, page_size: this.pageSize }); this.rows = result.rows || []; this.columns = result.columns || []; this.summary = result.summary || []; this.pagination = result.pagination || {}; this.metadata = result.metadata || {}; this.showCosts = Boolean(result.show_costs); } catch (error) { this.rows = []; this.summary = []; this.error = errorMessage(error, "Discount & Sales Quality failed to load."); } finally { this.loading = false; } },
 		async loadExportDataset() { return callMethod(this.exportMethod, { filters: { ...this.filters } }); },
 		openReportCell(payload) { if (!this.canUseNativeDesk) return; const row = payload?.row || {}; const field = payload?.column?.fieldname; if (field === "invoice" && row.invoice) window.open(`/app/sales-invoice/${encodeURIComponent(row.invoice)}`, "_blank", "noopener,noreferrer"); if (field === "customer" && row.customer) window.open(`/app/customer/${encodeURIComponent(row.customer)}`, "_blank", "noopener,noreferrer"); },
-		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
+		formatCurrency(value) { try { return window.retailedge.formatPlainValue(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (column?.fieldtype === "Percent") return `${Number(value || 0).toFixed(1)}%`; if (column?.fieldtype === "Date" && value) { try { return frappe.datetime.str_to_user(value); } catch (_error) { return String(value); } } if (value === null || value === undefined || value === "") return "—"; return String(value); },
 	},
 };
