@@ -1,7 +1,7 @@
 (function () {
 	"use strict";
 
-	const PRODUCT_SELECTOR = '.edge-app-shell[data-edge-product="retailedge"]';
+	const PRODUCT_SELECTOR = ".edge-app-shell[data-edge-product]";
 	const HOST_CLASS = "retailedge-topbar-branch-switcher";
 	const mounts = new Map();
 	let observer = null;
@@ -123,7 +123,11 @@
 		for (const [shell] of mounts) {
 			if (!shell?.isConnected) cleanup(shell);
 		}
-		document.querySelectorAll(PRODUCT_SELECTOR).forEach(ensureShell);
+		document.querySelectorAll(PRODUCT_SELECTOR).forEach((shell) => {
+			if (String(shell.getAttribute("data-edge-product") || "").trim().toLowerCase() === "retailedge") {
+				ensureShell(shell);
+			}
+		});
 	}
 
 	function schedule() {
