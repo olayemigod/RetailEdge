@@ -7,18 +7,15 @@ from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate, nowdate
 
-from retailedge.branch_context import (
-	BRANCH_FIELD_CANDIDATES,
-	get_first_existing_field,
-	has_doctype,
-	has_field,
-	resolve_retailedge_operational_defaults,
+from retailedge.branch_context import has_doctype, resolve_retailedge_operational_defaults
+from retailedge.guided_entry_context import (
+	get_guided_branch_search_filters,
+	get_guided_warehouse_search_filters,
+	resolve_guided_branch,
+	resolve_guided_default_branch,
+	validate_guided_branch_warehouse,
 )
-from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
-from retailedge.operating_context import (
-	get_operational_branch_scope,
-	resolve_operational_branch,
-)
+from retailedge.operating_context import get_operating_context, get_operational_branch_scope
 
 ACTION_KEY = "transfer-stock"
 STOCK_ENTRY_DOCTYPE = "Stock Entry"
@@ -31,10 +28,23 @@ MAX_ITEMS = 50
 def get_simple_stock_transfer_context(company: str = "", branch: str = "") -> dict[str, Any]:
 	_assert_can_create_stock_entry()
 	user = frappe.session.user
-	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
+	operating = get_operating_context() or {}
+	requested_company = str(company or "").strip()
+	company = str(
+		requested_company
+		or operating.get("company")
+		or frappe.defaults.get_user_default("Company")
+		or ""
+	).strip()
 	requested_branch = str(branch or "").strip()
 	legacy_default_branch = str(
-		frappe.defaults.get_user_default("RetailEdge Branch")
+		requested_branch
+		or (
+			operating.get("branch")
+			if not requested_company or operating.get("company") == company
+			else ""
+		)
+		or frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
 	).strip()
@@ -44,19 +54,11 @@ def get_simple_stock_transfer_context(company: str = "", branch: str = "") -> di
 		frappe.throw(_("Set a default Company before creating a Stock Transfer."))
 
 	scope = get_operational_branch_scope(company, user=user)
-	if requested_branch:
-		branch = resolve_operational_branch(company, requested_branch, user=user)["branch"]
-	elif scope["restricted"]:
-		if not scope["allowed_branches"] or len(scope["allowed_branches"]) == 1:
-			branch = resolve_operational_branch(company, user=user)["branch"]
-		else:
-			# Keep the guided dialog available so the user can explicitly choose
-			# source/target Branches. Warehouse search remains closed until then.
-			branch = ""
-	else:
-		branch = legacy_default_branch
-		if branch:
-			branch = resolve_operational_branch(company, branch, user=user)["branch"]
+	branch = resolve_guided_default_branch(
+		company,
+		legacy_default_branch,
+		user=user,
+	)
 
 	defaults = resolve_retailedge_operational_defaults(
 		company=company or None,
@@ -66,9 +68,13 @@ def get_simple_stock_transfer_context(company: str = "", branch: str = "") -> di
 	company = defaults.get("company") or company
 	_assert_read_permission("Company", company)
 	if branch:
-		branch = resolve_operational_branch(company, branch, user=user)["branch"]
-	elif not scope["restricted"] and defaults.get("branch"):
-		branch = resolve_operational_branch(company, defaults.get("branch"), user=user)["branch"]
+		branch = resolve_guided_branch(company, branch, user=user)
+	elif defaults.get("branch"):
+		branch = resolve_guided_default_branch(
+			company,
+			defaults.get("branch") or "",
+			user=user,
+		)
 
 	source_warehouse = defaults.get("default_source_warehouse") or defaults.get("default_warehouse") or ""
 	target_warehouse = defaults.get("default_target_warehouse") or ""
@@ -76,19 +82,25 @@ def get_simple_stock_transfer_context(company: str = "", branch: str = "") -> di
 		source_warehouse = ""
 		target_warehouse = ""
 	if source_warehouse and branch:
-		_validate_branch_warehouse(
-			branch=branch,
-			warehouse=source_warehouse,
-			company=company,
-			user=user,
-		)
+		try:
+			validate_guided_branch_warehouse(
+				branch=branch,
+				warehouse=source_warehouse,
+				company=company,
+				user=user,
+			)
+		except Exception:
+			source_warehouse = ""
 	if target_warehouse and branch:
-		_validate_branch_warehouse(
-			branch=branch,
-			warehouse=target_warehouse,
-			company=company,
-			user=user,
-		)
+		try:
+			validate_guided_branch_warehouse(
+				branch=branch,
+				warehouse=target_warehouse,
+				company=company,
+				user=user,
+			)
+		except Exception:
+			target_warehouse = ""
 	if target_warehouse == source_warehouse:
 		target_warehouse = ""
 
@@ -128,7 +140,13 @@ def search_simple_stock_transfer_options(
 	_assert_can_create_stock_entry()
 	values = _coerce_values(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
-	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
+	operating = get_operating_context() or {}
+	company = (
+		values.get("company")
+		or operating.get("company")
+		or frappe.defaults.get_user_default("Company")
+		or ""
+	)
 	source_branch = values.get("source_branch") or ""
 	target_branch = values.get("target_branch") or ""
 
@@ -175,15 +193,27 @@ def create_simple_stock_transfer_draft(values: dict | str | None = None) -> dict
 	_assert_can_create_stock_entry()
 	values = _coerce_values(values)
 	user = frappe.session.user
-	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
+	operating = get_operating_context() or {}
+	company = (
+		values.get("company")
+		or operating.get("company")
+		or frappe.defaults.get_user_default("Company")
+		or ""
+	)
 	if not company:
 		frappe.throw(_("Company is required."))
 	_assert_read_permission("Company", company)
 
-	source_branch = values.get("source_branch") or ""
-	target_branch = values.get("target_branch") or ""
-	source_branch = resolve_operational_branch(company, source_branch, user=user)["branch"]
-	target_branch = resolve_operational_branch(company, target_branch, user=user)["branch"]
+	source_branch = resolve_guided_branch(
+		company,
+		values.get("source_branch") or "",
+		user=user,
+	)
+	target_branch = resolve_guided_branch(
+		company,
+		values.get("target_branch") or "",
+		user=user,
+	)
 
 	source_warehouse = str(values.get("source_warehouse") or "").strip()
 	target_warehouse = str(values.get("target_warehouse") or "").strip()
@@ -200,7 +230,7 @@ def create_simple_stock_transfer_draft(values: dict | str | None = None) -> dict
 		if warehouse_company and warehouse_company != company:
 			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
 		if branch:
-			_validate_branch_warehouse(
+			validate_guided_branch_warehouse(
 				branch=branch,
 				warehouse=warehouse,
 				company=company,
@@ -288,76 +318,19 @@ def _assert_simple_stock_item(item_code: str) -> None:
 
 
 def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str, Any] | None:
-	if not company:
-		return None
-	filters: dict[str, Any] = {"is_group": 0, "disabled": 0}
-	if company and has_field("Warehouse", "company"):
-		filters["company"] = company
-	if not branch:
-		scope = get_operational_branch_scope(company, user=user)
-		if not scope["restricted"]:
-			return filters
-		if len(scope["allowed_branches"]) > 1:
-			return None
-	branch = resolve_operational_branch(company, branch, user=user)["branch"]
-	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
-	if branch_field:
-		filters[branch_field] = branch
-		return filters
-
-	profile_defaults = get_branch_profile_defaults(company=company or None, branch=branch, user=user)
-	warehouses = _unique(
-		[
-			profile_defaults.get("default_source_warehouse"),
-			profile_defaults.get("default_target_warehouse"),
-			profile_defaults.get("default_warehouse"),
-			profile_defaults.get("default_returns_warehouse"),
-		]
-	)
-	if not warehouses:
-		return None
-	filters["name"] = ["in", warehouses]
-	return filters
+	return get_guided_warehouse_search_filters(company, branch, user=user)
 
 
 def _branch_search_filters(company: str, user: str) -> dict[str, Any]:
-	if not company:
-		return {"name": "__never__"}
-	filters: dict[str, Any] = {}
-	if company and has_field("Branch", "company"):
-		filters["company"] = company
-	scope = get_operational_branch_scope(company, user=user)
-	if scope["restricted"]:
-		filters["name"] = ["in", scope["allowed_branches"]] if scope["allowed_branches"] else "__never__"
-	return filters
+	return get_guided_branch_search_filters(company, user=user)
 
 
 def _validate_branch_warehouse(*, branch: str, warehouse: str, company: str, user: str) -> None:
-	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
-	if branch_field:
-		warehouse_branch = frappe.db.get_value("Warehouse", warehouse, branch_field)
-		if warehouse_branch and warehouse_branch != branch:
-			frappe.throw(
-				_("Warehouse {0} belongs to Branch {1}, not Branch {2}.").format(
-					warehouse, warehouse_branch, branch
-				)
-			)
-		if warehouse_branch:
-			return
-
-	profile = get_branch_profile(
-		company=company,
+	validate_guided_branch_warehouse(
 		branch=branch,
-		user=user,
 		warehouse=warehouse,
-		active_only=True,
-	)
-	if profile:
-		return
-	frappe.throw(
-		_("Warehouse {0} is not configured for Branch {1}. Choose a warehouse linked to this branch.").format(
-			warehouse, branch
-		)
+		company=company,
+		user=user,
 	)
 
 
@@ -387,15 +360,3 @@ def _coerce_values(values: dict | str | None) -> dict[str, Any]:
 		return dict(values)
 	frappe.throw(_("Invalid Simple Stock Transfer values."))
 	return {}
-
-
-def _unique(values: list[Any]) -> list[str]:
-	seen: set[str] = set()
-	result: list[str] = []
-	for value in values:
-		value = str(value or "").strip()
-		if not value or value in seen:
-			continue
-		seen.add(value)
-		result.append(value)
-	return result
