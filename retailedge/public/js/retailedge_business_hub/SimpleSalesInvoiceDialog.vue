@@ -64,7 +64,7 @@
 					:modelValue="values.branch"
 					label="Branch"
 					placeholder="Search branch"
-					description="Selecting a Branch loads its preferred assigned stock location when available."
+					description="Only enabled Branch Setup entries for the active Company are shown. Selecting one loads its preferred stock location."
 					:searcher="searchBranch"
 					:context="searchContext"
 					@update:modelValue="setBranch"
@@ -74,8 +74,9 @@
 					:modelValue="values.warehouse"
 					label="Stock Location"
 					placeholder="Search stock location"
-					description="Selecting an assigned stock location resolves its Branch automatically."
+					description="Stock Locations are limited to the selected Company and enabled Branch Setup."
 					:required="Boolean(values.update_stock)"
+					:disabled="branchEnabled && !values.branch"
 					:searcher="searchWarehouse"
 					:context="searchContext"
 					@update:modelValue="setWarehouse"
@@ -83,10 +84,16 @@
 			</div>
 
 			<label class="guided-check-field">
-				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
+				<input
+					v-model="values.update_stock"
+					type="checkbox"
+					:true-value="1"
+					:false-value="0"
+					:disabled="!canEditUpdateStock"
+				/>
 				<span>
 					<strong>Update Stock</strong>
-					<small>Post stock movement when the invoice is eventually submitted.</small>
+					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by RetailEdge settings for Make a Sale." }}</small>
 				</span>
 			</label>
 
@@ -167,7 +174,7 @@ function emptyValues() {
 		posting_date: "",
 		warehouse: "",
 		customer: "",
-		update_stock: 0,
+		update_stock: 1,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -235,6 +242,9 @@ export default {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
+		canEditUpdateStock() {
+			return Boolean(this.formContext.capabilities?.can_edit_update_stock);
+		},
 		canCreateCustomer() {
 			return Boolean(this.formContext.capabilities?.can_create_customer);
 		},
@@ -278,6 +288,9 @@ export default {
 					...(data.defaults || {}),
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
+				if (!this.formContext.capabilities?.can_edit_update_stock) {
+					this.values.update_stock = 1;
+				}
 				if (this.formContext.capabilities?.can_override_rate === false) {
 					this.itemColumns = this.itemColumns.map((column) =>
 						column.fieldname === "rate" ? { ...column, read_only: 1 } : column
