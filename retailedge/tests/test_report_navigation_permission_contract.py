@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import inspect
 import unittest
+
+import frappe
 from unittest.mock import patch
 
 from retailedge.edgesuite_ui import (
