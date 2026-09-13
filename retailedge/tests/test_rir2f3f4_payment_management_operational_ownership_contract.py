@@ -25,7 +25,8 @@ def _method_source(source: str, name: str, next_name: str) -> str:
 def test_payment_management_contains_native_payment_entry_fallback_for_edgesuite_only_users():
 	page = _read(PAYMENT_MANAGEMENT)
 	assert "canUseNativeDesk: false" in page
-	assert "retailedge.master_experience.get_retailedge_business_hub_context" in page\n\tassert "get_master_retailedge_business_hub_context" not in page
+	assert "retailedge.master_experience.get_retailedge_business_hub_context" in page
+	assert "get_master_retailedge_business_hub_context" not in page
 	assert "this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);" in page
 	assert 'v-if="canUseNativeDesk"' in page
 
@@ -53,7 +54,8 @@ def test_customer_standard_review_stays_edgesuite_owned_while_native_review_is_e
 def test_supplier_payables_does_not_force_native_payment_entry_after_standard_handoff():
 	page = _read(PURCHASE_REPORT)
 	assert "canUseNativeDesk: false" in page
-	assert "retailedge.master_experience.get_retailedge_business_hub_context" in page\n\tassert "get_master_retailedge_business_hub_context" not in page
+	assert "retailedge.master_experience.get_retailedge_business_hub_context" in page
+	assert "get_master_retailedge_business_hub_context" not in page
 	assert "this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);" in page
 	assert 'intent="pay-supplier"' in page
 
