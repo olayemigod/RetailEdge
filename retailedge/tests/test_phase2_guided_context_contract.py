@@ -25,6 +25,8 @@ STOCK_UI = ROOT / "public/js/retailedge_business_hub/SimpleStockTransferDialog.v
 PURCHASE_UI = ROOT / "public/js/retailedge_business_hub/SimplePurchaseInvoiceDialog.vue"
 HUB = ROOT / "public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue"
 COMPLETION = ROOT / "standard_sales_invoice_completion.py"
+WORKFLOW_COMPLETION_UI = ROOT / "public/js/retailedge_business_hub/GuidedWorkflowCompletionDialog.vue"
+WORKFLOW_READINESS = ROOT / "workflow_readiness.py"
 SETTINGS = ROOT / "retailedge/doctype/retailedge_settings/retailedge_settings.json"
 
 
@@ -162,15 +164,24 @@ class TestPhase2GuidedContextContract(unittest.TestCase):
 		self.assertIn("doc.buying_price_list", source)
 		self.assertNotIn('values.get("buying_price_list")', source)
 
-	def test_cashier_expense_save_stays_in_edgesuite(self):
+	def test_cashier_expense_save_continues_workflow_inside_edgesuite(self):
 		source = HUB.read_text(encoding="utf-8")
-		self.assertIn("{ stayInEdgeSuite: true }", source)
+		dialog = WORKFLOW_COMPLETION_UI.read_text(encoding="utf-8")
 		start = source.index("handleSimpleCashierExpenseSaved(result)")
 		end = source.index("openNativeCashierExpense", start)
 		handler = source[start:end]
 		self.assertNotIn("frappe.set_route", handler)
 		self.assertNotIn("frappe.new_doc", handler)
-		self.assertIn("refreshHomeSnapshot()", handler)
+		self.assertIn("cashierExpenseCompletionOpen = true", handler)
+		self.assertIn("<GuidedWorkflowCompletionDialog", source)
+		self.assertIn("retailedge.workflow_readiness.get_document_workflow_readiness", dialog)
+		self.assertIn("retailedge.workflow_actions.apply_document_workflow_action", dialog)
+		self.assertIn("expected_modified", dialog)
+		self.assertIn("expected_state", dialog)
+
+	def test_workflow_readiness_exposes_snapshot_version_for_edgesuite_actions(self):
+		source = WORKFLOW_READINESS.read_text(encoding="utf-8")
+		self.assertIn('"modified": str(getattr(doc, "modified", "") or "")', source)
 
 	def test_sales_completion_uses_branch_setup_aware_warehouse_resolution(self):
 		source = COMPLETION.read_text(encoding="utf-8")
