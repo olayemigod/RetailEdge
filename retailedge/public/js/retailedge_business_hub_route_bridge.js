@@ -270,7 +270,6 @@
 			state.attempts = 0;
 			state.booted = false;
 			state.lastWrapperSource = "";
-			global.retailedgeTeardownBusinessHubPage?.();
 			return false;
 		}
 
@@ -312,6 +311,9 @@
 
 	["DOMContentLoaded", "page-change", "desktop_screen", "sidebar_setup"].forEach((eventName) => {
 		global.document?.addEventListener(eventName, scheduleBoot);
+	});
+	["popstate", "hashchange", "pageshow"].forEach((eventName) => {
+		global.addEventListener?.(eventName, scheduleBoot);
 	});
 	global.document?.addEventListener(GUIDED_CREATE_EVENT, requestGuidedCreate);
 	global.frappe?.router?.on?.("change", scheduleBoot);
