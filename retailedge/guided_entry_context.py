@@ -108,6 +108,27 @@ def resolve_guided_branch(
 	return "" if allow_blank_unrestricted else (branches[0] if len(branches) == 1 else "")
 
 
+
+def resolve_guided_default_branch(
+	company: str,
+	candidate: str = "",
+	*,
+	user: str | None = None,
+) -> str:
+	"""Resolve a non-blocking default Branch for a new guided entry."""
+	company = str(company or "").strip()
+	candidate = str(candidate or "").strip()
+	user = user or frappe.session.user
+	if not company:
+		return ""
+	branches = get_guided_branch_names(company, user=user)
+	if candidate and candidate in branches:
+		return resolve_guided_branch(company, candidate, user=user)
+	scope = get_operational_branch_scope(company, user=user)
+	if scope.get("restricted") and len(branches) == 1:
+		return branches[0]
+	return ""
+
 def get_guided_warehouse_search_filters(
 	company: str,
 	branch: str = "",
@@ -282,7 +303,7 @@ def resolve_branch_warehouse_selection(
 		else:
 			scope = get_operational_branch_scope(company, user=user)
 			if scope["restricted"]:
-				branch = resolve_operational_branch(company, "", user=user)["branch"]
+				branch = resolve_guided_branch(company, "", user=user)
 
 		if branch:
 			profile = get_branch_profile(
