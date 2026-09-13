@@ -132,18 +132,36 @@ def resolve_guided_default_branch(
 	*,
 	user: str | None = None,
 ) -> str:
-	"""Resolve a non-blocking default Branch for a new guided entry."""
+	"""Resolve a safe default Branch without silently choosing for multi-Branch users.
+
+	Restricted operational scope follows the B3 contract:
+	- exactly one enabled/permitted Branch -> auto-resolve;
+	- multiple enabled/permitted Branches -> require explicit selection;
+	- zero enabled/permitted Branches -> fail closed.
+
+	The candidate is considered only for unrestricted users. Explicit user Branch
+	selections must call resolve_guided_branch directly.
+	"""
 	company = str(company or "").strip()
 	candidate = str(candidate or "").strip()
 	user = user or frappe.session.user
 	if not company:
 		return ""
+
 	branches = get_guided_branch_names(company, user=user)
+	scope = get_operational_branch_scope(company, user=user)
+	if scope.get("restricted"):
+		if len(branches) == 1:
+			return branches[0]
+		if not branches:
+			frappe.throw(
+				_("No enabled Branch Setup is available for your access in Company {0}.").format(company),
+				frappe.PermissionError,
+			)
+		return ""
+
 	if candidate and candidate in branches:
 		return resolve_guided_branch(company, candidate, user=user)
-	scope = get_operational_branch_scope(company, user=user)
-	if scope.get("restricted") and len(branches) == 1:
-		return branches[0]
 	return ""
 
 def get_guided_warehouse_search_filters(
