@@ -30,14 +30,7 @@
 				@select="onBranchSelected"
 				@clear="clearBranch"
 			/>
-			<label class="edge-field">
-				<span>Party Type</span>
-				<select v-model="filters.party_type" class="edge-input" @change="onPartyTypeChanged">
-					<option value="">All parties</option>
-					<option value="Customer">Customer</option>
-					<option value="Supplier">Supplier</option>
-				</select>
-			</label>
+			<EdgeDropdown v-model="filters.party_type" :options="['Customer', 'Supplier']" label="Party Type" placeholder="All parties" @change="onPartyTypeChanged" />
 			<EdgeLinkField
 				v-if="filters.party_type"
 				v-model="filters.party"
@@ -52,24 +45,8 @@
 				<span>Party</span>
 				<div class="edge-input edge-input--readonly">Choose Party Type first</div>
 			</div>
-			<label class="edge-field">
-				<span>Payment Type</span>
-				<select v-model="filters.payment_type" class="edge-input">
-					<option value="">All payment types</option>
-					<option value="Receive">Receive</option>
-					<option value="Pay">Pay</option>
-					<option value="Internal Transfer">Internal Transfer</option>
-				</select>
-			</label>
-			<label class="edge-field">
-				<span>Document State</span>
-				<select v-model="filters.docstatus" class="edge-input">
-					<option value="all">All states</option>
-					<option value="draft">Draft</option>
-					<option value="submitted">Submitted</option>
-					<option value="cancelled">Cancelled</option>
-				</select>
-			</label>
+			<EdgeDropdown v-model="filters.payment_type" :options="['Receive', 'Pay', 'Internal Transfer']" label="Payment Type" placeholder="All payment types" />
+			<EdgeDropdown v-model="filters.docstatus" :options="[{ value: 'all', label: 'All states' }, { value: 'draft', label: 'Draft' }, { value: 'submitted', label: 'Submitted' }, { value: 'cancelled', label: 'Cancelled' }]" label="Document State" />
 			<label class="edge-field"><span>From Date</span><input v-model="filters.from_date" class="edge-input" type="date" /></label>
 			<label class="edge-field"><span>To Date</span><input v-model="filters.to_date" class="edge-input" type="date" /></label>
 			<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="loadPaymentHistory(1)">Apply Filters</button></div>
@@ -166,7 +143,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeLinkField", "EdgeDropdown"];
 const HISTORY_METHOD = "retailedge.payment_history.list_payment_history";
 const DETAIL_METHOD = "retailedge.payment_history.get_payment_history_detail";
 const CUSTOMER_SUBMIT_METHOD = "retailedge.standard_customer_payment_submit.submit_standard_customer_payment";
@@ -288,7 +265,7 @@ export default {
 		},
 		paymentAmount(row) { return row.payment_type === "Receive" ? Number(row.received_amount || 0) : Number(row.paid_amount || 0); },
 		documentState(docstatus) { const state = Number(docstatus); return state === 0 ? "Draft" : state === 1 ? "Submitted" : state === 2 ? "Cancelled" : "Unknown"; },
-		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
+		formatCurrency(value) { try { return window.retailedge.formatPlainValue(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 	},
 };
