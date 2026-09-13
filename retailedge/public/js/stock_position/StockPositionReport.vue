@@ -89,12 +89,7 @@
 						@select="onItemSelected"
 						@clear="clearItem"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">Stock Status</span>
-						<select v-model="filters.stock_status" class="edge-input">
-							<option v-for="status in stockStatuses" :key="status" :value="status">{{ status }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.stock_status" :options="stockStatuses" label="Stock Status" placeholder="All stock statuses" />
 					<label class="include-zero-field">
 						<input v-model="includeZero" type="checkbox" />
 						<span>
@@ -125,7 +120,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "stock-position";
 
