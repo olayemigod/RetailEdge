@@ -78,11 +78,6 @@ class TestPhase2GuidedContextContract(unittest.TestCase):
 				user="user@example.com",
 			)
 
-	@patch(
-		"retailedge.guided_entry_context.get_guided_branch_names",
-		return_value=["Lagos", "Abuja"],
-	)
-	@patch("retailedge.guided_entry_context.has_field", return_value=True)
 	def test_restricted_single_branch_default_auto_resolves(self):
 		with (
 			patch(
@@ -144,6 +139,11 @@ class TestPhase2GuidedContextContract(unittest.TestCase):
 					user="user@example.com",
 				)
 
+	@patch(
+		"retailedge.guided_entry_context.get_guided_branch_names",
+		return_value=["Lagos", "Abuja"],
+	)
+	@patch("retailedge.guided_entry_context.has_field", return_value=True)
 	def test_warehouse_search_stays_closed_until_branch_is_selected(
 		self, _mock_has_field, _mock_branches
 	):
