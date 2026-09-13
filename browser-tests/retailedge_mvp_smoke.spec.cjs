@@ -44,7 +44,7 @@ async function openProductPage(page, route, title, menuLabel) {
 		await page.waitForFunction(() => Boolean(window.frappe), null, { timeout: 20_000 }).catch(() => {});
 
 		try {
-			await page.getByText(title, { exact: true }).first().waitFor({
+			await page.getByRole("heading", { name: title, exact: true }).first().waitFor({
 				state: "visible",
 				timeout: 20_000,
 			});
