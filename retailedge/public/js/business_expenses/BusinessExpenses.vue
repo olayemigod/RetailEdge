@@ -45,13 +45,7 @@
 						<EdgeLinkField v-model="filters.company" label="Company" :searcher="companySearch" required @select="selectFilterCompany" />
 						<EdgeLinkField v-model="filters.branch" label="Branch" :searcher="branchSearch" placeholder="All permitted branches" @select="selectFilterBranch" @clear="clearFilterBranch" />
 						<EdgeLinkField v-model="filters.expense_category" label="Expense Category" :searcher="categorySearchForFilter" placeholder="All categories" @select="selectFilterCategory" @clear="clearFilterCategory" />
-						<label class="field-wrap">
-							<span>Status</span>
-							<select v-model="filters.expense_status" class="edge-input">
-								<option value="">All statuses</option>
-								<option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
-							</select>
-						</label>
+						<EdgeDropdown v-model="filters.expense_status" :options="statuses" label="Status" placeholder="All statuses" />
 						<label class="field-wrap"><span>From Date</span><input v-model="filters.from_date" class="edge-input" type="date" /></label>
 						<label class="field-wrap"><span>To Date</span><input v-model="filters.to_date" class="edge-input" type="date" /></label>
 						<label class="field-wrap filter-search"><span>Search</span><input v-model="filters.search_text" class="edge-input" placeholder="Reference, payee, supplier..." @keyup.enter="applyFilters" /></label>
@@ -110,7 +104,7 @@
 						<label class="field-wrap"><span>Expense Date</span><input v-model="values.expense_date" class="edge-input" type="date" required /></label>
 						<EdgeLinkField v-model="values.expense_category" label="Expense Category" :searcher="categorySearchForForm" required @select="selectCategory" />
 						<label class="field-wrap"><span>Amount</span><input v-model.number="values.amount" class="edge-input" type="number" min="0.01" step="0.01" required /></label>
-						<label class="field-wrap"><span>Payee Type</span><select v-model="values.payee_type" class="edge-input" @change="payeeTypeChanged"><option value="Other">Other / Merchant</option><option value="Supplier">Supplier</option></select></label>
+						<EdgeDropdown v-model="values.payee_type" :options="[{ value: 'Other', label: 'Other / Merchant' }, { value: 'Supplier', label: 'Supplier' }]" label="Payee Type" @change="payeeTypeChanged" />
 						<EdgeLinkField v-if="values.payee_type === 'Supplier'" v-model="values.supplier" label="Supplier" :searcher="supplierSearch" required @select="selectSupplier" />
 						<label v-else class="field-wrap"><span>Payee / Merchant</span><input v-model="values.payee_name" class="edge-input" placeholder="Who was paid?" /></label>
 						<label class="field-wrap"><span>Receipt / Reference No.</span><input v-model="values.reference_no" class="edge-input" /></label>
@@ -198,7 +192,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeLinkField", "EdgeLoadingState", "EdgeErrorState", "EdgeDropdown"];
 const CONTEXT_METHOD = "retailedge.business_expense.get_business_expense_context";
 const LIST_METHOD = "retailedge.business_expense.get_business_expenses";
 const SEARCH_METHOD = "retailedge.business_expense.search_business_expense_options";
@@ -318,7 +312,7 @@ export default {
 		async confirmReverse(values) { if (this.reversing || !this.current.name) return; this.reversing = true; this.reversalError = ""; try { const result = await callMethod(REVERSE_METHOD, { name: this.current.name, reason: values.reason || "", posting_date: values.posting_date || "", expected_modified: this.current.modified }); const expenseName = result.expense?.name || this.current.name; await this.openExpense(expenseName); frappe.show_alert?.({ message: result.idempotent ? "Business Expense was already reversed" : "Business Expense accounting reversed", indicator: "green" }); } catch (error) { this.reversalError = errorMessage(error, "Unable to reverse this Business Expense accounting."); await this.loadPostingReadiness(); } finally { this.reversing = false; } },
 		openExpenseRegister() { frappe.set_route("expense-register"); },
 		openExpenseCategories() { if (!this.hasPageTarget("retailedge-setup")) return; frappe.route_options = { setup_resource: "expense-categories" }; frappe.set_route("retailedge-setup"); },
-		formatAmount(value) { const amount = Number(value) || 0; try { return frappe.format(amount, { fieldtype: "Currency" }); } catch (_error) { return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
+		formatAmount(value) { const amount = Number(value) || 0; try { return window.retailedge.formatPlainValue(amount, { fieldtype: "Currency" }); } catch (_error) { return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(String(value)); } catch (_error) { return String(value); } },
 	},
 };
