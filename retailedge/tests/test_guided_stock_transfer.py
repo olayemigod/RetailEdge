@@ -94,8 +94,10 @@ class TestGuidedStockTransfer(unittest.TestCase):
 	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
 	@patch("retailedge.guided_stock_transfer.frappe.db.get_value", return_value="Demo Company")
 	@patch("retailedge.guided_stock_transfer.frappe.new_doc")
+	@patch("retailedge.guided_stock_transfer.resolve_guided_company", return_value="Demo Company")
 	def test_create_draft_assembles_material_transfer_once(
 		self,
+		_mock_company,
 		mock_new_doc,
 		_mock_db,
 		_mock_create_permission,
@@ -142,8 +144,10 @@ class TestGuidedStockTransfer(unittest.TestCase):
 	@patch("retailedge.guided_stock_transfer.resolve_guided_branch", return_value="")
 	@patch("retailedge.guided_stock_transfer._assert_read_permission")
 	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
+	@patch("retailedge.guided_stock_transfer.resolve_guided_company", return_value="Demo Company")
 	def test_same_source_and_target_warehouse_is_blocked(
 		self,
+		_mock_company,
 		_mock_create_permission,
 		_mock_permission,
 		_mock_branch_resolver,
@@ -167,8 +171,10 @@ class TestGuidedStockTransfer(unittest.TestCase):
 	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
 	@patch("retailedge.guided_stock_transfer.frappe.db.get_value", return_value="Demo Company")
 	@patch("retailedge.guided_stock_transfer.frappe.new_doc")
+	@patch("retailedge.guided_stock_transfer.resolve_guided_company", return_value="Demo Company")
 	def test_restricted_blank_branch_is_resolved_before_warehouse_validation(
 		self,
+		_mock_company,
 		mock_new_doc,
 		_mock_db,
 		_mock_create_permission,
