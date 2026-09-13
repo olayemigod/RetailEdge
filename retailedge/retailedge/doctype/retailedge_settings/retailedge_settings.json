@@ -9,6 +9,8 @@
   "enable_posting_date_control",
   "allow_pos_posting_date_override",
   "posting_date_allowed_roles",
+  "guided_sales_entry_section",
+  "allow_guided_sales_update_stock_edit",
   "cost_visibility_section",
   "hide_cost_price_for_selected_roles",
   "cost_price_hidden_roles",
@@ -126,6 +128,18 @@
    "fieldtype": "Table",
    "label": "Roles Allowed to Override Posting Date",
    "options": "RetailEdge Posting Date Role"
+  },
+  {
+   "fieldname": "guided_sales_entry_section",
+   "fieldtype": "Section Break",
+   "label": "Guided Sales Entry"
+  },
+  {
+   "default": "0",
+   "description": "Make a Sale keeps Update Stock enabled and read-only by default. Enable this only when permitted users should be able to switch Update Stock off or on in the guided Sales Invoice flow.",
+   "fieldname": "allow_guided_sales_update_stock_edit",
+   "fieldtype": "Check",
+   "label": "Allow Update Stock Editing in Make a Sale"
   },
   {
    "fieldname": "cost_visibility_section",
