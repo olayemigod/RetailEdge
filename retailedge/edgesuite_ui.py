@@ -447,14 +447,25 @@ def _get_permitted_quick_actions(
 	return actions
 
 
-def _cashier_deposit_available() -> bool:
+def _quiet_boolean_probe(probe) -> bool:
+	"""Run an internal capability probe without leaking Frappe message-log side effects."""
+	previous_messages = list(getattr(frappe.local, "message_log", []) or [])
 	try:
+		return bool(probe())
+	except Exception:
+		return False
+	finally:
+		frappe.local.message_log = previous_messages
+
+
+def _cashier_deposit_available() -> bool:
+	def probe() -> bool:
 		from retailedge.cashier_context import get_current_cashier_context
 
 		context = get_current_cashier_context(user=frappe.session.user) or {}
 		return bool(context.get("linked_pos_opening_shift") and context.get("payment_account"))
-	except Exception:
-		return False
+
+	return _quiet_boolean_probe(probe)
 
 
 def _can_open_target(item: dict[str, Any], *, target_cache=None, permission_cache=None) -> bool:
@@ -498,13 +509,9 @@ def _can_open_report_cached(report_name: str, cache: dict[tuple[str, str], bool]
 
 
 def _can_open_report(report_name: str) -> bool:
-	try:
-		from frappe.desk.query_report import get_report_doc
+	from frappe.desk.query_report import get_report_doc
 
-		get_report_doc(report_name)
-		return True
-	except Exception:
-		return False
+	return _quiet_boolean_probe(lambda: get_report_doc(report_name))
 
 
 def _target_exists_cached(target_type: str, target: str, cache: dict[tuple[str, str], bool]) -> bool:
