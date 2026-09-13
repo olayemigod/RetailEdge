@@ -76,7 +76,7 @@
 					placeholder="Search stock location"
 					description="Stock Locations are limited to the selected Company and enabled Branch Setup."
 					:required="Boolean(values.update_stock)"
-					:disabled="branchEnabled && !values.branch"
+					:disabled="requiresBranchSelection && !values.branch"
 					:searcher="searchWarehouse"
 					:context="searchContext"
 					@update:modelValue="setWarehouse"
@@ -241,6 +241,9 @@ export default {
 	computed: {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
+		},
+		requiresBranchSelection() {
+			return Boolean(this.formContext.capabilities?.requires_branch_selection);
 		},
 		canEditUpdateStock() {
 			return Boolean(this.formContext.capabilities?.can_edit_update_stock);
