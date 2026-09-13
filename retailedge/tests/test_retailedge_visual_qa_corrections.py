@@ -7,6 +7,9 @@ BUSINESS_HUB = PUBLIC_JS / "retailedge_business_hub" / "RetailEdgeBusinessHub.vu
 MASTER_EXPERIENCE = ROOT / "master_experience.py"
 HOOKS = ROOT / "hooks.py"
 GLOBAL_JS = PUBLIC_JS / "retailedge.js"
+SHELL_CONTEXT_JS = PUBLIC_JS / "retailedge_shell_context.js"
+BOOT = ROOT / "boot.py"
+IDENTITY_CSS = ROOT / "public" / "css" / "retailedge_product_identity.css"
 
 EDGE_DROPDOWN_MVP_SURFACES = (
     PUBLIC_JS / "operating_context" / "OperatingContext.vue",
@@ -50,31 +53,35 @@ def test_business_hub_is_the_retailedge_app_home_and_legacy_workspace_is_contain
     assert '"/app/retailedge"' in global_js
 
 
-def test_business_hub_exposes_company_identity_and_permission_safe_branch_switcher():
-    backend = read(MASTER_EXPERIENCE)
-    frontend = read(BUSINESS_HUB)
+def test_shared_shell_receives_company_identity_and_permission_safe_branch_switcher():
+    boot = read(BOOT)
+    shell_context = read(SHELL_CONTEXT_JS)
+    hooks = read(HOOKS)
+    styles = read(IDENTITY_CSS)
 
     for contract in (
-        "get_allowed_operating_contexts",
-        "company_label",
-        "company_logo",
-        "company_currency",
+        "edgesuite_ui_identity",
+        "retailedge_ui_identity",
+        "tenant_name",
+        "tenant_logo",
+        "active_company",
+        "active_branch",
         "branch_options",
         "can_switch_branch",
+        "get_allowed_operating_contexts",
     ):
-        assert contract in backend
+        assert contract in boot
 
-    for contract in (
-        "retailedge-context-bar",
-        "retailedge-company-identity",
-        "context.company_logo",
-        "context.company_label",
-        "<EdgeDropdown",
-        'label="Working branch"',
-        "switch_operating_context",
-        "branchSwitching",
-    ):
-        assert contract in frontend
+    assert "/assets/retailedge/js/retailedge_shell_context.js" in hooks
+    assert 'edge-app-shell[data-edge-product="retailedge"]' in shell_context
+    assert "EdgeDropdown" in shell_context
+    assert "switch_operating_context" in shell_context
+    assert "window.location.reload()" in shell_context
+    assert "retailedge-topbar-branch-switcher" in styles
+
+    frontend = read(BUSINESS_HUB)
+    assert "retailedge-context-bar" not in frontend
+    assert "branchSwitching" not in frontend
 
 
 def test_create_picker_uses_product_menu_visual_language_and_shared_icons():
@@ -110,3 +117,12 @@ def test_primary_mvp_vue_surfaces_never_render_frappe_formatter_html():
         source = read(path)
         assert "frappe.format(" not in source, path
         assert "formatPlainValue" in source or path == BUSINESS_HUB, path
+
+
+def test_business_hub_does_not_duplicate_shared_shell_context_controls():
+    source = read(BUSINESS_HUB)
+
+    assert "retailedge-context-bar" not in source
+    assert "<EdgeDropdown" not in source
+    assert "selectedBranch" not in source
+    assert "switchBranch(" not in source
