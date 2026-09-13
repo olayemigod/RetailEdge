@@ -40,15 +40,7 @@
 						<EdgeLinkField :modelValue="filters.user" label="User" placeholder="All users" :searcher="searchFilterUser" @update:modelValue="filters.user = $event || ''" />
 						<EdgeLinkField :modelValue="filters.company" label="Company" placeholder="All Companies" :searcher="searchFilterCompany" @update:modelValue="setFilterCompany" />
 						<EdgeLinkField :modelValue="filters.branch" label="Branch" placeholder="All Branches" :searcher="searchFilterBranch" @update:modelValue="filters.branch = $event || ''" />
-						<label class="edge-field">
-							<span class="edge-field-label">Status</span>
-							<select v-model="filters.status" class="edge-input">
-								<option value="">All statuses</option>
-								<option value="Active">Active</option>
-								<option value="Planned">Planned</option>
-								<option value="Ended">Ended</option>
-							</select>
-						</label>
+						<EdgeDropdown v-model="filters.status" :options="['Active', 'Planned', 'Ended']" label="Status" placeholder="All statuses" />
 					</div>
 					<div class="filter-actions">
 						<button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="loadAssignments">Apply Filters</button>
@@ -98,7 +90,7 @@
 			<EdgeLinkField :modelValue="assign.user" label="User" placeholder="Choose system user" :required="true" :searcher="searchAssignUser" @update:modelValue="assign.user = $event || ''" />
 			<EdgeLinkField :modelValue="assign.company" label="Company" placeholder="Choose Company" :required="true" :searcher="searchAssignCompany" @update:modelValue="setAssignCompany" />
 			<EdgeLinkField :modelValue="assign.branch" label="Branch" placeholder="Choose configured Branch" :required="true" :searcher="searchAssignBranch" @update:modelValue="assign.branch = $event || ''" />
-			<label class="edge-field"><span class="edge-field-label">Branch Role *</span><select v-model="assign.branch_role" class="edge-input"><option v-for="role in roles" :key="role" :value="role">{{ role }}</option></select></label>
+			<EdgeDropdown v-model="assign.branch_role" :options="roles" label="Branch Role" required />
 			<label class="edge-field"><span class="edge-field-label">Effective From *</span><input v-model="assign.effective_from" class="edge-input" type="date" /></label>
 			<label class="edge-field"><span class="edge-field-label">Effective To</span><input v-model="assign.effective_to" class="edge-input" type="date" /></label>
 			<label class="check-field"><input v-model="assign.is_primary" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Primary Branch</strong><small>A user can have only one overlapping primary Branch per Company.</small></span></label>
@@ -117,7 +109,7 @@
 			<EdgeLinkField :modelValue="transfer.company" label="New Company" placeholder="Choose Company" :required="true" :searcher="searchTransferCompany" @update:modelValue="setTransferCompany" />
 			<EdgeLinkField :modelValue="transfer.branch" label="New Branch" placeholder="Choose configured Branch" :required="true" :searcher="searchTransferBranch" @update:modelValue="transfer.branch = $event || ''" />
 			<label class="edge-field"><span class="edge-field-label">Transfer Date *</span><input v-model="transfer.effective_date" class="edge-input" type="date" /></label>
-			<label class="edge-field"><span class="edge-field-label">Branch Role</span><select v-model="transfer.branch_role" class="edge-input"><option v-for="role in roles" :key="role" :value="role">{{ role }}</option></select></label>
+			<EdgeDropdown v-model="transfer.branch_role" :options="roles" label="Branch Role" />
 			<label class="edge-field edge-field--wide"><span class="edge-field-label">Transfer Reason *</span><textarea v-model="transfer.reason" class="edge-input" rows="2"></textarea></label>
 			<label class="edge-field edge-field--wide"><span class="edge-field-label">Notes</span><textarea v-model="transfer.notes" class="edge-input" rows="3"></textarea></label>
 		</div>
@@ -128,7 +120,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeModal", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeModal", "EdgeLinkField", "EdgeDropdown"];
 const CONTEXT_METHOD = "retailedge.branch_assignment.get_branch_assignment_context";
 const CREATE_METHOD = "retailedge.branch_assignment.create_branch_assignment";
 const TRANSFER_METHOD = "retailedge.branch_assignment.transfer_branch_assignment";
