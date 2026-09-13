@@ -75,20 +75,8 @@
 						@select="onCategorySelected"
 						@clear="clearCategory"
 					/>
-					<label v-if="consolidatedViewAvailable" class="edge-field">
-						<span class="edge-field-label">View</span>
-						<select v-model="filters.view_mode" class="edge-input" @change="onViewModeChanged">
-							<option value="consolidated">Consolidated business expenses</option>
-							<option value="cashier">Cashier / POS expenses only</option>
-						</select>
-					</label>
-					<label v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'" class="edge-field">
-						<span class="edge-field-label">Source</span>
-						<select v-model="filters.source_type" class="edge-input">
-							<option value="">All expense sources</option>
-							<option v-for="source in sourceTypes" :key="source" :value="source">{{ source }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-if="consolidatedViewAvailable" v-model="filters.view_mode" :options="[{ value: 'consolidated', label: 'Consolidated business expenses' }, { value: 'cashier', label: 'Cashier / POS expenses only' }]" label="View" @change="onViewModeChanged" />
+					<EdgeDropdown v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'" v-model="filters.source_type" :options="sourceTypes" label="Source" placeholder="All expense sources" />
 					<label
 						v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'"
 						class="edge-check-field"
@@ -104,13 +92,7 @@
 							<small>Show operational exposure separately from posted expense totals.</small>
 						</span>
 					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">Status</span>
-						<select v-model="filters.expense_status" class="edge-input">
-							<option value="">All active statuses</option>
-							<option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.expense_status" :options="statuses" label="Status" placeholder="All active statuses" />
 					<label class="edge-field">
 						<span class="edge-field-label">From Date</span>
 						<input v-model="filters.from_date" type="date" class="edge-input" />
@@ -153,6 +135,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeReportShell",
 	"EdgeLinkField",
 	"EdgeExportMenu",
+	"EdgeDropdown",
 ];
 
 const REPORT_PRODUCT = "RetailEdge";
@@ -541,7 +524,7 @@ export default {
 			if (fieldtype === "Currency") {
 				const number = Number(value);
 				if (!Number.isFinite(number)) return String(value);
-				try { return frappe.format(number, { fieldtype: "Currency" }); }
+				try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency" }); }
 				catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 			}
 			if (fieldtype === "Int") return Number(value).toLocaleString();
