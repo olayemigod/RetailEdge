@@ -1,6 +1,9 @@
 name: EdgeSuite UI Candidate Compatibility
 
 on:
+  push:
+    branches:
+      - qa/retailedge-reconciled-20260902
   pull_request:
   workflow_dispatch:
 

@@ -1,6 +1,9 @@
 name: RetailEdge Upgrade Validation
 
 on:
+  push:
+    branches:
+      - qa/retailedge-reconciled-20260902
   pull_request:
     paths:
       - ".github/workflows/upgrade-validation.yml"
