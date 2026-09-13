@@ -46,6 +46,8 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "") -> dict[
 				reason=_("Choose a Branch to load scoped business signals."),
 				allowed_branches=allowed,
 			)
+	elif not frappe.has_permission("Company", "read", doc=company):
+		frappe.throw(_("You do not have permission to view this Company."), frappe.PermissionError)
 
 	today = nowdate()
 	period_filters = {"company": company, "branch": branch, "from_date": today, "to_date": today}
@@ -86,13 +88,14 @@ def _unavailable_scope_snapshot(
 ) -> dict[str, Any]:
 	"""Return a no-data Home state when restricted scope cannot be resolved safely."""
 	today = nowdate()
-	unavailable = lambda label, route="": {
-		"available": False,
-		"label": label,
-		"summary": [],
-		"route": route,
-		"reason": reason,
-	}
+	def unavailable(label: str, route: str = "") -> dict[str, Any]:
+		return {
+			"available": False,
+			"label": label,
+			"summary": [],
+			"route": route,
+			"reason": reason,
+		}
 	return {
 		"as_of_date": today,
 		"company": company,
