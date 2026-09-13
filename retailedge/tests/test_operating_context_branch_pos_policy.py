@@ -92,9 +92,10 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 		preview = self.read("new_document_defaults.py")
 
 		for contract in (
-			"get_operational_branch_scope",
-			"resolve_operational_branch",
-			"validate_operating_branch",
+			"resolve_guided_company",
+			"resolve_guided_branch",
+			"get_guided_branch_names",
+			"get_guided_warehouse_search_filters",
 		):
 			self.assertIn(contract, guided)
 		for contract in (
@@ -104,8 +105,13 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 		):
 			self.assertIn(contract, professional)
 
-		self.assertIn("get_operational_branch_scope", resolver)
-		self.assertIn("resolve_operational_branch", resolver)
+		for contract in (
+			"get_operating_context",
+			"get_operational_branch_scope",
+			"resolve_operational_branch",
+			"get_enabled_branch_profiles",
+		):
+			self.assertIn(contract, resolver)
 		self.assertIn("validate_operating_branch", preview)
 
 	def test_new_policy_keeps_accounting_and_document_safety_boundaries(self):
