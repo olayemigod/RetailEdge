@@ -61,28 +61,13 @@
 			<!-- EdgeFilterBar in default slot body flow -->
 			<EdgeFilterBar title="Filter Records">
 				<div class="edge-filter-grid">
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">Date Range Preset</label>
-						<select
-							v-model="filters.date_range_preset"
-							class="edge-select filter-select"
-							:disabled="metadataLoading"
-							@change="onPresetChange"
-						>
-							<option value="This Month">This Month</option>
-							<option value="Today">Today</option>
-							<option value="Yesterday">Yesterday</option>
-							<option value="This Week">This Week</option>
-							<option value="This Quarter">This Quarter</option>
-							<option value="This Year">This Year</option>
-							<option value="Last Week">Last Week</option>
-							<option value="Last Month">Last Month</option>
-							<option value="Last Quarter">Last Quarter</option>
-							<option value="Last Year">Last Year</option>
-							<option value="Custom Period">Custom Period</option>
-							<option value="Full History">Full History</option>
-						</select>
-					</div>
+					<EdgeDropdown
+						v-model="filters.date_range_preset"
+						:options="['This Month', 'Today', 'Yesterday', 'This Week', 'This Quarter', 'This Year', 'Last Week', 'Last Month', 'Last Quarter', 'Last Year', 'Custom Period', 'Full History']"
+						label="Date Range Preset"
+						:disabled="metadataLoading"
+						@change="onPresetChange"
+					/>
 					<div class="edge-field filter-group">
 						<label class="edge-field-label filter-label">From Date</label>
 						<input
@@ -103,35 +88,22 @@
 							@change="onDateChange"
 						/>
 					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">Branch</label>
-						<select
-							v-model="filters.branch"
-							class="edge-select filter-select"
-							:disabled="metadataLoading || branches.length === 0"
-							@change="fetchData"
-						>
-							<option v-if="metadataLoading" value="">Loading branches...</option>
-							<option v-else-if="branches.length === 0" value="">
-								No branch available
-							</option>
-							<option v-else value="">All Branches</option>
-							<option v-for="b in branches" :key="b" :value="b">{{ b }}</option>
-						</select>
-					</div>
-					<div class="edge-field filter-group">
-						<label class="edge-field-label filter-label">Salesperson</label>
-						<select
-							v-model="filters.salesperson"
-							class="edge-select filter-select"
-							:disabled="metadataLoading"
-							@change="fetchData"
-						>
-							<option v-if="metadataLoading" value="">Loading salespeople...</option>
-							<option v-else value="">All Salespeople</option>
-							<option v-for="s in salespeople" :key="s" :value="s">{{ s }}</option>
-						</select>
-					</div>
+					<EdgeDropdown
+						v-model="filters.branch"
+						:options="branches"
+						label="Branch"
+						placeholder="All Branches"
+						:disabled="metadataLoading || branches.length === 0"
+						@change="fetchData"
+					/>
+					<EdgeDropdown
+						v-model="filters.salesperson"
+						:options="salespeople"
+						label="Salesperson"
+						placeholder="All Salespeople"
+						:disabled="metadataLoading"
+						@change="fetchData"
+					/>
 					<div class="edge-field filter-group">
 						<label class="edge-field-label filter-label">Customer</label>
 						<input
@@ -538,13 +510,12 @@ const requiredEdgeUIComponents = [
 	"EdgeLoadingState",
 	"EdgeEmptyState",
 	"EdgeErrorState",
+	"EdgeDropdown",
 ];
 
 const resolveEdgeUIComponents = () => {
-	const runtimeComponents =
-		typeof window !== "undefined" && window.EdgeUI
-			? window.EdgeUI.components || window.EdgeUI
-			: {};
+	const runtime = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const runtimeComponents = runtime ? runtime.components || runtime : {};
 	return Object.fromEntries(
 		requiredEdgeUIComponents.map((name) => [
 			name,
