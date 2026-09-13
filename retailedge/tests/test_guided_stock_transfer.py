@@ -87,9 +87,10 @@ class TestGuidedStockTransfer(unittest.TestCase):
 				_assert_simple_stock_item("TRACKED-ITEM")
 
 	@patch("retailedge.guided_stock_transfer._assert_simple_stock_item")
-	@patch("retailedge.guided_stock_transfer._validate_branch_warehouse")
+	@patch("retailedge.guided_stock_transfer.validate_guided_branch_warehouse")
 	@patch("retailedge.guided_stock_transfer._assert_read_permission")
-	@patch("retailedge.guided_stock_transfer.resolve_operational_branch")
+	@patch("retailedge.guided_stock_transfer.get_guided_branch_names", return_value=["Lagos", "Abuja"])
+	@patch("retailedge.guided_stock_transfer.resolve_guided_branch")
 	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
 	@patch("retailedge.guided_stock_transfer.frappe.db.get_value", return_value="Demo Company")
 	@patch("retailedge.guided_stock_transfer.frappe.new_doc")
@@ -98,14 +99,15 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		mock_new_doc,
 		_mock_db,
 		_mock_create_permission,
-		mock_branch_scope,
+		mock_branch_resolver,
+		_mock_branches,
 		_mock_read_permission,
 		mock_validate_warehouse,
 		mock_item,
 	):
 		doc = _DraftStockEntry()
 		mock_new_doc.return_value = doc
-		mock_branch_scope.side_effect = lambda _company, branch="", user=None: {"branch": branch}
+		mock_branch_resolver.side_effect = lambda _company, branch="", user=None: branch
 		result = create_simple_stock_transfer_draft(
 			{
 				"company": "Demo Company",
@@ -122,7 +124,7 @@ class TestGuidedStockTransfer(unittest.TestCase):
 			}
 		)
 		mock_new_doc.assert_called_once_with("Stock Entry")
-		self.assertEqual(mock_branch_scope.call_count, 2)
+		self.assertEqual(mock_branch_resolver.call_count, 2)
 		self.assertEqual(mock_validate_warehouse.call_count, 2)
 		self.assertEqual(mock_item.call_count, 2)
 		self.assertEqual(doc.insert_calls, 1)
@@ -136,17 +138,16 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		self.assertEqual(result["docstatus"], 0)
 		self.assertEqual(result["name"], doc.name)
 
-	@patch(
-		"retailedge.guided_stock_transfer.resolve_operational_branch",
-		side_effect=lambda _company, branch="", user=None: {"branch": branch},
-	)
+	@patch("retailedge.guided_stock_transfer.get_guided_branch_names", return_value=[])
+	@patch("retailedge.guided_stock_transfer.resolve_guided_branch", return_value="")
 	@patch("retailedge.guided_stock_transfer._assert_read_permission")
 	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
 	def test_same_source_and_target_warehouse_is_blocked(
 		self,
 		_mock_create_permission,
 		_mock_permission,
-		_mock_branch_scope,
+		_mock_branch_resolver,
+		_mock_branches,
 	):
 		with self.assertRaises(frappe.ValidationError):
 			create_simple_stock_transfer_draft(
@@ -159,12 +160,10 @@ class TestGuidedStockTransfer(unittest.TestCase):
 			)
 
 	@patch("retailedge.guided_stock_transfer._assert_simple_stock_item")
-	@patch("retailedge.guided_stock_transfer._validate_branch_warehouse")
+	@patch("retailedge.guided_stock_transfer.validate_guided_branch_warehouse")
 	@patch("retailedge.guided_stock_transfer._assert_read_permission")
-	@patch(
-		"retailedge.guided_stock_transfer.resolve_operational_branch",
-		return_value={"branch": "Lagos"},
-	)
+	@patch("retailedge.guided_stock_transfer.get_guided_branch_names", return_value=["Lagos"])
+	@patch("retailedge.guided_stock_transfer.resolve_guided_branch", return_value="Lagos")
 	@patch("retailedge.guided_stock_transfer._assert_can_create_stock_entry")
 	@patch("retailedge.guided_stock_transfer.frappe.db.get_value", return_value="Demo Company")
 	@patch("retailedge.guided_stock_transfer.frappe.new_doc")
@@ -173,7 +172,8 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		mock_new_doc,
 		_mock_db,
 		_mock_create_permission,
-		mock_branch_scope,
+		mock_branch_resolver,
+		_mock_branches,
 		_mock_read_permission,
 		mock_validate_warehouse,
 		_mock_item,
@@ -189,33 +189,25 @@ class TestGuidedStockTransfer(unittest.TestCase):
 			}
 		)
 
-		self.assertEqual(mock_branch_scope.call_count, 2)
+		self.assertEqual(mock_branch_resolver.call_count, 2)
 		self.assertEqual(mock_validate_warehouse.call_count, 2)
 		for call in mock_validate_warehouse.call_args_list:
 			self.assertEqual(call.kwargs["branch"], "Lagos")
 
-	@patch(
-		"retailedge.guided_stock_transfer.get_operational_branch_scope",
-		return_value={"restricted": True, "allowed_branches": ["Lagos", "Ikeja"]},
-	)
-	@patch("retailedge.guided_stock_transfer.has_field", return_value=True)
-	def test_restricted_multi_branch_warehouse_search_requires_branch_selection(
-		self,
-		_mock_has_field,
-		_mock_scope,
-	):
+	@patch("retailedge.guided_stock_transfer.get_guided_warehouse_search_filters", return_value=None)
+	def test_restricted_multi_branch_warehouse_search_requires_branch_selection(self, mock_filters):
 		self.assertIsNone(_warehouse_search_filters("Demo Company", "", "stock@example.com"))
+		mock_filters.assert_called_once_with("Demo Company", "", user="stock@example.com")
 
-	@patch(
-		"retailedge.guided_stock_transfer.get_operational_branch_scope",
-		return_value={"restricted": True, "allowed_branches": []},
-	)
-	@patch("retailedge.guided_stock_transfer.has_field", return_value=True)
-	def test_restricted_zero_branch_search_fails_closed(self, _mock_has_field, _mock_scope):
+	@patch("retailedge.guided_stock_transfer.get_guided_branch_search_filters", return_value={"name": "__never__"})
+	def test_restricted_zero_branch_search_fails_closed(self, mock_filters):
 		filters = _branch_search_filters("Demo Company", "stock@example.com")
 		self.assertEqual(filters["name"], "__never__")
+		mock_filters.assert_called_once_with("Demo Company", user="stock@example.com")
 
-	def test_branch_and_warehouse_search_fail_closed_without_company(self):
+	@patch("retailedge.guided_stock_transfer.get_guided_branch_search_filters", return_value={"name": "__never__"})
+	@patch("retailedge.guided_stock_transfer.get_guided_warehouse_search_filters", return_value=None)
+	def test_branch_and_warehouse_search_fail_closed_without_company(self, _mock_warehouse, _mock_branch):
 		self.assertIsNone(_warehouse_search_filters("", "", "stock@example.com"))
 		self.assertEqual(
 			_branch_search_filters("", "stock@example.com"),
