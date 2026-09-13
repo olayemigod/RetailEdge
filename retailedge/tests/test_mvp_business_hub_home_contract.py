@@ -17,14 +17,30 @@ def test_business_hub_home_uses_existing_reporting_authorities():
 	assert "frappe.db.commit" not in source
 
 
-def test_business_hub_home_exposes_mvp_command_centre_sections():
+def test_business_hub_home_exposes_operational_command_centre_sections():
 	source = FRONTEND.read_text()
 	assert "retailedge.business_hub_home.get_business_hub_home_snapshot" in source
-	assert "Business at a glance" in source
+	for label in ("Understand", "Act", "Operate", "Respond"):
+		assert f">{label}<" in source
+	assert "Five connected experiences" not in source
 	assert "homeSnapshot.cards" in source
 	assert "['stock', 'banking', 'branch', 'cash_shift']" in source
-	assert ">Attention<" in source
+	assert "homeSnapshot.attention" in source
 	assert "refreshHomeSnapshot" in source
+	assert "EdgeDropdown" in source
+	assert "homePeriodPreset" in source
+
+
+def test_business_hub_period_filter_is_bounded_and_server_resolved():
+	backend = BACKEND.read_text()
+	frontend = FRONTEND.read_text()
+	for preset in ("Today", "Yesterday", "This Week", "This Month", "Last 7 Days", "Last 30 Days"):
+		assert preset in frontend
+	assert "date_preset" in frontend
+	assert "def _resolve_period(" in backend
+	assert "Unsupported Business Hub period." in backend
+	assert '"from_date": period["from_date"]' in backend
+	assert '"to_date": period["to_date"]' in backend
 
 
 def test_business_hub_home_never_falls_back_to_company_wide_data_for_restricted_blank_scope():
