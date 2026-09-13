@@ -6,9 +6,9 @@
 - **Authoritative branch:** `qa/retailedge-reconciled-20260902`
 - **MVP candidate:** current PR #55 exact head deployed to `retail.local`
 - **Stage:** RC3 — consolidated local browser/persona acceptance
-- **Execution status:** **NOT RUN**
+- **Execution status:** **PASS — RC3 FROZEN**
 - **Target QA site:** `retail.local`
-- **Release status:** **BLOCKED** until RC3 and the release upgrade gate pass
+- **Release status:** **RC3 CLOSED** — proceed to blocker-only RetailEdge 1.0.0 release hardening
 
 This is the single execution record for the final reconciliation browser/persona gate. It must be executed only after the second MVP audit in `docs/retailedge_mvp_second_audit_20260912.md` is implementation-green. It consolidates the current PR #55 contracts and reuses useful detail from earlier module-specific browser QA documents without inheriting their obsolete PR #23 branch assumptions or superseded promotion decisions.
 
@@ -54,13 +54,17 @@ Before testing:
 
 Execution record:
 
-- Tested SHA: **NOT RUN**
-- RetailEdge version/branch: `qa/retailedge-reconciled-20260902`
-- Frappe version: **record at execution**
-- ERPNext version: **record at execution**
-- EdgeSuite UI version/candidate: **record at execution**
-- Browser(s): **record at execution**
-- Tester/date: **record at execution**
+- Tested SHA: **`202741c34abd76d53521e3d60f0a69d1557a9a87`**
+- RetailEdge version/branch: `qa/retailedge-reconciled-20260902` — MVP 1.0 candidate
+- Frappe version: `version-16` workflow candidate
+- ERPNext version: `version-16` workflow candidate
+- EdgeSuite UI version/candidate: governed `agent/reporting-standard-v1` candidate used by RC3 workflow
+- Browser(s): Playwright Chromium on Ubuntu 24.04
+- Tester/date: exact-head GitHub Actions persona run + retained-evidence review, 2026-09-13
+- Browser workflow run: **34768383675**
+- Browser result: **21 / 21 PASS**
+- Retained evidence artifact: **retailedge-browser-persona-evidence**, artifact **10320623855** (screenshots, traces and video retained on success)
+- Companion exact-head gates: Theme Compatibility, Linters, Frappe v16 CI, EdgeSuite UI Candidate Compatibility and Upgrade Validation — **PASS**
 
 ## Required personas and scope fixtures
 
@@ -68,17 +72,17 @@ Use separate users/fixtures where practical; do not simulate denial only by hidi
 
 | Persona/context | Required scope characteristic | Status |
 | --- | --- | --- |
-| Owner / RetailEdge Manager | broad permitted company context | NOT RUN |
-| Branch Manager | management role with restricted branch context | NOT RUN |
-| Cashier | ordinary operational/cashier context | NOT RUN |
-| Accounts User / Manager | payments/banking/accounting operational context | NOT RUN |
-| Stock / Store user | stock operational context | NOT RUN |
-| Purchasing user | buying operational context | NOT RUN |
-| Sales user | selling operational context | NOT RUN |
-| Restricted — one Branch | exactly one permitted Branch in selected Company | NOT RUN |
-| Restricted — multiple Branches | more than one permitted Branch | NOT RUN |
-| Restricted — zero Branches | Branch Assignment history exists but no active permitted Branch | NOT RUN |
-| Advanced Native Desk user | explicitly allowed native/advanced fallback | NOT RUN |
+| Owner / RetailEdge Manager | broad permitted company context | PASS |
+| Branch Manager | management role with restricted branch context | PASS |
+| Cashier | ordinary operational/cashier context | PASS |
+| Accounts User / Manager | payments/banking/accounting operational context | PASS |
+| Stock / Store user | stock operational context | PASS |
+| Purchasing user | buying operational context | PASS |
+| Sales user | selling operational context | PASS |
+| Restricted — one Branch | exactly one permitted Branch in selected Company | PASS |
+| Restricted — multiple Branches | more than one permitted Branch | PASS |
+| Restricted — zero Branches | Branch Assignment history exists but no active permitted Branch | PASS |
+| Advanced Native Desk user | explicitly allowed native/advanced fallback | PASS |
 
 The branch fixtures must exercise the current authority rule: once Branch Assignment history exists it is authoritative; restricted-zero must fail closed.
 
@@ -253,14 +257,22 @@ Record PASS / FAIL / BLOCKED / NOT APPLICABLE. Initial state is intentionally NO
 
 | Gate | Owner/Manager | Branch Manager | Cashier | Accounts | Stock | Purchasing | Sales | 1 Branch | Multi Branch | Zero Branch | Native Advanced |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A Shell/navigation | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| B Create/search | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| C Guided operations | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| D Operational Pages | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| E Banking/setup | NOT RUN | NOT RUN | N/A | NOT RUN | N/A | N/A | N/A | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| F Read scope | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| G Keyboard/save | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
-| H Appearance/interaction | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN | NOT RUN |
+| A Shell/navigation | PASS | PASS | PASS | PASS | PASS | PASS | PASS | N/A | N/A | N/A | PASS |
+| B Create/search | PASS | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| C Guided operations | PASS* | PASS* | PASS* | PASS* | PASS* | PASS* | PASS* | PASS | PASS | PASS | PASS* |
+| D Operational Pages | PASS | PASS | PASS | PASS | PASS | PASS | PASS | N/A | N/A | N/A | PASS |
+| E Banking/setup | N/A | PASS | PASS (denied as designed) | PASS | N/A | N/A | N/A | N/A | N/A | N/A | PASS |
+| F Read scope | PASS* | PASS* | PASS* | PASS* | PASS* | PASS* | PASS* | PASS | PASS | PASS | PASS* |
+| G Keyboard/save | PASS* | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | PASS* |
+| H Appearance/interaction | PASS | PASS | PASS | PASS | PASS | PASS | PASS | N/A | N/A | N/A | PASS |
+
+### Acceptance evidence note
+
+- `PASS` means the exact-head browser/persona suite directly exercised the surface/context and the retained successful artifact was reviewed.
+- `PASS*` combines exact-head browser/persona execution with the corresponding exact-head backend/permission/accounting contract tests in the full Frappe v16 CI suite. RC3 deliberately did not create or submit arbitrary accounting documents merely to prove Frappe-native authority that is already regression-locked.
+- The Branch Assignment fixtures exercised one-Branch auto-resolution, multi-Branch explicit-choice behavior and restricted-zero fail-closed behavior.
+- Preserved successful-run evidence was reviewed for Business Hub/Create, Stock Position, Banking, Payment Management, Supplier Payables, RetailEdge Setup, Action Centre, permission-denial behavior and narrow/mobile rendering.
+- No unresolved cross-company/Branch exposure, unauthorised Native Desk escape, required-asset/runtime failure or submitted-document mutation blocker remained on the accepted SHA.
 
 ## Defect record
 
@@ -281,6 +293,17 @@ For every failure capture:
 | Fix commit | |
 | Retest result | |
 
+### Closed RC3 blocker summary
+
+| Blocker | Resolution | Final retest |
+| --- | --- | --- |
+| Incomplete Frappe/ERPNext Desk asset graph in browser CI | Browser workflow now builds the full Desk asset graph before Playwright | PASS |
+| Business Hub permission/modal leakage and restricted operational master access | Capability probes made quiet; Branch Assignment retained as operational authority; restricted Home remains fail-closed | PASS |
+| Sales/Purchase shell access and Page navigation fallback defects | Canonical persona Page access and EdgeSuite navigation fallback corrected without widening business-data authority | PASS |
+| Searchable Create hidden items remained visually rendered | Hidden Create actions now remain actually hidden while preserving server-derived permissions | PASS |
+| Restricted persona Stock/Banking data-path gaps | Branch warehouse fixture/data paths and safe-empty banking behavior hardened | PASS |
+| RC3 harness initially filtered out consolidated acceptance spec | Playwright discovery corrected; final run executed **21 tests** | **21/21 PASS** |
+
 ## RIR2E closure gate
 
 RIR2E may be frozen only when:
@@ -292,4 +315,6 @@ RIR2E may be frozen only when:
 - no unresolved permission, branch-scope, runtime/asset, route-composition or submitted-document safety defect remains;
 - the final PASS record identifies the exact tested SHA.
 
-Until then PR #55 remains draft/open/unmerged and the RetailEdge MVP must not be tagged or released.
+RC3 closure decision: **PASS / FROZEN** on implementation SHA `202741c34abd76d53521e3d60f0a69d1557a9a87`.
+
+PR #55 remains the authoritative release candidate line. After this documentation-only freeze record, all six governed gates must remain green on the resulting exact head. Once that is confirmed, the next allowed stage is RetailEdge **1.0.0 release hardening**; no new feature scope is permitted.
