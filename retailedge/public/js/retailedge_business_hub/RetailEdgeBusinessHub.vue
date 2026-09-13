@@ -15,7 +15,7 @@
 			<template #header>
 				<EdgePageHeader
 					title="Business Hub"
-					subtitle="Navigate, act, operate, understand, and respond from one business-focused workspace."
+					subtitle="Today’s priorities, actions and business position."
 					:withBackButton="false"
 				/>
 			</template>
@@ -37,11 +37,7 @@
 					<div>
 						<p class="hub-eyebrow">Retail operations simplified</p>
 						<h2>{{ greeting }}</h2>
-						<p>
-							Use the business menu for daily operations. The Create action shows only business
-							entries your current permissions allow, while guided flows keep ERPNext documents
-							and accounting truth underneath.
-						</p>
+						<p class="hub-rider">Review the selected period, act on exceptions, and continue daily work from one place.</p>
 					</div>
 					<div class="hub-banner-side">
 						<div class="hub-context">
@@ -59,15 +55,24 @@
 					</div>
 				</section>
 
-				<section class="home-command-centre">
+				<section class="home-command-centre hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Today</p>
-							<h3>Business at a glance</h3>
+							<p class="section-kicker">Understand</p>
+							<h3>Business performance</h3>
+							<p class="section-rider">Key business indicators for the selected period.</p>
 						</div>
-						<span v-if="homeSnapshot.as_of_date" class="home-as-of">As of {{ homeSnapshot.as_of_date }}</span>
+						<div class="home-period-controls">
+							<EdgeDropdown
+								v-model="homePeriodPreset"
+								:options="homePeriodOptions"
+								label="Period"
+								@update:modelValue="handleHomePeriodChange"
+							/>
+							<span v-if="homePeriod.from_date" class="home-as-of">{{ homePeriod.from_date }} – {{ homePeriod.to_date }}</span>
+						</div>
 					</div>
-					<EdgeLoadingState v-if="homeLoading" message="Loading today's business position..." :skeleton="true" />
+					<EdgeLoadingState v-if="homeLoading" message="Loading business performance..." :skeleton="true" />
 					<EdgeErrorState v-else-if="homeError" title="Business snapshot unavailable" :message="homeError" @retry="refreshHomeSnapshot" />
 					<div v-else>
 						<div v-if="homeSnapshot.cards.length" class="home-kpi-grid">
@@ -83,48 +88,24 @@
 									<span class="home-kpi-card-icon"><EdgeIcon :name="kpiIcon(card.label)" size="sm" /></span>
 								</span>
 								<strong>{{ formatHomeValue(card) }}</strong>
-								<small>{{ card.time_basis === "current" ? "Current position" : "Today" }}</small>
+								<small>{{ card.time_basis === "current" ? "Current position" : (homePeriod.label || "Selected period") }}</small>
 							</button>
 						</div>
 						<EdgeEmptyState
 							v-else
-							title="No management cards available"
-							description="Your current role can still use the permitted operational actions and pages from the RetailEdge menu."
+							title="No management indicators available"
+							description="No permitted indicators are available for this period and operating scope."
 							icon="bar-chart-2"
 						/>
-						<div class="home-signal-grid">
-							<article v-for="key in ['stock', 'banking', 'branch', 'cash_shift']" :key="key" class="home-signal-card">
-								<div class="home-signal-heading">
-									<h4><span class="home-signal-icon"><EdgeIcon :name="signalIcon(key)" size="sm" /></span>{{ homeSection(key).label || key }}</h4>
-									<button v-if="homeSection(key).route && homeSection(key).available" type="button" class="home-link" @click="openHomeRoute(homeSection(key).route)">Open</button>
-								</div>
-								<div v-if="homeSection(key).available && homeSection(key).summary.length" class="home-signal-list">
-									<div v-for="card in homeSection(key).summary.slice(0, 4)" :key="card.label">
-										<span>{{ card.label }}</span>
-										<strong>{{ formatHomeValue(card) }}</strong>
-									</div>
-								</div>
-								<p v-else class="home-unavailable">{{ homeSection(key).reason || "No signal is available for this scope." }}</p>
-							</article>
-							<article class="home-signal-card home-attention-card">
-								<div class="home-signal-heading"><h4><span class="home-signal-icon"><EdgeIcon name="bell" size="sm" /></span>Attention</h4><span>{{ homeSnapshot.attention.length }}</span></div>
-								<div v-if="homeSnapshot.attention.length" class="home-attention-list">
-									<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeRoute(item.route)">
-										<span>{{ item.label }}</span>
-										<strong>{{ formatHomeValue(item) }}</strong>
-									</button>
-								</div>
-								<p v-else class="home-unavailable">No current attention items were found in the permitted scope.</p>
-							</article>
-						</div>
 					</div>
 				</section>
 
-				<section v-if="homeQuickActions.length" class="home-quick-actions-section">
+				<section v-if="homeQuickActions.length" class="home-quick-actions-section hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Quick actions</p>
-							<h3>Do the next business task</h3>
+							<p class="section-kicker">Act</p>
+							<h3>Quick actions</h3>
+							<p class="section-rider">Start the next permitted business task.</p>
 						</div>
 					</div>
 					<div class="home-quick-actions-grid">
@@ -144,27 +125,52 @@
 					</div>
 				</section>
 
-				<section>
+				<section class="hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Business workflow</p>
-							<h3>Five connected experiences</h3>
+							<p class="section-kicker">Operate</p>
+							<h3>Operational control</h3>
+							<p class="section-rider">Current stock, banking, branch and cash-control signals.</p>
 						</div>
 					</div>
-					<div class="experience-grid">
-						<article
-							v-for="experience in programmeExperiences"
-							:key="experience.key"
-							class="experience-card"
-						>
-							<div class="experience-card-top">
-								<span class="experience-icon"><EdgeIcon :name="displayIcon(experience.icon)" size="sm" /></span>
-								<EdgeStatusBadge :label="experience.status" :status="experience.status" />
+					<div class="home-signal-grid home-operate-grid">
+						<article v-for="key in ['stock', 'banking', 'branch', 'cash_shift']" :key="key" class="home-signal-card">
+							<div class="home-signal-heading">
+								<h4><span class="home-signal-icon"><EdgeIcon :name="signalIcon(key)" size="sm" /></span>{{ homeSection(key).label || key }}</h4>
+								<button v-if="homeSection(key).route && homeSection(key).available" type="button" class="home-link" @click="openHomeRoute(homeSection(key).route)">Open</button>
 							</div>
-							<h4>{{ experience.label }}</h4>
-							<p>{{ experience.description }}</p>
+							<div v-if="homeSection(key).available && homeSection(key).summary.length" class="home-signal-list">
+								<div v-for="card in homeSection(key).summary.slice(0, 4)" :key="card.label">
+									<span>{{ card.label }}</span>
+									<strong>{{ formatHomeValue(card) }}</strong>
+								</div>
+							</div>
+							<p v-else class="home-unavailable">{{ homeSection(key).reason || "No signal is available for this scope." }}</p>
 						</article>
 					</div>
+				</section>
+
+				<section class="hub-experience-section">
+					<div class="section-heading">
+						<div>
+							<p class="section-kicker">Respond</p>
+							<h3>Needs attention</h3>
+							<p class="section-rider">Exceptions and follow-ups that may require action.</p>
+						</div>
+						<span class="home-attention-count">{{ homeSnapshot.attention.length }}</span>
+					</div>
+					<div v-if="homeSnapshot.attention.length" class="home-attention-list home-attention-list--wide">
+						<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeRoute(item.route)">
+							<span>{{ item.label }}</span>
+							<strong>{{ formatHomeValue(item) }}</strong>
+						</button>
+					</div>
+					<EdgeEmptyState
+						v-else
+						title="Nothing needs attention"
+						description="No current exception or follow-up item was found in your permitted scope."
+						icon="check-circle"
+					/>
 				</section>
 			</div>
 
@@ -402,11 +408,11 @@ function fetchSharedContext({ force = false } = {}) {
 	return request;
 }
 
-function fetchHomeSnapshot(company, branch) {
+function fetchHomeSnapshot(company, branch, datePreset) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method: HOME_SNAPSHOT_METHOD,
-			args: { company: company || "", branch: branch || "" },
+			args: { company: company || "", branch: branch || "", date_preset: datePreset || "Today" },
 			callback: (response) => resolve(response.message || {}),
 			error: (error) => reject(error),
 		});
@@ -425,6 +431,7 @@ export default {
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeIcon: runtimeComponents.EdgeIcon,
+		EdgeDropdown: runtimeComponents.EdgeDropdown,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
@@ -444,7 +451,9 @@ export default {
 			error: "",
 			homeLoading: false,
 			homeError: "",
-			homeSnapshot: { as_of_date: "", cards: [], sections: {}, attention: [] },
+			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, attention: [] },
+			homePeriodPreset: "Today",
+			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
 			salesInvoiceCompletionOpen: false,
@@ -463,7 +472,6 @@ export default {
 			simpleStockAdjustmentOpen: false,
 			stockCompletionOpen: false,
 			stockCompletionDocument: null,
-			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
 			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "" },
@@ -472,6 +480,12 @@ export default {
 		};
 	},
 	computed: {
+		homePeriodOptions() {
+			return ["Today", "Yesterday", "This Week", "This Month", "Last 7 Days", "Last 30 Days"].map((value) => ({
+				value,
+				label: value,
+			}));
+		},
 		greeting() {
 			return this.context.user_name
 				? `Welcome, ${this.context.user_name}`
@@ -553,7 +567,6 @@ export default {
 	},
 	methods: {
 		applyContext(data) {
-			this.programmeExperiences = data.programme_experiences || [];
 			this.navigationGroups = data.navigation_groups || [];
 			this.quickActions = data.quick_actions || [];
 			this.context = { ...this.context, ...(data.context || {}) };
@@ -578,15 +591,18 @@ export default {
 		},
 		refreshHomeSnapshot() {
 			if (!this.context.company) {
-				this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, attention: [] };
+				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, attention: [] };
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
 			this.homeError = "";
-			return fetchHomeSnapshot(this.context.company, this.context.branch)
+			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset)
 				.then((snapshot) => {
+					this.homePeriod = { ...this.homePeriod, ...(snapshot.period || {}) };
+					this.homePeriodPreset = this.homePeriod.preset || this.homePeriodPreset;
 					this.homeSnapshot = {
 						as_of_date: snapshot.as_of_date || "",
+						period: snapshot.period || {},
 						cards: snapshot.cards || [],
 						sections: snapshot.sections || {},
 						attention: snapshot.attention || [],
@@ -599,6 +615,10 @@ export default {
 				.finally(() => {
 					this.homeLoading = false;
 				});
+		},
+		handleHomePeriodChange(value) {
+			this.homePeriodPreset = value || "Today";
+			return this.refreshHomeSnapshot();
 		},
 		homeSection(key) {
 			return this.homeSnapshot.sections?.[key] || { available: false, label: key, summary: [], route: "", reason: "" };
@@ -1357,6 +1377,54 @@ export default {
 }
 @media (max-width: 760px) {
 	.create-picker-list {
+		grid-template-columns: 1fr;
+	}
+}
+
+.hub-rider,
+.section-rider,
+.home-quick-action small,
+.home-unavailable {
+	font-size: .82rem;
+	line-height: 1.45;
+}
+.section-rider {
+	margin: 4px 0 0;
+	color: var(--edge-text-muted, #667085);
+}
+.home-period-controls {
+	display: flex;
+	align-items: flex-end;
+	justify-content: flex-end;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.home-period-controls .edge-field {
+	min-width: 170px;
+	margin: 0;
+}
+.home-attention-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 30px;
+	height: 30px;
+	padding: 0 9px;
+	border: 1px solid var(--edge-border, #d9e2ec);
+	border-radius: 999px;
+	font-size: .8rem;
+	font-weight: 700;
+}
+.home-attention-list--wide {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+@media (max-width: 760px) {
+	.home-period-controls {
+		justify-content: flex-start;
+	}
+	.home-attention-list--wide {
 		grid-template-columns: 1fr;
 	}
 }
