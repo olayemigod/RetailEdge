@@ -306,8 +306,8 @@ def validate_operating_branch(
 		return result
 
 	try:
-		_assert_company_access(company)
-		_assert_branch_exists_and_active(branch)
+		_assert_company_access(company, user=user)
+		_assert_branch_exists_and_active(branch, user=user, company=company)
 		branch_company = _branch_company(branch)
 		if branch_company and branch_company != company:
 			frappe.throw(_("Branch {0} does not belong to Company {1}.").format(branch, company))
@@ -354,7 +354,7 @@ def validate_operating_branch(
 def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 	fallback_company = _clean(company) or _clean(frappe.defaults.get_user_default("Company"))
 	if fallback_company:
-		_assert_company_access(fallback_company)
+		_assert_company_access(fallback_company, user=user)
 
 	if not user_has_global_branch_access(user=user) and has_branch_assignments(user=user):
 		resolved = _resolve_assignment_fallback(user=user, company=fallback_company)
@@ -532,6 +532,7 @@ def _assert_switch_safe(*, company: str, branch: str, user: str) -> None:
 
 
 def _allowed_companies(*, user: str) -> list[str]:
+	assignment_authoritative = has_branch_assignments(user=user) and not user_has_global_branch_access(user=user)
 	try:
 		rows = frappe.get_list(
 			"Company",
@@ -542,13 +543,20 @@ def _allowed_companies(*, user: str) -> list[str]:
 	except Exception:
 		rows = []
 	companies = [_clean(row.get("name")) for row in rows if _clean(row.get("name"))]
-	if user_has_global_branch_access(user=user) or not has_branch_assignments(user=user):
+	if user_has_global_branch_access(user=user) or not assignment_authoritative:
 		return companies
+
 	active_companies = {
 		_clean(row.get("company"))
 		for row in get_active_branch_assignments(user=user)
 		if _clean(row.get("company"))
 	}
+	# Branch Assignment is the RetailEdge operational authority once history exists.
+	# Generic Company DocType permission must not erase an otherwise valid active
+	# assignment, but it also must not widen the user beyond assigned Companies.
+	for company in sorted(active_companies):
+		if company not in companies and frappe.db.exists("Company", company):
+			companies.append(company)
 	return [company for company in companies if company in active_companies]
 
 
@@ -562,8 +570,10 @@ def _allowed_branches(*, company: str, user: str) -> list[str]:
 		filters["company"] = company
 	if _doctype_has_field("Branch", "disabled"):
 		filters["disabled"] = 0
+	assignment_authoritative = has_branch_assignments(user=user) and not user_has_global_branch_access(user=user)
 	try:
-		rows = frappe.get_list(
+		reader = frappe.get_all if assignment_authoritative else frappe.get_list
+		rows = reader(
 			"Branch",
 			filters=filters,
 			fields=["name"],
@@ -608,20 +618,41 @@ def _allowed_branches(*, company: str, user: str) -> list[str]:
 	return permission_visible
 
 
-def _assert_company_access(company: str) -> None:
+def _assert_company_access(company: str, user: str | None = None) -> None:
 	if not frappe.db.exists("Company", company):
 		frappe.throw(_("Company {0} does not exist.").format(company))
-	if not frappe.has_permission("Company", "read", doc=company):
-		frappe.throw(_("You do not have access to Company {0}.").format(company), frappe.PermissionError)
+	user = user or frappe.session.user
+	if frappe.has_permission("Company", "read", doc=company) or user_has_global_branch_access(user=user):
+		return
+	if has_branch_assignments(user=user):
+		active_companies = {
+			_clean(row.get("company"))
+			for row in get_active_branch_assignments(user=user)
+			if _clean(row.get("company"))
+		}
+		if company in active_companies:
+			return
+	frappe.throw(_("You do not have access to Company {0}.").format(company), frappe.PermissionError)
 
 
-def _assert_branch_exists_and_active(branch: str) -> None:
+def _assert_branch_exists_and_active(
+	branch: str,
+	user: str | None = None,
+	company: str | None = None,
+) -> None:
 	if not frappe.db.exists("Branch", branch):
 		frappe.throw(_("Branch {0} does not exist.").format(branch))
-	if not frappe.has_permission("Branch", "read", doc=branch):
-		frappe.throw(_("You do not have access to Branch {0}.").format(branch), frappe.PermissionError)
 	if _doctype_has_field("Branch", "disabled") and frappe.db.get_value("Branch", branch, "disabled"):
 		frappe.throw(_("Branch {0} is disabled.").format(branch))
+
+	user = user or frappe.session.user
+	if frappe.has_permission("Branch", "read", doc=branch) or user_has_global_branch_access(user=user):
+		return
+	if has_branch_assignments(user=user) and branch in set(
+		get_assignment_branches(user=user, company=company or None)
+	):
+		return
+	frappe.throw(_("You do not have access to Branch {0}.").format(branch), frappe.PermissionError)
 
 
 def _branch_company(branch: str) -> str:
