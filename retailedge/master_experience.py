@@ -610,13 +610,20 @@ def _contain_native_navigation_for_edgesuite_only(context: dict[str, Any]) -> No
 
 def _company_identity(company: str) -> dict[str, str]:
 	company = str(company or "").strip()
-	if not company or not frappe.db.exists("Company", company):
-		return {"name": company, "label": company, "logo": "", "currency": ""}
+	fallback = {"name": company, "label": company, "logo": "", "currency": ""}
+	if not company:
+		return fallback
 
-	fields = ["name", "company_name", "default_currency"]
-	if frappe.get_meta("Company").has_field("company_logo"):
-		fields.append("company_logo")
-	row = frappe.db.get_value("Company", company, fields, as_dict=True) or {}
+	try:
+		if not frappe.db.exists("Company", company):
+			return fallback
+		fields = ["name", "company_name", "default_currency"]
+		if frappe.get_meta("Company").has_field("company_logo"):
+			fields.append("company_logo")
+		row = frappe.db.get_value("Company", company, fields, as_dict=True) or {}
+	except Exception:
+		return fallback
+
 	return {
 		"name": row.get("name") or company,
 		"label": row.get("company_name") or row.get("name") or company,
@@ -672,7 +679,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	identity = _company_identity(company)
 	try:
 		switcher = get_allowed_operating_contexts(company=company) if company else {}
-	except (frappe.PermissionError, frappe.ValidationError):
+	except Exception:
 		switcher = {}
 	user_context = dict(context.get("context") or {})
 	user_context.update({
