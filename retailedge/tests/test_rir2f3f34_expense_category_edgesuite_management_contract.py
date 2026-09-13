@@ -139,3 +139,11 @@ def test_f3f34_contract_preserves_master_and_accounting_truth():
 	assert "No accounting document is created or mutated" in doc
 	assert "Other RetailEdge Setup resources remain unchanged" in doc
 	assert "Manual browser/persona QA remains deferred" in doc
+
+
+def test_expense_category_list_coerces_json_filters_before_querying():
+	source = inspect.getsource(expense_category_setup)
+	assert "def _coerce_filters(" in source
+	assert "frappe.parse_json(filters)" in source
+	assert '"company", "active_status", "search_text", "page_size"' in source
+	assert "Expense Category filters must be an object." in source
