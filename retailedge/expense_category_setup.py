@@ -270,6 +270,21 @@ def save_expense_category(
 	return _category_payload(doc)
 
 
+
+def _coerce_filters(filters: dict[str, Any] | str | None) -> dict[str, Any]:
+	if filters in (None, ""):
+		return {}
+	if isinstance(filters, str):
+		try:
+			filters = frappe.parse_json(filters)
+		except Exception:
+			frappe.throw(_("Invalid Expense Category filters."))
+	if not isinstance(filters, dict):
+		frappe.throw(_("Expense Category filters must be an object."))
+
+	allowed = {"company", "active_status", "search_text", "page_size"}
+	return {key: filters.get(key) for key in allowed if key in filters}
+
 def _apply_values(doc, values: dict[str, Any]) -> None:
 	allowed = (
 		"category_name",
