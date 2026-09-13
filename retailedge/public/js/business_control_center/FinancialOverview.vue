@@ -90,7 +90,7 @@ export default {
 			const formatted = this.formatValue(metric.value, metric.datatype);
 			return metric.suffix ? `${formatted}${metric.suffix}` : formatted;
 		},
-		formatValue(value, datatype) { try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
+		formatValue(value, datatype) { try { return window.retailedge.formatPlainValue(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
 	},
 };
 </script>
