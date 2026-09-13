@@ -6,7 +6,7 @@ from typing import Any
 import frappe
 
 from retailedge.edgesuite_ui import get_retailedge_business_hub_context as _base_business_hub_context
-from retailedge.operating_context import get_operating_context
+from retailedge.operating_context import get_allowed_operating_contexts, get_operating_context
 
 CUSTOMER_ACTION: dict[str, Any] = {
 	"key": "new-customer",
@@ -651,10 +651,21 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context["quick_actions"] = quick_actions
 
 	operating = get_operating_context()
+	company = operating.get("company") or ""
+	identity = _company_identity(company)
+	try:
+		switcher = get_allowed_operating_contexts(company=company) if company else {}
+	except (frappe.PermissionError, frappe.ValidationError):
+		switcher = {}
 	user_context = dict(context.get("context") or {})
 	user_context.update({
-		"company": operating.get("company") or "",
+		"company": company,
+		"company_label": identity.get("label") or company,
+		"company_logo": identity.get("logo") or "",
+		"company_currency": identity.get("currency") or "",
 		"branch": operating.get("branch") or "",
+		"branch_options": list(switcher.get("branches") or []),
+		"can_switch_branch": bool(switcher.get("can_switch_branch")),
 		"operating_context_source": operating.get("source") or "",
 		"default_pos_profile": operating.get("default_pos_profile") or "",
 		"default_stock_location": operating.get("default_stock_location") or "",
