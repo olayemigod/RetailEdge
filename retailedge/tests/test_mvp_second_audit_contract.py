@@ -59,3 +59,18 @@ def test_rc3_contract_matches_current_stock_movement_and_frappe_v16_routing():
 	assert "Stock Movement History is now part of the EdgeSuite-owned 1.0 composition" in source
 	assert "Stock Movement History remains on its existing Query Report" not in source
 	assert "Do **not** use RIR2E to promote" not in source
+
+
+def test_second_audit_records_canonical_page_role_reconciliation():
+	source = AUDIT.read_text(encoding="utf-8")
+	assert "four genuine P1 pre-test gaps" in source
+	assert "P1-D — Canonical Page-role access — CLOSED" in source
+	assert "Shared-shell composition recheck — GREEN" in source
+	assert "ff5c260b19a5f66358fa3f95e94d6043edd17707" in source
+
+
+def test_rc3_expense_acceptance_covers_business_and_cashier_contexts():
+	source = RC3.read_text(encoding="utf-8")
+	assert "permitted Owner/Manager/Accounts contexts must enter the modern **Business Expenses** flow" in source
+	assert "cashier-only contexts must retain the governed **Cashier/POS Expense** flow" in source
+	assert "Business Expense acceptance must prove" in source
