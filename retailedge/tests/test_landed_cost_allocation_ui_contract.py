@@ -40,8 +40,9 @@ class TestLandedCostAllocationUIContract(TestCase):
 		self.assertNotIn('v-model="landedCost.taxes"', component)
 		self.assertNotIn('v-model="landedCost.vendorInvoices"', component)
 		self.assertIn("Distribution basis", component)
-		self.assertIn('value="Amount"', component)
-		self.assertIn('value="Qty"', component)
+		self.assertIn("EdgeDropdown", component)
+		self.assertIn("{ value: 'Amount', label: 'Amount' }", component)
+		self.assertIn("{ value: 'Qty', label: 'Quantity' }", component)
 		self.assertNotIn('<option value="Distribute Manually">', component)
 		self.assertIn("Advanced: Prepare in ERPNext", component)
 
