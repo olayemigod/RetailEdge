@@ -218,6 +218,11 @@ def create_simple_stock_transfer_draft(values: dict | str | None = None) -> dict
 		values.get("target_branch") or "",
 		user=user,
 	)
+	configured_branches = get_guided_branch_names(company, user=user)
+	if configured_branches and not source_branch:
+		frappe.throw(_("Choose a Source Branch before saving this Stock Transfer."))
+	if configured_branches and not target_branch:
+		frappe.throw(_("Choose a Destination Branch before saving this Stock Transfer."))
 
 	source_warehouse = str(values.get("source_warehouse") or "").strip()
 	target_warehouse = str(values.get("target_warehouse") or "").strip()
