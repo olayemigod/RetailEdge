@@ -126,6 +126,21 @@ class TestReportNavigationPermissionContract(unittest.TestCase):
 		with patch("frappe.desk.query_report.get_report_doc", side_effect=PermissionError("denied")):
 			self.assertFalse(_can_open_report("Restricted Report"))
 
+	def test_native_report_gate_restores_message_log_after_denied_probe(self):
+		previous_messages = list(getattr(frappe.local, "message_log", []) or [])
+		frappe.local.message_log = [{"message": "existing"}]
+
+		def deny_with_message(_report_name):
+			frappe.local.message_log.append({"message": "probe denial"})
+			raise frappe.PermissionError("denied")
+
+		try:
+			with patch("frappe.desk.query_report.get_report_doc", side_effect=deny_with_message):
+				self.assertFalse(_can_open_report("Restricted Report"))
+			self.assertEqual(frappe.local.message_log, [{"message": "existing"}])
+		finally:
+			frappe.local.message_log = previous_messages
+
 
 if __name__ == "__main__":
 	unittest.main()
