@@ -66,7 +66,8 @@ class RetailEdgePreReportingAccessHardeningTests(unittest.TestCase):
 		self.assertIn("link_type: item.target_type", hub)
 		self.assertIn("link_to: item.target", hub)
 		self.assertIn("data.access || {}", hub)
-		self.assertIn("if (this.nativeFallbackEnabled)", hub)
+		self.assertIn("this.nativeFallbackEnabled", hub)
+		self.assertIn("!stayInEdgeSuite", hub)
 		self.assertIn(':native-fallback-enabled="nativeFallbackEnabled"', hub)
 
 	def test_guided_dialogs_hide_full_form_fallback_when_native_desk_is_unavailable(self):
