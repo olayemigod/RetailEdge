@@ -5,13 +5,37 @@
 		activeRoute="/app/retailedge-business-hub"
 		title="RetailEdge"
 		subtitle="Retail operations & control"
-		:tenantName="context.company"
+		:tenantName="context.company_label || context.company"
 		:branchName="context.branch"
 		:userName="context.user_name"
 		:hideNativeSidebar="true"
 		@navigate="navigateFromShell"
 	>
 		<EdgePageLayout>
+			<section class="retailedge-context-bar" aria-label="RetailEdge operating context">
+				<div class="retailedge-company-identity">
+					<img v-if="context.company_logo" :src="context.company_logo" :alt="`${context.company_label || context.company} logo`" />
+					<span v-else class="retailedge-company-mark"><EdgeIcon name="building" size="sm" /></span>
+					<span class="retailedge-company-copy">
+						<small>Company</small>
+						<strong>{{ context.company_label || context.company || "Retail business" }}</strong>
+					</span>
+				</div>
+				<div class="retailedge-branch-switcher">
+					<EdgeDropdown
+						v-model="selectedBranch"
+						:options="context.branch_options || []"
+						label="Working branch"
+						placeholder="Select branch"
+						:disabled="branchSwitching || !context.can_switch_branch"
+						@change="switchBranch"
+					/>
+				</div>
+				<div class="retailedge-product-context">
+					<small>Product</small>
+					<strong>RetailEdge</strong>
+				</div>
+			</section>
 			<template #header>
 				<EdgePageHeader
 					title="Business Hub"
@@ -78,7 +102,10 @@
 								class="home-kpi-card"
 								@click="openHomeRoute(card.route)"
 							>
-								<span>{{ card.label }}</span>
+								<span class="home-kpi-card-heading">
+									<span>{{ card.label }}</span>
+									<span class="home-kpi-card-icon"><EdgeIcon :name="kpiIcon(card.label)" size="sm" /></span>
+								</span>
 								<strong>{{ formatHomeValue(card) }}</strong>
 								<small>{{ card.time_basis === "current" ? "Current position" : "Today" }}</small>
 							</button>
@@ -92,7 +119,7 @@
 						<div class="home-signal-grid">
 							<article v-for="key in ['stock', 'banking', 'branch', 'cash_shift']" :key="key" class="home-signal-card">
 								<div class="home-signal-heading">
-									<h4>{{ homeSection(key).label || key }}</h4>
+									<h4><span class="home-signal-icon"><EdgeIcon :name="signalIcon(key)" size="sm" /></span>{{ homeSection(key).label || key }}</h4>
 									<button v-if="homeSection(key).route && homeSection(key).available" type="button" class="home-link" @click="openHomeRoute(homeSection(key).route)">Open</button>
 								</div>
 								<div v-if="homeSection(key).available && homeSection(key).summary.length" class="home-signal-list">
@@ -104,7 +131,7 @@
 								<p v-else class="home-unavailable">{{ homeSection(key).reason || "No signal is available for this scope." }}</p>
 							</article>
 							<article class="home-signal-card home-attention-card">
-								<div class="home-signal-heading"><h4>Attention</h4><span>{{ homeSnapshot.attention.length }}</span></div>
+								<div class="home-signal-heading"><h4><span class="home-signal-icon"><EdgeIcon name="bell" size="sm" /></span>Attention</h4><span>{{ homeSnapshot.attention.length }}</span></div>
 								<div v-if="homeSnapshot.attention.length" class="home-attention-list">
 									<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeRoute(item.route)">
 										<span>{{ item.label }}</span>
@@ -132,7 +159,7 @@
 							class="home-quick-action"
 							@click="runHomeQuickAction(shortcut)"
 						>
-							<span class="home-quick-action-icon">{{ iconText(shortcut.icon) }}</span>
+							<span class="home-quick-action-icon"><EdgeIcon :name="shortcut.icon || 'zap'" size="sm" /></span>
 							<span>
 								<strong>{{ shortcut.label }}</strong>
 								<small>{{ shortcut.description }}</small>
@@ -155,7 +182,7 @@
 							class="experience-card"
 						>
 							<div class="experience-card-top">
-								<span class="experience-icon">{{ iconText(experience.icon) }}</span>
+								<span class="experience-icon"><EdgeIcon :name="experience.icon || 'grid'" size="sm" /></span>
 								<EdgeStatusBadge :label="experience.status" :status="experience.status" />
 							</div>
 							<h4>{{ experience.label }}</h4>
@@ -172,21 +199,30 @@
 				size="md"
 				@close="closeCreatePicker"
 			>
-				<div v-if="quickActions.length" class="create-picker-list">
-					<button
-						v-for="action in quickActions"
-						:key="action.key"
-						type="button"
-						class="create-picker-item"
-						@click="runQuickAction(action)"
-					>
-						<span class="create-picker-icon">{{ iconText(action.icon) }}</span>
-						<span class="create-picker-copy">
-							<strong>{{ action.label }}</strong>
-							<small>{{ action.description }}</small>
+				<div v-if="quickActions.length" class="create-product-menu">
+					<div class="create-product-menu-header">
+						<span class="create-product-menu-mark"><EdgeIcon name="plus" size="sm" /></span>
+						<span>
+							<strong>Create business entry</strong>
+							<small>Choose a permitted RetailEdge action</small>
 						</span>
-						<span class="create-picker-mode">{{ actionModeLabel(action) }}</span>
-					</button>
+					</div>
+					<div class="create-picker-list">
+						<button
+							v-for="action in quickActions"
+							:key="action.key"
+							type="button"
+							class="create-picker-item"
+							@click="runQuickAction(action)"
+						>
+							<span class="create-picker-icon"><EdgeIcon :name="action.icon || 'plus'" size="sm" /></span>
+							<span class="create-picker-copy">
+								<strong>{{ action.label }}</strong>
+								<small>{{ action.description }}</small>
+							</span>
+							<span class="create-picker-mode">{{ actionModeLabel(action) }}</span>
+						</button>
+					</div>
 				</div>
 				<EdgeEmptyState
 					v-else
@@ -400,6 +436,8 @@ export default {
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
+		EdgeDropdown: runtimeComponents.EdgeDropdown,
+		EdgeIcon: runtimeComponents.EdgeIcon,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
@@ -441,7 +479,9 @@ export default {
 			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
-			context: { user: "", user_name: "", company: "", branch: "" },
+			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "", branch_options: [], can_switch_branch: false },
+			selectedBranch: "",
+			branchSwitching: false,
 			featureFlags: {},
 			accessContext: { mode: "native_desk", restricted_to_edgesuite: false, can_use_native_desk: true },
 		};
@@ -532,6 +572,7 @@ export default {
 			this.navigationGroups = data.navigation_groups || [];
 			this.quickActions = data.quick_actions || [];
 			this.context = { ...this.context, ...(data.context || {}) };
+			this.selectedBranch = this.context.branch || "";
 			this.featureFlags = data.feature_flags || {};
 			this.accessContext = { ...this.accessContext, ...(data.access || {}) };
 			if (!this.quickActions.length) this.createPickerOpen = false;
@@ -582,11 +623,54 @@ export default {
 			const value = card?.value ?? 0;
 			const datatype = card?.datatype || card?.type || "Data";
 			if (datatype === "Currency") {
-				try { return frappe.format(value, { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(); }
+				const formatter = window.retailedge?.formatPlainValue;
+				if (formatter) return formatter(value, { fieldtype: "Currency" });
+				return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 			}
 			if (datatype === "Percent") return `${Number(value || 0).toLocaleString()}%`;
 			if (datatype === "Int" || datatype === "Float") return Number(value || 0).toLocaleString();
-			return String(value ?? "");
+			return window.retailedge?.toPlainText?.(value) ?? String(value ?? "");
+		},
+		kpiIcon(label) {
+			return {
+				Sales: "shopping-cart",
+				Expenses: "credit-card",
+				Receivables: "download",
+				Payables: "upload",
+				"Stock Value": "stock",
+			}[String(label || "")] || "chart";
+		},
+		signalIcon(key) {
+			return {
+				stock: "stock",
+				banking: "wallet",
+				branch: "building",
+				cash_shift: "credit-card",
+			}[String(key || "")] || "chart";
+		},
+		async switchBranch(option) {
+			const branch = option?.value || this.selectedBranch;
+			if (!branch || !this.context.company || branch === this.context.branch || this.branchSwitching) return;
+			this.branchSwitching = true;
+			try {
+				await frappe.call({
+					method: "retailedge.operating_context.switch_operating_context",
+					args: { company: this.context.company, branch },
+				});
+				window.__retailedgeBusinessHubContextCache = null;
+				window.__retailedgeBusinessHubContextRequest = null;
+				await this.refreshContext({ force: true });
+				frappe.show_alert?.({ message: __("Working branch updated."), indicator: "green" });
+			} catch (error) {
+				this.selectedBranch = this.context.branch || "";
+				frappe.msgprint({
+					title: __("Unable to switch branch"),
+					message: error?.message || __("The selected Branch could not be activated."),
+					indicator: "red",
+				});
+			} finally {
+				this.branchSwitching = false;
+			}
 		},
 		openHomeRoute(route) {
 			if (!route) return;
@@ -940,6 +1024,115 @@ export default {
 </script>
 
 <style scoped>
+.retailedge-context-bar {
+	display: grid;
+	grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 26rem) minmax(8rem, auto);
+	align-items: center;
+	gap: 16px;
+	padding: 12px 14px;
+	border: 1px solid var(--edge-color-border, #dfe6ec);
+	border-radius: 10px;
+	background: var(--edge-color-surface, #fff);
+}
+.retailedge-company-identity {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+.retailedge-company-identity img,
+.retailedge-company-mark {
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	object-fit: contain;
+	background: var(--edge-color-brand-50, #eef7ff);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+}
+.retailedge-company-copy,
+.retailedge-product-context {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+}
+.retailedge-company-copy small,
+.retailedge-product-context small {
+	font-size: 0.68rem;
+	font-weight: 750;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--edge-color-ink-500, #617589);
+}
+.retailedge-company-copy strong {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.retailedge-branch-switcher {
+	justify-self: center;
+	width: min(100%, 26rem);
+}
+.retailedge-product-context {
+	justify-self: end;
+	text-align: right;
+}
+.create-product-menu {
+	border: 1px solid var(--edge-color-border, #dfe6ec);
+	border-radius: 12px;
+	overflow: hidden;
+	background: var(--edge-color-surface, #fff);
+}
+.create-product-menu-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--edge-color-border, #dfe6ec);
+	background: var(--edge-color-surface-muted, #f6f8fa);
+}
+.create-product-menu-header > span:last-child {
+	display: grid;
+	gap: 2px;
+}
+.create-product-menu-header small {
+	color: var(--edge-color-ink-500, #617589);
+}
+.create-product-menu-mark,
+.create-picker-icon,
+.home-kpi-card-icon,
+.home-signal-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	background: var(--edge-color-brand-50, #eef7ff);
+	color: var(--edge-color-brand-700, #0c4f87);
+}
+.create-product-menu-mark {
+	width: 34px;
+	height: 34px;
+}
+.home-kpi-card-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+}
+.home-kpi-card-icon,
+.home-signal-icon {
+	width: 30px;
+	height: 30px;
+	flex: 0 0 auto;
+}
+.home-signal-heading h4 {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
 .retailedge-business-hub {
 	display: grid;
 	gap: 28px;
@@ -1170,6 +1363,7 @@ export default {
 }
 .create-picker-list {
 	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 8px;
 }
 .create-picker-item {
@@ -1239,6 +1433,21 @@ export default {
 	}
 	.create-picker-mode {
 		grid-column: 2;
+	}
+}
+@media (max-width: 760px) {
+	.retailedge-context-bar {
+		grid-template-columns: 1fr;
+		align-items: stretch;
+	}
+	.retailedge-branch-switcher,
+	.retailedge-product-context {
+		justify-self: stretch;
+		width: 100%;
+		text-align: left;
+	}
+	.create-picker-list {
+		grid-template-columns: 1fr;
 	}
 }
 </style>
