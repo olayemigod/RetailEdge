@@ -9,6 +9,7 @@ from frappe.utils import cint, flt, getdate, nowdate
 
 from retailedge.branch_context import has_doctype, resolve_retailedge_operational_defaults
 from retailedge.guided_entry_context import (
+	get_guided_branch_names,
 	get_guided_branch_search_filters,
 	get_guided_warehouse_search_filters,
 	resolve_guided_branch,
@@ -122,6 +123,9 @@ def get_simple_stock_transfer_context(company: str = "", branch: str = "") -> di
 		},
 		"capabilities": {
 			"branch_enabled": bool(has_doctype("Branch")),
+			"requires_branch_selection": bool(
+				get_guided_branch_names(company, user=user)
+			),
 			"can_create_item": bool(has_doctype("Item") and frappe.has_permission("Item", "create")),
 			"native_form_fallback": True,
 			"serial_batch_requires_full_form": True,
