@@ -4,6 +4,7 @@ app_publisher = "ProcessEdge Solutions"
 app_description = "Retail operations, POS control, sales audit, payment verification, branch workflows, and retail intelligence for ERPNext/POSNext."
 app_email = "support@processedge.com.ng"
 app_license = "MIT"
+app_home = "/desk/retailedge-business-hub"
 
 # The standalone ProcessEdge EdgeSuite UI app is the only supported shared
 # frontend runtime for new RetailEdge product pages. RetailEdge must not depend
