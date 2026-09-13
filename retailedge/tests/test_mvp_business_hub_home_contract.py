@@ -37,6 +37,13 @@ def test_business_hub_home_never_falls_back_to_company_wide_data_for_restricted_
 	assert '"attention": []' in source
 
 
+def test_business_hub_optional_sections_do_not_leak_caught_frappe_messages():
+	source = BACKEND.read_text()
+	assert 'previous_messages = list(getattr(frappe.local, "message_log", []) or [])' in source
+	assert "finally:" in source
+	assert "frappe.local.message_log = previous_messages" in source
+
+
 def test_business_hub_keeps_existing_guided_entry_ownership():
 	source = FRONTEND.read_text()
 	for token in (
