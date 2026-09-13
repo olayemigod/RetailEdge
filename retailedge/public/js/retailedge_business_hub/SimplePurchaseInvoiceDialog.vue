@@ -38,6 +38,9 @@
 			<div v-if="saveError" class="guided-purchase-error" role="alert">
 				{{ saveError }}
 			</div>
+			<div v-else-if="stockContextMessage" class="guided-purchase-warning" role="status">
+				{{ stockContextMessage }}
+			</div>
 
 			<div class="guided-purchase-grid">
 				<EdgeLinkField
@@ -64,7 +67,7 @@
 					:modelValue="values.branch"
 					label="Branch"
 					placeholder="Search branch"
-					description="Selecting a Branch loads its preferred receiving stock location when available."
+					description="Only enabled Branch Setup entries for the active Company are shown. Selecting one loads its preferred receiving stock location."
 					:searcher="searchBranch"
 					:context="searchContext"
 					@update:modelValue="setBranch"
@@ -148,7 +151,7 @@
 					<button
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading"
+						:disabled="saving || loading || !transactionContextReady"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -255,6 +258,19 @@ export default {
 		},
 		requiresBranchSelection() {
 			return Boolean(this.formContext.capabilities?.requires_branch_selection);
+		},
+		transactionContextReady() {
+			if (!this.values.update_stock) return true;
+			if (this.requiresBranchSelection && !this.values.branch) return false;
+			return Boolean(this.values.warehouse);
+		},
+		stockContextMessage() {
+			if (!this.values.update_stock) return "";
+			if (this.requiresBranchSelection && !this.values.branch) {
+				return "Choose a Branch before selecting the Receiving Stock Location.";
+			}
+			if (!this.values.warehouse) return "Choose a Receiving Stock Location before saving this stock-updating purchase.";
+			return "";
 		},
 		canCreateSupplier() {
 			return Boolean(this.formContext.capabilities?.can_create_supplier);
@@ -566,8 +582,17 @@ export default {
 	margin: -8px 0 0;
 	font-size: 0.8rem;
 }
+.guided-purchase-warning,
 .guided-purchase-error {
 	padding: 10px 12px;
+}
+.guided-purchase-warning {
+	border: 1px solid var(--edge-warning, #f79009);
+	border-radius: 8px;
+	color: var(--edge-text, #344054);
+	background: var(--edge-warning-subtle, #fffaeb);
+}
+.guided-purchase-error {
 	border: 1px solid var(--edge-danger, #d92d20);
 	border-radius: 8px;
 	color: var(--edge-danger, #b42318);
