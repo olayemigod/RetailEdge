@@ -126,3 +126,10 @@ def test_business_hub_does_not_duplicate_shared_shell_context_controls():
     assert "<EdgeDropdown" not in source
     assert "selectedBranch" not in source
     assert "switchBranch(" not in source
+
+
+def test_all_retailedge_vue_surfaces_use_shared_dropdowns_and_plain_formatting():
+    for path in PUBLIC_JS.rglob("*.vue"):
+        source = read(path)
+        assert "<select" not in source, path
+        assert "frappe.format(" not in source, path
