@@ -6,8 +6,10 @@
 - Release target: **1.0.0**
 - Authoritative PR: #55
 - Authoritative branch: `qa/retailedge-reconciled-20260902`
-- Validated second-audit gap-closure head: `4ac9734f91fdd1c7a05e0539ce5a03ddd12873c8`
-- Date: 2026-09-12
+- Initial second-audit gap-closure head: `4ac9734f91fdd1c7a05e0539ce5a03ddd12873c8`
+- Post-freeze implementation revalidation baseline: `ff5c260b19a5f66358fa3f95e94d6043edd17707`
+- Audit date: 2026-09-12
+- Revalidated: 2026-09-13
 - Audit state: **FROZEN — IMPLEMENTATION GREEN / RC3 ACCEPTANCE READY**
 - Purpose: perform and freeze the agreed second MVP re-audit **before** final browser/persona acceptance.
 
@@ -19,11 +21,12 @@ RC3 remains a separate acceptance phase. Automatically triggered browser smoke r
 
 RetailEdge 1.0 is not missing a major MVP business workflow. Core sales, purchasing, payments, expenses, stock, banking, reporting and management services are present and retain ERPNext accounting/stock truth.
 
-The second audit found three genuine P1 pre-test gaps. All three are now closed:
+The second audit and exact-head reconciliation found four genuine P1 pre-test gaps. All four are now closed:
 
 1. Business Hub expense ownership/routing;
 2. approved Business Hub Home shortcuts;
-3. RC3 acceptance-contract alignment for Stock Movement History and Frappe v16 Desk routing.
+3. RC3 acceptance-contract alignment for Stock Movement History and Frappe v16 Desk routing;
+4. canonical RetailEdge Page-role access for the Business Hub / banking entry surfaces.
 
 The second MVP audit is therefore frozen as **implementation-green / acceptance-ready**. The next governed phase is RC3 browser/persona acceptance.
 
@@ -32,7 +35,7 @@ The second MVP audit is therefore frozen as **implementation-green / acceptance-
 | # | Review area | Frozen status | Second-audit conclusion |
 |---|---|---|---|
 | 1 | Reconciled product baseline / branch composition | GREEN | PR #55 remains the authoritative consolidated candidate. No divergent product branch is required. |
-| 2 | Role model / EdgeSuite access model | GREEN | Canonical compact RetailEdge roles remain authoritative. Frappe roles intentionally remain Desk-enabled System User roles; EdgeSuite UI access mode independently controls `edgesuite_only` vs Native Desk. Canonical Page-role gaps on Business Hub/Banking were corrected before this audit. |
+| 2 | Role model / EdgeSuite access model | GREEN | Canonical compact RetailEdge roles remain authoritative. Frappe roles intentionally remain Desk-enabled System User roles; EdgeSuite UI access mode independently controls `edgesuite_only` vs Native Desk. Canonical Page-role gaps on Business Hub/Banking are corrected. The RC3-critical Page set was rechecked directly; Professional Purchasing intentionally remains limited to ERPNext Purchase/Accounts authority. |
 | 3 | Sales / customer operational workflow | GREEN | Standard Quotation → Sales Order → Delivery → Sales Invoice, customer receipt/advance and standard Sales Invoice completion are code-complete with Frappe Workflow precedence and ERPNext lifecycle authority. |
 | 4 | Purchasing / stock receiving / supplier workflow | GREEN | Professional Purchasing owns Purchase Order → Receipt → Purchase Invoice, returns/debit notes, supplier payment and standard completion. **Receive Stock** is now exposed from the approved Home shortcut contract while retaining Professional Purchasing as workflow owner. |
 | 5 | Payments / cash / banking | GREEN | Payment Management, Cash Movement, internal transfer, banking readiness and Bank Matching are implemented; Banking pages use the shared RetailEdge shell. **Match Bank Transactions** is now exposed from the approved Home shortcut contract. |
@@ -78,6 +81,25 @@ The RC3 runbook now matches the exact candidate:
 - Frappe v16 Desk routing is handled correctly; `/app/...` may resolve to `/desk/...` and acceptance waits for the actual Desk/page mount.
 - Automated browser smoke remains supplemental; full RC3 still requires the restricted one/multiple/zero Branch personas and consolidated cross-workflow checks.
 
+### P1-D — Canonical Page-role access — CLOSED
+
+Head reconciliation found that some high-value Page metadata still depended on compatibility role labels even though the canonical internal contract uses compact RetailEdge role IDs.
+
+The 1.0 entry surfaces are now aligned so canonical RetailEdge personas can reach the permitted Page before the EdgeSuite runtime is evaluated:
+
+- Business Hub includes canonical `RetailEdgeManager`, `RetailEdgeBranchManager` and `RetailEdgeCashier`;
+- Banking Readiness and Bank Matching include canonical Manager / Branch Manager identities alongside finance/System Manager authority;
+- the full RC3-critical Page set was rechecked for canonical role coverage;
+- Professional Purchasing is deliberately **not** broadened to RetailEdge Manager roles because ERPNext Purchase/Accounts permissions remain the authority.
+
+This is Page-entry compatibility only. It does not broaden DocType, accounting, stock, Company or Branch permissions.
+
+### Shared-shell composition recheck — GREEN
+
+The 1.0-critical operational surfaces were rechecked for common RetailEdge shell ownership. Business Hub, Action Centre, Banking Readiness, Bank Matching, Professional Selling/Purchasing, Payments, Cash Movement, Receivables, Payables, Stock Position/Movement, Expense Register/Business Expenses/Expense Review, Cash Shift Verification and Daily Sales Audit all resolve through the common RetailEdge navigation/shell contract or the shared reporting component that provides it.
+
+EdgeSuite-only final navigation still removes native DocType/Report destinations, while authorised Native Desk users retain deliberate advanced fallbacks.
+
 ## Freeze evidence
 
 The exact second-audit gap-closure head `4ac9734f91fdd1c7a05e0539ce5a03ddd12873c8` completed the normal governed implementation gates successfully:
@@ -89,6 +111,18 @@ The exact second-audit gap-closure head `4ac9734f91fdd1c7a05e0539ce5a03ddd12873c
 - RetailEdge Upgrade Validation — run #27 — **PASS**
 
 A Browser Persona Smoke workflow was also automatically triggered. It is explicitly **not** counted as RC3 acceptance merely because it ran from GitHub triggers.
+
+### Post-freeze implementation-head reconciliation
+
+After the initial `4ac9734f...` audit freeze, the PR advanced through browser-harness work and a narrow Business Hub canonical Page-role correction. Before this audit record was realigned, implementation head `ff5c260b19a5f66358fa3f95e94d6043edd17707` passed the normal governed gates again:
+
+- RetailEdge Theme Compatibility — run #908 — **PASS**
+- Linters — run #2749 — **PASS**
+- Clean Frappe v16 CI — run #2767 — **PASS**
+- EdgeSuite UI Candidate Compatibility — run #1005 — **PASS**
+- RetailEdge Upgrade Validation — run #39 — **PASS**
+
+The Browser Persona Smoke run on that head is **not** used to declare the second audit green; RC3 is a separate acceptance phase. The latest exact-head revalidation after audit-document alignment is recorded in the authoritative PR #55 freeze comment.
 
 ## Explicitly not reopened by this audit
 
