@@ -608,6 +608,23 @@ def _contain_native_navigation_for_edgesuite_only(context: dict[str, Any]) -> No
 	context["navigation_groups"] = contained_groups
 
 
+def _company_identity(company: str) -> dict[str, str]:
+	company = str(company or "").strip()
+	if not company or not frappe.db.exists("Company", company):
+		return {"name": company, "label": company, "logo": "", "currency": ""}
+
+	fields = ["name", "company_name", "default_currency"]
+	if frappe.get_meta("Company").has_field("company_logo"):
+		fields.append("company_logo")
+	row = frappe.db.get_value("Company", company, fields, as_dict=True) or {}
+	return {
+		"name": row.get("name") or company,
+		"label": row.get("company_name") or row.get("name") or company,
+		"logo": row.get("company_logo") or "",
+		"currency": row.get("default_currency") or "",
+	}
+
+
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context = deepcopy(_base_business_hub_context() or {})
@@ -659,7 +676,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		switcher = {}
 	user_context = dict(context.get("context") or {})
 	user_context.update({
-		"company": company,
+		"company": operating.get("company") or "",
 		"company_label": identity.get("label") or company,
 		"company_logo": identity.get("logo") or "",
 		"company_currency": identity.get("currency") or "",
