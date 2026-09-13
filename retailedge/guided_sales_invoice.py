@@ -13,6 +13,7 @@ from retailedge.guided_entry_context import (
 	get_guided_branch_search_filters,
 	get_guided_warehouse_search_filters,
 	resolve_guided_branch,
+	resolve_guided_company,
 	resolve_guided_default_branch,
 	validate_guided_branch_warehouse,
 )
@@ -31,11 +32,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 	_assert_can_create_sales_invoice()
 	user = frappe.session.user
 	operating = get_operating_context() or {}
-	company = (
-		operating.get("company")
-		or frappe.defaults.get_user_default("Company")
-		or ""
-	)
+	company = resolve_guided_company("", user=user)
 	legacy_default_branch = (
 		operating.get("branch")
 		or frappe.defaults.get_user_default("RetailEdge Branch")
@@ -141,12 +138,7 @@ def search_simple_sales_invoice_options(
 	values = _coerce_values(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
 	operating = get_operating_context() or {}
-	company = (
-		values.get("company")
-		or operating.get("company")
-		or frappe.defaults.get_user_default("Company")
-		or ""
-	)
+	company = resolve_guided_company(values.get("company") or "", user=frappe.session.user)
 	branch = values.get("branch") or ""
 	customer = values.get("customer") or ""
 
@@ -356,12 +348,7 @@ def _resolve_guided_branch(*, company: str, branch: str, user: str) -> str:
 
 def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple[str, str, str]:
 	operating = get_operating_context() or {}
-	company = str(
-		values.get("company")
-		or operating.get("company")
-		or frappe.defaults.get_user_default("Company")
-		or ""
-	).strip()
+	company = resolve_guided_company(values.get("company") or "", user=user)
 	if not company:
 		frappe.throw(_("Company is required."))
 	_assert_read_permission("Company", company)
