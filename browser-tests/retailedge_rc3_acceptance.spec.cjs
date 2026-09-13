@@ -115,7 +115,7 @@ test("RC3 searchable Create is permission-derived, focused and Escape-safe", asy
 		await expect(page.locator(".guided-create-search-count")).toContainText("permitted");
 
 		const firstPermittedText = (await items.first().innerText()).trim().toLowerCase();
-		const queryToken = firstPermittedText.split(/\\s+/).find((token) => token.length >= 4) || firstPermittedText.slice(0, 3);
+		const queryToken = firstPermittedText.split(/\s+/).find((token) => token.length >= 4) || firstPermittedText.slice(0, 3);
 		expect(queryToken.length).toBeGreaterThan(0);
 		await search.fill(queryToken);
 		const visibleItems = page.locator(".create-picker-item:visible");

@@ -311,7 +311,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
+					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.sales_reporting.get_sales_reporting_context"),
 					navigationPromise,

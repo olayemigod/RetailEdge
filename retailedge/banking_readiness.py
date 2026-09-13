@@ -674,7 +674,10 @@ def _bank_account_rows_for_readiness(company=None):
 	user = frappe.session.user
 	company = cstr(company).strip()
 	if not frappe.has_permission("Bank Account", "read", user=user):
-		frappe.throw("You do not have permission to view Bank Accounts.", frappe.PermissionError)
+		# Page access can legitimately admit an operational persona without native
+		# Bank Account read permission. Return no identities and no accounting data;
+		# direct readiness lookups retain their stricter permission gate.
+		return []
 
 	if company:
 		companies = [company]

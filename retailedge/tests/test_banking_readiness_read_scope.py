@@ -26,6 +26,16 @@ class TestBankingReadinessReadScope(unittest.TestCase):
 		has_doctype.assert_not_called()
 		scoped_rows.assert_not_called()
 
+	def test_reader_without_bank_account_read_gets_safe_empty_inventory(self):
+		with (
+			patch.object(readiness.frappe, "has_permission", return_value=False),
+			patch.object(readiness.frappe, "get_list") as get_list,
+		):
+			rows = readiness._bank_account_rows_for_readiness("Scope Co")
+
+		self.assertEqual(rows, [])
+		get_list.assert_not_called()
+
 	def test_unauthorized_explicit_company_stops_before_bank_account_query(self):
 		with (
 			patch.object(readiness.frappe, "has_permission", return_value=True),

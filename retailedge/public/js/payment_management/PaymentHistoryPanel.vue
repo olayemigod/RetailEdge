@@ -208,7 +208,7 @@ export default {
 			try {
 				const [context, navigation] = await Promise.all([
 					callMethod("retailedge.customer_receivables.get_customer_receivables_context"),
-					callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context"),
+					callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context"),
 				]);
 				this.filters.company = context.default_filters?.company || "";
 				this.filters.branch = context.default_filters?.branch || "";

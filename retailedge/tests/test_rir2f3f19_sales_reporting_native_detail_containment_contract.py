@@ -13,7 +13,7 @@ def _read(path: Path) -> str:
 def test_sales_reporting_fails_closed_on_final_native_desk_context():
 	source = _read(COMPONENT)
 	assert "canUseNativeDesk: false" in source
-	assert "retailedge.master_experience.get_master_retailedge_business_hub_context" in source
+	assert "retailedge.edgesuite_ui.get_retailedge_business_hub_context" in source
 	assert "this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);" in source
 
 

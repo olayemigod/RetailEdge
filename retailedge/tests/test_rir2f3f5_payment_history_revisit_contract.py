@@ -65,6 +65,8 @@ def test_payment_management_owns_history_and_revisit_without_forced_native_hando
 	assert "loadPaymentHistory" in panel
 	assert "reviewHistoryPayment" in panel
 	assert "canUseNativeDesk" in panel
+	assert "retailedge.edgesuite_ui.get_retailedge_business_hub_context" in panel
+	assert "retailedge.master_experience.get_master_retailedge_business_hub_context" not in panel
 	assert 'v-if="canUseNativeDesk"' in panel
 	assert "PaymentHistoryPanel.vue" in bundle
 	assert "mountPaymentHistoryPanel" in bundle

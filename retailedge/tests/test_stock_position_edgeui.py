@@ -4,7 +4,7 @@ import inspect
 import json
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from retailedge import stock_position
 
@@ -59,6 +59,22 @@ class TestStockPositionEdgeUI(unittest.TestCase):
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("frappe.db.commit()", source)
 		self.assertNotIn("frappe.db.sql", source)
+
+	def test_restricted_assigned_branch_does_not_require_duplicate_native_branch_permission(self):
+		filters = stock_position.frappe._dict(company="Scope Co", branch="Branch A")
+		with (
+			patch.object(
+				stock_position,
+				"get_operational_branch_scope",
+				return_value={"restricted": True, "allowed_branches": ["Branch A"], "source": "branch_assignment"},
+			),
+			patch.object(stock_position.frappe, "has_permission", return_value=True),
+			patch.object(stock_position.frappe.db, "exists", return_value=True),
+			patch.object(stock_position, "_assert_named_read") as assert_named_read,
+		):
+			stock_position._assert_report_access(filters)
+
+		self.assertEqual(assert_named_read.call_args_list, [call("Company", "Scope Co")])
 
 	def test_restricted_explicit_branch_outside_assignments_fails_closed(self):
 		filters = stock_position.frappe._dict(company="Scope Co", branch="Branch B")

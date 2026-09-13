@@ -57,7 +57,7 @@ def test_standard_submit_fails_closed_on_unreconciled_or_stock_updating_drafts()
 def test_edgesuite_review_replaces_ordinary_native_draft_handoff():
 	source = _read(COMPONENT)
 	assert "canUseNativeDesk: false" in source
-	assert "retailedge.master_experience.get_master_retailedge_business_hub_context" in source
+	assert "retailedge.edgesuite_ui.get_retailedge_business_hub_context" in source
 	assert "this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);" in source
 	assert "openPurchaseInvoiceReview(row)" in source
 	assert "get_supplier_document_purchase_invoice_review" in source

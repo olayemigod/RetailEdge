@@ -654,7 +654,21 @@ def _assert_report_access(filters: frappe._dict) -> None:
 		if filters.get(fieldname):
 			_assert_named_read(doctype, filters.get(fieldname))
 	if filters.get("branch"):
-		_assert_named_read("Branch", filters.branch)
+		branch = str(filters.branch or "").strip()
+		if not frappe.db.exists("Branch", branch):
+			frappe.throw(_("Branch {0} does not exist.").format(branch))
+		scope = get_operational_branch_scope(filters.company, user=frappe.session.user)
+		if scope.get("restricted"):
+			# Active RetailEdge Branch Assignments are authoritative for restricted
+			# operational personas; do not require a duplicate native Branch grant.
+			_assert_branch_read_scope(
+				company=filters.company,
+				branch=branch,
+				user=frappe.session.user,
+				scope=scope,
+			)
+		else:
+			_assert_named_read("Branch", branch)
 
 
 def _assert_named_read(doctype: str, name: str) -> None:

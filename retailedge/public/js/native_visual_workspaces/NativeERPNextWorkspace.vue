@@ -191,7 +191,7 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
-					: callMethod("retailedge.master_experience.get_master_retailedge_business_hub_context");
+					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [workspace, navigation] = await Promise.all([
 					callMethod("retailedge.native_visual_workspaces.get_native_visual_workspace", { workspace: this.workspaceKey }),
 					navigationPromise,
