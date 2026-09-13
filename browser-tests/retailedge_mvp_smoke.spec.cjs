@@ -54,7 +54,11 @@ async function openProductPage(page, route, title, menuLabel) {
 		}
 
 		if (menuLabel) {
-			await expect(page.getByText(menuLabel, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+			const productSidebar = page.locator(".edge-app-shell .edge-sidebar").first();
+			await expect(productSidebar).toBeAttached({ timeout: 15_000 });
+			await expect(productSidebar.getByText(menuLabel, { exact: true }).first()).toBeAttached({
+				timeout: 15_000,
+			});
 		}
 		await page.waitForTimeout(500);
 		expect(runtimeErrors, `runtime/asset errors on /app/${route}`).toEqual([]);
