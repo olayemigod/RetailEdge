@@ -73,7 +73,8 @@ def test_shared_shell_receives_company_identity_and_permission_safe_branch_switc
         assert contract in boot
 
     assert "/assets/retailedge/js/retailedge_shell_context.js" in hooks
-    assert 'edge-app-shell[data-edge-product="retailedge"]' in shell_context
+    assert 'const PRODUCT_SELECTOR = ".edge-app-shell[data-edge-product]"' in shell_context
+    assert '.toLowerCase() === "retailedge"' in shell_context
     assert "EdgeDropdown" in shell_context
     assert "switch_operating_context" in shell_context
     assert "window.location.reload()" in shell_context
@@ -133,3 +134,10 @@ def test_all_retailedge_vue_surfaces_use_shared_dropdowns_and_plain_formatting()
         source = read(path)
         assert "<select" not in source, path
         assert "frappe.format(" not in source, path
+
+
+def test_no_local_edgesuite_shell_clone_remains_in_retailedge_vue_sources():
+    for path in PUBLIC_JS.rglob("*.vue"):
+        source = read(path)
+        assert 'name: "EdgeAppShell"' not in source, path
+        assert "const EdgeAppShell =" not in source, path
