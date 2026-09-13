@@ -133,7 +133,7 @@
 					<button
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading || sameWarehouse || (requiresBranchSelection && (!values.source_branch || !values.target_branch))"
+						:disabled="saving || loading || !transferContextReady"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -238,6 +238,12 @@ export default {
 					this.values.target_warehouse &&
 					this.values.source_warehouse === this.values.target_warehouse
 			);
+		},
+		transferContextReady() {
+			if (this.sameWarehouse) return false;
+			if (!this.values.source_warehouse || !this.values.target_warehouse) return false;
+			if (this.requiresBranchSelection && (!this.values.source_branch || !this.values.target_branch)) return false;
+			return true;
 		},
 	},
 	watch: {
@@ -432,7 +438,7 @@ export default {
 			this.values.items = (nextRows || []).map((row) => ({ ...row }));
 		},
 		async saveDraft() {
-			if (this.saving || this.loading || this.sameWarehouse) return;
+			if (this.saving || this.loading || !this.transferContextReady) return;
 			this.saveError = "";
 			this.saving = true;
 			try {
