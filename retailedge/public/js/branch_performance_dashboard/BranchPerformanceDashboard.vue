@@ -171,7 +171,7 @@ export default {
 		focusBranch(branch) { this.filters.branch = branch === "Unattributed" ? "" : branch; this.filters.pos_profile = ""; this.filters.cashier = ""; this.fetchData(); },
 		openCell(payload) { if (payload?.column?.fieldname === "branch") this.focusBranch(payload.value); },
 		openDetailReport() { if (!this.nativeFallbackEnabled) return; frappe.set_route("query-report", "RetailEdge Branch Performance Summary"); },
-		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
+		formatCurrency(value) { try { return window.retailedge.formatPlainValue(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (value === null || value === undefined || value === "") return "—"; return String(value); },
 	},
 };
