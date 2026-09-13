@@ -176,29 +176,41 @@
 				@close="closeCreatePicker"
 			>
 				<div v-if="quickActions.length" class="create-product-menu">
-					<div class="create-product-menu-header">
-						<span class="create-product-menu-mark"><EdgeIcon name="plus" size="sm" /></span>
-						<span>
-							<strong>Create business entry</strong>
-							<small>Choose a permitted RetailEdge action</small>
-						</span>
-					</div>
-					<div class="create-picker-list">
-						<button
-							v-for="action in quickActions"
-							:key="action.key"
-							type="button"
-							class="create-picker-item"
-							@click="runQuickAction(action)"
-						>
-							<span class="create-picker-icon"><EdgeIcon :name="action.icon || 'plus'" size="sm" /></span>
-							<span class="create-picker-copy">
-								<strong>{{ action.label }}</strong>
-								<small>{{ action.description }}</small>
+					<header class="create-product-menu-header edge-product-menu__header">
+						<div class="edge-product-menu__brand">
+							<span class="create-product-menu-mark edge-product-menu__brand-mark"><EdgeIcon name="plus" size="sm" /></span>
+							<span>
+								<strong>Create</strong>
+								<small>RetailEdge business actions</small>
 							</span>
-							<span class="create-picker-mode">{{ actionModeLabel(action) }}</span>
-						</button>
-					</div>
+						</div>
+					</header>
+					<section class="edge-product-menu__section" aria-label="Permitted business actions">
+						<div class="edge-product-menu__section-heading">
+							<span class="edge-product-menu__section-icon"><EdgeIcon name="zap" size="sm" /></span>
+							<span>
+								<h3>Business actions</h3>
+								<p>Only entries permitted for your current role and context are shown.</p>
+							</span>
+						</div>
+						<div class="create-picker-list edge-product-menu__items">
+							<button
+								v-for="action in quickActions"
+								:key="action.key"
+								type="button"
+								class="create-picker-item edge-product-menu__item"
+								role="menuitem"
+								@click="runQuickAction(action)"
+							>
+								<span class="create-picker-icon edge-product-menu__item-icon"><EdgeIcon :name="action.icon || 'plus'" size="sm" /></span>
+								<span class="create-picker-copy edge-product-menu__item-copy">
+									<strong>{{ action.label }}</strong>
+									<small>{{ action.description }}</small>
+								</span>
+								<span class="create-picker-mode edge-product-menu__item-badge">{{ actionModeLabel(action) }}</span>
+							</button>
+						</div>
+					</section>
 				</div>
 				<EdgeEmptyState
 					v-else
