@@ -301,6 +301,15 @@
 				@saved="handleSimpleCashierExpenseSaved"
 				@open-native="openNativeCashierExpense"
 			/>
+			<GuidedWorkflowCompletionDialog
+				:open="cashierExpenseCompletionOpen"
+				:document="cashierExpenseCompletionDocument"
+				label="Cashier Expense"
+				:canUseNativeDesk="nativeFallbackEnabled"
+				@close="closeCashierExpenseCompletion"
+				@changed="handleCashierExpenseCompletionChanged"
+				@completed="handleCashierExpenseCompletionCompleted"
+			/>
 
 			<SimpleStockTransferDialog
 				:open="simpleStockTransferOpen"
@@ -334,6 +343,7 @@ import SimpleCashDepositDialog from "./SimpleCashDepositDialog.vue";
 import StandardInternalTransferCompletionDialog from "./StandardInternalTransferCompletionDialog.vue";
 import SimpleCashTransferDialog from "./SimpleCashTransferDialog.vue";
 import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
+import GuidedWorkflowCompletionDialog from "./GuidedWorkflowCompletionDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
 import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
@@ -436,6 +446,7 @@ export default {
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
 		SimpleCashierExpenseDialog,
+		GuidedWorkflowCompletionDialog,
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
 		StandardPurchaseInvoiceCompletionDialog,
@@ -468,6 +479,8 @@ export default {
 			purchaseInvoiceCompletionOpen: false,
 			purchaseInvoiceCompletionDocument: null,
 			simpleCashierExpenseOpen: false,
+			cashierExpenseCompletionOpen: false,
+			cashierExpenseCompletionDocument: null,
 			simpleStockTransferOpen: false,
 			simpleStockAdjustmentOpen: false,
 			stockCompletionOpen: false,
@@ -907,13 +920,25 @@ export default {
 		},
 		handleSimpleCashierExpenseSaved(result) {
 			this.simpleCashierExpenseOpen = false;
-			this.notifyGuidedDraftSaved(
-				result,
-				"RetailEdge Cashier Expense",
-				"Cashier Expense",
-				{ stayInEdgeSuite: true },
-			);
+			if (result?.name) {
+				this.cashierExpenseCompletionDocument = {
+					doctype: result.doctype || "RetailEdge Cashier Expense",
+					name: result.name,
+				};
+				this.cashierExpenseCompletionOpen = true;
+			}
 			this.refreshHomeSnapshot();
+		},
+		closeCashierExpenseCompletion() {
+			this.cashierExpenseCompletionOpen = false;
+			this.cashierExpenseCompletionDocument = null;
+		},
+		handleCashierExpenseCompletionChanged() {
+			this.refreshHomeSnapshot();
+		},
+		handleCashierExpenseCompletionCompleted() {
+			this.closeCashierExpenseCompletion();
+			this.refreshContext({ force: true });
 		},
 		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
 			if (!this.nativeFallbackEnabled) return;
