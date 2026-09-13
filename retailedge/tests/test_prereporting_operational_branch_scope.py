@@ -6,6 +6,8 @@ from unittest.mock import patch
 import frappe
 
 from retailedge.operating_context import (
+	_assert_branch_exists_and_active,
+	_assert_company_access,
 	get_operational_branch_scope,
 	resolve_operational_branch,
 )
@@ -84,6 +86,34 @@ class RetailEdgePreReportingOperationalBranchScopeTests(unittest.TestCase):
 		):
 			with self.assertRaises(frappe.PermissionError):
 				resolve_operational_branch("PISONMART", user="stock@example.com")
+
+	def test_active_assignment_can_authorize_company_without_generic_company_read(self):
+		with (
+			patch("retailedge.operating_context.frappe.db.exists", return_value=True),
+			patch("retailedge.operating_context.frappe.has_permission", return_value=False),
+			patch("retailedge.operating_context.user_has_global_branch_access", return_value=False),
+			patch("retailedge.operating_context.has_branch_assignments", return_value=True),
+			patch(
+				"retailedge.operating_context.get_active_branch_assignments",
+				return_value=[{"company": "PISONMART", "branch": "Lagos"}],
+			),
+		):
+			_assert_company_access("PISONMART", user="cashier@example.com")
+
+	def test_active_assignment_can_authorize_branch_without_generic_branch_read(self):
+		with (
+			patch("retailedge.operating_context.frappe.db.exists", return_value=True),
+			patch("retailedge.operating_context.frappe.has_permission", return_value=False),
+			patch("retailedge.operating_context._doctype_has_field", return_value=False),
+			patch("retailedge.operating_context.user_has_global_branch_access", return_value=False),
+			patch("retailedge.operating_context.has_branch_assignments", return_value=True),
+			patch("retailedge.operating_context.get_assignment_branches", return_value=["Lagos"]),
+		):
+			_assert_branch_exists_and_active(
+				"Lagos",
+				user="stock@example.com",
+				company="PISONMART",
+			)
 
 	def test_unrestricted_blank_branch_preserves_company_wide_behavior(self):
 		with (
