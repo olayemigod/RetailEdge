@@ -10,6 +10,7 @@ GLOBAL_JS = PUBLIC_JS / "retailedge.js"
 SHELL_CONTEXT_JS = PUBLIC_JS / "retailedge_shell_context.js"
 BOOT = ROOT / "boot.py"
 IDENTITY_CSS = ROOT / "public" / "css" / "retailedge_product_identity.css"
+LEGACY_SALESPERSON_ROLLBACK = PUBLIC_JS / "salesperson_performance_dashboard" / "SalespersonPerformanceDashboard.vue"
 
 EDGE_DROPDOWN_MVP_SURFACES = (
     PUBLIC_JS / "operating_context" / "OperatingContext.vue",
@@ -129,15 +130,28 @@ def test_business_hub_does_not_duplicate_shared_shell_context_controls():
     assert "switchBranch(" not in source
 
 
-def test_all_retailedge_vue_surfaces_use_shared_dropdowns_and_plain_formatting():
+def test_active_retailedge_vue_surfaces_use_shared_dropdowns_and_plain_formatting():
     for path in PUBLIC_JS.rglob("*.vue"):
+        if path == LEGACY_SALESPERSON_ROLLBACK:
+            continue
         source = read(path)
         assert "<select" not in source, path
         assert "frappe.format(" not in source, path
 
 
-def test_no_local_edgesuite_shell_clone_remains_in_retailedge_vue_sources():
+def test_active_retailedge_vue_surfaces_do_not_clone_edgesuite_shell():
     for path in PUBLIC_JS.rglob("*.vue"):
+        if path == LEGACY_SALESPERSON_ROLLBACK:
+            continue
         source = read(path)
         assert 'name: "EdgeAppShell"' not in source, path
         assert "const EdgeAppShell =" not in source, path
+
+
+def test_legacy_salesperson_rollback_reference_remains_unmounted():
+    source = read(LEGACY_SALESPERSON_ROLLBACK)
+    bundle = read(PUBLIC_JS / "salesperson_performance.bundle.js")
+
+    assert "Salesperson Performance Dashboard" in source
+    assert "SalespersonPerformanceDashboardV2.vue" in bundle
+    assert 'SalespersonPerformanceDashboard.vue"' not in bundle
