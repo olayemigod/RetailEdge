@@ -9,6 +9,8 @@
 **PR base:** `qa/retailedge-consolidated-20260829`  
 **Latest code-frozen exact head:** `6b1830f92ead4af23e0123b7959b23e5156bb8dd`
 
+> **RELEASE OVERRIDE — 2026-09-13:** The historical execution ledger below is retained for traceability but no longer controls the next step. The second MVP audit is frozen, RC3 is PASS / FROZEN on implementation SHA 202741c34abd76d53521e3d60f0a69d1557a9a87, and the documentation freeze head 1347ee447900a9ec94fd4c0c9eea9d19144f6865 passed all six governed gates. The only allowed stage is RetailEdge 1.0.0 release hardening → final gates → governed promotion to version-16 → tag v1.0.0. Old “next executable step” text below is historical and must not reopen feature scope.
+
 > This ledger records execution state only. It does not amend, rename, or silently promote the Product Owner's Draft V1.1 Godmode contract.
 
 ## Repository Authority

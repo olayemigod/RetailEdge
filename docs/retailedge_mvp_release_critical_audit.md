@@ -1,5 +1,7 @@
 # RetailEdge MVP Release-Critical Audit
 
+> **Release-state update — 2026-09-13:** RC1–RC4 are closed for the 1.0 MVP. RC3 consolidated browser/persona acceptance is frozen PASS and the documentation freeze head passed all six governed gates, including 21/21 browser tests and upgrade validation. This audit is now historical input to RC5 — 1.0.0 release hardening and final promotion. Do not use the older “RC3 NOT RUN” wording below to reopen implementation scope.
+
 ## Authority
 
 - Product: RetailEdge
