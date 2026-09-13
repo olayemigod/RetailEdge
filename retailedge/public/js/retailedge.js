@@ -4,6 +4,45 @@
 	}
 
 	window.retailedge = window.retailedge || {};
+
+	window.retailedge.toPlainText = function (value) {
+		if (value === null || value === undefined) return "";
+		const text = String(value);
+		if (!/[<&]/.test(text) || typeof document === "undefined") return text;
+		const node = document.createElement("div");
+		node.innerHTML = text;
+		return (node.textContent || node.innerText || "").trim();
+	};
+
+	window.retailedge.formatPlainValue = function (value, options) {
+		try {
+			if (typeof frappe !== "undefined" && typeof frappe.format === "function") {
+				return window.retailedge.toPlainText(frappe.format(value, options || {}));
+			}
+		} catch (_error) {
+			// Fall through to safe plain-text conversion.
+		}
+		return window.retailedge.toPlainText(value);
+	};
+
+	const RETAILEDGE_BUSINESS_HUB_ROUTE = "retailedge-business-hub";
+	function redirectLegacyRetailEdgeWorkspace() {
+		if (typeof frappe === "undefined" || typeof frappe.get_route !== "function" || typeof frappe.set_route !== "function") {
+			return false;
+		}
+		const route = frappe.get_route() || [];
+		const normalized = route.map((part) => String(part || "").trim().toLowerCase()).filter(Boolean).join("/");
+		const pathname = String(window.location?.pathname || "").replace(/\/+$/, "").toLowerCase();
+		const legacyRoute = ["retailedge", "workspace/retailedge", "workspaces/retailedge"].includes(normalized);
+		const legacyPath = ["/app/retailedge", "/desk/retailedge"].includes(pathname);
+		if (!legacyRoute && !legacyPath) return false;
+		frappe.set_route(RETAILEDGE_BUSINESS_HUB_ROUTE);
+		return true;
+	}
+	window.retailedge.redirectLegacyWorkspace = redirectLegacyRetailEdgeWorkspace;
+	document.addEventListener("page-change", redirectLegacyRetailEdgeWorkspace);
+	window.setTimeout(redirectLegacyRetailEdgeWorkspace, 0);
+	window.frappe?.router?.on?.("change", redirectLegacyRetailEdgeWorkspace);
 	const RULES_CACHE_VERSION = "v4";
 	const COST_FORM_DOCTYPES = [
 		"Item",
