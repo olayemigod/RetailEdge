@@ -14,6 +14,7 @@ from retailedge.branch_profile import (
 )
 from retailedge.operating_context import (
 	get_effective_operating_context,
+	get_operating_context,
 	get_operational_branch_scope,
 	resolve_operational_branch,
 )
