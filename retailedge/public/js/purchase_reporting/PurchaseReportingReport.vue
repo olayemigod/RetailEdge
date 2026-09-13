@@ -51,12 +51,7 @@
 					</div>
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.supplier" :selectedLabel="supplierLabel" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
-					<label v-if="reportType === 'supplier_payables'" class="edge-field">
-						<span class="edge-field-label">Age</span>
-						<select v-model="filters.ageing_bucket" class="edge-input">
-							<option v-for="bucket in ageingBuckets" :key="bucket" :value="bucket">{{ bucket }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-if="reportType === 'supplier_payables'" v-model="filters.ageing_bucket" :options="ageingBuckets" label="Age" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !requiredReady" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
 				<details class="advanced-filters">
@@ -66,8 +61,8 @@
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.item_code" :selectedLabel="itemLabel" label="Item" placeholder="All items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.warehouse" label="Warehouse" placeholder="All warehouses in scope" :searcher="warehouseSearch" @select="onWarehouseSelected" @clear="filters.warehouse = ''" />
-						<label v-if="reportType === 'purchase_register'" class="edge-field"><span class="edge-field-label">Invoice Type</span><select v-model="filters.invoice_kind" class="edge-input" @change="onSupplierFacetChange"><option value="All">All</option><option value="Purchases">Purchases</option><option value="Returns">Returns</option></select></label>
-						<label class="edge-field"><span class="edge-field-label">Invoice Status</span><select v-model="filters.status" class="edge-input" @change="onSupplierFacetChange"><option value="">All statuses</option><option v-for="status in invoiceStatuses" :key="status" :value="status">{{ status }}</option></select></label>
+						<EdgeDropdown v-if="reportType === 'purchase_register'" v-model="filters.invoice_kind" :options="['All', 'Purchases', 'Returns']" label="Invoice Type" @change="onSupplierFacetChange" />
+						<EdgeDropdown v-model="filters.status" :options="invoiceStatuses" label="Invoice Status" placeholder="All statuses" @change="onSupplierFacetChange" />
 					</div>
 				</details>
 			</template>
@@ -95,7 +90,7 @@
 <script>
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
 	purchase_register: {
