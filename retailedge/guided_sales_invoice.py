@@ -239,11 +239,14 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 	_assert_read_permission("Customer", customer)
 
 	items = _normalise_items(values.get("items"))
+	configured_branches = get_guided_branch_names(company, user=user)
 	settings = get_retailedge_settings()
 	can_edit_update_stock = bool(
 		getattr(settings, "allow_guided_sales_update_stock_edit", 0)
 	)
 	update_stock = cint(values.get("update_stock") or 0) if can_edit_update_stock else 1
+	if update_stock and configured_branches and not branch:
+		frappe.throw(_("Choose a Branch before saving a stock-updating Sales Invoice."))
 	if update_stock and not warehouse:
 		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
 
@@ -370,6 +373,9 @@ def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple
 	)
 
 	warehouse = str(values.get("warehouse") or "").strip()
+	configured_branches = get_guided_branch_names(company, user=user)
+	if warehouse and configured_branches and not branch:
+		frappe.throw(_("Choose a Branch before selecting a Stock Location."))
 	if warehouse:
 		_assert_read_permission("Warehouse", warehouse)
 		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
