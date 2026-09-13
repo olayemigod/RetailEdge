@@ -47,7 +47,7 @@
 					<EdgeLinkField v-model="filters.item_group" label="Product Group Anchor" placeholder="Any group" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
 					<EdgeLinkField v-model="filters.item_code" label="Product Anchor" placeholder="Any product" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
 					<label class="edge-field"><span class="edge-field-label">Minimum Times Together</span><input v-model.number="filters.minimum_pair_count" class="edge-input" type="number" min="1" step="1" /></label>
-					<label class="edge-field"><span class="edge-field-label">Rows per page</span><select v-model.number="pageSize" class="edge-input"><option :value="25">25</option><option :value="50">50</option><option :value="100">100</option></select></label>
+					<EdgeDropdown :modelValue="String(pageSize)" :options="['25', '50', '100']" label="Rows per page" @update:modelValue="pageSize = Number($event || 50)" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="resetAndFetch">{{ loading ? "Analysing…" : "Apply / Refresh" }}</button></div>
 				</div>
 			</template>
@@ -68,7 +68,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
