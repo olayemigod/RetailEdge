@@ -263,11 +263,18 @@ export default {
 				this.documents = allDocuments.filter((row) => row?.available && (row.can_read || row.can_create));
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.loaded = true;
+				this.applyPendingTarget();
 			} catch (error) {
 				this.error = errorMessage(error, "Professional Selling failed to load.");
 			} finally {
 				this.loading = false;
 			}
+		},
+		applyPendingTarget() {
+			const target = window.retailedgeProfessionalSellingTarget;
+			if (!target?.doctype || !target?.name) return;
+			delete window.retailedgeProfessionalSellingTarget;
+			if (target.doctype === "Sales Invoice") this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: target.name });
 		},
 		mapNavigationGroups(groups) {
 			return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) }));
