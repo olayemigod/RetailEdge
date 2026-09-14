@@ -24,9 +24,11 @@ def test_pr56_audit_records_and_closes_only_the_identified_p1_contract_gaps():
 		"P1-A — stale Business Hub acceptance assertion — CLOSED",
 		"P1-B — stale RC3 authority — CLOSED",
 		"P1-C — missing PR #56 browser regression coverage — CLOSED",
+		"P1-D — canonical RetailEdgeManager Business Hub Company access — CLOSED",
 	):
 		assert token in source
 	assert "No new P0 product, accounting, stock, permission, branch-isolation, install or upgrade defect was found." in source
+	assert "Four P1 audit/acceptance gaps were found and closed" in source
 
 
 def test_rc3_contract_is_reset_to_pr56_and_old_pr55_pass_is_historical_only():
