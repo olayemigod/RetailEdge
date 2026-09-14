@@ -80,12 +80,14 @@ These are intentional 1.0 boundaries, not release defects:
 - System Manager-only Branch Assignment/setup governance;
 - advanced ERPNext detail/form access for explicitly authorised Native Desk users.
 
-## Acceptance evidence
+## QA status
 
-PR #56 formal RC3 was accepted on exact post-audit-freeze SHA `099e4a30b2c8a25c2ca0858caa6bcbfe99a8b98c`. Browser Persona workflow run #234 completed **24/24 PASS** and retained evidence artifact `10357567550`. On the same exact head, Theme Compatibility #1121, Linters #2962, clean Frappe v16 CI #2983, EdgeSuite UI Candidate Compatibility #1218, and Upgrade Validation #128 were all green.
+RetailEdge 1.0.0 is **not yet released**.
 
-The second MVP audit is frozen at commit `1bd01c39d7a574df85773aae86fec7a144a98698`, backed by validated implementation head `aea2cf4980cfd2dc2b61133ee567f166392a7285`.
+Business Hub QA is still in progress. The automated browser runs recorded during PR #56 hardening are regression evidence only and must not be treated as completed Business Hub QA or full RetailEdge MVP RC3 acceptance.
 
-Final release hardening passed on exact head `0f9b527d01691a0b477ca9f28f940f04bd1da4ea`: Theme #1122, Linters #2963, clean Frappe v16 CI #2984, EdgeSuite UI Candidate Compatibility #1219, Upgrade Validation #129, and Browser Persona #235 with **24/24 PASS**.
+Full MVP QA remains required after Business Hub acceptance, including selling, purchasing/Receive Stock, payments/cash/banking, expenses, stock operations, Action Centre, receivables/payables, reporting, role/persona access, Branch isolation, workflow behaviour, and ERPNext accounting/stock safety.
 
-PR #56 was then merged to `version-16` as `06b9170edd3150394cf827de3827d171605f0463`. The merge commit tree is identical to the tested hardening head, so promotion introduced no content drift. The `v1.0.0` tag must point to the final `version-16` release head after this release-documentation closeout is itself validated.
+PR #56 was merged to `version-16` before QA completion. That merge represents code integration only; it does **not** represent product acceptance or permission to tag `v1.0.0`.
+
+No release tag or GitHub Release should be created until the complete QA sequence is finished and frozen.

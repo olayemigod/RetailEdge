@@ -1,62 +1,88 @@
-# RetailEdge 1.0.0 — Release Hardening Checklist
+# RetailEdge 1.0.0 — QA and Release Readiness Checklist
 
-## Authority
+## Current authority
 
 - Product: RetailEdge
-- Release: 1.0.0
-- Authoritative PR: **#56**
-- Authoritative branch: `qa/retailedge-visual-identity`
-- PR base / governed release branch: `version-16`
-- Validated implementation head: `aea2cf4980cfd2dc2b61133ee567f166392a7285`
-- Second MVP audit freeze commit: `1bd01c39d7a574df85773aae86fec7a144a98698`
-- Formal RC3 accepted head: `099e4a30b2c8a25c2ca0858caa6bcbfe99a8b98c`
-- Formal RC3 Browser Persona run: **#234 — 24/24 PASS**
-- Retained browser evidence artifact: `10357567550`
-- Final release-hardening head: `0f9b527d01691a0b477ca9f28f940f04bd1da4ea`
-- Governed `version-16` merge commit: `06b9170edd3150394cf827de3827d171605f0463`
-- Final hardening gates: Theme #1122, Linters #2963, CI #2984, EdgeSuite Compatibility #1219, Upgrade #129, Browser #235 (24/24 PASS)
+- Target release: **1.0.0**
+- Current state: **QA IN PROGRESS**
+- Current QA focus: **Business Hub**
+- Business Hub QA status: **ONGOING / NOT YET ACCEPTED**
+- Full RetailEdge MVP persona/workflow QA: **NOT YET COMPLETE**
+- Tagging/release: **BLOCKED**
+- No `v1.0.0` tag exists.
+- No GitHub Release exists.
+- Automated CI/browser runs are regression evidence and do not replace manual/operational QA acceptance.
 
-## Frozen release order
+## Repository state note
 
-1. Second full MVP audit — **COMPLETE**
-2. Close second-audit gaps — **COMPLETE**
-3. Freeze second audit — **COMPLETE**
-4. Formal PR #56 RC3 persona/browser acceptance — **COMPLETE / FROZEN**
-5. Blocker-only RC3 corrections — **NOT REQUIRED after formal run #234**
-6. 1.0.0 release hardening — **COMPLETE**
-7. Final exact-head gates — **COMPLETE on `0f9b527d01691a0b477ca9f28f940f04bd1da4ea`**
-8. Governed PR #56 merge to `version-16` — **COMPLETE**
-9. Recheck promoted release commit/status — **COMPLETE**
-10. Tag `v1.0.0` — **PENDING**
+PR #56 was merged to `version-16` as `06b9170edd3150394cf827de3827d171605f0463` before the actual QA stage was complete. That merge must **not** be interpreted as release acceptance. The current `version-16` line is an integration candidate while QA continues.
 
-## 1.0.0 hardening items
+Do not force-reset or rewrite release-branch history merely to change the status record. Any QA blocker found from this point must be fixed through the existing governed QA line and revalidated before release.
 
-- [x] Package version is 1.0.0
-- [x] README contains current 1.0 release guidance
-- [x] Installation/upgrade notes exist
-- [x] 1.0 release notes exist
-- [x] Known advanced-native boundaries are documented
-- [x] PR #56 second-audit freeze/evidence is recorded
-- [x] Formal PR #56 RC3 exact head is recorded
-- [x] Formal Browser Persona acceptance is 24/24 PASS
-- [x] Retained browser evidence artifact is recorded
-- [x] Theme Compatibility #1122 green on final hardening exact head
-- [x] Linters/Semgrep/dependency audit #2963 green on final hardening exact head
-- [x] Clean Frappe v16 CI #2984 green on final hardening exact head
-- [x] EdgeSuite UI Candidate Compatibility #1219 green on final hardening exact head
-- [x] Upgrade Validation #129 green on final hardening exact head
-- [x] Browser Persona #235 green on final hardening exact head — 24/24 PASS
-- [x] Final hardening SHA `0f9b527d01691a0b477ca9f28f940f04bd1da4ea` and final six gate run numbers recorded
-- [x] PR #56 marked ready only after final six gates were green
-- [x] PR #56 merged directly to governed `version-16` base as `06b9170edd3150394cf827de3827d171605f0463`
-- [x] Promoted merge commit rechecked on `version-16`; its tree is identical to the fully tested hardening head
-- [ ] Create tag `v1.0.0` on the promoted release commit
-- [ ] Publish/finalise release notes against the tag
+## Actual release order
 
-## Promotion rule
+1. Second full MVP implementation audit — **COMPLETE**
+2. Business Hub hardening — **IMPLEMENTED**
+3. Business Hub QA — **IN PROGRESS**
+4. Close Business Hub P0/P1 QA defects — **PENDING**
+5. Re-test Business Hub until accepted — **PENDING**
+6. Full RetailEdge MVP QA across personas and operational workflows — **PENDING**
+7. Close full-MVP P0/P1 defects — **PENDING**
+8. Re-run full persona/browser/permission/accounting/stock acceptance — **PENDING**
+9. Freeze RC3 acceptance only after the above is complete — **PENDING**
+10. 1.0.0 release hardening/final gates — **PENDING**
+11. Tag `v1.0.0` and publish release — **BLOCKED UNTIL QA COMPLETES**
 
-Do not create `v1.0.0` directly on the QA working branch.
+## Business Hub QA scope currently in progress
 
-PR #56 already targets the governed `version-16` release branch. The final tag must point to the merged/promoted `version-16` release commit, not the unmerged QA head.
+Business Hub QA must cover, at minimum:
 
-No new feature scope is permitted during this checklist. Only release metadata/documentation, test/harness corrections, and P0/P1 release blockers may change the candidate.
+- shell stability and Back/Forward behaviour;
+- Company/Working Branch context and cascades;
+- the eight actionable business indices;
+- date/period filters and hand-off into reports;
+- Attention/priority signals and drill-through;
+- quick actions and guided transaction entry points;
+- permissions and restricted-zero behaviour;
+- Company/Branch isolation;
+- loading, empty, unavailable and error states;
+- light/dark mode and responsive layouts;
+- no native-Desk escape where EdgeSuite owns the workflow;
+- no permission/modal leakage;
+- browser console/network/runtime errors;
+- practical usefulness of the Hub to owners/managers, not merely successful rendering.
+
+## Full MVP QA still required after Business Hub
+
+Business Hub acceptance does **not** accept the rest of RetailEdge. Separate QA is still required for:
+
+- Selling and customer workflows;
+- Purchasing / Receive Stock;
+- payments, cash and banking;
+- Business Expenses and Cashier Expense;
+- stock transfer, adjustment, position and movement;
+- Action Centre and operational review pages;
+- receivables/payables;
+- reporting and management visibility;
+- role/persona access;
+- one/multiple/zero Branch rules;
+- permission manipulation and cross-Company/Branch isolation;
+- workflow-enabled completion;
+- ERPNext accounting/stock integrity;
+- advanced-native boundaries;
+- install/migration/upgrade behaviour.
+
+## Automated evidence retained
+
+The following are useful regression signals only:
+
+- Browser Persona #234 — 24/24 PASS;
+- Browser Persona #235 — 24/24 PASS;
+- Theme, lint, CI, EdgeSuite compatibility and upgrade validation runs on the PR #56 candidate;
+- release-branch CI #2986 PASS.
+
+They must not be relabelled as Business Hub QA completion, full RC3 acceptance, or release readiness.
+
+## Release rule
+
+**No tag, GitHub Release, production-release declaration, or “RetailEdge 1.0 is complete” statement until Business Hub QA is completed and the subsequent full MVP QA/RC3 sequence is accepted.**

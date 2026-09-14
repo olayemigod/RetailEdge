@@ -4,7 +4,7 @@ RetailEdge is a retail operations app for Frappe / ERPNext v16 that is designed 
 
 ## RetailEdge 1.0.0
 
-RetailEdge 1.0.0 is the first governed MVP release target. The product is now in release hardening: RC3 browser/persona acceptance is frozen green, upgrade validation is green, and the final tag is created only after the 1.0.0 hardening head passes all governed gates and is promoted to the release branch.
+RetailEdge 1.0.0 is the governed MVP release target. The product is still in QA. Business Hub QA is currently in progress, and the full RetailEdge MVP persona/workflow QA has not yet been completed. Automated browser and CI runs are regression evidence only and must not be treated as release acceptance. No 1.0.0 tag or release should be created until Business Hub QA is completed and the remaining MVP QA gates are executed and accepted.
 
 ### 1.0 MVP coverage
 

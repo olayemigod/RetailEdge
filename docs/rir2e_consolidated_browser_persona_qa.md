@@ -7,10 +7,10 @@
 - **PR base:** `version-16`
 - **MVP candidate:** current PR #56 exact head
 - **Stage:** RC3 — consolidated browser/persona acceptance after the PR #56 second MVP audit is frozen
-- **Execution status:** **PASS / FROZEN — FORMAL PR #56 RC3 COMPLETE**
+- **Execution status:** **NOT COMPLETE — BUSINESS HUB QA IN PROGRESS**
 - **Automated QA site:** `retail-browser.localhost`
 - **Optional local replay site:** `retail.local`
-- **Release status:** formal RC3 accepted; advancing to 1.0.0 release hardening/final gates
+- **Release status:** **BLOCKED — Business Hub QA is still in progress; full MVP RC3/persona acceptance has not been completed**
 
 This is the governing browser/persona contract for PR #56. Browser runs triggered before the second MVP audit is frozen are regression evidence only and must not be counted as formal RC3 acceptance. The earlier PR #55 RC3 record remains historical evidence, but it does not accept the Business Hub, visual/runtime, branch-switcher, guided-context, Receive Stock, banking-import, or intelligence changes introduced on PR #56.
 
@@ -66,13 +66,15 @@ Current PR #56 execution record:
 - ERPNext version: `version-16`
 - EdgeSuite UI version/candidate: governed `agent/reporting-standard-v1`
 - Browser(s): Playwright Chromium on Ubuntu 24.04
-- Formal tester/date: automated Playwright persona harness / 2026-09-14
-- Formal browser workflow run: **#234** (run id `34867000280`)
-- Formal browser result: **24/24 PASS**
+- Automated regression harness/date: Playwright / 2026-09-14
+- Automated browser regression run: **#234** (run id `34867000280`)
+- Automated browser regression result: **24/24 PASS — regression evidence only, not formal QA acceptance**
 - Retained evidence artifact: `retailedge-browser-persona-evidence` — artifact id `10357567550` — sha256 `4442a6b3594b3b33e182631b06721f8c73da33d247a7284b41e36dde8242e897`
 - Companion gates: implementation head `aea2cf4980cfd2dc2b61133ee567f166392a7285` passed Theme #1119, Linters #2960, CI #2981, EdgeSuite Compatibility #1216, Upgrade Validation #126 and pre-freeze Browser regression #232
 
 Historical PR #55 acceptance remains recorded in repository history and prior revisions of this document; it must not be substituted for PR #56 acceptance.
+
+**Important:** PR #56 automated runs #234/#235 are regression smoke evidence. Business Hub QA is still being executed manually/operationally, and no PR #56 persona row or downstream Gate C–H workflow should be marked accepted until that QA is actually performed.
 
 ## Required personas and scope fixtures
 
@@ -80,17 +82,17 @@ Use separate users/fixtures where practical; do not simulate denial only by hidi
 
 | Persona/context | Required scope characteristic | Status |
 | --- | --- | --- |
-| Owner / RetailEdge Manager | broad permitted company context | PASS |
-| Branch Manager | management role with restricted branch context | PASS |
-| Cashier | ordinary operational/cashier context | PASS |
-| Accounts User / Manager | payments/banking/accounting operational context | PASS |
-| Stock / Store user | stock operational context | PASS |
-| Purchasing user | buying operational context | PASS |
-| Sales user | selling operational context | PASS |
-| Restricted — one Branch | exactly one permitted Branch in selected Company | PASS |
-| Restricted — multiple Branches | more than one permitted Branch | PASS |
-| Restricted — zero Branches | Branch Assignment history exists but no active permitted Branch | PASS |
-| Advanced Native Desk user | explicitly allowed native/advanced fallback | PASS |
+| Owner / RetailEdge Manager | broad permitted company context | NOT YET ACCEPTED |
+| Branch Manager | management role with restricted branch context | NOT YET ACCEPTED |
+| Cashier | ordinary operational/cashier context | NOT YET ACCEPTED |
+| Accounts User / Manager | payments/banking/accounting operational context | NOT YET ACCEPTED |
+| Stock / Store user | stock operational context | NOT YET ACCEPTED |
+| Purchasing user | buying operational context | NOT YET ACCEPTED |
+| Sales user | selling operational context | NOT YET ACCEPTED |
+| Restricted — one Branch | exactly one permitted Branch in selected Company | NOT YET ACCEPTED |
+| Restricted — multiple Branches | more than one permitted Branch | NOT YET ACCEPTED |
+| Restricted — zero Branches | Branch Assignment history exists but no active permitted Branch | NOT YET ACCEPTED |
+| Advanced Native Desk user | explicitly allowed native/advanced fallback | NOT YET ACCEPTED |
 
 The branch fixtures must exercise the current authority rule: once Branch Assignment history exists it is authoritative; restricted-zero must fail closed.
 
@@ -325,4 +327,4 @@ RIR2E may be frozen only when:
 
 Historical PR #55 closure decision: **PASS / FROZEN** on implementation SHA `202741c34abd76d53521e3d60f0a69d1557a9a87`.
 
-Current PR #56 closure decision: **PASS / FROZEN** on exact tested SHA `099e4a30b2c8a25c2ca0858caa6bcbfe99a8b98c`. Formal Browser Persona run #234 completed **24/24 PASS** with no unresolved stop-the-line defect. The second MVP audit and RC3 are both frozen; next work is 1.0.0 release hardening/final promotion gates.
+Current PR #56 QA decision: **NOT CLOSED**. Business Hub QA remains in progress. Browser Persona run #234 completed **24/24 PASS** as automated regression evidence, but it does not prove that the Business Hub QA checklist has been completed and does not constitute full RetailEdge MVP RC3/persona acceptance. Full MVP QA must follow after Business Hub QA is closed.
