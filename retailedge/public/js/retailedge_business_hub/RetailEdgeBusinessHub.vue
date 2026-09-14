@@ -265,6 +265,7 @@
 
 			<SimpleSalesInvoiceDialog
 				:open="simpleSalesInvoiceOpen"
+				:document="simpleSalesInvoiceDocument"
 				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleSalesInvoice"
 				@saved="handleSimpleSalesInvoiceSaved"
@@ -277,12 +278,15 @@
 				@close="closeSalesInvoiceCompletion"
 				@changed="handleSalesInvoiceCompletionChanged"
 				@completed="handleSalesInvoiceCompletionCompleted"
+				@edit="handleSalesInvoiceEdit"
+				@receive-payment="handleSalesInvoiceReceivePayment"
 			/>
 
 			<SimplePaymentDialog
 				:open="simplePaymentOpen"
 				:native-fallback-enabled="nativeFallbackEnabled"
 				:intent="simplePaymentIntent"
+				:initial-context="simplePaymentInitialContext"
 				@close="closeSimplePayment"
 				@saved="handleSimplePaymentSaved"
 				@open-native="openNativePayment"
@@ -545,10 +549,12 @@ export default {
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
+			simpleSalesInvoiceDocument: null,
 			salesInvoiceCompletionOpen: false,
 			salesInvoiceCompletionDocument: null,
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
+			simplePaymentInitialContext: {},
 			simpleCashDepositOpen: false,
 			internalTransferCompletionOpen: false,
 			internalTransferCompletionDocument: null,
@@ -847,6 +853,7 @@ export default {
 			if (!action || !action.doctype) return;
 			this.closeCreatePicker();
 			if (action.key === "new-sales-invoice") {
+				this.simpleSalesInvoiceDocument = null;
 				this.simpleSalesInvoiceOpen = true;
 				return;
 			}
@@ -941,6 +948,7 @@ export default {
 		},
 		closeSimpleSalesInvoice() {
 			this.simpleSalesInvoiceOpen = false;
+			this.simpleSalesInvoiceDocument = null;
 		},
 		handleSimpleSalesInvoiceSaved(result) {
 			this.simpleSalesInvoiceOpen = false;
@@ -960,27 +968,52 @@ export default {
 		handleSalesInvoiceCompletionChanged() {
 			this.refreshContext({ force: true });
 		},
-		handleSalesInvoiceCompletionCompleted() {
-			this.closeSalesInvoiceCompletion();
+		handleSalesInvoiceCompletionCompleted(result = {}) {
 			this.refreshContext({ force: true });
+			if (!result?.keep_open) this.closeSalesInvoiceCompletion();
 		},
-		openNativeSalesInvoice(doctype = "Sales Invoice") {
+		handleSalesInvoiceEdit(document) {
+			if (!document?.name) return;
+			this.closeSalesInvoiceCompletion();
+			this.simpleSalesInvoiceDocument = {
+				doctype: "Sales Invoice",
+				name: document.name,
+				modified: document.modified || "",
+			};
+			this.simpleSalesInvoiceOpen = true;
+		},
+		handleSalesInvoiceReceivePayment(context = {}) {
+			this.closeSalesInvoiceCompletion();
+			this.simplePaymentIntent = "receive-customer-payment";
+			this.simplePaymentInitialContext = { ...(context || {}) };
+			this.simplePaymentOpen = true;
+		},
+		openNativeSalesInvoice(document = "Sales Invoice") {
 			if (!this.nativeFallbackEnabled) return;
 			this.simpleSalesInvoiceOpen = false;
-			frappe.new_doc(doctype);
+			const payload = typeof document === "object" ? document : { doctype: document };
+			if (payload.name) {
+				frappe.set_route("Form", payload.doctype || "Sales Invoice", payload.name);
+				return;
+			}
+			frappe.new_doc(payload.doctype || "Sales Invoice");
 		},
 		closeSimplePayment() {
 			this.simplePaymentOpen = false;
+			this.simplePaymentIntent = "";
+			this.simplePaymentInitialContext = {};
 		},
 		handleSimplePaymentSaved(result) {
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
+			this.simplePaymentInitialContext = {};
 			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
 		},
 		openNativePayment(doctype = "Payment Entry") {
 			if (!this.nativeFallbackEnabled) return;
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
+			this.simplePaymentInitialContext = {};
 			frappe.new_doc(doctype);
 		},
 		closeSimpleCashDeposit() {
