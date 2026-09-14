@@ -96,7 +96,7 @@
 									<span>{{ card.label }}</span>
 									<span class="home-kpi-card-icon"><EdgeIcon :name="kpiIcon(card.label)" size="sm" /></span>
 								</span>
-								<strong>{{ formatHomeValue(card) }}</strong>
+								<strong :title="formatHomeValue(card, { compact: false })">{{ formatHomeValue(card) }}</strong>
 								<small>{{ card.time_basis === "current" ? "Current position" : (homePeriod.label || "Selected period") }}</small>
 							</button>
 						</div>
@@ -153,11 +153,11 @@
 							<template v-if="index.available">
 								<div class="home-index-headline">
 									<span>{{ index.headline?.label || "Position" }}</span>
-									<strong>{{ formatHomeValue(index.headline) }}</strong>
+									<strong :title="formatHomeValue(index.headline, { compact: false })">{{ formatHomeValue(index.headline) }}</strong>
 								</div>
 								<div v-if="index.signal?.label" class="home-index-signal">
 									<span>{{ index.signal.label }}</span>
-									<strong>{{ formatHomeValue(index.signal) }}</strong>
+									<strong :title="formatHomeValue(index.signal, { compact: false })">{{ formatHomeValue(index.signal) }}</strong>
 								</div>
 								<p>{{ index.signal?.message || index.recommendation }}</p>
 								<button type="button" class="home-index-action" @click="openHomeItem(index)">{{ index.action_label || "Open" }}</button>
@@ -188,7 +188,7 @@
 								<small v-if="item.recommendation">{{ item.recommendation }}</small>
 							</span>
 							<span class="home-attention-value">
-								<strong>{{ formatHomeValue(item) }}</strong>
+								<strong :title="formatHomeValue(item, { compact: false })">{{ formatHomeValue(item) }}</strong>
 								<small>{{ item.action_label || "Open" }}</small>
 							</span>
 						</button>
@@ -756,16 +756,58 @@ export default {
 			if (!value) return "";
 			return frappe.datetime?.str_to_user?.(value) || String(value);
 		},
-		formatHomeValue(card) {
+		compactNumber(value, { maximumFractionDigits = 2 } = {}) {
+			const number = Number(value || 0);
+			if (!Number.isFinite(number)) return String(value ?? "");
+			const absolute = Math.abs(number);
+			if (absolute < 100000) return number.toLocaleString(undefined, { maximumFractionDigits });
+			try {
+				return new Intl.NumberFormat(undefined, {
+					notation: "compact",
+					compactDisplay: "short",
+					maximumFractionDigits,
+				}).format(number);
+			} catch (_error) {
+				const units = [
+					{ value: 1e12, suffix: "T" },
+					{ value: 1e9, suffix: "B" },
+					{ value: 1e6, suffix: "M" },
+					{ value: 1e3, suffix: "K" },
+				];
+				const unit = units.find((row) => absolute >= row.value);
+				if (!unit) return number.toLocaleString(undefined, { maximumFractionDigits });
+				return `${(number / unit.value).toFixed(maximumFractionDigits).replace(/\.0+$|(?<=\.[0-9])0+$/g, "")}${unit.suffix}`;
+			}
+		},
+		currencyMark() {
+			const formatter = window.retailedge?.formatPlainValue;
+			if (!formatter) return "";
+			try {
+				return String(formatter(0, { fieldtype: "Currency" }) || "")
+					.replace(/[0-9.,\s()+-]/g, "")
+					.trim();
+			} catch (_error) {
+				return "";
+			}
+		},
+		formatHomeValue(card, { compact = true } = {}) {
 			const value = card?.value ?? 0;
 			const datatype = card?.datatype || card?.type || "Data";
 			if (datatype === "Currency") {
+				const number = Number(value || 0);
 				const formatter = window.retailedge?.formatPlainValue;
-				if (formatter) return formatter(value, { fieldtype: "Currency" });
-				return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+				if (!compact || Math.abs(number) < 100000) {
+					if (formatter) return formatter(value, { fieldtype: "Currency" });
+					return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+				}
+				const mark = this.currencyMark();
+				const amount = this.compactNumber(number, { maximumFractionDigits: 2 });
+				return mark ? `${mark} ${amount}` : amount;
 			}
 			if (datatype === "Percent") return `${Number(value || 0).toLocaleString()}%`;
-			if (datatype === "Int" || datatype === "Float") return Number(value || 0).toLocaleString();
+			if (datatype === "Int" || datatype === "Float") {
+				return compact ? this.compactNumber(value) : Number(value || 0).toLocaleString();
+			}
 			return window.retailedge?.toPlainText?.(value) ?? String(value ?? "");
 		},
 		displayIcon(icon) {
@@ -1275,7 +1317,14 @@ export default {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
+	min-width: 0;
 	width: 100%;
+}
+.home-kpi-card-heading > span:first-child {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: .74rem;
+	font-weight: 620;
 }
 .home-kpi-card-icon,
 .home-signal-icon {
@@ -1384,8 +1433,9 @@ export default {
 }
 .home-kpi-card {
 	display: grid;
-	gap: 6px;
-	padding: 16px;
+	gap: 5px;
+	min-width: 0;
+	padding: 13px 14px;
 	text-align: left;
 	cursor: pointer;
 }
@@ -1402,9 +1452,13 @@ export default {
 .home-kpi-card strong {
 	display: block;
 	min-width: 0;
-	font-size: clamp(1.08rem, 1.65vw, 1.5rem);
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: clamp(1rem, 1.25vw, 1.32rem);
 	font-variant-numeric: tabular-nums;
-	letter-spacing: -0.025em;
+	font-weight: 680;
+	letter-spacing: -0.02em;
 	line-height: 1.15;
 	white-space: nowrap;
 }
@@ -1433,6 +1487,47 @@ export default {
 	border-radius: 12px;
 	background: var(--edge-surface, #ffffff);
 }
+.home-index-headline > span,
+.home-index-signal > span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: .82rem;
+}
+.home-index-headline > strong,
+.home-index-signal > strong {
+	flex: 0 0 auto;
+	max-width: 48%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	font-size: .9rem;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+.home-intelligence-card p,
+.home-index-action,
+.home-attention-copy,
+.home-attention-value {
+	font-size: .82rem;
+}
+.home-intelligence-heading h4 {
+	min-width: 0;
+	font-size: .98rem;
+	font-weight: 650;
+	overflow-wrap: anywhere;
+}
+.home-attention-copy,
+.home-attention-value {
+	min-width: 0;
+}
+.home-attention-value strong {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 .home-intelligence-card.tone-danger {
 	border-color: color-mix(in srgb, var(--edge-danger, #d92d20) 55%, var(--edge-border, #dfe3e8));
 }
@@ -1446,6 +1541,7 @@ export default {
 .home-index-headline,
 .home-index-signal {
 	display: flex;
+	min-width: 0;
 	align-items: center;
 	justify-content: space-between;
 	gap: 10px;
