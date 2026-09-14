@@ -19,6 +19,7 @@ from retailedge.branch_context import (
 	user_has_global_branch_access,
 )
 from retailedge.operating_context import (
+	get_allowed_operating_branches,
 	get_operating_context,
 	get_operational_branch_scope,
 	validate_operating_branch,
@@ -526,8 +527,20 @@ def search_professional_purchasing_options(
 			filters["company"] = resolved_company
 		if resolved_branch:
 			filters["name"] = resolved_branch
-		elif not unrestricted:
-			filters["name"] = ["in", allowed or ["__no_permitted_branch__"]]
+		else:
+			# Branch options must use the same Branch Setup / permission contract as
+			# Operating Context. In unrestricted company-wide mode, an empty
+			# operational-scope list means "unrestricted", not "show every Branch
+			# regardless of RetailEdge Branch Setup".
+			selectable = (
+				get_allowed_operating_branches(
+					resolved_company,
+					user=frappe.session.user,
+				)
+				if unrestricted
+				else allowed
+			)
+			filters["name"] = ["in", selectable or ["__no_permitted_branch__"]]
 		rows = frappe.get_list(
 			"Branch",
 			filters=filters,
