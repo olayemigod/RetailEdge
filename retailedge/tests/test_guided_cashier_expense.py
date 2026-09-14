@@ -161,6 +161,10 @@ class TestGuidedCashierExpense(unittest.TestCase):
 		self.assertFalse(hasattr(doc, "expense_account"))
 		self.assertFalse(hasattr(doc, "cost_center"))
 		self.assertEqual(result["available_cash_after"], 750.0)
+		self.assertEqual(result["completion"]["mode"], "edgesuite_workflow")
+		self.assertEqual(result["completion"]["doctype"], "RetailEdge Cashier Expense")
+		self.assertEqual(result["completion"]["name"], doc.name)
+		self.assertEqual(result["route"], "")
 
 	@patch(
 		"retailedge.retailedge.doctype.retailedge_cashier_expense.retailedge_cashier_expense.frappe.has_permission",
@@ -256,6 +260,24 @@ class TestGuidedCashierExpense(unittest.TestCase):
 		self.assertIn('this.$emit("open-native", "RetailEdge Cashier Expense")', component)
 		self.assertNotIn("expense_account", component)
 		self.assertNotIn("cost_center", component)
+
+	def test_business_hub_keeps_cashier_expense_post_save_inside_edgesuite(self):
+		hub = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "RetailEdgeBusinessHub.vue"
+		).read_text()
+		start = hub.index("handleSimpleCashierExpenseSaved(result)")
+		end = hub.index("closeCashierExpenseCompletion()", start)
+		handler = hub[start:end]
+		self.assertIn("cashierExpenseCompletionDocument", handler)
+		self.assertIn("cashierExpenseCompletionOpen = true", handler)
+		self.assertNotIn("frappe.set_route", handler)
+		self.assertNotIn("frappe.new_doc", handler)
+		self.assertNotIn("notifyGuidedDraftSaved", handler)
+		self.assertIn("<GuidedWorkflowCompletionDialog", hub)
 
 	def test_limit_is_small_for_category_search(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
