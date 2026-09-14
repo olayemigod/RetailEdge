@@ -79,6 +79,7 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 			self.assertEqual(values["custom_format"], 1)
 			self.assertEqual(values["print_format_type"], "Jinja")
 			self.assertIn(MANAGED_MARKER, values["html"])
+			self.assertNotIn("retailedge-managed-print-format", values["html"])
 			self.assertNotIn("ProcessEdge Solutions", values["html"])
 			self.assertNotIn("processedge.com.ng", values["html"])
 			self.assertNotIn(">RetailEdge<", values["html"])
