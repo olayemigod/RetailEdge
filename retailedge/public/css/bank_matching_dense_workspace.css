@@ -10,7 +10,7 @@
 .retailedge-bank-layout .edge-filter-bar button,
 .retailedge-bank-layout .edge-link-field__input,
 .retailedge-bank-layout .edge-dropdown__trigger {
-	min-height: 2.15rem;
+	min-height: 1.95rem;
 }
 
 .retailedge-bank-table-wrap {
@@ -27,7 +27,7 @@
 
 .retailedge-bank-table th,
 .retailedge-bank-table td {
-	padding: .46rem .5rem !important;
+	padding: .38rem .42rem !important;
 	min-width: 0;
 	overflow-wrap: anywhere;
 }
@@ -93,8 +93,8 @@
 }
 
 .retailedge-bank-table .edge-button {
-	padding: .34rem .48rem;
-	min-height: 1.9rem;
+	padding: .28rem .42rem;
+	min-height: 1.75rem;
 	line-height: 1.15;
 	white-space: normal;
 }
