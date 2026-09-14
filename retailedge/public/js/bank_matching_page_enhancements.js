@@ -266,6 +266,7 @@
 					open: false,
 					busy: false,
 					company: "",
+					branch: "",
 					bankAccount: "",
 					templateName: "",
 					canCreateTemplate: false,
@@ -292,6 +293,7 @@
 
 				function resetState(context = {}) {
 					state.company = clean(context.company);
+					state.branch = clean(context.branch);
 					state.bankAccount = clean(context.bankAccount);
 					state.templateName = "";
 					state.canCreateTemplate = false;
@@ -338,6 +340,21 @@
 				}
 
 
+
+				async function searchBankAccounts(query) {
+					if (!state.company) return [];
+					const response = await global.frappe.call({
+						method: "retailedge.bank_matching_bank_account_cascade.search_bank_matching_bank_accounts",
+						args: {
+							company: state.company,
+							branch: state.branch || "",
+							txt: query || "",
+							limit: 20,
+						},
+					});
+					return Array.isArray(response?.message) ? response.message : [];
+				}
+
 				async function searchTemplates(query) {
 					if (!state.company || !state.bankAccount) return [];
 					const response = await global.frappe.call({
@@ -345,6 +362,7 @@
 						args: {
 							company: state.company,
 							bank_account: state.bankAccount,
+							branch: state.branch || "",
 							txt: query || "",
 						},
 					});
@@ -415,6 +433,7 @@
 							args: {
 								company: state.company,
 								bank_account: state.bankAccount,
+								branch: state.branch || "",
 								...draft,
 							},
 						});
@@ -441,11 +460,15 @@
 				}
 
 				async function ensureImportDraft() {
-					const contextKey = `${state.company}::${state.bankAccount}`;
+					const contextKey = `${state.company}::${state.branch || ""}::${state.bankAccount}`;
 					if (state.importName && state.importContextKey === contextKey) return state.importName;
 					const response = await global.frappe.call({
 						method: CREATE_IMPORT_METHOD,
-						args: { company: state.company, bank_account: state.bankAccount },
+						args: {
+							company: state.company,
+							branch: state.branch || "",
+							bank_account: state.bankAccount,
+						},
 					});
 					state.importName = response?.message?.name || "";
 					state.importContextKey = contextKey;
@@ -575,6 +598,28 @@
 								searcher: (query) => permissionAwareLinkSearch("Company", query),
 								"onUpdate:modelValue": (value) => {
 									state.company = value || "";
+									state.branch = "";
+									state.bankAccount = "";
+									state.templateName = "";
+									state.canCreateTemplate = false;
+									state.importName = "";
+									state.preview = null;
+								},
+							}),
+							h(EdgeLinkField, {
+								label: t("Branch"),
+								modelValue: state.branch,
+								disabled: !state.company || state.importStarted,
+								description: !state.company
+									? t("Select a company first.")
+									: t("Bank Accounts are restricted to the selected operational Branch."),
+								searcher: (query) => permissionAwareLinkSearch(
+									"Branch",
+									query,
+									state.company ? { company: state.company } : {},
+								),
+								"onUpdate:modelValue": (value) => {
+									state.branch = value || "";
 									state.bankAccount = "";
 									state.templateName = "";
 									state.canCreateTemplate = false;
@@ -586,8 +631,8 @@
 								label: t("Bank Account"),
 								modelValue: state.bankAccount,
 								disabled: !state.company,
-								description: !state.company ? t("Select a company first.") : t("Only bank accounts available to you for the selected company are shown."),
-								searcher: (query) => permissionAwareLinkSearch("Bank Account", query, state.company ? { company: state.company } : {}),
+								description: !state.company ? t("Select a company first.") : t("Only Bank Accounts valid for the selected Company and operational Branch are shown."),
+								searcher: searchBankAccounts,
 								"onUpdate:modelValue": (value) => {
 									state.bankAccount = value || "";
 									state.templateName = "";
@@ -704,6 +749,7 @@
 		}
 		modalHost.__retailedgeOpenStatementImport({
 			company: fieldValueByLabel(filterBar, "Company"),
+			branch: fieldValueByLabel(filterBar, "Branch"),
 			bankAccount: fieldValueByLabel(filterBar, "Bank Account"),
 		});
 	}
