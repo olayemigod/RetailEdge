@@ -120,8 +120,9 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		self.assertNotIn("grand_total =", html)
 
 	@patch("retailedge.document_output._permission", return_value=True)
+	@patch("retailedge.document_output.frappe.db.exists", return_value=False)
 	@patch("retailedge.document_output.frappe.get_list")
-	def test_document_output_prioritizes_professional_format_without_hiding_others(self, mock_get_list, _mock_permission):
+	def test_document_output_prioritizes_professional_format_without_hiding_others(self, mock_get_list, _mock_exists, _mock_permission):
 		mock_get_list.return_value = [
 			frappe._dict(name="Customer Custom Invoice"),
 			frappe._dict(name="Professional Sales Invoice"),
@@ -134,11 +135,25 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		self.assertIn("Sales Receipt 80mm", formats)
 
 	@patch("retailedge.document_output._permission", return_value=True)
+	@patch("retailedge.document_output.frappe.db.exists", return_value=False)
 	@patch("retailedge.document_output.frappe.get_list")
-	def test_document_output_falls_back_to_standard_when_preferred_format_missing(self, mock_get_list, _mock_permission):
+	def test_document_output_falls_back_to_standard_when_preferred_format_missing(self, mock_get_list, _mock_exists, _mock_permission):
 		mock_get_list.return_value = [frappe._dict(name="Customer Custom Invoice")]
 		formats = _available_print_formats("Sales Invoice")
 		self.assertEqual(formats, ["Standard", "Customer Custom Invoice"])
+
+	@patch("retailedge.document_output._permission", return_value=False)
+	@patch("retailedge.document_output.frappe.db.get_value")
+	@patch("retailedge.document_output.frappe.db.exists")
+	def test_managed_invoice_templates_remain_selectable_without_print_format_master_access(self, mock_exists, mock_get_value, _mock_permission):
+		managed_names = {row["name"] for row in MANAGED_PRINT_FORMATS if row["doctype"] == "Sales Invoice"}
+		mock_exists.side_effect = lambda doctype, name=None: doctype == "Print Format" and name in managed_names
+		mock_get_value.return_value = frappe._dict(disabled=0, html=MANAGED_MARKER)
+		formats = _available_print_formats("Sales Invoice")
+		self.assertEqual(formats[0], "Professional Sales Invoice")
+		for name in managed_names:
+			self.assertIn(name, formats)
+
 
 	def test_output_registry_exposes_pos_receipt_without_product_brand_label(self):
 		source = (APP_ROOT / "document_output.py").read_text()
