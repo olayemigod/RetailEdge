@@ -815,7 +815,8 @@ export default {
 			}
 			if (action.key === GUIDED_EXPENSE_ACTION) {
 				if (action.doctype === "RetailEdge Business Expense" || action.target === "business-expenses") {
-					frappe.route_options = { action: "new" };
+					setBusinessHubRouteHandoff("business-expenses", this.homeRouteFilters({ time_basis: "current" }));
+					frappe.route_options = { ...(frappe.route_options || {}), action: "new" };
 					frappe.set_route("business-expenses");
 					return;
 				}

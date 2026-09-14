@@ -246,8 +246,15 @@ export default {
 		const runtime = runtimeComponents();
 		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !runtime[name]);
 		this.edgeUIValid = !this.missingComponents.length;
+		this._onPageShow = () => this.consumePendingRouteOptions();
 	},
-	mounted() { this.loadMetadata(); },
+	mounted() {
+		window.addEventListener("retailedge-business-expenses-page-show", this._onPageShow);
+		this.loadMetadata();
+	},
+	beforeUnmount() {
+		window.removeEventListener("retailedge-business-expenses-page-show", this._onPageShow);
+	},
 	methods: {
 		async loadMetadata() {
 			this.metadataLoading = true; this.metadataError = "";
@@ -259,12 +266,40 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.settings = context.settings || {}; this.statuses = context.statuses || [];
 				this.canCreate = Boolean(context.capabilities?.can_create); this.canReview = Boolean(context.capabilities?.can_review);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
-				const routeOptions = frappe.route_options || {}; frappe.route_options = null;
-				if (routeOptions.business_expense) await this.openExpense(routeOptions.business_expense);
-				else if (routeOptions.action === "new" && this.canCreate) this.openNewExpense();
-				else await this.fetchList();
+				const handled = await this.consumePendingRouteOptions();
+				if (!handled) await this.fetchList();
 			} catch (error) { this.metadataError = errorMessage(error, "Unable to prepare Business Expenses."); }
 			finally { this.metadataLoading = false; }
+		},
+		applyBusinessHubHandoff() {
+			const handoff = window.retailedgeConsumeBusinessHubRouteOptions?.("business-expenses") || {};
+			if (handoff.company) {
+				this.filters.company = handoff.company;
+				this.defaultValues.company = handoff.company;
+				this.values.company = handoff.company;
+				this.tenantName = handoff.company;
+			}
+			if (handoff.branch) {
+				this.filters.branch = handoff.branch;
+				this.defaultValues.branch = handoff.branch;
+				this.values.branch = handoff.branch;
+				this.branchName = handoff.branch;
+			}
+			return handoff;
+		},
+		async consumePendingRouteOptions() {
+			const routeOptions = { ...(frappe.route_options || {}) };
+			this.applyBusinessHubHandoff();
+			if (frappe.route_options) frappe.route_options = null;
+			if (routeOptions.business_expense) {
+				await this.openExpense(routeOptions.business_expense);
+				return true;
+			}
+			if (routeOptions.action === "new" && this.canCreate) {
+				this.openNewExpense();
+				return true;
+			}
+			return false;
 		},
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return "/app/" + item.target; if (item.target_type === "Report") return "/app/query-report/" + encodeURIComponent(item.target); if (item.target_type === "DocType") return "/app/" + String(item.target || "").toLowerCase().replace(/\s+/g, "-"); return item.target || ""; },

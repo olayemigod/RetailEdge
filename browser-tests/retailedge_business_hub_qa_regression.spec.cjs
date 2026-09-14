@@ -232,3 +232,44 @@ test("Business Hub QA regression: performance KPI card opens its scoped destinat
 		await context.close();
 	}
 });
+
+
+test("Business Hub QA regression: Record Expense carries Company and Branch into Business Expenses", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		const result = await captureRoute(page, () =>
+			page.getByRole("button", { name: /Record Expense/i }).click()
+		);
+		expect(result.route).toEqual(["business-expenses"]);
+		expect(result.handoff?.target).toBe("business-expenses");
+		expect(result.handoff?.filters?.company).toBeTruthy();
+		expect(result.handoff?.filters?.branch).toBeTruthy();
+		expect(result.handoff?.filters?.from_date).toBeUndefined();
+		expect(result.handoff?.filters?.to_date).toBeUndefined();
+	} finally {
+		await context.close();
+	}
+});
+
+test("Business Hub QA regression: Record Expense reopens New Expense after Business Expenses page reuse", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		await page.getByRole("button", { name: /Record Expense/i }).click();
+		await expect(page.getByRole("heading", { name: "New Business Expense", exact: true })).toBeVisible();
+		await page.getByRole("button", { name: "Back to Queue", exact: true }).click();
+		await expect(page.getByRole("heading", { name: "Expense queue", exact: true })).toBeVisible();
+
+		await page.evaluate(() => frappe.set_route("retailedge-business-hub"));
+		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({ state: "visible", timeout: 20_000 });
+		await page.getByRole("button", { name: /Record Expense/i }).click();
+		await expect(page.getByRole("heading", { name: "New Business Expense", exact: true })).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
