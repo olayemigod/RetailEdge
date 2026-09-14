@@ -222,6 +222,29 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertIn("Advanced: Open in ERPNext", component)
 		self.assertIn('this.$emit("open-native", "Purchase Invoice")', component)
 
+	def test_purchase_invoice_uses_operating_company_branch_setup_and_server_buying_price(self):
+		backend = (APP_ROOT / "guided_purchase_invoice.py").read_text()
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimplePurchaseInvoiceDialog.vue"
+		).read_text()
+		for contract in (
+			"resolve_guided_company",
+			"get_guided_branch_names",
+			"get_guided_branch_search_filters",
+			"get_guided_warehouse_search_filters",
+			"resolve_purchase_item_pricing",
+			"doc.buying_price_list",
+		):
+			self.assertIn(contract, backend)
+		self.assertIn("requiresBranchSelection()", component)
+		self.assertIn(':disabled="requiresBranchSelection && !values.branch"', component)
+		self.assertIn("get_simple_purchase_invoice_item_pricing", component)
+		self.assertIn("Buying Price List", component)
+
 	def test_limits_are_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
 		self.assertEqual(MAX_ITEMS, 50)
