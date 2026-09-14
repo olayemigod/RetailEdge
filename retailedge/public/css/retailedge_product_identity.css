@@ -9,90 +9,101 @@
 
 body.edge-suite-product-retailedge,
 [data-edge-product="retailedge"] {
-	--retailedge-ink: #0b1f33;
-	--retailedge-ink-soft: #395168;
-	--retailedge-brand: #0f8f7f;
-	--retailedge-brand-strong: #087466;
-	--retailedge-brand-soft: #e5f7f3;
-	--retailedge-money: #13795b;
-	--retailedge-warning: #b96800;
-	--retailedge-danger: #b42318;
-	--retailedge-surface: #ffffff;
-	--retailedge-surface-muted: #f4f7f9;
-	--retailedge-border: #d9e2e8;
-	--retailedge-sidebar: #0b1f33;
-	--retailedge-sidebar-muted: #9eb0bf;
-	--retailedge-sidebar-active: #163b4d;
+	--retailedge-ink: var(--edge-color-ink-950, #0b1f33);
+	--retailedge-ink-soft: var(--edge-color-ink-700, #395168);
+	--retailedge-brand: var(--edge-color-brand-600, #0f8f7f);
+	--retailedge-brand-strong: var(--edge-color-brand-700, #087466);
+	--retailedge-brand-soft: var(--edge-color-brand-50, #e5f7f3);
+	--retailedge-money: var(--edge-color-success, #13795b);
+	--retailedge-warning: var(--edge-color-warning, #b96800);
+	--retailedge-danger: var(--edge-color-danger, #b42318);
+	--retailedge-surface: var(--edge-color-surface, #ffffff);
+	--retailedge-surface-muted: var(--edge-color-surface-muted, #f4f7f9);
+	--retailedge-border: var(--edge-color-border, #d9e2e8);
+	--retailedge-sidebar: color-mix(in srgb, var(--edge-color-brand-600, #0f8f7f) 4%, var(--edge-color-surface, #ffffff));
+	--retailedge-sidebar-muted: var(--edge-color-ink-500, #667085);
+	--retailedge-sidebar-active: color-mix(in srgb, var(--edge-color-brand-600, #0f8f7f) 12%, var(--edge-color-surface, #ffffff));
 	--retailedge-radius: 10px;
-	--retailedge-shadow: 0 8px 24px rgba(11, 31, 51, 0.08);
+	--retailedge-shadow: var(--edge-shadow-sm, 0 8px 24px rgba(11, 31, 51, 0.08));
 
-	/* Override shared EdgeSuite tokens without copying the shared components. */
-	--edge-color-brand-50: var(--retailedge-brand-soft);
-	--edge-color-brand-100: #c9eee7;
-	--edge-color-brand-500: var(--retailedge-brand);
-	--edge-color-brand-600: var(--retailedge-brand);
-	--edge-color-brand-700: var(--retailedge-brand-strong);
-	--edge-color-ink-950: var(--retailedge-ink);
-	--edge-color-ink-700: var(--retailedge-ink-soft);
-	--edge-color-surface-muted: var(--retailedge-surface-muted);
-	--edge-color-border: var(--retailedge-border);
+	--edge-surface: var(--edge-color-surface, #ffffff);
+	--edge-surface-muted: var(--edge-color-surface-muted, #f8fafc);
+	--edge-border: var(--edge-color-border, #dfe3e8);
+	--edge-text: var(--edge-color-ink-950, #101828);
+	--edge-text-muted: var(--edge-color-ink-500, #667085);
+	--edge-primary: var(--edge-color-brand-600, #0f766e);
+	--edge-danger: var(--edge-color-danger, #d92d20);
+	--edge-warning: var(--edge-color-warning, #f79009);
+
 	--edge-radius-sm: 0.45rem;
 	--edge-radius-md: 0.625rem;
 	--edge-radius-lg: 0.875rem;
-	--edge-shadow-sm: 0 1px 2px rgba(11, 31, 51, 0.06);
-	--edge-shadow-md: var(--retailedge-shadow);
 	--edge-page-padding: 1.15rem;
 	--edge-section-gap: 1rem;
 	--edge-card-gap: 0.85rem;
 }
 
-/* Commercial shell: dark operational rail + compact light work surface. */
+/* Navigation presentation follows the shared EdgeSuite Navigation Shell V2 pattern
+   used by VetEdge/EduEdge. RetailEdge supplies composition, not a private rail palette. */
 body.edge-suite-product-retailedge .edge-app-shell,
 [data-edge-product="retailedge"].edge-app-shell {
-	background: var(--retailedge-surface-muted);
+	background: var(--edge-color-surface-muted, var(--retailedge-surface-muted));
 	min-height: 100%;
 }
 
-body.edge-suite-product-retailedge .edge-app-shell__sidebar,
-[data-edge-product="retailedge"] .edge-app-shell__sidebar {
-	background:
-		linear-gradient(180deg, rgba(15, 143, 127, 0.12), transparent 11rem),
-		var(--retailedge-sidebar);
-	border-right: 0;
-	color: #f7fbfc;
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-app-shell__sidebar.edge-sidebar,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-app-shell__sidebar.edge-sidebar,
+body.edge-suite-product-retailedge .edge-app-shell__sidebar.edge-sidebar,
+[data-edge-product="retailedge"] .edge-app-shell__sidebar.edge-sidebar {
+	background: var(--edge-color-surface, var(--retailedge-surface));
+	border-right: 1px solid var(--edge-color-border, var(--retailedge-border));
+	color: var(--edge-color-ink-950, var(--retailedge-ink));
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__brand,
 [data-edge-product="retailedge"] .edge-sidebar__brand {
-	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	color: var(--edge-color-ink-950, var(--retailedge-ink)) !important;
+	border-bottom: 1px solid var(--edge-color-border, var(--retailedge-border));
 	padding-block: 1rem;
 }
 
-body.edge-suite-product-retailedge .edge-sidebar__mark,
-[data-edge-product="retailedge"] .edge-sidebar__mark {
-	background: var(--retailedge-brand);
-	border: 1px solid rgba(255, 255, 255, 0.2);
-	border-radius: 8px;
-	color: #fff;
+body.edge-suite-product-retailedge .edge-sidebar__brand-copy,
+[data-edge-product="retailedge"] .edge-sidebar__brand-copy {
+	display: grid !important;
+	visibility: visible !important;
+	opacity: 1 !important;
+	min-width: 0;
+	color: inherit !important;
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__brand-copy strong,
 [data-edge-product="retailedge"] .edge-sidebar__brand-copy strong {
-	color: #fff;
+	display: block !important;
+	visibility: visible !important;
+	opacity: 1 !important;
+	color: inherit !important;
 	letter-spacing: -0.015em;
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__brand-copy small,
 [data-edge-product="retailedge"] .edge-sidebar__brand-copy small {
-	color: var(--retailedge-sidebar-muted);
+	color: var(--edge-color-ink-500, var(--retailedge-sidebar-muted));
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__mark,
+[data-edge-product="retailedge"] .edge-sidebar__mark {
+	background: var(--edge-color-brand-600, var(--retailedge-brand));
+	border: 0;
+	border-radius: 8px;
+	color: var(--edge-color-on-brand, #fff);
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__section-toggle,
 [data-edge-product="retailedge"] .edge-sidebar__section-toggle {
-	color: #b8c7d2;
-	font-size: 0.7rem;
-	font-weight: 750;
-	letter-spacing: 0.055em;
+	color: var(--edge-color-ink-500, var(--retailedge-sidebar-muted));
+	font-size: 0.72rem;
+	font-weight: 650;
+	letter-spacing: 0.035em;
 	text-transform: uppercase;
 }
 
@@ -100,48 +111,87 @@ body.edge-suite-product-retailedge .edge-sidebar-item,
 [data-edge-product="retailedge"] .edge-sidebar-item {
 	border: 1px solid transparent;
 	border-radius: 8px;
-	color: #dce6ec;
-	min-height: 2.45rem;
+	color: var(--edge-color-ink-700, var(--retailedge-ink-soft));
+	min-height: 2.4rem;
+	font-weight: 550;
 }
 
 body.edge-suite-product-retailedge .edge-sidebar-item:hover,
 [data-edge-product="retailedge"] .edge-sidebar-item:hover {
-	background: rgba(255, 255, 255, 0.07);
-	color: #fff;
+	background: var(--edge-color-surface-muted, var(--retailedge-surface-muted));
+	color: var(--edge-color-ink-950, var(--retailedge-ink));
 }
 
 body.edge-suite-product-retailedge .edge-sidebar-item.active,
-[data-edge-product="retailedge"] .edge-sidebar-item.active {
-	background: var(--retailedge-sidebar-active);
-	border-color: rgba(33, 201, 174, 0.28);
-	box-shadow: inset 3px 0 0 var(--retailedge-brand);
-	color: #fff;
+body.edge-suite-product-retailedge .edge-sidebar-item[aria-current="page"],
+[data-edge-product="retailedge"] .edge-sidebar-item.active,
+[data-edge-product="retailedge"] .edge-sidebar-item[aria-current="page"] {
+	background: color-mix(in srgb, var(--edge-color-brand-50) 78%, var(--edge-color-surface));
+	border-color: transparent;
+	box-shadow: inset 2px 0 0 var(--edge-color-brand-600);
+	color: var(--edge-color-brand-700);
+}
+
+body.edge-suite-product-retailedge .edge-sidebar-item.active > .edge-icon,
+body.edge-suite-product-retailedge .edge-sidebar-item[aria-current="page"] > .edge-icon,
+[data-edge-product="retailedge"] .edge-sidebar-item.active > .edge-icon,
+[data-edge-product="retailedge"] .edge-sidebar-item[aria-current="page"] > .edge-icon {
+	background: color-mix(in srgb, var(--edge-color-brand-100) 65%, transparent);
+	border: 0;
+	box-shadow: none;
+	color: var(--edge-color-brand-700);
 }
 
 body.edge-suite-product-retailedge .edge-sidebar-item__description,
 [data-edge-product="retailedge"] .edge-sidebar-item__description {
-	color: var(--retailedge-sidebar-muted);
+	color: var(--edge-color-ink-500, var(--retailedge-sidebar-muted));
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__section-toggle:focus-visible,
+body.edge-suite-product-retailedge .edge-sidebar-item:focus-visible,
+[data-edge-product="retailedge"] .edge-sidebar__section-toggle:focus-visible,
+[data-edge-product="retailedge"] .edge-sidebar-item:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--edge-color-brand-500) 25%, transparent);
+	outline-offset: 2px;
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-sidebar-item.active,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-sidebar-item[aria-current="page"],
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-sidebar-item.active,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-sidebar-item[aria-current="page"] {
+	background: color-mix(in srgb, var(--edge-color-brand-700) 22%, var(--edge-color-surface));
+	color: var(--edge-color-ink-950);
 }
 
 /* RetailEdge top bar behaves like an operational context strip. */
 body.edge-suite-product-retailedge .edge-topbar,
 [data-edge-product="retailedge"] .edge-topbar {
-	background: rgba(255, 255, 255, 0.97);
+	background: color-mix(in srgb, var(--retailedge-surface) 97%, transparent);
 	border-bottom: 1px solid var(--retailedge-border);
 	box-shadow: 0 1px 0 rgba(11, 31, 51, 0.02);
 }
 
 body.edge-suite-product-retailedge .edge-topbar__mark,
 [data-edge-product="retailedge"] .edge-topbar__mark {
-	background: var(--retailedge-ink);
+	background: var(--retailedge-brand);
 	border-radius: 7px;
-	color: #fff;
+	color: var(--edge-color-on-brand, #fff);
+}
+
+body.edge-suite-product-retailedge .edge-topbar__title-copy strong,
+[data-edge-product="retailedge"] .edge-topbar__title-copy strong {
+	color: var(--retailedge-ink);
+}
+
+body.edge-suite-product-retailedge .edge-topbar__title-copy small,
+[data-edge-product="retailedge"] .edge-topbar__title-copy small {
+	color: var(--retailedge-sidebar-muted);
 }
 
 body.edge-suite-product-retailedge .edge-context-chip,
 [data-edge-product="retailedge"] .edge-context-chip {
 	background: var(--retailedge-brand-soft);
-	border-color: #c6e8e2;
+	border-color: var(--edge-color-brand-200, var(--retailedge-border));
 	color: var(--retailedge-brand-strong);
 }
 
@@ -149,11 +199,21 @@ body.edge-suite-product-retailedge .edge-context-chip,
 body.edge-suite-product-retailedge .edge-topbar__brand,
 [data-edge-product="retailedge"] .edge-topbar__brand {
 	min-width: min(22rem, 32vw);
+	max-width: min(28rem, 42vw);
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__brand-copy strong,
+body.edge-suite-product-retailedge .edge-topbar__title-copy strong,
+[data-edge-product="retailedge"] .edge-sidebar__brand-copy strong,
+[data-edge-product="retailedge"] .edge-topbar__title-copy strong {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 body.edge-suite-product-retailedge .edge-topbar__mark.edge-identity-mark--image,
 [data-edge-product="retailedge"] .edge-topbar__mark.edge-identity-mark--image {
-	background: #fff;
+	background: var(--edge-color-surface, var(--retailedge-surface));
 	border: 1px solid var(--retailedge-border);
 	overflow: hidden;
 }
@@ -188,7 +248,7 @@ body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-drop
 body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__trigger,
 [data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger {
 	min-height: 2.35rem;
-	border-color: #c7d5dd;
+	border-color: var(--edge-color-border, var(--retailedge-border));
 	border-radius: 999px;
 	background: var(--retailedge-surface-muted);
 	box-shadow: none;
@@ -271,7 +331,7 @@ body.edge-suite-product-retailedge .edge-stat-card::before,
 
 body.edge-suite-product-retailedge .edge-stat-card:hover,
 [data-edge-product="retailedge"] .edge-stat-card:hover {
-	border-color: #b7d8d2;
+	border-color: var(--edge-color-brand-200, var(--retailedge-border));
 	box-shadow: 0 6px 18px rgba(11, 31, 51, 0.08);
 	transform: translateY(-1px);
 }
@@ -335,7 +395,7 @@ body.edge-suite-product-retailedge .edge-data-table th,
 body.edge-suite-product-retailedge .edge-report-table th,
 [data-edge-product="retailedge"] .edge-data-table th,
 [data-edge-product="retailedge"] .edge-report-table th {
-	background: #edf3f5;
+	background: var(--edge-color-surface-muted, var(--retailedge-surface-muted));
 	color: var(--retailedge-ink-soft);
 	font-size: 0.7rem;
 	font-weight: 760;
@@ -354,8 +414,8 @@ body.edge-suite-product-retailedge .edge-report-table td,
 body.edge-suite-product-retailedge .retailedge-business-hub .hub-banner,
 [data-edge-product="retailedge"] .retailedge-business-hub .hub-banner {
 	background:
-		linear-gradient(120deg, rgba(15, 143, 127, 0.12), transparent 42%),
-		linear-gradient(180deg, #fff, #f9fbfc);
+		linear-gradient(120deg, color-mix(in srgb, var(--edge-color-brand-600) 12%, transparent), transparent 42%),
+		linear-gradient(180deg, var(--edge-color-surface), var(--edge-color-surface-muted));
 	border: 1px solid var(--retailedge-border);
 	border-radius: var(--retailedge-radius);
 	box-shadow: var(--retailedge-shadow);
@@ -374,6 +434,7 @@ body.edge-suite-product-retailedge .retailedge-business-hub .section-kicker,
 
 body.edge-suite-product-retailedge .home-kpi-grid,
 [data-edge-product="retailedge"] .home-kpi-grid {
+	grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
 	gap: 0.65rem;
 }
 
@@ -391,7 +452,7 @@ body.edge-suite-product-retailedge .home-kpi-card,
 
 body.edge-suite-product-retailedge .home-kpi-card:hover,
 [data-edge-product="retailedge"] .home-kpi-card:hover {
-	border-color: #9fcfc6;
+	border-color: var(--edge-color-brand-300, var(--retailedge-brand));
 	box-shadow: 0 5px 14px rgba(11, 31, 51, 0.07);
 	transform: translateY(-1px);
 }
@@ -408,9 +469,12 @@ body.edge-suite-product-retailedge .home-kpi-card > span,
 body.edge-suite-product-retailedge .home-kpi-card > strong,
 [data-edge-product="retailedge"] .home-kpi-card > strong {
 	color: var(--retailedge-ink);
-	font-size: clamp(1.25rem, 2.5vw, 1.65rem);
+	font-size: clamp(1.08rem, 1.65vw, 1.55rem);
 	font-variant-numeric: tabular-nums;
 	font-weight: 800;
+	letter-spacing: -0.025em;
+	line-height: 1.15;
+	white-space: nowrap;
 }
 
 body.edge-suite-product-retailedge .home-signal-card,
@@ -432,33 +496,48 @@ body.edge-suite-product-retailedge .home-quick-action,
 
 body.edge-suite-product-retailedge .home-quick-action-icon,
 [data-edge-product="retailedge"] .home-quick-action-icon {
-	background: var(--retailedge-ink);
+	background: var(--edge-color-brand-600, var(--retailedge-brand));
 	border-radius: 7px;
-	color: #fff;
+	color: var(--edge-color-on-brand, #fff);
 }
 
-/* Dark mode keeps the same identity rather than reverting to generic EdgeSuite. */
-html[data-edge-appearance="dark"] body.edge-suite-product-retailedge,
-body.edge-suite-product-retailedge[data-edge-appearance="dark"] {
-	--retailedge-ink: #eef6f8;
-	--retailedge-ink-soft: #b6c7d2;
-	--retailedge-surface: #132632;
-	--retailedge-surface-muted: #0d1b24;
-	--retailedge-border: #2a414e;
-	--retailedge-brand-soft: #123a37;
-	--edge-color-surface: var(--retailedge-surface);
-	--edge-color-surface-muted: var(--retailedge-surface-muted);
-	--edge-color-border: var(--retailedge-border);
+/* Dark appearance keeps the same retail composition while EdgeSuite owns colors. */
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] {
+	color-scheme: dark;
+	--retailedge-shadow: var(--edge-shadow-sm, 0 8px 24px rgb(0 0 0 / 22%));
 }
 
-html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-topbar,
-body.edge-suite-product-retailedge[data-edge-appearance="dark"] .edge-topbar {
-	background: rgba(19, 38, 50, 0.98);
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell__sidebar,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-app-shell__sidebar,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-topbar,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-topbar,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-page-header,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-page-header,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .home-kpi-card,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .home-kpi-card,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .home-intelligence-card,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .home-intelligence-card {
+	background-color: var(--edge-color-surface);
+	border-color: var(--edge-color-border);
+	color: var(--edge-color-ink-950);
 }
 
-html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-data-table th,
-html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-report-table th {
-	background: #18303d;
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-data-table th,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-report-table th,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-data-table th,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-report-table th {
+	background: var(--edge-color-surface-muted);
+	color: var(--edge-color-ink-700);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .retailedge-business-hub .hub-banner,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .retailedge-business-hub .hub-banner {
+	background:
+		linear-gradient(120deg, color-mix(in srgb, var(--edge-color-brand-600) 14%, transparent), transparent 42%),
+		linear-gradient(180deg, var(--edge-color-surface), var(--edge-color-surface-muted));
 }
 
 @media (max-width: 991px) {

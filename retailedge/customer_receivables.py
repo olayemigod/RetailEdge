@@ -53,6 +53,9 @@ def get_customer_receivables_context() -> dict[str, Any]:
 		"company_currency": _company_currency(company) if company else "",
 		"current_balance_date": today,
 		"balance_basis": "current_outstanding",
+		"capabilities": {
+			"can_create_payment_entry": bool(frappe.has_permission("Payment Entry", "create")),
+		},
 		"limits": {
 			"invoice_scan": MAX_INVOICE_SCAN_ROWS,
 			"page_size": MAX_PAGE_SIZE,

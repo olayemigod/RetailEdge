@@ -164,22 +164,42 @@ def _item_summary(doc) -> list[dict[str, Any]]:
 
 def _build_preview(doc) -> dict[str, Any]:
 	company, branch = _validate_standard_context(doc)
-	standard_blockers = _standard_shape_blockers(doc)
+	docstatus = cint(doc.docstatus)
+	is_draft = docstatus == 0
+	is_submitted = docstatus == 1
+	standard_blockers = _standard_shape_blockers(doc) if is_draft else []
 	workflow_readiness = get_workflow_readiness(doctype=doc.doctype, doc=doc)
 	workflow_controlled = _clean(workflow_readiness.get("source")) == "frappe"
 
 	blockers = list(standard_blockers)
-	if not workflow_controlled and not frappe.has_permission(doc.doctype, "submit", doc=doc):
+	if (
+		is_draft
+		and not workflow_controlled
+		and not frappe.has_permission(doc.doctype, "submit", doc=doc)
+	):
 		blockers.append(
 			_("You do not have permission to submit this {0}.").format(doc.doctype)
 		)
+
+	next_steps: list[dict[str, str]] = []
+	if is_submitted:
+		if doc.doctype == "Quotation":
+			next_steps = [
+				{"key": "sales-order", "label": _("Continue to Sales Order")},
+				{"key": "sales-invoice", "label": _("Continue to Sales Invoice")},
+			]
+		elif doc.doctype == "Sales Order":
+			next_steps = [
+				{"key": "delivery-note", "label": _("Continue to Delivery")},
+				{"key": "sales-invoice", "label": _("Continue to Sales Invoice")},
+			]
 
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
 		"modified": _clean(doc.get("modified")),
-		"docstatus": cint(doc.docstatus),
-		"status": _clean(doc.get("status")) or ("Draft" if cint(doc.docstatus) == 0 else ""),
+		"docstatus": docstatus,
+		"status": _clean(doc.get("status")) or ("Draft" if is_draft else ""),
 		"company": company,
 		"branch": branch,
 		"party": _party_value(doc),
@@ -188,14 +208,16 @@ def _build_preview(doc) -> dict[str, Any]:
 		"item_count": len(list(doc.get("items") or [])),
 		"items": _item_summary(doc),
 		"blockers": blockers,
-		"can_submit": bool(not blockers and not workflow_controlled and cint(doc.docstatus) == 0),
+		"can_submit": bool(is_draft and not blockers and not workflow_controlled),
 		"workflow_readiness": workflow_readiness,
-		"workflow_eligible": bool(workflow_controlled and not standard_blockers and cint(doc.docstatus) == 0),
+		"workflow_eligible": bool(workflow_controlled and not blockers and is_draft),
+		"lifecycle_stage": "submitted" if is_submitted else ("draft" if is_draft else "closed"),
+		"can_continue_flow": bool(is_submitted and next_steps),
+		"next_steps": next_steps,
 		"persistence": "none",
 		"source_of_truth": "ERPNext",
 		"route": f"/app/{frappe.scrub(doc.doctype).replace('_', '-')}/{doc.name}",
 	}
-
 
 def _assert_expected_modified(doc, expected_modified: str | None) -> str:
 	expected_modified = _clean(expected_modified)

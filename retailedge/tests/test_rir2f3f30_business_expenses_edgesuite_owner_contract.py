@@ -95,3 +95,15 @@ def test_slice_does_not_add_accounting_posting():
 	assert "Accounting posting remains out of scope" in doc
 	assert "active Frappe Workflow remains authoritative" in doc
 	assert "No submitted accounting document is mutated" in doc
+
+
+def test_business_hub_record_expense_handoff_is_reused_on_page_show():
+	hub = (ROOT / "public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue").read_text(encoding="utf-8")
+	page = PAGE.read_text(encoding="utf-8")
+	controller = (ROOT / "retailedge/page/business_expenses/business_expenses.js").read_text(encoding="utf-8")
+
+	assert 'setBusinessHubRouteHandoff("business-expenses"' in hub
+	assert 'retailedgeConsumeBusinessHubRouteOptions?.("business-expenses")' in page
+	assert "consumePendingRouteOptions()" in page
+	assert 'window.addEventListener("retailedge-business-expenses-page-show"' in page
+	assert 'new CustomEvent("retailedge-business-expenses-page-show")' in controller

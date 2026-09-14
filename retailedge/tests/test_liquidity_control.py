@@ -38,10 +38,12 @@ class RetailEdgeLiquidityControlTests(unittest.TestCase):
 		result = _build_liquidity_control(position, receivables, payables, horizon_days=30)
 		current = result["current_liquidity"]
 		self.assertEqual(current["cash_bank_balance"], 5000)
-		self.assertEqual(current["supplier_obligations_due_within_horizon"], 2500)
+		# The horizon is inclusive: an obligation due exactly on the horizon date
+		# is part of "due within horizon".
+		self.assertEqual(current["supplier_obligations_due_within_horizon"], 6500)
 		self.assertEqual(current["receivables_due_within_horizon"], 3000)
-		self.assertEqual(current["immediate_obligation_coverage_ratio"], 2.0)
-		self.assertEqual(current["indicative_coverage_ratio_including_due_receivables"], 3.2)
+		self.assertAlmostEqual(current["immediate_obligation_coverage_ratio"], 5000 / 6500)
+		self.assertAlmostEqual(current["indicative_coverage_ratio_including_due_receivables"], 8000 / 6500)
 		self.assertEqual(result["period_flow"]["net_cash_movement"], 3000)
 
 	def test_branch_without_safe_cash_balance_withholds_cash_ratios(self):

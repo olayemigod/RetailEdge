@@ -199,14 +199,24 @@ def get_operational_branch_scope(company: str, user: str | None = None) -> dict[
 	"""
 	company = _clean(company)
 	user = user or frappe.session.user
+	has_global_access = user_has_global_branch_access(user=user)
 	if not company:
+		# Branch Assignment history remains authoritative even when no active
+		# Company/Branch can be resolved. This is the explicit restricted-zero
+		# state and must never collapse into the legacy "unrestricted" meaning.
+		if not has_global_access and has_branch_assignments(user=user):
+			return {
+				"company": "",
+				"restricted": True,
+				"allowed_branches": [],
+				"source": "branch_assignment_zero_context",
+			}
 		return {
 			"company": "",
 			"restricted": False,
 			"allowed_branches": [],
 			"source": "no_company",
 		}
-	has_global_access = user_has_global_branch_access(user=user)
 	if has_global_access:
 		return {
 			"company": company,
@@ -365,6 +375,13 @@ def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 	# it does not narrow their effective operational Branch scope.
 	if not fallback_company:
 		fallback_company = _clean(assignment_anchor.get("company"))
+	if not fallback_company and not (has_assignments and not user_has_global_branch_access(user=user)):
+		# A single permitted Company is a deterministic operating anchor when a
+		# global/unrestricted user has no saved user default. Never guess when
+		# multiple Companies exist, and never widen restricted assignment users.
+		allowed_companies = _allowed_companies(user=user)
+		if len(allowed_companies) == 1:
+			fallback_company = _clean(allowed_companies[0])
 	if fallback_company:
 		_assert_company_access(fallback_company, user=user)
 

@@ -255,3 +255,33 @@ def test_phase5_variance_setting_is_migration_safe_and_non_posting():
 	assert "retailedge.patches.add_business_hub_intelligence_settings" in patches
 	assert "ignore_permissions=True" not in patch
 	assert "frappe.db.commit" not in patch
+
+
+def test_phase5_business_hub_qa_keeps_page_shortcuts_scoped_and_dates_user_formatted():
+	source = HUB.read_text(encoding="utf-8")
+
+	assert "formatDisplayDate(homePeriod.from_date)" in source
+	assert "formatDisplayDate(homePeriod.to_date)" in source
+	assert "frappe.datetime?.str_to_user?.(value)" in source
+
+	assert 'const currentOnly = shortcut.target === "professional-purchasing";' in source
+	assert "const filters = this.homeRouteFilters" in source
+	assert "this.openHomeRoute(shortcut.target, filters);" in source
+
+
+def test_phase5_business_hub_does_not_expose_architecture_labels_as_ui_copy():
+	source = HUB.read_text(encoding="utf-8")
+	for label in ("Understand", "Act", "Operate", "Respond"):
+		assert f'<p class="section-kicker">{label}</p>' not in source
+
+	for heading in ("Business performance", "Quick actions", "Business indices", "Needs attention"):
+		assert heading in source
+
+
+def test_phase5_business_hub_uses_banking_smart_date_component():
+	source = HUB.read_text(encoding="utf-8")
+	assert "EdgeSmartDateRange" in source
+	assert 'dateOrder="DMY"' in source
+	assert '@resolved="handleHomeDateResolved"' in source
+	assert "homeSmartDate" in source
+	assert "Custom Period" in source

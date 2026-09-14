@@ -280,7 +280,8 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertIn("retailedge.guided_sales_invoice.create_simple_sales_invoice_draft", component)
 		self.assertIn("retailedge.guided_sales_invoice.search_simple_sales_invoice_options", component)
 		self.assertIn("Open Full Form", component)
-		self.assertIn('this.$emit("open-native", "Sales Invoice")', component)
+		self.assertIn('this.$emit("open-native", {', component)
+		self.assertIn('doctype: "Sales Invoice"', component)
 		self.assertNotIn("frappe.new_doc", component)
 		self.assertNotIn("frappe.db.insert", component)
 
@@ -322,6 +323,34 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertIn(':disabled="requiresBranchSelection && !values.branch"', component)
 		self.assertIn(':disabled="saving || loading || !transactionContextReady"', component)
 		self.assertIn("Choose a Branch before selecting the Stock Location.", component)
+
+	def test_guided_quick_entry_edit_is_draft_only_permission_aware_and_stale_safe(self):
+		backend = (APP_ROOT / "guided_sales_invoice.py").read_text()
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text()
+		for marker in (
+			"def get_simple_sales_invoice_draft",
+			"def update_simple_sales_invoice_draft",
+			'frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)',
+			"Only draft Sales Invoices can be edited in quick entry.",
+			"Submitted Sales Invoices cannot be edited.",
+			"expected_modified",
+			"frappe.TimestampMismatchError",
+			"doc.save()",
+		):
+			self.assertIn(marker, backend)
+		self.assertNotIn("ignore_permissions=True", backend)
+		self.assertNotIn("doc.submit()", backend)
+		self.assertIn("LOAD_DRAFT_METHOD", component)
+		self.assertIn("UPDATE_DRAFT_METHOD", component)
+		self.assertIn("editingDocument", component)
+		self.assertIn("Update Draft", component)
+		self.assertIn("expected_modified: this.editingDocument.modified", component)
 
 	def test_limits_are_deliberately_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)

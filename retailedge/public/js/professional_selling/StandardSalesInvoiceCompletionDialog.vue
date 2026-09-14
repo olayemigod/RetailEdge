@@ -60,23 +60,78 @@
 					</p>
 				</div>
 
+				<div v-if="preview.docstatus === 1" class="invoice-lifecycle-panel">
+					<div>
+						<span>Invoice lifecycle</span>
+						<strong>{{ preview.status || "Submitted" }}</strong>
+					</div>
+					<div>
+						<span>Outstanding</span>
+						<strong>{{ preview.currency || "" }} {{ preview.outstanding_amount }}</strong>
+					</div>
+					<p v-if="preview.outstanding_amount > 0">
+						This invoice may remain unpaid. Record payment only when money has actually been received.
+					</p>
+					<p v-else>This invoice has no outstanding amount.</p>
+				</div>
+
 				<div v-if="actionError" class="invoice-completion-error" role="alert">{{ actionError }}</div>
 			</template>
 		</div>
 
 		<template #footer>
 			<div class="invoice-completion-footer">
-				<button
-					v-if="canUseNativeDesk && document?.name"
-					type="button"
-					class="edge-button edge-button--secondary"
-					:disabled="busy"
-					@click="openAdvanced"
-				>
-					Advanced: Open in ERPNext
-				</button>
+				<div class="invoice-completion-secondary-actions">
+					<button
+						v-if="preview?.can_edit"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy"
+						@click="editDraft"
+					>
+						Edit Invoice
+					</button>
+					<button
+						v-if="preview?.can_print"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy"
+						@click="printInvoice"
+					>
+						Print
+					</button>
+					<button
+						v-if="preview?.can_pdf"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy"
+						@click="downloadPdf"
+					>
+						PDF
+					</button>
+					<button
+						v-if="canUseNativeDesk && document?.name"
+						type="button"
+						class="edge-button edge-button--secondary"
+						:disabled="busy"
+						@click="openAdvanced"
+					>
+						Advanced: Open in ERPNext
+					</button>
+				</div>
 				<div class="invoice-completion-actions">
-					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
+					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">
+						{{ preview?.can_leave_unpaid ? "Finish for now" : "Close" }}
+					</button>
+					<button
+						v-if="preview?.can_receive_payment"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="busy"
+						@click="receivePayment"
+					>
+						Receive Payment
+					</button>
 					<button
 						v-if="preview?.can_submit"
 						type="button"
@@ -133,7 +188,7 @@ export default {
 		document: { type: Object, default: null },
 		canUseNativeDesk: { type: Boolean, default: false },
 	},
-	emits: ["close", "changed", "completed"],
+	emits: ["close", "changed", "completed", "edit", "receive-payment"],
 	data() {
 		return {
 			preview: null,
@@ -187,7 +242,8 @@ export default {
 					expected_modified: this.preview.modified,
 				});
 				this.$emit("changed", result);
-				this.$emit("completed", result);
+				await this.loadPreview();
+				this.$emit("completed", { ...result, keep_open: true });
 			} catch (error) {
 				this.actionError = errorMessage(error, "Unable to submit this Sales Invoice.");
 				await this.loadPreview();
@@ -208,7 +264,8 @@ export default {
 				});
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					this.$emit("completed", result);
+					await this.loadPreview();
+					this.$emit("completed", { ...result, keep_open: true });
 					return;
 				}
 				await this.loadPreview();
@@ -218,6 +275,43 @@ export default {
 			} finally {
 				this.busy = false;
 			}
+		},
+		editDraft() {
+			if (!this.preview?.can_edit || !this.preview?.name || this.busy) return;
+			this.$emit("edit", {
+				doctype: "Sales Invoice",
+				name: this.preview.name,
+				modified: this.preview.modified,
+			});
+		},
+		receivePayment() {
+			if (!this.preview?.can_receive_payment || this.busy) return;
+			this.$emit("receive-payment", { ...(this.preview.payment_context || {}) });
+		},
+		printInvoice() {
+			if (!this.preview?.can_print || !this.preview?.name || this.busy) return;
+			const query = new URLSearchParams({
+				doctype: "Sales Invoice",
+				name: this.preview.name,
+				format: "Standard",
+				no_letterhead: "0",
+				trigger_print: "1",
+			});
+			window.open(`/printview?${query.toString()}`, "_blank", "noopener,noreferrer");
+		},
+		downloadPdf() {
+			if (!this.preview?.can_pdf || !this.preview?.name || this.busy) return;
+			const query = new URLSearchParams({
+				doctype: "Sales Invoice",
+				name: this.preview.name,
+				format: "Standard",
+				no_letterhead: "0",
+			});
+			window.open(
+				`/api/method/frappe.utils.print_format.download_pdf?${query.toString()}`,
+				"_blank",
+				"noopener,noreferrer",
+			);
 		},
 		openAdvanced() {
 			if (!this.canUseNativeDesk || !this.document?.name) return;
@@ -252,6 +346,19 @@ export default {
 .invoice-completion-workflow p { margin: .35rem 0 0; }
 .invoice-completion-error { background: var(--red-50,#fef2f2); border: 1px solid var(--red-200,#fecaca); color: var(--red-700,#b91c1c); }
 .invoice-completion-hint { margin: 0; font-size: .82rem; color: var(--text-muted); }
+.invoice-lifecycle-panel {
+	display:grid;
+	grid-template-columns:repeat(2,minmax(0,1fr));
+	gap:10px;
+	padding:12px;
+	border:1px solid var(--edge-border,#dfe3e8);
+	border-radius:10px;
+	background:var(--edge-surface-muted,#f8fafc);
+}
+.invoice-lifecycle-panel > div { display:grid; gap:3px; }
+.invoice-lifecycle-panel span { color:var(--edge-text-muted,#667085); font-size:.76rem; }
+.invoice-lifecycle-panel p { grid-column:1/-1; margin:0; color:var(--edge-text-muted,#667085); }
+.invoice-completion-secondary-actions { display:flex; flex-wrap:wrap; gap:8px; }
 .invoice-completion-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; width: 100%; }
 .invoice-completion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 @media (max-width: 720px) { .invoice-completion-summary { grid-template-columns: 1fr; } .invoice-completion-item { grid-template-columns: 1fr; } .invoice-completion-footer { align-items: stretch; flex-direction: column; } .invoice-completion-actions { justify-content: flex-start; } }

@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Customer Receivables"
 			eyebrow="Customers & Receivables"
-			subtitle="Current unpaid customer invoices, overdue exposure, native payment requests, and dunning readiness from ERPNext accounting truth."
+			subtitle="Current unpaid customer invoices, overdue exposure, guided Payment Entry collection, payment requests, and dunning readiness from ERPNext accounting truth."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -61,14 +61,26 @@
 				<span>Current ERPNext outstanding balances aged at {{ formatDate(currentBalanceDate, "today") }}</span>
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
-				<span v-if="canUseNativeDesk">Collection handoffs prepare native drafts only · nothing is submitted automatically</span>
+				<span v-if="canCreatePaymentEntry">Payment Entry opens in EdgeSuite and remains user-controlled · nothing is submitted automatically</span>
+				<span v-if="canUseNativeDesk">Advanced collection handoffs remain available when permitted</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
+
+	<SimplePaymentDialog
+		:open="paymentOpen"
+		:native-fallback-enabled="canUseNativeDesk"
+		intent="receive-customer-payment"
+		:initial-context="paymentContext"
+		@close="closePaymentEntry"
+		@open-native="openNativePaymentEntry"
+	/>
 </template>
 
 <script>
+import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
+
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "customer-receivables";
@@ -84,7 +96,10 @@ function errorMessage(error, fallback) { return error?.message || error?.exc || 
 
 export default {
 	name: "CustomerReceivablesReport",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: {
+		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+		SimplePaymentDialog,
+	},
 	data() {
 		return {
 			edgeUIValid: true,
@@ -106,6 +121,9 @@ export default {
 			customerLabel: "",
 			actionInvoice: "",
 			canUseNativeDesk: false,
+			canCreatePaymentEntry: false,
+			paymentOpen: false,
+			paymentContext: {},
 			filters: { company: "", branch: "", customer: "", customer_group: "", ageing_bucket: "All", page_size: 50 },
 			currentPage: 1,
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
@@ -116,8 +134,15 @@ export default {
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 0); },
 		reportColumns() {
 			const clickable = ["invoice", "customer", "payment_request", "dunning"];
-			const columns = (this.columns || []).filter((column) => !column.hidden).map((column) => ({ ...column, fieldtype: column.fieldtype || column.type || "Data", clickable: this.canUseNativeDesk && clickable.includes(column.fieldname) }));
-			if (this.canUseNativeDesk && this.rows.some((row) => row.payment_request_action)) columns.push({ fieldname: "payment_request_action", label: "Payment Action", fieldtype: "Data", clickable: true });
+			const columns = (this.columns || []).filter((column) => !column.hidden).map((column) => ({
+				...column,
+				fieldtype: column.fieldtype || column.type || "Data",
+				clickable: this.canUseNativeDesk && clickable.includes(column.fieldname),
+			}));
+			if (this.canCreatePaymentEntry && this.rows.some((row) => row.payment_entry_action)) {
+				columns.push({ fieldname: "payment_entry_action", label: "Payment Entry", fieldtype: "Data", clickable: true });
+			}
+			if (this.canUseNativeDesk && this.rows.some((row) => row.payment_request_action)) columns.push({ fieldname: "payment_request_action", label: "Payment Request", fieldtype: "Data", clickable: true });
 			if (this.canUseNativeDesk && this.rows.some((row) => row.dunning_action)) columns.push({ fieldname: "dunning_action", label: "Dunning Action", fieldtype: "Data", clickable: true });
 			return columns;
 		},
@@ -145,6 +170,7 @@ export default {
 				this.companyCurrency = context.company_currency || "";
 				this.currentBalanceDate = context.current_balance_date || "";
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
+				this.canCreatePaymentEntry = Boolean(context.capabilities?.can_create_payment_entry);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Customer Receivables controls."); }
@@ -176,7 +202,13 @@ export default {
 				const pageSize = Number(this.filters.page_size || 50);
 				const start = Math.max(0, (this.currentPage - 1) * pageSize);
 				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
-				this.rows = result.rows || [];
+				this.rows = (result.rows || []).map((row) => ({
+					...row,
+					payment_entry_action:
+						this.canCreatePaymentEntry && Number(row.outstanding || 0) > 0
+							? "Receive Payment"
+							: "",
+				}));
 				this.columns = (result.columns || []).filter((column) => !column.hidden);
 				this.summary = result.summary || []; this.reportSort = result.sort || null;
 				this.scan = result.metadata?.scan || {};
@@ -197,6 +229,27 @@ export default {
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		rowKey(row, index) { return row.invoice || `customer-receivables:${index}`; },
+		openPaymentEntry(row) {
+			if (!this.canCreatePaymentEntry || !row?.invoice || !(Number(row.outstanding || 0) > 0)) return;
+			this.paymentContext = {
+				company: this.filters.company || "",
+				branch: row.branch || this.filters.branch || "",
+				party: row.customer || "",
+				reference_name: row.invoice,
+			};
+			this.paymentOpen = true;
+		},
+		closePaymentEntry() {
+			this.paymentOpen = false;
+			this.paymentContext = {};
+			this.fetchData();
+		},
+		openNativePaymentEntry(doctype = "Payment Entry") {
+			if (!this.canUseNativeDesk) return;
+			this.paymentOpen = false;
+			this.paymentContext = {};
+			frappe.new_doc(doctype);
+		},
 		async prepareCollectionAction(row, kind) {
 			if (!this.canUseNativeDesk || !row?.invoice || this.actionInvoice) return;
 			const method = kind === "payment" ? "retailedge.receivables_actions.prepare_payment_request" : "retailedge.receivables_actions.prepare_dunning";
@@ -215,9 +268,10 @@ export default {
 			const column = payload?.column;
 			const row = payload?.row;
 			if (!column || !row) return;
-			if (!this.canUseNativeDesk) return;
 			const value = row[column.fieldname];
 			if (!value) return;
+			if (column.fieldname === "payment_entry_action") return this.openPaymentEntry(row);
+			if (!this.canUseNativeDesk) return;
 			if (column.fieldname === "payment_request_action") return this.prepareCollectionAction(row, "payment");
 			if (column.fieldname === "dunning_action") return this.prepareCollectionAction(row, "dunning");
 			if (column.fieldname === "invoice") frappe.set_route("Form", "Sales Invoice", value);

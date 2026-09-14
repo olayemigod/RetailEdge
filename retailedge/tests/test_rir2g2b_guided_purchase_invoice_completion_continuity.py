@@ -233,3 +233,36 @@ def test_contract_preserves_source_driven_and_supplier_document_owners():
 	assert "Supplier Document → Purchase Invoice immutable handoff" in source
 	assert "Purchase Order-linked Purchase Invoice" in source
 	assert "Purchase Receipt-linked Purchase Invoice" in source
+
+
+def test_submitted_purchase_invoice_keeps_optional_supplier_payment_inside_edgesuite():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	hub = _read(HUB)
+	purchasing = _read(PURCHASING)
+	for marker in (
+		'"outstanding_amount": outstanding_amount',
+		'"can_pay_supplier": can_pay_supplier',
+		'"can_leave_unpaid": bool(is_submitted and outstanding_amount > 0)',
+		'frappe.has_permission("Payment Entry", "create")',
+		'"payment_context": {',
+		'"lifecycle_stage": "submitted"',
+	):
+		assert marker in service
+	for marker in ("Pay Supplier", "Finish for now", '@pay-supplier', "keep_open: true"):
+		assert marker in dialog or marker in hub or marker in purchasing
+	assert "SimplePaymentDialog" in hub
+	assert 'this.simplePaymentIntent = "pay-supplier"' in hub
+	assert "SimplePaymentDialog" in purchasing
+	assert 'intent="pay-supplier"' in purchasing
+	assert "supplierPaymentInitialContext" in purchasing
+
+
+def test_purchase_invoice_payment_lifecycle_never_auto_posts_or_mutates_submitted_truth():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	assert "frappe.new_doc" not in service
+	assert 'doc.outstanding_amount =' not in service
+	assert 'doc.set("outstanding_amount"' not in service
+	assert "Payment Entry" not in dialog.split("paySupplier()", 1)[1].split("openAdvanced()", 1)[0]
+	assert "may remain unpaid" in dialog

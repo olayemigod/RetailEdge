@@ -165,6 +165,8 @@ const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
+const LOAD_DRAFT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_draft";
+const UPDATE_DRAFT_METHOD = "retailedge.guided_sales_invoice.update_simple_sales_invoice_draft";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -207,6 +209,7 @@ export default {
 	props: {
 		nativeFallbackEnabled: { type: Boolean, default: true },
 		open: { type: Boolean, default: false },
+		document: { type: Object, default: null },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {
@@ -219,6 +222,7 @@ export default {
 			pricingTokens: {},
 			pricingCache: new Map(),
 			formContext: {},
+			editingDocument: null,
 			values: emptyValues(),
 			itemTableField: {
 				label: "Items",
@@ -289,6 +293,12 @@ export default {
 		open(next) {
 			if (next) this.loadContext();
 		},
+		document: {
+			deep: true,
+			handler(next, previous) {
+				if (this.open && next?.name !== previous?.name) this.loadContext();
+			},
+		},
 	},
 	mounted() {
 		if (this.open) this.loadContext();
@@ -302,11 +312,30 @@ export default {
 			try {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
+				this.editingDocument = null;
 				this.values = {
 					...emptyValues(),
 					...(data.defaults || {}),
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
+				if (this.document?.name) {
+					const loaded = await callMethod(LOAD_DRAFT_METHOD, { name: this.document.name });
+					this.editingDocument = {
+						name: loaded.name,
+						modified: loaded.modified,
+					};
+					this.formContext = {
+						...this.formContext,
+						title: `Edit Sales Invoice ${loaded.name}`,
+						subtitle: "Update this ERPNext draft through the same permission-aware quick-entry flow.",
+						submit_label: "Update Draft",
+					};
+					this.values = {
+						...emptyValues(),
+						...(loaded.values || {}),
+						items: (loaded.values?.items || emptyValues().items).map((row) => ({ ...row })),
+					};
+				}
 				if (!this.formContext.capabilities?.can_edit_update_stock) {
 					this.values.update_stock = 1;
 				}
@@ -327,7 +356,10 @@ export default {
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
-			this.$emit("open-native", "Sales Invoice");
+			this.$emit("open-native", {
+				doctype: "Sales Invoice",
+				name: this.editingDocument?.name || "",
+			});
 		},
 		async searchOptions(fieldname, query) {
 			const results = await callMethod(SEARCH_METHOD, {
@@ -500,7 +532,17 @@ export default {
 			this.saveError = "";
 			this.saving = true;
 			try {
-				const result = await callMethod(CREATE_METHOD, { values: this.values });
+				const result = this.editingDocument?.name
+					? await callMethod(UPDATE_DRAFT_METHOD, {
+						name: this.editingDocument.name,
+						values: this.values,
+						expected_modified: this.editingDocument.modified,
+					})
+					: await callMethod(CREATE_METHOD, { values: this.values });
+				this.editingDocument = result?.name ? {
+					name: result.name,
+					modified: result.modified || this.editingDocument?.modified || "",
+				} : this.editingDocument;
 				this.$emit("saved", result);
 			} catch (error) {
 				this.saveError = errorMessage(error, "Unable to save the Sales Invoice draft.");

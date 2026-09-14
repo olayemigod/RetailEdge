@@ -5,8 +5,9 @@ from typing import Any
 
 import frappe
 
+from retailedge.company_profile import resolve_company_profile
 from retailedge.edgesuite_ui import get_retailedge_business_hub_context as _base_business_hub_context
-from retailedge.operating_context import get_allowed_operating_branches, get_operating_context
+from retailedge.operating_context import get_allowed_operating_branches, get_operating_context, get_operational_branch_scope
 
 CUSTOMER_ACTION: dict[str, Any] = {
 	"key": "new-customer",
@@ -43,6 +44,18 @@ ITEM_ACTION: dict[str, Any] = {
 
 MASTER_ACTIONS: tuple[dict[str, Any], ...] = (CUSTOMER_ACTION, SUPPLIER_ACTION, ITEM_ACTION)
 
+OPERATIONAL_TRANSACTION_ACTION_KEYS = frozenset({
+	"new-sales-invoice",
+	"receive-customer-payment",
+	"pay-supplier",
+	"deposit-cash",
+	"cash-transfer",
+	"record-expense",
+	"record-purchase",
+	"transfer-stock",
+	"adjust-stock",
+})
+
 PROMOTED_R4_PAGE_TARGETS: dict[str, str] = {
 	"Cashier Expense Review": "expense-review",
 	"Cash Shift Verification": "cash-shift-verification",
@@ -54,6 +67,14 @@ OPERATING_CONTEXT_ITEM: dict[str, Any] = {
 	"description": "Choose the Company and Branch that should guide new work and branch defaults.",
 	"target_type": "Page",
 	"target": "operating-context",
+	"icon": "building",
+}
+
+COMPANY_PROFILE_ITEM: dict[str, Any] = {
+	"label": "Company Profile",
+	"description": "Review the active ERPNext Company identity used across RetailEdge.",
+	"target_type": "Page",
+	"target": "company-profile",
 	"icon": "building",
 }
 
@@ -237,6 +258,21 @@ def _add_operating_context_navigation(navigation_groups: list[dict[str, Any]]) -
 			return
 		insert_at = 1 if items else 0
 		items.insert(insert_at, deepcopy(OPERATING_CONTEXT_ITEM))
+		group["items"] = items
+		return
+
+
+def _add_company_profile_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(COMPANY_PROFILE_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "home":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target") == COMPANY_PROFILE_ITEM["target"] for item in items):
+			return
+		operating_index = next((index for index, item in enumerate(items) if item.get("target") == OPERATING_CONTEXT_ITEM["target"]), -1)
+		items.insert(operating_index + 1 if operating_index >= 0 else 0, deepcopy(COMPANY_PROFILE_ITEM))
 		group["items"] = items
 		return
 
@@ -608,36 +644,13 @@ def _contain_native_navigation_for_edgesuite_only(context: dict[str, Any]) -> No
 	context["navigation_groups"] = contained_groups
 
 
-def _company_identity(company: str) -> dict[str, str]:
-	company = str(company or "").strip()
-	fallback = {"name": company, "label": company, "logo": "", "currency": ""}
-	if not company:
-		return fallback
-
-	try:
-		if not frappe.db.exists("Company", company):
-			return fallback
-		fields = ["name", "company_name", "default_currency"]
-		if frappe.get_meta("Company").has_field("company_logo"):
-			fields.append("company_logo")
-		row = frappe.db.get_value("Company", company, fields, as_dict=True) or {}
-	except Exception:
-		return fallback
-
-	return {
-		"name": row.get("name") or company,
-		"label": row.get("company_name") or row.get("name") or company,
-		"logo": row.get("company_logo") or "",
-		"currency": row.get("default_currency") or "",
-	}
-
-
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context = deepcopy(_base_business_hub_context() or {})
 	navigation_groups = context.get("navigation_groups") or []
 	_promote_browser_approved_r4_pages(navigation_groups)
 	_add_operating_context_navigation(navigation_groups)
+	_add_company_profile_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
@@ -676,20 +689,41 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 
 	operating = get_operating_context()
 	company = operating.get("company") or ""
-	identity = _company_identity(company)
+	identity = resolve_company_profile(company)
 	try:
 		branches = get_allowed_operating_branches(company=company) if company else []
 	except Exception:
 		branches = []
+	try:
+		# Resolve scope even when Company is blank. Assignment history can represent
+		# an explicit restricted-zero state and must not be silently widened.
+		branch_scope = get_operational_branch_scope(company)
+	except Exception:
+		branch_scope = {
+			"restricted": True,
+			"allowed_branches": [],
+			"source": "scope_unavailable",
+		}
+	branch_scope_ready = not branch_scope.get("restricted") or bool(branch_scope.get("allowed_branches"))
+	if not branch_scope_ready:
+		quick_actions = [
+			action for action in quick_actions
+			if action.get("key") not in OPERATIONAL_TRANSACTION_ACTION_KEYS
+		]
+		context["quick_actions"] = quick_actions
 	user_context = dict(context.get("context") or {})
 	user_context.update({
 		"company": operating.get("company") or "",
 		"company_label": identity.get("label") or company,
 		"company_logo": identity.get("logo") or "",
 		"company_currency": identity.get("currency") or "",
+		"company_profile": identity,
 		"branch": operating.get("branch") or "",
 		"branch_options": list(branches),
 		"can_switch_branch": len(branches) > 1,
+		"branch_scope_restricted": bool(branch_scope.get("restricted")),
+		"branch_scope_ready": bool(branch_scope_ready),
+		"branch_scope_source": branch_scope.get("source") or "",
 		"operating_context_source": operating.get("source") or "",
 		"default_pos_profile": operating.get("default_pos_profile") or "",
 		"default_stock_location": operating.get("default_stock_location") or "",

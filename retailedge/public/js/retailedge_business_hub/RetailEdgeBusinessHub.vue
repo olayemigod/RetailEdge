@@ -15,7 +15,7 @@
 			<template #header>
 				<EdgePageHeader
 					title="Business Hub"
-					subtitle="Today’s priorities, actions and business position."
+					subtitle="Priorities, actions and business position."
 					:withBackButton="false"
 				/>
 			</template>
@@ -55,21 +55,30 @@
 					</div>
 				</section>
 
+				<div v-if="operatingScopeBlocked" class="hub-scope-warning" role="status">
+					<strong>No active Branch access</strong>
+					<span>Operational actions are unavailable until an active Branch assignment is restored for this Company.</span>
+				</div>
+				<div v-else-if="homeScopeNeedsBranch" class="hub-scope-warning hub-scope-warning--choice" role="status">
+					<strong>Choose a Working Branch</strong>
+					<span>Select one of your permitted Branches from the top bar to load branch-scoped performance, indices and attention.</span>
+				</div>
+
 				<section class="home-command-centre hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Understand</p>
 							<h3>Business performance</h3>
 							<p class="section-rider">Key business indicators for the selected period.</p>
 						</div>
 						<div class="home-period-controls">
-							<EdgeDropdown
-								v-model="homePeriodPreset"
-								:options="homePeriodOptions"
+							<EdgeSmartDateRange
+								v-model="homeSmartDate"
 								label="Period"
-								@update:modelValue="handleHomePeriodChange"
+								placeholder="e.g. last 30 days, YTD, this month"
+								dateOrder="DMY"
+								@resolved="handleHomeDateResolved"
 							/>
-							<span v-if="homePeriod.from_date" class="home-as-of">{{ homePeriod.from_date }} – {{ homePeriod.to_date }}</span>
+							<span v-if="homePeriod.from_date" class="home-as-of">{{ formatDisplayDate(homePeriod.from_date) }} – {{ formatDisplayDate(homePeriod.to_date) }}</span>
 						</div>
 					</div>
 					<EdgeLoadingState v-if="homeLoading" message="Loading business performance..." :skeleton="true" />
@@ -87,14 +96,14 @@
 									<span>{{ card.label }}</span>
 									<span class="home-kpi-card-icon"><EdgeIcon :name="kpiIcon(card.label)" size="sm" /></span>
 								</span>
-								<strong>{{ formatHomeValue(card) }}</strong>
+								<strong :title="formatHomeValue(card, { compact: false })">{{ formatHomeValue(card) }}</strong>
 								<small>{{ card.time_basis === "current" ? "Current position" : (homePeriod.label || "Selected period") }}</small>
 							</button>
 						</div>
 						<EdgeEmptyState
 							v-else
-							title="No management indicators available"
-							description="No permitted indicators are available for this period and operating scope."
+							:title="homeScopeNeedsBranch ? 'Working Branch required' : 'No management indicators available'"
+							:description="homeScopeNeedsBranch ? 'Choose a Working Branch to load branch-scoped business performance.' : 'No permitted indicators are available for this period and operating scope.'"
 							icon="bar-chart-2"
 						/>
 					</div>
@@ -103,7 +112,6 @@
 				<section v-if="homeQuickActions.length" class="home-quick-actions-section hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Act</p>
 							<h3>Quick actions</h3>
 							<p class="section-rider">Start the next permitted business task.</p>
 						</div>
@@ -128,7 +136,6 @@
 				<section class="hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Operate</p>
 							<h3>Business indices</h3>
 							<p class="section-rider">Sales, cash, stock, expenses, receivables, payables, branch and banking signals with the next useful action.</p>
 						</div>
@@ -146,11 +153,11 @@
 							<template v-if="index.available">
 								<div class="home-index-headline">
 									<span>{{ index.headline?.label || "Position" }}</span>
-									<strong>{{ formatHomeValue(index.headline) }}</strong>
+									<strong :title="formatHomeValue(index.headline, { compact: false })">{{ formatHomeValue(index.headline) }}</strong>
 								</div>
 								<div v-if="index.signal?.label" class="home-index-signal">
 									<span>{{ index.signal.label }}</span>
-									<strong>{{ formatHomeValue(index.signal) }}</strong>
+									<strong :title="formatHomeValue(index.signal, { compact: false })">{{ formatHomeValue(index.signal) }}</strong>
 								</div>
 								<p>{{ index.signal?.message || index.recommendation }}</p>
 								<button type="button" class="home-index-action" @click="openHomeItem(index)">{{ index.action_label || "Open" }}</button>
@@ -160,8 +167,8 @@
 					</div>
 					<EdgeEmptyState
 						v-else
-						title="No business indices available"
-						description="No permitted business index is available for the selected Company, Branch and period."
+						:title="homeScopeNeedsBranch ? 'Working Branch required' : 'No business indices available'"
+						:description="homeScopeNeedsBranch ? 'Choose a Working Branch to load business indices for one permitted operating scope.' : 'No permitted business index is available for the selected Company, Branch and period.'"
 						icon="bar-chart-2"
 					/>
 				</section>
@@ -169,24 +176,29 @@
 				<section class="hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Respond</p>
 							<h3>Needs attention</h3>
 							<p class="section-rider">Exceptions and follow-ups that may require action.</p>
 						</div>
 						<span class="home-attention-count">{{ homeSnapshot.attention.length }}</span>
 					</div>
-					<div v-if="homeSnapshot.attention.length" class="home-attention-list home-attention-list--wide">
+					<div v-if="!homeScopeNeedsBranch && homeSnapshot.attention.length" class="home-attention-list home-attention-list--wide">
 						<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeItem(item)">
 							<span class="home-attention-copy">
 								<strong>{{ item.label }}</strong>
 								<small v-if="item.recommendation">{{ item.recommendation }}</small>
 							</span>
 							<span class="home-attention-value">
-								<strong>{{ formatHomeValue(item) }}</strong>
+								<strong :title="formatHomeValue(item, { compact: false })">{{ formatHomeValue(item) }}</strong>
 								<small>{{ item.action_label || "Open" }}</small>
 							</span>
 						</button>
 					</div>
+					<EdgeEmptyState
+						v-else-if="homeScopeNeedsBranch"
+						title="Working Branch required"
+						description="Choose a Working Branch before RetailEdge evaluates branch-scoped exceptions and follow-ups."
+						icon="building"
+					/>
 					<EdgeEmptyState
 						v-else
 						title="Nothing needs attention"
@@ -253,6 +265,7 @@
 
 			<SimpleSalesInvoiceDialog
 				:open="simpleSalesInvoiceOpen"
+				:document="simpleSalesInvoiceDocument"
 				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleSalesInvoice"
 				@saved="handleSimpleSalesInvoiceSaved"
@@ -265,12 +278,15 @@
 				@close="closeSalesInvoiceCompletion"
 				@changed="handleSalesInvoiceCompletionChanged"
 				@completed="handleSalesInvoiceCompletionCompleted"
+				@edit="handleSalesInvoiceEdit"
+				@receive-payment="handleSalesInvoiceReceivePayment"
 			/>
 
 			<SimplePaymentDialog
 				:open="simplePaymentOpen"
 				:native-fallback-enabled="nativeFallbackEnabled"
 				:intent="simplePaymentIntent"
+				:initial-context="simplePaymentInitialContext"
 				@close="closeSimplePayment"
 				@saved="handleSimplePaymentSaved"
 				@open-native="openNativePayment"
@@ -314,6 +330,7 @@
 				@close="closePurchaseInvoiceCompletion"
 				@changed="handlePurchaseInvoiceCompletionChanged"
 				@completed="handlePurchaseInvoiceCompletionCompleted"
+				@pay-supplier="handlePurchaseInvoicePaySupplier"
 			/>
 
 			<SimpleCashierExpenseDialog
@@ -440,11 +457,18 @@ function fetchSharedContext({ force = false } = {}) {
 	return request;
 }
 
-function fetchHomeSnapshot(company, branch, datePreset) {
+function fetchHomeSnapshot(company, branch, datePreset, resolvedRange = {}) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method: HOME_SNAPSHOT_METHOD,
-			args: { company: company || "", branch: branch || "", date_preset: datePreset || "Today" },
+			args: {
+				company: company || "",
+				branch: branch || "",
+				date_preset: datePreset || "Today",
+				from_date: resolvedRange?.from_date || "",
+				to_date: resolvedRange?.to_date || "",
+				date_label: resolvedRange?.label || resolvedRange?.display_value || "",
+			},
 			callback: (response) => resolve(response.message || {}),
 			error: (error) => reject(error),
 		});
@@ -499,6 +523,7 @@ export default {
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeIcon: runtimeComponents.EdgeIcon,
 		EdgeDropdown: runtimeComponents.EdgeDropdown,
+		EdgeSmartDateRange: runtimeComponents.EdgeSmartDateRange,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
@@ -519,15 +544,18 @@ export default {
 			error: "",
 			homeLoading: false,
 			homeError: "",
-			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
+			homeSnapshot: { as_of_date: "", period: {}, scope: { restricted: false, allowed_branches: [] }, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
+			homeSmartDate: {},
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
+			simpleSalesInvoiceDocument: null,
 			salesInvoiceCompletionOpen: false,
 			salesInvoiceCompletionDocument: null,
 			simplePaymentOpen: false,
 			simplePaymentIntent: "",
+			simplePaymentInitialContext: {},
 			simpleCashDepositOpen: false,
 			internalTransferCompletionOpen: false,
 			internalTransferCompletionDocument: null,
@@ -544,7 +572,7 @@ export default {
 			stockCompletionDocument: null,
 			navigationGroups: [],
 			quickActions: [],
-			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "" },
+			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "", branch_scope_restricted: false, branch_scope_ready: true, branch_scope_source: "" },
 			featureFlags: {},
 			accessContext: { mode: "native_desk", restricted_to_edgesuite: false, can_use_native_desk: true },
 		};
@@ -567,7 +595,20 @@ export default {
 				this.featureFlags.native_document_fallback_enabled !== false
 			);
 		},
+		operatingScopeBlocked() {
+			return Boolean(this.context.branch_scope_restricted && this.context.branch_scope_ready === false);
+		},
+		homeScopeNeedsBranch() {
+			const scope = this.homeSnapshot.scope || {};
+			return Boolean(
+				scope.restricted &&
+				!this.context.branch &&
+				Array.isArray(scope.allowed_branches) &&
+				scope.allowed_branches.length > 1
+			);
+		},
 		homeQuickActions() {
+			if (this.operatingScopeBlocked) return [];
 			const byKey = new Map((this.quickActions || []).map((action) => [action.key, action]));
 			const pageTargets = new Set(
 				(this.navigationGroups || [])
@@ -659,20 +700,28 @@ export default {
 					this.loading = false;
 				});
 		},
-		refreshHomeSnapshot() {
+		refreshHomeSnapshot(resolvedRange = null) {
 			if (!this.context.company) {
-				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
+				this.homeSnapshot = { as_of_date: "", period: {}, scope: { restricted: false, allowed_branches: [] }, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
 			this.homeError = "";
-			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset)
+			const range = resolvedRange || this.homeSmartDate || {};
+			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset, range)
 				.then((snapshot) => {
 					this.homePeriod = { ...this.homePeriod, ...(snapshot.period || {}) };
 					this.homePeriodPreset = this.homePeriod.preset || this.homePeriodPreset;
+					this.homeSmartDate = {
+						...this.homeSmartDate,
+						from_date: this.homePeriod.from_date || "",
+						to_date: this.homePeriod.to_date || "",
+						label: this.homePeriod.label || "",
+					};
 					this.homeSnapshot = {
 						as_of_date: snapshot.as_of_date || "",
 						period: snapshot.period || {},
+						scope: snapshot.scope || { restricted: false, allowed_branches: [] },
 						cards: snapshot.cards || [],
 						sections: snapshot.sections || {},
 						indices: snapshot.indices || [],
@@ -681,30 +730,84 @@ export default {
 					};
 				})
 				.catch((error) => {
-					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, indices: [], settings: {}, attention: [] };
+					this.homeSnapshot = { as_of_date: "", period: {}, scope: { restricted: false, allowed_branches: [] }, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 					this.homeError = error?.message || "Unable to load the current business snapshot.";
 				})
 				.finally(() => {
 					this.homeLoading = false;
 				});
 		},
+		handleHomeDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.homeSmartDate = { ...(value || {}) };
+			this.homePeriodPreset = "Custom Period";
+			return this.refreshHomeSnapshot(value);
+		},
 		handleHomePeriodChange(value) {
+			// Compatibility hook for older cached bundles.
 			this.homePeriodPreset = value || "Today";
+			this.homeSmartDate = {};
 			return this.refreshHomeSnapshot();
 		},
 		homeSection(key) {
 			return this.homeSnapshot.sections?.[key] || { available: false, label: key, summary: [], route: "", reason: "" };
 		},
-		formatHomeValue(card) {
+		formatDisplayDate(value) {
+			if (!value) return "";
+			return frappe.datetime?.str_to_user?.(value) || String(value);
+		},
+		compactNumber(value, { maximumFractionDigits = 2 } = {}) {
+			const number = Number(value || 0);
+			if (!Number.isFinite(number)) return String(value ?? "");
+			const absolute = Math.abs(number);
+			if (absolute < 100000) return number.toLocaleString(undefined, { maximumFractionDigits });
+			try {
+				return new Intl.NumberFormat(undefined, {
+					notation: "compact",
+					compactDisplay: "short",
+					maximumFractionDigits,
+				}).format(number);
+			} catch (_error) {
+				const units = [
+					{ value: 1e12, suffix: "T" },
+					{ value: 1e9, suffix: "B" },
+					{ value: 1e6, suffix: "M" },
+					{ value: 1e3, suffix: "K" },
+				];
+				const unit = units.find((row) => absolute >= row.value);
+				if (!unit) return number.toLocaleString(undefined, { maximumFractionDigits });
+				return `${(number / unit.value).toFixed(maximumFractionDigits).replace(/\.0+$|(?<=\.[0-9])0+$/g, "")}${unit.suffix}`;
+			}
+		},
+		currencyMark() {
+			const formatter = window.retailedge?.formatPlainValue;
+			if (!formatter) return "";
+			try {
+				return String(formatter(0, { fieldtype: "Currency" }) || "")
+					.replace(/[0-9.,\s()+-]/g, "")
+					.trim();
+			} catch (_error) {
+				return "";
+			}
+		},
+		formatHomeValue(card, { compact = true } = {}) {
 			const value = card?.value ?? 0;
 			const datatype = card?.datatype || card?.type || "Data";
 			if (datatype === "Currency") {
+				const number = Number(value || 0);
 				const formatter = window.retailedge?.formatPlainValue;
-				if (formatter) return formatter(value, { fieldtype: "Currency" });
-				return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+				if (!compact || Math.abs(number) < 100000) {
+					if (formatter) return formatter(value, { fieldtype: "Currency" });
+					return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+				}
+				const mark = this.currencyMark();
+				const amount = this.compactNumber(number, { maximumFractionDigits: 2 });
+				return mark ? `${mark} ${amount}` : amount;
 			}
 			if (datatype === "Percent") return `${Number(value || 0).toLocaleString()}%`;
-			if (datatype === "Int" || datatype === "Float") return Number(value || 0).toLocaleString();
+			if (datatype === "Int" || datatype === "Float") {
+				return compact ? this.compactNumber(value) : Number(value || 0).toLocaleString();
+			}
 			return window.retailedge?.toPlainText?.(value) ?? String(value ?? "");
 		},
 		displayIcon(icon) {
@@ -783,13 +886,17 @@ export default {
 				return;
 			}
 			if (shortcut.kind === "page" && shortcut.target) {
-				frappe.set_route(shortcut.target);
+				const currentOnly = shortcut.target === "professional-purchasing";
+				const filters = this.homeRouteFilters({ time_basis: currentOnly ? "current" : "period" });
+				if (shortcut.target === "professional-purchasing") filters.retailedge_attention = "ready_to_receive";
+				this.openHomeRoute(shortcut.target, filters);
 			}
 		},
 		runQuickAction(action) {
 			if (!action || !action.doctype) return;
 			this.closeCreatePicker();
 			if (action.key === "new-sales-invoice") {
+				this.simpleSalesInvoiceDocument = null;
 				this.simpleSalesInvoiceOpen = true;
 				return;
 			}
@@ -812,7 +919,8 @@ export default {
 			}
 			if (action.key === GUIDED_EXPENSE_ACTION) {
 				if (action.doctype === "RetailEdge Business Expense" || action.target === "business-expenses") {
-					frappe.route_options = { action: "new" };
+					setBusinessHubRouteHandoff("business-expenses", this.homeRouteFilters({ time_basis: "current" }));
+					frappe.route_options = { ...(frappe.route_options || {}), action: "new" };
 					frappe.set_route("business-expenses");
 					return;
 				}
@@ -883,6 +991,7 @@ export default {
 		},
 		closeSimpleSalesInvoice() {
 			this.simpleSalesInvoiceOpen = false;
+			this.simpleSalesInvoiceDocument = null;
 		},
 		handleSimpleSalesInvoiceSaved(result) {
 			this.simpleSalesInvoiceOpen = false;
@@ -902,27 +1011,52 @@ export default {
 		handleSalesInvoiceCompletionChanged() {
 			this.refreshContext({ force: true });
 		},
-		handleSalesInvoiceCompletionCompleted() {
-			this.closeSalesInvoiceCompletion();
+		handleSalesInvoiceCompletionCompleted(result = {}) {
 			this.refreshContext({ force: true });
+			if (!result?.keep_open) this.closeSalesInvoiceCompletion();
 		},
-		openNativeSalesInvoice(doctype = "Sales Invoice") {
+		handleSalesInvoiceEdit(document) {
+			if (!document?.name) return;
+			this.closeSalesInvoiceCompletion();
+			this.simpleSalesInvoiceDocument = {
+				doctype: "Sales Invoice",
+				name: document.name,
+				modified: document.modified || "",
+			};
+			this.simpleSalesInvoiceOpen = true;
+		},
+		handleSalesInvoiceReceivePayment(context = {}) {
+			this.closeSalesInvoiceCompletion();
+			this.simplePaymentIntent = "receive-customer-payment";
+			this.simplePaymentInitialContext = { ...(context || {}) };
+			this.simplePaymentOpen = true;
+		},
+		openNativeSalesInvoice(document = "Sales Invoice") {
 			if (!this.nativeFallbackEnabled) return;
 			this.simpleSalesInvoiceOpen = false;
-			frappe.new_doc(doctype);
+			const payload = typeof document === "object" ? document : { doctype: document };
+			if (payload.name) {
+				frappe.set_route("Form", payload.doctype || "Sales Invoice", payload.name);
+				return;
+			}
+			frappe.new_doc(payload.doctype || "Sales Invoice");
 		},
 		closeSimplePayment() {
 			this.simplePaymentOpen = false;
+			this.simplePaymentIntent = "";
+			this.simplePaymentInitialContext = {};
 		},
 		handleSimplePaymentSaved(result) {
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
+			this.simplePaymentInitialContext = {};
 			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
 		},
 		openNativePayment(doctype = "Payment Entry") {
 			if (!this.nativeFallbackEnabled) return;
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
+			this.simplePaymentInitialContext = {};
 			frappe.new_doc(doctype);
 		},
 		closeSimpleCashDeposit() {
@@ -990,9 +1124,15 @@ export default {
 		handlePurchaseInvoiceCompletionChanged() {
 			this.refreshContext({ force: true });
 		},
-		handlePurchaseInvoiceCompletionCompleted() {
-			this.closePurchaseInvoiceCompletion();
+		handlePurchaseInvoiceCompletionCompleted(result = {}) {
 			this.refreshContext({ force: true });
+			if (!result?.keep_open) this.closePurchaseInvoiceCompletion();
+		},
+		handlePurchaseInvoicePaySupplier(context = {}) {
+			this.closePurchaseInvoiceCompletion();
+			this.simplePaymentIntent = "pay-supplier";
+			this.simplePaymentInitialContext = { ...(context || {}) };
+			this.simplePaymentOpen = true;
 		},
 		openNativePurchaseInvoice(doctype = "Purchase Invoice") {
 			if (!this.nativeFallbackEnabled) return;
@@ -1177,7 +1317,14 @@ export default {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
+	min-width: 0;
 	width: 100%;
+}
+.home-kpi-card-heading > span:first-child {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: .74rem;
+	font-weight: 620;
 }
 .home-kpi-card-icon,
 .home-signal-icon {
@@ -1198,6 +1345,21 @@ export default {
 .hub-state {
 	padding: 24px;
 }
+.hub-scope-warning {
+	display: grid;
+	gap: 0.2rem;
+	padding: 0.85rem 1rem;
+	border: 1px solid var(--orange-200, rgba(245, 158, 11, 0.32));
+	border-radius: 0.75rem;
+	background: var(--orange-50, rgba(245, 158, 11, 0.08));
+}
+.hub-scope-warning span {
+	color: var(--edge-text-muted, #667085);
+}
+.hub-scope-warning--choice {
+	border-color: var(--blue-200, rgba(37, 99, 235, 0.25));
+	background: var(--blue-50, rgba(37, 99, 235, 0.06));
+}
 .hub-banner {
 	display: flex;
 	justify-content: space-between;
@@ -1216,8 +1378,7 @@ export default {
 	color: var(--edge-text-muted, #667085);
 	max-width: 760px;
 }
-.hub-eyebrow,
-.section-kicker {
+.hub-eyebrow {
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	font-size: 0.72rem;
@@ -1260,7 +1421,7 @@ export default {
 }
 .home-kpi-grid {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
 	gap: 12px;
 	margin-bottom: 14px;
 }
@@ -1272,8 +1433,9 @@ export default {
 }
 .home-kpi-card {
 	display: grid;
-	gap: 6px;
-	padding: 16px;
+	gap: 5px;
+	min-width: 0;
+	padding: 13px 14px;
 	text-align: left;
 	cursor: pointer;
 }
@@ -1288,7 +1450,17 @@ export default {
 	color: var(--edge-text-muted, #667085);
 }
 .home-kpi-card strong {
-	font-size: 1.2rem;
+	display: block;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: clamp(1rem, 1.25vw, 1.32rem);
+	font-variant-numeric: tabular-nums;
+	font-weight: 680;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+	white-space: nowrap;
 }
 .home-kpi-card small {
 	font-size: 0.72rem;
@@ -1315,6 +1487,47 @@ export default {
 	border-radius: 12px;
 	background: var(--edge-surface, #ffffff);
 }
+.home-index-headline > span,
+.home-index-signal > span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: .82rem;
+}
+.home-index-headline > strong,
+.home-index-signal > strong {
+	flex: 0 0 auto;
+	max-width: 48%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	font-size: .9rem;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+.home-intelligence-card p,
+.home-index-action,
+.home-attention-copy,
+.home-attention-value {
+	font-size: .82rem;
+}
+.home-intelligence-heading h4 {
+	min-width: 0;
+	font-size: .98rem;
+	font-weight: 650;
+	overflow-wrap: anywhere;
+}
+.home-attention-copy,
+.home-attention-value {
+	min-width: 0;
+}
+.home-attention-value strong {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 .home-intelligence-card.tone-danger {
 	border-color: color-mix(in srgb, var(--edge-danger, #d92d20) 55%, var(--edge-border, #dfe3e8));
 }
@@ -1328,6 +1541,7 @@ export default {
 .home-index-headline,
 .home-index-signal {
 	display: flex;
+	min-width: 0;
 	align-items: center;
 	justify-content: space-between;
 	gap: 10px;
@@ -1618,8 +1832,9 @@ export default {
 	gap: 10px;
 	flex-wrap: wrap;
 }
-.home-period-controls .edge-field {
-	min-width: 170px;
+.home-period-controls .edge-field,
+.home-period-controls .edge-smart-date-range {
+	min-width: min(24rem, 100%);
 	margin: 0;
 }
 .home-attention-count {

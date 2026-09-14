@@ -78,4 +78,7 @@
 	}
 
 	frappe.pages[PAGE_NAME].on_page_load = boot;
+	frappe.pages[PAGE_NAME].on_page_show = function onPageShow() {
+		window.dispatchEvent(new CustomEvent("retailedge-bank-matching-page-show"));
+	};
 })();

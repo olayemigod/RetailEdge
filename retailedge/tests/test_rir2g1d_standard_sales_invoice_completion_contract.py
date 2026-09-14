@@ -169,7 +169,8 @@ def test_backend_never_writes_gl_stock_or_outstanding_truth_directly():
 		'frappe.new_doc("GL Entry")',
 		'frappe.new_doc("Stock Ledger Entry")',
 		"frappe.db.set_value",
-		"outstanding_amount =",
+		'doc.outstanding_amount =',
+		'doc.set("outstanding_amount"',
 		"update_stock_ledger",
 	):
 		assert forbidden not in source
@@ -223,3 +224,57 @@ def test_contract_preserves_payment_and_return_boundaries():
 	assert "Return / Credit Note completion" in source
 	assert "Payment Entry creation/collection" in source
 	assert "Payment Reconciliation" in source
+
+
+def test_submitted_invoice_exposes_optional_payment_print_and_edit_lifecycle():
+	source = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for marker in (
+		'"can_edit": can_write',
+		'"can_print": can_print',
+		'"can_pdf": can_print',
+		'"outstanding_amount": outstanding_amount',
+		'"can_receive_payment": can_receive_payment',
+		'"can_leave_unpaid": bool(is_submitted and outstanding_amount > 0)',
+		'"payment_context": {',
+		'frappe.has_permission("Payment Entry", "create")',
+		'"lifecycle_stage": "submitted"',
+	):
+		assert marker in source
+	for marker in (
+		"Edit Invoice",
+		"Print",
+		"PDF",
+		"Receive Payment",
+		"Finish for now",
+		'this.$emit("edit"',
+		'this.$emit("receive-payment"',
+		"/printview?",
+		"frappe.utils.print_format.download_pdf",
+		"keep_open: true",
+	):
+		assert marker in dialog
+
+
+def test_sales_invoice_lifecycle_never_forces_payment_or_mutates_submitted_invoice():
+	source = _read(SERVICE)
+	dialog = _read(DIALOG)
+	assert 'frappe.has_permission("Payment Entry", "create")' in source
+	assert "frappe.new_doc" not in source
+	assert 'doc.outstanding_amount =' not in source
+	assert 'doc.set("outstanding_amount"' not in source
+	assert "Payment Entry" not in dialog.split("receivePayment()", 1)[1].split("printInvoice()", 1)[0]
+	assert "This invoice may remain unpaid." in dialog
+
+
+def test_business_hub_and_professional_selling_share_edit_and_payment_lifecycle():
+	hub = _read(HUB)
+	selling = _read(SELLING)
+	for source in (hub, selling):
+		assert "@edit=" in source
+		assert "@receive-payment=" in source
+		assert "SimplePaymentDialog" in source
+		assert "receive-customer-payment" in source
+		assert "keep_open" in source
+	assert "SimpleSalesInvoiceDialog" in selling
+	assert "simpleSalesInvoiceDocument" in hub

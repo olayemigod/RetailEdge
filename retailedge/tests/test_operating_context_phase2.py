@@ -45,6 +45,19 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_single_allowed_company_is_deterministic_fallback_for_unrestricted_user(self):
+		source = self.read("operating_context.py")
+		fallback_start = source.index("def _resolve_fallback_context(")
+		fallback_end = source.index("\n\ndef _resolve_assignment_fallback", fallback_start)
+		fallback_source = source[fallback_start:fallback_end]
+		for contract in (
+			"allowed_companies = _allowed_companies(user=user)",
+			"if len(allowed_companies) == 1:",
+			"fallback_company = _clean(allowed_companies[0])",
+			"has_assignments and not user_has_global_branch_access(user=user)",
+		):
+			self.assertIn(contract, fallback_source)
+
 	def test_primary_branch_assignment_can_anchor_global_initial_context_without_restricting_scope(self):
 		source = self.read("operating_context.py")
 		fallback_start = source.index("def _resolve_fallback_context(")
@@ -203,6 +216,31 @@ class TestOperatingContextPhase2(unittest.TestCase):
 			'feature_flags["operating_branch_context"] = "phase2_active"',
 		):
 			self.assertIn(contract, source)
+
+
+	def test_restricted_assignment_history_without_company_is_fail_closed(self):
+		source = self.read("operating_context.py")
+		scope_start = source.index("def get_operational_branch_scope(")
+		scope_end = source.index("\n\ndef resolve_operational_branch", scope_start)
+		scope_source = source[scope_start:scope_end]
+		for contract in (
+			"branch_assignment_zero_context",
+			"not has_global_access and has_branch_assignments(user=user)",
+			'"restricted": True',
+			'"allowed_branches": []',
+		):
+			self.assertIn(contract, scope_source)
+		self.assertLess(
+			scope_source.index("branch_assignment_zero_context"),
+			scope_source.index('"source": "no_company"'),
+		)
+
+	def test_shell_switcher_is_available_when_multiple_branches_require_explicit_choice(self):
+		source = self.read("public/js/retailedge_shell_context.js")
+		self.assertIn('const needsExplicitBranch = !activeBranch && branches.length > 1 && Boolean(current.can_switch_branch);', source)
+		self.assertIn('if (!branches.length || (!activeBranch && !needsExplicitBranch)) return;', source)
+		self.assertIn('placeholder: activeBranch ? "Select branch" : "Choose working branch"', source)
+		self.assertNotIn('if (!branches.length || !activeBranch) return;', source)
 
 	def test_operating_context_page_is_edgesuite_and_preserves_switch_contract(self):
 		loader = self.read("retailedge/page/operating_context/operating_context.js")

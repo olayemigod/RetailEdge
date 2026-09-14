@@ -7,7 +7,7 @@
 		v-else
 		product="RetailEdge"
 		title="Operating Context"
-		:tenantName="current.company || tenantName"
+		:tenantName="tenantName || current.company"
 		:branchName="current.branch || selectedBranch"
 		:userName="userName"
 		:menuItems="menuItems"
@@ -163,7 +163,7 @@ export default {
 					: await callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
-				this.tenantName = navigation.context?.company || "";
+				this.tenantName = navigation.context?.company_label || navigation.context?.company || "";
 				this.userName = navigation.context?.user_name || "";
 			} catch (error) {
 				this.menuItems = [];
@@ -273,8 +273,10 @@ export default {
 					{ freeze: true, freezeMessage: __("Updating operating branch...") },
 				);
 				this.invalidateContextCache();
-				frappe.show_alert({ message: __("Operating branch updated."), indicator: "green" });
-				await Promise.all([this.loadContext(), this.loadNavigation()]);
+				const identity = await callMethod("retailedge.company_profile.get_shell_identity");
+				window.retailedgeSyncShellIdentity?.(identity);
+				frappe.show_alert({ message: __("Operating context updated."), indicator: "green" });
+				window.location.reload();
 			} finally {
 				this.busy = false;
 			}
@@ -289,8 +291,10 @@ export default {
 					{ freeze: true, freezeMessage: __("Restoring default operating branch...") },
 				);
 				this.invalidateContextCache();
-				frappe.show_alert({ message: __("Default operating branch restored."), indicator: "green" });
-				await Promise.all([this.loadContext(), this.loadNavigation()]);
+				const identity = await callMethod("retailedge.company_profile.get_shell_identity");
+				window.retailedgeSyncShellIdentity?.(identity);
+				frappe.show_alert({ message: __("Default operating context restored."), indicator: "green" });
+				window.location.reload();
 			} finally {
 				this.busy = false;
 			}
@@ -300,21 +304,35 @@ export default {
 </script>
 
 <style scoped>
-.operating-context-layout { display: grid; gap: 1rem; }
-.edge-panel { padding: 1.25rem; border: 1px solid var(--edge-border-color, var(--border-color)); border-radius: 0.75rem; background: var(--edge-surface, var(--card-bg)); }
+.operating-context-layout { display: grid; gap: 1rem; color: var(--edge-color-ink-950, var(--edge-text)); }
+.edge-panel { padding: 1.1rem; border: 1px solid var(--edge-color-border, var(--edge-border)); border-radius: 0.75rem; background: var(--edge-color-surface, var(--edge-surface)); color: var(--edge-color-ink-950, var(--edge-text)); }
 .operating-context-current { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
-.operating-context-current h3 { margin: 0.2rem 0 0.35rem; }
-.operating-context-current p { margin: 0; color: var(--text-muted); max-width: 52rem; }
-.operating-context-kicker { color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.operating-context-current h3 { margin: 0.2rem 0 0.35rem; font-size: 1.25rem; font-weight: 650; color: var(--edge-color-ink-950, var(--edge-text)); }
+.operating-context-current p { margin: 0; color: var(--edge-color-ink-500, var(--edge-text-muted)); max-width: 52rem; }
+.operating-context-kicker { color: var(--edge-color-ink-500, var(--edge-text-muted)); font-size: 0.76rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .operating-context-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-.operating-context-pos { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding: 0.85rem 1rem; border-radius: 0.6rem; border: 1px solid var(--edge-border-color, var(--border-color)); }
+.operating-context-pos { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding: 0.85rem 1rem; border-radius: 0.6rem; border: 1px solid var(--edge-color-border, var(--edge-border)); background: var(--edge-color-surface-muted, var(--edge-surface-muted)); color: var(--edge-color-ink-950, var(--edge-text)); }
 .operating-context-pos > div { display: grid; gap: 0.2rem; }
-.operating-context-pos small { color: var(--text-muted); }
+.operating-context-pos small { color: var(--edge-color-ink-500, var(--edge-text-muted)); }
 .operating-context-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
 .operating-context-blockers { display: grid; gap: 0.65rem; margin-top: 1rem; }
-.operating-context-warning { display: grid; gap: 0.2rem; padding: 0.85rem 1rem; border-radius: 0.6rem; background: var(--orange-50, rgba(245, 158, 11, 0.1)); }
-.operating-context-guidance h4 { margin-top: 0; }
-.operating-context-guidance ul { margin-bottom: 0; padding-left: 1.15rem; }
+.operating-context-warning {
+	display: grid;
+	gap: 0.2rem;
+	padding: 0.85rem 1rem;
+	border: 1px solid color-mix(in srgb, var(--edge-color-warning) 38%, var(--edge-color-border));
+	border-radius: 0.6rem;
+	background: color-mix(in srgb, var(--edge-color-warning) 12%, var(--edge-color-surface));
+	color: var(--edge-color-ink-950);
+}
+.operating-context-warning strong { color: var(--edge-color-ink-950); font-weight: 650; }
+.operating-context-warning span { color: var(--edge-color-ink-700); }
+.operating-context-guidance h4 { margin-top: 0; color: var(--edge-color-ink-950, var(--edge-text)); }
+.operating-context-guidance ul { margin-bottom: 0; padding-left: 1.15rem; color: var(--edge-color-ink-700, var(--edge-text)); }
 .operating-context-guidance li + li { margin-top: 0.4rem; }
+:global(:root[data-edge-appearance="dark"]) .operating-context-warning {
+	background: color-mix(in srgb, var(--edge-color-warning) 16%, var(--edge-color-surface));
+	border-color: color-mix(in srgb, var(--edge-color-warning) 42%, var(--edge-color-border));
+}
 @media (max-width: 720px) { .operating-context-fields { grid-template-columns: 1fr; } .operating-context-current { flex-direction: column; } }
 </style>

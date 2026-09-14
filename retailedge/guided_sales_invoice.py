@@ -5,7 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.desk.search import search_link
-from frappe.utils import cint, flt, getdate, nowdate
+from frappe.utils import cint, flt, get_datetime, getdate, nowdate
 
 from retailedge.branch_context import has_doctype, resolve_retailedge_operational_defaults
 from retailedge.guided_entry_context import (
@@ -307,6 +307,168 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 		"company": doc.company,
 		"branch": getattr(doc, "retailedge_branch", None) or branch,
 		"selling_price_list": getattr(doc, "selling_price_list", None) or pricing_context.get("price_list"),
+		"grand_total": doc.grand_total,
+		"currency": doc.currency,
+		"route": f"/app/sales-invoice/{doc.name}",
+	}
+
+
+@frappe.whitelist()
+def get_simple_sales_invoice_draft(name: str) -> dict[str, Any]:
+	"""Load one writable draft into the EdgeSuite quick-entry editor."""
+	name = str(name or "").strip()
+	if not name or not frappe.db.exists(SALES_INVOICE_DOCTYPE, name):
+		frappe.throw(_("Sales Invoice {0} does not exist.").format(name or "(blank)"))
+	doc = frappe.get_doc(SALES_INVOICE_DOCTYPE, name)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only draft Sales Invoices can be edited in quick entry."))
+	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
+		frappe.throw(
+			_("You do not have permission to edit Sales Invoice {0}.").format(name),
+			frappe.PermissionError,
+		)
+
+	branch = str(doc.get("branch") or doc.get("retailedge_branch") or "").strip()
+	warehouse = str(doc.get("set_warehouse") or "").strip()
+	if not warehouse:
+		warehouses = {
+			str(row.get("warehouse") or "").strip()
+			for row in list(doc.get("items") or [])
+			if str(row.get("warehouse") or "").strip()
+		}
+		if len(warehouses) == 1:
+			warehouse = next(iter(warehouses))
+
+	_validate_transaction_context(
+		{
+			"company": doc.company,
+			"branch": branch,
+			"warehouse": warehouse,
+		},
+		user=frappe.session.user,
+	)
+
+	return {
+		"name": doc.name,
+		"modified": str(doc.modified),
+		"values": {
+			"company": doc.company,
+			"branch": branch,
+			"posting_date": str(doc.posting_date or nowdate()),
+			"warehouse": warehouse,
+			"customer": doc.customer,
+			"update_stock": cint(doc.update_stock),
+			"remarks": str(doc.remarks or ""),
+			"items": [
+				{
+					"item_code": row.item_code,
+					"qty": flt(row.qty),
+					"rate": flt(row.rate),
+				}
+				for row in list(doc.items or [])
+			] or [{"item_code": "", "qty": 1, "rate": ""}],
+		},
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def update_simple_sales_invoice_draft(
+	name: str,
+	values: dict | str | None = None,
+	expected_modified: str = "",
+) -> dict[str, Any]:
+	"""Update a writable draft only; submitted Sales Invoices are never mutated."""
+	name = str(name or "").strip()
+	if not name or not frappe.db.exists(SALES_INVOICE_DOCTYPE, name):
+		frappe.throw(_("Sales Invoice {0} does not exist.").format(name or "(blank)"))
+	doc = frappe.get_doc(SALES_INVOICE_DOCTYPE, name)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Submitted Sales Invoices cannot be edited. Create the appropriate correction document instead."))
+	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
+		frappe.throw(
+			_("You do not have permission to edit Sales Invoice {0}.").format(name),
+			frappe.PermissionError,
+		)
+
+	expected_modified = str(expected_modified or "").strip()
+	if not expected_modified or get_datetime(expected_modified) != get_datetime(doc.modified):
+		frappe.throw(
+			_("Sales Invoice {0} changed after it was opened. Reload before saving.").format(name),
+			frappe.TimestampMismatchError,
+		)
+
+	values = _coerce_values(values)
+	user = frappe.session.user
+	company, branch, warehouse = _validate_transaction_context(values, user=user)
+	if company != str(doc.company or "").strip():
+		frappe.throw(_("Company cannot be changed while editing this Sales Invoice in quick entry."))
+
+	customer = str(values.get("customer") or "").strip()
+	if not customer:
+		frappe.throw(_("Customer is required."))
+	_assert_read_permission("Customer", customer)
+	items = _normalise_items(values.get("items"))
+
+	configured_branches = get_guided_branch_names(company, user=user)
+	settings = get_retailedge_settings()
+	can_edit_update_stock = bool(getattr(settings, "allow_guided_sales_update_stock_edit", 0))
+	update_stock = cint(values.get("update_stock") or 0) if can_edit_update_stock else 1
+	if update_stock and configured_branches and not branch:
+		frappe.throw(_("Choose a Branch before saving a stock-updating Sales Invoice."))
+	if update_stock and not warehouse:
+		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
+
+	pricing_context = resolve_price_list_context(
+		mode="selling", company=company, branch=branch, party=customer, user=user
+	)
+	doc.customer = customer
+	doc.posting_date = getdate(values.get("posting_date") or nowdate())
+	doc.update_stock = update_stock
+	doc.remarks = str(values.get("remarks") or "").strip()
+	doc.branch = branch or None
+	doc.set_warehouse = warehouse or None
+	if pricing_context.get("price_list"):
+		doc.selling_price_list = pricing_context["price_list"]
+
+	doc.set("items", [])
+	for item in items:
+		_assert_read_permission("Item", item["item_code"])
+		resolved = resolve_sales_item_pricing(
+			item_code=item["item_code"],
+			company=company,
+			customer=customer,
+			branch=branch,
+			warehouse=warehouse,
+			posting_date=str(doc.posting_date),
+			qty=item["qty"],
+			user=user,
+		)
+		resolved_rate = resolved.get("rate")
+		manual_rate = item.get("rate")
+		if resolved_rate is None and manual_rate is None:
+			frappe.throw(
+				_("No selling price could be resolved for Item {0}.").format(item["item_code"])
+			)
+		if resolved.get("source") == "pos_profile" and not resolved.get("allow_rate_change", True):
+			effective_rate = resolved_rate
+		else:
+			effective_rate = manual_rate if manual_rate is not None else resolved_rate
+		if effective_rate is None:
+			frappe.throw(_("Selling Rate is required for Item {0}.").format(item["item_code"]))
+		row = {"item_code": item["item_code"], "qty": item["qty"], "rate": effective_rate}
+		if warehouse:
+			row["warehouse"] = warehouse
+		doc.append("items", row)
+
+	doc.save()
+	return {
+		"doctype": doc.doctype,
+		"name": doc.name,
+		"modified": str(doc.modified),
+		"docstatus": doc.docstatus,
+		"customer": doc.customer,
+		"company": doc.company,
+		"branch": str(doc.get("branch") or doc.get("retailedge_branch") or branch or ""),
 		"grand_total": doc.grand_total,
 		"currency": doc.currency,
 		"route": f"/app/sales-invoice/{doc.name}",

@@ -19,7 +19,14 @@ MAX_HOME_ATTENTION_ITEMS = 12
 
 
 @frappe.whitelist()
-def get_business_hub_home_snapshot(company: str = "", branch: str = "", date_preset: str = "Today") -> dict[str, Any]:
+def get_business_hub_home_snapshot(
+	company: str = "",
+	branch: str = "",
+	date_preset: str = "Today",
+	from_date: str = "",
+	to_date: str = "",
+	date_label: str = "",
+) -> dict[str, Any]:
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
 	branch = str(
 		branch
@@ -30,7 +37,12 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "", date_pre
 	if not company:
 		frappe.throw(_("Company is required."))
 
-	period = _resolve_period(date_preset)
+	period = _resolve_period(
+		date_preset,
+		from_date=from_date,
+		to_date=to_date,
+		date_label=date_label,
+	)
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	allowed = [str(value or "").strip() for value in scope.get("allowed_branches") or [] if str(value or "").strip()]
 	if branch:
@@ -115,29 +127,52 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "", date_pre
 
 
 
-def _resolve_period(date_preset: str) -> dict[str, str]:
+def _resolve_period(
+	date_preset: str,
+	*,
+	from_date: str = "",
+	to_date: str = "",
+	date_label: str = "",
+) -> dict[str, str]:
 	preset = str(date_preset or "Today").strip() or "Today"
+	custom_from = str(from_date or "").strip()
+	custom_to = str(to_date or "").strip()
+	if custom_from or custom_to:
+		if not custom_from or not custom_to:
+			frappe.throw(_("Both From Date and To Date are required for a custom Business Hub period."))
+		resolved_from = getdate(custom_from)
+		resolved_to = getdate(custom_to)
+		if resolved_from > resolved_to:
+			frappe.throw(_("From Date cannot be after To Date."))
+		label = str(date_label or "").strip() or _("Custom Period")
+		return {
+			"preset": "Custom Period",
+			"label": label,
+			"from_date": str(resolved_from),
+			"to_date": str(resolved_to),
+		}
+
 	today = getdate(nowdate())
 	if preset == "Today":
-		from_date = today
+		resolved_from = today
 	elif preset == "Yesterday":
-		from_date = getdate(add_days(today, -1))
-		today = from_date
+		resolved_from = getdate(add_days(today, -1))
+		today = resolved_from
 	elif preset == "This Week":
-		from_date = getdate(add_days(today, -today.weekday()))
+		resolved_from = getdate(add_days(today, -today.weekday()))
 	elif preset == "This Month":
-		from_date = getdate(get_first_day(today))
+		resolved_from = getdate(get_first_day(today))
 	elif preset == "Last 7 Days":
-		from_date = getdate(add_days(today, -6))
+		resolved_from = getdate(add_days(today, -6))
 	elif preset == "Last 30 Days":
-		from_date = getdate(add_days(today, -29))
+		resolved_from = getdate(add_days(today, -29))
 	else:
 		frappe.throw(_("Unsupported Business Hub period."))
 
 	return {
 		"preset": preset,
 		"label": preset,
-		"from_date": str(from_date),
+		"from_date": str(resolved_from),
 		"to_date": str(today),
 	}
 

@@ -63,7 +63,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const root = document.createElement("div");
 		root.className = "retailedge-business-expenses-root";
 		page.body.append(root);
-		await window.mountRetailEdgeBusinessExpenses(root);
+		wrapper._retailedgeBusinessExpensesApp = await window.mountRetailEdgeBusinessExpenses(root);
 	} catch (error) {
 		loading.remove();
 		const block = document.createElement("div");
@@ -75,4 +75,5 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
 	hideNativePageSidebar(wrapper);
+	window.dispatchEvent(new CustomEvent("retailedge-business-expenses-page-show"));
 };

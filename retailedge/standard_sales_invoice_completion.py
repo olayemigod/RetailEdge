@@ -317,22 +317,36 @@ def _item_summary(doc) -> list[dict[str, Any]]:
 
 def _build_preview(doc) -> dict[str, Any]:
 	company, invoice_branch = _validate_invoice_context(doc)
-	blockers = _standard_invoice_blockers(doc)
+	docstatus = cint(doc.docstatus)
+	is_draft = docstatus == 0
+	is_submitted = docstatus == 1
+
 	source_context = _validate_source_context(
 		doc,
 		company=company,
 		invoice_branch=invoice_branch,
 	)
-	blockers.extend(source_context["blockers"])
-	stock_context = _validate_stock_context(
-		doc,
-		company=company,
-		invoice_branch=invoice_branch,
-		source_type=source_context["source_type"],
-		source_branch=source_context["source_branch"],
-	)
-	blockers.extend(stock_context["blockers"])
-	blockers = list(dict.fromkeys(blockers))
+
+	if is_draft:
+		blockers = _standard_invoice_blockers(doc)
+		blockers.extend(source_context["blockers"])
+		stock_context = _validate_stock_context(
+			doc,
+			company=company,
+			invoice_branch=invoice_branch,
+			source_type=source_context["source_type"],
+			source_branch=source_context["source_branch"],
+		)
+		blockers.extend(stock_context["blockers"])
+		blockers = list(dict.fromkeys(blockers))
+	else:
+		# Submitted accounting truth is immutable. Completion becomes a lifecycle
+		# view only; advanced shapes do not prevent printing or collecting payment.
+		blockers = []
+		stock_context = {
+			"mode": "update_stock" if cint(doc.get("update_stock")) else "accounting_only",
+			"effective_branch": invoice_branch or source_context.get("source_branch") or "",
+		}
 
 	workflow_readiness = get_workflow_readiness(
 		doctype=SALES_INVOICE_DOCTYPE,
@@ -341,23 +355,40 @@ def _build_preview(doc) -> dict[str, Any]:
 	workflow_controlled = _clean(workflow_readiness.get("source")) == "frappe"
 
 	if (
-		not workflow_controlled
+		is_draft
+		and not workflow_controlled
 		and not blockers
 		and not frappe.has_permission(SALES_INVOICE_DOCTYPE, "submit", doc=doc)
 	):
 		blockers.append(_("You do not have permission to submit this Sales Invoice."))
 
+	can_write = bool(
+		is_draft
+		and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
+	)
+	can_print = bool(
+		frappe.has_permission(SALES_INVOICE_DOCTYPE, "read", doc=doc)
+		and frappe.has_permission(SALES_INVOICE_DOCTYPE, "print", doc=doc)
+	)
+	outstanding_amount = flt(doc.get("outstanding_amount")) if is_submitted else 0
+	can_receive_payment = bool(
+		is_submitted
+		and outstanding_amount > 0
+		and frappe.has_permission("Payment Entry", "create")
+	)
+
 	return {
 		"doctype": SALES_INVOICE_DOCTYPE,
 		"name": doc.name,
 		"modified": _clean(doc.get("modified")),
-		"docstatus": cint(doc.docstatus),
-		"status": _clean(doc.get("status")) or ("Draft" if cint(doc.docstatus) == 0 else ""),
+		"docstatus": docstatus,
+		"status": _clean(doc.get("status")) or ("Draft" if is_draft else ""),
 		"company": company,
 		"branch": stock_context["effective_branch"] or invoice_branch,
 		"customer": _clean(doc.get("customer")),
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
+		"outstanding_amount": outstanding_amount,
 		"update_stock": bool(cint(doc.get("update_stock"))),
 		"completion_mode": stock_context["mode"],
 		"source_type": source_context["source_type"],
@@ -365,22 +396,33 @@ def _build_preview(doc) -> dict[str, Any]:
 		"item_count": len(list(doc.get("items") or [])),
 		"items": _item_summary(doc),
 		"blockers": blockers,
+		"can_edit": can_write,
+		"can_print": can_print,
+		"can_pdf": can_print,
+		"can_receive_payment": can_receive_payment,
+		"can_leave_unpaid": bool(is_submitted and outstanding_amount > 0),
+		"payment_context": {
+			"company": company,
+			"branch": stock_context["effective_branch"] or invoice_branch,
+			"party": _clean(doc.get("customer")),
+			"reference_name": doc.name,
+		} if can_receive_payment else {},
 		"can_submit": bool(
-			not blockers
+			is_draft
+			and not blockers
 			and not workflow_controlled
-			and cint(doc.docstatus) == 0
 		),
 		"workflow_readiness": workflow_readiness,
 		"workflow_eligible": bool(
 			workflow_controlled
 			and not blockers
-			and cint(doc.docstatus) == 0
+			and is_draft
 		),
+		"lifecycle_stage": "submitted" if is_submitted else ("draft" if is_draft else "closed"),
 		"persistence": "none",
 		"source_of_truth": "ERPNext",
 		"route": f"/app/sales-invoice/{doc.name}",
 	}
-
 
 def _assert_expected_modified(doc, expected_modified: str | None) -> str:
 	expected_modified = _clean(expected_modified)

@@ -71,6 +71,30 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn("frappe.show_alert", component)
 		self.assertNotIn("window.EdgeUI", component)
 
+	def test_business_hub_receive_stock_handoff_focuses_ready_to_receive_queue(self):
+		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
+		hub = (APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue").read_text()
+
+		self.assertIn('filters.retailedge_attention = "ready_to_receive"', hub)
+		self.assertIn('retailedgeConsumeBusinessHubRouteOptions?.("professional-purchasing")', component)
+		self.assertIn("applyBusinessHubHandoff()", component)
+		self.assertIn("this._onPageShow = () => {", component)
+		self.assertIn('hubHandoff.retailedge_attention === "ready_to_receive"', component)
+		self.assertIn('this.attentionFilter = "ready_to_receive"', component)
+
+	def test_procurement_lifecycle_stays_inside_edgesuite_through_receipt_and_supplier_payment(self):
+		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
+		self.assertIn("Prepare Receipt", component)
+		self.assertIn("OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", component)
+		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", component)
+		self.assertIn("StandardPurchaseInvoiceCompletionDialog", component)
+		self.assertIn("SimplePaymentDialog", component)
+		self.assertIn('@pay-supplier="handlePurchaseInvoicePaySupplier"', component)
+		self.assertIn('intent="pay-supplier"', component)
+		self.assertIn("supplierPaymentInitialContext", component)
+		self.assertIn("keep_open", component)
+		self.assertNotIn('frappe.new_doc("Purchase Receipt")', component)
+
 	def test_backend_is_draft_first_and_does_not_write_ledgers_or_bypass_supplier_validation(self):
 		source = (APP_ROOT / "professional_purchasing.py").read_text()
 
