@@ -455,7 +455,11 @@
 					await global.frappe.call({
 						method: TEMPLATE_APPLY_METHOD,
 						type: "POST",
-						args: { data_import: importName, template_name: state.templateName },
+						args: {
+							data_import: importName,
+							template_name: state.templateName,
+							branch: state.branch || "",
+						},
 					});
 				}
 
