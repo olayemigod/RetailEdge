@@ -29,18 +29,25 @@ def test_business_hub_home_exposes_operational_command_centre_sections():
 		assert f'key="{index_key}"' in source or index_key in source
 	assert "homeSnapshot.attention" in source
 	assert "refreshHomeSnapshot" in source
-	assert "EdgeDropdown" in source
+	assert "EdgeSmartDateRange" in source
 	assert "homePeriodPreset" in source
 
 
-def test_business_hub_period_filter_is_bounded_and_server_resolved():
+def test_business_hub_period_filter_is_smart_date_and_server_resolved():
 	backend = BACKEND.read_text()
 	frontend = FRONTEND.read_text()
+	assert "EdgeSmartDateRange" in frontend
+	assert 'placeholder="e.g. last 30 days, YTD, this month"' in frontend
+	assert '@resolved="handleHomeDateResolved"' in frontend
+	assert "from_date: resolvedRange?.from_date" in frontend
+	assert "to_date: resolvedRange?.to_date" in frontend
 	for preset in ("Today", "Yesterday", "This Week", "This Month", "Last 7 Days", "Last 30 Days"):
-		assert preset in frontend
+		assert preset in backend
 	assert "date_preset" in frontend
 	assert "def _resolve_period(" in backend
-	assert "Unsupported Business Hub period." in backend
+	assert "Both From Date and To Date are required" in backend
+	assert "From Date cannot be after To Date." in backend
+	assert '"preset": "Custom Period"' in backend
 	assert '"from_date": period["from_date"]' in backend
 	assert '"to_date": period["to_date"]' in backend
 
