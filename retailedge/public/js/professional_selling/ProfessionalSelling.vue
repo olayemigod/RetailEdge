@@ -142,6 +142,24 @@
 				@close="closeSalesInvoiceCompletion"
 				@changed="handleSalesInvoiceCompletionChanged"
 				@completed="handleSalesInvoiceCompletionCompleted"
+				@edit="handleSalesInvoiceEdit"
+				@receive-payment="handleSalesInvoiceReceivePayment"
+			/>
+			<SimpleSalesInvoiceDialog
+				:open="salesInvoiceEditOpen"
+				:document="salesInvoiceEditDocument"
+				:native-fallback-enabled="canUseNativeDesk"
+				@close="closeSalesInvoiceEdit"
+				@saved="handleSalesInvoiceEditSaved"
+				@open-native="openEditedInvoiceNative"
+			/>
+			<SimplePaymentDialog
+				:open="paymentOpen"
+				:native-fallback-enabled="canUseNativeDesk"
+				intent="receive-customer-payment"
+				:initial-context="paymentInitialContext"
+				@close="closePayment"
+				@open-native="openNativePayment"
 			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -155,6 +173,8 @@ import ProfessionalSalesInvoiceDialog from "./ProfessionalSalesInvoiceDialog.vue
 import StandardSellingCompletionDialog from "./StandardSellingCompletionDialog.vue";
 import StandardDeliveryCompletionDialog from "./StandardDeliveryCompletionDialog.vue";
 import StandardSalesInvoiceCompletionDialog from "./StandardSalesInvoiceCompletionDialog.vue";
+import SimpleSalesInvoiceDialog from "../retailedge_business_hub/SimpleSalesInvoiceDialog.vue";
+import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability";
@@ -192,6 +212,8 @@ export default {
 		StandardSellingCompletionDialog,
 		StandardDeliveryCompletionDialog,
 		StandardSalesInvoiceCompletionDialog,
+		SimpleSalesInvoiceDialog,
+		SimplePaymentDialog,
 	},
 	data() {
 		return {
@@ -222,6 +244,10 @@ export default {
 			deliveryCompletionDocument: null,
 			salesInvoiceCompletionOpen: false,
 			salesInvoiceCompletionDocument: null,
+			salesInvoiceEditOpen: false,
+			salesInvoiceEditDocument: null,
+			paymentOpen: false,
+			paymentInitialContext: {},
 		};
 	},
 	created() {
@@ -423,10 +449,50 @@ export default {
 			this.loadWorkspace();
 			if (this.recentDocument) this.loadRecent(this.recentDocument);
 		},
-		handleSalesInvoiceCompletionCompleted() {
-			this.closeSalesInvoiceCompletion();
+		handleSalesInvoiceCompletionCompleted(result = {}) {
 			this.loadWorkspace();
 			if (this.recentDocument) this.loadRecent(this.recentDocument);
+			if (!result?.keep_open) this.closeSalesInvoiceCompletion();
+		},
+		handleSalesInvoiceEdit(document) {
+			if (!document?.name) return;
+			this.closeSalesInvoiceCompletion();
+			this.salesInvoiceEditDocument = { doctype: "Sales Invoice", name: document.name, modified: document.modified || "" };
+			this.salesInvoiceEditOpen = true;
+		},
+		closeSalesInvoiceEdit() {
+			this.salesInvoiceEditOpen = false;
+			this.salesInvoiceEditDocument = null;
+		},
+		handleSalesInvoiceEditSaved(result) {
+			this.closeSalesInvoiceEdit();
+			if (result?.name) this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name });
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		openEditedInvoiceNative(document = {}) {
+			if (!this.canUseNativeDesk) return;
+			this.closeSalesInvoiceEdit();
+			const payload = typeof document === "object" ? document : { doctype: document };
+			if (payload.name) frappe.set_route("Form", payload.doctype || "Sales Invoice", payload.name);
+			else frappe.new_doc(payload.doctype || "Sales Invoice");
+		},
+		handleSalesInvoiceReceivePayment(context = {}) {
+			this.closeSalesInvoiceCompletion();
+			this.paymentInitialContext = { ...(context || {}) };
+			this.paymentOpen = true;
+		},
+		closePayment() {
+			this.paymentOpen = false;
+			this.paymentInitialContext = {};
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+		},
+		openNativePayment(doctype = "Payment Entry") {
+			if (!this.canUseNativeDesk) return;
+			this.paymentOpen = false;
+			this.paymentInitialContext = {};
+			frappe.new_doc(doctype);
 		},
 		clearRecent() { this.recentDocument = null; this.recentRows = []; },
 		openOperatingContext() { frappe.set_route("operating-context"); },
