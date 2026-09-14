@@ -182,7 +182,7 @@ def test_submitted_commitment_keeps_optional_next_stage_inside_professional_sell
 		"Finish for now",
 		"No next document is created automatically.",
 		"keep_open: true",
-		'this.$emit("continue-flow"',
+		"$emit('continue-flow'",
 	):
 		assert marker in dialog
 	assert '@continue-flow="handleContinueSellingFlow"' in workspace
