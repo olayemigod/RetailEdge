@@ -7,10 +7,10 @@
 - **PR base:** `version-16`
 - **MVP candidate:** current PR #56 exact head
 - **Stage:** RC3 — consolidated browser/persona acceptance after the PR #56 second MVP audit is frozen
-- **Execution status:** **NOT YET COUNTED FOR PR #56**
+- **Execution status:** **FORMAL PR #56 RC3 STARTED AFTER AUDIT FREEZE**
 - **Automated QA site:** `retail-browser.localhost`
 - **Optional local replay site:** `retail.local`
-- **Release status:** blocked on second-audit freeze, then formal RC3 acceptance
+- **Release status:** second audit frozen; blocked only on formal RC3 acceptance and any P0/P1 blocker-only correction
 
 This is the governing browser/persona contract for PR #56. Browser runs triggered before the second MVP audit is frozen are regression evidence only and must not be counted as formal RC3 acceptance. The earlier PR #55 RC3 record remains historical evidence, but it does not accept the Business Hub, visual/runtime, branch-switcher, guided-context, Receive Stock, banking-import, or intelligence changes introduced on PR #56.
 
@@ -58,17 +58,19 @@ Before testing:
 
 Current PR #56 execution record:
 
-- Tested SHA: **PENDING — must be the post-audit-freeze PR #56 exact head**
+- Audit freeze commit: `1bd01c39d7a574df85773aae86fec7a144a98698`
+- Validated implementation head beneath freeze: `aea2cf4980cfd2dc2b61133ee567f166392a7285`
+- Tested SHA: **PENDING — the exact head created by this post-freeze RC3 trigger update will be recorded after execution**
 - RetailEdge version/branch: `qa/retailedge-visual-identity` — RetailEdge 1.0 candidate
 - Frappe version: `version-16`
 - ERPNext version: `version-16`
 - EdgeSuite UI version/candidate: governed `agent/reporting-standard-v1`
 - Browser(s): Playwright Chromium on Ubuntu 24.04
-- Formal tester/date: **PENDING**
+- Formal tester/date: automated Playwright persona harness / 2026-09-14
 - Formal browser workflow run: **PENDING**
 - Formal browser result: **PENDING**
 - Retained evidence artifact: **PENDING**
-- Companion exact-head gates: **PENDING on the audit-freeze head**
+- Companion gates: implementation head `aea2cf4980cfd2dc2b61133ee567f166392a7285` passed Theme #1119, Linters #2960, CI #2981, EdgeSuite Compatibility #1216, Upgrade Validation #126 and pre-freeze Browser regression #232
 
 Historical PR #55 acceptance remains recorded in repository history and prior revisions of this document; it must not be substituted for PR #56 acceptance.
 
@@ -323,4 +325,4 @@ RIR2E may be frozen only when:
 
 Historical PR #55 closure decision: **PASS / FROZEN** on implementation SHA `202741c34abd76d53521e3d60f0a69d1557a9a87`.
 
-Current PR #56 closure decision: **NOT YET RUN AS FORMAL RC3**. Freeze the PR #56 second MVP audit first, then execute the exact-head browser/persona workflow. Only P0/P1 blocker corrections may follow a formal RC3 failure.
+Current PR #56 closure decision: **FORMAL RC3 IN PROGRESS ON THE POST-FREEZE LINE**. The second MVP audit is frozen. Only P0/P1 blocker corrections may follow a formal RC3 failure.
