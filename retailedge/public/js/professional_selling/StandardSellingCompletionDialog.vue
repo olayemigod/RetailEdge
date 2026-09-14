@@ -49,6 +49,14 @@
 					</p>
 				</div>
 
+				<div v-if="preview.can_continue_flow" class="selling-lifecycle-panel">
+					<strong>{{ preview.doctype }} submitted</strong>
+					<p>Continue the customer journey in RetailEdge or finish for now. No next document is created automatically.</p>
+					<div class="selling-lifecycle-next">
+						<span v-for="step in preview.next_steps || []" :key="step.key">{{ step.label }}</span>
+					</div>
+				</div>
+
 				<div v-if="actionError" class="selling-completion-error" role="alert">{{ actionError }}</div>
 			</template>
 		</div>
@@ -65,7 +73,16 @@
 					Advanced: Open in ERPNext
 				</button>
 				<div class="selling-completion-actions">
-					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
+					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">{{ preview?.can_continue_flow ? "Finish for now" : "Close" }}</button>
+					<button
+						v-if="preview?.can_continue_flow"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="busy"
+						@click="$emit('continue-flow', { doctype: preview.doctype, name: preview.name, next_steps: preview.next_steps || [] })"
+					>
+						Continue Selling Flow
+					</button>
 					<button
 						v-if="preview?.can_submit"
 						type="button"
@@ -126,7 +143,7 @@ export default {
 		document: { type: Object, default: null },
 		canUseNativeDesk: { type: Boolean, default: false },
 	},
-	emits: ["close", "changed", "completed"],
+	emits: ["close", "changed", "completed", "continue-flow"],
 	data() {
 		return {
 			preview: null,
@@ -187,7 +204,8 @@ export default {
 					expected_modified: this.preview.modified,
 				});
 				this.$emit("changed", result);
-				this.$emit("completed", result);
+				await this.loadPreview();
+				this.$emit("completed", { ...result, keep_open: true });
 			} catch (error) {
 				this.actionError = errorMessage(error, "Unable to submit this document.");
 				await this.loadPreview();
@@ -209,7 +227,8 @@ export default {
 				});
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					this.$emit("completed", result);
+					await this.loadPreview();
+					this.$emit("completed", { ...result, keep_open: true });
 					return;
 				}
 				await this.loadPreview();
@@ -250,6 +269,10 @@ export default {
 .selling-completion-workflow p { margin: .35rem 0 0; }
 .selling-completion-error { background: var(--red-50,#fef2f2); border: 1px solid var(--red-200,#fecaca); color: var(--red-700,#b91c1c); }
 .selling-completion-hint { margin: 0; font-size: .82rem; color: var(--text-muted); }
+.selling-lifecycle-panel { display:grid; gap:.55rem; padding:.8rem; border:1px solid var(--edge-border-color,var(--border-color)); border-radius:.6rem; background:var(--edge-surface-muted,var(--subtle-fg)); }
+.selling-lifecycle-panel p { margin:0; color:var(--text-muted); }
+.selling-lifecycle-next { display:flex; flex-wrap:wrap; gap:.4rem; }
+.selling-lifecycle-next span { padding:.25rem .5rem; border-radius:999px; background:var(--edge-surface,var(--card-bg)); border:1px solid var(--edge-border-color,var(--border-color)); font-size:.78rem; }
 .selling-completion-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; width: 100%; }
 .selling-completion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 @media (max-width: 720px) { .selling-completion-summary { grid-template-columns: 1fr; } .selling-completion-item { grid-template-columns: 1fr; } .selling-completion-footer { align-items: stretch; flex-direction: column; } .selling-completion-actions { justify-content: flex-start; } }
