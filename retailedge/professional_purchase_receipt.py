@@ -86,8 +86,8 @@ def _validate_po_scope(po: Any) -> str:
 		branch=branch or None,
 	)
 	# _resolve_scope already validates an explicit Branch through the current
-	# Branch Setup-aware operating contract. Do not reintroduce the legacy
-	# validate_user_branch_access fallback here.
+	# Branch Setup-aware operating contract. Do not reintroduce the retired
+	# legacy branch-access fallback here.
 	if not branch and not global_access:
 		frappe.throw(
 			_("Purchase Order {0} has no Branch attribution for your restricted access. Ask an authorised manager to correct the document before receiving it.").format(po.name),
