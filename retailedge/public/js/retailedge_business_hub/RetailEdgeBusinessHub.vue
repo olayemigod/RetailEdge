@@ -59,6 +59,10 @@
 					<strong>No active Branch access</strong>
 					<span>Operational actions are unavailable until an active Branch assignment is restored for this Company.</span>
 				</div>
+				<div v-else-if="homeScopeNeedsBranch" class="hub-scope-warning hub-scope-warning--choice" role="status">
+					<strong>Choose a Working Branch</strong>
+					<span>Select one of your permitted Branches from the top bar to load branch-scoped performance, indices and attention.</span>
+				</div>
 
 				<section class="home-command-centre hub-experience-section">
 					<div class="section-heading">
@@ -97,8 +101,8 @@
 						</div>
 						<EdgeEmptyState
 							v-else
-							title="No management indicators available"
-							description="No permitted indicators are available for this period and operating scope."
+							:title="homeScopeNeedsBranch ? 'Working Branch required' : 'No management indicators available'"
+							:description="homeScopeNeedsBranch ? 'Choose a Working Branch to load branch-scoped business performance.' : 'No permitted indicators are available for this period and operating scope.'"
 							icon="bar-chart-2"
 						/>
 					</div>
@@ -162,8 +166,8 @@
 					</div>
 					<EdgeEmptyState
 						v-else
-						title="No business indices available"
-						description="No permitted business index is available for the selected Company, Branch and period."
+						:title="homeScopeNeedsBranch ? 'Working Branch required' : 'No business indices available'"
+						:description="homeScopeNeedsBranch ? 'Choose a Working Branch to load business indices for one permitted operating scope.' : 'No permitted business index is available for the selected Company, Branch and period.'"
 						icon="bar-chart-2"
 					/>
 				</section>
@@ -176,7 +180,7 @@
 						</div>
 						<span class="home-attention-count">{{ homeSnapshot.attention.length }}</span>
 					</div>
-					<div v-if="homeSnapshot.attention.length" class="home-attention-list home-attention-list--wide">
+					<div v-if="!homeScopeNeedsBranch && homeSnapshot.attention.length" class="home-attention-list home-attention-list--wide">
 						<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeItem(item)">
 							<span class="home-attention-copy">
 								<strong>{{ item.label }}</strong>
@@ -188,6 +192,12 @@
 							</span>
 						</button>
 					</div>
+					<EdgeEmptyState
+						v-else-if="homeScopeNeedsBranch"
+						title="Working Branch required"
+						description="Choose a Working Branch before RetailEdge evaluates branch-scoped exceptions and follow-ups."
+						icon="building"
+					/>
 					<EdgeEmptyState
 						v-else
 						title="Nothing needs attention"
@@ -520,7 +530,7 @@ export default {
 			error: "",
 			homeLoading: false,
 			homeError: "",
-			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
+			homeSnapshot: { as_of_date: "", period: {}, scope: { restricted: false, allowed_branches: [] }, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
@@ -570,6 +580,15 @@ export default {
 		},
 		operatingScopeBlocked() {
 			return Boolean(this.context.branch_scope_restricted && this.context.branch_scope_ready === false);
+		},
+		homeScopeNeedsBranch() {
+			const scope = this.homeSnapshot.scope || {};
+			return Boolean(
+				scope.restricted &&
+				!this.context.branch &&
+				Array.isArray(scope.allowed_branches) &&
+				scope.allowed_branches.length > 1
+			);
 		},
 		homeQuickActions() {
 			if (this.operatingScopeBlocked) return [];
@@ -666,7 +685,7 @@ export default {
 		},
 		refreshHomeSnapshot() {
 			if (!this.context.company) {
-				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
+				this.homeSnapshot = { as_of_date: "", period: {}, scope: { restricted: false, allowed_branches: [] }, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
@@ -678,6 +697,7 @@ export default {
 					this.homeSnapshot = {
 						as_of_date: snapshot.as_of_date || "",
 						period: snapshot.period || {},
+						scope: snapshot.scope || { restricted: false, allowed_branches: [] },
 						cards: snapshot.cards || [],
 						sections: snapshot.sections || {},
 						indices: snapshot.indices || [],
@@ -686,7 +706,7 @@ export default {
 					};
 				})
 				.catch((error) => {
-					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, indices: [], settings: {}, attention: [] };
+					this.homeSnapshot = { as_of_date: "", period: {}, scope: { restricted: false, allowed_branches: [] }, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 					this.homeError = error?.message || "Unable to load the current business snapshot.";
 				})
 				.finally(() => {
@@ -1221,6 +1241,10 @@ export default {
 }
 .hub-scope-warning span {
 	color: var(--edge-text-muted, #667085);
+}
+.hub-scope-warning--choice {
+	border-color: var(--blue-200, rgba(37, 99, 235, 0.25));
+	background: var(--blue-50, rgba(37, 99, 235, 0.06));
 }
 .hub-banner {
 	display: flex;

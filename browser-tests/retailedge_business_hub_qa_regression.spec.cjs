@@ -404,3 +404,31 @@ test("Business Hub QA regression: multi-Branch blank context still exposes Worki
 		await context.close();
 	}
 });
+
+
+test("Business Hub QA regression: ambiguous multi-Branch scope shows guidance instead of false clean states", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context, MULTI_BRANCH);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		await page.evaluate(() => {
+			const wrapper = frappe.pages?.["retailedge-business-hub"];
+			const proxy = wrapper?._retailedgeBusinessHub?._instance?.proxy;
+			if (!proxy) throw new Error("Business Hub proxy is unavailable.");
+			proxy.context = { ...(proxy.context || {}), branch: "" };
+			proxy.homeSnapshot = {
+				...(proxy.homeSnapshot || {}),
+				scope: { restricted: true, allowed_branches: ["RetailEdge RC3 Lagos", "RetailEdge RC3 Ikeja"] },
+				cards: [],
+				indices: [],
+				attention: [],
+			};
+		});
+		await expect(page.locator(".hub-scope-warning--choice")).toContainText("Choose a Working Branch");
+		await expect(page.getByText("Working Branch required", { exact: true })).toHaveCount(3);
+		await expect(page.getByText("Nothing needs attention", { exact: true })).toHaveCount(0);
+	} finally {
+		await context.close();
+	}
+});

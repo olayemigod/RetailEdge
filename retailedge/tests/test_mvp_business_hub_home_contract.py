@@ -47,12 +47,18 @@ def test_business_hub_period_filter_is_bounded_and_server_resolved():
 
 def test_business_hub_home_never_falls_back_to_company_wide_data_for_restricted_blank_scope():
 	source = BACKEND.read_text()
+	frontend = FRONTEND.read_text()
 	assert "if len(allowed) == 1:" in source
 	assert "branch = allowed[0]" in source
 	assert "_unavailable_scope_snapshot" in source
 	assert "Choose a Branch to load scoped business signals." in source
 	assert '"cards": []' in source
 	assert '"attention": []' in source
+	assert '"allowed_branches": list(allowed_branches or [])' in source
+	assert "scope: snapshot.scope" in frontend
+	assert "homeScopeNeedsBranch" in frontend
+	assert "Choose a Working Branch" in frontend
+	assert "Working Branch required" in frontend
 
 
 def test_business_hub_respects_retailedge_global_manager_company_access_contract():
