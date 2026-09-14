@@ -109,3 +109,54 @@ test("Business Hub QA regression: Sales index action carries selected period and
 		await context.close();
 	}
 });
+
+
+test("Business Hub QA regression: Make Sale stays guided and keeps Update Stock controlled", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		await page.getByRole("button", { name: /Make Sale/i }).click();
+		await expect(page.locator(".guided-invoice-form")).toBeVisible();
+		const updateStock = page.locator('.guided-check-field input[type="checkbox"]').first();
+		await expect(updateStock).toBeChecked();
+		await expect(updateStock).toBeDisabled();
+	} finally {
+		await context.close();
+	}
+});
+
+test("Business Hub QA regression: Record Purchase and Transfer Stock open guided forms", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		await page.getByRole("button", { name: /Record Purchase/i }).click();
+		await expect(page.locator(".guided-purchase-form")).toBeVisible();
+		await page.getByRole("button", { name: "Cancel", exact: true }).last().click();
+		await page.getByRole("button", { name: /Transfer Stock/i }).click();
+		await expect(page.locator(".guided-stock-form")).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
+test("Business Hub QA regression: manager Record Expense stays in EdgeSuite Business Expenses", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		await page.getByRole("button", { name: /Record Expense/i }).click();
+		await page.getByRole("heading", { name: "Business Expenses", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+		await expect(page.getByRole("heading", { name: "New Business Expense", exact: true })).toBeVisible();
+		await expect(page.locator(".edge-app-shell").first()).toBeAttached();
+	} finally {
+		await context.close();
+	}
+});
