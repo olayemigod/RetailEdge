@@ -375,6 +375,13 @@ def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 	# it does not narrow their effective operational Branch scope.
 	if not fallback_company:
 		fallback_company = _clean(assignment_anchor.get("company"))
+	if not fallback_company and not (has_assignments and not user_has_global_branch_access(user=user)):
+		# A single permitted Company is a deterministic operating anchor when a
+		# global/unrestricted user has no saved user default. Never guess when
+		# multiple Companies exist, and never widen restricted assignment users.
+		allowed_companies = _allowed_companies(user=user)
+		if len(allowed_companies) == 1:
+			fallback_company = _clean(allowed_companies[0])
 	if fallback_company:
 		_assert_company_access(fallback_company, user=user)
 
