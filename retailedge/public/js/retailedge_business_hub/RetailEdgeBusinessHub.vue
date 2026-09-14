@@ -920,10 +920,12 @@ export default {
 		},
 		handleSimpleCashierExpenseSaved(result) {
 			this.simpleCashierExpenseOpen = false;
-			if (result?.name) {
+			const completion = result?.completion || {};
+			const name = completion.name || result?.name || "";
+			if (name) {
 				this.cashierExpenseCompletionDocument = {
-					doctype: result.doctype || "RetailEdge Cashier Expense",
-					name: result.name,
+					doctype: completion.doctype || result?.doctype || "RetailEdge Cashier Expense",
+					name,
 				};
 				this.cashierExpenseCompletionOpen = true;
 			}
