@@ -4,8 +4,9 @@ from typing import Any
 
 import frappe
 
-# Internal ownership marker only. It is never rendered to users or customers.
-MANAGED_MARKER = "<!-- retailedge-managed-print-format:v2 -->"
+# Keep the legacy marker only for recognising formats installed by older releases.
+LEGACY_MANAGED_MARKER = "<!-- retailedge-managed-print-format:v2 -->"
+MANAGED_MARKER = "<!-- managed-business-print-format:v3 -->"
 
 PROFESSIONAL_PRINT_FORMATS: tuple[dict[str, str], ...] = (
 	{"name": "Professional Quotation", "doctype": "Quotation", "heading": "Quotation", "kind": "document"},
@@ -33,7 +34,7 @@ MANAGED_PRINT_FORMATS = PROFESSIONAL_PRINT_FORMATS + SALES_INVOICE_STYLE_FORMATS
 PRINT_FORMAT_BY_DOCTYPE = {row["doctype"]: row["name"] for row in PROFESSIONAL_PRINT_FORMATS}
 
 _DOCUMENT_HTML = r"""
-<!-- retailedge-managed-print-format:v2 -->
+<!-- managed-business-print-format:v3 -->
 {% set party = doc.get("customer_name") or doc.get("party_name") or doc.get("customer") or "" %}
 {% set document_date = doc.get("transaction_date") or doc.get("posting_date") %}
 {% set secondary_date = doc.get("valid_till") or doc.get("delivery_date") or doc.get("due_date") %}
@@ -130,7 +131,7 @@ _DOCUMENT_CSS_BY_KIND = {
 }
 
 _RECEIPT_HTML = r"""
-<!-- retailedge-managed-print-format:v2 -->
+<!-- managed-business-print-format:v3 -->
 {% set party = doc.get("customer_name") or doc.get("customer") or "" %}
 {% set receipt_date = doc.get("posting_date") or doc.get("transaction_date") %}
 <div class="pe-receipt">
@@ -224,7 +225,7 @@ def ensure_retailedge_professional_print_formats() -> dict[str, int]:
 			continue
 
 		doc = frappe.get_doc("Print Format", name)
-		owned = str(doc.module or "") == "RetailEdge" or MANAGED_MARKER in str(doc.html or "")
+		owned = (\n\t\t\tstr(doc.module or "") == "RetailEdge"\n\t\t\tor MANAGED_MARKER in str(doc.html or "")\n\t\t\tor LEGACY_MANAGED_MARKER in str(doc.html or "")\n\t\t)
 		if not owned:
 			logger.warning("Skipping non-managed Print Format name collision: %s", name)
 			result["skipped"] += 1
