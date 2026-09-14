@@ -252,8 +252,10 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				this.tenantName = context.tenant_name || this.filters.company || "";
-				this.branchName = context.branch_name || this.filters.branch || "";
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("cash-movement") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
+				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.movementTypes = context.movement_types || [];
 				this.dateRangeLimit = Number(context.limits?.date_range_days || 366);
