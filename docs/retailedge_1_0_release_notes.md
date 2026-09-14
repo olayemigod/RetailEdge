@@ -8,7 +8,7 @@ RetailEdge 1.0.0 is the first governed MVP release for day-to-day retail operati
 
 ### Business Hub and control
 
-- Business Hub MVP Home with Today, Stock, Banking, Branch, Cash Shift and Attention signals
+- Business Hub command centre with eight actionable indices: Sales, Cash, Stock, Expenses, Receivables, Payables, Branch Performance and Banking, plus prioritised Attention signals
 - permission-aware quick actions and searchable Create
 - Action Centre for operational follow-up
 - shared EdgeSuite navigation, appearance and keyboard ownership
@@ -82,6 +82,8 @@ These are intentional 1.0 boundaries, not release defects:
 
 ## Acceptance evidence
 
-The RC3 implementation SHA 202741c34abd76d53521e3d60f0a69d1557a9a87 completed the consolidated persona/browser suite with 21/21 PASS. The documentation freeze head 1347ee447900a9ec94fd4c0c9eea9d19144f6865 then reran all six governed gates successfully, including browser/persona acceptance and upgrade validation.
+PR #56 formal RC3 was accepted on exact post-audit-freeze SHA `099e4a30b2c8a25c2ca0858caa6bcbfe99a8b98c`. Browser Persona workflow run #234 completed **24/24 PASS** and retained evidence artifact `10357567550`. On the same exact head, Theme Compatibility #1121, Linters #2962, clean Frappe v16 CI #2983, EdgeSuite UI Candidate Compatibility #1218, and Upgrade Validation #128 were all green.
 
-The final v1.0.0 tag must point to the promoted release commit after the 1.0.0 hardening head also passes the complete final gate set.
+The second MVP audit is frozen at commit `1bd01c39d7a574df85773aae86fec7a144a98698`, backed by validated implementation head `aea2cf4980cfd2dc2b61133ee567f166392a7285`.
+
+The final `v1.0.0` tag must point to the merged/promoted `version-16` release commit after the release-hardening head passes the complete final gate set.
