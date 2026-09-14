@@ -205,7 +205,11 @@ def create_bank_statement_template(
 
 
 @frappe.whitelist(methods=["POST"])
-def apply_bank_statement_template(data_import: str, template_name: str) -> dict:
+def apply_bank_statement_template(
+	data_import: str,
+	template_name: str,
+	branch: str = "",
+) -> dict:
 	"""Apply a reusable RetailEdge mapping to an existing native ERPNext import draft."""
 	data_import = str(data_import or "").strip()
 	template_name = str(template_name or "").strip()
@@ -216,7 +220,11 @@ def apply_bank_statement_template(data_import: str, template_name: str) -> dict:
 	doc.check_permission("write")
 	if str(doc.reference_doctype or "") != "Bank Transaction":
 		frappe.throw(_("Only Bank Transaction imports can use this mapping template."))
-	account = _bank_account_context(str(doc.company or ""), str(doc.bank_account or ""))
+	account = _bank_account_context(
+		str(doc.company or ""),
+		str(doc.bank_account or ""),
+		branch,
+	)
 
 	template = frappe.get_doc(TEMPLATE_DOCTYPE, template_name)
 	template.check_permission("read")
