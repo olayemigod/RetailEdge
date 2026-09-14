@@ -55,6 +55,13 @@
 					</p>
 				</div>
 
+				<div v-if="preview.docstatus === 1" class="invoice-lifecycle-panel">
+					<div><span>Invoice lifecycle</span><strong>{{ preview.status || "Submitted" }}</strong></div>
+					<div><span>Outstanding</span><strong>{{ preview.currency || "" }} {{ preview.outstanding_amount }}</strong></div>
+					<p v-if="preview.outstanding_amount > 0">This Purchase Invoice may remain unpaid. Pay only when the supplier payment is actually being made.</p>
+					<p v-else>This Purchase Invoice has no outstanding amount.</p>
+				</div>
+
 				<div v-if="actionError" class="invoice-completion-error" role="alert">{{ actionError }}</div>
 			</template>
 		</div>
@@ -71,7 +78,16 @@
 					Advanced: Open in ERPNext
 				</button>
 				<div class="invoice-completion-actions">
-					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
+					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">{{ preview?.can_leave_unpaid ? "Finish for now" : "Close" }}</button>
+					<button
+						v-if="preview?.can_pay_supplier"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="busy"
+						@click="paySupplier"
+					>
+						Pay Supplier
+					</button>
 					<button
 						v-if="preview?.can_submit"
 						type="button"
@@ -128,7 +144,7 @@ export default {
 		document: { type: Object, default: null },
 		canUseNativeDesk: { type: Boolean, default: false },
 	},
-	emits: ["close", "changed", "completed"],
+	emits: ["close", "changed", "completed", "pay-supplier"],
 	data() {
 		return {
 			preview: null,
@@ -182,7 +198,8 @@ export default {
 					expected_modified: this.preview.modified,
 				});
 				this.$emit("changed", result);
-				this.$emit("completed", result);
+				await this.loadPreview();
+				this.$emit("completed", { ...result, keep_open: true });
 			} catch (error) {
 				this.actionError = errorMessage(error, "Unable to submit this Purchase Invoice.");
 				await this.loadPreview();
@@ -203,7 +220,8 @@ export default {
 				});
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					this.$emit("completed", result);
+					await this.loadPreview();
+					this.$emit("completed", { ...result, keep_open: true });
 					return;
 				}
 				await this.loadPreview();
@@ -213,6 +231,10 @@ export default {
 			} finally {
 				this.busy = false;
 			}
+		},
+		paySupplier() {
+			if (!this.preview?.can_pay_supplier || this.busy) return;
+			this.$emit("pay-supplier", { ...(this.preview.payment_context || {}) });
 		},
 		openAdvanced() {
 			if (!this.canUseNativeDesk || !this.document?.name) return;
@@ -246,6 +268,10 @@ export default {
 .invoice-completion-workflow p { margin: .35rem 0 0; }
 .invoice-completion-error { background: var(--red-50,#fef2f2); border: 1px solid var(--red-200,#fecaca); color: var(--red-700,#b91c1c); }
 .invoice-completion-hint { margin: 0; font-size: .82rem; color: var(--text-muted); }
+.invoice-lifecycle-panel { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; padding:.8rem; border:1px solid var(--edge-border-color,var(--border-color)); border-radius:.6rem; background:var(--edge-surface-muted,var(--subtle-fg)); }
+.invoice-lifecycle-panel > div { display:grid; gap:.2rem; }
+.invoice-lifecycle-panel span { font-size:.78rem; color:var(--text-muted); }
+.invoice-lifecycle-panel p { grid-column:1/-1; margin:0; color:var(--text-muted); }
 .invoice-completion-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; width: 100%; }
 .invoice-completion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 @media (max-width: 720px) { .invoice-completion-summary { grid-template-columns: 1fr; } .invoice-completion-item { grid-template-columns: 1fr; } .invoice-completion-footer { align-items: stretch; flex-direction: column; } .invoice-completion-actions { justify-content: flex-start; } }
