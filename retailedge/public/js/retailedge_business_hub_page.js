@@ -26,9 +26,6 @@
 		if (!(wrapper instanceof global.HTMLElement)) {
 			return false;
 		}
-		if (wrapper.__retailedge_business_hub_registered) {
-			return true;
-		}
 		wrapper.__retailedge_business_hub_registered = true;
 
 		wrapper.on_page_load = function onPageLoad(currentWrapper) {
@@ -88,9 +85,15 @@
 		}
 
 		const mountedComponent = getMountedComponent(wrapper);
-		if (mountedComponent) {
-			enforceCreateVisibility(wrapper._retailedgeBusinessHubRoot?.[0]);
+		const mountedRoot = wrapper._retailedgeBusinessHubRoot?.[0];
+		if (mountedComponent && mountedRoot?.isConnected) {
+			suppressNativePageChrome(wrapper);
+			enforceCreateVisibility(mountedRoot);
 			return Promise.resolve(wrapper._retailedgeBusinessHub);
+		}
+		if (mountedComponent || mountedRoot) {
+			const target = wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
+			clearPreviousMount(wrapper, target);
 		}
 
 		wrapper._retailedgeBusinessHubBootPromise = mountBusinessHub(wrapper).finally(() => {
@@ -299,7 +302,7 @@
 		}
 
 		const components = runtime.components || runtime;
-		const required = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
+		const required = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeDropdown"];
 		const missing = required.filter((name) => !components[name]);
 		if (missing.length) {
 			console.error("[RetailEdge Business Hub] missing interface components", missing);

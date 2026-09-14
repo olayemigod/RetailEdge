@@ -22,7 +22,13 @@ def get_document_workflow_readiness(doctype: str, name: str) -> dict[str, Any]:
 	doc = frappe.get_doc(doctype, name)
 	if not frappe.has_permission(doctype, "read", doc=doc):
 		frappe.throw(_("You do not have permission to read this document."), frappe.PermissionError)
-	return get_workflow_readiness(doctype=doctype, doc=doc)
+	result = get_workflow_readiness(doctype=doctype, doc=doc)
+	return {
+		**result,
+		"doctype": doctype,
+		"name": name,
+		"modified": str(getattr(doc, "modified", "") or ""),
+	}
 
 
 def get_workflow_readiness(*, doctype: str, doc=None) -> dict[str, Any]:

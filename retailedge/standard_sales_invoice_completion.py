@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_datetime
 
-from retailedge.branch_context import resolve_branch_from_warehouse
+from retailedge.guided_entry_context import resolve_branch_warehouse_selection
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_selling import (
 	_assert_read,
@@ -246,12 +246,21 @@ def _validate_stock_context(
 			)
 			continue
 
-		resolved = resolve_branch_from_warehouse(warehouse, company=company)
-		warehouse_branch = _clean(resolved.get("branch"))
+		try:
+			resolved = resolve_branch_warehouse_selection(
+				company=company,
+				branch=invoice_branch or source_branch,
+				warehouse=warehouse,
+				preference="sales",
+			)
+			warehouse_branch = _clean(resolved.get("branch"))
+		except (frappe.PermissionError, frappe.ValidationError) as exc:
+			blockers.append(str(exc))
+			continue
 		if not warehouse_branch:
 			blockers.append(
-				_("Warehouse {0} is not mapped to an operational Branch; use Advanced ERPNext review.").format(
-					warehouse
+				_("Warehouse {0} is not configured in an enabled Branch Setup for Company {1}.").format(
+					warehouse, company
 				)
 			)
 			continue

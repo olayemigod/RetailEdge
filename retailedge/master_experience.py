@@ -6,7 +6,7 @@ from typing import Any
 import frappe
 
 from retailedge.edgesuite_ui import get_retailedge_business_hub_context as _base_business_hub_context
-from retailedge.operating_context import get_operating_context
+from retailedge.operating_context import get_allowed_operating_branches, get_operating_context
 
 CUSTOMER_ACTION: dict[str, Any] = {
 	"key": "new-customer",
@@ -608,6 +608,30 @@ def _contain_native_navigation_for_edgesuite_only(context: dict[str, Any]) -> No
 	context["navigation_groups"] = contained_groups
 
 
+def _company_identity(company: str) -> dict[str, str]:
+	company = str(company or "").strip()
+	fallback = {"name": company, "label": company, "logo": "", "currency": ""}
+	if not company:
+		return fallback
+
+	try:
+		if not frappe.db.exists("Company", company):
+			return fallback
+		fields = ["name", "company_name", "default_currency"]
+		if frappe.get_meta("Company").has_field("company_logo"):
+			fields.append("company_logo")
+		row = frappe.db.get_value("Company", company, fields, as_dict=True) or {}
+	except Exception:
+		return fallback
+
+	return {
+		"name": row.get("name") or company,
+		"label": row.get("company_name") or row.get("name") or company,
+		"logo": row.get("company_logo") or "",
+		"currency": row.get("default_currency") or "",
+	}
+
+
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context = deepcopy(_base_business_hub_context() or {})
@@ -651,10 +675,21 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context["quick_actions"] = quick_actions
 
 	operating = get_operating_context()
+	company = operating.get("company") or ""
+	identity = _company_identity(company)
+	try:
+		branches = get_allowed_operating_branches(company=company) if company else []
+	except Exception:
+		branches = []
 	user_context = dict(context.get("context") or {})
 	user_context.update({
 		"company": operating.get("company") or "",
+		"company_label": identity.get("label") or company,
+		"company_logo": identity.get("logo") or "",
+		"company_currency": identity.get("currency") or "",
 		"branch": operating.get("branch") or "",
+		"branch_options": list(branches),
+		"can_switch_branch": len(branches) > 1,
 		"operating_context_source": operating.get("source") or "",
 		"default_pos_profile": operating.get("default_pos_profile") or "",
 		"default_stock_location": operating.get("default_stock_location") or "",

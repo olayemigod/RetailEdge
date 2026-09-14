@@ -127,7 +127,7 @@ export default {
 		nativeDetailTitle() { return this.canOpenNative ? "Open the authoritative ERPNext document" : "Advanced Native Desk access is required to open this document"; },
 	},
 	methods: {
-		formatValue(value, datatype) { if (value === null || value === undefined) return "—"; try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value; } },
+		formatValue(value, datatype) { if (value === null || value === undefined) return "—"; try { return window.retailedge.formatPlainValue(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value; } },
 		formatPercent(value) { return value === null || value === undefined ? "—" : `${Number(value).toFixed(1)}%`; },
 		openSalesInvoice(invoice) { if (!this.canOpenNative) return; if (invoice) window.open(`/app/sales-invoice/${encodeURIComponent(invoice)}`, "_blank", "noopener,noreferrer"); },
 		openPurchaseInvoice(row) { if (!this.canOpenNative) return; const route = row?.route || (row?.invoice ? `/app/purchase-invoice/${encodeURIComponent(row.invoice)}` : ""); if (route) window.open(route, "_blank", "noopener,noreferrer"); },

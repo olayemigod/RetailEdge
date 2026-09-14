@@ -36,9 +36,9 @@
 				<div class="business-control-filters">
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">Follow-up Status</span><select v-model="filters.follow_up_status" class="edge-input"><option>All</option><option>Open</option><option>Acknowledged</option><option>Snoozed</option></select></label>
-					<label class="edge-field"><span class="edge-field-label">Assignment</span><select v-model="filters.assignment_scope" class="edge-input"><option value="all">All Actions</option><option value="mine">My Actions</option></select></label>
-					<label class="edge-field"><span class="edge-field-label">Follow-up Timing</span><select v-model="filters.due_scope" class="edge-input"><option value="all">All Timing</option><option value="due">Due / Overdue</option></select></label>
+					<EdgeDropdown v-model="filters.follow_up_status" :options="['All', 'Open', 'Acknowledged', 'Snoozed']" label="Follow-up Status" />
+					<EdgeDropdown v-model="filters.assignment_scope" :options="[{ value: 'all', label: 'All Actions' }, { value: 'mine', label: 'My Actions' }]" label="Assignment" />
+					<EdgeDropdown v-model="filters.due_scope" :options="[{ value: 'all', label: 'All Timing' }, { value: 'due', label: 'Due / Overdue' }]" label="Follow-up Timing" />
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="fetchData">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
 			</template>
@@ -127,7 +127,7 @@ import BusinessControlRow from "./BusinessControlRow.vue";
 import FinancialOverview from "./FinancialOverview.vue";
 import OwnerControlDetails from "./OwnerControlDetails.vue";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeDropdown"];
 const FILE_SCOPE_KEY = "business-control-center";
 const FILE_CAPABILITY_KEY = "owner-dashboard";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -345,7 +345,7 @@ export default {
 		},
 		itemKey(item) { return item.fingerprint || `${item.source}:${item.semantic_key || item.kind}:${item.route}`; },
 		sourceLabel(source) { return String(source || "management").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); },
-		formatValue(value, datatype) { try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
+		formatValue(value, datatype) { try { return window.retailedge.formatPlainValue(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
 		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
 		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },

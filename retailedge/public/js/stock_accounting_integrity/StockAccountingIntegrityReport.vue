@@ -409,10 +409,10 @@ export default {
 				catch (_error) { return value; }
 			}
 			if (fieldtype === "Currency") {
-				try { return frappe.format(value, { fieldtype: "Currency", options: currency || this.companyCurrency }); }
+				try { return window.retailedge.formatPlainValue(value, { fieldtype: "Currency", options: currency || this.companyCurrency }); }
 				catch (_error) { return Number(value || 0).toLocaleString(); }
 			}
-			try { return frappe.format(value, { fieldtype: fieldtype || "Data" }); }
+			try { return window.retailedge.formatPlainValue(value, { fieldtype: fieldtype || "Data" }); }
 			catch (_error) { return String(value); }
 		},
 	},

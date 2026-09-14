@@ -36,25 +36,8 @@
 
 				<section class="edge-panel operating-context-form">
 					<div class="operating-context-fields">
-						<label class="edge-field">
-							<span class="edge-field-label">Operating Company</span>
-							<select v-model="selectedCompany" class="edge-input" :disabled="busy" @change="onCompanyChange">
-								<option value="">Choose Company</option>
-								<option v-for="company in companies" :key="company" :value="company">{{ company }}</option>
-							</select>
-						</label>
-						<label class="edge-field">
-							<span class="edge-field-label">Operating Branch</span>
-							<select
-								v-model="selectedBranch"
-								class="edge-input"
-								:disabled="busy || !selectedCompany"
-								@change="onBranchChange"
-							>
-								<option value="">Choose Branch</option>
-								<option v-for="branch in branches" :key="branch" :value="branch">{{ branch }}</option>
-							</select>
-						</label>
+						<EdgeDropdown v-model="selectedCompany" :options="companies" label="Operating Company" placeholder="Choose Company" :disabled="busy" @change="onCompanyChange" />
+						<EdgeDropdown v-model="selectedBranch" :options="branches" label="Operating Branch" placeholder="Choose Branch" :disabled="busy || !selectedCompany" @change="onBranchChange" />
 					</div>
 
 					<div v-if="posRequired && selectedBranch" class="operating-context-pos">
@@ -104,7 +87,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeDropdown"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};

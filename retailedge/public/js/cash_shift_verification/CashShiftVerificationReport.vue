@@ -81,15 +81,7 @@
 						><span class="edge-field-label">To Date</span
 						><input v-model="filters.to_date" type="date" class="edge-input"
 					/></label>
-					<label class="edge-field"
-						><span class="edge-field-label">Cash Status</span
-						><select v-model="filters.cash_status" class="edge-input">
-							<option value="">All</option>
-							<option v-for="status in cashStatuses" :key="status" :value="status">
-								{{ status }}
-							</option>
-						</select></label
-					>
+					<EdgeDropdown v-model="filters.cash_status" :options="cashStatuses" label="Cash Status" placeholder="All" />
 					<div class="filter-action">
 						<button
 							class="edge-primary-button"
@@ -104,19 +96,7 @@
 				<details class="advanced-filters">
 					<summary>More filters</summary>
 					<div class="shift-filter-grid advanced-grid">
-						<label class="edge-field"
-							><span class="edge-field-label">Review Status</span
-							><select v-model="filters.review_status" class="edge-input">
-								<option value="">All</option>
-								<option
-									v-for="status in reviewStatuses"
-									:key="status"
-									:value="status"
-								>
-									{{ status }}
-								</option>
-							</select></label
-						>
+						<EdgeDropdown v-model="filters.review_status" :options="reviewStatuses" label="Review Status" placeholder="All" />
 						<label class="edge-check"
 							><input
 								v-model="filters.only_unsynced"
@@ -145,7 +125,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "cash-shift-verification";
 function runtimeComponents() {
@@ -471,7 +451,7 @@ export default {
 			if (value === null || value === undefined || value === "") return "—";
 			if (column.fieldtype === "Currency") {
 				try {
-					return frappe.format(Number(value), { fieldtype: "Currency" });
+					return window.retailedge.formatPlainValue(Number(value), { fieldtype: "Currency" });
 				} catch (_error) {
 					return Number(value).toLocaleString(undefined, {
 						minimumFractionDigits: 2,

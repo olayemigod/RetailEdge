@@ -188,6 +188,77 @@ test("RC3 owner/manager reaches the product Home and Action Centre", async ({ br
 	}
 });
 
+test("RC3 PR56 Business Hub renders the eight actionable business indices", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await expect(page.getByRole("heading", { name: "Business indices", exact: true })).toBeVisible();
+
+		const cards = page.locator(".home-intelligence-card");
+		await expect(cards).toHaveCount(8);
+		for (const label of [
+			"Sales",
+			"Cash",
+			"Stock",
+			"Expenses",
+			"Receivables",
+			"Payables",
+			"Branch Performance",
+			"Banking",
+		]) {
+			await expect(cards.getByRole("heading", { name: label, exact: true })).toHaveCount(1);
+		}
+	} finally {
+		await context.close();
+	}
+});
+
+test("RC3 PR56 Back and Forward navigation restore the EdgeSuite shell without refresh", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await expect(page.locator('.edge-app-shell[data-edge-product="RetailEdge"], .edge-app-shell[data-edge-product="retailedge"]').first()).toBeAttached();
+
+		await page.evaluate(() => frappe.set_route("action-center"));
+		await page.getByRole("heading", { name: "Action Centre", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+
+		await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
+		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+		await expect(page.locator(".edge-app-shell .edge-sidebar").first()).toBeAttached();
+		await expect(page.locator(".home-intelligence-card")).toHaveCount(8);
+
+		await page.goForward({ waitUntil: "domcontentloaded" }).catch(() => null);
+		await page.getByRole("heading", { name: "Action Centre", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+		await expect(page.locator(".edge-app-shell .edge-sidebar").first()).toBeAttached();
+	} finally {
+		await context.close();
+	}
+});
+
+test("RC3 PR56 multi-Branch persona receives the shared working-Branch switcher", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.multiBranch);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const switcher = page.locator('[aria-label="Working branch"]');
+		await expect(switcher).toBeVisible();
+		await expect(switcher).toContainText(LAGOS);
+		const trigger = switcher.locator("button").first();
+		await expect(trigger).toBeVisible();
+		await expect(trigger).toBeEnabled();
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 restricted Branch Manager reaches Home, Action Centre and Banking workspace", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.branchManager);
 	try {

@@ -45,7 +45,7 @@
 					:modelValue="values.source_branch"
 					label="Source Branch"
 					placeholder="Search source branch"
-					description="Loads the branch's assigned source stock location when available."
+					description="Only enabled Branch Setup entries for the active Company are shown."
 					:searcher="searchSourceBranch"
 					:context="searchContext"
 					@update:modelValue="setSourceBranch"
@@ -55,8 +55,9 @@
 					:modelValue="values.source_warehouse"
 					label="Source Stock Location"
 					placeholder="Search source stock location"
-					description="Selecting an assigned stock location resolves its Branch automatically."
+					description="Source Stock Locations are limited to the selected Company and Source Branch."
 					:required="true"
+					:disabled="requiresBranchSelection && !values.source_branch"
 					:searcher="searchSourceWarehouse"
 					:context="searchContext"
 					@update:modelValue="setSourceWarehouse"
@@ -67,7 +68,7 @@
 					:modelValue="values.target_branch"
 					label="Destination Branch"
 					placeholder="Search destination branch"
-					description="Loads the branch's assigned destination stock location when available."
+					description="Only enabled Branch Setup entries for the active Company are shown."
 					:searcher="searchTargetBranch"
 					:context="searchContext"
 					@update:modelValue="setTargetBranch"
@@ -77,8 +78,9 @@
 					:modelValue="values.target_warehouse"
 					label="Destination Stock Location"
 					placeholder="Search destination stock location"
-					description="Selecting an assigned stock location resolves its Branch automatically."
+					description="Destination Stock Locations are limited to the selected Company and Destination Branch."
 					:required="true"
+					:disabled="requiresBranchSelection && !values.target_branch"
 					:searcher="searchTargetWarehouse"
 					:context="searchContext"
 					@update:modelValue="setTargetWarehouse"
@@ -131,7 +133,7 @@
 					<button
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading || sameWarehouse"
+						:disabled="saving || loading || !transferContextReady"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -215,6 +217,9 @@ export default {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
+		requiresBranchSelection() {
+			return Boolean(this.formContext.capabilities?.requires_branch_selection);
+		},
 		canCreateItem() {
 			return Boolean(this.formContext.capabilities?.can_create_item);
 		},
@@ -233,6 +238,12 @@ export default {
 					this.values.target_warehouse &&
 					this.values.source_warehouse === this.values.target_warehouse
 			);
+		},
+		transferContextReady() {
+			if (this.sameWarehouse) return false;
+			if (!this.values.source_warehouse || !this.values.target_warehouse) return false;
+			if (this.requiresBranchSelection && (!this.values.source_branch || !this.values.target_branch)) return false;
+			return true;
 		},
 	},
 	watch: {
@@ -427,7 +438,7 @@ export default {
 			this.values.items = (nextRows || []).map((row) => ({ ...row }));
 		},
 		async saveDraft() {
-			if (this.saving || this.loading || this.sameWarehouse) return;
+			if (this.saving || this.loading || !this.transferContextReady) return;
 			this.saveError = "";
 			this.saving = true;
 			try {

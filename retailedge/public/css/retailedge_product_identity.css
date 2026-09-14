@@ -1,0 +1,519 @@
+/*
+ * RetailEdge product visual identity.
+ *
+ * EdgeSuite UI owns primitives and interaction behaviour.
+ * RetailEdge owns the commercial/operational presentation composed from them.
+ * Keep every selector scoped to the active RetailEdge shell so VetEdge, EduEdge,
+ * Frappe Desk, and other products are unaffected.
+ */
+
+body.edge-suite-product-retailedge,
+[data-edge-product="retailedge"] {
+	--retailedge-ink: #0b1f33;
+	--retailedge-ink-soft: #395168;
+	--retailedge-brand: #0f8f7f;
+	--retailedge-brand-strong: #087466;
+	--retailedge-brand-soft: #e5f7f3;
+	--retailedge-money: #13795b;
+	--retailedge-warning: #b96800;
+	--retailedge-danger: #b42318;
+	--retailedge-surface: #ffffff;
+	--retailedge-surface-muted: #f4f7f9;
+	--retailedge-border: #d9e2e8;
+	--retailedge-sidebar: #0b1f33;
+	--retailedge-sidebar-muted: #9eb0bf;
+	--retailedge-sidebar-active: #163b4d;
+	--retailedge-radius: 10px;
+	--retailedge-shadow: 0 8px 24px rgba(11, 31, 51, 0.08);
+
+	/* Override shared EdgeSuite tokens without copying the shared components. */
+	--edge-color-brand-50: var(--retailedge-brand-soft);
+	--edge-color-brand-100: #c9eee7;
+	--edge-color-brand-500: var(--retailedge-brand);
+	--edge-color-brand-600: var(--retailedge-brand);
+	--edge-color-brand-700: var(--retailedge-brand-strong);
+	--edge-color-ink-950: var(--retailedge-ink);
+	--edge-color-ink-700: var(--retailedge-ink-soft);
+	--edge-color-surface-muted: var(--retailedge-surface-muted);
+	--edge-color-border: var(--retailedge-border);
+	--edge-radius-sm: 0.45rem;
+	--edge-radius-md: 0.625rem;
+	--edge-radius-lg: 0.875rem;
+	--edge-shadow-sm: 0 1px 2px rgba(11, 31, 51, 0.06);
+	--edge-shadow-md: var(--retailedge-shadow);
+	--edge-page-padding: 1.15rem;
+	--edge-section-gap: 1rem;
+	--edge-card-gap: 0.85rem;
+}
+
+/* Commercial shell: dark operational rail + compact light work surface. */
+body.edge-suite-product-retailedge .edge-app-shell,
+[data-edge-product="retailedge"].edge-app-shell {
+	background: var(--retailedge-surface-muted);
+	min-height: 100%;
+}
+
+body.edge-suite-product-retailedge .edge-app-shell__sidebar,
+[data-edge-product="retailedge"] .edge-app-shell__sidebar {
+	background:
+		linear-gradient(180deg, rgba(15, 143, 127, 0.12), transparent 11rem),
+		var(--retailedge-sidebar);
+	border-right: 0;
+	color: #f7fbfc;
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__brand,
+[data-edge-product="retailedge"] .edge-sidebar__brand {
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	padding-block: 1rem;
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__mark,
+[data-edge-product="retailedge"] .edge-sidebar__mark {
+	background: var(--retailedge-brand);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 8px;
+	color: #fff;
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__brand-copy strong,
+[data-edge-product="retailedge"] .edge-sidebar__brand-copy strong {
+	color: #fff;
+	letter-spacing: -0.015em;
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__brand-copy small,
+[data-edge-product="retailedge"] .edge-sidebar__brand-copy small {
+	color: var(--retailedge-sidebar-muted);
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__section-toggle,
+[data-edge-product="retailedge"] .edge-sidebar__section-toggle {
+	color: #b8c7d2;
+	font-size: 0.7rem;
+	font-weight: 750;
+	letter-spacing: 0.055em;
+	text-transform: uppercase;
+}
+
+body.edge-suite-product-retailedge .edge-sidebar-item,
+[data-edge-product="retailedge"] .edge-sidebar-item {
+	border: 1px solid transparent;
+	border-radius: 8px;
+	color: #dce6ec;
+	min-height: 2.45rem;
+}
+
+body.edge-suite-product-retailedge .edge-sidebar-item:hover,
+[data-edge-product="retailedge"] .edge-sidebar-item:hover {
+	background: rgba(255, 255, 255, 0.07);
+	color: #fff;
+}
+
+body.edge-suite-product-retailedge .edge-sidebar-item.active,
+[data-edge-product="retailedge"] .edge-sidebar-item.active {
+	background: var(--retailedge-sidebar-active);
+	border-color: rgba(33, 201, 174, 0.28);
+	box-shadow: inset 3px 0 0 var(--retailedge-brand);
+	color: #fff;
+}
+
+body.edge-suite-product-retailedge .edge-sidebar-item__description,
+[data-edge-product="retailedge"] .edge-sidebar-item__description {
+	color: var(--retailedge-sidebar-muted);
+}
+
+/* RetailEdge top bar behaves like an operational context strip. */
+body.edge-suite-product-retailedge .edge-topbar,
+[data-edge-product="retailedge"] .edge-topbar {
+	background: rgba(255, 255, 255, 0.97);
+	border-bottom: 1px solid var(--retailedge-border);
+	box-shadow: 0 1px 0 rgba(11, 31, 51, 0.02);
+}
+
+body.edge-suite-product-retailedge .edge-topbar__mark,
+[data-edge-product="retailedge"] .edge-topbar__mark {
+	background: var(--retailedge-ink);
+	border-radius: 7px;
+	color: #fff;
+}
+
+body.edge-suite-product-retailedge .edge-context-chip,
+[data-edge-product="retailedge"] .edge-context-chip {
+	background: var(--retailedge-brand-soft);
+	border-color: #c6e8e2;
+	color: var(--retailedge-brand-strong);
+}
+
+/* RetailEdge shell identity: company left, working Branch centred, user actions right. */
+body.edge-suite-product-retailedge .edge-topbar__brand,
+[data-edge-product="retailedge"] .edge-topbar__brand {
+	min-width: min(22rem, 32vw);
+}
+
+body.edge-suite-product-retailedge .edge-topbar__mark.edge-identity-mark--image,
+[data-edge-product="retailedge"] .edge-topbar__mark.edge-identity-mark--image {
+	background: #fff;
+	border: 1px solid var(--retailedge-border);
+	overflow: hidden;
+}
+
+body.edge-suite-product-retailedge .edge-topbar__mark .edge-identity-logo,
+[data-edge-product="retailedge"] .edge-topbar__mark .edge-identity-logo {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+body.edge-suite-product-retailedge .edge-topbar-context,
+[data-edge-product="retailedge"] .edge-topbar-context {
+	flex: 1 1 auto;
+	justify-content: center;
+	min-width: 12rem;
+}
+
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher {
+	width: min(25rem, 100%);
+}
+
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__label,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__label,
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__helper,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__helper {
+	display: none;
+}
+
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__trigger,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger {
+	min-height: 2.35rem;
+	border-color: #c7d5dd;
+	border-radius: 999px;
+	background: var(--retailedge-surface-muted);
+	box-shadow: none;
+	font-size: 0.82rem;
+	font-weight: 700;
+	padding-inline: 0.9rem;
+}
+
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__trigger:hover,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger:hover,
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown.is-open .edge-dropdown__trigger,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown.is-open .edge-dropdown__trigger {
+	border-color: var(--retailedge-brand);
+	background: var(--retailedge-brand-soft);
+}
+
+body.edge-suite-product-retailedge .retailedge-topbar-branch-switcher .edge-dropdown__menu,
+[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__menu {
+	left: 50%;
+	right: auto;
+	width: min(25rem, calc(100vw - 2rem));
+	transform: translateX(-50%);
+}
+
+/* Denser page hierarchy: retail users scan figures and exceptions first. */
+body.edge-suite-product-retailedge .edge-page-layout,
+[data-edge-product="retailedge"] .edge-page-layout {
+	gap: 1rem;
+	padding: 1.15rem;
+}
+
+body.edge-suite-product-retailedge .edge-page-header,
+[data-edge-product="retailedge"] .edge-page-header {
+	align-items: center;
+	background: var(--retailedge-surface);
+	border: 1px solid var(--retailedge-border);
+	border-left: 4px solid var(--retailedge-brand);
+	border-radius: var(--retailedge-radius);
+	box-shadow: 0 2px 8px rgba(11, 31, 51, 0.04);
+	padding: 0.9rem 1rem;
+}
+
+body.edge-suite-product-retailedge .edge-page-header__title,
+[data-edge-product="retailedge"] .edge-page-header__title {
+	font-size: clamp(1.35rem, 2vw, 1.75rem);
+	font-weight: 760;
+	letter-spacing: -0.025em;
+}
+
+body.edge-suite-product-retailedge .edge-page-header__subtitle,
+[data-edge-product="retailedge"] .edge-page-header__subtitle {
+	font-size: 0.82rem;
+	margin-top: 0.15rem;
+}
+
+/* Commercial KPI cards: compact, numeric, actionable. */
+body.edge-suite-product-retailedge .edge-dashboard-layout,
+[data-edge-product="retailedge"] .edge-dashboard-layout {
+	gap: 0.8rem;
+}
+
+body.edge-suite-product-retailedge .edge-stat-card,
+[data-edge-product="retailedge"] .edge-stat-card {
+	border-radius: var(--retailedge-radius);
+	box-shadow: none;
+	min-height: 7rem;
+	padding: 0.95rem 1rem;
+	position: relative;
+	transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+body.edge-suite-product-retailedge .edge-stat-card::before,
+[data-edge-product="retailedge"] .edge-stat-card::before {
+	background: var(--retailedge-brand);
+	content: "";
+	height: 3px;
+	inset: 0 0 auto;
+	position: absolute;
+}
+
+body.edge-suite-product-retailedge .edge-stat-card:hover,
+[data-edge-product="retailedge"] .edge-stat-card:hover {
+	border-color: #b7d8d2;
+	box-shadow: 0 6px 18px rgba(11, 31, 51, 0.08);
+	transform: translateY(-1px);
+}
+
+body.edge-suite-product-retailedge .edge-stat-card__label,
+[data-edge-product="retailedge"] .edge-stat-card__label {
+	font-size: 0.72rem;
+	font-weight: 760;
+	letter-spacing: 0.035em;
+	text-transform: uppercase;
+}
+
+body.edge-suite-product-retailedge .edge-stat-card__value,
+[data-edge-product="retailedge"] .edge-stat-card__value {
+	color: var(--retailedge-ink);
+	font-size: clamp(1.45rem, 3vw, 1.85rem);
+	font-variant-numeric: tabular-nums;
+	font-weight: 800;
+}
+
+/* Filters and actions stay compact because operational pages are high-frequency. */
+body.edge-suite-product-retailedge .edge-filter-bar,
+body.edge-suite-product-retailedge .edge-action-bar,
+[data-edge-product="retailedge"] .edge-filter-bar,
+[data-edge-product="retailedge"] .edge-action-bar {
+	border-radius: var(--retailedge-radius);
+	box-shadow: none;
+	gap: 0.7rem;
+	padding: 0.75rem 0.85rem;
+}
+
+body.edge-suite-product-retailedge .edge-button,
+[data-edge-product="retailedge"] .edge-button {
+	border-radius: 7px;
+	min-height: 2.25rem;
+	padding: 0.48rem 0.8rem;
+}
+
+body.edge-suite-product-retailedge .edge-button--primary,
+[data-edge-product="retailedge"] .edge-button--primary {
+	background: var(--retailedge-brand);
+	box-shadow: 0 2px 6px rgba(15, 143, 127, 0.2);
+}
+
+body.edge-suite-product-retailedge .edge-button--primary:hover,
+[data-edge-product="retailedge"] .edge-button--primary:hover {
+	background: var(--retailedge-brand-strong);
+}
+
+/* Tables favour density and ledger-like readability. */
+body.edge-suite-product-retailedge .edge-data-table,
+body.edge-suite-product-retailedge .edge-report-table,
+[data-edge-product="retailedge"] .edge-data-table,
+[data-edge-product="retailedge"] .edge-report-table {
+	border: 1px solid var(--retailedge-border);
+	border-radius: var(--retailedge-radius);
+	overflow: hidden;
+}
+
+body.edge-suite-product-retailedge .edge-data-table th,
+body.edge-suite-product-retailedge .edge-report-table th,
+[data-edge-product="retailedge"] .edge-data-table th,
+[data-edge-product="retailedge"] .edge-report-table th {
+	background: #edf3f5;
+	color: var(--retailedge-ink-soft);
+	font-size: 0.7rem;
+	font-weight: 760;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+body.edge-suite-product-retailedge .edge-data-table td,
+body.edge-suite-product-retailedge .edge-report-table td,
+[data-edge-product="retailedge"] .edge-data-table td,
+[data-edge-product="retailedge"] .edge-report-table td {
+	font-variant-numeric: tabular-nums;
+}
+
+/* Business Hub becomes the reference RetailEdge command-centre composition. */
+body.edge-suite-product-retailedge .retailedge-business-hub .hub-banner,
+[data-edge-product="retailedge"] .retailedge-business-hub .hub-banner {
+	background:
+		linear-gradient(120deg, rgba(15, 143, 127, 0.12), transparent 42%),
+		linear-gradient(180deg, #fff, #f9fbfc);
+	border: 1px solid var(--retailedge-border);
+	border-radius: var(--retailedge-radius);
+	box-shadow: var(--retailedge-shadow);
+}
+
+body.edge-suite-product-retailedge .retailedge-business-hub .hub-eyebrow,
+[data-edge-product="retailedge"] .retailedge-business-hub .hub-eyebrow,
+body.edge-suite-product-retailedge .retailedge-business-hub .section-kicker,
+[data-edge-product="retailedge"] .retailedge-business-hub .section-kicker {
+	color: var(--retailedge-brand-strong);
+	font-size: 0.7rem;
+	font-weight: 800;
+	letter-spacing: 0.075em;
+	text-transform: uppercase;
+}
+
+body.edge-suite-product-retailedge .home-kpi-grid,
+[data-edge-product="retailedge"] .home-kpi-grid {
+	gap: 0.65rem;
+}
+
+body.edge-suite-product-retailedge .home-kpi-card,
+[data-edge-product="retailedge"] .home-kpi-card {
+	background: var(--retailedge-surface);
+	border: 1px solid var(--retailedge-border);
+	border-radius: 9px;
+	box-shadow: none;
+	min-height: 6.7rem;
+	padding: 0.85rem 0.9rem;
+	text-align: left;
+	transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+body.edge-suite-product-retailedge .home-kpi-card:hover,
+[data-edge-product="retailedge"] .home-kpi-card:hover {
+	border-color: #9fcfc6;
+	box-shadow: 0 5px 14px rgba(11, 31, 51, 0.07);
+	transform: translateY(-1px);
+}
+
+body.edge-suite-product-retailedge .home-kpi-card > span,
+[data-edge-product="retailedge"] .home-kpi-card > span {
+	color: var(--retailedge-ink-soft);
+	font-size: 0.7rem;
+	font-weight: 760;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+}
+
+body.edge-suite-product-retailedge .home-kpi-card > strong,
+[data-edge-product="retailedge"] .home-kpi-card > strong {
+	color: var(--retailedge-ink);
+	font-size: clamp(1.25rem, 2.5vw, 1.65rem);
+	font-variant-numeric: tabular-nums;
+	font-weight: 800;
+}
+
+body.edge-suite-product-retailedge .home-signal-card,
+[data-edge-product="retailedge"] .home-signal-card {
+	border: 1px solid var(--retailedge-border);
+	border-radius: var(--retailedge-radius);
+	box-shadow: none;
+}
+
+body.edge-suite-product-retailedge .home-attention-card,
+[data-edge-product="retailedge"] .home-attention-card {
+	border-top: 3px solid var(--retailedge-warning);
+}
+
+body.edge-suite-product-retailedge .home-quick-action,
+[data-edge-product="retailedge"] .home-quick-action {
+	border-radius: 9px;
+}
+
+body.edge-suite-product-retailedge .home-quick-action-icon,
+[data-edge-product="retailedge"] .home-quick-action-icon {
+	background: var(--retailedge-ink);
+	border-radius: 7px;
+	color: #fff;
+}
+
+/* Dark mode keeps the same identity rather than reverting to generic EdgeSuite. */
+html[data-edge-appearance="dark"] body.edge-suite-product-retailedge,
+body.edge-suite-product-retailedge[data-edge-appearance="dark"] {
+	--retailedge-ink: #eef6f8;
+	--retailedge-ink-soft: #b6c7d2;
+	--retailedge-surface: #132632;
+	--retailedge-surface-muted: #0d1b24;
+	--retailedge-border: #2a414e;
+	--retailedge-brand-soft: #123a37;
+	--edge-color-surface: var(--retailedge-surface);
+	--edge-color-surface-muted: var(--retailedge-surface-muted);
+	--edge-color-border: var(--retailedge-border);
+}
+
+html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-topbar,
+body.edge-suite-product-retailedge[data-edge-appearance="dark"] .edge-topbar {
+	background: rgba(19, 38, 50, 0.98);
+}
+
+html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-data-table th,
+html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-report-table th {
+	background: #18303d;
+}
+
+@media (max-width: 991px) {
+	body.edge-suite-product-retailedge .edge-page-layout,
+	[data-edge-product="retailedge"] .edge-page-layout {
+		padding: 0.85rem;
+	}
+
+	body.edge-suite-product-retailedge .edge-page-header,
+	[data-edge-product="retailedge"] .edge-page-header {
+		align-items: stretch;
+	}
+
+	body.edge-suite-product-retailedge .edge-stat-card,
+	[data-edge-product="retailedge"] .edge-stat-card {
+		min-height: 6.25rem;
+	}
+}
+
+@media (max-width: 760px) {
+	[data-edge-product="retailedge"] .edge-topbar__brand {
+		min-width: 0;
+	}
+
+	[data-edge-product="retailedge"] .edge-topbar__title-copy small {
+		display: none;
+	}
+
+	[data-edge-product="retailedge"] .edge-topbar-context {
+		min-width: 0;
+	}
+
+	[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher {
+		width: min(15rem, 100%);
+	}
+
+	[data-edge-product="retailedge"] .retailedge-topbar-branch-switcher .edge-dropdown__trigger {
+		padding-inline: 0.7rem;
+	}
+}
+
+@media (max-width: 600px) {
+	body.edge-suite-product-retailedge .edge-page-layout,
+	[data-edge-product="retailedge"] .edge-page-layout {
+		padding: 0.65rem;
+	}
+
+	body.edge-suite-product-retailedge .edge-page-header,
+	[data-edge-product="retailedge"] .edge-page-header {
+		border-left-width: 3px;
+		padding: 0.75rem;
+	}
+
+	body.edge-suite-product-retailedge .edge-stat-card,
+	[data-edge-product="retailedge"] .edge-stat-card {
+		padding: 0.8rem;
+	}
+}

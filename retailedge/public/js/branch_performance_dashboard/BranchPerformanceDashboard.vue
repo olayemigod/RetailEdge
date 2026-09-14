@@ -44,18 +44,10 @@
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.pos_profile" label="POS Profile" placeholder="All POS Profiles" :searcher="posProfileSearch" @select="onPosProfileSelected" @clear="clearPosProfile" />
 					<EdgeLinkField v-model="filters.cashier" label="Cashier" placeholder="All permitted cashiers" :searcher="cashierSearch" @select="onCashierSelected" @clear="clearCashier" />
-					<label class="edge-field">
-						<span class="edge-field-label">Date Range Preset</span>
-						<select v-model="filters.date_range_preset" class="edge-input" @change="onPresetChange">
-							<option v-for="preset in datePresets" :key="preset" :value="preset">{{ preset }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range Preset" @change="onPresetChange" />
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="filters.date_range_preset = 'Custom Period'" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="filters.date_range_preset = 'Custom Period'" /></label>
-					<label class="edge-field">
-						<span class="edge-field-label">Payment Method</span>
-						<select v-model="filters.payment_method" class="edge-input"><option value="">All payment methods</option><option v-for="method in paymentMethods" :key="method" :value="method">{{ method }}</option></select>
-					</label>
+					<EdgeDropdown v-model="filters.payment_method" :options="paymentMethods" label="Payment Method" placeholder="All payment methods" />
 					<label class="branch-performance-check"><input v-model="filters.only_pos_invoices" type="checkbox" :true-value="1" :false-value="0" /> Only POS invoices</label>
 					<label class="branch-performance-check"><input v-model="filters.include_unattributed" type="checkbox" :true-value="1" :false-value="0" /> Include unattributed</label>
 					<label class="branch-performance-check"><input v-model="filters.include_fallback_branch_resolution" type="checkbox" :true-value="1" :false-value="0" /> Use fallback branch resolution</label>
@@ -94,7 +86,7 @@ import {
 	printDashboard,
 } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField", "EdgeDropdown"];
 const DASHBOARD_KEY = "branch-performance";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -139,8 +131,11 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.branch_performance_dashboard.get_branch_performance_dashboard_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("branch-performance-dashboard") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				if (hubHandoff.from_date && hubHandoff.to_date) this.filters.date_range_preset = "Custom Period";
 				this.capabilities = context.capabilities || this.capabilities;
-				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.paymentMethods = context.payment_methods || [];
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.paymentMethods = context.payment_methods || [];
 				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
@@ -171,7 +166,7 @@ export default {
 		focusBranch(branch) { this.filters.branch = branch === "Unattributed" ? "" : branch; this.filters.pos_profile = ""; this.filters.cashier = ""; this.fetchData(); },
 		openCell(payload) { if (payload?.column?.fieldname === "branch") this.focusBranch(payload.value); },
 		openDetailReport() { if (!this.nativeFallbackEnabled) return; frappe.set_route("query-report", "RetailEdge Branch Performance Summary"); },
-		formatCurrency(value) { try { return frappe.format(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
+		formatCurrency(value) { try { return window.retailedge.formatPlainValue(Number(value || 0), { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatCell(value, column) { if (column?.fieldtype === "Currency") return this.formatCurrency(value); if (value === null || value === undefined || value === "") return "—"; return String(value); },
 	},
 };

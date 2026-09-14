@@ -4,13 +4,10 @@ on:
   push:
     branches:
       - qa/retailedge-reconciled-20260902
+  # Every pull-request candidate must prove upgrade safety on its exact head.
+  # Path filtering allowed substantial runtime/UI candidates to bypass this
+  # release gate even when hooks/settings or operational composition changed.
   pull_request:
-    paths:
-      - ".github/workflows/upgrade-validation.yml"
-      - "retailedge/tests/upgrade_validation_fixture.py"
-      - "retailedge/patches.txt"
-      - "retailedge/patches/**"
-      - "docs/rir2e_consolidated_browser_persona_qa.md"
   workflow_dispatch:
 
 permissions:

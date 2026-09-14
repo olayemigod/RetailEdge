@@ -124,7 +124,7 @@ export default {
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		openRoute(route) { if (route) window.location.assign(route); }, openSection(section) { this.openRoute(section?.route); },
 		sectionDescription() { return "Summary from the existing RetailEdge source report."; },
-		formatCard(card) { try { return frappe.format(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
+		formatCard(card) { try { return window.retailedge.formatPlainValue(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
 	},
 };
 </script>

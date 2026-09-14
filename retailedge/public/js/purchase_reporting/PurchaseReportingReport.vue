@@ -51,12 +51,7 @@
 					</div>
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.supplier" :selectedLabel="supplierLabel" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
-					<label v-if="reportType === 'supplier_payables'" class="edge-field">
-						<span class="edge-field-label">Age</span>
-						<select v-model="filters.ageing_bucket" class="edge-input">
-							<option v-for="bucket in ageingBuckets" :key="bucket" :value="bucket">{{ bucket }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-if="reportType === 'supplier_payables'" v-model="filters.ageing_bucket" :options="ageingBuckets" label="Age" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !requiredReady" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
 				<details class="advanced-filters">
@@ -66,8 +61,8 @@
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.item_code" :selectedLabel="itemLabel" label="Item" placeholder="All items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
 						<EdgeLinkField v-if="reportType === 'purchase_register'" v-model="filters.warehouse" label="Warehouse" placeholder="All warehouses in scope" :searcher="warehouseSearch" @select="onWarehouseSelected" @clear="filters.warehouse = ''" />
-						<label v-if="reportType === 'purchase_register'" class="edge-field"><span class="edge-field-label">Invoice Type</span><select v-model="filters.invoice_kind" class="edge-input" @change="onSupplierFacetChange"><option value="All">All</option><option value="Purchases">Purchases</option><option value="Returns">Returns</option></select></label>
-						<label class="edge-field"><span class="edge-field-label">Invoice Status</span><select v-model="filters.status" class="edge-input" @change="onSupplierFacetChange"><option value="">All statuses</option><option v-for="status in invoiceStatuses" :key="status" :value="status">{{ status }}</option></select></label>
+						<EdgeDropdown v-if="reportType === 'purchase_register'" v-model="filters.invoice_kind" :options="['All', 'Purchases', 'Returns']" label="Invoice Type" @change="onSupplierFacetChange" />
+						<EdgeDropdown v-model="filters.status" :options="invoiceStatuses" label="Invoice Status" placeholder="All statuses" @change="onSupplierFacetChange" />
 					</div>
 				</details>
 			</template>
@@ -95,7 +90,7 @@
 <script>
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
 	purchase_register: {
@@ -171,7 +166,11 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.purchase_reporting.get_purchase_reporting_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";
+				const hubHandoff = this.reportType === "supplier_payables"
+					? window.retailedgeConsumeBusinessHubRouteOptions?.("supplier-payables") || {}
+					: {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				if (this.requiredReady) await this.fetchData();
@@ -242,7 +241,7 @@ export default {
 			else if (column.fieldname === "supplier") frappe.set_route("Form", "Supplier", value);
 		},
 		formatCell(value, column) { return this.formatValue(value, column.fieldtype, column.options || this.companyCurrency); },
-		formatValue(value, fieldtype, currency) { if (value === null || value === undefined || value === "") return "—"; if (fieldtype === "Currency") { const number = Number(value); if (!Number.isFinite(number)) return String(value); try { return frappe.format(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); } catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (fieldtype === "Float") { const number = Number(value); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 4 }) : String(value); } if (fieldtype === "Int") return Number(value).toLocaleString(); if (fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
+		formatValue(value, fieldtype, currency) { if (value === null || value === undefined || value === "") return "—"; if (fieldtype === "Currency") { const number = Number(value); if (!Number.isFinite(number)) return String(value); try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); } catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (fieldtype === "Float") { const number = Number(value); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 4 }) : String(value); } if (fieldtype === "Int") return Number(value).toLocaleString(); if (fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
 	},
 };
 </script>

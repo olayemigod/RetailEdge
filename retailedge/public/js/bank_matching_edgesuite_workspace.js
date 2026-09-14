@@ -220,6 +220,10 @@
 					state.userName = context.context?.user_name || context.context?.user || "";
 					if (!state.filters.company) state.filters.company = context.context?.company || "";
 					if (!state.filters.branch) state.filters.branch = context.context?.branch || "";
+					const hubHandoff = global.retailedgeConsumeBusinessHubRouteOptions?.(PAGE_NAME) || {};
+					Object.assign(state.filters, hubHandoff);
+					if (hubHandoff.company) state.tenantName = hubHandoff.company;
+					if (hubHandoff.branch) state.branchName = hubHandoff.branch;
 				}
 
 				function handleNavigation(route) {

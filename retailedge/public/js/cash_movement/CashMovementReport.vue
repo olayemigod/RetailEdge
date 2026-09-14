@@ -74,13 +74,7 @@
 						@select="onAccountSelected"
 						@clear="clearAccount"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">Movement Type</span>
-						<select v-model="filters.movement_type" class="edge-input">
-							<option value="">All movements</option>
-							<option v-for="movement in movementTypes" :key="movement" :value="movement">{{ movement }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.movement_type" :options="movementTypes" label="Movement Type" placeholder="All movements" />
 					<label class="edge-field">
 						<span class="edge-field-label">From Date</span>
 						<input v-model="filters.from_date" type="date" class="edge-input" />
@@ -117,6 +111,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeReportShell",
 	"EdgeLinkField",
 	"EdgeExportMenu",
+	"EdgeDropdown",
 ];
 
 const REPORT_PRODUCT = "RetailEdge";
@@ -257,8 +252,10 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				this.tenantName = context.tenant_name || this.filters.company || "";
-				this.branchName = context.branch_name || this.filters.branch || "";
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("cash-movement") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
+				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.movementTypes = context.movement_types || [];
 				this.dateRangeLimit = Number(context.limits?.date_range_days || 366);
@@ -450,7 +447,7 @@ export default {
 			if (fieldtype === "Currency") {
 				const number = Number(value);
 				if (!Number.isFinite(number)) return String(value);
-				try { return frappe.format(number, { fieldtype: "Currency" }); }
+				try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency" }); }
 				catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 			}
 			if (fieldtype === "Int") return Number(value).toLocaleString();

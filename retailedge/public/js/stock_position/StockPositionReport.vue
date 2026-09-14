@@ -89,12 +89,7 @@
 						@select="onItemSelected"
 						@clear="clearItem"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">Stock Status</span>
-						<select v-model="filters.stock_status" class="edge-input">
-							<option v-for="status in stockStatuses" :key="status" :value="status">{{ status }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.stock_status" :options="stockStatuses" label="Stock Status" placeholder="All stock statuses" />
 					<label class="include-zero-field">
 						<input v-model="includeZero" type="checkbox" />
 						<span>
@@ -125,7 +120,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "stock-position";
 
@@ -277,8 +272,10 @@ export default {
 					callMethod("retailedge.operating_report_defaults.get_replenishment_handoff_context"),
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				this.tenantName = context.tenant_name || this.filters.company || "";
-				this.branchName = context.branch_name || this.filters.branch || "";
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("stock-position") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
+				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
 				this.showCosts = Boolean(Number(context.show_costs));
@@ -518,7 +515,7 @@ export default {
 			if (fieldtype === "Currency") {
 				const number = Number(value);
 				if (!Number.isFinite(number)) return String(value);
-				try { return frappe.format(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); }
+				try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); }
 				catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 			}
 			if (fieldtype === "Float") {

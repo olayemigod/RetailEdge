@@ -8,6 +8,8 @@ import frappe
 
 from retailedge.landed_cost_allocation import (
 	MAX_LINK_RESULTS,
+	_lcv_dimension_fields,
+	get_landed_cost_capability,
 	prepare_landed_cost_voucher_draft,
 	search_landed_cost_sources,
 )
@@ -56,6 +58,35 @@ def _native_lcv(source) -> dict:
 
 
 class TestLandedCostAllocation(unittest.TestCase):
+	@patch("retailedge.landed_cost_allocation._permission")
+	def test_capability_load_does_not_require_lcv_dimension_helper(self, mock_permission):
+		mock_permission.return_value = True
+		result = get_landed_cost_capability()
+		self.assertTrue(result["can_prepare_landed_cost"])
+		self.assertTrue(result["can_use_purchase_receipt"])
+		self.assertTrue(result["can_use_purchase_invoice"])
+
+	@patch(
+		"erpnext.accounts.doctype.accounting_dimension.accounting_dimension.get_accounting_dimensions",
+		return_value=["business_unit", "project", "business_unit"],
+	)
+	def test_lcv_dimensions_use_accounting_dimension_api_with_stable_defaults(self, _mock_dimensions):
+		self.assertEqual(
+			_lcv_dimension_fields(),
+			["cost_center", "project", "business_unit"],
+		)
+
+	def test_module_does_not_import_minor_version_lcv_dimension_helper(self):
+		from pathlib import Path
+
+		source = (
+			Path(__file__).resolve().parents[1] / "landed_cost_allocation.py"
+		).read_text(encoding="utf-8")
+		self.assertNotIn(
+			"from erpnext.stock.doctype.landed_cost_voucher.landed_cost_voucher import get_lcv_dimension_fields",
+			source,
+		)
+
 	@patch("retailedge.landed_cost_allocation.make_lcv")
 	@patch("retailedge.landed_cost_allocation._validate_native_purchase_return_source")
 	@patch("retailedge.landed_cost_allocation.frappe.get_doc")

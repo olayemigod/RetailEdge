@@ -29,14 +29,7 @@
 						@select="selectFilterCompany"
 						@clear="clearFilterCompany"
 					/>
-					<label class="manager-field">
-						<span>Status</span>
-						<select v-model="filters.active_status" class="edge-input">
-							<option value="All">All</option>
-							<option value="Active">Active</option>
-							<option value="Inactive">Inactive</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.active_status" :options="['All', 'Active', 'Inactive']" label="Status" />
 					<label class="manager-field manager-search">
 						<span>Search</span>
 						<input v-model="filters.search_text" class="edge-input" placeholder="Name, code or description" @keyup.enter="applyFilters" />
@@ -151,6 +144,7 @@
 
 <script>
 const EdgeLinkField = window.EdgeSuiteUI?.components?.EdgeLinkField;
+const EdgeDropdown = window.EdgeSuiteUI?.components?.EdgeDropdown;
 
 function callMethod(method, args = {}) {
 	return new Promise((resolve, reject) => frappe.call({
@@ -180,7 +174,7 @@ function blankForm() {
 
 export default {
 	name: "ExpenseCategoryManager",
-	components: { EdgeLinkField },
+	components: { EdgeLinkField, EdgeDropdown },
 	props: {
 		initialAction: { type: String, default: "list" },
 		initialName: { type: String, default: "" },

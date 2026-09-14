@@ -4,6 +4,7 @@ app_publisher = "ProcessEdge Solutions"
 app_description = "Retail operations, POS control, sales audit, payment verification, branch workflows, and retail intelligence for ERPNext/POSNext."
 app_email = "support@processedge.com.ng"
 app_license = "MIT"
+app_home = "/desk/retailedge-business-hub"
 
 # The standalone ProcessEdge EdgeSuite UI app is the only supported shared
 # frontend runtime for new RetailEdge product pages. RetailEdge must not depend
@@ -32,9 +33,11 @@ app_include_css = [
 	"/assets/retailedge/css/retailedge_cards.css",
 	"/assets/retailedge/css/retailedge_workspace_home.css",
 	"/assets/retailedge/css/retailedge_guided_create_menu.css",
+	"/assets/retailedge/css/retailedge_product_identity.css",
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
+	"/assets/retailedge/js/retailedge_shell_context.js",
 	"/assets/retailedge/js/retailedge_business_hub_bootstrap.js",
 	"/assets/retailedge/js/retailedge_reporting_actions.js",
 	"/assets/retailedge/js/new_document_operating_defaults.js",

@@ -46,8 +46,8 @@
 					<EdgeLinkField v-model="filters.cashier" :selectedLabel="cashierLabel" label="Cashier" placeholder="All cashiers" :searcher="cashierSearch" @select="onCashierSelected" @clear="clearCashier" />
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">Audit Status</span><select v-model="filters.audit_status" class="edge-input"><option value="">All</option><option v-for="status in auditStatuses" :key="status" :value="status">{{ status }}</option></select></label>
-					<label class="edge-field"><span class="edge-field-label">Audit Result</span><select v-model="filters.audit_result" class="edge-input"><option value="">All</option><option v-for="result in auditResults" :key="result" :value="result">{{ result }}</option></select></label>
+					<EdgeDropdown v-model="filters.audit_status" :options="auditStatuses" label="Audit Status" placeholder="All" />
+					<EdgeDropdown v-model="filters.audit_result" :options="auditResults" label="Audit Result" placeholder="All" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
 			</template>
@@ -61,7 +61,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "daily-sales-audit";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -123,7 +123,7 @@ export default {
 		handleSortChange(sort) { this.reportSort = sort || null; this.currentPage = 1; return this.fetchData(); },
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); }, setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); }, rowKey(row, index) { return row.name || `daily-sales-audit:${index}`; },
 		handleCellClick(payload) { if (!this.canUseNativeDesk) return; const column = payload?.column; const row = payload?.row; if (!column || !row) return; const value = row[column.fieldname]; if (!value) return; if (column.fieldname === "name") frappe.set_route("Form", "RetailEdge Daily Sales Audit", value); else if (column.fieldname === "cashier" || ["submitted_for_review_by", "approved_by", "rejected_by"].includes(column.fieldname)) frappe.set_route("Form", "User", value); else if (column.fieldname === "pos_profile") frappe.set_route("Form", "POS Profile", value); else if (column.fieldname === "pos_opening_shift") frappe.set_route("Form", "POS Opening Shift", value); else if (column.fieldname === "pos_closing_shift") frappe.set_route("Form", "POS Closing Shift", value); },
-		formatCell(value, column) { if (value === null || value === undefined || value === "") return "—"; if (column.fieldtype === "Currency") { try { return frappe.format(Number(value), { fieldtype: "Currency" }); } catch (_error) { return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (column.fieldtype === "Check") return Number(value) ? __("Yes") : __("No"); if (column.fieldtype === "Int") return Number(value).toLocaleString(); if (column.fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
+		formatCell(value, column) { if (value === null || value === undefined || value === "") return "—"; if (column.fieldtype === "Currency") { try { return window.retailedge.formatPlainValue(Number(value), { fieldtype: "Currency" }); } catch (_error) { return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (column.fieldtype === "Check") return Number(value) ? __("Yes") : __("No"); if (column.fieldtype === "Int") return Number(value).toLocaleString(); if (column.fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
 	},
 };
 </script>

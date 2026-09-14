@@ -38,6 +38,9 @@
 			<div v-if="saveError" class="guided-invoice-error" role="alert">
 				{{ saveError }}
 			</div>
+			<div v-else-if="stockContextMessage" class="guided-invoice-warning" role="status">
+				{{ stockContextMessage }}
+			</div>
 
 			<div class="guided-invoice-grid">
 				<EdgeLinkField
@@ -64,7 +67,7 @@
 					:modelValue="values.branch"
 					label="Branch"
 					placeholder="Search branch"
-					description="Selecting a Branch loads its preferred assigned stock location when available."
+					description="Only enabled Branch Setup entries for the active Company are shown. Selecting one loads its preferred stock location."
 					:searcher="searchBranch"
 					:context="searchContext"
 					@update:modelValue="setBranch"
@@ -74,8 +77,9 @@
 					:modelValue="values.warehouse"
 					label="Stock Location"
 					placeholder="Search stock location"
-					description="Selecting an assigned stock location resolves its Branch automatically."
+					description="Stock Locations are limited to the selected Company and enabled Branch Setup."
 					:required="Boolean(values.update_stock)"
+					:disabled="requiresBranchSelection && !values.branch"
 					:searcher="searchWarehouse"
 					:context="searchContext"
 					@update:modelValue="setWarehouse"
@@ -83,10 +87,16 @@
 			</div>
 
 			<label class="guided-check-field">
-				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
+				<input
+					v-model="values.update_stock"
+					type="checkbox"
+					:true-value="1"
+					:false-value="0"
+					:disabled="!canEditUpdateStock"
+				/>
 				<span>
 					<strong>Update Stock</strong>
-					<small>Post stock movement when the invoice is eventually submitted.</small>
+					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by RetailEdge settings for Make a Sale." }}</small>
 				</span>
 			</label>
 
@@ -131,7 +141,7 @@
 					<button
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading"
+						:disabled="saving || loading || !transactionContextReady"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -167,7 +177,7 @@ function emptyValues() {
 		posting_date: "",
 		warehouse: "",
 		customer: "",
-		update_stock: 0,
+		update_stock: 1,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -235,6 +245,25 @@ export default {
 		branchEnabled() {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
+		requiresBranchSelection() {
+			return Boolean(this.formContext.capabilities?.requires_branch_selection);
+		},
+		canEditUpdateStock() {
+			return Boolean(this.formContext.capabilities?.can_edit_update_stock);
+		},
+		transactionContextReady() {
+			if (!this.values.update_stock) return true;
+			if (this.requiresBranchSelection && !this.values.branch) return false;
+			return Boolean(this.values.warehouse);
+		},
+		stockContextMessage() {
+			if (!this.values.update_stock) return "";
+			if (this.requiresBranchSelection && !this.values.branch) {
+				return "Choose a Branch before selecting the Stock Location.";
+			}
+			if (!this.values.warehouse) return "Choose a Stock Location before saving this stock-updating sale.";
+			return "";
+		},
 		canCreateCustomer() {
 			return Boolean(this.formContext.capabilities?.can_create_customer);
 		},
@@ -278,6 +307,9 @@ export default {
 					...(data.defaults || {}),
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
+				if (!this.formContext.capabilities?.can_edit_update_stock) {
+					this.values.update_stock = 1;
+				}
 				if (this.formContext.capabilities?.can_override_rate === false) {
 					this.itemColumns = this.itemColumns.map((column) =>
 						column.fieldname === "rate" ? { ...column, read_only: 1 } : column
@@ -464,7 +496,7 @@ export default {
 			});
 		},
 		async saveDraft() {
-			if (this.saving || this.loading) return;
+			if (this.saving || this.loading || !this.transactionContextReady) return;
 			this.saveError = "";
 			this.saving = true;
 			try {
@@ -548,8 +580,17 @@ export default {
 	margin: -8px 0 0;
 	font-size: 0.8rem;
 }
+.guided-invoice-warning,
 .guided-invoice-error {
 	padding: 10px 12px;
+}
+.guided-invoice-warning {
+	border: 1px solid var(--edge-warning, #f79009);
+	border-radius: 8px;
+	color: var(--edge-text, #344054);
+	background: var(--edge-warning-subtle, #fffaeb);
+}
+.guided-invoice-error {
 	border: 1px solid var(--edge-danger, #d92d20);
 	border-radius: 8px;
 	color: var(--edge-danger, #b42318);

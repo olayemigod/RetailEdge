@@ -41,11 +41,7 @@
 							<h3>Find a permitted customer document</h3>
 						</div>
 
-						<label class="field-label" for="output-document-type">Document type</label>
-						<select id="output-document-type" v-model="selectedDocumentKey" class="edge-control" @change="resetDocumentSelection">
-							<option value="">Choose document type</option>
-							<option v-for="document in readableDocuments" :key="document.key" :value="document.key">{{ document.label }}</option>
-						</select>
+						<EdgeDropdown id="output-document-type" v-model="selectedDocumentKey" :options="readableDocuments.map((document) => ({ value: document.key, label: document.label }))" label="Document type" placeholder="Choose document type" @change="resetDocumentSelection" />
 
 						<label class="field-label" for="output-document-search">Document</label>
 						<div class="search-row">
@@ -74,12 +70,7 @@
 						<EdgeEmptyState v-else-if="!details" title="Nothing selected" description="Choose a permitted document to see Print, PDF, Email and WhatsApp options." />
 						<div v-else class="action-form">
 							<div class="field-grid">
-								<div>
-									<label class="field-label" for="output-print-format">Print Format</label>
-									<select id="output-print-format" v-model="printFormat" class="edge-control" :disabled="!details.can_print">
-										<option v-for="format in details.print_formats || ['Standard']" :key="format" :value="format">{{ format }}</option>
-									</select>
-								</div>
+								<EdgeDropdown id="output-print-format" v-model="printFormat" :options="details.print_formats || ['Standard']" label="Print Format" :disabled="!details.can_print" />
 								<label class="letterhead-toggle"><input v-model="useLetterhead" type="checkbox" /><span>Use ERPNext Letterhead</span></label>
 							</div>
 
@@ -119,7 +110,7 @@ const SEARCH_METHOD = "retailedge.document_output.search_output_documents";
 const DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const EMAIL_METHOD = "retailedge.document_output.send_document_email";
 const WHATSAPP_METHOD = "retailedge.document_output.get_whatsapp_handoff";
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge", "EdgeDropdown"];
 
 function runtimeComponents() {
 	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;

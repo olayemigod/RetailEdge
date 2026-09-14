@@ -24,13 +24,7 @@
 					</div>
 
 					<div class="quote-capture__form">
-						<label class="quote-field">
-							<span>Supplier</span>
-							<select v-model="capture.supplier" class="edge-input" :disabled="capture.saving" @change="onCaptureSupplierChanged">
-								<option value="">Choose supplier</option>
-								<option v-for="option in capture.preview.suppliers || []" :key="option.value" :value="option.value">{{ option.label || option.value }}</option>
-							</select>
-						</label>
+						<EdgeDropdown v-model="capture.supplier" :options="(capture.preview.suppliers || []).map((option) => ({ value: option.value, label: option.label || option.value }))" label="Supplier" placeholder="Choose supplier" :disabled="capture.saving" @change="onCaptureSupplierChanged" />
 						<label class="quote-field"><span>Quotation Date</span><input v-model="capture.transaction_date" class="edge-input" type="date" :disabled="capture.saving" /></label>
 						<label class="quote-field"><span>Valid Till</span><input v-model="capture.valid_till" class="edge-input" type="date" :disabled="capture.saving" /></label>
 						<label class="quote-field"><span>Supplier Reference</span><input v-model.trim="capture.quotation_number" class="edge-input" type="text" :disabled="capture.saving" placeholder="Optional quote/reference number" /></label>
@@ -156,6 +150,7 @@ export default {
 	components: {
 		EdgeModal: runtime.EdgeModal,
 		EdgeLinkField: runtime.EdgeLinkField,
+		EdgeDropdown: runtime.EdgeDropdown,
 		EdgeLoadingState: runtime.EdgeLoadingState,
 		EdgeErrorState: runtime.EdgeErrorState,
 		EdgeEmptyState: runtime.EdgeEmptyState,

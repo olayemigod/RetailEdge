@@ -17,9 +17,13 @@ from retailedge.branch_context import (
 	get_user_allowed_branches,
 	has_field,
 	user_has_global_branch_access,
-	validate_user_branch_access,
 )
-from retailedge.operating_context import get_operating_context
+from retailedge.operating_context import (
+	get_allowed_operating_branches,
+	get_operating_context,
+	get_operational_branch_scope,
+	validate_operating_branch,
+)
 
 PURCHASE_ORDER_DOCTYPE = "Purchase Order"
 PURCHASE_RECEIPT_DOCTYPE = "Purchase Receipt"
@@ -66,10 +70,30 @@ def _document_branch(doc: Any) -> str:
 
 
 def _resolve_scope(company: str | None = None, branch: str | None = None) -> tuple[str, str, list[str], bool]:
+	"""Resolve Professional Purchasing scope from the active operating context.
+
+	An active Operating Company / Branch is authoritative. Browser-supplied filters
+	may narrow a company-wide context, but they may not silently switch away from
+	the active operating context.
+	"""
+	user = frappe.session.user
 	operating = get_operating_context() or {}
+	active_company = str(operating.get("company") or "").strip()
+	active_branch = str(operating.get("branch") or "").strip()
+	requested_company = str(company or "").strip()
+	requested_branch = str(branch or "").strip()
+
+	if active_company and requested_company and requested_company != active_company:
+		frappe.throw(
+			_("Change Operating Company before using Professional Purchasing for Company {0}.").format(
+				requested_company
+			),
+			frappe.PermissionError,
+		)
+
 	resolved_company = str(
-		company
-		or operating.get("company")
+		active_company
+		or requested_company
 		or frappe.defaults.get_user_default("Company")
 		or ""
 	).strip()
@@ -77,24 +101,35 @@ def _resolve_scope(company: str | None = None, branch: str | None = None) -> tup
 		frappe.throw(_("Choose an Operating Company before using Professional Purchasing."))
 	_assert_read("Company", resolved_company)
 
-	resolved_branch = str(branch or "").strip()
-	if not resolved_branch and (not company or resolved_company == str(operating.get("company") or "")):
-		resolved_branch = str(operating.get("branch") or "").strip()
-	if resolved_branch:
-		validate_user_branch_access(
-			resolved_branch,
-			user=frappe.session.user,
-			company=resolved_company,
-			throw=True,
+	if active_branch and requested_branch and requested_branch != active_branch:
+		frappe.throw(
+			_("Change Operating Branch before using Professional Purchasing for Branch {0}.").format(
+				requested_branch
+			),
+			frappe.PermissionError,
 		)
 
-	global_access = user_has_global_branch_access(user=frappe.session.user)
-	allowed = list(
-		get_user_allowed_branches(user=frappe.session.user, company=resolved_company).get("branches") or []
-	)
-	if resolved_branch and allowed and not global_access and resolved_branch not in allowed:
-		frappe.throw(_("You do not have access to Branch {0}.").format(resolved_branch), frappe.PermissionError)
-	return resolved_company, resolved_branch, allowed, global_access
+	resolved_branch = active_branch or requested_branch
+	scope = get_operational_branch_scope(resolved_company, user=user)
+	allowed = list(scope.get("allowed_branches") or [])
+	unrestricted = not bool(scope.get("restricted"))
+
+	if resolved_branch:
+		validate_operating_branch(
+			company=resolved_company,
+			branch=resolved_branch,
+			user=user,
+			throw=True,
+		)
+		if scope.get("restricted") and resolved_branch not in allowed:
+			frappe.throw(
+				_("You do not have active operational access to Branch {0}.").format(
+					resolved_branch
+				),
+				frappe.PermissionError,
+			)
+
+	return resolved_company, resolved_branch, allowed, unrestricted
 
 
 def _branch_scoped_filters(
@@ -464,7 +499,15 @@ def search_professional_purchasing_options(
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	if kind == "company":
-		return search_link("Company", txt, page_length=MAX_LINK_RESULTS)
+		operating = get_operating_context() or {}
+		active_company = str(operating.get("company") or "").strip()
+		filters = {"name": active_company} if active_company else None
+		return search_link(
+			"Company",
+			txt,
+			filters=filters,
+			page_length=MAX_LINK_RESULTS,
+		)
 	if kind in {"supplier", "rfq_supplier"}:
 		return search_link(
 			SUPPLIER_DOCTYPE,
@@ -475,12 +518,29 @@ def search_professional_purchasing_options(
 			link_fieldname="supplier",
 		)
 	if kind == "branch":
-		resolved_company, _branch, allowed, global_access = _resolve_scope(company=company, branch=None)
+		resolved_company, resolved_branch, allowed, unrestricted = _resolve_scope(
+			company=company,
+			branch=None,
+		)
 		filters: dict[str, Any] = {}
 		if has_field("Branch", "company"):
 			filters["company"] = resolved_company
-		if not global_access:
-			filters["name"] = ["in", allowed or ["__no_permitted_branch__"]]
+		if resolved_branch:
+			filters["name"] = resolved_branch
+		else:
+			# Branch options must use the same Branch Setup / permission contract as
+			# Operating Context. In unrestricted company-wide mode, an empty
+			# operational-scope list means "unrestricted", not "show every Branch
+			# regardless of RetailEdge Branch Setup".
+			selectable = (
+				get_allowed_operating_branches(
+					resolved_company,
+					user=frappe.session.user,
+				)
+				if unrestricted
+				else allowed
+			)
+			filters["name"] = ["in", selectable or ["__no_permitted_branch__"]]
 		rows = frappe.get_list(
 			"Branch",
 			filters=filters,
@@ -521,10 +581,10 @@ def prepare_request_for_quotation_draft(
 
 	branch = _document_branch(request)
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
+		validate_operating_branch(
 			company=request.company,
+			branch=branch,
+			user=frappe.session.user,
 			throw=True,
 		)
 
@@ -594,10 +654,10 @@ def prepare_purchase_receipt_draft(purchase_order: str) -> dict[str, Any]:
 
 	branch = _document_branch(po)
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
+		validate_operating_branch(
 			company=po.company,
+			branch=branch,
+			user=frappe.session.user,
 			throw=True,
 		)
 
@@ -714,7 +774,12 @@ def _validate_native_purchase_return_source(source: Any, *, source_label: str) -
 
 	branch = _document_branch(source)
 	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=company, throw=True)
+		validate_operating_branch(
+			company=company,
+			branch=branch,
+			user=frappe.session.user,
+			throw=True,
+		)
 
 	operating = get_operating_context() or {}
 	operating_company = str(operating.get("company") or "").strip()
@@ -762,7 +827,12 @@ def _validate_native_purchase_return_target(
 		setattr(target, target_branch_field, source_branch)
 		target_branch = source_branch
 	if target_branch:
-		validate_user_branch_access(target_branch, user=frappe.session.user, company=company, throw=True)
+		validate_operating_branch(
+			company=company,
+			branch=target_branch,
+			user=frappe.session.user,
+			throw=True,
+		)
 
 	operating_branch = str((get_operating_context() or {}).get("branch") or "").strip()
 	if operating_branch and target_branch and operating_branch != target_branch:

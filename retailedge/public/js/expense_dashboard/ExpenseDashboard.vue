@@ -246,9 +246,9 @@ export default {
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		openRoute(route) { if (route) window.location.assign(route); },
 		openExpense(row) { if (!row) return; if (row.source_doctype === "RetailEdge Business Expense" && this.hasPageTarget("business-expenses")) { frappe.route_options = { business_expense: row.source_reference || "" }; frappe.set_route("business-expenses"); return; } if (row.source_doctype === "Purchase Invoice" && this.hasPageTarget("purchase-register")) { frappe.route_options = { purchase_invoice: row.source_reference || "" }; frappe.set_route("purchase-register"); return; } if (this.canUseNativeDesk && row.source_doctype && row.source_reference) frappe.set_route("Form", row.source_doctype, row.source_reference); },
-		money(value) { try { return frappe.format(value || 0, { fieldtype: "Currency" }); } catch (_error) { return value ?? "—"; } },
+		money(value) { try { return window.retailedge.formatPlainValue(value || 0, { fieldtype: "Currency" }); } catch (_error) { return value ?? "—"; } },
 		percent(value) { if (value == null) return "—"; return `${Number(value).toFixed(1)}%`; },
-		formatValue(value, datatype) { if (datatype === "Percent") return this.percent(value); try { return frappe.format(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
+		formatValue(value, datatype) { if (datatype === "Percent") return this.percent(value); try { return window.retailedge.formatPlainValue(value, { fieldtype: datatype || "Data" }); } catch (_error) { return value ?? "—"; } },
 	},
 };
 </script>

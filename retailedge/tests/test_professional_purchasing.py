@@ -58,7 +58,7 @@ class _DraftRFQ(SimpleNamespace):
 
 class TestProfessionalPurchasing(unittest.TestCase):
 	@patch("retailedge.professional_purchasing._transaction_branch_field", return_value="retailedge_branch")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access")
+	@patch("retailedge.professional_purchasing.validate_operating_branch")
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Lagos")
 	@patch("retailedge.professional_purchasing.make_purchase_receipt")
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
@@ -92,9 +92,9 @@ class TestProfessionalPurchasing(unittest.TestCase):
 
 		mock_mapper.assert_called_once_with("PUR-ORD-0001")
 		mock_branch_access.assert_called_once_with(
-			"Lagos",
-			user=frappe.session.user,
 			company="Demo Company",
+			branch="Lagos",
+			user=frappe.session.user,
 			throw=True,
 		)
 		self.assertEqual(receipt.insert_calls, 1)
@@ -173,7 +173,7 @@ class TestProfessionalPurchasing(unittest.TestCase):
 
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Abuja")
 	@patch("retailedge.professional_purchasing.make_purchase_receipt")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access", side_effect=frappe.PermissionError)
+	@patch("retailedge.professional_purchasing.validate_operating_branch", side_effect=frappe.PermissionError)
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
 	@patch("retailedge.professional_purchasing._assert_create")
 	@patch("retailedge.professional_purchasing._assert_read")
@@ -202,7 +202,7 @@ class TestProfessionalPurchasing(unittest.TestCase):
 		mock_mapper.assert_not_called()
 
 	@patch("retailedge.professional_purchasing._transaction_branch_field", return_value="retailedge_branch")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access")
+	@patch("retailedge.professional_purchasing.validate_operating_branch")
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Lagos")
 	@patch("retailedge.professional_purchasing.make_request_for_quotation")
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
@@ -235,9 +235,9 @@ class TestProfessionalPurchasing(unittest.TestCase):
 
 		mock_mapper.assert_called_once_with(request.name)
 		mock_branch_access.assert_called_once_with(
-			"Lagos",
-			user=frappe.session.user,
 			company="Demo Company",
+			branch="Lagos",
+			user=frappe.session.user,
 			throw=True,
 		)
 		self.assertEqual(rfq.insert_calls, 1)
@@ -325,7 +325,7 @@ class TestProfessionalPurchasing(unittest.TestCase):
 			prepare_request_for_quotation_draft("MAT-MR-EMPTY", ["SUP-001"])
 
 	@patch("retailedge.professional_purchasing.make_request_for_quotation")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access", side_effect=frappe.PermissionError)
+	@patch("retailedge.professional_purchasing.validate_operating_branch", side_effect=frappe.PermissionError)
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Abuja")
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
 	@patch("retailedge.professional_purchasing._assert_create")
@@ -366,8 +366,16 @@ class TestProfessionalPurchasing(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			prepare_request_for_quotation_draft("MAT-MR-0001", [f"SUP-{index:03d}" for index in range(21)])
 
+	@patch(
+		"retailedge.professional_purchasing.get_operating_context",
+		return_value={"company": "Demo Company", "branch": ""},
+	)
 	@patch("retailedge.professional_purchasing.search_link")
-	def test_company_search_preserves_frappe_link_result_shape(self, mock_search_link):
+	def test_company_search_preserves_frappe_link_result_shape_and_active_company_scope(
+		self,
+		mock_search_link,
+		_mock_context,
+	):
 		mock_search_link.return_value = [
 			{"value": "Demo Company", "description": "DC", "label": "Demo Company"}
 		]
@@ -375,7 +383,12 @@ class TestProfessionalPurchasing(unittest.TestCase):
 		result = search_professional_purchasing_options("company", "Demo")
 
 		self.assertEqual(result, mock_search_link.return_value)
-		mock_search_link.assert_called_once_with("Company", "Demo", page_length=20)
+		mock_search_link.assert_called_once_with(
+			"Company",
+			"Demo",
+			filters={"name": "Demo Company"},
+			page_length=20,
+		)
 
 	@patch("retailedge.professional_purchasing.search_link")
 	def test_rfq_supplier_search_uses_native_supplier_link_and_disabled_filter(self, mock_search_link):

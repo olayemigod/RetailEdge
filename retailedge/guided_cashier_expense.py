@@ -145,7 +145,12 @@ def create_guided_cashier_expense_draft(values: dict | str | None = None) -> dic
 		"expense_category": doc.expense_category,
 		"amount": doc.amount,
 		"available_cash_after": flt(doc.available_shift_cash_after_expense),
-		"route": f"/app/retailedge-cashier-expense/{doc.name}",
+		"completion": {
+			"mode": "edgesuite_workflow",
+			"doctype": doc.doctype,
+			"name": doc.name,
+		},
+		"route": "",
 	}
 
 

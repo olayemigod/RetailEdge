@@ -63,12 +63,7 @@
 						dateOrder="DMY"
 						@resolved="onSmartDateResolved"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">Date Range</span>
-						<select v-model="filters.date_range_preset" class="edge-input" @change="onPresetChange">
-							<option v-for="preset in datePresets" :key="preset" :value="preset">{{ preset }}</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range" @change="onPresetChange" />
 					<label class="edge-field">
 						<span class="edge-field-label">From Date</span>
 						<input v-model="filters.from_date" type="date" class="edge-input" @change="onDateChange" />
@@ -94,14 +89,7 @@
 						@select="onCustomerSelected"
 						@clear="clearCustomer"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">Invoice Type</span>
-						<select v-model="filters.invoice_kind" class="edge-input">
-							<option value="All">All</option>
-							<option value="Sales">Sales</option>
-							<option value="Returns">Returns</option>
-						</select>
-					</label>
+					<EdgeDropdown v-model="filters.invoice_kind" :options="['All', 'Sales', 'Returns']" label="Invoice Type" />
 					<div class="filter-action">
 						<button class="edge-primary-button" type="button" :disabled="loading || !requiredReady" @click="applyFilters">
 							{{ loading ? "Loading…" : "Apply Filters" }}
@@ -143,13 +131,7 @@
 							@select="onWarehouseSelected"
 							@clear="filters.warehouse = ''"
 						/>
-						<label class="edge-field">
-							<span class="edge-field-label">Invoice Status</span>
-							<select v-model="filters.status" class="edge-input">
-								<option value="">All statuses</option>
-								<option v-for="status in invoiceStatuses" :key="status" :value="status">{{ status }}</option>
-							</select>
-						</label>
+						<EdgeDropdown v-model="filters.status" :options="invoiceStatuses" label="Invoice Status" placeholder="All statuses" />
 					</div>
 				</details>
 			</template>
@@ -165,7 +147,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
 	sales_by_item: {
@@ -317,9 +299,12 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
-				this.tenantName = context.tenant_name || this.filters.company || "";
-				this.branchName = context.branch_name || this.filters.branch || "";
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("sales-invoice-register") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				if (hubHandoff.from_date && hubHandoff.to_date) this.filters.date_range_preset = "Custom Period";
+				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
+				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
 				this.companyCurrency = context.company_currency || "";
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
@@ -541,7 +526,7 @@ export default {
 			if (fieldtype === "Currency") {
 				const number = Number(value);
 				if (!Number.isFinite(number)) return String(value);
-				try { return frappe.format(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); }
+				try { return window.retailedge.formatPlainValue(number, { fieldtype: "Currency", options: currency || this.companyCurrency }); }
 				catch (_error) { return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 			}
 			if (fieldtype === "Float") {

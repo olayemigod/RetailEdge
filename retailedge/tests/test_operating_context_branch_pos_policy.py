@@ -18,7 +18,8 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			"configured_branches",
 			"Branch Setup is the RetailEdge Company→Branch binding",
 			"if configured_branches:",
-			"if user_has_global_branch_access(user=user):",
+			"global_access = user_has_global_branch_access(user=user)",
+			"if global_access:",
 			"get_allowed_operating_branches",
 			"validate_operating_branch",
 			"has_any_setup and branch not in configured_branches",
@@ -27,7 +28,7 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertLess(
 			source.index("if configured_branches:"),
-			source.index("if user_has_global_branch_access(user=user):"),
+			source.index("if global_access:"),
 		)
 
 	def test_branch_setup_pos_profile_remains_optional_at_schema_level(self):
@@ -92,9 +93,10 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 		preview = self.read("new_document_defaults.py")
 
 		for contract in (
-			"get_operational_branch_scope",
-			"resolve_operational_branch",
-			"validate_operating_branch",
+			"resolve_guided_company",
+			"resolve_guided_branch",
+			"get_guided_branch_names",
+			"get_guided_warehouse_search_filters",
 		):
 			self.assertIn(contract, guided)
 		for contract in (
@@ -104,8 +106,13 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 		):
 			self.assertIn(contract, professional)
 
-		self.assertIn("get_operational_branch_scope", resolver)
-		self.assertIn("resolve_operational_branch", resolver)
+		for contract in (
+			"get_operating_context",
+			"get_operational_branch_scope",
+			"resolve_operational_branch",
+			"get_enabled_branch_profiles",
+		):
+			self.assertIn(contract, resolver)
 		self.assertIn("validate_operating_branch", preview)
 
 	def test_new_policy_keeps_accounting_and_document_safety_boundaries(self):

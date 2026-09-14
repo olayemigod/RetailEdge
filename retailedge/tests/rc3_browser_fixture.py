@@ -22,6 +22,7 @@ EXTRA_PERSONAS = {
 }
 
 ACTIVE_ASSIGNMENTS = {
+	"browser-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-branch-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),),
 	"browser-cashier@example.com": (("RetailEdge RC3 Lagos", "Cashier", 1),),
 	"browser-accounts@example.com": (("RetailEdge RC3 Lagos", "Accounts", 1),),

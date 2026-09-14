@@ -7,23 +7,19 @@ from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate, nowdate
 
-from retailedge.branch_assignment import has_branch_assignments
-from retailedge.branch_context import (
-	BRANCH_FIELD_CANDIDATES,
-	get_first_existing_field,
-	has_doctype,
-	has_field,
-	resolve_branch_from_warehouse,
-	resolve_retailedge_operational_defaults,
-	validate_user_branch_access,
+from retailedge.branch_context import has_doctype, resolve_retailedge_operational_defaults
+from retailedge.guided_entry_context import (
+	get_guided_branch_names,
+	get_guided_branch_search_filters,
+	get_guided_warehouse_search_filters,
+	resolve_guided_branch,
+	resolve_guided_company,
+	resolve_guided_default_branch,
+	validate_guided_branch_warehouse,
 )
-from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
-from retailedge.operating_context import (
-	get_operational_branch_scope,
-	resolve_operational_branch,
-	validate_operating_branch,
-)
+from retailedge.operating_context import get_operating_context, get_operational_branch_scope
+from retailedge.utils.settings import get_retailedge_settings
 
 ACTION_KEY = "new-sales-invoice"
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
@@ -35,9 +31,11 @@ MAX_ITEMS = 50
 def get_simple_sales_invoice_context() -> dict[str, Any]:
 	_assert_can_create_sales_invoice()
 	user = frappe.session.user
-	company = frappe.defaults.get_user_default("Company") or ""
+	operating = get_operating_context() or {}
+	company = resolve_guided_company("", user=user)
 	legacy_default_branch = (
-		frappe.defaults.get_user_default("RetailEdge Branch")
+		operating.get("branch")
+		or frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
 	)
@@ -46,15 +44,11 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 	_assert_read_permission("Company", company)
 
 	scope = get_operational_branch_scope(company, user=user)
-	if scope["restricted"]:
-		if len(scope["allowed_branches"]) <= 1:
-			branch = _resolve_guided_branch(company=company, branch="", user=user)
-		else:
-			branch = ""
-	else:
-		branch = str(legacy_default_branch or "").strip()
-		if branch:
-			branch = _resolve_guided_branch(company=company, branch=branch, user=user)
+	branch = resolve_guided_default_branch(
+		company,
+		str(legacy_default_branch or "").strip(),
+		user=user,
+	)
 
 	defaults = resolve_retailedge_operational_defaults(
 		company=company or None,
@@ -64,11 +58,11 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 	company = defaults.get("company") or company
 	_assert_read_permission("Company", company)
 	if branch:
-		branch = _resolve_guided_branch(company=company, branch=branch, user=user)
-	elif not scope["restricted"] and defaults.get("branch"):
-		branch = _resolve_guided_branch(
-			company=company,
-			branch=defaults.get("branch") or "",
+		branch = resolve_guided_branch(company, branch, user=user)
+	elif defaults.get("branch"):
+		branch = resolve_guided_default_branch(
+			company,
+			defaults.get("branch") or "",
 			user=user,
 		)
 
@@ -81,10 +75,22 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 	if scope["restricted"] and not branch:
 		warehouse = ""
 	if warehouse and branch:
-		_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
+		try:
+			validate_guided_branch_warehouse(
+				branch=branch,
+				warehouse=warehouse,
+				company=company,
+				user=user,
+			)
+		except Exception:
+			warehouse = ""
 
 	pricing = resolve_price_list_context(
 		mode="selling", company=company, branch=branch or "", user=user
+	)
+	settings = get_retailedge_settings()
+	allow_update_stock_edit = bool(
+		getattr(settings, "allow_guided_sales_update_stock_edit", 0)
 	)
 
 	return {
@@ -100,17 +106,21 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 			"posting_date": nowdate(),
 			"warehouse": warehouse,
 			"customer": "",
-			"update_stock": 0,
+			"update_stock": 1,
 			"remarks": "",
 			"items": [{"item_code": "", "qty": 1, "rate": ""}],
 		},
 		"capabilities": {
 			"branch_enabled": bool(has_doctype("Branch")),
+			"requires_branch_selection": bool(
+				get_guided_branch_names(company, user=user)
+			),
 			"can_create_customer": bool(
 				has_doctype("Customer") and frappe.has_permission("Customer", "create")
 			),
 			"can_create_item": bool(has_doctype("Item") and frappe.has_permission("Item", "create")),
 			"can_override_rate": bool(pricing.get("allow_rate_change", True)),
+			"can_edit_update_stock": allow_update_stock_edit,
 			"native_form_fallback": True,
 		},
 		"limits": {"link_results": MAX_LINK_RESULTS, "max_items": MAX_ITEMS},
@@ -127,7 +137,7 @@ def search_simple_sales_invoice_options(
 	_assert_can_create_sales_invoice()
 	values = _coerce_values(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
-	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
+	company = resolve_guided_company(values.get("company") or "", user=frappe.session.user)
 	branch = values.get("branch") or ""
 	customer = values.get("customer") or ""
 
@@ -220,7 +230,14 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 	_assert_read_permission("Customer", customer)
 
 	items = _normalise_items(values.get("items"))
-	update_stock = cint(values.get("update_stock") or 0)
+	configured_branches = get_guided_branch_names(company, user=user)
+	settings = get_retailedge_settings()
+	can_edit_update_stock = bool(
+		getattr(settings, "allow_guided_sales_update_stock_edit", 0)
+	)
+	update_stock = cint(values.get("update_stock") or 0) if can_edit_update_stock else 1
+	if update_stock and configured_branches and not branch:
+		frappe.throw(_("Choose a Branch before saving a stock-updating Sales Invoice."))
 	if update_stock and not warehouse:
 		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
 
@@ -325,114 +342,54 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 
 
 def _resolve_guided_branch(*, company: str, branch: str, user: str) -> str:
-	branch = str(branch or "").strip()
-	# Sites without Branch Assignment history retain the established compatibility
-	# path for explicit Branch values. Assignment-backed users and every blank-
-	# Branch write go through the explicit operational-scope resolver instead.
-	if branch and not has_branch_assignments(user=user):
-		validate_user_branch_access(branch, user=user, company=company, throw=True)
-		validate_operating_branch(company=company, branch=branch, user=user, throw=True)
-		return branch
-	return str(resolve_operational_branch(company, branch, user=user).get("branch") or "").strip()
+	return resolve_guided_branch(company, branch, user=user)
 
 
 def _validate_transaction_context(values: dict[str, Any], *, user: str) -> tuple[str, str, str]:
-	company = str(values.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	company = resolve_guided_company(values.get("company") or "", user=user)
 	if not company:
 		frappe.throw(_("Company is required."))
 	_assert_read_permission("Company", company)
 
-	branch = _resolve_guided_branch(
-		company=company,
-		branch=str(values.get("branch") or "").strip(),
+	branch = resolve_guided_branch(
+		company,
+		str(values.get("branch") or "").strip(),
 		user=user,
 	)
 
 	warehouse = str(values.get("warehouse") or "").strip()
+	configured_branches = get_guided_branch_names(company, user=user)
+	if warehouse and configured_branches and not branch:
+		frappe.throw(_("Choose a Branch before selecting a Stock Location."))
 	if warehouse:
 		_assert_read_permission("Warehouse", warehouse)
 		warehouse_company = frappe.db.get_value("Warehouse", warehouse, "company")
 		if warehouse_company and warehouse_company != company:
 			frappe.throw(_("Warehouse {0} does not belong to Company {1}.").format(warehouse, company))
 		if branch:
-			_validate_branch_warehouse(branch=branch, warehouse=warehouse, company=company, user=user)
+			validate_guided_branch_warehouse(
+				branch=branch,
+				warehouse=warehouse,
+				company=company,
+				user=user,
+			)
 	return company, branch, warehouse
 
 
 def _warehouse_search_filters(company: str, branch: str, user: str) -> dict[str, Any] | None:
-	if not company:
-		return None
-	filters: dict[str, Any] = {"is_group": 0}
-	if has_field("Warehouse", "company"):
-		filters["company"] = company
-	branch = str(branch or "").strip()
-	if not branch:
-		scope = get_operational_branch_scope(company, user=user)
-		if not scope["restricted"]:
-			return filters
-		if len(scope["allowed_branches"]) > 1:
-			return None
-	branch = _resolve_guided_branch(company=company, branch=branch, user=user)
-	if not branch:
-		return filters
-
-	branch_field = get_first_existing_field("Warehouse", BRANCH_FIELD_CANDIDATES)
-	if branch_field:
-		filters[branch_field] = branch
-		return filters
-
-	profile_defaults = get_branch_profile_defaults(company=company or None, branch=branch, user=user)
-	warehouses = _unique(
-		[
-			profile_defaults.get("default_source_warehouse"),
-			profile_defaults.get("default_warehouse"),
-			profile_defaults.get("default_target_warehouse"),
-			profile_defaults.get("default_returns_warehouse"),
-		]
-	)
-	if not warehouses:
-		return None
-	filters["name"] = ["in", warehouses]
-	return filters
+	return get_guided_warehouse_search_filters(company, branch, user=user)
 
 
 def _branch_search_filters(company: str, user: str) -> dict[str, Any]:
-	if not company:
-		return {"name": "__never__"}
-	filters: dict[str, Any] = {}
-	if has_field("Branch", "company"):
-		filters["company"] = company
-	scope = get_operational_branch_scope(company, user=user)
-	if scope["restricted"]:
-		filters["name"] = ["in", scope["allowed_branches"]] if scope["allowed_branches"] else "__never__"
-	return filters
+	return get_guided_branch_search_filters(company, user=user)
 
 
 def _validate_branch_warehouse(*, branch: str, warehouse: str, company: str, user: str) -> None:
-	resolved = resolve_branch_from_warehouse(warehouse, company=company)
-	warehouse_branch = resolved.get("branch")
-	if warehouse_branch:
-		if warehouse_branch != branch:
-			frappe.throw(
-				_("Warehouse {0} belongs to Branch {1}, not Branch {2}.").format(
-					warehouse, warehouse_branch, branch
-				)
-			)
-		return
-
-	profile = get_branch_profile(
-		company=company,
+	validate_guided_branch_warehouse(
 		branch=branch,
-		user=user,
 		warehouse=warehouse,
-		active_only=True,
-	)
-	if profile:
-		return
-	frappe.throw(
-		_("Warehouse {0} is not configured for Branch {1}. Choose a warehouse linked to this branch.").format(
-			warehouse, branch
-		)
+		company=company,
+		user=user,
 	)
 
 
@@ -461,13 +418,3 @@ def _coerce_values(values: dict | str | None) -> dict[str, Any]:
 		return dict(values)
 	frappe.throw(_("Invalid Simple Sales Invoice values."))
 	return {}
-
-
-def _unique(values: list[str | None]) -> list[str]:
-	seen: set[str] = set()
-	result: list[str] = []
-	for value in values:
-		if value and value not in seen:
-			seen.add(value)
-			result.append(value)
-	return result

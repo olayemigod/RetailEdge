@@ -204,8 +204,8 @@ export default {
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.nativeFallbackEnabled) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
 		openRoute(route) { if (route) window.location.assign(route); },
 		openInvoice(name) { if (!this.nativeFallbackEnabled) return; if (name) frappe.set_route("Form", "Sales Invoice", name); },
-		formatValue(card) { try { return frappe.format(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
-		formatCurrency(value) { try { return frappe.format(value, { fieldtype: "Currency" }); } catch (_error) { return value ?? "—"; } },
+		formatValue(card) { try { return window.retailedge.formatPlainValue(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
+		formatCurrency(value) { try { return window.retailedge.formatPlainValue(value, { fieldtype: "Currency" }); } catch (_error) { return value ?? "—"; } },
 		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(String(value)); } catch (_error) { return String(value); } },
 	},
 };

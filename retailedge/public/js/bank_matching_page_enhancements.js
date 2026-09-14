@@ -8,6 +8,9 @@
 	const START_IMPORT_METHOD = "erpnext.accounts.doctype.bank_statement_import.bank_statement_import.form_start_import";
 	const IMPORT_STATUS_METHOD = "erpnext.accounts.doctype.bank_statement_import.bank_statement_import.get_import_status";
 	const MT940_CONVERT_METHOD = "erpnext.accounts.doctype.bank_statement_import.bank_statement_import.convert_mt940_to_csv";
+	const TEMPLATE_SEARCH_METHOD = "retailedge.bank_statement_import.get_bank_statement_template_options";
+	const TEMPLATE_CREATE_METHOD = "retailedge.bank_statement_import.create_bank_statement_template";
+	const TEMPLATE_APPLY_METHOD = "retailedge.bank_statement_import.apply_bank_statement_template";
 	const ALLOWED_FILE_EXTENSIONS = [".csv", ".xls", ".xlsx", ".txt"];
 	let scheduled = false;
 
@@ -263,7 +266,20 @@
 					open: false,
 					busy: false,
 					company: "",
+					branch: "",
 					bankAccount: "",
+					templateName: "",
+					canCreateTemplate: false,
+					templateCreateOpen: false,
+					templateDraft: {
+						template_name: "",
+						date_column: "",
+						debit_column: "",
+						credit_column: "",
+						reference_column: "",
+						narration_column: "",
+						currency_column: "",
+					},
 					file: null,
 					fileName: "",
 					importName: "",
@@ -277,7 +293,20 @@
 
 				function resetState(context = {}) {
 					state.company = clean(context.company);
+					state.branch = clean(context.branch);
 					state.bankAccount = clean(context.bankAccount);
+					state.templateName = "";
+					state.canCreateTemplate = false;
+					state.templateCreateOpen = false;
+					state.templateDraft = {
+						template_name: "",
+						date_column: "",
+						debit_column: "",
+						credit_column: "",
+						reference_column: "",
+						narration_column: "",
+						currency_column: "",
+					};
 					state.file = null;
 					state.fileName = "";
 					state.importName = "";
@@ -289,6 +318,7 @@
 					state.importStarted = false;
 					state.busy = false;
 					state.open = true;
+					setTimeout(refreshTemplateCapability, 0);
 				}
 				host.__retailedgeOpenStatementImport = resetState;
 
@@ -309,12 +339,140 @@
 					}
 				}
 
+
+
+				async function searchBankAccounts(query) {
+					if (!state.company) return [];
+					const response = await global.frappe.call({
+						method: "retailedge.bank_matching_bank_account_cascade.search_bank_matching_bank_accounts",
+						args: {
+							company: state.company,
+							branch: state.branch || "",
+							txt: query || "",
+							limit: 20,
+						},
+					});
+					return Array.isArray(response?.message) ? response.message : [];
+				}
+
+				async function searchTemplates(query) {
+					if (!state.company || !state.bankAccount) return [];
+					const response = await global.frappe.call({
+						method: TEMPLATE_SEARCH_METHOD,
+						args: {
+							company: state.company,
+							bank_account: state.bankAccount,
+							branch: state.branch || "",
+							txt: query || "",
+						},
+					});
+					const payload = response?.message || {};
+					state.canCreateTemplate = Boolean(payload.can_create);
+					return Array.isArray(payload.options) ? payload.options : [];
+				}
+
+				async function refreshTemplateCapability() {
+					if (!state.company || !state.bankAccount) {
+						state.canCreateTemplate = false;
+						return;
+					}
+					try {
+						await searchTemplates("");
+					} catch (_error) {
+						state.canCreateTemplate = false;
+					}
+				}
+
+				function openTemplateCreator() {
+					if (!state.canCreateTemplate || !state.company || !state.bankAccount) return;
+					state.templateDraft = {
+						template_name: "",
+						date_column: "",
+						debit_column: "",
+						credit_column: "",
+						reference_column: "",
+						narration_column: "",
+						currency_column: "",
+					};
+					state.templateCreateOpen = true;
+					state.error = "";
+				}
+
+				function templateField(label, fieldname, options = {}) {
+					return h("label", { class: "retailedge-bank-template-field" }, [
+						h("span", [
+							t(label),
+							options.required ? h("strong", { "aria-hidden": "true" }, " *") : null,
+						]),
+						h("input", {
+							type: "text",
+							value: state.templateDraft[fieldname] || "",
+							placeholder: t(options.placeholder || label),
+							disabled: state.busy,
+							onInput: (event) => { state.templateDraft[fieldname] = event.target.value || ""; },
+						}),
+					]);
+				}
+
+				async function saveTemplate() {
+					const draft = state.templateDraft || {};
+					if (!clean(draft.template_name) || !clean(draft.date_column)) {
+						state.error = t("Template Name and Date Column are required.");
+						return;
+					}
+					if (!clean(draft.debit_column) && !clean(draft.credit_column)) {
+						state.error = t("Add a Debit Column, Credit Column, or both.");
+						return;
+					}
+					state.busy = true;
+					state.error = "";
+					try {
+						const response = await global.frappe.call({
+							method: TEMPLATE_CREATE_METHOD,
+							type: "POST",
+							args: {
+								company: state.company,
+								bank_account: state.bankAccount,
+								branch: state.branch || "",
+								...draft,
+							},
+						});
+						const result = response?.message || {};
+						state.templateName = result.name || "";
+						state.templateCreateOpen = false;
+						state.status = t("Import template selected");
+						state.statusDetail = t("The new mapping will be applied to this statement preview.");
+						await refreshTemplateCapability();
+					} catch (error) {
+						state.error = error?.message || t("Unable to create the bank statement template.");
+					} finally {
+						state.busy = false;
+					}
+				}
+
+				async function applySelectedTemplate(importName) {
+					if (!state.templateName || fileExtension(state.fileName) === ".txt") return;
+					await global.frappe.call({
+						method: TEMPLATE_APPLY_METHOD,
+						type: "POST",
+						args: {
+							data_import: importName,
+							template_name: state.templateName,
+							branch: state.branch || "",
+						},
+					});
+				}
+
 				async function ensureImportDraft() {
-					const contextKey = `${state.company}::${state.bankAccount}`;
+					const contextKey = `${state.company}::${state.branch || ""}::${state.bankAccount}`;
 					if (state.importName && state.importContextKey === contextKey) return state.importName;
 					const response = await global.frappe.call({
 						method: CREATE_IMPORT_METHOD,
-						args: { company: state.company, bank_account: state.bankAccount },
+						args: {
+							company: state.company,
+							branch: state.branch || "",
+							bank_account: state.bankAccount,
+						},
 					});
 					state.importName = response?.message?.name || "";
 					state.importContextKey = contextKey;
@@ -346,6 +504,7 @@
 							fileUrl = converted?.message || fileUrl;
 						}
 						await setImportField(importName, "import_file", fileUrl);
+						await applySelectedTemplate(importName);
 						const previewResponse = await global.frappe.call({
 							method: PREVIEW_METHOD,
 							args: { data_import: importName, import_file: fileUrl },
@@ -443,7 +602,31 @@
 								searcher: (query) => permissionAwareLinkSearch("Company", query),
 								"onUpdate:modelValue": (value) => {
 									state.company = value || "";
+									state.branch = "";
 									state.bankAccount = "";
+									state.templateName = "";
+									state.canCreateTemplate = false;
+									state.importName = "";
+									state.preview = null;
+								},
+							}),
+							h(EdgeLinkField, {
+								label: t("Branch"),
+								modelValue: state.branch,
+								disabled: !state.company || state.importStarted,
+								description: !state.company
+									? t("Select a company first.")
+									: t("Bank Accounts are restricted to the selected operational Branch."),
+								searcher: (query) => permissionAwareLinkSearch(
+									"Branch",
+									query,
+									state.company ? { company: state.company } : {},
+								),
+								"onUpdate:modelValue": (value) => {
+									state.branch = value || "";
+									state.bankAccount = "";
+									state.templateName = "";
+									state.canCreateTemplate = false;
 									state.importName = "";
 									state.preview = null;
 								},
@@ -452,15 +635,74 @@
 								label: t("Bank Account"),
 								modelValue: state.bankAccount,
 								disabled: !state.company,
-								description: !state.company ? t("Select a company first.") : t("Only bank accounts available to you for the selected company are shown."),
-								searcher: (query) => permissionAwareLinkSearch("Bank Account", query, state.company ? { company: state.company } : {}),
+								description: !state.company ? t("Select a company first.") : t("Only Bank Accounts valid for the selected Company and operational Branch are shown."),
+								searcher: searchBankAccounts,
 								"onUpdate:modelValue": (value) => {
 									state.bankAccount = value || "";
+									state.templateName = "";
 									state.importName = "";
 									state.preview = null;
+									refreshTemplateCapability();
 								},
 							}),
 						]),
+
+						h("div", { class: "retailedge-bank-import-template-row" }, [
+							h(EdgeLinkField, {
+								label: t("Import Template"),
+								modelValue: state.templateName,
+								disabled: !state.company || !state.bankAccount || state.importStarted,
+								description: !state.bankAccount
+									? t("Select a Bank Account first.")
+									: t("Optional reusable column mapping. Leave blank to use the Bank's current ERPNext mapping."),
+								searcher: searchTemplates,
+								"onUpdate:modelValue": (value) => {
+									state.templateName = value || "";
+									state.preview = null;
+								},
+							}),
+							state.canCreateTemplate
+								? h("button", {
+									type: "button",
+									class: "edge-button edge-button--secondary retailedge-bank-create-template",
+									disabled: state.busy || !state.company || !state.bankAccount || state.importStarted,
+									onClick: openTemplateCreator,
+								}, t("Create Template"))
+								: null,
+						]),
+						state.templateCreateOpen
+							? h("section", { class: "retailedge-bank-template-editor" }, [
+								h("div", { class: "retailedge-bank-template-editor__heading" }, [
+									h("div", [
+										h("strong", t("New Bank Statement Template")),
+										h("p", t("Use the exact column headings from the bank's CSV/XLS/XLSX file.")),
+									]),
+									h("button", {
+										type: "button",
+										class: "edge-button edge-button--secondary",
+										disabled: state.busy,
+										onClick: () => { state.templateCreateOpen = false; },
+									}, t("Cancel")),
+								]),
+								h("div", { class: "retailedge-bank-template-grid" }, [
+									templateField("Template Name", "template_name", { required: true, placeholder: "e.g. Access Bank CSV" }),
+									templateField("Date Column", "date_column", { required: true, placeholder: "e.g. Transaction Date" }),
+									templateField("Debit Column", "debit_column", { placeholder: "e.g. Debit" }),
+									templateField("Credit Column", "credit_column", { placeholder: "e.g. Credit" }),
+									templateField("Reference Column", "reference_column", { placeholder: "e.g. Reference" }),
+									templateField("Narration Column", "narration_column", { placeholder: "e.g. Description" }),
+									templateField("Currency Column", "currency_column", { placeholder: "e.g. Currency" }),
+								]),
+								h("div", { class: "retailedge-bank-template-actions" }, [
+									h("button", {
+										type: "button",
+										class: "edge-button edge-button--primary",
+										disabled: state.busy,
+										onClick: saveTemplate,
+									}, t("Save & Select Template")),
+								]),
+							])
+							: null,
 						h("div", { class: "retailedge-bank-import-file-row" }, [
 							h("label", { class: "retailedge-bank-import-file" }, [
 								h("span", t("Statement File")),
@@ -511,6 +753,7 @@
 		}
 		modalHost.__retailedgeOpenStatementImport({
 			company: fieldValueByLabel(filterBar, "Company"),
+			branch: fieldValueByLabel(filterBar, "Branch"),
 			bankAccount: fieldValueByLabel(filterBar, "Bank Account"),
 		});
 	}

@@ -186,7 +186,7 @@ export default {
 			if (section.time_basis === "current") return "Current position as of today; the selected date range does not reconstruct a historical balance.";
 			return "Performance for the selected date range from the existing RetailEdge source report.";
 		},
-		formatCard(card) { try { return frappe.format(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
+		formatCard(card) { try { return window.retailedge.formatPlainValue(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
 	},
 };
 </script>

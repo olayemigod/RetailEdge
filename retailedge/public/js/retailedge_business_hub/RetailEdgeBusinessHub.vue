@@ -4,7 +4,8 @@
 		:menuItems="shellMenuItems"
 		activeRoute="/app/retailedge-business-hub"
 		title="RetailEdge"
-		:tenantName="context.company"
+		subtitle="Retail operations & control"
+		:tenantName="context.company_label || context.company"
 		:branchName="context.branch"
 		:userName="context.user_name"
 		:hideNativeSidebar="true"
@@ -14,7 +15,7 @@
 			<template #header>
 				<EdgePageHeader
 					title="Business Hub"
-					subtitle="Navigate, act, operate, understand, and respond from one business-focused workspace."
+					subtitle="Today’s priorities, actions and business position."
 					:withBackButton="false"
 				/>
 			</template>
@@ -36,11 +37,7 @@
 					<div>
 						<p class="hub-eyebrow">Retail operations simplified</p>
 						<h2>{{ greeting }}</h2>
-						<p>
-							Use the business menu for daily operations. The Create action shows only business
-							entries your current permissions allow, while guided flows keep ERPNext documents
-							and accounting truth underneath.
-						</p>
+						<p class="hub-rider">Review the selected period, act on exceptions, and continue daily work from one place.</p>
 					</div>
 					<div class="hub-banner-side">
 						<div class="hub-context">
@@ -58,15 +55,24 @@
 					</div>
 				</section>
 
-				<section class="home-command-centre">
+				<section class="home-command-centre hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Today</p>
-							<h3>Business at a glance</h3>
+							<p class="section-kicker">Understand</p>
+							<h3>Business performance</h3>
+							<p class="section-rider">Key business indicators for the selected period.</p>
 						</div>
-						<span v-if="homeSnapshot.as_of_date" class="home-as-of">As of {{ homeSnapshot.as_of_date }}</span>
+						<div class="home-period-controls">
+							<EdgeDropdown
+								v-model="homePeriodPreset"
+								:options="homePeriodOptions"
+								label="Period"
+								@update:modelValue="handleHomePeriodChange"
+							/>
+							<span v-if="homePeriod.from_date" class="home-as-of">{{ homePeriod.from_date }} – {{ homePeriod.to_date }}</span>
+						</div>
 					</div>
-					<EdgeLoadingState v-if="homeLoading" message="Loading today's business position..." :skeleton="true" />
+					<EdgeLoadingState v-if="homeLoading" message="Loading business performance..." :skeleton="true" />
 					<EdgeErrorState v-else-if="homeError" title="Business snapshot unavailable" :message="homeError" @retry="refreshHomeSnapshot" />
 					<div v-else>
 						<div v-if="homeSnapshot.cards.length" class="home-kpi-grid">
@@ -75,52 +81,31 @@
 								:key="card.label"
 								type="button"
 								class="home-kpi-card"
-								@click="openHomeRoute(card.route)"
+								@click="openHomeRoute(card.route, homeRouteFilters(card))"
 							>
-								<span>{{ card.label }}</span>
+								<span class="home-kpi-card-heading">
+									<span>{{ card.label }}</span>
+									<span class="home-kpi-card-icon"><EdgeIcon :name="kpiIcon(card.label)" size="sm" /></span>
+								</span>
 								<strong>{{ formatHomeValue(card) }}</strong>
-								<small>{{ card.time_basis === "current" ? "Current position" : "Today" }}</small>
+								<small>{{ card.time_basis === "current" ? "Current position" : (homePeriod.label || "Selected period") }}</small>
 							</button>
 						</div>
 						<EdgeEmptyState
 							v-else
-							title="No management cards available"
-							description="Your current role can still use the permitted operational actions and pages from the RetailEdge menu."
+							title="No management indicators available"
+							description="No permitted indicators are available for this period and operating scope."
 							icon="bar-chart-2"
 						/>
-						<div class="home-signal-grid">
-							<article v-for="key in ['stock', 'banking', 'branch', 'cash_shift']" :key="key" class="home-signal-card">
-								<div class="home-signal-heading">
-									<h4>{{ homeSection(key).label || key }}</h4>
-									<button v-if="homeSection(key).route && homeSection(key).available" type="button" class="home-link" @click="openHomeRoute(homeSection(key).route)">Open</button>
-								</div>
-								<div v-if="homeSection(key).available && homeSection(key).summary.length" class="home-signal-list">
-									<div v-for="card in homeSection(key).summary.slice(0, 4)" :key="card.label">
-										<span>{{ card.label }}</span>
-										<strong>{{ formatHomeValue(card) }}</strong>
-									</div>
-								</div>
-								<p v-else class="home-unavailable">{{ homeSection(key).reason || "No signal is available for this scope." }}</p>
-							</article>
-							<article class="home-signal-card home-attention-card">
-								<div class="home-signal-heading"><h4>Attention</h4><span>{{ homeSnapshot.attention.length }}</span></div>
-								<div v-if="homeSnapshot.attention.length" class="home-attention-list">
-									<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeRoute(item.route)">
-										<span>{{ item.label }}</span>
-										<strong>{{ formatHomeValue(item) }}</strong>
-									</button>
-								</div>
-								<p v-else class="home-unavailable">No current attention items were found in the permitted scope.</p>
-							</article>
-						</div>
 					</div>
 				</section>
 
-				<section v-if="homeQuickActions.length" class="home-quick-actions-section">
+				<section v-if="homeQuickActions.length" class="home-quick-actions-section hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Quick actions</p>
-							<h3>Do the next business task</h3>
+							<p class="section-kicker">Act</p>
+							<h3>Quick actions</h3>
+							<p class="section-rider">Start the next permitted business task.</p>
 						</div>
 					</div>
 					<div class="home-quick-actions-grid">
@@ -131,7 +116,7 @@
 							class="home-quick-action"
 							@click="runHomeQuickAction(shortcut)"
 						>
-							<span class="home-quick-action-icon">{{ iconText(shortcut.icon) }}</span>
+							<span class="home-quick-action-icon"><EdgeIcon :name="displayIcon(shortcut.icon)" size="sm" /></span>
 							<span>
 								<strong>{{ shortcut.label }}</strong>
 								<small>{{ shortcut.description }}</small>
@@ -140,27 +125,74 @@
 					</div>
 				</section>
 
-				<section>
+				<section class="hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Business workflow</p>
-							<h3>Five connected experiences</h3>
+							<p class="section-kicker">Operate</p>
+							<h3>Business indices</h3>
+							<p class="section-rider">Sales, cash, stock, expenses, receivables, payables, branch and banking signals with the next useful action.</p>
 						</div>
 					</div>
-					<div class="experience-grid">
+					<div v-if="homeSnapshot.indices.length" class="home-intelligence-grid">
 						<article
-							v-for="experience in programmeExperiences"
-							:key="experience.key"
-							class="experience-card"
+							v-for="index in homeSnapshot.indices"
+							:key="index.key"
+							:class="['home-intelligence-card', `tone-${index.tone || 'neutral'}`, { 'is-unavailable': !index.available }]"
 						>
-							<div class="experience-card-top">
-								<span class="experience-icon">{{ iconText(experience.icon) }}</span>
-								<EdgeStatusBadge :label="experience.status" :status="experience.status" />
+							<div class="home-intelligence-heading">
+								<h4><span class="home-signal-icon"><EdgeIcon :name="signalIcon(index.key)" size="sm" /></span>{{ index.label }}</h4>
+								<span :class="['home-index-status', `tone-${index.tone || 'neutral'}`]">{{ indexStatusLabel(index) }}</span>
 							</div>
-							<h4>{{ experience.label }}</h4>
-							<p>{{ experience.description }}</p>
+							<template v-if="index.available">
+								<div class="home-index-headline">
+									<span>{{ index.headline?.label || "Position" }}</span>
+									<strong>{{ formatHomeValue(index.headline) }}</strong>
+								</div>
+								<div v-if="index.signal?.label" class="home-index-signal">
+									<span>{{ index.signal.label }}</span>
+									<strong>{{ formatHomeValue(index.signal) }}</strong>
+								</div>
+								<p>{{ index.signal?.message || index.recommendation }}</p>
+								<button type="button" class="home-index-action" @click="openHomeItem(index)">{{ index.action_label || "Open" }}</button>
+							</template>
+							<p v-else class="home-unavailable">{{ index.reason || "This index is unavailable for your current permissions and scope." }}</p>
 						</article>
 					</div>
+					<EdgeEmptyState
+						v-else
+						title="No business indices available"
+						description="No permitted business index is available for the selected Company, Branch and period."
+						icon="bar-chart-2"
+					/>
+				</section>
+
+				<section class="hub-experience-section">
+					<div class="section-heading">
+						<div>
+							<p class="section-kicker">Respond</p>
+							<h3>Needs attention</h3>
+							<p class="section-rider">Exceptions and follow-ups that may require action.</p>
+						</div>
+						<span class="home-attention-count">{{ homeSnapshot.attention.length }}</span>
+					</div>
+					<div v-if="homeSnapshot.attention.length" class="home-attention-list home-attention-list--wide">
+						<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeItem(item)">
+							<span class="home-attention-copy">
+								<strong>{{ item.label }}</strong>
+								<small v-if="item.recommendation">{{ item.recommendation }}</small>
+							</span>
+							<span class="home-attention-value">
+								<strong>{{ formatHomeValue(item) }}</strong>
+								<small>{{ item.action_label || "Open" }}</small>
+							</span>
+						</button>
+					</div>
+					<EdgeEmptyState
+						v-else
+						title="Nothing needs attention"
+						description="No current exception or follow-up item was found in your permitted scope."
+						icon="check-circle"
+					/>
 				</section>
 			</div>
 
@@ -171,21 +203,42 @@
 				size="md"
 				@close="closeCreatePicker"
 			>
-				<div v-if="quickActions.length" class="create-picker-list">
-					<button
-						v-for="action in quickActions"
-						:key="action.key"
-						type="button"
-						class="create-picker-item"
-						@click="runQuickAction(action)"
-					>
-						<span class="create-picker-icon">{{ iconText(action.icon) }}</span>
-						<span class="create-picker-copy">
-							<strong>{{ action.label }}</strong>
-							<small>{{ action.description }}</small>
-						</span>
-						<span class="create-picker-mode">{{ actionModeLabel(action) }}</span>
-					</button>
+				<div v-if="quickActions.length" class="create-product-menu">
+					<header class="create-product-menu-header edge-product-menu__header">
+						<div class="edge-product-menu__brand">
+							<span class="create-product-menu-mark edge-product-menu__brand-mark"><EdgeIcon name="clipboard" size="sm" /></span>
+							<span>
+								<strong>Create</strong>
+								<small>RetailEdge business actions</small>
+							</span>
+						</div>
+					</header>
+					<section class="edge-product-menu__section" aria-label="Permitted business actions">
+						<div class="edge-product-menu__section-heading">
+							<span class="edge-product-menu__section-icon"><EdgeIcon name="activity" size="sm" /></span>
+							<span>
+								<h3>Business actions</h3>
+								<p>Only entries permitted for your current role and context are shown.</p>
+							</span>
+						</div>
+						<div class="create-picker-list edge-product-menu__items">
+							<button
+								v-for="action in quickActions"
+								:key="action.key"
+								type="button"
+								class="create-picker-item edge-product-menu__item"
+								role="menuitem"
+								@click="runQuickAction(action)"
+							>
+								<span class="create-picker-icon edge-product-menu__item-icon"><EdgeIcon :name="displayIcon(action.icon)" size="sm" /></span>
+								<span class="create-picker-copy edge-product-menu__item-copy">
+									<strong>{{ action.label }}</strong>
+									<small>{{ action.description }}</small>
+								</span>
+								<span class="create-picker-mode edge-product-menu__item-badge">{{ actionModeLabel(action) }}</span>
+							</button>
+						</div>
+					</section>
 				</div>
 				<EdgeEmptyState
 					v-else
@@ -270,6 +323,15 @@
 				@saved="handleSimpleCashierExpenseSaved"
 				@open-native="openNativeCashierExpense"
 			/>
+			<GuidedWorkflowCompletionDialog
+				:open="cashierExpenseCompletionOpen"
+				:document="cashierExpenseCompletionDocument"
+				label="Cashier Expense"
+				:canUseNativeDesk="nativeFallbackEnabled"
+				@close="closeCashierExpenseCompletion"
+				@changed="handleCashierExpenseCompletionChanged"
+				@completed="handleCashierExpenseCompletionCompleted"
+			/>
 
 			<SimpleStockTransferDialog
 				:open="simpleStockTransferOpen"
@@ -303,6 +365,7 @@ import SimpleCashDepositDialog from "./SimpleCashDepositDialog.vue";
 import StandardInternalTransferCompletionDialog from "./StandardInternalTransferCompletionDialog.vue";
 import SimpleCashTransferDialog from "./SimpleCashTransferDialog.vue";
 import SimpleCashierExpenseDialog from "./SimpleCashierExpenseDialog.vue";
+import GuidedWorkflowCompletionDialog from "./GuidedWorkflowCompletionDialog.vue";
 import SimplePaymentDialog from "./SimplePaymentDialog.vue";
 import SimplePurchaseInvoiceDialog from "./SimplePurchaseInvoiceDialog.vue";
 import StandardPurchaseInvoiceCompletionDialog from "../professional_purchasing/StandardPurchaseInvoiceCompletionDialog.vue";
@@ -377,16 +440,51 @@ function fetchSharedContext({ force = false } = {}) {
 	return request;
 }
 
-function fetchHomeSnapshot(company, branch) {
+function fetchHomeSnapshot(company, branch, datePreset) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method: HOME_SNAPSHOT_METHOD,
-			args: { company: company || "", branch: branch || "" },
+			args: { company: company || "", branch: branch || "", date_preset: datePreset || "Today" },
 			callback: (response) => resolve(response.message || {}),
 			error: (error) => reject(error),
 		});
 	});
 }
+
+function routeTarget(route) {
+	return String(route || "").replace(/^\/app\//, "").split("/").filter(Boolean)[0] || "";
+}
+
+function setBusinessHubRouteHandoff(route, filters = {}) {
+	const target = routeTarget(route);
+	if (!target) return;
+	const cleanFilters = Object.fromEntries(
+		Object.entries(filters || {}).filter(([, value]) => value !== undefined && value !== null && value !== "")
+	);
+	window.__retailedgeBusinessHubRouteHandoff = {
+		target,
+		filters: cleanFilters,
+		createdAt: Date.now(),
+	};
+	frappe.route_options = {
+		...cleanFilters,
+		retailedge_business_hub_handoff: 1,
+		retailedge_business_hub_target: target,
+	};
+}
+
+window.retailedgeConsumeBusinessHubRouteOptions = function consumeBusinessHubRouteOptions(target) {
+	const handoff = window.__retailedgeBusinessHubRouteHandoff;
+	if (!handoff || Date.now() - Number(handoff.createdAt || 0) > 60_000) {
+		delete window.__retailedgeBusinessHubRouteHandoff;
+		return {};
+	}
+	if (String(handoff.target || "") !== String(target || "")) return {};
+	const filters = { ...(handoff.filters || {}) };
+	delete window.__retailedgeBusinessHubRouteHandoff;
+	if (frappe.route_options?.retailedge_business_hub_handoff) frappe.route_options = null;
+	return filters;
+};
 
 export default {
 	name: "RetailEdgeBusinessHub",
@@ -399,10 +497,13 @@ export default {
 		EdgeEmptyState: runtimeComponents.EdgeEmptyState,
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
+		EdgeIcon: runtimeComponents.EdgeIcon,
+		EdgeDropdown: runtimeComponents.EdgeDropdown,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
 		SimpleCashierExpenseDialog,
+		GuidedWorkflowCompletionDialog,
 		SimplePaymentDialog,
 		SimplePurchaseInvoiceDialog,
 		StandardPurchaseInvoiceCompletionDialog,
@@ -418,7 +519,9 @@ export default {
 			error: "",
 			homeLoading: false,
 			homeError: "",
-			homeSnapshot: { as_of_date: "", cards: [], sections: {}, attention: [] },
+			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
+			homePeriodPreset: "Today",
+			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
 			salesInvoiceCompletionOpen: false,
@@ -433,19 +536,26 @@ export default {
 			purchaseInvoiceCompletionOpen: false,
 			purchaseInvoiceCompletionDocument: null,
 			simpleCashierExpenseOpen: false,
+			cashierExpenseCompletionOpen: false,
+			cashierExpenseCompletionDocument: null,
 			simpleStockTransferOpen: false,
 			simpleStockAdjustmentOpen: false,
 			stockCompletionOpen: false,
 			stockCompletionDocument: null,
-			programmeExperiences: [],
 			navigationGroups: [],
 			quickActions: [],
-			context: { user: "", user_name: "", company: "", branch: "" },
+			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "" },
 			featureFlags: {},
 			accessContext: { mode: "native_desk", restricted_to_edgesuite: false, can_use_native_desk: true },
 		};
 	},
 	computed: {
+		homePeriodOptions() {
+			return ["Today", "Yesterday", "This Week", "This Month", "Last 7 Days", "Last 30 Days"].map((value) => ({
+				value,
+				label: value,
+			}));
+		},
 		greeting() {
 			return this.context.user_name
 				? `Welcome, ${this.context.user_name}`
@@ -527,7 +637,6 @@ export default {
 	},
 	methods: {
 		applyContext(data) {
-			this.programmeExperiences = data.programme_experiences || [];
 			this.navigationGroups = data.navigation_groups || [];
 			this.quickActions = data.quick_actions || [];
 			this.context = { ...this.context, ...(data.context || {}) };
@@ -552,27 +661,36 @@ export default {
 		},
 		refreshHomeSnapshot() {
 			if (!this.context.company) {
-				this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, attention: [] };
+				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
 			this.homeError = "";
-			return fetchHomeSnapshot(this.context.company, this.context.branch)
+			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset)
 				.then((snapshot) => {
+					this.homePeriod = { ...this.homePeriod, ...(snapshot.period || {}) };
+					this.homePeriodPreset = this.homePeriod.preset || this.homePeriodPreset;
 					this.homeSnapshot = {
 						as_of_date: snapshot.as_of_date || "",
+						period: snapshot.period || {},
 						cards: snapshot.cards || [],
 						sections: snapshot.sections || {},
+						indices: snapshot.indices || [],
+						settings: snapshot.settings || {},
 						attention: snapshot.attention || [],
 					};
 				})
 				.catch((error) => {
-					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, attention: [] };
+					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 					this.homeError = error?.message || "Unable to load the current business snapshot.";
 				})
 				.finally(() => {
 					this.homeLoading = false;
 				});
+		},
+		handleHomePeriodChange(value) {
+			this.homePeriodPreset = value || "Today";
+			return this.refreshHomeSnapshot();
 		},
 		homeSection(key) {
 			return this.homeSnapshot.sections?.[key] || { available: false, label: key, summary: [], route: "", reason: "" };
@@ -581,14 +699,73 @@ export default {
 			const value = card?.value ?? 0;
 			const datatype = card?.datatype || card?.type || "Data";
 			if (datatype === "Currency") {
-				try { return frappe.format(value, { fieldtype: "Currency" }); } catch (_error) { return Number(value || 0).toLocaleString(); }
+				const formatter = window.retailedge?.formatPlainValue;
+				if (formatter) return formatter(value, { fieldtype: "Currency" });
+				return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 			}
 			if (datatype === "Percent") return `${Number(value || 0).toLocaleString()}%`;
 			if (datatype === "Int" || datatype === "Float") return Number(value || 0).toLocaleString();
-			return String(value ?? "");
+			return window.retailedge?.toPlainText?.(value) ?? String(value ?? "");
 		},
-		openHomeRoute(route) {
+		displayIcon(icon) {
+			return {
+				"file-text": "report",
+				download: "wallet",
+				upload: "wallet",
+				"credit-card": "wallet",
+				"shopping-bag": "layers",
+				"shopping-cart": "grid",
+				repeat: "activity",
+				zap: "activity",
+				plus: "clipboard",
+				stock: "layers",
+				"bar-chart-2": "chart",
+			}[String(icon || "")] || icon || "list";
+		},
+		kpiIcon(label) {
+			return {
+				Sales: "chart",
+				Expenses: "wallet",
+				Receivables: "report",
+				Payables: "wallet",
+				"Stock Value": "layers",
+			}[String(label || "")] || "chart";
+		},
+		signalIcon(key) {
+			return {
+				stock: "layers",
+				banking: "wallet",
+				branch: "building",
+				cash_shift: "wallet",
+				sales: "chart",
+				cash: "wallet",
+				expenses: "wallet",
+				receivables: "report",
+				payables: "wallet",
+			}[String(key || "")] || "chart";
+		},
+		homeRouteFilters(card = {}) {
+			const filters = { company: this.context.company || "" };
+			if (this.context.branch) filters.branch = this.context.branch;
+			if (card?.time_basis !== "current") {
+				filters.from_date = this.homePeriod.from_date || "";
+				filters.to_date = this.homePeriod.to_date || "";
+			}
+			return filters;
+		},
+		indexStatusLabel(index) {
+			if (!index?.available) return "Unavailable";
+			if (index?.requires_action && index?.tone === "danger") return "Act now";
+			if (index?.requires_action) return "Review";
+			return "On track";
+		},
+		openHomeItem(item) {
+			if (!item?.route) return;
+			this.openHomeRoute(item.route, item.route_filters || {});
+		},
+		openHomeRoute(route, filters = {}) {
 			if (!route) return;
+			setBusinessHubRouteHandoff(route, filters);
 			const normalized = String(route).replace(/^\/app\//, "");
 			frappe.set_route(...normalized.split("/").filter(Boolean));
 		},
@@ -674,10 +851,10 @@ export default {
 			}
 			frappe.new_doc(action.doctype);
 		},
-		notifyGuidedDraftSaved(result, fallbackDoctype, label) {
+		notifyGuidedDraftSaved(result, fallbackDoctype, label, { stayInEdgeSuite = false } = {}) {
 			if (!result?.name) return;
 			const doctype = result.doctype || fallbackDoctype;
-			if (this.nativeFallbackEnabled) {
+			if (this.nativeFallbackEnabled && !stayInEdgeSuite) {
 				frappe.set_route("Form", doctype, result.name);
 			}
 			frappe.call({
@@ -827,7 +1004,27 @@ export default {
 		},
 		handleSimpleCashierExpenseSaved(result) {
 			this.simpleCashierExpenseOpen = false;
-			this.notifyGuidedDraftSaved(result, "RetailEdge Cashier Expense", "Cashier Expense");
+			const completion = result?.completion || {};
+			const name = completion.name || result?.name || "";
+			if (name) {
+				this.cashierExpenseCompletionDocument = {
+					doctype: completion.doctype || result?.doctype || "RetailEdge Cashier Expense",
+					name,
+				};
+				this.cashierExpenseCompletionOpen = true;
+			}
+			this.refreshHomeSnapshot();
+		},
+		closeCashierExpenseCompletion() {
+			this.cashierExpenseCompletionOpen = false;
+			this.cashierExpenseCompletionDocument = null;
+		},
+		handleCashierExpenseCompletionChanged() {
+			this.refreshHomeSnapshot();
+		},
+		handleCashierExpenseCompletionCompleted() {
+			this.closeCashierExpenseCompletion();
+			this.refreshContext({ force: true });
 		},
 		openNativeCashierExpense(doctype = "RetailEdge Cashier Expense") {
 			if (!this.nativeFallbackEnabled) return;
@@ -939,6 +1136,60 @@ export default {
 </script>
 
 <style scoped>
+.create-product-menu {
+	border: 1px solid var(--edge-color-border, #dfe6ec);
+	border-radius: 12px;
+	overflow: hidden;
+	background: var(--edge-color-surface, #fff);
+}
+.create-product-menu-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--edge-color-border, #dfe6ec);
+	background: var(--edge-color-surface-muted, #f6f8fa);
+}
+.create-product-menu-header > span:last-child {
+	display: grid;
+	gap: 2px;
+}
+.create-product-menu-header small {
+	color: var(--edge-color-ink-500, #617589);
+}
+.create-product-menu-mark,
+.create-picker-icon,
+.home-kpi-card-icon,
+.home-signal-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	background: var(--edge-color-brand-50, #eef7ff);
+	color: var(--edge-color-brand-700, #0c4f87);
+}
+.create-product-menu-mark {
+	width: 34px;
+	height: 34px;
+}
+.home-kpi-card-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+}
+.home-kpi-card-icon,
+.home-signal-icon {
+	width: 30px;
+	height: 30px;
+	flex: 0 0 auto;
+}
+.home-signal-heading h4 {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
 .retailedge-business-hub {
 	display: grid;
 	gap: 28px;
@@ -1050,6 +1301,89 @@ export default {
 .home-signal-card {
 	padding: 16px;
 }
+.home-intelligence-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+}
+.home-intelligence-card {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+	padding: 16px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 12px;
+	background: var(--edge-surface, #ffffff);
+}
+.home-intelligence-card.tone-danger {
+	border-color: color-mix(in srgb, var(--edge-danger, #d92d20) 55%, var(--edge-border, #dfe3e8));
+}
+.home-intelligence-card.tone-warning {
+	border-color: color-mix(in srgb, var(--edge-warning, #f79009) 55%, var(--edge-border, #dfe3e8));
+}
+.home-intelligence-card.is-unavailable {
+	opacity: .72;
+}
+.home-intelligence-heading,
+.home-index-headline,
+.home-index-signal {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+.home-intelligence-heading h4 {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+}
+.home-index-status {
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+	padding: 0 8px;
+	border-radius: 999px;
+	background: var(--edge-surface-muted, #f8fafc);
+	font-size: .7rem;
+	font-weight: 700;
+	white-space: nowrap;
+}
+.home-index-status.tone-danger {
+	color: var(--edge-danger, #d92d20);
+}
+.home-index-status.tone-warning {
+	color: var(--edge-warning, #b54708);
+}
+.home-index-headline,
+.home-index-signal {
+	padding: 9px 10px;
+	border-radius: 9px;
+	background: var(--edge-surface-muted, #f8fafc);
+}
+.home-index-headline span,
+.home-index-signal span,
+.home-intelligence-card p {
+	color: var(--edge-text-muted, #667085);
+}
+.home-intelligence-card p {
+	margin: 0;
+	font-size: .8rem;
+	line-height: 1.4;
+}
+.home-index-action {
+	justify-self: start;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--edge-primary, #2563eb);
+	font-weight: 700;
+	cursor: pointer;
+}
+.home-index-action:hover,
+.home-index-action:focus-visible {
+	text-decoration: underline;
+}
 .home-signal-heading {
 	display: flex;
 	align-items: center;
@@ -1104,6 +1438,21 @@ export default {
 }
 .home-attention-item.tone-warning {
 	border-color: var(--edge-warning, #f79009);
+}
+.home-attention-copy,
+.home-attention-value {
+	display: grid;
+	gap: 3px;
+}
+.home-attention-copy small,
+.home-attention-value small {
+	color: var(--edge-text-muted, #667085);
+	font-size: .74rem;
+	line-height: 1.35;
+}
+.home-attention-value {
+	justify-items: end;
+	text-align: right;
 }
 .home-quick-actions-grid {
 	display: grid;
@@ -1169,6 +1518,7 @@ export default {
 }
 .create-picker-list {
 	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 8px;
 }
 .create-picker-item {
@@ -1208,6 +1558,9 @@ export default {
 	.home-kpi-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
+	.home-intelligence-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 	.home-quick-actions-grid,
 	.experience-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1227,6 +1580,7 @@ export default {
 		width: 100%;
 	}
 	.home-kpi-grid,
+	.home-intelligence-grid,
 	.home-signal-grid,
 	.home-signal-list,
 	.home-quick-actions-grid,
@@ -1238,6 +1592,59 @@ export default {
 	}
 	.create-picker-mode {
 		grid-column: 2;
+	}
+}
+@media (max-width: 760px) {
+	.create-picker-list {
+		grid-template-columns: 1fr;
+	}
+}
+
+.hub-rider,
+.section-rider,
+.home-quick-action small,
+.home-unavailable {
+	font-size: .82rem;
+	line-height: 1.45;
+}
+.section-rider {
+	margin: 4px 0 0;
+	color: var(--edge-text-muted, #667085);
+}
+.home-period-controls {
+	display: flex;
+	align-items: flex-end;
+	justify-content: flex-end;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.home-period-controls .edge-field {
+	min-width: 170px;
+	margin: 0;
+}
+.home-attention-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 30px;
+	height: 30px;
+	padding: 0 9px;
+	border: 1px solid var(--edge-border, #d9e2ec);
+	border-radius: 999px;
+	font-size: .8rem;
+	font-weight: 700;
+}
+.home-attention-list--wide {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+@media (max-width: 760px) {
+	.home-period-controls {
+		justify-content: flex-start;
+	}
+	.home-attention-list--wide {
+		grid-template-columns: 1fr;
 	}
 }
 </style>

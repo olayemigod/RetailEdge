@@ -64,16 +64,13 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 				with self.assertRaises(frappe.ValidationError):
 					_normalise_items(rows)
 
-	@patch("retailedge.guided_sales_invoice.validate_operating_branch")
-	@patch("retailedge.guided_sales_invoice.validate_user_branch_access")
-	@patch("retailedge.guided_sales_invoice.get_first_existing_field", return_value="branch")
-	@patch("retailedge.guided_sales_invoice.has_field", return_value=True)
+	@patch(
+		"retailedge.guided_sales_invoice.get_guided_warehouse_search_filters",
+		return_value={"company": "Demo Company", "branch": "Lagos", "is_group": 0},
+	)
 	def test_warehouse_search_filters_company_and_branch_without_loading_all_rows(
 		self,
-		_mock_has_field,
-		_mock_branch_field,
-		mock_validate_access,
-		mock_validate_operating,
+		mock_filters,
 	):
 		filters = _warehouse_search_filters(
 			company="Demo Company",
@@ -83,14 +80,13 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertEqual(filters["company"], "Demo Company")
 		self.assertEqual(filters["branch"], "Lagos")
 		self.assertEqual(filters["is_group"], 0)
-		mock_validate_access.assert_called_once()
-		mock_validate_operating.assert_called_once()
+		mock_filters.assert_called_once_with("Demo Company", "Lagos", user="sales@example.com")
 
-	@patch("retailedge.guided_sales_invoice.get_branch_profile")
-	@patch("retailedge.guided_sales_invoice.resolve_branch_from_warehouse")
-	def test_branch_warehouse_mismatch_is_blocked(self, mock_resolve, mock_profile):
-		mock_resolve.return_value = {"branch": "Abuja"}
-		mock_profile.return_value = None
+	@patch(
+		"retailedge.guided_sales_invoice.validate_guided_branch_warehouse",
+		side_effect=frappe.ValidationError("Branch mismatch"),
+	)
+	def test_branch_warehouse_mismatch_is_blocked(self, mock_validate):
 		with self.assertRaises(frappe.ValidationError):
 			_validate_branch_warehouse(
 				branch="Lagos",
@@ -98,21 +94,24 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 				company="Demo Company",
 				user="sales@example.com",
 			)
+		mock_validate.assert_called_once()
 
 	@patch("retailedge.guided_sales_invoice.resolve_sales_item_pricing")
 	@patch("retailedge.guided_sales_invoice.resolve_price_list_context")
+	@patch("retailedge.guided_sales_invoice.get_retailedge_settings", return_value=SimpleNamespace(allow_guided_sales_update_stock_edit=1))
+	@patch("retailedge.guided_sales_invoice.get_guided_branch_names", return_value=[])
+	@patch("retailedge.guided_sales_invoice._validate_transaction_context", return_value=("Demo Company", "Lagos", ""))
 	@patch("retailedge.guided_sales_invoice._assert_read_permission")
-	@patch("retailedge.guided_sales_invoice.validate_operating_branch")
-	@patch("retailedge.guided_sales_invoice.validate_user_branch_access")
 	@patch("retailedge.guided_sales_invoice._assert_can_create_sales_invoice")
 	@patch("retailedge.guided_sales_invoice.frappe.new_doc")
 	def test_create_draft_resolves_blank_rate_from_server_price_list(
 		self,
 		mock_new_doc,
 		_mock_create_permission,
-		mock_branch_access,
-		mock_operating_branch,
 		mock_read_permission,
+		_mock_context,
+		_mock_branches,
+		_mock_settings,
 		mock_price_context,
 		mock_item_pricing,
 	):
@@ -144,9 +143,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		)
 
 		mock_new_doc.assert_called_once_with("Sales Invoice")
-		mock_branch_access.assert_called_once()
-		mock_operating_branch.assert_called_once()
-		self.assertGreaterEqual(mock_read_permission.call_count, 4)
+		self.assertGreaterEqual(mock_read_permission.call_count, 3)
 		self.assertEqual(doc.insert_calls, 1)
 		self.assertEqual(doc.company, "Demo Company")
 		self.assertEqual(doc.customer, "CUST-001")
@@ -163,6 +160,9 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 
 	@patch("retailedge.guided_sales_invoice.resolve_sales_item_pricing")
 	@patch("retailedge.guided_sales_invoice.resolve_price_list_context")
+	@patch("retailedge.guided_sales_invoice.get_retailedge_settings", return_value=SimpleNamespace(allow_guided_sales_update_stock_edit=1))
+	@patch("retailedge.guided_sales_invoice.get_guided_branch_names", return_value=[])
+	@patch("retailedge.guided_sales_invoice._validate_transaction_context", return_value=("Demo Company", "", ""))
 	@patch("retailedge.guided_sales_invoice._assert_read_permission")
 	@patch("retailedge.guided_sales_invoice._assert_can_create_sales_invoice")
 	@patch("retailedge.guided_sales_invoice.frappe.new_doc")
@@ -171,6 +171,9 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		mock_new_doc,
 		_mock_create_permission,
 		_mock_read_permission,
+		_mock_context,
+		_mock_branches,
+		_mock_settings,
 		mock_price_context,
 		mock_item_pricing,
 	):
@@ -280,6 +283,45 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertIn('this.$emit("open-native", "Sales Invoice")', component)
 		self.assertNotIn("frappe.new_doc", component)
 		self.assertNotIn("frappe.db.insert", component)
+
+	def test_make_sale_update_stock_defaults_on_and_is_settings_controlled(self):
+		backend = (APP_ROOT / "guided_sales_invoice.py").read_text()
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text()
+		settings = (
+			APP_ROOT
+			/ "retailedge"
+			/ "doctype"
+			/ "retailedge_settings"
+			/ "retailedge_settings.json"
+		).read_text()
+		self.assertIn('"update_stock": 1', backend)
+		self.assertIn("allow_guided_sales_update_stock_edit", backend)
+		self.assertIn("else 1", backend)
+		self.assertIn("update_stock: 1", component)
+		self.assertIn(':disabled="!canEditUpdateStock"', component)
+		self.assertIn("transactionContextReady()", component)
+		self.assertIn("requiresBranchSelection()", component)
+		self.assertIn('"fieldname": "allow_guided_sales_update_stock_edit"', settings)
+		self.assertIn('"default": "0"', settings)
+
+	def test_make_sale_branch_and_stock_location_are_ui_gated_before_save(self):
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text()
+		self.assertIn("Only enabled Branch Setup entries for the active Company are shown.", component)
+		self.assertIn(':disabled="requiresBranchSelection && !values.branch"', component)
+		self.assertIn(':disabled="saving || loading || !transactionContextReady"', component)
+		self.assertIn("Choose a Branch before selecting the Stock Location.", component)
 
 	def test_limits_are_deliberately_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)

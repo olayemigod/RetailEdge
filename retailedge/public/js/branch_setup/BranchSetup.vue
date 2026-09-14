@@ -51,14 +51,7 @@
 							:searcher="searchFilterBranch"
 							@update:modelValue="filters.branch = $event || ''"
 						/>
-						<label class="edge-field">
-							<span class="edge-field-label">Status</span>
-							<select v-model="filters.enabled" class="edge-input">
-								<option value="">All</option>
-								<option value="1">Enabled</option>
-								<option value="0">Disabled / History</option>
-							</select>
-						</label>
+						<EdgeDropdown v-model="filters.enabled" :options="[{ value: '1', label: 'Enabled' }, { value: '0', label: 'Disabled / History' }]" label="Status" placeholder="All" />
 					</div>
 					<div class="filter-actions">
 						<button type="button" class="edge-button edge-button--primary" :disabled="loading" @click="loadProfiles">Apply Filters</button>
@@ -222,7 +215,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeModal", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeModal", "EdgeLinkField", "EdgeDropdown"];
 const CONTEXT_METHOD = "retailedge.branch_setup.get_branch_setup_context";
 const GET_METHOD = "retailedge.branch_setup.get_branch_setup";
 const SAVE_METHOD = "retailedge.branch_setup.save_branch_setup";

@@ -46,14 +46,14 @@
 					<EdgeLinkField v-model="filters.expense_category" label="Expense Category" placeholder="All categories" :searcher="categorySearch" />
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onReviewDateChange" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onReviewDateChange" /></label>
-					<label class="edge-field"><span class="edge-field-label">Review Status</span><select v-model="filters.daily_audit_inclusion_status" class="edge-input"><option value="">All</option><option value="Pending Review">Pending Review</option><option value="Included">Included</option><option value="Excluded">Excluded</option><option value="Needs Clarification">Needs Clarification</option></select></label>
+					<EdgeDropdown v-model="filters.daily_audit_inclusion_status" :options="['Pending Review', 'Included', 'Excluded', 'Needs Clarification']" label="Review Status" placeholder="All" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
 				<details class="advanced-filters">
 					<summary>More filters</summary>
 					<div class="review-filter-grid advanced-grid">
-						<label class="edge-field"><span class="edge-field-label">Expense Status</span><select v-model="filters.expense_status" class="edge-input"><option value="">All</option><option v-for="status in expenseStatuses" :key="status" :value="status">{{ status }}</option></select></label>
-						<label class="edge-field"><span class="edge-field-label">Posting Ready</span><select v-model="filters.posting_ready" class="edge-input"><option value="">All</option><option value="1">Ready</option><option value="0">Blocked</option></select></label>
+						<EdgeDropdown v-model="filters.expense_status" :options="expenseStatuses" label="Expense Status" placeholder="All" />
+						<EdgeDropdown v-model="filters.posting_ready" :options="[{ value: '1', label: 'Ready' }, { value: '0', label: 'Blocked' }]" label="Posting Ready" placeholder="All" />
 					</div>
 				</details>
 			</template>
@@ -68,7 +68,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "expense-review";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -139,7 +139,7 @@ export default {
 				try { await callMethod("retailedge.expense_review.apply_expense_review_action", { expense_name: row.name, action, note: values.note || "" }); frappe.show_alert({ message: __("Expense review updated."), indicator: "green" }); await this.fetchData(); } catch (error) { frappe.msgprint({ title: __("Expense Review Failed"), message: errorMessage(error, "The expense review action failed."), indicator: "red" }); }
 			}, __("Review Expense"), __("Apply"));
 		},
-		formatCell(value, column) { if (value === null || value === undefined || value === "") return "—"; if (column.fieldtype === "Currency") { try { return frappe.format(Number(value), { fieldtype: "Currency" }); } catch (_error) { return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (column.fieldtype === "Check") return Number(value) ? __("Yes") : __("No"); if (column.fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
+		formatCell(value, column) { if (value === null || value === undefined || value === "") return "—"; if (column.fieldtype === "Currency") { try { return window.retailedge.formatPlainValue(Number(value), { fieldtype: "Currency" }); } catch (_error) { return Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } } if (column.fieldtype === "Check") return Number(value) ? __("Yes") : __("No"); if (column.fieldtype === "Date") { try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } } return String(value); },
 	},
 };
 </script>
