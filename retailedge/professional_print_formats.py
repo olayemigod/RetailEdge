@@ -214,10 +214,15 @@ def _format_values(spec: dict[str, str]) -> dict[str, Any]:
 	}
 
 
+def is_managed_print_format_html(html: Any) -> bool:
+	"""Return whether HTML carries a current or legacy app ownership marker."""
+	html = str(html or "")
+	return MANAGED_MARKER in html or any(marker in html for marker in LEGACY_MANAGED_MARKERS)
+
+
 def _is_managed_print_format(doc) -> bool:
 	"""Identify formats created by this app using embedded ownership markers only."""
-	html = str(doc.html or "")
-	return MANAGED_MARKER in html or any(marker in html for marker in LEGACY_MANAGED_MARKERS)
+	return is_managed_print_format_html(doc.html)
 
 
 def ensure_retailedge_professional_print_formats() -> dict[str, int]:
