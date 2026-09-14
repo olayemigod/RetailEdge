@@ -45,6 +45,19 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_single_allowed_company_is_deterministic_fallback_for_unrestricted_user(self):
+		source = self.read("operating_context.py")
+		fallback_start = source.index("def _resolve_fallback_context(")
+		fallback_end = source.index("\n\ndef _resolve_assignment_fallback", fallback_start)
+		fallback_source = source[fallback_start:fallback_end]
+		for contract in (
+			"allowed_companies = _allowed_companies(user=user)",
+			"if len(allowed_companies) == 1:",
+			"fallback_company = _clean(allowed_companies[0])",
+			"has_assignments and not user_has_global_branch_access(user=user)",
+		):
+			self.assertIn(contract, fallback_source)
+
 	def test_primary_branch_assignment_can_anchor_global_initial_context_without_restricting_scope(self):
 		source = self.read("operating_context.py")
 		fallback_start = source.index("def _resolve_fallback_context(")
