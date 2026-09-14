@@ -126,6 +126,7 @@
 				@close="closeStandardCompletion"
 				@changed="handleCompletionChanged"
 				@completed="handleCompletionCompleted"
+				@continue-flow="handleContinueSellingFlow"
 			/>
 			<StandardDeliveryCompletionDialog
 				:open="deliveryCompletionOpen"
@@ -397,7 +398,12 @@ export default {
 			this.loadWorkspace();
 			if (this.recentDocument) this.loadRecent(this.recentDocument);
 		},
-		handleCompletionCompleted() {
+		handleCompletionCompleted(result = {}) {
+			this.loadWorkspace();
+			if (this.recentDocument) this.loadRecent(this.recentDocument);
+			if (!result?.keep_open) this.closeStandardCompletion();
+		},
+		handleContinueSellingFlow() {
 			this.closeStandardCompletion();
 			this.loadWorkspace();
 			if (this.recentDocument) this.loadRecent(this.recentDocument);
