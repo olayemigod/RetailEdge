@@ -200,7 +200,9 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.owner_dashboard.get_owner_dashboard_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				this.tenantName = context.tenant_name || this.filters.company || "";
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("profitability-intelligence") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
