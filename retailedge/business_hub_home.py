@@ -8,6 +8,7 @@ from frappe import _
 from frappe.utils import add_days, flt, get_first_day, getdate, nowdate
 
 from retailedge.bank_exception_summary import get_bank_exception_summary
+from retailedge.branch_context import user_has_global_branch_access
 from retailedge.cash_shift_verification import get_cash_shift_verification
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.owner_dashboard import get_owner_dashboard_data
@@ -53,7 +54,10 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "", date_pre
 				allowed_branches=allowed,
 				period=period,
 			)
-	elif not frappe.has_permission("Company", "read", doc=company):
+	elif not (
+		user_has_global_branch_access(user=frappe.session.user)
+		or frappe.has_permission("Company", "read", doc=company)
+	):
 		frappe.throw(_("You do not have permission to view this Company."), frappe.PermissionError)
 
 	period_filters = {
