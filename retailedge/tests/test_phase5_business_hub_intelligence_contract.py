@@ -72,7 +72,7 @@ def _owner():
 				"payables": _section(
 					[
 						{"label": "Total Payables", "value": 250_000, "datatype": "Currency"},
-						{"label": "Open Invoices", "value": 3, "datatype": "Int"},
+						{"label": "Open Bills", "value": 3, "datatype": "Int"},
 						{"label": "Overdue", "value": 0, "datatype": "Currency"},
 						{"label": "Over 90 Days", "value": 0, "datatype": "Currency"},
 					]
