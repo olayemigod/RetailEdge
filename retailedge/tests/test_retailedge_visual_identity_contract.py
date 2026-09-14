@@ -32,7 +32,7 @@ def test_identity_layer_is_scoped_to_retailedge_and_does_not_clone_shared_shell(
         '[data-edge-product="retailedge"]',
         "--retailedge-brand",
         "--retailedge-sidebar",
-        "--edge-color-brand-600",
+        "--retailedge-brand: var(--edge-color-brand-600",
         ".edge-app-shell__sidebar",
         ".edge-page-header",
         ".edge-stat-card",
@@ -72,3 +72,19 @@ def test_visual_identity_does_not_replace_business_or_accounting_authorities():
         "frappe.db",
     ):
         assert forbidden not in source
+
+
+def test_light_appearance_does_not_force_dark_sidebar_and_title_remains_readable():
+    source = IDENTITY_CSS.read_text(encoding="utf-8")
+    assert "--retailedge-sidebar: color-mix" in source
+    assert ".edge-topbar__title-copy strong" in source
+    assert "var(--edge-color-surface" in source
+    assert "var(--edge-color-ink-950" in source
+
+
+def test_business_hub_large_money_cards_are_non_wrapping_and_roomy():
+    source = IDENTITY_CSS.read_text(encoding="utf-8")
+    component = BUSINESS_HUB.read_text(encoding="utf-8")
+    assert "repeat(auto-fit, minmax(13.5rem, 1fr))" in source
+    assert "white-space: nowrap;" in source
+    assert "repeat(auto-fit, minmax(13.5rem, 1fr))" in component
