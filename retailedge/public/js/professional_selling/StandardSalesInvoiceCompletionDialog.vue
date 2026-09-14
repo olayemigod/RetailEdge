@@ -31,20 +31,6 @@
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !datesDirty" @click="saveDraftDates">
 						{{ busy ? "Saving..." : "Save Draft Dates" }}
 					</button>
-				</div>
-
-				<div v-if="preview.can_edit_dates" class="invoice-date-editor">
-					<div>
-						<label for="invoice-posting-date">Posting Date</label>
-						<input id="invoice-posting-date" v-model="postingDate" class="edge-control" type="date" :disabled="busy" />
-					</div>
-					<div>
-						<label for="invoice-due-date">Due Date</label>
-						<input id="invoice-due-date" v-model="dueDate" class="edge-control" type="date" :disabled="busy" />
-					</div>
-					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !datesChanged" @click="saveDates">
-						{{ busy ? "Saving..." : "Save Draft Dates" }}
-					</button>
 					<p>Draft dates can be corrected before submission. Due Date must be the same as or later than Posting Date.</p>
 				</div>
 
@@ -134,7 +120,6 @@
 <script>
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const UPDATE_DATES_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_dates";
-const UPDATE_DATES_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_dates";
 const SUBMIT_METHOD = "retailedge.standard_sales_invoice_completion.submit_standard_sales_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_standard_sales_invoice_workflow_action";
 
@@ -172,8 +157,6 @@ export default {
 			busy: false,
 			error: "",
 			actionError: "",
-			postingDate: "",
-			dueDate: "",
 			draftPostingDate: "",
 			draftDueDate: "",
 		};
@@ -181,11 +164,6 @@ export default {
 	computed: {
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
-		},
-		datesChanged() {
-			if (!this.preview?.can_edit_dates) return false;
-			return String(this.postingDate || "") !== String(this.preview?.posting_date || "")
-				|| String(this.dueDate || "") !== String(this.preview?.due_date || "");
 		},
 		datesDirty() {
 			return Boolean(this.preview?.can_edit_dates) && (
@@ -244,29 +222,6 @@ export default {
 				frappe.show_alert({ message: __("Draft invoice dates updated"), indicator: "green" });
 			} catch (error) {
 				this.actionError = errorMessage(error, "Unable to update draft invoice dates.");
-				await this.loadPreview();
-			} finally {
-				this.busy = false;
-			}
-		},
-		async saveDates() {
-			if (!this.preview?.can_edit_dates || !this.datesChanged || this.busy) return;
-			this.busy = true;
-			this.actionError = "";
-			try {
-				const result = await callMethod(UPDATE_DATES_METHOD, {
-					name: this.preview.name,
-					posting_date: this.postingDate,
-					due_date: this.dueDate,
-					expected_modified: this.preview.modified,
-				});
-				this.preview = result;
-				this.postingDate = result?.posting_date || "";
-				this.dueDate = result?.due_date || "";
-				this.$emit("changed", result);
-				frappe.show_alert({ message: __("Draft dates updated"), indicator: "green" });
-			} catch (error) {
-				this.actionError = errorMessage(error, "Unable to update draft dates.");
 				await this.loadPreview();
 			} finally {
 				this.busy = false;
@@ -339,9 +294,6 @@ export default {
 .invoice-date-editor > div { display: grid; gap: .3rem; }
 .invoice-date-editor label { font-size: .78rem; color: var(--text-muted); }
 .invoice-date-editor p { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: .82rem; }
-.invoice-date-editor { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)) auto; gap: .75rem; align-items: end; padding: .8rem; border: 1px solid var(--edge-border-color,var(--border-color)); border-radius: .6rem; }
-.invoice-date-editor > div { display: grid; gap: .3rem; }
-.invoice-date-editor label { font-size: .78rem; color: var(--text-muted); }
 .invoice-accounting-note { background: var(--blue-50,#eff6ff); border-color: var(--blue-200,#bfdbfe); }
 .invoice-accounting-note p { margin: 0; }
 .invoice-completion-items { display: grid; gap: .45rem; }
