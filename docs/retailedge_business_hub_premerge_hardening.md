@@ -33,7 +33,7 @@ Out of scope:
 
 ## Phase 2 — Guided transaction context and branch cascade
 
-Status: pending.
+Status: implemented; final retail.local replay pending.
 
 Scope:
 - Make Sale: Company → Branch → Warehouse cascade, only valid operational branches/warehouses.
@@ -51,7 +51,7 @@ Safety:
 
 ## Phase 3 — Purchasing and Receive Stock compatibility
 
-Status: pending.
+Status: implemented and contract-hardened; exact-head automated validation pending.
 
 Scope:
 - Fix ERPNext 16.34.x Landed Cost Voucher compatibility without private/removed imports.
@@ -61,12 +61,12 @@ Scope:
 
 ## Phase 4 — Banking usability
 
-Status: pending.
+Status: implemented; exact-head automated validation and retail.local visual replay pending.
 
 Scope:
 - Reduce Bank Matching typography and control density now that the EdgeSuite sidebar is present.
 - Preserve responsive/mobile usability.
-- Upgrade Upload Bank Statement dialog to select an existing Bank Statement Import template or create one through a permission-aware guided path.
+- Upgrade Upload Bank Statement dialog to select an existing reusable RetailEdge bank mapping template or create one through a permission-aware guided path; translate it into ERPNext Bank Statement Import `template_options` so ERPNext remains the import authority.
 - Keep bank matching/reconciliation truth and permissions unchanged.
 
 ## Phase 5 — Intelligent Hub expansion
