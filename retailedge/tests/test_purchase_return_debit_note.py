@@ -178,7 +178,7 @@ class TestPurchaseReturnDebitNote(unittest.TestCase):
 			self.assertEqual(target.insert_calls, 0)
 
 	@patch("erpnext.accounts.doctype.purchase_invoice.purchase_invoice.make_debit_note")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access", side_effect=frappe.PermissionError)
+	@patch("retailedge.professional_purchasing.validate_operating_branch", side_effect=frappe.PermissionError)
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Abuja")
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
 	@patch("retailedge.professional_purchasing._assert_create")
