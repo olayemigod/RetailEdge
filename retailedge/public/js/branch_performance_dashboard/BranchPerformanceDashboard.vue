@@ -133,6 +133,7 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("branch-performance-dashboard") || {};
 				this.filters = { ...this.filters, ...hubHandoff };
+				if (hubHandoff.from_date && hubHandoff.to_date) this.filters.date_range_preset = "Custom Period";
 				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.paymentMethods = context.payment_methods || [];
 				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
