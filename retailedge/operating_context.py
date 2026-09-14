@@ -443,27 +443,35 @@ def _build_context(*, company: str, branch: str, user: str, source: str) -> dict
 
 
 def _validate_context(*, company: str, branch: str, user: str, throw: bool) -> dict[str, Any]:
-	validated = validate_operating_branch(company=company, branch=branch, user=user, throw=throw)
-	if not validated.get("allowed"):
-		return validated
+	# Fallback/cache validation is intentionally non-interactive. Frappe throw()
+	# records server messages before raising, so caught probe failures must restore
+	# the caller's message log or Desk will render a permission modal from a probe.
+	previous_messages = list(getattr(frappe.local, "message_log", []) or []) if not throw else None
+	try:
+		validated = validate_operating_branch(company=company, branch=branch, user=user, throw=throw)
+		if not validated.get("allowed"):
+			return validated
 
-	pos_state = resolve_branch_pos_requirement(
-		company=validated["company"],
-		branch=validated["branch"],
-		user=user,
-	)
-	if pos_state.get("pos_required") and not pos_state.get("pos_ready"):
-		if throw:
-			frappe.throw(
-				pos_state.get("pos_message") or _("A valid POS Profile is required for this Branch.")
-			)
-		return {
-			"allowed": False,
-			"company": validated["company"],
-			"branch": validated["branch"],
-			"reason": "pos_profile_required",
-		}
-	return validated
+		pos_state = resolve_branch_pos_requirement(
+			company=validated["company"],
+			branch=validated["branch"],
+			user=user,
+		)
+		if pos_state.get("pos_required") and not pos_state.get("pos_ready"):
+			if throw:
+				frappe.throw(
+					pos_state.get("pos_message") or _("A valid POS Profile is required for this Branch.")
+				)
+			return {
+				"allowed": False,
+				"company": validated["company"],
+				"branch": validated["branch"],
+				"reason": "pos_profile_required",
+			}
+		return validated
+	finally:
+		if previous_messages is not None:
+			frappe.local.message_log = previous_messages
 
 
 def _get_switch_blockers(*, user: str) -> list[dict[str, str]]:
@@ -549,9 +557,14 @@ def _assert_switch_safe(*, company: str, branch: str, user: str) -> None:
 
 
 def _allowed_companies(*, user: str) -> list[str]:
-	assignment_authoritative = has_branch_assignments(user=user) and not user_has_global_branch_access(user=user)
+	global_access = user_has_global_branch_access(user=user)
+	assignment_authoritative = has_branch_assignments(user=user) and not global_access
 	try:
-		rows = frappe.get_list(
+		# RetailEdge global-access roles are the product-level authority for the
+		# operating switcher. Their Company options must not disappear merely
+		# because the generic Company DocType has no explicit read grant.
+		reader = frappe.get_all if global_access else frappe.get_list
+		rows = reader(
 			"Company",
 			fields=["name"],
 			order_by="name asc",
@@ -560,7 +573,7 @@ def _allowed_companies(*, user: str) -> list[str]:
 	except Exception:
 		rows = []
 	companies = [_clean(row.get("name")) for row in rows if _clean(row.get("name"))]
-	if user_has_global_branch_access(user=user) or not assignment_authoritative:
+	if global_access or not assignment_authoritative:
 		return companies
 
 	active_companies = {
@@ -587,9 +600,13 @@ def _allowed_branches(*, company: str, user: str) -> list[str]:
 		filters["company"] = company
 	if _doctype_has_field("Branch", "disabled"):
 		filters["disabled"] = 0
-	assignment_authoritative = has_branch_assignments(user=user) and not user_has_global_branch_access(user=user)
+	global_access = user_has_global_branch_access(user=user)
+	assignment_authoritative = has_branch_assignments(user=user) and not global_access
 	try:
-		reader = frappe.get_all if assignment_authoritative else frappe.get_list
+		# Global RetailEdge roles and assignment-authoritative restricted users
+		# already passed the product access model. Enumerate the candidate Branch
+		# set here, then apply Branch Setup / assignment constraints below.
+		reader = frappe.get_all if (global_access or assignment_authoritative) else frappe.get_list
 		rows = reader(
 			"Branch",
 			filters=filters,
@@ -612,7 +629,7 @@ def _allowed_branches(*, company: str, user: str) -> list[str]:
 	elif has_any_setup:
 		permission_visible = []
 
-	if user_has_global_branch_access(user=user):
+	if global_access:
 		return permission_visible
 
 	# Once a user has Branch Assignment history, effective assignments are the
