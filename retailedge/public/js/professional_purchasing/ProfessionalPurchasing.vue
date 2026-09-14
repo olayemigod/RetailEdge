@@ -306,6 +306,15 @@
 				@close="closePurchaseInvoiceCompletion"
 				@changed="handlePurchaseInvoiceCompletionChanged"
 				@completed="handlePurchaseInvoiceCompletionCompleted"
+				@pay-supplier="handlePurchaseInvoicePaySupplier"
+			/>
+			<SimplePaymentDialog
+				:open="supplierPaymentOpen"
+				:native-fallback-enabled="canUseNativeDesk"
+				intent="pay-supplier"
+				:initial-context="supplierPaymentInitialContext"
+				@close="closeSupplierPayment"
+				@open-native="openNativeSupplierPayment"
 			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -314,6 +323,7 @@
 <script>
 import IncomingQualityInspection from "./IncomingQualityInspection.vue";
 import StandardPurchaseInvoiceCompletionDialog from "./StandardPurchaseInvoiceCompletionDialog.vue";
+import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_purchasing.get_professional_purchasing_context";
 const PROCUREMENT_TRACKER_HANDOFF_METHOD = "retailedge.procurement_tracker_handoff.get_procurement_tracker_handoff";
@@ -354,12 +364,13 @@ function sortedCopy(rows, sort) {
 
 export default {
 	name: "RetailEdgeProfessionalPurchasing",
-	components: { IncomingQualityInspection, StandardPurchaseInvoiceCompletionDialog, ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])) },
+	components: { IncomingQualityInspection, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog, ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])) },
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", actionError: "", actionNotice: "", company: "", branch: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			filters: { company: "", branch: "", supplier: "" }, summary: {}, capabilities: {}, limits: {}, rows: [], materialRequests: [], serverToday: "",
 			draftPurchaseInvoices: [], draftInvoiceSort: null, loadingDraftPurchaseInvoices: false, purchaseInvoiceCompletionOpen: false, purchaseInvoiceCompletionDocument: null,
+			supplierPaymentOpen: false, supplierPaymentInitialContext: {},
 			procurementTracker: { available: false, company: "", branch: "", report: "Procurement Tracker", reason: "" },
 			returnCapabilities: { can_prepare_purchase_return: false, can_prepare_supplier_debit_note: false }, returnSources: { purchaseReceipt: "", purchaseInvoice: "" }, preparingReturn: "",
 			landedCostCapability: { can_prepare_landed_cost: false, can_use_purchase_receipt: false, can_use_purchase_invoice: false },
@@ -455,9 +466,26 @@ export default {
 		async handlePurchaseInvoiceCompletionChanged() {
 			await this.refreshDraftPurchaseInvoices();
 		},
-		async handlePurchaseInvoiceCompletionCompleted() {
-			this.closePurchaseInvoiceCompletion();
+		async handlePurchaseInvoiceCompletionCompleted(result = {}) {
 			await this.refreshDraftPurchaseInvoices();
+			if (!result?.keep_open) this.closePurchaseInvoiceCompletion();
+		},
+		handlePurchaseInvoicePaySupplier(context = {}) {
+			this.closePurchaseInvoiceCompletion();
+			this.supplierPaymentInitialContext = { ...(context || {}) };
+			this.supplierPaymentOpen = true;
+		},
+		async closeSupplierPayment() {
+			this.supplierPaymentOpen = false;
+			this.supplierPaymentInitialContext = {};
+			await this.refreshDraftPurchaseInvoices();
+			await this.loadWorkspace();
+		},
+		openNativeSupplierPayment(doctype = "Payment Entry") {
+			if (!this.canUseNativeDesk) return;
+			this.supplierPaymentOpen = false;
+			this.supplierPaymentInitialContext = {};
+			frappe.new_doc(doctype);
 		},
 		handleLandedCostHandoff(handoff) {
 			const sourceName = String(handoff?.source_name || "").trim();
