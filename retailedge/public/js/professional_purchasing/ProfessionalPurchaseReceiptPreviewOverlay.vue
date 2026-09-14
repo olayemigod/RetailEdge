@@ -85,6 +85,7 @@ const SUBMIT_METHOD = "retailedge.professional_purchase_receipt.submit_standard_
 const START_WORKFLOW_METHOD = "retailedge.professional_purchase_receipt.start_standard_purchase_receipt_workflow";
 const WORKFLOW_ACTION_METHOD = "retailedge.professional_purchase_receipt.apply_standard_purchase_receipt_workflow_action";
 const OPEN_EVENT = "retailedge-open-professional-purchase-receipt-preview";
+const LANDED_COST_HANDOFF_EVENT = "retailedge-professional-purchasing-landed-cost-handoff";
 const ACCESS_MODE = "edgesuite_only";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
@@ -161,6 +162,7 @@ export default {
 					const receiptName = result.name || this.preview.purchase_receipt || "";
 					this.posting = false;
 					this.close();
+					this.dispatchLandedCostHandoff(result);
 					frappe.show_alert({ message: __(`Purchase Receipt ${receiptName} submitted. Stock has been received.`), indicator: "green" }, 7);
 					return;
 				}
@@ -188,12 +190,18 @@ export default {
 				}, "POST");
 				this.posting = false;
 				this.close();
+				this.dispatchLandedCostHandoff(result);
 				frappe.show_alert({ message: __(`Purchase Receipt ${result.name || ''} submitted. Stock has been received.`), indicator: "green" }, 7);
 				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
 			} catch (error) {
 				this.posting = false;
 				this.error = errorMessage(error, "Unable to submit this Purchase Receipt.");
 			}
+		},
+		dispatchLandedCostHandoff(result) {
+			const handoff = result?.landed_cost_handoff || {};
+			if (!handoff.available || handoff.source_type !== "purchase_receipt" || !handoff.source_name) return;
+			window.dispatchEvent(new CustomEvent(LANDED_COST_HANDOFF_EVENT, { detail: handoff }));
 		},
 		controlLabel(row) {
 			const flags = [];
