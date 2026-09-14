@@ -31,6 +31,7 @@ class _DraftAdvance(SimpleNamespace):
 
 
 class TestAdvancedPayments(unittest.TestCase):
+	@patch("retailedge.advanced_payments.get_operating_context", return_value={})
 	@patch("retailedge.advanced_payments._payment_branch_field", return_value=None)
 	@patch("retailedge.advanced_payments._assert_read")
 	@patch("retailedge.advanced_payments.frappe.get_list")
@@ -39,6 +40,7 @@ class TestAdvancedPayments(unittest.TestCase):
 		mock_get_list,
 		_mock_assert_read,
 		_mock_branch_field,
+		_mock_operating_context,
 	):
 		mock_get_list.return_value = [
 			frappe._dict(
