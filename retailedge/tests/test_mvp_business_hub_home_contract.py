@@ -55,6 +55,13 @@ def test_business_hub_home_never_falls_back_to_company_wide_data_for_restricted_
 	assert '"attention": []' in source
 
 
+def test_business_hub_respects_retailedge_global_manager_company_access_contract():
+	source = BACKEND.read_text()
+	assert "user_has_global_branch_access" in source
+	assert 'or frappe.has_permission("Company", "read", doc=company)' in source
+	assert "get_operational_branch_scope" in source
+
+
 def test_business_hub_optional_sections_do_not_leak_caught_frappe_messages():
 	source = BACKEND.read_text()
 	assert 'previous_messages = list(getattr(frappe.local, "message_log", []) or [])' in source
