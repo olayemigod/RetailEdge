@@ -19,11 +19,12 @@ Browser/persona runs triggered before this audit is frozen are regression eviden
 
 No new P0 product, accounting, stock, permission, branch-isolation, install or upgrade defect was found.
 
-Three P1 audit/acceptance-contract gaps were found and closed:
+Four P1 audit/acceptance gaps were found and closed:
 
 1. the legacy Business Hub MVP contract still asserted the pre-Phase-5 four-signal Operate layout;
 2. the RC3 runbook still named PR #55 and its historical PASS as current authority;
-3. the RC3 browser suite did not explicitly exercise the PR #56 Business Hub intelligence, browser Back/Forward shell recovery, or shared Working Branch switcher.
+3. the RC3 browser suite did not explicitly exercise the PR #56 Business Hub intelligence, browser Back/Forward shell recovery, or shared Working Branch switcher;
+4. the Business Hub snapshot required raw Company read permission even for canonical RetailEdge global managers, contradicting the shared RetailEdge global-branch-access contract.
 
 The product implementation itself remains ERPNext/Frappe-authoritative for accounting, stock, workflow and permissions.
 
@@ -38,7 +39,7 @@ The product implementation itself remains ERPNext/Frappe-authoritative for accou
 | 5 | Payments / cash / banking | GREEN | Existing payment/cash authorities remain intact. Bank Matching remains EdgeSuite-owned for everyday work. Upload Statement creates native ERPNext Bank Statement Import records; reusable mapping templates are permission-aware and Company/Bank/Branch-context checked before writing native `template_options`. |
 | 6 | Expenses | GREEN | Business Expense remains the modern owner/manager/accounts flow. Cashier Expense remains a governed draft-first cashier flow and now continues into EdgeSuite workflow completion rather than forcing ordinary users into the native DocType. |
 | 7 | Stock operations | GREEN | Guided Stock Transfer remains ERPNext Stock Entry draft truth, with Source/Destination Branch required where configured and both Warehouses revalidated server-side. Complex Serial/Batch cases retain the advanced ERPNext boundary. |
-| 8 | Business Hub / command centre | GREEN | Business Hub is the RetailEdge app home, shell ownership is stable across history navigation, quick actions remain permission-derived, and Phase 5 exposes eight actionable indices: Sales, Cash, Stock, Expenses, Receivables, Payables, Branch Performance and Banking. |
+| 8 | Business Hub / command centre | GREEN | Business Hub is the RetailEdge app home, shell ownership is stable across history navigation, quick actions remain permission-derived, canonical RetailEdge global managers use the shared Company-access contract, and Phase 5 exposes eight actionable indices: Sales, Cash, Stock, Expenses, Receivables, Payables, Branch Performance and Banking. |
 | 9 | Action Centre / operational review ownership | GREEN | Action Centre remains the EdgeSuite review surface. Banking and other supported review destinations retain current canonical Pages and Native Desk capability boundaries. |
 | 10 | Reporting / management visibility | GREEN FOR MVP | Existing reporting authorities are reused rather than reimplemented. Business Hub carries Company/Branch/period handoffs into reports and prioritises actionable exceptions instead of decorative duplicate analytics. |
 | 11 | Security / install / migration / upgrade | GREEN AUTOMATED | Exact-head clean Frappe v16 CI, lint/Semgrep/dependency audit, EdgeSuite compatibility, theme checks and real frozen-baseline upgrade validation were green before audit-contract closure. Upgrade validation runs on every PR candidate and verifies submitted accounting truth after double migration. |
@@ -68,6 +69,12 @@ The consolidated RC3 Playwright spec now explicitly checks:
 - the multi-Branch persona receives an enabled shared Working Branch control showing the active permitted Branch.
 
 These checks supplement, rather than replace, the existing one/multiple/zero Branch API fixtures, role/page access, appearance, mobile, Create/search and operational Page coverage.
+
+### P1-D — canonical RetailEdgeManager Business Hub Company access — CLOSED
+
+The new PR #56 browser coverage exposed that a canonical `RetailEdgeManager` could open Business Hub but its Home snapshot failed because the snapshot applied raw `Company` DocType read permission after the shared branch-scope resolver had already classified the role as global RetailEdge access.
+
+Business Hub now follows the same shared access contract used by Operating Context: an already-authorised RetailEdge global-access role may view the selected Company Home snapshot even when that custom role does not carry ERPNext's generic Company read permission directly. Restricted users still require their existing permission/Branch rules and restricted-zero remains fail-closed.
 
 ## Safety recheck
 
