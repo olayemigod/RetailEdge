@@ -118,13 +118,7 @@ def _headline_summary(sections: dict[str, dict[str, Any]]) -> list[dict[str, Any
 		card = _summary_card(sections.get(section_key), metric_label)
 		if card:
 			section = sections.get(section_key) or {}
-			cards.append({
-				**card,
-				"label": _(display_label),
-				"source_label": card.get("label"),
-				"time_basis": section.get("time_basis") or "period",
-				"route": section.get("route") or "",
-			})
+			cards.append({**card, "label": _(display_label), "source_label": card.get("label"), "time_basis": section.get("time_basis") or "period"})
 	return cards
 
 

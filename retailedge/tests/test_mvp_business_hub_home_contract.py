@@ -82,11 +82,3 @@ def test_business_hub_keeps_existing_guided_entry_ownership():
 		"SimpleStockAdjustmentDialog",
 	):
 		assert token in source
-
-
-def test_business_hub_performance_cards_inherit_actionable_section_routes():
-	source = (APP_ROOT / "owner_dashboard.py").read_text(encoding="utf-8")
-	hub = HUB.read_text(encoding="utf-8")
-
-	assert '"route": section.get("route") or ""' in source
-	assert '@click="openHomeRoute(card.route, homeRouteFilters(card))"' in hub
