@@ -205,6 +205,23 @@ class TestOperatingContextPhase2(unittest.TestCase):
 			self.assertIn(contract, source)
 
 
+	def test_restricted_assignment_history_without_company_is_fail_closed(self):
+		source = self.read("operating_context.py")
+		scope_start = source.index("def get_operational_branch_scope(")
+		scope_end = source.index("\n\ndef resolve_operational_branch", scope_start)
+		scope_source = source[scope_start:scope_end]
+		for contract in (
+			"branch_assignment_zero_context",
+			"not has_global_access and has_branch_assignments(user=user)",
+			'"restricted": True',
+			'"allowed_branches": []',
+		):
+			self.assertIn(contract, scope_source)
+		self.assertLess(
+			scope_source.index("branch_assignment_zero_context"),
+			scope_source.index('"source": "no_company"'),
+		)
+
 	def test_shell_switcher_is_available_when_multiple_branches_require_explicit_choice(self):
 		source = self.read("public/js/retailedge_shell_context.js")
 		self.assertIn('const needsExplicitBranch = !activeBranch && branches.length > 1 && Boolean(current.can_switch_branch);', source)
