@@ -15,7 +15,7 @@
 			<template #header>
 				<EdgePageHeader
 					title="Business Hub"
-					subtitle="Today’s priorities, actions and business position."
+					subtitle="Priorities, actions and business position."
 					:withBackButton="false"
 				/>
 			</template>
