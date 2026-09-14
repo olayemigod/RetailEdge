@@ -2,21 +2,23 @@
 
 ## Authority and status
 
-- **Authoritative PR:** #55
-- **Authoritative branch:** `qa/retailedge-reconciled-20260902`
-- **MVP candidate:** current PR #55 exact head deployed to `retail.local`
-- **Stage:** RC3 — consolidated local browser/persona acceptance
-- **Execution status:** **PASS — RC3 FROZEN**
-- **Target QA site:** `retail.local`
-- **Release status:** **RC3 CLOSED** — proceed to blocker-only RetailEdge 1.0.0 release hardening
+- **Authoritative PR:** #56
+- **Authoritative branch:** `qa/retailedge-visual-identity`
+- **PR base:** `version-16`
+- **MVP candidate:** current PR #56 exact head
+- **Stage:** RC3 — consolidated browser/persona acceptance after the PR #56 second MVP audit is frozen
+- **Execution status:** **NOT YET COUNTED FOR PR #56**
+- **Automated QA site:** `retail-browser.localhost`
+- **Optional local replay site:** `retail.local`
+- **Release status:** blocked on second-audit freeze, then formal RC3 acceptance
 
-This is the single execution record for the final reconciliation browser/persona gate. It must be executed only after the second MVP audit in `docs/retailedge_mvp_second_audit_20260912.md` is implementation-green. It consolidates the current PR #55 contracts and reuses useful detail from earlier module-specific browser QA documents without inheriting their obsolete PR #23 branch assumptions or superseded promotion decisions.
+This is the governing browser/persona contract for PR #56. Browser runs triggered before the second MVP audit is frozen are regression evidence only and must not be counted as formal RC3 acceptance. The earlier PR #55 RC3 record remains historical evidence, but it does not accept the Business Hub, visual/runtime, branch-switcher, guided-context, Receive Stock, banking-import, or intelligence changes introduced on PR #56.
 
-Actual QA results must be recorded against the exact commit deployed to `retail.local`. Automated green checks do not substitute for this browser gate.
+Formal PR #56 acceptance must identify the exact post-audit-freeze SHA and its browser workflow run. Automated browser execution is valid evidence for the deterministic persona matrix, but it must execute only after the second audit has been frozen; any optional `retail.local` replay is supplementary.
 
 ## Source contracts reused by this runbook
 
-The detailed checks in the following documents remain useful where they agree with the current PR #55 route/promotion contract:
+The detailed checks in the following documents remain useful where they agree with the current PR #56 route/promotion contract:
 
 - `docs/retailedge_reconciliation_integrity_recovery.md`
 - `docs/retailedge_route_promotion_matrix.md`
@@ -30,20 +32,22 @@ The detailed checks in the following documents remain useful where they agree wi
 - `docs/rir2c1_keyboard_command_ownership.md`
 - `docs/rir2d1_searchable_create_picker.md`
 
-When an older browser document conflicts with the current route matrix or later RIR decision, the later PR #55 contract wins. In particular:
+When an older browser document conflicts with the current route matrix or later RIR decision, the PR #56 contract wins. In particular:
 
 - Bank Matching everyday navigation must open Page `bank-matching-reconciliation`, not the legacy `RetailEdge Bank Transaction Matching` Query Report.
 - Banking Readiness is permission-aware in the Business Hub Money group and appears before Bank Matching.
 - `branch-assignments` remains System Manager-only through consolidated RetailEdge Setup; it must not appear as a general operator route.
 - Daily Sales Audit, Expense Review and Cash Shift Verification are current Business Hub Pages with native/report fallback retained where defined by the route matrix.
 - Stock Movement History now uses the hardened EdgeSuite Page `stock-movement-history` in final master composition when Page permission is available; native Item/Voucher drill-through remains capability-gated.
-- The current Business Hub MVP Home is in scope. QA must verify the Today command centre, permitted KPI cards, Stock/Banking/Branch/Cash Shift sections, Attention items, quick actions, and graceful degradation for personas without management-dashboard permissions.
+- The current Business Hub MVP Home is in scope. QA must verify the eight actionable Business indices (Sales, Cash, Stock, Expenses, Receivables, Payables, Branch Performance and Banking), Attention priorities, quick actions, Company/Branch/period handoff, and graceful degradation for personas without a permitted management data source.
+- PR #56 Back/Forward navigation must restore the RetailEdge EdgeSuite shell without requiring a manual refresh.
+- The shared top-bar Working Branch switcher must render only permission-scoped branches and continue to use server-side `switch_operating_context` validation.
 
 ## Exact-head preflight
 
 Before testing:
 
-1. Record the exact deployed RetailEdge SHA below. It must be the current PR #55 head being accepted.
+1. Record the exact RetailEdge SHA below. It must be the post-second-audit-freeze PR #56 head being accepted.
 2. Confirm the working tree is clean after pull/build/migrate.
 3. Build RetailEdge and governed EdgeSuite UI assets.
 4. Run `bench --site retail.local migrate` and clear browser/server cache as required.
@@ -52,19 +56,21 @@ Before testing:
 7. Confirm Theme Compatibility, Linters, full Frappe/RetailEdge CI and EdgeSuite UI Candidate Compatibility are green on the same exact head.
 8. Keep browser console and network panels available during QA. Missing assets, uncaught exceptions and 403/permission failures must be captured with the persona and route.
 
-Execution record:
+Current PR #56 execution record:
 
-- Tested SHA: **`202741c34abd76d53521e3d60f0a69d1557a9a87`**
-- RetailEdge version/branch: `qa/retailedge-reconciled-20260902` — MVP 1.0 candidate
-- Frappe version: `version-16` workflow candidate
-- ERPNext version: `version-16` workflow candidate
-- EdgeSuite UI version/candidate: governed `agent/reporting-standard-v1` candidate used by RC3 workflow
+- Tested SHA: **PENDING — must be the post-audit-freeze PR #56 exact head**
+- RetailEdge version/branch: `qa/retailedge-visual-identity` — RetailEdge 1.0 candidate
+- Frappe version: `version-16`
+- ERPNext version: `version-16`
+- EdgeSuite UI version/candidate: governed `agent/reporting-standard-v1`
 - Browser(s): Playwright Chromium on Ubuntu 24.04
-- Tester/date: exact-head GitHub Actions persona run + retained-evidence review, 2026-09-13
-- Browser workflow run: **34768383675**
-- Browser result: **21 / 21 PASS**
-- Retained evidence artifact: **retailedge-browser-persona-evidence**, artifact **10320623855** (screenshots, traces and video retained on success)
-- Companion exact-head gates: Theme Compatibility, Linters, Frappe v16 CI, EdgeSuite UI Candidate Compatibility and Upgrade Validation — **PASS**
+- Formal tester/date: **PENDING**
+- Formal browser workflow run: **PENDING**
+- Formal browser result: **PENDING**
+- Retained evidence artifact: **PENDING**
+- Companion exact-head gates: **PENDING on the audit-freeze head**
+
+Historical PR #55 acceptance remains recorded in repository history and prior revisions of this document; it must not be substituted for PR #56 acceptance.
 
 ## Required personas and scope fixtures
 
@@ -251,7 +257,7 @@ RIR2E cannot pass with any unresolved defect in these classes:
 
 Blocker-only fixes found during this stage must remain narrowly scoped, preserve the reconciled branch composition, receive regression coverage where practical, and rerun the exact-head automated gates before browser retest.
 
-## Result matrix
+## Historical PR #55 result matrix — reference only
 
 Record PASS / FAIL / BLOCKED / NOT APPLICABLE. Initial state is intentionally NOT RUN.
 
@@ -315,6 +321,6 @@ RIR2E may be frozen only when:
 - no unresolved permission, branch-scope, runtime/asset, route-composition or submitted-document safety defect remains;
 - the final PASS record identifies the exact tested SHA.
 
-RC3 closure decision: **PASS / FROZEN** on implementation SHA `202741c34abd76d53521e3d60f0a69d1557a9a87`.
+Historical PR #55 closure decision: **PASS / FROZEN** on implementation SHA `202741c34abd76d53521e3d60f0a69d1557a9a87`.
 
-PR #55 remains the authoritative release candidate line. After this documentation-only freeze record, all six governed gates must remain green on the resulting exact head. Once that is confirmed, the next allowed stage is RetailEdge **1.0.0 release hardening**; no new feature scope is permitted.
+Current PR #56 closure decision: **NOT YET RUN AS FORMAL RC3**. Freeze the PR #56 second MVP audit first, then execute the exact-head browser/persona workflow. Only P0/P1 blocker corrections may follow a formal RC3 failure.
