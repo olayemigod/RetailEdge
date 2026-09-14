@@ -110,11 +110,104 @@ class TestPhase3ProfessionalPurchasingScopeContract(TestCase):
 			throw=True,
 		)
 
+	def test_unrestricted_branch_selector_uses_shared_operating_options(self):
+		with (
+			patch.object(
+				purchasing,
+				"_resolve_scope",
+				return_value=("RetailEdge Consulting", "", [], True),
+			),
+			patch.object(
+				purchasing,
+				"get_allowed_operating_branches",
+				return_value=["Lagos", "Ketu"],
+			) as allowed_options,
+			patch.object(purchasing, "has_field", return_value=True),
+			patch.object(
+				purchasing.frappe,
+				"get_list",
+				return_value=[
+					frappe._dict(name="Ketu"),
+					frappe._dict(name="Lagos"),
+				],
+			) as get_list,
+		):
+			rows = purchasing.search_professional_purchasing_options(
+				kind="branch",
+				company="RetailEdge Consulting",
+			)
+
+		allowed_options.assert_called_once_with(
+			"RetailEdge Consulting",
+			user=frappe.session.user,
+		)
+		self.assertEqual(
+			get_list.call_args.kwargs["filters"]["name"],
+			["in", ["Lagos", "Ketu"]],
+		)
+		self.assertEqual(
+			rows,
+			[
+				{"value": "Ketu", "label": "Ketu"},
+				{"value": "Lagos", "label": "Lagos"},
+			],
+		)
+
+	def test_restricted_branch_selector_keeps_operational_allowed_list(self):
+		with (
+			patch.object(
+				purchasing,
+				"_resolve_scope",
+				return_value=("RetailEdge Consulting", "", ["Lagos"], False),
+			),
+			patch.object(purchasing, "get_allowed_operating_branches") as allowed_options,
+			patch.object(purchasing, "has_field", return_value=True),
+			patch.object(
+				purchasing.frappe,
+				"get_list",
+				return_value=[frappe._dict(name="Lagos")],
+			) as get_list,
+		):
+			purchasing.search_professional_purchasing_options(
+				kind="branch",
+				company="RetailEdge Consulting",
+			)
+
+		allowed_options.assert_not_called()
+		self.assertEqual(
+			get_list.call_args.kwargs["filters"]["name"],
+			["in", ["Lagos"]],
+		)
+
+	def test_active_branch_selector_remains_exact(self):
+		with (
+			patch.object(
+				purchasing,
+				"_resolve_scope",
+				return_value=("RetailEdge Consulting", "Lagos", [], True),
+			),
+			patch.object(purchasing, "get_allowed_operating_branches") as allowed_options,
+			patch.object(purchasing, "has_field", return_value=True),
+			patch.object(
+				purchasing.frappe,
+				"get_list",
+				return_value=[frappe._dict(name="Lagos")],
+			) as get_list,
+		):
+			purchasing.search_professional_purchasing_options(
+				kind="branch",
+				company="RetailEdge Consulting",
+			)
+
+		allowed_options.assert_not_called()
+		self.assertEqual(get_list.call_args.kwargs["filters"]["name"], "Lagos")
+
 	def test_active_company_and_branch_limit_smart_selectors(self):
 		source = PURCHASING.read_text(encoding="utf-8")
 		self.assertIn('filters = {"name": active_company} if active_company else None', source)
 		self.assertIn('if resolved_branch:', source)
 		self.assertIn('filters["name"] = resolved_branch', source)
+		self.assertIn("get_allowed_operating_branches(", source)
 		self.assertIn("validate_operating_branch(", source)
 		self.assertNotIn("validate_user_branch_access(", source)
 
