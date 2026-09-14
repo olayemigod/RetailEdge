@@ -180,3 +180,34 @@ test("Business Hub QA regression: Receive Stock lands on Ready to Receive purcha
 		await context.close();
 	}
 });
+
+
+test("Business Hub QA regression: period change refreshes selected-period views without relabelling current position", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		const result = await page.evaluate(async () => {
+			const wrapper = frappe.pages?.["retailedge-business-hub"];
+			const proxy = wrapper?._retailedgeBusinessHub?._instance?.proxy;
+			if (!proxy?.handleHomePeriodChange) throw new Error("Business Hub proxy is unavailable.");
+			await proxy.handleHomePeriodChange("Last 30 Days");
+			return {
+				preset: proxy.homePeriodPreset,
+				period: { ...(proxy.homePeriod || {}) },
+				displayRange: proxy.homePeriod?.from_date && proxy.homePeriod?.to_date
+					? `${frappe.datetime.str_to_user(proxy.homePeriod.from_date)} – ${frappe.datetime.str_to_user(proxy.homePeriod.to_date)}`
+					: "",
+			};
+		});
+		expect(result.preset).toBe("Last 30 Days");
+		expect(result.period?.from_date).toBeTruthy();
+		expect(result.period?.to_date).toBeTruthy();
+		await expect(page.locator(".home-as-of")).toHaveText(result.displayRange);
+		await expect(page.locator(".home-kpi-card").filter({ hasText: "Current position" }).first()).toBeVisible();
+		await expect(page.locator(".home-kpi-card").filter({ hasText: "Last 30 Days" }).first()).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
