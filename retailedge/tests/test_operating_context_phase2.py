@@ -43,6 +43,30 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_primary_branch_assignment_can_anchor_global_initial_context_without_restricting_scope(self):
+		source = self.read("operating_context.py")
+		fallback_start = source.index("def _resolve_fallback_context(")
+		fallback_end = source.index("\n\ndef _resolve_assignment_fallback", fallback_start)
+		fallback_source = source[fallback_start:fallback_end]
+		for contract in (
+			"has_assignments = has_branch_assignments(user=user)",
+			"assignment_anchor = (",
+			"_resolve_assignment_fallback(user=user, company=fallback_company)",
+			'fallback_company = _clean(assignment_anchor.get("company"))',
+			'if _clean(assignment_anchor.get("branch")):',
+			"resolved = assignment_anchor",
+		):
+			self.assertIn(contract, fallback_source)
+
+		# The assignment is only the initial anchor for a global RetailEdge manager.
+		# Effective operational scope must still take the global-access path first.
+		scope_start = source.index("def get_operational_branch_scope(")
+		scope_end = source.index("\n\ndef resolve_operational_branch", scope_start)
+		scope_source = source[scope_start:scope_end]
+		self.assertLess(scope_source.index("if has_global_access:"), scope_source.index("if has_branch_assignments(user=user):"))
+		self.assertIn('"restricted": False', scope_source)
+		self.assertIn('"source": "global"', scope_source)
+
 	def test_context_preview_does_not_clear_valid_session_context(self):
 		source = self.read("operating_context.py")
 		preview_start = source.index("def preview_operating_context(")
