@@ -21,7 +21,7 @@ def test_business_hub_home_exposes_operational_command_centre_sections():
 	source = FRONTEND.read_text()
 	assert "retailedge.business_hub_home.get_business_hub_home_snapshot" in source
 	for label in ("Understand", "Act", "Operate", "Respond"):
-		assert f">{label}<" in source
+		assert f'<p class="section-kicker">{label}</p>' not in source
 	assert "Five connected experiences" not in source
 	assert "homeSnapshot.cards" in source
 	assert "homeSnapshot.indices" in source
@@ -82,3 +82,15 @@ def test_business_hub_keeps_existing_guided_entry_ownership():
 		"SimpleStockAdjustmentDialog",
 	):
 		assert token in source
+
+
+def test_business_hub_restricted_zero_scope_is_ui_gated_before_transaction_attempts():
+	master = (ROOT / "master_experience.py").read_text()
+	frontend = FRONTEND.read_text()
+	assert "get_operational_branch_scope" in master
+	assert "OPERATIONAL_TRANSACTION_ACTION_KEYS" in master
+	assert '"branch_scope_restricted"' in master
+	assert '"branch_scope_ready"' in master
+	assert "operatingScopeBlocked" in frontend
+	assert "No active Branch access" in frontend
+	assert "if (this.operatingScopeBlocked) return [];" in frontend

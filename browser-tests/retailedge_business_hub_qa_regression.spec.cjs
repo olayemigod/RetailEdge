@@ -4,6 +4,7 @@ const BASE_URL = process.env.RETAILEDGE_BASE_URL || "http://retail-browser.local
 const PASSWORD = process.env.RETAILEDGE_BROWSER_PASSWORD || "RetailEdgeBrowser1!";
 const MANAGER = "browser-manager@example.com";
 const CASHIER = "browser-cashier@example.com";
+const ZERO_BRANCH = "browser-zero-branch@example.com";
 
 async function login(context, user = MANAGER) {
 	const response = await context.request.post(`${BASE_URL}/api/method/login`, {
@@ -286,6 +287,30 @@ test("Business Hub QA regression: cashier Record Expense stays in guided Cashier
 		await expect(page.locator(".guided-expense-form")).toBeVisible();
 		await expect(page.locator(".edge-app-shell").first()).toBeAttached();
 		await expect(page).toHaveURL(/retailedge-business-hub/);
+	} finally {
+		await context.close();
+	}
+});
+
+
+test("Business Hub QA regression: restricted-zero Branch user is gated before operational actions", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context, ZERO_BRANCH);
+	const page = await context.newPage();
+	try {
+		await page.goto(`${BASE_URL}/app/retailedge-business-hub`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+		await expect(page.locator(".hub-scope-warning")).toContainText("No active Branch access");
+		await expect(page.locator(".home-quick-action")).toHaveCount(0);
+		for (const label of ["Make Sale", "Record Expense", "Receive Stock", "Transfer Stock", "Record Purchase"]) {
+			await expect(page.getByRole("button", { name: new RegExp(label, "i") })).toHaveCount(0);
+		}
 	} finally {
 		await context.close();
 	}

@@ -6,7 +6,7 @@ from typing import Any
 import frappe
 
 from retailedge.edgesuite_ui import get_retailedge_business_hub_context as _base_business_hub_context
-from retailedge.operating_context import get_allowed_operating_branches, get_operating_context
+from retailedge.operating_context import get_allowed_operating_branches, get_operating_context, get_operational_branch_scope
 
 CUSTOMER_ACTION: dict[str, Any] = {
 	"key": "new-customer",
@@ -42,6 +42,18 @@ ITEM_ACTION: dict[str, Any] = {
 }
 
 MASTER_ACTIONS: tuple[dict[str, Any], ...] = (CUSTOMER_ACTION, SUPPLIER_ACTION, ITEM_ACTION)
+
+OPERATIONAL_TRANSACTION_ACTION_KEYS = frozenset({
+	"new-sales-invoice",
+	"receive-customer-payment",
+	"pay-supplier",
+	"deposit-cash",
+	"cash-transfer",
+	"record-expense",
+	"record-purchase",
+	"transfer-stock",
+	"adjust-stock",
+})
 
 PROMOTED_R4_PAGE_TARGETS: dict[str, str] = {
 	"Cashier Expense Review": "expense-review",
@@ -681,6 +693,25 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		branches = get_allowed_operating_branches(company=company) if company else []
 	except Exception:
 		branches = []
+	try:
+		branch_scope = get_operational_branch_scope(company) if company else {
+			"restricted": False,
+			"allowed_branches": [],
+			"source": "no_company",
+		}
+	except Exception:
+		branch_scope = {
+			"restricted": True,
+			"allowed_branches": [],
+			"source": "scope_unavailable",
+		}
+	branch_scope_ready = not branch_scope.get("restricted") or bool(branch_scope.get("allowed_branches"))
+	if not branch_scope_ready:
+		quick_actions = [
+			action for action in quick_actions
+			if action.get("key") not in OPERATIONAL_TRANSACTION_ACTION_KEYS
+		]
+		context["quick_actions"] = quick_actions
 	user_context = dict(context.get("context") or {})
 	user_context.update({
 		"company": operating.get("company") or "",
@@ -690,6 +721,9 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		"branch": operating.get("branch") or "",
 		"branch_options": list(branches),
 		"can_switch_branch": len(branches) > 1,
+		"branch_scope_restricted": bool(branch_scope.get("restricted")),
+		"branch_scope_ready": bool(branch_scope_ready),
+		"branch_scope_source": branch_scope.get("source") or "",
 		"operating_context_source": operating.get("source") or "",
 		"default_pos_profile": operating.get("default_pos_profile") or "",
 		"default_stock_location": operating.get("default_stock_location") or "",

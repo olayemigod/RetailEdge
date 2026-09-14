@@ -55,6 +55,11 @@
 					</div>
 				</section>
 
+				<div v-if="operatingScopeBlocked" class="hub-scope-warning" role="status">
+					<strong>No active Branch access</strong>
+					<span>Operational actions are unavailable until an active Branch assignment is restored for this Company.</span>
+				</div>
+
 				<section class="home-command-centre hub-experience-section">
 					<div class="section-heading">
 						<div>
@@ -540,7 +545,7 @@ export default {
 			stockCompletionDocument: null,
 			navigationGroups: [],
 			quickActions: [],
-			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "" },
+			context: { user: "", user_name: "", company: "", company_label: "", company_logo: "", company_currency: "", branch: "", branch_scope_restricted: false, branch_scope_ready: true, branch_scope_source: "" },
 			featureFlags: {},
 			accessContext: { mode: "native_desk", restricted_to_edgesuite: false, can_use_native_desk: true },
 		};
@@ -563,7 +568,11 @@ export default {
 				this.featureFlags.native_document_fallback_enabled !== false
 			);
 		},
+		operatingScopeBlocked() {
+			return Boolean(this.context.branch_scope_restricted && this.context.branch_scope_ready === false);
+		},
 		homeQuickActions() {
+			if (this.operatingScopeBlocked) return [];
 			const byKey = new Map((this.quickActions || []).map((action) => [action.key, action]));
 			const pageTargets = new Set(
 				(this.navigationGroups || [])
@@ -1202,6 +1211,17 @@ export default {
 .hub-state {
 	padding: 24px;
 }
+.hub-scope-warning {
+	display: grid;
+	gap: 0.2rem;
+	padding: 0.85rem 1rem;
+	border: 1px solid var(--orange-200, rgba(245, 158, 11, 0.32));
+	border-radius: 0.75rem;
+	background: var(--orange-50, rgba(245, 158, 11, 0.08));
+}
+.hub-scope-warning span {
+	color: var(--edge-text-muted, #667085);
+}
 .hub-banner {
 	display: flex;
 	justify-content: space-between;
@@ -1220,8 +1240,7 @@ export default {
 	color: var(--edge-text-muted, #667085);
 	max-width: 760px;
 }
-.hub-eyebrow,
-.section-kicker {
+.hub-eyebrow {
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	font-size: 0.72rem;

@@ -7,6 +7,7 @@ from unittest.mock import patch
 from retailedge.master_experience import (
 	CUSTOMER_ACTION,
 	ITEM_ACTION,
+	OPERATIONAL_TRANSACTION_ACTION_KEYS,
 	SUPPLIER_ACTION,
 	get_retailedge_business_hub_context,
 )
@@ -46,6 +47,12 @@ class TestMasterExperience(unittest.TestCase):
 		self.assertNotIn("new-customer", keys)
 		self.assertNotIn("new-supplier", keys)
 		self.assertNotIn("new-item", keys)
+
+	def test_restricted_zero_branch_scope_hides_operational_transaction_actions(self):
+		self.assertIn("new-sales-invoice", OPERATIONAL_TRANSACTION_ACTION_KEYS)
+		self.assertIn("record-expense", OPERATIONAL_TRANSACTION_ACTION_KEYS)
+		self.assertIn("record-purchase", OPERATIONAL_TRANSACTION_ACTION_KEYS)
+		self.assertIn("transfer-stock", OPERATIONAL_TRANSACTION_ACTION_KEYS)
 
 	def test_master_action_contracts_use_native_erpnext_masters(self):
 		self.assertEqual(CUSTOMER_ACTION["doctype"], "Customer")
