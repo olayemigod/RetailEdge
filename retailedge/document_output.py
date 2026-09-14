@@ -11,7 +11,11 @@ from frappe.utils.user import get_user_fullname
 
 from retailedge.branch_context import BRANCH_FIELD_CANDIDATES, get_first_existing_field
 from retailedge.operating_context import get_operating_context
-from retailedge.professional_print_formats import get_preferred_print_format
+from retailedge.professional_print_formats import (
+	MANAGED_PRINT_FORMATS,
+	is_managed_print_format_html,
+	get_preferred_print_format,
+)
 
 MAX_LINK_RESULTS = 20
 MAX_PRINT_FORMATS = 50
@@ -133,34 +137,50 @@ def _validate_print_format(doctype: str, print_format: str | None) -> str:
 		return print_format
 	if not frappe.db.exists("Print Format", print_format):
 		frappe.throw(_("Print Format {0} is not available.").format(print_format))
-	if not _permission("Print Format", "read", name=print_format):
-		frappe.throw(
-			_("You do not have permission to use Print Format {0}.").format(print_format),
-			frappe.PermissionError,
-		)
-	row = frappe.db.get_value("Print Format", print_format, ["doc_type", "disabled"], as_dict=True) or {}
+	row = frappe.db.get_value(
+		"Print Format", print_format, ["doc_type", "disabled", "html"], as_dict=True
+	) or {}
 	if str(row.get("doc_type") or "") != doctype:
 		frappe.throw(_("Print Format {0} is not for {1}.").format(print_format, doctype))
 	if cint(row.get("disabled")):
 		frappe.throw(_("Print Format {0} is disabled.").format(print_format))
+	managed = is_managed_print_format_html(row.get("html"))
+	if not managed and not _permission("Print Format", "read", name=print_format):
+		frappe.throw(
+			_("You do not have permission to use Print Format {0}.").format(print_format),
+			frappe.PermissionError,
+		)
 	return print_format
 
 
 def _available_print_formats(doctype: str) -> list[str]:
 	formats = ["Standard"]
-	if not _permission("Print Format", "read"):
-		return formats
-	rows = frappe.get_list(
-		"Print Format",
-		filters={"doc_type": doctype, "disabled": 0},
-		fields=["name"],
-		order_by="name asc",
-		limit_page_length=MAX_PRINT_FORMATS,
-	)
-	for row in rows:
-		name = str(row.get("name") or "").strip()
-		if name and name not in formats:
+
+	# App-managed customer-safe formats are selectable based on permission to print
+	# the source document; direct Print Format DocType access is not required.
+	for spec in MANAGED_PRINT_FORMATS:
+		if spec.get("doctype") != doctype:
+			continue
+		name = str(spec.get("name") or "").strip()
+		if not name or not frappe.db.exists("Print Format", name):
+			continue
+		row = frappe.db.get_value("Print Format", name, ["disabled", "html"], as_dict=True) or {}
+		if not cint(row.get("disabled")) and is_managed_print_format_html(row.get("html")) and name not in formats:
 			formats.append(name)
+
+	# Other ERPNext/customer-defined formats remain permission-gated.
+	if _permission("Print Format", "read"):
+		rows = frappe.get_list(
+			"Print Format",
+			filters={"doc_type": doctype, "disabled": 0},
+			fields=["name"],
+			order_by="name asc",
+			limit_page_length=MAX_PRINT_FORMATS,
+		)
+		for row in rows:
+			name = str(row.get("name") or "").strip()
+			if name and name not in formats:
+				formats.append(name)
 
 	preferred = _preferred_print_format(doctype)
 	if preferred and preferred in formats:
