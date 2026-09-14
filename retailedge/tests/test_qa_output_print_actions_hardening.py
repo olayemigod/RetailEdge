@@ -10,6 +10,8 @@ OUTPUT_SERVICE = ROOT / "document_output.py"
 OUTPUT_PAGE = ROOT / "public/js/document_output_sharing/DocumentOutputSharing.vue"
 CONTROL_WORKSPACE = ROOT / "public/js/native_visual_workspaces/NativeERPNextWorkspace.vue"
 PRINT_FORMATS = ROOT / "professional_print_formats.py"
+CUSTOMER_PORTAL = ROOT / "www/customer_portal.html"
+CUSTOMER_PORTAL_DOWNLOAD = ROOT / "customer_portal_download.py"
 
 
 def _read(path: Path) -> str:
@@ -38,6 +40,15 @@ def test_shared_control_workspace_uses_edgesuite_button_contract():
 	assert 'class="edge-button edge-button--secondary"' in source
 	assert 'class="edge-primary-button"' not in source
 	assert 'class="edge-secondary-button"' not in source
+
+
+def test_customer_portal_visible_copy_and_pdf_path_are_neutral():
+	portal = _read(CUSTOMER_PORTAL)
+	download = _read(CUSTOMER_PORTAL_DOWNLOAD)
+	assert "RetailEdge" not in portal
+	assert "ProcessEdge" not in portal
+	assert "get_preferred_print_format" in download
+	assert "MANAGED_MARKER" in download
 
 
 def test_customer_visible_output_copy_has_no_product_or_vendor_alias():
