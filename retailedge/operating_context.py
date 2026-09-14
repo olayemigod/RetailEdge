@@ -199,14 +199,24 @@ def get_operational_branch_scope(company: str, user: str | None = None) -> dict[
 	"""
 	company = _clean(company)
 	user = user or frappe.session.user
+	has_global_access = user_has_global_branch_access(user=user)
 	if not company:
+		# Branch Assignment history remains authoritative even when no active
+		# Company/Branch can be resolved. This is the explicit restricted-zero
+		# state and must never collapse into the legacy "unrestricted" meaning.
+		if not has_global_access and has_branch_assignments(user=user):
+			return {
+				"company": "",
+				"restricted": True,
+				"allowed_branches": [],
+				"source": "branch_assignment_zero_context",
+			}
 		return {
 			"company": "",
 			"restricted": False,
 			"allowed_branches": [],
 			"source": "no_company",
 		}
-	has_global_access = user_has_global_branch_access(user=user)
 	if has_global_access:
 		return {
 			"company": company,
