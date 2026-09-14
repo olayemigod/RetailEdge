@@ -77,6 +77,8 @@ class TestProfessionalPurchasingUIContract(TestCase):
 
 		self.assertIn('filters.retailedge_attention = "ready_to_receive"', hub)
 		self.assertIn('retailedgeConsumeBusinessHubRouteOptions?.("professional-purchasing")', component)
+		self.assertIn("applyBusinessHubHandoff()", component)
+		self.assertIn("this._onPageShow = () => {", component)
 		self.assertIn('hubHandoff.retailedge_attention === "ready_to_receive"', component)
 		self.assertIn('this.attentionFilter = "ready_to_receive"', component)
 

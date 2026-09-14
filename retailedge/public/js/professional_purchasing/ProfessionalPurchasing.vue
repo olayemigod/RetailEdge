@@ -388,16 +388,16 @@ export default {
 		const components = runtimeComponents();
 		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
 		this.edgeUIValid = this.missingComponents.length === 0;
-		this._onPageShow = () => this.loadWorkspace();
+		this._onPageShow = () => {
+			this.applyBusinessHubHandoff();
+			this.loadWorkspace();
+		};
 		this._onLandedCostHandoff = (event) => this.handleLandedCostHandoff(event?.detail || {});
 	},
 	mounted() {
 		window.addEventListener("retailedge-professional-purchasing-page-show", this._onPageShow);
 		window.addEventListener(LANDED_COST_HANDOFF_EVENT, this._onLandedCostHandoff);
-		const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("professional-purchasing") || {};
-		if (hubHandoff.company) this.filters.company = hubHandoff.company;
-		if (hubHandoff.branch) this.filters.branch = hubHandoff.branch;
-		if (hubHandoff.retailedge_attention === "ready_to_receive") this.attentionFilter = "ready_to_receive";
+		this.applyBusinessHubHandoff();
 		if (this.edgeUIValid) this.loadWorkspace();
 	},
 	beforeUnmount() {
@@ -405,6 +405,12 @@ export default {
 		window.removeEventListener(LANDED_COST_HANDOFF_EVENT, this._onLandedCostHandoff);
 	},
 	methods: {
+		applyBusinessHubHandoff() {
+			const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("professional-purchasing") || {};
+			if (hubHandoff.company) this.filters.company = hubHandoff.company;
+			if (hubHandoff.branch) this.filters.branch = hubHandoff.branch;
+			if (hubHandoff.retailedge_attention === "ready_to_receive") this.attentionFilter = "ready_to_receive";
+		},
 		async loadWorkspace() {
 			if (this.loading) return; this.loading = true; this.error = "";
 			try {
