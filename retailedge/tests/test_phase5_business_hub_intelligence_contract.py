@@ -240,6 +240,11 @@ def test_phase5_frontend_renders_intelligence_and_targeted_route_handoff():
 		text = destination.read_text(encoding="utf-8")
 		assert "retailedgeConsumeBusinessHubRouteOptions" in text
 
+	sales = (ROOT / "public/js/sales_reporting/SalesReportingReport.vue").read_text(encoding="utf-8")
+	branches = (ROOT / "public/js/branch_performance_dashboard/BranchPerformanceDashboard.vue").read_text(encoding="utf-8")
+	assert 'this.filters.date_range_preset = "Custom Period"' in sales
+	assert 'this.filters.date_range_preset = "Custom Period"' in branches
+
 
 def test_phase5_variance_setting_is_migration_safe_and_non_posting():
 	patch = SETTING_PATCH.read_text(encoding="utf-8")
