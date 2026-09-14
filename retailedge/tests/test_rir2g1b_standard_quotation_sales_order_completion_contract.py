@@ -163,3 +163,38 @@ def test_contract_stays_bounded_to_commitment_documents():
 	assert "Delivery Note submit" in source
 	assert "Sales Invoice submit" in source
 	assert "separate checkpoints" in source
+
+
+def test_submitted_commitment_keeps_optional_next_stage_inside_professional_selling():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	workspace = _read(WORKSPACE)
+	for marker in (
+		'"lifecycle_stage": "submitted"',
+		'"can_continue_flow": bool(is_submitted and next_steps)',
+		'"key": "sales-order"',
+		'"key": "delivery-note"',
+		'"key": "sales-invoice"',
+	):
+		assert marker in service
+	for marker in (
+		"Continue Selling Flow",
+		"Finish for now",
+		"No next document is created automatically.",
+		"keep_open: true",
+		'this.$emit("continue-flow"',
+	):
+		assert marker in dialog
+	assert '@continue-flow="handleContinueSellingFlow"' in workspace
+	assert "handleCompletionCompleted(result = {})" in workspace
+	assert "if (!result?.keep_open) this.closeStandardCompletion();" in workspace
+
+
+def test_selling_lifecycle_does_not_auto_create_next_document():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	assert "frappe.new_doc" not in service
+	assert "frappe.new_doc" not in dialog
+	assert "make_sales_order" not in service
+	assert "make_delivery_note" not in service
+	assert "make_sales_invoice" not in service
