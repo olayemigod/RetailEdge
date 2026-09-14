@@ -70,6 +70,12 @@ The consolidated RC3 Playwright spec now explicitly checks:
 
 These checks supplement, rather than replace, the existing one/multiple/zero Branch API fixtures, role/page access, appearance, mobile, Create/search and operational Page coverage.
 
+### P1-D — RC3 manager operating context was not deterministic — CLOSED
+
+The first gap-closure browser run proved that the manager login had no initial Company context: Frappe's own session-default endpoint returned a null Company, so the Business Hub correctly did not request its scoped snapshot. The multi-Branch fixture still worked because Branch Assignment supplied its context.
+
+The RC3 fixture now gives the manager one primary Lagos Branch Assignment to establish deterministic initial Company/Branch context. This does **not** restrict the manager's effective operational branch scope because `RetailEdgeManager` remains a global-branch-access role; the assignment is only the initial operating-context anchor for deterministic browser acceptance.
+
 ### P1-D — canonical RetailEdgeManager Business Hub Company access — CLOSED
 
 The new PR #56 browser coverage exposed that a canonical `RetailEdgeManager` could open Business Hub but its Home snapshot failed because the snapshot applied raw `Company` DocType read permission after the shared branch-scope resolver had already classified the role as global RetailEdge access.
@@ -114,7 +120,7 @@ The browser result from this pre-freeze validation does **not** become formal RC
 
 1. Second full PR #56 MVP re-audit — **COMPLETE**
 2. Close audit P1 gaps — **COMPLETE**
-3. Exact-head gap-closure revalidation — **PENDING**
+3. Exact-head gap-closure revalidation — **RE-RUNNING AFTER P1-D FIX**
 4. Freeze audit — **PENDING**
 5. Execute formal RC3 browser/persona acceptance on the frozen audit head.
 6. Fix **only** P0/P1 RC3 defects.
