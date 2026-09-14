@@ -34,7 +34,7 @@
 			<div v-else-if="error" class="native-control-state native-control-error">
 				<strong>Unable to load this workspace.</strong>
 				<span>{{ error }}</span>
-				<button class="edge-secondary-button" type="button" @click="loadWorkspace">Retry</button>
+				<button class="edge-button edge-button--secondary" type="button" @click="loadWorkspace">Retry</button>
 			</div>
 			<template v-else>
 				<section class="native-control-section">
@@ -54,7 +54,7 @@
 							<div class="native-control-card-actions">
 								<button
 									v-if="source.kind === 'page' || canUseNativeDesk"
-									class="edge-primary-button"
+									class="edge-button edge-button--primary"
 									type="button"
 									@click="openSource(source)"
 								>
@@ -62,7 +62,7 @@
 								</button>
 								<button
 									v-if="canUseNativeDesk && source.kind === 'doctype' && source.can_create"
-									class="edge-secondary-button"
+									class="edge-button edge-button--secondary"
 									type="button"
 									@click="createSource(source)"
 								>
@@ -82,7 +82,7 @@
 								{{ canUseNativeDesk ? "Open a row for the authoritative document." : "Read-only preview in EdgeSuite." }}
 							</p>
 						</div>
-						<button v-if="canUseNativeDesk" class="edge-secondary-button" type="button" @click="openSource(source)">View all</button>
+						<button v-if="canUseNativeDesk" class="edge-button edge-button--secondary" type="button" @click="openSource(source)">View all</button>
 					</div>
 					<div v-if="source.rows.length" class="native-control-table-wrap">
 						<table class="native-control-table">
