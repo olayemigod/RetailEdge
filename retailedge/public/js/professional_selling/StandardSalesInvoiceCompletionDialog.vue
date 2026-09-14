@@ -19,6 +19,20 @@
 					<div><span>Mode</span><strong>{{ preview.update_stock ? "Accounting + Stock" : "Accounting only" }}</strong></div>
 				</div>
 
+				<div v-if="preview.can_edit_dates" class="invoice-date-editor">
+					<div>
+						<label for="invoice-posting-date">Posting Date</label>
+						<input id="invoice-posting-date" v-model="draftPostingDate" class="edge-control" type="date" :disabled="busy" />
+					</div>
+					<div>
+						<label for="invoice-due-date">Due Date</label>
+						<input id="invoice-due-date" v-model="draftDueDate" class="edge-control" type="date" :disabled="busy" />
+					</div>
+					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !datesDirty" @click="saveDraftDates">
+						{{ busy ? "Saving..." : "Save Draft Dates" }}
+					</button>
+				</div>
+
 				<div v-if="preview.source_name" class="invoice-source-note">
 					<span>Source</span>
 					<strong>{{ preview.source_type }} {{ preview.source_name }}</strong>
@@ -26,7 +40,7 @@
 
 				<div class="invoice-accounting-note">
 					<strong>ERPNext posting authority</strong>
-					<p>Submitting uses ERPNext native accounting. RetailEdge does not create General Ledger, receivable, outstanding or Stock Ledger entries directly.</p>
+					<p>Submitting uses ERPNext native accounting. This workspace does not create General Ledger, receivable, outstanding or Stock Ledger entries directly.</p>
 				</div>
 
 				<div v-if="preview.items?.length" class="invoice-completion-items">
@@ -104,6 +118,7 @@
 
 <script>
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
+const UPDATE_DATES_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_dates";
 const SUBMIT_METHOD = "retailedge.standard_sales_invoice_completion.submit_standard_sales_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_standard_sales_invoice_workflow_action";
 
@@ -141,11 +156,19 @@ export default {
 			busy: false,
 			error: "",
 			actionError: "",
+			draftPostingDate: "",
+			draftDueDate: "",
 		};
 	},
 	computed: {
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
+		},
+		datesDirty() {
+			return Boolean(this.preview?.can_edit_dates) && (
+				String(this.draftPostingDate || "") !== String(this.preview?.posting_date || "")
+				|| String(this.draftDueDate || "") !== String(this.preview?.due_date || "")
+			);
 		},
 	},
 	watch: {
@@ -163,18 +186,44 @@ export default {
 		},
 	},
 	methods: {
+		applyPreview(preview) {
+			this.preview = preview || null;
+			this.draftPostingDate = preview?.posting_date || "";
+			this.draftDueDate = preview?.due_date || "";
+		},
 		async loadPreview() {
 			if (!this.document?.name || this.loading) return;
 			this.loading = true;
 			this.error = "";
 			this.actionError = "";
 			try {
-				this.preview = await callMethod(PREVIEW_METHOD, { name: this.document.name });
+				this.applyPreview(await callMethod(PREVIEW_METHOD, { name: this.document.name }));
 			} catch (error) {
-				this.preview = null;
+				this.applyPreview(null);
 				this.error = errorMessage(error, "Unable to review this Sales Invoice.");
 			} finally {
 				this.loading = false;
+			}
+		},
+		async saveDraftDates() {
+			if (!this.preview?.can_edit_dates || !this.datesDirty || this.busy) return;
+			this.busy = true;
+			this.actionError = "";
+			try {
+				const result = await callMethod(UPDATE_DATES_METHOD, {
+					name: this.preview.name,
+					posting_date: this.draftPostingDate,
+					due_date: this.draftDueDate,
+					expected_modified: this.preview.modified,
+				});
+				this.applyPreview(result);
+				this.$emit("changed", result);
+				frappe.show_alert({ message: __("Draft invoice dates updated"), indicator: "green" });
+			} catch (error) {
+				this.actionError = errorMessage(error, "Unable to update draft invoice dates.");
+				await this.loadPreview();
+			} finally {
+				this.busy = false;
 			}
 		},
 		async submitDocument() {
@@ -240,6 +289,9 @@ export default {
 .invoice-completion-summary > div { display: grid; gap: .2rem; padding: .75rem; border: 1px solid var(--edge-border-color,var(--border-color)); border-radius: .6rem; }
 .invoice-completion-summary span, .invoice-completion-workflow span, .invoice-source-note span { font-size: .78rem; color: var(--text-muted); }
 .invoice-source-note, .invoice-accounting-note { display: grid; gap: .25rem; padding: .8rem; border-radius: .6rem; border: 1px solid var(--edge-border-color,var(--border-color)); }
+.invoice-date-editor { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)) auto; gap: .75rem; align-items: end; padding: .8rem; border: 1px solid var(--edge-border-color,var(--border-color)); border-radius: .6rem; }
+.invoice-date-editor > div { display: grid; gap: .3rem; }
+.invoice-date-editor label { font-size: .78rem; color: var(--text-muted); }
 .invoice-accounting-note { background: var(--blue-50,#eff6ff); border-color: var(--blue-200,#bfdbfe); }
 .invoice-accounting-note p { margin: 0; }
 .invoice-completion-items { display: grid; gap: .45rem; }
@@ -254,5 +306,5 @@ export default {
 .invoice-completion-hint { margin: 0; font-size: .82rem; color: var(--text-muted); }
 .invoice-completion-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; width: 100%; }
 .invoice-completion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
-@media (max-width: 720px) { .invoice-completion-summary { grid-template-columns: 1fr; } .invoice-completion-item { grid-template-columns: 1fr; } .invoice-completion-footer { align-items: stretch; flex-direction: column; } .invoice-completion-actions { justify-content: flex-start; } }
+@media (max-width: 720px) { .invoice-completion-summary, .invoice-date-editor { grid-template-columns: 1fr; } .invoice-completion-item { grid-template-columns: 1fr; } .invoice-completion-footer { align-items: stretch; flex-direction: column; } .invoice-completion-actions { justify-content: flex-start; } }
 </style>
