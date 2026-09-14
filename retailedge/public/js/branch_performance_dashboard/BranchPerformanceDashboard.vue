@@ -131,8 +131,10 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.branch_performance_dashboard.get_branch_performance_dashboard_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("branch-performance-dashboard") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
 				this.capabilities = context.capabilities || this.capabilities;
-				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.paymentMethods = context.payment_methods || [];
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.userName = context.user_name || ""; this.paymentMethods = context.payment_methods || [];
 				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
