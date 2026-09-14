@@ -24,6 +24,7 @@ def test_pr56_audit_records_and_closes_only_the_identified_p1_contract_gaps():
 		"P1-A — stale Business Hub acceptance assertion — CLOSED",
 		"P1-B — stale RC3 authority — CLOSED",
 		"P1-C — missing PR #56 browser regression coverage — CLOSED",
+		"P1-D — RC3 manager operating context was not deterministic — CLOSED",
 		"P1-D — canonical RetailEdgeManager Business Hub Company access — CLOSED",
 	):
 		assert token in source
@@ -61,3 +62,8 @@ def test_business_hub_legacy_contract_now_follows_phase5_indices():
 	assert "[\'stock\', \'banking\', \'branch\', \'cash_shift\']" not in source
 	for key in ("sales", "cash", "stock", "expenses", "receivables", "payables", "branch", "banking"):
 		assert key in source
+
+
+def test_rc3_manager_fixture_has_deterministic_operating_context_anchor():
+	fixture = (ROOT / "tests/rc3_browser_fixture.py").read_text(encoding="utf-8")
+	assert '"browser-manager@example.com": (("RetailEdge RC3 Lagos", "Manager", 1),)' in fixture
