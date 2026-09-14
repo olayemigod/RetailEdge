@@ -14,6 +14,14 @@ PROFESSIONAL_PRINT_FORMATS: tuple[dict[str, str], ...] = (
 	{"name": "Professional Sales Invoice", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "document"},
 )
 
+SALES_INVOICE_STYLE_FORMATS: tuple[dict[str, str], ...] = (
+	{"name": "Invoice Classic", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-classic"},
+	{"name": "Invoice Modern", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-modern"},
+	{"name": "Invoice Compact", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-compact"},
+	{"name": "Invoice Minimal", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-minimal"},
+	{"name": "Invoice Executive", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-executive"},
+)
+
 RECEIPT_PRINT_FORMATS: tuple[dict[str, str], ...] = (
 	{"name": "Sales Receipt 80mm", "doctype": "Sales Invoice", "heading": "Receipt", "kind": "receipt-80"},
 	{"name": "Sales Receipt 58mm", "doctype": "Sales Invoice", "heading": "Receipt", "kind": "receipt-58"},
@@ -21,7 +29,7 @@ RECEIPT_PRINT_FORMATS: tuple[dict[str, str], ...] = (
 	{"name": "POS Receipt 58mm", "doctype": "POS Invoice", "heading": "Receipt", "kind": "receipt-58"},
 )
 
-MANAGED_PRINT_FORMATS = PROFESSIONAL_PRINT_FORMATS + RECEIPT_PRINT_FORMATS
+MANAGED_PRINT_FORMATS = PROFESSIONAL_PRINT_FORMATS + SALES_INVOICE_STYLE_FORMATS + RECEIPT_PRINT_FORMATS
 PRINT_FORMAT_BY_DOCTYPE = {row["doctype"]: row["name"] for row in PROFESSIONAL_PRINT_FORMATS}
 
 _DOCUMENT_HTML = r"""
@@ -93,6 +101,34 @@ _DOCUMENT_CSS = r"""
 .pe-document{color:#1f2937;font-size:10.5pt;line-height:1.45}.pe-header{display:flex;justify-content:space-between;gap:20px;padding-bottom:16px;border-bottom:2px solid #111827}.pe-header h1{margin:3px 0 6px;font-size:24pt;color:#111827}.pe-company,.pe-label{font-size:8.5pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280}.pe-status{display:inline-block;padding:3px 8px;border:1px solid #d1d5db;border-radius:999px;font-size:8.5pt}.pe-meta{min-width:190px;display:grid;gap:6px}.pe-meta div{display:grid;grid-template-columns:78px 1fr;gap:8px}.pe-meta strong{text-align:right}.pe-party-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}.pe-card{border:1px solid #e5e7eb;border-radius:7px;padding:11px 12px;min-height:78px}.pe-party{display:block;margin:4px 0 5px;font-size:12pt}.pe-items,.pe-detail table{width:100%;border-collapse:collapse}.pe-items th{padding:8px 7px;border-bottom:1px solid #9ca3af;background:#f3f4f6;font-size:8.5pt;text-transform:uppercase}.pe-items td,.pe-detail th,.pe-detail td{padding:8px 7px;border-bottom:1px solid #e5e7eb;vertical-align:top}.num{text-align:right}.muted{color:#6b7280;font-size:8.5pt}.pe-summary{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:24px;margin-top:16px}.pe-notes,.pe-totals{display:grid;gap:7px;align-content:start}.pe-notes div,.pe-totals div{display:flex;justify-content:space-between;gap:16px}.grand{padding-top:9px;margin-top:3px;border-top:2px solid #111827;font-size:12pt}.words{display:block!important;color:#4b5563;font-size:8.5pt;font-style:italic}.pe-detail{margin-top:18px;break-inside:avoid}.pe-signatures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:48px;margin-top:42px}.pe-signatures div{padding-top:8px;border-top:1px solid #9ca3af;color:#6b7280;font-size:8.5pt}@media print{.pe-document{font-size:9.5pt}.pe-card,.pe-detail,.pe-signatures{break-inside:avoid}}
 """.strip()
 
+_DOCUMENT_CSS_CLASSIC = _DOCUMENT_CSS + r"""
+.pe-header{border-bottom:1px solid #111827}.pe-header h1{font-family:Georgia,serif;font-weight:600}.pe-card{border-radius:0}.pe-items th{background:#fff;border-top:1px solid #111827;border-bottom:1px solid #111827}.grand{border-top:1px double #111827}
+""".strip()
+
+_DOCUMENT_CSS_MODERN = _DOCUMENT_CSS + r"""
+.pe-header{padding:14px 16px;background:#f3f4f6;border-bottom:0;border-left:5px solid #111827}.pe-header h1{font-size:22pt}.pe-card{border:0;background:#f9fafb}.pe-items th{background:#111827;color:#fff}.grand{background:#f3f4f6;padding:9px 8px}.pe-signatures div{border-top:2px solid #111827}
+""".strip()
+
+_DOCUMENT_CSS_COMPACT = _DOCUMENT_CSS + r"""
+.pe-document{font-size:9pt;line-height:1.3}.pe-header{padding-bottom:9px}.pe-header h1{font-size:18pt}.pe-party-grid{margin:9px 0;gap:8px}.pe-card{padding:7px 8px;min-height:54px}.pe-items th,.pe-items td,.pe-detail th,.pe-detail td{padding:5px 5px}.pe-summary{margin-top:9px;gap:14px;grid-template-columns:minmax(0,1fr) 240px}.pe-detail{margin-top:11px}.pe-signatures{margin-top:28px}
+""".strip()
+
+_DOCUMENT_CSS_MINIMAL = _DOCUMENT_CSS + r"""
+.pe-header{border-bottom:1px solid #d1d5db}.pe-status{border:0;padding:0}.pe-card{border:0;padding:4px 0;min-height:0}.pe-party-grid{border-bottom:1px solid #e5e7eb;padding-bottom:12px}.pe-items th{background:transparent;border-bottom:1px solid #111827}.pe-items td{border-bottom:1px solid #f3f4f6}.pe-detail table th{background:transparent}.grand{border-top:1px solid #111827}.pe-signatures div{border-top:1px solid #d1d5db}
+""".strip()
+
+_DOCUMENT_CSS_EXECUTIVE = _DOCUMENT_CSS + r"""
+.pe-header{background:#111827;color:#fff;padding:16px;border:0}.pe-header h1,.pe-header .pe-company,.pe-header .pe-meta span,.pe-header .pe-meta strong{color:#fff}.pe-status{border-color:#9ca3af}.pe-party-grid{margin-top:18px}.pe-items th{background:#374151;color:#fff}.pe-card{border-color:#d1d5db}.grand{border-top:3px solid #111827}.pe-label{color:#374151}
+""".strip()
+
+_DOCUMENT_CSS_BY_KIND = {
+	"invoice-classic": _DOCUMENT_CSS_CLASSIC,
+	"invoice-modern": _DOCUMENT_CSS_MODERN,
+	"invoice-compact": _DOCUMENT_CSS_COMPACT,
+	"invoice-minimal": _DOCUMENT_CSS_MINIMAL,
+	"invoice-executive": _DOCUMENT_CSS_EXECUTIVE,
+}
+
 _RECEIPT_HTML = r"""
 <!-- retailedge-managed-print-format:v2 -->
 {% set party = doc.get("customer_name") or doc.get("customer") or "" %}
@@ -139,7 +175,13 @@ def get_preferred_print_format(doctype: str) -> str:
 def _format_values(spec: dict[str, str]) -> dict[str, Any]:
 	kind = spec.get("kind") or "document"
 	is_receipt = kind.startswith("receipt-")
-	css = _RECEIPT_CSS_58 if kind == "receipt-58" else _RECEIPT_CSS_80 if is_receipt else _DOCUMENT_CSS
+	css = (
+		_RECEIPT_CSS_58
+		if kind == "receipt-58"
+		else _RECEIPT_CSS_80
+		if is_receipt
+		else _DOCUMENT_CSS_BY_KIND.get(kind, _DOCUMENT_CSS)
+	)
 	html = _RECEIPT_HTML if is_receipt else _DOCUMENT_HTML
 	return {
 		"print_format_for": "DocType",
