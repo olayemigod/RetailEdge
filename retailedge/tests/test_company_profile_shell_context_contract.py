@@ -84,6 +84,8 @@ def test_retailedge_sidebar_follows_shared_navigation_shell_pattern_and_has_iden
 		"var(--edge-color-border",
 		"var(--edge-color-ink-950",
 		"box-shadow: inset 2px 0 0 var(--edge-color-brand-600)",
+		"max-width: min(28rem, 42vw)",
+		"text-overflow: ellipsis",
 		'data-edge-appearance="dark"',
 	):
 		assert marker in css
@@ -129,3 +131,9 @@ def test_company_profile_is_promoted_into_edgesuite_home_navigation():
 		'"company_profile": identity',
 	):
 		assert marker in master
+
+
+def test_operating_context_uses_company_profile_label_in_shell():
+	component = OPERATING.read_text(encoding="utf-8")
+	assert ':tenantName="tenantName || current.company"' in component
+	assert 'navigation.context?.company_label || navigation.context?.company || ""' in component
