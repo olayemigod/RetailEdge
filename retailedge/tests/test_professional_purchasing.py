@@ -366,8 +366,16 @@ class TestProfessionalPurchasing(unittest.TestCase):
 		with self.assertRaises(frappe.ValidationError):
 			prepare_request_for_quotation_draft("MAT-MR-0001", [f"SUP-{index:03d}" for index in range(21)])
 
+	@patch(
+		"retailedge.professional_purchasing.get_operating_context",
+		return_value={"company": "Demo Company", "branch": ""},
+	)
 	@patch("retailedge.professional_purchasing.search_link")
-	def test_company_search_preserves_frappe_link_result_shape(self, mock_search_link):
+	def test_company_search_preserves_frappe_link_result_shape_and_active_company_scope(
+		self,
+		mock_search_link,
+		_mock_context,
+	):
 		mock_search_link.return_value = [
 			{"value": "Demo Company", "description": "DC", "label": "Demo Company"}
 		]
@@ -375,7 +383,12 @@ class TestProfessionalPurchasing(unittest.TestCase):
 		result = search_professional_purchasing_options("company", "Demo")
 
 		self.assertEqual(result, mock_search_link.return_value)
-		mock_search_link.assert_called_once_with("Company", "Demo", page_length=20)
+		mock_search_link.assert_called_once_with(
+			"Company",
+			"Demo",
+			filters={"name": "Demo Company"},
+			page_length=20,
+		)
 
 	@patch("retailedge.professional_purchasing.search_link")
 	def test_rfq_supplier_search_uses_native_supplier_link_and_disabled_filter(self, mock_search_link):
