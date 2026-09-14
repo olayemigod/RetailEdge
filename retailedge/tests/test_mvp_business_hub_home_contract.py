@@ -24,7 +24,9 @@ def test_business_hub_home_exposes_operational_command_centre_sections():
 		assert f">{label}<" in source
 	assert "Five connected experiences" not in source
 	assert "homeSnapshot.cards" in source
-	assert "['stock', 'banking', 'branch', 'cash_shift']" in source
+	assert "homeSnapshot.indices" in source
+	for index_key in ("sales", "cash", "stock", "expenses", "receivables", "payables", "branch", "banking"):
+		assert f'key="{index_key}"' in source or index_key in source
 	assert "homeSnapshot.attention" in source
 	assert "refreshHomeSnapshot" in source
 	assert "EdgeDropdown" in source
