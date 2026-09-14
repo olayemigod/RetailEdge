@@ -218,13 +218,13 @@ test("Business Hub QA: Smart Date custom range reaches authoritative Hub snapsho
 
 test("Business Hub QA: visible monetary KPI values stay inside their cards", async ({ browser }) => {
 	const context = await browser.newContext({ baseURL: BASE_URL });
-	await login(context);
+	await login(context, "browser-native@example.com");
 	const page = await context.newPage();
 	try {
 		await openHub(page);
 		const cards = page.locator(".home-kpi-card");
 		const count = await cards.count();
-		if (count === 0) test.skip(true, "This browser fixture has no scoped KPI cards for the current operating context.");
+		expect(count).toBeGreaterThan(0);
 		const measurements = await page.locator(".home-kpi-card strong").evaluateAll((nodes) =>
 			nodes.map((node) => ({
 				text: node.textContent?.trim() || "",
@@ -276,13 +276,12 @@ test("Business Hub QA: restricted-zero Branch remains visibly fail-closed", asyn
 	try {
 		await openHub(page);
 		const hub = await getHubContext(page);
-		if (!hub?.context?.branch_scope_restricted) {
-			test.skip(true, "The zero-Branch browser fixture is not assignment-restricted in this environment.");
-		}
+		expect(hub?.context?.branch_scope_restricted).toBeTruthy();
 		expect(hub?.context?.branch_scope_ready).toBeFalsy();
 		await expect(page.locator(".home-quick-action")).toHaveCount(0);
 		const warning = page.locator(".hub-scope-warning");
-		if (await warning.count()) await expect(warning).toContainText(/Branch access|Working Branch/i);
+		await expect(warning).toBeVisible();
+		await expect(warning).toContainText(/Branch access|Working Branch/i);
 	} finally {
 		await context.close();
 	}
