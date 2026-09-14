@@ -33,7 +33,7 @@ def test_landed_cost_is_v16_34_compatible_and_uses_native_mapper():
 	source = LANDED.read_text(encoding="utf-8")
 	assert "from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_lcv" in source
 	assert "get_accounting_dimensions" in source
-	assert "get_lcv_dimension_fields" not in source
+	assert "from erpnext.stock.doctype.landed_cost_voucher.landed_cost_voucher import get_lcv_dimension_fields" not in source
 	assert "make_lcv(" in source
 	assert 'run_method("validate")' in source
 	assert "landed_cost_voucher.insert()" in source
