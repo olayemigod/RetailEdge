@@ -246,7 +246,9 @@ export default {
 		const runtime = runtimeComponents();
 		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !runtime[name]);
 		this.edgeUIValid = !this.missingComponents.length;
-		this._onPageShow = () => this.consumePendingRouteOptions();
+		this._onPageShow = () => {
+			if (!this.metadataLoading) this.consumePendingRouteOptions();
+		};
 	},
 	mounted() {
 		window.addEventListener("retailedge-business-expenses-page-show", this._onPageShow);
