@@ -107,6 +107,19 @@ class BankingPageContractTests(unittest.TestCase):
 		self.assertIn('state.filters.bank_account = ""', asset)
 		self.assertIn("retailedge.banking_workspace.get_banking_workspace_rows", asset)
 
+
+	def test_business_hub_handoff_is_reapplied_when_banking_page_is_reused(self):
+		page_js = PAGE_JS.read_text()
+		asset = WORKSPACE_JS.read_text()
+		self.assertIn('new CustomEvent("retailedge-bank-matching-page-show")', page_js)
+		self.assertIn("on_page_show", page_js)
+		self.assertIn("applyBusinessHubHandoff", asset)
+		self.assertIn('retailedgeConsumeBusinessHubRouteOptions?.(PAGE_NAME)', asset)
+		self.assertIn('global.addEventListener("retailedge-bank-matching-page-show", handlePageShow)', asset)
+		self.assertIn('global.removeEventListener("retailedge-bank-matching-page-show", handlePageShow)', asset)
+		self.assertIn("if (!applyBusinessHubHandoff()) return;", asset)
+		self.assertIn("await refresh();", asset)
+
 	def test_banking_table_is_sortable_compact_and_responsive(self):
 		asset = WORKSPACE_JS.read_text()
 		page_css = PAGE_CSS.read_text()

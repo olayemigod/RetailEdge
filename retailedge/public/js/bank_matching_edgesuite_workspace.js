@@ -116,7 +116,7 @@
 	}
 
 	function createWorkspaceComponent(runtime, page) {
-		const { defineComponent, h, onMounted, reactive, computed } = runtime.Vue;
+		const { defineComponent, h, onMounted, onBeforeUnmount, reactive, computed } = runtime.Vue;
 		const EdgeAppShell = runtime.getComponent("EdgeAppShell");
 		const EdgePageLayout = runtime.getComponent("EdgePageLayout");
 		const EdgePageHeader = runtime.getComponent("EdgePageHeader");
@@ -211,6 +211,15 @@
 					state.notice.tone = tone;
 				}
 
+				function applyBusinessHubHandoff() {
+					const hubHandoff = global.retailedgeConsumeBusinessHubRouteOptions?.(PAGE_NAME) || {};
+					if (!Object.keys(hubHandoff).length) return false;
+					Object.assign(state.filters, hubHandoff);
+					if (hubHandoff.company) state.tenantName = hubHandoff.company;
+					if (hubHandoff.branch) state.branchName = hubHandoff.branch;
+					return true;
+				}
+
 				async function loadShellContext() {
 					const context = await resolveBusinessHubContext();
 					state.canUseNativeDesk = Boolean(context.access?.can_use_native_desk);
@@ -220,10 +229,7 @@
 					state.userName = context.context?.user_name || context.context?.user || "";
 					if (!state.filters.company) state.filters.company = context.context?.company || "";
 					if (!state.filters.branch) state.filters.branch = context.context?.branch || "";
-					const hubHandoff = global.retailedgeConsumeBusinessHubRouteOptions?.(PAGE_NAME) || {};
-					Object.assign(state.filters, hubHandoff);
-					if (hubHandoff.company) state.tenantName = hubHandoff.company;
-					if (hubHandoff.branch) state.branchName = hubHandoff.branch;
+					applyBusinessHubHandoff();
 				}
 
 				function handleNavigation(route) {
@@ -898,9 +904,18 @@
 					});
 				}
 
+				const handlePageShow = async () => {
+					if (!applyBusinessHubHandoff()) return;
+					await refresh();
+				};
+
 				onMounted(async () => {
+					global.addEventListener("retailedge-bank-matching-page-show", handlePageShow);
 					await loadShellContext();
 					await refresh();
+				});
+				onBeforeUnmount(() => {
+					global.removeEventListener("retailedge-bank-matching-page-show", handlePageShow);
 				});
 				global.retailedgeBankingWorkspaceRefresh = refresh;
 

@@ -315,3 +315,65 @@ test("Business Hub QA regression: restricted-zero Branch user is gated before op
 		await context.close();
 	}
 });
+
+
+test("Business Hub QA regression: Bank Matching page reuse reapplies the latest Hub period", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+
+	async function setHubPeriod(preset) {
+		return page.evaluate(async (value) => {
+			const wrapper = frappe.pages?.["retailedge-business-hub"];
+			const proxy = wrapper?._retailedgeBusinessHub?._instance?.proxy;
+			if (!proxy?.handleHomePeriodChange) throw new Error("Business Hub proxy is unavailable.");
+			await proxy.handleHomePeriodChange(value);
+			return {
+				from_date: proxy.homePeriod?.from_date || "",
+				to_date: proxy.homePeriod?.to_date || "",
+			};
+		}, preset);
+	}
+
+	async function bankDateFilters() {
+		return page.evaluate(() => {
+			const fields = Array.from(document.querySelectorAll(".retailedge-bank-layout .edge-input"));
+			const read = (label) => {
+				const field = fields.find((node) => {
+					const text = node.querySelector(".edge-input__label")?.textContent || node.querySelector("label")?.textContent || "";
+					return String(text).trim() === label;
+				});
+				return field?.querySelector("input")?.value || "";
+			};
+			return { from_date: read("From Date"), to_date: read("To Date") };
+		});
+	}
+
+	try {
+		await openHub(page);
+		const firstPeriod = await setHubPeriod("Last 30 Days");
+		await page.getByRole("button", { name: /Match Bank Transactions/i }).click();
+		await page.getByRole("heading", { name: "Bank Matching & Reconciliation", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+		await expect.poll(bankDateFilters).toEqual(firstPeriod);
+
+		await page.evaluate(() => frappe.set_route("retailedge-business-hub"));
+		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+		const secondPeriod = await setHubPeriod("Yesterday");
+		expect(secondPeriod).not.toEqual(firstPeriod);
+
+		await page.getByRole("button", { name: /Match Bank Transactions/i }).click();
+		await page.getByRole("heading", { name: "Bank Matching & Reconciliation", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+		await expect.poll(bankDateFilters).toEqual(secondPeriod);
+	} finally {
+		await context.close();
+	}
+});
