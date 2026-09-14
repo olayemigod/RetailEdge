@@ -4,7 +4,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, get_datetime
+from frappe.utils import cint, flt, get_datetime, getdate
 
 from retailedge.guided_entry_context import resolve_branch_warehouse_selection
 from retailedge.operating_context import get_operating_context
@@ -105,6 +105,15 @@ def _standard_invoice_blockers(doc) -> list[str]:
 		blockers.append(_("Sales Invoice Customer is required."))
 	if not list(doc.get("items") or []):
 		blockers.append(_("Sales Invoice must contain at least one item."))
+
+	posting_date = doc.get("posting_date")
+	due_date = doc.get("due_date")
+	if posting_date and due_date:
+		try:
+			if getdate(due_date) < getdate(posting_date):
+				blockers.append(_("Due Date cannot be before Posting Date. Edit the draft dates before completing."))
+		except Exception:
+			blockers.append(_("Sales Invoice Posting Date or Due Date is invalid."))
 
 	if flt(doc.get("write_off_amount")) or flt(doc.get("base_write_off_amount")):
 		blockers.append(_("Sales Invoice write-off requires Advanced ERPNext review."))
@@ -358,6 +367,12 @@ def _build_preview(doc) -> dict[str, Any]:
 		"customer": _clean(doc.get("customer")),
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
+		"posting_date": _clean(doc.get("posting_date")),
+		"due_date": _clean(doc.get("due_date")),
+		"can_edit_dates": bool(
+			cint(doc.docstatus) == 0
+			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
+		),
 		"update_stock": bool(cint(doc.get("update_stock"))),
 		"completion_mode": stock_context["mode"],
 		"source_type": source_context["source_type"],
@@ -409,6 +424,47 @@ def get_standard_sales_invoice_completion_preview(name: str) -> dict[str, Any]:
 	"""Return a persistence-free completion review for one standard Sales Invoice."""
 	doc = _get_sales_invoice(name)
 	return _build_preview(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def update_standard_sales_invoice_dates(
+	name: str,
+	posting_date: str | None = None,
+	due_date: str | None = None,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Update posting/due dates on one draft Sales Invoice and re-run ERPNext validation."""
+	name = _clean(name)
+	_lock_sales_invoice(name)
+	doc = _get_sales_invoice(name)
+	_assert_expected_modified(doc, expected_modified)
+	_validate_invoice_context(doc)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only draft Sales Invoices can have dates edited here."), frappe.ValidationError)
+	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this Sales Invoice."), frappe.PermissionError)
+
+	posting_text = _clean(posting_date or doc.get("posting_date"))
+	due_text = _clean(due_date or doc.get("due_date"))
+	if not posting_text:
+		frappe.throw(_("Posting Date is required."), frappe.ValidationError)
+	try:
+		posting_value = getdate(posting_text)
+		due_value = getdate(due_text) if due_text else None
+	except Exception:
+		frappe.throw(_("Enter valid Posting Date and Due Date values."), frappe.ValidationError)
+	if due_value and due_value < posting_value:
+		frappe.throw(_("Due Date cannot be before Posting Date."), frappe.ValidationError)
+
+	doc.set("posting_date", posting_value)
+	if doc.meta.has_field("due_date"):
+		doc.set("due_date", due_value)
+	# Saving the draft deliberately delegates date/payment-term validation back to ERPNext.
+	doc.save()
+	doc.reload()
+	result = _build_preview(doc)
+	result["persistence"] = "draft_update"
+	return result
 
 
 @frappe.whitelist(methods=["POST"])
