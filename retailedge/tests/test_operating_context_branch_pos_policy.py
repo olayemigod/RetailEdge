@@ -18,7 +18,8 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			"configured_branches",
 			"Branch Setup is the RetailEdge Company→Branch binding",
 			"if configured_branches:",
-			"if user_has_global_branch_access(user=user):",
+			"global_access = user_has_global_branch_access(user=user)",
+			"if global_access:",
 			"get_allowed_operating_branches",
 			"validate_operating_branch",
 			"has_any_setup and branch not in configured_branches",
@@ -27,7 +28,7 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertLess(
 			source.index("if configured_branches:"),
-			source.index("if user_has_global_branch_access(user=user):"),
+			source.index("if global_access:"),
 		)
 
 	def test_branch_setup_pos_profile_remains_optional_at_schema_level(self):
