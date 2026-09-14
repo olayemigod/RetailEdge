@@ -17,7 +17,6 @@ from retailedge.branch_context import (
 	get_user_allowed_branches,
 	has_field,
 	user_has_global_branch_access,
-	validate_user_branch_access,
 )
 from retailedge.operating_context import (
 	get_operating_context,
@@ -499,7 +498,15 @@ def search_professional_purchasing_options(
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	if kind == "company":
-		return search_link("Company", txt, page_length=MAX_LINK_RESULTS)
+		operating = get_operating_context() or {}
+		active_company = str(operating.get("company") or "").strip()
+		filters = {"name": active_company} if active_company else None
+		return search_link(
+			"Company",
+			txt,
+			filters=filters,
+			page_length=MAX_LINK_RESULTS,
+		)
 	if kind in {"supplier", "rfq_supplier"}:
 		return search_link(
 			SUPPLIER_DOCTYPE,
@@ -510,11 +517,16 @@ def search_professional_purchasing_options(
 			link_fieldname="supplier",
 		)
 	if kind == "branch":
-		resolved_company, _branch, allowed, global_access = _resolve_scope(company=company, branch=None)
+		resolved_company, resolved_branch, allowed, unrestricted = _resolve_scope(
+			company=company,
+			branch=None,
+		)
 		filters: dict[str, Any] = {}
 		if has_field("Branch", "company"):
 			filters["company"] = resolved_company
-		if not global_access:
+		if resolved_branch:
+			filters["name"] = resolved_branch
+		elif not unrestricted:
 			filters["name"] = ["in", allowed or ["__no_permitted_branch__"]]
 		rows = frappe.get_list(
 			"Branch",
@@ -556,10 +568,10 @@ def prepare_request_for_quotation_draft(
 
 	branch = _document_branch(request)
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
+		validate_operating_branch(
 			company=request.company,
+			branch=branch,
+			user=frappe.session.user,
 			throw=True,
 		)
 
@@ -629,10 +641,10 @@ def prepare_purchase_receipt_draft(purchase_order: str) -> dict[str, Any]:
 
 	branch = _document_branch(po)
 	if branch:
-		validate_user_branch_access(
-			branch,
-			user=frappe.session.user,
+		validate_operating_branch(
 			company=po.company,
+			branch=branch,
+			user=frappe.session.user,
 			throw=True,
 		)
 
