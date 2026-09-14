@@ -273,8 +273,10 @@ export default {
 					{ freeze: true, freezeMessage: __("Updating operating branch...") },
 				);
 				this.invalidateContextCache();
-				frappe.show_alert({ message: __("Operating branch updated."), indicator: "green" });
-				await Promise.all([this.loadContext(), this.loadNavigation()]);
+				const identity = await callMethod("retailedge.company_profile.get_shell_identity");
+				window.retailedgeSyncShellIdentity?.(identity);
+				frappe.show_alert({ message: __("Operating context updated."), indicator: "green" });
+				window.location.reload();
 			} finally {
 				this.busy = false;
 			}
@@ -289,8 +291,10 @@ export default {
 					{ freeze: true, freezeMessage: __("Restoring default operating branch...") },
 				);
 				this.invalidateContextCache();
-				frappe.show_alert({ message: __("Default operating branch restored."), indicator: "green" });
-				await Promise.all([this.loadContext(), this.loadNavigation()]);
+				const identity = await callMethod("retailedge.company_profile.get_shell_identity");
+				window.retailedgeSyncShellIdentity?.(identity);
+				frappe.show_alert({ message: __("Default operating context restored."), indicator: "green" });
+				window.location.reload();
 			} finally {
 				this.busy = false;
 			}
