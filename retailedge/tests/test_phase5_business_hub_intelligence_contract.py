@@ -276,3 +276,12 @@ def test_phase5_business_hub_does_not_expose_architecture_labels_as_ui_copy():
 
 	for heading in ("Business performance", "Quick actions", "Business indices", "Needs attention"):
 		assert heading in source
+
+
+def test_phase5_business_hub_uses_banking_smart_date_component():
+	source = HUB.read_text(encoding="utf-8")
+	assert "EdgeSmartDateRange" in source
+	assert 'dateOrder="DMY"' in source
+	assert '@resolved="handleHomeDateResolved"' in source
+	assert "homeSmartDate" in source
+	assert "Custom Period" in source
