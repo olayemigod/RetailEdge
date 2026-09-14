@@ -86,4 +86,6 @@ PR #56 formal RC3 was accepted on exact post-audit-freeze SHA `099e4a30b2c8a25c2
 
 The second MVP audit is frozen at commit `1bd01c39d7a574df85773aae86fec7a144a98698`, backed by validated implementation head `aea2cf4980cfd2dc2b61133ee567f166392a7285`.
 
-The final `v1.0.0` tag must point to the merged/promoted `version-16` release commit after the release-hardening head passes the complete final gate set.
+Final release hardening passed on exact head `0f9b527d01691a0b477ca9f28f940f04bd1da4ea`: Theme #1122, Linters #2963, clean Frappe v16 CI #2984, EdgeSuite UI Candidate Compatibility #1219, Upgrade Validation #129, and Browser Persona #235 with **24/24 PASS**.
+
+PR #56 was then merged to `version-16` as `06b9170edd3150394cf827de3827d171605f0463`. The merge commit tree is identical to the tested hardening head, so promotion introduced no content drift. The `v1.0.0` tag must point to the final `version-16` release head after this release-documentation closeout is itself validated.
