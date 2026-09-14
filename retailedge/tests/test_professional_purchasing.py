@@ -58,7 +58,7 @@ class _DraftRFQ(SimpleNamespace):
 
 class TestProfessionalPurchasing(unittest.TestCase):
 	@patch("retailedge.professional_purchasing._transaction_branch_field", return_value="retailedge_branch")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access")
+	@patch("retailedge.professional_purchasing.validate_operating_branch")
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Lagos")
 	@patch("retailedge.professional_purchasing.make_purchase_receipt")
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
@@ -92,9 +92,9 @@ class TestProfessionalPurchasing(unittest.TestCase):
 
 		mock_mapper.assert_called_once_with("PUR-ORD-0001")
 		mock_branch_access.assert_called_once_with(
-			"Lagos",
-			user=frappe.session.user,
 			company="Demo Company",
+			branch="Lagos",
+			user=frappe.session.user,
 			throw=True,
 		)
 		self.assertEqual(receipt.insert_calls, 1)
@@ -173,7 +173,7 @@ class TestProfessionalPurchasing(unittest.TestCase):
 
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Abuja")
 	@patch("retailedge.professional_purchasing.make_purchase_receipt")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access", side_effect=frappe.PermissionError)
+	@patch("retailedge.professional_purchasing.validate_operating_branch", side_effect=frappe.PermissionError)
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
 	@patch("retailedge.professional_purchasing._assert_create")
 	@patch("retailedge.professional_purchasing._assert_read")
@@ -202,7 +202,7 @@ class TestProfessionalPurchasing(unittest.TestCase):
 		mock_mapper.assert_not_called()
 
 	@patch("retailedge.professional_purchasing._transaction_branch_field", return_value="retailedge_branch")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access")
+	@patch("retailedge.professional_purchasing.validate_operating_branch")
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Lagos")
 	@patch("retailedge.professional_purchasing.make_request_for_quotation")
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
@@ -235,9 +235,9 @@ class TestProfessionalPurchasing(unittest.TestCase):
 
 		mock_mapper.assert_called_once_with(request.name)
 		mock_branch_access.assert_called_once_with(
-			"Lagos",
-			user=frappe.session.user,
 			company="Demo Company",
+			branch="Lagos",
+			user=frappe.session.user,
 			throw=True,
 		)
 		self.assertEqual(rfq.insert_calls, 1)
@@ -325,7 +325,7 @@ class TestProfessionalPurchasing(unittest.TestCase):
 			prepare_request_for_quotation_draft("MAT-MR-EMPTY", ["SUP-001"])
 
 	@patch("retailedge.professional_purchasing.make_request_for_quotation")
-	@patch("retailedge.professional_purchasing.validate_user_branch_access", side_effect=frappe.PermissionError)
+	@patch("retailedge.professional_purchasing.validate_operating_branch", side_effect=frappe.PermissionError)
 	@patch("retailedge.professional_purchasing._document_branch", return_value="Abuja")
 	@patch("retailedge.professional_purchasing.frappe.get_doc")
 	@patch("retailedge.professional_purchasing._assert_create")
