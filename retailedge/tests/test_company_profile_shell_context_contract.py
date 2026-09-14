@@ -137,3 +137,9 @@ def test_operating_context_uses_company_profile_label_in_shell():
 	component = OPERATING.read_text(encoding="utf-8")
 	assert ':tenantName="tenantName || current.company"' in component
 	assert 'navigation.context?.company_label || navigation.context?.company || ""' in component
+
+
+def test_master_context_never_bypasses_restricted_zero_scope_when_company_is_blank():
+	master = MASTER.read_text(encoding="utf-8")
+	assert "branch_scope = get_operational_branch_scope(company)" in master
+	assert 'get_operational_branch_scope(company) if company else' not in master
