@@ -71,11 +71,12 @@
 							<p class="section-rider">Key business indicators for the selected period.</p>
 						</div>
 						<div class="home-period-controls">
-							<EdgeDropdown
-								v-model="homePeriodPreset"
-								:options="homePeriodOptions"
+							<EdgeSmartDateRange
+								v-model="homeSmartDate"
 								label="Period"
-								@update:modelValue="handleHomePeriodChange"
+								placeholder="e.g. last 30 days, YTD, this month"
+								dateOrder="DMY"
+								@resolved="handleHomeDateResolved"
 							/>
 							<span v-if="homePeriod.from_date" class="home-as-of">{{ formatDisplayDate(homePeriod.from_date) }} – {{ formatDisplayDate(homePeriod.to_date) }}</span>
 						</div>
@@ -451,11 +452,18 @@ function fetchSharedContext({ force = false } = {}) {
 	return request;
 }
 
-function fetchHomeSnapshot(company, branch, datePreset) {
+function fetchHomeSnapshot(company, branch, datePreset, resolvedRange = {}) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method: HOME_SNAPSHOT_METHOD,
-			args: { company: company || "", branch: branch || "", date_preset: datePreset || "Today" },
+			args: {
+				company: company || "",
+				branch: branch || "",
+				date_preset: datePreset || "Today",
+				from_date: resolvedRange?.from_date || "",
+				to_date: resolvedRange?.to_date || "",
+				date_label: resolvedRange?.label || resolvedRange?.display_value || "",
+			},
 			callback: (response) => resolve(response.message || {}),
 			error: (error) => reject(error),
 		});
@@ -510,6 +518,7 @@ export default {
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeIcon: runtimeComponents.EdgeIcon,
 		EdgeDropdown: runtimeComponents.EdgeDropdown,
+		EdgeSmartDateRange: runtimeComponents.EdgeSmartDateRange,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
@@ -532,6 +541,7 @@ export default {
 			homeError: "",
 			homeSnapshot: { as_of_date: "", period: {}, scope: { restricted: false, allowed_branches: [] }, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
+			homeSmartDate: {},
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
@@ -683,17 +693,24 @@ export default {
 					this.loading = false;
 				});
 		},
-		refreshHomeSnapshot() {
+		refreshHomeSnapshot(resolvedRange = null) {
 			if (!this.context.company) {
 				this.homeSnapshot = { as_of_date: "", period: {}, scope: { restricted: false, allowed_branches: [] }, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
 			this.homeError = "";
-			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset)
+			const range = resolvedRange || this.homeSmartDate || {};
+			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset, range)
 				.then((snapshot) => {
 					this.homePeriod = { ...this.homePeriod, ...(snapshot.period || {}) };
 					this.homePeriodPreset = this.homePeriod.preset || this.homePeriodPreset;
+					this.homeSmartDate = {
+						...this.homeSmartDate,
+						from_date: this.homePeriod.from_date || "",
+						to_date: this.homePeriod.to_date || "",
+						label: this.homePeriod.label || "",
+					};
 					this.homeSnapshot = {
 						as_of_date: snapshot.as_of_date || "",
 						period: snapshot.period || {},
@@ -713,8 +730,16 @@ export default {
 					this.homeLoading = false;
 				});
 		},
+		handleHomeDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.homeSmartDate = { ...(value || {}) };
+			this.homePeriodPreset = "Custom Period";
+			return this.refreshHomeSnapshot(value);
+		},
 		handleHomePeriodChange(value) {
+			// Compatibility hook for older cached bundles.
 			this.homePeriodPreset = value || "Today";
+			this.homeSmartDate = {};
 			return this.refreshHomeSnapshot();
 		},
 		homeSection(key) {
@@ -1307,7 +1332,7 @@ export default {
 }
 .home-kpi-grid {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
 	gap: 12px;
 	margin-bottom: 14px;
 }
@@ -1335,7 +1360,13 @@ export default {
 	color: var(--edge-text-muted, #667085);
 }
 .home-kpi-card strong {
-	font-size: 1.2rem;
+	display: block;
+	min-width: 0;
+	font-size: clamp(1.08rem, 1.65vw, 1.5rem);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.025em;
+	line-height: 1.15;
+	white-space: nowrap;
 }
 .home-kpi-card small {
 	font-size: 0.72rem;
@@ -1665,8 +1696,9 @@ export default {
 	gap: 10px;
 	flex-wrap: wrap;
 }
-.home-period-controls .edge-field {
-	min-width: 170px;
+.home-period-controls .edge-field,
+.home-period-controls .edge-smart-date-range {
+	min-width: min(24rem, 100%);
 	margin: 0;
 }
 .home-attention-count {
