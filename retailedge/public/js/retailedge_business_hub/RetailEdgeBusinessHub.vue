@@ -330,6 +330,7 @@
 				@close="closePurchaseInvoiceCompletion"
 				@changed="handlePurchaseInvoiceCompletionChanged"
 				@completed="handlePurchaseInvoiceCompletionCompleted"
+				@pay-supplier="handlePurchaseInvoicePaySupplier"
 			/>
 
 			<SimpleCashierExpenseDialog
@@ -1081,9 +1082,15 @@ export default {
 		handlePurchaseInvoiceCompletionChanged() {
 			this.refreshContext({ force: true });
 		},
-		handlePurchaseInvoiceCompletionCompleted() {
-			this.closePurchaseInvoiceCompletion();
+		handlePurchaseInvoiceCompletionCompleted(result = {}) {
 			this.refreshContext({ force: true });
+			if (!result?.keep_open) this.closePurchaseInvoiceCompletion();
+		},
+		handlePurchaseInvoicePaySupplier(context = {}) {
+			this.closePurchaseInvoiceCompletion();
+			this.simplePaymentIntent = "pay-supplier";
+			this.simplePaymentInitialContext = { ...(context || {}) };
+			this.simplePaymentOpen = true;
 		},
 		openNativePurchaseInvoice(doctype = "Purchase Invoice") {
 			if (!this.nativeFallbackEnabled) return;
