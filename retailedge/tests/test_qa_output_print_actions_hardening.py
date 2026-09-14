@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_SERVICE = ROOT / "document_output.py"
 OUTPUT_PAGE = ROOT / "public/js/document_output_sharing/DocumentOutputSharing.vue"
 CONTROL_WORKSPACE = ROOT / "public/js/native_visual_workspaces/NativeERPNextWorkspace.vue"
+SELLING_PAGE = ROOT / "public/js/professional_selling/ProfessionalSelling.vue"
 PRINT_FORMATS = ROOT / "professional_print_formats.py"
 CUSTOMER_PORTAL = ROOT / "www/customer_portal.html"
 CUSTOMER_PORTAL_DOWNLOAD = ROOT / "customer_portal_download.py"
@@ -32,6 +33,20 @@ def test_recent_invoice_target_is_consumed_by_output_workspace():
 	assert "await this.applyPendingTarget()" in source
 	assert "await this.selectDocument({ value: target.name })" in source
 	assert "delete window.retailedgeDocumentOutputTarget" in source
+
+
+def test_invoice_output_view_can_handoff_writable_draft_to_edgesuite_completion():
+	output = _read(OUTPUT_PAGE)
+	selling = _read(SELLING_PAGE)
+	service = _read(OUTPUT_SERVICE)
+	assert "canEditSelectedSalesInvoice" in output
+	assert "Edit / Complete Draft" in output
+	assert "window.retailedgeProfessionalSellingTarget" in output
+	assert 'frappe.set_route("professional-selling")' in output
+	assert "window.retailedgeProfessionalSellingTarget" in selling
+	assert "applyPendingTarget()" in selling
+	assert '"can_write": _permission(doctype, "write", name=name)' in service
+	assert '"docstatus": cint(doc.docstatus)' in service
 
 
 def test_shared_control_workspace_uses_edgesuite_button_contract():
