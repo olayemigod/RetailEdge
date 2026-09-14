@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, validate_email_address
+from frappe.utils.user import get_user_fullname
 
 from retailedge.branch_context import BRANCH_FIELD_CANDIDATES, get_first_existing_field
 from retailedge.operating_context import get_operating_context
@@ -222,7 +223,7 @@ def get_document_output_context() -> dict[str, Any]:
 			"public_pdf_links": False,
 			"business_documents_immutable": True,
 		},
-		"user_name": frappe.get_user().get_fullname() if getattr(frappe, "session", None) else "",
+		"user_name": get_user_fullname(frappe.session.user) if getattr(frappe, "session", None) else "",
 	}
 
 
