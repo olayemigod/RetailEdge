@@ -301,6 +301,7 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("sales-invoice-register") || {};
 				this.filters = { ...this.filters, ...hubHandoff };
+				if (hubHandoff.from_date && hubHandoff.to_date) this.filters.date_range_preset = "Custom Period";
 				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
