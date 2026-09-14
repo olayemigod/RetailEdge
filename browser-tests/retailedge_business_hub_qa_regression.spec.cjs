@@ -3,10 +3,11 @@ const { test, expect } = require("@playwright/test");
 const BASE_URL = process.env.RETAILEDGE_BASE_URL || "http://retail-browser.localhost:8000";
 const PASSWORD = process.env.RETAILEDGE_BROWSER_PASSWORD || "RetailEdgeBrowser1!";
 const MANAGER = "browser-manager@example.com";
+const CASHIER = "browser-cashier@example.com";
 
-async function login(context) {
+async function login(context, user = MANAGER) {
 	const response = await context.request.post(`${BASE_URL}/api/method/login`, {
-		form: { usr: MANAGER, pwd: PASSWORD },
+		form: { usr: user, pwd: PASSWORD },
 	});
 	expect(response.ok(), "manager login failed").toBeTruthy();
 }
@@ -269,6 +270,22 @@ test("Business Hub QA regression: Record Expense reopens New Expense after Busin
 		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({ state: "visible", timeout: 20_000 });
 		await page.getByRole("button", { name: /Record Expense/i }).click();
 		await expect(page.getByRole("heading", { name: "New Business Expense", exact: true })).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
+
+test("Business Hub QA regression: cashier Record Expense stays in guided Cashier Expense", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context, CASHIER);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		await page.getByRole("button", { name: /Record Expense/i }).click();
+		await expect(page.locator(".guided-expense-form")).toBeVisible();
+		await expect(page.locator(".edge-app-shell").first()).toBeAttached();
+		await expect(page).toHaveURL(/retailedge-business-hub/);
 	} finally {
 		await context.close();
 	}
