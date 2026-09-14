@@ -58,7 +58,6 @@
 				<section class="home-command-centre hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Understand</p>
 							<h3>Business performance</h3>
 							<p class="section-rider">Key business indicators for the selected period.</p>
 						</div>
@@ -103,7 +102,6 @@
 				<section v-if="homeQuickActions.length" class="home-quick-actions-section hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Act</p>
 							<h3>Quick actions</h3>
 							<p class="section-rider">Start the next permitted business task.</p>
 						</div>
@@ -128,7 +126,6 @@
 				<section class="hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Operate</p>
 							<h3>Business indices</h3>
 							<p class="section-rider">Sales, cash, stock, expenses, receivables, payables, branch and banking signals with the next useful action.</p>
 						</div>
@@ -169,7 +166,6 @@
 				<section class="hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Respond</p>
 							<h3>Needs attention</h3>
 							<p class="section-rider">Exceptions and follow-ups that may require action.</p>
 						</div>

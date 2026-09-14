@@ -267,3 +267,12 @@ def test_phase5_business_hub_qa_keeps_page_shortcuts_scoped_and_dates_user_forma
 	assert 'const currentOnly = shortcut.target === "professional-purchasing";' in source
 	assert "const filters = this.homeRouteFilters" in source
 	assert "this.openHomeRoute(shortcut.target, filters);" in source
+
+
+def test_phase5_business_hub_does_not_expose_architecture_labels_as_ui_copy():
+	source = HUB.read_text(encoding="utf-8")
+	for label in ("Understand", "Act", "Operate", "Respond"):
+		assert f'<p class="section-kicker">{label}</p>' not in source
+
+	for heading in ("Business performance", "Quick actions", "Business indices", "Needs attention"):
+		assert heading in source
