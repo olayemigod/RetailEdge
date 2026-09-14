@@ -507,6 +507,12 @@ def submit_standard_purchase_receipt(
 		"item_count": len(items),
 		"posting_status": "Submitted",
 		"stock_posted_by": "ERPNext Purchase Receipt submit",
+		"landed_cost_handoff": {
+			"available": True,
+			"source_type": "purchase_receipt",
+			"source_name": receipt.name,
+			"authority": "ERPNext Landed Cost Voucher",
+		},
 		"source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
 	}
 
