@@ -77,6 +77,7 @@
 							<div class="primary-actions">
 								<button type="button" class="edge-button edge-button--secondary" :disabled="!details.can_print" @click="previewDocument">Print Preview</button>
 								<button type="button" class="edge-button edge-button--primary" :disabled="!details.can_print" @click="downloadPdf">Download PDF</button>
+								<button v-if="canEditSelectedSalesInvoice" type="button" class="edge-button edge-button--secondary" @click="editSelectedSalesInvoice">Edit / Complete Draft</button>
 								<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openNativeDocument">Advanced: Open Full Document</button>
 							</div>
 
@@ -128,6 +129,7 @@ export default {
 		readableDocuments() { return this.documents.filter((row) => row.available && row.can_read); },
 		selectedDefinition() { return this.documents.find((row) => row.key === this.selectedDocumentKey) || null; },
 		canSendEmail() { return Boolean(this.details?.can_email && this.details?.can_print && String(this.emailRecipient || "").trim()); },
+		canEditSelectedSalesInvoice() { return Boolean(this.details?.doctype === "Sales Invoice" && Number(this.details?.docstatus || 0) === 0 && this.details?.can_write); },
 	},
 	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; this._onPageShow = () => this.loadWorkspace(); },
 	mounted() { window.addEventListener("retailedge-document-output-page-show", this._onPageShow); if (this.edgeUIValid) this.loadWorkspace(); },
@@ -145,6 +147,7 @@ export default {
 		printQuery() { return new URLSearchParams({ doctype: this.details.doctype, name: this.details.name, format: this.printFormat || "Standard", no_letterhead: this.useLetterhead ? "0" : "1" }).toString(); },
 		previewDocument() { if (this.details?.can_print) window.open(`/printview?${this.printQuery()}`, "_blank", "noopener,noreferrer"); },
 		downloadPdf() { if (!this.details?.can_print) return; const query = new URLSearchParams({ document: this.selectedDocumentKey, name: this.details.name, print_format: this.printFormat || "Standard", no_letterhead: this.useLetterhead ? "0" : "1" }).toString(); window.open(`/api/method/retailedge.document_output.download_document_pdf?${query}`, "_blank", "noopener,noreferrer"); },
+		editSelectedSalesInvoice() { if (!this.canEditSelectedSalesInvoice || !this.details?.name) return; window.retailedgeProfessionalSellingTarget = { doctype: "Sales Invoice", name: this.details.name }; frappe.set_route("professional-selling"); },
 		openNativeDocument() { if (!this.canUseNativeDesk) return; if (this.details?.native_route) window.open(this.details.native_route, "_blank", "noopener,noreferrer"); },
 		async sendEmail() { if (!this.canSendEmail || this.sendingEmail) return; this.sendingEmail = true; try { await callMethod(EMAIL_METHOD, { document: this.selectedDocumentKey, name: this.details.name, recipient: this.emailRecipient, subject: this.emailSubject, message: this.emailMessage, print_format: this.printFormat || "Standard", no_letterhead: this.useLetterhead ? 0 : 1 }, "POST"); frappe.show_alert({ message: __("Email queued with PDF attachment"), indicator: "green" }); } catch (error) { frappe.msgprint({ title: __("Email failed"), message: errorMessage(error, "Unable to queue the email."), indicator: "red" }); } finally { this.sendingEmail = false; } },
 		async openWhatsApp() { if (!this.details || this.preparingWhatsApp) return; this.preparingWhatsApp = true; try { const handoff = await callMethod(WHATSAPP_METHOD, { document: this.selectedDocumentKey, name: this.details.name }); const phone = String(handoff.phone || "").replace(/[^0-9]/g, ""); const target = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(handoff.text || "")}` : `https://wa.me/?text=${encodeURIComponent(handoff.text || "")}`; window.open(target, "_blank", "noopener,noreferrer"); } catch (error) { frappe.msgprint({ title: __("WhatsApp handoff failed"), message: errorMessage(error, "Unable to prepare the WhatsApp message."), indicator: "red" }); } finally { this.preparingWhatsApp = false; } },
