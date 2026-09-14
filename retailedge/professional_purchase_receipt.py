@@ -350,6 +350,15 @@ def _validate_standard_receipt_draft(
 	return items, blockers
 
 
+def _landed_cost_handoff(purchase_receipt: str) -> dict[str, Any]:
+	return {
+		"available": True,
+		"source_type": "purchase_receipt",
+		"source_name": str(purchase_receipt or "").strip(),
+		"authority": "ERPNext Landed Cost Voucher",
+	}
+
+
 def _workflow_draft_payload(
 	*,
 	po: Any,
@@ -507,12 +516,7 @@ def submit_standard_purchase_receipt(
 		"item_count": len(items),
 		"posting_status": "Submitted",
 		"stock_posted_by": "ERPNext Purchase Receipt submit",
-		"landed_cost_handoff": {
-			"available": True,
-			"source_type": "purchase_receipt",
-			"source_name": receipt.name,
-			"authority": "ERPNext Landed Cost Voucher",
-		},
+		"landed_cost_handoff": _landed_cost_handoff(receipt.name),
 		"source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
 	}
 
@@ -671,13 +675,24 @@ def apply_standard_purchase_receipt_workflow_action(
 			).format(draft.name)
 		)
 
-	return apply_document_workflow_action(
+	result = apply_document_workflow_action(
 		doctype=PURCHASE_RECEIPT_DOCTYPE,
 		name=draft.name,
 		action=action,
 		expected_modified=expected_modified,
 		expected_state=str(expected_workflow_state or ""),
 	)
+	updated_receipt = frappe.get_doc(PURCHASE_RECEIPT_DOCTYPE, draft.name)
+	if cint(getattr(updated_receipt, "docstatus", 0)) == 1:
+		result = dict(result or {})
+		result.update(
+			{
+				"name": updated_receipt.name,
+				"docstatus": 1,
+				"landed_cost_handoff": _landed_cost_handoff(updated_receipt.name),
+			}
+		)
+	return result
 
 
 @frappe.whitelist()
