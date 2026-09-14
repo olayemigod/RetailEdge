@@ -85,7 +85,8 @@ class TestProfessionalPurchasingUIContract(TestCase):
 	def test_procurement_lifecycle_stays_inside_edgesuite_through_receipt_and_supplier_payment(self):
 		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
 		self.assertIn("Prepare Receipt", component)
-		self.assertIn("ProfessionalPurchaseReceiptPreviewOverlay", (APP_ROOT / "public" / "js" / "professional_purchasing.bundle.js").read_text())
+		self.assertIn("OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", component)
+		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", component)
 		self.assertIn("StandardPurchaseInvoiceCompletionDialog", component)
 		self.assertIn("SimplePaymentDialog", component)
 		self.assertIn('@pay-supplier="handlePurchaseInvoicePaySupplier"', component)
