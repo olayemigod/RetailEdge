@@ -104,6 +104,12 @@ class TestDocumentOutput(unittest.TestCase):
 		self.assertNotIn("graph.facebook.com", source)
 		self.assertNotIn("api.whatsapp", source)
 
+	def test_context_uses_frappe_v16_fullname_helper(self):
+		source = self.read("document_output.py")
+		self.assertIn("from frappe.utils.user import get_user_fullname", source)
+		self.assertIn("get_user_fullname(frappe.session.user)", source)
+		self.assertNotIn("frappe.get_user().get_fullname()", source)
+
 
 if __name__ == "__main__":
 	unittest.main()
