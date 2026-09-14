@@ -385,7 +385,7 @@ def _business_indices(
 	elif payable_overdue and flt(payable_overdue.get("value")) > 0:
 		payable_signal = _signal(payable_overdue, tone="warning", requires_action=True, message=_("Supplier balances are overdue."))
 	else:
-		payable_signal = _signal(_summary_card(payables, "Open Invoices"), message=_("No overdue supplier balance is currently flagged."))
+		payable_signal = _signal(_summary_card(payables, "Open Bills"), message=_("No overdue supplier balance is currently flagged."))
 
 	branch_variance = _summary_card(branches, "Audit Variance")
 	branch_issues = _summary_card(branches, "Payment Issues")
