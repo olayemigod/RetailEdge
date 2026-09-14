@@ -34,7 +34,7 @@ def _portal_print_format(doctype: str) -> str:
 	row = frappe.db.get_value(
 		"Print Format",
 		preferred,
-		["doc_type", "disabled", "module", "html"],
+		["doc_type", "disabled", "html"],
 		as_dict=True,
 	) or {}
 	owned = MANAGED_MARKER in str(row.get("html") or "")
