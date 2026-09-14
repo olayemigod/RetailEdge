@@ -7,7 +7,7 @@ import frappe
 # Keep the legacy marker only for recognising formats installed by older releases.
 LEGACY_MANAGED_MARKERS = (
 	"<!-- retailedge-managed-professional-print-format:v1 -->",
-	"<!-- managed-business-print-format:v3 -->",
+	"<!-- retailedge-managed-print-format:v2 -->",
 )
 MANAGED_MARKER = "<!-- managed-business-print-format:v3 -->"
 
