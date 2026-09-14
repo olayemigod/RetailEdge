@@ -353,13 +353,30 @@ def validate_operating_branch(
 
 def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 	fallback_company = _clean(company) or _clean(frappe.defaults.get_user_default("Company"))
+	has_assignments = has_branch_assignments(user=user)
+	assignment_anchor = (
+		_resolve_assignment_fallback(user=user, company=fallback_company)
+		if has_assignments
+		else {}
+	)
+
+	# Branch Assignment can provide a deterministic initial operating anchor even
+	# for RetailEdge global-access roles. It selects the starting Company/Branch;
+	# it does not narrow their effective operational Branch scope.
+	if not fallback_company:
+		fallback_company = _clean(assignment_anchor.get("company"))
 	if fallback_company:
 		_assert_company_access(fallback_company, user=user)
 
-	if not user_has_global_branch_access(user=user) and has_branch_assignments(user=user):
-		resolved = _resolve_assignment_fallback(user=user, company=fallback_company)
+	if _clean(assignment_anchor.get("branch")):
+		resolved = assignment_anchor
+	elif not user_has_global_branch_access(user=user) and has_assignments:
+		# Assignment history remains authoritative for restricted users, including
+		# the explicit restricted-zero case when no assignment is currently active.
+		resolved = assignment_anchor
 	else:
 		resolved = resolve_branch_from_user(user=user, company=fallback_company or None)
+
 	fallback_branch = _clean(resolved.get("branch"))
 	fallback_company = _clean(resolved.get("company")) or fallback_company
 	if fallback_branch and fallback_company:
@@ -382,7 +399,7 @@ def _resolve_fallback_context(*, company: str, user: str) -> dict[str, Any]:
 		branch="",
 		user=user,
 		source="branch_assignment"
-		if has_branch_assignments(user=user)
+		if has_assignments
 		else ("company_default" if fallback_company else "empty"),
 	)
 
