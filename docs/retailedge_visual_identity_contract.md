@@ -43,15 +43,15 @@ RetailEdge applies its own presentation only under the active RetailEdge product
 
 The product layer owns:
 
-- dark operational sidebar treatment;
-- retail-specific accent and surface tokens;
+- appearance-aware operational sidebar treatment that follows EdgeSuite light/dark mode;
+- retail-specific composition that consumes the active EdgeSuite theme palette and semantic surface tokens;
 - denser operational spacing;
 - commercial KPI hierarchy;
 - compact filters and actions;
 - ledger-like table readability;
 - Business Hub command-centre composition;
 - attention/exceptions emphasis;
-- RetailEdge-specific dark-mode treatment;
+- RetailEdge-specific light/dark composition without overriding EdgeSuite theme authority;
 - responsive adjustments appropriate for high-frequency business operations.
 
 ## Reference experience
@@ -75,6 +75,8 @@ The intended mental model is:
 
 This layer must not:
 
+- override the active EdgeSuite palette with a fixed RetailEdge palette;
+- force a dark sidebar while the active appearance is light;
 - change accounting calculations;
 - mutate submitted ERPNext documents;
 - change stock posting semantics;
