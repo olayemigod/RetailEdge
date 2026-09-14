@@ -191,6 +191,39 @@ def test_completion_dialog_uses_only_server_authoritative_actions():
 		assert forbidden not in source
 
 
+def test_draft_dates_can_be_corrected_without_weakening_erpnext_validation():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for contract in (
+		"def update_standard_sales_invoice_dates(",
+		"expected_modified",
+		'frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)',
+		"getdate(due_text) if due_text else None",
+		"due_value < posting_value",
+		"Due Date cannot be before Posting Date.",
+		'doc.set("posting_date", posting_value)',
+		'doc.set("due_date", due_value)',
+		"doc.save()",
+	):
+		assert contract in service
+	for contract in (
+		"update_standard_sales_invoice_dates",
+		'Save Draft Dates',
+		'invoice-posting-date',
+		'invoice-due-date',
+		"expected_modified: this.preview.modified",
+	):
+		assert contract in dialog
+
+
+def test_recent_sales_invoice_exposes_output_and_draft_edit_paths():
+	source = _read(SELLING)
+	assert "View &amp; Output" in source
+	assert "Edit / Complete" in source
+	assert "window.retailedgeDocumentOutputTarget" in source
+	assert 'frappe.set_route("document-output-sharing")' in source
+
+
 def test_professional_selling_opens_invoice_completion_except_returns():
 	source = _read(SELLING)
 	assert 'import StandardSalesInvoiceCompletionDialog from "./StandardSalesInvoiceCompletionDialog.vue"' in source
