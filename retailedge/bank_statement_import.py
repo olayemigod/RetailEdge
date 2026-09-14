@@ -3,25 +3,29 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
+from retailedge.bank_account_policy import resolve_retailedge_bank_account
+
 
 TEMPLATE_DOCTYPE = "RetailEdge Statement Mapping Template"
 NATIVE_TEMPLATE_MODE = "Separate Debit/Credit Columns"
 
 
 
-def _bank_account_context(company: str, bank_account: str):
+def _bank_account_context(company: str, bank_account: str, branch: str = ""):
 	company = str(company or "").strip()
 	bank_account = str(bank_account or "").strip()
+	branch = str(branch or "").strip()
 	if not company or not bank_account:
 		frappe.throw(_("Company and Bank Account are required."))
 
-	account = frappe.get_doc("Bank Account", bank_account)
+	resolved = resolve_retailedge_bank_account(
+		company=company,
+		branch=branch,
+		bank_account=bank_account,
+		strict_branch_scope=True,
+	)
+	account = frappe.get_doc("Bank Account", resolved.get("bank_account") or bank_account)
 	account.check_permission("read")
-	if str(account.company or "") != company:
-		frappe.throw(
-			_("Bank Account {0} does not belong to Company {1}.").format(bank_account, company),
-			frappe.ValidationError,
-		)
 	if not str(account.bank or "").strip():
 		frappe.throw(_("Bank Account {0} is not linked to a Bank.").format(bank_account))
 	return account
@@ -86,9 +90,10 @@ def get_bank_statement_template_options(
 	company: str,
 	bank_account: str,
 	txt: str = "",
+	branch: str = "",
 ) -> dict:
 	"""Return enabled reusable mappings valid for the selected Company/Bank."""
-	account = _bank_account_context(company, bank_account)
+	account = _bank_account_context(company, bank_account, branch)
 	frappe.has_permission(TEMPLATE_DOCTYPE, ptype="read", throw=True)
 	filters = {"enabled": 1, "statement_type": "Bank Transfer"}
 	txt = str(txt or "").strip()
@@ -155,9 +160,10 @@ def create_bank_statement_template(
 	reference_column: str = "",
 	narration_column: str = "",
 	currency_column: str = "",
+	branch: str = "",
 ) -> dict:
 	"""Create one bounded reusable bank-statement mapping without opening native Desk."""
-	account = _bank_account_context(company, bank_account)
+	account = _bank_account_context(company, bank_account, branch)
 	frappe.has_permission(TEMPLATE_DOCTYPE, ptype="create", throw=True)
 	template_name = str(template_name or "").strip()
 	if not template_name:
@@ -228,7 +234,7 @@ def apply_bank_statement_template(data_import: str, template_name: str) -> dict:
 
 
 @frappe.whitelist(methods=["POST"])
-def create_bank_statement_import(company: str, bank_account: str) -> dict:
+def create_bank_statement_import(company: str, bank_account: str, branch: str = "") -> dict:
 	"""Create the native ERPNext Bank Statement Import in a validated banking context.
 
 	RetailEdge owns only the context validation and draft creation. ERPNext remains the
@@ -242,7 +248,7 @@ def create_bank_statement_import(company: str, bank_account: str) -> dict:
 	frappe.has_permission("Bank Statement Import", ptype="create", throw=True)
 	frappe.has_permission("Bank Transaction", ptype="import", throw=True)
 
-	account = _bank_account_context(company, bank_account)
+	account = _bank_account_context(company, bank_account, branch)
 
 	doc = frappe.new_doc("Bank Statement Import")
 	doc.company = company
