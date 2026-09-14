@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RECEIPT = ROOT / "professional_purchase_receipt.py"
 LANDED = ROOT / "landed_cost_allocation.py"
 PURCHASING_UI = ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue"
+RECEIPT_UI = ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReceiptPreviewOverlay.vue"
 
 
 def test_receive_stock_remains_native_erpnext_stock_posting():
@@ -51,3 +52,18 @@ def test_purchase_receipt_is_supported_as_landed_cost_source_in_edgesuite():
 	assert "Review Landed Cost" in ui
 	assert "Prepare Landed Cost Draft" in ui
 	assert "Advanced: Prepare in ERPNext" in ui
+
+
+def test_receive_stock_hands_submitted_receipt_into_landed_cost_edgesuite_flow():
+	backend = RECEIPT.read_text(encoding="utf-8")
+	receipt_ui = RECEIPT_UI.read_text(encoding="utf-8")
+	purchasing_ui = PURCHASING_UI.read_text(encoding="utf-8")
+	assert "_landed_cost_handoff" in backend
+	assert '"landed_cost_handoff": _landed_cost_handoff(receipt.name)' in backend
+	assert '"landed_cost_handoff": _landed_cost_handoff(updated_receipt.name)' in backend
+	assert "retailedge-professional-purchasing-landed-cost-handoff" in receipt_ui
+	assert "dispatchLandedCostHandoff(result)" in receipt_ui
+	assert "retailedge-professional-purchasing-landed-cost-handoff" in purchasing_ui
+	assert "handleLandedCostHandoff(handoff)" in purchasing_ui
+	assert 'this.landedCost.sourceType = "purchase_receipt"' in purchasing_ui
+	assert "this.landedCost.source = sourceName" in purchasing_ui
