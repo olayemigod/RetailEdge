@@ -2,7 +2,7 @@
 
 Status: **QA IN PROGRESS — Business Hub not yet accepted**  
 Branch: `qa/retailedge-visual-identity`  
-PR: #56  
+PR: #57  
 Release target: RetailEdge 1.0
 
 ## Goal
