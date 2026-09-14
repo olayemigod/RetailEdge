@@ -82,7 +82,8 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 			self.assertNotIn("retailedge-managed-print-format", values["html"])
 			self.assertNotIn("ProcessEdge Solutions", values["html"])
 			self.assertNotIn("processedge.com.ng", values["html"])
-			self.assertNotIn(">RetailEdge<", values["html"])
+			self.assertNotIn("retailedge", values["html"].lower())
+			self.assertNotIn("processedge", values["html"].lower())
 			self.assertNotIn("valuation_rate", values["html"])
 			self.assertNotIn("incoming_rate", values["html"])
 			self.assertNotIn("buying_rate", values["html"])
@@ -92,7 +93,7 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		for spec in RECEIPT_PRINT_FORMATS:
 			html = _format_values(spec)["html"]
 			self.assertIn('{{ doc.get("company") or "" }}', html)
-			self.assertNotIn(">RetailEdge<", html)
+			self.assertNotIn("retailedge", html.lower())
 			self.assertNotIn("ProcessEdge Solutions", html)
 			self.assertNotIn("processedge.com.ng", html)
 			self.assertNotIn("Powered by", html)
