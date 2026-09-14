@@ -7,9 +7,9 @@
 - Authoritative PR: **#56**
 - Authoritative branch: `qa/retailedge-visual-identity`
 - PR base: `version-16`
-- Gap-closure implementation baseline: `d9288f722fd7b6fe58d7b05b772a12c6d71c323f`
+- Validated gap-closure implementation head: `aea2cf4980cfd2dc2b61133ee567f166392a7285`
 - Audit date: 2026-09-14
-- Audit state: **GAP CLOSURE IMPLEMENTED — EXACT-HEAD REVALIDATION PENDING**
+- Audit state: **FROZEN — IMPLEMENTATION GREEN / FORMAL RC3 READY**
 
 This is the required second full MVP re-audit for the current PR #56 candidate. It supersedes the older PR #55 audit for the purpose of accepting the visual/runtime, Business Hub, guided-context, Receive Stock, banking-import and intelligence changes introduced after the prior release candidate.
 
@@ -78,7 +78,7 @@ The RC3 fixture gives the manager one primary Lagos Branch Assignment to establi
 
 The resolver now permits a deterministic primary/sole Branch Assignment to supply the **initial** Company/Branch anchor for global RetailEdge managers. This does **not** restrict the manager's effective operational branch scope: `get_operational_branch_scope` still takes the global-access path first and remains unrestricted. Restricted users retain Branch Assignment authority and the restricted-zero fail-closed case.
 
-### P1-D — canonical RetailEdgeManager Business Hub Company access — CLOSED
+### P1-E — canonical RetailEdgeManager Business Hub Company access — CLOSED
 
 The new PR #56 browser coverage exposed that a canonical `RetailEdgeManager` could open Business Hub but its Home snapshot failed because the snapshot applied raw `Company` DocType read permission after the shared branch-scope resolver had already classified the role as global RetailEdge access.
 
@@ -105,26 +105,28 @@ The only new setting introduced by Phase 5 is a Business Hub variance tolerance 
 - Upgrade validation starts from the frozen pre-MVP baseline, seeds representative accounting data, switches to the exact candidate, builds, migrates twice, verifies submitted accounting truth, and runs the current RetailEdge suite.
 - CoreEdge is not required on the standalone RetailEdge validation site.
 
-## Audit freeze gate
+## Audit freeze gate — SATISFIED
 
-Before this audit may be marked **FROZEN — IMPLEMENTATION GREEN / RC3 READY**, the exact gap-closure head must pass:
+The validated gap-closure implementation head `aea2cf4980cfd2dc2b61133ee567f166392a7285` passed every required pre-freeze gate:
 
-1. RetailEdge Theme Compatibility;
-2. Linters / Semgrep / dependency audit;
-3. clean Frappe v16 CI;
-4. EdgeSuite UI Candidate Compatibility;
-5. RetailEdge Upgrade Validation;
-6. Browser Persona Smoke as regression evidence only.
+1. RetailEdge Theme Compatibility — run **#1119** — **PASS**;
+2. Linters / Semgrep / dependency audit — run **#2960** — **PASS**;
+3. clean Frappe v16 CI — run **#2981** — **PASS**;
+4. EdgeSuite UI Candidate Compatibility — run **#1216** — **PASS**;
+5. RetailEdge Upgrade Validation — run **#126** — **PASS**, including double migration and submitted accounting-truth verification;
+6. Browser Persona Smoke — run **#232** — **PASS** as pre-freeze regression evidence.
 
-The browser result from this pre-freeze validation does **not** become formal RC3 merely because it is green.
+The earlier integration failures on head `c370ce66012199f2d55d051d026108f96abf9b2f` were caused by one stale source-contract assertion after the approved global-access resolver refactor. The runtime/browser fix itself was already green. The stale assertion was aligned in `aea2cf4980cfd2dc2b61133ee567f166392a7285`, after which all six gates passed.
+
+This second full MVP audit is now **FROZEN — IMPLEMENTATION GREEN / FORMAL RC3 READY**. Browser run #232 remains pre-freeze regression evidence and is not promoted retroactively to formal RC3.
 
 ## Governed release order
 
 1. Second full PR #56 MVP re-audit — **COMPLETE**
 2. Close audit P1 gaps — **COMPLETE**
-3. Exact-head gap-closure revalidation — **RE-RUNNING AFTER P1-D FIX**
-4. Freeze audit — **PENDING**
-5. Execute formal RC3 browser/persona acceptance on the frozen audit head.
+3. Exact-head gap-closure revalidation — **COMPLETE / ALL SIX GATES GREEN**
+4. Freeze audit — **COMPLETE**
+5. Execute formal RC3 browser/persona acceptance on the frozen audit line — **NEXT**.
 6. Fix **only** P0/P1 RC3 defects.
 7. Revalidate blocker-only corrections.
 8. Complete RetailEdge 1.0.0 release hardening/final promotion gates.
