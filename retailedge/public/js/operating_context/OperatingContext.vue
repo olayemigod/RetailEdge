@@ -7,7 +7,7 @@
 		v-else
 		product="RetailEdge"
 		title="Operating Context"
-		:tenantName="current.company || tenantName"
+		:tenantName="tenantName || current.company"
 		:branchName="current.branch || selectedBranch"
 		:userName="userName"
 		:menuItems="menuItems"
@@ -163,7 +163,7 @@ export default {
 					: await callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
-				this.tenantName = navigation.context?.company || "";
+				this.tenantName = navigation.context?.company_label || navigation.context?.company || "";
 				this.userName = navigation.context?.user_name || "";
 			} catch (error) {
 				this.menuItems = [];
