@@ -81,7 +81,7 @@
 								:key="card.label"
 								type="button"
 								class="home-kpi-card"
-								@click="openHomeRoute(card.route)"
+								@click="openHomeRoute(card.route, homeRouteFilters(card))"
 							>
 								<span class="home-kpi-card-heading">
 									<span>{{ card.label }}</span>
@@ -129,25 +129,41 @@
 					<div class="section-heading">
 						<div>
 							<p class="section-kicker">Operate</p>
-							<h3>Operational control</h3>
-							<p class="section-rider">Current stock, banking, branch and cash-control signals.</p>
+							<h3>Business indices</h3>
+							<p class="section-rider">Sales, cash, stock, expenses, receivables, payables, branch and banking signals with the next useful action.</p>
 						</div>
 					</div>
-					<div class="home-signal-grid home-operate-grid">
-						<article v-for="key in ['stock', 'banking', 'branch', 'cash_shift']" :key="key" class="home-signal-card">
-							<div class="home-signal-heading">
-								<h4><span class="home-signal-icon"><EdgeIcon :name="signalIcon(key)" size="sm" /></span>{{ homeSection(key).label || key }}</h4>
-								<button v-if="homeSection(key).route && homeSection(key).available" type="button" class="home-link" @click="openHomeRoute(homeSection(key).route)">Open</button>
+					<div v-if="homeSnapshot.indices.length" class="home-intelligence-grid">
+						<article
+							v-for="index in homeSnapshot.indices"
+							:key="index.key"
+							:class="['home-intelligence-card', `tone-${index.tone || 'neutral'}`, { 'is-unavailable': !index.available }]"
+						>
+							<div class="home-intelligence-heading">
+								<h4><span class="home-signal-icon"><EdgeIcon :name="signalIcon(index.key)" size="sm" /></span>{{ index.label }}</h4>
+								<span :class="['home-index-status', `tone-${index.tone || 'neutral'}`]">{{ indexStatusLabel(index) }}</span>
 							</div>
-							<div v-if="homeSection(key).available && homeSection(key).summary.length" class="home-signal-list">
-								<div v-for="card in homeSection(key).summary.slice(0, 4)" :key="card.label">
-									<span>{{ card.label }}</span>
-									<strong>{{ formatHomeValue(card) }}</strong>
+							<template v-if="index.available">
+								<div class="home-index-headline">
+									<span>{{ index.headline?.label || "Position" }}</span>
+									<strong>{{ formatHomeValue(index.headline) }}</strong>
 								</div>
-							</div>
-							<p v-else class="home-unavailable">{{ homeSection(key).reason || "No signal is available for this scope." }}</p>
+								<div v-if="index.signal?.label" class="home-index-signal">
+									<span>{{ index.signal.label }}</span>
+									<strong>{{ formatHomeValue(index.signal) }}</strong>
+								</div>
+								<p>{{ index.signal?.message || index.recommendation }}</p>
+								<button type="button" class="home-index-action" @click="openHomeItem(index)">{{ index.action_label || "Open" }}</button>
+							</template>
+							<p v-else class="home-unavailable">{{ index.reason || "This index is unavailable for your current permissions and scope." }}</p>
 						</article>
 					</div>
+					<EdgeEmptyState
+						v-else
+						title="No business indices available"
+						description="No permitted business index is available for the selected Company, Branch and period."
+						icon="bar-chart-2"
+					/>
 				</section>
 
 				<section class="hub-experience-section">
@@ -160,9 +176,15 @@
 						<span class="home-attention-count">{{ homeSnapshot.attention.length }}</span>
 					</div>
 					<div v-if="homeSnapshot.attention.length" class="home-attention-list home-attention-list--wide">
-						<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeRoute(item.route)">
-							<span>{{ item.label }}</span>
-							<strong>{{ formatHomeValue(item) }}</strong>
+						<button v-for="(item, index) in homeSnapshot.attention" :key="`${item.section || 'attention'}-${index}`" type="button" :class="['home-attention-item', `tone-${item.tone || 'warning'}`]" @click="openHomeItem(item)">
+							<span class="home-attention-copy">
+								<strong>{{ item.label }}</strong>
+								<small v-if="item.recommendation">{{ item.recommendation }}</small>
+							</span>
+							<span class="home-attention-value">
+								<strong>{{ formatHomeValue(item) }}</strong>
+								<small>{{ item.action_label || "Open" }}</small>
+							</span>
 						</button>
 					</div>
 					<EdgeEmptyState
@@ -429,6 +451,41 @@ function fetchHomeSnapshot(company, branch, datePreset) {
 	});
 }
 
+function routeTarget(route) {
+	return String(route || "").replace(/^\/app\//, "").split("/").filter(Boolean)[0] || "";
+}
+
+function setBusinessHubRouteHandoff(route, filters = {}) {
+	const target = routeTarget(route);
+	if (!target) return;
+	const cleanFilters = Object.fromEntries(
+		Object.entries(filters || {}).filter(([, value]) => value !== undefined && value !== null && value !== "")
+	);
+	window.__retailedgeBusinessHubRouteHandoff = {
+		target,
+		filters: cleanFilters,
+		createdAt: Date.now(),
+	};
+	frappe.route_options = {
+		...cleanFilters,
+		retailedge_business_hub_handoff: 1,
+		retailedge_business_hub_target: target,
+	};
+}
+
+window.retailedgeConsumeBusinessHubRouteOptions = function consumeBusinessHubRouteOptions(target) {
+	const handoff = window.__retailedgeBusinessHubRouteHandoff;
+	if (!handoff || Date.now() - Number(handoff.createdAt || 0) > 60_000) {
+		delete window.__retailedgeBusinessHubRouteHandoff;
+		return {};
+	}
+	if (String(handoff.target || "") !== String(target || "")) return {};
+	const filters = { ...(handoff.filters || {}) };
+	delete window.__retailedgeBusinessHubRouteHandoff;
+	if (frappe.route_options?.retailedge_business_hub_handoff) frappe.route_options = null;
+	return filters;
+};
+
 export default {
 	name: "RetailEdgeBusinessHub",
 	components: {
@@ -462,7 +519,7 @@ export default {
 			error: "",
 			homeLoading: false,
 			homeError: "",
-			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, attention: [] },
+			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
@@ -604,7 +661,7 @@ export default {
 		},
 		refreshHomeSnapshot() {
 			if (!this.context.company) {
-				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, attention: [] };
+				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
@@ -618,11 +675,13 @@ export default {
 						period: snapshot.period || {},
 						cards: snapshot.cards || [],
 						sections: snapshot.sections || {},
+						indices: snapshot.indices || [],
+						settings: snapshot.settings || {},
 						attention: snapshot.attention || [],
 					};
 				})
 				.catch((error) => {
-					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, attention: [] };
+					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 					this.homeError = error?.message || "Unable to load the current business snapshot.";
 				})
 				.finally(() => {
@@ -678,10 +737,35 @@ export default {
 				banking: "wallet",
 				branch: "building",
 				cash_shift: "wallet",
+				sales: "chart",
+				cash: "wallet",
+				expenses: "wallet",
+				receivables: "report",
+				payables: "wallet",
 			}[String(key || "")] || "chart";
 		},
-		openHomeRoute(route) {
+		homeRouteFilters(card = {}) {
+			const filters = { company: this.context.company || "" };
+			if (this.context.branch) filters.branch = this.context.branch;
+			if (card?.time_basis !== "current") {
+				filters.from_date = this.homePeriod.from_date || "";
+				filters.to_date = this.homePeriod.to_date || "";
+			}
+			return filters;
+		},
+		indexStatusLabel(index) {
+			if (!index?.available) return "Unavailable";
+			if (index?.requires_action && index?.tone === "danger") return "Act now";
+			if (index?.requires_action) return "Review";
+			return "On track";
+		},
+		openHomeItem(item) {
+			if (!item?.route) return;
+			this.openHomeRoute(item.route, item.route_filters || {});
+		},
+		openHomeRoute(route, filters = {}) {
 			if (!route) return;
+			setBusinessHubRouteHandoff(route, filters);
 			const normalized = String(route).replace(/^\/app\//, "");
 			frappe.set_route(...normalized.split("/").filter(Boolean));
 		},
@@ -1217,6 +1301,89 @@ export default {
 .home-signal-card {
 	padding: 16px;
 }
+.home-intelligence-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+}
+.home-intelligence-card {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+	padding: 16px;
+	border: 1px solid var(--edge-border, #dfe3e8);
+	border-radius: 12px;
+	background: var(--edge-surface, #ffffff);
+}
+.home-intelligence-card.tone-danger {
+	border-color: color-mix(in srgb, var(--edge-danger, #d92d20) 55%, var(--edge-border, #dfe3e8));
+}
+.home-intelligence-card.tone-warning {
+	border-color: color-mix(in srgb, var(--edge-warning, #f79009) 55%, var(--edge-border, #dfe3e8));
+}
+.home-intelligence-card.is-unavailable {
+	opacity: .72;
+}
+.home-intelligence-heading,
+.home-index-headline,
+.home-index-signal {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+.home-intelligence-heading h4 {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+}
+.home-index-status {
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+	padding: 0 8px;
+	border-radius: 999px;
+	background: var(--edge-surface-muted, #f8fafc);
+	font-size: .7rem;
+	font-weight: 700;
+	white-space: nowrap;
+}
+.home-index-status.tone-danger {
+	color: var(--edge-danger, #d92d20);
+}
+.home-index-status.tone-warning {
+	color: var(--edge-warning, #b54708);
+}
+.home-index-headline,
+.home-index-signal {
+	padding: 9px 10px;
+	border-radius: 9px;
+	background: var(--edge-surface-muted, #f8fafc);
+}
+.home-index-headline span,
+.home-index-signal span,
+.home-intelligence-card p {
+	color: var(--edge-text-muted, #667085);
+}
+.home-intelligence-card p {
+	margin: 0;
+	font-size: .8rem;
+	line-height: 1.4;
+}
+.home-index-action {
+	justify-self: start;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--edge-primary, #2563eb);
+	font-weight: 700;
+	cursor: pointer;
+}
+.home-index-action:hover,
+.home-index-action:focus-visible {
+	text-decoration: underline;
+}
 .home-signal-heading {
 	display: flex;
 	align-items: center;
@@ -1271,6 +1438,21 @@ export default {
 }
 .home-attention-item.tone-warning {
 	border-color: var(--edge-warning, #f79009);
+}
+.home-attention-copy,
+.home-attention-value {
+	display: grid;
+	gap: 3px;
+}
+.home-attention-copy small,
+.home-attention-value small {
+	color: var(--edge-text-muted, #667085);
+	font-size: .74rem;
+	line-height: 1.35;
+}
+.home-attention-value {
+	justify-items: end;
+	text-align: right;
 }
 .home-quick-actions-grid {
 	display: grid;
@@ -1376,6 +1558,9 @@ export default {
 	.home-kpi-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
+	.home-intelligence-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 	.home-quick-actions-grid,
 	.experience-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1395,6 +1580,7 @@ export default {
 		width: 100%;
 	}
 	.home-kpi-grid,
+	.home-intelligence-grid,
 	.home-signal-grid,
 	.home-signal-list,
 	.home-quick-actions-grid,
