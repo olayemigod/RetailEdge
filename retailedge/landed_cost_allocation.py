@@ -7,7 +7,6 @@ from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt
 
-from erpnext.stock.doctype.landed_cost_voucher.landed_cost_voucher import get_lcv_dimension_fields
 from erpnext.stock.doctype.purchase_receipt.purchase_receipt import make_lcv
 
 from retailedge.professional_purchasing import (
@@ -243,10 +242,40 @@ def _native_landed_cost_voucher(
 	return landed_cost_voucher
 
 
+def _lcv_dimension_fields() -> list[str]:
+	"""Return Landed Cost accounting dimensions without depending on a minor-version LCV helper.
+
+	ERPNext 16.34.x does not export get_lcv_dimension_fields from the Landed Cost
+	Voucher controller, while newer v16 releases do. Accounting Dimension remains
+	the underlying source of truth in both shapes, so resolve it lazily here.
+	"""
+	try:
+		from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import (
+			get_accounting_dimensions,
+		)
+	except ImportError:
+		frappe.throw(
+			_(
+				"ERPNext accounting-dimension support is unavailable on this installation. "
+				"Use Advanced ERPNext review for this Landed Cost Voucher."
+			)
+		)
+
+	fields = ["cost_center", "project", *(get_accounting_dimensions() or [])]
+	result: list[str] = []
+	seen: set[str] = set()
+	for fieldname in fields:
+		fieldname = str(fieldname or "").strip()
+		if fieldname and fieldname not in seen:
+			seen.add(fieldname)
+			result.append(fieldname)
+	return result
+
+
 def _dimension_values(row: Any) -> dict[str, str]:
 	return {
 		fieldname: str(getattr(row, fieldname, "") or "")
-		for fieldname in get_lcv_dimension_fields()
+		for fieldname in _lcv_dimension_fields()
 	}
 
 
