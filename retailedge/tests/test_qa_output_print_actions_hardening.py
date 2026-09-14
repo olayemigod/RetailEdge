@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from retailedge.professional_print_formats import MANAGED_PRINT_FORMATS, _format_values
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_SERVICE = ROOT / "document_output.py"
@@ -39,8 +41,17 @@ def test_shared_control_workspace_uses_edgesuite_button_contract():
 
 
 def test_customer_visible_output_copy_has_no_product_or_vendor_alias():
-	print_source = _read(PRINT_FORMATS)
 	output_source = _read(OUTPUT_PAGE)
+	for spec in MANAGED_PRINT_FORMATS:
+		html = _format_values(spec)["html"]
+		for forbidden in (
+			"RetailEdge",
+			"retailedge",
+			"Powered by",
+			"ProcessEdge Solutions",
+			"processedge.com.ng",
+		):
+			assert forbidden not in html
 	for forbidden in (
 		">RetailEdge<",
 		"RetailEdge Professional",
@@ -48,6 +59,5 @@ def test_customer_visible_output_copy_has_no_product_or_vendor_alias():
 		"ProcessEdge Solutions",
 		"processedge.com.ng",
 	):
-		assert forbidden not in print_source
 		assert forbidden not in output_source
 	assert 'product="Retail"' in output_source
