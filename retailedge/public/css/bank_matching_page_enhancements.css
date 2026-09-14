@@ -1,7 +1,7 @@
 /* Bank Matching page-only refinements. Typography changes remain scoped to this
    workspace so the rest of RetailEdge and EdgeSuite keep their native sizing. */
 .retailedge-bank-layout {
-	font-size: 1.06rem;
+	font-size: .92rem;
 }
 
 .retailedge-bank-layout .edge-page-header p,
@@ -9,19 +9,19 @@
 .retailedge-bank-layout .edge-action-bar,
 .retailedge-bank-layout .retailedge-bank-stats,
 .retailedge-bank-layout .retailedge-bank-table {
-	font-size: 1.02rem;
+	font-size: .9rem;
 }
 
 .retailedge-bank-layout .edge-filter-bar label,
 .retailedge-bank-layout .edge-filter-bar [class*="label"],
 .retailedge-bank-layout .retailedge-bank-table th {
-	font-size: .98rem;
+	font-size: .78rem;
 }
 
 .retailedge-bank-layout .retailedge-bank-table td,
 .retailedge-bank-layout .edge-button,
 .retailedge-bank-layout .edge-link-button {
-	font-size: 1.02rem;
+	font-size: .86rem;
 }
 
 /* Reset is a low-emphasis utility, not a primary workflow button. */
@@ -189,7 +189,7 @@
 .retailedge-bank-import-table {
 	width: 100%;
 	border-collapse: collapse;
-	font-size: .94rem;
+	font-size: .84rem;
 }
 
 .retailedge-bank-import-table th,
@@ -218,5 +218,84 @@
 	.retailedge-bank-layout .retailedge-bank-smart-date {
 		min-width: 100%;
 		flex-basis: 100%;
+	}
+}
+
+
+.retailedge-bank-import-template-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: .65rem;
+	align-items: end;
+	margin-top: .75rem;
+}
+
+.retailedge-bank-create-template {
+	white-space: nowrap;
+}
+
+.retailedge-bank-template-editor {
+	margin-top: .75rem;
+	padding: .75rem;
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-lg, .75rem);
+	background: var(--edge-color-surface-subtle, var(--subtle-fg));
+}
+
+.retailedge-bank-template-editor__heading {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: .75rem;
+	margin-bottom: .65rem;
+}
+
+.retailedge-bank-template-editor__heading p {
+	margin: .15rem 0 0;
+	color: var(--edge-color-text-muted, var(--text-muted));
+	font-size: .82rem;
+}
+
+.retailedge-bank-template-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: .6rem;
+}
+
+.retailedge-bank-template-field {
+	display: grid;
+	gap: .25rem;
+	color: var(--edge-color-text-muted, var(--text-muted));
+	font-size: .78rem;
+	font-weight: 600;
+}
+
+.retailedge-bank-template-field input {
+	min-height: 2rem;
+	width: 100%;
+	padding: .34rem .5rem;
+	border: 1px solid var(--edge-color-border, var(--border-color));
+	border-radius: var(--edge-radius-md, .5rem);
+	background: var(--edge-color-surface, var(--card-bg));
+	color: var(--edge-color-text, var(--text-color));
+	font: inherit;
+}
+
+.retailedge-bank-template-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: .65rem;
+}
+
+@media (max-width: 900px) {
+	.retailedge-bank-template-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 600px) {
+	.retailedge-bank-import-template-row,
+	.retailedge-bank-template-grid {
+		grid-template-columns: 1fr;
 	}
 }
