@@ -41,6 +41,29 @@ class RetailEdgeCustomerReceivablesTests(unittest.TestCase):
 		self.assertIn("Current outstanding", component)
 		self.assertNotIn(">As of Date<", component)
 
+	def test_receivables_exposes_edgesuite_payment_entry_action_without_native_desk_dependency(self):
+		backend = (APP_ROOT / "customer_receivables.py").read_text()
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "customer_receivables"
+			/ "CustomerReceivablesReport.vue"
+		).read_text()
+		self.assertIn('"can_create_payment_entry": bool(frappe.has_permission("Payment Entry", "create"))', backend)
+		self.assertIn("SimplePaymentDialog", component)
+		self.assertIn('label: "Payment Entry"', component)
+		self.assertIn('payment_entry_action', component)
+		self.assertIn('"Receive Payment"', component)
+		self.assertIn('intent="receive-customer-payment"', component)
+		self.assertIn(':initial-context="paymentContext"', component)
+		self.assertIn("reference_name: row.invoice", component)
+		cell_handler = component.split("async openReportCell(payload)", 1)[1]
+		self.assertLess(
+			cell_handler.index('column.fieldname === "payment_entry_action"'),
+			cell_handler.index("if (!this.canUseNativeDesk) return"),
+		)
+
 	def test_branch_scope_is_server_authoritative(self):
 		source = (APP_ROOT / "customer_receivables.py").read_text()
 		self.assertIn("get_operational_branch_scope", source)
