@@ -89,7 +89,8 @@
 		const current = identity();
 		const branches = normalizeBranches(current.branch_options);
 		const activeBranch = String(current.active_branch || "").trim();
-		if (!branches.length || !activeBranch) return;
+		const needsExplicitBranch = !activeBranch && branches.length > 1 && Boolean(current.can_switch_branch);
+		if (!branches.length || (!activeBranch && !needsExplicitBranch)) return;
 
 		const signature = JSON.stringify({
 			activeBranch,
@@ -109,7 +110,7 @@
 		const app = edge.createEdgeApp(Dropdown, {
 			modelValue: activeBranch,
 			options: branches,
-			placeholder: "Select branch",
+			placeholder: activeBranch ? "Select branch" : "Choose working branch",
 			disabled: !current.can_switch_branch || branches.length <= 1,
 			class: "retailedge-topbar-branch-dropdown",
 			onChange: switchBranch,

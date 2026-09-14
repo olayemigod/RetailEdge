@@ -204,6 +204,14 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+
+	def test_shell_switcher_is_available_when_multiple_branches_require_explicit_choice(self):
+		source = self.read("public/js/retailedge_shell_context.js")
+		self.assertIn('const needsExplicitBranch = !activeBranch && branches.length > 1 && Boolean(current.can_switch_branch);', source)
+		self.assertIn('if (!branches.length || (!activeBranch && !needsExplicitBranch)) return;', source)
+		self.assertIn('placeholder: activeBranch ? "Select branch" : "Choose working branch"', source)
+		self.assertNotIn('if (!branches.length || !activeBranch) return;', source)
+
 	def test_operating_context_page_is_edgesuite_and_preserves_switch_contract(self):
 		loader = self.read("retailedge/page/operating_context/operating_context.js")
 		component = self.read("public/js/operating_context/OperatingContext.vue")

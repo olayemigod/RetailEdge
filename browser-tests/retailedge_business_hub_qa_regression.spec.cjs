@@ -5,6 +5,7 @@ const PASSWORD = process.env.RETAILEDGE_BROWSER_PASSWORD || "RetailEdgeBrowser1!
 const MANAGER = "browser-manager@example.com";
 const CASHIER = "browser-cashier@example.com";
 const ZERO_BRANCH = "browser-zero-branch@example.com";
+const MULTI_BRANCH = "browser-multi-branch@example.com";
 
 async function login(context, user = MANAGER) {
 	const response = await context.request.post(`${BASE_URL}/api/method/login`, {
@@ -373,6 +374,32 @@ test("Business Hub QA regression: Bank Matching page reuse reapplies the latest 
 			timeout: 20_000,
 		});
 		await expect.poll(bankDateFilters).toEqual(secondPeriod);
+	} finally {
+		await context.close();
+	}
+});
+
+
+test("Business Hub QA regression: multi-Branch blank context still exposes Working Branch choice", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context, MULTI_BRANCH);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		await page.evaluate(() => {
+			const shared = frappe.boot?.edgesuite_ui_identity?.retailedge;
+			const legacy = frappe.boot?.retailedge_ui_identity;
+			if (shared) shared.active_branch = "";
+			if (legacy) legacy.active_branch = "";
+			document.dispatchEvent(new CustomEvent("edgesuite-context-changed", {
+				detail: { product: "retailedge", company: shared?.active_company || legacy?.active_company || "", branch: "" },
+			}));
+		});
+		const switcher = page.locator('[aria-label="Working branch"]');
+		await expect(switcher).toBeVisible();
+		const trigger = switcher.locator("button").first();
+		await expect(trigger).toBeEnabled();
+		await expect(switcher).toContainText(/Choose working branch|Select branch/i);
 	} finally {
 		await context.close();
 	}
