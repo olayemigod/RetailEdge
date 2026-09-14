@@ -53,6 +53,11 @@ class TestMasterExperience(unittest.TestCase):
 		self.assertIn("record-expense", OPERATIONAL_TRANSACTION_ACTION_KEYS)
 		self.assertIn("record-purchase", OPERATIONAL_TRANSACTION_ACTION_KEYS)
 		self.assertIn("transfer-stock", OPERATIONAL_TRANSACTION_ACTION_KEYS)
+		source = (APP_ROOT / "master_experience.py").read_text(encoding="utf-8")
+		self.assertIn('branch_scope_ready = not branch_scope.get("restricted") or bool(branch_scope.get("allowed_branches"))', source)
+		self.assertIn('if action.get("key") not in OPERATIONAL_TRANSACTION_ACTION_KEYS', source)
+		self.assertIn('"branch_scope_restricted": bool(branch_scope.get("restricted"))', source)
+		self.assertIn('"branch_scope_ready": bool(branch_scope_ready)', source)
 
 	def test_master_action_contracts_use_native_erpnext_masters(self):
 		self.assertEqual(CUSTOMER_ACTION["doctype"], "Customer")
