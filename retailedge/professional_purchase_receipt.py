@@ -8,7 +8,7 @@ from frappe.utils import cint, flt
 
 from erpnext.buying.doctype.purchase_order.purchase_order import make_purchase_receipt
 
-from retailedge.branch_context import validate_user_branch_access
+from retailedge.guided_entry_context import validate_guided_branch_warehouse
 from retailedge.professional_purchasing import (
 	PURCHASE_ORDER_DOCTYPE,
 	_assert_read,
@@ -85,9 +85,10 @@ def _validate_po_scope(po: Any) -> str:
 		company=str(po.company or ""),
 		branch=branch or None,
 	)
-	if branch:
-		validate_user_branch_access(branch, user=frappe.session.user, company=po.company, throw=True)
-	elif not global_access:
+	# _resolve_scope already validates an explicit Branch through the current
+	# Branch Setup-aware operating contract. Do not reintroduce the legacy
+	# validate_user_branch_access fallback here.
+	if not branch and not global_access:
 		frappe.throw(
 			_("Purchase Order {0} has no Branch attribution for your restricted access. Ask an authorised manager to correct the document before receiving it.").format(po.name),
 			frappe.PermissionError,
@@ -95,6 +96,53 @@ def _validate_po_scope(po: Any) -> str:
 	if branch and allowed_branches and not global_access and branch not in allowed_branches:
 		frappe.throw(_("You do not have access to Branch {0}.").format(branch), frappe.PermissionError)
 	return branch
+
+
+def _warehouse_scope_blocker(
+	*,
+	warehouse: str,
+	company: str,
+	branch: str,
+	item_code: str,
+) -> dict[str, str] | None:
+	"""Return an EdgeSuite preflight blocker for an invalid receiving Stock Location."""
+	warehouse = str(warehouse or "").strip()
+	company = str(company or "").strip()
+	branch = str(branch or "").strip()
+	item_code = str(item_code or "").strip()
+
+	if not warehouse:
+		return {
+			"key": "missing_warehouse",
+			"label": _("Receiving Stock Location is required"),
+			"item_code": item_code,
+		}
+
+	warehouse_company = str(frappe.db.get_value("Warehouse", warehouse, "company") or "").strip()
+	if warehouse_company != company:
+		return {
+			"key": "warehouse_company",
+			"label": _("Receiving Stock Location belongs to another Company"),
+			"item_code": item_code,
+		}
+
+	if branch:
+		try:
+			validate_guided_branch_warehouse(
+				company=company,
+				branch=branch,
+				warehouse=warehouse,
+				user=frappe.session.user,
+			)
+		except (frappe.PermissionError, frappe.ValidationError):
+			return {
+				"key": "warehouse_branch",
+				"label": _(
+					"Receiving Stock Location {0} is not configured for Branch {1}"
+				).format(warehouse, branch),
+				"item_code": item_code,
+			}
+	return None
 
 
 def _validate_open_po(po: Any) -> None:
@@ -140,12 +188,14 @@ def _map_receipt(po: Any, branch: str) -> tuple[Any, list[dict[str, Any]], list[
 			frappe.throw(_("Mapped Purchase Receipt contains an item outside Purchase Order {0}.").format(po.name))
 		preview, row_blockers = _receipt_item_preview(row)
 		warehouse = str(preview.get("warehouse") or "").strip()
-		if not warehouse:
-			row_blockers.append({"key": "missing_warehouse", "label": _("Receiving Stock Location is required"), "item_code": preview.get("item_code") or ""})
-		else:
-			warehouse_company = str(frappe.db.get_value("Warehouse", warehouse, "company") or "")
-			if warehouse_company != str(po.company or ""):
-				frappe.throw(_("Receiving Stock Location {0} does not belong to Company {1}.").format(warehouse, po.company))
+		warehouse_blocker = _warehouse_scope_blocker(
+			warehouse=warehouse,
+			company=str(po.company or ""),
+			branch=branch,
+			item_code=preview.get("item_code") or "",
+		)
+		if warehouse_blocker:
+			row_blockers.append(warehouse_blocker)
 		items.append(preview)
 		blockers.extend(row_blockers)
 
@@ -272,12 +322,14 @@ def _validate_standard_receipt_draft(
 			blockers.append({"key": "multiple_purchase_orders", "label": _("Draft Purchase Receipt contains an item outside the selected Purchase Order")})
 		preview, row_blockers = _receipt_item_preview(row)
 		warehouse = str(preview.get("warehouse") or "").strip()
-		if not warehouse:
-			row_blockers.append({"key": "missing_warehouse", "label": _("Receiving Stock Location is required"), "item_code": preview.get("item_code") or ""})
-		else:
-			warehouse_company = str(frappe.db.get_value("Warehouse", warehouse, "company") or "")
-			if warehouse_company != str(po.company or ""):
-				row_blockers.append({"key": "warehouse_company", "label": _("Receiving Stock Location belongs to another Company"), "item_code": preview.get("item_code") or ""})
+		warehouse_blocker = _warehouse_scope_blocker(
+			warehouse=warehouse,
+			company=str(po.company or ""),
+			branch=branch,
+			item_code=preview.get("item_code") or "",
+		)
+		if warehouse_blocker:
+			row_blockers.append(warehouse_blocker)
 		items.append(preview)
 		blockers.extend(row_blockers)
 
