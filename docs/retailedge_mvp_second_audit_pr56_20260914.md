@@ -74,7 +74,9 @@ These checks supplement, rather than replace, the existing one/multiple/zero Bra
 
 The first gap-closure browser run proved that the manager login had no initial Company context: Frappe's own session-default endpoint returned a null Company, so the Business Hub correctly did not request its scoped snapshot. The multi-Branch fixture still worked because Branch Assignment supplied its context.
 
-The RC3 fixture now gives the manager one primary Lagos Branch Assignment to establish deterministic initial Company/Branch context. This does **not** restrict the manager's effective operational branch scope because `RetailEdgeManager` remains a global-branch-access role; the assignment is only the initial operating-context anchor for deterministic browser acceptance.
+The RC3 fixture gives the manager one primary Lagos Branch Assignment to establish deterministic initial Company/Branch context. Exact-head revalidation then exposed the remaining resolver defect: `_resolve_fallback_context` skipped Branch Assignment anchoring for global-access roles, so the Business Hub context reported `operating_context_source = branch_assignment` while still returning an empty Company and Branch.
+
+The resolver now permits a deterministic primary/sole Branch Assignment to supply the **initial** Company/Branch anchor for global RetailEdge managers. This does **not** restrict the manager's effective operational branch scope: `get_operational_branch_scope` still takes the global-access path first and remains unrestricted. Restricted users retain Branch Assignment authority and the restricted-zero fail-closed case.
 
 ### P1-D — canonical RetailEdgeManager Business Hub Company access — CLOSED
 
