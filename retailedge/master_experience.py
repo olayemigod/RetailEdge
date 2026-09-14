@@ -695,11 +695,9 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	except Exception:
 		branches = []
 	try:
-		branch_scope = get_operational_branch_scope(company) if company else {
-			"restricted": False,
-			"allowed_branches": [],
-			"source": "no_company",
-		}
+		# Resolve scope even when Company is blank. Assignment history can represent
+		# an explicit restricted-zero state and must not be silently widened.
+		branch_scope = get_operational_branch_scope(company)
 	except Exception:
 		branch_scope = {
 			"restricted": True,
