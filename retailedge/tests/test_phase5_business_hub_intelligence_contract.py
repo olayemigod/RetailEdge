@@ -18,6 +18,7 @@ DESTINATIONS = (
 	ROOT / "public/js/stock_position/StockPositionReport.vue",
 	ROOT / "public/js/branch_performance_dashboard/BranchPerformanceDashboard.vue",
 	ROOT / "public/js/bank_matching_edgesuite_workspace.js",
+	ROOT / "public/js/profitability_intelligence/ProfitabilityIntelligence.vue",
 )
 
 
