@@ -785,6 +785,7 @@ export default {
 			if (shortcut.kind === "page" && shortcut.target) {
 				const currentOnly = shortcut.target === "professional-purchasing";
 				const filters = this.homeRouteFilters({ time_basis: currentOnly ? "current" : "period" });
+				if (shortcut.target === "professional-purchasing") filters.retailedge_attention = "ready_to_receive";
 				this.openHomeRoute(shortcut.target, filters);
 			}
 		},

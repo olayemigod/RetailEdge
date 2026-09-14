@@ -394,6 +394,10 @@ export default {
 	mounted() {
 		window.addEventListener("retailedge-professional-purchasing-page-show", this._onPageShow);
 		window.addEventListener(LANDED_COST_HANDOFF_EVENT, this._onLandedCostHandoff);
+		const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("professional-purchasing") || {};
+		if (hubHandoff.company) this.filters.company = hubHandoff.company;
+		if (hubHandoff.branch) this.filters.branch = hubHandoff.branch;
+		if (hubHandoff.retailedge_attention === "ready_to_receive") this.attentionFilter = "ready_to_receive";
 		if (this.edgeUIValid) this.loadWorkspace();
 	},
 	beforeUnmount() {

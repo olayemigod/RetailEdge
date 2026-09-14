@@ -60,6 +60,7 @@ test("Business Hub QA regression: Receive Stock keeps Company and Branch context
 		expect(result.handoff?.target).toBe("professional-purchasing");
 		expect(result.handoff?.filters?.company).toBeTruthy();
 		expect(result.handoff?.filters?.branch).toBeTruthy();
+		expect(result.handoff?.filters?.retailedge_attention).toBe("ready_to_receive");
 		expect(result.handoff?.filters?.from_date).toBeUndefined();
 		expect(result.handoff?.filters?.to_date).toBeUndefined();
 	} finally {
@@ -156,6 +157,25 @@ test("Business Hub QA regression: manager Record Expense stays in EdgeSuite Busi
 		});
 		await expect(page.getByRole("heading", { name: "New Business Expense", exact: true })).toBeVisible();
 		await expect(page.locator(".edge-app-shell").first()).toBeAttached();
+	} finally {
+		await context.close();
+	}
+});
+
+
+test("Business Hub QA regression: Receive Stock lands on Ready to Receive purchasing view", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		await page.getByRole("button", { name: /Receive Stock/i }).click();
+		await page.getByRole("heading", { name: "Professional Purchasing", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+		const ready = page.getByRole("button", { name: /Ready to Receive/i }).first();
+		await expect(ready).toHaveClass(/attention-chip--active/);
 	} finally {
 		await context.close();
 	}
