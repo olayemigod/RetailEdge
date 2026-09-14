@@ -12,6 +12,7 @@ from retailedge.professional_print_formats import (
 	MANAGED_PRINT_FORMATS,
 	PROFESSIONAL_PRINT_FORMATS,
 	RECEIPT_PRINT_FORMATS,
+	SALES_INVOICE_STYLE_FORMATS,
 	_format_values,
 	get_preferred_print_format,
 )
@@ -34,6 +35,30 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		for doctype, name in catalog.items():
 			self.assertEqual(get_preferred_print_format(doctype), name)
 			self.assertNotIn("RetailEdge", name)
+
+	def test_sales_invoice_template_pack_exposes_five_distinct_selectable_styles(self):
+		names = [row["name"] for row in SALES_INVOICE_STYLE_FORMATS]
+		self.assertEqual(
+			names,
+			["Invoice Classic", "Invoice Modern", "Invoice Compact", "Invoice Minimal", "Invoice Executive"],
+		)
+		self.assertEqual(len({ _format_values(row)["css"] for row in SALES_INVOICE_STYLE_FORMATS }), 5)
+		for row in SALES_INVOICE_STYLE_FORMATS:
+			self.assertEqual(row["doctype"], "Sales Invoice")
+			self.assertNotIn("RetailEdge", row["name"])
+			self.assertNotIn("ProcessEdge", row["name"])
+
+	def test_sales_invoice_has_at_least_five_document_templates_plus_thermal_receipts(self):
+		document_templates = [
+			row for row in MANAGED_PRINT_FORMATS
+			if row["doctype"] == "Sales Invoice" and not row["kind"].startswith("receipt-")
+		]
+		receipts = [
+			row for row in MANAGED_PRINT_FORMATS
+			if row["doctype"] == "Sales Invoice" and row["kind"].startswith("receipt-")
+		]
+		self.assertGreaterEqual(len(document_templates), 5)
+		self.assertEqual({row["kind"] for row in receipts}, {"receipt-80", "receipt-58"})
 
 	def test_receipt_catalog_covers_sales_and_pos_in_80mm_and_58mm(self):
 		catalog = {(row["doctype"], row["kind"]): row["name"] for row in RECEIPT_PRINT_FORMATS}
@@ -142,6 +167,7 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		patches = (APP_ROOT / "patches.txt").read_text()
 		source = (APP_ROOT / "professional_print_formats.py").read_text()
 		self.assertIn("retailedge.patches.install_professional_print_formats", patches)
+		self.assertIn("retailedge.patches.install_output_print_template_pack_v3", patches)
 		self.assertIn("if not owned:", source)
 		self.assertIn("Skipping non-managed Print Format name collision", source)
 		self.assertNotIn("frappe.db.delete", source)
