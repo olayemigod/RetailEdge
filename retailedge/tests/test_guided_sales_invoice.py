@@ -284,6 +284,45 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertNotIn("frappe.new_doc", component)
 		self.assertNotIn("frappe.db.insert", component)
 
+	def test_make_sale_update_stock_defaults_on_and_is_settings_controlled(self):
+		backend = (APP_ROOT / "guided_sales_invoice.py").read_text()
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text()
+		settings = (
+			APP_ROOT
+			/ "retailedge"
+			/ "doctype"
+			/ "retailedge_settings"
+			/ "retailedge_settings.json"
+		).read_text()
+		self.assertIn('"update_stock": 1', backend)
+		self.assertIn("allow_guided_sales_update_stock_edit", backend)
+		self.assertIn("else 1", backend)
+		self.assertIn("update_stock: 1", component)
+		self.assertIn(':disabled="!canEditUpdateStock"', component)
+		self.assertIn("transactionContextReady()", component)
+		self.assertIn("requiresBranchSelection()", component)
+		self.assertIn('"fieldname": "allow_guided_sales_update_stock_edit"', settings)
+		self.assertIn('"default": "0"', settings)
+
+	def test_make_sale_branch_and_stock_location_are_ui_gated_before_save(self):
+		component = (
+			APP_ROOT
+			/ "public"
+			/ "js"
+			/ "retailedge_business_hub"
+			/ "SimpleSalesInvoiceDialog.vue"
+		).read_text()
+		self.assertIn("Only enabled Branch Setup entries for the active Company are shown.", component)
+		self.assertIn(':disabled="requiresBranchSelection && !values.branch"', component)
+		self.assertIn(':disabled="saving || loading || !transactionContextReady"', component)
+		self.assertIn("Choose a Branch before selecting the Stock Location.", component)
+
 	def test_limits_are_deliberately_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
 		self.assertEqual(MAX_ITEMS, 50)
