@@ -52,6 +52,7 @@ class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 
 	def test_business_hub_keeps_shared_edgesuite_aliases_instead_of_private_fixed_palette(self):
 		component = BUSINESS_HUB.read_text(encoding="utf-8")
+		identity = (APP_ROOT / "public" / "css" / "retailedge_product_identity.css").read_text(encoding="utf-8")
 		for expected in (
 			"var(--edge-border",
 			"var(--edge-surface",
@@ -59,6 +60,15 @@ class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 			"var(--edge-primary",
 		):
 			self.assertIn(expected, component)
+		for expected in (
+			"--retailedge-brand: var(--edge-color-brand-600",
+			"--retailedge-surface: var(--edge-color-surface",
+			"--retailedge-ink: var(--edge-color-ink-950",
+			"--edge-surface: var(--edge-color-surface",
+			"--edge-text: var(--edge-color-ink-950",
+		):
+			self.assertIn(expected, identity)
+		self.assertNotIn("--edge-color-brand-600: var(--retailedge-brand)", identity)
 
 	def test_c22_integrity_page_uses_edgesuite_shell_and_semantic_theme_aliases(self):
 		component = STOCK_ACCOUNTING_INTEGRITY.read_text(encoding="utf-8")
