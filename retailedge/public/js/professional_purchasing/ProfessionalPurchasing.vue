@@ -324,6 +324,7 @@ const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
 const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
 const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
 const OPEN_PURCHASE_RECEIPT_HISTORY_EVENT = "retailedge-open-professional-purchase-receipt-history";
+const LANDED_COST_HANDOFF_EVENT = "retailedge-professional-purchasing-landed-cost-handoff";
 const RETURN_CAPABILITY_METHOD = "retailedge.professional_purchasing.get_purchase_return_capability";
 const RETURN_SEARCH_METHOD = "retailedge.professional_purchasing.search_purchase_return_sources";
 const PREPARE_PURCHASE_RETURN_METHOD = "retailedge.professional_purchasing.prepare_purchase_return_draft";
@@ -383,9 +384,22 @@ export default {
 		sortedMaterialRequests() { return sortedCopy(this.materialRequests, this.materialSort); },
 		sortedDraftPurchaseInvoices() { return sortedCopy(this.draftPurchaseInvoices, this.draftInvoiceSort); },
 	},
-	created() { const components = runtimeComponents(); this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]); this.edgeUIValid = this.missingComponents.length === 0; this._onPageShow = () => this.loadWorkspace(); },
-	mounted() { window.addEventListener("retailedge-professional-purchasing-page-show", this._onPageShow); if (this.edgeUIValid) this.loadWorkspace(); },
-	beforeUnmount() { window.removeEventListener("retailedge-professional-purchasing-page-show", this._onPageShow); },
+	created() {
+		const components = runtimeComponents();
+		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
+		this.edgeUIValid = this.missingComponents.length === 0;
+		this._onPageShow = () => this.loadWorkspace();
+		this._onLandedCostHandoff = (event) => this.handleLandedCostHandoff(event?.detail || {});
+	},
+	mounted() {
+		window.addEventListener("retailedge-professional-purchasing-page-show", this._onPageShow);
+		window.addEventListener(LANDED_COST_HANDOFF_EVENT, this._onLandedCostHandoff);
+		if (this.edgeUIValid) this.loadWorkspace();
+	},
+	beforeUnmount() {
+		window.removeEventListener("retailedge-professional-purchasing-page-show", this._onPageShow);
+		window.removeEventListener(LANDED_COST_HANDOFF_EVENT, this._onLandedCostHandoff);
+	},
 	methods: {
 		async loadWorkspace() {
 			if (this.loading) return; this.loading = true; this.error = "";
@@ -434,6 +448,15 @@ export default {
 		async handlePurchaseInvoiceCompletionCompleted() {
 			this.closePurchaseInvoiceCompletion();
 			await this.refreshDraftPurchaseInvoices();
+		},
+		handleLandedCostHandoff(handoff) {
+			const sourceName = String(handoff?.source_name || "").trim();
+			if (!handoff?.available || handoff?.source_type !== "purchase_receipt" || !sourceName) return;
+			this.landedCost.sourceType = "purchase_receipt";
+			this.landedCost.source = sourceName;
+			this.clearLandedCostProgress();
+			this.actionError = "";
+			this.actionNotice = `Purchase Receipt ${sourceName} is ready for landed cost review. Add freight, clearing or other eligible charges when applicable.`;
 		},
 		applyLandedCostCapability(capability) {
 			this.landedCostCapability = { ...this.landedCostCapability, ...(capability || {}) };
