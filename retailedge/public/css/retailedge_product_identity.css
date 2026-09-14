@@ -199,6 +199,16 @@ body.edge-suite-product-retailedge .edge-context-chip,
 body.edge-suite-product-retailedge .edge-topbar__brand,
 [data-edge-product="retailedge"] .edge-topbar__brand {
 	min-width: min(22rem, 32vw);
+	max-width: min(28rem, 42vw);
+}
+
+body.edge-suite-product-retailedge .edge-sidebar__brand-copy strong,
+body.edge-suite-product-retailedge .edge-topbar__title-copy strong,
+[data-edge-product="retailedge"] .edge-sidebar__brand-copy strong,
+[data-edge-product="retailedge"] .edge-topbar__title-copy strong {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 body.edge-suite-product-retailedge .edge-topbar__mark.edge-identity-mark--image,
