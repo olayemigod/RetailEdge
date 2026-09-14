@@ -5,8 +5,18 @@ from typing import Any
 import frappe
 
 # Keep the legacy marker only for recognising formats installed by older releases.
-LEGACY_MANAGED_MARKER = "<!-- retailedge-managed-print-format:v2 -->"
+LEGACY_MANAGED_MARKERS = (
+	"<!-- retailedge-managed-professional-print-format:v1 -->",
+	"<!-- retailedge-managed-print-format:v2 -->",
+)
 MANAGED_MARKER = "<!-- managed-business-print-format:v3 -->"
+
+LEGACY_PRINT_FORMAT_ALIASES: tuple[str, ...] = (
+	"RetailEdge Professional Quotation",
+	"RetailEdge Professional Sales Order",
+	"RetailEdge Professional Delivery Note",
+	"RetailEdge Professional Sales Invoice",
+)
 
 PROFESSIONAL_PRINT_FORMATS: tuple[dict[str, str], ...] = (
 	{"name": "Professional Quotation", "doctype": "Quotation", "heading": "Quotation", "kind": "document"},
@@ -204,6 +214,15 @@ def _format_values(spec: dict[str, str]) -> dict[str, Any]:
 	}
 
 
+def _is_managed_print_format(doc) -> bool:
+	html = str(doc.html or "")
+	return (
+		str(doc.module or "") == "RetailEdge"
+		or MANAGED_MARKER in html
+		or any(marker in html for marker in LEGACY_MANAGED_MARKERS)
+	)
+
+
 def ensure_retailedge_professional_print_formats() -> dict[str, int]:
 	"""Idempotently install managed formats without replacing user-owned formats."""
 	result = {"created": 0, "updated": 0, "skipped": 0}
@@ -211,6 +230,19 @@ def ensure_retailedge_professional_print_formats() -> dict[str, int]:
 		return result
 
 	logger = frappe.logger("retailedge")
+	for legacy_name in LEGACY_PRINT_FORMAT_ALIASES:
+		if not frappe.db.exists("Print Format", legacy_name):
+			continue
+		legacy_doc = frappe.get_doc("Print Format", legacy_name)
+		if not _is_managed_print_format(legacy_doc):
+			logger.warning("Skipping non-managed legacy Print Format collision: %s", legacy_name)
+			result["skipped"] += 1
+			continue
+		if not int(legacy_doc.disabled or 0):
+			legacy_doc.disabled = 1
+			legacy_doc.save()
+			result["updated"] += 1
+
 	for spec in MANAGED_PRINT_FORMATS:
 		if not frappe.db.exists("DocType", spec["doctype"]):
 			result["skipped"] += 1
@@ -225,11 +257,7 @@ def ensure_retailedge_professional_print_formats() -> dict[str, int]:
 			continue
 
 		doc = frappe.get_doc("Print Format", name)
-		owned = (
-			str(doc.module or "") == "RetailEdge"
-			or MANAGED_MARKER in str(doc.html or "")
-			or LEGACY_MANAGED_MARKER in str(doc.html or "")
-		)
+		owned = _is_managed_print_format(doc)
 		if not owned:
 			logger.warning("Skipping non-managed Print Format name collision: %s", name)
 			result["skipped"] += 1
