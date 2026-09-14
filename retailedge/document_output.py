@@ -205,6 +205,7 @@ def _document_summary(definition: dict[str, Any], doc) -> dict[str, Any]:
 		"company": doc.get("company") if doc.meta.has_field("company") else "",
 		"branch": branch,
 		"status": doc.get("status") if doc.meta.has_field("status") else "",
+		"docstatus": cint(doc.docstatus),
 		"currency": doc.get("currency") if doc.meta.has_field("currency") else "",
 		"grand_total": flt(doc.get("grand_total")) if doc.meta.has_field("grand_total") else 0,
 		"contact_email": doc.get("contact_email") if doc.meta.has_field("contact_email") else "",
@@ -277,6 +278,7 @@ def get_output_document_details(document: str, name: str) -> dict[str, Any]:
 		{
 			"can_print": _permission(doctype, "print", name=name),
 			"can_email": _permission(doctype, "email", name=name),
+			"can_write": _permission(doctype, "write", name=name),
 			"print_formats": formats,
 			"recommended_print_format": preferred if preferred in formats else "Standard",
 			"default_email_subject": share_copy["subject"],
