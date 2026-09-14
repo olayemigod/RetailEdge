@@ -69,7 +69,7 @@
 								label="Period"
 								@update:modelValue="handleHomePeriodChange"
 							/>
-							<span v-if="homePeriod.from_date" class="home-as-of">{{ homePeriod.from_date }} – {{ homePeriod.to_date }}</span>
+							<span v-if="homePeriod.from_date" class="home-as-of">{{ formatDisplayDate(homePeriod.from_date) }} – {{ formatDisplayDate(homePeriod.to_date) }}</span>
 						</div>
 					</div>
 					<EdgeLoadingState v-if="homeLoading" message="Loading business performance..." :skeleton="true" />
@@ -695,6 +695,10 @@ export default {
 		homeSection(key) {
 			return this.homeSnapshot.sections?.[key] || { available: false, label: key, summary: [], route: "", reason: "" };
 		},
+		formatDisplayDate(value) {
+			if (!value) return "";
+			return frappe.datetime?.str_to_user?.(value) || String(value);
+		},
 		formatHomeValue(card) {
 			const value = card?.value ?? 0;
 			const datatype = card?.datatype || card?.type || "Data";
@@ -783,7 +787,9 @@ export default {
 				return;
 			}
 			if (shortcut.kind === "page" && shortcut.target) {
-				frappe.set_route(shortcut.target);
+				const currentOnly = shortcut.target === "professional-purchasing";
+				const filters = this.homeRouteFilters({ time_basis: currentOnly ? "current" : "period" });
+				this.openHomeRoute(shortcut.target, filters);
 			}
 		},
 		runQuickAction(action) {

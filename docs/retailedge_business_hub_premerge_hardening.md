@@ -1,6 +1,6 @@
 # RetailEdge Business Hub Pre-Merge Hardening
 
-Status: active  
+Status: **QA IN PROGRESS — Business Hub not yet accepted**  
 Branch: `qa/retailedge-visual-identity`  
 PR: #56  
 Release target: RetailEdge 1.0
@@ -81,9 +81,15 @@ Scope:
 - Propagate Business Hub period/scope consistently.
 - Avoid decorative KPIs that do not lead to an action or decision.
 
-## Phase 6 — Second MVP audit and release gate
+## Current QA gate
 
-Status: pending.
+Status: **Business Hub QA ongoing. Full MVP QA and RC3 are not yet started/accepted from this line.**
+
+Automated CI/Playwright results are regression evidence only. They do not close Business Hub QA.
+
+## Phase 6 — Full MVP QA and release gate
+
+Status: pending until Business Hub QA is accepted.
 
 Sequence:
 1. Run focused tests for Phases 1–5.

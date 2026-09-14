@@ -2,7 +2,7 @@ const { defineConfig } = require("@playwright/test");
 
 module.exports = defineConfig({
 	testDir: __dirname,
-	testMatch: /retailedge_(?:mvp_smoke|rc3_acceptance)\.spec\.cjs/,
+	testMatch: /retailedge_(?:mvp_smoke|rc3_acceptance|business_hub_qa_regression)\.spec\.cjs/,
 	fullyParallel: false,
 	retries: 0,
 	workers: 1,
@@ -10,9 +10,8 @@ module.exports = defineConfig({
 	expect: { timeout: 15_000 },
 	use: {
 		baseURL: process.env.RETAILEDGE_BASE_URL || "http://retail-browser.localhost:8000",
-		// RC3 is a reviewed acceptance gate, not only an automated pass/fail gate.
-		// Preserve successful-run evidence so the exact-head persona journeys can
-		// be inspected independently before the release is promoted.
+		// Preserve browser evidence for regression review. A green automated run is
+		// not Business Hub QA acceptance and must not be promoted to RC3 by itself.
 		trace: "on",
 		screenshot: "on",
 		video: "on",
