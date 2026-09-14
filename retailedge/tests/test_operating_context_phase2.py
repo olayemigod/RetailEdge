@@ -28,7 +28,9 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
-		self.assertNotIn("frappe.get_all(", source)
+		# Unscoped reads are permitted only inside the operating-option resolvers
+		# after RetailEdge has established global or assignment authority.
+		self.assertEqual(source.count("frappe.get_all"), 2)
 		self.assertNotIn("ignore_permissions", source)
 		self.assertNotIn("frappe.db.commit", source)
 
@@ -66,6 +68,41 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		self.assertLess(scope_source.index("if has_global_access:"), scope_source.index("if has_branch_assignments(user=user):"))
 		self.assertIn('"restricted": False', scope_source)
 		self.assertIn('"source": "global"', scope_source)
+
+	def test_global_operating_options_follow_retailedge_authority_without_frappe_link_grants(self):
+		source = self.read("operating_context.py")
+		companies_start = source.index("def _allowed_companies(")
+		companies_end = source.index("\n\ndef _allowed_branches", companies_start)
+		companies_source = source[companies_start:companies_end]
+		for contract in (
+			"global_access = user_has_global_branch_access(user=user)",
+			"reader = frappe.get_all if global_access else frappe.get_list",
+			"if global_access or not assignment_authoritative:",
+		):
+			self.assertIn(contract, companies_source)
+
+		branches_start = source.index("def _allowed_branches(")
+		branches_end = source.index("\n\ndef _assert_company_access", branches_start)
+		branches_source = source[branches_start:branches_end]
+		for contract in (
+			"global_access = user_has_global_branch_access(user=user)",
+			"reader = frappe.get_all if (global_access or assignment_authoritative) else frappe.get_list",
+			"if global_access:",
+			"return permission_visible",
+		):
+			self.assertIn(contract, branches_source)
+
+	def test_non_throwing_context_validation_does_not_leak_frappe_permission_modals(self):
+		source = self.read("operating_context.py")
+		validation_start = source.index("def _validate_context(")
+		validation_end = source.index("\n\ndef _get_switch_blockers", validation_start)
+		validation_source = source[validation_start:validation_end]
+		for contract in (
+			'previous_messages = list(getattr(frappe.local, "message_log", []) or []) if not throw else None',
+			"finally:",
+			"frappe.local.message_log = previous_messages",
+		):
+			self.assertIn(contract, validation_source)
 
 	def test_context_preview_does_not_clear_valid_session_context(self):
 		source = self.read("operating_context.py")
