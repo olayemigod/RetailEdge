@@ -211,3 +211,24 @@ test("Business Hub QA regression: period change refreshes selected-period views 
 		await context.close();
 	}
 });
+
+
+test("Business Hub QA regression: performance KPI card opens its scoped destination", async ({ browser }) => {
+	const context = await browser.newContext({ baseURL: BASE_URL });
+	await login(context);
+	const page = await context.newPage();
+	try {
+		await openHub(page);
+		const salesCard = page.locator(".home-kpi-card").filter({ hasText: "Sales" }).first();
+		await expect(salesCard).toBeVisible();
+		const result = await captureRoute(page, () => salesCard.click());
+		expect(result.route).toEqual(["sales-invoice-register"]);
+		expect(result.handoff?.target).toBe("sales-invoice-register");
+		expect(result.handoff?.filters?.company).toBeTruthy();
+		expect(result.handoff?.filters?.branch).toBeTruthy();
+		expect(result.handoff?.filters?.from_date).toBeTruthy();
+		expect(result.handoff?.filters?.to_date).toBeTruthy();
+	} finally {
+		await context.close();
+	}
+});
