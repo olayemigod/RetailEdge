@@ -71,7 +71,7 @@ Scope:
 
 ## Phase 5 — Intelligent Hub expansion
 
-Status: pending.
+Status: implemented; exact-head automated validation and retail.local visual replay pending.
 
 Scope:
 - Expand actionable indices for sales, cash, stock, expenses, receivables, payables, branch performance and banking.
