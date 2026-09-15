@@ -102,5 +102,80 @@ def test_sidebar_and_waffle_use_managed_settings_and_review_pages():
         ("Expense Review", "Page", "expense-review"),
         ("Cash Shift Verification", "Page", "cash-shift-verification"),
         ("Banking Readiness", "Page", "banking-readiness"),
+        ("POS Closing Variance & Expenses", "Page", "pos-closing-variance"),
+        ("Unmatched Bank Transactions", "Page", "unmatched-bank-transactions"),
+        ("Unmatched Bank Payments", "Page", "unmatched-bank-payments"),
+        ("Reconciliation Handoff", "Page", "reconciliation-handoff"),
+        ("Daily Sales Audit Register", "Page", "daily-sales-audit-register"),
     ):
         assert item in review
+
+    legacy_report_targets = {
+        "POS Closing Variance vs Expenses",
+        "RetailEdge Unmatched Bank Transactions",
+        "RetailEdge Unmatched Bank Payment Events",
+        "RetailEdge Reconciliation Handoff",
+        "RetailEdge Daily Sales Audit Register",
+    }
+    assert not any(
+        item["target_type"] == "Report" and item["target"] in legacy_report_targets
+        for item in groups["review-approvals"]["items"]
+    )
+
+
+def test_remaining_review_reports_use_shared_managed_report_workspace():
+    backend = (ROOT / "managed_review_reports.py").read_text(encoding="utf-8")
+    vue = (
+        ROOT / "public" / "js" / "managed_review_reports" / "ManagedReviewReport.vue"
+    ).read_text(encoding="utf-8")
+    bundle = (ROOT / "public" / "js" / "managed_review_report.bundle.js").read_text(
+        encoding="utf-8"
+    )
+
+    for surface in (
+        "pos-closing-variance",
+        "unmatched-bank-transactions",
+        "unmatched-bank-payments",
+        "reconciliation-handoff",
+        "daily-sales-audit-register",
+    ):
+        assert surface in backend
+        page_folder = surface.replace("-", "_")
+        page_json = (
+            ROOT
+            / "retailedge"
+            / "page"
+            / page_folder
+            / f"{page_folder}.json"
+        )
+        page_js = (
+            ROOT
+            / "retailedge"
+            / "page"
+            / page_folder
+            / f"{page_folder}.js"
+        )
+        assert page_json.exists()
+        assert page_js.exists()
+        assert "managed_review_report.bundle.js" in page_js.read_text(encoding="utf-8")
+
+    for contract in (
+        "run_query_report",
+        "get_operating_context",
+        "get_allowed_operating_branches",
+        "MAX_VISIBLE_ROWS",
+        "search_review_report_options",
+    ):
+        assert contract in backend
+
+    for component in (
+        "<EdgeAppShell",
+        "<EdgeReportShell",
+        "<EdgeLinkField",
+        "<EdgeDropdown",
+        "More filters",
+        "userErrorMessage",
+    ):
+        assert component in vue
+
+    assert "window.mountManagedReviewReport" in bundle
