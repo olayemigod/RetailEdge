@@ -337,7 +337,10 @@ export default {
 			return "Review / Complete";
 		},
 		moreActions(row) {
-			const actions = [];
+			const actions = (Array.isArray(row?.actions) ? row.actions : []).map((action) => ({
+				...action,
+				description: action.description || "Continue with the next permitted ERPNext sales workflow.",
+			}));
 			if (this.canComplete(row)) {
 				actions.push({
 					value: "output",
