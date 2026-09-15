@@ -702,3 +702,32 @@ def get_professional_selling_list(
 			"to_date": to_text,
 		},
 	}
+
+
+@frappe.whitelist()
+def get_professional_selling_record_actions(document: str, name: str) -> dict[str, Any]:
+	"""Resolve permitted next actions for one visible Professional Selling record."""
+	document = str(document or "").strip()
+	name = str(name or "").strip()
+	if not name:
+		frappe.throw(_("Document name is required."))
+
+	result = get_professional_selling_list(
+		document=document,
+		search=name,
+		status="All",
+		start=0,
+		page_length=20,
+	)
+	row = next((row for row in result.get("rows") or [] if str(row.get("name") or "") == name), None)
+	if not row:
+		frappe.throw(
+			_("The selected document is not available in your current Company/Branch context."),
+			frappe.PermissionError,
+		)
+	return {
+		"document": document,
+		"doctype": result.get("doctype"),
+		"name": name,
+		"actions": list(row.get("actions") or []),
+	}
