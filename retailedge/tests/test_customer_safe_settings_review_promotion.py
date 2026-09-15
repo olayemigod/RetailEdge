@@ -10,7 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_customer_facing_error_helper_never_returns_raw_tracebacks():
     source = (ROOT / "public" / "js" / "retailedge.js").read_text(encoding="utf-8")
-    business = (ROOT / "public" / "js" / "business_expenses" / "BusinessExpenses.vue").read_text(encoding="utf-8")
+    business = (
+        ROOT / "public" / "js" / "business_expenses" / "BusinessExpenses.vue"
+    ).read_text(encoding="utf-8")
 
     for contract in (
         "window.retailedge.userErrorMessage",
@@ -26,7 +28,9 @@ def test_customer_facing_error_helper_never_returns_raw_tracebacks():
 
 def test_business_expenses_disabled_state_is_normal_ui_not_an_exception():
     backend = (ROOT / "business_expense.py").read_text(encoding="utf-8")
-    frontend = (ROOT / "public" / "js" / "business_expenses" / "BusinessExpenses.vue").read_text(encoding="utf-8")
+    frontend = (
+        ROOT / "public" / "js" / "business_expenses" / "BusinessExpenses.vue"
+    ).read_text(encoding="utf-8")
 
     context_start = backend.index("def get_business_expense_context(")
     context_end = backend.index("\n\n@frappe.whitelist()", context_start)
@@ -42,8 +46,12 @@ def test_business_expenses_disabled_state_is_normal_ui_not_an_exception():
 
 
 def test_settings_are_managed_in_horizontal_tab_workspace():
-    backend = (ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.py").read_text(encoding="utf-8")
-    page = (ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.js").read_text(encoding="utf-8")
+    backend = (
+        ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.py"
+    ).read_text(encoding="utf-8")
+    page = (
+        ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.js"
+    ).read_text(encoding="utf-8")
     vue = (ROOT / "public" / "js" / "retail_settings" / "RetailSettings.vue").read_text(encoding="utf-8")
 
     for key in (
@@ -81,7 +89,10 @@ def test_sidebar_and_waffle_use_managed_settings_and_review_pages():
     assert ("Settings", "Page", "retail-settings") in setup
     assert ("Settings", "DocType", "RetailEdge Settings") not in setup
 
-    review = {(item["label"], item["target_type"], item["target"]) for item in groups["review-approvals"]["items"]}
+    review = {
+        (item["label"], item["target_type"], item["target"])
+        for item in groups["review-approvals"]["items"]
+    }
     for item in (
         ("Business Control Centre", "Page", "business-control-center"),
         ("Action Centre", "Page", "action-center"),
