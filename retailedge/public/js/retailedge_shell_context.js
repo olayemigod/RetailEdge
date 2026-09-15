@@ -108,12 +108,30 @@
 		}
 	}
 
+	function ensureRetailEdgeBrand(shell) {
+		const brand = shell?.querySelector?.(".edge-sidebar__brand");
+		if (!brand) return;
+		let copy = brand.querySelector(".edge-sidebar__brand-copy");
+		if (!copy) {
+			copy = document.createElement("span");
+			copy.className = "edge-sidebar__brand-copy retailedge-sidebar-brand-fallback";
+			brand.appendChild(copy);
+		}
+		let title = copy.querySelector("strong");
+		if (!title) {
+			title = document.createElement("strong");
+			copy.prepend(title);
+		}
+		if (!String(title.textContent || "").trim()) title.textContent = "RetailEdge";
+	}
+
 	function ensureShell(shell) {
 		if (!shell?.isConnected) {
 			cleanup(shell);
 			return;
 		}
 
+		ensureRetailEdgeBrand(shell);
 		const edge = runtime();
 		const Dropdown = edge?.components?.EdgeDropdown;
 		if (!edge?.createEdgeApp || !Dropdown) return;
