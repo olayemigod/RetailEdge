@@ -1,5 +1,5 @@
 app_name = "retailedge"
-app_title = "ProcessEdge Retail"
+app_title = "PEdge Retail"
 app_publisher = "ProcessEdge Solutions"
 app_description = "Retail operations, POS control, sales audit, payment verification, branch workflows, and retail intelligence for ERPNext/POSNext."
 app_email = "support@processedge.com.ng"
@@ -18,9 +18,9 @@ required_apps = ["edgesuite_ui"]
 add_to_apps_screen = [
 	{
 		"name": "retailedge",
-		"logo": "/assets/retailedge/images/processedge_retail/processedge-retail-mark.svg",
-		"title": "ProcessEdge Retail",
-		"route": "/app/retailedge-business-hub",
+		"logo": "/assets/retailedge/images/processedge_retail/pedge-retail-app-icon.png",
+		"title": "PEdge Retail",
+		"route": "/desk/retailedge-business-hub",
 	}
 ]
 
@@ -240,6 +240,7 @@ after_migrate = [
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.customer_project_updates.ensure_customer_project_update_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
+	"retailedge.desktop_identity.sync_retailedge_desktop_identity",
 ]
 boot_session = "retailedge.boot.boot_session"
 
