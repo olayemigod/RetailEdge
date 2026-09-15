@@ -125,9 +125,8 @@ def test_completion_dialog_uses_only_server_authoritative_actions():
 		"expected_workflow_state",
 		"Print",
 		"PDF",
-		"Create Sales Order",
-		"Create Sales Invoice",
-		"Make Payment",
+		"get_professional_selling_record_actions",
+		"completedResult.next_actions",
 		'emitNextAction(action)',
 	):
 		assert contract in source
