@@ -69,10 +69,12 @@ def test_shared_shell_receives_company_identity_and_permission_safe_branch_switc
         "active_branch",
         "branch_options",
         "can_switch_branch",
-        "get_allowed_operating_branches",
+        "get_shell_identity",
     ):
         assert contract in boot
 
+    assert "from retailedge.company_profile import get_shell_identity" in boot
+    assert "payload = get_shell_identity()" in boot
     assert "/assets/retailedge/js/retailedge_shell_context.js" in hooks
     assert 'const PRODUCT_SELECTOR = ".edge-app-shell[data-edge-product]"' in shell_context
     assert '.toLowerCase() === "retailedge"' in shell_context
