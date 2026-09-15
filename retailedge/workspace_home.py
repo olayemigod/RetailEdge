@@ -263,8 +263,8 @@ def build_home_workspace_content(workspace_data: dict, check_dependencies: bool 
 			"type": "header",
 			"data": {
 				"text": (
-					'<div class="retailedge-home-title"><span>RetailEdge</span>'
-					"<small>Business operations, controls and insights</small></div>"
+					'<div class="retailedge-home-title"><span>ProcessEdge Retail</span>'
+					"<small>Structured for Scale.</small></div>"
 				),
 				"col": 12,
 			},
