@@ -99,6 +99,22 @@ class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, component)
 
+	def test_business_hub_identity_layer_has_no_hardcoded_light_dark_contrast_traps(self):
+		css = IDENTITY_CSS.read_text(encoding="utf-8")
+		for expected in (
+			"linear-gradient(180deg, var(--edge-color-surface), var(--edge-color-surface-muted))",
+			"color: var(--edge-color-ink-950);",
+			"background: color-mix(in srgb, var(--edge-color-brand-600) 16%, var(--edge-color-surface));",
+			":root[data-edge-appearance=\"dark\"] body.edge-suite-product-retailedge .retailedge-business-hub .hub-banner",
+		):
+			self.assertIn(expected, css)
+
+		for forbidden in (
+			"linear-gradient(180deg, #fff, #f9fbfc)",
+			"background: var(--retailedge-ink);",
+		):
+			self.assertNotIn(forbidden, css)
+
 	def test_c22_integrity_page_uses_edgesuite_shell_and_semantic_theme_aliases(self):
 		component = STOCK_ACCOUNTING_INTEGRITY.read_text(encoding="utf-8")
 		for expected in (
