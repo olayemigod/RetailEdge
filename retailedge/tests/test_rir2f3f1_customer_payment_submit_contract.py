@@ -51,7 +51,7 @@ def test_standard_shape_excludes_supplier_pay_transfer_multicurrency_and_complex
 	assert "Pay or Internal Transfer" in source
 	assert "Multi-currency Payment Entries require Advanced ERPNext review" in source
 	assert "Payments allocated to multiple documents require Advanced ERPNext review" in source
-	assert "Only a single Sales Invoice allocation is supported" in source
+	assert "Only a single Sales Invoice or Sales Order allocation is supported by standard EdgeSuite submission" in source
 	assert "Return Sales Invoices require Advanced ERPNext review" in source
 	assert "Payments with deductions or exchange differences require Advanced ERPNext review" in source
 	assert "Separate party-account advances require Advanced ERPNext review" in source
