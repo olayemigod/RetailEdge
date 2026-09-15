@@ -112,6 +112,13 @@ SURFACES: dict[str, dict[str, Any]] = {
 	},
 }
 
+ALLOWED_LINK_DOCTYPES = {
+	field["options"]
+	for surface in SURFACES.values()
+	for field in surface["filters"]
+	if field.get("fieldtype") == "Link" and field.get("options")
+}
+
 
 def _surface(key: str) -> dict[str, Any]:
 	key = str(key or "").strip()
@@ -198,6 +205,8 @@ def run_review_report(surface_key: str, filters: dict[str, Any] | str | None = N
 	for card in result.get("report_summary") or result.get("summary") or []:
 		card = dict(card)
 		card["label"] = _customer_copy(card.get("label"))
+		card["datatype"] = card.get("datatype") or card.get("type") or "Data"
+		card["type"] = card.get("type") or card["datatype"]
 		summary.append(card)
 	return {
 		"columns": columns,
@@ -218,6 +227,8 @@ def search_review_report_options(
 	doctype = str(doctype or "").strip()
 	txt = str(txt or "").strip()
 	company = str(company or "").strip()
+	if doctype not in ALLOWED_LINK_DOCTYPES:
+		frappe.throw(_("Unsupported review filter search."), frappe.PermissionError)
 	if doctype == "Branch":
 		branches = get_allowed_operating_branches(company=company) if company else []
 		return [
