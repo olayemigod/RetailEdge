@@ -452,22 +452,9 @@ def _validate_context(*, company: str, branch: str, user: str, throw: bool) -> d
 		if not validated.get("allowed"):
 			return validated
 
-		pos_state = resolve_branch_pos_requirement(
-			company=validated["company"],
-			branch=validated["branch"],
-			user=user,
-		)
-		if pos_state.get("pos_required") and not pos_state.get("pos_ready"):
-			if throw:
-				frappe.throw(
-					pos_state.get("pos_message") or _("A valid POS Profile is required for this Branch.")
-				)
-			return {
-				"allowed": False,
-				"company": validated["company"],
-				"branch": validated["branch"],
-				"reason": "pos_profile_required",
-			}
+		# Operating Company/Branch selection is a general business context, not a POS
+		# entitlement gate. POS readiness is still exposed by _build_context() for
+		# guidance, but it is enforced only when POS is actually launched.
 		return validated
 	finally:
 		if previous_messages is not None:
