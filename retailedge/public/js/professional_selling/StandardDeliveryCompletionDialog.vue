@@ -21,7 +21,7 @@
 
 				<div class="delivery-stock-note">
 					<strong>Stock posting</strong>
-					<p>Submitting this Delivery Note uses ERPNext native stock posting. RetailEdge does not create Stock Ledger entries or valuation effects directly.</p>
+					<p>Submitting this Delivery Note uses ERPNext native stock posting. This workflow does not create Stock Ledger entries or valuation effects directly.</p>
 				</div>
 
 				<div v-if="preview.items?.length" class="delivery-completion-items">
