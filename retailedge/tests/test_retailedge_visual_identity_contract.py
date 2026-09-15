@@ -6,7 +6,7 @@ HOOKS = ROOT / "hooks.py"
 IDENTITY_CSS = ROOT / "public" / "css" / "retailedge_product_identity.css"
 NAV_COMPAT_CSS = ROOT / "public" / "css" / "retailedge_navigation_shell_compat.css"
 PRODUCT_MARK = ROOT / "public" / "images" / "processedge_retail" / "processedge-retail-mark.svg"
-APP_ICON = ROOT / "public" / "images" / "processedge_retail" / "pedge-retail-app-icon.png"
+APP_ICON = ROOT / "public" / "images" / "processedge_retail" / "processedge-retail-mark.svg"
 DESKTOP_IDENTITY = ROOT / "desktop_identity.py"
 SHELL_CONTEXT = ROOT / "public" / "js" / "retailedge_shell_context.js"
 COMPANY_PROFILE = ROOT / "company_profile.py"
@@ -151,7 +151,7 @@ def test_approved_processedge_retail_brand_assets_and_visible_identity_are_wired
     assert APP_ICON.exists()
     assert 'app_title = "PEdge Retail"' in hooks
     assert '"title": "PEdge Retail"' in hooks
-    assert "pedge-retail-app-icon.png" in hooks
+    assert "processedge-retail-mark.svg" in hooks
     assert '"route": "/desk/retailedge-business-hub"' in hooks
     assert "retailedge.desktop_identity.sync_retailedge_desktop_identity" in hooks
     assert '"product_code": "retailedge"' in profile
@@ -172,7 +172,7 @@ def test_desktop_launcher_repairs_existing_frappe_desktop_state_without_renaming
     for contract in (
         'DESKTOP_LABEL = "PEdge Retail"',
         'DESKTOP_ROUTE = "/desk/retailedge-business-hub"',
-        'pedge-retail-app-icon.png',
+        'processedge-retail-mark.svg',
         '"Desktop Icon"',
         '"Workspace Sidebar"',
         'WORKSPACE_NAME = "RetailEdge"',
