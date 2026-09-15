@@ -7,7 +7,7 @@
 	<EdgeAppShell
 		v-else
 		product="retailedge"
-		title="RetailEdge"
+		title="ProcessEdge Retail"
 		:tenantName="profile.label || profile.official_name || profile.name"
 		:branchName="operatingContext.branch || 'Company Profile'"
 		:userName="userName"
@@ -20,7 +20,7 @@
 			<EdgePageHeader
 				eyebrow="Administration"
 				title="Company Profile"
-				description="Maintain the business identity RetailEdge uses in its shell and customer-facing experience without exposing accounting-critical Company settings."
+				description="Maintain the business identity ProcessEdge Retail uses in its shell and customer-facing experience without exposing accounting-critical Company settings."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -61,7 +61,7 @@
 						<div>
 							<p class="edge-eyebrow">Owner-managed business profile</p>
 							<h2>Company details</h2>
-							<p>These fields are RetailEdge presentation/contact information. ERPNext Company remains authoritative for accounting and statutory setup.</p>
+							<p>These fields are ProcessEdge Retail presentation/contact information. ERPNext Company remains authoritative for accounting and statutory setup.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--primary" :disabled="!canWrite || savingProfile" @click="saveProfile">
 							{{ savingProfile ? "Saving..." : "Save Company profile" }}
@@ -103,7 +103,7 @@
 						<div>
 							<p class="edge-eyebrow">Business contact location</p>
 							<h2>Company address</h2>
-							<p>This address belongs to the RetailEdge business profile. It does not alter ERPNext accounting configuration.</p>
+							<p>This address belongs to the ProcessEdge Retail business profile. It does not alter ERPNext accounting configuration.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--primary" :disabled="!canManageAddress || savingAddress" @click="saveAddress">
 							{{ savingAddress ? "Saving..." : "Save address" }}
@@ -299,7 +299,7 @@ export default {
 				}, "POST");
 				this.applyProfileResponse(ensured);
 				const profileDocname = ensured.profile?.profile_docname;
-				if (!profileDocname) throw new Error("RetailEdge Company Profile could not be prepared for upload.");
+				if (!profileDocname) throw new Error("ProcessEdge Retail Company Profile could not be prepared for upload.");
 
 				new frappe.ui.FileUploader({
 					doctype: PROFILE_DOCTYPE,
