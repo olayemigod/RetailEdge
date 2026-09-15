@@ -204,22 +204,25 @@ def _customer_copy(value: Any) -> str:
 		.replace("RetailEdge", "")
 		.replace("EdgeSuite UI", "the application")
 		.replace("EdgeSuite", "the application")
+		.replace("ERPNext ", "")
+		.replace("Frappe ", "")
 		.strip()
 	)
 
 
 def _field_schema(df, value: Any) -> dict[str, Any]:
 	fieldtype = df.fieldtype
+	read_only = bool(cint(df.read_only))
 	result = {
 		"fieldname": df.fieldname,
 		"label": _customer_copy(df.label or df.fieldname),
 		"fieldtype": fieldtype,
 		"description": _customer_copy(df.description or ""),
 		"depends_on": df.depends_on or "",
-		"read_only": bool(cint(df.read_only)),
+		"read_only": read_only,
 		"options": [],
 		"link_doctype": "",
-		"value": value,
+		"value": _customer_copy(value) if read_only and isinstance(value, str) else value,
 	}
 	if fieldtype == "Select":
 		result["options"] = [line.strip() for line in str(df.options or "").splitlines() if line.strip()]
