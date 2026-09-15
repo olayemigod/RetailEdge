@@ -59,7 +59,7 @@
 		const mounted = mounts.get(shell);
 		if (!mounted) return;
 		try {
-			mounted.app?.unmount?.();
+			mounted.teardown?.();
 		} catch (_error) {
 			// A detached Desk route should not block cleanup.
 		}
@@ -125,6 +125,147 @@
 		if (!String(title.textContent || "").trim()) title.textContent = "ProcessEdge Retail";
 	}
 
+	function positionBranchPopover(trigger, popover) {
+		if (!trigger?.isConnected || !popover?.isConnected) return;
+		const rect = trigger.getBoundingClientRect();
+		const viewportGap = 12;
+		const width = Math.min(384, Math.max(260, window.innerWidth - viewportGap * 2));
+		popover.style.width = `${width}px`;
+		popover.style.maxWidth = `calc(100vw - ${viewportGap * 2}px)`;
+		let left = rect.left + rect.width / 2 - width / 2;
+		left = Math.max(viewportGap, Math.min(left, window.innerWidth - width - viewportGap));
+		popover.style.left = `${Math.round(left)}px`;
+
+		const measuredHeight = Math.min(popover.scrollHeight || 420, Math.max(220, window.innerHeight - viewportGap * 2));
+		const below = window.innerHeight - rect.bottom - viewportGap;
+		const above = rect.top - viewportGap;
+		if (below >= Math.min(measuredHeight, 320) || below >= above) {
+			popover.style.top = `${Math.round(rect.bottom + 8)}px`;
+			popover.style.bottom = "auto";
+			popover.style.maxHeight = `${Math.max(180, below)}px`;
+		} else {
+			popover.style.top = "auto";
+			popover.style.bottom = `${Math.round(window.innerHeight - rect.top + 8)}px`;
+			popover.style.maxHeight = `${Math.max(180, above)}px`;
+		}
+	}
+
+	function createBranchPopover(shell, host, current, branches, signature) {
+		const activeBranch = String(current.active_branch || "").trim();
+		const canSwitch = Boolean(current.can_switch_branch) && branches.length > 1;
+		const trigger = document.createElement("button");
+		trigger.type = "button";
+		trigger.className = "retailedge-topbar-branch-trigger";
+		trigger.setAttribute("aria-haspopup", "dialog");
+		trigger.setAttribute("aria-expanded", "false");
+		trigger.disabled = !canSwitch;
+		trigger.innerHTML = `
+			<span class="retailedge-topbar-branch-trigger__icon" aria-hidden="true">⌘</span>
+			<span class="retailedge-topbar-branch-trigger__copy">
+				<small>Working Branch</small>
+				<strong></strong>
+			</span>
+			<span class="retailedge-topbar-branch-trigger__chevron" aria-hidden="true">▾</span>
+		`;
+		trigger.querySelector("strong").textContent = activeBranch;
+		host.appendChild(trigger);
+
+		let popover = null;
+		let outsideHandler = null;
+		let keyHandler = null;
+		let positionHandler = null;
+
+		function closePopover() {
+			if (!popover) return;
+			popover.remove();
+			popover = null;
+			trigger.setAttribute("aria-expanded", "false");
+			if (outsideHandler) document.removeEventListener("pointerdown", outsideHandler, true);
+			if (keyHandler) document.removeEventListener("keydown", keyHandler, true);
+			if (positionHandler) {
+				window.removeEventListener("resize", positionHandler);
+				window.removeEventListener("scroll", positionHandler, true);
+			}
+			outsideHandler = null;
+			keyHandler = null;
+			positionHandler = null;
+		}
+
+		function openPopover() {
+			if (!canSwitch || popover) return;
+			popover = document.createElement("section");
+			popover.className = "retailedge-branch-popover";
+			popover.setAttribute("role", "dialog");
+			popover.setAttribute("aria-label", "Choose working branch");
+
+			const header = document.createElement("header");
+			header.className = "retailedge-branch-popover__header";
+			header.innerHTML = "<strong>Working Branch</strong><small>Choose a permitted Branch for this session.</small>";
+			popover.appendChild(header);
+
+			const list = document.createElement("div");
+			list.className = "retailedge-branch-popover__list";
+			list.setAttribute("role", "listbox");
+			for (const branch of branches) {
+				const option = document.createElement("button");
+				option.type = "button";
+				option.className = "retailedge-branch-popover__option";
+				option.setAttribute("role", "option");
+				option.setAttribute("aria-selected", branch === activeBranch ? "true" : "false");
+				if (branch === activeBranch) option.classList.add("is-active");
+				const label = document.createElement("span");
+				label.textContent = branch;
+				const state = document.createElement("small");
+				state.textContent = branch === activeBranch ? "Current" : "Switch";
+				option.append(label, state);
+				option.addEventListener("click", async () => {
+					if (branch === activeBranch) {
+						closePopover();
+						return;
+					}
+					closePopover();
+					await switchBranch({ value: branch });
+				});
+				list.appendChild(option);
+			}
+			popover.appendChild(list);
+			document.body.appendChild(popover);
+			trigger.setAttribute("aria-expanded", "true");
+			positionBranchPopover(trigger, popover);
+
+			outsideHandler = (event) => {
+				if (!popover || popover.contains(event.target) || trigger.contains(event.target)) return;
+				closePopover();
+			};
+			keyHandler = (event) => {
+				if (event.key !== "Escape") return;
+				event.preventDefault();
+				closePopover();
+				trigger.focus();
+			};
+			positionHandler = () => positionBranchPopover(trigger, popover);
+			document.addEventListener("pointerdown", outsideHandler, true);
+			document.addEventListener("keydown", keyHandler, true);
+			window.addEventListener("resize", positionHandler);
+			window.addEventListener("scroll", positionHandler, true);
+			popover.querySelector(".retailedge-branch-popover__option")?.focus?.();
+		}
+
+		trigger.addEventListener("click", () => {
+			if (popover) closePopover();
+			else openPopover();
+		});
+
+		return {
+			host,
+			signature,
+			teardown() {
+				closePopover();
+				trigger.remove();
+			},
+		};
+	}
+
 	function ensureShell(shell) {
 		if (!shell?.isConnected) {
 			cleanup(shell);
@@ -132,10 +273,6 @@
 		}
 
 		ensureRetailEdgeBrand(shell);
-		const edge = runtime();
-		const Dropdown = edge?.components?.EdgeDropdown;
-		if (!edge?.createEdgeApp || !Dropdown) return;
-
 		const topbarContext = shell.querySelector(".edge-topbar-context");
 		if (!topbarContext) return;
 
@@ -156,19 +293,10 @@
 		topbarContext.replaceChildren();
 		const host = document.createElement("div");
 		host.className = HOST_CLASS;
-		host.setAttribute("aria-label", "Working branch");
+		host.setAttribute("aria-label", "Working Branch");
 		topbarContext.appendChild(host);
 
-		const app = edge.createEdgeApp(Dropdown, {
-			modelValue: activeBranch,
-			options: branches,
-			placeholder: "Select branch",
-			disabled: !current.can_switch_branch || branches.length <= 1,
-			class: "retailedge-topbar-branch-dropdown",
-			onChange: switchBranch,
-		});
-		app.mount(host);
-		mounts.set(shell, { app, host, signature });
+		mounts.set(shell, createBranchPopover(shell, host, current, branches, signature));
 	}
 
 	function apply() {
@@ -201,8 +329,7 @@
 	}
 
 	function boot() {
-		const edge = runtime();
-		if (edge?.components?.EdgeDropdown && edge?.createEdgeApp) {
+		if (runtime()) {
 			start();
 			return;
 		}
