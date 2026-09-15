@@ -349,6 +349,13 @@ export default {
 		rowKey(row, index) {
 			return row?.name || row?.row_id || row?.bank_transaction || row?.payment_event || String(index || "");
 		},
+		customerText(value) {
+			return String(value ?? "")
+				.replaceAll("RetailEdge ", "")
+				.replaceAll("RetailEdge", "")
+				.replaceAll("EdgeSuite UI", "the application")
+				.replaceAll("EdgeSuite", "the application");
+		},
 		formatCell(value, column) {
 			if (value === null || value === undefined || value === "") return "—";
 			const fieldtype = column?.fieldtype || column?.type || "Data";
@@ -361,7 +368,7 @@ export default {
 			if (fieldtype === "Date" || fieldtype === "Datetime") {
 				try { return frappe.datetime.str_to_user(String(value)); } catch (_error) { return String(value); }
 			}
-			return String(value);
+			return this.customerText(value);
 		},
 		openAction() {
 			if (this.action.route) frappe.set_route(this.action.route);
