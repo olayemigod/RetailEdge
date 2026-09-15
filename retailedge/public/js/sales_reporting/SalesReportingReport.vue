@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="sales-report-fallback">
 		<strong>Sales reporting could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -155,14 +155,14 @@ const REPORT_CONFIG = {
 		subtitle: "Understand what is selling, what is being returned, and the net sales contribution of each item.",
 		providerKey: "sales-by-item",
 		route: "/app/sales-by-item",
-		filename: "RetailEdge Sales by Item",
+		filename: "ProcessEdge Retail Sales by Item",
 	},
 	sales_invoice_register: {
 		title: "Sales Invoice Register",
 		subtitle: "A clear invoice-level view of submitted sales, returns, taxes, and outstanding balances.",
 		providerKey: "sales-invoice-register",
 		route: "/app/sales-invoice-register",
-		filename: "RetailEdge Sales Invoice Register",
+		filename: "ProcessEdge Retail Sales Invoice Register",
 	},
 };
 
@@ -445,7 +445,7 @@ export default {
 		async fetchData() {
 			if (!this.requiredReady) return;
 			if (!this.reportProvider?.load) {
-				this.error = `The shared EdgeSuite ${this.config.title} provider is unavailable.`;
+				this.error = `The ${this.config.title} reporting service is unavailable.`;
 				return;
 			}
 			this.loading = true;
