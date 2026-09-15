@@ -608,7 +608,7 @@ def get_professional_selling_list(
 	rows = frappe.get_list(
 		doctype,
 		filters=filters,
-		or_filters=or_filters or None,
+		or_filters=or_filters,
 		fields=fields,
 		order_by=f"{date_field} desc, modified desc",
 		limit_start=start,
