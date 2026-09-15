@@ -313,6 +313,7 @@ def _item_summary(doc) -> list[dict[str, Any]]:
 	for row in list(doc.get("items") or [])[:MAX_ITEM_SUMMARY]:
 		result.append(
 			{
+				"name": _clean(row.get("name")),
 				"item_code": _clean(row.get("item_code")),
 				"item_name": _clean(row.get("item_name")),
 				"qty": flt(row.get("qty")),
@@ -369,6 +370,12 @@ def _build_preview(doc) -> dict[str, Any]:
 		"grand_total": flt(doc.get("grand_total")),
 		"posting_date": _clean(doc.get("posting_date")),
 		"due_date": _clean(doc.get("due_date")),
+		"po_no": _clean(doc.get("po_no")),
+		"remarks": _clean(doc.get("remarks")),
+		"can_edit": bool(
+			cint(doc.docstatus) == 0
+			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
+		),
 		"can_edit_dates": bool(
 			cint(doc.docstatus) == 0
 			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
@@ -474,6 +481,100 @@ def get_standard_sales_invoice_completion_preview(name: str) -> dict[str, Any]:
 	"""Return a persistence-free completion review for one standard Sales Invoice."""
 	doc = _get_sales_invoice(name)
 	return _build_preview(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def update_standard_sales_invoice_draft(
+	name: str,
+	values: dict | str | None = None,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Update a bounded set of editable fields on one draft Sales Invoice.
+
+	Company, Customer, Branch, item identity, source links, warehouses and stock
+	mode are intentionally immutable in this completion editor. ERPNext performs
+	the final validation/recalculation on save.
+	"""
+	name = _clean(name)
+	_lock_sales_invoice(name)
+	doc = _get_sales_invoice(name)
+	_assert_expected_modified(doc, expected_modified)
+	_validate_invoice_context(doc)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only draft Sales Invoices can be edited here."), frappe.ValidationError)
+	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this Sales Invoice."), frappe.PermissionError)
+
+	if isinstance(values, str):
+		values = frappe.parse_json(values)
+	if values is None:
+		values = {}
+	if not isinstance(values, dict):
+		frappe.throw(_("Invalid Sales Invoice draft changes."), frappe.ValidationError)
+
+	posting_text = _clean(values.get("posting_date") or doc.get("posting_date"))
+	due_text = _clean(values.get("due_date") or doc.get("due_date"))
+	if not posting_text:
+		frappe.throw(_("Posting Date is required."), frappe.ValidationError)
+	try:
+		posting_value = getdate(posting_text)
+		due_value = getdate(due_text) if due_text else None
+	except Exception:
+		frappe.throw(_("Enter valid Posting Date and Due Date values."), frappe.ValidationError)
+	if due_value and due_value < posting_value:
+		frappe.throw(_("Due Date cannot be before Posting Date."), frappe.ValidationError)
+
+	doc.set("posting_date", posting_value)
+	if doc.meta.has_field("due_date"):
+		doc.set("due_date", due_value)
+		_sync_manual_due_date_with_payment_schedule(doc, due_value)
+	if doc.meta.has_field("po_no"):
+		doc.set("po_no", _clean(values.get("po_no")))
+	if doc.meta.has_field("remarks"):
+		doc.set("remarks", _clean(values.get("remarks")))
+
+	requested_items = values.get("items")
+	if requested_items is not None:
+		if not isinstance(requested_items, list):
+			frappe.throw(_("Invalid Sales Invoice item changes."), frappe.ValidationError)
+		current_rows = {_clean(row.get("name")): row for row in list(doc.get("items") or []) if row.get("name")}
+		requested_names: set[str] = set()
+		for index, item in enumerate(requested_items, start=1):
+			if not isinstance(item, dict):
+				frappe.throw(_("Invalid item edit on row {0}.").format(index), frappe.ValidationError)
+			row_name = _clean(item.get("name"))
+			if not row_name or row_name not in current_rows:
+				frappe.throw(
+					_("Item rows cannot be added, removed or replaced from the completion editor."),
+					frappe.ValidationError,
+				)
+			if row_name in requested_names:
+				frappe.throw(_("Item row {0} is repeated.").format(row_name), frappe.ValidationError)
+			requested_names.add(row_name)
+			qty = flt(item.get("qty"))
+			rate = flt(item.get("rate"))
+			if qty <= 0:
+				frappe.throw(_("Quantity must be greater than zero on item row {0}.").format(index))
+			if rate < 0:
+				frappe.throw(_("Rate cannot be negative on item row {0}.").format(index))
+			row = current_rows[row_name]
+			row.qty = qty
+			row.rate = rate
+
+		if requested_names != set(current_rows):
+			frappe.throw(
+				_("All existing invoice item rows must remain present in the completion editor."),
+				frappe.ValidationError,
+			)
+
+	# ERPNext owns taxes, totals, source quantity limits, credit controls and
+	# stock/accounting validation. No ledger is posted by saving this draft.
+	doc.save()
+	doc.reload()
+	_assert_saved_invoice_dates(doc, posting_value, due_value)
+	result = _build_preview(doc)
+	result["persistence"] = "draft_update"
+	return result
 
 
 @frappe.whitelist(methods=["POST"])
