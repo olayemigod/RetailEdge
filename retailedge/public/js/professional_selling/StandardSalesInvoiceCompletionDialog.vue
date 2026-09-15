@@ -94,8 +94,16 @@
 						<p>Choose the next permitted workflow. The invoice stays open until you choose an action or close it.</p>
 					</div>
 					<div class="invoice-next-buttons">
-						<button v-if="Number(completedResult.outstanding_amount || 0) > 0" type="button" class="edge-button edge-button--primary" @click="emitNextAction('make-payment')">Make Payment</button>
-						<button v-if="!completedResult.update_stock" type="button" class="edge-button edge-button--secondary" @click="emitNextAction('create-delivery-note')">Create Delivery Note</button>
+						<button
+							v-for="(action, index) in completedResult.next_actions || []"
+							:key="action.value"
+							type="button"
+							class="edge-button"
+							:class="{ 'edge-button--primary': index === 0, 'edge-button--secondary': index !== 0 }"
+							@click="emitNextAction(action.value)"
+						>
+							{{ action.label }}
+						</button>
 						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">View / Print / Send</button>
 					</div>
 				</div>
@@ -142,6 +150,7 @@ const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standar
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
+const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 const SUBMIT_METHOD = "retailedge.standard_sales_invoice_completion.submit_standard_sales_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_standard_sales_invoice_workflow_action";
 
@@ -291,7 +300,8 @@ export default {
 					expected_modified: this.preview.modified,
 				}, "POST");
 				this.$emit("changed", result);
-				this.completedResult = await callMethod(PREVIEW_METHOD, { name: result.name });
+				const submitted = await callMethod(PREVIEW_METHOD, { name: result.name });
+				this.completedResult = await this.decorateCompletedResult(submitted);
 				this.$emit("completed", this.completedResult);
 			} catch (error) {
 				this.actionError = errorMessage(error, "Unable to submit this Sales Invoice.");
@@ -313,7 +323,8 @@ export default {
 				}, "POST");
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					this.completedResult = await callMethod(PREVIEW_METHOD, { name: result.name || this.preview.name });
+					const submitted = await callMethod(PREVIEW_METHOD, { name: result.name || this.preview.name });
+					this.completedResult = await this.decorateCompletedResult(submitted);
 					this.$emit("completed", this.completedResult);
 					return;
 				}
@@ -324,6 +335,10 @@ export default {
 			} finally {
 				this.busy = false;
 			}
+		},
+		async decorateCompletedResult(result) {
+			const resolved = await callMethod(ACTIONS_METHOD, { document: "sales-invoice", name: result.name });
+			return { ...result, next_actions: resolved.actions || [] };
 		},
 		async ensureOutputDetails() {
 			if (this.outputDetails?.name === this.document?.name) return this.outputDetails;
