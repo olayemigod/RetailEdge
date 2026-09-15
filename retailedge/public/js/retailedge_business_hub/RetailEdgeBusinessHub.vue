@@ -3,8 +3,8 @@
 		product="retailedge"
 		:menuItems="shellMenuItems"
 		activeRoute="/app/retailedge-business-hub"
-		title="RetailEdge"
-		subtitle="Retail operations & control"
+		title="ProcessEdge Retail"
+		subtitle="Structured for Scale."
 		:tenantName="context.company_label || context.company"
 		:branchName="context.branch"
 		:userName="context.user_name"
@@ -210,7 +210,7 @@
 							<span class="create-product-menu-mark edge-product-menu__brand-mark"><EdgeIcon name="clipboard" size="sm" /></span>
 							<span>
 								<strong>Create</strong>
-								<small>RetailEdge business actions</small>
+								<small>Retail business actions</small>
 							</span>
 						</div>
 					</header>
