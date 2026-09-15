@@ -6,7 +6,7 @@ import frappe
 APP_NAME = "retailedge"
 DESKTOP_LABEL = "PEdge Retail"
 DESKTOP_ROUTE = "/desk/retailedge-business-hub"
-DESKTOP_LOGO = "/assets/retailedge/images/processedge_retail/pedge-retail-app-icon-dark-v2.svg"
+DESKTOP_LOGO = "/assets/retailedge/images/processedge_retail/pedge-retail-app-icon-blue-v1.svg"
 LEGACY_LABELS = {"RetailEdge", "ProcessEdge Retail"}
 WORKSPACE_NAME = "RetailEdge"
 
