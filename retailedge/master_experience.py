@@ -84,7 +84,7 @@ TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 
 PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 	"label": "Professional Selling",
-	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided RetailEdge selling flow.",
+	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided selling flow.",
 	"target_type": "Page",
 	"target": "professional-selling",
 	"icon": "shopping-bag",
