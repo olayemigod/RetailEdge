@@ -89,10 +89,12 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 			self.assertNotIn("buying_rate", values["html"])
 			self.assertNotIn("gross_profit", values["html"])
 
-	def test_receipts_use_client_company_as_visible_identity(self):
+	def test_receipts_use_client_company_profile_as_visible_identity(self):
 		for spec in RECEIPT_PRINT_FORMATS:
 			html = _format_values(spec)["html"]
-			self.assertIn('{{ doc.get("company") or "" }}', html)
+			self.assertIn("get_business_print_context(doc)", html)
+			self.assertIn("output.display_name or output.company", html)
+			self.assertIn("output.show_logo and output.logo", html)
 			self.assertNotIn("retailedge", html.lower())
 			self.assertNotIn("ProcessEdge Solutions", html)
 			self.assertNotIn("processedge.com.ng", html)
@@ -110,6 +112,36 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 				self.assertIn("58mm", values["css"])
 			self.assertIn("Thank you for your business.", values["html"])
 			self.assertIn('doc.get_formatted("grand_total")', values["html"])
+			self.assertIn('class="receipt-items"', values["html"])
+			self.assertIn("Unit Price", values["html"])
+			self.assertIn("output.include_qr and output.qr_data_uri", values["html"])
+			self.assertIn('class="receipt-logo"', values["html"])
+
+	def test_all_managed_templates_support_company_logo_and_optional_document_qr(self):
+		for spec in MANAGED_PRINT_FORMATS:
+			html = _format_values(spec)["html"]
+			self.assertIn("get_business_print_context(doc)", html)
+			self.assertIn("output.show_logo and output.logo", html)
+			self.assertIn("output.include_qr and output.qr_data_uri", html)
+			self.assertNotIn("RetailEdge Payment Verification", html)
+
+	def test_formal_templates_follow_logo_left_document_title_right_reference_layout(self):
+		html = _format_values(PROFESSIONAL_PRINT_FORMATS[3])["html"]
+		css = _format_values(PROFESSIONAL_PRINT_FORMATS[3])["css"]
+		for contract in (
+			'class="pe-brand"',
+			'class="pe-logo"',
+			'class="pe-title-block"',
+			'class="pe-document-no"',
+			'class="pe-party-grid"',
+			'class="pe-items"',
+			'class="pe-summary"',
+			'class="pe-balance"',
+		):
+			self.assertIn(contract, html)
+		self.assertIn(".pe-title-block{text-align:right", css)
+		self.assertIn(".pe-items th{", css)
+
 
 	def test_document_format_uses_native_totals_not_recalculated_accounting(self):
 		html = _format_values(PROFESSIONAL_PRINT_FORMATS[0])["html"]
@@ -168,8 +200,9 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 			self.assertIn(name, component)
 		self.assertIn("window.EdgeSuiteUI", component)
 		self.assertNotIn("window.EdgeUI", component)
-		self.assertIn('product="Retail"', component)
+		self.assertIn('product="retailedge"', component)
 		self.assertNotIn('product="RetailEdge"', component)
+		self.assertNotIn('product="Retail"', component)
 		self.assertNotIn("RetailEdge does not publish", component)
 
 	def test_output_workspace_consumes_server_company_identity_and_recommended_format(self):
@@ -177,7 +210,9 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		self.assertIn("this.details.recommended_print_format", component)
 		self.assertIn("this.details.default_email_subject", component)
 		self.assertIn("this.details.default_email_message", component)
-		self.assertIn("{{ details.company }}", component)
+		self.assertIn("this.details.default_use_letterhead", component)
+		self.assertIn("this.details.default_show_logo", component)
+		self.assertIn("this.details.default_include_qr", component)
 		self.assertNotIn("Please find attached ${this.selectedDefinition", component)
 
 	def test_installer_is_registered_and_collision_safe(self):
@@ -185,6 +220,7 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		source = (APP_ROOT / "professional_print_formats.py").read_text()
 		self.assertIn("retailedge.patches.install_professional_print_formats", patches)
 		self.assertIn("retailedge.patches.install_output_print_template_pack_v3", patches)
+		self.assertIn("retailedge.patches.install_output_print_template_pack_v4", patches)
 		self.assertIn("if not owned:", source)
 		self.assertIn("Skipping non-managed Print Format name collision", source)
 		self.assertIn("LEGACY_PRINT_FORMAT_ALIASES", source)
