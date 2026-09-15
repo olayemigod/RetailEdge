@@ -49,6 +49,32 @@ def test_identity_layer_is_scoped_to_retailedge_and_does_not_clone_shared_shell(
     assert "eduedge" not in source.lower()
 
 
+def test_retailedge_sidebar_and_product_name_follow_edgesuite_appearance():
+    source = IDENTITY_CSS.read_text(encoding="utf-8")
+
+    for contract in (
+        "--retailedge-sidebar: var(--edge-color-surface);",
+        "--retailedge-sidebar-muted: var(--edge-color-ink-500);",
+        "background: var(--edge-color-surface);",
+        "border-right: 1px solid var(--edge-color-border);",
+        "color: var(--edge-color-ink-950);",
+        ".edge-sidebar__brand-copy strong",
+        ".edge-topbar__title-copy strong",
+        "background: var(--edge-color-surface-muted);",
+        "color: var(--edge-color-brand-700);",
+        'edge-sidebar-item[aria-current="page"]',
+    ):
+        assert contract in source
+
+    for legacy_dark_sidebar_contract in (
+        "color: #f7fbfc;",
+        "color: #dce6ec;",
+        "background: rgba(255, 255, 255, 0.07);",
+        "border-right: 0;",
+    ):
+        assert legacy_dark_sidebar_contract not in source
+
+
 def test_business_hub_declares_product_identity_through_shared_edgesuite_shell():
     source = BUSINESS_HUB.read_text(encoding="utf-8")
 
