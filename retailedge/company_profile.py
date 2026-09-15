@@ -179,7 +179,7 @@ def _profile_response(company: str) -> dict[str, Any]:
 		"profile": profile,
 		"operating_context": current,
 		"permissions": _permissions(company, profile.get("profile_docname") or ""),
-		"source_of_truth": "ERPNext Company + RetailEdge Company Profile",
+		"source_of_truth": "ERPNext Company + Business Profile",
 	}
 
 
