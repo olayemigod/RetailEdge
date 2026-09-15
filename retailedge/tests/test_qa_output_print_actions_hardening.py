@@ -86,4 +86,15 @@ def test_customer_visible_output_copy_has_no_product_or_vendor_alias():
 		"processedge.com.ng",
 	):
 		assert forbidden not in output_source
-	assert 'product="Retail"' in output_source
+	# The internal shell uses the production ProcessEdge Retail identity while
+	# generated customer documents remain company/ERPNext branded and vendor-neutral.
+	assert 'product="retailedge"' in output_source
+
+
+def test_invoice_edit_and_output_workspaces_use_production_retail_identity_key():
+	output = _read(OUTPUT_PAGE)
+	selling = _read(SELLING_PAGE)
+	assert 'product="retailedge"' in output
+	assert 'product="retailedge"' in selling
+	assert 'product="Retail"' not in output
+	assert 'product="RetailEdge"' not in selling
