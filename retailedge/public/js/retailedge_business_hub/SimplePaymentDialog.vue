@@ -111,7 +111,7 @@
 
 			<p class="guided-payment-hint">
 				Submitting uses the native ERPNext Payment Entry submit flow. RetailEdge does not directly change
-				the Sales Invoice outstanding amount, GL Entry, Payment Ledger Entry, or customer balance.
+				the source Sales Invoice/Sales Order, GL Entry, Payment Ledger Entry, or customer balance.
 			</p>
 		</div>
 
@@ -314,10 +314,10 @@
 			</div>
 
 			<p class="guided-payment-hint">
-				Only submitted invoices with a positive outstanding balance are offered. Multi-currency and
-				payment-term allocation cases remain on the full ERPNext Payment Entry form.
+				Only submitted sales references with an amount available for payment are offered. Multi-currency and
+				complex allocation cases remain on the full ERPNext Payment Entry form.
 				<template v-if="isCustomerPayment">
-					Standard Receive Customer supports one Sales Invoice receipt or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
+					Standard Receive Customer supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
 				</template>
 				<template v-if="isSupplierPayment">
 					Standard Pay Supplier supports one Purchase Invoice per payment; complex allocations stay in Advanced ERPNext.
@@ -527,15 +527,15 @@ export default {
 			modeDetails: {},
 			values: emptyValues(),
 			referenceTableField: {
-				label: "Invoice Allocations",
-				description: "Allocate this payment to one or more outstanding invoices.",
+				label: "Sales Reference Allocation",
+				description: "Allocate this payment to the selected payable sales reference.",
 			},
 			referenceColumns: [
 				{
 					fieldname: "reference_name",
-					label: "Invoice",
+					label: "Sales Reference",
 					fieldtype: "Link",
-					placeholder: "Search outstanding invoice",
+					placeholder: "Search payable sales reference",
 				},
 				{
 					fieldname: "outstanding_amount",
@@ -646,7 +646,7 @@ export default {
 				});
 				const outstandingAmount = Number(details.outstanding_amount || 0);
 				if (!(outstandingAmount > 0)) {
-					throw new Error("The selected invoice no longer has an outstanding amount available for payment.");
+					throw new Error("The selected sales reference no longer has an amount available for payment.");
 				}
 				this.values.references = [{
 					reference_name: referenceName,
@@ -769,7 +769,7 @@ export default {
 					this.values.amount = this.allocatedTotal;
 				}
 			} catch (error) {
-				this.saveError = errorMessage(error, "Unable to load the invoice outstanding amount.");
+				this.saveError = errorMessage(error, "Unable to load the sales reference amount available for payment.");
 				this.values.references = rows;
 			} finally {
 				this.referenceLoading = false;
