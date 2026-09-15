@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Branch Setup could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -16,7 +16,7 @@
 		<EdgePageLayout class="retailedge-branch-setup-page">
 			<EdgePageHeader
 				title="Branch Setup"
-				description="Map Branches to Companies and configure the stock, POS, accounting and control defaults used by RetailEdge."
+				description="Map Branches to Companies and configure the stock, POS, accounting and control defaults used by business operations."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -95,7 +95,7 @@
 		</EdgePageLayout>
 	</EdgeAppShell>
 
-	<EdgeModal :open="editorOpen" :title="editorTitle" subtitle="RetailEdge validates all Company, Branch, stock and accounting relationships on the server." size="xl" @close="closeEditor">
+	<EdgeModal :open="editorOpen" :title="editorTitle" subtitle="Company, Branch, stock and accounting relationships are validated on the server." size="xl" @close="closeEditor">
 		<div v-if="editorError" class="form-error">{{ editorError }}</div>
 		<div v-if="editorLoading" class="p-6 text-center text-muted">Loading Branch Setup…</div>
 		<div v-else class="editor-body">
@@ -165,9 +165,9 @@
 			<section v-if="activeTab === 'controls'" class="form-section">
 				<h4>Controls & audit</h4>
 				<div class="control-grid">
-					<label class="check-field"><input v-model="editor.enable_cashier_expense_control" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Cashier Expense Control</strong><small>Use RetailEdge branch controls for cashier expenses.</small></span></label>
+					<label class="check-field"><input v-model="editor.enable_cashier_expense_control" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Cashier Expense Control</strong><small>Use Branch controls for cashier expenses.</small></span></label>
 					<label class="check-field"><input v-model="editor.enable_daily_sales_audit" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Daily Sales Audit</strong><small>Enable Branch daily audit workflows.</small></span></label>
-					<label class="check-field"><input v-model="editor.enable_transaction_branch_attribution" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Transaction Branch Attribution</strong><small>Apply the Branch context to supported new RetailEdge work.</small></span></label>
+					<label class="check-field"><input v-model="editor.enable_transaction_branch_attribution" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Transaction Branch Attribution</strong><small>Apply the Branch context to supported new work.</small></span></label>
 					<label class="check-field"><input v-model="editor.require_pos_closing_shift_for_audit" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Require POS Closing Shift</strong><small>Require closing evidence for the audit flow where applicable.</small></span></label>
 					<label class="edge-field"><span class="edge-field-label">Variance Tolerance</span><input v-model.number="editor.variance_tolerance" class="edge-input" type="number" step="0.01" min="0" /></label>
 					<label class="edge-field edge-field--wide"><span class="edge-field-label">Notes</span><textarea v-model="editor.notes" class="edge-input" rows="4"></textarea></label>
@@ -185,7 +185,7 @@
 		</template>
 	</EdgeModal>
 
-	<EdgeModal :open="reassignOpen" title="Change Company / Branch" subtitle="RetailEdge preserves historical meaning and clears Branch-specific defaults before applying the new mapping." size="lg" @close="closeReassign">
+	<EdgeModal :open="reassignOpen" title="Change Company / Branch" subtitle="Historical meaning is preserved and Branch-specific defaults are cleared before the new mapping is applied." size="lg" @close="closeReassign">
 		<div v-if="reassignError" class="form-error">{{ reassignError }}</div>
 		<div class="form-grid">
 			<EdgeLinkField :modelValue="reassign.company" label="New Company" placeholder="Choose Company" :required="true" :searcher="searchReassignCompany" @update:modelValue="setReassignCompany" />
