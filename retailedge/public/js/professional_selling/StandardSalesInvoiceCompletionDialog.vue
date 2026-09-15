@@ -20,18 +20,27 @@
 				</div>
 
 				<div v-if="preview.can_edit_dates" class="invoice-date-editor">
-					<div>
-						<label for="invoice-posting-date">Posting Date</label>
-						<input id="invoice-posting-date" v-model="draftPostingDate" class="edge-control" type="date" :disabled="busy" />
-					</div>
-					<div>
-						<label for="invoice-due-date">Due Date</label>
-						<input id="invoice-due-date" v-model="draftDueDate" class="edge-control" type="date" :disabled="busy" />
-					</div>
-					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !datesDirty" @click="saveDraftDates">
+					<EdgeInput
+						id="invoice-posting-date"
+						v-model="draftPostingDate"
+						label="Posting Date"
+						type="date"
+						:disabled="busy"
+						required
+					/>
+					<EdgeInput
+						id="invoice-due-date"
+						v-model="draftDueDate"
+						label="Due Date"
+						type="date"
+						:min="draftPostingDate || undefined"
+						:disabled="busy"
+						required
+					/>
+					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !datesDirty || !datesValid" @click="saveDraftDates">
 						{{ busy ? "Saving..." : "Save Draft Dates" }}
 					</button>
-					<p>Draft dates can be corrected before submission. Due Date must be the same as or later than Posting Date.</p>
+					<p>Draft dates are saved back to ERPNext. Due Date must be the same as or later than Posting Date. Payment-term schedules remain ERPNext-controlled.</p>
 				</div>
 
 				<div v-if="preview.source_name" class="invoice-source-note">
@@ -128,9 +137,9 @@ function runtimeComponents() {
 	return edgeUI?.components || edgeUI || {};
 }
 
-function callMethod(method, args = {}) {
+function callMethod(method, args = {}, type = "GET") {
 	return new Promise((resolve, reject) => {
-		frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject });
+		frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject });
 	});
 }
 
@@ -143,6 +152,7 @@ export default {
 	components: {
 		EdgeModal: runtimeComponents().EdgeModal,
 		EdgeLoadingState: runtimeComponents().EdgeLoadingState,
+		EdgeInput: runtimeComponents().EdgeInput,
 	},
 	props: {
 		open: { type: Boolean, default: false },
@@ -170,6 +180,10 @@ export default {
 				String(this.draftPostingDate || "") !== String(this.preview?.posting_date || "")
 				|| String(this.draftDueDate || "") !== String(this.preview?.due_date || "")
 			);
+		},
+		datesValid() {
+			if (!this.draftPostingDate || !this.draftDueDate) return false;
+			return String(this.draftDueDate) >= String(this.draftPostingDate);
 		},
 	},
 	watch: {
@@ -207,7 +221,7 @@ export default {
 			}
 		},
 		async saveDraftDates() {
-			if (!this.preview?.can_edit_dates || !this.datesDirty || this.busy) return;
+			if (!this.preview?.can_edit_dates || !this.datesDirty || !this.datesValid || this.busy) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
@@ -216,7 +230,7 @@ export default {
 					posting_date: this.draftPostingDate,
 					due_date: this.draftDueDate,
 					expected_modified: this.preview.modified,
-				});
+				}, "POST");
 				this.applyPreview(result);
 				this.$emit("changed", result);
 				frappe.show_alert({ message: __("Draft invoice dates updated"), indicator: "green" });
@@ -235,7 +249,7 @@ export default {
 				const result = await callMethod(SUBMIT_METHOD, {
 					name: this.preview.name,
 					expected_modified: this.preview.modified,
-				});
+				}, "POST");
 				this.$emit("changed", result);
 				this.$emit("completed", result);
 			} catch (error) {
@@ -255,7 +269,7 @@ export default {
 					action,
 					expected_modified: this.preview.modified,
 					expected_workflow_state: this.preview.workflow_readiness?.current_state || "",
-				});
+				}, "POST");
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
 					this.$emit("completed", result);
@@ -291,9 +305,10 @@ export default {
 .invoice-completion-summary span, .invoice-completion-workflow span, .invoice-source-note span { font-size: .78rem; color: var(--text-muted); }
 .invoice-source-note, .invoice-accounting-note, .invoice-date-editor { display: grid; gap: .25rem; padding: .8rem; border-radius: .6rem; border: 1px solid var(--edge-border-color,var(--border-color)); }
 .invoice-date-editor { grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; align-items: end; gap: .75rem; }
-.invoice-date-editor > div { display: grid; gap: .3rem; }
-.invoice-date-editor label { font-size: .78rem; color: var(--text-muted); }
-.invoice-date-editor p { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: .82rem; }
+.invoice-date-editor :deep(.edge-input) { min-width: 0; }
+.invoice-date-editor :deep(.edge-input__label) { color: var(--edge-color-ink-500,var(--text-muted)); font-size: .78rem; }
+.invoice-date-editor :deep(.edge-input__control) { width: 100%; }
+.invoice-date-editor p { grid-column: 1 / -1; margin: 0; color: var(--edge-color-ink-500,var(--text-muted)); font-size: .82rem; }
 .invoice-accounting-note { background: var(--blue-50,#eff6ff); border-color: var(--blue-200,#bfdbfe); }
 .invoice-accounting-note p { margin: 0; }
 .invoice-completion-items { display: grid; gap: .45rem; }
