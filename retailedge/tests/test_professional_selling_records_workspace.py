@@ -108,6 +108,55 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 		assert contract in workspace
 
 
+def test_submitted_rows_receive_server_authoritative_conversion_and_payment_actions():
+	backend = read(BACKEND)
+	records = read(RECORDS)
+	workspace = read(WORKSPACE)
+
+	for contract in (
+		"def _selling_record_actions(",
+		'"create-sales-order"',
+		'"create-delivery-note"',
+		'"create-sales-invoice"',
+		'"make-payment"',
+		'flt(row.get("per_delivered")) < 99.999',
+		'flt(row.get("per_billed")) < 99.999',
+		'not cint(row.get("update_stock"))',
+		'flt(row.get("outstanding_amount")) > 0.005',
+		'payload["actions"] = _selling_record_actions',
+	):
+		assert contract in backend
+
+	assert "Array.isArray(row?.actions)" in records
+	for contract in (
+		'if (action === "make-payment")',
+		'["create-sales-order", "create-delivery-note", "create-sales-invoice"].includes(action)',
+		"runConversionAction(action, document, row)",
+		"openCustomerPayment(document, row)",
+		"create_sales_order_from_quotation",
+		"create_sales_invoice_from_quotation",
+		"create_sales_invoice_from_sales_order",
+		"create_sales_invoice_from_delivery_note",
+		"create_delivery_note_from_sales_order",
+		"create_delivery_note_from_sales_invoice",
+	):
+		assert contract in workspace
+
+
+def test_professional_selling_keeps_submitted_completion_open_for_next_workflow():
+	workspace = read(WORKSPACE)
+	for contract in (
+		'@next-action="handleCompletionNextAction"',
+		"handleCompletionNextAction(payload)",
+		'paymentIntent = document.key === "sales-order" ? "receive-sales-order-payment" : "receive-customer-payment"',
+		"<SimplePaymentDialog",
+		':showNextActions="true"',
+	):
+		assert contract in workspace
+
+	completed = workspace[workspace.index("handleCompletionCompleted()"):workspace.index("openDeliveryCompletion", workspace.index("handleCompletionCompleted()"))]
+	assert "closeStandardCompletion()" not in completed
+
 def test_draft_completion_actions_remain_document_specific_and_accounting_safe():
 	records = read(RECORDS)
 	workspace = read(WORKSPACE)
