@@ -88,7 +88,7 @@
 					</p>
 				</div>
 
-				<div v-if="completedResult" class="invoice-next-actions">
+				<div v-if="completedResult && showNextActions" class="invoice-next-actions">
 					<div>
 						<strong>Sales Invoice submitted</strong>
 						<p>Choose the next permitted workflow. The invoice stays open until you choose an action or close it.</p>
@@ -139,7 +139,6 @@
 
 <script>
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
-const UPDATE_DATES_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_dates";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
@@ -172,6 +171,7 @@ export default {
 		open: { type: Boolean, default: false },
 		document: { type: Object, default: null },
 		canUseNativeDesk: { type: Boolean, default: false },
+		showNextActions: { type: Boolean, default: false },
 	},
 	emits: ["close", "changed", "completed", "next-action"],
 	data() {
