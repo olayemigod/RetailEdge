@@ -225,9 +225,21 @@ def search_review_report_options(
 			for branch in branches
 			if not txt or txt.lower() in branch.lower()
 		][:20]
+	filters: dict[str, Any] = {}
+	if txt:
+		filters["name"] = ["like", f"%{txt}%"]
+	if company and doctype in {"Bank Account", "POS Profile", "Cost Center", "Account"}:
+		meta = frappe.get_meta(doctype)
+		if meta.has_field("company"):
+			filters["company"] = company
+	if doctype in {"Cost Center", "Account"}:
+		filters["is_group"] = 0
+	if doctype == "User":
+		filters["enabled"] = 1
+
 	response = frappe.get_list(
 		doctype,
-		filters={"name": ["like", f"%{txt}%"]} if txt else {},
+		filters=filters,
 		fields=["name"],
 		order_by="name asc",
 		limit_page_length=20,
