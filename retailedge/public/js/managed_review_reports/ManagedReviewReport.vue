@@ -48,26 +48,82 @@
 			<template #filters>
 				<div class="managed-filter-grid">
 					<template v-for="field in primaryFilterFields" :key="field.fieldname">
-						<FilterField
-							:field="field"
+						<EdgeLinkField
+							v-if="field.fieldtype === 'Link'"
+							:modelValue="filters[field.fieldname] || ''"
+							:label="field.label"
+							:placeholder="'Search ' + field.label.toLowerCase()"
+							:searcher="linkSearcher(field)"
+							@select="setFilter(field, $event.value || '')"
+							@clear="setFilter(field, '')"
+						/>
+						<EdgeDropdown
+							v-else-if="field.fieldtype === 'Select'"
 							:modelValue="filters[field.fieldname]"
-							:company="filters.company"
+							:label="field.label"
+							:options="field.options || []"
 							@update:modelValue="setFilter(field, $event)"
 						/>
+						<label v-else-if="field.fieldtype === 'Check'" class="managed-check-field">
+							<input
+								type="checkbox"
+								:checked="Boolean(Number(filters[field.fieldname] || 0))"
+								@change="setFilter(field, $event.target.checked ? 1 : 0)"
+							/>
+							<span>{{ field.label }}</span>
+						</label>
+						<label v-else class="managed-input-field">
+							<span>{{ field.label }}</span>
+							<input
+								class="edge-input"
+								:type="inputType(field)"
+								:value="filters[field.fieldname] ?? ''"
+								:required="Boolean(field.required)"
+								@input="setFilter(field, inputValue(field, $event.target.value))"
+							/>
+						</label>
 					</template>
 				</div>
 				<details v-if="advancedFilterFields.length" class="managed-advanced-filters">
 					<summary>More filters</summary>
-					<div class="managed-filter-grid managed-filter-grid--advanced">
-						<FilterField
-							v-for="field in advancedFilterFields"
-							:key="field.fieldname"
-							:field="field"
+				<div class="managed-filter-grid managed-filter-grid--advanced">
+					<template v-for="field in advancedFilterFields" :key="field.fieldname">
+						<EdgeLinkField
+							v-if="field.fieldtype === 'Link'"
+							:modelValue="filters[field.fieldname] || ''"
+							:label="field.label"
+							:placeholder="'Search ' + field.label.toLowerCase()"
+							:searcher="linkSearcher(field)"
+							@select="setFilter(field, $event.value || '')"
+							@clear="setFilter(field, '')"
+						/>
+						<EdgeDropdown
+							v-else-if="field.fieldtype === 'Select'"
 							:modelValue="filters[field.fieldname]"
-							:company="filters.company"
+							:label="field.label"
+							:options="field.options || []"
 							@update:modelValue="setFilter(field, $event)"
 						/>
-					</div>
+						<label v-else-if="field.fieldtype === 'Check'" class="managed-check-field">
+							<input
+								type="checkbox"
+								:checked="Boolean(Number(filters[field.fieldname] || 0))"
+								@change="setFilter(field, $event.target.checked ? 1 : 0)"
+							/>
+							<span>{{ field.label }}</span>
+						</label>
+						<label v-else class="managed-input-field">
+							<span>{{ field.label }}</span>
+							<input
+								class="edge-input"
+								:type="inputType(field)"
+								:value="filters[field.fieldname] ?? ''"
+								:required="Boolean(field.required)"
+								@input="setFilter(field, inputValue(field, $event.target.value))"
+							/>
+						</label>
+					</template>
+				</div>
 				</details>
 			</template>
 
@@ -99,75 +155,12 @@ function userError(error, fallback) {
 	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
-const FilterField = {
-	name: "ManagedReviewFilterField",
-	props: {
-		field: { type: Object, required: true },
-		modelValue: { default: "" },
-		company: { type: String, default: "" },
-	},
-	emits: ["update:modelValue"],
-	components: {
-		EdgeLinkField: runtimeComponents().EdgeLinkField,
-		EdgeDropdown: runtimeComponents().EdgeDropdown,
-	},
-	methods: {
-		async searcher(txt) {
-			const result = await callMethod("retailedge.managed_review_reports.search_review_report_options", {
-				doctype: this.field.options,
-				txt: txt || "",
-				company: this.company || "",
-			});
-			return Array.isArray(result) ? result : [];
-		},
-	},
-	template: `
-		<EdgeLinkField
-			v-if="field.fieldtype === 'Link'"
-			:modelValue="modelValue || ''"
-			:label="field.label"
-			:placeholder="'Search ' + field.label.toLowerCase()"
-			:searcher="searcher"
-			@select="$emit('update:modelValue', $event.value || '')"
-			@clear="$emit('update:modelValue', '')"
-		/>
-		<EdgeDropdown
-			v-else-if="field.fieldtype === 'Select'"
-			:modelValue="modelValue"
-			:label="field.label"
-			:options="field.options || []"
-			@update:modelValue="$emit('update:modelValue', $event)"
-		/>
-		<label v-else-if="field.fieldtype === 'Check'" class="managed-check-field">
-			<input
-				type="checkbox"
-				:checked="Boolean(Number(modelValue || 0))"
-				@change="$emit('update:modelValue', $event.target.checked ? 1 : 0)"
-			/>
-			<span>{{ field.label }}</span>
-		</label>
-		<label v-else class="managed-input-field">
-			<span>{{ field.label }}</span>
-			<input
-				class="edge-input"
-				:type="field.fieldtype === 'Date' ? 'date' : (field.fieldtype === 'Currency' || field.fieldtype === 'Int' || field.fieldtype === 'Float' ? 'number' : 'text')"
-				:value="modelValue ?? ''"
-				:required="Boolean(field.required)"
-				@input="$emit('update:modelValue', $event.target.value)"
-			/>
-		</label>
-	`,
-};
-
 export default {
 	name: "ManagedReviewReport",
 	props: {
 		surfaceKey: { type: String, required: true },
 	},
-	components: {
-		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
-		FilterField,
-	},
+	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 	data() {
 		return {
 			edgeUIValid: true,
@@ -301,6 +294,27 @@ export default {
 			} finally {
 				this.loading = false;
 			}
+		},
+		linkSearcher(field) {
+			return async (txt) => {
+				const result = await callMethod("retailedge.managed_review_reports.search_review_report_options", {
+					doctype: field.options,
+					txt: txt || "",
+					company: this.filters.company || "",
+				});
+				return Array.isArray(result) ? result : [];
+			};
+		},
+		inputType(field) {
+			if (field.fieldtype === "Date") return "date";
+			if (["Currency", "Int", "Float"].includes(field.fieldtype)) return "number";
+			return "text";
+		},
+		inputValue(field, value) {
+			if (["Currency", "Int", "Float"].includes(field.fieldtype)) {
+				return value === "" ? "" : Number(value);
+			}
+			return value;
 		},
 		setFilter(field, value) {
 			this.filters[field.fieldname] = value;
