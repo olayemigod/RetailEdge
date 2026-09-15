@@ -60,7 +60,7 @@ OPERATING_CONTEXT_ITEM: dict[str, Any] = {
 
 COMPANY_PROFILE_ITEM: dict[str, Any] = {
 	"label": "Company Profile",
-	"description": "Maintain the active ERPNext Company identity, logo and business contact profile used across RetailEdge.",
+	"description": "Maintain the active ERPNext Company identity, logo and business contact profile used across ProcessEdge Retail.",
 	"target_type": "Page",
 	"target": "company-profile",
 	"icon": "building",
@@ -76,7 +76,7 @@ BRANCH_ASSIGNMENTS_ITEM: dict[str, Any] = {
 
 TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 	"label": "Transaction Workspace",
-	"description": "Start sales, purchasing, stock and POS work inside the RetailEdge operating shell.",
+	"description": "Start sales, purchasing, stock and POS work inside the ProcessEdge Retail operating shell.",
 	"target_type": "Page",
 	"target": "transaction-workspace",
 	"icon": "shopping-cart",
@@ -196,7 +196,7 @@ PROJECT_LIST_ITEM: dict[str, Any] = {
 
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
-	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
+	"description": "Configure ProcessEdge Retail business rules, Branch Setup, payment masters and statement mappings.",
 	"target_type": "Page",
 	"target": "retailedge-setup",
 	"icon": "settings",
