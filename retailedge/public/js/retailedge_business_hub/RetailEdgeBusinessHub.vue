@@ -70,6 +70,7 @@
 								label="Period"
 								placeholder="e.g. last 30 days, YTD, 01/09/2026 - 15/09/2026"
 								:canCreate="true"
+								:creator="createHomePeriodOption"
 								createLabel="Use period"
 								noResultsLabel="Type a period and press Enter"
 								@select="handleHomePeriodSelection"
