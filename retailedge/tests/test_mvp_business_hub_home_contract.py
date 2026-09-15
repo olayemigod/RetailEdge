@@ -29,20 +29,65 @@ def test_business_hub_home_exposes_operational_command_centre_sections():
 		assert f'key="{index_key}"' in source or index_key in source
 	assert "homeSnapshot.attention" in source
 	assert "refreshHomeSnapshot" in source
-	assert "EdgeDropdown" in source
+	assert "EdgeLinkField" in source
 	assert "homePeriodPreset" in source
+	assert "homePeriodQuery" in source
 
 
-def test_business_hub_period_filter_is_bounded_and_server_resolved():
+def test_business_hub_period_filter_is_fuzzy_bounded_and_server_resolved():
 	backend = BACKEND.read_text()
 	frontend = FRONTEND.read_text()
-	for preset in ("Today", "Yesterday", "This Week", "This Month", "Last 7 Days", "Last 30 Days"):
-		assert preset in frontend
+
+	for preset in ("Today", "Yesterday", "This Week", "This Month", "Last 7 Days", "Last 30 Days", "Year to Date", "Last Month"):
+		assert preset in frontend or preset in backend
+
+	for contract in (
+		"EdgeLinkField",
+		':creator="createHomePeriodOption"',
+		'placeholder="e.g. last 30 days, YTD, 01/09/2026 - 15/09/2026"',
+		"handleHomePeriodSelection",
+		"formatDisplayDate",
+	):
+		assert contract in frontend
+
+	for contract in (
+		"MAX_CUSTOM_PERIOD_DAYS = 366",
+		"def _custom_range_from_text",
+		"def _assert_bounded_period",
+		'"ytd": "Year to Date"',
+		'"mtd": "This Month"',
+		'r"(?:last|past)\\s+(\\d{1,3})\\s+days?"',
+		"Both From Date and To Date are required",
+		"From Date cannot be after To Date.",
+		'"preset": "Custom Period"',
+	):
+		assert contract in backend
+
 	assert "date_preset" in frontend
 	assert "def _resolve_period(" in backend
-	assert "Unsupported Business Hub period." in backend
 	assert '"from_date": period["from_date"]' in backend
 	assert '"to_date": period["to_date"]' in backend
+
+
+def test_business_hub_compacts_large_values_and_preserves_exact_value_tooltips():
+	frontend = FRONTEND.read_text()
+
+	for contract in (
+		"compactNumber(value",
+		'notation: "compact"',
+		'{ value: 1e9, suffix: "B" }',
+		'{ value: 1e6, suffix: "M" }',
+		'{ value: 1e3, suffix: "K" }',
+		'formatHomeValue(card, { compact = true } = {})',
+		':title="formatHomeValue(card, { compact: false })"',
+		':title="formatHomeValue(index.headline, { compact: false })"',
+		':title="formatHomeValue(index.signal, { compact: false })"',
+		':title="formatHomeValue(item, { compact: false })"',
+		"repeat(auto-fit, minmax(13.5rem, 1fr))",
+		"text-overflow: ellipsis;",
+		"white-space: nowrap;",
+	):
+		assert contract in frontend
 
 
 def test_business_hub_home_never_falls_back_to_company_wide_data_for_restricted_blank_scope():
