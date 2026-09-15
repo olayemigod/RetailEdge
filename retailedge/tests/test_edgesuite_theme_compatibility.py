@@ -6,6 +6,7 @@ from pathlib import Path
 APP_ROOT = Path(__file__).resolve().parents[1]
 THEME_CSS = APP_ROOT / "public" / "css" / "retailedge_edgeui_theme_compat.css"
 IDENTITY_CSS = APP_ROOT / "public" / "css" / "retailedge_product_identity.css"
+NAV_COMPAT_CSS = APP_ROOT / "public" / "css" / "retailedge_navigation_shell_compat.css"
 WORKSPACE_CSS = APP_ROOT / "public" / "css" / "retailedge_workspace_home.css"
 BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 STOCK_ACCOUNTING_INTEGRITY = (
@@ -72,6 +73,31 @@ class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 			"color: #dce6ec;",
 			"background: rgba(255, 255, 255, 0.07);",
 			"border-right: 0;",
+		):
+			self.assertNotIn(forbidden, css)
+
+	def test_navigation_shell_compat_uses_only_edgesuite_theme_tokens(self):
+		css = NAV_COMPAT_CSS.read_text(encoding="utf-8")
+		for expected in (
+			".edge-app-shell.edge-nav-shell-v2",
+			"var(--edge-color-surface)",
+			"var(--edge-color-surface-muted)",
+			"var(--edge-color-border)",
+			"var(--edge-color-ink-950)",
+			"var(--edge-color-ink-700)",
+			"var(--edge-color-ink-500)",
+			"var(--edge-color-brand-50)",
+			"var(--edge-color-brand-600)",
+			"var(--edge-color-brand-700)",
+			'data-edge-appearance="dark"',
+		):
+			self.assertIn(expected, css)
+
+		for forbidden in (
+			"#0b1f33",
+			"#f7fbfc",
+			"#dce6ec",
+			"rgba(255, 255, 255",
 		):
 			self.assertNotIn(forbidden, css)
 
