@@ -87,7 +87,7 @@
 				<div class="delivery-completion-actions">
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<button
-						v-if="preview?.can_submit"
+						v-if="!completedResult && preview?.can_submit"
 						type="button"
 						class="edge-button edge-button--primary"
 						:disabled="busy"
@@ -96,6 +96,7 @@
 						{{ busy ? "Submitting..." : "Submit Delivery" }}
 					</button>
 					<button
+						v-if="!completedResult"
 						v-for="action in workflowActions"
 						:key="action.action"
 						type="button"
