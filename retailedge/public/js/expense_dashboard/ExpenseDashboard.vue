@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Expenses Dashboard could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -85,7 +85,7 @@
 						<span>{{ budgetStatusDetail }}</span>
 					</div>
 					<div v-if="budgetInsight.ambiguous_category_count" class="expense-budget-warning">
-						{{ budgetInsight.ambiguous_category_count }} category mapping{{ budgetInsight.ambiguous_category_count === 1 ? " is" : "s are" }} shared across the same account/cost-centre budget. RetailEdge does not split those targets arbitrarily.
+						{{ budgetInsight.ambiguous_category_count }} category mapping{{ budgetInsight.ambiguous_category_count === 1 ? " is" : "s are" }} shared across the same account/cost-centre budget. Those targets are not split arbitrarily.
 					</div>
 				</EdgeDashboardSection>
 
