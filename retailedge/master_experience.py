@@ -60,10 +60,18 @@ OPERATING_CONTEXT_ITEM: dict[str, Any] = {
 
 COMPANY_PROFILE_ITEM: dict[str, Any] = {
 	"label": "Company Profile",
-	"description": "Review the active ERPNext Company identity used across RetailEdge.",
+	"description": "Maintain the active ERPNext Company identity, logo and business contact profile used across RetailEdge.",
 	"target_type": "Page",
 	"target": "company-profile",
 	"icon": "building",
+}
+
+BRANCH_ASSIGNMENTS_ITEM: dict[str, Any] = {
+	"label": "Branch Assignments",
+	"description": "Assign users to operational Branches and preserve effective-dated transfer history.",
+	"target_type": "Page",
+	"target": "branch-assignments",
+	"icon": "users",
 }
 
 TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
@@ -266,6 +274,32 @@ def _add_company_profile_navigation(navigation_groups: list[dict[str, Any]]) -> 
 		items.insert(operating_index + 1 if operating_index >= 0 else 0, deepcopy(COMPANY_PROFILE_ITEM))
 		group["items"] = items
 		return
+
+
+def _add_branch_assignment_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(BRANCH_ASSIGNMENTS_ITEM["target"]):
+		return
+
+	setup_group = next((group for group in navigation_groups if group.get("key") == "setup"), None)
+	if setup_group is None:
+		setup_group = {
+			"key": "setup",
+			"label": "Setup",
+			"icon": "settings",
+			"items": [],
+		}
+		navigation_groups.append(setup_group)
+
+	items = list(setup_group.get("items") or [])
+	if any(item.get("target") == BRANCH_ASSIGNMENTS_ITEM["target"] for item in items):
+		return
+
+	branch_setup_index = next(
+		(index for index, item in enumerate(items) if item.get("target") == "RetailEdge Branch Profile"),
+		-1,
+	)
+	items.insert(branch_setup_index + 1 if branch_setup_index >= 0 else 0, deepcopy(BRANCH_ASSIGNMENTS_ITEM))
+	setup_group["items"] = items
 
 
 def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> None:
@@ -642,6 +676,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_browser_approved_r4_pages(navigation_groups)
 	_add_operating_context_navigation(navigation_groups)
 	_add_company_profile_navigation(navigation_groups)
+	_add_branch_assignment_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
