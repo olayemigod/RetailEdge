@@ -521,6 +521,62 @@ def _selling_list_definition(document: str) -> dict[str, Any]:
 	return dict(definition)
 
 
+def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str, str]]:
+	"""Return permission/status-aware secondary actions for one submitted selling record.
+
+	These are discoverability hints only. Every target endpoint revalidates
+	permissions, Company/Branch context and native ERPNext conversion rules.
+	"""
+	if cint(row.get("docstatus")) != 1:
+		return []
+
+	actions: list[dict[str, str]] = []
+	status = str(row.get("status") or "").strip()
+	if document == "quotation":
+		if _permission("Sales Order", "create") and status not in {"Ordered", "Lost", "Cancelled", "Expired"}:
+			actions.append({"value": "create-sales-order", "label": _("Create Sales Order")})
+		if _permission("Sales Invoice", "create") and status not in {"Partially Ordered", "Ordered", "Lost", "Cancelled", "Expired"}:
+			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
+
+	elif document == "sales-order":
+		if (
+			_permission("Delivery Note", "create")
+			and status not in {"Closed", "Completed", "Cancelled"}
+			and flt(row.get("per_delivered")) < 99.999
+		):
+			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
+		if (
+			_permission("Sales Invoice", "create")
+			and status not in {"Closed", "Cancelled"}
+			and flt(row.get("per_billed")) < 99.999
+		):
+			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
+		if _permission("Payment Entry", "create") and flt(row.get("grand_total")) - flt(row.get("advance_paid")) > 0.005:
+			actions.append({"value": "make-payment", "label": _("Make Payment")})
+
+	elif document == "delivery-note":
+		if (
+			_permission("Sales Invoice", "create")
+			and not cint(row.get("is_return"))
+			and status not in {"Closed", "Cancelled"}
+			and flt(row.get("per_billed")) < 99.999
+		):
+			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
+
+	elif document == "sales-invoice":
+		if (
+			_permission("Delivery Note", "create")
+			and not cint(row.get("is_return"))
+			and not cint(row.get("update_stock"))
+			and status not in {"Cancelled", "Return"}
+		):
+			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
+		if _permission("Payment Entry", "create") and flt(row.get("outstanding_amount")) > 0.005:
+			actions.append({"value": "make-payment", "label": _("Make Payment")})
+
+	return actions
+
+
 def _selling_list_status_filter(meta, status: str, filters: dict[str, Any]) -> None:
 	status = str(status or "").strip()
 	if not status or status == "All":
@@ -601,6 +657,13 @@ def get_professional_selling_list(
 		"grand_total",
 		"currency",
 		"shipping_rule",
+		"delivery_status",
+		"per_delivered",
+		"per_billed",
+		"advance_paid",
+		"outstanding_amount",
+		"update_stock",
+		"is_return",
 	):
 		if candidate not in fields and meta.has_field(candidate):
 			fields.append(candidate)
@@ -616,13 +679,18 @@ def get_professional_selling_list(
 	)
 	has_more = len(rows) > page_length
 	rows = rows[:page_length]
+	result_rows: list[dict[str, Any]] = []
+	for row in rows:
+		payload = dict(row)
+		payload["actions"] = _selling_record_actions(definition["key"], payload)
+		result_rows.append(payload)
 	return {
 		"document": definition["key"],
 		"doctype": doctype,
 		"label": definition["label"],
 		"date_field": date_field,
 		"party_field": definition["party_field"],
-		"rows": [dict(row) for row in rows],
+		"rows": result_rows,
 		"start": start,
 		"page_length": page_length,
 		"next_start": start + len(rows),
