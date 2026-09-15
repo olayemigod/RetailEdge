@@ -55,15 +55,16 @@
 						<p>Continue with the next permitted sales workflow or close this review.</p>
 					</div>
 					<div class="selling-next-buttons">
-						<template v-if="completedResult.doctype === 'Quotation'">
-							<button type="button" class="edge-button edge-button--primary" @click="emitNextAction('create-sales-order')">Create Sales Order</button>
-							<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('create-sales-invoice')">Create Sales Invoice</button>
-						</template>
-						<template v-else-if="completedResult.doctype === 'Sales Order'">
-							<button type="button" class="edge-button edge-button--primary" @click="emitNextAction('create-delivery-note')">Create Delivery Note</button>
-							<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('create-sales-invoice')">Create Sales Invoice</button>
-							<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('make-payment')">Make Payment</button>
-						</template>
+						<button
+							v-for="(action, index) in completedResult.next_actions || []"
+							:key="action.value"
+							type="button"
+							class="edge-button"
+							:class="{ 'edge-button--primary': index === 0, 'edge-button--secondary': index !== 0 }"
+							@click="emitNextAction(action.value)"
+						>
+							{{ action.label }}
+						</button>
 						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">View / Print / Send</button>
 					</div>
 				</div>
@@ -111,6 +112,7 @@ const SUBMIT_METHOD = "retailedge.standard_selling_completion.submit_standard_se
 const WORKFLOW_METHOD = "retailedge.standard_selling_completion.apply_standard_selling_workflow_action";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
+const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 
 function runtimeComponents() {
 	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
@@ -205,9 +207,9 @@ export default {
 					name: this.preview.name,
 					expected_modified: this.preview.modified,
 				}, "POST");
-				this.completedResult = result;
+				this.completedResult = await this.decorateCompletedResult(result);
 				this.$emit("changed", result);
-				this.$emit("completed", result);
+				this.$emit("completed", this.completedResult);
 			} catch (error) {
 				this.actionError = errorMessage(error, "Unable to submit this document.");
 				await this.loadPreview();
@@ -229,12 +231,12 @@ export default {
 				}, "POST");
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					this.completedResult = {
+					this.completedResult = await this.decorateCompletedResult({
 						...result,
 						doctype: result.doctype || this.preview.doctype,
 						name: result.name || this.preview.name,
 						party: result.party || this.preview.party,
-					};
+					});
 					this.$emit("completed", this.completedResult);
 					return;
 				}
@@ -245,6 +247,11 @@ export default {
 			} finally {
 				this.busy = false;
 			}
+		},
+		async decorateCompletedResult(result) {
+			const document = result?.doctype === "Quotation" ? "quotation" : "sales-order";
+			const resolved = await callMethod(ACTIONS_METHOD, { document, name: result.name });
+			return { ...result, next_actions: resolved.actions || [] };
 		},
 		documentKey() {
 			return this.document?.doctype === "Quotation" ? "quotation" : "sales-order";
