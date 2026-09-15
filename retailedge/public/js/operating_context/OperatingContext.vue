@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Operating Context could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgePageLayout class="retailedge-operating-context-page">
 			<EdgePageHeader
 				title="Operating Context"
-				description="Choose the Company and Branch that should guide new RetailEdge work. Existing documents keep their saved accounting, branch and stock values."
+				description="Choose the Company and Branch that should guide new work. Existing documents keep their saved accounting, branch and stock values."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -42,9 +42,9 @@
 
 					<div v-if="posRequired && selectedBranch" class="operating-context-pos">
 						<div>
-							<span class="operating-context-kicker">Required POS access</span>
-							<strong>{{ posProfile || "POS Profile not ready" }}</strong>
-							<small>{{ posMessage || "Your Branch Setup POS Profile is valid for this operating Branch." }}</small>
+							<span class="operating-context-kicker">POS readiness</span>
+							<strong>{{ posProfile || (posReady ? "POS ready" : "POS setup incomplete") }}</strong>
+							<small>{{ posMessage || "POS setup is checked when POS is opened. It does not block Branch switching." }}</small>
 						</div>
 						<EdgeStatusBadge :status="posReady ? 'Active' : 'Warning'" />
 					</div>
@@ -60,7 +60,7 @@
 						<button
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy || !selectedCompany || !selectedBranch || (posRequired && !posReady)"
+							:disabled="busy || !selectedCompany || !selectedBranch"
 							@click="switchContext"
 						>
 							{{ busy ? "Updating…" : "Use Selected Branch" }}
@@ -77,8 +77,8 @@
 						<li>New guided and full-form transactions may receive Branch Setup defaults for the selected Branch.</li>
 						<li>Operational reports may start with the selected Company and Branch as editable defaults.</li>
 						<li>Existing drafts and submitted documents keep their stored Company, Branch, Stock Location and accounting values.</li>
-						<li>Users assigned to ERPNext POS Profiles must have a valid Branch Setup POS Profile for the selected Branch.</li>
-						<li>An active POS shift or unsaved POS/cart/payment state can block switching until that work is completed.</li>
+						<li>POS configuration is checked when POS is opened; an incomplete POS setup does not prevent switching Branch.</li>
+						<li>An active POS shift or unsaved POS/cart/payment state can still block switching until that work is completed.</li>
 					</ul>
 				</section>
 			</div>
@@ -264,7 +264,7 @@ export default {
 			}
 		},
 		async switchContext() {
-			if (!this.selectedCompany || !this.selectedBranch || (this.posRequired && !this.posReady) || this.showClientBlocker()) return;
+			if (!this.selectedCompany || !this.selectedBranch || this.showClientBlocker()) return;
 			this.busy = true;
 			try {
 				await callMethod(
