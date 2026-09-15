@@ -65,6 +65,7 @@
 						<div class="home-period-controls">
 							<EdgeSmartDateRange
 								v-model="homeSmartDate"
+								class="edge-smart-date--align-end"
 								label="Period"
 								placeholder="e.g. last 30 days, YTD, this month"
 								dateOrder="DMY"
@@ -917,7 +918,7 @@ export default {
 				return;
 			}
 			if (!this.nativeFallbackEnabled) {
-				frappe.show_alert?.({ message: "This account is limited to EdgeSuite operational pages.", indicator: "orange" });
+				frappe.show_alert?.({ message: "This account is limited to guided operational pages.", indicator: "orange" });
 				return;
 			}
 			frappe.new_doc(action.doctype);
@@ -1183,7 +1184,7 @@ export default {
 			return "";
 		},
 		actionModeLabel(action) {
-			if (action?.mode === "page") return "EdgeSuite";
+			if (action?.mode === "page") return "Guided";
 			return action?.mode === "available" ? "Guided entry" : "Full form";
 		},
 		iconText(icon) {
