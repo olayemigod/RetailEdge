@@ -120,26 +120,27 @@
 				</div>
 				<div class="invoice-completion-actions">
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
-					<button
-						v-if="!completedResult && preview?.can_submit"
-						type="button"
-						class="edge-button edge-button--primary"
-						:disabled="busy"
-						@click="submitDocument"
-					>
-						{{ busy ? "Submitting..." : "Submit Sales Invoice" }}
-					</button>
-					<button
-						v-if="!completedResult"
-						v-for="action in workflowActions"
-						:key="action.action"
-						type="button"
-						class="edge-button edge-button--primary"
-						:disabled="busy || !preview?.workflow_eligible"
-						@click="applyWorkflow(action.action)"
-					>
-						{{ action.action }}
-					</button>
+					<template v-if="!completedResult">
+						<button
+							v-if="preview?.can_submit"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="busy"
+							@click="submitDocument"
+						>
+							{{ busy ? "Submitting..." : "Submit Sales Invoice" }}
+						</button>
+						<button
+							v-for="action in workflowActions"
+							:key="action.action"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="busy || !preview?.workflow_eligible"
+							@click="applyWorkflow(action.action)"
+						>
+							{{ action.action }}
+						</button>
+					</template>
 				</div>
 			</div>
 		</template>
