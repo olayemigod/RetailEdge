@@ -6,6 +6,8 @@ HOOKS = ROOT / "hooks.py"
 IDENTITY_CSS = ROOT / "public" / "css" / "retailedge_product_identity.css"
 NAV_COMPAT_CSS = ROOT / "public" / "css" / "retailedge_navigation_shell_compat.css"
 PRODUCT_MARK = ROOT / "public" / "images" / "processedge_retail" / "processedge-retail-mark.svg"
+APP_ICON = ROOT / "public" / "images" / "processedge_retail" / "pedge-retail-app-icon.png"
+DESKTOP_IDENTITY = ROOT / "desktop_identity.py"
 SHELL_CONTEXT = ROOT / "public" / "js" / "retailedge_shell_context.js"
 COMPANY_PROFILE = ROOT / "company_profile.py"
 WORKSPACE = ROOT / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
@@ -146,8 +148,12 @@ def test_approved_processedge_retail_brand_assets_and_visible_identity_are_wired
     mark = PRODUCT_MARK.read_text(encoding="utf-8")
 
     assert PRODUCT_MARK.exists()
-    assert "ProcessEdge Retail" in hooks
-    assert "processedge-retail-mark.svg" in hooks
+    assert APP_ICON.exists()
+    assert 'app_title = "PEdge Retail"' in hooks
+    assert '"title": "PEdge Retail"' in hooks
+    assert "pedge-retail-app-icon.png" in hooks
+    assert '"route": "/desk/retailedge-business-hub"' in hooks
+    assert "retailedge.desktop_identity.sync_retailedge_desktop_identity" in hooks
     assert '"product_code": "retailedge"' in profile
     assert '"product_name": "ProcessEdge Retail"' in profile
     assert '"product_subtitle": "Structured for Scale."' in profile
@@ -158,6 +164,25 @@ def test_approved_processedge_retail_brand_assets_and_visible_identity_are_wired
     assert '"label": "ProcessEdge Retail"' in workspace
     assert '"title": "ProcessEdge Retail"' in workspace
     assert "Shelf R mark" in mark
+
+
+def test_desktop_launcher_repairs_existing_frappe_desktop_state_without_renaming_workspace():
+    source = DESKTOP_IDENTITY.read_text(encoding="utf-8")
+
+    for contract in (
+        'DESKTOP_LABEL = "PEdge Retail"',
+        'DESKTOP_ROUTE = "/desk/retailedge-business-hub"',
+        'pedge-retail-app-icon.png',
+        '"Desktop Icon"',
+        '"Workspace Sidebar"',
+        'WORKSPACE_NAME = "RetailEdge"',
+        'frappe.cache.delete_key("desktop_icons")',
+        'frappe.cache.delete_key("bootinfo")',
+    ):
+        assert contract in source
+
+    assert 'frappe.delete_doc("Workspace"' not in source
+    assert 'frappe.rename_doc("Workspace"' not in source
 
 
 def test_processedge_retail_palette_uses_approved_master_brand_colours():
