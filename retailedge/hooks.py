@@ -1,5 +1,5 @@
 app_name = "retailedge"
-app_title = "RetailEdge"
+app_title = "ProcessEdge Retail"
 app_publisher = "ProcessEdge Solutions"
 app_description = "Retail operations, POS control, sales audit, payment verification, branch workflows, and retail intelligence for ERPNext/POSNext."
 app_email = "support@processedge.com.ng"
@@ -15,15 +15,14 @@ required_apps = ["edgesuite_ui"]
 # ------------------
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "retailedge",
-# 		"logo": "/assets/retailedge/logo.png",
-# 		"title": "RetailEdge",
-# 		"route": "/retailedge",
-# 		"has_permission": "retailedge.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "retailedge",
+		"logo": "/assets/retailedge/images/processedge_retail/processedge-retail-mark.svg",
+		"title": "ProcessEdge Retail",
+		"route": "/app/retailedge-business-hub",
+	}
+]
 
 # Includes in <head>
 # ------------------
