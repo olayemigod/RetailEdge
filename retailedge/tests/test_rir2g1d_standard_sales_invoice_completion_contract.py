@@ -186,8 +186,8 @@ def test_completion_dialog_uses_only_server_authoritative_actions():
 		"expected_workflow_state",
 		"Print",
 		"PDF",
-		"Make Payment",
-		"Create Delivery Note",
+		"get_professional_selling_record_actions",
+		"completedResult.next_actions",
 		'emitNextAction(action)',
 	):
 		assert contract in source
@@ -286,8 +286,8 @@ def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():
 	for contract in (
 		">Print</button>",
 		">PDF</button>",
-		"Make Payment",
-		"Create Delivery Note",
+		"get_professional_selling_record_actions",
+		"completedResult.next_actions",
 		"View / Print / Send",
 		'this.$emit("next-action"',
 		"completedResult",
