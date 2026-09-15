@@ -314,13 +314,11 @@
 			</div>
 
 			<p class="guided-payment-hint">
-				Only submitted sales references with an amount available for payment are offered. Multi-currency and
-				complex allocation cases remain on the full ERPNext Payment Entry form.
 				<template v-if="isCustomerPayment">
-					Standard Receive Customer supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
+					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Standard Receive Customer supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
 				</template>
 				<template v-if="isSupplierPayment">
-					Standard Pay Supplier supports one Purchase Invoice per payment; complex allocations stay in Advanced ERPNext.
+					Only submitted Purchase Invoices with a positive outstanding balance are offered. Standard Pay Supplier supports one Purchase Invoice per payment; complex allocations stay in Advanced ERPNext.
 				</template>
 			</p>
 
@@ -527,15 +525,15 @@ export default {
 			modeDetails: {},
 			values: emptyValues(),
 			referenceTableField: {
-				label: "Sales Reference Allocation",
-				description: "Allocate this payment to the selected payable sales reference.",
+				label: "Reference Allocation",
+				description: "Allocate this payment to the selected payable reference.",
 			},
 			referenceColumns: [
 				{
 					fieldname: "reference_name",
-					label: "Sales Reference",
+					label: "Reference",
 					fieldtype: "Link",
-					placeholder: "Search payable sales reference",
+					placeholder: "Search payable reference",
 				},
 				{
 					fieldname: "outstanding_amount",
@@ -646,7 +644,7 @@ export default {
 				});
 				const outstandingAmount = Number(details.outstanding_amount || 0);
 				if (!(outstandingAmount > 0)) {
-					throw new Error("The selected sales reference no longer has an amount available for payment.");
+					throw new Error("The selected reference no longer has an amount available for payment.");
 				}
 				this.values.references = [{
 					reference_name: referenceName,
@@ -769,7 +767,7 @@ export default {
 					this.values.amount = this.allocatedTotal;
 				}
 			} catch (error) {
-				this.saveError = errorMessage(error, "Unable to load the sales reference amount available for payment.");
+				this.saveError = errorMessage(error, "Unable to load the reference amount available for payment.");
 				this.values.references = rows;
 			} finally {
 				this.referenceLoading = false;
