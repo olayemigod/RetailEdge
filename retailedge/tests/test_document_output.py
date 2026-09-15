@@ -91,6 +91,56 @@ class TestDocumentOutput(unittest.TestCase):
 		self.assertNotIn("from ProcessEdge", source)
 		self.assertNotIn("secure RetailEdge", source)
 
+	def test_preview_pdf_and_email_share_one_request_scoped_render_contract(self):
+		source = self.read("document_output.py")
+		for contract in (
+			"def _output_render_options(",
+			"frappe.flags.retailedge_output_options",
+			"def _render_document(",
+			"render_document_preview",
+			"show_logo: int = 1",
+			"include_qr: int = 0",
+			"no_letterhead: int = 1",
+			"pdf = _render_document(",
+		):
+			self.assertIn(contract, source)
+
+	def test_email_readiness_is_checked_before_queueing(self):
+		source = self.read("document_output.py")
+		component = self.read("public/js/document_output_sharing/DocumentOutputSharing.vue")
+		for contract in (
+			"EmailAccount.find_default_outgoing()",
+			'"email_configured": _outgoing_email_ready()',
+			"if not _outgoing_email_ready():",
+			"frappe.OutgoingEmailError",
+		):
+			self.assertIn(contract, source)
+		for contract in (
+			"this.details?.email_configured",
+			"Outgoing email is not configured.",
+			'{{ sendingEmail ? "Queueing..." : "Email PDF" }}',
+			"this.sendingEmail = false;",
+		):
+			self.assertIn(contract, component)
+
+	def test_output_page_is_preview_driven_and_letterhead_defaults_off(self):
+		component = self.read("public/js/document_output_sharing/DocumentOutputSharing.vue")
+		for contract in (
+			'PREVIEW_METHOD = "retailedge.document_output.render_document_preview"',
+			'ref="documentPreview"',
+			':srcdoc="previewHtml"',
+			'this.useLetterhead = Boolean(this.details.default_use_letterhead);',
+			"useLetterhead: false",
+			"showLogo: true",
+			"includeQr: false",
+			"Include company logo",
+			"Include document QR",
+			"Download PDF",
+		):
+			self.assertIn(contract, component)
+		self.assertNotIn("/printview?", component)
+
+
 	def test_whatsapp_is_user_initiated_without_public_document_link(self):
 		source = self.read("document_output.py")
 		for contract in (
