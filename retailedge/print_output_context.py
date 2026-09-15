@@ -58,7 +58,7 @@ def _qr_data_uri(value: str) -> str:
 		return "data:image/svg+xml;base64," + base64.b64encode(stream.getvalue()).decode()
 
 
-def get_retailedge_print_context(doc) -> dict[str, Any]:
+def get_business_print_context(doc) -> dict[str, Any]:
 	"""Return presentation-only print identity and request-scoped output options.
 
 	The source business document is never changed. Logo/QR choices are supplied
