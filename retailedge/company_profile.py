@@ -12,29 +12,40 @@ from retailedge.operating_context import (
 )
 
 
-PROFILE_EDITABLE_FIELDS = (
-	"company_name",
-	"tax_id",
+PROFILE_DOCTYPE = "RetailEdge Company Profile"
+PROFILE_FIELDS = (
+	"display_name",
+	"logo",
+	"phone",
+	"whatsapp_number",
+	"email",
 	"website",
-	"date_of_establishment",
-)
-PROFILE_READ_ONLY_FIELDS = (
-	"abbr",
-	"default_currency",
-	"country",
-)
-ADDRESS_FIELDS = (
-	"address_title",
-	"address_type",
 	"address_line1",
 	"address_line2",
 	"city",
 	"county",
 	"state",
 	"country",
-	"pincode",
-	"phone",
-	"email_id",
+	"postal_code",
+)
+ADDRESS_PROFILE_FIELDS = (
+	"address_line1",
+	"address_line2",
+	"city",
+	"county",
+	"state",
+	"country",
+	"postal_code",
+)
+COMPANY_READ_ONLY_FIELDS = (
+	"company_name",
+	"company_logo",
+	"abbr",
+	"default_currency",
+	"country",
+	"tax_id",
+	"website",
+	"date_of_establishment",
 )
 
 
@@ -42,44 +53,19 @@ def _clean(value: Any) -> str:
 	return str(value or "").strip()
 
 
-def _company_meta():
-	return frappe.get_meta("Company")
+def _assert_company_access(company: str) -> None:
+	if not company:
+		frappe.throw(_("Company is required."))
+	get_allowed_operating_contexts(company=company)
 
 
-def _company_fields() -> list[str]:
-	meta = _company_meta()
-	fields = ["name"]
-	for fieldname in ("company_logo", *PROFILE_EDITABLE_FIELDS, *PROFILE_READ_ONLY_FIELDS):
-		if meta.has_field(fieldname):
-			fields.append(fieldname)
-	return fields
-
-
-def _profile_from_row(row: dict[str, Any], company: str) -> dict[str, Any]:
-	return {
-		"name": row.get("name") or company,
-		"label": row.get("company_name") or row.get("name") or company,
-		"company_name": row.get("company_name") or row.get("name") or company,
-		"logo": row.get("company_logo") or "",
-		"abbr": row.get("abbr") or "",
-		"currency": row.get("default_currency") or "",
-		"country": row.get("country") or "",
-		"tax_id": row.get("tax_id") or "",
-		"website": row.get("website") or "",
-		"date_of_establishment": row.get("date_of_establishment") or "",
-	}
-
-
-def resolve_company_profile(company: str) -> dict[str, Any]:
-	"""Return presentation-safe ERPNext Company identity without duplicating Company truth."""
-	company = _clean(company)
+def _company_row(company: str) -> dict[str, Any]:
 	fallback = {
 		"name": company,
-		"label": company,
 		"company_name": company,
-		"logo": "",
+		"company_logo": "",
 		"abbr": "",
-		"currency": "",
+		"default_currency": "",
 		"country": "",
 		"tax_id": "",
 		"website": "",
@@ -88,91 +74,135 @@ def resolve_company_profile(company: str) -> dict[str, Any]:
 	if not company or not frappe.db.exists("Company", company):
 		return fallback
 
-	row = frappe.db.get_value("Company", company, _company_fields(), as_dict=True) or {}
-	return _profile_from_row(row, company)
+	meta = frappe.get_meta("Company")
+	fields = ["name", *[fieldname for fieldname in COMPANY_READ_ONLY_FIELDS if meta.has_field(fieldname)]]
+	row = frappe.db.get_value("Company", company, fields, as_dict=True) or {}
+	fallback.update(row)
+	return fallback
 
 
-def _assert_company_access(company: str) -> None:
-	if not company:
-		frappe.throw(_("Company is required."))
-	# Operating Context is the RetailEdge product authority. This validation also
-	# preserves assignment-authoritative users who may not have generic Company read.
-	get_allowed_operating_contexts(company=company)
-
-
-def _assert_company_write(company: str) -> None:
-	_assert_company_access(company)
-	try:
-		allowed = bool(frappe.has_permission("Company", "write", doc=company))
-	except Exception:
-		allowed = False
-	if not allowed:
-		frappe.throw(_("You do not have permission to update this Company profile."), frappe.PermissionError)
-
-
-def _find_company_address(company: str) -> str:
-	try:
-		return (
-			frappe.db.get_value(
-				"Dynamic Link",
-				{
-					"parenttype": "Address",
-					"link_doctype": "Company",
-					"link_name": company,
-				},
-				"parent",
-				order_by="idx asc",
-			)
-			or ""
-		)
-	except Exception:
+def _profile_name(company: str) -> str:
+	if not frappe.db.exists("DocType", PROFILE_DOCTYPE):
 		return ""
+	return _clean(frappe.db.exists(PROFILE_DOCTYPE, {"company": company}) or "")
 
 
-def _address_payload(company: str) -> dict[str, Any]:
-	name = _find_company_address(company)
-	payload = {fieldname: "" for fieldname in ADDRESS_FIELDS}
-	payload.update({"name": name})
-	if not name or not frappe.db.exists("Address", name):
+def _profile_row(company: str) -> dict[str, Any]:
+	payload = {fieldname: "" for fieldname in PROFILE_FIELDS}
+	name = _profile_name(company)
+	payload["profile_docname"] = name
+	if not name:
 		return payload
-	meta = frappe.get_meta("Address")
-	fields = ["name", *[fieldname for fieldname in ADDRESS_FIELDS if meta.has_field(fieldname)]]
-	row = frappe.db.get_value("Address", name, fields, as_dict=True) or {}
-	payload.update({fieldname: row.get(fieldname) or "" for fieldname in fields})
+
+	meta = frappe.get_meta(PROFILE_DOCTYPE)
+	fields = ["name", "company", *[fieldname for fieldname in PROFILE_FIELDS if meta.has_field(fieldname)]]
+	row = frappe.db.get_value(PROFILE_DOCTYPE, name, fields, as_dict=True) or {}
+	payload.update(row)
+	payload["profile_docname"] = row.get("name") or name
 	return payload
 
 
-def _permissions(company: str, address_name: str = "") -> dict[str, bool]:
+def resolve_company_profile(company: str) -> dict[str, Any]:
+	"""Merge accounting-safe ERPNext Company truth with RetailEdge presentation profile."""
+	company = _clean(company)
+	base = _company_row(company)
+	product = _profile_row(company)
+
+	company_name = _clean(base.get("company_name")) or _clean(base.get("name")) or company
+	display_name = _clean(product.get("display_name")) or company_name
+	logo = _clean(product.get("logo")) or _clean(base.get("company_logo"))
+	website = _clean(product.get("website")) or _clean(base.get("website"))
+
+	return {
+		"name": _clean(base.get("name")) or company,
+		"label": display_name,
+		"official_name": company_name,
+		"display_name": _clean(product.get("display_name")),
+		"logo": logo,
+		"profile_logo": _clean(product.get("logo")),
+		"profile_docname": _clean(product.get("profile_docname")),
+		"abbr": _clean(base.get("abbr")),
+		"currency": _clean(base.get("default_currency")),
+		"country": _clean(base.get("country")),
+		"tax_id": _clean(base.get("tax_id")),
+		"website": website,
+		"company_website": _clean(base.get("website")),
+		"date_of_establishment": base.get("date_of_establishment") or "",
+		"phone": _clean(product.get("phone")),
+		"whatsapp_number": _clean(product.get("whatsapp_number")),
+		"email": _clean(product.get("email")),
+		"address_line1": _clean(product.get("address_line1")),
+		"address_line2": _clean(product.get("address_line2")),
+		"city": _clean(product.get("city")),
+		"county": _clean(product.get("county")),
+		"state": _clean(product.get("state")),
+		"profile_country": _clean(product.get("country")),
+		"postal_code": _clean(product.get("postal_code")),
+	}
+
+
+def _can_create_profile() -> bool:
 	try:
-		can_write = bool(frappe.has_permission("Company", "write", doc=company))
+		return bool(frappe.has_permission(PROFILE_DOCTYPE, "create"))
 	except Exception:
-		can_write = False
+		return False
+
+
+def _can_write_profile(profile_name: str = "") -> bool:
 	try:
-		can_manage_address = bool(
-			frappe.has_permission("Address", "write", doc=address_name)
-			if address_name
-			else frappe.has_permission("Address", "create")
-		)
+		if profile_name:
+			return bool(frappe.has_permission(PROFILE_DOCTYPE, "write", doc=profile_name))
+		return _can_create_profile()
 	except Exception:
-		can_manage_address = False
+		return False
+
+
+def _assert_profile_write(company: str, profile_name: str = "") -> None:
+	_assert_company_access(company)
+	if not _can_write_profile(profile_name):
+		frappe.throw(_("You do not have permission to update this Company profile."), frappe.PermissionError)
+
+
+def _permissions(company: str, profile_name: str = "") -> dict[str, bool]:
+	can_write = _can_write_profile(profile_name)
 	return {
 		"can_write": can_write,
 		"can_upload_logo": can_write,
-		"can_manage_address": can_manage_address,
+		"can_manage_address": can_write,
 	}
 
 
 def _profile_response(company: str) -> dict[str, Any]:
 	current = get_operating_context()
 	profile = resolve_company_profile(company)
-	address = _address_payload(company)
 	return {
 		"profile": profile,
-		"address": address,
 		"operating_context": current,
-		"permissions": _permissions(company, address.get("name") or ""),
-		"source_of_truth": "ERPNext Company",
+		"permissions": _permissions(company, profile.get("profile_docname") or ""),
+		"source_of_truth": "ERPNext Company + RetailEdge Company Profile",
 	}
+
+
+def _new_profile(company: str):
+	doc = frappe.new_doc(PROFILE_DOCTYPE)
+	doc.company = company
+	doc.display_name = _company_row(company).get("company_name") or company
+	return doc
+
+
+def _get_or_new_profile(company: str):
+	name = _profile_name(company)
+	if name:
+		return frappe.get_doc(PROFILE_DOCTYPE, name), False
+	return _new_profile(company), True
+
+
+def _save_profile_doc(doc, *, is_new: bool):
+	if is_new:
+		doc.insert()
+	else:
+		doc.save()
+	return doc
 
 
 @frappe.whitelist()
@@ -184,80 +214,56 @@ def get_company_profile(company: str = "") -> dict[str, Any]:
 
 
 @frappe.whitelist(methods=["POST"])
-def save_company_profile(company: str, profile: str | dict[str, Any]) -> dict[str, Any]:
+def ensure_company_profile(company: str) -> dict[str, Any]:
 	company = _clean(company)
-	_assert_company_write(company)
-	payload = frappe.parse_json(profile) if isinstance(profile, str) else dict(profile or {})
-	doc = frappe.get_doc("Company", company)
-	meta = frappe.get_meta("Company")
-	for fieldname in PROFILE_EDITABLE_FIELDS:
-		if fieldname not in payload or not meta.has_field(fieldname):
-			continue
-		value = payload.get(fieldname)
-		if fieldname == "date_of_establishment":
-			doc.set(fieldname, value or None)
-		else:
-			doc.set(fieldname, _clean(value))
-	doc.save()
+	_assert_company_access(company)
+	name = _profile_name(company)
+	if name:
+		return _profile_response(company)
+	_assert_profile_write(company)
+	doc = _new_profile(company)
+	doc.insert()
 	return _profile_response(company)
 
 
-def _assert_address_permission(address_name: str = "") -> None:
-	try:
-		allowed = bool(
-			frappe.has_permission("Address", "write", doc=address_name)
-			if address_name
-			else frappe.has_permission("Address", "create")
-		)
-	except Exception:
-		allowed = False
-	if not allowed:
-		frappe.throw(_("You do not have permission to update the Company address."), frappe.PermissionError)
+@frappe.whitelist(methods=["POST"])
+def save_company_profile(company: str, profile: str | dict[str, Any]) -> dict[str, Any]:
+	company = _clean(company)
+	payload = frappe.parse_json(profile) if isinstance(profile, str) else dict(profile or {})
+	doc, is_new = _get_or_new_profile(company)
+	_assert_profile_write(company, "" if is_new else doc.name)
+
+	for fieldname in PROFILE_FIELDS:
+		if fieldname not in payload or fieldname in ADDRESS_PROFILE_FIELDS or fieldname == "logo":
+			continue
+		doc.set(fieldname, _clean(payload.get(fieldname)))
+	_save_profile_doc(doc, is_new=is_new)
+	return _profile_response(company)
 
 
 @frappe.whitelist(methods=["POST"])
 def save_company_address(company: str, address: str | dict[str, Any]) -> dict[str, Any]:
 	company = _clean(company)
-	_assert_company_access(company)
 	payload = frappe.parse_json(address) if isinstance(address, str) else dict(address or {})
-	existing_name = _clean(payload.get("name")) or _find_company_address(company)
-	_assert_address_permission(existing_name)
+	doc, is_new = _get_or_new_profile(company)
+	_assert_profile_write(company, "" if is_new else doc.name)
 
-	if existing_name:
-		doc = frappe.get_doc("Address", existing_name)
-	else:
-		doc = frappe.new_doc("Address")
-		doc.address_title = _clean(payload.get("address_title")) or resolve_company_profile(company).get("label") or company
-		doc.address_type = _clean(payload.get("address_type")) or "Office"
-		doc.append("links", {"link_doctype": "Company", "link_name": company})
-
-	meta = frappe.get_meta("Address")
-	for fieldname in ADDRESS_FIELDS:
-		if not meta.has_field(fieldname) or fieldname not in payload:
-			continue
-		doc.set(fieldname, _clean(payload.get(fieldname)))
-	if not _clean(doc.get("address_title")):
-		doc.address_title = resolve_company_profile(company).get("label") or company
-	if not _clean(doc.get("address_type")):
-		doc.address_type = "Office"
-	if not any(
-		_clean(row.link_doctype) == "Company" and _clean(row.link_name) == company
-		for row in (doc.get("links") or [])
-	):
-		doc.append("links", {"link_doctype": "Company", "link_name": company})
-	doc.save()
+	for fieldname in ADDRESS_PROFILE_FIELDS:
+		if fieldname in payload:
+			doc.set(fieldname, _clean(payload.get(fieldname)))
+	_save_profile_doc(doc, is_new=is_new)
 	return _profile_response(company)
 
 
-def _assert_attached_company_logo(company: str, file_url: str) -> None:
+def _assert_attached_profile_logo(profile_name: str, file_url: str) -> None:
 	if not file_url:
 		return
 	file_name = frappe.db.get_value(
 		"File",
 		{
 			"file_url": file_url,
-			"attached_to_doctype": "Company",
-			"attached_to_name": company,
+			"attached_to_doctype": PROFILE_DOCTYPE,
+			"attached_to_name": profile_name,
 		},
 		"name",
 	)
@@ -268,14 +274,13 @@ def _assert_attached_company_logo(company: str, file_url: str) -> None:
 @frappe.whitelist(methods=["POST"])
 def set_company_logo(company: str, file_url: str = "") -> dict[str, Any]:
 	company = _clean(company)
-	_assert_company_write(company)
-	file_url = _clean(file_url)
-	_assert_attached_company_logo(company, file_url)
-	meta = frappe.get_meta("Company")
-	if not meta.has_field("company_logo"):
-		frappe.throw(_("This ERPNext Company does not expose a Company Logo field."))
-	doc = frappe.get_doc("Company", company)
-	doc.company_logo = file_url
+	doc, is_new = _get_or_new_profile(company)
+	_assert_profile_write(company, "" if is_new else doc.name)
+	if is_new:
+		_save_profile_doc(doc, is_new=True)
+	_assert_attached_profile_logo(doc.name, _clean(file_url))
+	doc.reload()
+	doc.logo = _clean(file_url)
 	doc.save()
 	return _profile_response(company)
 
