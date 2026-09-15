@@ -377,7 +377,7 @@ import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import StandardStockCompletionDialog from "./StandardStockCompletionDialog.vue";
 import { openQuickEntryMaster } from "./guidedEntryUtils";
 
-const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home_snapshot";
 const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
 const CONTEXT_CACHE_TTL_MS = 30_000;
