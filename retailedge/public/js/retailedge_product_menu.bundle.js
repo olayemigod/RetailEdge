@@ -1,6 +1,6 @@
 const PRODUCT = "RetailEdge";
 const SHARED_RUNTIME_ASSET = "edgeui.bundle.js";
-const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const MAX_INSTALL_ATTEMPTS = 6;
 const GUIDED_CREATE_ACTION = "guided-create";
