@@ -29,9 +29,9 @@ def test_business_hub_home_exposes_operational_command_centre_sections():
 		assert f'key="{index_key}"' in source or index_key in source
 	assert "homeSnapshot.attention" in source
 	assert "refreshHomeSnapshot" in source
-	assert "EdgeLinkField" in source
+	assert "EdgeSmartDateRange" in source
 	assert "homePeriodPreset" in source
-	assert "homePeriodQuery" in source
+	assert "homeSmartDate" in source
 
 
 def test_business_hub_period_filter_is_fuzzy_bounded_and_server_resolved():
@@ -42,10 +42,13 @@ def test_business_hub_period_filter_is_fuzzy_bounded_and_server_resolved():
 		assert preset in frontend or preset in backend
 
 	for contract in (
-		"EdgeLinkField",
-		':creator="createHomePeriodOption"',
-		'placeholder="e.g. last 30 days, YTD, 01/09/2026 - 15/09/2026"',
-		"handleHomePeriodSelection",
+		"EdgeSmartDateRange",
+		'placeholder="e.g. last 30 days, YTD, this month"',
+		'dateOrder="DMY"',
+		'@resolved="handleHomeDateResolved"',
+		"homeSmartDate",
+		"from_date: resolvedRange?.from_date",
+		"to_date: resolvedRange?.to_date",
 		"formatDisplayDate",
 	):
 		assert contract in frontend
