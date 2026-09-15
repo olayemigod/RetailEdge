@@ -231,7 +231,7 @@ export default {
 		posDescription() {
 			return this.pos?.provider === "posnext"
 				? "Use the installed POSNext provider from the current operating context."
-				: "POSNext is not available, so RetailEdge falls back to ERPNext's native Point of Sale where installed.";
+				: "POSNext is not available, so the standard ERPNext Point of Sale is used where installed.";
 		},
 		hasOperatingContext() {
 			return Boolean(String(this.tenantName || "").trim() && String(this.branchName || "").trim());
