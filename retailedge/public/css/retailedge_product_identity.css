@@ -370,11 +370,12 @@ body.edge-suite-product-retailedge .edge-report-table td,
 body.edge-suite-product-retailedge .retailedge-business-hub .hub-banner,
 [data-edge-product="retailedge"] .retailedge-business-hub .hub-banner {
 	background:
-		linear-gradient(120deg, rgba(15, 143, 127, 0.12), transparent 42%),
-		linear-gradient(180deg, #fff, #f9fbfc);
-	border: 1px solid var(--retailedge-border);
+		linear-gradient(120deg, color-mix(in srgb, var(--edge-color-brand-600) 12%, transparent), transparent 42%),
+		linear-gradient(180deg, var(--edge-color-surface), var(--edge-color-surface-muted));
+	border: 1px solid var(--edge-color-border);
 	border-radius: var(--retailedge-radius);
 	box-shadow: var(--retailedge-shadow);
+	color: var(--edge-color-ink-950);
 }
 
 body.edge-suite-product-retailedge .retailedge-business-hub .hub-eyebrow,
@@ -407,8 +408,8 @@ body.edge-suite-product-retailedge .home-kpi-card,
 
 body.edge-suite-product-retailedge .home-kpi-card:hover,
 [data-edge-product="retailedge"] .home-kpi-card:hover {
-	border-color: #9fcfc6;
-	box-shadow: 0 5px 14px rgba(11, 31, 51, 0.07);
+	border-color: color-mix(in srgb, var(--edge-color-brand-600) 38%, var(--edge-color-border));
+	box-shadow: var(--edge-shadow-sm);
 	transform: translateY(-1px);
 }
 
@@ -448,9 +449,9 @@ body.edge-suite-product-retailedge .home-quick-action,
 
 body.edge-suite-product-retailedge .home-quick-action-icon,
 [data-edge-product="retailedge"] .home-quick-action-icon {
-	background: var(--retailedge-ink);
+	background: color-mix(in srgb, var(--edge-color-brand-600) 16%, var(--edge-color-surface));
 	border-radius: 7px;
-	color: #fff;
+	color: var(--edge-color-brand-600);
 }
 
 /* Dark mode keeps the same identity rather than reverting to generic EdgeSuite. */
@@ -472,6 +473,21 @@ html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-topba
 body.edge-suite-product-retailedge[data-edge-appearance="dark"] .edge-topbar,
 :root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-topbar {
 	background: rgba(19, 38, 50, 0.98);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .retailedge-business-hub .hub-banner,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .retailedge-business-hub .hub-banner {
+	background:
+		linear-gradient(120deg, color-mix(in srgb, var(--edge-color-brand-600) 14%, transparent), transparent 42%),
+		linear-gradient(180deg, var(--edge-color-surface), var(--edge-color-surface-muted));
+	border-color: var(--edge-color-border);
+	color: var(--edge-color-ink-950);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .home-quick-action-icon,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .home-quick-action-icon {
+	background: color-mix(in srgb, var(--edge-color-brand-600) 18%, var(--edge-color-surface));
+	color: var(--edge-color-brand-500);
 }
 
 html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-sidebar-item.active,
