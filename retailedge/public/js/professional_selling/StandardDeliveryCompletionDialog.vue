@@ -60,7 +60,16 @@
 						<p>Continue to billing or output without closing the workflow.</p>
 					</div>
 					<div class="delivery-next-buttons">
-						<button type="button" class="edge-button edge-button--primary" @click="emitNextAction('create-sales-invoice')">Create Sales Invoice</button>
+						<button
+							v-for="(action, index) in completedResult.next_actions || []"
+							:key="action.value"
+							type="button"
+							class="edge-button"
+							:class="{ 'edge-button--primary': index === 0, 'edge-button--secondary': index !== 0 }"
+							@click="emitNextAction(action.value)"
+						>
+							{{ action.label }}
+						</button>
 						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">View / Print / Send</button>
 					</div>
 				</div>
@@ -108,6 +117,7 @@ const SUBMIT_METHOD = "retailedge.standard_delivery_completion.submit_standard_d
 const WORKFLOW_METHOD = "retailedge.standard_delivery_completion.apply_standard_delivery_workflow_action";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
+const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 
 function runtimeComponents() {
 	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
@@ -191,9 +201,9 @@ export default {
 					name: this.preview.name,
 					expected_modified: this.preview.modified,
 				}, "POST");
-				this.completedResult = result;
+				this.completedResult = await this.decorateCompletedResult(result);
 				this.$emit("changed", result);
-				this.$emit("completed", result);
+				this.$emit("completed", this.completedResult);
 			} catch (error) {
 				this.actionError = errorMessage(error, "Unable to submit this Delivery Note.");
 				await this.loadPreview();
@@ -214,7 +224,7 @@ export default {
 				}, "POST");
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					this.completedResult = { ...result, customer: result.customer || this.preview?.customer || "" };
+					this.completedResult = await this.decorateCompletedResult({ ...result, customer: result.customer || this.preview?.customer || "" });
 					this.$emit("completed", this.completedResult);
 					return;
 				}
@@ -225,6 +235,10 @@ export default {
 			} finally {
 				this.busy = false;
 			}
+		},
+		async decorateCompletedResult(result) {
+			const resolved = await callMethod(ACTIONS_METHOD, { document: "delivery-note", name: result.name });
+			return { ...result, next_actions: resolved.actions || [] };
 		},
 		async ensureOutputDetails() {
 			if (this.outputDetails?.name === this.document?.name) return this.outputDetails;
