@@ -2,7 +2,7 @@
 	<EdgeModal
 		:open="open"
 		title="New Quotation"
-		subtitle="Prepare a customer quotation using ERPNext pricing, Shipping Rules and RetailEdge Operating Context."
+		subtitle="Prepare a customer quotation using ERPNext pricing, Shipping Rules and the current Operating Context."
 		size="xl"
 		@close="requestClose"
 	>
