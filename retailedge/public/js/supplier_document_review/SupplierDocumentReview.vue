@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="supplier-review-fallback">
 		<strong>Supplier Document Review could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -66,7 +66,7 @@
 										<span v-else>Not recorded</span>
 									</td>
 									<td class="num">{{ formatMoney(row.extracted_total, row.extracted_currency || row.purchase_order_currency) }}</td>
-									<td><button v-if="row.purchase_invoice" class="edge-link-button" type="button" @click="openPurchaseInvoiceReview(row)">{{ row.purchase_invoice }}</button><span v-else>—</span><small v-if="row.purchase_invoice">Review the ERPNext PO-mapped invoice in EdgeSuite before submission</small></td>
+									<td><button v-if="row.purchase_invoice" class="edge-link-button" type="button" @click="openPurchaseInvoiceReview(row)">{{ row.purchase_invoice }}</button><span v-else>—</span><small v-if="row.purchase_invoice">Review the ERPNext PO-mapped invoice here before submission</small></td>
 									<td class="supplier-review-row-actions">
 										<button v-if="row.intake_review_status === 'Pending Review'" class="edge-button edge-button--compact" type="button" @click="setIntakeStatus(row, 'In Review')">Start Review</button>
 										<button v-if="!row.extraction && !isIntakeFinal(row)" class="edge-button edge-button--compact" type="button" @click="openExtractionModal(row)">Record Extraction</button>
@@ -109,7 +109,7 @@
 						</div>
 						<div v-if="invoiceReview.workflow_readiness?.source === 'frappe'" class="supplier-review-safety">
 							<strong>{{ invoiceReview.workflow_readiness.message }}</strong>
-							<span>Only actions currently permitted by Frappe Workflow are available here. RetailEdge does not assign workflow state directly.</span>
+							<span>Only actions currently permitted by Frappe Workflow are available here. Workflow state is not assigned directly by this page.</span>
 						</div>
 						<div v-if="invoiceReview.blockers && invoiceReview.blockers.some((row) => row.key !== 'workflow')" class="supplier-review-error">
 							<strong>Standard completion is blocked.</strong>
