@@ -63,17 +63,12 @@
 							<p class="section-rider">Key business indicators for the selected period.</p>
 						</div>
 						<div class="home-period-controls">
-							<EdgeLinkField
-								v-model="homePeriodQuery"
-								:selectedLabel="homePeriod.label || homePeriodQuery"
-								:options="homePeriodOptions"
+							<EdgeSmartDateRange
+								v-model="homeSmartDate"
 								label="Period"
-								placeholder="e.g. last 30 days, YTD, 01/09/2026 - 15/09/2026"
-								:canCreate="true"
-								:creator="createHomePeriodOption"
-								createLabel="Use period"
-								noResultsLabel="Type a period and press Enter"
-								@select="handleHomePeriodSelection"
+								placeholder="e.g. last 30 days, YTD, this month"
+								dateOrder="DMY"
+								@resolved="handleHomeDateResolved"
 							/>
 							<span v-if="homePeriod.from_date" class="home-as-of">{{ formatDisplayDate(homePeriod.from_date) }} – {{ formatDisplayDate(homePeriod.to_date) }}</span>
 						</div>
@@ -446,11 +441,18 @@ function fetchSharedContext({ force = false } = {}) {
 	return request;
 }
 
-function fetchHomeSnapshot(company, branch, datePreset) {
+function fetchHomeSnapshot(company, branch, datePreset, resolvedRange = {}) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method: HOME_SNAPSHOT_METHOD,
-			args: { company: company || "", branch: branch || "", date_preset: datePreset || "Today" },
+			args: {
+				company: company || "",
+				branch: branch || "",
+				date_preset: datePreset || "Today",
+				from_date: resolvedRange?.from_date || "",
+				to_date: resolvedRange?.to_date || "",
+				date_label: resolvedRange?.label || resolvedRange?.display_value || "",
+			},
 			callback: (response) => resolve(response.message || {}),
 			error: (error) => reject(error),
 		});
@@ -504,7 +506,7 @@ export default {
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeIcon: runtimeComponents.EdgeIcon,
-		EdgeLinkField: runtimeComponents.EdgeLinkField,
+		EdgeSmartDateRange: runtimeComponents.EdgeSmartDateRange,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
@@ -527,7 +529,7 @@ export default {
 			homeError: "",
 			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
-			homePeriodQuery: "Today",
+			homeSmartDate: {},
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
@@ -557,18 +559,6 @@ export default {
 		};
 	},
 	computed: {
-		homePeriodOptions() {
-			return [
-				{ value: "Today", label: "Today", description: "Current business day" },
-				{ value: "Yesterday", label: "Yesterday", description: "Previous business day" },
-				{ value: "This Week", label: "This Week", description: "Week to date · WTD" },
-				{ value: "This Month", label: "This Month", description: "Month to date · MTD" },
-				{ value: "Last 7 Days", label: "Last 7 Days", description: "Rolling seven-day period" },
-				{ value: "Last 30 Days", label: "Last 30 Days", description: "Rolling thirty-day period" },
-				{ value: "Year to Date", label: "Year to Date", description: "YTD · from 1 January" },
-				{ value: "Last Month", label: "Last Month", description: "Previous calendar month" },
-			];
-		},
 		greeting() {
 			return this.context.user_name
 				? `Welcome, ${this.context.user_name}`
@@ -672,18 +662,24 @@ export default {
 					this.loading = false;
 				});
 		},
-		refreshHomeSnapshot() {
+		refreshHomeSnapshot(resolvedRange = null) {
 			if (!this.context.company) {
 				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
 			this.homeError = "";
-			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset)
+			const range = resolvedRange || this.homeSmartDate || {};
+			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset, range)
 				.then((snapshot) => {
 					this.homePeriod = { ...this.homePeriod, ...(snapshot.period || {}) };
 					this.homePeriodPreset = this.homePeriod.preset || this.homePeriodPreset;
-					this.homePeriodQuery = this.homePeriod.label || this.homePeriod.preset || this.homePeriodQuery;
+					this.homeSmartDate = {
+						...this.homeSmartDate,
+						from_date: this.homePeriod.from_date || "",
+						to_date: this.homePeriod.to_date || "",
+						label: this.homePeriod.label || "",
+					};
 					this.homeSnapshot = {
 						as_of_date: snapshot.as_of_date || "",
 						period: snapshot.period || {},
@@ -702,21 +698,16 @@ export default {
 					this.homeLoading = false;
 				});
 		},
-		createHomePeriodOption(query) {
-			const value = String(query || "").trim();
-			return Promise.resolve(value ? { value, label: value, description: "Custom Business Hub period" } : null);
-		},
-		handleHomePeriodSelection(option) {
-			const value = String(option?.value || option || "").trim();
-			if (!value) return;
-			this.homePeriodPreset = value;
-			this.homePeriodQuery = value;
-			return this.refreshHomeSnapshot();
+		handleHomeDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.homeSmartDate = { ...(value || {}) };
+			this.homePeriodPreset = "Custom Period";
+			return this.refreshHomeSnapshot(value);
 		},
 		handleHomePeriodChange(value) {
 			// Compatibility hook for older cached bundles.
 			this.homePeriodPreset = value || "Today";
-			this.homePeriodQuery = this.homePeriodPreset;
+			this.homeSmartDate = {};
 			return this.refreshHomeSnapshot();
 		},
 		formatDisplayDate(value) {
@@ -1828,7 +1819,9 @@ export default {
 	gap: 10px;
 	flex-wrap: wrap;
 }
-.home-period-controls .edge-link-field {
+.home-period-controls .edge-field,
+.home-period-controls .edge-smart-date-range,
+.home-period-controls .edge-smart-date {
 	min-width: min(24rem, 100%);
 	margin: 0;
 }
