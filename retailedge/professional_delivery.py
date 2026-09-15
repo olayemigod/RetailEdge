@@ -23,24 +23,29 @@ def _source_branch(doc) -> str:
 
 
 def _validate_source_against_operating_context(source) -> tuple[str, str]:
+	source_label = str(getattr(source, "doctype", "") or "Selling Document").strip()
 	company = str(source.get("company") or "").strip()
 	if not company:
-		frappe.throw(_("The Sales Order has no Company."))
+		frappe.throw(_("The {0} has no Company.").format(source_label))
 	_assert_read("Company", company)
 
 	branch = _validate_stored_operational_branch(
 		company=company,
 		branch=_source_branch(source),
-		label=_("Submitted Sales Order"),
+		label=_("Submitted {0}").format(source_label),
 	)
 
 	operating = get_operating_context() or {}
 	operating_company = str(operating.get("company") or "").strip()
 	operating_branch = str(operating.get("branch") or "").strip()
 	if operating_company and operating_company != company:
-		frappe.throw(_("The Sales Order belongs to another Company. Change Operating Context before creating its Delivery Note."))
+		frappe.throw(
+			_(
+				"The {0} belongs to another Company. Change Operating Context before creating its Delivery Note."
+			).format(source_label)
+		)
 	if operating_branch and branch and operating_branch != branch:
-		frappe.throw(_("The Sales Order Branch does not match the current Operating Branch."))
+		frappe.throw(_("{0} Branch does not match the current Operating Branch.").format(source_label))
 	return company, branch
 
 
