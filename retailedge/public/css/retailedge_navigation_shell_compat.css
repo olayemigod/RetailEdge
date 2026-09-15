@@ -262,6 +262,14 @@ body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sideb
 }
 .retailedge-branch-popover__option.is-active small { color: var(--edge-color-brand-700, var(--primary)); font-weight: 700; }
 
+
+/* Smart Date uses a wide anchored popout. The shared shell clips horizontal
+   overflow by default, so release that clip only while the picker is open. */
+body.edge-suite-product-retailedge .edge-shell-main:has(.edge-smart-date.is-open),
+[data-edge-product="retailedge"] .edge-shell-main:has(.edge-smart-date.is-open) {
+	overflow-x: visible;
+}
+
 @media (max-width: 720px) {
 	.retailedge-topbar-branch-switcher { max-width: 54vw; }
 	.retailedge-topbar-branch-trigger { min-width: 0; max-width: 54vw; }
