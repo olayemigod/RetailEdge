@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Branch Performance could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -56,7 +56,7 @@
 			</template>
 
 			<EdgeDashboardGrid minColumnWidth="24rem">
-				<EdgeDashboardSection title="Branch Scorecard" description="Operational comparison using the existing RetailEdge Branch Performance engine." span="2">
+				<EdgeDashboardSection title="Branch Scorecard" description="Operational comparison using the existing Branch Performance engine." span="2">
 					<EdgeReportTable :columns="dashboardColumns" :rows="rows" rowKey="branch" :formatter="formatCell" @cell-click="openCell" />
 				</EdgeDashboardSection>
 				<EdgeDashboardSection title="Attention Required" description="Branches with payment issues, pending audits or material cash variance.">
