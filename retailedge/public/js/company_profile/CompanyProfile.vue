@@ -8,7 +8,7 @@
 		v-else
 		product="retailedge"
 		title="RetailEdge"
-		:tenantName="profile.label || profile.name"
+		:tenantName="profile.label || profile.official_name || profile.name"
 		:branchName="operatingContext.branch || 'Company Profile'"
 		:userName="userName"
 		:menuItems="menuItems"
@@ -20,7 +20,7 @@
 			<EdgePageHeader
 				eyebrow="Administration"
 				title="Company Profile"
-				description="Maintain the business identity RetailEdge uses in the shell, reports and customer-facing output while ERPNext Company remains the source of truth."
+				description="Maintain the business identity RetailEdge uses in its shell and customer-facing experience without exposing accounting-critical Company settings."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -28,19 +28,20 @@
 
 			<div v-else class="company-profile-layout">
 				<section class="edge-panel company-profile-preview">
-					<div class="company-profile-logo" :class="{ 'has-logo': Boolean(profile.logo) }">
+					<div class="company-profile-logo">
 						<img v-if="profile.logo" :src="profile.logo" :alt="profile.label || profile.name" />
 						<EdgeIcon v-else name="building" size="lg" />
 					</div>
 
 					<div class="company-profile-preview-copy">
-						<span class="company-profile-kicker">Operating company</span>
-						<h2>{{ profile.company_name || profile.label || profile.name || "Company" }}</h2>
-						<p>{{ profile.name }}</p>
+						<span class="company-profile-kicker">Business identity</span>
+						<h2>{{ profile.label || profile.official_name || profile.name || "Company" }}</h2>
+						<p>{{ profile.official_name || profile.name }}</p>
 						<div class="company-profile-summary">
 							<span><small>Abbreviation</small><strong>{{ profile.abbr || "—" }}</strong></span>
 							<span><small>Currency</small><strong>{{ profile.currency || "—" }}</strong></span>
-							<span><small>Country</small><strong>{{ profile.country || "—" }}</strong></span>
+							<span><small>ERPNext country</small><strong>{{ profile.country || "—" }}</strong></span>
+							<span><small>Tax ID</small><strong>{{ profile.tax_id || "—" }}</strong></span>
 							<span><small>Working Branch</small><strong>{{ operatingContext.branch || "Company-wide" }}</strong></span>
 						</div>
 					</div>
@@ -49,7 +50,7 @@
 						<button type="button" class="edge-button edge-button--primary" :disabled="savingLogo" @click="uploadLogo">
 							{{ savingLogo ? "Updating..." : "Upload logo" }}
 						</button>
-						<button v-if="profile.logo" type="button" class="edge-button edge-button--secondary" :disabled="savingLogo" @click="removeLogo">
+						<button v-if="profile.profile_logo" type="button" class="edge-button edge-button--secondary" :disabled="savingLogo" @click="removeLogo">
 							Remove logo
 						</button>
 					</div>
@@ -58,9 +59,9 @@
 				<section class="edge-panel">
 					<div class="company-profile-heading">
 						<div>
-							<p class="edge-eyebrow">Identity and tax profile</p>
+							<p class="edge-eyebrow">Owner-managed business profile</p>
 							<h2>Company details</h2>
-							<p>These are safe profile fields only. Currency, country, abbreviation and accounting defaults remain in Advanced ERPNext Company.</p>
+							<p>These fields are RetailEdge presentation/contact information. ERPNext Company remains authoritative for accounting and statutory setup.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--primary" :disabled="!canWrite || savingProfile" @click="saveProfile">
 							{{ savingProfile ? "Saving..." : "Save Company profile" }}
@@ -68,25 +69,29 @@
 					</div>
 
 					<div v-if="!canWrite" class="company-profile-readonly">
-						Your current ERPNext permissions allow you to view this Company but not update its profile.
+						Your current role can view this profile but cannot update it.
 					</div>
 
 					<div class="company-profile-form-grid">
 						<label>
-							<span>Company name</span>
-							<input v-model.trim="profile.company_name" class="form-control" :disabled="!canWrite" />
+							<span>Display name</span>
+							<input v-model.trim="profile.display_name" class="form-control" :disabled="!canWrite" :placeholder="profile.official_name || profile.name" />
 						</label>
 						<label>
-							<span>Tax ID</span>
-							<input v-model.trim="profile.tax_id" class="form-control" :disabled="!canWrite" />
+							<span>Phone</span>
+							<input v-model.trim="profile.phone" class="form-control" :disabled="!canWrite" />
 						</label>
 						<label>
+							<span>WhatsApp number</span>
+							<input v-model.trim="profile.whatsapp_number" class="form-control" :disabled="!canWrite" />
+						</label>
+						<label>
+							<span>Email</span>
+							<input v-model.trim="profile.email" type="email" class="form-control" :disabled="!canWrite" />
+						</label>
+						<label class="company-profile-wide">
 							<span>Website</span>
 							<input v-model.trim="profile.website" class="form-control" :disabled="!canWrite" placeholder="https://example.com" />
-						</label>
-						<label>
-							<span>Date of establishment</span>
-							<input v-model="profile.date_of_establishment" type="date" class="form-control" :disabled="!canWrite" />
 						</label>
 					</div>
 
@@ -96,41 +101,23 @@
 				<section class="edge-panel">
 					<div class="company-profile-heading">
 						<div>
-							<p class="edge-eyebrow">Official contact location</p>
+							<p class="edge-eyebrow">Business contact location</p>
 							<h2>Company address</h2>
-							<p>RetailEdge reads and updates the Address linked to this ERPNext Company. It does not create a second Company record.</p>
+							<p>This address belongs to the RetailEdge business profile. It does not alter ERPNext accounting configuration.</p>
 						</div>
-						<div class="company-profile-heading-actions">
-							<button type="button" class="edge-button edge-button--primary" :disabled="!canManageAddress || savingAddress" @click="saveAddress">
-								{{ savingAddress ? "Saving..." : "Save address" }}
-							</button>
-							<button v-if="address.name && canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openAddress">
-								Open full Address
-							</button>
-						</div>
-					</div>
-
-					<div v-if="!canManageAddress" class="company-profile-readonly">
-						Address editing requires the standard ERPNext Address create/write permission.
+						<button type="button" class="edge-button edge-button--primary" :disabled="!canManageAddress || savingAddress" @click="saveAddress">
+							{{ savingAddress ? "Saving..." : "Save address" }}
+						</button>
 					</div>
 
 					<div class="company-profile-form-grid">
-						<label><span>Address title</span><input v-model.trim="address.address_title" class="form-control" :disabled="!canManageAddress" /></label>
-						<EdgeDropdown
-							v-model="address.address_type"
-							:options="addressTypeOptions"
-							label="Address type"
-							:disabled="!canManageAddress"
-						/>
 						<label class="company-profile-wide"><span>Address line 1</span><input v-model.trim="address.address_line1" class="form-control" :disabled="!canManageAddress" /></label>
 						<label class="company-profile-wide"><span>Address line 2</span><input v-model.trim="address.address_line2" class="form-control" :disabled="!canManageAddress" /></label>
 						<label><span>City / town</span><input v-model.trim="address.city" class="form-control" :disabled="!canManageAddress" /></label>
 						<label><span>County / LGA</span><input v-model.trim="address.county" class="form-control" :disabled="!canManageAddress" /></label>
 						<label><span>State / province</span><input v-model.trim="address.state" class="form-control" :disabled="!canManageAddress" /></label>
 						<label><span>Country</span><input v-model.trim="address.country" class="form-control" :disabled="!canManageAddress" /></label>
-						<label><span>Postal code</span><input v-model.trim="address.pincode" class="form-control" :disabled="!canManageAddress" /></label>
-						<label><span>Phone</span><input v-model.trim="address.phone" class="form-control" :disabled="!canManageAddress" /></label>
-						<label><span>Email</span><input v-model.trim="address.email_id" type="email" class="form-control" :disabled="!canManageAddress" /></label>
+						<label><span>Postal code</span><input v-model.trim="address.postal_code" class="form-control" :disabled="!canManageAddress" /></label>
 					</div>
 
 					<p v-if="addressError" class="company-profile-error">{{ addressError }}</p>
@@ -140,7 +127,7 @@
 					<div>
 						<p class="edge-eyebrow">Advanced ERPNext setup</p>
 						<h2>Accounting and statutory Company configuration</h2>
-						<p>Use the full ERPNext Company form for abbreviation, country, base currency, chart of accounts, default accounts, stock settings and other advanced configuration.</p>
+						<p>Official Company name, abbreviation, base currency, country, tax setup, chart of accounts and default accounts remain in ERPNext Company.</p>
 					</div>
 					<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openAdvanced">
 						Advanced: Open Company in ERPNext
@@ -153,21 +140,17 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeIcon", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeIcon"];
+const PROFILE_DOCTYPE = "RetailEdge Company Profile";
 
 const blankAddress = () => ({
-	name: "",
-	address_title: "",
-	address_type: "Office",
 	address_line1: "",
 	address_line2: "",
 	city: "",
 	county: "",
 	state: "",
 	country: "",
-	pincode: "",
-	phone: "",
-	email_id: "",
+	postal_code: "",
 });
 
 function runtimeComponents() {
@@ -209,9 +192,6 @@ export default {
 		};
 	},
 	computed: {
-		addressTypeOptions() {
-			return ["Office", "Billing", "Shipping", "Shop", "Other"].map((value) => ({ value, label: value }));
-		},
 		canWrite() { return Boolean(this.permissions?.can_write); },
 		canUploadLogo() { return Boolean(this.permissions?.can_upload_logo); },
 		canManageAddress() { return Boolean(this.permissions?.can_manage_address); },
@@ -232,11 +212,20 @@ export default {
 	methods: {
 		applyProfileResponse(data = {}) {
 			this.profile = { ...(data.profile || {}) };
-			this.address = { ...blankAddress(), ...(data.address || {}) };
+			this.address = {
+				...blankAddress(),
+				address_line1: this.profile.address_line1 || "",
+				address_line2: this.profile.address_line2 || "",
+				city: this.profile.city || "",
+				county: this.profile.county || "",
+				state: this.profile.state || "",
+				country: this.profile.profile_country || "",
+				postal_code: this.profile.postal_code || "",
+			};
 			this.operatingContext = data.operating_context || this.operatingContext || {};
 			this.permissions = { ...this.permissions, ...(data.permissions || {}) };
 			window.retailedgeSyncShellIdentity?.({
-				tenant_name: this.profile.label || this.profile.company_name || this.profile.name || "",
+				tenant_name: this.profile.label || this.profile.official_name || this.profile.name || "",
 				tenant_logo: this.profile.logo || "",
 				active_company: this.profile.name || "",
 				active_branch: this.operatingContext.branch || "",
@@ -300,35 +289,45 @@ export default {
 				this.savingAddress = false;
 			}
 		},
-		uploadLogo() {
+		async uploadLogo() {
 			if (!this.canUploadLogo || !this.profile.name || !frappe.ui?.FileUploader) return;
-			new frappe.ui.FileUploader({
-				doctype: "Company",
-				docname: this.profile.name,
-				fieldname: "company_logo",
-				allow_multiple: false,
-				is_private: 0,
-				restrictions: {
-					allowed_file_types: ["image/*"],
-					max_file_size: 2 * 1024 * 1024,
-				},
-				on_success: async (file) => {
-					this.savingLogo = true;
-					this.profileError = "";
-					try {
-						const data = await callMethod("retailedge.company_profile.set_company_logo", {
-							company: this.profile.name,
-							file_url: file.file_url,
-						}, "POST");
-						this.applyProfileResponse(data);
-						frappe.show_alert({ message: __("Company logo updated"), indicator: "green" });
-					} catch (error) {
-						this.profileError = error?.message || error?.exc || "Company logo could not be updated.";
-					} finally {
-						this.savingLogo = false;
-					}
-				},
-			});
+			this.savingLogo = true;
+			this.profileError = "";
+			try {
+				const ensured = await callMethod("retailedge.company_profile.ensure_company_profile", {
+					company: this.profile.name,
+				}, "POST");
+				this.applyProfileResponse(ensured);
+				const profileDocname = ensured.profile?.profile_docname;
+				if (!profileDocname) throw new Error("RetailEdge Company Profile could not be prepared for upload.");
+
+				new frappe.ui.FileUploader({
+					doctype: PROFILE_DOCTYPE,
+					docname: profileDocname,
+					fieldname: "logo",
+					allow_multiple: false,
+					is_private: 0,
+					restrictions: { allowed_file_types: ["image/*"], max_file_size: 2 * 1024 * 1024 },
+					on_success: async (file) => {
+						try {
+							const data = await callMethod("retailedge.company_profile.set_company_logo", {
+								company: this.profile.name,
+								file_url: file.file_url,
+							}, "POST");
+							this.applyProfileResponse(data);
+							frappe.show_alert({ message: __("Company logo updated"), indicator: "green" });
+						} catch (error) {
+							this.profileError = error?.message || error?.exc || "Company logo could not be updated.";
+						} finally {
+							this.savingLogo = false;
+						}
+					},
+					on_error: () => { this.savingLogo = false; },
+				});
+			} catch (error) {
+				this.profileError = error?.message || error?.exc || "Company logo upload could not start.";
+				this.savingLogo = false;
+			}
 		},
 		async removeLogo() {
 			if (!this.canUploadLogo || !this.profile.name) return;
@@ -365,9 +364,6 @@ export default {
 			else if (this.canUseNativeDesk && item.target_type === "Report") frappe.set_route("query-report", item.target);
 			else if (this.canUseNativeDesk && item.target_type === "DocType") frappe.set_route("List", item.target);
 		},
-		openAddress() {
-			if (this.canUseNativeDesk && this.address.name) frappe.set_route("Form", "Address", this.address.name);
-		},
 		openAdvanced() {
 			if (!this.canUseNativeDesk || !this.profile.name) return;
 			frappe.set_route("Form", "Company", this.profile.name);
@@ -389,7 +385,7 @@ export default {
 .company-profile-summary { display:flex; flex-wrap:wrap; gap:.75rem 1.25rem; margin-top:.85rem; }
 .company-profile-summary span { display:grid; gap:.1rem; }
 .company-profile-summary strong { font-size:.82rem; font-weight:650; }
-.company-profile-logo-actions,.company-profile-heading-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
+.company-profile-logo-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
 .company-profile-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; }
 .company-profile-heading > div { min-width:0; }
 .company-profile-form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(13rem,1fr)); gap:.9rem; }
