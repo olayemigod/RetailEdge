@@ -135,5 +135,25 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 		self.assertNotIn("frappe.client.save", component)
 
 
+	def test_pos_launch_errors_are_user_safe_and_missing_context_is_gated_in_edgesuite(self):
+		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
+		for contract in (
+			'product="retailedge"',
+			"hasOperatingContext()",
+			"return this.hasOperatingContext && Boolean(this.pos?.start_target || this.pos?.start_url);",
+			'this.posLaunchError = "Select an Operating Company and Branch before starting POS.";',
+			"parseErrorPayload(value)",
+			'response?._server_messages',
+			'response?.exception',
+			'response?.exc',
+			"Traceback \\(most recent call last\\)",
+			'v-else-if="!hasOperatingContext"',
+		):
+			self.assertIn(contract, component)
+
+		self.assertNotIn('product="RetailEdge"', component)
+		self.assertNotIn("return error?.message || error?.exc || error?._server_messages || fallback;", component)
+
+
 if __name__ == "__main__":
 	unittest.main()
