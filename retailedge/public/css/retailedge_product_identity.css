@@ -476,6 +476,67 @@ body.edge-suite-product-retailedge[data-edge-appearance="dark"] .edge-topbar,
 	background: rgba(19, 38, 50, 0.98);
 }
 
+
+/* Frappe's FileUploader is mounted outside the EdgeAppShell. In EdgeSuite dark
+   appearance it must inherit the Retail product surface/text tokens instead of
+   falling back to Frappe's light upload-area variables. */
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .modal-content:has(.file-uploader) {
+	--bg-color: var(--retailedge-surface-muted);
+	--fg-color: var(--retailedge-surface);
+	--text-color: var(--retailedge-ink);
+	--text-light: var(--retailedge-ink-soft);
+	--subtle-fg: color-mix(in srgb, var(--edge-color-brand-600) 16%, var(--retailedge-surface));
+	--border-color: var(--retailedge-border);
+	--dark-border-color: color-mix(in srgb, var(--retailedge-border) 78%, var(--retailedge-ink-soft));
+	background: var(--retailedge-surface);
+	color: var(--retailedge-ink);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .file-upload-area {
+	color: var(--retailedge-ink);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .file-upload-area {
+	background: var(--retailedge-surface-muted) !important;
+	border-color: color-mix(in srgb, var(--retailedge-border) 78%, var(--retailedge-ink-soft)) !important;
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .btn-file-upload {
+	color: var(--retailedge-ink-soft);
+	border-radius: 0.6rem;
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .btn-file-upload:hover,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .btn-file-upload:focus-visible {
+	background: color-mix(in srgb, var(--edge-color-brand-600) 12%, var(--retailedge-surface));
+	color: var(--retailedge-ink);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .file-browser .text-muted,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .file-web-link .text-muted,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .file-size,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .frappe-checkbox {
+	color: var(--retailedge-ink-soft) !important;
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .form-control {
+	background: var(--retailedge-surface-muted);
+	border-color: var(--retailedge-border);
+	color: var(--retailedge-ink);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .file-uploader .form-control::placeholder {
+	color: var(--retailedge-ink-soft);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .modal-content:has(.file-uploader) .modal-footer .btn-default,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .modal-content:has(.file-uploader) .modal-footer .btn-secondary {
+	background: var(--retailedge-surface-muted);
+	border-color: var(--retailedge-border);
+	color: var(--retailedge-ink);
+}
+
 :root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .retailedge-business-hub .hub-banner,
 :root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .retailedge-business-hub .hub-banner {
 	background:
