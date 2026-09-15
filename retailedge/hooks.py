@@ -131,7 +131,7 @@ doctype_list_js = {
 # add methods and filters to jinja environment
 jinja = {
 	"methods": [
-		"retailedge.print_output_context.get_retailedge_print_context",
+		"retailedge.print_output_context.get_business_print_context",
 	],
 }
 
