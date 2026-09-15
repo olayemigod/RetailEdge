@@ -257,20 +257,19 @@ def test_phase5_variance_setting_is_migration_safe_and_non_posting():
 	assert "frappe.db.commit" not in patch
 
 
-def test_phase5_business_hub_uses_governed_fuzzy_period_field_and_dmy_display():
+def test_phase5_business_hub_uses_governed_smart_date_component_and_dmy_display():
 	source = HUB.read_text(encoding="utf-8")
 
 	for contract in (
-		"EdgeLinkField",
-		':creator="createHomePeriodOption"',
-		"handleHomePeriodSelection",
-		"homePeriodQuery",
+		"EdgeSmartDateRange",
+		'dateOrder="DMY"',
+		'@resolved="handleHomeDateResolved"',
+		"homeSmartDate",
 		"formatDisplayDate",
-		'placeholder="e.g. last 30 days, YTD, 01/09/2026 - 15/09/2026"',
+		'placeholder="e.g. last 30 days, YTD, this month"',
 	):
 		assert contract in source
 
-	assert "EdgeSmartDateRange" not in source
 	assert "<EdgeDropdown" not in source
 
 
