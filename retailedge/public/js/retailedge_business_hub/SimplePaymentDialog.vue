@@ -92,8 +92,8 @@
 					<strong>{{ customerReview.payment_kind || 'Customer Receipt' }}</strong>
 				</div>
 				<div>
-					<span>Sales Invoice</span>
-					<strong>{{ customerReview.sales_invoice || 'Customer Advance' }}</strong>
+					<span>{{ customerReview.reference_doctype || 'Sales Reference' }}</span>
+					<strong>{{ customerReview.reference_name || customerReview.sales_invoice || customerReview.sales_order || 'Customer Advance' }}</strong>
 				</div>
 				<div>
 					<span>Allocated</span>
@@ -103,9 +103,9 @@
 					<span>Unallocated</span>
 					<strong>{{ formatMoney(customerReview.unallocated_amount, customerReview.currency) }}</strong>
 				</div>
-				<div v-if="customerReview.sales_invoice">
-					<span>Invoice Outstanding</span>
-					<strong>{{ formatMoney(customerReview.invoice_outstanding_amount, customerReview.currency) }}</strong>
+				<div v-if="customerReview.reference_name || customerReview.sales_invoice || customerReview.sales_order">
+					<span>{{ customerReview.sales_order ? 'Order Payment Available' : 'Invoice Outstanding' }}</span>
+					<strong>{{ formatMoney(customerReview.reference_outstanding_amount ?? customerReview.invoice_outstanding_amount, customerReview.currency) }}</strong>
 				</div>
 			</div>
 
@@ -556,7 +556,7 @@ export default {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
 		isCustomerPayment() {
-			return this.intent === "receive-customer-payment";
+			return ["receive-customer-payment", "receive-sales-order-payment"].includes(this.intent);
 		},
 		isSupplierPayment() {
 			return this.intent === "pay-supplier";
