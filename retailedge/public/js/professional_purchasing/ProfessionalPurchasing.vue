@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="purchasing-fallback">
 		<strong>Professional Purchasing could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -75,7 +75,7 @@
 						<div>
 							<span class="purchasing-kicker">Direct purchase continuity</span>
 							<h3>Draft Purchase Invoices Awaiting Completion</h3>
-							<p>Source-less direct Purchase Invoice drafts that can continue through the standard EdgeSuite completion contract. PO/Receipt-linked and Supplier Document invoices stay with their existing workflows.</p>
+							<p>Source-less direct Purchase Invoice drafts that can continue through the standard completion flow. PO/Receipt-linked and Supplier Document invoices stay with their existing workflows.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--secondary" :disabled="loadingDraftPurchaseInvoices" @click="refreshDraftPurchaseInvoices">{{ loadingDraftPurchaseInvoices ? "Refreshing…" : "Refresh Drafts" }}</button>
 					</div>
@@ -112,7 +112,7 @@
 						<div>
 							<span class="purchasing-kicker">Corrections after receipt or billing</span>
 							<h3>Returns & Supplier Credits</h3>
-							<p>Choose the business intent explicitly. RetailEdge prepares one native ERPNext draft only and never chains a stock return and supplier debit note automatically.</p>
+							<p>Choose the business intent explicitly. This workflow prepares one native ERPNext draft only and never chains a stock return and supplier debit note automatically.</p>
 						</div>
 					</div>
 					<div class="return-grid">
@@ -134,7 +134,7 @@
 						<div>
 							<span class="purchasing-kicker">True inventory cost</span>
 							<h3>Allocate Landed Cost</h3>
-							<p>Review freight, clearing, duty, insurance and similar acquisition charges in EdgeSuite. ERPNext remains authoritative for exchange rates, allocation, stock valuation and all Stock Ledger / General Ledger reposting.</p>
+							<p>Review freight, clearing, duty, insurance and similar acquisition charges here. ERPNext remains authoritative for exchange rates, allocation, stock valuation and all Stock Ledger / General Ledger reposting.</p>
 						</div>
 					</div>
 					<div class="landed-cost-source-types" aria-label="Landed cost source type">
@@ -214,7 +214,7 @@
 							>{{ applyingLandedCostWorkflow ? "Applying…" : action.action }}</button>
 						</div>
 					</div>
-					<p class="landed-cost-help">Standard EdgeSuite ownership supports one permitted receipt/invoice, Amount or Quantity distribution, and ordinary positive charge rows. Manual allocation, fixed assets, vendor-invoice claims, custom accounting dimensions and other advanced cases remain in ERPNext.</p>
+					<p class="landed-cost-help">The guided workflow supports one permitted receipt/invoice, Amount or Quantity distribution, and ordinary positive charge rows. Manual allocation, fixed assets, vendor-invoice claims, custom accounting dimensions and other advanced cases remain in ERPNext.</p>
 				</section>
 
 				<IncomingQualityInspection :company="filters.company" :branch="filters.branch" :supplier="filters.supplier" />
