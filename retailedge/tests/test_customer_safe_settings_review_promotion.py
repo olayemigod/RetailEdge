@@ -164,6 +164,10 @@ def test_remaining_review_reports_use_shared_managed_report_workspace():
         "get_operating_context",
         "get_allowed_operating_branches",
         "MAX_VISIBLE_ROWS",
+        "ALLOWED_LINK_DOCTYPES",
+        "Unsupported review filter search.",
+        'filters["company"] = company',
+        'filters["is_group"] = 0',
         "search_review_report_options",
     ):
         assert contract in backend
