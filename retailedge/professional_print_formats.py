@@ -46,7 +46,7 @@ PRINT_FORMAT_BY_DOCTYPE = {row["doctype"]: row["name"] for row in PROFESSIONAL_P
 
 _DOCUMENT_HTML = r"""
 <!-- managed-business-print-format:v4 -->
-{% set output = get_retailedge_print_context(doc) %}
+{% set output = get_business_print_context(doc) %}
 {% set party = doc.get("customer_name") or doc.get("party_name") or doc.get("customer") or "" %}
 {% set document_date = doc.get("transaction_date") or doc.get("posting_date") %}
 {% set secondary_date = doc.get("valid_till") or doc.get("delivery_date") or doc.get("due_date") %}
@@ -174,7 +174,7 @@ _DOCUMENT_CSS_BY_KIND = {
 
 _RECEIPT_HTML = r"""
 <!-- managed-business-print-format:v4 -->
-{% set output = get_retailedge_print_context(doc) %}
+{% set output = get_business_print_context(doc) %}
 {% set party = doc.get("customer_name") or doc.get("customer") or "" %}
 {% set receipt_date = doc.get("posting_date") or doc.get("transaction_date") %}
 <div class="pe-receipt">
@@ -207,7 +207,7 @@ _RECEIPT_HTML = r"""
 		</tbody>
 	</table>
 	<div class="receipt-rule"></div>
-	<div class="receipt-total"><span>Total Qty</span><strong>{{ doc.get_formatted("total_qty") if doc.meta.has_field("total_qty") else "" }}</strong></div>
+	<div class="receipt-total"><span>Total Qty</span><strong>{{ doc.get_formatted("total_qty") if doc.get("total_qty") is not none else "" }}</strong></div>
 	<div class="receipt-total"><span>Subtotal</span><strong>{{ doc.get_formatted("net_total") }}</strong></div>
 	{% if doc.get("discount_amount") %}<div class="receipt-total"><span>Discount</span><strong>{{ doc.get_formatted("discount_amount") }}</strong></div>{% endif %}
 	{% if doc.get("total_taxes_and_charges") %}<div class="receipt-total"><span>Tax / Charges</span><strong>{{ doc.get_formatted("total_taxes_and_charges") }}</strong></div>{% endif %}
