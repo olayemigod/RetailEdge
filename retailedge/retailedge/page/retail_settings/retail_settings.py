@@ -197,13 +197,24 @@ def _fieldnames() -> set[str]:
 	}
 
 
+def _customer_copy(value: Any) -> str:
+	return (
+		str(value or "")
+		.replace("RetailEdge ", "")
+		.replace("RetailEdge", "")
+		.replace("EdgeSuite UI", "the application")
+		.replace("EdgeSuite", "the application")
+		.strip()
+	)
+
+
 def _field_schema(df, value: Any) -> dict[str, Any]:
 	fieldtype = df.fieldtype
 	result = {
 		"fieldname": df.fieldname,
-		"label": df.label or df.fieldname,
+		"label": _customer_copy(df.label or df.fieldname),
 		"fieldtype": fieldtype,
-		"description": df.description or "",
+		"description": _customer_copy(df.description or ""),
 		"depends_on": df.depends_on or "",
 		"read_only": bool(cint(df.read_only)),
 		"options": [],
