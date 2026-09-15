@@ -99,6 +99,7 @@
 									{{ primaryActionLabel(row) }}
 								</button>
 								<EdgeDropdown
+									v-if="moreActions(row).length"
 									:modelValue="''"
 									:options="moreActions(row)"
 									placeholder="More"
@@ -106,6 +107,7 @@
 									class="record-more"
 									@select="runMoreAction(row, $event)"
 								/>
+								<span v-else class="record-more-placeholder" aria-hidden="true"></span>
 							</div>
 						</td>
 					</tr>
@@ -184,7 +186,14 @@ export default {
 			return this.readableDocuments.find((row) => row.key === this.activeKey) || this.readableDocuments[0] || null;
 		},
 		statusOptions() {
-			return ["All", "Draft", "Submitted", "Cancelled"].map((value) => ({ value, label: value }));
+			const common = ["All", "Draft", "Submitted", "Cancelled"];
+			const byDocument = {
+				quotation: ["Open", "Ordered", "Lost", "Expired"],
+				"sales-order": ["To Deliver and Bill", "To Deliver", "To Bill", "Completed", "Closed"],
+				"delivery-note": ["To Bill", "Completed", "Closed", "Return"],
+				"sales-invoice": ["Unpaid", "Overdue", "Partly Paid", "Paid", "Credit Note", "Return"],
+			};
+			return [...new Set([...common, ...(byDocument[this.activeKey] || [])])].map((value) => ({ value, label: value }));
 		},
 		hasFilters() {
 			return Boolean(
@@ -343,13 +352,6 @@ export default {
 					description: "Open the full ERPNext document for advanced work.",
 				});
 			}
-			if (!actions.length) {
-				actions.push({
-					value: "output",
-					label: "View / Print / Send",
-					description: "Preview, download PDF, email or prepare WhatsApp sharing.",
-				});
-			}
 			return actions;
 		},
 		runPrimaryAction(row) {
@@ -392,6 +394,7 @@ export default {
 .record-actions { display:grid; grid-template-columns:minmax(9.5rem,1fr) 7rem; gap:.5rem; align-items:center; }
 .record-primary-action { width:100%; white-space:nowrap; }
 .record-more { min-width:0; }
+.record-more-placeholder { display:block; min-width:0; }
 :deep(.record-more .edge-dropdown__trigger) { min-width:0; width:100%; }
 .selling-record-footer { display:flex; justify-content:space-between; align-items:center; gap:1rem; color:var(--edge-color-ink-500,var(--text-muted)); font-size:.82rem; }
 .selling-record-error { margin:0; padding:.7rem .85rem; border:1px solid var(--edge-color-danger); border-radius:.6rem; color:var(--edge-color-danger); background:color-mix(in srgb,var(--edge-color-danger) 7%,var(--edge-color-surface)); }
