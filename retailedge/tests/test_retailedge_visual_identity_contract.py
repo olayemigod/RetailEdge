@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 IDENTITY_CSS = ROOT / "public" / "css" / "retailedge_product_identity.css"
+NAV_COMPAT_CSS = ROOT / "public" / "css" / "retailedge_navigation_shell_compat.css"
 BUSINESS_HUB = (
     ROOT
     / "public"
@@ -20,8 +21,9 @@ def test_retailedge_identity_layer_is_loaded_after_existing_product_styles():
     workspace = hooks.index("/assets/retailedge/css/retailedge_workspace_home.css")
     guided = hooks.index("/assets/retailedge/css/retailedge_guided_create_menu.css")
     identity = hooks.index("/assets/retailedge/css/retailedge_product_identity.css")
+    nav_compat = hooks.index("/assets/retailedge/css/retailedge_navigation_shell_compat.css")
 
-    assert cards < workspace < guided < identity
+    assert cards < workspace < guided < identity < nav_compat
 
 
 def test_identity_layer_is_scoped_to_retailedge_and_does_not_clone_shared_shell():
@@ -73,6 +75,35 @@ def test_retailedge_sidebar_and_product_name_follow_edgesuite_appearance():
         "border-right: 0;",
     ):
         assert legacy_dark_sidebar_contract not in source
+
+
+def test_retailedge_navigation_compat_matches_vetedge_theme_owned_menu_contract():
+    source = NAV_COMPAT_CSS.read_text(encoding="utf-8")
+
+    for contract in (
+        ".edge-app-shell.edge-nav-shell-v2",
+        "background: var(--edge-color-surface);",
+        "color: var(--edge-color-ink-950);",
+        ".edge-sidebar__section.is-expanded .edge-sidebar__section-toggle",
+        ".edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle",
+        "background: transparent;",
+        "color: var(--edge-color-brand-600);",
+        "background: color-mix(in srgb, var(--edge-color-brand-50) 78%, var(--edge-color-surface));",
+        'data-edge-appearance="dark"',
+        "background: color-mix(in srgb, var(--edge-color-brand-700) 22%, var(--edge-color-surface));",
+        "outline: 3px solid color-mix(in srgb, var(--edge-color-brand-500) 25%, transparent);",
+    ):
+        assert contract in source
+
+    for forbidden in (
+        "#0b1f33",
+        "#f7fbfc",
+        "#dce6ec",
+        "rgba(255, 255, 255",
+        "--retailedge-sidebar-active",
+    ):
+        assert forbidden not in source
+
 
 
 def test_business_hub_declares_product_identity_through_shared_edgesuite_shell():
