@@ -126,6 +126,7 @@
 				:open="salesInvoiceCompletionOpen"
 				:document="salesInvoiceCompletionDocument"
 				:canUseNativeDesk="canUseNativeDesk"
+				:showNextActions="true"
 				@close="closeSalesInvoiceCompletion"
 				@changed="handleSalesInvoiceCompletionChanged"
 				@completed="handleSalesInvoiceCompletionCompleted"
