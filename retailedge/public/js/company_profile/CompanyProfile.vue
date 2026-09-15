@@ -116,16 +116,12 @@
 
 					<div class="company-profile-form-grid">
 						<label><span>Address title</span><input v-model.trim="address.address_title" class="form-control" :disabled="!canManageAddress" /></label>
-						<label>
-							<span>Address type</span>
-							<select v-model="address.address_type" class="form-control" :disabled="!canManageAddress">
-								<option>Office</option>
-								<option>Billing</option>
-								<option>Shipping</option>
-								<option>Shop</option>
-								<option>Other</option>
-							</select>
-						</label>
+						<EdgeDropdown
+							v-model="address.address_type"
+							:options="addressTypeOptions"
+							label="Address type"
+							:disabled="!canManageAddress"
+						/>
 						<label class="company-profile-wide"><span>Address line 1</span><input v-model.trim="address.address_line1" class="form-control" :disabled="!canManageAddress" /></label>
 						<label class="company-profile-wide"><span>Address line 2</span><input v-model.trim="address.address_line2" class="form-control" :disabled="!canManageAddress" /></label>
 						<label><span>City / town</span><input v-model.trim="address.city" class="form-control" :disabled="!canManageAddress" /></label>
@@ -157,7 +153,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeIcon"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeIcon", "EdgeDropdown"];
 
 const blankAddress = () => ({
 	name: "",
@@ -213,6 +209,9 @@ export default {
 		};
 	},
 	computed: {
+		addressTypeOptions() {
+			return ["Office", "Billing", "Shipping", "Shop", "Other"].map((value) => ({ value, label: value }));
+		},
 		canWrite() { return Boolean(this.permissions?.can_write); },
 		canUploadLogo() { return Boolean(this.permissions?.can_upload_logo); },
 		canManageAddress() { return Boolean(this.permissions?.can_manage_address); },
