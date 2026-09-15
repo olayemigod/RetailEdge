@@ -1,0 +1,166 @@
+/* RetailEdge compatibility for EdgeSuite Navigation Shell V2.
+   Mirrors the proven VetEdge navigation contract: EdgeSuite UI owns menu
+   presentation and the selected EdgeTheme/Appearance owns all menu colors.
+   RetailEdge supplies menu data, routes and product identity only. */
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar {
+	background: var(--edge-color-surface);
+	border-right: 1px solid var(--edge-color-border);
+	color: var(--edge-color-ink-950);
+}
+
+/* Brand presentation follows the active theme. */
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand {
+	background: var(--edge-color-surface);
+	border-bottom-color: var(--edge-color-border);
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__mark,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__mark {
+	background: var(--edge-color-brand-50);
+	border-color: var(--edge-color-brand-100);
+	color: var(--edge-color-brand-600);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand-copy strong,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand-copy strong {
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand-copy small,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__brand-copy small {
+	color: var(--edge-color-ink-500);
+}
+
+/* Group headers are navigation labels, not selected cards. Expanded groups and
+   groups containing the active page remain transparent; only their icon picks
+   up the theme accent. */
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle {
+	background: transparent;
+	border-color: transparent;
+	color: var(--edge-color-ink-700);
+	font-size: .76rem;
+	font-weight: 680;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle:hover:not(:disabled),
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle:hover:not(:disabled) {
+	background: var(--edge-color-surface-muted);
+	border-color: transparent;
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle {
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle > .edge-icon:first-child,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle > .edge-icon:first-child {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	color: var(--edge-color-ink-500);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle > .edge-icon:first-child,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle > .edge-icon:first-child,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle > .edge-icon:first-child,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle > .edge-icon:first-child {
+	color: var(--edge-color-brand-600);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle > .edge-icon:last-child,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle > .edge-icon:last-child {
+	color: var(--edge-color-ink-400);
+}
+
+/* Leaf navigation follows the same active treatment as VetEdge. */
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item {
+	background: transparent;
+	border: 0;
+	color: var(--edge-color-ink-700);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item:hover,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item:hover {
+	background: var(--edge-color-surface-muted);
+	border-color: transparent;
+	color: var(--edge-color-ink-950);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"],
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] {
+	background: color-mix(in srgb, var(--edge-color-brand-50) 78%, var(--edge-color-surface));
+	border-color: transparent;
+	box-shadow: inset 2px 0 0 var(--edge-color-brand-600);
+	color: var(--edge-color-brand-700);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item > .edge-icon,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item > .edge-icon {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	color: var(--edge-color-ink-500);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active > .edge-icon,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] > .edge-icon,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active > .edge-icon,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] > .edge-icon {
+	background: color-mix(in srgb, var(--edge-color-brand-100) 65%, transparent);
+	border: 0;
+	box-shadow: none;
+	color: var(--edge-color-brand-700);
+}
+
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle:focus-visible,
+body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item:focus-visible,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section-toggle:focus-visible,
+[data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item:focus-visible {
+	outline: 3px solid color-mix(in srgb, var(--edge-color-brand-500) 25%, transparent);
+	outline-offset: 2px;
+}
+
+/* Dark appearance: keep selection restrained and readable. The selected
+   EdgeTheme still supplies brand and surface tokens. */
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section.is-expanded .edge-sidebar__section-toggle,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar__section:has(.edge-sidebar-item.active) .edge-sidebar__section-toggle {
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+	color: var(--edge-color-ink-950);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"],
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] {
+	background: color-mix(in srgb, var(--edge-color-brand-700) 22%, var(--edge-color-surface));
+	color: var(--edge-color-ink-950);
+}
+
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active > .edge-icon,
+:root[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] > .edge-icon,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item.active > .edge-icon,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"].edge-app-shell.edge-nav-shell-v2 .edge-sidebar-item[aria-current="page"] > .edge-icon {
+	background: color-mix(in srgb, var(--edge-color-brand-700) 18%, var(--edge-color-surface));
+	color: var(--edge-color-brand-text, var(--edge-color-info));
+}
