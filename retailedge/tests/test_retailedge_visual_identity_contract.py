@@ -185,6 +185,20 @@ def test_desktop_launcher_repairs_existing_frappe_desktop_state_without_renaming
     assert 'frappe.rename_doc("Workspace"' not in source
 
 
+def test_desktop_launcher_opens_business_hub_in_same_tab():
+    source = (ROOT / "public" / "js" / "retailedge.js").read_text(encoding="utf-8")
+
+    for contract in (
+        'const RETAILEDGE_DESKTOP_LABEL = "PEdge Retail"',
+        'const RETAILEDGE_DESKTOP_PATH = "/desk/retailedge-business-hub"',
+        "keepRetailDesktopLauncherInSameTab",
+        'link.removeAttribute("target")',
+        'link.setAttribute("href", RETAILEDGE_DESKTOP_PATH)',
+        "MutationObserver",
+    ):
+        assert contract in source
+
+
 def test_processedge_retail_palette_uses_approved_master_brand_colours():
     source = IDENTITY_CSS.read_text(encoding="utf-8")
     assert "--retailedge-brand: #0056A6;" in source
