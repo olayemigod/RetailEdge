@@ -337,22 +337,23 @@ export default {
 			return "Review / Complete";
 		},
 		moreActions(row) {
-			const actions = (Array.isArray(row?.actions) ? row.actions : []).map((action) => ({
-				...action,
-				description: action.description || "Continue with the next permitted ERPNext sales workflow.",
-			}));
+			const actions = (Array.isArray(row?.actions) ? row.actions : [])
+				.map((action) => ({
+					value: action?.value,
+					label: action?.label,
+					disabled: Boolean(action?.disabled),
+				}))
+				.filter((action) => action.value && action.label);
 			if (this.canComplete(row)) {
 				actions.push({
 					value: "output",
 					label: "View / Print / Send",
-					description: "Preview, download PDF, email or prepare WhatsApp sharing.",
 				});
 			}
 			if (this.canUseNativeDesk) {
 				actions.push({
 					value: "advanced",
 					label: "Advanced: Open in ERPNext",
-					description: "Open the full ERPNext document for advanced work.",
 				});
 			}
 			return actions;
@@ -394,11 +395,22 @@ export default {
 .date-column { white-space:nowrap; }
 .amount-column { width:9.5rem; text-align:right !important; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .actions-column { width:20rem; }
-.record-actions { display:grid; grid-template-columns:minmax(9.5rem,1fr) 7rem; gap:.5rem; align-items:center; }
-.record-primary-action { width:100%; white-space:nowrap; }
-.record-more { min-width:0; }
+.record-actions { display:grid; grid-template-columns:minmax(8.5rem,1fr) 9.25rem; gap:.5rem; align-items:center; }
+.record-primary-action { width:100%; white-space:nowrap; font-size:.76rem; padding-inline:.55rem; }
+.record-more { min-width:0; width:100%; font-size:.78rem; }
 .record-more-placeholder { display:block; min-width:0; }
-:deep(.record-more .edge-dropdown__trigger) { min-width:0; width:100%; }
+:deep(.edge-dropdown__trigger.record-more + .edge-dropdown__menu) {
+	left:auto;
+	right:0;
+	width:min(15rem,calc(100vw - 2rem));
+	min-width:min(15rem,calc(100vw - 2rem));
+	max-width:none;
+}
+:deep(.edge-dropdown__trigger.record-more + .edge-dropdown__menu .edge-dropdown__option-label) {
+	overflow:visible;
+	text-overflow:clip;
+	white-space:normal;
+}
 .selling-record-footer { display:flex; justify-content:space-between; align-items:center; gap:1rem; color:var(--edge-color-ink-500,var(--text-muted)); font-size:.82rem; }
 .selling-record-error { margin:0; padding:.7rem .85rem; border:1px solid var(--edge-color-danger); border-radius:.6rem; color:var(--edge-color-danger); background:color-mix(in srgb,var(--edge-color-danger) 7%,var(--edge-color-surface)); }
 @media (max-width: 960px) {
