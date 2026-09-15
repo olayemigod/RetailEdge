@@ -1,6 +1,17 @@
-# RetailEdge Visual Identity Contract
+# ProcessEdge Retail Visual Identity Contract
 
 ## Goal
+
+## Approved production identity
+
+- Public product name: **ProcessEdge Retail**
+- Graphic lockup: **ProcessEDGE Retail**
+- Approved product mark: **Shelf-R**
+- Rider: **Structured for Scale.**
+- Primary blue: **#0056A6**
+- Growth green: **#1C9C5D**
+- Dark blue: **#003E73**
+- Internal product/app code remains `retailedge`; technical routes, APIs, roles, DocTypes, reports, database fields and namespaces are not renamed.
 
 RetailEdge must remain an EdgeSuite UI product while being visually recognisable as a retail and business-operations application even when product names and logos are removed.
 
