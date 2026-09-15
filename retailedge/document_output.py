@@ -15,8 +15,8 @@ from retailedge.branch_context import BRANCH_FIELD_CANDIDATES, get_first_existin
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_print_formats import (
 	MANAGED_PRINT_FORMATS,
-	is_managed_print_format_html,
 	get_preferred_print_format,
+	is_managed_print_format_html,
 )
 
 MAX_LINK_RESULTS = 20
