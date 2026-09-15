@@ -73,7 +73,7 @@ const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "expense-review";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 
 export default {
 	name: "ExpenseReviewReport",
