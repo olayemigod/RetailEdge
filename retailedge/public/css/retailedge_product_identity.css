@@ -11,10 +11,10 @@ body.edge-suite-product-retailedge,
 [data-edge-product="retailedge"] {
 	--retailedge-ink: #0b1f33;
 	--retailedge-ink-soft: #395168;
-	--retailedge-brand: #0f8f7f;
-	--retailedge-brand-strong: #087466;
-	--retailedge-brand-soft: #e5f7f3;
-	--retailedge-money: #13795b;
+	--retailedge-brand: #0056A6;
+	--retailedge-brand-strong: #003E73;
+	--retailedge-brand-soft: #E8F2FB;
+	--retailedge-money: #1C9C5D;
 	--retailedge-warning: #b96800;
 	--retailedge-danger: #b42318;
 	--retailedge-surface: #ffffff;
@@ -29,7 +29,7 @@ body.edge-suite-product-retailedge,
 
 	/* Override shared EdgeSuite tokens without copying the shared components. */
 	--edge-color-brand-50: var(--retailedge-brand-soft);
-	--edge-color-brand-100: #c9eee7;
+	--edge-color-brand-100: #CFE4F6;
 	--edge-color-brand-500: var(--retailedge-brand);
 	--edge-color-brand-600: var(--retailedge-brand);
 	--edge-color-brand-700: var(--retailedge-brand-strong);
@@ -464,7 +464,7 @@ body.edge-suite-product-retailedge[data-edge-appearance="dark"],
 	--retailedge-surface: #132632;
 	--retailedge-surface-muted: #0d1b24;
 	--retailedge-border: #2a414e;
-	--retailedge-brand-soft: #123a37;
+	--retailedge-brand-soft: #102B44;
 	--edge-color-surface: var(--retailedge-surface);
 	--edge-color-surface-muted: var(--retailedge-surface-muted);
 	--edge-color-border: var(--retailedge-border);
