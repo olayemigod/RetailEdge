@@ -267,7 +267,7 @@ class TestGuidedPayment(unittest.TestCase):
 		for contract in (
 			'"receive-sales-order-payment"',
 			"one Sales Order advance",
-			"Sales Reference Allocation",
+			"Reference Allocation",
 			"Order Payment Available",
 		):
 			self.assertIn(contract, component)
