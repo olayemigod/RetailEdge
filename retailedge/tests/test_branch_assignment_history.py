@@ -27,6 +27,9 @@ ASSIGNMENT_JS = (
 	/ "retailedge_branch_assignment.js"
 )
 ASSIGNMENT_VUE = APP_ROOT / "public" / "js" / "branch_assignments" / "BranchAssignments.vue"
+MASTER_EXPERIENCE = APP_ROOT / "master_experience.py"
+BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
+PRODUCT_MENU = APP_ROOT / "public" / "js" / "retailedge_product_menu.bundle.js"
 
 
 class TestBranchAssignmentHistory(unittest.TestCase):
@@ -128,6 +131,31 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		self.assertIn('"label": "Branch Assignments"', setup)
 		self.assertIn('"page": "branch-assignments"', setup)
 		self.assertIn("if (resource?.page)", setup_vue)
+
+
+	def test_branch_assignments_is_promoted_to_sidebar_and_waffle_navigation(self):
+		master = MASTER_EXPERIENCE.read_text(encoding="utf-8")
+		business_hub = BUSINESS_HUB.read_text(encoding="utf-8")
+		product_menu = PRODUCT_MENU.read_text(encoding="utf-8")
+
+		for contract in (
+			'"label": "Branch Assignments"',
+			'"target": "branch-assignments"',
+			"def _add_branch_assignment_navigation",
+			"_add_branch_assignment_navigation(navigation_groups)",
+		):
+			self.assertIn(contract, master)
+
+		authoritative_method = "retailedge.master_experience.get_retailedge_business_hub_context"
+		self.assertIn(authoritative_method, business_hub)
+		self.assertIn(authoritative_method, product_menu)
+		self.assertNotIn("retailedge.edgesuite_ui.get_retailedge_business_hub_context", business_hub)
+		self.assertNotIn("retailedge.edgesuite_ui.get_retailedge_business_hub_context", product_menu)
+
+	def test_branch_assignment_page_uses_retailedge_theme_identity(self):
+		source = ASSIGNMENT_VUE.read_text(encoding="utf-8")
+		self.assertIn('product="retailedge"', source)
+		self.assertNotIn('product="RetailEdge"', source)
 
 
 if __name__ == "__main__":
