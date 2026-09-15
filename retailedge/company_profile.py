@@ -293,10 +293,10 @@ def get_shell_identity() -> dict[str, Any]:
 	branches = get_allowed_operating_branches(company=company) if company else []
 	return {
 		"product_code": "retailedge",
-		"product_name": "RetailEdge",
-		"product_logo": "",
+		"product_name": "ProcessEdge Retail",
+		"product_logo": "/assets/retailedge/images/processedge_retail/processedge-retail-mark.svg",
 		"product_icon": "shopping-cart",
-		"product_subtitle": "Retail operations & control",
+		"product_subtitle": "Structured for Scale.",
 		"tenant_name": profile.get("label") or company,
 		"tenant_logo": profile.get("logo") or "",
 		"tenant_icon": "building",
