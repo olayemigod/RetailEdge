@@ -6,6 +6,8 @@
 	const mounts = new Map();
 	let observer = null;
 	let scheduled = false;
+	let identityRequest = null;
+	let identityRefreshedAt = 0;
 
 	function runtime() {
 		return window.EdgeSuiteUI || window.EdgeUI || null;
@@ -15,6 +17,39 @@
 		const boot = window.frappe?.boot || {};
 		return boot.edgesuite_ui_identity?.retailedge || boot.retailedge_ui_identity || {};
 	}
+
+	function applyIdentity(payload = {}) {
+		const boot = window.frappe?.boot;
+		if (!boot || !payload || typeof payload !== "object") return identity();
+		boot.retailedge_ui_identity = { ...(boot.retailedge_ui_identity || {}), ...payload };
+		boot.edgesuite_ui_identity = boot.edgesuite_ui_identity || {};
+		boot.edgesuite_ui_identity.retailedge = { ...(boot.edgesuite_ui_identity.retailedge || {}), ...payload };
+		return boot.edgesuite_ui_identity.retailedge;
+	}
+
+	async function refreshIdentity({ force = false } = {}) {
+		const now = Date.now();
+		if (!force && identityRefreshedAt && now - identityRefreshedAt < 5000) return identity();
+		if (identityRequest) return identityRequest;
+		identityRequest = new Promise((resolve) => {
+			frappe.call({
+				method: "retailedge.company_profile.get_shell_identity",
+				callback: (response) => {
+					identityRefreshedAt = Date.now();
+					resolve(applyIdentity(response.message || {}));
+				},
+				error: () => resolve(identity()),
+			});
+		}).finally(() => { identityRequest = null; });
+		return identityRequest;
+	}
+
+	window.retailedgeSyncShellIdentity = function (payload = {}) {
+		identityRefreshedAt = Date.now();
+		const next = applyIdentity(payload);
+		schedule();
+		return next;
+	};
 
 	function normalizeBranches(values) {
 		return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || "").trim()).filter(Boolean))];
@@ -140,10 +175,11 @@
 		if (observer || !document.body) return;
 		observer = new MutationObserver(schedule);
 		observer.observe(document.body, { childList: true, subtree: true });
-		document.addEventListener("page-change", schedule);
-		document.addEventListener("edgesuite-context-changed", schedule);
-		window.frappe?.router?.on?.("change", schedule);
-		schedule();
+		document.addEventListener("page-change", () => { refreshIdentity().finally(schedule); });
+		document.addEventListener("edgesuite-context-changed", () => { refreshIdentity({ force: true }).finally(schedule); });
+		document.addEventListener("retailedge-operating-context-changed", () => { refreshIdentity({ force: true }).finally(schedule); });
+		window.frappe?.router?.on?.("change", () => { refreshIdentity().finally(schedule); });
+		refreshIdentity({ force: true }).finally(schedule);
 	}
 
 	function boot() {
