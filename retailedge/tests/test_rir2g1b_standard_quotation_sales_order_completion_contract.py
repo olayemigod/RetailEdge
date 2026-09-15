@@ -123,7 +123,12 @@ def test_completion_dialog_uses_only_server_authoritative_actions():
 		"workflow_readiness?.available_actions",
 		"expected_modified",
 		"expected_workflow_state",
-		"Advanced: Open in ERPNext",
+		"Print",
+		"PDF",
+		"Create Sales Order",
+		"Create Sales Invoice",
+		"Make Payment",
+		'emitNextAction(action)',
 	):
 		assert contract in source
 	for forbidden in (
@@ -144,18 +149,18 @@ def test_professional_selling_opens_completion_after_saved_quote_or_order():
 	assert 'doctype: "Sales Order"' in source
 
 
-def test_recent_draft_completion_is_limited_to_quote_and_order():
+def test_tabbed_draft_completion_routes_quote_and_order_to_standard_completion():
 	source = _read(WORKSPACE)
-	assert "canReviewCompletion(row)" in source
-	assert '["quotation", "sales-order"].includes(this.recentDocument?.key)' in source
-	assert "Number(row?.docstatus || 0) === 0" in source
-	assert "Review Completion" in source
+	assert 'if (document.key === "quotation")' in source
+	assert 'this.openStandardCompletion({ doctype: "Quotation", name: row.name });' in source
+	assert 'if (document.key === "sales-order")' in source
+	assert 'this.openStandardCompletion({ doctype: "Sales Order", name: row.name });' in source
 
 
-def test_delivery_and_invoice_do_not_receive_rir2g1b_completion_controls():
+def test_delivery_and_invoice_keep_their_own_completion_dialogs():
 	source = _read(WORKSPACE)
-	assert '["quotation", "sales-order"]' in source
-	assert '["delivery-note", "sales-invoice"]' not in source[source.index("canReviewCompletion(row)"):source.index("openStandardCompletion", source.index("canReviewCompletion(row)"))]
+	assert 'this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name });' in source
+	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });' in source
 
 
 def test_contract_stays_bounded_to_commitment_documents():
