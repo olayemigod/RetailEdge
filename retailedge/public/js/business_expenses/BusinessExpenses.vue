@@ -31,6 +31,14 @@
 
 			<EdgeLoadingState v-if="metadataLoading" message="Preparing Business Expenses..." :skeleton="true" />
 			<EdgeErrorState v-else-if="metadataError" title="Business Expenses unavailable" :message="metadataError" @retry="loadMetadata" />
+			<section v-else-if="!settings.enabled" class="edge-card feature-disabled-card">
+				<div>
+					<p class="eyebrow">Feature setting</p>
+					<h3>Business Expenses are turned off</h3>
+					<p>{{ featureMessage || "Enable Business Expenses in Settings before recording direct non-POS spending." }}</p>
+				</div>
+				<button v-if="canManageSettings" type="button" class="edge-button edge-button--primary" @click="openSettings">Open Settings</button>
+			</section>
 
 			<template v-else>
 				<section v-if="screen === 'list'" class="edge-card">
@@ -217,7 +225,7 @@ function callMethod(method, args = {}) {
 		error: reject,
 	}));
 }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 function blankValues() {
 	return { company: "", branch: "", expense_date: "", expense_category: "", amount: "", description: "", payee_type: "Other", supplier: "", payee_name: "", reference_no: "", payment_account: "", cost_center: "", project: "" };
 }
@@ -232,7 +240,7 @@ export default {
 			postingLoading: false, postingAction: false, postingError: "", postingReadiness: {},
 			reversing: false, reversalError: "", reversalReadiness: {},
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
-			canCreate: false, canReview: false, settings: {}, statuses: [], defaultValues: {},
+			canCreate: false, canReview: false, canManageSettings: false, featureMessage: "", settings: {}, statuses: [], defaultValues: {},
 			filters: { company: "", branch: "", from_date: "", to_date: "", expense_category: "", expense_status: "", search_text: "", page_size: 25 },
 			rows: [], summary: {}, pagination: {}, scope: {}, listSort: null, screen: "list", values: blankValues(),
 			categoryDefaults: {}, current: {}, editingName: "", actionRemarks: "",
@@ -257,9 +265,11 @@ export default {
 				this.tenantName = context.default_values?.company || ""; this.branchName = context.default_values?.branch || ""; this.userName = navigation.context?.user_name || frappe.session?.user || "";
 				this.defaultValues = { ...blankValues(), ...(context.default_values || {}) }; this.values = { ...this.defaultValues };
 				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.settings = context.settings || {}; this.statuses = context.statuses || [];
-				this.canCreate = Boolean(context.capabilities?.can_create); this.canReview = Boolean(context.capabilities?.can_review);
+				this.canCreate = Boolean(context.capabilities?.can_create); this.canReview = Boolean(context.capabilities?.can_review); this.canManageSettings = Boolean(context.capabilities?.can_manage_settings);
+				this.featureMessage = context.feature?.message || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				const routeOptions = frappe.route_options || {}; frappe.route_options = null;
+				if (!this.settings.enabled) return;
 				if (routeOptions.business_expense) await this.openExpense(routeOptions.business_expense);
 				else if (routeOptions.action === "new" && this.canCreate) this.openNewExpense();
 				else await this.fetchList();
@@ -311,6 +321,7 @@ export default {
 		openReversalDialog() { if (this.reversing || !this.reversalReadiness.can_reverse || !this.current.name) return; const dialog = new frappe.ui.Dialog({ title: "Reverse Business Expense", fields: [{ fieldname: "posting_date", fieldtype: "Date", label: "Reversal Posting Date", reqd: 1, default: this.reversalReadiness.default_posting_date || frappe.datetime.get_today() }, { fieldname: "reason", fieldtype: "Small Text", label: "Reversal Reason", reqd: 1, description: "Explain why this posted expense must be reversed. The original accounting entry remains unchanged." }], primary_action_label: "Reverse Accounting", primary_action: (values) => { dialog.hide(); this.confirmReverse(values || {}); } }); dialog.show(); },
 		async confirmReverse(values) { if (this.reversing || !this.current.name) return; this.reversing = true; this.reversalError = ""; try { const result = await callMethod(REVERSE_METHOD, { name: this.current.name, reason: values.reason || "", posting_date: values.posting_date || "", expected_modified: this.current.modified }); const expenseName = result.expense?.name || this.current.name; await this.openExpense(expenseName); frappe.show_alert?.({ message: result.idempotent ? "Business Expense was already reversed" : "Business Expense accounting reversed", indicator: "green" }); } catch (error) { this.reversalError = errorMessage(error, "Unable to reverse this Business Expense accounting."); await this.loadPostingReadiness(); } finally { this.reversing = false; } },
 		openExpenseRegister() { frappe.set_route("expense-register"); },
+		openSettings() { frappe.route_options = { settings_section: "business-expenses" }; frappe.set_route("retail-settings"); },
 		openExpenseCategories() { if (!this.hasPageTarget("retailedge-setup")) return; frappe.route_options = { setup_resource: "expense-categories" }; frappe.set_route("retailedge-setup"); },
 		formatAmount(value) { const amount = Number(value) || 0; try { return window.retailedge.formatPlainValue(amount, { fieldtype: "Currency" }); } catch (_error) { return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } },
 		formatDate(value) { if (!value) return "—"; try { return frappe.datetime.str_to_user(String(value)); } catch (_error) { return String(value); } },
@@ -365,6 +376,9 @@ textarea.edge-input { min-height: 78px; resize: vertical; }
 .workflow-actions .edge-button { display: inline-flex; align-items: center; gap: 8px; }
 .workflow-actions small { opacity: .85; }
 .error-banner { padding: 10px 12px; border: 1px solid var(--edge-danger, #d92d20); border-radius: 8px; color: var(--edge-danger, #b42318); background: var(--edge-danger-subtle, #fef3f2); }
+.feature-disabled-card { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1.25rem; }
+.feature-disabled-card h3 { margin:.2rem 0 .35rem; }
+.feature-disabled-card p { margin:0; color:var(--edge-text-muted, #667085); }
 .business-expense-fallback { margin: 20px; padding: 16px; border: 1px solid var(--edge-border, #d9d9d9); border-radius: 10px; display: grid; gap: 6px; }
 @media (max-width: 1000px) { .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .business-expense-header, .section-heading { align-items: flex-start; flex-direction: column; } .filter-grid, .form-grid, .queue-summary, .derived-context, .detail-grid { grid-template-columns: 1fr; } .filter-search { grid-column: auto; } .header-actions { flex-wrap: wrap; } }
