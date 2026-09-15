@@ -32,7 +32,7 @@ class TestSimplePaymentPrefillContract(TestCase):
 		).read_text()
 		self.assertIn('["receive-customer-payment", "receive-sales-order-payment"].includes(this.intent)', component)
 		self.assertIn("reference_name: referenceName", component)
-		self.assertIn("selected sales reference", component)
+		self.assertIn("selected reference", component)
 		self.assertIn("one Sales Order advance", component)
 
 	def test_prefill_preserves_existing_draft_payment_service_and_stale_value_clearing(self):
