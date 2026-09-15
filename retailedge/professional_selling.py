@@ -5,7 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.desk.search import search_link
-from frappe.utils import cint, flt, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 from frappe.utils.user import get_user_fullname
 
 from retailedge.branch_context import (
@@ -67,6 +67,19 @@ SELLING_DOCUMENTS: tuple[dict[str, Any], ...] = (
 
 _DOCUMENT_BY_KEY = {row["key"]: row for row in SELLING_DOCUMENTS}
 _DOCUMENT_BY_DOCTYPE = {row["doctype"]: row for row in SELLING_DOCUMENTS}
+
+_LIST_DOCUMENTS: dict[str, dict[str, Any]] = {
+	**{row["key"]: dict(row) for row in SELLING_DOCUMENTS},
+	"sales-invoice": {
+		"key": "sales-invoice",
+		"doctype": "Sales Invoice",
+		"label": "Sales Invoice",
+		"stage": "Invoice",
+		"date_field": "posting_date",
+		"party_field": "customer",
+		"native_route": "/app/sales-invoice",
+	},
+}
 
 
 def get_selling_document_definition(value: str) -> dict[str, Any]:
@@ -498,3 +511,126 @@ def get_recent_selling_documents(document: str, limit: int = 8) -> list[dict[str
 		limit_page_length=limit,
 	)
 	return [dict(row) for row in rows]
+
+
+def _selling_list_definition(document: str) -> dict[str, Any]:
+	key = str(document or "").strip()
+	definition = _LIST_DOCUMENTS.get(key)
+	if not definition:
+		frappe.throw(_("Unsupported Professional Selling list: {0}").format(key))
+	return dict(definition)
+
+
+def _selling_list_status_filter(meta, status: str, filters: dict[str, Any]) -> None:
+	status = str(status or "").strip()
+	if not status or status == "All":
+		return
+	if status == "Draft":
+		filters["docstatus"] = 0
+		return
+	if status == "Submitted":
+		filters["docstatus"] = 1
+		return
+	if status == "Cancelled":
+		filters["docstatus"] = 2
+		return
+	if meta.has_field("status"):
+		filters["status"] = status
+
+
+@frappe.whitelist()
+def get_professional_selling_list(
+	document: str,
+	search: str = "",
+	status: str = "All",
+	from_date: str = "",
+	to_date: str = "",
+	start: int = 0,
+	page_length: int = 20,
+) -> dict[str, Any]:
+	"""Return a filter-aware, permission-aware selling list for the four Professional Selling tabs."""
+	definition = _selling_list_definition(document)
+	doctype = definition["doctype"]
+	if not _permission(doctype, "read"):
+		frappe.throw(_("You do not have permission to view {0}.").format(doctype), frappe.PermissionError)
+
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	if not company:
+		frappe.throw(_("Choose an Operating Company before viewing Professional Selling records."))
+	_assert_read("Company", company)
+
+	filters = _operating_document_filters(doctype, company=company, branch=branch)
+	meta = frappe.get_meta(doctype)
+	_selling_list_status_filter(meta, status, filters)
+
+	date_field = definition["date_field"]
+	from_text = str(from_date or "").strip()
+	to_text = str(to_date or "").strip()
+	if from_text:
+		from_value = getdate(from_text)
+		filters[date_field] = [">=", from_value]
+	if to_text:
+		to_value = getdate(to_text)
+		if from_text and to_value < getdate(from_text):
+			frappe.throw(_("To Date cannot be before From Date."))
+		if date_field in filters:
+			filters[date_field] = ["between", [getdate(from_text), to_value]]
+		else:
+			filters[date_field] = ["<=", to_value]
+
+	search_text = str(search or "").strip()
+	or_filters: list[list[Any]] = []
+	if search_text:
+		like = f"%{search_text}%"
+		or_filters.append(["name", "like", like])
+		party_field = definition["party_field"]
+		if meta.has_field(party_field):
+			or_filters.append([party_field, "like", like])
+		if meta.has_field("status"):
+			or_filters.append(["status", "like", like])
+
+	start = max(0, cint(start))
+	page_length = max(5, min(cint(page_length) or 20, 100))
+	fields = ["name", "docstatus", "modified"]
+	for candidate in (
+		definition["party_field"],
+		date_field,
+		"status",
+		"grand_total",
+		"currency",
+		"shipping_rule",
+	):
+		if candidate not in fields and meta.has_field(candidate):
+			fields.append(candidate)
+
+	rows = frappe.get_list(
+		doctype,
+		filters=filters,
+		or_filters=or_filters or None,
+		fields=fields,
+		order_by=f"{date_field} desc, modified desc",
+		limit_start=start,
+		limit_page_length=page_length + 1,
+	)
+	has_more = len(rows) > page_length
+	rows = rows[:page_length]
+	return {
+		"document": definition["key"],
+		"doctype": doctype,
+		"label": definition["label"],
+		"date_field": date_field,
+		"party_field": definition["party_field"],
+		"rows": [dict(row) for row in rows],
+		"start": start,
+		"page_length": page_length,
+		"next_start": start + len(rows),
+		"has_more": has_more,
+		"filters": {
+			"search": search_text,
+			"status": str(status or "All"),
+			"from_date": from_text,
+			"to_date": to_text,
+		},
+	}
