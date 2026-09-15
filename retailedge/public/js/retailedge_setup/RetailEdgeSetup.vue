@@ -199,7 +199,7 @@ export default {
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.loaded = true;
 			} catch (error) {
-				this.error = error?.message || error?.exc || "Business Setup failed to load.";
+				this.error = window.retailedge?.userErrorMessage?.(error, "Business Setup failed to load.") || "Business Setup failed to load.";
 			} finally {
 				this.loading = false;
 			}
