@@ -20,9 +20,10 @@ body.edge-suite-product-retailedge,
 	--retailedge-surface: #ffffff;
 	--retailedge-surface-muted: #f4f7f9;
 	--retailedge-border: #d9e2e8;
-	--retailedge-sidebar: #0b1f33;
-	--retailedge-sidebar-muted: #9eb0bf;
-	--retailedge-sidebar-active: #163b4d;
+	/* Sidebar presentation follows the active EdgeSuite appearance, as in EduEdge/VetEdge. */
+	--retailedge-sidebar: var(--edge-color-surface);
+	--retailedge-sidebar-muted: var(--edge-color-ink-500);
+	--retailedge-sidebar-active: color-mix(in srgb, var(--edge-color-brand-50) 78%, var(--edge-color-surface));
 	--retailedge-radius: 10px;
 	--retailedge-shadow: 0 8px 24px rgba(11, 31, 51, 0.08);
 
@@ -46,7 +47,9 @@ body.edge-suite-product-retailedge,
 	--edge-card-gap: 0.85rem;
 }
 
-/* Commercial shell: dark operational rail + compact light work surface. */
+/* Commercial shell: compact retail work surface with theme-owned navigation.
+   EdgeSuite Navigation Shell V2 owns light/dark sidebar presentation just as it
+   does for EduEdge and VetEdge; RetailEdge keeps only its accent/density. */
 body.edge-suite-product-retailedge .edge-app-shell,
 [data-edge-product="retailedge"].edge-app-shell {
 	background: var(--retailedge-surface-muted);
@@ -55,41 +58,42 @@ body.edge-suite-product-retailedge .edge-app-shell,
 
 body.edge-suite-product-retailedge .edge-app-shell__sidebar,
 [data-edge-product="retailedge"] .edge-app-shell__sidebar {
-	background:
-		linear-gradient(180deg, rgba(15, 143, 127, 0.12), transparent 11rem),
-		var(--retailedge-sidebar);
-	border-right: 0;
-	color: #f7fbfc;
+	background: var(--edge-color-surface);
+	border-right: 1px solid var(--edge-color-border);
+	color: var(--edge-color-ink-950);
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__brand,
 [data-edge-product="retailedge"] .edge-sidebar__brand {
-	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	background: var(--edge-color-surface);
+	border-bottom: 1px solid var(--edge-color-border);
 	padding-block: 1rem;
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__mark,
 [data-edge-product="retailedge"] .edge-sidebar__mark {
-	background: var(--retailedge-brand);
-	border: 1px solid rgba(255, 255, 255, 0.2);
+	background: var(--edge-color-brand-50);
+	border: 1px solid var(--edge-color-brand-100);
 	border-radius: 8px;
-	color: #fff;
+	color: var(--edge-color-brand-600);
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__brand-copy strong,
-[data-edge-product="retailedge"] .edge-sidebar__brand-copy strong {
-	color: #fff;
+[data-edge-product="retailedge"] .edge-sidebar__brand-copy strong,
+body.edge-suite-product-retailedge .edge-topbar__title-copy strong,
+[data-edge-product="retailedge"] .edge-topbar__title-copy strong {
+	color: var(--edge-color-ink-950);
 	letter-spacing: -0.015em;
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__brand-copy small,
 [data-edge-product="retailedge"] .edge-sidebar__brand-copy small {
-	color: var(--retailedge-sidebar-muted);
+	color: var(--edge-color-ink-500);
 }
 
 body.edge-suite-product-retailedge .edge-sidebar__section-toggle,
 [data-edge-product="retailedge"] .edge-sidebar__section-toggle {
-	color: #b8c7d2;
+	color: var(--edge-color-ink-700);
 	font-size: 0.7rem;
 	font-weight: 750;
 	letter-spacing: 0.055em;
@@ -100,27 +104,39 @@ body.edge-suite-product-retailedge .edge-sidebar-item,
 [data-edge-product="retailedge"] .edge-sidebar-item {
 	border: 1px solid transparent;
 	border-radius: 8px;
-	color: #dce6ec;
+	color: var(--edge-color-ink-700);
 	min-height: 2.45rem;
 }
 
 body.edge-suite-product-retailedge .edge-sidebar-item:hover,
 [data-edge-product="retailedge"] .edge-sidebar-item:hover {
-	background: rgba(255, 255, 255, 0.07);
-	color: #fff;
+	background: var(--edge-color-surface-muted);
+	color: var(--edge-color-ink-950);
 }
 
 body.edge-suite-product-retailedge .edge-sidebar-item.active,
-[data-edge-product="retailedge"] .edge-sidebar-item.active {
+body.edge-suite-product-retailedge .edge-sidebar-item[aria-current="page"],
+[data-edge-product="retailedge"] .edge-sidebar-item.active,
+[data-edge-product="retailedge"] .edge-sidebar-item[aria-current="page"] {
 	background: var(--retailedge-sidebar-active);
-	border-color: rgba(33, 201, 174, 0.28);
-	box-shadow: inset 3px 0 0 var(--retailedge-brand);
-	color: #fff;
+	border-color: transparent;
+	box-shadow: inset 2px 0 0 var(--edge-color-brand-600);
+	color: var(--edge-color-brand-700);
+}
+
+body.edge-suite-product-retailedge .edge-sidebar-item.active > .edge-icon,
+body.edge-suite-product-retailedge .edge-sidebar-item[aria-current="page"] > .edge-icon,
+[data-edge-product="retailedge"] .edge-sidebar-item.active > .edge-icon,
+[data-edge-product="retailedge"] .edge-sidebar-item[aria-current="page"] > .edge-icon {
+	background: color-mix(in srgb, var(--edge-color-brand-100) 65%, transparent);
+	border: 0;
+	box-shadow: none;
+	color: var(--edge-color-brand-700);
 }
 
 body.edge-suite-product-retailedge .edge-sidebar-item__description,
 [data-edge-product="retailedge"] .edge-sidebar-item__description {
-	color: var(--retailedge-sidebar-muted);
+	color: var(--edge-color-ink-500);
 }
 
 /* RetailEdge top bar behaves like an operational context strip. */
@@ -454,6 +470,14 @@ body.edge-suite-product-retailedge[data-edge-appearance="dark"] {
 html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-topbar,
 body.edge-suite-product-retailedge[data-edge-appearance="dark"] .edge-topbar {
 	background: rgba(19, 38, 50, 0.98);
+}
+
+html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-sidebar-item.active,
+html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-sidebar-item[aria-current="page"],
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-sidebar-item.active,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-sidebar-item[aria-current="page"] {
+	background: color-mix(in srgb, var(--edge-color-brand-700) 22%, var(--edge-color-surface));
+	color: var(--edge-color-ink-950);
 }
 
 html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-data-table th,
