@@ -164,3 +164,106 @@ body.edge-suite-product-retailedge .edge-app-shell.edge-nav-shell-v2 .edge-sideb
 	background: color-mix(in srgb, var(--edge-color-brand-700) 18%, var(--edge-color-surface));
 	color: var(--edge-color-brand-text, var(--edge-color-info));
 }
+
+
+/* Working Branch switcher: use a body-level popover so Branch choices cannot be
+   clipped by the shared top bar, page shell, or sidebar overflow. */
+.retailedge-topbar-branch-switcher {
+	width: auto;
+	min-width: 0;
+	max-width: min(22rem, 44vw);
+}
+
+.retailedge-topbar-branch-trigger {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	gap: .55rem;
+	min-width: 11rem;
+	max-width: min(22rem, 44vw);
+	min-height: 2.65rem;
+	padding: .42rem .7rem;
+	border: 1px solid var(--edge-color-border-strong, var(--border-color));
+	border-radius: 999px;
+	background: var(--edge-color-surface-muted, var(--control-bg));
+	color: var(--edge-color-ink-900, var(--text-color));
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.retailedge-topbar-branch-trigger:hover:not(:disabled),
+.retailedge-topbar-branch-trigger:focus-visible {
+	border-color: var(--edge-color-brand-500, var(--primary));
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--edge-color-brand-500, var(--primary)) 12%, transparent);
+	outline: none;
+}
+
+.retailedge-topbar-branch-trigger:disabled { cursor: default; opacity: .82; }
+.retailedge-topbar-branch-trigger__icon { flex: 0 0 auto; color: var(--edge-color-brand-700, var(--primary)); font-size: .85rem; }
+.retailedge-topbar-branch-trigger__copy { display: grid; min-width: 0; line-height: 1.08; }
+.retailedge-topbar-branch-trigger__copy small { color: var(--edge-color-ink-500, var(--text-muted)); font-size: .62rem; font-weight: 650; text-transform: uppercase; letter-spacing: .035em; }
+.retailedge-topbar-branch-trigger__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; }
+.retailedge-topbar-branch-trigger__chevron { margin-left: auto; flex: 0 0 auto; color: var(--edge-color-ink-500, var(--text-muted)); }
+
+.retailedge-branch-popover {
+	position: fixed;
+	z-index: 2200;
+	display: grid;
+	gap: .65rem;
+	overflow: auto;
+	overscroll-behavior: contain;
+	padding: .75rem;
+	border: 1px solid var(--edge-color-border-strong, var(--border-color));
+	border-radius: .9rem;
+	background: var(--edge-color-surface, var(--card-bg, #fff));
+	color: var(--edge-color-ink-950, var(--text-color));
+	box-shadow: 0 18px 48px rgb(15 23 42 / 18%);
+}
+
+.retailedge-branch-popover__header {
+	display: grid;
+	gap: .15rem;
+	padding: .15rem .2rem .55rem;
+	border-bottom: 1px solid var(--edge-color-border, var(--border-color));
+}
+.retailedge-branch-popover__header strong { font-size: .9rem; }
+.retailedge-branch-popover__header small { color: var(--edge-color-ink-500, var(--text-muted)); font-size: .72rem; }
+
+.retailedge-branch-popover__list { display: grid; gap: .3rem; }
+.retailedge-branch-popover__option {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .8rem;
+	width: 100%;
+	min-height: 2.7rem;
+	padding: .55rem .65rem;
+	border: 1px solid transparent;
+	border-radius: .65rem;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+.retailedge-branch-popover__option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; font-weight: 680; }
+.retailedge-branch-popover__option small { flex: 0 0 auto; color: var(--edge-color-ink-500, var(--text-muted)); font-size: .68rem; }
+.retailedge-branch-popover__option:hover,
+.retailedge-branch-popover__option:focus-visible {
+	border-color: var(--edge-color-brand-100, var(--border-color));
+	background: var(--edge-color-brand-50, var(--control-bg));
+	outline: none;
+}
+.retailedge-branch-popover__option.is-active {
+	border-color: var(--edge-color-brand-300, var(--primary));
+	background: var(--edge-color-brand-50, var(--control-bg));
+}
+.retailedge-branch-popover__option.is-active small { color: var(--edge-color-brand-700, var(--primary)); font-weight: 700; }
+
+@media (max-width: 720px) {
+	.retailedge-topbar-branch-switcher { max-width: 54vw; }
+	.retailedge-topbar-branch-trigger { min-width: 0; max-width: 54vw; }
+	.retailedge-topbar-branch-trigger__copy small { display: none; }
+}
