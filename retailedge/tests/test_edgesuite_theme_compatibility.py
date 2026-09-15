@@ -5,6 +5,7 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 THEME_CSS = APP_ROOT / "public" / "css" / "retailedge_edgeui_theme_compat.css"
+IDENTITY_CSS = APP_ROOT / "public" / "css" / "retailedge_product_identity.css"
 WORKSPACE_CSS = APP_ROOT / "public" / "css" / "retailedge_workspace_home.css"
 BUSINESS_HUB = APP_ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 STOCK_ACCOUNTING_INTEGRITY = (
@@ -49,6 +50,30 @@ class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 			"Workspaces/RetailEdge",
 		):
 			self.assertIn(expected, css)
+
+	def test_product_sidebar_follows_light_dark_edgesuite_semantic_tokens(self):
+		css = IDENTITY_CSS.read_text(encoding="utf-8")
+		for expected in (
+			"--retailedge-sidebar: var(--edge-color-surface);",
+			"--retailedge-sidebar-muted: var(--edge-color-ink-500);",
+			"background: var(--edge-color-surface);",
+			"border-right: 1px solid var(--edge-color-border);",
+			"color: var(--edge-color-ink-950);",
+			".edge-sidebar__brand-copy strong",
+			".edge-topbar__title-copy strong",
+			"background: var(--edge-color-surface-muted);",
+			'edge-sidebar-item[aria-current="page"]',
+			':root[data-edge-appearance="dark"] [data-edge-product="retailedge"]',
+		):
+			self.assertIn(expected, css)
+
+		for forbidden in (
+			"color: #f7fbfc;",
+			"color: #dce6ec;",
+			"background: rgba(255, 255, 255, 0.07);",
+			"border-right: 0;",
+		):
+			self.assertNotIn(forbidden, css)
 
 	def test_business_hub_keeps_shared_edgesuite_aliases_instead_of_private_fixed_palette(self):
 		component = BUSINESS_HUB.read_text(encoding="utf-8")
