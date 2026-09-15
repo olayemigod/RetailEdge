@@ -122,7 +122,7 @@
 			title = document.createElement("strong");
 			copy.prepend(title);
 		}
-		if (!String(title.textContent || "").trim()) title.textContent = "RetailEdge";
+		if (!String(title.textContent || "").trim()) title.textContent = "ProcessEdge Retail";
 	}
 
 	function ensureShell(shell) {
