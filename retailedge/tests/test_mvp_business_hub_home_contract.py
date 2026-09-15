@@ -21,7 +21,7 @@ def test_business_hub_home_exposes_operational_command_centre_sections():
 	source = FRONTEND.read_text()
 	assert "retailedge.business_hub_home.get_business_hub_home_snapshot" in source
 	for label in ("Understand", "Act", "Operate", "Respond"):
-		assert f">{label}<" in source
+		assert f">{label}<" not in source
 	assert "Five connected experiences" not in source
 	assert "homeSnapshot.cards" in source
 	assert "homeSnapshot.indices" in source
@@ -30,6 +30,9 @@ def test_business_hub_home_exposes_operational_command_centre_sections():
 	assert "homeSnapshot.attention" in source
 	assert "refreshHomeSnapshot" in source
 	assert "EdgeSmartDateRange" in source
+	assert 'class="edge-smart-date--align-end"' in source
+	assert "overflow: visible;" in source
+	assert "z-index: 2600;" in source
 	assert "homePeriodPreset" in source
 	assert "homeSmartDate" in source
 
