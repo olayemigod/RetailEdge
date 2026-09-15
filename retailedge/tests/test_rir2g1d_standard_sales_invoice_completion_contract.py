@@ -184,7 +184,11 @@ def test_completion_dialog_uses_only_server_authoritative_actions():
 		"workflow_readiness?.available_actions",
 		"expected_modified",
 		"expected_workflow_state",
-		"Advanced: Open in ERPNext",
+		"Print",
+		"PDF",
+		"Make Payment",
+		"Create Delivery Note",
+		'emitNextAction(action)',
 	):
 		assert contract in source
 	for forbidden in (".workflow_state =", ".docstatus =", ".status ="):
@@ -213,14 +217,17 @@ def test_draft_dates_can_be_corrected_without_weakening_erpnext_validation():
 	):
 		assert contract in service
 	for contract in (
-		"update_standard_sales_invoice_dates",
-		'Save Draft Dates',
+		"update_standard_sales_invoice_draft",
+		'Save Draft Changes',
 		'<EdgeInput',
 		'id="invoice-posting-date"',
 		'id="invoice-due-date"',
+		'id="invoice-po-number"',
+		'id="invoice-remarks"',
 		'type="date"',
 		':min="draftPostingDate || undefined"',
-		"datesValid()",
+		"draftValid()",
+		"draftItems",
 		'expected_modified: this.preview.modified',
 		'}, "POST");',
 	):
@@ -229,12 +236,11 @@ def test_draft_dates_can_be_corrected_without_weakening_erpnext_validation():
 	assert '<input id="invoice-due-date"' not in dialog
 
 
-def test_recent_sales_invoice_exposes_output_and_draft_edit_paths():
+def test_tabbed_sales_invoice_exposes_output_and_draft_edit_paths():
 	source = _read(SELLING)
-	assert "View &amp; Output" in source
-	assert "Edit / Complete" in source
 	assert "window.retailedgeDocumentOutputTarget" in source
 	assert 'frappe.set_route("document-output-sharing")' in source
+	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });' in source
 
 
 def test_professional_selling_opens_invoice_completion_except_returns():
@@ -243,8 +249,51 @@ def test_professional_selling_opens_invoice_completion_except_returns():
 	assert "handleSalesInvoiceSaved(result)" in source
 	assert "!result?.is_return" in source
 	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name })' in source
-	assert "canReviewSalesInvoiceCompletion(row)" in source
-	assert 'this.recentDocument?.key === "sales-invoice"' in source
+	assert ':showNextActions="true"' in source
+
+
+
+def test_bounded_invoice_draft_editor_cannot_change_accounting_identity_or_add_rows():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for contract in (
+		"def update_standard_sales_invoice_draft(",
+		'"po_no"',
+		'"remarks"',
+		'row.qty = qty',
+		'row.rate = rate',
+		"Item rows cannot be added, removed or replaced",
+		"All existing invoice item rows must remain present",
+		"doc.save()",
+	):
+		assert contract in service
+	for forbidden in (
+		'doc.set("company"',
+		'doc.set("customer"',
+		'doc.set("branch"',
+		'doc.set("warehouse"',
+		'doc.set("update_stock"',
+		'doc.append("items"',
+	):
+		assert forbidden not in service[service.index("def update_standard_sales_invoice_draft("):service.index("def update_standard_sales_invoice_dates(")]
+	assert "Edit draft before completion" in dialog
+	assert "Customer PO / Reference" in dialog
+	assert "ERPNext recalculates taxes, totals" in dialog
+
+
+def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():
+	dialog = _read(DIALOG)
+	for contract in (
+		">Print</button>",
+		">PDF</button>",
+		"Make Payment",
+		"Create Delivery Note",
+		"View / Print / Send",
+		'this.$emit("next-action"',
+		"completedResult",
+	):
+		assert contract in dialog
+	assert "Advanced: Open in ERPNext" not in dialog
 
 
 def test_business_hub_simple_invoice_opens_same_completion_review():
