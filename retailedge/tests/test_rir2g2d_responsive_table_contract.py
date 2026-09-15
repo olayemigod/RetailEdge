@@ -22,6 +22,7 @@ LOCAL_OVERFLOW_WRAPPERS = {
 	"professional_purchasing/IncomingQualityInspection.vue": "quality-table-wrap",
 	"professional_purchasing/ProfessionalPurchasing.vue": "table-wrap",
 	"professional_purchasing/SupplierScorecardGovernance.vue": "period-table-wrap",
+	"professional_selling/ProfessionalSellingRecords.vue": "selling-record-table-wrap",
 	"profitability_intelligence/ProfitabilityIntelligence.vue": "profit-table-wrap",
 	"project_operations/ProjectOperations.vue": "table-wrap",
 	"retailedge_setup/ExpenseCategoryManager.vue": "manager-table-wrap",
