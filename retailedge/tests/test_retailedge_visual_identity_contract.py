@@ -5,6 +5,11 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOKS = ROOT / "hooks.py"
 IDENTITY_CSS = ROOT / "public" / "css" / "retailedge_product_identity.css"
 NAV_COMPAT_CSS = ROOT / "public" / "css" / "retailedge_navigation_shell_compat.css"
+PRODUCT_MARK = ROOT / "public" / "images" / "processedge_retail" / "processedge-retail-mark.svg"
+SHELL_CONTEXT = ROOT / "public" / "js" / "retailedge_shell_context.js"
+COMPANY_PROFILE = ROOT / "company_profile.py"
+WORKSPACE = ROOT / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
+
 BUSINESS_HUB = (
     ROOT
     / "public"
@@ -111,8 +116,8 @@ def test_business_hub_declares_product_identity_through_shared_edgesuite_shell()
 
     assert '<EdgeAppShell' in source
     assert 'product="retailedge"' in source
-    assert 'title="RetailEdge"' in source
-    assert 'subtitle="Retail operations & control"' in source
+    assert 'title="ProcessEdge Retail"' in source
+    assert 'subtitle="Structured for Scale."' in source
     assert ':hideNativeSidebar="true"' in source
 
 
@@ -129,3 +134,32 @@ def test_visual_identity_does_not_replace_business_or_accounting_authorities():
         "frappe.db",
     ):
         assert forbidden not in source
+
+
+def test_approved_processedge_retail_brand_assets_and_visible_identity_are_wired():
+    hooks = HOOKS.read_text(encoding="utf-8")
+    profile = COMPANY_PROFILE.read_text(encoding="utf-8")
+    shell = SHELL_CONTEXT.read_text(encoding="utf-8")
+    workspace = WORKSPACE.read_text(encoding="utf-8")
+    mark = PRODUCT_MARK.read_text(encoding="utf-8")
+
+    assert PRODUCT_MARK.exists()
+    assert "ProcessEdge Retail" in hooks
+    assert "processedge-retail-mark.svg" in hooks
+    assert '"product_code": "retailedge"' in profile
+    assert '"product_name": "ProcessEdge Retail"' in profile
+    assert '"product_subtitle": "Structured for Scale."' in profile
+    assert "processedge-retail-mark.svg" in profile
+    assert 'title.textContent = "ProcessEdge Retail"' in shell
+    assert '"name": "RetailEdge"' in workspace
+    assert '"module": "RetailEdge"' in workspace
+    assert '"label": "ProcessEdge Retail"' in workspace
+    assert '"title": "ProcessEdge Retail"' in workspace
+    assert "Shelf R mark" in mark
+
+
+def test_processedge_retail_palette_uses_approved_master_brand_colours():
+    source = IDENTITY_CSS.read_text(encoding="utf-8")
+    assert "--retailedge-brand: #0056A6;" in source
+    assert "--retailedge-brand-strong: #003E73;" in source
+    assert "--retailedge-money: #1C9C5D;" in source
