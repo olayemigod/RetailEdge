@@ -110,7 +110,7 @@ def test_boot_and_runtime_share_company_profile_identity():
         "boot.retailedge_ui_identity",
         "boot.edgesuite_ui_identity.retailedge",
         "function ensureRetailEdgeBrand(shell)",
-        'title.textContent = "RetailEdge"',
+        'title.textContent = "ProcessEdge Retail"',
     ):
         assert marker in shell
 
@@ -146,6 +146,7 @@ def test_company_profile_owner_ui_supports_logo_safe_edits_address_and_advanced_
         'v-model.trim="profile.whatsapp_number"',
         'v-model.trim="profile.email"',
         'product="retailedge"',
+        'title="ProcessEdge Retail"',
     ):
         assert marker in source
 
