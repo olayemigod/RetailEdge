@@ -9,6 +9,8 @@ PRODUCT_MARK = ROOT / "public" / "images" / "processedge_retail" / "processedge-
 SHELL_CONTEXT = ROOT / "public" / "js" / "retailedge_shell_context.js"
 COMPANY_PROFILE = ROOT / "company_profile.py"
 WORKSPACE = ROOT / "retailedge" / "workspace" / "retailedge" / "retailedge.json"
+PROFESSIONAL_SELLING = ROOT / "public" / "js" / "professional_selling" / "ProfessionalSelling.vue"
+DOCUMENT_OUTPUT = ROOT / "public" / "js" / "document_output_sharing" / "DocumentOutputSharing.vue"
 
 BUSINESS_HUB = (
     ROOT
@@ -180,3 +182,13 @@ def test_file_uploader_dark_mode_uses_retail_surface_and_text_tokens():
         ".modal-footer .btn-default",
     ):
         assert contract in source
+
+
+def test_invoice_edit_and_print_surfaces_are_stacked_on_production_identity():
+    selling = PROFESSIONAL_SELLING.read_text(encoding="utf-8")
+    output = DOCUMENT_OUTPUT.read_text(encoding="utf-8")
+
+    assert 'product="retailedge"' in selling
+    assert 'product="retailedge"' in output
+    assert 'product="RetailEdge"' not in selling
+    assert 'product="Retail"' not in output
