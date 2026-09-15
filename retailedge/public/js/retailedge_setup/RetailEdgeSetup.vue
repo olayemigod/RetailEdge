@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Setup could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgePageLayout class="retailedge-setup-page">
 			<EdgePageHeader
 				title="Setup"
-				description="Configure RetailEdge operating controls and open the authoritative ERPNext/Frappe setup records from one place."
+				description="Configure operating controls and open the authoritative ERPNext/Frappe setup records from one place."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -37,7 +37,7 @@
 					<div>
 						<span class="setup-kicker">Configuration hub</span>
 						<h3>Business setup without duplicate records</h3>
-						<p>RetailEdge keeps the existing DocTypes as the system of record. This page guides you to the permitted setup record; advanced editing still uses the native validated form.</p>
+						<p>Existing ERPNext/Frappe records remain the system of record. This page guides you to the permitted setup record; advanced editing still uses the native validated form.</p>
 					</div>
 					<button type="button" class="edge-button edge-button--secondary" @click="openOperatingContext">Operating Context</button>
 				</section>
@@ -45,7 +45,7 @@
 				<EdgeEmptyState
 					v-if="!resources.length"
 					title="No setup resources available"
-					description="Your current permissions do not allow access to RetailEdge setup records."
+					description="Your current permissions do not allow access to these setup records."
 				/>
 
 				<div v-else class="setup-grid">
@@ -199,7 +199,7 @@ export default {
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.loaded = true;
 			} catch (error) {
-				this.error = error?.message || error?.exc || "RetailEdge Setup failed to load.";
+				this.error = error?.message || error?.exc || "Business Setup failed to load.";
 			} finally {
 				this.loading = false;
 			}
