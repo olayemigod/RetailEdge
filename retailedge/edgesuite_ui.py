@@ -180,6 +180,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 	},
 	{
 		"key": "expenses", "label": "Expenses", "icon": "file-text", "items": (
+			{"label": "Business Expenses", "target_type": "Page", "target": "business-expenses", "icon": "file-text"},
 			{"label": "Expense Register", "target_type": "Page", "target": "expense-register", "icon": "report"},
 			{"label": "Cashier Expenses", "target_type": "DocType", "target": "RetailEdge Cashier Expense", "icon": "wallet"},
 			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category", "icon": "layers"},
