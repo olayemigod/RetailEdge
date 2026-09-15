@@ -149,16 +149,17 @@ body.edge-suite-product-retailedge .edge-topbar,
 
 body.edge-suite-product-retailedge .edge-topbar__mark,
 [data-edge-product="retailedge"] .edge-topbar__mark {
-	background: var(--retailedge-ink);
+	background: color-mix(in srgb, var(--edge-color-brand-600) 16%, var(--edge-color-surface));
+	border: 1px solid color-mix(in srgb, var(--edge-color-brand-600) 28%, var(--edge-color-border));
 	border-radius: 7px;
-	color: #fff;
+	color: var(--edge-color-brand-600);
 }
 
 body.edge-suite-product-retailedge .edge-context-chip,
 [data-edge-product="retailedge"] .edge-context-chip {
-	background: var(--retailedge-brand-soft);
-	border-color: #c6e8e2;
-	color: var(--retailedge-brand-strong);
+	background: var(--edge-color-brand-50);
+	border-color: color-mix(in srgb, var(--edge-color-brand-600) 24%, var(--edge-color-border));
+	color: var(--edge-color-brand-700);
 }
 
 /* RetailEdge shell identity: company left, working Branch centred, user actions right. */
@@ -169,8 +170,8 @@ body.edge-suite-product-retailedge .edge-topbar__brand,
 
 body.edge-suite-product-retailedge .edge-topbar__mark.edge-identity-mark--image,
 [data-edge-product="retailedge"] .edge-topbar__mark.edge-identity-mark--image {
-	background: #fff;
-	border: 1px solid var(--retailedge-border);
+	background: var(--edge-color-surface);
+	border: 1px solid var(--edge-color-border);
 	overflow: hidden;
 }
 
