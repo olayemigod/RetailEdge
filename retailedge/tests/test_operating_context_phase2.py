@@ -45,6 +45,32 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_selected_branch_is_persisted_in_the_authenticated_frappe_session(self):
+		source = self.read("operating_context.py")
+		for contract in (
+			'OPERATING_CONTEXT_SESSION_KEY = "retailedge_operating_context"',
+			"def _read_session_context(",
+			"def _write_session_context(",
+			"def _clear_session_context(",
+			'getattr(frappe.session, "data", None)',
+			"data[OPERATING_CONTEXT_SESSION_KEY] = payload",
+			"session_obj.update(force=True)",
+			"persisted = _read_session_context()",
+			"cached = persisted or _read_cached_context(user=user)",
+		):
+			self.assertIn(contract, source)
+
+		switch_start = source.index("def switch_operating_context(")
+		switch_end = source.index("\n\n@frappe.whitelist()\ndef clear_operating_context", switch_start)
+		switch_source = source[switch_start:switch_end]
+		self.assertLess(switch_source.index("_write_session_context(context)"), switch_source.index("_write_cached_context(context"))
+
+		clear_start = source.index("def clear_operating_context(")
+		clear_end = source.index("\n\ndef get_effective_operating_context", clear_start)
+		clear_source = source[clear_start:clear_end]
+		self.assertIn("_clear_session_context()", clear_source)
+		self.assertIn("_clear_cached_context(user=user)", clear_source)
+
 	def test_primary_branch_assignment_can_anchor_global_initial_context_without_restricting_scope(self):
 		source = self.read("operating_context.py")
 		fallback_start = source.index("def _resolve_fallback_context(")

@@ -26,7 +26,7 @@
 			</div>
 			<div v-else-if="preview.blockers?.length" class="po-submit-review__blocked">
 				<strong v-if="preview.workflow_eligible">This Purchase Order is controlled by {{ preview.workflow_readiness?.workflow || 'Frappe Workflow' }}.</strong>
-				<strong v-else>Standard EdgeSuite submission is not available.</strong>
+				<strong v-else>Standard submission is not available.</strong>
 				<ul><li v-for="blocker in preview.blockers" :key="blocker">{{ blocker }}</li></ul>
 			</div>
 			<div v-else class="po-submit-review__ready">

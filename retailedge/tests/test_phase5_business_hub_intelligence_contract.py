@@ -255,3 +255,33 @@ def test_phase5_variance_setting_is_migration_safe_and_non_posting():
 	assert "retailedge.patches.add_business_hub_intelligence_settings" in patches
 	assert "ignore_permissions=True" not in patch
 	assert "frappe.db.commit" not in patch
+
+
+def test_phase5_business_hub_uses_governed_smart_date_component_and_dmy_display():
+	source = HUB.read_text(encoding="utf-8")
+
+	for contract in (
+		"EdgeSmartDateRange",
+		'dateOrder="DMY"',
+		'@resolved="handleHomeDateResolved"',
+		"homeSmartDate",
+		"formatDisplayDate",
+		'placeholder="e.g. last 30 days, YTD, this month"',
+	):
+		assert contract in source
+
+	assert "<EdgeDropdown" not in source
+
+
+def test_phase5_business_hub_compacts_large_values_without_losing_exact_amount():
+	source = HUB.read_text(encoding="utf-8")
+
+	for contract in (
+		"compactNumber(value",
+		'notation: "compact"',
+		'formatHomeValue(card, { compact = true } = {})',
+		':title="formatHomeValue(card, { compact: false })"',
+		"text-overflow: ellipsis;",
+		"white-space: nowrap;",
+	):
+		assert contract in source

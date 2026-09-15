@@ -29,7 +29,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 		"page_route": "service-warranty-control",
 		"title": "Service & Warranty",
 		"eyebrow": "After-sales Control",
-		"description": "Review warranty and maintenance activity in EdgeSuite, then use ERPNext for authoritative creation, editing, submission, scheduling, and lifecycle actions.",
+		"description": "Review warranty and maintenance activity here, then use ERPNext for authoritative creation, editing, submission, scheduling, and lifecycle actions.",
 		"sources": (
 			{
 				"kind": "doctype",
@@ -61,13 +61,13 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 		"page_route": "sales-team-control",
 		"title": "Sales Team, Targets & Commissions",
 		"eyebrow": "Sales Performance Control",
-		"description": "Keep the RetailEdge sales-team experience in EdgeSuite while ERPNext remains authoritative for Sales Person, Sales Partner, targets, and commission reports.",
+		"description": "Manage sales-team performance here while ERPNext remains authoritative for Sales Person, Sales Partner, targets, and commission reports.",
 		"sources": (
 			{
 				"kind": "page",
 				"label": "Salesperson Performance",
 				"target": "salesperson-performance-dashboard",
-				"description": "Open the existing RetailEdge EdgeSuite salesperson performance dashboard.",
+				"description": "Open the salesperson performance dashboard.",
 			},
 			{
 				"kind": "doctype",
@@ -115,7 +115,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 		"page_route": "budget-control",
 		"title": "Budgeting & Cost Control",
 		"eyebrow": "Accounting Control",
-		"description": "Review budgets and cost-centre structure in EdgeSuite while ERPNext remains authoritative for budget rules, enforcement, submission, and variance calculations.",
+		"description": "Review budgets and cost-centre structure here while ERPNext remains authoritative for budget rules, enforcement, submission, and variance calculations.",
 		"sources": (
 			{
 				"kind": "doctype",
@@ -145,7 +145,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 		"page_route": "assets-control",
 		"title": "Assets",
 		"eyebrow": "Fixed Asset Control",
-		"description": "Review the fixed-asset register and category configuration in EdgeSuite while ERPNext remains authoritative for depreciation, movement, maintenance, adjustment, sale, scrap and accounting lifecycle actions.",
+		"description": "Review the fixed-asset register and category configuration here while ERPNext remains authoritative for depreciation, movement, maintenance, adjustment, sale, scrap and accounting lifecycle actions.",
 		"sources": (
 			{
 				"kind": "doctype",
@@ -180,7 +180,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 		"page_route": "stock-traceability-control",
 		"title": "Stock Traceability",
 		"eyebrow": "Batch & Serial Control",
-		"description": "Review batch and serial traceability in EdgeSuite while ERPNext remains authoritative for stock quantities, expiry, warranty, movement, valuation and Serial and Batch Bundle transactions.",
+		"description": "Review batch and serial traceability here while ERPNext remains authoritative for stock quantities, expiry, warranty, movement, valuation and Serial and Batch Bundle transactions.",
 		"sources": (
 			{
 				"kind": "doctype",
@@ -233,7 +233,7 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 		"page_route": "pricing-promotions-control",
 		"title": "Pricing & Promotions",
 		"eyebrow": "Commercial Control",
-		"description": "Review pricing, promotions, coupons and loyalty configuration in EdgeSuite while ERPNext remains authoritative for master data, pricing evaluation and transaction-time enforcement.",
+		"description": "Review pricing, promotions, coupons and loyalty configuration here while ERPNext remains authoritative for master data, pricing evaluation and transaction-time enforcement.",
 		"sources": (
 			{
 				"kind": "doctype",
@@ -290,12 +290,12 @@ WORKSPACES: dict[str, dict[str, Any]] = {
 
 @frappe.whitelist()
 def get_native_visual_workspace(workspace: str) -> dict[str, Any]:
-	"""Return a bounded, permission-aware EdgeSuite overview over native ERPNext capabilities."""
+	"""Return a bounded, permission-aware overview over native ERPNext capabilities."""
 	_assert_authenticated()
 	workspace = str(workspace or "").strip()
 	config = WORKSPACES.get(workspace)
 	if not config:
-		frappe.throw(_("Unsupported RetailEdge control workspace."))
+		frappe.throw(_("Unsupported business control workspace."))
 
 	# Resolve one authoritative server-side context for both the banner and every
 	# context-aware preview. Client parameters can never widen this scope.
@@ -548,4 +548,4 @@ def _resolve_page_source(source: dict[str, Any]) -> dict[str, Any] | None:
 
 def _assert_authenticated() -> None:
 	if not frappe.session.user or frappe.session.user == "Guest":
-		frappe.throw(_("Sign in to open this RetailEdge control workspace."), frappe.PermissionError)
+		frappe.throw(_("Sign in to open this business control workspace."), frappe.PermissionError)

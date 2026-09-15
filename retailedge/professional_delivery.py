@@ -5,6 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 
+from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_delivery_note as erpnext_make_delivery_note_from_invoice
 from erpnext.selling.doctype.sales_order.sales_order import make_delivery_note as erpnext_make_delivery_note
 
 from retailedge.branch_context import resolve_branch_from_warehouse
@@ -22,24 +23,29 @@ def _source_branch(doc) -> str:
 
 
 def _validate_source_against_operating_context(source) -> tuple[str, str]:
+	source_label = str(getattr(source, "doctype", "") or "Selling Document").strip()
 	company = str(source.get("company") or "").strip()
 	if not company:
-		frappe.throw(_("The Sales Order has no Company."))
+		frappe.throw(_("The {0} has no Company.").format(source_label))
 	_assert_read("Company", company)
 
 	branch = _validate_stored_operational_branch(
 		company=company,
 		branch=_source_branch(source),
-		label=_("Submitted Sales Order"),
+		label=_("Submitted {0}").format(source_label),
 	)
 
 	operating = get_operating_context() or {}
 	operating_company = str(operating.get("company") or "").strip()
 	operating_branch = str(operating.get("branch") or "").strip()
 	if operating_company and operating_company != company:
-		frappe.throw(_("The Sales Order belongs to another Company. Change Operating Context before creating its Delivery Note."))
+		frappe.throw(
+			_(
+				"The {0} belongs to another Company. Change Operating Context before creating its Delivery Note."
+			).format(source_label)
+		)
 	if operating_branch and branch and operating_branch != branch:
-		frappe.throw(_("The Sales Order Branch does not match the current Operating Branch."))
+		frappe.throw(_("{0} Branch does not match the current Operating Branch.").format(source_label))
 	return company, branch
 
 
@@ -128,5 +134,65 @@ def create_delivery_note_from_sales_order(sales_order: str) -> dict[str, Any]:
 		"grand_total": target.grand_total,
 		"currency": target.currency,
 		"source_sales_order": source.name,
+		"route": f"/app/delivery-note/{target.name}",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def create_delivery_note_from_sales_invoice(sales_invoice: str) -> dict[str, Any]:
+	"""Create a draft Delivery Note from remaining quantities on a submitted Sales Invoice.
+
+	ERPNext's native Sales Invoice mapper owns invoice-item linkage and remaining
+	delivery quantities. RetailEdge refuses stock-posting/return invoices because
+	they are not a safe source for a second delivery posting.
+	"""
+	if not _permission("Delivery Note", "create"):
+		frappe.throw(_("You do not have permission to create Delivery Note."), frappe.PermissionError)
+
+	sales_invoice = str(sales_invoice or "").strip()
+	_assert_read("Sales Invoice", sales_invoice)
+	source = frappe.get_doc("Sales Invoice", sales_invoice)
+	if source.docstatus != 1:
+		frappe.throw(_("Submit the Sales Invoice before creating a Delivery Note from it."))
+	if source.get("is_return"):
+		frappe.throw(_("Return / Credit Note invoices cannot create a Delivery Note."))
+	if source.get("update_stock"):
+		frappe.throw(
+			_(
+				"This Sales Invoice already posted stock. Creating another Delivery Note would duplicate stock movement."
+			)
+		)
+
+	company, source_branch = _validate_source_against_operating_context(source)
+	target = erpnext_make_delivery_note_from_invoice(source.name)
+	if not target or target.doctype != "Delivery Note":
+		frappe.throw(_("ERPNext could not prepare a Delivery Note from this Sales Invoice."))
+	if target.docstatus != 0:
+		frappe.throw(_("ERPNext returned a non-draft Delivery Note mapping; creation was stopped."))
+	if not target.get("items"):
+		frappe.throw(_("There are no remaining deliverable quantities on this Sales Invoice."))
+	if str(target.get("company") or "") != company:
+		frappe.throw(_("The mapped Delivery Note Company does not match the Sales Invoice."))
+
+	mapped_branch = _validate_mapped_delivery_stock_context(
+		target,
+		company=company,
+		source_branch=source_branch,
+	)
+	if target.get("shipping_rule"):
+		_validate_shipping_rule(target.shipping_rule, company=company)
+
+	target.insert()
+	return {
+		"doctype": target.doctype,
+		"name": target.name,
+		"docstatus": target.docstatus,
+		"customer": target.customer,
+		"company": target.company,
+		"branch": target.get("branch") or target.get("retailedge_branch") or mapped_branch,
+		"shipping_rule": target.get("shipping_rule") or "",
+		"grand_total": target.grand_total,
+		"currency": target.currency,
+		"source_sales_invoice": source.name,
 		"route": f"/app/delivery-note/{target.name}",
 	}

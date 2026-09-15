@@ -130,7 +130,13 @@ class TestEdgeSuitePageGovernance(unittest.TestCase):
 		self.assertNotIn("ignore_permissions", backend)
 		self.assertNotIn("frappe.db.commit", backend)
 		self.assertNotIn("frappe.client.save", component)
-		self.assertNotIn("<iframe", component.lower())
+		# Live print preview is server-rendered HTML in a sandboxed srcdoc frame.
+		# It must not embed an external/native Desk page or a public document URL.
+		self.assertIn('<iframe', component.lower())
+		self.assertIn(':srcdoc="previewHtml"', component)
+		self.assertIn('sandbox="allow-same-origin allow-modals"', component)
+		self.assertNotIn('/printview?', component)
+		self.assertNotIn(' src="/app/', component.lower())
 		self.assertNotIn("public/files", backend)
 
 

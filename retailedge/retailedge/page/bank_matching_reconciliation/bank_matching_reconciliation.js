@@ -54,7 +54,7 @@
 
 	function startWorkspace(wrapper) {
 		if (typeof window.retailedgeBootBankingWorkspace !== "function") {
-			frappe.throw(__("RetailEdge Banking EdgeSuite workspace asset is unavailable. Rebuild assets and clear cache."));
+			frappe.throw(__("The Banking workspace is unavailable. Refresh the page or contact your administrator."));
 		}
 		window.retailedgeBootBankingWorkspace(wrapper);
 	}
@@ -72,8 +72,8 @@
 			.then(() => Promise.resolve(frappe.require(PRIMARY_DATE_ASSET)))
 			.then(() => startWorkspace(wrapper))
 			.catch((error) => {
-				console.error("RetailEdge Banking EdgeSuite workspace asset failed to load", error);
-				frappe.throw(__("RetailEdge Banking EdgeSuite workspace asset failed to load."));
+				console.error("Banking workspace asset failed to load", error);
+				frappe.throw(__("The Banking workspace could not be loaded. Refresh the page or contact your administrator."));
 			});
 	}
 

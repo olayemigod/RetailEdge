@@ -49,42 +49,59 @@
 					</p>
 				</div>
 
+				<div v-if="completedResult" class="selling-next-actions">
+					<div>
+						<strong>{{ completedResult.doctype }} submitted</strong>
+						<p>Continue with the next permitted sales workflow or close this review.</p>
+					</div>
+					<div class="selling-next-buttons">
+						<button
+							v-for="(action, index) in completedResult.next_actions || []"
+							:key="action.value"
+							type="button"
+							class="edge-button"
+							:class="{ 'edge-button--primary': index === 0, 'edge-button--secondary': index !== 0 }"
+							@click="emitNextAction(action.value)"
+						>
+							{{ action.label }}
+						</button>
+						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">View / Print / Send</button>
+					</div>
+				</div>
+
 				<div v-if="actionError" class="selling-completion-error" role="alert">{{ actionError }}</div>
 			</template>
 		</div>
 
 		<template #footer>
 			<div class="selling-completion-footer">
-				<button
-					v-if="canUseNativeDesk && document?.doctype && document?.name"
-					type="button"
-					class="edge-button edge-button--secondary"
-					:disabled="busy"
-					@click="openAdvanced"
-				>
-					Advanced: Open in ERPNext
-				</button>
+				<div class="selling-output-actions">
+					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !document?.name" @click="printDocument">Print</button>
+					<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !document?.name" @click="downloadPdf">PDF</button>
+				</div>
 				<div class="selling-completion-actions">
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
-					<button
-						v-if="preview?.can_submit"
-						type="button"
-						class="edge-button edge-button--primary"
-						:disabled="busy"
-						@click="submitDocument"
-					>
-						{{ busy ? "Submitting..." : "Submit" }}
-					</button>
-					<button
-						v-for="action in workflowActions"
-						:key="action.action"
-						type="button"
-						class="edge-button edge-button--primary"
-						:disabled="busy || !preview?.workflow_eligible"
-						@click="applyWorkflow(action.action)"
-					>
-						{{ action.action }}
-					</button>
+					<template v-if="!completedResult">
+						<button
+							v-if="preview?.can_submit"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="busy"
+							@click="submitDocument"
+						>
+							{{ busy ? "Submitting..." : "Submit" }}
+						</button>
+						<button
+							v-for="action in workflowActions"
+							:key="action.action"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="busy || !preview?.workflow_eligible"
+							@click="applyWorkflow(action.action)"
+						>
+							{{ action.action }}
+						</button>
+					</template>
 				</div>
 			</div>
 		</template>
@@ -95,15 +112,18 @@
 const PREVIEW_METHOD = "retailedge.standard_selling_completion.get_standard_selling_completion_preview";
 const SUBMIT_METHOD = "retailedge.standard_selling_completion.submit_standard_selling_document";
 const WORKFLOW_METHOD = "retailedge.standard_selling_completion.apply_standard_selling_workflow_action";
+const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
+const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
+const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 
 function runtimeComponents() {
 	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 
-function callMethod(method, args = {}) {
+function callMethod(method, args = {}, type = "GET") {
 	return new Promise((resolve, reject) => {
-		frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject });
+		frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject });
 	});
 }
 
@@ -126,7 +146,7 @@ export default {
 		document: { type: Object, default: null },
 		canUseNativeDesk: { type: Boolean, default: false },
 	},
-	emits: ["close", "changed", "completed"],
+	emits: ["close", "changed", "completed", "next-action"],
 	data() {
 		return {
 			preview: null,
@@ -134,6 +154,8 @@ export default {
 			busy: false,
 			error: "",
 			actionError: "",
+			completedResult: null,
+			outputDetails: null,
 		};
 	},
 	computed: {
@@ -169,6 +191,7 @@ export default {
 					doctype: this.document.doctype,
 					name: this.document.name,
 				});
+				if (Number(this.preview?.docstatus || 0) === 0) this.completedResult = null;
 			} catch (error) {
 				this.preview = null;
 				this.error = errorMessage(error, "Unable to review this selling document.");
@@ -185,9 +208,10 @@ export default {
 					doctype: this.preview.doctype,
 					name: this.preview.name,
 					expected_modified: this.preview.modified,
-				});
+				}, "POST");
+				this.completedResult = await this.decorateCompletedResult(result);
 				this.$emit("changed", result);
-				this.$emit("completed", result);
+				this.$emit("completed", this.completedResult);
 			} catch (error) {
 				this.actionError = errorMessage(error, "Unable to submit this document.");
 				await this.loadPreview();
@@ -206,10 +230,16 @@ export default {
 					action,
 					expected_modified: this.preview.modified,
 					expected_workflow_state: this.preview.workflow_readiness?.current_state || "",
-				});
+				}, "POST");
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					this.$emit("completed", result);
+					this.completedResult = await this.decorateCompletedResult({
+						...result,
+						doctype: result.doctype || this.preview.doctype,
+						name: result.name || this.preview.name,
+						party: result.party || this.preview.party,
+					});
+					this.$emit("completed", this.completedResult);
 					return;
 				}
 				await this.loadPreview();
@@ -220,14 +250,75 @@ export default {
 				this.busy = false;
 			}
 		},
-		openAdvanced() {
-			if (!this.canUseNativeDesk || !this.document?.doctype || !this.document?.name) return;
-			window.open(
-				`/app/${doctypeSlug(this.document.doctype)}/${encodeURIComponent(this.document.name)}`,
-				"_blank",
-				"noopener,noreferrer",
-			);
+		async decorateCompletedResult(result) {
+			const document = result?.doctype === "Quotation" ? "quotation" : "sales-order";
+			const resolved = await callMethod(ACTIONS_METHOD, { document, name: result.name });
+			return { ...result, next_actions: resolved.actions || [] };
 		},
+		documentKey() {
+			return this.document?.doctype === "Quotation" ? "quotation" : "sales-order";
+		},
+		async ensureOutputDetails() {
+			if (this.outputDetails?.name === this.document?.name) return this.outputDetails;
+			this.outputDetails = await callMethod(OUTPUT_DETAILS_METHOD, { document: this.documentKey(), name: this.document.name });
+			return this.outputDetails;
+		},
+		async printDocument() {
+			if (!this.document?.name || this.busy) return;
+			this.busy = true;
+			this.actionError = "";
+			try {
+				const details = await this.ensureOutputDetails();
+				const result = await callMethod(OUTPUT_PREVIEW_METHOD, {
+					document: this.documentKey(),
+					name: this.document.name,
+					print_format: details.recommended_print_format || "Standard",
+					no_letterhead: 1,
+					show_logo: 1,
+					include_qr: 0,
+				});
+				const frame = document.createElement("iframe");
+				Object.assign(frame.style, { position: "fixed", width: "0", height: "0", border: "0" });
+				document.body.appendChild(frame);
+				frame.contentDocument.open();
+				frame.contentDocument.write(result.html || "");
+				frame.contentDocument.close();
+				frame.contentWindow.focus();
+				frame.contentWindow.print();
+				window.setTimeout(() => frame.remove(), 1200);
+			} catch (error) {
+				this.actionError = errorMessage(error, "Unable to print this document.");
+			} finally {
+				this.busy = false;
+			}
+		},
+		async downloadPdf() {
+			if (!this.document?.name) return;
+			try {
+				const details = await this.ensureOutputDetails();
+				const query = new URLSearchParams({
+					document: this.documentKey(),
+					name: this.document.name,
+					print_format: details.recommended_print_format || "Standard",
+					no_letterhead: "1",
+					show_logo: "1",
+					include_qr: "0",
+				}).toString();
+				window.open("/api/method/retailedge.document_output.download_document_pdf?" + query, "_blank", "noopener,noreferrer");
+			} catch (error) {
+				this.actionError = errorMessage(error, "Unable to prepare this document PDF.");
+			}
+		},
+		emitNextAction(action) {
+			if (!this.completedResult?.name || !action) return;
+			this.$emit("next-action", {
+				action,
+				doctype: this.completedResult.doctype || this.preview?.doctype,
+				name: this.completedResult.name,
+				customer: this.completedResult.party || this.preview?.party || "",
+			});
+		},
+
 		requestClose() {
 			if (!this.busy) this.$emit("close");
 		},
@@ -250,6 +341,9 @@ export default {
 .selling-completion-workflow p { margin: .35rem 0 0; }
 .selling-completion-error { background: var(--red-50,#fef2f2); border: 1px solid var(--red-200,#fecaca); color: var(--red-700,#b91c1c); }
 .selling-completion-hint { margin: 0; font-size: .82rem; color: var(--text-muted); }
+.selling-next-actions { display:grid; gap:.65rem; padding:.85rem; border:1px solid var(--edge-color-brand-200,var(--blue-200,#bfdbfe)); border-radius:.6rem; background:var(--edge-color-brand-50,var(--blue-50,#eff6ff)); }
+.selling-next-actions p { margin:.2rem 0 0; color:var(--text-muted); }
+.selling-next-buttons,.selling-output-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
 .selling-completion-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; width: 100%; }
 .selling-completion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 @media (max-width: 720px) { .selling-completion-summary { grid-template-columns: 1fr; } .selling-completion-item { grid-template-columns: 1fr; } .selling-completion-footer { align-items: stretch; flex-direction: column; } .selling-completion-actions { justify-content: flex-start; } }

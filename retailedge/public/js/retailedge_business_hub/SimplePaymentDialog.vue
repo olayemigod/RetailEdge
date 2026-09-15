@@ -92,8 +92,8 @@
 					<strong>{{ customerReview.payment_kind || 'Customer Receipt' }}</strong>
 				</div>
 				<div>
-					<span>Sales Invoice</span>
-					<strong>{{ customerReview.sales_invoice || 'Customer Advance' }}</strong>
+					<span>{{ customerReview.reference_doctype || 'Sales Reference' }}</span>
+					<strong>{{ customerReview.reference_name || customerReview.sales_invoice || customerReview.sales_order || 'Customer Advance' }}</strong>
 				</div>
 				<div>
 					<span>Allocated</span>
@@ -103,15 +103,15 @@
 					<span>Unallocated</span>
 					<strong>{{ formatMoney(customerReview.unallocated_amount, customerReview.currency) }}</strong>
 				</div>
-				<div v-if="customerReview.sales_invoice">
-					<span>Invoice Outstanding</span>
-					<strong>{{ formatMoney(customerReview.invoice_outstanding_amount, customerReview.currency) }}</strong>
+				<div v-if="customerReview.reference_name || customerReview.sales_invoice || customerReview.sales_order">
+					<span>{{ customerReview.sales_order ? 'Order Payment Available' : 'Invoice Outstanding' }}</span>
+					<strong>{{ formatMoney(customerReview.reference_outstanding_amount ?? customerReview.invoice_outstanding_amount, customerReview.currency) }}</strong>
 				</div>
 			</div>
 
 			<p class="guided-payment-hint">
-				Submitting uses the native ERPNext Payment Entry submit flow. RetailEdge does not directly change
-				the Sales Invoice outstanding amount, GL Entry, Payment Ledger Entry, or customer balance.
+				Submitting uses the native ERPNext Payment Entry submit flow. This workflow does not directly change
+				the source Sales Invoice/Sales Order, GL Entry, Payment Ledger Entry, or customer balance.
 			</p>
 		</div>
 
@@ -192,7 +192,7 @@
 			</div>
 
 			<p class="guided-payment-hint">
-				Submitting uses the native ERPNext Payment Entry submit flow. RetailEdge does not directly change
+				Submitting uses the native ERPNext Payment Entry submit flow. This workflow does not directly change
 				the Purchase Invoice outstanding amount, GL Entry, Payment Ledger Entry, or supplier balance.
 			</p>
 		</div>
@@ -314,13 +314,11 @@
 			</div>
 
 			<p class="guided-payment-hint">
-				Only submitted invoices with a positive outstanding balance are offered. Multi-currency and
-				payment-term allocation cases remain on the full ERPNext Payment Entry form.
 				<template v-if="isCustomerPayment">
-					Standard Receive Customer supports one Sales Invoice receipt or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
+					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Standard Receive Customer supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
 				</template>
 				<template v-if="isSupplierPayment">
-					Standard Pay Supplier supports one Purchase Invoice per payment; complex allocations stay in Advanced ERPNext.
+					Only submitted Purchase Invoices with a positive outstanding balance are offered. Standard Pay Supplier supports one Purchase Invoice per payment; complex allocations stay in Advanced ERPNext.
 				</template>
 			</p>
 
@@ -527,15 +525,15 @@ export default {
 			modeDetails: {},
 			values: emptyValues(),
 			referenceTableField: {
-				label: "Invoice Allocations",
-				description: "Allocate this payment to one or more outstanding invoices.",
+				label: "Reference Allocation",
+				description: "Allocate this payment to the selected payable reference.",
 			},
 			referenceColumns: [
 				{
 					fieldname: "reference_name",
-					label: "Invoice",
+					label: "Reference",
 					fieldtype: "Link",
-					placeholder: "Search outstanding invoice",
+					placeholder: "Search payable reference",
 				},
 				{
 					fieldname: "outstanding_amount",
@@ -556,7 +554,7 @@ export default {
 			return Boolean(this.formContext.capabilities?.branch_enabled);
 		},
 		isCustomerPayment() {
-			return this.intent === "receive-customer-payment";
+			return ["receive-customer-payment", "receive-sales-order-payment"].includes(this.intent);
 		},
 		isSupplierPayment() {
 			return this.intent === "pay-supplier";
@@ -646,7 +644,7 @@ export default {
 				});
 				const outstandingAmount = Number(details.outstanding_amount || 0);
 				if (!(outstandingAmount > 0)) {
-					throw new Error("The selected invoice no longer has an outstanding amount available for payment.");
+					throw new Error("The selected reference no longer has an amount available for payment.");
 				}
 				this.values.references = [{
 					reference_name: referenceName,
@@ -769,7 +767,7 @@ export default {
 					this.values.amount = this.allocatedTotal;
 				}
 			} catch (error) {
-				this.saveError = errorMessage(error, "Unable to load the invoice outstanding amount.");
+				this.saveError = errorMessage(error, "Unable to load the reference amount available for payment.");
 				this.values.references = rows;
 			} finally {
 				this.referenceLoading = false;

@@ -96,7 +96,7 @@
 				/>
 				<span>
 					<strong>Update Stock</strong>
-					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by RetailEdge settings for Make a Sale." }}</small>
+					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by the current sales settings for Make a Sale." }}</small>
 				</span>
 			</label>
 

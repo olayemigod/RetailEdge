@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="expense-register-fallback">
 		<strong>Expense Register could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -116,7 +116,7 @@
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
 				<span>{{ showCashier ? "Permitted cashier visibility" : "Your expenses only" }}</span>
-				<span>{{ filters.view_mode === "consolidated" ? "Sources: Cashier/POS + posted business expenses" : "Source: RetailEdge Cashier Expense" }}</span>
+				<span>{{ filters.view_mode === "consolidated" ? "Sources: Cashier/POS + posted business expenses" : "Source: Cashier Expense" }}</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
@@ -226,7 +226,7 @@ export default {
 		exportDataset() {
 			return {
 				title: "Expense Register",
-				filename: `RetailEdge Expense Register ${this.filters.company || ""}`.trim(),
+				filename: `ProcessEdge Retail Expense Register ${this.filters.company || ""}`.trim(),
 				columns: this.exportColumns(this.columns),
 				rows: this.rows,
 				filters: this.exportFilters,
@@ -257,7 +257,7 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Source", value: this.filters.view_mode === "consolidated" ? "Consolidated business expenses" : "RetailEdge Cashier Expense" },
+				{ label: "Source", value: this.filters.view_mode === "consolidated" ? "Consolidated business expenses" : "Cashier Expense" },
 				{ label: "Scope", value: this.scopeLabel },
 				{ label: "Cashier visibility", value: this.showCashier ? "Permitted scope" : "Current user only" },
 			];
@@ -395,7 +395,7 @@ export default {
 		async fetchData() {
 			if (!this.filters.company) return;
 			if (!this.reportProvider?.load) {
-				this.error = "The shared EdgeSuite Expense Register provider is unavailable.";
+				this.error = "The Expense Register reporting service is unavailable.";
 				return;
 			}
 			this.loading = true;

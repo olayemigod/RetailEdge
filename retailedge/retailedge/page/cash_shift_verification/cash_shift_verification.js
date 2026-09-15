@@ -29,7 +29,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(REPORTING_ASSET); if (typeof window.mountCashShiftVerificationPage !== "function") throw new Error("Cash Shift Verification bundle is unavailable.");
 		loading.remove(); const root = document.createElement("div"); root.className = "retailedge-cash-shift-verification-root"; page.body.append(root); await window.mountCashShiftVerificationPage(root);
 	} catch (error) {
-		loading.remove(); const errorDiv = document.createElement("div"); errorDiv.className = "alert alert-danger p-6 text-center"; errorDiv.textContent = error?.message || __(`${PAGE_TITLE} failed to load.`); wrapper.appendChild(errorDiv);
+		loading.remove(); const errorDiv = document.createElement("div"); errorDiv.className = "alert alert-danger p-6 text-center"; errorDiv.textContent = window.retailedge?.userErrorMessage?.(error, __(`${PAGE_TITLE} failed to load.`)) || __(`${PAGE_TITLE} failed to load.`); wrapper.appendChild(errorDiv);
 	}
 };
 

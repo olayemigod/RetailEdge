@@ -5,6 +5,7 @@ from typing import Any
 
 import frappe
 
+from retailedge.company_profile import resolve_company_profile
 from retailedge.edgesuite_ui import get_retailedge_business_hub_context as _base_business_hub_context
 from retailedge.operating_context import get_allowed_operating_branches, get_operating_context
 
@@ -57,9 +58,25 @@ OPERATING_CONTEXT_ITEM: dict[str, Any] = {
 	"icon": "building",
 }
 
+COMPANY_PROFILE_ITEM: dict[str, Any] = {
+	"label": "Company Profile",
+	"description": "Maintain the active ERPNext Company identity, logo and business contact profile used across ProcessEdge Retail.",
+	"target_type": "Page",
+	"target": "company-profile",
+	"icon": "building",
+}
+
+BRANCH_ASSIGNMENTS_ITEM: dict[str, Any] = {
+	"label": "Branch Assignments",
+	"description": "Assign users to operational Branches and preserve effective-dated transfer history.",
+	"target_type": "Page",
+	"target": "branch-assignments",
+	"icon": "users",
+}
+
 TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 	"label": "Transaction Workspace",
-	"description": "Start sales, purchasing, stock and POS work inside the RetailEdge operating shell.",
+	"description": "Start sales, purchasing, stock and POS work inside the ProcessEdge Retail operating shell.",
 	"target_type": "Page",
 	"target": "transaction-workspace",
 	"icon": "shopping-cart",
@@ -67,7 +84,7 @@ TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 
 PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 	"label": "Professional Selling",
-	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided RetailEdge selling flow.",
+	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided selling flow.",
 	"target_type": "Page",
 	"target": "professional-selling",
 	"icon": "shopping-bag",
@@ -179,7 +196,7 @@ PROJECT_LIST_ITEM: dict[str, Any] = {
 
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
-	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
+	"description": "Configure ProcessEdge Retail business rules, Branch Setup, payment masters and statement mappings.",
 	"target_type": "Page",
 	"target": "retailedge-setup",
 	"icon": "settings",
@@ -239,6 +256,50 @@ def _add_operating_context_navigation(navigation_groups: list[dict[str, Any]]) -
 		items.insert(insert_at, deepcopy(OPERATING_CONTEXT_ITEM))
 		group["items"] = items
 		return
+
+
+def _add_company_profile_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(COMPANY_PROFILE_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "home":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target") == COMPANY_PROFILE_ITEM["target"] for item in items):
+			return
+		operating_index = next(
+			(index for index, item in enumerate(items) if item.get("target") == OPERATING_CONTEXT_ITEM["target"]),
+			-1,
+		)
+		items.insert(operating_index + 1 if operating_index >= 0 else 0, deepcopy(COMPANY_PROFILE_ITEM))
+		group["items"] = items
+		return
+
+
+def _add_branch_assignment_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(BRANCH_ASSIGNMENTS_ITEM["target"]):
+		return
+
+	setup_group = next((group for group in navigation_groups if group.get("key") == "setup"), None)
+	if setup_group is None:
+		setup_group = {
+			"key": "setup",
+			"label": "Setup",
+			"icon": "settings",
+			"items": [],
+		}
+		navigation_groups.append(setup_group)
+
+	items = list(setup_group.get("items") or [])
+	if any(item.get("target") == BRANCH_ASSIGNMENTS_ITEM["target"] for item in items):
+		return
+
+	branch_setup_index = next(
+		(index for index, item in enumerate(items) if item.get("target") == "RetailEdge Branch Profile"),
+		-1,
+	)
+	items.insert(branch_setup_index + 1 if branch_setup_index >= 0 else 0, deepcopy(BRANCH_ASSIGNMENTS_ITEM))
+	setup_group["items"] = items
 
 
 def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> None:
@@ -608,36 +669,14 @@ def _contain_native_navigation_for_edgesuite_only(context: dict[str, Any]) -> No
 	context["navigation_groups"] = contained_groups
 
 
-def _company_identity(company: str) -> dict[str, str]:
-	company = str(company or "").strip()
-	fallback = {"name": company, "label": company, "logo": "", "currency": ""}
-	if not company:
-		return fallback
-
-	try:
-		if not frappe.db.exists("Company", company):
-			return fallback
-		fields = ["name", "company_name", "default_currency"]
-		if frappe.get_meta("Company").has_field("company_logo"):
-			fields.append("company_logo")
-		row = frappe.db.get_value("Company", company, fields, as_dict=True) or {}
-	except Exception:
-		return fallback
-
-	return {
-		"name": row.get("name") or company,
-		"label": row.get("company_name") or row.get("name") or company,
-		"logo": row.get("company_logo") or "",
-		"currency": row.get("default_currency") or "",
-	}
-
-
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context = deepcopy(_base_business_hub_context() or {})
 	navigation_groups = context.get("navigation_groups") or []
 	_promote_browser_approved_r4_pages(navigation_groups)
 	_add_operating_context_navigation(navigation_groups)
+	_add_company_profile_navigation(navigation_groups)
+	_add_branch_assignment_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
@@ -676,7 +715,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 
 	operating = get_operating_context()
 	company = operating.get("company") or ""
-	identity = _company_identity(company)
+	identity = resolve_company_profile(company)
 	try:
 		branches = get_allowed_operating_branches(company=company) if company else []
 	except Exception:
@@ -687,6 +726,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		"company_label": identity.get("label") or company,
 		"company_logo": identity.get("logo") or "",
 		"company_currency": identity.get("currency") or "",
+		"company_profile": identity,
 		"branch": operating.get("branch") or "",
 		"branch_options": list(branches),
 		"can_switch_branch": len(branches) > 1,

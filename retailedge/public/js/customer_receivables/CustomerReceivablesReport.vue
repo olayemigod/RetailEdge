@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="receivables-fallback">
 		<strong>Customer Receivables could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -169,7 +169,7 @@ export default {
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; return filters; },
 		async fetchData() {
 			if (!this.filters.company) return;
-			if (!this.reportProvider?.load) { this.error = "The shared EdgeSuite Customer Receivables provider is unavailable."; return; }
+			if (!this.reportProvider?.load) { this.error = "The Customer Receivables reporting service is unavailable."; return; }
 			this.loading = true;
 			this.error = "";
 			try {

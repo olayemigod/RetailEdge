@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="shift-fallback">
 		<strong>Cash Shift Verification could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -376,7 +376,7 @@ export default {
 			if (!this.filters.company) return;
 			if (!this.reportProvider?.load) {
 				this.error =
-					"The shared EdgeSuite Cash Shift Verification provider is unavailable.";
+					"The Cash Shift Verification reporting service is unavailable.";
 				return;
 			}
 			this.loading = true;

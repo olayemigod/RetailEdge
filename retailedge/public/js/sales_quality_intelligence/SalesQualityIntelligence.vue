@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="sales-quality-fallback">
 		<strong>Discount & Sales Quality could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -90,7 +90,7 @@ export default {
 	},
 	computed: {
 		reportColumns() { return (this.columns || []).map((column) => ({ ...column, clickable: this.canUseNativeDesk && ["invoice", "customer"].includes(column.fieldname), sortable: false })); },
-		exportDataset() { return { title: "Discount & Sales Quality", filename: `RetailEdge Discount Sales Quality ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
+		exportDataset() { return { title: "Discount & Sales Quality", filename: `ProcessEdge Retail Discount Sales Quality ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() {
 			const labels = { company: "Company", branch: "Branch", from_date: "From Date", to_date: "To Date", customer: "Customer", salesperson: "Salesperson", item_group: "Item Group", item_code: "Item", warehouse: "Warehouse", high_reduction_percent: "High Reduction Threshold (%)", low_margin_percent: "Low Margin Threshold (%)" };
 			return Object.entries(labels)

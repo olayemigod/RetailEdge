@@ -69,10 +69,20 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			self.assertIn(contract, source)
 
 		operating = self.read("operating_context.py")
-		self.assertIn('pos_state.get("pos_required") and not pos_state.get("pos_ready")', operating)
-		self.assertIn('"pos_profile_required"', operating)
+		self.assertNotIn('"pos_profile_required"', operating)
+		validation = operating[operating.index("def _validate_context("):operating.index("def _get_switch_blockers(")]
+		self.assertNotIn('pos_state.get("pos_required") and not pos_state.get("pos_ready")', validation)
 
-	def test_operating_context_ui_blocks_invalid_required_pos_context(self):
+		pos_launch = self.read("retailedge/page/transaction_workspace/transaction_workspace.py")
+		prepare = pos_launch[pos_launch.index("def prepare_pos_launch("):]
+		for contract in (
+			"resolve_branch_pos_requirement(",
+			'pos_state.get("pos_required") and not pos_state.get("pos_ready")',
+			'pos_state.get("pos_message")',
+		):
+			self.assertIn(contract, prepare)
+
+	def test_operating_context_ui_shows_pos_readiness_without_blocking_branch_switch(self):
 		component = self.read("public/js/operating_context/OperatingContext.vue")
 		for contract in (
 			"preview_operating_context",
@@ -81,10 +91,9 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			"posProfile",
 			"posReady",
 			"posMessage",
-			"(posRequired && !posReady)",
-			"Required POS access",
 		):
 			self.assertIn(contract, component)
+		self.assertNotIn("(posRequired && !posReady)", component)
 
 	def test_guided_and_professional_selling_share_operating_branch_policy(self):
 		guided = self.read("guided_sales_invoice.py")

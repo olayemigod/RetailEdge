@@ -57,6 +57,14 @@ PAYMENT_INTENTS: dict[str, dict[str, str]] = {
 		"reference_doctype": "Sales Invoice",
 		"reference_label": "Sales Invoice",
 	},
+	"receive-sales-order-payment": {
+		"title": "Receive Sales Order Payment",
+		"payment_type": "Receive",
+		"party_type": "Customer",
+		"party_label": "Customer",
+		"reference_doctype": "Sales Order",
+		"reference_label": "Sales Order",
+	},
 	"pay-supplier": {
 		"title": "Pay Supplier",
 		"payment_type": "Pay",
@@ -403,15 +411,16 @@ def _search_outstanding_references(
 		require_when_restricted=False,
 	)
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
+	reference_doctype = config["reference_doctype"]
+	party_field = config["party_type"].lower()
 	filters: dict[str, Any] = {
 		"company": company,
-		config["party_type"].lower(): party,
+		party_field: party,
 		"docstatus": 1,
-		"outstanding_amount": [">", 0],
 	}
 	if txt:
 		filters["name"] = ["like", f"%{txt}%"]
-	branch_field = get_first_existing_field(config["reference_doctype"], BRANCH_FIELD_CANDIDATES)
+	branch_field = get_first_existing_field(reference_doctype, BRANCH_FIELD_CANDIDATES)
 	if scope["restricted"] and not branch:
 		return []
 	if scope["restricted"] and not branch_field:
@@ -419,25 +428,61 @@ def _search_outstanding_references(
 	if branch and branch_field:
 		filters[branch_field] = branch
 
-	fields = ["name", "posting_date", "outstanding_amount", "currency"]
-	if has_field(config["reference_doctype"], "due_date"):
-		fields.append("due_date")
+	if reference_doctype == "Sales Invoice":
+		filters["outstanding_amount"] = [">", 0]
+		fields = ["name", "posting_date", "outstanding_amount", "currency"]
+		if has_field(reference_doctype, "due_date"):
+			fields.append("due_date")
+		rows = frappe.get_list(
+			reference_doctype,
+			filters=filters,
+			fields=fields,
+			order_by="due_date asc, posting_date asc, name asc" if "due_date" in fields else "posting_date asc, name asc",
+			limit_page_length=limit,
+		)
+		return [
+			{"value": row.name, "label": row.name, "description": _reference_description(row)}
+			for row in rows
+		]
+
+	# Sales Order advances do not use an outstanding_amount database field.
+	# Resolve the live payable/advance balance through ERPNext's Payment Entry
+	# reference engine and return only orders that still accept payment.
+	fields = ["name", "transaction_date", "currency", "grand_total", "advance_paid"]
 	rows = frappe.get_list(
-		config["reference_doctype"],
+		reference_doctype,
 		filters=filters,
 		fields=fields,
-		order_by="due_date asc, posting_date asc, name asc" if "due_date" in fields else "posting_date asc, name asc",
-		limit_page_length=limit,
+		order_by="transaction_date asc, name asc",
+		limit_page_length=min(max(limit * 3, limit), 60),
 	)
-	return [
-		{
-			"value": row.name,
-			"label": row.name,
-			"description": _reference_description(row),
-		}
-		for row in rows
-	]
-
+	result: list[dict[str, Any]] = []
+	for row in rows:
+		try:
+			snapshot = _get_reference_snapshot(
+				config=config,
+				company=company,
+				party=party,
+				reference_name=row.name,
+				branch=branch,
+			)
+		except (frappe.PermissionError, frappe.ValidationError):
+			continue
+		if flt(snapshot.get("outstanding_amount")) <= 0:
+			continue
+		result.append(
+			{
+				"value": row.name,
+				"label": row.name,
+				"description": _("Available for advance {0} {1}").format(
+					snapshot.get("currency") or "",
+					snapshot.get("outstanding_amount"),
+				),
+			}
+		)
+		if len(result) >= limit:
+			break
+	return result
 
 def _get_reference_snapshot(
 	*,
@@ -456,7 +501,7 @@ def _get_reference_snapshot(
 		fields.append(branch_field)
 	row = frappe.db.get_value(reference_doctype, reference_name, fields, as_dict=True)
 	if not row or row.company != company or row.get(party_field) != party or cint(row.docstatus) != 1:
-		frappe.throw(_("{0} {1} is not a submitted outstanding invoice for this party and company.").format(reference_doctype, reference_name))
+		frappe.throw(_("{0} {1} is not a submitted payable reference for this party and company.").format(reference_doctype, reference_name))
 
 	if row.payment_terms_template and frappe.db.get_value(
 		"Payment Terms Template",
@@ -526,7 +571,7 @@ def _normalise_references(references: Any) -> list[dict[str, Any]]:
 	if isinstance(references, str):
 		references = frappe.parse_json(references)
 	if not isinstance(references, list) or not references:
-		frappe.throw(_("Add at least one outstanding invoice."))
+		frappe.throw(_("Add at least one payable sales reference."))
 	if len(references) > MAX_REFERENCES:
 		frappe.throw(_("A Simple Payment can contain at most {0} invoice references.").format(MAX_REFERENCES))
 
@@ -537,9 +582,9 @@ def _normalise_references(references: Any) -> list[dict[str, Any]]:
 			frappe.throw(_("Payment reference row {0} is invalid.").format(index))
 		name = str(row.get("reference_name") or "").strip()
 		if not name:
-			frappe.throw(_("Invoice is required on reference row {0}.").format(index))
+			frappe.throw(_("Sales reference is required on row {0}.").format(index))
 		if name in seen:
-			frappe.throw(_("Invoice {0} is selected more than once.").format(name))
+			frappe.throw(_("Sales reference {0} is selected more than once.").format(name))
 		seen.add(name)
 		result.append({"reference_name": name, "allocated_amount": flt(row.get("allocated_amount"))})
 	return result

@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="audit-fallback">
 		<strong>Daily Sales Audit could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgeReportShell
 			title="Daily Sales Audit"
 			eyebrow="Review & Approvals"
-			subtitle="Inspect daily sales audit records, variances, review requirements, and clarification exceptions using the existing RetailEdge audit engine."
+			subtitle="Inspect daily sales audit records, variances, review requirements, and clarification exceptions using the existing audit engine."
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -112,7 +112,7 @@ export default {
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; return filters; },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
 		async fetchData() {
-			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The shared EdgeSuite Daily Sales Audit provider is unavailable."; return; }
+			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The Daily Sales Audit reporting service is unavailable."; return; }
 			this.loading = true; this.error = "";
 			try {
 				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });

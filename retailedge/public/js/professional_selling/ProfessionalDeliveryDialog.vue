@@ -26,7 +26,7 @@
 
 			<section class="delivery-safety-note">
 				<strong>ERPNext keeps delivery truth.</strong>
-				<p>Remaining quantities, Sales Order item links, Stock Locations, packed items, taxes and stock validation are mapped by ERPNext. RetailEdge creates a draft only and never changes the submitted Sales Order.</p>
+				<p>Remaining quantities, Sales Order item links, Stock Locations, packed items, taxes and stock validation are mapped by ERPNext. This workflow creates a draft only and never changes the submitted Sales Order.</p>
 			</section>
 		</div>
 
