@@ -157,12 +157,10 @@ function userError(error, fallback) {
 
 export default {
 	name: "ManagedReviewReport",
-	props: {
-		surfaceKey: { type: String, required: true },
-	},
 	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 	data() {
 		return {
+			surfaceKey: String(window.__retailedgeManagedReviewSurfaceKey || ""),
 			edgeUIValid: true,
 			missingComponents: [],
 			metadataLoading: true,
