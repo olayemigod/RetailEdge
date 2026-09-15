@@ -129,10 +129,11 @@ doctype_list_js = {
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "retailedge.utils.jinja_methods",
-# 	"filters": "retailedge.utils.jinja_filters"
-# }
+jinja = {
+	"methods": [
+		"retailedge.print_output_context.get_retailedge_print_context",
+	],
+}
 
 # Installation
 # ------------
