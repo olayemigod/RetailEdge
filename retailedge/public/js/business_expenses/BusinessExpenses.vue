@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="business-expense-fallback">
 		<strong>Business Expenses could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -20,7 +20,7 @@
 				<div>
 					<p class="eyebrow">Expense Control</p>
 					<h2>Business Expenses</h2>
-					<p>Capture direct non-POS spending, evidence and approvals without leaving EdgeSuite.</p>
+					<p>Capture direct non-POS spending, evidence and approvals without leaving this workspace.</p>
 				</div>
 				<div class="header-actions">
 					<button type="button" class="edge-button" @click="openExpenseRegister">Expense Register</button>
