@@ -34,6 +34,7 @@ app_include_css = [
 	"/assets/retailedge/css/retailedge_workspace_home.css",
 	"/assets/retailedge/css/retailedge_guided_create_menu.css",
 	"/assets/retailedge/css/retailedge_product_identity.css",
+	"/assets/retailedge/css/retailedge_navigation_shell_compat.css",
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
