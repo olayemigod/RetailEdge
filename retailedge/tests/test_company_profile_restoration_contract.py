@@ -33,7 +33,7 @@ def test_company_profile_standard_page_is_present_and_not_orphaned():
     assert '"module": "RetailEdge"' in source
 
 
-def test_company_profile_uses_erpnext_company_as_source_of_truth():
+def test_company_profile_uses_erpnext_company_as_source_of_truth_and_safe_profile_fields():
     source = read(PROFILE)
 
     for marker in (
@@ -41,12 +41,24 @@ def test_company_profile_uses_erpnext_company_as_source_of_truth():
         'frappe.get_meta("Company")',
         'frappe.db.get_value("Company", company',
         '"source_of_truth": "ERPNext Company"',
+        "PROFILE_EDITABLE_FIELDS = (",
+        '"company_name"',
+        '"tax_id"',
+        '"website"',
+        '"date_of_establishment"',
+        "def save_company_profile",
+        "def save_company_address",
+        "def set_company_logo",
         "def get_shell_identity",
     ):
         assert marker in source
 
-    for forbidden in ("frappe.new_doc(", "frappe.db.set_value(", "ignore_permissions"):
+    for forbidden in ("frappe.db.set_value(", "ignore_permissions"):
         assert forbidden not in source
+
+    editable_block = source.split("PROFILE_EDITABLE_FIELDS = (", 1)[1].split(")", 1)[0]
+    for accounting_field in ("default_currency", "abbr", "country", "default_bank_account", "default_cash_account"):
+        assert accounting_field not in editable_block
 
 
 def test_company_profile_is_in_retailedge_home_navigation_and_context():
@@ -88,3 +100,28 @@ def test_operating_context_refreshes_company_identity_after_switch():
     assert '"retailedge.company_profile.get_shell_identity"' in source
     assert "window.retailedgeSyncShellIdentity?.(identity)" in source
     assert "window.location.reload()" in source
+
+
+def test_company_profile_owner_ui_supports_logo_safe_edits_address_and_advanced_link():
+    source = read(COMPONENT)
+
+    for marker in (
+        "Upload logo",
+        "Remove logo",
+        "Save Company profile",
+        "Save address",
+        "Advanced: Open Company in ERPNext",
+        "frappe.ui.FileUploader",
+        '"retailedge.company_profile.save_company_profile"',
+        '"retailedge.company_profile.save_company_address"',
+        '"retailedge.company_profile.set_company_logo"',
+        "window.retailedgeSyncShellIdentity",
+        "EdgeDropdown",
+        'product="retailedge"',
+    ):
+        assert marker in source
+
+    assert "<select" not in source
+    assert "default_currency" not in source
+    assert "default_cash_account" not in source
+    assert "default_bank_account" not in source
