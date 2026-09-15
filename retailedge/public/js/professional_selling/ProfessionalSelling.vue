@@ -417,6 +417,13 @@ export default {
 			const doctypeToKey = { "Quotation": "quotation", "Sales Order": "sales-order", "Delivery Note": "delivery-note", "Sales Invoice": "sales-invoice" };
 			const key = doctypeToKey[payload?.doctype];
 			if (!key || !payload?.name || !payload?.action) return;
+
+			// Keep the completed review visible until the user chooses what to do.
+			// Once chosen, transition cleanly into the next workflow without stacked modals.
+			if (["Quotation", "Sales Order"].includes(payload.doctype)) this.closeStandardCompletion();
+			else if (payload.doctype === "Delivery Note") this.closeDeliveryCompletion();
+			else if (payload.doctype === "Sales Invoice") this.closeSalesInvoiceCompletion();
+
 			const document = this.documents.find((row) => row.key === key) || { key, doctype: payload.doctype };
 			this.handleRecordAction({
 				action: payload.action,
