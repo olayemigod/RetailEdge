@@ -203,17 +203,30 @@ def test_draft_dates_can_be_corrected_without_weakening_erpnext_validation():
 		"Due Date cannot be before Posting Date.",
 		'doc.set("posting_date", posting_value)',
 		'doc.set("due_date", due_value)',
+		"def _sync_manual_due_date_with_payment_schedule",
+		'len(schedule) == 1 and not _clean(doc.get("payment_terms_template"))',
+		"schedule[0].due_date = due_value",
+		"Due Date is controlled by this invoice's Payment Terms schedule.",
+		"def _assert_saved_invoice_dates",
 		"doc.save()",
+		"doc.reload()",
 	):
 		assert contract in service
 	for contract in (
 		"update_standard_sales_invoice_dates",
 		'Save Draft Dates',
-		'invoice-posting-date',
-		'invoice-due-date',
-		"expected_modified: this.preview.modified",
+		'<EdgeInput',
+		'id="invoice-posting-date"',
+		'id="invoice-due-date"',
+		'type="date"',
+		':min="draftPostingDate || undefined"',
+		"datesValid()",
+		'expected_modified: this.preview.modified',
+		'}, "POST");',
 	):
 		assert contract in dialog
+	assert '<input id="invoice-posting-date"' not in dialog
+	assert '<input id="invoice-due-date"' not in dialog
 
 
 def test_recent_sales_invoice_exposes_output_and_draft_edit_paths():
