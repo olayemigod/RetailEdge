@@ -573,7 +573,7 @@ def _assert_modified(doc, expected_modified: str | None) -> None:
 def prepare_business_expense_defaults(doc) -> None:
 	settings = get_business_expense_settings()
 	if not settings["enabled"]:
-		frappe.throw(_("Business Expenses are disabled in RetailEdge Settings."))
+		frappe.throw(_("Business Expenses are disabled in Settings."))
 	if not getattr(doc, "requested_by", None):
 		doc.requested_by = frappe.session.user
 	if not getattr(doc, "expense_date", None):
@@ -601,7 +601,7 @@ def validate_business_expense_document(doc) -> None:
 	_assert_posted_business_expense_workflow_terminal(doc)
 	settings = get_business_expense_settings()
 	if not settings["enabled"]:
-		frappe.throw(_("Business Expenses are disabled in RetailEdge Settings."))
+		frappe.throw(_("Business Expenses are disabled in Settings."))
 	if not getattr(doc, "company", None):
 		frappe.throw(_("Company is required."))
 	_assert_company_access(doc.company)
@@ -712,7 +712,7 @@ def approve_business_expense(
 	settings = get_business_expense_settings()
 	if settings["process"] != "Approval Required":
 		frappe.throw(
-			_("This Business Expense does not use the RetailEdge approval fallback.")
+			_("This Business Expense does not use the configured approval fallback.")
 		)
 	if doc.docstatus != 1 or doc.expense_status != "Submitted":
 		frappe.throw(_("Only submitted Business Expenses can be approved."))
@@ -1140,7 +1140,7 @@ def _assert_not_self_approval(doc) -> None:
 
 def _assert_feature_enabled() -> None:
 	if not get_business_expense_settings()["enabled"]:
-		frappe.throw(_("Business Expenses are disabled in RetailEdge Settings."))
+		frappe.throw(_("Business Expenses are disabled in Settings."))
 
 
 def _assert_company_access(company: str) -> None:
