@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Document Output & Sharing could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 
 	<EdgeAppShell
@@ -30,7 +30,7 @@
 					<div>
 						<span class="output-kicker">Document truth</span>
 						<h3>ERPNext remains authoritative</h3>
-						<p>RetailEdge renders from the saved ERPNext document. Preview, print, PDF and email use the same selected template and output options without modifying the source transaction.</p>
+						<p>Output is rendered from the saved ERPNext document. Preview, print, PDF and email use the same selected template and output options without modifying the source transaction.</p>
 					</div>
 					<EdgeStatusBadge status="Active" />
 				</section>
