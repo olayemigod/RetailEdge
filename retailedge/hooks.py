@@ -18,7 +18,7 @@ required_apps = ["edgesuite_ui"]
 add_to_apps_screen = [
 	{
 		"name": "retailedge",
-		"logo": "/assets/retailedge/images/processedge_retail/pedge-retail-app-icon-dark.png",
+		"logo": "/assets/retailedge/images/processedge_retail/pedge-retail-app-icon-dark-v2.svg",
 		"title": "PEdge Retail",
 		"route": "/desk/retailedge-business-hub",
 	}
