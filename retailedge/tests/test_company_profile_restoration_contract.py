@@ -12,6 +12,7 @@ SHELL = APP_ROOT / "public" / "js" / "retailedge_shell_context.js"
 OPERATING = APP_ROOT / "public" / "js" / "operating_context" / "OperatingContext.vue"
 COMPONENT = APP_ROOT / "public" / "js" / "company_profile" / "CompanyProfile.vue"
 BUNDLE = APP_ROOT / "public" / "js" / "company_profile.bundle.js"
+PROFILE_DOCTYPE_JSON = APP_ROOT / "retailedge" / "doctype" / "retailedge_company_profile" / "retailedge_company_profile.json"
 
 
 def read(path: Path) -> str:
@@ -33,32 +34,54 @@ def test_company_profile_standard_page_is_present_and_not_orphaned():
     assert '"module": "RetailEdge"' in source
 
 
-def test_company_profile_uses_erpnext_company_as_source_of_truth_and_safe_profile_fields():
+def test_company_profile_keeps_erpnext_accounting_truth_and_uses_owner_managed_overlay():
     source = read(PROFILE)
+    definition = read(PROFILE_DOCTYPE_JSON)
 
     for marker in (
         'frappe.db.exists("Company", company)',
         'frappe.get_meta("Company")',
         'frappe.db.get_value("Company", company',
-        '"source_of_truth": "ERPNext Company"',
-        "PROFILE_EDITABLE_FIELDS = (",
-        '"company_name"',
-        '"tax_id"',
-        '"website"',
-        '"date_of_establishment"',
+        'PROFILE_DOCTYPE = "RetailEdge Company Profile"',
+        "PROFILE_FIELDS = (",
+        "def ensure_company_profile",
         "def save_company_profile",
         "def save_company_address",
         "def set_company_logo",
         "def get_shell_identity",
+        '"source_of_truth": "ERPNext Company + RetailEdge Company Profile"',
     ):
         assert marker in source
 
     for forbidden in ("frappe.db.set_value(", "ignore_permissions"):
         assert forbidden not in source
 
-    editable_block = source.split("PROFILE_EDITABLE_FIELDS = (", 1)[1].split(")", 1)[0]
-    for accounting_field in ("default_currency", "abbr", "country", "default_bank_account", "default_cash_account"):
-        assert accounting_field not in editable_block
+    for editable_field in (
+        '"display_name"',
+        '"logo"',
+        '"phone"',
+        '"whatsapp_number"',
+        '"email"',
+        '"website"',
+        '"address_line1"',
+        '"city"',
+        '"state"',
+        '"postal_code"',
+    ):
+        assert editable_field in definition
+
+    for accounting_field in (
+        '"default_currency"',
+        '"abbr"',
+        '"default_bank_account"',
+        '"default_cash_account"',
+        '"chart_of_accounts"',
+    ):
+        assert accounting_field not in definition
+
+    assert '"role":"RetailEdgeManager"' in definition
+    assert '"write":1' in definition
+    assert '"role":"RetailEdge Branch Manager"' in definition
 
 
 def test_company_profile_is_in_retailedge_home_navigation_and_context():
@@ -111,17 +134,24 @@ def test_company_profile_owner_ui_supports_logo_safe_edits_address_and_advanced_
         "Save Company profile",
         "Save address",
         "Advanced: Open Company in ERPNext",
+        "RetailEdge Company Profile",
         "frappe.ui.FileUploader",
+        '"retailedge.company_profile.ensure_company_profile"',
         '"retailedge.company_profile.save_company_profile"',
         '"retailedge.company_profile.save_company_address"',
         '"retailedge.company_profile.set_company_logo"',
         "window.retailedgeSyncShellIdentity",
-        "EdgeDropdown",
+        'v-model.trim="profile.display_name"',
+        'v-model.trim="profile.phone"',
+        'v-model.trim="profile.whatsapp_number"',
+        'v-model.trim="profile.email"',
         'product="retailedge"',
     ):
         assert marker in source
 
     assert "<select" not in source
+    assert 'v-model.trim="profile.tax_id"' not in source
+    assert 'v-model="profile.date_of_establishment"' not in source
     assert "default_currency" not in source
     assert "default_cash_account" not in source
     assert "default_bank_account" not in source
