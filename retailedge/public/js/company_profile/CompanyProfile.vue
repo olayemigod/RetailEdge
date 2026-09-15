@@ -5,7 +5,7 @@
 	</div>
 	<EdgeAppShell
 		v-else
-		product="RetailEdge"
+		product="retailedge"
 		title="Company Profile"
 		:tenantName="profile.label || profile.name"
 		:branchName="operatingContext.branch || ''"
