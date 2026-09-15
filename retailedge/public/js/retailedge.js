@@ -26,6 +26,48 @@
 	};
 
 	const RETAILEDGE_BUSINESS_HUB_ROUTE = "retailedge-business-hub";
+	const RETAILEDGE_DESKTOP_LABEL = "PEdge Retail";
+	const RETAILEDGE_DESKTOP_PATH = "/desk/retailedge-business-hub";
+
+	function keepRetailDesktopLauncherInSameTab(root = document) {
+		if (!root?.querySelectorAll) return;
+		const selector = `[data-id="${RETAILEDGE_DESKTOP_LABEL}"][href], [data-label="${RETAILEDGE_DESKTOP_LABEL}"][href]`;
+		root.querySelectorAll(selector).forEach((link) => {
+			link.removeAttribute("target");
+			link.removeAttribute("rel");
+			link.setAttribute("href", RETAILEDGE_DESKTOP_PATH);
+		});
+	}
+
+	function installRetailDesktopLauncherGuard() {
+		keepRetailDesktopLauncherInSameTab();
+		if (window.__retailedgeDesktopLauncherObserver || typeof MutationObserver === "undefined" || !document.body) return;
+		const observer = new MutationObserver((mutations) => {
+			for (const mutation of mutations) {
+				for (const node of mutation.addedNodes || []) {
+					if (node?.nodeType !== 1) continue;
+					if (
+						node.matches?.(`[data-id="${RETAILEDGE_DESKTOP_LABEL}"][href], [data-label="${RETAILEDGE_DESKTOP_LABEL}"][href]`)
+					) {
+						node.removeAttribute("target");
+						node.removeAttribute("rel");
+						node.setAttribute("href", RETAILEDGE_DESKTOP_PATH);
+					}
+					keepRetailDesktopLauncherInSameTab(node);
+				}
+			}
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+		window.__retailedgeDesktopLauncherObserver = observer;
+	}
+
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", installRetailDesktopLauncherGuard, { once: true });
+	} else {
+		installRetailDesktopLauncherGuard();
+	}
+	document.addEventListener("page-change", keepRetailDesktopLauncherInSameTab);
+
 	function redirectLegacyRetailEdgeWorkspace() {
 		if (typeof frappe === "undefined" || typeof frappe.get_route !== "function" || typeof frappe.set_route !== "function") {
 			return false;
