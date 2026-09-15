@@ -163,3 +163,20 @@ def test_processedge_retail_palette_uses_approved_master_brand_colours():
     assert "--retailedge-brand: #0056A6;" in source
     assert "--retailedge-brand-strong: #003E73;" in source
     assert "--retailedge-money: #1C9C5D;" in source
+
+
+def test_file_uploader_dark_mode_uses_retail_surface_and_text_tokens():
+    source = IDENTITY_CSS.read_text(encoding="utf-8")
+
+    for contract in (
+        ".modal-content:has(.file-uploader)",
+        ".file-uploader .file-upload-area",
+        "--bg-color: var(--retailedge-surface-muted);",
+        "--text-color: var(--retailedge-ink);",
+        "--subtle-fg:",
+        "background: var(--retailedge-surface-muted) !important;",
+        ".file-uploader .btn-file-upload",
+        ".file-uploader .form-control",
+        ".modal-footer .btn-default",
+    ):
+        assert contract in source
