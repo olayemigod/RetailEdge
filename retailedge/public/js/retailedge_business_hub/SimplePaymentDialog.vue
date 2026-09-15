@@ -110,7 +110,7 @@
 			</div>
 
 			<p class="guided-payment-hint">
-				Submitting uses the native ERPNext Payment Entry submit flow. RetailEdge does not directly change
+				Submitting uses the native ERPNext Payment Entry submit flow. This workflow does not directly change
 				the source Sales Invoice/Sales Order, GL Entry, Payment Ledger Entry, or customer balance.
 			</p>
 		</div>
@@ -192,7 +192,7 @@
 			</div>
 
 			<p class="guided-payment-hint">
-				Submitting uses the native ERPNext Payment Entry submit flow. RetailEdge does not directly change
+				Submitting uses the native ERPNext Payment Entry submit flow. This workflow does not directly change
 				the Purchase Invoice outstanding amount, GL Entry, Payment Ledger Entry, or supplier balance.
 			</p>
 		</div>
