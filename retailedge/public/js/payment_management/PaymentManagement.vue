@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="payment-fallback">
 		<strong>Payment Management could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -201,7 +201,7 @@
 								<button class="edge-primary-button" type="button" :disabled="settlement.creatingReceipt || !canCreateReceipt" @click="createReceiptDraft">{{ settlement.creatingReceipt ? "Creating…" : "Create Draft Receipt" }}</button>
 							</div>
 							<div v-if="settlement.lastDraft.name" class="draft-notice">
-								<div><strong>Draft {{ settlement.lastDraft.name }} created.</strong><br />It is not posted yet. Review and submit it in EdgeSuite to update the Sales Invoice outstanding.</div>
+								<div><strong>Draft {{ settlement.lastDraft.name }} created.</strong><br />It is not posted yet. Review and submit it here to update the Sales Invoice outstanding.</div>
 								<button class="edge-secondary-button" type="button" @click="reviewPaymentDraft(settlement.lastDraft.name)">Review Draft</button>
 							</div>
 						</div>
@@ -253,7 +253,7 @@
 			</section>
 
 			<div class="accounting-note">
-				<strong>Accounting safety:</strong> RetailEdge does not maintain a separate customer wallet or advance ledger. Submitted Payment Entry <code>unallocated_amount</code>, Sales Invoice <code>outstanding_amount</code>, ERPNext Payment Reconciliation, and standard Payment Entry submission remain authoritative.
+				<strong>Accounting safety:</strong> No separate customer wallet or advance ledger is maintained. Submitted Payment Entry <code>unallocated_amount</code>, Sales Invoice <code>outstanding_amount</code>, ERPNext Payment Reconciliation, and standard Payment Entry submission remain authoritative.
 			</div>
 			</template>
 		</section>
