@@ -85,6 +85,8 @@ def test_shared_shell_receives_company_identity_and_permission_safe_branch_switc
     assert "switch_operating_context" in shell_context
     assert "window.location.reload()" in shell_context
     assert "retailedge-topbar-branch-switcher" in styles
+    assert ":has(.edge-smart-date.is-open)" in styles
+    assert "overflow-x: visible" in styles
     assert "get_allowed_operating_contexts" not in boot
     assert "get_allowed_operating_contexts" not in read(MASTER_EXPERIENCE)
 
