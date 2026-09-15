@@ -46,7 +46,11 @@ def test_records_table_has_fixed_columns_and_single_actions_slot():
 		'class="actions-column">Actions</th>',
 		"table-layout:fixed;",
 		".actions-column { width:20rem; }",
-		".record-actions { display:grid; grid-template-columns:minmax(9.5rem,1fr) 7rem;",
+		".record-actions { display:grid; grid-template-columns:minmax(8.5rem,1fr) 9.25rem;",
+		".record-primary-action { width:100%; white-space:nowrap; font-size:.76rem;",
+		".edge-dropdown__trigger.record-more + .edge-dropdown__menu",
+		"width:min(15rem,calc(100vw - 2rem));",
+		"white-space:normal;",
 	):
 		assert contract in source
 
@@ -99,6 +103,10 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 		'this.$emit("action", { action: "output", document: this.activeDocument, row });',
 	):
 		assert contract in records
+
+	assert 'description: action.description' not in records
+	assert 'description: "Preview, download PDF, email or prepare WhatsApp sharing."' not in records
+	assert 'description: "Open the full ERPNext document for advanced work."' not in records
 
 	for contract in (
 		"openDocumentOutput(document, row)",
