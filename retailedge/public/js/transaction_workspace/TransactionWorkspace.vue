@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Transaction Workspace could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgePageLayout class="retailedge-transaction-workspace-page">
 			<EdgePageHeader
 				title="Transaction Workspace"
-				description="Start sales, purchasing, stock and POS work from one RetailEdge operating context while ERPNext remains the system of record."
+				description="Start sales, purchasing, stock and POS work from one operating context while ERPNext remains the system of record."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -53,7 +53,7 @@
 						<button v-if="canUseNativeDesk && pos?.opening_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.opening_doctype)">Advanced: POS Opening</button>
 						<button v-if="canUseNativeDesk && pos?.closing_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.closing_doctype)">Advanced: POS Closing</button>
 					</div>
-					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. When online, RetailEdge validates the current operating context before launch. If the device is offline, RetailEdge does not make its preflight a hard dependency; POSNext keeps control of its own offline runtime and sync behaviour.</p>
+					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. When online, the current operating context is validated before launch. If the device is offline, POSNext keeps control of its own offline runtime and sync behaviour.</p>
 				</section>
 
 				<EdgeEmptyState
@@ -230,7 +230,7 @@ export default {
 		},
 		posDescription() {
 			return this.pos?.provider === "posnext"
-				? "Use the installed POSNext provider from the current RetailEdge operating context."
+				? "Use the installed POSNext provider from the current operating context."
 				: "POSNext is not available, so RetailEdge falls back to ERPNext's native Point of Sale where installed.";
 		},
 		hasOperatingContext() {
@@ -406,10 +406,10 @@ export default {
 				return "Use the guided Purchase Invoice flow here and review submitted purchases in the Purchase Register.";
 			}
 			if (["Sales Order", "Delivery Note"].includes(action?.doctype)) {
-				return "Continue this routine workflow in Professional Selling, where EdgeSuite owns guided selling operations and ERPNext remains authoritative.";
+				return "Continue this routine workflow in Professional Selling, where the guided selling flow is used and ERPNext remains authoritative.";
 			}
 			if (["Purchase Order", "Purchase Receipt"].includes(action?.doctype)) {
-				return "Continue this routine workflow in Professional Purchasing, where EdgeSuite owns the standard purchasing path and ERPNext remains authoritative.";
+				return "Continue this routine workflow in Professional Purchasing, where the guided purchasing flow is used and ERPNext remains authoritative.";
 			}
 			return GUIDED_DOCTYPES.has(action?.doctype)
 				? `Use the existing guided ${action.label} flow here, with native ERPNext as an explicit advanced fallback.`
