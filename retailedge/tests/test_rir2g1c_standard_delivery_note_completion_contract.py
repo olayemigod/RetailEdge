@@ -156,7 +156,8 @@ def test_delivery_dialog_uses_only_server_authoritative_completion_actions():
 		"expected_workflow_state",
 		"Print",
 		"PDF",
-		"Create Sales Invoice",
+		"get_professional_selling_record_actions",
+		"completedResult.next_actions",
 		'emitNextAction(action)',
 	):
 		assert contract in source
@@ -183,7 +184,8 @@ def test_tabbed_delivery_completion_is_separate_from_quote_order_and_invoice():
 
 def test_delivery_completion_exposes_post_submit_invoice_and_output_actions():
 	dialog = _read(DIALOG)
-	assert "Create Sales Invoice" in dialog
+	assert "get_professional_selling_record_actions" in dialog
+	assert "completedResult.next_actions" in dialog
 	assert "View / Print / Send" in dialog
 	assert 'this.$emit("next-action"' in dialog
 
