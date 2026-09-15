@@ -455,7 +455,8 @@ body.edge-suite-product-retailedge .home-quick-action-icon,
 
 /* Dark mode keeps the same identity rather than reverting to generic EdgeSuite. */
 html[data-edge-appearance="dark"] body.edge-suite-product-retailedge,
-body.edge-suite-product-retailedge[data-edge-appearance="dark"] {
+body.edge-suite-product-retailedge[data-edge-appearance="dark"],
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] {
 	--retailedge-ink: #eef6f8;
 	--retailedge-ink-soft: #b6c7d2;
 	--retailedge-surface: #132632;
@@ -468,7 +469,8 @@ body.edge-suite-product-retailedge[data-edge-appearance="dark"] {
 }
 
 html[data-edge-appearance="dark"] body.edge-suite-product-retailedge .edge-topbar,
-body.edge-suite-product-retailedge[data-edge-appearance="dark"] .edge-topbar {
+body.edge-suite-product-retailedge[data-edge-appearance="dark"] .edge-topbar,
+:root[data-edge-appearance="dark"] [data-edge-product="retailedge"] .edge-topbar {
 	background: rgba(19, 38, 50, 0.98);
 }
 
