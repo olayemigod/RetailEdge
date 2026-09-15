@@ -69,7 +69,10 @@ class RIR2F1SellingEdgeSuiteOwnershipContractTests(unittest.TestCase):
 		self.assertIn("navigation.access?.can_use_native_desk", source)
 		self.assertIn("Advanced: Open in ERPNext", source)
 		self.assertIn("openAdvancedNative(document)", source)
-		self.assertIn("openAdvancedRecord(recentDocument, row.name)", source)
+		self.assertIn("openAdvancedRecord(document, row.name)", source)
+		self.assertIn("ProfessionalSellingRecords", source)
+		self.assertIn('@action="handleRecordAction"', source)
+		self.assertNotIn("recentDocument", source)
 		self.assertIn(":deep(.selling-form-footer > .edge-button:first-child)", source)
 
 	def test_transaction_workspace_sales_invoice_read_path_uses_professional_selling_owner(self):
