@@ -419,6 +419,56 @@ def _assert_expected_modified(doc, expected_modified: str | None) -> str:
 	return expected_modified
 
 
+def _sync_manual_due_date_with_payment_schedule(doc, due_value) -> None:
+	"""Keep ERPNext's invoice due date and simple payment schedule aligned.
+
+	ERPNext derives Sales Invoice.due_date from the maximum payment_schedule due
+	date during validation. For a simple one-row schedule, changing only the
+	invoice field would therefore appear to save and then revert. Multi-row or
+	templated schedules remain owned by ERPNext Payment Terms and fail closed.
+	"""
+	if not due_value or not doc.meta.has_field("payment_schedule"):
+		return
+
+	schedule = list(doc.get("payment_schedule") or [])
+	if not schedule:
+		# ERPNext will create the standard one-row schedule from due_date.
+		return
+
+	if len(schedule) == 1 and not _clean(doc.get("payment_terms_template")):
+		schedule[0].due_date = due_value
+		return
+
+	current_due_dates = [getdate(row.due_date) for row in schedule if row.get("due_date")]
+	current_due_date = max(current_due_dates) if current_due_dates else None
+	if current_due_date == due_value:
+		return
+
+	frappe.throw(
+		_(
+			"Due Date is controlled by this invoice's Payment Terms schedule. "
+			"Use Advanced ERPNext to change the payment schedule safely."
+		),
+		frappe.ValidationError,
+	)
+
+
+def _assert_saved_invoice_dates(doc, posting_value, due_value) -> None:
+	if getdate(doc.get("posting_date")) != posting_value:
+		frappe.throw(
+			_("ERPNext did not persist the requested Posting Date. Refresh and try again."),
+			frappe.ValidationError,
+		)
+	if due_value and getdate(doc.get("due_date")) != due_value:
+		frappe.throw(
+			_(
+				"ERPNext recalculated the Due Date from Payment Terms. "
+				"Use Advanced ERPNext to review the payment schedule."
+			),
+			frappe.ValidationError,
+		)
+
+
 @frappe.whitelist()
 def get_standard_sales_invoice_completion_preview(name: str) -> dict[str, Any]:
 	"""Return a persistence-free completion review for one standard Sales Invoice."""
@@ -459,9 +509,13 @@ def update_standard_sales_invoice_dates(
 	doc.set("posting_date", posting_value)
 	if doc.meta.has_field("due_date"):
 		doc.set("due_date", due_value)
-	# Saving the draft deliberately delegates date/payment-term validation back to ERPNext.
+		_sync_manual_due_date_with_payment_schedule(doc, due_value)
+
+	# Saving the draft deliberately delegates fiscal-year, payment-term and
+	# accounting validation back to ERPNext. Submitted documents are never changed.
 	doc.save()
 	doc.reload()
+	_assert_saved_invoice_dates(doc, posting_value, due_value)
 	result = _build_preview(doc)
 	result["persistence"] = "draft_update"
 	return result
