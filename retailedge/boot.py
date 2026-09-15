@@ -19,6 +19,7 @@ def _populate_edgesuite_identity(bootinfo) -> None:
 	except Exception:
 		frappe.logger("retailedge.boot").exception("Failed to populate RetailEdge EdgeSuite identity")
 
+
 def boot_session(bootinfo):
 	bootinfo.retailedge = {}
 	_populate_edgesuite_identity(bootinfo)
