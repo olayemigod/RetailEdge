@@ -154,7 +154,10 @@ def test_delivery_dialog_uses_only_server_authoritative_completion_actions():
 		"workflow_readiness?.available_actions",
 		"expected_modified",
 		"expected_workflow_state",
-		"Advanced: Open in ERPNext",
+		"Print",
+		"PDF",
+		"Create Sales Invoice",
+		'emitNextAction(action)',
 	):
 		assert contract in source
 	for forbidden in (".workflow_state =", ".docstatus =", ".status ="):
@@ -170,22 +173,19 @@ def test_workspace_opens_delivery_completion_after_saved_delivery():
 	assert "deliveryCompletionDocument" in source
 
 
-def test_recent_delivery_completion_is_separate_from_g1b_commitment_completion():
+def test_tabbed_delivery_completion_is_separate_from_quote_order_and_invoice():
 	source = _read(WORKSPACE)
-	assert '["quotation", "sales-order"].includes(this.recentDocument?.key)' in source
-	assert "canReviewDeliveryCompletion(row)" in source
-	assert 'this.recentDocument?.key === "delivery-note"' in source
-	assert "openRecentDeliveryCompletion(row)" in source
-	assert 'doctype: "Delivery Note"' in source
+	assert 'if (document.key === "delivery-note")' in source
+	assert 'this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name });' in source
+	assert 'this.openStandardCompletion({ doctype: "Quotation", name: row.name });' in source
+	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });' in source
 
 
-def test_sales_invoice_does_not_receive_g1c_completion_controls():
-	source = _read(WORKSPACE)
-	start = source.index("canReviewDeliveryCompletion(row)")
-	end = source.index("openDeliveryCompletion", start)
-	method = source[start:end]
-	assert "delivery-note" in method
-	assert "sales-invoice" not in method
+def test_delivery_completion_exposes_post_submit_invoice_and_output_actions():
+	dialog = _read(DIALOG)
+	assert "Create Sales Invoice" in dialog
+	assert "View / Print / Send" in dialog
+	assert 'this.$emit("next-action"' in dialog
 
 
 def test_existing_delivery_creation_remains_native_mapper_and_draft_only():
