@@ -63,13 +63,18 @@
 							<p class="section-rider">Key business indicators for the selected period.</p>
 						</div>
 						<div class="home-period-controls">
-							<EdgeDropdown
-								v-model="homePeriodPreset"
+							<EdgeLinkField
+								v-model="homePeriodQuery"
+								:selectedLabel="homePeriod.label || homePeriodQuery"
 								:options="homePeriodOptions"
 								label="Period"
-								@update:modelValue="handleHomePeriodChange"
+								placeholder="e.g. last 30 days, YTD, 01/09/2026 - 15/09/2026"
+								:canCreate="true"
+								createLabel="Use period"
+								noResultsLabel="Type a period and press Enter"
+								@select="handleHomePeriodSelection"
 							/>
-							<span v-if="homePeriod.from_date" class="home-as-of">{{ homePeriod.from_date }} – {{ homePeriod.to_date }}</span>
+							<span v-if="homePeriod.from_date" class="home-as-of">{{ formatDisplayDate(homePeriod.from_date) }} – {{ formatDisplayDate(homePeriod.to_date) }}</span>
 						</div>
 					</div>
 					<EdgeLoadingState v-if="homeLoading" message="Loading business performance..." :skeleton="true" />
@@ -87,7 +92,7 @@
 									<span>{{ card.label }}</span>
 									<span class="home-kpi-card-icon"><EdgeIcon :name="kpiIcon(card.label)" size="sm" /></span>
 								</span>
-								<strong>{{ formatHomeValue(card) }}</strong>
+								<strong :title="formatHomeValue(card, { compact: false })">{{ formatHomeValue(card) }}</strong>
 								<small>{{ card.time_basis === "current" ? "Current position" : (homePeriod.label || "Selected period") }}</small>
 							</button>
 						</div>
@@ -146,11 +151,11 @@
 							<template v-if="index.available">
 								<div class="home-index-headline">
 									<span>{{ index.headline?.label || "Position" }}</span>
-									<strong>{{ formatHomeValue(index.headline) }}</strong>
+									<strong :title="formatHomeValue(index.headline, { compact: false })">{{ formatHomeValue(index.headline) }}</strong>
 								</div>
 								<div v-if="index.signal?.label" class="home-index-signal">
 									<span>{{ index.signal.label }}</span>
-									<strong>{{ formatHomeValue(index.signal) }}</strong>
+									<strong :title="formatHomeValue(index.signal, { compact: false })">{{ formatHomeValue(index.signal) }}</strong>
 								</div>
 								<p>{{ index.signal?.message || index.recommendation }}</p>
 								<button type="button" class="home-index-action" @click="openHomeItem(index)">{{ index.action_label || "Open" }}</button>
@@ -182,7 +187,7 @@
 								<small v-if="item.recommendation">{{ item.recommendation }}</small>
 							</span>
 							<span class="home-attention-value">
-								<strong>{{ formatHomeValue(item) }}</strong>
+								<strong :title="formatHomeValue(item, { compact: false })">{{ formatHomeValue(item) }}</strong>
 								<small>{{ item.action_label || "Open" }}</small>
 							</span>
 						</button>
@@ -498,7 +503,7 @@ export default {
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeIcon: runtimeComponents.EdgeIcon,
-		EdgeDropdown: runtimeComponents.EdgeDropdown,
+		EdgeLinkField: runtimeComponents.EdgeLinkField,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
@@ -521,6 +526,7 @@ export default {
 			homeError: "",
 			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
+			homePeriodQuery: "Today",
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
@@ -551,10 +557,16 @@ export default {
 	},
 	computed: {
 		homePeriodOptions() {
-			return ["Today", "Yesterday", "This Week", "This Month", "Last 7 Days", "Last 30 Days"].map((value) => ({
-				value,
-				label: value,
-			}));
+			return [
+				{ value: "Today", label: "Today", description: "Current business day" },
+				{ value: "Yesterday", label: "Yesterday", description: "Previous business day" },
+				{ value: "This Week", label: "This Week", description: "Week to date · WTD" },
+				{ value: "This Month", label: "This Month", description: "Month to date · MTD" },
+				{ value: "Last 7 Days", label: "Last 7 Days", description: "Rolling seven-day period" },
+				{ value: "Last 30 Days", label: "Last 30 Days", description: "Rolling thirty-day period" },
+				{ value: "Year to Date", label: "Year to Date", description: "YTD · from 1 January" },
+				{ value: "Last Month", label: "Last Month", description: "Previous calendar month" },
+			];
 		},
 		greeting() {
 			return this.context.user_name
@@ -670,6 +682,7 @@ export default {
 				.then((snapshot) => {
 					this.homePeriod = { ...this.homePeriod, ...(snapshot.period || {}) };
 					this.homePeriodPreset = this.homePeriod.preset || this.homePeriodPreset;
+					this.homePeriodQuery = this.homePeriod.label || this.homePeriod.preset || this.homePeriodQuery;
 					this.homeSnapshot = {
 						as_of_date: snapshot.as_of_date || "",
 						period: snapshot.period || {},
@@ -688,23 +701,85 @@ export default {
 					this.homeLoading = false;
 				});
 		},
-		handleHomePeriodChange(value) {
-			this.homePeriodPreset = value || "Today";
+		createHomePeriodOption(query) {
+			const value = String(query || "").trim();
+			return Promise.resolve(value ? { value, label: value, description: "Custom Business Hub period" } : null);
+		},
+		handleHomePeriodSelection(option) {
+			const value = String(option?.value || option || "").trim();
+			if (!value) return;
+			this.homePeriodPreset = value;
+			this.homePeriodQuery = value;
 			return this.refreshHomeSnapshot();
+		},
+		handleHomePeriodChange(value) {
+			// Compatibility hook for older cached bundles.
+			this.homePeriodPreset = value || "Today";
+			this.homePeriodQuery = this.homePeriodPreset;
+			return this.refreshHomeSnapshot();
+		},
+		formatDisplayDate(value) {
+			const text = String(value || "").trim();
+			const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+			if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+			return frappe.datetime?.str_to_user?.(text) || text;
 		},
 		homeSection(key) {
 			return this.homeSnapshot.sections?.[key] || { available: false, label: key, summary: [], route: "", reason: "" };
 		},
-		formatHomeValue(card) {
+		compactNumber(value, { maximumFractionDigits = 2 } = {}) {
+			const number = Number(value || 0);
+			if (!Number.isFinite(number)) return String(value ?? "");
+			const absolute = Math.abs(number);
+			if (absolute < 100000) return number.toLocaleString(undefined, { maximumFractionDigits });
+			try {
+				return new Intl.NumberFormat(undefined, {
+					notation: "compact",
+					compactDisplay: "short",
+					maximumFractionDigits,
+				}).format(number);
+			} catch (_error) {
+				const units = [
+					{ value: 1e12, suffix: "T" },
+					{ value: 1e9, suffix: "B" },
+					{ value: 1e6, suffix: "M" },
+					{ value: 1e3, suffix: "K" },
+				];
+				const unit = units.find((row) => absolute >= row.value);
+				if (!unit) return number.toLocaleString(undefined, { maximumFractionDigits });
+				const scaled = (number / unit.value).toFixed(maximumFractionDigits).replace(/\.0+$|(?<=\.[0-9])0+$/g, "");
+				return `${scaled}${unit.suffix}`;
+			}
+		},
+		currencyMark() {
+			const formatter = window.retailedge?.formatPlainValue;
+			if (!formatter) return "";
+			try {
+				return String(formatter(0, { fieldtype: "Currency" }) || "")
+					.replace(/[0-9.,\s()+-]/g, "")
+					.trim();
+			} catch (_error) {
+				return "";
+			}
+		},
+		formatHomeValue(card, { compact = true } = {}) {
 			const value = card?.value ?? 0;
 			const datatype = card?.datatype || card?.type || "Data";
 			if (datatype === "Currency") {
+				const number = Number(value || 0);
 				const formatter = window.retailedge?.formatPlainValue;
-				if (formatter) return formatter(value, { fieldtype: "Currency" });
-				return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+				if (!compact || Math.abs(number) < 100000) {
+					if (formatter) return formatter(value, { fieldtype: "Currency" });
+					return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+				}
+				const mark = this.currencyMark();
+				const amount = this.compactNumber(number, { maximumFractionDigits: 2 });
+				return mark ? `${mark} ${amount}` : amount;
 			}
 			if (datatype === "Percent") return `${Number(value || 0).toLocaleString()}%`;
-			if (datatype === "Int" || datatype === "Float") return Number(value || 0).toLocaleString();
+			if (datatype === "Int" || datatype === "Float") {
+				return compact ? this.compactNumber(value) : Number(value || 0).toLocaleString();
+			}
 			return window.retailedge?.toPlainText?.(value) ?? String(value ?? "");
 		},
 		displayIcon(icon) {
@@ -1177,7 +1252,14 @@ export default {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
+	min-width: 0;
 	width: 100%;
+}
+.home-kpi-card-heading > span:first-child {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: .74rem;
+	font-weight: 620;
 }
 .home-kpi-card-icon {
 	width: 30px;
@@ -1269,7 +1351,7 @@ export default {
 }
 .home-kpi-grid {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
 	gap: 12px;
 	margin-bottom: 14px;
 }
@@ -1281,8 +1363,9 @@ export default {
 }
 .home-kpi-card {
 	display: grid;
-	gap: 6px;
-	padding: 16px;
+	gap: 5px;
+	min-width: 0;
+	padding: 13px 14px;
 	text-align: left;
 	cursor: pointer;
 }
@@ -1297,7 +1380,17 @@ export default {
 	color: var(--edge-color-ink-500, #667085);
 }
 .home-kpi-card strong {
-	font-size: 1.2rem;
+	display: block;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: clamp(1rem, 1.25vw, 1.32rem);
+	font-variant-numeric: tabular-nums;
+	font-weight: 680;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+	white-space: nowrap;
 }
 .home-kpi-card small {
 	font-size: 0.72rem;
@@ -1324,6 +1417,45 @@ export default {
 	border-radius: 12px;
 	background: var(--edge-color-surface, #ffffff);
 }
+.home-index-headline > span,
+.home-index-signal > span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: .82rem;
+}
+.home-index-headline > strong,
+.home-index-signal > strong {
+	flex: 0 0 auto;
+	max-width: 48%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	font-size: .86rem;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+.home-intelligence-card p,
+.home-index-action,
+.home-attention-copy,
+.home-attention-value {
+	font-size: .82rem;
+}
+.home-intelligence-heading h4 {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.home-attention-copy,
+.home-attention-value {
+	min-width: 0;
+}
+.home-attention-value strong {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 .home-intelligence-card.tone-danger {
 	border-color: color-mix(in srgb, var(--edge-color-danger, #d92d20) 55%, var(--edge-color-border, #dfe3e8));
 }
@@ -1337,6 +1469,7 @@ export default {
 .home-index-headline,
 .home-index-signal {
 	display: flex;
+	min-width: 0;
 	align-items: center;
 	justify-content: space-between;
 	gap: 10px;
@@ -1694,8 +1827,8 @@ export default {
 	gap: 10px;
 	flex-wrap: wrap;
 }
-.home-period-controls .edge-field {
-	min-width: 170px;
+.home-period-controls .edge-link-field {
+	min-width: min(24rem, 100%);
 	margin: 0;
 }
 .home-attention-count {
