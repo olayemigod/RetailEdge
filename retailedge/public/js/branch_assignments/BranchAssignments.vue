@@ -5,7 +5,7 @@
 	</div>
 	<EdgeAppShell
 		v-else
-		product="RetailEdge"
+		product="retailedge"
 		title="Branch Assignments"
 		:userName="userName"
 		:menuItems="menuItems"
