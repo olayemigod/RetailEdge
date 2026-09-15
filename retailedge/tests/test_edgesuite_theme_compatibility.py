@@ -75,15 +75,29 @@ class RetailEdgeThemeCompatibilityTests(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, css)
 
-	def test_business_hub_keeps_shared_edgesuite_aliases_instead_of_private_fixed_palette(self):
+	def test_business_hub_uses_semantic_theme_tokens_and_compact_business_indices(self):
 		component = BUSINESS_HUB.read_text(encoding="utf-8")
 		for expected in (
-			"var(--edge-border",
-			"var(--edge-surface",
-			"var(--edge-text-muted",
-			"var(--edge-primary",
+			"var(--edge-color-border",
+			"var(--edge-color-surface",
+			"var(--edge-color-surface-muted",
+			"var(--edge-color-ink-950",
+			"var(--edge-color-ink-500",
+			"var(--edge-color-brand-600",
+			':global(:root[data-edge-appearance="dark"]) .retailedge-business-hub',
+			".home-signal-icon {",
+			"width: 24px;",
+			"font-size: 0.96rem;",
 		):
 			self.assertIn(expected, component)
+
+		for forbidden in (
+			"var(--edge-surface, #ffffff)",
+			"var(--edge-surface-muted, #f8fafc)",
+			"var(--edge-text-muted, #667085)",
+			"var(--edge-primary, #2563eb)",
+		):
+			self.assertNotIn(forbidden, component)
 
 	def test_c22_integrity_page_uses_edgesuite_shell_and_semantic_theme_aliases(self):
 		component = STOCK_ACCOUNTING_INTEGRITY.read_text(encoding="utf-8")
