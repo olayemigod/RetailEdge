@@ -1,6 +1,6 @@
 <template>
 	<div v-if="!edgeUIValid" class="stock-movement-fallback">
-		<strong>EdgeSuite UI failed to load</strong>
+		<strong>The interface could not be loaded</strong>
 		<span>Missing components: {{ missingComponents.join(", ") }}</span>
 	</div>
 
@@ -9,7 +9,7 @@
 		product="retailedge"
 		:menuItems="menuItems"
 		activeRoute="/app/stock-movement-history"
-		title="RetailEdge"
+		title="ProcessEdge Retail"
 		:tenantName="tenantName"
 		:branchName="branchName"
 		:userName="userName"
