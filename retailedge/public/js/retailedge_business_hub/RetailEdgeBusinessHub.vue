@@ -451,7 +451,9 @@ function fetchHomeSnapshot(company, branch, datePreset, resolvedRange = {}) {
 				date_preset: datePreset || "Today",
 				from_date: resolvedRange?.from_date || "",
 				to_date: resolvedRange?.to_date || "",
-				date_label: resolvedRange?.label || resolvedRange?.display_value || "",
+				date_label: resolvedRange?.expression && resolvedRange.expression !== "custom"
+					? resolvedRange.expression
+					: (resolvedRange?.label || resolvedRange?.display_value || ""),
 			},
 			callback: (response) => resolve(response.message || {}),
 			error: (error) => reject(error),
@@ -676,6 +678,8 @@ export default {
 					this.homePeriodPreset = this.homePeriod.preset || this.homePeriodPreset;
 					this.homeSmartDate = {
 						...this.homeSmartDate,
+						expression: this.homeSmartDate.expression
+							|| (this.homePeriod.preset === "Custom Period" ? "custom" : this.homePeriod.preset || "Today"),
 						from_date: this.homePeriod.from_date || "",
 						to_date: this.homePeriod.to_date || "",
 						label: this.homePeriod.label || "",
