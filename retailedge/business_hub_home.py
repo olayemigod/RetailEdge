@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import re
 from typing import Any
 
 import frappe
 from frappe import _
 from frappe.utils import add_days, flt, get_first_day, getdate, nowdate
-
-import re
 
 from retailedge.bank_exception_summary import get_bank_exception_summary
 from retailedge.branch_context import user_has_global_branch_access
