@@ -175,7 +175,6 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Subscription Plans", "target_type": "DocType", "target": "Subscription Plan", "icon": "clipboard", "mode": "native_fallback"},
 			{"label": "Bank Transactions", "target_type": "DocType", "target": "Bank Transaction", "icon": "wallet", "mode": "native_fallback", "required_roles": tuple(sorted(FINANCE_TRANSFER_ROLES))},
 			{"label": "Import Bank Statement", "target_type": "DocType", "target": "RetailEdge Payment Statement Import", "icon": "upload"},
-			{"label": "Bank Matching", "target_type": "Page", "target": "bank-matching-reconciliation", "icon": "report"},
 		),
 	},
 	{
