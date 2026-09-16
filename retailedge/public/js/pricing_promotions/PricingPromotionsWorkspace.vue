@@ -56,6 +56,9 @@
 				</nav>
 
 				<section v-if="activeArea" class="pricing-panel">
+					<div v-if="priceListScopeMessage && ['price-lists', 'item-prices'].includes(activeArea.key)" class="pricing-scope-note">
+						{{ priceListScopeMessage }}
+					</div>
 					<div class="pricing-panel-heading">
 						<div>
 							<h3>{{ activeArea.label }}</h3>
@@ -86,10 +89,10 @@
 						/>
 						<template v-for="filter in activeArea.filters || []" :key="filter.fieldname">
 							<EdgeDropdown
-								v-if="filter.type === 'boolean'"
+								v-if="filter.type === 'boolean' || filter.type === 'price_list'"
 								:modelValue="filterValues[filter.fieldname] || ''"
 								:label="filter.label"
-								:options="booleanOptions"
+								:options="filter.type === 'price_list' ? priceListFilterOptions : booleanOptions"
 								@update:modelValue="setFilter(filter.fieldname, $event)"
 							/>
 							<EdgeInput
@@ -217,6 +220,8 @@ export default {
 			searchTimer: null,
 			menuItems: [],
 			canUseNativeDesk: false,
+			priceListScopeMessage: "",
+			priceListOptions: [],
 			booleanOptions: [
 				{ value: "", label: "All" },
 				{ value: "Yes", label: "Yes" },
@@ -230,6 +235,9 @@ export default {
 		},
 		searchPlaceholder() {
 			return this.activeArea ? `Search ${this.activeArea.label.toLowerCase()}` : "Search";
+		},
+		priceListFilterOptions() {
+			return [{ value: "", label: "All accessible price lists" }, ...(this.priceListOptions || [])];
 		},
 	},
 	created() {
@@ -260,6 +268,8 @@ export default {
 				this.branch = workspace.branch || navigation.context?.branch || "";
 				this.userName = workspace.user_name || navigation.context?.user_name || "";
 				this.areas = Array.isArray(workspace.areas) ? workspace.areas : [];
+				this.priceListScopeMessage = workspace.price_list_scope?.message || "";
+				this.priceListOptions = Array.isArray(workspace.price_list_options) ? workspace.price_list_options : [];
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (!this.areas.some((area) => area.key === this.activeKey)) {
@@ -358,6 +368,9 @@ export default {
 		},
 		createRecord() {
 			if (!this.activeArea?.can_create) return;
+			if (this.activeArea.doctype === "Item Price" && this.priceListOptions.length === 1) {
+				frappe.route_options = { price_list: this.priceListOptions[0].value };
+			}
 			frappe.new_doc(this.activeArea.doctype);
 		},
 		editRecord(row) {
@@ -447,6 +460,7 @@ export default {
 .pricing-actions-column { width:8.75rem; text-align:right !important; }
 .pricing-edit { width:100%; white-space:nowrap; }
 .pricing-footer { display:flex; justify-content:space-between; align-items:center; gap:1rem; color:var(--edge-color-ink-500,var(--text-muted)); }
+.pricing-scope-note { padding:.75rem .9rem; border:1px solid var(--edge-color-border,var(--border-color)); border-radius:.65rem; background:var(--edge-color-surface-muted,var(--control-bg)); color:var(--edge-color-ink-600,var(--text-muted)); font-size:.86rem; }
 .pricing-inline-error,.pricing-state--error { color:var(--red-600,#b42318); }
 .pricing-state { display:grid; gap:.75rem; justify-items:start; }
 .pricing-fallback { display:grid; gap:.5rem; padding:1.5rem; }
