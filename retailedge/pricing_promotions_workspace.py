@@ -180,6 +180,7 @@ def _available_area(key: str, config: dict[str, Any]) -> dict[str, Any] | None:
 		"doctype": doctype,
 		"description": _(config["description"]),
 		"can_create": int(bool(frappe.has_permission(doctype, "create"))),
+		"can_write": int(bool(frappe.has_permission(doctype, "write"))),
 		"columns": columns,
 		"filters": filters,
 	}
