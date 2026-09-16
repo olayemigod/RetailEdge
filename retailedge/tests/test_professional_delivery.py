@@ -40,6 +40,19 @@ class TestProfessionalDelivery(unittest.TestCase):
 		self.assertNotIn("target.submit()", source)
 		self.assertNotIn("ignore_permissions=True", source)
 
+	def test_sales_invoice_delivery_creation_reuses_existing_draft(self):
+		source = self.read("professional_delivery.py")
+		for contract in (
+			"def _lock_sales_invoice",
+			"FOR UPDATE",
+			"def _existing_draft_delivery_for_invoice",
+			"item.against_sales_invoice = %s",
+			"dn.docstatus = 0",
+			'"existing": existing',
+			"if existing:",
+		):
+			self.assertIn(contract, source)
+
 	def test_delivery_never_mutates_or_submits_source_or_target(self):
 		source = self.read("professional_delivery.py")
 		for forbidden in (
