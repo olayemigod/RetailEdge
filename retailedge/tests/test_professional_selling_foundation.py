@@ -76,6 +76,17 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		self.assertNotIn("<iframe", component.lower())
 		self.assertNotIn("frappe-card", component)
 
+	def test_ui_displays_the_persisted_operating_branch_from_server_context(self):
+		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		for contract in (
+			'const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context"',
+			"callMethod(CONTEXT_METHOD)",
+			"this.sellingContext = selling || {}",
+			'this.branchName = selling.operating?.branch || navigation.context?.branch || ""',
+			'{{ branchName || "No operating branch selected" }}',
+		):
+			self.assertIn(contract, component)
+
 	def test_ui_preserves_erpnext_shipping_and_advanced_document_truth(self):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		for contract in (

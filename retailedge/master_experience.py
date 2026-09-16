@@ -5,6 +5,7 @@ from typing import Any
 
 import frappe
 
+from retailedge.company_profile import resolve_company_profile
 from retailedge.edgesuite_ui import get_retailedge_business_hub_context as _base_business_hub_context
 from retailedge.operating_context import get_allowed_operating_branches, get_operating_context
 
@@ -57,9 +58,25 @@ OPERATING_CONTEXT_ITEM: dict[str, Any] = {
 	"icon": "building",
 }
 
+COMPANY_PROFILE_ITEM: dict[str, Any] = {
+	"label": "Company Profile",
+	"description": "Maintain the active ERPNext Company identity, logo and business contact profile used across ProcessEdge Retail.",
+	"target_type": "Page",
+	"target": "company-profile",
+	"icon": "building",
+}
+
+BRANCH_ASSIGNMENTS_ITEM: dict[str, Any] = {
+	"label": "Branch Assignments",
+	"description": "Assign users to operational Branches and preserve effective-dated transfer history.",
+	"target_type": "Page",
+	"target": "branch-assignments",
+	"icon": "users",
+}
+
 TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 	"label": "Transaction Workspace",
-	"description": "Start sales, purchasing, stock and POS work inside the RetailEdge operating shell.",
+	"description": "Start sales, purchasing, stock and POS work inside the ProcessEdge Retail operating shell.",
 	"target_type": "Page",
 	"target": "transaction-workspace",
 	"icon": "shopping-cart",
@@ -67,7 +84,7 @@ TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 
 PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 	"label": "Professional Selling",
-	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided RetailEdge selling flow.",
+	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided selling flow.",
 	"target_type": "Page",
 	"target": "professional-selling",
 	"icon": "shopping-bag",
@@ -112,6 +129,17 @@ BUSINESS_EXPENSE_QUICK_ACTION: dict[str, Any] = {
 	"target_type": "Page",
 	"target": "business-expenses",
 }
+
+PRICING_PROMOTIONS_PAGE_TARGET = "pricing-promotions-control"
+PRICING_PROMOTIONS_NATIVE_PEERS = {
+	"Price List",
+	"Item Price",
+	"Pricing Rule",
+	"Promotional Scheme",
+	"Coupon Code",
+	"Loyalty Program",
+}
+
 
 DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
 	"label": "Document Output & Sharing",
@@ -179,7 +207,7 @@ PROJECT_LIST_ITEM: dict[str, Any] = {
 
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
-	"description": "Configure RetailEdge business rules, Branch Setup, payment masters and statement mappings.",
+	"description": "Configure ProcessEdge Retail business rules, Branch Setup, payment masters and statement mappings.",
 	"target_type": "Page",
 	"target": "retailedge-setup",
 	"icon": "settings",
@@ -241,6 +269,50 @@ def _add_operating_context_navigation(navigation_groups: list[dict[str, Any]]) -
 		return
 
 
+def _add_company_profile_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(COMPANY_PROFILE_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "home":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target") == COMPANY_PROFILE_ITEM["target"] for item in items):
+			return
+		operating_index = next(
+			(index for index, item in enumerate(items) if item.get("target") == OPERATING_CONTEXT_ITEM["target"]),
+			-1,
+		)
+		items.insert(operating_index + 1 if operating_index >= 0 else 0, deepcopy(COMPANY_PROFILE_ITEM))
+		group["items"] = items
+		return
+
+
+def _add_branch_assignment_navigation(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(BRANCH_ASSIGNMENTS_ITEM["target"]):
+		return
+
+	setup_group = next((group for group in navigation_groups if group.get("key") == "setup"), None)
+	if setup_group is None:
+		setup_group = {
+			"key": "setup",
+			"label": "Setup",
+			"icon": "settings",
+			"items": [],
+		}
+		navigation_groups.append(setup_group)
+
+	items = list(setup_group.get("items") or [])
+	if any(item.get("target") == BRANCH_ASSIGNMENTS_ITEM["target"] for item in items):
+		return
+
+	branch_setup_index = next(
+		(index for index, item in enumerate(items) if item.get("target") == "RetailEdge Branch Profile"),
+		-1,
+	)
+	items.insert(branch_setup_index + 1 if branch_setup_index >= 0 else 0, deepcopy(BRANCH_ASSIGNMENTS_ITEM))
+	setup_group["items"] = items
+
+
 def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(TRANSACTION_WORKSPACE_ITEM["target"]):
 		return
@@ -299,6 +371,40 @@ def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> No
 			deepcopy(existing_page or PROFESSIONAL_SELLING_ITEM),
 		)
 		group["items"] = items
+		return
+
+
+def _promote_pricing_promotions_ownership(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Use the Pricing & Promotions Page as the everyday owner of pricing masters."""
+	if not _can_open_page(PRICING_PROMOTIONS_PAGE_TARGET):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "pricing-promotions":
+			continue
+		items = list(group.get("items") or [])
+		page_item = next(
+			(
+				item
+				for item in items
+				if item.get("target_type") == "Page"
+				and item.get("target") == PRICING_PROMOTIONS_PAGE_TARGET
+			),
+			None,
+		)
+		if page_item is None:
+			return
+		group["items"] = [
+			page_item,
+			*[
+				item
+				for item in items
+				if not (
+					item.get("target_type") == "DocType"
+					and item.get("target") in PRICING_PROMOTIONS_NATIVE_PEERS
+				)
+				and item is not page_item
+			],
+		]
 		return
 
 
@@ -608,38 +714,17 @@ def _contain_native_navigation_for_edgesuite_only(context: dict[str, Any]) -> No
 	context["navigation_groups"] = contained_groups
 
 
-def _company_identity(company: str) -> dict[str, str]:
-	company = str(company or "").strip()
-	fallback = {"name": company, "label": company, "logo": "", "currency": ""}
-	if not company:
-		return fallback
-
-	try:
-		if not frappe.db.exists("Company", company):
-			return fallback
-		fields = ["name", "company_name", "default_currency"]
-		if frappe.get_meta("Company").has_field("company_logo"):
-			fields.append("company_logo")
-		row = frappe.db.get_value("Company", company, fields, as_dict=True) or {}
-	except Exception:
-		return fallback
-
-	return {
-		"name": row.get("name") or company,
-		"label": row.get("company_name") or row.get("name") or company,
-		"logo": row.get("company_logo") or "",
-		"currency": row.get("default_currency") or "",
-	}
-
-
 @frappe.whitelist()
 def get_retailedge_business_hub_context() -> dict[str, Any]:
 	context = deepcopy(_base_business_hub_context() or {})
 	navigation_groups = context.get("navigation_groups") or []
 	_promote_browser_approved_r4_pages(navigation_groups)
 	_add_operating_context_navigation(navigation_groups)
+	_add_company_profile_navigation(navigation_groups)
+	_add_branch_assignment_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
+	_promote_pricing_promotions_ownership(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
 	_promote_purchase_invoice_ownership(navigation_groups)
 	_promote_stock_movement_history(navigation_groups)
@@ -676,7 +761,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 
 	operating = get_operating_context()
 	company = operating.get("company") or ""
-	identity = _company_identity(company)
+	identity = resolve_company_profile(company)
 	try:
 		branches = get_allowed_operating_branches(company=company) if company else []
 	except Exception:
@@ -687,6 +772,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 		"company_label": identity.get("label") or company,
 		"company_logo": identity.get("logo") or "",
 		"company_currency": identity.get("currency") or "",
+		"company_profile": identity,
 		"branch": operating.get("branch") or "",
 		"branch_options": list(branches),
 		"can_switch_branch": len(branches) > 1,
@@ -703,6 +789,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
 	feature_flags["professional_selling"] = "edgesuite_primary"
+	feature_flags["pricing_promotions_ownership"] = "application_workspace"
 	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"
 	feature_flags["purchase_invoice_ownership"] = "edgesuite_purchase_register"
 	feature_flags["stock_movement_history_ownership"] = "edgesuite_page"

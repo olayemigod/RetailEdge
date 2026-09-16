@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Sales Overview could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Sales Overview"
 			eyebrow="Sales Performance"
-			subtitle="Invoice health and product performance from RetailEdge's existing Sales Invoice Register and Sales by Item engines."
+			subtitle="Invoice health and product performance from the existing Sales Invoice Register and Sales by Item engines."
 			:summary="headlineSummary"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -78,7 +78,7 @@
 					<button type="button" class="edge-button edge-button--secondary sales-open" @click="openRoute(routes.sales_by_item)">Open Sales by Item</button>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection title="Performance Drill-downs" description="Use the established RetailEdge dashboards for salesperson and branch comparison.">
+				<EdgeDashboardSection title="Performance Drill-downs" description="Use the established dashboards for salesperson and branch comparison.">
 					<div class="sales-drilldowns">
 						<button type="button" class="edge-button edge-button--secondary" @click="openRoute(routes.salesperson_performance)">Salesperson Performance</button>
 						<button type="button" class="edge-button edge-button--secondary" @click="openRoute(routes.branch_performance)">Branch Performance</button>

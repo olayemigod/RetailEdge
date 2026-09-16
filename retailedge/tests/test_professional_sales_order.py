@@ -47,6 +47,16 @@ class TestProfessionalSalesOrder(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_mapped_order_supplies_required_header_and_item_delivery_dates(self):
+		source = self.read("professional_sales_order.py")
+		for contract in (
+			"delivery_date = getdate(target.get(\"delivery_date\")",
+			"target.delivery_date = delivery_date",
+			'item.meta.has_field("delivery_date")',
+			"item.delivery_date = delivery_date",
+		):
+			self.assertIn(contract, source)
+
 	def test_mapping_never_mutates_submitted_quotation(self):
 		source = self.read("professional_sales_order.py")
 		for forbidden in (

@@ -1,5 +1,5 @@
 app_name = "retailedge"
-app_title = "RetailEdge"
+app_title = "PEdge Retail"
 app_publisher = "ProcessEdge Solutions"
 app_description = "Retail operations, POS control, sales audit, payment verification, branch workflows, and retail intelligence for ERPNext/POSNext."
 app_email = "support@processedge.com.ng"
@@ -15,15 +15,14 @@ required_apps = ["edgesuite_ui"]
 # ------------------
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "retailedge",
-# 		"logo": "/assets/retailedge/logo.png",
-# 		"title": "RetailEdge",
-# 		"route": "/retailedge",
-# 		"has_permission": "retailedge.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "retailedge",
+		"logo": "/assets/retailedge/images/processedge_retail/pedge-retail-app-icon-blue-v1.svg",
+		"title": "PEdge Retail",
+		"route": "/desk/retailedge-business-hub",
+	}
+]
 
 # Includes in <head>
 # ------------------
@@ -34,6 +33,7 @@ app_include_css = [
 	"/assets/retailedge/css/retailedge_workspace_home.css",
 	"/assets/retailedge/css/retailedge_guided_create_menu.css",
 	"/assets/retailedge/css/retailedge_product_identity.css",
+	"/assets/retailedge/css/retailedge_navigation_shell_compat.css",
 ]
 app_include_js = [
 	"/assets/retailedge/js/retailedge.js",
@@ -129,10 +129,11 @@ doctype_list_js = {
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "retailedge.utils.jinja_methods",
-# 	"filters": "retailedge.utils.jinja_filters"
-# }
+jinja = {
+	"methods": [
+		"retailedge.print_output_context.get_business_print_context",
+	],
+}
 
 # Installation
 # ------------
@@ -167,6 +168,9 @@ doctype_list_js = {
 doc_events = {
 	"Bank Account": {
 		"validate": "retailedge.bank_account_policy.validate_bank_account_branch",
+	},
+	"Item Price": {
+		"validate": "retailedge.pricing_promotions_workspace.validate_item_price_assignment",
 	},
 	"Sales Invoice": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
@@ -239,16 +243,21 @@ after_migrate = [
 	"retailedge.sales_invoice_verification_sync.ensure_sales_invoice_verification_custom_fields",
 	"retailedge.customer_project_updates.ensure_customer_project_update_custom_fields",
 	"retailedge.workspace_sync.sync_retailedge_workspace_layout",
+	"retailedge.desktop_identity.sync_retailedge_desktop_identity",
 ]
 boot_session = "retailedge.boot.boot_session"
 
 # Permission scope
 # ------------------------------
 permission_query_conditions = {
+	"Price List": "retailedge.pricing_promotions_workspace.get_price_list_permission_query_conditions",
+	"Item Price": "retailedge.pricing_promotions_workspace.get_item_price_permission_query_conditions",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.get_permission_query_conditions",
 	"RetailEdge Business Expense": "retailedge.business_expense.get_permission_query_conditions",
 }
 has_permission = {
+	"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission",
+	"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission",
 	"RetailEdge Action Follow Up": "retailedge.action_follow_up.has_permission",
 	"RetailEdge Business Expense": "retailedge.business_expense.has_permission",
 }

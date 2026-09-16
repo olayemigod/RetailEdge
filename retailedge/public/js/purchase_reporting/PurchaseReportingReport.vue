@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="purchase-report-fallback">
 		<strong>Purchase reporting could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -196,7 +196,7 @@ export default {
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; if (this.reportType === "supplier_payables") { delete filters.from_date; delete filters.to_date; delete filters.item_code; delete filters.item_group; delete filters.warehouse; delete filters.invoice_kind; } else { delete filters.as_of_date; delete filters.ageing_bucket; } return filters; },
 		async fetchData() {
-			if (!this.requiredReady) return; if (!this.reportProvider?.load) { this.error = `The shared EdgeSuite ${this.config.title} provider is unavailable.`; return; }
+			if (!this.requiredReady) return; if (!this.reportProvider?.load) { this.error = `The ${this.config.title} reporting service is unavailable.`; return; }
 			this.loading = true; this.error = "";
 			try {
 				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize);

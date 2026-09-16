@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Owner Dashboard could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Owner Dashboard"
 			eyebrow="Business Overview"
-			subtitle="Period performance plus current balances and stock, composed from RetailEdge's existing reporting engines."
+			subtitle="Period performance plus current balances and stock, composed from existing reporting engines."
 			:summary="headlineSummary"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -44,7 +44,7 @@
 				<EdgeDashboardSection
 					v-if="attention.length"
 					title="Attention Required"
-					description="Operational exceptions surfaced from the same RetailEdge reports behind this dashboard."
+					description="Operational exceptions surfaced from the same reports behind this dashboard."
 					span="2"
 				>
 					<div class="owner-attention-list">
@@ -184,7 +184,7 @@ export default {
 		sectionDescription(section) {
 			if (section.key === "stock" && section.show_costs === false) return "Current stock quantities; valuation remains hidden by your cost-visibility policy.";
 			if (section.time_basis === "current") return "Current position as of today; the selected date range does not reconstruct a historical balance.";
-			return "Performance for the selected date range from the existing RetailEdge source report.";
+			return "Performance for the selected date range from the existing source report.";
 		},
 		formatCard(card) { try { return window.retailedge.formatPlainValue(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
 	},

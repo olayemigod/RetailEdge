@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="review-fallback">
 		<strong>Expense Review could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -73,7 +73,7 @@ const REPORT_PRODUCT = "RetailEdge";
 const REPORT_KEY = "expense-review";
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+function errorMessage(error, fallback) { return window.retailedge?.userErrorMessage?.(error, fallback) || fallback; }
 
 export default {
 	name: "ExpenseReviewReport",
@@ -118,7 +118,7 @@ export default {
 		providerFilters() { const { page_size: _pageSize, ...filters } = this.filters; return filters; },
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
 		async fetchData() {
-			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The shared EdgeSuite Expense Review provider is unavailable."; return; }
+			if (!this.filters.company) return; if (!this.reportProvider?.load) { this.error = "The Expense Review reporting service is unavailable."; return; }
 			this.loading = true; this.error = "";
 			try {
 				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize); const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });

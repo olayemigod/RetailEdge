@@ -25,7 +25,91 @@
 		return window.retailedge.toPlainText(value);
 	};
 
+	window.retailedge.userErrorMessage = function (error, fallback) {
+		const fallbackText = window.retailedge.toPlainText(fallback || "Something went wrong. Please try again.");
+		const normalize = function (value) {
+			if (value === null || value === undefined) return "";
+			if (Array.isArray(value)) {
+				for (const item of value) {
+					const resolved = normalize(item);
+					if (resolved) return resolved;
+				}
+				return "";
+			}
+			if (typeof value === "object") {
+				if (value.message) return normalize(value.message);
+				return "";
+			}
+			let text = String(value || "").trim();
+			if (!text) return "";
+			try {
+				const parsed = JSON.parse(text);
+				const resolved = normalize(parsed);
+				if (resolved) return resolved;
+			} catch (_error) {
+				// Not JSON; continue with the plain string.
+			}
+			if (/traceback|file\s+"apps\/|frappe\.exceptions\.|apps\/frappe\/|apps\/retailedge\//i.test(text)) {
+				const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+				text = lines[lines.length - 1] || "";
+				text = text.replace(/^(?:frappe\.exceptions\.)?[A-Za-z0-9_.]*(?:Error|Exception):\s*/i, "");
+			}
+			text = window.retailedge.toPlainText(text).replace(/^["'\[]+|["'\]]+$/g, "").trim();
+			if (!text || /^traceback/i.test(text)) return "";
+			return text.length > 600 ? text.slice(0, 597) + "..." : text;
+		};
+		const serverMessages = normalize(error?._server_messages);
+		if (serverMessages) return serverMessages;
+		for (const candidate of [error?.message, error?.exception, error?.exc]) {
+			const resolved = normalize(candidate);
+			if (resolved && !/^(server error|request failed|there was an error)$/i.test(resolved)) return resolved;
+		}
+		return fallbackText;
+	};
+
 	const RETAILEDGE_BUSINESS_HUB_ROUTE = "retailedge-business-hub";
+	const RETAILEDGE_DESKTOP_LABEL = "PEdge Retail";
+	const RETAILEDGE_DESKTOP_PATH = "/desk/retailedge-business-hub";
+
+	function keepRetailDesktopLauncherInSameTab(root = document) {
+		if (!root?.querySelectorAll) return;
+		const selector = `[data-id="${RETAILEDGE_DESKTOP_LABEL}"][href], [data-label="${RETAILEDGE_DESKTOP_LABEL}"][href]`;
+		root.querySelectorAll(selector).forEach((link) => {
+			link.removeAttribute("target");
+			link.removeAttribute("rel");
+			link.setAttribute("href", RETAILEDGE_DESKTOP_PATH);
+		});
+	}
+
+	function installRetailDesktopLauncherGuard() {
+		keepRetailDesktopLauncherInSameTab();
+		if (window.__retailedgeDesktopLauncherObserver || typeof MutationObserver === "undefined" || !document.body) return;
+		const observer = new MutationObserver((mutations) => {
+			for (const mutation of mutations) {
+				for (const node of mutation.addedNodes || []) {
+					if (node?.nodeType !== 1) continue;
+					if (
+						node.matches?.(`[data-id="${RETAILEDGE_DESKTOP_LABEL}"][href], [data-label="${RETAILEDGE_DESKTOP_LABEL}"][href]`)
+					) {
+						node.removeAttribute("target");
+						node.removeAttribute("rel");
+						node.setAttribute("href", RETAILEDGE_DESKTOP_PATH);
+					}
+					keepRetailDesktopLauncherInSameTab(node);
+				}
+			}
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+		window.__retailedgeDesktopLauncherObserver = observer;
+	}
+
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", installRetailDesktopLauncherGuard, { once: true });
+	} else {
+		installRetailDesktopLauncherGuard();
+	}
+	document.addEventListener("page-change", keepRetailDesktopLauncherInSameTab);
+
 	function redirectLegacyRetailEdgeWorkspace() {
 		if (typeof frappe === "undefined" || typeof frappe.get_route !== "function" || typeof frappe.set_route !== "function") {
 			return false;

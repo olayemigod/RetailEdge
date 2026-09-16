@@ -1,11 +1,11 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Transaction Workspace could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
-		product="RetailEdge"
+		product="retailedge"
 		title="Transaction Workspace"
 		:tenantName="tenantName"
 		:branchName="branchName"
@@ -18,7 +18,7 @@
 		<EdgePageLayout class="retailedge-transaction-workspace-page">
 			<EdgePageHeader
 				title="Transaction Workspace"
-				description="Start sales, purchasing, stock and POS work from one RetailEdge operating context while ERPNext remains the system of record."
+				description="Start sales, purchasing, stock and POS work from one operating context while ERPNext remains the system of record."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" />
@@ -45,12 +45,15 @@
 						<EdgeStatusBadge :status="pos?.provider === 'posnext' ? 'Active' : 'Warning'" />
 					</div>
 					<div v-if="posLaunchError" class="pos-launch-error" role="alert">{{ posLaunchError }}</div>
+					<div v-else-if="!hasOperatingContext" class="pos-launch-warning" role="status">
+						Select an Operating Company and Branch before starting POS.
+					</div>
 					<div class="workspace-actions">
 						<button v-if="canStartPos" type="button" class="edge-button edge-button--primary" :disabled="posStarting" @click="startPos">{{ posStarting ? "Checking POS..." : "Start POS" }}</button>
 						<button v-if="canUseNativeDesk && pos?.opening_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.opening_doctype)">Advanced: POS Opening</button>
 						<button v-if="canUseNativeDesk && pos?.closing_doctype" type="button" class="edge-button edge-button--secondary" @click="openDoctype(pos.closing_doctype)">Advanced: POS Closing</button>
 					</div>
-					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. When online, RetailEdge validates the current operating context before launch. If the device is offline, RetailEdge does not make its preflight a hard dependency; POSNext keeps control of its own offline runtime and sync behaviour.</p>
+					<p v-if="pos?.provider === 'posnext'" class="muted">POSNext remains the POS engine. When online, the current operating context is validated before launch. If the device is offline, POSNext keeps control of its own offline runtime and sync behaviour.</p>
 				</section>
 
 				<EdgeEmptyState
@@ -136,8 +139,59 @@ function doctypeSlug(doctype) {
 		.replace(/^-|-$/g, "");
 }
 
+function parseErrorPayload(value) {
+	if (!value) return "";
+	if (Array.isArray(value)) {
+		for (const item of value) {
+			const message = parseErrorPayload(item);
+			if (message) return message;
+		}
+		return "";
+	}
+	if (typeof value === "object") {
+		for (const key of ["message", "description", "exception"]) {
+			const message = parseErrorPayload(value[key]);
+			if (message) return message;
+		}
+		return "";
+	}
+	const text = String(value || "").trim();
+	if (!text) return "";
+	try {
+		const parsed = JSON.parse(text);
+		if (parsed !== text) {
+			const message = parseErrorPayload(parsed);
+			if (message) return message;
+		}
+	} catch (_error) {
+		// Plain text is handled below.
+	}
+	if (/Traceback \(most recent call last\)/i.test(text)) {
+		const lines = text.replace(/\\n/g, "\n").split("\n").map((line) => line.trim()).filter(Boolean);
+		for (let index = lines.length - 1; index >= 0; index -= 1) {
+			const match = lines[index].match(/(?:ValidationError|PermissionError|MandatoryError|DoesNotExistError|AuthenticationError|FrappeException|Exception):\s*(.+)$/);
+			if (match?.[1]) return match[1].replace(/\\?["']+$/g, "").trim();
+		}
+		return "";
+	}
+	return text;
+}
+
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?._server_messages || fallback;
+	const response = error?.responseJSON || error || {};
+	for (const candidate of [
+		response?._server_messages,
+		error?._server_messages,
+		response?.message,
+		error?.message,
+		response?.exception,
+		response?.exc,
+		error?.exc,
+	]) {
+		const message = parseErrorPayload(candidate);
+		if (message && !/Traceback \(most recent call last\)/i.test(message)) return message;
+	}
+	return fallback;
 }
 
 export default {
@@ -176,11 +230,14 @@ export default {
 		},
 		posDescription() {
 			return this.pos?.provider === "posnext"
-				? "Use the installed POSNext provider from the current RetailEdge operating context."
-				: "POSNext is not available, so RetailEdge falls back to ERPNext's native Point of Sale where installed.";
+				? "Use the installed POSNext provider from the current operating context."
+				: "POSNext is not available, so the standard ERPNext Point of Sale is used where installed.";
+		},
+		hasOperatingContext() {
+			return Boolean(String(this.tenantName || "").trim() && String(this.branchName || "").trim());
 		},
 		canStartPos() {
-			return Boolean(this.pos?.start_target || this.pos?.start_url);
+			return this.hasOperatingContext && Boolean(this.pos?.start_target || this.pos?.start_url);
 		},
 	},
 	created() {
@@ -280,6 +337,10 @@ export default {
 		},
 		async startPos() {
 			if (this.posStarting) return;
+			if (!this.hasOperatingContext) {
+				this.posLaunchError = "Select an Operating Company and Branch before starting POS.";
+				return;
+			}
 			this.posStarting = true;
 			this.posLaunchError = "";
 			try {
@@ -345,10 +406,10 @@ export default {
 				return "Use the guided Purchase Invoice flow here and review submitted purchases in the Purchase Register.";
 			}
 			if (["Sales Order", "Delivery Note"].includes(action?.doctype)) {
-				return "Continue this routine workflow in Professional Selling, where EdgeSuite owns guided selling operations and ERPNext remains authoritative.";
+				return "Continue this routine workflow in Professional Selling, where the guided selling flow is used and ERPNext remains authoritative.";
 			}
 			if (["Purchase Order", "Purchase Receipt"].includes(action?.doctype)) {
-				return "Continue this routine workflow in Professional Purchasing, where EdgeSuite owns the standard purchasing path and ERPNext remains authoritative.";
+				return "Continue this routine workflow in Professional Purchasing, where the guided purchasing flow is used and ERPNext remains authoritative.";
 			}
 			return GUIDED_DOCTYPES.has(action?.doctype)
 				? `Use the existing guided ${action.label} flow here, with native ERPNext as an explicit advanced fallback.`
@@ -399,6 +460,8 @@ export default {
 .transaction-card { display: flex; flex-direction: column; gap: 0.8rem; min-height: 11rem; }
 .workspace-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; }
 .muted { color: var(--text-muted); font-size: 0.9rem; }
-.pos-launch-error { margin-top: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--red-200, #fecaca); border-radius: 0.6rem; color: var(--red-700, #b91c1c); background: var(--red-50, #fef2f2); }
+.pos-launch-error, .pos-launch-warning { margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 0.6rem; }
+.pos-launch-error { border: 1px solid var(--red-200, #fecaca); color: var(--red-700, #b91c1c); background: var(--red-50, #fef2f2); }
+.pos-launch-warning { border: 1px solid var(--yellow-200, #fde68a); color: var(--edge-color-ink-700, var(--text-color)); background: var(--yellow-50, #fffbeb); }
 @media (max-width: 760px) { .transaction-grid { grid-template-columns: 1fr; } .context-panel, .panel-heading { flex-direction: column; } }
 </style>

@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="forecast-fallback">
 		<strong>Sales Forecast could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -84,7 +84,7 @@ export default {
 	computed: {
 		reportColumns() { return (this.columns || []).map((column) => ({ ...column, sortable: false })); },
 		forecastMethod() { const engine = this.metadata.forecast_engine || {}; return engine.method ? `Method: ${engine.method}${engine.fallback_reason ? ` · ${engine.fallback_reason}` : ""}` : "Explainable deterministic baseline"; },
-		exportDataset() { return { title: "Sales Forecast", filename: `RetailEdge Sales Forecast ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
+		exportDataset() { return { title: "Sales Forecast", filename: `ProcessEdge Retail Sales Forecast ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() {
 			const labels = { company: "Company", branch: "Branch", as_of_date: "As of Date", history_months: "History Months", forecast_months: "Forecast Months", customer: "Customer", salesperson: "Salesperson", item_group: "Item Group", item_code: "Item", warehouse: "Warehouse" };
 			return Object.entries(labels).map(([key, label]) => ({ label, value: this.filters[key] })).filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined);

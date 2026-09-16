@@ -1,7 +1,7 @@
 {
  "app": "retailedge",
  "charts": [],
- "content": "[{\"id\":\"retailedge_home_header\",\"type\":\"header\",\"data\":{\"text\":\"<div class=\\\"retailedge-home-title\\\"><span>RetailEdge</span><small>Business operations, controls and insights</small></div>\",\"col\":12}},{\"id\":\"retailedge_home_start_pos\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Start POS\",\"col\":4}},{\"id\":\"retailedge_home_section_1\",\"type\":\"card\",\"data\":{\"card_name\":\"Home\",\"col\":4}},{\"id\":\"retailedge_home_section_2\",\"type\":\"card\",\"data\":{\"card_name\":\"Sell\",\"col\":4}},{\"id\":\"retailedge_home_section_3\",\"type\":\"card\",\"data\":{\"card_name\":\"Buy\",\"col\":4}},{\"id\":\"retailedge_home_section_4\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"retailedge_home_section_5\",\"type\":\"card\",\"data\":{\"card_name\":\"Money\",\"col\":4}},{\"id\":\"retailedge_home_section_6\",\"type\":\"card\",\"data\":{\"card_name\":\"Expenses\",\"col\":4}},{\"id\":\"retailedge_home_section_7\",\"type\":\"card\",\"data\":{\"card_name\":\"Customers\",\"col\":4}},{\"id\":\"retailedge_home_section_8\",\"type\":\"card\",\"data\":{\"card_name\":\"Suppliers & Payables\",\"col\":4}},{\"id\":\"retailedge_home_section_9\",\"type\":\"card\",\"data\":{\"card_name\":\"Insights\",\"col\":4}},{\"id\":\"retailedge_home_section_10\",\"type\":\"card\",\"data\":{\"card_name\":\"Review & Approvals\",\"col\":4}},{\"id\":\"retailedge_home_section_11\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}}]",
+ "content": "[{\"id\":\"retailedge_home_header\",\"type\":\"header\",\"data\":{\"text\":\"<div class=\\\"retailedge-home-title\\\"><span>ProcessEdge Retail</span><small>Structured for Scale.</small></div>\",\"col\":12}},{\"id\":\"retailedge_home_start_pos\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Start POS\",\"col\":4}},{\"id\":\"retailedge_home_section_1\",\"type\":\"card\",\"data\":{\"card_name\":\"Home\",\"col\":4}},{\"id\":\"retailedge_home_section_2\",\"type\":\"card\",\"data\":{\"card_name\":\"Sell\",\"col\":4}},{\"id\":\"retailedge_home_section_3\",\"type\":\"card\",\"data\":{\"card_name\":\"Buy\",\"col\":4}},{\"id\":\"retailedge_home_section_4\",\"type\":\"card\",\"data\":{\"card_name\":\"Stock\",\"col\":4}},{\"id\":\"retailedge_home_section_5\",\"type\":\"card\",\"data\":{\"card_name\":\"Money\",\"col\":4}},{\"id\":\"retailedge_home_section_6\",\"type\":\"card\",\"data\":{\"card_name\":\"Expenses\",\"col\":4}},{\"id\":\"retailedge_home_section_7\",\"type\":\"card\",\"data\":{\"card_name\":\"Customers\",\"col\":4}},{\"id\":\"retailedge_home_section_8\",\"type\":\"card\",\"data\":{\"card_name\":\"Suppliers & Payables\",\"col\":4}},{\"id\":\"retailedge_home_section_9\",\"type\":\"card\",\"data\":{\"card_name\":\"Insights\",\"col\":4}},{\"id\":\"retailedge_home_section_10\",\"type\":\"card\",\"data\":{\"card_name\":\"Review & Approvals\",\"col\":4}},{\"id\":\"retailedge_home_section_11\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}}]",
  "creation": "2026-05-07 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -12,7 +12,7 @@
  "idx": 0,
  "indicator_color": "blue",
  "is_hidden": 0,
- "label": "RetailEdge",
+ "label": "ProcessEdge Retail",
  "links": [
   {"close":1,"hidden":0,"is_query_report":0,"label":"Home","link_count":1,"link_type":"Page","onboard":0,"type":"Card Break"},
   {"hidden":0,"is_query_report":0,"label":"Business Hub","link_count":0,"link_to":"retailedge-business-hub","link_type":"Page","onboard":0,"type":"Link"},
@@ -93,5 +93,5 @@
   {"color":"Blue","doc_view":"","label":"Branch Performance","link_to":"branch-performance-dashboard","stats_filter":"[]","type":"Page"},
   {"color":"Green","doc_view":"List","label":"Daily Sales Audit","link_to":"RetailEdge Daily Sales Audit","stats_filter":"[]","type":"DocType"}
  ],
- "title": "RetailEdge"
+ "title": "ProcessEdge Retail"
 }

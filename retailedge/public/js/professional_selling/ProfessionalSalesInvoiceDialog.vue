@@ -127,7 +127,7 @@
 				@update:rows="updateItems"
 			/>
 
-			<p class="selling-form-hint">RetailEdge resolves selling prices again on the server. Delivery charges remain ERPNext Shipping Rule calculations.</p>
+			<p class="selling-form-hint">Selling prices are resolved again on the server. Delivery charges remain ERPNext Shipping Rule calculations.</p>
 
 			<label class="selling-field selling-field--wide">
 				<span>Remarks</span>
@@ -229,7 +229,7 @@ export default {
 		},
 		sourceHint() {
 			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. Review the prepared draft in the standard Sales Invoice form; no refund or Payment Entry is created automatically.";
-			return "The source remains submitted and unchanged. RetailEdge creates a new ERPNext Sales Invoice draft only.";
+			return "The source remains submitted and unchanged. This workflow creates a new ERPNext Sales Invoice draft only.";
 		},
 		saveLabel() {
 			if (this.mode === "new") return "Save Draft";

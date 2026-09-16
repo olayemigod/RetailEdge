@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Profitability Intelligence could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else

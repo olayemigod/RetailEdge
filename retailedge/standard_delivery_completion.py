@@ -4,10 +4,11 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, get_datetime
+from frappe.utils import cint, flt, get_datetime, getdate
 
 from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.operating_context import get_operating_context
+from retailedge.professional_draft_items import editable_items, update_draft_items
 from retailedge.professional_selling import (
 	_assert_read,
 	_validate_stored_operational_branch,
@@ -104,11 +105,7 @@ def _standard_delivery_blockers(doc) -> list[str]:
 	source_orders: set[str] = set()
 	for row in items:
 		source_name = _clean(row.get("against_sales_order"))
-		if not source_name:
-			blockers.append(
-				_("Every standard Delivery Note item must be linked to its source Sales Order.")
-			)
-		else:
+		if source_name:
 			source_orders.add(source_name)
 
 		if not _clean(row.get("warehouse")):
@@ -289,6 +286,11 @@ def _build_preview(doc) -> dict[str, Any]:
 		"source_sales_order": stock_context["source_sales_order"],
 		"item_count": len(list(doc.get("items") or [])),
 		"items": _item_summary(doc),
+		"editable_items": editable_items(doc),
+		"posting_date": _clean(doc.get("posting_date")),
+		"posting_time": _clean(doc.get("posting_time")),
+		"remarks": _clean(doc.get("remarks")),
+		"can_edit": bool(cint(doc.docstatus) == 0 and frappe.has_permission(DELIVERY_NOTE_DOCTYPE, "write", doc=doc)),
 		"blockers": blockers,
 		"can_submit": bool(
 			not blockers
@@ -334,6 +336,57 @@ def get_standard_delivery_completion_preview(name: str) -> dict[str, Any]:
 	"""Return a persistence-free completion review for one standard Delivery Note."""
 	doc = _get_delivery_note(name)
 	return _build_preview(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def update_standard_delivery_draft(
+	name: str,
+	values: dict | str | None = None,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Edit one Delivery Note draft while preserving source links and stock truth."""
+	name = _clean(name)
+	_lock_delivery_note(name)
+	doc = _get_delivery_note(name)
+	_assert_expected_modified(doc, expected_modified)
+	company, branch = _validate_delivery_context(doc)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only draft Delivery Notes can be edited here."))
+	if not frappe.has_permission(DELIVERY_NOTE_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this Delivery Note."), frappe.PermissionError)
+
+	if isinstance(values, str):
+		values = frappe.parse_json(values)
+	values = values or {}
+	if not isinstance(values, dict):
+		frappe.throw(_("Invalid Delivery Note draft changes."))
+
+	posting_date = getdate(values.get("posting_date") or doc.get("posting_date"))
+	doc.posting_date = posting_date
+	if doc.meta.has_field("remarks"):
+		doc.remarks = _clean(values.get("remarks"))
+
+	default_warehouse = _clean(doc.get("set_warehouse"))
+	if not default_warehouse:
+		for row in list(doc.get("items") or []):
+			if _clean(row.get("warehouse")):
+				default_warehouse = _clean(row.get("warehouse"))
+				break
+
+	update_draft_items(
+		doc,
+		values.get("items") or editable_items(doc),
+		company=company,
+		branch=branch,
+		customer=_clean(doc.get("customer")),
+		posting_date=str(posting_date),
+		default_warehouse=default_warehouse,
+	)
+	doc.save()
+	doc.reload()
+	result = _build_preview(doc)
+	result["persistence"] = "draft_update"
+	return result
 
 
 @frappe.whitelist(methods=["POST"])

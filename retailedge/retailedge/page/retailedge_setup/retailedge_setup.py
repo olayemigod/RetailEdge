@@ -7,8 +7,9 @@ SETUP_RESOURCES = (
 	{
 		"key": "settings",
 		"label": "Settings",
-		"description": "Configure RetailEdge controls, posting rules, cost visibility and operating defaults.",
+		"description": "Configure operating controls, expenses, audit rules, banking safeguards and platform integrations.",
 		"doctype": "RetailEdge Settings",
+		"page": "retail-settings",
 		"singleton": True,
 		"icon": "settings",
 	},

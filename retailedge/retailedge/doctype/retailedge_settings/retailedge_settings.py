@@ -31,7 +31,7 @@ class RetailEdgeSettings(Document):
 		if len(workflows) != 1:
 			frappe.throw(
 				_(
-					"Workflow State Allowed for Accounting Posting requires exactly one active Workflow for RetailEdge Business Expense."
+					"Workflow State Allowed for Accounting Posting requires exactly one active Business Expense workflow."
 				)
 			)
 		if not frappe.db.exists(
@@ -45,7 +45,7 @@ class RetailEdgeSettings(Document):
 		):
 			frappe.throw(
 				_(
-					"Workflow State {0} is not a submitted state in the active RetailEdge Business Expense Workflow."
+					"Workflow State {0} is not a submitted state in the active Business Expense workflow."
 				).format(state)
 			)
 
@@ -67,11 +67,11 @@ class RetailEdgeSettings(Document):
 		self.bank_auto_match_mode = mode
 		self.bank_auto_match_guidance = (
 			"Auto-match helps reduce manual review for strict exact bank matches. "
-			"It operates only at the RetailEdge review layer. "
+			"It operates only at the review layer. "
 			"Auto-prepare creates Bank Match Review records. "
 			"Auto-confirm confirms Bank Match Review records only. "
 			"It does not reconcile Bank Transactions, change Bank Transaction status, create Payment Entries, "
 			"create Journal Entries, create GL Entries, mark Sales Invoices as paid, mutate POS shifts, "
 			"mutate Daily Sales Audit records, or mutate stock records. "
-			"ERPNext reconciliation remains a separate future process."
+			"Reconciliation remains a separate controlled process."
 		)

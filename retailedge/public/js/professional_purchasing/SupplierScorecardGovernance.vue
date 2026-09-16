@@ -4,7 +4,7 @@
 			<div>
 				<span class="scorecard-kicker">Supplier governance</span>
 				<h3>Supplier Scorecard &amp; Governance</h3>
-				<p>Review ERPNext's native supplier score and effective RFQ / Purchase Order governance without recalculating, refreshing or changing the scorecard from RetailEdge.</p>
+				<p>Review ERPNext's native supplier score and effective RFQ / Purchase Order governance without recalculating, refreshing or changing the scorecard here.</p>
 			</div>
 			<div class="scorecard-actions">
 				<button v-if="capability.can_read_scorecard" type="button" class="edge-button edge-button--secondary" @click="openScorecardList">Scorecards</button>
@@ -14,7 +14,7 @@
 
 		<div v-if="!capability.can_read_scorecard" class="scorecard-permission-note">
 			<strong>Native ERPNext permission required.</strong>
-			<span>Supplier Scorecard is available here only to users who already have ERPNext permission to read it. RetailEdge does not broaden that access.</span>
+			<span>Supplier Scorecard is available here only to users who already have ERPNext permission to read it. This workspace does not broaden that access.</span>
 		</div>
 
 		<EdgeEmptyState

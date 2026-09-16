@@ -4,7 +4,9 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, nowdate
+
+from erpnext.accounts.doctype.payment_entry.payment_entry import get_party_details, get_reference_details
 
 from retailedge.advanced_payments import (
 	CUSTOMER_DOCTYPE,
@@ -22,6 +24,7 @@ from retailedge.workflow_actions import apply_document_workflow_action
 from retailedge.workflow_readiness import get_workflow_readiness
 
 MAX_DRAFT_ROWS = 50
+SALES_ORDER_DOCTYPE = "Sales Order"
 
 
 def _assert_permission(doctype: str, ptype: str, doc: Any | None = None) -> None:
@@ -97,68 +100,100 @@ def _reference_preview(doc: Any, payment_branch: str) -> tuple[dict[str, Any] | 
 		return None, blockers
 
 	row = references[0]
-	if str(getattr(row, "reference_doctype", "") or "") != SALES_INVOICE_DOCTYPE:
-		blockers.append(_("Only a single Sales Invoice allocation is supported by standard EdgeSuite submission."))
+	reference_doctype = str(getattr(row, "reference_doctype", "") or "").strip()
+	if reference_doctype not in {SALES_INVOICE_DOCTYPE, SALES_ORDER_DOCTYPE}:
+		blockers.append(_("Only a single Sales Invoice or Sales Order allocation is supported by standard EdgeSuite submission."))
 		return None, blockers
 
-	invoice_name = str(getattr(row, "reference_name", "") or "").strip()
+	reference_name = str(getattr(row, "reference_name", "") or "").strip()
 	allocated_amount = flt(getattr(row, "allocated_amount", 0))
-	if not invoice_name or allocated_amount <= 0:
-		blockers.append(_("The Sales Invoice allocation is incomplete. Use Advanced ERPNext review."))
+	if not reference_name or allocated_amount <= 0:
+		blockers.append(_("The customer payment allocation is incomplete. Use Advanced ERPNext review."))
 		return None, blockers
-	if not frappe.db.exists(SALES_INVOICE_DOCTYPE, invoice_name):
-		blockers.append(_("Referenced Sales Invoice {0} no longer exists.").format(invoice_name))
-		return {"sales_invoice": invoice_name, "allocated_amount": allocated_amount}, blockers
+	if not frappe.db.exists(reference_doctype, reference_name):
+		blockers.append(_("Referenced {0} {1} no longer exists.").format(reference_doctype, reference_name))
+		return {
+			"reference_doctype": reference_doctype,
+			"reference_name": reference_name,
+			"allocated_amount": allocated_amount,
+		}, blockers
 
-	invoice = frappe.get_doc(SALES_INVOICE_DOCTYPE, invoice_name)
-	_assert_permission(SALES_INVOICE_DOCTYPE, "read", invoice)
-	invoice_branch = _invoice_branch(invoice)
-	invoice_scope = get_operational_branch_scope(
-		str(getattr(invoice, "company", "") or ""),
+	reference = frappe.get_doc(reference_doctype, reference_name)
+	_assert_permission(reference_doctype, "read", reference)
+	reference_branch = _invoice_branch(reference)
+	reference_scope = get_operational_branch_scope(
+		str(getattr(reference, "company", "") or ""),
 		user=frappe.session.user,
 	)
-	if invoice_branch:
-		invoice_branch = str(
+	if reference_branch:
+		reference_branch = str(
 			resolve_operational_branch(
-				invoice.company,
-				invoice_branch,
+				reference.company,
+				reference_branch,
 				user=frappe.session.user,
 			).get("branch")
 			or ""
 		).strip()
-	elif invoice_scope["restricted"]:
+	elif reference_scope["restricted"]:
 		blockers.append(
-			_("Referenced Sales Invoice {0} has no Branch attribution for your restricted access.").format(
-				invoice_name
+			_("Referenced {0} {1} has no Branch attribution for your restricted access.").format(
+				reference_doctype,
+				reference_name,
 			)
 		)
-	if cint(getattr(invoice, "docstatus", 0)) != 1:
-		blockers.append(_("Referenced Sales Invoice {0} is not submitted.").format(invoice_name))
-	if cint(getattr(invoice, "is_return", 0)):
+	if cint(getattr(reference, "docstatus", 0)) != 1:
+		blockers.append(_("Referenced {0} {1} is not submitted.").format(reference_doctype, reference_name))
+	if reference_doctype == SALES_INVOICE_DOCTYPE and cint(getattr(reference, "is_return", 0)):
 		blockers.append(_("Return Sales Invoices require Advanced ERPNext review."))
-	if str(getattr(invoice, "company", "") or "") != str(getattr(doc, "company", "") or ""):
-		blockers.append(_("Payment Entry and Sales Invoice must belong to the same Company."))
-	if str(getattr(invoice, "customer", "") or "") != str(getattr(doc, "party", "") or ""):
-		blockers.append(_("Payment Entry and Sales Invoice must belong to the same Customer."))
-	if invoice_branch and payment_branch and invoice_branch != payment_branch:
-		blockers.append(_("Payment Entry and Sales Invoice must belong to the same Branch."))
+	if str(getattr(reference, "company", "") or "") != str(getattr(doc, "company", "") or ""):
+		blockers.append(_("Payment Entry and {0} must belong to the same Company.").format(reference_doctype))
+	if str(getattr(reference, "customer", "") or "") != str(getattr(doc, "party", "") or ""):
+		blockers.append(_("Payment Entry and {0} must belong to the same Customer.").format(reference_doctype))
+	if reference_branch and payment_branch and reference_branch != payment_branch:
+		blockers.append(_("Payment Entry and {0} must belong to the same Branch.").format(reference_doctype))
 
-	company_currency = _company_currency(str(getattr(doc, "company", "") or ""))
-	invoice_currency = str(getattr(invoice, "currency", "") or company_currency)
-	if invoice_currency != company_currency:
-		blockers.append(_("Multi-currency Sales Invoice receipts require Advanced ERPNext review."))
-	outstanding = flt(getattr(invoice, "outstanding_amount", 0))
+	company = str(getattr(doc, "company", "") or "")
+	company_currency = _company_currency(company)
+	reference_currency = str(getattr(reference, "currency", "") or company_currency)
+	if reference_currency != company_currency:
+		blockers.append(_("Multi-currency {0} payments require Advanced ERPNext review.").format(reference_doctype))
+
+	party = str(getattr(doc, "party", "") or "")
+	party_details = get_party_details(company, CUSTOMER_DOCTYPE, party, nowdate())
+	details = get_reference_details(
+		reference_doctype,
+		reference_name,
+		party_details.get("party_account_currency"),
+		CUSTOMER_DOCTYPE,
+		party,
+	)
+	outstanding = flt(details.get("outstanding_amount"))
 	if outstanding <= 0:
-		blockers.append(_("Sales Invoice {0} no longer has a positive outstanding amount.").format(invoice_name))
+		blockers.append(_("{0} {1} no longer has an amount available for payment.").format(reference_doctype, reference_name))
 	elif allocated_amount > outstanding + 0.005:
-		blockers.append(_("The draft allocation exceeds the current Sales Invoice outstanding amount."))
+		blockers.append(_("The draft allocation exceeds the current {0} amount available for payment.").format(reference_doctype))
 
-	return {
-		"sales_invoice": invoice_name,
+	payload = {
+		"reference_doctype": reference_doctype,
+		"reference_name": reference_name,
 		"allocated_amount": allocated_amount,
-		"invoice_outstanding_amount": outstanding,
-	}, blockers
-
+		"reference_outstanding_amount": outstanding,
+	}
+	if reference_doctype == SALES_INVOICE_DOCTYPE:
+		payload.update(
+			{
+				"sales_invoice": reference_name,
+				"invoice_outstanding_amount": outstanding,
+			}
+		)
+	else:
+		payload.update(
+			{
+				"sales_order": reference_name,
+				"order_payment_available": outstanding,
+			}
+		)
+	return payload, blockers
 
 def _workflow_submit_blocker(workflow_readiness: dict[str, Any]) -> str:
 	if str(workflow_readiness.get("source") or "") != "frappe":
@@ -251,8 +286,12 @@ def _build_preview(
 		"allocated_amount": allocated_amount,
 		"unallocated_amount": max(received_amount - allocated_amount, 0),
 		"sales_invoice": reference.get("sales_invoice") if reference else "",
+		"sales_order": reference.get("sales_order") if reference else "",
+		"reference_doctype": reference.get("reference_doctype") if reference else "",
+		"reference_name": reference.get("reference_name") if reference else "",
 		"invoice_outstanding_amount": reference.get("invoice_outstanding_amount") if reference else None,
-		"payment_kind": "Invoice Receipt" if reference else "Customer Advance",
+		"reference_outstanding_amount": reference.get("reference_outstanding_amount") if reference else None,
+		"payment_kind": ("Invoice Receipt" if reference.get("sales_invoice") else "Sales Order Advance") if reference else "Customer Advance",
 		"docstatus": cint(getattr(doc, "docstatus", 0)),
 		"status": "Draft" if cint(getattr(doc, "docstatus", 0)) == 0 else str(getattr(doc, "status", "") or "Submitted"),
 		"blockers": blockers,
@@ -446,6 +485,7 @@ def submit_standard_customer_payment(
 	doc.reload()
 
 	invoice_name = reference.get("sales_invoice") if reference else ""
+	order_name = reference.get("sales_order") if reference else ""
 	invoice_outstanding = (
 		flt(frappe.db.get_value(SALES_INVOICE_DOCTYPE, invoice_name, "outstanding_amount"))
 		if invoice_name
@@ -459,6 +499,9 @@ def submit_standard_customer_payment(
 		"branch": payment_branch,
 		"customer": str(getattr(doc, "party", "") or ""),
 		"sales_invoice": invoice_name,
+		"sales_order": order_name,
+		"reference_doctype": reference.get("reference_doctype") if reference else "",
+		"reference_name": reference.get("reference_name") if reference else "",
 		"received_amount": flt(getattr(doc, "received_amount", 0)),
 		"unallocated_amount": flt(getattr(doc, "unallocated_amount", 0)),
 		"invoice_outstanding_amount": invoice_outstanding,

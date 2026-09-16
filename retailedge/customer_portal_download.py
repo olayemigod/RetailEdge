@@ -34,10 +34,10 @@ def _portal_print_format(doctype: str) -> str:
 	row = frappe.db.get_value(
 		"Print Format",
 		preferred,
-		["doc_type", "disabled", "module", "html"],
+		["doc_type", "disabled", "html"],
 		as_dict=True,
 	) or {}
-	owned = str(row.get("module") or "") == "RetailEdge" or MANAGED_MARKER in str(row.get("html") or "")
+	owned = MANAGED_MARKER in str(row.get("html") or "")
 	if str(row.get("doc_type") or "") != doctype or cint(row.get("disabled")) or not owned:
 		return "Standard"
 	return preferred

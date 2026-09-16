@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
 		<strong>Salesperson Performance could not start.</strong>
-		<div>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</div>
+		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -18,7 +18,7 @@
 		<EdgeDashboardShell
 			title="Salesperson Performance"
 			eyebrow="Sales Intelligence"
-			subtitle="Review submitted invoice performance using the same ERPNext Sales Team allocation contract as RetailEdge profitability intelligence."
+			subtitle="Review submitted invoice performance using the same ERPNext Sales Team allocation contract as profitability intelligence."
 			:summary="summary"
 			:loading="loading || metadataLoading"
 			:error="error"
@@ -63,7 +63,7 @@
 						</div>
 					</div>
 				</EdgeDashboardSection>
-				<EdgeDashboardSection title="Allocation Policy" description="How RetailEdge interprets ERPNext Sales Team records.">
+				<EdgeDashboardSection title="Allocation Policy" description="How ERPNext Sales Team records are interpreted for this dashboard.">
 					<div class="salesperson-policy">
 						<strong>One shared R8/R11 allocation contract</strong>
 						<span>Positive allocation percentages are respected exactly.</span>

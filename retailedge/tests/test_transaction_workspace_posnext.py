@@ -89,7 +89,7 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 			'if (this.pos?.provider === "posnext" && typeof navigator !== "undefined" && navigator.onLine === false)',
 			"this.launchPosTarget(this.pos)",
 			"window.location.assign(launch.start_url)",
-			"RetailEdge does not make its preflight a hard dependency",
+			"When online, the current operating context is validated before launch",
 			"POSNext keeps control of its own offline runtime and sync behaviour",
 		):
 			self.assertIn(contract, component)
@@ -133,6 +133,26 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 		self.assertIn("window.open(`/app/${doctypeSlug(doctype)}/new`", component)
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.client.save", component)
+
+
+	def test_pos_launch_errors_are_user_safe_and_missing_context_is_gated_in_edgesuite(self):
+		component = self.read("public/js/transaction_workspace/TransactionWorkspace.vue")
+		for contract in (
+			'product="retailedge"',
+			"hasOperatingContext()",
+			"return this.hasOperatingContext && Boolean(this.pos?.start_target || this.pos?.start_url);",
+			'this.posLaunchError = "Select an Operating Company and Branch before starting POS.";',
+			"parseErrorPayload(value)",
+			'response?._server_messages',
+			'response?.exception',
+			'response?.exc',
+			"Traceback \\(most recent call last\\)",
+			'v-else-if="!hasOperatingContext"',
+		):
+			self.assertIn(contract, component)
+
+		self.assertNotIn('product="RetailEdge"', component)
+		self.assertNotIn("return error?.message || error?.exc || error?._server_messages || fallback;", component)
 
 
 if __name__ == "__main__":

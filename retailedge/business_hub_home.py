@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -19,7 +20,14 @@ MAX_HOME_ATTENTION_ITEMS = 12
 
 
 @frappe.whitelist()
-def get_business_hub_home_snapshot(company: str = "", branch: str = "", date_preset: str = "Today") -> dict[str, Any]:
+def get_business_hub_home_snapshot(
+	company: str = "",
+	branch: str = "",
+	date_preset: str = "Today",
+	from_date: str = "",
+	to_date: str = "",
+	date_label: str = "",
+) -> dict[str, Any]:
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
 	branch = str(
 		branch
@@ -30,7 +38,7 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "", date_pre
 	if not company:
 		frappe.throw(_("Company is required."))
 
-	period = _resolve_period(date_preset)
+	period = _resolve_period(date_preset, from_date=from_date, to_date=to_date, date_label=date_label)
 	scope = get_operational_branch_scope(company, user=frappe.session.user)
 	allowed = [str(value or "").strip() for value in scope.get("allowed_branches") or [] if str(value or "").strip()]
 	if branch:
@@ -115,30 +123,145 @@ def get_business_hub_home_snapshot(company: str = "", branch: str = "", date_pre
 
 
 
-def _resolve_period(date_preset: str) -> dict[str, str]:
+MAX_CUSTOM_PERIOD_DAYS = 366
+
+
+def _parse_dmy_date(value: str):
+	match = re.fullmatch(r"\s*(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\s*", str(value or ""))
+	if not match:
+		return None
+	day, month, year = (int(part) for part in match.groups())
+	try:
+		return getdate(f"{year:04d}-{month:02d}-{day:02d}")
+	except Exception:
+		return None
+
+
+def _custom_range_from_text(value: str):
+	text = str(value or "").strip()
+	if not text:
+		return None
+	parts = re.split(r"\s+(?:to|–|—|-)\s+", text, maxsplit=1, flags=re.IGNORECASE)
+	if len(parts) == 2:
+		start = _parse_dmy_date(parts[0])
+		end = _parse_dmy_date(parts[1])
+		if start and end:
+			return start, end
+	single = _parse_dmy_date(text)
+	return (single, single) if single else None
+
+
+def _assert_bounded_period(resolved_from, resolved_to) -> None:
+	if resolved_from > resolved_to:
+		frappe.throw(_("From Date cannot be after To Date."))
+	if (resolved_to - resolved_from).days + 1 > MAX_CUSTOM_PERIOD_DAYS:
+		frappe.throw(_("Business Hub periods cannot exceed {0} days.").format(MAX_CUSTOM_PERIOD_DAYS))
+
+
+def _resolve_period(
+	date_preset: str,
+	*,
+	from_date: str = "",
+	to_date: str = "",
+	date_label: str = "",
+) -> dict[str, str]:
 	preset = str(date_preset or "Today").strip() or "Today"
+	custom_from = str(from_date or "").strip()
+	custom_to = str(to_date or "").strip()
+	if custom_from or custom_to:
+		if not custom_from or not custom_to:
+			frappe.throw(_("Both From Date and To Date are required for a custom Business Hub period."))
+		resolved_from = getdate(custom_from)
+		resolved_to = getdate(custom_to)
+		_assert_bounded_period(resolved_from, resolved_to)
+		label = str(date_label or "").strip() or _("Custom Period")
+		return {
+			"preset": "Custom Period",
+			"label": label,
+			"from_date": str(resolved_from),
+			"to_date": str(resolved_to),
+		}
+
+	normalized = re.sub(r"\s+", " ", preset.strip()).lower()
+	aliases = {
+		"today": "Today",
+		"tdy": "Today",
+		"yesterday": "Yesterday",
+		"yday": "Yesterday",
+		"this week": "This Week",
+		"week to date": "This Week",
+		"wtd": "This Week",
+		"this month": "This Month",
+		"month to date": "This Month",
+		"mtd": "This Month",
+		"last 7 days": "Last 7 Days",
+		"last week": "Last 7 Days",
+		"last 30 days": "Last 30 Days",
+		"this year": "Year to Date",
+		"year to date": "Year to Date",
+		"ytd": "Year to Date",
+		"last month": "Last Month",
+	}
+	canonical = aliases.get(normalized)
+
+	custom_range = _custom_range_from_text(preset)
+	if custom_range:
+		resolved_from, resolved_to = custom_range
+		_assert_bounded_period(resolved_from, resolved_to)
+		return {
+			"preset": "Custom Period",
+			"label": preset,
+			"from_date": str(resolved_from),
+			"to_date": str(resolved_to),
+		}
+
+	last_days = re.fullmatch(r"(?:last|past)\s+(\d{1,3})\s+days?", normalized)
+	if last_days:
+		days = int(last_days.group(1))
+		if days < 1 or days > MAX_CUSTOM_PERIOD_DAYS:
+			frappe.throw(_("Business Hub periods cannot exceed {0} days.").format(MAX_CUSTOM_PERIOD_DAYS))
+		resolved_to = getdate(nowdate())
+		resolved_from = getdate(add_days(resolved_to, -(days - 1)))
+		return {
+			"preset": f"Last {days} Days",
+			"label": f"Last {days} Days",
+			"from_date": str(resolved_from),
+			"to_date": str(resolved_to),
+		}
+
+	if not canonical:
+		frappe.throw(_("Unsupported Business Hub period."))
+
 	today = getdate(nowdate())
-	if preset == "Today":
-		from_date = today
-	elif preset == "Yesterday":
-		from_date = getdate(add_days(today, -1))
-		today = from_date
-	elif preset == "This Week":
-		from_date = getdate(add_days(today, -today.weekday()))
-	elif preset == "This Month":
-		from_date = getdate(get_first_day(today))
-	elif preset == "Last 7 Days":
-		from_date = getdate(add_days(today, -6))
-	elif preset == "Last 30 Days":
-		from_date = getdate(add_days(today, -29))
+	resolved_to = today
+	if canonical == "Today":
+		resolved_from = today
+	elif canonical == "Yesterday":
+		resolved_from = getdate(add_days(today, -1))
+		resolved_to = resolved_from
+	elif canonical == "This Week":
+		resolved_from = getdate(add_days(today, -today.weekday()))
+	elif canonical == "This Month":
+		resolved_from = getdate(get_first_day(today))
+	elif canonical == "Last 7 Days":
+		resolved_from = getdate(add_days(today, -6))
+	elif canonical == "Last 30 Days":
+		resolved_from = getdate(add_days(today, -29))
+	elif canonical == "Year to Date":
+		resolved_from = getdate(f"{today.year}-01-01")
+	elif canonical == "Last Month":
+		this_month = getdate(get_first_day(today))
+		resolved_to = getdate(add_days(this_month, -1))
+		resolved_from = getdate(get_first_day(resolved_to))
 	else:
 		frappe.throw(_("Unsupported Business Hub period."))
 
+	_assert_bounded_period(resolved_from, resolved_to)
 	return {
-		"preset": preset,
-		"label": preset,
-		"from_date": str(from_date),
-		"to_date": str(today),
+		"preset": canonical,
+		"label": canonical,
+		"from_date": str(resolved_from),
+		"to_date": str(resolved_to),
 	}
 
 def _unavailable_scope_snapshot(

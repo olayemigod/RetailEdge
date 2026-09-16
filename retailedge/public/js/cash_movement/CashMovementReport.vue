@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="cash-movement-fallback">
 		<strong>Cash Movement could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -202,7 +202,7 @@ export default {
 		exportDataset() {
 			return {
 				title: "Cash Movement",
-				filename: `RetailEdge Cash Movement ${this.filters.company || ""}`.trim(),
+				filename: `ProcessEdge Retail Cash Movement ${this.filters.company || ""}`.trim(),
 				columns: this.exportColumns(this.columns),
 				rows: this.rows,
 				filters: this.exportFilters,
@@ -344,7 +344,7 @@ export default {
 		async fetchData() {
 			if (!this.filters.company) return;
 			if (!this.reportProvider?.load) {
-				this.error = "The shared EdgeSuite Cash Movement provider is unavailable.";
+				this.error = "The Cash Movement reporting service is unavailable.";
 				return;
 			}
 			this.loading = true;

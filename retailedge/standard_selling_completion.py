@@ -4,9 +4,11 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, get_datetime
+from frappe.utils import cint, flt, get_datetime, getdate
 
 from retailedge.operating_context import get_operating_context
+from retailedge.professional_draft_items import editable_items, update_draft_items
+from retailedge.professional_quotation import _validate_shipping_rule
 from retailedge.professional_selling import _validate_stored_operational_branch
 from retailedge.workflow_actions import apply_document_workflow_action
 from retailedge.workflow_readiness import get_workflow_readiness
@@ -187,6 +189,15 @@ def _build_preview(doc) -> dict[str, Any]:
 		"grand_total": flt(doc.get("grand_total")),
 		"item_count": len(list(doc.get("items") or [])),
 		"items": _item_summary(doc),
+		"editable_items": editable_items(doc),
+		"transaction_date": _clean(doc.get("transaction_date")),
+		"valid_till": _clean(doc.get("valid_till")),
+		"delivery_date": _clean(doc.get("delivery_date")),
+		"po_no": _clean(doc.get("po_no")),
+		"terms": _clean(doc.get("terms")),
+		"remarks": _clean(doc.get("remarks")),
+		"shipping_rule": _clean(doc.get("shipping_rule")),
+		"can_edit": bool(cint(doc.docstatus) == 0 and frappe.has_permission(doc.doctype, "write", doc=doc)),
 		"blockers": blockers,
 		"can_submit": bool(not blockers and not workflow_controlled and cint(doc.docstatus) == 0),
 		"workflow_readiness": workflow_readiness,
@@ -224,6 +235,80 @@ def get_standard_selling_completion_preview(doctype: str, name: str) -> dict[str
 	"""Return a persistence-free standard completion review for one Quote or Sales Order."""
 	doc = _get_supported_document(doctype, name)
 	return _build_preview(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def update_standard_selling_draft(
+	doctype: str,
+	name: str,
+	values: dict | str | None = None,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Edit one Quotation/Sales Order draft without mutating submitted documents."""
+	doctype = _clean(doctype)
+	name = _clean(name)
+	_lock_supported_document(doctype, name)
+	doc = _get_supported_document(doctype, name)
+	_assert_expected_modified(doc, expected_modified)
+	company, branch = _validate_standard_context(doc)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only draft documents can be edited here."))
+	if not frappe.has_permission(doctype, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit this {0}.").format(doctype), frappe.PermissionError)
+
+	if isinstance(values, str):
+		values = frappe.parse_json(values)
+	values = values or {}
+	if not isinstance(values, dict):
+		frappe.throw(_("Invalid draft changes."))
+
+	transaction_date = getdate(values.get("transaction_date") or doc.get("transaction_date"))
+	doc.transaction_date = transaction_date
+	if doc.doctype == "Quotation":
+		valid_till = values.get("valid_till")
+		if valid_till:
+			valid_till = getdate(valid_till)
+			if valid_till < transaction_date:
+				frappe.throw(_("Valid Till cannot be before the Quotation Date."))
+			doc.valid_till = valid_till
+	elif doc.doctype == "Sales Order":
+		delivery_date = getdate(values.get("delivery_date") or doc.get("delivery_date") or transaction_date)
+		if delivery_date < transaction_date:
+			frappe.throw(_("Delivery Date cannot be before the Order Date."))
+		doc.delivery_date = delivery_date
+		if doc.meta.has_field("po_no"):
+			doc.po_no = _clean(values.get("po_no"))
+
+	if doc.meta.has_field("terms"):
+		doc.terms = _clean(values.get("terms"))
+	if doc.meta.has_field("remarks"):
+		doc.remarks = _clean(values.get("remarks"))
+
+	if doc.meta.has_field("shipping_rule"):
+		shipping_rule = _clean(values.get("shipping_rule"))
+		if shipping_rule:
+			shipping_rule = _validate_shipping_rule(shipping_rule, company=company)
+		doc.shipping_rule = shipping_rule or None
+
+	update_draft_items(
+		doc,
+		values.get("items") or editable_items(doc),
+		company=company,
+		branch=branch,
+		customer=_party_value(doc),
+		posting_date=str(transaction_date),
+		default_warehouse=_clean(doc.get("set_warehouse")),
+		default_delivery_date=_clean(doc.get("delivery_date")),
+	)
+
+	doc.save()
+	if doc.get("shipping_rule"):
+		doc.apply_shipping_rule()
+		doc.save()
+	doc.reload()
+	result = _build_preview(doc)
+	result["persistence"] = "draft_update"
+	return result
 
 
 @frappe.whitelist(methods=["POST"])

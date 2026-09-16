@@ -3,8 +3,8 @@
 		product="retailedge"
 		:menuItems="shellMenuItems"
 		activeRoute="/app/retailedge-business-hub"
-		title="RetailEdge"
-		subtitle="Retail operations & control"
+		title="ProcessEdge Retail"
+		subtitle="Structured for Scale."
 		:tenantName="context.company_label || context.company"
 		:branchName="context.branch"
 		:userName="context.user_name"
@@ -58,18 +58,20 @@
 				<section class="home-command-centre hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Understand</p>
+							
 							<h3>Business performance</h3>
 							<p class="section-rider">Key business indicators for the selected period.</p>
 						</div>
 						<div class="home-period-controls">
-							<EdgeDropdown
-								v-model="homePeriodPreset"
-								:options="homePeriodOptions"
+							<EdgeSmartDateRange
+								v-model="homeSmartDate"
+								class="edge-smart-date--align-end"
 								label="Period"
-								@update:modelValue="handleHomePeriodChange"
+								placeholder="e.g. last 30 days, YTD, this month"
+								dateOrder="DMY"
+								@resolved="handleHomeDateResolved"
 							/>
-							<span v-if="homePeriod.from_date" class="home-as-of">{{ homePeriod.from_date }} – {{ homePeriod.to_date }}</span>
+							<span v-if="homePeriod.from_date" class="home-as-of">{{ formatDisplayDate(homePeriod.from_date) }} – {{ formatDisplayDate(homePeriod.to_date) }}</span>
 						</div>
 					</div>
 					<EdgeLoadingState v-if="homeLoading" message="Loading business performance..." :skeleton="true" />
@@ -87,7 +89,7 @@
 									<span>{{ card.label }}</span>
 									<span class="home-kpi-card-icon"><EdgeIcon :name="kpiIcon(card.label)" size="sm" /></span>
 								</span>
-								<strong>{{ formatHomeValue(card) }}</strong>
+								<strong :title="formatHomeValue(card, { compact: false })">{{ formatHomeValue(card) }}</strong>
 								<small>{{ card.time_basis === "current" ? "Current position" : (homePeriod.label || "Selected period") }}</small>
 							</button>
 						</div>
@@ -103,7 +105,7 @@
 				<section v-if="homeQuickActions.length" class="home-quick-actions-section hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Act</p>
+							
 							<h3>Quick actions</h3>
 							<p class="section-rider">Start the next permitted business task.</p>
 						</div>
@@ -128,7 +130,7 @@
 				<section class="hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Operate</p>
+							
 							<h3>Business indices</h3>
 							<p class="section-rider">Sales, cash, stock, expenses, receivables, payables, branch and banking signals with the next useful action.</p>
 						</div>
@@ -146,11 +148,11 @@
 							<template v-if="index.available">
 								<div class="home-index-headline">
 									<span>{{ index.headline?.label || "Position" }}</span>
-									<strong>{{ formatHomeValue(index.headline) }}</strong>
+									<strong :title="formatHomeValue(index.headline, { compact: false })">{{ formatHomeValue(index.headline) }}</strong>
 								</div>
 								<div v-if="index.signal?.label" class="home-index-signal">
 									<span>{{ index.signal.label }}</span>
-									<strong>{{ formatHomeValue(index.signal) }}</strong>
+									<strong :title="formatHomeValue(index.signal, { compact: false })">{{ formatHomeValue(index.signal) }}</strong>
 								</div>
 								<p>{{ index.signal?.message || index.recommendation }}</p>
 								<button type="button" class="home-index-action" @click="openHomeItem(index)">{{ index.action_label || "Open" }}</button>
@@ -169,7 +171,7 @@
 				<section class="hub-experience-section">
 					<div class="section-heading">
 						<div>
-							<p class="section-kicker">Respond</p>
+							
 							<h3>Needs attention</h3>
 							<p class="section-rider">Exceptions and follow-ups that may require action.</p>
 						</div>
@@ -182,7 +184,7 @@
 								<small v-if="item.recommendation">{{ item.recommendation }}</small>
 							</span>
 							<span class="home-attention-value">
-								<strong>{{ formatHomeValue(item) }}</strong>
+								<strong :title="formatHomeValue(item, { compact: false })">{{ formatHomeValue(item) }}</strong>
 								<small>{{ item.action_label || "Open" }}</small>
 							</span>
 						</button>
@@ -209,7 +211,7 @@
 							<span class="create-product-menu-mark edge-product-menu__brand-mark"><EdgeIcon name="clipboard" size="sm" /></span>
 							<span>
 								<strong>Create</strong>
-								<small>RetailEdge business actions</small>
+								<small>Retail business actions</small>
 							</span>
 						</div>
 					</header>
@@ -376,7 +378,7 @@ import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import StandardStockCompletionDialog from "./StandardStockCompletionDialog.vue";
 import { openQuickEntryMaster } from "./guidedEntryUtils";
 
-const CONTEXT_METHOD = "retailedge.edgesuite_ui.get_retailedge_business_hub_context";
+const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home_snapshot";
 const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
 const CONTEXT_CACHE_TTL_MS = 30_000;
@@ -440,11 +442,20 @@ function fetchSharedContext({ force = false } = {}) {
 	return request;
 }
 
-function fetchHomeSnapshot(company, branch, datePreset) {
+function fetchHomeSnapshot(company, branch, datePreset, resolvedRange = {}) {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method: HOME_SNAPSHOT_METHOD,
-			args: { company: company || "", branch: branch || "", date_preset: datePreset || "Today" },
+			args: {
+				company: company || "",
+				branch: branch || "",
+				date_preset: datePreset || "Today",
+				from_date: resolvedRange?.from_date || "",
+				to_date: resolvedRange?.to_date || "",
+				date_label: resolvedRange?.expression && resolvedRange.expression !== "custom"
+					? resolvedRange.expression
+					: (resolvedRange?.label || resolvedRange?.display_value || ""),
+			},
 			callback: (response) => resolve(response.message || {}),
 			error: (error) => reject(error),
 		});
@@ -498,7 +509,7 @@ export default {
 		EdgeStatusBadge: runtimeComponents.EdgeStatusBadge,
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeIcon: runtimeComponents.EdgeIcon,
-		EdgeDropdown: runtimeComponents.EdgeDropdown,
+		EdgeSmartDateRange: runtimeComponents.EdgeSmartDateRange,
 		SimpleCashDepositDialog,
 		StandardInternalTransferCompletionDialog,
 		SimpleCashTransferDialog,
@@ -521,6 +532,7 @@ export default {
 			homeError: "",
 			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
+			homeSmartDate: {},
 			homePeriod: { preset: "Today", label: "Today", from_date: "", to_date: "" },
 			createPickerOpen: false,
 			simpleSalesInvoiceOpen: false,
@@ -550,12 +562,6 @@ export default {
 		};
 	},
 	computed: {
-		homePeriodOptions() {
-			return ["Today", "Yesterday", "This Week", "This Month", "Last 7 Days", "Last 30 Days"].map((value) => ({
-				value,
-				label: value,
-			}));
-		},
 		greeting() {
 			return this.context.user_name
 				? `Welcome, ${this.context.user_name}`
@@ -640,6 +646,14 @@ export default {
 			this.navigationGroups = data.navigation_groups || [];
 			this.quickActions = data.quick_actions || [];
 			this.context = { ...this.context, ...(data.context || {}) };
+			if (typeof window.retailedgeSyncShellIdentity === "function") {
+				window.retailedgeSyncShellIdentity({
+					active_company: this.context.company || "",
+					active_branch: this.context.branch || "",
+					branch_options: Array.isArray(this.context.branch_options) ? this.context.branch_options : [],
+					can_switch_branch: Boolean(this.context.can_switch_branch),
+				});
+			}
 			this.featureFlags = data.feature_flags || {};
 			this.accessContext = { ...this.accessContext, ...(data.access || {}) };
 			if (!this.quickActions.length) this.createPickerOpen = false;
@@ -659,17 +673,26 @@ export default {
 					this.loading = false;
 				});
 		},
-		refreshHomeSnapshot() {
+		refreshHomeSnapshot(resolvedRange = null) {
 			if (!this.context.company) {
 				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
 			this.homeError = "";
-			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset)
+			const range = resolvedRange || this.homeSmartDate || {};
+			return fetchHomeSnapshot(this.context.company, this.context.branch, this.homePeriodPreset, range)
 				.then((snapshot) => {
 					this.homePeriod = { ...this.homePeriod, ...(snapshot.period || {}) };
 					this.homePeriodPreset = this.homePeriod.preset || this.homePeriodPreset;
+					this.homeSmartDate = {
+						...this.homeSmartDate,
+						expression: this.homeSmartDate.expression
+							|| (this.homePeriod.preset === "Custom Period" ? "custom" : this.homePeriod.preset || "Today"),
+						from_date: this.homePeriod.from_date || "",
+						to_date: this.homePeriod.to_date || "",
+						label: this.homePeriod.label || "",
+					};
 					this.homeSnapshot = {
 						as_of_date: snapshot.as_of_date || "",
 						period: snapshot.period || {},
@@ -688,23 +711,80 @@ export default {
 					this.homeLoading = false;
 				});
 		},
+		handleHomeDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.homeSmartDate = { ...(value || {}) };
+			this.homePeriodPreset = "Custom Period";
+			return this.refreshHomeSnapshot(value);
+		},
 		handleHomePeriodChange(value) {
+			// Compatibility hook for older cached bundles.
 			this.homePeriodPreset = value || "Today";
+			this.homeSmartDate = {};
 			return this.refreshHomeSnapshot();
+		},
+		formatDisplayDate(value) {
+			const text = String(value || "").trim();
+			const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+			if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+			return frappe.datetime?.str_to_user?.(text) || text;
 		},
 		homeSection(key) {
 			return this.homeSnapshot.sections?.[key] || { available: false, label: key, summary: [], route: "", reason: "" };
 		},
-		formatHomeValue(card) {
+		compactNumber(value, { maximumFractionDigits = 2 } = {}) {
+			const number = Number(value || 0);
+			if (!Number.isFinite(number)) return String(value ?? "");
+			const absolute = Math.abs(number);
+			if (absolute < 100000) return number.toLocaleString(undefined, { maximumFractionDigits });
+			try {
+				return new Intl.NumberFormat(undefined, {
+					notation: "compact",
+					compactDisplay: "short",
+					maximumFractionDigits,
+				}).format(number);
+			} catch (_error) {
+				const units = [
+					{ value: 1e12, suffix: "T" },
+					{ value: 1e9, suffix: "B" },
+					{ value: 1e6, suffix: "M" },
+					{ value: 1e3, suffix: "K" },
+				];
+				const unit = units.find((row) => absolute >= row.value);
+				if (!unit) return number.toLocaleString(undefined, { maximumFractionDigits });
+				const scaled = (number / unit.value).toFixed(maximumFractionDigits).replace(/\.0+$|(?<=\.[0-9])0+$/g, "");
+				return `${scaled}${unit.suffix}`;
+			}
+		},
+		currencyMark() {
+			const formatter = window.retailedge?.formatPlainValue;
+			if (!formatter) return "";
+			try {
+				return String(formatter(0, { fieldtype: "Currency" }) || "")
+					.replace(/[0-9.,\s()+-]/g, "")
+					.trim();
+			} catch (_error) {
+				return "";
+			}
+		},
+		formatHomeValue(card, { compact = true } = {}) {
 			const value = card?.value ?? 0;
 			const datatype = card?.datatype || card?.type || "Data";
 			if (datatype === "Currency") {
+				const number = Number(value || 0);
 				const formatter = window.retailedge?.formatPlainValue;
-				if (formatter) return formatter(value, { fieldtype: "Currency" });
-				return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+				if (!compact || Math.abs(number) < 100000) {
+					if (formatter) return formatter(value, { fieldtype: "Currency" });
+					return number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+				}
+				const mark = this.currencyMark();
+				const amount = this.compactNumber(number, { maximumFractionDigits: 2 });
+				return mark ? `${mark} ${amount}` : amount;
 			}
 			if (datatype === "Percent") return `${Number(value || 0).toLocaleString()}%`;
-			if (datatype === "Int" || datatype === "Float") return Number(value || 0).toLocaleString();
+			if (datatype === "Int" || datatype === "Float") {
+				return compact ? this.compactNumber(value) : Number(value || 0).toLocaleString();
+			}
 			return window.retailedge?.toPlainText?.(value) ?? String(value ?? "");
 		},
 		displayIcon(icon) {
@@ -846,7 +926,7 @@ export default {
 				return;
 			}
 			if (!this.nativeFallbackEnabled) {
-				frappe.show_alert?.({ message: "This account is limited to EdgeSuite operational pages.", indicator: "orange" });
+				frappe.show_alert?.({ message: "This account is limited to guided operational pages.", indicator: "orange" });
 				return;
 			}
 			frappe.new_doc(action.doctype);
@@ -1112,7 +1192,7 @@ export default {
 			return "";
 		},
 		actionModeLabel(action) {
-			if (action?.mode === "page") return "EdgeSuite";
+			if (action?.mode === "page") return "Guided";
 			return action?.mode === "available" ? "Guided entry" : "Full form";
 		},
 		iconText(icon) {
@@ -1177,13 +1257,29 @@ export default {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
+	min-width: 0;
 	width: 100%;
 }
-.home-kpi-card-icon,
-.home-signal-icon {
+.home-kpi-card-heading > span:first-child {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: .74rem;
+	font-weight: 620;
+}
+.home-kpi-card-icon {
 	width: 30px;
 	height: 30px;
 	flex: 0 0 auto;
+}
+.home-signal-icon {
+	width: 24px;
+	height: 24px;
+	flex: 0 0 auto;
+	border-radius: 6px;
+}
+.home-signal-icon :deep(svg) {
+	width: 14px;
+	height: 14px;
 }
 .home-signal-heading h4 {
 	display: inline-flex;
@@ -1203,9 +1299,9 @@ export default {
 	justify-content: space-between;
 	gap: 24px;
 	padding: 24px;
-	border: 1px solid var(--edge-border, #dfe3e8);
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 14px;
-	background: var(--edge-surface, #ffffff);
+	background: var(--edge-color-surface, #ffffff);
 }
 .hub-banner h2 {
 	margin: 4px 0 8px;
@@ -1213,7 +1309,7 @@ export default {
 }
 .hub-banner p {
 	margin: 0;
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 	max-width: 760px;
 }
 .hub-eyebrow,
@@ -1222,7 +1318,7 @@ export default {
 	letter-spacing: 0.08em;
 	font-size: 0.72rem;
 	font-weight: 700;
-	color: var(--edge-primary, #2563eb);
+	color: var(--edge-color-brand-600, #2563eb);
 }
 .hub-banner-side,
 .hub-context {
@@ -1238,7 +1334,7 @@ export default {
 .hub-context {
 	gap: 6px;
 	font-size: 0.82rem;
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 }
 .hub-create-button {
 	min-width: 120px;
@@ -1256,39 +1352,50 @@ export default {
 }
 .home-as-of {
 	font-size: 0.78rem;
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 }
 .home-kpi-grid {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
 	gap: 12px;
 	margin-bottom: 14px;
 }
 .home-kpi-card,
 .home-signal-card {
-	border: 1px solid var(--edge-border, #dfe3e8);
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 12px;
-	background: var(--edge-surface, #ffffff);
+	background: var(--edge-color-surface, #ffffff);
 }
 .home-kpi-card {
 	display: grid;
-	gap: 6px;
-	padding: 16px;
+	gap: 5px;
+	min-width: 0;
+	padding: 13px 14px;
 	text-align: left;
 	cursor: pointer;
 }
 .home-kpi-card:hover,
 .home-kpi-card:focus-visible {
-	border-color: var(--edge-primary, #2563eb);
+	border-color: var(--edge-color-brand-600, #2563eb);
 }
 .home-kpi-card span,
 .home-kpi-card small,
 .home-signal-list span,
 .home-unavailable {
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 }
 .home-kpi-card strong {
-	font-size: 1.2rem;
+	display: block;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: clamp(1rem, 1.25vw, 1.32rem);
+	font-variant-numeric: tabular-nums;
+	font-weight: 680;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+	white-space: nowrap;
 }
 .home-kpi-card small {
 	font-size: 0.72rem;
@@ -1311,15 +1418,54 @@ export default {
 	gap: 10px;
 	min-width: 0;
 	padding: 16px;
-	border: 1px solid var(--edge-border, #dfe3e8);
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 12px;
-	background: var(--edge-surface, #ffffff);
+	background: var(--edge-color-surface, #ffffff);
+}
+.home-index-headline > span,
+.home-index-signal > span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: .82rem;
+}
+.home-index-headline > strong,
+.home-index-signal > strong {
+	flex: 0 0 auto;
+	max-width: 48%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	font-size: .86rem;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+.home-intelligence-card p,
+.home-index-action,
+.home-attention-copy,
+.home-attention-value {
+	font-size: .82rem;
+}
+.home-intelligence-heading h4 {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.home-attention-copy,
+.home-attention-value {
+	min-width: 0;
+}
+.home-attention-value strong {
+	display: block;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .home-intelligence-card.tone-danger {
-	border-color: color-mix(in srgb, var(--edge-danger, #d92d20) 55%, var(--edge-border, #dfe3e8));
+	border-color: color-mix(in srgb, var(--edge-color-danger, #d92d20) 55%, var(--edge-color-border, #dfe3e8));
 }
 .home-intelligence-card.tone-warning {
-	border-color: color-mix(in srgb, var(--edge-warning, #f79009) 55%, var(--edge-border, #dfe3e8));
+	border-color: color-mix(in srgb, var(--edge-color-warning, #f79009) 55%, var(--edge-color-border, #dfe3e8));
 }
 .home-intelligence-card.is-unavailable {
 	opacity: .72;
@@ -1328,6 +1474,7 @@ export default {
 .home-index-headline,
 .home-index-signal {
 	display: flex;
+	min-width: 0;
 	align-items: center;
 	justify-content: space-between;
 	gap: 10px;
@@ -1335,36 +1482,50 @@ export default {
 .home-intelligence-heading h4 {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
+	gap: 7px;
 	margin: 0;
+	font-size: 0.96rem;
+	line-height: 1.25;
+	font-weight: 700;
+	color: var(--edge-color-ink-950, #101828);
 }
 .home-index-status {
 	display: inline-flex;
 	align-items: center;
-	min-height: 24px;
-	padding: 0 8px;
+	min-height: 22px;
+	padding: 0 7px;
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 999px;
-	background: var(--edge-surface-muted, #f8fafc);
-	font-size: .7rem;
+	background: var(--edge-color-surface-muted, #f8fafc);
+	color: var(--edge-color-ink-700, #344054);
+	font-size: .66rem;
 	font-weight: 700;
 	white-space: nowrap;
 }
 .home-index-status.tone-danger {
-	color: var(--edge-danger, #d92d20);
+	color: var(--edge-color-danger, #d92d20);
 }
 .home-index-status.tone-warning {
-	color: var(--edge-warning, #b54708);
+	color: var(--edge-color-warning, #b54708);
 }
 .home-index-headline,
 .home-index-signal {
 	padding: 9px 10px;
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 9px;
-	background: var(--edge-surface-muted, #f8fafc);
+	background: var(--edge-color-surface-muted, #f8fafc);
+	color: var(--edge-color-ink-950, #101828);
 }
 .home-index-headline span,
 .home-index-signal span,
 .home-intelligence-card p {
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
+}
+.home-index-headline strong,
+.home-index-signal strong {
+	color: var(--edge-color-ink-950, #101828);
+	font-size: .86rem;
+	font-variant-numeric: tabular-nums;
 }
 .home-intelligence-card p {
 	margin: 0;
@@ -1376,7 +1537,7 @@ export default {
 	padding: 0;
 	border: 0;
 	background: transparent;
-	color: var(--edge-primary, #2563eb);
+	color: var(--edge-color-brand-600, #2563eb);
 	font-weight: 700;
 	cursor: pointer;
 }
@@ -1397,7 +1558,7 @@ export default {
 .home-link {
 	border: 0;
 	background: transparent;
-	color: var(--edge-primary, #2563eb);
+	color: var(--edge-color-brand-600, #2563eb);
 	font-weight: 600;
 	cursor: pointer;
 }
@@ -1411,7 +1572,7 @@ export default {
 	gap: 3px;
 	padding: 10px;
 	border-radius: 9px;
-	background: var(--edge-surface-muted, #f8fafc);
+	background: var(--edge-color-surface-muted, #f8fafc);
 }
 .home-unavailable {
 	margin: 0;
@@ -1427,17 +1588,17 @@ export default {
 	gap: 12px;
 	width: 100%;
 	padding: 9px 10px;
-	border: 1px solid var(--edge-border, #dfe3e8);
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 9px;
-	background: var(--edge-surface, #ffffff);
+	background: var(--edge-color-surface, #ffffff);
 	text-align: left;
 	cursor: pointer;
 }
 .home-attention-item.tone-danger {
-	border-color: var(--edge-danger, #d92d20);
+	border-color: var(--edge-color-danger, #d92d20);
 }
 .home-attention-item.tone-warning {
-	border-color: var(--edge-warning, #f79009);
+	border-color: var(--edge-color-warning, #f79009);
 }
 .home-attention-copy,
 .home-attention-value {
@@ -1446,7 +1607,7 @@ export default {
 }
 .home-attention-copy small,
 .home-attention-value small {
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 	font-size: .74rem;
 	line-height: 1.35;
 }
@@ -1465,22 +1626,22 @@ export default {
 	align-items: start;
 	gap: 10px;
 	padding: 14px;
-	border: 1px solid var(--edge-border, #dfe3e8);
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 12px;
-	background: var(--edge-surface, #ffffff);
+	background: var(--edge-color-surface, #ffffff);
 	text-align: left;
 	cursor: pointer;
 }
 .home-quick-action:hover,
 .home-quick-action:focus-visible {
-	border-color: var(--edge-primary, #2563eb);
+	border-color: var(--edge-color-brand-600, #2563eb);
 }
 .home-quick-action > span:last-child {
 	display: grid;
 	gap: 4px;
 }
 .home-quick-action small {
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 	line-height: 1.35;
 }
 .home-quick-action-icon {
@@ -1493,9 +1654,9 @@ export default {
 }
 .experience-card {
 	padding: 18px;
-	border: 1px solid var(--edge-border, #dfe3e8);
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 12px;
-	background: var(--edge-surface, #ffffff);
+	background: var(--edge-color-surface, #ffffff);
 }
 .experience-card-top {
 	display: flex;
@@ -1508,7 +1669,7 @@ export default {
 }
 .experience-card p {
 	margin: 0;
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 	font-size: 0.88rem;
 	line-height: 1.5;
 }
@@ -1528,15 +1689,15 @@ export default {
 	gap: 12px;
 	width: 100%;
 	padding: 13px 14px;
-	border: 1px solid var(--edge-border, #dfe3e8);
+	border: 1px solid var(--edge-color-border, #dfe3e8);
 	border-radius: 10px;
-	background: var(--edge-surface, #ffffff);
+	background: var(--edge-color-surface, #ffffff);
 	text-align: left;
 	cursor: pointer;
 }
 .create-picker-item:hover,
 .create-picker-item:focus-visible {
-	border-color: var(--edge-primary, #2563eb);
+	border-color: var(--edge-color-brand-600, #2563eb);
 }
 .create-picker-copy {
 	display: grid;
@@ -1545,7 +1706,7 @@ export default {
 }
 .create-picker-copy small,
 .create-picker-mode {
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 }
 .create-picker-copy small {
 	line-height: 1.35;
@@ -1554,6 +1715,59 @@ export default {
 	font-size: 0.72rem;
 	white-space: nowrap;
 }
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .hub-banner,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-kpi-card,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-intelligence-card,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-quick-action,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-attention-item,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-signal-card,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .create-picker-item,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .create-product-menu {
+	background: var(--edge-color-surface);
+	border-color: var(--edge-color-border);
+	color: var(--edge-color-ink-950);
+}
+
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-index-headline,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-index-signal,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-index-status,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-signal-list > div {
+	background: var(--edge-color-surface-muted);
+	border-color: var(--edge-color-border);
+	color: var(--edge-color-ink-950);
+}
+
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .hub-banner h2,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-intelligence-heading h4,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-index-headline strong,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-index-signal strong,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-quick-action strong {
+	color: var(--edge-color-ink-950);
+}
+
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .hub-rider,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .hub-context,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .section-rider,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-index-headline span,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-index-signal span,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-intelligence-card p,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-quick-action small {
+	color: var(--edge-color-ink-500);
+}
+
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-index-status:not(.tone-warning):not(.tone-danger) {
+	background: color-mix(in srgb, var(--edge-color-success) 14%, var(--edge-color-surface-muted));
+	border-color: color-mix(in srgb, var(--edge-color-success) 32%, var(--edge-color-border));
+	color: var(--edge-color-success);
+}
+
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-quick-action-icon,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-signal-icon,
+:global(:root[data-edge-appearance="dark"]) .retailedge-business-hub .home-kpi-card-icon {
+	background: color-mix(in srgb, var(--edge-color-brand-600) 18%, var(--edge-color-surface));
+	color: var(--edge-color-brand-500);
+}
+
 @media (max-width: 1200px) {
 	.home-kpi-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1609,7 +1823,7 @@ export default {
 }
 .section-rider {
 	margin: 4px 0 0;
-	color: var(--edge-text-muted, #667085);
+	color: var(--edge-color-ink-500, #667085);
 }
 .home-period-controls {
 	display: flex;
@@ -1617,9 +1831,23 @@ export default {
 	justify-content: flex-end;
 	gap: 10px;
 	flex-wrap: wrap;
+	position: relative;
+	z-index: 20;
+	overflow: visible;
 }
-.home-period-controls .edge-field {
-	min-width: 170px;
+.home-command-centre,
+.hub-experience-section,
+.section-heading {
+	overflow: visible;
+}
+:deep(.home-period-controls .edge-smart-date__picker) {
+	z-index: 2600;
+	max-width: calc(100vw - 1.5rem);
+}
+.home-period-controls .edge-field,
+.home-period-controls .edge-smart-date-range,
+.home-period-controls .edge-smart-date {
+	min-width: min(24rem, 100%);
 	margin: 0;
 }
 .home-attention-count {
@@ -1629,7 +1857,7 @@ export default {
 	min-width: 30px;
 	height: 30px;
 	padding: 0 9px;
-	border: 1px solid var(--edge-border, #d9e2ec);
+	border: 1px solid var(--edge-color-border, #d9e2ec);
 	border-radius: 999px;
 	font-size: .8rem;
 	font-weight: 700;

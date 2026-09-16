@@ -35,6 +35,7 @@ from retailedge.professional_selling import (
 from retailedge.quotation_invoice_conversion import (
 	complete_quotation_conversion,
 	filter_unconverted_quotation_results,
+	get_quotation_conversion,
 	reserve_quotation_conversion,
 )
 
@@ -171,6 +172,15 @@ def _validate_invoice_stock_context(target, *, company: str, source_branch: str)
 	if operating_branch and mapped_branch and operating_branch != mapped_branch:
 		frappe.throw(_("The mapped Sales Invoice Stock Location does not match the current Operating Branch."))
 	return mapped_branch
+
+
+def _lock_quotation_for_direct_invoice(name: str) -> None:
+	rows = frappe.db.sql(
+		"SELECT name FROM `tabQuotation` WHERE name = %s FOR UPDATE",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Quotation {0} no longer exists.").format(name))
 
 
 def _invoice_response(
@@ -480,6 +490,30 @@ def create_sales_invoice_from_quotation(quotation: str) -> dict[str, Any]:
 	company, branch = _validate_source_context(source, source_label="Quotation")
 	if source.get("shipping_rule"):
 		_validate_shipping_rule(source.shipping_rule, company=company)
+
+	# Serialize direct conversion by source Quotation so concurrent clicks either
+	# create one draft or observe and open that same draft.
+	_lock_quotation_for_direct_invoice(source.name)
+	existing_conversion = get_quotation_conversion(source.name)
+	existing_invoice = str((existing_conversion or {}).get("sales_invoice") or "").strip()
+	if existing_invoice and frappe.db.exists("Sales Invoice", existing_invoice):
+		_assert_read("Sales Invoice", existing_invoice)
+		existing_doc = frappe.get_doc("Sales Invoice", existing_invoice)
+		result = _invoice_response(
+			existing_doc,
+			branch=branch,
+			source_doctype="Quotation",
+			source_name=source.name,
+		)
+		result.update(
+			{
+				"existing": True,
+				"existing_status": str(existing_doc.get("status") or ""),
+				"cancelled": cint(existing_doc.docstatus) == 2,
+				"requires_amend": cint(existing_doc.docstatus) == 2,
+			}
+		)
+		return result
 
 	tracker = reserve_quotation_conversion(source, company=company, branch=branch)
 	target = frappe.new_doc("Sales Invoice")

@@ -111,9 +111,7 @@ export function callMethod(method, args = {}) {
 }
 
 export function errorMessage(error, fallback) {
-	if (error?.message) return error.message;
-	if (error?.exc_type) return error.exc_type;
-	return fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 export function resolveBranchWarehouse({ company, branch = "", warehouse = "", preference = "default" }) {

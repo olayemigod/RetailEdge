@@ -1,7 +1,7 @@
 <template>
 	<div v-if="!edgeUIValid" class="planning-fallback">
 		<strong>Forecasting & Planning could not start.</strong>
-		<span>Missing EdgeSuite UI components: {{ missingComponents.join(", ") }}</span>
+		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
@@ -133,7 +133,7 @@ export default {
 		cashCommitmentReason() { const d = this.domains?.cash; if (!d) return ""; if (d.available === false) return d.reason || "Cash planning is unavailable."; const meta = d.metadata?.known_due_schedule || {}; return meta.available === false ? (meta.reason || "Known due commitments are unavailable.") : ""; },
 		budgetSummary() { return this.domains?.budget?.available ? (this.domains.budget.summary || []) : []; },
 		budgetReason() { const d = this.domains?.budget; return d && d.available === false ? d.reason : ""; },
-		exportDataset() { return { title: "Forecasting & Planning", filename: `RetailEdge Forecasting Planning ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
+		exportDataset() { return { title: "Forecasting & Planning", filename: `ProcessEdge Retail Forecasting Planning ${this.filters.company || ""}`.trim(), columns: this.columns, rows: this.rows, filters: this.exportFilters, summary: this.summary, metadata: this.exportMetadata }; },
 		exportFilters() { return Object.entries({ company: "Company", branch: "Branch", as_of_date: "As of Date", history_months: "History Months", forecast_months: "Forecast Months", sales_adjustment_percent: "Sales Adjustment (%)", expense_adjustment_percent: "Expense Adjustment (%)", cash_adjustment_percent: "Cash Adjustment (%)", inventory_safety_percent: "Inventory Safety (%)" }).map(([key, label]) => ({ label, value: this.filters[key] })).filter((x) => x.value !== "" && x.value !== null && x.value !== undefined); },
 		exportMetadata() { return [{ label: "Accounting Truth", value: this.metadata.accounting_truth || "ERPNext GL / P&L" }, { label: "Budget Truth", value: this.metadata.budget_truth || "Submitted ERPNext Budget" }, { label: "Scenario Model", value: this.metadata.scenario_truth || "Assumptions only" }]; },
 	},
