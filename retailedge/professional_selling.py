@@ -492,6 +492,9 @@ def get_recent_selling_documents(document: str, limit: int = 8) -> list[dict[str
 	limit = max(1, min(int(limit or 8), 20))
 	meta = frappe.get_meta(doctype)
 	fields = ["name", "docstatus", "modified"]
+	branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
+	if branch_field and branch_field not in fields:
+		fields.append(branch_field)
 	for candidate in (
 		definition["party_field"],
 		definition["date_field"],
@@ -682,6 +685,7 @@ def get_professional_selling_list(
 	result_rows: list[dict[str, Any]] = []
 	for row in rows:
 		payload = dict(row)
+		payload["branch"] = str(payload.get(branch_field) or branch or "").strip() if branch_field else branch
 		payload["actions"] = _selling_record_actions(definition["key"], payload)
 		result_rows.append(payload)
 	return {
