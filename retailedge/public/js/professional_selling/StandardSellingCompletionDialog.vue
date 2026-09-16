@@ -3,7 +3,7 @@
 		:open="open"
 		:title="dialogTitle"
 		subtitle="Review the saved ERPNext draft and complete it through native submission or the active Frappe Workflow."
-		size="lg"
+		size="xl"
 		@close="requestClose"
 	>
 		<div class="selling-completion">
@@ -18,6 +18,59 @@
 					<div><span>Total</span><strong>{{ preview.currency || "" }} {{ preview.grand_total }}</strong></div>
 					<div><span>Status</span><strong>{{ preview.status || "Draft" }}</strong></div>
 				</div>
+
+				<section v-if="preview.can_edit && !completedResult" class="selling-draft-editor">
+					<div class="selling-editor-heading">
+						<div>
+							<strong>Edit draft before completion</strong>
+							<p>Update draft dates, notes and quantities, or add new items. Existing source-linked item identity remains protected.</p>
+						</div>
+						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftValid" @click="saveDraftChanges">
+							{{ busy ? "Saving..." : "Save Draft Changes" }}
+						</button>
+					</div>
+					<div class="selling-editor-grid">
+						<EdgeInput v-model="draftTransactionDate" id="selling-draft-date" :label="preview.doctype === 'Quotation' ? 'Quotation Date' : 'Order Date'" type="date" :disabled="busy" required />
+						<EdgeInput v-if="preview.doctype === 'Quotation'" v-model="draftSecondaryDate" id="selling-draft-valid-till" label="Valid Till" type="date" :min="draftTransactionDate || undefined" :disabled="busy" />
+						<EdgeInput v-else v-model="draftSecondaryDate" id="selling-draft-delivery-date" label="Delivery Date" type="date" :min="draftTransactionDate || undefined" :disabled="busy" required />
+						<EdgeInput v-if="preview.doctype === 'Sales Order'" v-model="draftPoNo" id="selling-draft-po-no" label="Customer PO / Reference" type="text" :disabled="busy" />
+					</div>
+
+					<div class="selling-edit-items">
+						<div class="selling-edit-item selling-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span></div>
+						<div v-for="(row, index) in draftItems" :key="row.name || index" class="selling-edit-item">
+							<strong>{{ row.item_code || row.item_name || "Item" }}</strong>
+							<EdgeInput v-model="row.qty" :id="`selling-item-qty-${index}`" label="Qty" type="number" min="0.000001" step="any" :disabled="busy" />
+							<EdgeInput v-model="row.rate" :id="`selling-item-rate-${index}`" label="Rate" type="number" min="0" step="any" :disabled="busy" />
+							<EdgeLinkField
+								:modelValue="row.warehouse || ''"
+								label="Stock Location"
+								placeholder="Optional stock location"
+								:searcher="(query) => searchOptions('warehouse', query)"
+								@update:modelValue="row.warehouse = $event || ''"
+							/>
+						</div>
+					</div>
+
+					<EdgeChildTable
+						:field="{ label: 'Additional Items', description: 'Add items to this draft before submission.' }"
+						:rows="newItems"
+						:columns="newItemColumns"
+						:addLabel="'Add Item'"
+						:linkSearcher="searchNewItemLink"
+						:newRowsFirst="false"
+						@update:rows="newItems = $event"
+					/>
+
+					<label class="selling-edit-textarea">
+						<span>Terms / Notes</span>
+						<textarea v-model="draftTerms" class="form-control" rows="3" :disabled="busy"></textarea>
+					</label>
+					<label class="selling-edit-textarea">
+						<span>Remarks</span>
+						<textarea v-model="draftRemarks" class="form-control" rows="2" :disabled="busy"></textarea>
+					</label>
+				</section>
 
 				<div v-if="preview.items?.length" class="selling-completion-items">
 					<h4>Items</h4>
@@ -110,7 +163,9 @@
 
 <script>
 const PREVIEW_METHOD = "retailedge.standard_selling_completion.get_standard_selling_completion_preview";
+const UPDATE_DRAFT_METHOD = "retailedge.standard_selling_completion.update_standard_selling_draft";
 const SUBMIT_METHOD = "retailedge.standard_selling_completion.submit_standard_selling_document";
+const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
 const WORKFLOW_METHOD = "retailedge.standard_selling_completion.apply_standard_selling_workflow_action";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
@@ -128,7 +183,7 @@ function callMethod(method, args = {}, type = "GET") {
 }
 
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?._server_messages || fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 function doctypeSlug(doctype) {
@@ -140,6 +195,9 @@ export default {
 	components: {
 		EdgeModal: runtimeComponents().EdgeModal,
 		EdgeLoadingState: runtimeComponents().EdgeLoadingState,
+		EdgeInput: runtimeComponents().EdgeInput,
+		EdgeChildTable: runtimeComponents().EdgeChildTable,
+		EdgeLinkField: runtimeComponents().EdgeLinkField,
 	},
 	props: {
 		open: { type: Boolean, default: false },
@@ -156,6 +214,19 @@ export default {
 			actionError: "",
 			completedResult: null,
 			outputDetails: null,
+			draftTransactionDate: "",
+			draftSecondaryDate: "",
+			draftPoNo: "",
+			draftTerms: "",
+			draftRemarks: "",
+			draftItems: [],
+			newItems: [],
+			newItemColumns: [
+				{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" },
+				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
+				{ fieldname: "rate", label: "Rate", fieldtype: "Currency", placeholder: "Auto price" },
+				{ fieldname: "warehouse", label: "Stock Location", fieldtype: "Link", placeholder: "Optional" },
+			],
 		};
 	},
 	computed: {
@@ -164,6 +235,12 @@ export default {
 		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
+		},
+		draftValid() {
+			if (!this.preview?.can_edit || !this.draftTransactionDate) return false;
+			if (this.preview.doctype === "Sales Order" && !this.draftSecondaryDate) return false;
+			return this.draftItems.every((row) => Number(row.qty) > 0 && Number(row.rate) >= 0)
+				&& this.newItems.filter((row) => row.item_code).every((row) => Number(row.qty || 0) > 0);
 		},
 	},
 	watch: {
@@ -191,12 +268,75 @@ export default {
 					doctype: this.document.doctype,
 					name: this.document.name,
 				});
-				if (Number(this.preview?.docstatus || 0) === 0) this.completedResult = null;
+				if (Number(this.preview?.docstatus || 0) === 0) {
+					this.completedResult = null;
+					this.hydrateDraft();
+				}
 			} catch (error) {
 				this.preview = null;
 				this.error = errorMessage(error, "Unable to review this selling document.");
 			} finally {
 				this.loading = false;
+			}
+		},
+		hydrateDraft() {
+			this.draftTransactionDate = this.preview?.transaction_date || "";
+			this.draftSecondaryDate = this.preview?.doctype === "Quotation"
+				? (this.preview?.valid_till || "")
+				: (this.preview?.delivery_date || "");
+			this.draftPoNo = this.preview?.po_no || "";
+			this.draftTerms = this.preview?.terms || "";
+			this.draftRemarks = this.preview?.remarks || "";
+			this.draftItems = (this.preview?.editable_items || []).map((row) => ({ ...row }));
+			this.newItems = [];
+		},
+		searchOptions(fieldname, query) {
+			return callMethod(SEARCH_METHOD, {
+				document: this.documentKey(),
+				fieldname,
+				txt: query || "",
+				values: {
+					company: this.preview?.company || "",
+					branch: this.preview?.branch || "",
+					customer: this.preview?.party || "",
+				},
+			}).then((rows) => Array.isArray(rows) ? rows : []);
+		},
+		searchNewItemLink(column, query) {
+			if (column?.fieldname === "item_code") return this.searchOptions("item_code", query);
+			if (column?.fieldname === "warehouse") return this.searchOptions("warehouse", query);
+			return Promise.resolve([]);
+		},
+		async saveDraftChanges() {
+			if (!this.preview?.can_edit || this.busy || !this.draftValid) return;
+			this.busy = true;
+			this.actionError = "";
+			try {
+				const additions = this.newItems.filter((row) => row?.item_code).map((row) => ({ ...row }));
+				const result = await callMethod(UPDATE_DRAFT_METHOD, {
+					doctype: this.preview.doctype,
+					name: this.preview.name,
+					expected_modified: this.preview.modified,
+					values: {
+						transaction_date: this.draftTransactionDate,
+						valid_till: this.preview.doctype === "Quotation" ? this.draftSecondaryDate : "",
+						delivery_date: this.preview.doctype === "Sales Order" ? this.draftSecondaryDate : "",
+						po_no: this.draftPoNo,
+						terms: this.draftTerms,
+						remarks: this.draftRemarks,
+						shipping_rule: this.preview.shipping_rule || "",
+						items: [...this.draftItems, ...additions],
+					},
+				}, "POST");
+				this.preview = result;
+				this.hydrateDraft();
+				this.$emit("changed", result);
+				frappe.show_alert?.({ message: "Draft updated", indicator: "green" });
+			} catch (error) {
+				this.actionError = errorMessage(error, "Unable to save draft changes.");
+				await this.loadPreview();
+			} finally {
+				this.busy = false;
 			}
 		},
 		async submitDocument() {
@@ -331,6 +471,15 @@ export default {
 .selling-completion-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .75rem; }
 .selling-completion-summary > div { display: grid; gap: .2rem; padding: .75rem; border: 1px solid var(--edge-border-color,var(--border-color)); border-radius: .6rem; }
 .selling-completion-summary span, .selling-completion-workflow span { font-size: .78rem; color: var(--text-muted); }
+.selling-draft-editor { display:grid; gap:1rem; padding:1rem; border:1px solid var(--edge-border-color,var(--border-color)); border-radius:.7rem; background:var(--edge-surface-muted,var(--control-bg)); }
+.selling-editor-heading { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+.selling-editor-heading p { margin:.25rem 0 0; color:var(--text-muted); }
+.selling-editor-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
+.selling-edit-items { display:grid; gap:.45rem; }
+.selling-edit-item { display:grid; grid-template-columns:minmax(10rem,1.2fr) minmax(7rem,.6fr) minmax(7rem,.6fr) minmax(12rem,1fr); gap:.6rem; align-items:end; }
+.selling-edit-item--head { color:var(--text-muted); font-size:.75rem; font-weight:700; }
+.selling-edit-textarea { display:grid; gap:.35rem; }
+.selling-edit-textarea > span { font-size:.78rem; color:var(--text-muted); }
 .selling-completion-items { display: grid; gap: .45rem; }
 .selling-completion-items h4 { margin: 0; }
 .selling-completion-item { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: .75rem; padding: .55rem .7rem; border-bottom: 1px solid var(--edge-border-color,var(--border-color)); }
@@ -346,5 +495,6 @@ export default {
 .selling-next-buttons,.selling-output-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
 .selling-completion-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; width: 100%; }
 .selling-completion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
-@media (max-width: 720px) { .selling-completion-summary { grid-template-columns: 1fr; } .selling-completion-item { grid-template-columns: 1fr; } .selling-completion-footer { align-items: stretch; flex-direction: column; } .selling-completion-actions { justify-content: flex-start; } }
+@media (max-width: 900px) { .selling-editor-grid { grid-template-columns:1fr 1fr; } .selling-edit-item { grid-template-columns:1fr 1fr; } }
+@media (max-width: 720px) { .selling-editor-heading { flex-direction:column; } .selling-editor-grid,.selling-edit-item { grid-template-columns:1fr; } .selling-completion-summary { grid-template-columns: 1fr; } .selling-completion-item { grid-template-columns: 1fr; } .selling-completion-footer { align-items: stretch; flex-direction: column; } .selling-completion-actions { justify-content: flex-start; } }
 </style>
