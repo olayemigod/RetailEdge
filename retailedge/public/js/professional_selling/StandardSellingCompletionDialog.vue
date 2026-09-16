@@ -47,7 +47,8 @@
 								label="Stock Location"
 								placeholder="Optional stock location"
 								:searcher="(query) => searchOptions('warehouse', query)"
-								@update:modelValue="row.warehouse = $event || ''"
+								@select="row.warehouse = $event.value || ''"
+								@clear="row.warehouse = ''"
 							/>
 						</div>
 					</div>
