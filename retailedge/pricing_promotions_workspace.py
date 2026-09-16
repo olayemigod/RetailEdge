@@ -270,6 +270,8 @@ def get_pricing_promotions_records(
 	filters: dict | str | None = None,
 	start: int = 0,
 	page_length: int = DEFAULT_PAGE_LENGTH,
+	sort_by: str = "modified",
+	sort_order: str = "desc",
 ) -> dict[str, Any]:
 	config = _area(area)
 	doctype = config["doctype"]
@@ -296,12 +298,22 @@ def get_pricing_promotions_records(
 
 	start = max(0, cint(start))
 	page_length = max(10, min(cint(page_length) or DEFAULT_PAGE_LENGTH, MAX_PAGE_LENGTH))
+	allowed_sort_fields = {
+		fieldname
+		for fieldname, _label in config["columns"]
+		if fieldname == "name" or fieldname == "modified" or meta.has_field(fieldname)
+	}
+	allowed_sort_fields.update({"name", "modified"})
+	sort_by = str(sort_by or "modified").strip()
+	if sort_by not in allowed_sort_fields:
+		sort_by = "modified"
+	sort_order = "asc" if str(sort_order or "").lower() == "asc" else "desc"
 	rows = frappe.get_list(
 		doctype,
 		filters=query_filters,
 		or_filters=or_filters,
 		fields=fields,
-		order_by="modified desc",
+		order_by=f"{sort_by} {sort_order}",
 		limit_start=start,
 		limit_page_length=page_length + 1,
 	)
@@ -315,4 +327,6 @@ def get_pricing_promotions_records(
 		"next_start": start + len(rows),
 		"page_length": page_length,
 		"can_create": int(bool(frappe.has_permission(doctype, "create"))),
+		"sort_by": sort_by,
+		"sort_order": sort_order,
 	}
