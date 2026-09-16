@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
+
+from retailedge import pricing_promotions_workspace
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -116,6 +120,66 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			'"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission"',
 		):
 			self.assertIn(hook, hooks)
+	def test_controller_permission_hooks_deny_unassigned_price_documents(self):
+		assigned_price_list = SimpleNamespace(name="Assigned Retail", is_new=lambda: False)
+		other_price_list = SimpleNamespace(name="Other Retail", is_new=lambda: False)
+		assigned_item_price = SimpleNamespace(price_list="Assigned Retail", is_new=lambda: False)
+		other_item_price = SimpleNamespace(price_list="Other Retail", is_new=lambda: False)
+		scope = {"restricted": True, "names": ["Assigned Retail"]}
+
+		with patch.object(
+			pricing_promotions_workspace,
+			"_permission_assignment_scope",
+			return_value=scope,
+		):
+			self.assertTrue(
+				pricing_promotions_workspace.has_price_list_permission(
+					assigned_price_list,
+					user="sales@example.com",
+					ptype="read",
+				)
+			)
+			self.assertFalse(
+				pricing_promotions_workspace.has_price_list_permission(
+					other_price_list,
+					user="sales@example.com",
+					ptype="read",
+				)
+			)
+			self.assertTrue(
+				pricing_promotions_workspace.has_item_price_permission(
+					assigned_item_price,
+					user="sales@example.com",
+					ptype="read",
+				)
+			)
+			self.assertFalse(
+				pricing_promotions_workspace.has_item_price_permission(
+					other_item_price,
+					user="sales@example.com",
+					ptype="read",
+				)
+			)
+
+	def test_permission_query_hooks_fail_closed_for_empty_assigned_scope(self):
+		with patch.object(
+			pricing_promotions_workspace,
+			"_permission_assignment_scope",
+			return_value={"restricted": True, "names": []},
+		):
+			self.assertEqual(
+				pricing_promotions_workspace.get_price_list_permission_query_conditions(
+					"sales@example.com"
+				),
+				"1=0",
+			)
+			self.assertEqual(
+				pricing_promotions_workspace.get_item_price_permission_query_conditions(
+					"sales@example.com"
+				),
+				"1=0",
+			)
+
 	def test_pricing_workspace_uses_assignment_options_for_item_price_filter(self):
 		source = (
 			APP_ROOT
