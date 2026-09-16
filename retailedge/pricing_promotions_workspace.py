@@ -383,6 +383,10 @@ def get_pricing_promotions_workspace() -> dict[str, Any]:
 		for key, config in AREAS.items()
 		if (resolved := _available_area(key, config))
 	]
+	if not price_list_scope["names"]:
+		for area in areas:
+			if area.get("doctype") == "Item Price":
+				area["can_create"] = 0
 	if not areas:
 		frappe.throw(
 			_("You do not have permission to view pricing and promotions setup."),
