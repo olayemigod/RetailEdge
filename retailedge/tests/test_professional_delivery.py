@@ -45,9 +45,9 @@ class TestProfessionalDelivery(unittest.TestCase):
 		for contract in (
 			"def _lock_sales_invoice",
 			"FOR UPDATE",
-			"def _existing_draft_delivery_for_invoice",
+			"def _existing_delivery_for_invoice",
 			"item.against_sales_invoice = %s",
-			"dn.docstatus = 0",
+			"dn.docstatus",
 			'"existing": existing',
 			"if existing:",
 		):
