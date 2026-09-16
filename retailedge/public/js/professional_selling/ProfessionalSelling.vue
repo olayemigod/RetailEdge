@@ -176,7 +176,7 @@ function doctypeSlug(doctype) {
 }
 
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?._server_messages || fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 export default {
