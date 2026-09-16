@@ -131,7 +131,7 @@
 									</td>
 									<td class="pricing-actions-column">
 										<button type="button" class="edge-button edge-button--secondary pricing-edit" @click="editRecord(row)">
-											View / Edit
+											{{ activeArea.can_write ? "Edit" : "View" }}
 										</button>
 									</td>
 								</tr>
