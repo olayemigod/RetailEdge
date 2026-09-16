@@ -242,6 +242,7 @@ def _validate_context(
 				)
 	return company, branch, warehouse
 
+
 def _operating_document_filters(doctype: str, *, company: str, branch: str) -> dict[str, Any]:
 	filters: dict[str, Any] = {}
 	meta = frappe.get_meta(doctype)
@@ -263,6 +264,7 @@ def _operating_document_filters(doctype: str, *, company: str, branch: str) -> d
 			filters[branch_field] = ["in", scope["allowed_branches"]]
 	return filters
 
+
 def _branch_filters(company: str) -> dict[str, Any]:
 	if not company:
 		return {"name": "__never__"}
@@ -274,6 +276,7 @@ def _branch_filters(company: str) -> dict[str, Any]:
 	if scope["restricted"] or allowed:
 		filters["name"] = ["in", allowed] if allowed else "__never__"
 	return filters
+
 
 def _warehouse_filters(company: str, branch: str) -> dict[str, Any] | None:
 	if not company:
@@ -622,6 +625,7 @@ def get_professional_selling_list(
 
 	filters = _operating_document_filters(doctype, company=company, branch=branch)
 	meta = frappe.get_meta(doctype)
+	branch_field = get_first_existing_field(doctype, BRANCH_FIELD_CANDIDATES)
 	_selling_list_status_filter(meta, status, filters)
 
 	date_field = definition["date_field"]
@@ -653,6 +657,8 @@ def get_professional_selling_list(
 	start = max(0, cint(start))
 	page_length = max(5, min(cint(page_length) or 20, 100))
 	fields = ["name", "docstatus", "modified"]
+	if branch_field and branch_field not in fields:
+		fields.append(branch_field)
 	for candidate in (
 		definition["party_field"],
 		date_field,
