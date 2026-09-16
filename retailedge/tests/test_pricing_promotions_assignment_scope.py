@@ -71,6 +71,14 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			client,
 		)
 
+	def test_permission_checks_do_not_borrow_another_users_session_branch(self):
+		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
+		self.assertIn("is_session_user = user == frappe.session.user", source)
+		self.assertIn(
+			"operating = (get_operating_context() or {}) if is_session_user else {}",
+			source,
+		)
+
 	def test_existing_assignment_boundary_fails_closed_without_a_price_list(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 
