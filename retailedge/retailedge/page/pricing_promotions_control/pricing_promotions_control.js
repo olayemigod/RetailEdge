@@ -38,7 +38,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		wrapper.page = page;
 		hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET);
-		if (!window.EdgeSuiteUI?.createEdgeApp) throw new Error("EdgeSuite UI runtime is unavailable.");
+		if (!window.EdgeSuiteUI?.createEdgeApp) throw new Error("Application interface runtime is unavailable.");
 		await requireAsync(WORKSPACE_ASSET);
 		if (typeof window.mountPricingPromotionsWorkspace !== "function") throw new Error("Pricing & Promotions workspace bundle is unavailable.");
 		loading.remove();
