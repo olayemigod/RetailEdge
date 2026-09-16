@@ -103,8 +103,11 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 		'this.$emit("action", { action: "view", document: this.activeDocument, row });',
 		'"Edit / Complete"',
 		'"View"',
-		"shouldFlyUp(index)",
+		"shouldFlyUp(row, index)",
 		'"record-more--fly-up"',
+		"prepareDropdownDirection($event, row, index)",
+		"window.innerHeight - rect.bottom",
+		"estimatedMenuHeight",
 		"bottom:calc(100% + .25rem);",
 	):
 		assert contract in records
