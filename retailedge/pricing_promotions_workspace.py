@@ -8,6 +8,8 @@ from frappe.core.doctype.user_permission.user_permission import get_user_permiss
 from frappe.utils import cint, getdate
 from frappe.utils.user import get_user_fullname
 
+from erpnext.stock.get_item_details import get_pos_profile
+
 from retailedge.branch_profile import get_exact_branch_profile, get_user_pos_profiles
 from retailedge.operating_context import get_operating_context
 
@@ -188,6 +190,7 @@ def _candidate_assigned_price_lists(
 		"user_default": [],
 		"pos_profile": [],
 		"branch_pos_profile": [],
+		"effective_pos_profile": [],
 	}
 
 	for row in get_user_permissions(user).get("Price List", []) or []:
@@ -215,6 +218,31 @@ def _candidate_assigned_price_lists(
 			if name:
 				candidates.add(name)
 				sources["pos_profile"].append(name)
+
+	if company:
+		try:
+			effective_pos = get_pos_profile(company, user=user)
+		except Exception:
+			effective_pos = None
+		effective_name = ""
+		if effective_pos:
+			effective_name = str(
+				effective_pos.get("name")
+				if isinstance(effective_pos, dict)
+				else getattr(effective_pos, "name", "")
+			).strip()
+		if effective_name:
+			pos = frappe.db.get_value(
+				"POS Profile",
+				effective_name,
+				["disabled", "company", "selling_price_list"],
+				as_dict=True,
+			)
+			if pos and not pos.get("disabled") and (not pos.get("company") or pos.get("company") == company):
+				name = str(pos.get("selling_price_list") or "").strip()
+				if name:
+					candidates.add(name)
+					sources["effective_pos_profile"].append(name)
 
 	if company and branch:
 		profile = get_exact_branch_profile(company=company, branch=branch, active_only=True)
