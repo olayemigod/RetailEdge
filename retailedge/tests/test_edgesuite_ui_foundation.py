@@ -81,12 +81,16 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 			{item["target"] for item in groups["insights"]["items"]},
 		)
 		self.assertIn(
-			"RetailEdge Bank Transaction Match",
+			"bank-matching-reconciliation",
 			{item["target"] for item in groups["review-approvals"]["items"]},
 		)
 		self.assertNotIn(
-			"RetailEdge Bank Transaction Match",
+			"bank-matching-reconciliation",
 			{item["target"] for item in groups["money"]["items"]},
+		)
+		self.assertNotIn(
+			"RetailEdge Bank Transaction Match",
+			{item["target"] for item in groups["review-approvals"]["items"]},
 		)
 
 	def test_accounting_and_setup_are_role_restricted(self):
