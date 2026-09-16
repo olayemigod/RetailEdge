@@ -19,6 +19,7 @@ from retailedge.branch_context import (
 )
 from retailedge.operating_context import (
 	get_allowed_operating_branches,
+	get_operating_context,
 	get_operational_branch_scope,
 	resolve_operational_branch,
 )
@@ -81,12 +82,14 @@ def get_simple_payment_context(intent: str) -> dict[str, Any]:
 	config = _get_intent(intent)
 	_assert_can_create_payment_entry()
 	user = frappe.session.user
-	company = frappe.defaults.get_user_default("Company") or ""
-	branch = (
-		frappe.defaults.get_user_default("RetailEdge Branch")
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
+	branch = str(
+		operating.get("branch")
+		or frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
-	)
+	).strip()
 	defaults = resolve_retailedge_operational_defaults(
 		company=company or None,
 		branch=branch or None,
