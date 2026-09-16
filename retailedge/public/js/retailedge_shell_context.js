@@ -102,7 +102,7 @@
 		} catch (error) {
 			frappe.msgprint({
 				title: __("Unable to switch branch"),
-				message: error?.message || error?.exc || __("The selected Branch could not be activated."),
+				message: window.retailedge?.userErrorMessage?.(error, __("The selected Branch could not be activated.")) || __("The selected Branch could not be activated."),
 				indicator: "red",
 			});
 		}
@@ -293,7 +293,7 @@
 		topbarContext.replaceChildren();
 		const host = document.createElement("div");
 		host.className = HOST_CLASS;
-		host.setAttribute("aria-label", "Working Branch");
+		host.setAttribute("aria-label", "Working branch");
 		topbarContext.appendChild(host);
 
 		mounts.set(shell, createBranchPopover(shell, host, current, branches, signature));
