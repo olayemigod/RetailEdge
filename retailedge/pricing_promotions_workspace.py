@@ -88,7 +88,6 @@ AREAS: dict[str, dict[str, Any]] = {
 			{"fieldname": "valid_from", "label": "Valid From", "type": "date_from"},
 			{"fieldname": "valid_upto", "label": "Valid Until", "type": "date_to"},
 		),
-		"company_scoped": True,
 	},
 	"promotional-schemes": {
 		"label": "Promotional Schemes",
