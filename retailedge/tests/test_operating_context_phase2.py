@@ -230,6 +230,30 @@ class TestOperatingContextPhase2(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_global_shell_branch_switcher_tracks_authoritative_business_hub_context(self):
+		shell = self.read("public/js/retailedge_shell_context.js")
+		hub = self.read("public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue")
+
+		for contract in (
+			'host.setAttribute("aria-label", "Working branch")',
+			"current.branch_options",
+			"current.active_branch",
+			"current.can_switch_branch",
+			"retailedgeSyncShellIdentity",
+			"switch_operating_context",
+			"userErrorMessage",
+		):
+			self.assertIn(contract, shell)
+
+		for contract in (
+			'window.retailedgeSyncShellIdentity({',
+			'active_company: this.context.company || ""',
+			'active_branch: this.context.branch || ""',
+			"branch_options: Array.isArray(this.context.branch_options)",
+			"can_switch_branch: Boolean(this.context.can_switch_branch)",
+		):
+			self.assertIn(contract, hub)
+
 	def test_operating_context_page_is_edgesuite_and_preserves_switch_contract(self):
 		loader = self.read("retailedge/page/operating_context/operating_context.js")
 		component = self.read("public/js/operating_context/OperatingContext.vue")
