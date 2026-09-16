@@ -397,8 +397,14 @@ export default {
 						return;
 					}
 					frappe.show_alert({ message: __(label + " already exists. Opening it instead."), indicator: "blue" });
-					if (Number(result.docstatus || 0) === 0 && result.doctype === "Sales Invoice") {
-						this.openSalesInvoiceCompletion(result);
+					if (Number(result.docstatus || 0) === 0) {
+						if (result.doctype === "Sales Order") this.openStandardCompletion(result);
+						else if (result.doctype === "Delivery Note") this.openDeliveryCompletion(result);
+						else if (result.doctype === "Sales Invoice") this.openSalesInvoiceCompletion(result);
+						else {
+							const existingDocument = this.documents.find((item) => item.doctype === result.doctype) || document;
+							this.openDocumentOutput(existingDocument, result, "view");
+						}
 					} else {
 						const existingDocument = this.documents.find((item) => item.doctype === result.doctype) || document;
 						this.openDocumentOutput(existingDocument, result, "view");
