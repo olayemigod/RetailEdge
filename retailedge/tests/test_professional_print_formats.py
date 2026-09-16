@@ -21,32 +21,33 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestProfessionalPrintFormats(unittest.TestCase):
-	def test_professional_catalog_uses_neutral_user_facing_names(self):
+	def test_professional_catalog_uses_explicit_pedge_names(self):
 		catalog = {row["doctype"]: row["name"] for row in PROFESSIONAL_PRINT_FORMATS}
 		self.assertEqual(
 			catalog,
 			{
-				"Quotation": "Professional Quotation",
-				"Sales Order": "Professional Sales Order",
-				"Delivery Note": "Professional Delivery Note",
-				"Sales Invoice": "Professional Sales Invoice",
+				"Quotation": "PEdge Professional Quotation",
+				"Sales Order": "PEdge Professional Sales Order",
+				"Delivery Note": "PEdge Professional Delivery Note",
+				"Sales Invoice": "PEdge Professional Sales Invoice",
 			},
 		)
 		for doctype, name in catalog.items():
 			self.assertEqual(get_preferred_print_format(doctype), name)
+			self.assertTrue(name.startswith("PEdge "))
 			self.assertNotIn("RetailEdge", name)
 
 	def test_sales_invoice_template_pack_exposes_five_distinct_selectable_styles(self):
 		names = [row["name"] for row in SALES_INVOICE_STYLE_FORMATS]
 		self.assertEqual(
 			names,
-			["Invoice Classic", "Invoice Modern", "Invoice Compact", "Invoice Minimal", "Invoice Executive"],
+			["PEdge Invoice Classic", "PEdge Invoice Modern", "PEdge Invoice Compact", "PEdge Invoice Minimal", "PEdge Invoice Executive"],
 		)
 		self.assertEqual(len({ _format_values(row)["css"] for row in SALES_INVOICE_STYLE_FORMATS }), 5)
 		for row in SALES_INVOICE_STYLE_FORMATS:
 			self.assertEqual(row["doctype"], "Sales Invoice")
 			self.assertNotIn("RetailEdge", row["name"])
-			self.assertNotIn("ProcessEdge", row["name"])
+			self.assertTrue(row["name"].startswith("PEdge "))
 
 	def test_sales_invoice_has_at_least_five_document_templates_plus_thermal_receipts(self):
 		document_templates = [
@@ -62,11 +63,12 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 
 	def test_receipt_catalog_covers_sales_and_pos_in_80mm_and_58mm(self):
 		catalog = {(row["doctype"], row["kind"]): row["name"] for row in RECEIPT_PRINT_FORMATS}
-		self.assertEqual(catalog[("Sales Invoice", "receipt-80")], "Sales Receipt 80mm")
-		self.assertEqual(catalog[("Sales Invoice", "receipt-58")], "Sales Receipt 58mm")
-		self.assertEqual(catalog[("POS Invoice", "receipt-80")], "POS Receipt 80mm")
-		self.assertEqual(catalog[("POS Invoice", "receipt-58")], "POS Receipt 58mm")
+		self.assertEqual(catalog[("Sales Invoice", "receipt-80")], "PEdge Sales Receipt 80mm")
+		self.assertEqual(catalog[("Sales Invoice", "receipt-58")], "PEdge Sales Receipt 58mm")
+		self.assertEqual(catalog[("POS Invoice", "receipt-80")], "PEdge POS Receipt 80mm")
+		self.assertEqual(catalog[("POS Invoice", "receipt-58")], "PEdge POS Receipt 58mm")
 		for name in catalog.values():
+			self.assertTrue(name.startswith("PEdge "))
 			self.assertNotIn("RetailEdge", name)
 
 	def test_all_managed_formats_are_white_label_and_customer_safe(self):
@@ -157,14 +159,14 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 	def test_document_output_prioritizes_professional_format_without_hiding_others(self, mock_get_list, _mock_exists, _mock_permission):
 		mock_get_list.return_value = [
 			frappe._dict(name="Customer Custom Invoice"),
-			frappe._dict(name="Professional Sales Invoice"),
-			frappe._dict(name="Sales Receipt 80mm"),
+			frappe._dict(name="PEdge Professional Sales Invoice"),
+			frappe._dict(name="PEdge Sales Receipt 80mm"),
 		]
 		formats = _available_print_formats("Sales Invoice")
-		self.assertEqual(formats[0], "Professional Sales Invoice")
+		self.assertEqual(formats[0], "PEdge Professional Sales Invoice")
 		self.assertIn("Standard", formats)
 		self.assertIn("Customer Custom Invoice", formats)
-		self.assertIn("Sales Receipt 80mm", formats)
+		self.assertIn("PEdge Sales Receipt 80mm", formats)
 
 	@patch("retailedge.document_output._permission", return_value=True)
 	@patch("retailedge.document_output.frappe.db.exists", return_value=False)
@@ -182,7 +184,7 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		mock_exists.side_effect = lambda doctype, name=None: doctype == "Print Format" and name in managed_names
 		mock_get_value.return_value = frappe._dict(disabled=0, html=MANAGED_MARKER)
 		formats = _available_print_formats("Sales Invoice")
-		self.assertEqual(formats[0], "Professional Sales Invoice")
+		self.assertEqual(formats[0], "PEdge Professional Sales Invoice")
 		for name in managed_names:
 			self.assertIn(name, formats)
 
@@ -221,6 +223,7 @@ class TestProfessionalPrintFormats(unittest.TestCase):
 		self.assertIn("retailedge.patches.install_professional_print_formats", patches)
 		self.assertIn("retailedge.patches.install_output_print_template_pack_v3", patches)
 		self.assertIn("retailedge.patches.install_output_print_template_pack_v4", patches)
+		self.assertIn("retailedge.patches.install_pedge_print_formats_v5", patches)
 		self.assertIn("if not owned:", source)
 		self.assertIn("Skipping non-managed Print Format name collision", source)
 		self.assertIn("LEGACY_PRINT_FORMAT_ALIASES", source)
