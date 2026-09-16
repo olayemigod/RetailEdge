@@ -226,6 +226,24 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			source,
 		)
 
+	def test_price_resolution_does_not_emit_pos_permission_modal_for_non_pos_user(self):
+		guided = (APP_ROOT / "guided_pricing.py").read_text()
+		workspace = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
+
+		guided_guard = 'if not frappe.has_permission("POS Profile", "read", user=user):'
+		workspace_guard = 'if company and frappe.has_permission("POS Profile", "read", user=user):'
+		self.assertIn(guided_guard, guided)
+		self.assertIn(workspace_guard, workspace)
+		self.assertLess(
+			guided.index(guided_guard),
+			guided.index("standard = get_pos_profile(company, user=user)"),
+		)
+		self.assertLess(
+			workspace.index(workspace_guard),
+			workspace.index("effective_pos = get_pos_profile(company, user=user)"),
+		)
+
+
 	def test_price_master_roles_and_administrator_keep_native_management_scope(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 		self.assertIn('user == "Administrator"', source)
