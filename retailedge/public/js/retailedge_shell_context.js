@@ -102,7 +102,11 @@
 		} catch (error) {
 			frappe.msgprint({
 				title: __("Unable to switch branch"),
-				message: window.retailedge?.userErrorMessage?.(error, __("The selected Branch could not be activated.")) || __("The selected Branch could not be activated."),
+				message:
+					window.retailedge?.userErrorMessage?.(
+						error,
+						__("The selected Branch could not be activated.")
+					) || __("The selected Branch could not be activated."),
 				indicator: "red",
 			});
 		}
