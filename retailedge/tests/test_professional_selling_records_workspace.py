@@ -96,11 +96,16 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 	for contract in (
 		'placeholder="More"',
 		"moreActions(row)",
-		'"View / Print / Send"',
+		'"Print & Send"',
 		'"Advanced: Open in ERPNext"',
 		'{{ loadingMore ? "Loading..." : "Load more" }}',
 		"runPrimaryAction(row)",
-		'this.$emit("action", { action: "output", document: this.activeDocument, row });',
+		'this.$emit("action", { action: "view", document: this.activeDocument, row });',
+		'"Edit / Complete"',
+		'"View"',
+		"shouldFlyUp(index)",
+		'"record-more--fly-up"',
+		"bottom:calc(100% + .25rem);",
 	):
 		assert contract in records
 
@@ -109,8 +114,10 @@ def test_row_actions_are_stable_and_output_supports_all_four_document_types():
 	assert 'description: "Open the full ERPNext document for advanced work."' not in records
 
 	for contract in (
-		"openDocumentOutput(document, row)",
-		"window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name };",
+		'openDocumentOutput(document, row, mode = "share")',
+		"window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name, mode };",
+		'if (action === "view") { this.openDocumentOutput(document, row, "view"); return; }',
+		'if (action === "output") { this.openDocumentOutput(document, row, "share"); return; }',
 		'frappe.set_route("document-output-sharing");',
 	):
 		assert contract in workspace
