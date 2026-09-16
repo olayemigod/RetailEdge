@@ -36,7 +36,7 @@ def _page_definition(directory_name: str, filename: str) -> dict:
 
 class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 	def test_bank_matching_b1_decision_has_advanced_to_confirmed_page_route(self):
-		base = _base_item("money", "Bank Matching")
+		base = _base_item("review-approvals", "Bank Match Reviews")
 		fallback = _fallback_item("Bank Matching")
 
 		self.assertEqual((base["target_type"], base["target"]), ("Page", "bank-matching-reconciliation"))
