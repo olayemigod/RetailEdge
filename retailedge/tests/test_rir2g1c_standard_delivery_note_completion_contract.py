@@ -145,6 +145,27 @@ def test_backend_never_writes_stock_or_accounting_truth_directly():
 		assert forbidden not in source
 
 
+def test_delivery_draft_editor_allows_safe_item_edits_and_additions():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for contract in (
+		"def update_standard_delivery_draft(",
+		"update_draft_items(",
+		'"editable_items": editable_items(doc)',
+		'"can_edit": bool(',
+	):
+		assert contract in service
+	for contract in (
+		"Edit draft before completion",
+		"Save Draft Changes",
+		"Additional Items",
+		"EdgeChildTable",
+		"EdgeLinkField",
+		"update_standard_delivery_draft",
+	):
+		assert contract in dialog
+
+
 def test_delivery_dialog_uses_only_server_authoritative_completion_actions():
 	source = _read(DIALOG)
 	for contract in (
@@ -186,7 +207,7 @@ def test_delivery_completion_exposes_post_submit_invoice_and_output_actions():
 	dialog = _read(DIALOG)
 	assert "get_professional_selling_record_actions" in dialog
 	assert "completedResult.next_actions" in dialog
-	assert "View / Print / Send" in dialog
+	assert "Print & Send" in dialog
 	assert 'this.$emit("next-action"' in dialog
 
 
