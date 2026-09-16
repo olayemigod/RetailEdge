@@ -293,6 +293,11 @@ def get_native_visual_workspace(workspace: str) -> dict[str, Any]:
 	"""Return a bounded, permission-aware overview over native ERPNext capabilities."""
 	_assert_authenticated()
 	workspace = str(workspace or "").strip()
+	if workspace == "pricing-promotions":
+		frappe.throw(
+			_("Pricing & Promotions is available through its dedicated managed workspace."),
+			frappe.PermissionError,
+		)
 	config = WORKSPACES.get(workspace)
 	if not config:
 		frappe.throw(_("Unsupported business control workspace."))
