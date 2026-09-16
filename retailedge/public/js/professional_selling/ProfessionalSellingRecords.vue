@@ -104,7 +104,8 @@
 									:options="moreActions(row)"
 									placeholder="More"
 									aria-label="More record actions"
-									:class="['record-more', { 'record-more--fly-up': shouldFlyUp(index) }]"
+									:class="['record-more', { 'record-more--fly-up': shouldFlyUp(row, index) }]"
+									@pointerdown.capture="prepareDropdownDirection($event, row, index)"
 									@select="runMoreAction(row, $event)"
 								/>
 								<span v-else class="record-more-placeholder" aria-hidden="true"></span>
@@ -168,6 +169,7 @@ export default {
 			nextStart: 0,
 			requestToken: 0,
 			searchTimer: null,
+			flyUpRows: {},
 			filters: {
 				search: "",
 				status: "All",
@@ -360,7 +362,22 @@ export default {
 			}
 			this.$emit("action", { action: "view", document: this.activeDocument, row });
 		},
-		shouldFlyUp(index) {
+		prepareDropdownDirection(event, row, index) {
+			const trigger = event?.currentTarget?.querySelector?.(".edge-dropdown__trigger")
+				|| event?.currentTarget
+				|| event?.target;
+			const rect = trigger?.getBoundingClientRect?.();
+			const actionCount = Math.max(1, this.moreActions(row).length);
+			const estimatedMenuHeight = Math.min(288, actionCount * 48 + 16);
+			const spaceBelow = rect ? window.innerHeight - rect.bottom : Number.POSITIVE_INFINITY;
+			const spaceAbove = rect ? rect.top : 0;
+			const flyUp = spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+			this.flyUpRows = { ...this.flyUpRows, [row.name]: flyUp };
+		},
+		shouldFlyUp(row, index) {
+			if (Object.prototype.hasOwnProperty.call(this.flyUpRows, row?.name)) {
+				return Boolean(this.flyUpRows[row.name]);
+			}
 			if (!Number.isInteger(index) || this.rows.length < 2) return false;
 			return index >= Math.max(0, this.rows.length - 2);
 		},
