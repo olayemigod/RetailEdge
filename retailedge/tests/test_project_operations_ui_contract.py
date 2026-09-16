@@ -35,7 +35,7 @@ class TestProjectOperationsUIContract(TestCase):
 		self.assertIn("Payment Entry", component)
 		self.assertIn("Project Transaction Timeline", component)
 		self.assertIn("openTimelineDoc", component)
-		self.assertIn("does not maintain a project wallet", component)
+		self.assertIn("no project wallet", component)
 		self.assertNotIn("GL Entry", component)
 
 	def test_project_branch_search_is_bounded_permission_aware_and_company_contextual(self):
