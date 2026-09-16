@@ -89,7 +89,7 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 			'if (this.pos?.provider === "posnext" && typeof navigator !== "undefined" && navigator.onLine === false)',
 			"this.launchPosTarget(this.pos)",
 			"window.location.assign(launch.start_url)",
-			"preflight is not a hard dependency",
+			"When online, the current operating context is validated before launch",
 			"POSNext keeps control of its own offline runtime and sync behaviour",
 		):
 			self.assertIn(contract, component)
