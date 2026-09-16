@@ -58,14 +58,20 @@ def _lock_sales_invoice(name: str) -> None:
 		frappe.throw(_("Sales Invoice {0} no longer exists.").format(name))
 
 
-def _existing_draft_delivery_for_invoice(sales_invoice: str):
+def _existing_delivery_for_invoice(sales_invoice: str):
+	"""Return the first Delivery Note ever created directly from this Sales Invoice.
+
+	Professional Selling treats direct Sales Invoice -> Delivery Note conversion as
+	one idempotent workflow. A second click must reopen the existing Delivery Note,
+	not create another one. If that Delivery Note was cancelled, normal ERPNext
+	Amend is the safe continuation path so document lineage remains intact.
+	"""
 	rows = frappe.db.sql(
 		"""
-		SELECT DISTINCT dn.name
+		SELECT DISTINCT dn.name, dn.docstatus
 		FROM `tabDelivery Note` dn
 		INNER JOIN `tabDelivery Note Item` item ON item.parent = dn.name
-		WHERE dn.docstatus = 0
-		  AND item.against_sales_invoice = %s
+		WHERE item.against_sales_invoice = %s
 		ORDER BY dn.creation ASC
 		LIMIT 1
 		""",
@@ -74,19 +80,37 @@ def _existing_draft_delivery_for_invoice(sales_invoice: str):
 	)
 	if not rows:
 		return None
+
 	name = str(rows[0].name or "").strip()
 	if not name:
 		return None
+
 	doc = frappe.get_doc("Delivery Note", name)
 	if not frappe.has_permission("Delivery Note", "read", doc=doc):
 		frappe.throw(
-			_("A Delivery Note draft already exists for this Sales Invoice, but you do not have permission to open it."),
+			_(
+				"A Delivery Note already exists for this Sales Invoice, but you do not have permission to open it."
+			),
 			frappe.PermissionError,
+		)
+	if int(doc.docstatus or 0) == 2:
+		frappe.throw(
+			_(
+				"Sales Invoice {0} already created Delivery Note {1}. That Delivery Note is cancelled; "
+				"open it and use Amend instead of creating another Delivery Note."
+			).format(sales_invoice, doc.name)
 		)
 	return doc
 
 
-def _delivery_response(target, *, branch: str, source_sales_invoice: str = "", source_sales_order: str = "", existing: bool = False) -> dict[str, Any]:
+def _delivery_response(
+	target,
+	*,
+	branch: str,
+	source_sales_invoice: str = "",
+	source_sales_order: str = "",
+	existing: bool = False,
+) -> dict[str, Any]:
 	return {
 		"doctype": target.doctype,
 		"name": target.name,
@@ -129,7 +153,12 @@ def _validate_mapped_delivery_stock_context(target, *, company: str, source_bran
 			resolved_branches.add(warehouse_branch)
 
 	if len(resolved_branches) > 1:
-		frappe.throw(_("The mapped Delivery Note spans Stock Locations from multiple Branches. Use the native Delivery Note workflow to split the delivery safely."))
+		frappe.throw(
+			_(
+				"The mapped Delivery Note spans Stock Locations from multiple Branches. "
+				"Use the native Delivery Note workflow to split the delivery safely."
+			)
+		)
 	mapped_branch = next(iter(resolved_branches), "") or _source_branch(target) or source_branch
 	if operating_branch and mapped_branch and operating_branch != mapped_branch:
 		frappe.throw(_("The mapped Delivery Stock Location does not match the current Operating Branch."))
@@ -183,11 +212,12 @@ def create_delivery_note_from_sales_order(sales_order: str) -> dict[str, Any]:
 
 @frappe.whitelist(methods=["POST"])
 def create_delivery_note_from_sales_invoice(sales_invoice: str) -> dict[str, Any]:
-	"""Create a draft Delivery Note from remaining quantities on a submitted Sales Invoice.
+	"""Create or reopen the single Delivery Note directly linked to a Sales Invoice.
 
 	ERPNext's native Sales Invoice mapper owns invoice-item linkage and remaining
-	delivery quantities. RetailEdge refuses stock-posting/return invoices because
-	they are not a safe source for a second delivery posting.
+	delivery quantities. Professional Selling adds a source-level lock and an
+	idempotency check so repeated clicks cannot create duplicate direct Delivery
+	Notes from the same Sales Invoice.
 	"""
 	if not _permission("Delivery Note", "create"):
 		frappe.throw(_("You do not have permission to create Delivery Note."), frappe.PermissionError)
@@ -208,7 +238,7 @@ def create_delivery_note_from_sales_invoice(sales_invoice: str) -> dict[str, Any
 
 	company, source_branch = _validate_source_against_operating_context(source)
 	_lock_sales_invoice(source.name)
-	existing = _existing_draft_delivery_for_invoice(source.name)
+	existing = _existing_delivery_for_invoice(source.name)
 	if existing:
 		existing_branch = _source_branch(existing) or source_branch
 		return _delivery_response(
