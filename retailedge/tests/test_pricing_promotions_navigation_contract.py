@@ -68,7 +68,7 @@ class TestPricingPromotionsNavigationContract(TestCase):
 		for contract in (
 			"pricing-tabs",
 			"Create {{ singularLabel(activeArea.label) }}",
-			"View / Edit",
+			'activeArea.can_write ? "Edit" : "View"',
 			"Clear filters",
 			"Load more",
 			"get_pricing_promotions_records",
