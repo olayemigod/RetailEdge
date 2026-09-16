@@ -120,7 +120,7 @@ _DOCUMENT_BY_DOCTYPE = {row["doctype"]: row for row in OUTPUT_DOCUMENTS}
 
 def _preferred_print_format(doctype: str) -> str:
 	if str(doctype or "").strip() == "POS Invoice":
-		return "POS Receipt 80mm"
+		return "PEdge POS Receipt 80mm"
 	return get_preferred_print_format(doctype)
 
 
