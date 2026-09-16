@@ -307,7 +307,8 @@ def _permission_assignment_scope(user: str | None = None) -> dict[str, Any]:
 	user = user or frappe.session.user
 	if not user or user == "Guest" or _has_price_master_scope(user):
 		return {"restricted": False, "names": []}
-	operating = get_operating_context() or {}
+	is_session_user = user == frappe.session.user
+	operating = (get_operating_context() or {}) if is_session_user else {}
 	company = str(operating.get("company") or "").strip()
 	branch = str(operating.get("branch") or "").strip()
 	names, _sources, has_assignment_boundary = _raw_assigned_price_lists(
