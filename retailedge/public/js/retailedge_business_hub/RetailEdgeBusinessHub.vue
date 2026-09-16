@@ -646,6 +646,14 @@ export default {
 			this.navigationGroups = data.navigation_groups || [];
 			this.quickActions = data.quick_actions || [];
 			this.context = { ...this.context, ...(data.context || {}) };
+			if (typeof window.retailedgeSyncShellIdentity === "function") {
+				window.retailedgeSyncShellIdentity({
+					active_company: this.context.company || "",
+					active_branch: this.context.branch || "",
+					branch_options: Array.isArray(this.context.branch_options) ? this.context.branch_options : [],
+					can_switch_branch: Boolean(this.context.can_switch_branch),
+				});
+			}
 			this.featureFlags = data.feature_flags || {};
 			this.accessContext = { ...this.accessContext, ...(data.access || {}) };
 			if (!this.quickActions.length) this.createPickerOpen = false;
