@@ -49,7 +49,6 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 		self.assertIn("price_list not in allowed_price_lists", source)
 		self.assertIn("row_company != company", source)
 
-
 	def test_item_price_filter_and_write_path_use_same_scope(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 		hooks = (APP_ROOT / "hooks.py").read_text()
@@ -73,6 +72,28 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			client,
 		)
 
+	def test_direct_native_price_master_access_uses_assignment_permission_hooks(self):
+		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
+		hooks = (APP_ROOT / "hooks.py").read_text()
+
+		for contract in (
+			"def get_price_list_permission_query_conditions(",
+			"def get_item_price_permission_query_conditions(",
+			"def has_price_list_permission(",
+			"def has_item_price_permission(",
+			"`tabPrice List`.`name`",
+			"`tabItem Price`.`price_list`",
+			"ptype: str | None = None",
+		):
+			self.assertIn(contract, source)
+
+		for hook in (
+			'"Price List": "retailedge.pricing_promotions_workspace.get_price_list_permission_query_conditions"',
+			'"Item Price": "retailedge.pricing_promotions_workspace.get_item_price_permission_query_conditions"',
+			'"Price List": "retailedge.pricing_promotions_workspace.has_price_list_permission"',
+			'"Item Price": "retailedge.pricing_promotions_workspace.has_item_price_permission"',
+		):
+			self.assertIn(hook, hooks)
 	def test_pricing_workspace_uses_assignment_options_for_item_price_filter(self):
 		source = (
 			APP_ROOT
@@ -106,11 +127,14 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			source,
 		)
 
-
-	def test_system_manager_and_administrator_keep_native_management_scope(self):
+	def test_price_master_roles_and_administrator_keep_native_management_scope(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 		self.assertIn('user == "Administrator"', source)
-		self.assertIn('"System Manager" in set(frappe.get_roles(user) or [])', source)
+		self.assertIn('"Sales Master Manager"', source)
+		self.assertIn('"Purchase Master Manager"', source)
+		self.assertIn('"System Manager"', source)
+		self.assertIn("def _has_price_master_scope(", source)
+		self.assertIn("if _has_price_master_scope(user):", source)
 		self.assertIn('mode = "native"', source)
 
 
