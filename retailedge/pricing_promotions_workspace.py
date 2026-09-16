@@ -326,6 +326,52 @@ def _available_area(key: str, config: dict[str, Any]) -> dict[str, Any] | None:
 
 
 @frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def allowed_price_list_query(
+	doctype: str,
+	txt: str,
+	searchfield: str,
+	start: int,
+	page_len: int,
+	filters: dict[str, Any] | None = None,
+) -> list[list[str]]:
+	scope = _resolve_price_list_scope()
+	allowed = list(scope.get("names") or [])
+	if not allowed:
+		return []
+	query_filters: list[list[Any]] = [["Price List", "name", "in", allowed]]
+	if txt:
+		query_filters.append(["Price List", "name", "like", f"%{txt}%"])
+	rows = frappe.get_list(
+		"Price List",
+		filters=query_filters,
+		fields=["name"],
+		order_by="name asc",
+		limit_start=max(0, cint(start)),
+		limit_page_length=max(1, min(cint(page_len) or 20, 50)),
+	)
+	return [[str(row.get("name") or "")] for row in rows if row.get("name")]
+
+
+def validate_item_price_assignment(doc: Any, method: str | None = None) -> None:
+	"""Prevent Item Price writes outside an explicitly assigned operational price-list scope."""
+	if frappe.session.user in (None, "", "Guest"):
+		return
+	scope = _resolve_price_list_scope()
+	if scope.get("mode") != "assigned":
+		return
+	price_list = str(getattr(doc, "price_list", None) or "").strip()
+	if not price_list or price_list in set(scope.get("names") or []):
+		return
+	frappe.throw(
+		_("Price List {0} is not assigned to your account or current operating setup.").format(
+			frappe.bold(price_list)
+		),
+		frappe.PermissionError,
+	)
+
+
+@frappe.whitelist()
 def get_pricing_promotions_workspace() -> dict[str, Any]:
 	if not frappe.session.user or frappe.session.user == "Guest":
 		frappe.throw(_("Sign in to open Pricing & Promotions."), frappe.PermissionError)
