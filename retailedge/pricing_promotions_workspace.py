@@ -196,7 +196,6 @@ def _raw_assigned_price_lists(
 	candidates: set[str] = set()
 	sources: dict[str, list[str]] = {
 		"user_permission": [],
-		"user_default": [],
 		"pos_profile": [],
 		"branch_pos_profile": [],
 		"effective_pos_profile": [],
@@ -207,12 +206,6 @@ def _raw_assigned_price_lists(
 		if name:
 			candidates.add(name)
 			sources["user_permission"].append(name)
-
-	for key in ("Selling Price List", "selling_price_list", "Buying Price List", "buying_price_list"):
-		name = str(frappe.defaults.get_user_default(key) or "").strip()
-		if name:
-			candidates.add(name)
-			sources["user_default"].append(name)
 
 	assigned_profiles = get_user_pos_profiles(user=user, company=company or None)
 	profile_names = [str(row.get("name") or "").strip() for row in assigned_profiles if row.get("name")]
