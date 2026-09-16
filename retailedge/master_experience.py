@@ -130,6 +130,17 @@ BUSINESS_EXPENSE_QUICK_ACTION: dict[str, Any] = {
 	"target": "business-expenses",
 }
 
+PRICING_PROMOTIONS_PAGE_TARGET = "pricing-promotions-control"
+PRICING_PROMOTIONS_NATIVE_PEERS = {
+	"Price List",
+	"Item Price",
+	"Pricing Rule",
+	"Promotional Scheme",
+	"Coupon Code",
+	"Loyalty Program",
+}
+
+
 DOCUMENT_OUTPUT_ITEM: dict[str, Any] = {
 	"label": "Document Output & Sharing",
 	"description": "Print, download and share customer documents using ERPNext Print Formats and permissions.",
@@ -360,6 +371,40 @@ def _promote_professional_selling(navigation_groups: list[dict[str, Any]]) -> No
 			deepcopy(existing_page or PROFESSIONAL_SELLING_ITEM),
 		)
 		group["items"] = items
+		return
+
+
+def _promote_pricing_promotions_ownership(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Use the Pricing & Promotions Page as the everyday owner of pricing masters."""
+	if not _can_open_page(PRICING_PROMOTIONS_PAGE_TARGET):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "pricing-promotions":
+			continue
+		items = list(group.get("items") or [])
+		page_item = next(
+			(
+				item
+				for item in items
+				if item.get("target_type") == "Page"
+				and item.get("target") == PRICING_PROMOTIONS_PAGE_TARGET
+			),
+			None,
+		)
+		if page_item is None:
+			return
+		group["items"] = [
+			page_item,
+			*[
+				item
+				for item in items
+				if not (
+					item.get("target_type") == "DocType"
+					and item.get("target") in PRICING_PROMOTIONS_NATIVE_PEERS
+				)
+				and item is not page_item
+			],
+		]
 		return
 
 
@@ -679,6 +724,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_add_branch_assignment_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
 	_promote_professional_selling(navigation_groups)
+	_promote_pricing_promotions_ownership(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
 	_promote_purchase_invoice_ownership(navigation_groups)
 	_promote_stock_movement_history(navigation_groups)
@@ -743,6 +789,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
 	feature_flags["professional_selling"] = "edgesuite_primary"
+	feature_flags["pricing_promotions_ownership"] = "application_workspace"
 	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"
 	feature_flags["purchase_invoice_ownership"] = "edgesuite_purchase_register"
 	feature_flags["stock_movement_history_ownership"] = "edgesuite_page"
