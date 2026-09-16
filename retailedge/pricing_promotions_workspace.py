@@ -192,8 +192,9 @@ def _raw_assigned_price_lists(
 	user: str,
 	company: str,
 	branch: str,
-) -> tuple[set[str], dict[str, list[str]]]:
+) -> tuple[set[str], dict[str, list[str]], bool]:
 	candidates: set[str] = set()
+	has_assignment_boundary = False
 	sources: dict[str, list[str]] = {
 		"user_permission": [],
 		"pos_profile": [],
@@ -201,7 +202,10 @@ def _raw_assigned_price_lists(
 		"effective_pos_profile": [],
 	}
 
-	for row in get_user_permissions(user).get("Price List", []) or []:
+	price_permissions = get_user_permissions(user).get("Price List", []) or []
+	if price_permissions:
+		has_assignment_boundary = True
+	for row in price_permissions:
 		name = str(row.get("doc") or "").strip()
 		if name:
 			candidates.add(name)
@@ -210,6 +214,7 @@ def _raw_assigned_price_lists(
 	assigned_profiles = get_user_pos_profiles(user=user, company=company or None)
 	profile_names = [str(row.get("name") or "").strip() for row in assigned_profiles if row.get("name")]
 	if profile_names:
+		has_assignment_boundary = True
 		for row in frappe.get_all(
 			"POS Profile",
 			filters={"name": ["in", profile_names], "disabled": 0},
@@ -246,6 +251,7 @@ def _raw_assigned_price_lists(
 					"POS Profile User",
 					{"parent": effective_name, "user": user},
 				):
+					has_assignment_boundary = True
 					name = str(pos.get("selling_price_list") or "").strip()
 					if name:
 						candidates.add(name)
@@ -267,6 +273,7 @@ def _raw_assigned_price_lists(
 					"POS Profile User",
 					{"parent": pos_profile, "user": user},
 				):
+					has_assignment_boundary = True
 					name = str(pos.get("selling_price_list") or "").strip()
 					if name:
 						candidates.add(name)
@@ -274,7 +281,7 @@ def _raw_assigned_price_lists(
 
 	for source, values in sources.items():
 		sources[source] = sorted({name for name in values if name})
-	return candidates, sources
+	return candidates, sources, has_assignment_boundary
 
 
 def _candidate_assigned_price_lists(
@@ -283,8 +290,8 @@ def _candidate_assigned_price_lists(
 	company: str,
 	branch: str,
 	native_rows: list[dict[str, Any]],
-) -> tuple[set[str], dict[str, list[str]]]:
-	candidates, sources = _raw_assigned_price_lists(
+) -> tuple[set[str], dict[str, list[str]], bool]:
+	candidates, sources, has_assignment_boundary = _raw_assigned_price_lists(
 		user=user,
 		company=company,
 		branch=branch,
@@ -293,7 +300,7 @@ def _candidate_assigned_price_lists(
 	candidates.intersection_update(native_names)
 	for source, values in sources.items():
 		sources[source] = sorted({name for name in values if name in native_names})
-	return candidates, sources
+	return candidates, sources, has_assignment_boundary
 
 
 def _permission_assignment_scope(user: str | None = None) -> dict[str, Any]:
@@ -303,13 +310,13 @@ def _permission_assignment_scope(user: str | None = None) -> dict[str, Any]:
 	operating = get_operating_context() or {}
 	company = str(operating.get("company") or "").strip()
 	branch = str(operating.get("branch") or "").strip()
-	names, _sources = _raw_assigned_price_lists(
+	names, _sources, has_assignment_boundary = _raw_assigned_price_lists(
 		user=user,
 		company=company,
 		branch=branch,
 	)
 	return {
-		"restricted": bool(names),
+		"restricted": has_assignment_boundary,
 		"names": sorted(names),
 		"company": company,
 		"branch": branch,
@@ -384,13 +391,13 @@ def _resolve_price_list_scope() -> dict[str, Any]:
 		mode = "native"
 		sources: dict[str, list[str]] = {}
 	else:
-		assigned, sources = _candidate_assigned_price_lists(
+		assigned, sources, has_assignment_boundary = _candidate_assigned_price_lists(
 			user=user,
 			company=company,
 			branch=branch,
 			native_rows=native_rows,
 		)
-		if assigned:
+		if has_assignment_boundary:
 			allowed = assigned
 			mode = "assigned"
 		else:
