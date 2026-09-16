@@ -77,7 +77,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-for="row in rows" :key="row.name">
+					<tr v-for="(row, index) in rows" :key="row.name">
 						<td>
 							<strong class="record-name">{{ row.name }}</strong>
 						</td>
@@ -104,7 +104,7 @@
 									:options="moreActions(row)"
 									placeholder="More"
 									aria-label="More record actions"
-									class="record-more"
+									:class="['record-more', { 'record-more--fly-up': shouldFlyUp(index) }]"
 									@select="runMoreAction(row, $event)"
 								/>
 								<span v-else class="record-more-placeholder" aria-hidden="true"></span>
@@ -331,10 +331,7 @@ export default {
 			return Number(row?.docstatus || 0) === 0;
 		},
 		primaryActionLabel(row) {
-			if (!this.canComplete(row)) return "View & Output";
-			if (this.activeKey === "delivery-note") return "Review Delivery";
-			if (this.activeKey === "sales-invoice") return "Edit / Complete";
-			return "Review / Complete";
+			return this.canComplete(row) ? "Edit / Complete" : "View";
 		},
 		moreActions(row) {
 			const actions = (Array.isArray(row?.actions) ? row.actions : [])
@@ -344,10 +341,10 @@ export default {
 					disabled: Boolean(action?.disabled),
 				}))
 				.filter((action) => action.value && action.label);
-			if (this.canComplete(row)) {
+			if (!actions.some((action) => action.value === "output")) {
 				actions.push({
 					value: "output",
-					label: "View / Print / Send",
+					label: "Print & Send",
 				});
 			}
 			if (this.canUseNativeDesk) {
@@ -363,7 +360,11 @@ export default {
 				this.$emit("action", { action: "complete", document: this.activeDocument, row });
 				return;
 			}
-			this.$emit("action", { action: "output", document: this.activeDocument, row });
+			this.$emit("action", { action: "view", document: this.activeDocument, row });
+		},
+		shouldFlyUp(index) {
+			if (!Number.isInteger(index) || this.rows.length < 2) return false;
+			return index >= Math.max(0, this.rows.length - 2);
 		},
 		runMoreAction(row, option) {
 			const action = String(option?.value || "");
@@ -405,6 +406,10 @@ export default {
 	width:min(15rem,calc(100vw - 2rem));
 	min-width:min(15rem,calc(100vw - 2rem));
 	max-width:none;
+}
+:deep(.edge-dropdown__trigger.record-more.record-more--fly-up + .edge-dropdown__menu) {
+	top:auto;
+	bottom:calc(100% + .25rem);
 }
 :deep(.edge-dropdown__trigger.record-more + .edge-dropdown__menu .edge-dropdown__option-label) {
 	overflow:visible;
