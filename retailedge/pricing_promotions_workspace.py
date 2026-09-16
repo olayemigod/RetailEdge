@@ -5,6 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.utils import cint, getdate
+from frappe.utils.user import get_user_fullname
 
 from retailedge.operating_context import get_operating_context
 
@@ -205,7 +206,7 @@ def get_pricing_promotions_workspace() -> dict[str, Any]:
 		"description": _("Manage price lists, item prices, pricing rules, promotions, coupons and loyalty programmes from one workspace."),
 		"company": str(operating.get("company") or ""),
 		"branch": str(operating.get("branch") or ""),
-		"user_name": frappe.utils.get_fullname(frappe.session.user),
+		"user_name": get_user_fullname(frappe.session.user),
 		"areas": areas,
 		"default_page_length": DEFAULT_PAGE_LENGTH,
 	}
