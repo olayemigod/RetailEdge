@@ -4,9 +4,11 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.core.doctype.user_permission.user_permission import get_user_permissions
 from frappe.utils import cint, getdate
 from frappe.utils.user import get_user_fullname
 
+from retailedge.branch_profile import get_exact_branch_profile, get_user_pos_profiles
 from retailedge.operating_context import get_operating_context
 
 MAX_PAGE_LENGTH = 100
@@ -50,7 +52,7 @@ AREAS: dict[str, dict[str, Any]] = {
 		"search_fields": ("name", "item_code", "price_list"),
 		"filters": (
 			{"fieldname": "item_code", "label": "Item", "type": "text"},
-			{"fieldname": "price_list", "label": "Price List", "type": "text"},
+			{"fieldname": "price_list", "label": "Price List", "type": "price_list"},
 			{"fieldname": "currency", "label": "Currency", "type": "text"},
 			{"fieldname": "uom", "label": "UOM", "type": "text"},
 			{"fieldname": "valid_from", "label": "Valid From", "type": "date_from"},
@@ -159,6 +161,143 @@ def _area(area: str) -> dict[str, Any]:
 	return config
 
 
+def _native_readable_price_lists(*, user: str) -> list[dict[str, Any]]:
+	if not frappe.has_permission("Price List", "read", user=user):
+		return []
+	return [
+		dict(row)
+		for row in frappe.get_list(
+			"Price List",
+			fields=["name", "enabled", "selling", "buying", "currency", "owner"],
+			order_by="name asc",
+			limit_page_length=0,
+		)
+	]
+
+
+def _candidate_assigned_price_lists(
+	*,
+	user: str,
+	company: str,
+	branch: str,
+	native_rows: list[dict[str, Any]],
+) -> tuple[set[str], dict[str, list[str]]]:
+	candidates: set[str] = set()
+	sources: dict[str, list[str]] = {
+		"user_permission": [],
+		"user_default": [],
+		"pos_profile": [],
+		"branch_pos_profile": [],
+	}
+
+	for row in get_user_permissions(user).get("Price List", []) or []:
+		name = str(row.get("doc") or "").strip()
+		if name:
+			candidates.add(name)
+			sources["user_permission"].append(name)
+
+	for key in ("Selling Price List", "selling_price_list", "Buying Price List", "buying_price_list"):
+		name = str(frappe.defaults.get_user_default(key) or "").strip()
+		if name:
+			candidates.add(name)
+			sources["user_default"].append(name)
+
+	assigned_profiles = get_user_pos_profiles(user=user, company=company or None)
+	profile_names = [str(row.get("name") or "").strip() for row in assigned_profiles if row.get("name")]
+	if profile_names:
+		for row in frappe.get_all(
+			"POS Profile",
+			filters={"name": ["in", profile_names], "disabled": 0},
+			fields=["name", "selling_price_list"],
+			limit_page_length=0,
+		):
+			name = str(row.get("selling_price_list") or "").strip()
+			if name:
+				candidates.add(name)
+				sources["pos_profile"].append(name)
+
+	if company and branch:
+		profile = get_exact_branch_profile(company=company, branch=branch, active_only=True)
+		pos_profile = str(getattr(profile, "default_pos_profile", None) or "").strip() if profile else ""
+		if pos_profile:
+			pos = frappe.db.get_value(
+				"POS Profile",
+				pos_profile,
+				["name", "company", "disabled", "selling_price_list"],
+				as_dict=True,
+			)
+			if pos and not pos.get("disabled") and (not pos.get("company") or pos.get("company") == company):
+				user_rows = frappe.db.count("POS Profile User", {"parent": pos_profile})
+				if not user_rows or frappe.db.exists(
+					"POS Profile User",
+					{"parent": pos_profile, "user": user},
+				):
+					name = str(pos.get("selling_price_list") or "").strip()
+					if name:
+						candidates.add(name)
+						sources["branch_pos_profile"].append(name)
+
+	native_names = {str(row.get("name") or "").strip() for row in native_rows}
+	candidates.intersection_update(native_names)
+	for source, values in sources.items():
+		sources[source] = sorted({name for name in values if name in native_names})
+	return candidates, sources
+
+
+def _resolve_price_list_scope() -> dict[str, Any]:
+	user = frappe.session.user
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	native_rows = _native_readable_price_lists(user=user)
+	native_names = {str(row.get("name") or "").strip() for row in native_rows if row.get("name")}
+
+	if user == "Administrator" or "System Manager" in set(frappe.get_roles(user) or []):
+		allowed = native_names
+		mode = "native"
+		sources: dict[str, list[str]] = {}
+	else:
+		assigned, sources = _candidate_assigned_price_lists(
+			user=user,
+			company=company,
+			branch=branch,
+			native_rows=native_rows,
+		)
+		if assigned:
+			allowed = assigned
+			mode = "assigned"
+		else:
+			allowed = native_names
+			mode = "native"
+
+	return {
+		"mode": mode,
+		"names": sorted(allowed),
+		"sources": sources,
+		"company": company,
+		"branch": branch,
+		"message": (
+			_("Showing price lists assigned to your account and current operating setup.")
+			if mode == "assigned"
+			else _("Showing price lists available to your account.")
+		),
+	}
+
+
+def _apply_price_list_scope(
+	*,
+	doctype: str,
+	meta: Any,
+	filters: dict[str, Any],
+	scope: dict[str, Any],
+) -> None:
+	allowed = list(scope.get("names") or [])
+	if doctype == "Price List":
+		filters["name"] = ["in", allowed] if allowed else "__never__"
+	elif doctype == "Item Price" and meta.has_field("price_list"):
+		filters["price_list"] = ["in", allowed] if allowed else "__never__"
+
+
 def _available_area(key: str, config: dict[str, Any]) -> dict[str, Any] | None:
 	doctype = config["doctype"]
 	if not frappe.db.exists("DocType", doctype) or not frappe.has_permission(doctype, "read"):
@@ -192,6 +331,7 @@ def get_pricing_promotions_workspace() -> dict[str, Any]:
 		frappe.throw(_("Sign in to open Pricing & Promotions."), frappe.PermissionError)
 
 	operating = get_operating_context() or {}
+	price_list_scope = _resolve_price_list_scope()
 	areas = [
 		resolved
 		for key, config in AREAS.items()
@@ -212,6 +352,15 @@ def get_pricing_promotions_workspace() -> dict[str, Any]:
 		"branch": str(operating.get("branch") or ""),
 		"user_name": get_user_fullname(frappe.session.user),
 		"areas": areas,
+		"price_list_scope": {
+			"mode": price_list_scope["mode"],
+			"message": price_list_scope["message"],
+			"names": price_list_scope["names"],
+		},
+		"price_list_options": [
+			{"value": name, "label": name}
+			for name in price_list_scope["names"]
+		],
 		"default_page_length": DEFAULT_PAGE_LENGTH,
 	}
 
@@ -283,7 +432,21 @@ def get_pricing_promotions_records(
 
 	meta = frappe.get_meta(doctype)
 	supplied = _coerce_filters(filters)
+	price_list_scope = _resolve_price_list_scope()
 	query_filters = _build_filters(config, meta, supplied)
+	_apply_price_list_scope(
+		doctype=doctype,
+		meta=meta,
+		filters=query_filters,
+		scope=price_list_scope,
+	)
+	if doctype == "Item Price":
+		requested_price_list = str(supplied.get("price_list") or "").strip()
+		if requested_price_list and requested_price_list not in set(price_list_scope["names"]):
+			frappe.throw(
+				_("You do not have access to the selected Price List."),
+				frappe.PermissionError,
+			)
 	search_text = str(search or "").strip()
 	or_filters: list[list[Any]] = []
 	if search_text:
