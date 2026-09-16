@@ -8,6 +8,7 @@ from frappe.utils import cint, flt, get_datetime, getdate
 
 from retailedge.guided_entry_context import resolve_branch_warehouse_selection
 from retailedge.operating_context import get_operating_context
+from retailedge.professional_draft_items import editable_items, update_draft_items
 from retailedge.professional_selling import (
 	_assert_read,
 	_validate_stored_operational_branch,
@@ -387,6 +388,7 @@ def _build_preview(doc) -> dict[str, Any]:
 		"source_name": source_context["source_name"],
 		"item_count": len(list(doc.get("items") or [])),
 		"items": _item_summary(doc),
+		"editable_items": editable_items(doc),
 		"blockers": blockers,
 		"can_submit": bool(
 			not blockers
@@ -536,37 +538,15 @@ def update_standard_sales_invoice_draft(
 
 	requested_items = values.get("items")
 	if requested_items is not None:
-		if not isinstance(requested_items, list):
-			frappe.throw(_("Invalid Sales Invoice item changes."), frappe.ValidationError)
-		current_rows = {_clean(row.get("name")): row for row in list(doc.get("items") or []) if row.get("name")}
-		requested_names: set[str] = set()
-		for index, item in enumerate(requested_items, start=1):
-			if not isinstance(item, dict):
-				frappe.throw(_("Invalid item edit on row {0}.").format(index), frappe.ValidationError)
-			row_name = _clean(item.get("name"))
-			if not row_name or row_name not in current_rows:
-				frappe.throw(
-					_("Item rows cannot be added, removed or replaced from the completion editor."),
-					frappe.ValidationError,
-				)
-			if row_name in requested_names:
-				frappe.throw(_("Item row {0} is repeated.").format(row_name), frappe.ValidationError)
-			requested_names.add(row_name)
-			qty = flt(item.get("qty"))
-			rate = flt(item.get("rate"))
-			if qty <= 0:
-				frappe.throw(_("Quantity must be greater than zero on item row {0}.").format(index))
-			if rate < 0:
-				frappe.throw(_("Rate cannot be negative on item row {0}.").format(index))
-			row = current_rows[row_name]
-			row.qty = qty
-			row.rate = rate
-
-		if requested_names != set(current_rows):
-			frappe.throw(
-				_("All existing invoice item rows must remain present in the completion editor."),
-				frappe.ValidationError,
-			)
+		update_draft_items(
+			doc,
+			requested_items,
+			company=_clean(doc.get("company")),
+			branch=_stored_branch(doc),
+			customer=_clean(doc.get("customer")),
+			posting_date=str(posting_value),
+			default_warehouse=_clean(doc.get("set_warehouse")),
+		)
 
 	# ERPNext owns taxes, totals, source quantity limits, credit controls and
 	# stock/accounting validation. No ledger is posted by saving this draft.
