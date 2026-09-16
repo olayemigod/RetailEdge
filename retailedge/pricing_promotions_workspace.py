@@ -203,7 +203,10 @@ def get_pricing_promotions_workspace() -> dict[str, Any]:
 		)
 	return {
 		"title": _("Pricing & Promotions"),
-		"description": _("Manage price lists, item prices, pricing rules, promotions, coupons and loyalty programmes from one workspace."),
+		"description": _(
+			"Manage price lists, item prices, pricing rules, promotions, coupons and loyalty programmes "
+			"from one workspace."
+		),
 		"company": str(operating.get("company") or ""),
 		"branch": str(operating.get("branch") or ""),
 		"user_name": get_user_fullname(frappe.session.user),
@@ -270,7 +273,10 @@ def get_pricing_promotions_records(
 	config = _area(area)
 	doctype = config["doctype"]
 	if not frappe.db.exists("DocType", doctype) or not frappe.has_permission(doctype, "read"):
-		frappe.throw(_("You do not have permission to view {0}.").format(_(config["label"])), frappe.PermissionError)
+		frappe.throw(
+			_("You do not have permission to view {0}.").format(_(config["label"])),
+			frappe.PermissionError,
+		)
 
 	meta = frappe.get_meta(doctype)
 	supplied = _coerce_filters(filters)
