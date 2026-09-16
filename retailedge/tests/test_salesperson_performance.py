@@ -208,7 +208,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 	def test_frontend_has_visible_fallback(self):
 		content = self._read_vue()
 		self.assertIn("!edgeUIValid", content)
-		self.assertIn("EdgeSuite UI failed to load", content)
+		self.assertIn("The interface could not be loaded", content)
 
 	def test_frontend_filter_bar_and_stat_cards_are_business_facing(self):
 		content = self._read_vue()
