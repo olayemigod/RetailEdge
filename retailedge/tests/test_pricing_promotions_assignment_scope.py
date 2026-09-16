@@ -15,6 +15,7 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			"get_user_permissions",
 			"get_user_pos_profiles",
 			"get_exact_branch_profile",
+			"get_pos_profile",
 			'"Selling Price List"',
 			'"Buying Price List"',
 			'"POS Profile User"',
