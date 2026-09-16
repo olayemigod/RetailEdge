@@ -429,7 +429,7 @@ def _apply_price_list_scope(
 	allowed = list(scope.get("names") or [])
 	if doctype == "Price List":
 		filters["name"] = ["in", allowed] if allowed else "__never__"
-	elif doctype == "Item Price" and meta.has_field("price_list"):
+	elif doctype == "Item Price" and meta.has_field("price_list") and "price_list" not in filters:
 		filters["price_list"] = ["in", allowed] if allowed else "__never__"
 
 
@@ -653,6 +653,8 @@ def _build_filters(config: dict[str, Any], meta: Any, supplied: dict[str, Any]) 
 			filters[fieldname] = [">=", getdate(value)]
 		elif kind == "date_to":
 			filters[fieldname] = ["<=", getdate(value)]
+		elif kind == "price_list":
+			filters[fieldname] = value
 		else:
 			filters[fieldname] = ["like", f"%{value}%"]
 
