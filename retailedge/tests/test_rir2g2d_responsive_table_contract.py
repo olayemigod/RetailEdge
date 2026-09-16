@@ -19,6 +19,7 @@ LOCAL_OVERFLOW_WRAPPERS = {
 	"native_visual_workspaces/NativeERPNextWorkspace.vue": "native-control-table-wrap",
 	"payment_management/PaymentHistoryPanel.vue": "table-wrap",
 	"payment_management/PaymentManagement.vue": "table-wrap",
+	"pricing_promotions/PricingPromotionsWorkspace.vue": "pricing-table-wrap",
 	"professional_purchasing/IncomingQualityInspection.vue": "quality-table-wrap",
 	"professional_purchasing/ProfessionalPurchasing.vue": "table-wrap",
 	"professional_purchasing/SupplierScorecardGovernance.vue": "period-table-wrap",
