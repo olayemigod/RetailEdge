@@ -146,9 +146,7 @@ function callMethod(method, args = {}) {
 }
 
 function cleanError(error, fallback) {
-	const value = error?.message || error?.responseJSON?.message || error?.exc || "";
-	if (value && !String(value).includes("Traceback (most recent call last)")) return String(value);
-	return fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 export default {
