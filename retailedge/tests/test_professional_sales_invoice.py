@@ -45,6 +45,18 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 			self.assertIn(contract, source)
 		self.assertNotIn("erpnext_make_sales_order", source)
 
+	def test_direct_quote_invoice_reuses_registered_invoice_and_serializes_clicks(self):
+		source = self.read("professional_sales_invoice.py")
+		for contract in (
+			"get_quotation_conversion",
+			"def _lock_quotation_for_direct_invoice",
+			"FOR UPDATE",
+			'"existing": True',
+			'"requires_amend": cint(existing_doc.docstatus) == 2',
+		"return result",
+		):
+			self.assertIn(contract, source)
+
 	def test_direct_quote_invoice_is_blocked_after_order_creation(self):
 		source = self.read("professional_sales_invoice.py")
 		for contract in (
