@@ -115,7 +115,10 @@
 							<thead>
 								<tr>
 									<th v-for="column in activeArea.columns" :key="column.fieldname" scope="col">
-										{{ column.label }}
+										<button type="button" class="pricing-sort" @click="setSort(column.fieldname)">
+											<span>{{ column.label }}</span>
+											<span v-if="sortBy === column.fieldname" aria-hidden="true">{{ sortOrder === "asc" ? "▲" : "▼" }}</span>
+										</button>
 									</th>
 									<th scope="col" class="pricing-actions-column">Actions</th>
 								</tr>
@@ -208,6 +211,8 @@ export default {
 			filterValues: {},
 			hasMore: false,
 			nextStart: 0,
+			sortBy: "modified",
+			sortOrder: "desc",
 			requestToken: 0,
 			searchTimer: null,
 			menuItems: [],
@@ -275,6 +280,8 @@ export default {
 			this.rows = [];
 			this.hasMore = false;
 			this.nextStart = 0;
+			this.sortBy = "modified";
+			this.sortOrder = "desc";
 			this.reload();
 		},
 		setFilter(fieldname, value) {
@@ -284,6 +291,16 @@ export default {
 		clearFilters() {
 			this.search = "";
 			this.filterValues = {};
+			this.reload();
+		},
+		setSort(fieldname) {
+			if (!fieldname) return;
+			if (this.sortBy === fieldname) {
+				this.sortOrder = this.sortOrder === "asc" ? "desc" : "asc";
+			} else {
+				this.sortBy = fieldname;
+				this.sortOrder = "asc";
+			}
 			this.reload();
 		},
 		scheduleReload() {
@@ -335,6 +352,8 @@ export default {
 				filters: this.filterValues,
 				start,
 				page_length: 25,
+				sort_by: this.sortBy,
+				sort_order: this.sortOrder,
 			});
 		},
 		createRecord() {
@@ -359,7 +378,10 @@ export default {
 		displayValue(value, fieldname) {
 			if (value === null || value === undefined || value === "") return "—";
 			if (["enabled", "selling", "buying", "disable"].includes(fieldname)) return Number(value) ? "Yes" : "No";
-			if ((fieldname === "modified" || fieldname.includes("date")) && frappe.datetime?.str_to_user) {
+			if (
+				["modified", "valid_from", "valid_upto", "from_date", "to_date"].includes(fieldname)
+				&& frappe.datetime?.str_to_user
+			) {
 				try {
 					return frappe.datetime.str_to_user(String(value));
 				} catch (_error) {
@@ -419,6 +441,7 @@ export default {
 .pricing-table { width:100%; min-width:60rem; border-collapse:collapse; table-layout:auto; }
 .pricing-table th,.pricing-table td { padding:.75rem; border-bottom:1px solid var(--edge-color-border,var(--border-color)); text-align:left; white-space:nowrap; max-width:18rem; overflow:hidden; text-overflow:ellipsis; }
 .pricing-table th { background:var(--edge-color-surface-muted,var(--control-bg)); color:var(--edge-color-ink-500,var(--text-muted)); font-size:.72rem; font-weight:700; letter-spacing:.035em; text-transform:uppercase; }
+.pricing-sort { display:flex; align-items:center; gap:.35rem; width:100%; border:0; background:transparent; color:inherit; padding:0; font:inherit; font-weight:inherit; letter-spacing:inherit; text-transform:inherit; cursor:pointer; text-align:left; }
 .pricing-table tbody tr:last-child td { border-bottom:0; }
 .pricing-table tbody tr:hover { background:color-mix(in srgb,var(--edge-color-brand-50) 38%,transparent); }
 .pricing-actions-column { width:8.75rem; text-align:right !important; }
