@@ -354,7 +354,8 @@ export default {
 			const document = payload?.document;
 			const row = payload?.row;
 			if (!document?.key || !row?.name) return;
-			if (action === "output") { this.openDocumentOutput(document, row); return; }
+			if (action === "view") { this.openDocumentOutput(document, row, "view"); return; }
+			if (action === "output") { this.openDocumentOutput(document, row, "share"); return; }
 			if (action === "advanced") { this.openAdvancedRecord(document, row.name); return; }
 			if (action === "make-payment") { this.openCustomerPayment(document, row); return; }
 			if (["create-sales-order", "create-delivery-note", "create-sales-invoice"].includes(action)) {
@@ -382,8 +383,30 @@ export default {
 			if (!route?.method) return;
 			try {
 				const result = await callMethod(route.method, route.args, "POST");
-				frappe.show_alert({ message: __((result.doctype || "Document") + " " + (result.name || "") + " created as draft"), indicator: "green" });
 				this.$refs.sellingRecords?.refresh?.();
+
+				if (result.existing) {
+					const label = (result.doctype || "Document") + " " + (result.name || "");
+					if (result.requires_amend || Number(result.docstatus || 0) === 2) {
+						frappe.msgprint({
+							title: __("Existing cancelled invoice"),
+							message: __(label + " already came from this Quotation. Open it and use Amend instead of creating another invoice."),
+							indicator: "orange",
+						});
+						if (this.canUseNativeDesk) frappe.set_route("Form", "Sales Invoice", result.name);
+						return;
+					}
+					frappe.show_alert({ message: __(label + " already exists. Opening it instead."), indicator: "blue" });
+					if (Number(result.docstatus || 0) === 0 && result.doctype === "Sales Invoice") {
+						this.openSalesInvoiceCompletion(result);
+					} else {
+						const existingDocument = this.documents.find((item) => item.doctype === result.doctype) || document;
+						this.openDocumentOutput(existingDocument, result, "view");
+					}
+					return;
+				}
+
+				frappe.show_alert({ message: __((result.doctype || "Document") + " " + (result.name || "") + " created as draft"), indicator: "green" });
 				if (result.doctype === "Sales Order") this.openStandardCompletion(result);
 				else if (result.doctype === "Delivery Note") this.openDeliveryCompletion(result);
 				else if (result.doctype === "Sales Invoice") this.openSalesInvoiceCompletion(result);
@@ -396,7 +419,7 @@ export default {
 			this.paymentIntent = document.key === "sales-order" ? "receive-sales-order-payment" : "receive-customer-payment";
 			this.paymentInitialContext = {
 				company: this.sellingContext?.operating?.company || this.tenantName || "",
-				branch: this.sellingContext?.operating?.branch || this.branchName || "",
+				branch: row.branch || row.retailedge_branch || this.sellingContext?.operating?.branch || this.branchName || "",
 				party: row.customer || "",
 				reference_name: row.name,
 			};
@@ -432,9 +455,9 @@ export default {
 			});
 		},
 
-		openDocumentOutput(document, row) {
+		openDocumentOutput(document, row, mode = "share") {
 			if (!document?.key || !row?.name) return;
-			window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name };
+			window.retailedgeDocumentOutputTarget = { document: document.key, name: row.name, mode };
 			frappe.set_route("document-output-sharing");
 		},
 
