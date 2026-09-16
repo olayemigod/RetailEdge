@@ -253,17 +253,14 @@ def test_professional_selling_opens_invoice_completion_except_returns():
 
 
 
-def test_bounded_invoice_draft_editor_cannot_change_accounting_identity_or_add_rows():
+def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_items():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
+	helper = _read(ROOT / "professional_draft_items.py")
 	for contract in (
 		"def update_standard_sales_invoice_draft(",
-		'"po_no"',
-		'"remarks"',
-		'row.qty = qty',
-		'row.rate = rate',
-		"Item rows cannot be added, removed or replaced",
-		"All existing invoice item rows must remain present",
+		"update_draft_items(",
+		'"editable_items": editable_items(doc)',
 		"doc.save()",
 	):
 		assert contract in service
@@ -271,14 +268,28 @@ def test_bounded_invoice_draft_editor_cannot_change_accounting_identity_or_add_r
 		'doc.set("company"',
 		'doc.set("customer"',
 		'doc.set("branch"',
-		'doc.set("warehouse"',
 		'doc.set("update_stock"',
-		'doc.append("items"',
 	):
-		assert forbidden not in service[service.index("def update_standard_sales_invoice_draft("):service.index("def update_standard_sales_invoice_dates(")]
-	assert "Edit draft before completion" in dialog
-	assert "Customer PO / Reference" in dialog
-	assert "ERPNext recalculates taxes, totals" in dialog
+		assert forbidden not in service[
+			service.index("def update_standard_sales_invoice_draft("):
+			service.index("def update_standard_sales_invoice_dates(")
+		]
+	for contract in (
+		'doc.append("items"',
+		"Existing item identity cannot be replaced here.",
+		"Source-linked item",
+		"resolve_sales_item_pricing",
+		"_validate_warehouse_branch",
+	):
+		assert contract in helper
+	for contract in (
+		"Edit draft before completion",
+		"Customer PO / Reference",
+		"Additional Items",
+		"EdgeChildTable",
+		"ERPNext recalculates taxes, totals",
+	):
+		assert contract in dialog
 
 
 def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():
@@ -288,7 +299,7 @@ def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():
 		">PDF</button>",
 		"get_professional_selling_record_actions",
 		"completedResult.next_actions",
-		"View / Print / Send",
+		"Print & Send",
 		'this.$emit("next-action"',
 		"completedResult",
 	):
