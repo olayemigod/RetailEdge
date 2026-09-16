@@ -239,10 +239,15 @@ def _candidate_assigned_price_lists(
 				as_dict=True,
 			)
 			if pos and not pos.get("disabled") and (not pos.get("company") or pos.get("company") == company):
-				name = str(pos.get("selling_price_list") or "").strip()
-				if name:
-					candidates.add(name)
-					sources["effective_pos_profile"].append(name)
+				user_rows = frappe.db.count("POS Profile User", {"parent": effective_name})
+				if not user_rows or frappe.db.exists(
+					"POS Profile User",
+					{"parent": effective_name, "user": user},
+				):
+					name = str(pos.get("selling_price_list") or "").strip()
+					if name:
+						candidates.add(name)
+						sources["effective_pos_profile"].append(name)
 
 	if company and branch:
 		profile = get_exact_branch_profile(company=company, branch=branch, active_only=True)
