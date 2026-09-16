@@ -17,28 +17,41 @@ LEGACY_PRINT_FORMAT_ALIASES: tuple[str, ...] = (
 	"RetailEdge Professional Sales Order",
 	"RetailEdge Professional Delivery Note",
 	"RetailEdge Professional Sales Invoice",
+	"Professional Quotation",
+	"Professional Sales Order",
+	"Professional Delivery Note",
+	"Professional Sales Invoice",
+	"Invoice Classic",
+	"Invoice Modern",
+	"Invoice Compact",
+	"Invoice Minimal",
+	"Invoice Executive",
+	"Sales Receipt 80mm",
+	"Sales Receipt 58mm",
+	"POS Receipt 80mm",
+	"POS Receipt 58mm",
 )
 
 PROFESSIONAL_PRINT_FORMATS: tuple[dict[str, str], ...] = (
-	{"name": "Professional Quotation", "doctype": "Quotation", "heading": "Quotation", "kind": "document"},
-	{"name": "Professional Sales Order", "doctype": "Sales Order", "heading": "Sales Order", "kind": "document"},
-	{"name": "Professional Delivery Note", "doctype": "Delivery Note", "heading": "Delivery Note", "kind": "document"},
-	{"name": "Professional Sales Invoice", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "document"},
+	{"name": "PEdge Professional Quotation", "doctype": "Quotation", "heading": "Quotation", "kind": "document"},
+	{"name": "PEdge Professional Sales Order", "doctype": "Sales Order", "heading": "Sales Order", "kind": "document"},
+	{"name": "PEdge Professional Delivery Note", "doctype": "Delivery Note", "heading": "Delivery Note", "kind": "document"},
+	{"name": "PEdge Professional Sales Invoice", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "document"},
 )
 
 SALES_INVOICE_STYLE_FORMATS: tuple[dict[str, str], ...] = (
-	{"name": "Invoice Classic", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-classic"},
-	{"name": "Invoice Modern", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-modern"},
-	{"name": "Invoice Compact", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-compact"},
-	{"name": "Invoice Minimal", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-minimal"},
-	{"name": "Invoice Executive", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-executive"},
+	{"name": "PEdge Invoice Classic", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-classic"},
+	{"name": "PEdge Invoice Modern", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-modern"},
+	{"name": "PEdge Invoice Compact", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-compact"},
+	{"name": "PEdge Invoice Minimal", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-minimal"},
+	{"name": "PEdge Invoice Executive", "doctype": "Sales Invoice", "heading": "Sales Invoice", "kind": "invoice-executive"},
 )
 
 RECEIPT_PRINT_FORMATS: tuple[dict[str, str], ...] = (
-	{"name": "Sales Receipt 80mm", "doctype": "Sales Invoice", "heading": "Receipt", "kind": "receipt-80"},
-	{"name": "Sales Receipt 58mm", "doctype": "Sales Invoice", "heading": "Receipt", "kind": "receipt-58"},
-	{"name": "POS Receipt 80mm", "doctype": "POS Invoice", "heading": "Receipt", "kind": "receipt-80"},
-	{"name": "POS Receipt 58mm", "doctype": "POS Invoice", "heading": "Receipt", "kind": "receipt-58"},
+	{"name": "PEdge Sales Receipt 80mm", "doctype": "Sales Invoice", "heading": "Receipt", "kind": "receipt-80"},
+	{"name": "PEdge Sales Receipt 58mm", "doctype": "Sales Invoice", "heading": "Receipt", "kind": "receipt-58"},
+	{"name": "PEdge POS Receipt 80mm", "doctype": "POS Invoice", "heading": "Receipt", "kind": "receipt-80"},
+	{"name": "PEdge POS Receipt 58mm", "doctype": "POS Invoice", "heading": "Receipt", "kind": "receipt-58"},
 )
 
 MANAGED_PRINT_FORMATS = PROFESSIONAL_PRINT_FORMATS + SALES_INVOICE_STYLE_FORMATS + RECEIPT_PRINT_FORMATS
