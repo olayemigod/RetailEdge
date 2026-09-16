@@ -71,6 +71,21 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			client,
 		)
 
+	def test_existing_assignment_boundary_fails_closed_without_a_price_list(self):
+		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
+
+		for contract in (
+			"has_assignment_boundary = False",
+			"if price_permissions:",
+			"has_assignment_boundary = True",
+			"if profile_names:",
+			'"restricted": has_assignment_boundary',
+			"if has_assignment_boundary:",
+			"allowed = assigned",
+			'if not names:\n\t\treturn "1=0"',
+		):
+			self.assertIn(contract, source)
+
 	def test_direct_native_price_master_access_uses_assignment_permission_hooks(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 		hooks = (APP_ROOT / "hooks.py").read_text()
