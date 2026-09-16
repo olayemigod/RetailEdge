@@ -49,6 +49,61 @@ def _validate_source_against_operating_context(source) -> tuple[str, str]:
 	return company, branch
 
 
+def _lock_sales_invoice(name: str) -> None:
+	rows = frappe.db.sql(
+		"SELECT name FROM `tabSales Invoice` WHERE name = %s FOR UPDATE",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Sales Invoice {0} no longer exists.").format(name))
+
+
+def _existing_draft_delivery_for_invoice(sales_invoice: str):
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT dn.name
+		FROM `tabDelivery Note` dn
+		INNER JOIN `tabDelivery Note Item` item ON item.parent = dn.name
+		WHERE dn.docstatus = 0
+		  AND item.against_sales_invoice = %s
+		ORDER BY dn.creation ASC
+		LIMIT 1
+		""",
+		(sales_invoice,),
+		as_dict=True,
+	)
+	if not rows:
+		return None
+	name = str(rows[0].name or "").strip()
+	if not name:
+		return None
+	doc = frappe.get_doc("Delivery Note", name)
+	if not frappe.has_permission("Delivery Note", "read", doc=doc):
+		frappe.throw(
+			_("A Delivery Note draft already exists for this Sales Invoice, but you do not have permission to open it."),
+			frappe.PermissionError,
+		)
+	return doc
+
+
+def _delivery_response(target, *, branch: str, source_sales_invoice: str = "", source_sales_order: str = "", existing: bool = False) -> dict[str, Any]:
+	return {
+		"doctype": target.doctype,
+		"name": target.name,
+		"docstatus": target.docstatus,
+		"customer": target.customer,
+		"company": target.company,
+		"branch": target.get("branch") or target.get("retailedge_branch") or branch,
+		"shipping_rule": target.get("shipping_rule") or "",
+		"grand_total": target.grand_total,
+		"currency": target.currency,
+		"source_sales_invoice": source_sales_invoice,
+		"source_sales_order": source_sales_order,
+		"existing": existing,
+		"route": f"/app/delivery-note/{target.name}",
+	}
+
+
 def _validate_mapped_delivery_stock_context(target, *, company: str, source_branch: str) -> str:
 	"""Validate every mapped Stock Location before the draft is inserted."""
 	operating = get_operating_context() or {}
@@ -123,19 +178,7 @@ def create_delivery_note_from_sales_order(sales_order: str) -> dict[str, Any]:
 	# Draft insertion only. No stock ledger entry is created until normal ERPNext
 	# submission by an authorised user.
 	target.insert()
-	return {
-		"doctype": target.doctype,
-		"name": target.name,
-		"docstatus": target.docstatus,
-		"customer": target.customer,
-		"company": target.company,
-		"branch": target.get("branch") or target.get("retailedge_branch") or mapped_branch,
-		"shipping_rule": target.get("shipping_rule") or "",
-		"grand_total": target.grand_total,
-		"currency": target.currency,
-		"source_sales_order": source.name,
-		"route": f"/app/delivery-note/{target.name}",
-	}
+	return _delivery_response(target, branch=mapped_branch, source_sales_order=source.name)
 
 
 @frappe.whitelist(methods=["POST"])
@@ -164,6 +207,17 @@ def create_delivery_note_from_sales_invoice(sales_invoice: str) -> dict[str, Any
 		)
 
 	company, source_branch = _validate_source_against_operating_context(source)
+	_lock_sales_invoice(source.name)
+	existing = _existing_draft_delivery_for_invoice(source.name)
+	if existing:
+		existing_branch = _source_branch(existing) or source_branch
+		return _delivery_response(
+			existing,
+			branch=existing_branch,
+			source_sales_invoice=source.name,
+			existing=True,
+		)
+
 	target = erpnext_make_delivery_note_from_invoice(source.name)
 	if not target or target.doctype != "Delivery Note":
 		frappe.throw(_("ERPNext could not prepare a Delivery Note from this Sales Invoice."))
@@ -183,16 +237,4 @@ def create_delivery_note_from_sales_invoice(sales_invoice: str) -> dict[str, Any
 		_validate_shipping_rule(target.shipping_rule, company=company)
 
 	target.insert()
-	return {
-		"doctype": target.doctype,
-		"name": target.name,
-		"docstatus": target.docstatus,
-		"customer": target.customer,
-		"company": target.company,
-		"branch": target.get("branch") or target.get("retailedge_branch") or mapped_branch,
-		"shipping_rule": target.get("shipping_rule") or "",
-		"grand_total": target.grand_total,
-		"currency": target.currency,
-		"source_sales_invoice": source.name,
-		"route": f"/app/delivery-note/{target.name}",
-	}
+	return _delivery_response(target, branch=mapped_branch, source_sales_invoice=source.name)
