@@ -347,14 +347,16 @@ def get_item_price_permission_query_conditions(user: str | None = None) -> str:
 def has_price_list_permission(
 	doc: Any,
 	user: str | None = None,
-	permission_type: str | None = None,
-) -> bool | None:
+	ptype: str | None = None,
+	debug: bool = False,
+	**_kwargs: Any,
+) -> bool:
 	user = user or frappe.session.user
-	if permission_type == "create" or getattr(doc, "is_new", lambda: False)():
-		return None
+	if ptype == "create" or getattr(doc, "is_new", lambda: False)():
+		return True
 	scope = _permission_assignment_scope(user)
 	if not scope.get("restricted"):
-		return None
+		return True
 	name = str(getattr(doc, "name", "") or "").strip()
 	return name in set(scope.get("names") or [])
 
@@ -362,14 +364,16 @@ def has_price_list_permission(
 def has_item_price_permission(
 	doc: Any,
 	user: str | None = None,
-	permission_type: str | None = None,
-) -> bool | None:
+	ptype: str | None = None,
+	debug: bool = False,
+	**_kwargs: Any,
+) -> bool:
 	user = user or frappe.session.user
-	if permission_type == "create" or getattr(doc, "is_new", lambda: False)():
-		return None
+	if ptype == "create" or getattr(doc, "is_new", lambda: False)():
+		return True
 	scope = _permission_assignment_scope(user)
 	if not scope.get("restricted"):
-		return None
+		return True
 	price_list = str(getattr(doc, "price_list", "") or "").strip()
 	return price_list in set(scope.get("names") or [])
 
