@@ -226,7 +226,7 @@ def _raw_assigned_price_lists(
 				candidates.add(name)
 				sources["pos_profile"].append(name)
 
-	if company:
+	if company and frappe.has_permission("POS Profile", "read", user=user):
 		try:
 			effective_pos = get_pos_profile(company, user=user)
 		except Exception:
