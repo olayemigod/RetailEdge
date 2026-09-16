@@ -70,6 +70,7 @@ AREAS: dict[str, dict[str, Any]] = {
 			("title", "Title"),
 			("apply_on", "Applies On"),
 			("price_or_product_discount", "Discount Type"),
+			("for_price_list", "Price List"),
 			("selling", "Selling"),
 			("buying", "Buying"),
 			("valid_from", "Valid From"),
@@ -80,6 +81,7 @@ AREAS: dict[str, dict[str, Any]] = {
 		"filters": (
 			{"fieldname": "apply_on", "label": "Applies On", "type": "text"},
 			{"fieldname": "price_or_product_discount", "label": "Discount Type", "type": "text"},
+			{"fieldname": "for_price_list", "label": "Price List", "type": "price_list"},
 			{"fieldname": "selling", "label": "Selling", "type": "boolean"},
 			{"fieldname": "buying", "label": "Buying", "type": "boolean"},
 			{"fieldname": "disable", "label": "Disabled", "type": "boolean"},
@@ -331,6 +333,75 @@ def _apply_price_list_scope(
 		filters["price_list"] = ["in", allowed] if allowed else "__never__"
 
 
+def _allowed_pricing_rule_names(scope: dict[str, Any]) -> list[str]:
+	if not frappe.db.exists("DocType", "Pricing Rule") or not frappe.has_permission("Pricing Rule", "read"):
+		return []
+	meta = frappe.get_meta("Pricing Rule")
+	fields = ["name"]
+	if meta.has_field("company"):
+		fields.append("company")
+	if meta.has_field("for_price_list"):
+		fields.append("for_price_list")
+	rows = frappe.get_list(
+		"Pricing Rule",
+		fields=fields,
+		order_by="modified desc",
+		limit_page_length=0,
+	)
+	company = str(scope.get("company") or "").strip()
+	allowed_price_lists = set(scope.get("names") or [])
+	allowed: list[str] = []
+	for row in rows:
+		row_company = str(row.get("company") or "").strip()
+		if company and row_company and row_company != company:
+			continue
+		price_list = str(row.get("for_price_list") or "").strip()
+		if price_list and price_list not in allowed_price_lists:
+			continue
+		name = str(row.get("name") or "").strip()
+		if name:
+			allowed.append(name)
+	return allowed
+
+
+def _allowed_coupon_names(scope: dict[str, Any]) -> list[str]:
+	if not frappe.db.exists("DocType", "Coupon Code") or not frappe.has_permission("Coupon Code", "read"):
+		return []
+	meta = frappe.get_meta("Coupon Code")
+	if not meta.has_field("pricing_rule"):
+		return frappe.get_list("Coupon Code", pluck="name", limit_page_length=0)
+	allowed_rules = set(_allowed_pricing_rule_names(scope))
+	rows = frappe.get_list(
+		"Coupon Code",
+		fields=["name", "pricing_rule"],
+		order_by="modified desc",
+		limit_page_length=0,
+	)
+	return [
+		str(row.get("name") or "")
+		for row in rows
+		if row.get("name")
+		and (
+			not str(row.get("pricing_rule") or "").strip()
+			or str(row.get("pricing_rule") or "").strip() in allowed_rules
+		)
+	]
+
+
+def _apply_related_pricing_scope(
+	*,
+	doctype: str,
+	filters: dict[str, Any],
+	scope: dict[str, Any],
+) -> None:
+	if doctype == "Pricing Rule":
+		allowed = _allowed_pricing_rule_names(scope)
+		filters["name"] = ["in", allowed] if allowed else "__never__"
+	elif doctype == "Coupon Code":
+		allowed = _allowed_coupon_names(scope)
+		filters["name"] = ["in", allowed] if allowed else "__never__"
+
+
 def _available_area(key: str, config: dict[str, Any]) -> dict[str, Any] | None:
 	doctype = config["doctype"]
 	if not frappe.db.exists("DocType", doctype) or not frappe.has_permission(doctype, "read"):
@@ -523,8 +594,17 @@ def get_pricing_promotions_records(
 		filters=query_filters,
 		scope=price_list_scope,
 	)
-	if doctype == "Item Price":
-		requested_price_list = str(supplied.get("price_list") or "").strip()
+	_apply_related_pricing_scope(
+		doctype=doctype,
+		filters=query_filters,
+		scope=price_list_scope,
+	)
+	if doctype in {"Item Price", "Pricing Rule"}:
+		requested_price_list = str(
+			supplied.get("price_list")
+			or supplied.get("for_price_list")
+			or ""
+		).strip()
 		if requested_price_list and requested_price_list not in set(price_list_scope["names"]):
 			frappe.throw(
 				_("You do not have access to the selected Price List."),
