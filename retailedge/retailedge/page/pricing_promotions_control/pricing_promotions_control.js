@@ -1,8 +1,7 @@
 const EDGEUI_ASSET = "edgeui.bundle.js";
-const WORKSPACE_ASSET = "native_visual_workspaces.bundle.js";
+const WORKSPACE_ASSET = "pricing_promotions_workspace.bundle.js";
 const PAGE_ROUTE = "pricing-promotions-control";
 const PAGE_TITLE = "Pricing & Promotions";
-const WORKSPACE_KEY = "pricing-promotions";
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {
@@ -41,12 +40,12 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(EDGEUI_ASSET);
 		if (!window.EdgeSuiteUI?.createEdgeApp) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(WORKSPACE_ASSET);
-		if (typeof window.mountNativeERPNextWorkspace !== "function") throw new Error("RetailEdge control workspace bundle is unavailable.");
+		if (typeof window.mountPricingPromotionsWorkspace !== "function") throw new Error("Pricing & Promotions workspace bundle is unavailable.");
 		loading.remove();
 		const root = document.createElement("div");
 		root.className = "retailedge-native-workspace-root";
 		page.body.append(root);
-		window.mountNativeERPNextWorkspace(root, WORKSPACE_KEY);
+		window.mountPricingPromotionsWorkspace(root);
 	} catch (error) {
 		loading.textContent = error?.message || __("Pricing & Promotions failed to load.");
 		loading.classList.add("text-danger");
