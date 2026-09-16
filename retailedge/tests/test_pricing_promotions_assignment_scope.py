@@ -23,11 +23,11 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			"def _apply_price_list_scope(",
 			'if doctype == "Price List":',
 			'elif doctype == "Item Price"',
-			'"price_list": ["in", allowed]',
+			'filters["price_list"] = ["in", allowed]',
 		):
 			self.assertIn(contract, source)
 
-		self.assertIn('"mode": "assigned"', source)
+		self.assertIn('mode = "assigned"', source)
 		self.assertIn("Showing price lists assigned to your account", source)
 
 	def test_item_price_filter_and_write_path_use_same_scope(self):
