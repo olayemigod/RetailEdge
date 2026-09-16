@@ -478,9 +478,7 @@ function callMethod(method, args = {}) {
 }
 
 function errorMessage(error, fallback) {
-	if (error?.message) return error.message;
-	if (error?.exc_type) return error.exc_type;
-	return fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 function confirmAction(message) {
