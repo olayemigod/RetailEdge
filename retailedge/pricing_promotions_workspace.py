@@ -180,12 +180,18 @@ def _native_readable_price_lists(*, user: str) -> list[dict[str, Any]]:
 	]
 
 
-def _candidate_assigned_price_lists(
+PRICE_MASTER_ROLES = {"Sales Master Manager", "Purchase Master Manager", "System Manager"}
+
+
+def _has_price_master_scope(user: str) -> bool:
+	return user == "Administrator" or bool(PRICE_MASTER_ROLES.intersection(set(frappe.get_roles(user) or [])))
+
+
+def _raw_assigned_price_lists(
 	*,
 	user: str,
 	company: str,
 	branch: str,
-	native_rows: list[dict[str, Any]],
 ) -> tuple[set[str], dict[str, list[str]]]:
 	candidates: set[str] = set()
 	sources: dict[str, list[str]] = {
@@ -273,11 +279,99 @@ def _candidate_assigned_price_lists(
 						candidates.add(name)
 						sources["branch_pos_profile"].append(name)
 
+	for source, values in sources.items():
+		sources[source] = sorted({name for name in values if name})
+	return candidates, sources
+
+
+def _candidate_assigned_price_lists(
+	*,
+	user: str,
+	company: str,
+	branch: str,
+	native_rows: list[dict[str, Any]],
+) -> tuple[set[str], dict[str, list[str]]]:
+	candidates, sources = _raw_assigned_price_lists(
+		user=user,
+		company=company,
+		branch=branch,
+	)
 	native_names = {str(row.get("name") or "").strip() for row in native_rows}
 	candidates.intersection_update(native_names)
 	for source, values in sources.items():
 		sources[source] = sorted({name for name in values if name in native_names})
 	return candidates, sources
+
+
+def _permission_assignment_scope(user: str | None = None) -> dict[str, Any]:
+	user = user or frappe.session.user
+	if not user or user == "Guest" or _has_price_master_scope(user):
+		return {"restricted": False, "names": []}
+	operating = get_operating_context() or {}
+	company = str(operating.get("company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
+	names, _sources = _raw_assigned_price_lists(
+		user=user,
+		company=company,
+		branch=branch,
+	)
+	return {
+		"restricted": bool(names),
+		"names": sorted(names),
+		"company": company,
+		"branch": branch,
+	}
+
+
+def _sql_in_condition(field: str, names: list[str]) -> str:
+	if not names:
+		return "1=0"
+	values = ", ".join(frappe.db.escape(name) for name in names)
+	return f"{field} in ({values})"
+
+
+def get_price_list_permission_query_conditions(user: str | None = None) -> str:
+	scope = _permission_assignment_scope(user)
+	if not scope.get("restricted"):
+		return ""
+	return _sql_in_condition("`tabPrice List`.`name`", list(scope.get("names") or []))
+
+
+def get_item_price_permission_query_conditions(user: str | None = None) -> str:
+	scope = _permission_assignment_scope(user)
+	if not scope.get("restricted"):
+		return ""
+	return _sql_in_condition("`tabItem Price`.`price_list`", list(scope.get("names") or []))
+
+
+def has_price_list_permission(
+	doc: Any,
+	user: str | None = None,
+	permission_type: str | None = None,
+) -> bool | None:
+	user = user or frappe.session.user
+	if permission_type == "create" or getattr(doc, "is_new", lambda: False)():
+		return None
+	scope = _permission_assignment_scope(user)
+	if not scope.get("restricted"):
+		return None
+	name = str(getattr(doc, "name", "") or "").strip()
+	return name in set(scope.get("names") or [])
+
+
+def has_item_price_permission(
+	doc: Any,
+	user: str | None = None,
+	permission_type: str | None = None,
+) -> bool | None:
+	user = user or frappe.session.user
+	if permission_type == "create" or getattr(doc, "is_new", lambda: False)():
+		return None
+	scope = _permission_assignment_scope(user)
+	if not scope.get("restricted"):
+		return None
+	price_list = str(getattr(doc, "price_list", "") or "").strip()
+	return price_list in set(scope.get("names") or [])
 
 
 def _resolve_price_list_scope() -> dict[str, Any]:
@@ -288,7 +382,7 @@ def _resolve_price_list_scope() -> dict[str, Any]:
 	native_rows = _native_readable_price_lists(user=user)
 	native_names = {str(row.get("name") or "").strip() for row in native_rows if row.get("name")}
 
-	if user == "Administrator" or "System Manager" in set(frappe.get_roles(user) or []):
+	if _has_price_master_scope(user):
 		allowed = native_names
 		mode = "native"
 		sources: dict[str, list[str]] = {}
