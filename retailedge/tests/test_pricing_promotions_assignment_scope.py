@@ -31,6 +31,25 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 		self.assertIn('mode = "assigned"', source)
 		self.assertIn("Showing price lists assigned to your account", source)
 
+	def test_related_pricing_records_follow_company_and_price_list_scope(self):
+		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
+
+		for contract in (
+			'"for_price_list", "Price List"',
+			'"fieldname": "for_price_list"',
+			"def _allowed_pricing_rule_names(",
+			"def _allowed_coupon_names(",
+			"def _apply_related_pricing_scope(",
+			'if doctype == "Pricing Rule":',
+			'elif doctype == "Coupon Code":',
+			'"company_scoped": True',
+		):
+			self.assertIn(contract, source)
+
+		self.assertIn("price_list not in allowed_price_lists", source)
+		self.assertIn("row_company != company", source)
+
+
 	def test_item_price_filter_and_write_path_use_same_scope(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 		hooks = (APP_ROOT / "hooks.py").read_text()
