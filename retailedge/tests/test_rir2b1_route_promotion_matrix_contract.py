@@ -92,7 +92,7 @@ class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 			},
 		)
 
-	def test_review_only_pages_exist_without_becoming_b1_route_promotions(self):
+	def test_later_review_promotions_do_not_rewrite_the_frozen_b1_matrix(self):
 		base_targets = {
 			(item["target_type"], item["target"])
 			for group in NAVIGATION_GROUPS
@@ -104,7 +104,7 @@ class TestRIR2B1RoutePromotionMatrixContract(unittest.TestCase):
 		branch_assignments = _page_definition("branch_assignments", "branch_assignments.json")
 		self.assertEqual(banking_readiness["name"], "banking-readiness")
 		self.assertEqual(branch_assignments["name"], "branch-assignments")
-		self.assertNotIn(("Page", "banking-readiness"), base_targets)
+		self.assertIn(("Page", "banking-readiness"), base_targets)
 		self.assertNotIn(("Page", "banking-readiness"), fallback_targets)
 		self.assertNotIn(("Page", "branch-assignments"), base_targets)
 		self.assertNotIn(("Page", "branch-assignments"), fallback_targets)
