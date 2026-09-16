@@ -237,6 +237,8 @@ def _resolve_user_pos_profile(*, company: str, branch: str, user: str) -> frappe
 			if pos:
 				return pos
 
+	if not frappe.has_permission("POS Profile", "read", user=user):
+		return None
 	try:
 		standard = get_pos_profile(company, user=user)
 	except Exception:
