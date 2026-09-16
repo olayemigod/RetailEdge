@@ -78,6 +78,15 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			source,
 		)
 
+	def test_legacy_generic_pricing_preview_is_closed(self):
+		source = (APP_ROOT / "native_visual_workspaces.py").read_text()
+		self.assertIn('if workspace == "pricing-promotions":', source)
+		self.assertIn(
+			"Pricing & Promotions is available through its dedicated managed workspace.",
+			source,
+		)
+
+
 	def test_system_manager_and_administrator_keep_native_management_scope(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 		self.assertIn('user == "Administrator"', source)
