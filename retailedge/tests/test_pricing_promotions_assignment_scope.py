@@ -16,8 +16,6 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 			"get_user_pos_profiles",
 			"get_exact_branch_profile",
 			"get_pos_profile",
-			'"Selling Price List"',
-			'"Buying Price List"',
 			'"POS Profile User"',
 			'"selling_price_list"',
 			"def _resolve_price_list_scope(",
@@ -30,6 +28,7 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 
 		self.assertIn('mode = "assigned"', source)
 		self.assertIn("Showing price lists assigned to your account", source)
+		self.assertNotIn("frappe.defaults.get_user_default", source)
 
 	def test_related_pricing_records_follow_company_and_price_list_scope(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
