@@ -118,7 +118,7 @@
 						>
 							{{ action.label }}
 						</button>
-						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">View / Print / Send</button>
+						<button type="button" class="edge-button edge-button--secondary" @click="emitNextAction('output')">Print & Send</button>
 					</div>
 				</div>
 
