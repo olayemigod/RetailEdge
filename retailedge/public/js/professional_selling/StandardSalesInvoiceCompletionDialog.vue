@@ -44,6 +44,15 @@
 							<span>{{ preview.currency || "" }} {{ row.amount }}</span>
 						</div>
 					</div>
+					<EdgeChildTable
+						:field="{ label: 'Additional Items', description: 'Add products or services to this draft before submission.' }"
+						:rows="newItems"
+						:columns="newItemColumns"
+						:addLabel="'Add Item'"
+						:linkSearcher="searchNewItemLink"
+						:newRowsFirst="false"
+						@update:rows="newItems = $event"
+					/>
 					<p class="invoice-completion-hint">ERPNext recalculates taxes, totals, source quantity limits and accounting validation when the draft is saved.</p>
 				</section>
 
@@ -155,6 +164,7 @@ const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_previe
 const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 const SUBMIT_METHOD = "retailedge.standard_sales_invoice_completion.submit_standard_sales_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_standard_sales_invoice_workflow_action";
+const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
 
 function runtimeComponents() {
 	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
@@ -168,7 +178,7 @@ function callMethod(method, args = {}, type = "GET") {
 }
 
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?._server_messages || fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 export default {
@@ -177,6 +187,7 @@ export default {
 		EdgeModal: runtimeComponents().EdgeModal,
 		EdgeLoadingState: runtimeComponents().EdgeLoadingState,
 		EdgeInput: runtimeComponents().EdgeInput,
+		EdgeChildTable: runtimeComponents().EdgeChildTable,
 	},
 	props: {
 		open: { type: Boolean, default: false },
@@ -197,6 +208,13 @@ export default {
 			draftPoNo: "",
 			draftRemarks: "",
 			draftItems: [],
+			newItems: [],
+			newItemColumns: [
+				{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" },
+				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
+				{ fieldname: "rate", label: "Rate", fieldtype: "Currency", placeholder: "Auto price" },
+				{ fieldname: "warehouse", label: "Stock Location", fieldtype: "Link", placeholder: "Optional" },
+			],
 			completedResult: null,
 			outputDetails: null,
 		};
@@ -213,7 +231,8 @@ export default {
 				|| String(this.draftPoNo || "") !== String(this.preview?.po_no || "")
 				|| String(this.draftRemarks || "") !== String(this.preview?.remarks || "")
 			) return true;
-			const original = this.preview?.items || [];
+			if (this.newItems.some((row) => row?.item_code)) return true;
+			const original = this.preview?.editable_items || [];
 			return this.draftItems.some((row, index) => (
 				Number(row.qty || 0) !== Number(original[index]?.qty || 0)
 				|| Number(row.rate || 0) !== Number(original[index]?.rate || 0)
@@ -221,7 +240,8 @@ export default {
 		},
 		draftValid() {
 			if (!this.draftPostingDate || !this.draftDueDate || String(this.draftDueDate) < String(this.draftPostingDate)) return false;
-			return this.draftItems.every((row) => Number(row.qty || 0) > 0 && Number(row.rate || 0) >= 0);
+			return this.draftItems.every((row) => Number(row.qty || 0) > 0 && Number(row.rate || 0) >= 0)
+				&& this.newItems.filter((row) => row?.item_code).every((row) => Number(row.qty || 0) > 0);
 		},
 	},
 	watch: {
@@ -245,7 +265,8 @@ export default {
 			this.draftDueDate = preview?.due_date || "";
 			this.draftPoNo = preview?.po_no || "";
 			this.draftRemarks = preview?.remarks || "";
-			this.draftItems = (preview?.items || []).map((row) => ({ ...row }));
+			this.draftItems = (preview?.editable_items || preview?.items || []).map((row) => ({ ...row }));
+			this.newItems = [];
 		},
 		async loadPreview() {
 			if (!this.document?.name || this.loading) return;
@@ -262,6 +283,23 @@ export default {
 				this.loading = false;
 			}
 		},
+		searchOptions(fieldname, query) {
+			return callMethod(SEARCH_METHOD, {
+				document: "sales-invoice",
+				fieldname,
+				txt: query || "",
+				values: {
+					company: this.preview?.company || "",
+					branch: this.preview?.branch || "",
+					customer: this.preview?.customer || "",
+				},
+			}).then((rows) => Array.isArray(rows) ? rows : []);
+		},
+		searchNewItemLink(column, query) {
+			if (column?.fieldname === "item_code") return this.searchOptions("item_code", query);
+			if (column?.fieldname === "warehouse") return this.searchOptions("warehouse", query);
+			return Promise.resolve([]);
+		},
 		async saveDraftChanges() {
 			if (!this.preview?.can_edit || !this.draftDirty || !this.draftValid || this.busy) return;
 			this.busy = true;
@@ -275,7 +313,10 @@ export default {
 						due_date: this.draftDueDate,
 						po_no: this.draftPoNo,
 						remarks: this.draftRemarks,
-						items: this.draftItems.map((row) => ({ name: row.name, qty: Number(row.qty), rate: Number(row.rate) })),
+						items: [
+							...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty), rate: Number(row.rate), warehouse: row.warehouse || "" })),
+							...this.newItems.filter((row) => row?.item_code).map((row) => ({ ...row })),
+						],
 					},
 				}, "POST");
 				this.applyPreview(result);
