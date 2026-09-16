@@ -52,6 +52,19 @@ class TestPricingPromotionsAssignmentScope(TestCase):
 		self.assertIn("price_list not in allowed_price_lists", source)
 		self.assertIn("row_company != company", source)
 
+	def test_selected_accessible_price_list_filter_is_not_overwritten(self):
+		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
+		self.assertIn('elif kind == "price_list":', source)
+		self.assertIn("filters[fieldname] = value", source)
+		self.assertIn(
+			'meta.has_field("price_list") and "price_list" not in filters',
+			source,
+		)
+		self.assertIn(
+			"requested_price_list not in set(price_list_scope[\"names\"])",
+			source,
+		)
+
 	def test_item_price_filter_and_write_path_use_same_scope(self):
 		source = (APP_ROOT / "pricing_promotions_workspace.py").read_text()
 		hooks = (APP_ROOT / "hooks.py").read_text()
