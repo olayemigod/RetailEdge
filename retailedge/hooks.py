@@ -169,6 +169,9 @@ doc_events = {
 	"Bank Account": {
 		"validate": "retailedge.bank_account_policy.validate_bank_account_branch",
 	},
+	"Item Price": {
+		"validate": "retailedge.pricing_promotions_workspace.validate_item_price_assignment",
+	},
 	"Sales Invoice": {
 		"validate": "retailedge.branch_defaults_application.apply_branch_attribution_and_defaults",
 	},
