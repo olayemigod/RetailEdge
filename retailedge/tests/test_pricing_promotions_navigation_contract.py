@@ -71,6 +71,8 @@ class TestPricingPromotionsNavigationContract(TestCase):
 			'activeArea.can_write ? "Edit" : "View"',
 			"Clear filters",
 			"Load more",
+			"pricing-sort",
+			"sort_by",
 			"get_pricing_promotions_records",
 		):
 			self.assertIn(contract, workspace)
