@@ -579,6 +579,7 @@ export default {
 			visualLoading: false,
 			visualError: "",
 			homeVisuals: [],
+			visualRequestId: 0,
 			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
 			homeSmartDate: {},
@@ -769,18 +770,21 @@ export default {
 				this.visualError = "";
 				return Promise.resolve();
 			}
+			const requestId = ++this.visualRequestId;
 			this.visualLoading = true;
 			this.visualError = "";
 			return fetchHomeVisuals(this.context.company, this.context.branch, this.homePeriod)
 				.then((payload) => {
+					if (requestId !== this.visualRequestId) return;
 					this.homeVisuals = payload.visuals || [];
 				})
 				.catch((error) => {
+					if (requestId !== this.visualRequestId) return;
 					this.homeVisuals = [];
 					this.visualError = error?.message || "Unable to load business visuals.";
 				})
 				.finally(() => {
-					this.visualLoading = false;
+					if (requestId === this.visualRequestId) this.visualLoading = false;
 				});
 		},
 		openHomeVisual(chart) {
