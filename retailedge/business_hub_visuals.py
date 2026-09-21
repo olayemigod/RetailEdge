@@ -9,11 +9,11 @@ from frappe import _
 from frappe.utils import flt, getdate
 
 from retailedge.branch_context import user_has_global_branch_access
-from retailedge.cash_movement import get_cash_movement_export
+from retailedge.cash_movement import get_cash_movement_visual_aggregates
 from retailedge.customer_receivables import get_customer_receivables_export
 from retailedge.expense_register import get_expense_register_export
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
-from retailedge.sales_reporting import get_sales_by_item_export, get_sales_invoice_register_export
+from retailedge.sales_reporting import get_sales_by_item_export, get_sales_visual_aggregates
 from retailedge.stock_position import get_stock_position
 from retailedge.supplier_payables import get_supplier_payables_export
 
@@ -212,16 +212,16 @@ def _sales_trend(
     end,
     currency: str,
 ) -> dict[str, Any]:
-    dataset = get_sales_invoice_register_export(filters)
+    dataset = get_sales_visual_aggregates(filters)
     granularity = _granularity(start, end)
     rows = _period_rows(start, end, granularity, ("net_sales", "transactions"))
     by_key = {row["key"]: row for row in rows}
-    for source in dataset.get("rows") or []:
+    for source in dataset.get("trend") or []:
         key, _ = _bucket_for_date(source.get("posting_date"), granularity)
         if key not in by_key:
             continue
-        by_key[key]["net_sales"] += flt(source.get("grand_total"))
-        by_key[key]["transactions"] += 1
+        by_key[key]["net_sales"] += flt(source.get("net_sales"))
+        by_key[key]["transactions"] += flt(source.get("transactions"))
     return {
         "description": _("Net invoiced sales over the selected period."),
         "chart_type": "line",
@@ -251,13 +251,17 @@ def _sales_mix(
         description = _("Top item groups contributing to net sales in this Branch.")
         route = "/app/sales-by-item"
     else:
-        dataset = get_sales_invoice_register_export(filters)
+        dataset = get_sales_visual_aggregates(filters)
         buckets = defaultdict(float)
-        for row in dataset.get("rows") or []:
+        for row in dataset.get("branch_mix") or []:
             label = str(row.get("branch") or _("Unattributed")).strip() or _("Unattributed")
-            buckets[label] += flt(row.get("grand_total"))
+            buckets[label] += flt(row.get("net_sales"))
         title = _("Sales by Branch")
-        description = _("Top Branch contributions to company net invoiced sales.")
+        description = (
+            _("Top Branch contributions to company net invoiced sales.")
+            if dataset.get("branch_mix_supported")
+            else _("Sales Invoice Branch attribution is unavailable for this Company.")
+        )
         route = "/app/branch-performance-dashboard"
 
     return {
@@ -279,7 +283,7 @@ def _cash_visual(
     end,
     currency: str,
 ) -> dict[str, Any]:
-    dataset = get_cash_movement_export(filters)
+    dataset = get_cash_movement_visual_aggregates(filters)
     granularity = _granularity(start, end)
     rows = _period_rows(start, end, granularity, ("money_in", "money_out"))
     by_key = {row["key"]: row for row in rows}
