@@ -174,6 +174,7 @@ def test_business_hub_frontend_renders_visual_layer_and_drill_through():
 		"refreshHomeVisuals",
 		"drillHomeVisual",
 		"home-visual-grid",
+		"visualRequestId",
 	):
 		assert token in hub
 
@@ -184,5 +185,6 @@ def test_business_hub_frontend_renders_visual_layer_and_drill_through():
 		"var(--edge-color-surface",
 		"prefers-reduced-motion",
 		"aria-label",
+		"lineExtent",
 	):
 		assert token in chart
