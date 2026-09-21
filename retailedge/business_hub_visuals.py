@@ -266,7 +266,7 @@ def _sales_mix(
         "chart_type": "bar",
         "currency": currency,
         "series": [{"key": "value", "label": _("Net Sales"), "datatype": "Currency"}],
-        "rows": _top_mix_rows(buckets),
+        "rows": _top_mix_rows(buckets, drill_field="item_group" if branch else "branch"),
         "route": route,
         "route_filters": dict(filters),
     }
@@ -320,7 +320,7 @@ def _expense_visual(filters: dict[str, Any], *, currency: str) -> dict[str, Any]
         "chart_type": "bar",
         "currency": currency,
         "series": [{"key": "value", "label": _("Expenses"), "datatype": "Currency"}],
-        "rows": _top_mix_rows(buckets),
+        "rows": _top_mix_rows(buckets, drill_field="expense_category"),
         "route_filters": dict(filters),
     }
 
@@ -345,6 +345,8 @@ def _exposure_visual(filters: dict[str, Any], *, currency: str) -> dict[str, Any
             "label": bucket.replace(" Days", ""),
             "receivables": flt(receivable_buckets.get(bucket)),
             "payables": flt(payable_buckets.get(bucket)),
+            "drill_field": "ageing_bucket",
+            "drill_value": bucket,
         }
         for bucket in AGE_BUCKETS
     ]
@@ -369,11 +371,11 @@ def _stock_health(filters: dict[str, Any]) -> dict[str, Any]:
         for row in dataset.get("summary") or []
     }
     rows = [
-        {"key": "available", "label": _("Available"), "value": summary.get("Available Items", 0)},
-        {"key": "reorder_due", "label": _("Reorder Due"), "value": summary.get("Reorder Due", 0)},
-        {"key": "out_of_stock", "label": _("Out of Stock"), "value": summary.get("Out of Stock", 0)},
-        {"key": "negative", "label": _("Negative"), "value": summary.get("Negative Stock", 0)},
-        {"key": "fully_reserved", "label": _("Fully Reserved"), "value": summary.get("Fully Reserved", 0)},
+        {"key": "available", "label": _("Available"), "value": summary.get("Available Items", 0), "drill_field": "stock_status", "drill_value": "Available"},
+        {"key": "reorder_due", "label": _("Reorder Due"), "value": summary.get("Reorder Due", 0), "drill_field": "stock_status", "drill_value": "Reorder Due"},
+        {"key": "out_of_stock", "label": _("Out of Stock"), "value": summary.get("Out of Stock", 0), "drill_field": "stock_status", "drill_value": "Out of Stock"},
+        {"key": "negative", "label": _("Negative"), "value": summary.get("Negative Stock", 0), "drill_field": "stock_status", "drill_value": "Negative"},
+        {"key": "fully_reserved", "label": _("Fully Reserved"), "value": summary.get("Fully Reserved", 0), "drill_field": "stock_status", "drill_value": "Fully Reserved"},
     ]
     return {
         "description": _("Current stock availability and replenishment exceptions."),
@@ -405,29 +407,44 @@ def _bucket_for_date(value, granularity: str) -> tuple[str, str]:
 
 
 def _period_rows(start, end, granularity: str, metric_keys: tuple[str, ...]) -> list[dict[str, Any]]:
-    ordered: list[tuple[str, str]] = []
-    seen: set[str] = set()
+    ordered: list[dict[str, Any]] = []
+    by_key: dict[str, dict[str, Any]] = {}
     cursor = start
     while cursor <= end:
         key, label = _bucket_for_date(cursor, granularity)
-        if key not in seen:
-            seen.add(key)
-            ordered.append((key, label))
+        row = by_key.get(key)
+        if row is None:
+            row = {
+                "key": key,
+                "label": label,
+                "from_date": str(cursor),
+                "to_date": str(cursor),
+                **{metric: 0.0 for metric in metric_keys},
+            }
+            by_key[key] = row
+            ordered.append(row)
+        else:
+            row["to_date"] = str(cursor)
         cursor += timedelta(days=1)
-    return [
-        {"key": key, "label": label, **{metric: 0.0 for metric in metric_keys}}
-        for key, label in ordered
-    ]
+    return ordered
 
 
-def _top_mix_rows(buckets: dict[str, float]) -> list[dict[str, Any]]:
+def _top_mix_rows(buckets: dict[str, float], *, drill_field: str = "") -> list[dict[str, Any]]:
     ordered = sorted(
         ((label, flt(value)) for label, value in buckets.items()),
         key=lambda item: (-item[1], item[0]),
     )
     visible = ordered[:TOP_MIX_ROWS]
     remaining = ordered[TOP_MIX_ROWS:]
-    rows = [{"key": label, "label": label, "value": value} for label, value in visible]
+    rows = [
+        {
+            "key": label,
+            "label": label,
+            "value": value,
+            **({"drill_field": drill_field, "drill_value": label} if drill_field else {}),
+        }
+        for label, value in visible
+    ]
     if remaining:
         rows.append(
             {
