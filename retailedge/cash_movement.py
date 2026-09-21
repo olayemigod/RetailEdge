@@ -116,6 +116,40 @@ def search_cash_movement_options(
 	frappe.throw(_("Unsupported Cash Movement search type."))
 
 
+def get_cash_movement_visual_aggregates(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return daily Cash/Bank movement aggregates using the governed Cash Movement scope."""
+	query = _prepare_query(_coerce_filters(filters))
+	sql = f"""
+		SELECT
+			gle.posting_date,
+			COALESCE(SUM(gle.debit), 0) AS money_in,
+			COALESCE(SUM(gle.credit), 0) AS money_out
+		FROM `tabGL Entry` gle
+		INNER JOIN `tabAccount` acc ON acc.name = gle.account
+		{query["joins"]}
+		WHERE {query["where_sql"]}
+		GROUP BY gle.posting_date
+		ORDER BY gle.posting_date ASC
+	"""
+	rows = frappe.db.sql(sql, values=query["values"], as_dict=True)
+	return {
+		"rows": [
+			{
+				"posting_date": row.posting_date,
+				"money_in": flt(row.money_in),
+				"money_out": flt(row.money_out),
+			}
+			for row in rows
+		],
+		"currency": query["currency"],
+		"scope": {
+			"company": query["company"],
+			"branch": query["requested_branch"],
+			"branch_scope": query["branch_scope_label"],
+		},
+	}
+
+
 @frappe.whitelist()
 def get_cash_movement(
 	filters: dict[str, Any] | str | None = None,
