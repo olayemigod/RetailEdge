@@ -102,6 +102,33 @@
 					</div>
 				</section>
 
+				<section class="hub-experience-section home-visuals-section">
+					<div class="section-heading">
+						<div>
+							<h3>Business overview</h3>
+							<p class="section-rider">Visualise sales, cash, expenses, exposure and stock health for the current operating scope.</p>
+						</div>
+					</div>
+					<EdgeLoadingState v-if="visualLoading" message="Loading business visuals..." :skeleton="true" />
+					<EdgeErrorState v-else-if="visualError" title="Business visuals unavailable" :message="visualError" @retry="refreshHomeVisuals" />
+					<div v-else-if="homeVisuals.length" class="home-visual-grid">
+						<BusinessHubChartCard
+							v-for="chart in homeVisuals"
+							:key="chart.key"
+							:chart="chart"
+							:wide="chart.key === 'sales_trend'"
+							@open="openHomeVisual"
+							@drill="drillHomeVisual"
+						/>
+					</div>
+					<EdgeEmptyState
+						v-else
+						title="No business visuals available"
+						description="No permitted visual dataset is available for the selected Company, Branch and period."
+						icon="bar-chart-2"
+					/>
+				</section>
+
 				<section v-if="homeQuickActions.length" class="home-quick-actions-section hub-experience-section">
 					<div class="section-heading">
 						<div>
@@ -376,10 +403,12 @@ import StandardSalesInvoiceCompletionDialog from "../professional_selling/Standa
 import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import StandardStockCompletionDialog from "./StandardStockCompletionDialog.vue";
+import BusinessHubChartCard from "./BusinessHubChartCard.vue";
 import { openQuickEntryMaster } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home_snapshot";
+const HOME_VISUALS_METHOD = "retailedge.business_hub_visuals.get_business_hub_visuals";
 const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
@@ -462,6 +491,22 @@ function fetchHomeSnapshot(company, branch, datePreset, resolvedRange = {}) {
 	});
 }
 
+function fetchHomeVisuals(company, branch, period = {}) {
+	return new Promise((resolve, reject) => {
+		frappe.call({
+			method: HOME_VISUALS_METHOD,
+			args: {
+				company: company || "",
+				branch: branch || "",
+				from_date: period?.from_date || "",
+				to_date: period?.to_date || "",
+			},
+			callback: (response) => resolve(response.message || {}),
+			error: (error) => reject(error),
+		});
+	});
+}
+
 function routeTarget(route) {
 	return String(route || "").replace(/^\/app\//, "").split("/").filter(Boolean)[0] || "";
 }
@@ -523,6 +568,7 @@ export default {
 		SimpleStockAdjustmentDialog,
 		SimpleStockTransferDialog,
 		StandardStockCompletionDialog,
+		BusinessHubChartCard,
 	},
 	data() {
 		return {
@@ -530,6 +576,9 @@ export default {
 			error: "",
 			homeLoading: false,
 			homeError: "",
+			visualLoading: false,
+			visualError: "",
+			homeVisuals: [],
 			homeSnapshot: { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] },
 			homePeriodPreset: "Today",
 			homeSmartDate: {},
@@ -676,6 +725,8 @@ export default {
 		refreshHomeSnapshot(resolvedRange = null) {
 			if (!this.context.company) {
 				this.homeSnapshot = { as_of_date: "", period: {}, cards: [], sections: {}, indices: [], settings: {}, attention: [] };
+				this.homeVisuals = [];
+				this.visualError = "";
 				return Promise.resolve();
 			}
 			this.homeLoading = true;
@@ -702,6 +753,7 @@ export default {
 						settings: snapshot.settings || {},
 						attention: snapshot.attention || [],
 					};
+					return this.refreshHomeVisuals();
 				})
 				.catch((error) => {
 					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, indices: [], settings: {}, attention: [] };
@@ -710,6 +762,46 @@ export default {
 				.finally(() => {
 					this.homeLoading = false;
 				});
+		},
+		refreshHomeVisuals() {
+			if (!this.context.company || !this.homePeriod.from_date || !this.homePeriod.to_date) {
+				this.homeVisuals = [];
+				this.visualError = "";
+				return Promise.resolve();
+			}
+			this.visualLoading = true;
+			this.visualError = "";
+			return fetchHomeVisuals(this.context.company, this.context.branch, this.homePeriod)
+				.then((payload) => {
+					this.homeVisuals = payload.visuals || [];
+				})
+				.catch((error) => {
+					this.homeVisuals = [];
+					this.visualError = error?.message || "Unable to load business visuals.";
+				})
+				.finally(() => {
+					this.visualLoading = false;
+				});
+		},
+		openHomeVisual(chart) {
+			if (!chart?.route) return;
+			this.openHomeRoute(chart.route, chart.route_filters || {});
+		},
+		drillHomeVisual(chart, row, series) {
+			if (!chart?.route || !row) return;
+			let route = chart.route;
+			if (chart.key === "exposure" && series?.key === "payables" && chart.secondary_route) {
+				route = chart.secondary_route;
+			}
+			const filters = { ...(chart.route_filters || {}) };
+			if (row.from_date && row.to_date) {
+				filters.from_date = row.from_date;
+				filters.to_date = row.to_date;
+			}
+			if (row.drill_field && row.drill_value) {
+				filters[row.drill_field] = row.drill_value;
+			}
+			this.openHomeRoute(route, filters);
 		},
 		handleHomeDateResolved(value) {
 			if (!value?.from_date || !value?.to_date) return;
@@ -1400,6 +1492,14 @@ export default {
 .home-kpi-card small {
 	font-size: 0.72rem;
 }
+.home-visual-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+.home-visuals-section {
+	min-width: 0;
+}
 .home-signal-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1794,6 +1894,7 @@ export default {
 		width: 100%;
 	}
 	.home-kpi-grid,
+	.home-visual-grid,
 	.home-intelligence-grid,
 	.home-signal-grid,
 	.home-signal-list,
