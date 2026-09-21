@@ -753,7 +753,7 @@ export default {
 						settings: snapshot.settings || {},
 						attention: snapshot.attention || [],
 					};
-					return this.refreshHomeVisuals();
+					this.refreshHomeVisuals();
 				})
 				.catch((error) => {
 					this.homeSnapshot = { as_of_date: "", cards: [], sections: {}, indices: [], settings: {}, attention: [] };
