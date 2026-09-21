@@ -266,6 +266,74 @@ def _search_salespeople(txt: str, invoice_filters: dict[str, Any]) -> list[dict[
 	return [{"value": row.name, "label": row.name} for row in salespeople]
 
 
+def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	"""Return compact permission-aware sales aggregates for dashboard visualisation."""
+	filters = _coerce_filters(filters)
+	_validate_filters(filters)
+	_assert_report_access(filters)
+	branch_field, branch_condition = _invoice_branch_scope(filters)
+	query_filters: dict[str, Any] = {
+		"docstatus": 1,
+		"company": filters.company,
+		"posting_date": ["between", [filters.from_date, filters.to_date]],
+	}
+	if branch_field and branch_condition is not None:
+		query_filters[branch_field] = branch_condition
+
+	trend_rows = frappe.get_list(
+		"Sales Invoice",
+		filters=query_filters,
+		fields=[
+			"posting_date",
+			"is_return",
+			{"SUM": "base_grand_total", "as": "grand_total"},
+			{"COUNT": "name", "as": "transactions"},
+		],
+		group_by="posting_date, is_return",
+		order_by="posting_date asc",
+		limit_page_length=800,
+	)
+	trend = [
+		{
+			"posting_date": row.posting_date,
+			"net_sales": -abs(flt(row.grand_total)) if cint(row.is_return) else flt(row.grand_total),
+			"transactions": cint(row.transactions),
+		}
+		for row in trend_rows
+	]
+
+	branch_mix: list[dict[str, Any]] = []
+	if not filters.get("branch") and branch_field:
+		mix_rows = frappe.get_list(
+			"Sales Invoice",
+			filters=query_filters,
+			fields=[
+				branch_field,
+				"is_return",
+				{"SUM": "base_grand_total", "as": "grand_total"},
+			],
+			group_by=f"{branch_field}, is_return",
+			order_by=f"{branch_field} asc",
+			limit_page_length=500,
+		)
+		aggregated: dict[str, float] = defaultdict(float)
+		for row in mix_rows:
+			label = str(row.get(branch_field) or _("Unattributed")).strip() or _("Unattributed")
+			value = -abs(flt(row.grand_total)) if cint(row.is_return) else flt(row.grand_total)
+			aggregated[label] += value
+		branch_mix = [
+			{"branch": label, "net_sales": value}
+			for label, value in sorted(aggregated.items(), key=lambda item: (-item[1], item[0]))
+		]
+
+	return {
+		"trend": trend,
+		"branch_mix": branch_mix,
+		"branch_mix_supported": bool(branch_field),
+		"company_currency": _company_currency(filters.company),
+	}
+
+
 @frappe.whitelist()
 def get_sales_by_item(
 	filters: dict[str, Any] | str | None = None,
