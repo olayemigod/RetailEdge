@@ -138,6 +138,14 @@ export default {
 			}
 			return maximum || 1;
 		},
+		lineExtent() {
+			const series = this.chart.series?.[0];
+			const values = (this.chart.rows || []).map((row) => Number(row?.[series?.key] || 0));
+			const minimum = Math.min(0, ...values);
+			const maximum = Math.max(0, ...values);
+			if (minimum === maximum) return { minimum: 0, maximum: maximum || 1 };
+			return { minimum, maximum };
+		},
 		linePointRows() {
 			const rows = this.chart.rows || [];
 			const series = this.chart.series?.[0];
@@ -148,11 +156,12 @@ export default {
 			const bottom = 194;
 			const range = right - left;
 			const height = bottom - top;
-			const max = this.maxValue;
+			const { minimum, maximum } = this.lineExtent;
+			const valueRange = maximum - minimum || 1;
 			return rows.map((row, index) => {
 				const x = rows.length === 1 ? (left + right) / 2 : left + (range * index) / (rows.length - 1);
 				const value = Number(row?.[series.key] || 0);
-				const y = bottom - (Math.max(value, 0) / max) * height;
+				const y = bottom - ((value - minimum) / valueRange) * height;
 				return { key: row.key || index, x, y, value, row };
 			});
 		},
@@ -162,8 +171,9 @@ export default {
 		yTicks() {
 			const top = 18;
 			const bottom = 194;
+			const { minimum, maximum } = this.lineExtent;
 			return [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
-				value: this.maxValue * ratio,
+				value: minimum + (maximum - minimum) * ratio,
 				y: bottom - (bottom - top) * ratio,
 			}));
 		},
