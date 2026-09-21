@@ -368,6 +368,9 @@ export default {
 	stroke-linecap: round;
 	stroke-linejoin: round;
 }
+.hub-line-chart__line.series-0 {
+	fill: none;
+}
 .hub-line-chart__point {
 	cursor: pointer;
 	stroke: var(--edge-color-surface, #ffffff);
