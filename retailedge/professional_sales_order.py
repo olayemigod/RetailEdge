@@ -30,6 +30,52 @@ def _set_branch_if_supported(doc, branch: str) -> None:
 			return
 
 
+def _lock_quotation(name: str) -> None:
+	rows = frappe.db.sql(
+		"SELECT name FROM `tabQuotation` WHERE name = %s FOR UPDATE",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Quotation {0} no longer exists.").format(name))
+
+
+def _existing_draft_sales_order_for_quotation(quotation: str):
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT so.name
+		FROM `tabSales Order` so
+		INNER JOIN `tabSales Order Item` item ON item.parent = so.name
+		WHERE so.docstatus = 0 AND item.prevdoc_docname = %s
+		ORDER BY so.creation ASC
+		LIMIT 3
+		""",
+		(quotation,),
+		as_dict=True,
+	)
+	if len(rows) > 1:
+		frappe.throw(
+			_("Multiple draft Sales Orders already reference Quotation {0}. Review them before creating another order.").format(quotation)
+		)
+	if not rows:
+		return None
+	doc = frappe.get_doc("Sales Order", rows[0].name)
+	if not frappe.has_permission("Sales Order", "read", doc=doc):
+		frappe.throw(
+			_("A draft Sales Order already exists for this Quotation, but you do not have permission to open it."),
+			frappe.PermissionError,
+		)
+	linked_quotations = {
+		str(row.get("prevdoc_docname") or "").strip()
+		for row in list(doc.get("items") or [])
+		if str(row.get("prevdoc_docname") or "").strip()
+	}
+	if linked_quotations != {quotation}:
+		frappe.throw(
+			_("The existing draft Sales Order combines multiple Quotations. Use Advanced ERPNext review.")
+		)
+	return doc
+
+
 def _assert_mapped_sales_order_context(doc) -> tuple[str, str]:
 	"""Validate mapped source truth without rewriting values from Operating Context."""
 	company = str(doc.get("company") or "").strip()
@@ -178,6 +224,14 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 
 	# ERPNext owns source-to-target field/item mapping, ordered-quantity checks and
 	# expired-quotation policy. The submitted source is never changed here.
+	_lock_quotation(source.name)
+	existing = _existing_draft_sales_order_for_quotation(source.name)
+	if existing:
+		_company, existing_branch = _assert_mapped_sales_order_context(existing)
+		return {
+			**_sales_order_response(existing, branch=existing_branch, source_quotation=source.name),
+			"existing": True,
+		}
 	target = erpnext_make_sales_order(source.name)
 	if not target or target.doctype != "Sales Order":
 		frappe.throw(_("ERPNext could not prepare a Sales Order from this Quotation."))
@@ -203,7 +257,10 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 
 	target.insert()
 	_apply_shipping_rule_to_draft(target)
-	return _sales_order_response(target, branch=branch, source_quotation=source.name)
+	return {
+		**_sales_order_response(target, branch=branch, source_quotation=source.name),
+		"existing": False,
+	}
 
 
 def _sales_order_response(doc, *, branch: str = "", source_quotation: str = "") -> dict[str, Any]:
