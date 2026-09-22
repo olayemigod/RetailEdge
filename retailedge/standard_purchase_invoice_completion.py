@@ -248,6 +248,7 @@ def _validate_stock_context(
 	if not cint(doc.get("update_stock")):
 		return {
 			"mode": "accounting_only",
+			"default_warehouse": _clean(doc.get("set_warehouse")),
 			"warehouse_branch": "",
 			"effective_branch": invoice_branch,
 			"blockers": [],
@@ -255,8 +256,11 @@ def _validate_stock_context(
 
 	blockers: list[str] = []
 	resolved_branches: set[str] = set()
+	warehouses: set[str] = set()
 	for row in list(doc.get("items") or []):
 		warehouse = _clean(row.get("warehouse"))
+		if warehouse:
+			warehouses.add(warehouse)
 		if not warehouse:
 			blockers.append(_("Every stock-updating Purchase Invoice item must have a Warehouse."))
 			continue
@@ -310,8 +314,10 @@ def _validate_stock_context(
 			frappe.PermissionError,
 		)
 
+	default_warehouse = _clean(doc.get("set_warehouse")) or (next(iter(warehouses), "") if len(warehouses) == 1 else "")
 	return {
 		"mode": "update_stock",
+		"default_warehouse": default_warehouse,
 		"warehouse_branch": warehouse_branch,
 		"effective_branch": effective_branch,
 		"blockers": list(dict.fromkeys(blockers)),
@@ -530,6 +536,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_DIRECT) -> dict[str, A
 		),
 		"update_stock": bool(cint(doc.get("update_stock"))),
 		"completion_mode": stock_context["mode"],
+		"default_warehouse": stock_context.get("default_warehouse") or "",
 		"source_mode": _clean(source_mode) or SOURCE_MODE_DIRECT,
 		"source_type": source_context.get("source_type") or "",
 		"source_name": source_context.get("source_name") or "",
