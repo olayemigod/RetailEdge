@@ -190,7 +190,7 @@ export default {
 						values: {
 							posting_date: this.values.posting_date,
 							remarks: this.values.remarks || "",
-							items: (this.values.items || []).filter((row) => row?.item_code).map((row) => ({ item_code: row.item_code, qty: Number(row.qty || 0) })),
+							items: (this.values.items || []).filter((row) => row?.item_code).map((row) => ({ name: row.name || "", item_code: row.item_code, qty: Number(row.qty || 0) })),
 						},
 					}, "POST");
 					this.syncPageFromDraftPreview(result);
@@ -211,7 +211,7 @@ export default {
 		},
 		beginSavedDraftEdit() { if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return; this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values); },
 		cancelSavedDraftEdit() { const close = () => { try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {} this.editingSavedDraft = false; this.saveError = ""; }; if (!this.hasUnsavedChanges) return close(); frappe.confirm("Discard unsaved changes to this saved Stock Transfer draft?", close); },
-		syncPageFromDraftPreview(result) { if (!result) return; if (result.posting_date) this.values.posting_date = result.posting_date; if (Object.prototype.hasOwnProperty.call(result, "remarks")) this.values.remarks = result.remarks || ""; if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ item_code: row.item_code || "", qty: row.qty })); },
+		syncPageFromDraftPreview(result) { if (!result) return; if (result.posting_date) this.values.posting_date = result.posting_date; if (Object.prototype.hasOwnProperty.call(result, "remarks")) this.values.remarks = result.remarks || ""; if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ name: row.name || "", item_code: row.item_code || "", qty: row.qty })); },
 		openCompletion() { if (this.savedDocument?.name) { this.editingSavedDraft = false; this.completionOpen = true; } },
 		handleCompletionChanged(result) { if (!result?.name) return; this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Entry" }; if (Number(result.docstatus || 0) === 0) { this.syncPageFromDraftPreview(result); this.initialSnapshot = JSON.stringify(this.values); } },
 		handleCompletionCompleted(result) {
