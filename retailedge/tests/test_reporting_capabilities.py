@@ -52,6 +52,7 @@ def test_reporting_capabilities_use_settings_scope_roles_and_document_read_permi
 		"supplier-payables",
 		"stock-position",
 		"stock-movement-history",
+		"expense-analysis",
 		"expense-register",
 		"cash-movement",
 	):
@@ -105,6 +106,7 @@ def test_export_wrapper_rechecks_action_before_existing_bounded_report_backend()
 		"get_supplier_payables_export",
 		"get_stock_position_export",
 		"get_stock_movement_export",
+		"get_expense_analysis_export",
 		"get_expense_register_export",
 		"get_cash_movement_export",
 	):
@@ -152,6 +154,7 @@ def test_browser_reporting_actions_use_native_shell_builder_and_verified_downloa
 		'"/app/sales-analysis": "sales-analysis"',
 		'"/app/customer-receivables": "customer-receivables"',
 		'"/app/purchase-register": "purchase-register"',
+		'"/app/expense-analysis": "expense-analysis"',
 		'"/app/supplier-payables": "supplier-payables"',
 		"exportEnabled",
 		"printEnabled",
