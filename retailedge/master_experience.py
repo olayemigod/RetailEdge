@@ -680,20 +680,33 @@ def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None
 def _promote_reports_centre(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(REPORTS_CENTRE_ITEM["target"]):
 		return
-	for group in navigation_groups:
-		if group.get("key") != "insights":
-			continue
-		items = list(group.get("items") or [])
-		if any(
-			item.get("target_type") == "Page"
-			and item.get("target") == REPORTS_CENTRE_ITEM["target"]
-			for item in items
-		):
-			return
-		items.insert(0, deepcopy(REPORTS_CENTRE_ITEM))
-		group["items"] = items
+
+	existing_group = next(
+		(group for group in navigation_groups if group.get("key") == "reports"),
+		None,
+	)
+	if existing_group is not None:
+		items = list(existing_group.get("items") or [])
+		if not any(item.get("target") == REPORTS_CENTRE_ITEM["target"] for item in items):
+			items.insert(0, deepcopy(REPORTS_CENTRE_ITEM))
+			existing_group["items"] = items
 		return
 
+	report_group = {
+		"key": "reports",
+		"label": "Reports",
+		"icon": "report",
+		"items": [deepcopy(REPORTS_CENTRE_ITEM)],
+	}
+	insert_at = next(
+		(
+			index
+			for index, group in enumerate(navigation_groups)
+			if group.get("key") == "insights"
+		),
+		len(navigation_groups),
+	)
+	navigation_groups.insert(insert_at, report_group)
 
 def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(SETUP_HUB_ITEM["target"]):
