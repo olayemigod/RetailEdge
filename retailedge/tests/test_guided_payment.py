@@ -283,6 +283,20 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertNotIn("frappe.get_list", component)
 		self.assertNotIn("frappe.db.insert", component)
 
+	def test_managed_payment_escape_is_server_permission_aware(self):
+		source = (APP_ROOT / "guided_payment.py").read_text()
+		component = (APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue").read_text()
+		for contract in (
+			'def _can_open_page(page_name: str) -> bool:',
+			'frappe.get_doc("Page", page_name).is_permitted()',
+			'managed_page = "supplier-payables" if intent == "pay-supplier" else "payment-management"',
+			'"can_open_managed_page": can_open_managed_page',
+		):
+			self.assertIn(contract, source)
+		self.assertIn('v-if="canOpenManagedPage"', component)
+		self.assertIn('this.formContext.capabilities?.can_open_managed_page', component)
+		self.assertIn('if (this.saving || this.submitting || !this.canOpenManagedPage) return;', component)
+
 	def test_limits_are_deliberately_small(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
 		self.assertEqual(MAX_REFERENCES, 20)
