@@ -232,7 +232,55 @@ def _existing_draft_invoice_for_source(source_doctype: str, source_name: str):
 		frappe.throw(
 			_("The existing draft Sales Invoice combines multiple source documents. Use Advanced ERPNext review.")
 		)
+	if source_doctype == "Sales Order":
+		delivery_links = {
+			str(row.get("delivery_note") or "").strip()
+			for row in list(doc.get("items") or [])
+			if str(row.get("delivery_note") or "").strip()
+		}
+		if delivery_links:
+			frappe.throw(
+				_("A draft Sales Invoice for this Sales Order is owned by Delivery Note billing. Continue from the Delivery Note instead.")
+			)
 	return doc
+
+
+def _draft_sales_order_conflicts_for_quotation(quotation: str) -> list[str]:
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT so.name
+		FROM `tabSales Order` so
+		INNER JOIN `tabSales Order Item` item ON item.parent = so.name
+		WHERE so.docstatus = 0 AND item.prevdoc_docname = %s
+		ORDER BY so.creation ASC
+		LIMIT 10
+		""",
+		(quotation,),
+		as_dict=True,
+	)
+	return [str(row.get("name") or "").strip() for row in rows if row.get("name")]
+
+
+def _direct_sales_order_draft_invoice_conflicts(sales_orders: set[str]) -> list[str]:
+	"""Return draft invoices owned directly by Sales Orders, not Delivery Notes."""
+	sales_orders = {str(name or "").strip() for name in sales_orders if str(name or "").strip()}
+	if not sales_orders:
+		return []
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT si.name
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` item ON item.parent = si.name
+		WHERE si.docstatus = 0
+			AND item.sales_order IN %(sales_orders)s
+			AND COALESCE(item.delivery_note, '') = ''
+		ORDER BY si.creation ASC
+		LIMIT 10
+		""",
+		{"sales_orders": tuple(sales_orders)},
+		as_dict=True,
+	)
+	return [str(row.get("name") or "").strip() for row in rows if row.get("name")]
 
 
 def _lock_quotation_for_direct_invoice(name: str) -> None:
@@ -555,6 +603,13 @@ def create_sales_invoice_from_quotation(quotation: str) -> dict[str, Any]:
 	# Serialize direct conversion by source Quotation so concurrent clicks either
 	# create one draft or observe and open that same draft.
 	_lock_quotation_for_direct_invoice(source.name)
+	sales_order_conflicts = _draft_sales_order_conflicts_for_quotation(source.name)
+	if sales_order_conflicts:
+		frappe.throw(
+			_(
+				"Quotation {0} cannot create a direct Sales Invoice while draft Sales Order(s) {1} remain open. Complete or cancel the Sales Order draft first."
+			).format(source.name, ", ".join(sales_order_conflicts))
+		)
 	existing_conversion = get_quotation_conversion(source.name)
 	existing_invoice = str((existing_conversion or {}).get("sales_invoice") or "").strip()
 	if existing_invoice and frappe.db.exists("Sales Invoice", existing_invoice):
@@ -630,6 +685,19 @@ def _create_invoice_from_native_mapper(source_doctype: str, source_name: str, ma
 			),
 			"existing": True,
 		}
+	if source_doctype == "Delivery Note":
+		linked_sales_orders = {
+			str(row.get("against_sales_order") or "").strip()
+			for row in list(source.get("items") or [])
+			if str(row.get("against_sales_order") or "").strip()
+		}
+		conflicts = _direct_sales_order_draft_invoice_conflicts(linked_sales_orders)
+		if conflicts:
+			frappe.throw(
+				_(
+					"Delivery Note {0} cannot prepare another Sales Invoice while direct Sales Order draft invoice(s) {1} remain open. Complete or cancel the Sales Order-owned draft first."
+				).format(source.name, ", ".join(conflicts))
+			)
 	target = mapper(source.name)
 	if not target or target.doctype != "Sales Invoice":
 		frappe.throw(_("ERPNext could not prepare a Sales Invoice from this {0}.").format(source_doctype))
