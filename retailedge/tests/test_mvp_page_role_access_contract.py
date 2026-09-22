@@ -37,3 +37,19 @@ def test_role_normalization_does_not_depend_on_new_spaced_cashier_alias():
 	setup_roles = (ROOT / "setup_roles.py").read_text(encoding="utf-8")
 	assert '"RetailEdgeCashier",' in setup_roles
 	assert '"RetailEdgeCashier": (' not in setup_roles
+
+def test_document_output_page_accepts_sales_accounts_and_purchasing_personas():
+	roles = _roles("retailedge/page/document_output_sharing/document_output_sharing.json")
+	for role in (
+		"System Manager",
+		"Sales User",
+		"Sales Manager",
+		"Accounts User",
+		"Accounts Manager",
+		"Purchase User",
+		"Purchase Manager",
+		"RetailEdgeManager",
+		"RetailEdgeBranchManager",
+	):
+		assert role in roles
+
