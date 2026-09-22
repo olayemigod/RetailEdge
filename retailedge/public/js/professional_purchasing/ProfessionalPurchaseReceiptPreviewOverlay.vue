@@ -121,7 +121,9 @@ export default {
 	},
 	data() { return { open: false, purchaseOrder: "", loading: false, posting: false, error: "", preview: null, submitted: null }; },
 	computed: {
-		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE; },
+		nativeFallbackEnabled() { const access = frappe.boot?.edgesuite_ui_access || {};
+			const mode = String(access.mode || "").trim();
+			return mode !== ACCESS_MODE && Boolean(access.can_use_native_desk); },
 		canSubmitStandard() { return Boolean(!this.submitted && this.preview?.standard_receipt_eligible && this.preview?.can_submit && !this.preview?.workflow_controlled); },
 		canStartWorkflow() { return Boolean(!this.submitted && this.preview?.workflow_controlled && !this.preview?.workflow_started && this.preview?.standard_receipt_eligible && this.preview?.can_start_workflow); },
 	},
