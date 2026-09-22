@@ -461,6 +461,8 @@ export default {
 				action,
 				doctype: "Sales Invoice",
 				name: this.completedResult.name,
+				company: this.completedResult.company || this.preview?.company || "",
+				branch: this.completedResult.branch || this.preview?.branch || "",
 				customer: this.completedResult.customer || this.preview?.customer || "",
 			});
 		},
