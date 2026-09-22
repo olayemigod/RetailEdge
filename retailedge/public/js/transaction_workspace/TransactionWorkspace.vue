@@ -69,6 +69,7 @@
 						<p>{{ actionDescription(action) }}</p>
 						<div class="workspace-actions">
 							<button v-if="canRunTransactionAction(action)" type="button" class="edge-button edge-button--primary" @click="runTransactionAction(action)">{{ actionButtonLabel(action) }}</button>
+							<button v-if="action.doctype === 'Sales Invoice' && hasPageTarget('make-sale')" type="button" class="edge-button edge-button--secondary" @click="openQuickSale">Quick Sale</button>
 							<button v-if="canViewTransactionRecords(action)" type="button" class="edge-button edge-button--secondary" @click="viewTransactionRecords(action)">{{ viewButtonLabel(action) }}</button>
 						</div>
 					</section>
@@ -80,6 +81,7 @@
 				:nativeFallbackEnabled="canUseNativeDesk"
 				@close="simpleSalesInvoiceOpen = false"
 				@saved="handleGuidedSaved"
+				@open-page="openMakeSaleFromQuick"
 				@open-native="openNativeSalesInvoice"
 			/>
 			<SimplePurchaseInvoiceDialog
@@ -362,6 +364,10 @@ export default {
 		runTransactionAction(action) {
 			if (!action?.doctype) return;
 			if (action.doctype === "Sales Invoice") {
+				if (this.hasPageTarget("make-sale")) {
+					frappe.set_route("make-sale");
+					return;
+				}
 				this.simpleSalesInvoiceOpen = true;
 				return;
 			}
@@ -389,6 +395,7 @@ export default {
 			this.openDoctype(action?.doctype);
 		},
 		actionButtonLabel(action) {
+			if (action?.doctype === "Sales Invoice" && this.hasPageTarget("make-sale")) return "Make Sale";
 			if (GUIDED_DOCTYPES.has(action?.doctype)) return "Guided Entry";
 			const owner = this.createOwnerPage(action);
 			if (owner === "professional-selling" && this.hasPageTarget(owner)) return "Open Selling";
@@ -400,7 +407,9 @@ export default {
 		},
 		actionDescription(action) {
 			if (action?.doctype === "Sales Invoice") {
-				return "Use the guided Sales Invoice flow here and manage selling records in Professional Selling.";
+				return this.hasPageTarget("make-sale")
+					? "Use Make Sale for larger or multi-item invoices. Quick Sale remains available for short transactions."
+					: "Use the guided Sales Invoice flow here and manage selling records in Professional Selling.";
 			}
 			if (action?.doctype === "Purchase Invoice") {
 				return "Use the guided Purchase Invoice flow here and review submitted purchases in the Purchase Register.";
@@ -420,6 +429,21 @@ export default {
 			this.simplePurchaseInvoiceOpen = false;
 			this.simpleStockTransferOpen = false;
 			this.loadWorkspace();
+		},
+		openQuickSale() {
+			this.simpleSalesInvoiceOpen = true;
+		},
+		openMakeSaleFromQuick(payload = {}) {
+			try {
+				window.sessionStorage.setItem("retailedge:make-sale:handoff", JSON.stringify({
+					createdAt: Date.now(),
+					values: payload?.values || {},
+				}));
+			} catch (_error) {
+				// The full page remains available even if browser session storage is blocked.
+			}
+			this.simpleSalesInvoiceOpen = false;
+			frappe.set_route("make-sale");
 		},
 		openNativeSalesInvoice() {
 			if (!this.canUseNativeDesk) return;
