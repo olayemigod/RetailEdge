@@ -125,6 +125,17 @@ test("RetailEdge manager reaches Payment & Settlement Analysis from governed rep
 	}
 });
 
+test("Purchase User reaches Purchase Analysis with governed presets", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.purchasing);
+	try {
+		await openProductPage(page, "purchase-analysis", "Purchase Analysis", "Reports");
+		await expect(page.getByText("Purchase Trend", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("Group By", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
 test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
