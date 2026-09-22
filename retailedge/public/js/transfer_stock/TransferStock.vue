@@ -259,7 +259,7 @@ export default {
 			this.completionOpen = false;
 		},
 		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
-		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => frappe.new_doc("Stock Entry", { purpose: "Material Transfer" }); if (!this.hasUnsavedChanges) return go(); frappe.confirm("Open the advanced ERPNext Stock Entry form? Save this page first if you want the current transfer recorded.", go); },
+		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Stock Entry", this.savedDocument.name) : frappe.new_doc("Stock Entry", { purpose: "Material Transfer" }); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Stock Entry in Advanced ERPNext? Unsaved page edits are not carried until you update the draft." : "Open the advanced ERPNext Stock Entry form? Save this page first if you want the current transfer recorded."; frappe.confirm(message, go); },
 	},
 };
 </script>
