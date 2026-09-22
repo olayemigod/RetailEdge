@@ -25,7 +25,25 @@ VIEWS = (
 
 class TestRIR2G2C2EdgeReportServerSorting(TestCase):
 	def test_report_sort_registry_is_explicit(self):
-		self.assertEqual(len(REPORT_SORT_FIELDS), 13)
+		self.assertEqual(
+			set(REPORT_SORT_FIELDS),
+			{
+				"cash-flow-outlook",
+				"cash-movement",
+				"cash-shift-verification",
+				"customer-receivables",
+				"daily-sales-audit",
+				"expense-register",
+				"expense-review",
+				"purchase-register",
+				"supplier-payables",
+				"sales-analysis",
+				"sales-by-item",
+				"sales-invoice-register",
+				"stock-accounting-integrity",
+				"stock-position",
+			},
+		)
 
 	def test_invalid_sort_is_rejected(self):
 		self.assertIsNone(normalise_report_sort({"field": "drop table", "direction": "asc"}, "stock-position"))
