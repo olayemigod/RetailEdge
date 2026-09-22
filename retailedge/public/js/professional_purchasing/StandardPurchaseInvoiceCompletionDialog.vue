@@ -140,7 +140,7 @@
 							v-if="preview?.can_submit"
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy"
+							:disabled="busy || draftDirty"
 							@click="submitDocument"
 						>
 							{{ busy ? "Submitting..." : "Submit Purchase Invoice" }}
@@ -150,7 +150,7 @@
 							:key="action.action"
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy || !preview?.workflow_eligible"
+							:disabled="busy || draftDirty || !preview?.workflow_eligible"
 							@click="applyWorkflow(action.action)"
 						>
 							{{ action.action }}
@@ -338,7 +338,7 @@ export default {
 			}
 		},
 		async submitDocument() {
-			if (!this.preview?.can_submit || this.busy) return;
+			if (!this.preview?.can_submit || this.busy || this.draftDirty) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
@@ -358,7 +358,7 @@ export default {
 			}
 		},
 		async applyWorkflow(action) {
-			if (!action || !this.preview?.workflow_eligible || this.busy) return;
+			if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
@@ -403,7 +403,12 @@ export default {
 			);
 		},
 		requestClose() {
-			if (!this.busy) this.$emit("close");
+			if (this.busy) return;
+			if (this.preview?.can_edit && !this.completedResult && this.draftDirty) {
+				frappe.confirm(__("Discard unsaved Purchase Invoice draft changes?"), () => this.$emit("close"));
+				return;
+			}
+			this.$emit("close");
 		},
 	},
 };
