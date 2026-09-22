@@ -76,6 +76,12 @@ _REPORT_SPECS = {
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Purchase Invoice",
 	),
+	"supplier-performance": ReportCapabilitySpec(
+		key="supplier-performance", label="Supplier Performance",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _PURCHASE_USER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Purchase Invoice",
+	),
 	"purchase-register": ReportCapabilitySpec(
 		key="purchase-register", label="Purchase Register",
 		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _PURCHASE_MANAGER_ROLES, _PURCHASE_USER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
