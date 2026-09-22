@@ -48,6 +48,34 @@ The Sales Analysis engine uses one bounded server-side dataset and named presets
 | Cashier | **Not currently exposed** | Must use canonical POS/cashier/shift attribution before analytical grouping is enabled |
 | Payment Mode | **Not a Sales Analysis dimension** | Belongs to Payment & Settlement Analysis |
 
+## Payment & Settlement Metrics
+
+Payment & Settlement Analysis is based on submitted ERPNext Payment Entries. It is not a sales-by-payment-method reconstruction.
+
+| Metric | Definition / Formula | Source | Caveats |
+| --- | --- | --- | --- |
+| Money In | base_received_amount for submitted Receive Payment Entries | Payment Entry | Company-currency base amount; not inferred from Sales Invoice |
+| Money Out | base_paid_amount for submitted Pay Payment Entries | Payment Entry | Company-currency base amount |
+| Net External Settlement | Money In − Money Out | Payment Entry | Internal Transfers excluded from external net |
+| Internal Transfers | Company-currency transfer amount for submitted Internal Transfer entries | Payment Entry | Shown separately because transfer is not revenue or expense |
+| Payment Entries | Count of submitted Payment Entries after current filters | Payment Entry | Includes Receive, Pay and Internal Transfer unless filtered |
+| Allocated Customer Receipts | Company-currency customer receipt amount less current unallocated amount | Payment Entry | Calculated only when the customer party account currency is explicitly Company currency |
+| Available Customer Advances | Current positive unallocated_amount on submitted customer Receive Payment Entries | Payment Entry | No shadow wallet; multi-currency/unknown party-currency rows are excluded from the amount and counted as exceptions |
+| Average External Payment | (Money In + Money Out) ÷ external Receive/Pay count | Payment Entry | Internal Transfers excluded |
+| Multi-currency Exceptions | Customer receipt rows whose party account currency is absent or differs from Company currency | Payment Entry | Amounts are not converted or guessed |
+
+### Payment & Settlement Dimensions
+
+- Day / Week / Month / Quarter / Year → Payment Entry posting_date.
+- Mode of Payment → Payment Entry mode_of_payment.
+- Branch → authoritative Payment Entry RetailEdge/Branch attribution.
+- Payment Type → Receive / Pay / Internal Transfer.
+- Party Type → Customer / Supplier / no party.
+- Party → Payment Entry party under its party_type.
+- Settlement Account → receive target account, pay source account, or transfer source→target.
+- Cashier → **not exposed**. Payment Entry owner is not a cashier proxy.
+- Sales Invoice payment mode → **not inferred**. Invoice sales and payment settlement remain separate analytical truths.
+
 ## Money and Planning Ownership
 
 | Metric family | Authoritative source | Owner / rule |
