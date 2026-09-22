@@ -170,7 +170,24 @@ export default {
 			this.handoffNotice = "Supplier, context and item lines were carried into the full-page workspace."; return true;
 		},
 		loadRecoveryCandidate() { let raw = ""; try { raw = sessionStorage.getItem(this.recoveryKey()) || ""; } catch (_error) { return; } const payload = stored(raw, 12 * 60 * 60 * 1000); if (payload && (!payload.values.company || !this.values.company || payload.values.company === this.values.company)) this.recoveryCandidate = payload; },
-		restoreRecovery() { if (!this.recoveryCandidate?.values) return; this.values = { ...this.values, ...clone(this.recoveryCandidate.values), items: (this.recoveryCandidate.values.items || []).map((row) => ({ ...row })) }; this.recoveryCandidate = null; this.handoffNotice = "Recovered unsaved purchase work from this browser session."; },
+		async restoreRecovery() {
+			if (!this.recoveryCandidate?.values) return;
+			const recovered = clone(this.recoveryCandidate.values);
+			this.values = { ...this.values, ...recovered, items: (recovered.items || []).map((row) => ({ ...row })) };
+			this.recoveryCandidate = null; this.saveError = "";
+			try {
+				if (this.values.company && (this.values.branch || this.values.warehouse)) {
+					const r = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.branch || "", warehouse: this.values.warehouse || "", preference: "purchase" });
+					this.values.branch = r.branch || this.values.branch || "";
+					this.values.warehouse = r.warehouse || this.values.warehouse || "";
+				}
+				this.handoffNotice = "Recovered unsaved purchase work and revalidated its current Branch / Receiving Stock Location access.";
+			} catch (error) {
+				this.values.branch = ""; this.values.warehouse = "";
+				this.saveError = errorMessage(error, "The recovered Branch or Receiving Stock Location is no longer available. Choose the current transaction context before saving.");
+				this.handoffNotice = "Recovered purchase lines, but the saved Branch / Receiving Stock Location was cleared because access could not be revalidated.";
+			}
+		},
 		discardRecovery() { this.recoveryCandidate = null; this.clearRecovery(); },
 		scheduleRecovery() { if (this.recoveryTimer) clearTimeout(this.recoveryTimer); this.recoveryTimer = setTimeout(() => { if (!this.hasUnsavedChanges || this.savedDocument) return this.clearRecovery(); try { sessionStorage.setItem(this.recoveryKey(), JSON.stringify({ createdAt: Date.now(), values: clone(this.values) })); } catch (_error) {} }, 250); },
 		clearRecovery() { try { sessionStorage.removeItem(this.recoveryKey()); } catch (_error) {} },
