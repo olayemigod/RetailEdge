@@ -21,6 +21,19 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertNotIn("Return + Debit Note", component)
 		self.assertNotIn("return_and_debit", component)
 
+	def test_record_purchase_supplier_debit_note_handoff_is_consumed_by_professional_purchasing(self):
+		record_purchase = (APP_ROOT / "public/js/record_purchase/RecordPurchase.vue").read_text()
+		purchasing = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text()
+
+		self.assertIn("retailedgeProfessionalPurchasingTarget", record_purchase)
+		self.assertIn('action: "supplier-debit-note"', record_purchase)
+		self.assertIn("applyPendingTarget()", purchasing)
+		self.assertIn("delete window.retailedgeProfessionalPurchasingTarget", purchasing)
+		self.assertIn('String(target.user || "") !== String(frappe.session?.user || "Guest")', purchasing)
+		self.assertIn('target.action === "supplier-debit-note"', purchasing)
+		self.assertIn('source_type: "purchase_invoice"', purchasing)
+		self.assertIn("OPEN_PURCHASE_RETURN_REVIEW_EVENT", purchasing)
+
 	def test_ui_uses_backend_filtered_sources_and_clears_dependent_selections(self):
 		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
 
