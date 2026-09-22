@@ -199,6 +199,16 @@ def test_professional_purchasing_source_mode_preserves_source_ownership_and_allo
 
 
 
+def test_purchase_invoice_preview_and_draft_edit_revalidate_existing_item_access():
+	service = _read(SERVICE)
+	assert "def _validate_purchase_item_access(doc)" in service
+	assert '_assert_read("Item", item_code)' in service
+	build = service[service.index("def _build_preview"):service.index("def _assert_expected_modified")]
+	assert "_validate_purchase_item_access(doc)" in build
+	update = service[service.index("def update_standard_purchase_invoice_draft"):service.index("def _queue_filters")]
+	assert "_validate_purchase_item_access(doc)" in update
+
+
 def test_purchase_invoice_draft_editor_is_stale_safe_permission_aware_and_source_bounded():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
