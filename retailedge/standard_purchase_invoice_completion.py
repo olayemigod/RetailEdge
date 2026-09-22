@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from erpnext.controllers.sales_and_purchase_return import get_returned_qty_map_for_row
 from frappe import _
 from frappe.utils import cint, flt, get_datetime, getdate
 
@@ -335,6 +336,23 @@ def _validate_stock_context(
 	}
 
 
+def _purchase_invoice_has_returnable_items(doc) -> bool:
+	if cint(doc.docstatus) != 1 or cint(doc.get("is_return")):
+		return False
+	supplier = _clean(doc.get("supplier"))
+	if not supplier:
+		return False
+	for row in list(doc.get("items") or []):
+		row_name = _clean(row.get("name"))
+		qty = flt(row.get("qty"))
+		if not row_name or qty <= 0:
+			continue
+		returned = get_returned_qty_map_for_row(doc.name, supplier, row_name, PURCHASE_INVOICE_DOCTYPE) or {}
+		if qty - flt(returned.get("qty")) > 0.000001:
+			return True
+	return False
+
+
 def _submitted_next_actions(doc) -> list[dict[str, str]]:
 	"""Return safe next business actions for one submitted payable Purchase Invoice."""
 	if cint(doc.docstatus) != 1 or cint(doc.get("is_return")):
@@ -343,7 +361,10 @@ def _submitted_next_actions(doc) -> list[dict[str, str]]:
 	actions: list[dict[str, str]] = []
 	if frappe.has_permission("Payment Entry", "create") and flt(doc.get("outstanding_amount")) > 0.005:
 		actions.append({"value": "pay-supplier", "label": _("Pay Supplier")})
-	if frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "create"):
+	if (
+		frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "create")
+		and _purchase_invoice_has_returnable_items(doc)
+	):
 		actions.append({"value": "create-supplier-debit-note", "label": _("Supplier Debit Note")})
 	return actions
 
