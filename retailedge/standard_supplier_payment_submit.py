@@ -211,7 +211,7 @@ def _standard_submit_blockers(
 	doc: Any,
 	payment_branch: str,
 	workflow_readiness: dict[str, Any] | None = None,
-) -> tuple[list[str], dict[str, Any] | None]:
+) -> tuple[list[str], list[dict[str, Any]]]:
 	blockers: list[str] = []
 	if cint(getattr(doc, "docstatus", 0)) != 0:
 		blockers.append(_("Only draft Payment Entries can use standard EdgeSuite submission."))
