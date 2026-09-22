@@ -20,7 +20,7 @@ def test_completion_is_bounded_to_standard_stock_documents():
 	assert 'SUPPORTED_DOCTYPES = {STOCK_ENTRY_DOCTYPE, STOCK_RECONCILIATION_DOCTYPE}' in source
 	assert 'MATERIAL_TRANSFER' in source
 	assert 'STOCK_RECONCILIATION_PURPOSE' in source
-	assert 'MAX_STANDARD_ITEMS = 50' in source
+	assert 'MAX_STANDARD_ITEMS = 100' in source
 	assert 'Amended stock documents require Advanced ERPNext review.' in source
 	assert 'Serial No or Batch tracking and requires Advanced ERPNext' in source
 
