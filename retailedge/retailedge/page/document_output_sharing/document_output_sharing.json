@@ -11,15 +11,39 @@
  "owner": "Administrator",
  "page_name": "document-output-sharing",
  "roles": [
-  {"role": "System Manager"},
-  {"role": "RetailEdge Manager"},
-  {"role": "RetailEdgeManager"},
-  {"role": "RetailEdge Branch Manager"},
-  {"role": "RetailEdgeBranchManager"},
-  {"role": "Sales Manager"},
-  {"role": "Sales User"},
-  {"role": "Accounts Manager"},
-  {"role": "Accounts User"}
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "RetailEdge Manager"
+  },
+  {
+   "role": "RetailEdgeManager"
+  },
+  {
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "role": "RetailEdgeBranchManager"
+  },
+  {
+   "role": "Sales Manager"
+  },
+  {
+   "role": "Sales User"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "Purchase Manager"
+  },
+  {
+   "role": "Purchase User"
+  }
  ],
  "script": null,
  "standard": "Yes",
