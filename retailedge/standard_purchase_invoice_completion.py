@@ -523,7 +523,11 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_DIRECT) -> dict[str, A
 		"remarks": _clean(doc.get("remarks")),
 		"can_edit": bool(cint(doc.docstatus) == 0 and not blockers and frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)),
 		"editable_items": _editable_purchase_items(doc),
-		"allow_new_items": bool((_clean(source_mode) or SOURCE_MODE_DIRECT) == SOURCE_MODE_DIRECT),
+		"default_warehouse": _clean(doc.get("set_warehouse")),
+		"allow_new_items": bool(
+			(_clean(source_mode) or SOURCE_MODE_DIRECT) == SOURCE_MODE_DIRECT
+			and (not cint(doc.get("update_stock")) or _clean(doc.get("set_warehouse")))
+		),
 		"update_stock": bool(cint(doc.get("update_stock"))),
 		"completion_mode": stock_context["mode"],
 		"source_mode": _clean(source_mode) or SOURCE_MODE_DIRECT,
