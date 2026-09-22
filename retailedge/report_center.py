@@ -73,6 +73,13 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"icon": "shopping-bag",
 		"items": (
 			{
+				"label": "Purchase Analysis",
+				"description": "Group submitted purchases and returns by time, item, category, supplier, Branch or warehouse.",
+				"target_type": "Page",
+				"target": "purchase-analysis",
+				"tags": ("purchase", "analysis", "supplier", "category", "branch", "warehouse"),
+			},
+			{
 				"label": "Purchase Register",
 				"description": "Review submitted purchases, returns and supplier invoice detail.",
 				"target_type": "Page",
