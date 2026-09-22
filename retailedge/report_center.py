@@ -16,6 +16,13 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"icon": "chart",
 		"items": (
 			{
+				"label": "Selling Control",
+				"description": "Control quotations, orders, deliveries and invoices in the existing Professional Selling workspace.",
+				"target_type": "Page",
+				"target": "professional-selling",
+				"tags": ("selling", "quotation", "sales order", "delivery", "invoice", "control"),
+			},
+			{
 				"label": "Sales Analysis",
 				"description": "Group submitted sales by time, item, category, customer, Branch, salesperson or warehouse.",
 				"target_type": "Page",
@@ -72,6 +79,20 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"description": "Purchase activity and supplier transaction detail.",
 		"icon": "shopping-bag",
 		"items": (
+			{
+				"label": "Buying Control",
+				"description": "Control purchase requests, RFQs, orders, receipts, returns and landed cost in Professional Purchasing.",
+				"target_type": "Page",
+				"target": "professional-purchasing",
+				"tags": ("buying", "purchase request", "rfq", "purchase order", "receipt", "control"),
+			},
+			{
+				"label": "Supplier Document Control",
+				"description": "Review supplier document intake, extraction evidence and the governed Purchase Invoice handoff.",
+				"target_type": "Page",
+				"target": "supplier-document-review",
+				"tags": ("supplier", "document", "review", "extraction", "purchase invoice", "control"),
+			},
 			{
 				"label": "Purchase Analysis",
 				"description": "Group submitted purchases and returns by time, item, category, supplier, Branch or warehouse.",
