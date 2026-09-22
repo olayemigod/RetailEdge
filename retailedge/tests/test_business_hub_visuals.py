@@ -22,6 +22,12 @@ HUB = ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHu
 CHART = ROOT / "public" / "js" / "retailedge_business_hub" / "BusinessHubChartCard.vue"
 
 
+def test_visual_functions_do_not_shadow_translation_helper():
+	source = PROVIDER.read_text(encoding="utf-8")
+	assert "key, _ = _bucket_for_date" not in source
+	assert 'key = _bucket_for_date(source.get("posting_date"), granularity)[0]' in source
+
+
 def test_business_hub_visuals_are_composed_from_existing_reporting_authorities():
 	source = PROVIDER.read_text(encoding="utf-8")
 	for token in (
