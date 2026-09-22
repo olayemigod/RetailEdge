@@ -456,6 +456,8 @@ export default {
 				action,
 				doctype: this.completedResult.doctype || this.preview?.doctype,
 				name: this.completedResult.name,
+				company: this.completedResult.company || this.preview?.company || "",
+				branch: this.completedResult.branch || this.preview?.branch || "",
 				customer: this.completedResult.party || this.preview?.party || "",
 			});
 		},
