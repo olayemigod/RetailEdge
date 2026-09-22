@@ -59,6 +59,12 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 		self.assertIn("Advanced: Prepare in ERPNext", overlay)
 		self.assertIn("never chains a stock return and supplier debit note automatically", (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text())
 
+	def test_return_review_native_fallback_requires_explicit_desk_grant(self):
+		overlay = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReturnReviewOverlay.vue").read_text()
+		self.assertIn("Boolean(frappe.boot?.edgesuite_ui_access?.can_use_native_desk)", overlay)
+		self.assertNotIn("mode !== ACCESS_MODE", overlay)
+		self.assertIn("if (!this.nativeFallbackEnabled", overlay)
+
 	def test_existing_professional_purchasing_flows_and_edgesuite_runtime_remain(self):
 		component = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text()
 
