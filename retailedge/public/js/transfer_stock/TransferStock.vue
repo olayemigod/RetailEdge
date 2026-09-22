@@ -125,7 +125,7 @@ export default {
 				this.formContext = data || {}; this.applyShell(shell || {});
 				this.values = { ...emptyValues(), ...(data.defaults || {}), items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })) };
 				this.initialSnapshot = JSON.stringify(this.values);
-				if (!this.consumeHandoff()) this.loadRecoveryCandidate();
+				if (!(await this.consumeHandoff())) this.loadRecoveryCandidate();
 				this.loaded = true;
 			} catch (error) { this.loadError = errorMessage(error, "Unable to prepare Transfer Stock."); }
 			finally { this.loading = false; }
@@ -139,7 +139,34 @@ export default {
 		handleNavigation(route) { if (!route || route === "/app/transfer-stock") return; const go = () => { if (/^https?:\/\//i.test(route)) window.location.assign(route); else frappe.set_route(...String(route).replace(/^\/app\//, "").split("/").filter(Boolean)); }; if (!this.hasUnsavedChanges || (this.savedDocument && !this.editingSavedDraft)) return go(); frappe.confirm("Leave Transfer Stock? Unsaved changes are retained temporarily in this browser session.", go); },
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
-		consumeHandoff() { let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; } const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false; if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false; this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) }; this.handoffNotice = "Source, destination and item lines were carried into the full-page workspace."; return true; },
+		async consumeHandoff() {
+			let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; }
+			const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false;
+			if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false;
+			this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) };
+			try {
+				if (this.values.company && (this.values.source_branch || this.values.source_warehouse)) {
+					const source = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.source_branch || "", warehouse: this.values.source_warehouse || "", preference: "source" });
+					this.values.source_branch = source.branch || this.values.source_branch || "";
+					this.values.source_warehouse = source.warehouse || this.values.source_warehouse || "";
+				}
+				if (this.values.company && (this.values.target_branch || this.values.target_warehouse)) {
+					const target = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.target_branch || "", warehouse: this.values.target_warehouse || "", preference: "target" });
+					this.values.target_branch = target.branch || this.values.target_branch || "";
+					this.values.target_warehouse = target.warehouse || this.values.target_warehouse || "";
+				}
+				if (this.values.source_warehouse && this.values.source_warehouse === this.values.target_warehouse) {
+					this.values.target_warehouse = "";
+					this.saveError = "Source and Destination Stock Location must be different.";
+				}
+				this.handoffNotice = "Quick Transfer data was carried into Transfer Stock and current source / destination access was revalidated.";
+			} catch (error) {
+				this.values.source_branch = ""; this.values.source_warehouse = ""; this.values.target_branch = ""; this.values.target_warehouse = "";
+				this.saveError = errorMessage(error, "The carried transfer locations are no longer available. Choose the current source and destination before saving.");
+				this.handoffNotice = "Quick Transfer line items were carried over, but saved source / destination context was cleared because access could not be revalidated.";
+			}
+			return true;
+		},
 		loadRecoveryCandidate() { let raw = ""; try { raw = sessionStorage.getItem(this.recoveryKey()) || ""; } catch (_error) { return; } const payload = stored(raw, 12 * 60 * 60 * 1000); if (payload && (!payload.values.company || !this.values.company || payload.values.company === this.values.company)) this.recoveryCandidate = payload; },
 		async restoreRecovery() {
 			if (!this.recoveryCandidate?.values) return;
