@@ -41,7 +41,7 @@ From the PR #58 audit freeze forward, only release-blocking corrections may chan
 6. Formal RC3 browser/persona acceptance — **COMPLETE — 31/31 PASS**
 7. Close RC3 blocker-only findings and revalidate — **COMPLETE**
 8. Exact-head Theme/Lint/CI/EdgeSuite/Upgrade/RC3 gates — **COMPLETE — 6/6 GREEN**
-9. 1.0.0 release documentation/promotion hardening — **IN PROGRESS**
+9. 1.0.0 release documentation/promotion hardening — **COMPLETE**
 10. Mark governed PR ready / merge or promote through the approved `version-16` path — **PENDING APPROVAL**
 11. Tag `v1.0.0` and publish GitHub Release — **PENDING APPROVAL**
 
@@ -68,9 +68,9 @@ Business Hub QA must cover, at minimum:
 - browser console/network/runtime errors;
 - practical usefulness of the Hub to owners/managers, not merely successful rendering.
 
-## Full MVP QA still required after Business Hub
+## Historical full-MVP QA scope — completed by formal RC3
 
-Business Hub acceptance does **not** accept the rest of RetailEdge. Separate QA is still required for:
+Business Hub acceptance alone did not accept the rest of RetailEdge. The following broader scope was subsequently exercised through the governed full-suite, permission/upgrade checks and formal RC3 browser/persona acceptance, and is now closed for the frozen candidate:
 
 - Selling and customer workflows;
 - Purchasing / Receive Stock;
