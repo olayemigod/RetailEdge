@@ -11,11 +11,33 @@
  "owner": "Administrator",
  "page_name": "professional-purchasing",
  "roles": [
-  {"role": "System Manager"},
-  {"role": "Purchase Manager"},
-  {"role": "Purchase User"},
-  {"role": "Accounts Manager"},
-  {"role": "Accounts User"}
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Purchase Manager"
+  },
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "RetailEdge Manager"
+  },
+  {
+   "role": "RetailEdgeManager"
+  },
+  {
+   "role": "RetailEdge Branch Manager"
+  },
+  {
+   "role": "RetailEdgeBranchManager"
+  }
  ],
  "script": null,
  "standard": "Yes",
