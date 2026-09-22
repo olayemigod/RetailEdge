@@ -42,6 +42,7 @@ def test_reporting_capabilities_use_settings_scope_roles_and_document_read_permi
 
 	for report_key in (
 		"sales-by-item",
+		"sales-analysis",
 		"sales-invoice-register",
 		"customer-receivables",
 		"purchase-register",
@@ -92,6 +93,7 @@ def test_export_wrapper_rechecks_action_before_existing_bounded_report_backend()
 	assert "return handler(filters=resolved_filters)" in source
 	for backend in (
 		"get_sales_by_item_export",
+		"get_sales_analysis_export",
 		"get_sales_invoice_register_export",
 		"get_customer_receivables_export",
 		"get_purchase_register_export",
