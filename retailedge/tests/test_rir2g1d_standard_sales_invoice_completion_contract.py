@@ -292,6 +292,20 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 		assert contract in dialog
 
 
+
+def test_invoice_completion_requires_saving_dirty_editor_before_submit_or_workflow():
+	dialog = _read(DIALOG)
+	for contract in (
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved Sales Invoice draft changes?',
+		'this.preview?.can_edit && !this.completedResult && this.draftDirty',
+	):
+		assert contract in dialog
+
+
 def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():
 	dialog = _read(DIALOG)
 	for contract in (
