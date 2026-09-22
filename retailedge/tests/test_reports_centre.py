@@ -68,6 +68,7 @@ def test_reports_centre_exposes_permission_filtered_catalogue(
 		"money",
 		"expenses",
 		"profitability",
+		"planning",
 		"controls",
 		"financial",
 	]
@@ -80,6 +81,8 @@ def test_reports_centre_exposes_permission_filtered_catalogue(
 	assert purchases["items"][0]["target"] == "professional-purchasing"
 	assert purchases["items"][0]["label"] == "Buying Control"
 	assert any(item["target"] == "supplier-document-review" and item["label"] == "Supplier Document Control" for item in purchases["items"])
+	planning = next(group for group in result["groups"] if group["key"] == "planning")
+	assert [item["target"] for item in planning["items"]] == ["forecasting-planning", "sales-forecast"]
 	assert page_available.called
 	assert report_available.called
 
@@ -155,6 +158,15 @@ def test_reports_centre_control_layer_reuses_existing_workspaces_without_new_met
 		'"label": "Supplier Document Control"',
 	):
 		assert label in source
+
+
+def test_reports_centre_keeps_forecasting_separate_from_known_commitments():
+	source = BACKEND.read_text(encoding="utf-8")
+
+	assert '"key": "planning"' in source
+	assert '"target": "forecasting-planning"' in source
+	assert '"target": "sales-forecast"' in source
+	assert "known cash commitments" in source.lower()
 
 
 def test_reports_centre_backend_is_catalogue_only():
