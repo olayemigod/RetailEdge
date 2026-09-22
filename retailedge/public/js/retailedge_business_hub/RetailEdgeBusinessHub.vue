@@ -430,6 +430,7 @@ const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home
 const HOME_VISUALS_METHOD = "retailedge.business_hub_visuals.get_business_hub_visuals";
 const WORKFLOW_READINESS_METHOD = "retailedge.workflow_readiness.get_document_workflow_readiness";
 const CREATE_DELIVERY_METHOD = "retailedge.professional_delivery.create_delivery_note_from_sales_invoice";
+const CREATE_RETURN_METHOD = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft";
 const CONTEXT_CACHE_TTL_MS = 30_000;
 const GUIDED_PAYMENT_ACTIONS = new Set(["receive-customer-payment", "pay-supplier"]);
 const GUIDED_CASH_DEPOSIT_ACTION = "deposit-cash";
@@ -1137,6 +1138,23 @@ export default {
 				} catch (error) {
 					const message = window.retailedge?.userErrorMessage?.(error, "Unable to continue to Delivery Note.")
 						|| "Unable to continue to Delivery Note.";
+					frappe.show_alert?.({ message, indicator: "red" }, 8);
+				}
+				return;
+			}
+			if (payload.action === "create-return-credit-note") {
+				try {
+					const result = await callMethod(CREATE_RETURN_METHOD, { sales_invoice: payload.name }, "POST");
+					if (!result?.name) throw new Error("Return / Credit Note draft was not returned.");
+					window.retailedgeProfessionalSellingTarget = {
+						doctype: "Sales Invoice",
+						name: result.name,
+						source_mode: "sales_return",
+					};
+					frappe.set_route("professional-selling");
+				} catch (error) {
+					const message = window.retailedge?.userErrorMessage?.(error, "Unable to prepare the Return / Credit Note.")
+						|| "Unable to prepare the Return / Credit Note.";
 					frappe.show_alert?.({ message, indicator: "red" }, 8);
 				}
 				return;
