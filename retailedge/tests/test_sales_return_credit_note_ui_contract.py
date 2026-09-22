@@ -37,7 +37,7 @@ class TestSalesReturnCreditNoteUIContract(TestCase):
 		self.assertIn("create-return-credit-note", page)
 		self.assertIn("create_sales_return_credit_note_draft", page)
 		self.assertNotIn("Draft Return / Credit Note prepared for Advanced ERPNext review.", page)
-		self.assertNotIn('frappe.set_route("Form", "Sales Invoice", result.name)', page)
+		self.assertIn('if (this.canUseNativeDesk) frappe.set_route("Form", "Sales Invoice", result.name);', page)
 		self.assertIn('sourceMode: { type: String, default: "standard" }', completion)
 		self.assertIn('source_mode: this.sourceMode || "standard"', completion)
 		self.assertIn("Submit Return / Credit Note", completion)
