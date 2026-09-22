@@ -60,7 +60,8 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 		for contract in (
 			"Save Draft",
 			"create_professional_quotation_draft",
-			"Open Full Form",
+			"Advanced: Open in ERPNext",
+			'v-if="canUseNativeDesk"',
 		):
 			self.assertIn(contract, component)
 		self.assertIn("Guided Quotation", workspace)
