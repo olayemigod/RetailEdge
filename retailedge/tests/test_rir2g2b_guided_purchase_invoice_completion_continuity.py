@@ -272,10 +272,31 @@ def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
 	dialog = _read(DIALOG)
 	assert '"value": "pay-supplier"' in service
 	assert '"label": _("Pay Supplier")' in service
+	assert '"value": "create-supplier-debit-note"' in service
+	assert '"label": _("Supplier Debit Note")' in service
 	assert "showNextActions" in dialog
 	assert "emitNextAction" in dialog
 	assert "supplier-payables" in dialog
 	assert "Print & Share" in dialog
+
+
+
+def test_purchase_invoice_next_action_reuses_professional_supplier_debit_note_review():
+	record_purchase = _read(ROOT / "public/js/record_purchase/RecordPurchase.vue")
+	hub = _read(HUB)
+	purchasing = _read(PURCHASING)
+	bundle = _read(ROOT / "public/js/professional_purchasing.bundle.js")
+	for source in (record_purchase, hub):
+		assert '"create-supplier-debit-note"' in source
+		assert 'retailedgeProfessionalPurchasingTarget' in source
+		assert 'user: frappe.session?.user || "Guest"' in source
+		assert 'frappe.set_route("professional-purchasing")' in source
+	assert 'OPEN_PURCHASE_RETURN_REVIEW_EVENT' in purchasing
+	assert 'source_type: "purchase_invoice"' in purchasing
+	assert 'installProfessionalPurchaseReturnOwnership(target)' in bundle
+	assert 'consumeProfessionalPurchasingTarget();' in bundle
+	assert 'delete window.retailedgeProfessionalPurchasingTarget' in bundle
+	assert 'String(target.user || "") !== String(frappe.session?.user || "Guest")' in bundle
 
 
 def test_business_hub_record_purchase_opens_purchase_invoice_completion():
