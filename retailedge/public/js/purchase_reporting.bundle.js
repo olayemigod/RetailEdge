@@ -16,6 +16,11 @@ const PURCHASE_REPORT_PROVIDERS = Object.freeze({
 		pageMethod: "retailedge.purchase_analysis.get_purchase_analysis",
 		maxDatasetRows: 10000,
 	},
+	supplier_performance: {
+		key: "supplier-performance",
+		pageMethod: "retailedge.supplier_performance.get_supplier_performance",
+		maxDatasetRows: 2000,
+	},
 	purchase_register: {
 		key: "purchase-register",
 		pageMethod: "retailedge.purchase_reporting.get_purchase_register",
