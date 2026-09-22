@@ -441,7 +441,7 @@ export default {
 			if (!["sales-order", "sales-invoice"].includes(document?.key) || !row?.name) return;
 			this.paymentIntent = document.key === "sales-order" ? "receive-sales-order-payment" : "receive-customer-payment";
 			this.paymentInitialContext = {
-				company: this.sellingContext?.operating?.company || this.tenantName || "",
+				company: row.company || this.sellingContext?.operating?.company || this.tenantName || "",
 				branch: row.branch || row.retailedge_branch || this.sellingContext?.operating?.branch || this.branchName || "",
 				party: row.customer || "",
 				reference_name: row.name,
@@ -474,7 +474,13 @@ export default {
 			this.handleRecordAction({
 				action: payload.action,
 				document,
-				row: { name: payload.name, docstatus: 1, customer: payload.customer || "" },
+				row: {
+					name: payload.name,
+					docstatus: 1,
+					company: payload.company || "",
+					branch: payload.branch || "",
+					customer: payload.customer || "",
+				},
 			});
 		},
 
