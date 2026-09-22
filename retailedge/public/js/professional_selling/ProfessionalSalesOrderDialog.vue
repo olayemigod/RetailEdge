@@ -117,7 +117,7 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Order')">Open Full Form</button>
+				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Order')">Advanced: Open in ERPNext</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode === 'quotation' && !sourceQuotation)" @click="saveDraft">{{ saving ? "Saving..." : mode === 'quotation' ? "Create Draft from Quotation" : "Save Draft" }}</button>
@@ -158,7 +158,7 @@ function initialValues(context = {}) {
 export default {
 	name: "ProfessionalSalesOrderDialog",
 	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
-	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) } },
+	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) }, canUseNativeDesk: { type: Boolean, default: false } },
 	emits: ["close", "saved", "open-native"],
 	data() {
 		return {
