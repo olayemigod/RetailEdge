@@ -552,16 +552,35 @@ export default {
 			if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return;
 			this.recoveryCandidate = payload;
 		},
-		restoreRecovery() {
+		async restoreRecovery() {
 			if (!this.recoveryCandidate?.values) return;
+			const recovered = cloneValues(this.recoveryCandidate.values);
 			this.values = {
 				...this.values,
-				...cloneValues(this.recoveryCandidate.values),
-				items: (this.recoveryCandidate.values.items || []).map((row) => ({ ...row })),
+				...recovered,
+				items: (recovered.items || []).map((row) => ({ ...row })),
 			};
 			if (!this.formContext.capabilities?.can_edit_update_stock) this.values.update_stock = 1;
 			this.recoveryCandidate = null;
-			this.handoffNotice = "Recovered unsaved Make Sale work from this browser session.";
+			this.saveError = "";
+			try {
+				if (this.values.company && (this.values.branch || this.values.warehouse)) {
+					const resolved = await resolveBranchWarehouse({
+						company: this.values.company,
+						branch: this.values.branch || "",
+						warehouse: this.values.warehouse || "",
+						preference: "sales",
+					});
+					this.values.branch = resolved.branch || this.values.branch || "";
+					this.values.warehouse = resolved.warehouse || this.values.warehouse || "";
+				}
+				this.handoffNotice = "Recovered unsaved Make Sale work and revalidated its current Branch / Stock Location access.";
+			} catch (error) {
+				this.values.branch = "";
+				this.values.warehouse = "";
+				this.saveError = errorMessage(error, "The recovered Branch or Stock Location is no longer available. Choose the current transaction context before saving.");
+				this.handoffNotice = "Recovered line items, but the saved Branch / Stock Location was cleared because access could not be revalidated.";
+			}
 		},
 		discardRecovery() {
 			this.recoveryCandidate = null;
