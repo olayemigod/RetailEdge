@@ -322,7 +322,7 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 	if not items:
 		frappe.throw(_("Add at least one invoice item."))
 	if len(items) > MAX_ITEMS:
-		frappe.throw(_("A Simple Sales Invoice can contain at most {0} items.").format(MAX_ITEMS))
+		frappe.throw(_("A Sales Invoice can contain at most {0} items in this guided entry flow.").format(MAX_ITEMS))
 
 	normalised: list[dict[str, Any]] = []
 	for index, item in enumerate(items, start=1):
