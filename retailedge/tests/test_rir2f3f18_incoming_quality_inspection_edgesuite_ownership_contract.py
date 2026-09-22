@@ -63,7 +63,9 @@ class TestRIR2F3F18IncomingQualityInspectionOwnershipContract(TestCase):
 		self.assertIn("if (!this.nativeFallbackEnabled", component)
 		self.assertIn('frappe.set_route("Form", "Quality Inspection"', component)
 		self.assertIn('frappe.set_route("Form", "Purchase Receipt"', component)
-		self.assertIn('frappe.boot?.edgesuite_ui_access?.mode !== "edgesuite_only"', component)
+		self.assertIn('const access = frappe.boot?.edgesuite_ui_access || {};', component)
+		self.assertIn('String(access.mode || "").trim() !== "edgesuite_only"', component)
+		self.assertIn('Boolean(access.can_use_native_desk)', component)
 
 
 if __name__ == "__main__":
