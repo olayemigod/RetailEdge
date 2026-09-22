@@ -424,6 +424,28 @@ def test_quick_entry_limit_is_lower_than_persistent_page_capacity():
 	assert "MAX_DRAFT_ITEMS = 100" in (ROOT / "professional_draft_items.py").read_text(encoding="utf-8")
 
 
+
+def test_advanced_native_from_saved_full_page_reopens_existing_draft_instead_of_creating_duplicate():
+	contracts = {
+		"make-sale": ('frappe.set_route("Form", "Sales Invoice", this.savedDocument.name)', 'frappe.new_doc("Sales Invoice")'),
+		"record-purchase": ('frappe.set_route("Form", "Purchase Invoice", this.savedDocument.name)', 'frappe.new_doc("Purchase Invoice")'),
+		"transfer-stock": ('frappe.set_route("Form", "Stock Entry", this.savedDocument.name)', 'frappe.new_doc("Stock Entry", { purpose: "Material Transfer" })'),
+		"stock-adjustment": ('frappe.set_route("Form", "Stock Reconciliation", this.savedDocument.name)', 'frappe.new_doc("Stock Reconciliation")'),
+	}
+	for route, (saved_route, new_route) in contracts.items():
+		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
+		assert saved_route in source
+		assert new_route in source
+		assert "this.savedDocument?.name" in source
+		assert "Unsaved page edits are not carried until you update the draft." in source
+
+
+def test_standard_selling_completion_requires_edgesuite_runtime_only():
+	source = (ROOT / "public/js/professional_selling/StandardSellingCompletionDialog.vue").read_text(encoding="utf-8")
+	assert "window.EdgeSuiteUI" in source
+	assert "window.EdgeUI" not in source
+
+
 def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 	for config in ENTRY_PAGES.values():
 		source = config["component"].read_text(encoding="utf-8")
