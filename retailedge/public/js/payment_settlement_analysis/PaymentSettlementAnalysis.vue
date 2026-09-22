@@ -99,11 +99,12 @@
 						<input v-model="filters.to_date" type="date" class="edge-input" />
 					</label>
 					<div class="filter-note">
+						<span v-if="branchRequired">Choose one of your assigned Branches before loading this report.</span>
 						<span>{{ dateRangeLimit }}-day maximum per request</span>
 						<span>Submitted Payment Entries only</span>
 					</div>
 					<div class="filter-action">
-						<button class="primary-action full" type="button" :disabled="loading || !filters.company" @click="applyFilters">
+						<button class="primary-action full" type="button" :disabled="loading || !filters.company || branchRequired" @click="applyFilters">
 							{{ loading ? "Loading…" : "Apply Filters" }}
 						</button>
 					</div>
@@ -171,6 +172,7 @@ export default {
 			userName: "",
 			companyCurrency: "",
 			dateRangeLimit: 366,
+			branchRequired: false,
 			groupByOptions: [],
 			paymentTypes: [],
 			partyTypes: [],
@@ -284,9 +286,10 @@ export default {
 				this.paymentTypes = context.payment_types || [];
 				this.partyTypes = context.party_types || [];
 				this.dateRangeLimit = Number(context.limits?.date_range_days || 366);
+				this.branchRequired = Boolean(context.scope?.restricted && !this.filters.branch);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
-				if (this.filters.company) await this.fetchData();
+				if (this.filters.company && !this.branchRequired) await this.fetchData();
 			} catch (error) {
 				this.error = errorMessage(error, "Failed to load Payment & Settlement Analysis controls.");
 			} finally {
@@ -342,11 +345,13 @@ export default {
 		onBranchSelected(option) {
 			this.filters.branch = option.value;
 			this.branchName = option.label || option.value;
+			this.branchRequired = false;
 			this.currentPage = 1;
 		},
 		clearBranch() {
 			this.filters.branch = "";
 			this.branchName = "";
+			this.branchRequired = true;
 			this.currentPage = 1;
 		},
 		onPartyTypeChange() {
