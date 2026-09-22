@@ -240,6 +240,21 @@ def test_stock_full_pages_preserve_submitted_result_and_hide_edit_complete_after
 		assert "this.savedDocument = { ...this.savedDocument, ...result" in source
 
 
+
+def test_sales_and_purchase_draft_editors_fail_closed_on_noneditable_completion_blockers():
+	sales = (ROOT / "standard_sales_invoice_completion.py").read_text(encoding="utf-8")
+	purchase = (ROOT / "standard_purchase_invoice_completion.py").read_text(encoding="utf-8")
+
+	assert "def _standard_invoice_blockers(doc, *, include_date_validation: bool = True)" in sales
+	assert "_standard_invoice_blockers(doc, include_date_validation=False)" in sales
+	assert 'Sales Invoice draft editing is blocked:' in sales
+	assert "and not edit_blockers" in sales
+	assert "include_date_validation and posting_date and due_date" in sales
+
+	assert 'Purchase Invoice draft editing is blocked:' in purchase
+	assert 'and not blockers and frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)' in purchase
+
+
 def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 	for config in ENTRY_PAGES.values():
 		source = config["component"].read_text(encoding="utf-8")
