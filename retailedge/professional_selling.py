@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import frappe
+from erpnext.controllers.sales_and_purchase_return import get_returned_qty_map_for_row
 from frappe import _
 from frappe.desk.search import search_link
 from frappe.utils import cint, flt, getdate, nowdate
@@ -744,6 +745,23 @@ def _delivery_has_direct_sales_order_billing(delivery) -> bool:
 	)
 	return bool(rows)
 
+def _sales_invoice_has_returnable_items(invoice) -> bool:
+	if cint(invoice.docstatus) != 1 or cint(invoice.get("is_return")):
+		return False
+	customer = str(invoice.get("customer") or "").strip()
+	if not customer:
+		return False
+	for row in list(invoice.get("items") or []):
+		row_name = str(row.get("name") or "").strip()
+		qty = flt(row.get("qty"))
+		if not row_name or qty <= 0:
+			continue
+		returned = get_returned_qty_map_for_row(invoice.name, customer, row_name, "Sales Invoice") or {}
+		if qty - flt(returned.get("qty")) > 0.000001:
+			return True
+	return False
+
+
 def get_professional_selling_record_actions(document: str, name: str) -> dict[str, Any]:
 	"""Resolve permitted next actions for one visible Professional Selling record."""
 	document = str(document or "").strip()
@@ -771,6 +789,10 @@ def get_professional_selling_record_actions(document: str, name: str) -> dict[st
 		direct_order_billing = _delivery_has_direct_sales_order_billing(delivery)
 		if invoice_sourced or direct_order_billing:
 			actions = [action for action in actions if action.get("value") != "create-sales-invoice"]
+	elif document == "sales-invoice":
+		invoice = frappe.get_doc("Sales Invoice", name)
+		if not _sales_invoice_has_returnable_items(invoice):
+			actions = [action for action in actions if action.get("value") != "create-return-credit-note"]
 
 	return {
 		"document": document,
