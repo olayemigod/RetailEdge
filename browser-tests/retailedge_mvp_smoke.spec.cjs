@@ -8,6 +8,7 @@ const USERS = {
 	cashier: "browser-cashier@example.com",
 	accounts: "browser-accounts@example.com",
 	stock: "browser-stock@example.com",
+	purchasing: "browser-purchasing@example.com",
 };
 
 async function login(context, user) {
