@@ -48,6 +48,33 @@ The Sales Analysis engine uses one bounded server-side dataset and named presets
 | Cashier | **Not currently exposed** | Must use canonical POS/cashier/shift attribution before analytical grouping is enabled |
 | Payment Mode | **Not a Sales Analysis dimension** | Belongs to Payment & Settlement Analysis |
 
+## Purchase Analysis Metrics
+
+Purchase Analysis is based on submitted ERPNext Purchase Invoice and Purchase Invoice Item truth. It is a dimensional purchasing view, not a replacement for Purchase Register, Supplier Payables, or Professional Purchasing lifecycle control.
+
+| Metric | Definition / Formula | Source | Caveats |
+| --- | --- | --- | --- |
+| Purchase Value | Sum of submitted non-return Purchase Invoice Item base_net_amount | Purchase Invoice Item | Company-currency additive item value after line-level discounts |
+| Returns Value | Absolute submitted return Purchase Invoice Item base_net_amount | Purchase Invoice Item | Returns are reversed using the parent Purchase Invoice is_return flag |
+| Net Purchased | Purchase Value − Returns Value | Purchase Invoice Item | Does not include invoice-level tax or outstanding |
+| Purchased Qty | Positive non-return Purchase Invoice Item qty | Purchase Invoice Item | May mix UOM outside Item-level grouping |
+| Returned Qty | Absolute return Purchase Invoice Item qty | Purchase Invoice Item | May mix UOM outside Item-level grouping |
+| Net Qty | Purchased Qty − Returned Qty | Purchase Invoice Item | Operational quantity only |
+| Invoices | Distinct submitted Purchase Invoices represented by matching item rows | Purchase Invoice + Item | One invoice can appear in multiple dimensional groups |
+| Average Transaction Value | Net Purchased ÷ distinct matching invoice count | Purchase Invoice + Item | Item-net basis, not grand-total basis |
+| Average Unit Cost | Net Purchased ÷ Net Qty | Purchase Invoice Item | Exposed only for Item grouping |
+
+### Purchase Analysis Dimensions
+
+- Day / Week / Month / Quarter / Year → Purchase Invoice posting_date.
+- Item / Item Group → Purchase Invoice Item.
+- Supplier / Supplier Group → Purchase Invoice.
+- Branch → authoritative RetailEdge Purchase Invoice branch attribution.
+- Warehouse → Purchase Invoice Item warehouse.
+- Outstanding → **not grouped here**; Supplier Payables owns invoice-level outstanding and ageing.
+- Tax / Grand Total → **not allocated here**; Purchase Register owns invoice-level tax and grand total.
+- Supplier Score → **not invented**; Supplier Performance must use evidence-backed measures only.
+
 ## Payment & Settlement Metrics
 
 Payment & Settlement Analysis is based on submitted ERPNext Payment Entries. It is not a sales-by-payment-method reconstruction.
