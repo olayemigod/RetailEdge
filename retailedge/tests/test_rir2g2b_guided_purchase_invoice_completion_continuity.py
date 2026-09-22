@@ -310,6 +310,14 @@ def test_purchase_invoice_editor_requires_saving_dirty_changes_before_submit_or_
 	assert "window.EdgeSuiteUI" in dialog
 
 
+def test_purchase_invoice_next_actions_hide_debit_note_after_full_return():
+	service = _read(SERVICE)
+	assert "get_returned_qty_map_for_row" in service
+	assert "def _purchase_invoice_has_returnable_items(doc)" in service
+	assert "get_returned_qty_map_for_row(doc.name, supplier, row_name, PURCHASE_INVOICE_DOCTYPE)" in service
+	assert "and _purchase_invoice_has_returnable_items(doc)" in service
+
+
 def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
