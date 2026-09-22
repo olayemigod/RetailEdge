@@ -158,6 +158,8 @@ def test_stock_draft_editor_is_stale_safe_permission_aware_and_scope_fixed():
 		"update_standard_stock_document_draft",
 		"Edit draft items",
 		"Save Draft Changes",
+		"draftPostingDate",
+		"draftRemarks",
 		"editable_items",
 		"expected_modified",
 		"EdgeChildTable",
