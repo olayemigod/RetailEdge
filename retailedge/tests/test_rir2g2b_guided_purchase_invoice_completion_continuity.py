@@ -336,6 +336,17 @@ def test_purchase_invoice_next_actions_hide_debit_note_after_full_return():
 	assert "and _purchase_invoice_has_returnable_items(doc)" in service
 
 
+
+def test_supplier_debit_note_next_action_requires_professional_purchasing_page_access():
+	source = _read(SERVICE)
+	assert 'def _can_open_page(page_name: str) -> bool:' in source
+	assert 'frappe.get_doc("Page", page_name).is_permitted()' in source
+	assert '_can_open_page("professional-purchasing")' in source
+	debit_index = source.index('actions.append({"value": "create-supplier-debit-note"')
+	gate_index = source.rfind('_can_open_page("professional-purchasing")', 0, debit_index)
+	assert gate_index >= 0
+
+
 def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
