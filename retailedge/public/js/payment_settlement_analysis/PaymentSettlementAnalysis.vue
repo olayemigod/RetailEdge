@@ -172,6 +172,7 @@ export default {
 			userName: "",
 			companyCurrency: "",
 			dateRangeLimit: 366,
+			scopeRestricted: false,
 			branchRequired: false,
 			groupByOptions: [],
 			paymentTypes: [],
@@ -286,7 +287,8 @@ export default {
 				this.paymentTypes = context.payment_types || [];
 				this.partyTypes = context.party_types || [];
 				this.dateRangeLimit = Number(context.limits?.date_range_days || 366);
-				this.branchRequired = Boolean(context.scope?.restricted && !this.filters.branch);
+				this.scopeRestricted = Boolean(context.scope?.restricted);
+				this.branchRequired = Boolean(this.scopeRestricted && !this.filters.branch);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company && !this.branchRequired) await this.fetchData();
@@ -340,6 +342,8 @@ export default {
 			this.filters.party = "";
 			this.partyLabel = "";
 			this.branchName = "";
+			this.scopeRestricted = false;
+			this.branchRequired = false;
 			this.currentPage = 1;
 		},
 		onBranchSelected(option) {
@@ -351,7 +355,7 @@ export default {
 		clearBranch() {
 			this.filters.branch = "";
 			this.branchName = "";
-			this.branchRequired = true;
+			this.branchRequired = this.scopeRestricted;
 			this.currentPage = 1;
 		},
 		onPartyTypeChange() {
