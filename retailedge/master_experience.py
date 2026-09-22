@@ -247,7 +247,9 @@ def _promote_browser_approved_r4_pages(navigation_groups: list[dict[str, Any]]) 
 
 def _can_open_page(target: str) -> bool:
 	try:
-		return bool(frappe.db.exists("Page", target) and frappe.has_permission("Page", "read", doc=target))
+		if not frappe.db.exists("Page", target):
+			return False
+		return bool(frappe.get_doc("Page", target).is_permitted())
 	except Exception:
 		return False
 
