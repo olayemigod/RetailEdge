@@ -232,6 +232,16 @@ def test_persistent_transaction_pages_fail_closed_for_native_desk_and_scope_hand
 
 
 
+
+def test_persistent_pages_do_not_auto_open_completion_after_first_save():
+	for route in ("make-sale", "record-purchase", "transfer-stock", "stock-adjustment"):
+		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
+		assert "Continue Editing on Page" in source
+		assert "Review / Complete" in source
+		create_segment = source[source.index("async saveDraft()"):source.index("openCompletion", source.index("async saveDraft()")) if "openCompletion" in source[source.index("async saveDraft()"):] else len(source)]
+		assert "this.completionOpen = false" in create_segment
+
+
 def test_persistent_pages_keep_saved_draft_editing_on_the_page():
 	contracts = {
 		"make-sale": "update_standard_sales_invoice_draft",
