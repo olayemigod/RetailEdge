@@ -23,6 +23,7 @@ from retailedge.sales_reporting import (
 from retailedge.sales_team_allocation import get_sales_team_allocations
 
 DEFAULT_GROUP_BY = "Month"
+PERIOD_GROUPS = frozenset({"Day", "Week", "Month", "Quarter", "Year"})
 SUPPORTED_GROUP_BY = (
 	"Day",
 	"Week",
@@ -124,7 +125,10 @@ def _build_sales_analysis_dataset(filters: frappe._dict) -> dict[str, Any]:
 			)
 
 	rows = [_finalise_bucket(bucket, include_cost=show_costs) for bucket in buckets.values()]
-	rows.sort(key=lambda row: (-flt(row.get("net_sales")), str(row.get("group_label") or "")))
+	if group_by in PERIOD_GROUPS:
+		rows.sort(key=lambda row: str(row.get("group_key") or ""))
+	else:
+		rows.sort(key=lambda row: (-flt(row.get("net_sales")), str(row.get("group_label") or "")))
 
 	matched_invoice_count = len(
 		{
@@ -279,7 +283,7 @@ def _group_entries(
 			)
 		]
 
-	if group_by in {"Day", "Week", "Month", "Quarter", "Year"}:
+	if group_by in PERIOD_GROUPS:
 		key, label = _period_group(header.get("posting_date"), group_by)
 		return [(key, label, 1.0)]
 
