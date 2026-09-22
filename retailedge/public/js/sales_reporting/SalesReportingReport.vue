@@ -299,7 +299,7 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("sales-invoice-register") || {};
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey) || {};
 				this.filters = { ...this.filters, ...hubHandoff };
 				if (hubHandoff.from_date && hubHandoff.to_date) this.filters.date_range_preset = "Custom Period";
 				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
