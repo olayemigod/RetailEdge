@@ -118,6 +118,7 @@ def _reference_previews(doc: Any, payment_branch: str) -> tuple[list[dict[str, A
 	supplier = str(getattr(doc, "party", "") or "")
 	company_currency = _company_currency(company)
 	seen: set[str] = set()
+	reference_branches: set[str] = set()
 	result: list[dict[str, Any]] = []
 
 	for index, row in enumerate(rows, start=1):
@@ -171,6 +172,8 @@ def _reference_previews(doc: Any, payment_branch: str) -> tuple[list[dict[str, A
 			blockers.append(_("Payment Entry and Purchase Invoice {0} must belong to the same Company.").format(invoice_name))
 		if str(getattr(invoice, "supplier", "") or "") != supplier:
 			blockers.append(_("Payment Entry and Purchase Invoice {0} must belong to the same Supplier.").format(invoice_name))
+		if invoice_branch:
+			reference_branches.add(invoice_branch)
 		if invoice_branch and payment_branch and invoice_branch != payment_branch:
 			blockers.append(_("Payment Entry and Purchase Invoice {0} must belong to the same Branch.").format(invoice_name))
 
@@ -196,6 +199,11 @@ def _reference_previews(doc: Any, payment_branch: str) -> tuple[list[dict[str, A
 				"branch": invoice_branch,
 			}
 		)
+
+	if len(reference_branches) > 1:
+		blockers.append(_("All Purchase Invoice allocations in a standard supplier settlement must belong to one Branch."))
+	if reference_branches and _payment_branch_field() and not payment_branch:
+		blockers.append(_("The Payment Entry must carry the Branch of its Purchase Invoice allocations."))
 
 	return result, list(dict.fromkeys(blockers))
 
