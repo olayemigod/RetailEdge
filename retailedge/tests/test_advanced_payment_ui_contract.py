@@ -14,9 +14,18 @@ class TestAdvancedPaymentUIContract(TestCase):
 
 		self.assertIn('"page_name": "payment-management"', page_json)
 		self.assertIn('"standard": "Yes"', page_json)
+		self.assertIn('"role": "System Manager"', page_json)
 		self.assertIn('"role": "Accounts User"', page_json)
 		self.assertIn('"role": "Accounts Manager"', page_json)
-		self.assertIn('"role": "Sales Manager"', page_json)
+		for forbidden_role in (
+			"Sales User",
+			"Sales Manager",
+			"RetailEdge Manager",
+			"RetailEdgeManager",
+			"RetailEdge Branch Manager",
+			"RetailEdgeBranchManager",
+		):
+			self.assertNotIn(f'"role": "{forbidden_role}"', page_json)
 		self.assertIn('const EDGEUI_ASSET = "edgeui.bundle.js"', page_js)
 		self.assertIn('const PAYMENT_ASSET = "payment_management.bundle.js"', page_js)
 		self.assertIn("window.mountPaymentManagementPage", page_js)
