@@ -117,7 +117,7 @@ class TestSupplierPerformance(FrappeTestCase):
 			"supplier_performance:",
 			'providerKey: "supplier-performance"',
 			"supplierPerformance: true",
-			'"Period purchases · current payables aged at',
+			"Period purchases · current payables aged at",
 			'["purchase_analysis", "supplier_performance"].includes(this.reportType)',
 		):
 			self.assertIn(token, component)
