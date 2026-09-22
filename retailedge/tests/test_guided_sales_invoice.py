@@ -279,7 +279,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		).read_text()
 		self.assertIn("retailedge.guided_sales_invoice.create_simple_sales_invoice_draft", component)
 		self.assertIn("retailedge.guided_sales_invoice.search_simple_sales_invoice_options", component)
-		self.assertIn("Open Full Form", component)
+		self.assertIn("Advanced: Open in ERPNext", component)
 		self.assertIn('this.$emit("open-native", "Sales Invoice")', component)
 		self.assertNotIn("frappe.new_doc", component)
 		self.assertNotIn("frappe.db.insert", component)
@@ -320,7 +320,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		).read_text()
 		self.assertIn("Only enabled Branch Setup entries for the active Company are shown.", component)
 		self.assertIn(':disabled="requiresBranchSelection && !values.branch"', component)
-		self.assertIn(':disabled="saving || loading || !transactionContextReady"', component)
+		self.assertIn(':disabled="saving || loading || !transactionContextReady || quickEntryTooLarge"', component)
 		self.assertIn("Choose a Branch before selecting the Stock Location.", component)
 
 	def test_limits_are_deliberately_small_for_guided_entry(self):

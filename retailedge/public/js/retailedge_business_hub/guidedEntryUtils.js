@@ -1,6 +1,8 @@
 export const BRANCH_WAREHOUSE_METHOD =
 	"retailedge.guided_entry_context.resolve_branch_warehouse_selection";
 
+export const QUICK_ENTRY_MAX_LINES = 10;
+
 const PRICING_BATCH_METHODS = {
 	"retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing":
 		"retailedge.guided_pricing_api.get_sales_item_pricing_batch",
@@ -43,11 +45,12 @@ async function normaliseGuidedContext(method, message) {
 	return { ...message, defaults };
 }
 
-function rawCall(method, args = {}) {
+function rawCall(method, args = {}, type = "POST") {
 	return new Promise((resolve, reject) => {
 		frappe.call({
 			method,
 			args,
+			type,
 			callback: (response) => {
 				const message = response.message || {};
 				Promise.resolve(normaliseGuidedContext(method, message)).then(resolve).catch(reject);
@@ -101,13 +104,14 @@ function queuePricingCall(method, args, batchMethod, values) {
 	});
 }
 
-export function callMethod(method, args = {}) {
+export function callMethod(method, args = {}, type = "POST") {
 	const batchMethod = PRICING_BATCH_METHODS[method];
 	const values = batchMethod ? pricingContext(args) : null;
 	if (batchMethod && values && args.item_code) {
 		return queuePricingCall(method, args, batchMethod, values);
 	}
-	return rawCall(method, args);
+	if (type === "POST") return rawCall(method, args);
+	return rawCall(method, args, type);
 }
 
 export function errorMessage(error, fallback) {

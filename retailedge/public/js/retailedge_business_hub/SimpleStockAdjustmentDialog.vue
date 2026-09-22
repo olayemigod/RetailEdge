@@ -57,6 +57,8 @@
 				@update:rows="updateItems"
 			/>
 
+			<p v-if="quickEntryTooLarge" class="guided-entry-size-warning" role="alert">Quick Adjustment is limited to {{ QUICK_ENTRY_MAX_LINES }} populated item lines. Continue in Stock Adjustment to keep working on this larger count.</p>
+
 			<p class="guided-adjustment-hint">
 				Enter the physical quantity actually counted. Zero is valid; negative physical counts are not.
 				Valuation and cost fields are deliberately not exposed by this guided flow. Serial-numbered or
@@ -66,10 +68,13 @@
 
 		<template #footer>
 			<div class="guided-adjustment-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Open Full Form</button>
+				<div class="guided-adjustment-footer-actions">
+					<button type="button" class="edge-button" :disabled="saving" @click="continueInAdjustmentPage">Continue in Stock Adjustment</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open in ERPNext</button>
+				</div>
 				<div class="guided-adjustment-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
-					<button type="button" class="edge-button edge-button--primary" :disabled="saving || loading" @click="saveDraft">
+					<button type="button" class="edge-button edge-button--primary" :disabled="saving || loading || quickEntryTooLarge" @click="saveDraft">
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
 					</button>
 				</div>
@@ -79,7 +84,7 @@
 </template>
 
 <script>
-import { callMethod, errorMessage, resolveBranchWarehouse } from "./guidedEntryUtils";
+import { callMethod, errorMessage, resolveBranchWarehouse, QUICK_ENTRY_MAX_LINES } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.guided_stock_adjustment.get_simple_stock_adjustment_context";
 const SEARCH_METHOD = "retailedge.guided_stock_adjustment.search_simple_stock_adjustment_options";
@@ -103,7 +108,7 @@ export default {
 		open: { type: Boolean, default: false },
 		nativeFallbackEnabled: { type: Boolean, default: true },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved", "open-native", "open-page"],
 	data() {
 		return {
 			loading: false,
@@ -112,6 +117,7 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			formContext: {},
+			initialValuesSnapshot: "",
 			values: emptyValues(),
 			itemTableField: { label: "Physical Counts", description: "Enter one row per counted stock item." },
 			itemColumns: [
@@ -123,6 +129,10 @@ export default {
 	computed: {
 		branchEnabled() { return Boolean(this.formContext.capabilities?.branch_enabled); },
 		searchContext() { return { company: this.values.company, branch: this.values.branch, warehouse: this.values.warehouse }; },
+		hasUnsavedChanges() { return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot); },
+		populatedItemCount() { return (this.values.items || []).filter((row) => row?.item_code).length; },
+		quickEntryTooLarge() { return this.populatedItemCount > QUICK_ENTRY_MAX_LINES; },
+		QUICK_ENTRY_MAX_LINES() { return QUICK_ENTRY_MAX_LINES; },
 	},
 	watch: { open(value) { if (value) this.loadContext(); } },
 	mounted() { if (this.open) this.loadContext(); },
@@ -133,10 +143,19 @@ export default {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
 				this.values = { ...emptyValues(), ...(data.defaults || {}), items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })) };
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) { this.loadError = errorMessage(error, "Unable to prepare Stock Adjustment."); }
 			finally { this.loading = false; }
 		},
-		requestClose() { if (!this.saving) this.$emit("close"); },
+		requestClose() {
+			if (this.saving) return;
+			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
+			frappe.confirm("Discard the unsaved Quick Adjustment changes?", () => this.$emit("close"));
+		},
+		continueInAdjustmentPage() {
+			if (this.saving) return;
+			this.$emit("open-page", { values: JSON.parse(JSON.stringify(this.values || {})) });
+		},
 		openFullForm() { if (!this.saving && this.nativeFallbackEnabled) this.$emit("open-native", "Stock Reconciliation"); },
 		async searchOptions(fieldname, query) {
 			const result = await callMethod(SEARCH_METHOD, { fieldname, txt: query || "", values: { ...this.values, items: undefined }, limit: 20 });
@@ -175,6 +194,7 @@ export default {
 		updateItems(rows) { this.values.items = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : []; },
 		async saveDraft() {
 			if (this.saving || this.loading) return;
+			if (this.quickEntryTooLarge) { this.saveError = `Quick Adjustment supports up to ${QUICK_ENTRY_MAX_LINES} populated item lines. Continue in Stock Adjustment for larger counts.`; return; }
 			if (!this.values.company || !this.values.warehouse) { this.saveError = "Company and Stock Location are required."; return; }
 			const rows = (this.values.items || []).filter((row) => row?.item_code);
 			if (!rows.length) { this.saveError = "Add at least one counted Item."; return; }
@@ -202,4 +222,5 @@ export default {
 .guided-adjustment-footer,.guided-adjustment-footer-actions { display:flex; align-items:center; gap:10px; }
 .guided-adjustment-footer { justify-content:space-between; width:100%; }
 @media (max-width:720px) { .guided-adjustment-context,.guided-adjustment-grid { grid-template-columns:1fr; } .guided-adjustment-footer { align-items:stretch; flex-direction:column; } .guided-adjustment-footer-actions { justify-content:flex-end; } }
+.guided-entry-size-warning { margin:0; padding:10px 12px; border:1px solid var(--edge-warning,#f79009); border-radius:8px; background:var(--edge-warning-subtle,#fffaeb); color:var(--edge-warning-text,#7a2e0e); font-size:.82rem; }
 </style>

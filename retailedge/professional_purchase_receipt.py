@@ -14,6 +14,7 @@ from retailedge.professional_purchasing import (
 	_assert_read,
 	_branch_scoped_filters,
 	_document_branch,
+	_permission,
 	_resolve_scope,
 	_transaction_branch_field,
 )
@@ -729,6 +730,7 @@ def get_professional_purchase_receipt_history(
 		"supplier_name",
 		"status",
 		"total_qty",
+		"per_billed",
 		"modified",
 	]
 	if branch_field:
@@ -770,6 +772,8 @@ def get_professional_purchase_receipt_history(
 				"supplier_name": str(row.get("supplier_name") or row.get("supplier") or ""),
 				"status": str(row.get("status") or "Submitted"),
 				"total_qty": flt(row.get("total_qty")),
+				"per_billed": flt(row.get("per_billed")),
+				"can_prepare_invoice": bool(_permission("Purchase Invoice", "create") and flt(row.get("per_billed")) < 99.99),
 				"purchase_orders": purchase_orders.get(str(row.get("name") or ""), []),
 			}
 			for row in rows

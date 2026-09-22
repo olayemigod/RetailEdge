@@ -167,7 +167,7 @@ const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_stan
 const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
 
 function runtimeComponents() {
-	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 

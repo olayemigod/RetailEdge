@@ -270,7 +270,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 
 QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	{
-		"key": "new-sales-invoice", "label": "New Sales Invoice", "description": "Create a formal cash, credit, wholesale, or account-customer invoice.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
+		"key": "new-sales-invoice", "label": "Quick Sale", "description": "Create a short Sales Invoice quickly. Use Make Sale for larger or multi-item transactions.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record and allocate money received from a customer.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
@@ -288,16 +288,16 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 		"key": "record-expense", "label": "Record Cashier Expense", "description": "Record a controlled expense arising during an open cashier shift.", "doctype": "RetailEdge Cashier Expense", "icon": "credit-card", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "record-purchase", "label": "Record Purchase", "description": "Create a purchase invoice for stock, services, or operating expenses.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
+		"key": "record-purchase", "label": "Quick Purchase", "description": "Create a short Purchase Invoice quickly. Use Record Purchase for larger or multi-item purchases.", "doctype": "Purchase Invoice", "icon": "shopping-bag", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "new-warranty-claim", "label": "New Warranty Claim", "description": "Open an unsaved native ERPNext warranty claim for a customer item or serial number.", "doctype": "Warranty Claim", "icon": "tool", "experience": "act", "mode": "native_fallback",
 	},
 	{
-		"key": "transfer-stock", "label": "Transfer Stock", "description": "Move stock between permitted stock locations using a native Stock Entry.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
+		"key": "transfer-stock", "label": "Quick Transfer", "description": "Move a small number of stock lines quickly. Use Transfer Stock for larger movements.", "doctype": "Stock Entry", "icon": "repeat", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "adjust-stock", "label": "Stock Adjustment", "description": "Record a physical stock count using a native Stock Reconciliation draft.", "doctype": "Stock Reconciliation", "icon": "clipboard", "experience": "act", "mode": "available",
+		"key": "adjust-stock", "label": "Quick Adjustment", "description": "Record a short physical count quickly. Use Stock Adjustment for larger counts.", "doctype": "Stock Reconciliation", "icon": "clipboard", "experience": "act", "mode": "available",
 	},
 )
 

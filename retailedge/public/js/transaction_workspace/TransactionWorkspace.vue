@@ -69,6 +69,10 @@
 						<p>{{ actionDescription(action) }}</p>
 						<div class="workspace-actions">
 							<button v-if="canRunTransactionAction(action)" type="button" class="edge-button edge-button--primary" @click="runTransactionAction(action)">{{ actionButtonLabel(action) }}</button>
+							<button v-if="action.doctype === 'Sales Invoice' && hasPageTarget('make-sale')" type="button" class="edge-button edge-button--secondary" @click="openQuickSale">Quick Sale</button>
+							<button v-if="action.doctype === 'Purchase Invoice' && hasPageTarget('record-purchase')" type="button" class="edge-button edge-button--secondary" @click="openQuickPurchase">Quick Purchase</button>
+							<button v-if="action.doctype === 'Stock Entry' && hasPageTarget('transfer-stock')" type="button" class="edge-button edge-button--secondary" @click="openQuickTransfer">Quick Transfer</button>
+							<button v-if="action.doctype === 'Stock Reconciliation' && hasPageTarget('stock-adjustment')" type="button" class="edge-button edge-button--secondary" @click="openQuickAdjustment">Quick Adjustment</button>
 							<button v-if="canViewTransactionRecords(action)" type="button" class="edge-button edge-button--secondary" @click="viewTransactionRecords(action)">{{ viewButtonLabel(action) }}</button>
 						</div>
 					</section>
@@ -80,6 +84,7 @@
 				:nativeFallbackEnabled="canUseNativeDesk"
 				@close="simpleSalesInvoiceOpen = false"
 				@saved="handleGuidedSaved"
+				@open-page="openMakeSaleFromQuick"
 				@open-native="openNativeSalesInvoice"
 			/>
 			<SimplePurchaseInvoiceDialog
@@ -87,13 +92,23 @@
 				:nativeFallbackEnabled="false"
 				@close="simplePurchaseInvoiceOpen = false"
 				@saved="handleGuidedSaved"
+				@open-page="openRecordPurchaseFromQuick"
 			/>
 			<SimpleStockTransferDialog
 				:open="simpleStockTransferOpen"
 				:nativeFallbackEnabled="canUseNativeDesk"
 				@close="simpleStockTransferOpen = false"
 				@saved="handleGuidedSaved"
+				@open-page="openTransferStockFromQuick"
 				@open-native="openNativeStockTransfer"
+			/>
+			<SimpleStockAdjustmentDialog
+				:open="simpleStockAdjustmentOpen"
+				:nativeFallbackEnabled="canUseNativeDesk"
+				@close="simpleStockAdjustmentOpen = false"
+				@saved="handleGuidedSaved"
+				@open-page="openStockAdjustmentFromQuick"
+				@open-native="openNativeStockAdjustment"
 			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -103,6 +118,7 @@
 import SimplePurchaseInvoiceDialog from "../retailedge_business_hub/SimplePurchaseInvoiceDialog.vue";
 import SimpleSalesInvoiceDialog from "../retailedge_business_hub/SimpleSalesInvoiceDialog.vue";
 import SimpleStockTransferDialog from "../retailedge_business_hub/SimpleStockTransferDialog.vue";
+import SimpleStockAdjustmentDialog from "../retailedge_business_hub/SimpleStockAdjustmentDialog.vue";
 
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
@@ -113,7 +129,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeEmptyState",
 	"EdgeStatusBadge",
 ];
-const GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry"]);
+const GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry", "Stock Reconciliation"]);
 const POS_LAUNCH_METHOD = "retailedge.retailedge.page.transaction_workspace.transaction_workspace.prepare_pos_launch";
 
 function runtimeComponents() {
@@ -201,6 +217,7 @@ export default {
 		SimplePurchaseInvoiceDialog,
 		SimpleSalesInvoiceDialog,
 		SimpleStockTransferDialog,
+		SimpleStockAdjustmentDialog,
 	},
 	data() {
 		return {
@@ -221,6 +238,7 @@ export default {
 			simpleSalesInvoiceOpen: false,
 			simplePurchaseInvoiceOpen: false,
 			simpleStockTransferOpen: false,
+			simpleStockAdjustmentOpen: false,
 			canUseNativeDesk: false,
 		};
 	},
@@ -362,15 +380,26 @@ export default {
 		runTransactionAction(action) {
 			if (!action?.doctype) return;
 			if (action.doctype === "Sales Invoice") {
+				if (this.hasPageTarget("make-sale")) {
+					frappe.set_route("make-sale");
+					return;
+				}
 				this.simpleSalesInvoiceOpen = true;
 				return;
 			}
 			if (action.doctype === "Purchase Invoice") {
+				if (this.hasPageTarget("record-purchase")) { frappe.set_route("record-purchase"); return; }
 				this.simplePurchaseInvoiceOpen = true;
 				return;
 			}
 			if (action.doctype === "Stock Entry") {
+				if (this.hasPageTarget("transfer-stock")) { frappe.set_route("transfer-stock"); return; }
 				this.simpleStockTransferOpen = true;
+				return;
+			}
+			if (action.doctype === "Stock Reconciliation") {
+				if (this.hasPageTarget("stock-adjustment")) { frappe.set_route("stock-adjustment"); return; }
+				this.simpleStockAdjustmentOpen = true;
 				return;
 			}
 			const owner = this.createOwnerPage(action);
@@ -389,6 +418,10 @@ export default {
 			this.openDoctype(action?.doctype);
 		},
 		actionButtonLabel(action) {
+			if (action?.doctype === "Sales Invoice" && this.hasPageTarget("make-sale")) return "Make Sale";
+			if (action?.doctype === "Purchase Invoice" && this.hasPageTarget("record-purchase")) return "Record Purchase";
+			if (action?.doctype === "Stock Entry" && this.hasPageTarget("transfer-stock")) return "Transfer Stock";
+			if (action?.doctype === "Stock Reconciliation" && this.hasPageTarget("stock-adjustment")) return "Stock Adjustment";
 			if (GUIDED_DOCTYPES.has(action?.doctype)) return "Guided Entry";
 			const owner = this.createOwnerPage(action);
 			if (owner === "professional-selling" && this.hasPageTarget(owner)) return "Open Selling";
@@ -400,10 +433,18 @@ export default {
 		},
 		actionDescription(action) {
 			if (action?.doctype === "Sales Invoice") {
-				return "Use the guided Sales Invoice flow here and manage selling records in Professional Selling.";
+				return this.hasPageTarget("make-sale")
+					? "Use Make Sale for larger or multi-item invoices. Quick Sale remains available for short transactions."
+					: "Use the guided Sales Invoice flow here and manage selling records in Professional Selling.";
 			}
 			if (action?.doctype === "Purchase Invoice") {
-				return "Use the guided Purchase Invoice flow here and review submitted purchases in the Purchase Register.";
+				return this.hasPageTarget("record-purchase") ? "Use Record Purchase for larger or multi-item purchases. Quick Purchase remains available for short entries." : "Use the guided Purchase Invoice flow here and review submitted purchases in the Purchase Register.";
+			}
+			if (action?.doctype === "Stock Entry") {
+				return this.hasPageTarget("transfer-stock") ? "Use Transfer Stock for larger stock movements. Quick Transfer remains available for short movements." : "Use the guided Stock Transfer flow.";
+			}
+			if (action?.doctype === "Stock Reconciliation") {
+				return this.hasPageTarget("stock-adjustment") ? "Use Stock Adjustment for larger physical counts. Quick Adjustment remains available for short corrections." : "Use the guided Stock Adjustment flow.";
 			}
 			if (["Sales Order", "Delivery Note"].includes(action?.doctype)) {
 				return "Continue this routine workflow in Professional Selling, where the guided selling flow is used and ERPNext remains authoritative.";
@@ -419,7 +460,41 @@ export default {
 			this.simpleSalesInvoiceOpen = false;
 			this.simplePurchaseInvoiceOpen = false;
 			this.simpleStockTransferOpen = false;
+			this.simpleStockAdjustmentOpen = false;
 			this.loadWorkspace();
+		},
+		openQuickSale() {
+			this.simpleSalesInvoiceOpen = true;
+		},
+		openMakeSaleFromQuick(payload = {}) {
+			try {
+				window.sessionStorage.setItem(`retailedge:make-sale:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({
+					createdAt: Date.now(),
+					values: payload?.values || {},
+				}));
+			} catch (_error) {
+				// The full page remains available even if browser session storage is blocked.
+			}
+			this.simpleSalesInvoiceOpen = false;
+			frappe.set_route("make-sale");
+		},
+		openQuickPurchase() { this.simplePurchaseInvoiceOpen = true; },
+		openQuickTransfer() { this.simpleStockTransferOpen = true; },
+		openQuickAdjustment() { this.simpleStockAdjustmentOpen = true; },
+		openRecordPurchaseFromQuick(payload = {}) {
+			try { window.sessionStorage.setItem(`retailedge:record-purchase:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), values: payload?.values || {} })); } catch (_error) {}
+			this.simplePurchaseInvoiceOpen = false;
+			frappe.set_route("record-purchase");
+		},
+		openTransferStockFromQuick(payload = {}) {
+			try { window.sessionStorage.setItem(`retailedge:transfer-stock:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), values: payload?.values || {} })); } catch (_error) {}
+			this.simpleStockTransferOpen = false;
+			frappe.set_route("transfer-stock");
+		},
+		openStockAdjustmentFromQuick(payload = {}) {
+			try { window.sessionStorage.setItem(`retailedge:stock-adjustment:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`, JSON.stringify({ createdAt: Date.now(), values: payload?.values || {} })); } catch (_error) {}
+			this.simpleStockAdjustmentOpen = false;
+			frappe.set_route("stock-adjustment");
 		},
 		openNativeSalesInvoice() {
 			if (!this.canUseNativeDesk) return;
@@ -430,6 +505,11 @@ export default {
 			if (!this.canUseNativeDesk) return;
 			this.simpleStockTransferOpen = false;
 			this.createDoctype("Stock Entry");
+		},
+		openNativeStockAdjustment() {
+			if (!this.canUseNativeDesk) return;
+			this.simpleStockAdjustmentOpen = false;
+			this.createDoctype("Stock Reconciliation");
 		},
 		openDoctype(doctype) {
 			if (!this.canUseNativeDesk || !doctype) return;

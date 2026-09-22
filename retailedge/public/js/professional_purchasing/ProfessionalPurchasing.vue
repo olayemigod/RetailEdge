@@ -291,7 +291,7 @@
 								<td><span class="status-pill">{{ row.status || (row.docstatus === 0 ? "Draft" : "Submitted") }}</span></td>
 								<td><div class="attention-badges"><span v-if="!row.attention_flags?.length" class="attention-badge attention-badge--clear">Clear</span><span v-for="flag in row.attention_flags || []" :key="flag.key" class="attention-badge" :class="`attention-badge--${flag.kind || 'readiness'}`">{{ flag.label }}</span></div></td>
 								<td class="num">{{ formatPercent(row.per_received) }}</td><td class="num">{{ formatPercent(row.per_billed) }}</td><td class="num strong">{{ formatMoney(row.grand_total, row.currency) }}</td>
-								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openPurchaseOrder(row.name)">Open</button><button v-if="row.can_prepare_receipt" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingReceipt === row.name" @click="prepareReceipt(row)">{{ preparingReceipt === row.name ? "Preparing…" : "Prepare Receipt" }}</button></td>
+								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openPurchaseOrder(row.name)">Open</button><button v-if="row.can_prepare_receipt" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingReceipt === row.name" @click="prepareReceipt(row)">{{ preparingReceipt === row.name ? "Preparing…" : "Prepare Receipt" }}</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? "Preparing…" : "Create Invoice" }}</button></td>
 							</tr></tbody>
 						</table>
 					</div>
@@ -302,10 +302,21 @@
 			<StandardPurchaseInvoiceCompletionDialog
 				:open="purchaseInvoiceCompletionOpen"
 				:document="purchaseInvoiceCompletionDocument"
+				:sourceMode="purchaseInvoiceCompletionSourceMode"
 				:canUseNativeDesk="canUseNativeDesk"
+				:showNextActions="true"
 				@close="closePurchaseInvoiceCompletion"
 				@changed="handlePurchaseInvoiceCompletionChanged"
 				@completed="handlePurchaseInvoiceCompletionCompleted"
+				@next-action="handlePurchaseInvoiceCompletionNextAction"
+			/>
+			<SimplePaymentDialog
+				:open="supplierPaymentOpen"
+				intent="pay-supplier"
+				:initialContext="supplierPaymentInitialContext"
+				:nativeFallbackEnabled="canUseNativeDesk"
+				@close="closeSupplierPayment"
+				@saved="closeSupplierPayment"
 			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -314,6 +325,7 @@
 <script>
 import IncomingQualityInspection from "./IncomingQualityInspection.vue";
 import StandardPurchaseInvoiceCompletionDialog from "./StandardPurchaseInvoiceCompletionDialog.vue";
+import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_purchasing.get_professional_purchasing_context";
 const PROCUREMENT_TRACKER_HANDOFF_METHOD = "retailedge.procurement_tracker_handoff.get_procurement_tracker_handoff";
@@ -324,6 +336,8 @@ const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
 const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
 const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
 const OPEN_PURCHASE_RECEIPT_HISTORY_EVENT = "retailedge-open-professional-purchase-receipt-history";
+const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
+const PREPARE_PO_INVOICE_METHOD = "retailedge.professional_purchasing.prepare_purchase_invoice_from_purchase_order";
 const LANDED_COST_HANDOFF_EVENT = "retailedge-professional-purchasing-landed-cost-handoff";
 const RETURN_CAPABILITY_METHOD = "retailedge.professional_purchasing.get_purchase_return_capability";
 const RETURN_SEARCH_METHOD = "retailedge.professional_purchasing.search_purchase_return_sources";
@@ -341,7 +355,7 @@ const PURCHASE_INVOICE_QUEUE_METHOD = "retailedge.standard_purchase_invoice_comp
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeLinkField", "EdgeDropdown"];
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
-function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
+function callMethod(method, args = {}, type = "GET") { return new Promise((resolve, reject) => frappe.call({ method, args, type, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?._server_messages || fallback; }
 function doctypeSlug(doctype) { return String(doctype || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 function dispatchEdgeSuiteEvent(name, detail = {}) { window.dispatchEvent(new CustomEvent(name, { detail })); }
@@ -354,19 +368,20 @@ function sortedCopy(rows, sort) {
 
 export default {
 	name: "RetailEdgeProfessionalPurchasing",
-	components: { IncomingQualityInspection, StandardPurchaseInvoiceCompletionDialog, ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])) },
+	components: { IncomingQualityInspection, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog, ...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])) },
 	data() {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", actionError: "", actionNotice: "", company: "", branch: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			filters: { company: "", branch: "", supplier: "" }, summary: {}, capabilities: {}, limits: {}, rows: [], materialRequests: [], serverToday: "",
-			draftPurchaseInvoices: [], draftInvoiceSort: null, loadingDraftPurchaseInvoices: false, purchaseInvoiceCompletionOpen: false, purchaseInvoiceCompletionDocument: null,
+			draftPurchaseInvoices: [], draftInvoiceSort: null, loadingDraftPurchaseInvoices: false, purchaseInvoiceCompletionOpen: false, purchaseInvoiceCompletionDocument: null, purchaseInvoiceCompletionSourceMode: "direct",
+			supplierPaymentOpen: false, supplierPaymentInitialContext: {},
 			procurementTracker: { available: false, company: "", branch: "", report: "Procurement Tracker", reason: "" },
 			returnCapabilities: { can_prepare_purchase_return: false, can_prepare_supplier_debit_note: false }, returnSources: { purchaseReceipt: "", purchaseInvoice: "" }, preparingReturn: "",
 			landedCostCapability: { can_prepare_landed_cost: false, can_use_purchase_receipt: false, can_use_purchase_invoice: false },
 			landedCost: { sourceType: "purchase_receipt", source: "", distributionMethod: "Amount", charges: [{ expense_account: "", description: "Freight / clearing", amount: "" }] },
 			landedCostReview: null, landedCostDraft: null, landedCostSourceModified: "",
 			reviewingLandedCost: false, savingLandedCost: false, submittingLandedCost: false, applyingLandedCostWorkflow: false, preparingLandedCost: false,
-			preparingReceipt: "", preparingRfq: false, rfqSupplierInput: "", rfqDraft: { material_request: "", suppliers: [] },
+			preparingReceipt: "", preparingInvoice: "", preparingRfq: false, rfqSupplierInput: "", rfqDraft: { material_request: "", suppliers: [] },
 			sort: { key: "transaction_date", direction: "desc" }, materialSort: { key: "transaction_date", direction: "desc" }, attentionFilter: "all",
 			attentionOptions: [
 				{ key: "all", label: "All" }, { key: "needs_review", label: "Needs Review" }, { key: "overdue_receipt", label: "Overdue" },
@@ -390,15 +405,18 @@ export default {
 		this.edgeUIValid = this.missingComponents.length === 0;
 		this._onPageShow = () => this.loadWorkspace();
 		this._onLandedCostHandoff = (event) => this.handleLandedCostHandoff(event?.detail || {});
+		this._onPurchaseInvoiceReady = (event) => this.handlePurchaseInvoiceReady(event?.detail || {});
 	},
 	mounted() {
 		window.addEventListener("retailedge-professional-purchasing-page-show", this._onPageShow);
 		window.addEventListener(LANDED_COST_HANDOFF_EVENT, this._onLandedCostHandoff);
+		window.addEventListener(PURCHASE_INVOICE_READY_EVENT, this._onPurchaseInvoiceReady);
 		if (this.edgeUIValid) this.loadWorkspace();
 	},
 	beforeUnmount() {
 		window.removeEventListener("retailedge-professional-purchasing-page-show", this._onPageShow);
 		window.removeEventListener(LANDED_COST_HANDOFF_EVENT, this._onLandedCostHandoff);
+		window.removeEventListener(PURCHASE_INVOICE_READY_EVENT, this._onPurchaseInvoiceReady);
 	},
 	methods: {
 		async loadWorkspace() {
@@ -433,21 +451,65 @@ export default {
 				this.loadingDraftPurchaseInvoices = false;
 			}
 		},
-		openPurchaseInvoiceCompletion(row) {
+		openPurchaseInvoiceCompletion(row, sourceMode = "direct") {
 			if (!row?.name) return;
+			this.purchaseInvoiceCompletionSourceMode = sourceMode || row.source_mode || "direct";
 			this.purchaseInvoiceCompletionDocument = { doctype: "Purchase Invoice", name: row.name };
 			this.purchaseInvoiceCompletionOpen = true;
 		},
 		closePurchaseInvoiceCompletion() {
 			this.purchaseInvoiceCompletionOpen = false;
 			this.purchaseInvoiceCompletionDocument = null;
+			this.purchaseInvoiceCompletionSourceMode = "direct";
 		},
 		async handlePurchaseInvoiceCompletionChanged() {
 			await this.refreshDraftPurchaseInvoices();
 		},
 		async handlePurchaseInvoiceCompletionCompleted() {
-			this.closePurchaseInvoiceCompletion();
 			await this.refreshDraftPurchaseInvoices();
+			await this.loadWorkspace();
+		},
+		handlePurchaseInvoiceReady(result) {
+			if (!result?.name) return;
+			this.actionNotice = result.existing
+				? `Existing Purchase Invoice ${result.name} reused for ${result.source_type || "purchase source"} ${result.source_name || ""}.`
+				: `Purchase Invoice ${result.name} prepared as a draft from ${result.source_type || "purchase source"} ${result.source_name || ""}.`;
+			this.openPurchaseInvoiceCompletion(result, "professional_purchasing");
+		},
+		async handlePurchaseInvoiceCompletionNextAction(payload) {
+			if (!payload?.action || !payload?.name) return;
+			this.closePurchaseInvoiceCompletion();
+			if (payload.action === "pay-supplier") {
+				this.supplierPaymentInitialContext = {
+					company: payload.company || this.filters.company || this.company || "",
+					branch: payload.branch || this.filters.branch || this.branch || "",
+					party: payload.supplier || this.filters.supplier || "",
+					reference_name: payload.name,
+				};
+				this.supplierPaymentOpen = true;
+				return;
+			}
+			if (payload.action === "supplier-payables") {
+				const filters = {
+					company: payload.company || this.filters.company || this.company || "",
+					branch: payload.branch || this.filters.branch || this.branch || "",
+					supplier: payload.supplier || this.filters.supplier || "",
+				};
+				const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
+				window.__retailedgeBusinessHubRouteHandoff = { target: "supplier-payables", filters: cleanFilters, createdAt: Date.now() };
+				frappe.route_options = { ...cleanFilters, retailedge_business_hub_handoff: 1, retailedge_business_hub_target: "supplier-payables" };
+				frappe.set_route("supplier-payables");
+				return;
+			}
+			if (payload.action === "output") {
+				window.retailedgeDocumentOutputTarget = { document: "purchase-invoice", name: payload.name, mode: "share" };
+				frappe.set_route("document-output-sharing");
+			}
+		},
+		closeSupplierPayment() {
+			this.supplierPaymentOpen = false;
+			this.supplierPaymentInitialContext = {};
+			this.loadWorkspace();
 		},
 		handleLandedCostHandoff(handoff) {
 			const sourceName = String(handoff?.source_name || "").trim();
@@ -517,6 +579,16 @@ export default {
 			if (!row?.name) return;
 			this.clearActionFeedback();
 			dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT, { purchase_order: row.name });
+		},
+		async prepareInvoice(row) {
+			if (!row?.name || !row.can_prepare_invoice || this.preparingInvoice) return;
+			this.preparingInvoice = row.name; this.clearActionFeedback();
+			try {
+				const result = await callMethod(PREPARE_PO_INVOICE_METHOD, { purchase_order: row.name }, "POST");
+				this.handlePurchaseInvoiceReady(result);
+			} catch (error) {
+				this.actionError = errorMessage(error, "ERPNext could not prepare the Purchase Invoice from this Purchase Order.");
+			} finally { this.preparingInvoice = ""; }
 		},
 		async preparePurchaseReturn() {
 			if (!this.canUseNativeDesk || !this.returnSources.purchaseReceipt || this.preparingReturn) return; this.preparingReturn = "purchase_receipt"; this.clearActionFeedback();

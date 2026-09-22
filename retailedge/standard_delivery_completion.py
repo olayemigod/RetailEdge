@@ -103,10 +103,14 @@ def _standard_delivery_blockers(doc) -> list[str]:
 		blockers.append(_("Product Bundle / packed-item delivery requires Advanced ERPNext review."))
 
 	source_orders: set[str] = set()
+	source_invoices: set[str] = set()
 	for row in items:
 		source_name = _clean(row.get("against_sales_order"))
 		if source_name:
 			source_orders.add(source_name)
+		source_invoice = _clean(row.get("against_sales_invoice"))
+		if source_invoice:
+			source_invoices.add(source_invoice)
 
 		if not _clean(row.get("warehouse")):
 			blockers.append(
@@ -126,6 +130,16 @@ def _standard_delivery_blockers(doc) -> list[str]:
 		blockers.append(
 			_("A standard Delivery Note may reference only one source Sales Order.")
 		)
+	if len(source_invoices) > 1:
+		blockers.append(
+			_("A standard Delivery Note may reference only one source Sales Invoice.")
+		)
+	if len(source_invoices) == 1:
+		source_invoice = next(iter(source_invoices))
+		if any(_clean(row.get("against_sales_invoice")) != source_invoice for row in items):
+			blockers.append(
+				_("Sales Invoice-linked Delivery Notes cannot mix unlinked or differently linked items in the standard path.")
+			)
 
 	return list(dict.fromkeys(blockers))
 
@@ -143,11 +157,44 @@ def _validate_source_and_stock_context(
 		for row in items
 		if _clean(row.get("against_sales_order"))
 	}
-	source_name = next(iter(source_orders), "") if len(source_orders) == 1 else ""
+	source_invoices = {
+		_clean(row.get("against_sales_invoice"))
+		for row in items
+		if _clean(row.get("against_sales_invoice"))
+	}
+	source_sales_invoice = next(iter(source_invoices), "") if len(source_invoices) == 1 else ""
+	source_name = "" if source_sales_invoice else (next(iter(source_orders), "") if len(source_orders) == 1 else "")
 	customer = _clean(doc.get("customer"))
 
 	source_branch = ""
-	if source_name:
+	if source_sales_invoice:
+		if not frappe.db.exists("Sales Invoice", source_sales_invoice):
+			blockers.append(_("Source Sales Invoice {0} no longer exists.").format(source_sales_invoice))
+		else:
+			source = frappe.get_doc("Sales Invoice", source_sales_invoice)
+			if not frappe.has_permission("Sales Invoice", "read", doc=source):
+				frappe.throw(
+					_("You do not have permission to read Sales Invoice {0}.").format(source_sales_invoice),
+					frappe.PermissionError,
+				)
+			if cint(source.docstatus) != 1:
+				blockers.append(_("Source Sales Invoice {0} is not submitted.").format(source_sales_invoice))
+			if cint(source.get("is_return")):
+				blockers.append(_("Return / Credit Note invoices cannot own a standard Delivery Note."))
+			if cint(source.get("update_stock")):
+				blockers.append(_("The source Sales Invoice already posted stock; completing another Delivery Note would duplicate stock movement."))
+			source_company = _clean(source.get("company"))
+			source_customer = _clean(source.get("customer"))
+			if source_company != company:
+				blockers.append(_("Source Sales Invoice Company does not match the Delivery Note."))
+			if source_customer != customer:
+				blockers.append(_("Source Sales Invoice Customer does not match the Delivery Note."))
+			source_branch = _validate_stored_operational_branch(
+				company=source_company or company,
+				branch=_stored_branch(source),
+				label=_("Submitted Sales Invoice {0}").format(source_sales_invoice),
+			)
+	elif source_name:
 		if not frappe.db.exists("Sales Order", source_name):
 			blockers.append(_("Source Sales Order {0} no longer exists.").format(source_name))
 		else:
@@ -226,6 +273,7 @@ def _validate_source_and_stock_context(
 
 	return {
 		"source_sales_order": source_name,
+		"source_sales_invoice": source_sales_invoice,
 		"source_branch": source_branch,
 		"warehouse_branch": warehouse_branch,
 		"effective_branch": effective_branch,
@@ -243,6 +291,7 @@ def _item_summary(doc) -> list[dict[str, Any]]:
 				"qty": flt(row.get("qty")),
 				"warehouse": _clean(row.get("warehouse")),
 				"against_sales_order": _clean(row.get("against_sales_order")),
+				"against_sales_invoice": _clean(row.get("against_sales_invoice")),
 			}
 		)
 	return result
@@ -284,6 +333,7 @@ def _build_preview(doc) -> dict[str, Any]:
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
 		"source_sales_order": stock_context["source_sales_order"],
+		"source_sales_invoice": stock_context["source_sales_invoice"],
 		"item_count": len(list(doc.get("items") or [])),
 		"items": _item_summary(doc),
 		"editable_items": editable_items(doc),
@@ -445,6 +495,7 @@ def submit_standard_delivery_note(
 		"branch": _stored_branch(doc) or stock_context["effective_branch"],
 		"customer": _clean(doc.get("customer")),
 		"source_sales_order": stock_context["source_sales_order"],
+		"source_sales_invoice": stock_context["source_sales_invoice"],
 		"source_of_truth": "ERPNext native submit",
 		"route": f"/app/delivery-note/{doc.name}",
 	}
@@ -488,10 +539,21 @@ def apply_standard_delivery_workflow_action(
 			frappe.ValidationError,
 		)
 
-	return apply_document_workflow_action(
+	result = apply_document_workflow_action(
 		doctype=DELIVERY_NOTE_DOCTYPE,
 		name=name,
 		action=action,
 		expected_modified=expected_modified,
 		expected_state=str(expected_workflow_state or ""),
 	)
+	if cint(result.get("docstatus")) == 1:
+		result.update(
+			{
+				"source_sales_order": stock_context["source_sales_order"],
+				"source_sales_invoice": stock_context["source_sales_invoice"],
+				"customer": _clean(doc.get("customer")),
+				"company": company,
+				"branch": _stored_branch(doc) or stock_context["effective_branch"],
+			}
+		)
+	return result

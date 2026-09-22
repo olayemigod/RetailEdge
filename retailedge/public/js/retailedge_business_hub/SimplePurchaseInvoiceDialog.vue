@@ -121,6 +121,9 @@
 				:newRowsFirst="true"
 				@update:rows="updateItems"
 			/>
+			<p v-if="quickEntryTooLarge" class="guided-entry-size-warning" role="alert">
+				Quick Purchase is limited to {{ QUICK_ENTRY_MAX_LINES }} populated item lines. Continue in the full page to keep working on this larger transaction.
+			</p>
 
 			<p class="guided-purchase-hint">
 				Buying Rate follows your assigned Buying Price List and ERPNext buying defaults, Item Prices
@@ -141,9 +144,10 @@
 
 		<template #footer>
 			<div class="guided-purchase-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Advanced: Open in ERPNext
-				</button>
+				<div class="guided-purchase-footer-actions">
+					<button type="button" class="edge-button" :disabled="saving" @click="continueInRecordPurchase">Continue in Record Purchase</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open in ERPNext</button>
+				</div>
 				<div class="guided-purchase-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
 						Cancel
@@ -151,7 +155,7 @@
 					<button
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading || !transactionContextReady"
+						:disabled="saving || loading || !transactionContextReady || quickEntryTooLarge"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -169,6 +173,7 @@ import {
 	quickCreateItem,
 	quickCreateSupplier,
 	resolveBranchWarehouse,
+	QUICK_ENTRY_MAX_LINES,
 } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_context";
@@ -219,7 +224,7 @@ export default {
 		nativeFallbackEnabled: { type: Boolean, default: true },
 		open: { type: Boolean, default: false },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved", "open-native", "open-page"],
 	data() {
 		return {
 			loading: false,
@@ -229,6 +234,7 @@ export default {
 			cascadeToken: 0,
 			pricingTokens: {},
 			pricingCache: new Map(),
+			initialValuesSnapshot: "",
 			formContext: {},
 			values: emptyValues(),
 			itemTableField: {
@@ -292,6 +298,12 @@ export default {
 				supplier: this.values.supplier,
 			};
 		},
+		hasUnsavedChanges() {
+			return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
+		},
+		populatedItemCount() { return (this.values.items || []).filter((row) => row?.item_code).length; },
+		quickEntryTooLarge() { return this.populatedItemCount > QUICK_ENTRY_MAX_LINES; },
+		QUICK_ENTRY_MAX_LINES() { return QUICK_ENTRY_MAX_LINES; },
 	},
 	watch: {
 		open(next) {
@@ -315,6 +327,7 @@ export default {
 					...(data.defaults || {}),
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Purchase Invoice.");
 			} finally {
@@ -323,7 +336,12 @@ export default {
 		},
 		requestClose() {
 			if (this.saving) return;
-			this.$emit("close");
+			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
+			frappe.confirm("Discard the unsaved Quick Purchase changes?", () => this.$emit("close"));
+		},
+		continueInRecordPurchase() {
+			if (this.saving) return;
+			this.$emit("open-page", { values: JSON.parse(JSON.stringify(this.values || {})) });
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
@@ -499,6 +517,7 @@ export default {
 		},
 		async saveDraft() {
 			if (this.saving || this.loading || !this.transactionContextReady) return;
+			if (this.quickEntryTooLarge) { this.saveError = `Quick Purchase supports up to ${QUICK_ENTRY_MAX_LINES} populated item lines. Continue in the full page for larger transactions.`; return; }
 			this.saveError = "";
 			this.saving = true;
 			try {
@@ -620,4 +639,5 @@ export default {
 		justify-content: flex-end;
 	}
 }
+.guided-entry-size-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--edge-warning, #f79009); border-radius: 8px; background: var(--edge-warning-subtle, #fffaeb); color: var(--edge-warning-text, #7a2e0e); font-size: .82rem; }
 </style>

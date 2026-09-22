@@ -253,7 +253,7 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		self.assertIn('this.values.target_warehouse = "";', component)
 		self.assertIn("sameWarehouse", component)
 		self.assertIn("serial-numbered or batch-managed", component.lower())
-		self.assertIn("Open Full Form", component)
+		self.assertIn("Advanced: Open in ERPNext", component)
 		self.assertIn('this.$emit("open-native", "Stock Entry")', component)
 
 	def test_limits_are_small_for_guided_transfer(self):

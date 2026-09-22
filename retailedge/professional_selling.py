@@ -735,9 +735,15 @@ def get_professional_selling_record_actions(document: str, name: str) -> dict[st
 			_("The selected document is not available in your current Company/Branch context."),
 			frappe.PermissionError,
 		)
+	actions = list(row.get("actions") or [])
+	if document == "delivery-note":
+		delivery = frappe.get_doc("Delivery Note", name)
+		if any(str(row.get("against_sales_invoice") or "").strip() for row in delivery.get("items") or []):
+			actions = [action for action in actions if action.get("value") != "create-sales-invoice"]
+
 	return {
 		"document": document,
 		"doctype": result.get("doctype"),
 		"name": name,
-		"actions": list(row.get("actions") or []),
+		"actions": actions,
 	}

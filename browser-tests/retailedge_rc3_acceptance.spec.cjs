@@ -300,20 +300,48 @@ test("RC3 Accounts persona reaches Home, Action Centre and both banking Pages", 
 	}
 });
 
-test("RC3 Stock persona reaches Home and Stock Position", async ({ browser }) => {
+test("RC3 Stock persona reaches governed stock workspaces and Quick variants", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.stock);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const transferAction = page.locator(".home-quick-action").filter({ hasText: "Transfer Stock" }).first();
+		await expect(transferAction).toBeVisible();
+		await transferAction.click();
+		await expect(page).toHaveURL(/\/(?:app|desk)\/transfer-stock(?:$|[?#])/);
+		await page.getByRole("heading", { name: "Transfer Stock", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
+		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
+
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await page.getByRole("button", { name: "+ Create", exact: true }).click();
+		for (const label of ["Quick Transfer", "Quick Adjustment"]) {
+			await expect(page.locator(".create-picker-item").filter({ hasText: label }).first()).toBeVisible();
+		}
+		await page.keyboard.press("Escape");
+
+		await openProductPage(page, "stock-adjustment", "Stock Adjustment");
+		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
 		await openProductPage(page, "stock-position", "Stock Position");
 	} finally {
 		await context.close();
 	}
 });
 
-test("RC3 Purchasing persona has an EdgeSuite product shell and purchasing workspace", async ({ browser }) => {
+test("RC3 Purchasing persona reaches Record Purchase, Quick Purchase and purchasing workspaces", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.purchasing);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const purchaseAction = page.locator(".home-quick-action").filter({ hasText: "Record Purchase" }).first();
+		await expect(purchaseAction).toBeVisible();
+		await purchaseAction.click();
+		await expect(page).toHaveURL(/\/(?:app|desk)\/record-purchase(?:$|[?#])/);
+		await page.getByRole("heading", { name: "Record Purchase", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
+		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
+
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await page.getByRole("button", { name: "+ Create", exact: true }).click();
+		await expect(page.locator(".create-picker-item").filter({ hasText: "Quick Purchase" }).first()).toBeVisible();
+		await page.keyboard.press("Escape");
+
 		await openProductPage(page, "professional-purchasing", "Professional Purchasing");
 		await openProductPage(page, "supplier-payables", "Supplier Payables");
 	} finally {
@@ -321,10 +349,22 @@ test("RC3 Purchasing persona has an EdgeSuite product shell and purchasing works
 	}
 });
 
-test("RC3 Sales persona has an EdgeSuite product shell and selling workspace", async ({ browser }) => {
+test("RC3 Sales persona reaches Make Sale, Quick Sale and selling workspaces", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.sales);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const saleAction = page.locator(".home-quick-action").filter({ hasText: "Make Sale" }).first();
+		await expect(saleAction).toBeVisible();
+		await saleAction.click();
+		await expect(page).toHaveURL(/\/(?:app|desk)\/make-sale(?:$|[?#])/);
+		await page.getByRole("heading", { name: "Make Sale", exact: true }).first().waitFor({ state: "visible", timeout: 25_000 });
+		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
+
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await page.getByRole("button", { name: "+ Create", exact: true }).click();
+		await expect(page.locator(".create-picker-item").filter({ hasText: "Quick Sale" }).first()).toBeVisible();
+		await page.keyboard.press("Escape");
+
 		await openProductPage(page, "professional-selling", "Professional Selling");
 		await openProductPage(page, "customer-receivables", "Customer Receivables");
 		await openProductPage(page, "payment-management", "Advanced Payment Management");

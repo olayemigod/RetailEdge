@@ -37,6 +37,11 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn("Purchase Material Requests", component)
 		self.assertIn("Start RFQ", component)
 		self.assertIn("Prepare Receipt", component)
+		self.assertIn("Create Invoice", component)
+		self.assertIn("prepare_purchase_invoice_from_purchase_order", component)
+		self.assertIn("retailedge-professional-purchasing-purchase-invoice-ready", component)
+		self.assertIn('intent="pay-supplier"', component)
+		self.assertIn(':showNextActions="true"', component)
 		self.assertIn("sortBy('per_received')", component)
 		self.assertIn("sortMaterialBy('per_ordered')", component)
 		self.assertIn("canUseNativeDesk: false", component)
@@ -79,6 +84,11 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn("rfq.insert()", source)
 		self.assertIn("make_purchase_receipt(po.name)", source)
 		self.assertIn("receipt.insert()", source)
+		self.assertIn("make_purchase_invoice_from_purchase_order(source.name)", source)
+		self.assertIn("make_purchase_invoice_from_purchase_receipt(source.name)", source)
+		self.assertIn("target.insert()", source)
+		self.assertIn("FOR UPDATE", source)
+		self.assertIn("_existing_source_purchase_invoice", source)
 		self.assertIn('"posting_status": "Draft"', source)
 		self.assertIn("validate_operating_branch", source)
 		self.assertNotIn("validate_user_branch_access(", source)
@@ -88,6 +98,22 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn('frappe.new_doc("GL Entry")', source)
 		self.assertNotIn('frappe.new_doc("Stock Ledger Entry")', source)
+
+	def test_receipt_history_can_continue_to_purchase_invoice_inside_edgesuite(self):
+		overlay = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReceiptHistoryOverlay.vue").read_text()
+		backend = (APP_ROOT / "professional_purchase_receipt.py").read_text()
+		self.assertIn("Create Invoice", overlay)
+		self.assertIn("prepare_purchase_invoice_from_purchase_receipt", overlay)
+		self.assertIn("retailedge-professional-purchasing-purchase-invoice-ready", overlay)
+		self.assertIn('"can_prepare_invoice"', backend)
+		self.assertIn('"per_billed"', backend)
+
+	def test_purchase_invoice_draft_reuse_preserves_exact_source_lineage(self):
+		source = (APP_ROOT / "professional_purchasing.py").read_text()
+		self.assertIn("_existing_source_purchase_invoice", source)
+		self.assertIn('row.get("purchase_receipt")', source)
+		self.assertIn("owned by Purchase Receipt billing", source)
+		self.assertIn("Multiple draft Purchase Invoices already reference", source)
 
 	def test_business_hub_promotes_page_as_purchase_order_owner(self):
 		source = (APP_ROOT / "master_experience.py").read_text()

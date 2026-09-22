@@ -405,9 +405,10 @@
 				</div>
 			</div>
 			<div v-else class="guided-payment-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Advanced ERPNext
-				</button>
+				<div class="guided-payment-footer-actions">
+					<button v-if="isCustomerPayment || isSupplierPayment" type="button" class="edge-button" :disabled="saving" @click="openManagedPaymentPage">Open {{ managedPageLabel }}</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced ERPNext</button>
+				</div>
 				<div class="guided-payment-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
 						Cancel
@@ -521,6 +522,7 @@ export default {
 			supplierReview: null,
 			formContext: {},
 			modeDetails: {},
+			initialValuesSnapshot: "",
 			values: emptyValues(),
 			referenceTableField: {
 				label: "Reference Allocation",
@@ -573,6 +575,12 @@ export default {
 		unallocatedAmount() {
 			return (Number(this.values.amount) || 0) - this.allocatedTotal;
 		},
+		hasUnsavedChanges() {
+			return Boolean(!this.customerReview && !this.supplierReview && this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
+		},
+		managedPageLabel() {
+			return this.isSupplierPayment ? "Supplier Payables" : "Payment Management";
+		},
 	},
 	watch: {
 		open(next) {
@@ -613,6 +621,7 @@ export default {
 					})),
 				};
 				await this.applyInitialContext();
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Payment Entry.");
 			} finally {
@@ -656,7 +665,22 @@ export default {
 		},
 		requestClose() {
 			if (this.saving || this.submitting) return;
+			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
+			frappe.confirm("Discard the unsaved Quick Payment changes?", () => this.$emit("close"));
+		},
+		openManagedPaymentPage() {
+			if (this.saving || this.submitting) return;
+			const target = this.isSupplierPayment ? "supplier-payables" : "payment-management";
+			const filters = { company: this.values.company || "", branch: this.values.branch || "" };
+			if (this.isSupplierPayment) filters.supplier = this.values.party || "";
+			else filters.customer = this.values.party || "";
+			const firstReference = (this.values.references || []).find((row) => row?.reference_name)?.reference_name || "";
+			if (!this.isSupplierPayment && firstReference) filters.sales_invoice = firstReference;
+			const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
+			window.__retailedgeBusinessHubRouteHandoff = { target, filters: cleanFilters, createdAt: Date.now() };
+			frappe.route_options = { ...cleanFilters, retailedge_business_hub_handoff: 1, retailedge_business_hub_target: target };
 			this.$emit("close");
+			frappe.set_route(target);
 		},
 		openFullForm() {
 			if (this.saving || this.submitting || !this.nativeFallbackEnabled) return;

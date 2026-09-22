@@ -28,7 +28,9 @@ def test_service_is_purchase_invoice_only_and_preview_is_persistence_free():
 		"_get_purchase_invoice",
 		"_validate_invoice_context",
 		"_standard_invoice_blockers",
+		"_completion_source_context",
 		"_validate_source_less_context",
+		"_validate_professional_purchasing_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		'"persistence": "none"',
@@ -115,7 +117,7 @@ def test_direct_submit_locks_stale_checks_revalidates_and_calls_native_submit_on
 		"expected_modified",
 		"_validate_invoice_context",
 		"_standard_invoice_blockers",
-		"_validate_source_less_context",
+		"_completion_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		'frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "submit", doc=doc)',
@@ -141,7 +143,7 @@ def test_workflow_action_uses_shared_f3f27_bridge():
 		"FOR UPDATE",
 		"expected_modified",
 		"expected_workflow_state",
-		"_validate_source_less_context",
+		"_completion_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		"apply_document_workflow_action(",
@@ -179,6 +181,72 @@ def test_dialog_uses_server_authoritative_submit_and_workflow_actions():
 	):
 		assert marker in source
 	assert 'v-if="canUseNativeDesk && document?.name"' in source
+
+
+def test_professional_purchasing_source_mode_preserves_source_ownership_and_allows_governed_completion():
+	source = _read(SERVICE)
+	for marker in (
+		'SOURCE_MODE_PROFESSIONAL_PURCHASING = "professional_purchasing"',
+		"_validate_professional_purchasing_source_context",
+		'"source_type": source_context.get("source_type") or ""',
+		'"source_name": source_context.get("source_name") or ""',
+		"Standard Professional Purchasing completion supports one source Purchase Receipt at a time",
+		"Standard Professional Purchasing completion supports one source Purchase Order at a time",
+	):
+		assert marker in source
+	assert "Supplier Document Purchase Invoice remains owned by its immutable handoff workflow" in source
+
+
+
+def test_purchase_invoice_draft_editor_is_stale_safe_permission_aware_and_source_bounded():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for marker in (
+		"def update_standard_purchase_invoice_draft(",
+		"_lock_purchase_invoice(name)",
+		"_assert_expected_modified(doc, expected_modified)",
+		'frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)',
+		"_standard_invoice_blockers(doc)",
+		"_completion_source_context(doc, source_mode)",
+		"_validate_stock_context(doc",
+		"resolve_purchase_item_pricing(",
+		"Source-linked Purchase Invoice items cannot be added",
+		"Source-linked purchase items cannot be removed",
+		"doc.save()",
+		'result["persistence"] = "draft_update"',
+	):
+		assert marker in service
+	for forbidden in (
+		"ignore_permissions=True",
+		"frappe.db.commit",
+		'frappe.new_doc("GL Entry")',
+		'frappe.new_doc("Stock Ledger Entry")',
+		'frappe.new_doc("Payment Ledger Entry")',
+	):
+		assert forbidden not in service
+
+	for marker in (
+		"update_standard_purchase_invoice_draft",
+		"Edit draft before completion",
+		"Save Draft Changes",
+		"editable_items",
+		"allow_new_items",
+		"sourceMode",
+		"expected_modified",
+		"EdgeChildTable",
+	):
+		assert marker in dialog
+
+
+def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	assert '"value": "pay-supplier"' in service
+	assert '"label": _("Pay Supplier")' in service
+	assert "showNextActions" in dialog
+	assert "emitNextAction" in dialog
+	assert "supplier-payables" in dialog
+	assert "Print & Share" in dialog
 
 
 def test_business_hub_record_purchase_opens_purchase_invoice_completion():
