@@ -37,14 +37,15 @@
 					<p>{{ handoffNotice }}</p>
 				</section>
 
-				<section v-if="savedDocument" class="edge-panel saved-panel">
+				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
 					<div>
 						<span class="make-sale-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span>
 						<h3>{{ savedDocument.name }}</h3>
 						<p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Sales Invoice. Continue with the next valid customer workflow or start another sale." : "The ERPNext Sales Invoice draft now owns the saved work. You can complete it or start another sale." }}</p>
 					</div>
 					<div class="make-sale-inline-actions">
-						<button v-if="Number(savedDocument.docstatus || 0) === 0" type="button" class="edge-button edge-button--primary" @click="openCompletion">Edit / Complete</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 0" type="button" class="edge-button edge-button--primary" @click="beginSavedDraftEdit">Continue Editing on Page</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 0" type="button" class="edge-button" @click="openCompletion">Review / Complete</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('make-payment')" type="button" class="edge-button edge-button--primary" @click="runSavedNextAction('make-payment')">Record Payment</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-delivery-note')" type="button" class="edge-button" @click="runSavedNextAction('create-delivery-note')">Create Delivery Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" type="button" class="edge-button" @click="runSavedNextAction('output')">Print / Share</button>
@@ -52,7 +53,7 @@
 					</div>
 				</section>
 
-				<form v-else class="edge-panel make-sale-form" @submit.prevent="saveDraft">
+				<form v-if="!savedDocument || editingSavedDraft" class="edge-panel make-sale-form" @submit.prevent="saveDraft">
 					<div class="guided-invoice-context" aria-label="Invoice context">
 						<div>
 							<span>Company</span>
@@ -81,8 +82,9 @@
 							:required="true"
 							:searcher="searchCustomer"
 							:context="searchContext"
-							:canCreate="canCreateCustomer"
+							:canCreate="!editingSavedDraft && canCreateCustomer"
 							:creator="createCustomer"
+							:disabled="editingSavedDraft"
 							createLabel="Create Customer"
 							@update:modelValue="setCustomer"
 						/>
@@ -97,6 +99,7 @@
 							description="Only enabled Branch Setup entries for the active Company are shown."
 							:searcher="searchBranch"
 							:context="searchContext"
+							:disabled="editingSavedDraft"
 							@update:modelValue="setBranch"
 						/>
 
@@ -106,7 +109,7 @@
 							placeholder="Search stock location"
 							description="Stock Locations are limited to the selected Company and enabled Branch Setup."
 							:required="Boolean(values.update_stock)"
-							:disabled="requiresBranchSelection && !values.branch"
+							:disabled="editingSavedDraft || (requiresBranchSelection && !values.branch)"
 							:searcher="searchWarehouse"
 							:context="searchContext"
 							@update:modelValue="setWarehouse"
@@ -119,7 +122,7 @@
 							type="checkbox"
 							:true-value="1"
 							:false-value="0"
-							:disabled="!canEditUpdateStock"
+							:disabled="editingSavedDraft || !canEditUpdateStock"
 						/>
 						<span>
 							<strong>Update Stock</strong>
@@ -167,13 +170,14 @@
 						</div>
 						<div class="make-sale-inline-actions">
 							<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button>
-							<button type="button" class="edge-button" :disabled="saving" @click="resetForm">Reset</button>
+							<button v-if="editingSavedDraft" type="button" class="edge-button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button>
+							<button v-else type="button" class="edge-button" :disabled="saving" @click="resetForm">Reset</button>
 							<button
 								type="submit"
 								class="edge-button edge-button--primary"
 								:disabled="saving || loading || !transactionContextReady"
 							>
-								{{ saving ? "Saving..." : formContext.submit_label || "Save Draft" }}
+								{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}
 							</button>
 						</div>
 					</div>
@@ -227,6 +231,7 @@ const CONTEXT_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice
 const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
+const UPDATE_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const CREATE_DELIVERY_METHOD = "retailedge.professional_delivery.create_delivery_note_from_sales_invoice";
 const HANDOFF_PREFIX = "retailedge:make-sale:handoff:";
@@ -308,6 +313,7 @@ export default {
 			handoffNotice: "",
 			recoveryTimer: null,
 			savedDocument: null,
+			editingSavedDraft: false,
 			completionOpen: false,
 			deliveryCompletionOpen: false,
 			deliveryCompletionDocument: null,
@@ -397,7 +403,7 @@ export default {
 			if (!this.loaded && !this.loading) this.loadPage();
 		};
 		this._beforeUnload = (event) => {
-			if (!this.hasUnsavedChanges || this.saving || this.savedDocument) return;
+			if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return;
 			event.preventDefault();
 			event.returnValue = "";
 		};
@@ -787,11 +793,33 @@ export default {
 			this.saveError = "";
 			this.saving = true;
 			try {
-				const result = await callMethod(CREATE_METHOD, { values: this.values });
+				let result;
+				if (this.savedDocument?.name && this.editingSavedDraft) {
+					result = await callMethod(UPDATE_METHOD, {
+						name: this.savedDocument.name,
+						expected_modified: this.savedDocument.modified || "",
+						values: {
+							posting_date: this.values.posting_date,
+							remarks: this.values.remarks || "",
+							items: (this.values.items || []).filter((row) => row?.item_code).map((row) => ({
+								item_code: row.item_code,
+								qty: Number(row.qty || 0),
+								rate: row.rate,
+							})),
+						},
+					}, "POST");
+					this.syncPageFromDraftPreview(result);
+					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
+					this.initialSnapshot = JSON.stringify(this.values);
+					this.editingSavedDraft = false;
+					frappe.show_alert?.({ message: `Sales Invoice ${result.name} draft updated`, indicator: "green" });
+					return;
+				}
+				result = await callMethod(CREATE_METHOD, { values: this.values });
 				if (!result?.name) throw new Error("The Sales Invoice draft was not returned after saving.");
 				this.clearRecovery();
 				this.initialSnapshot = JSON.stringify(this.values);
-				this.savedDocument = { doctype: result.doctype || "Sales Invoice", name: result.name };
+				this.savedDocument = { ...result, doctype: result.doctype || "Sales Invoice" };
 				this.completionOpen = true;
 				frappe.show_alert?.({ message: `Sales Invoice ${result.name} saved as Draft`, indicator: "green" });
 			} catch (error) {
@@ -800,13 +828,49 @@ export default {
 				this.saving = false;
 			}
 		},
-		openCompletion() {
-			if (this.savedDocument?.name) this.completionOpen = true;
+		beginSavedDraftEdit() {
+			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return;
+			this.editingSavedDraft = true;
+			this.completionOpen = false;
+			this.initialSnapshot = JSON.stringify(this.values);
 		},
-		handleCompletionChanged() {
-			// The completion component reloads the ERPNext document itself.
+		cancelSavedDraftEdit() {
+			const close = () => {
+				try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {}
+				this.editingSavedDraft = false;
+				this.saveError = "";
+			};
+			if (!this.hasUnsavedChanges) return close();
+			frappe.confirm("Discard unsaved changes to this saved Sales Invoice draft?", close);
+		},
+		syncPageFromDraftPreview(result) {
+			if (!result) return;
+			if (result.posting_date) this.values.posting_date = result.posting_date;
+			if (Object.prototype.hasOwnProperty.call(result, "remarks")) this.values.remarks = result.remarks || "";
+			if (Array.isArray(result.editable_items)) {
+				this.values.items = result.editable_items.map((row) => ({
+					item_code: row.item_code || "",
+					qty: row.qty,
+					rate: row.rate,
+				}));
+			}
+		},
+		openCompletion() {
+			if (this.savedDocument?.name) {
+				this.editingSavedDraft = false;
+				this.completionOpen = true;
+			}
+		},
+		handleCompletionChanged(result) {
+			if (!result?.name) return;
+			this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
+			if (Number(result.docstatus || 0) === 0) {
+				this.syncPageFromDraftPreview(result);
+				this.initialSnapshot = JSON.stringify(this.values);
+			}
 		},
 		handleCompletionCompleted(result) {
+			this.editingSavedDraft = false;
 			if (result?.name) this.savedDocument = { ...this.savedDocument, ...result, doctype: "Sales Invoice" };
 		},
 		hasSavedNextAction(action) {
@@ -871,6 +935,7 @@ export default {
 		},
 		async startAnother() {
 			this.savedDocument = null;
+			this.editingSavedDraft = false;
 			this.recoveryCandidate = null;
 			await this.loadPage();
 		},
