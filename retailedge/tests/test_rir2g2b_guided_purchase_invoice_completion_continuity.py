@@ -195,6 +195,7 @@ def test_professional_purchasing_source_mode_preserves_source_ownership_and_allo
 	):
 		assert marker in source
 	assert "Supplier Document Purchase Invoice remains owned by its immutable handoff workflow" in source
+	assert 'not cint(doc.get("update_stock")) or _clean(doc.get("set_warehouse"))' in source
 
 
 
@@ -230,6 +231,7 @@ def test_purchase_invoice_draft_editor_is_stale_safe_permission_aware_and_source
 		"Edit draft before completion",
 		"Save Draft Changes",
 		"editable_items",
+		"default_warehouse",
 		"allow_new_items",
 		"sourceMode",
 		"expected_modified",
