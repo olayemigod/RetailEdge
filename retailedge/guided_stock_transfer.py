@@ -23,7 +23,7 @@ ACTION_KEY = "transfer-stock"
 STOCK_ENTRY_DOCTYPE = "Stock Entry"
 MATERIAL_TRANSFER = "Material Transfer"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
