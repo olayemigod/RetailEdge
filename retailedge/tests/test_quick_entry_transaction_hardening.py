@@ -96,10 +96,10 @@ def test_master_promotions_can_recreate_sell_buy_and_stock_groups_after_native_c
 	master = MASTER.read_text(encoding="utf-8")
 	for contract in (
 		'sell_group = next((group for group in navigation_groups if group.get("key") == "sell"), None)',
-		'sell_group = {"key": "sell", "label": _("Sell"), "icon": "shopping-cart", "items": []}',
+		'sell_group = {"key": "sell", "label": "Sell", "icon": "shopping-cart", "items": []}',
 		'group = next((row for row in navigation_groups if row.get("key") == group_key), None)',
-		'"buy": {"label": _("Buy"), "icon": "shopping-bag"}',
-		'"stock": {"label": _("Stock"), "icon": "layers"}',
+		'"buy": {"label": "Buy", "icon": "shopping-bag"}',
+		'"stock": {"label": "Stock", "icon": "layers"}',
 	):
 		assert contract in master
 
