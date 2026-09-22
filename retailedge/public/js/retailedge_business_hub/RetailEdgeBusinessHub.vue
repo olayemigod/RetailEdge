@@ -1294,6 +1294,11 @@ export default {
 				this.simplePaymentOpen = true;
 				return;
 			}
+			if (payload.action === "create-supplier-debit-note") {
+				window.retailedgeProfessionalPurchasingTarget = { action: "supplier-debit-note", source_name: payload.name };
+				frappe.set_route("professional-purchasing");
+				return;
+			}
 			if (payload.action === "supplier-payables") {
 				const filters = {
 					company: payload.company || this.context.company || "",
