@@ -247,6 +247,28 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		),
 	},
 	{
+		"key": "planning",
+		"label": "Planning & Forecasting",
+		"description": "Behavioural forecasts and planning intelligence kept separate from known cash commitments.",
+		"icon": "calendar",
+		"items": (
+			{
+				"label": "Forecasting & Planning",
+				"description": "Review behavioural sales, cash, expense, inventory and profitability planning signals.",
+				"target_type": "Page",
+				"target": "forecasting-planning",
+				"tags": ("forecast", "planning", "scenario", "cash", "inventory", "profitability"),
+			},
+			{
+				"label": "Sales Forecast",
+				"description": "Review the existing R12 sales forecast without treating it as a committed receivable schedule.",
+				"target_type": "Page",
+				"target": "sales-forecast",
+				"tags": ("sales", "forecast", "trend", "planning"),
+			},
+		),
+	},
+	{
 		"key": "controls",
 		"label": "Controls & Audit",
 		"description": "Operational exceptions, reconciliation and integrity controls.",
