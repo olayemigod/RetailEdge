@@ -23,7 +23,7 @@ from retailedge.operating_context import get_operating_context, get_operational_
 ACTION_KEY = "record-purchase"
 PURCHASE_INVOICE_DOCTYPE = "Purchase Invoice"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
