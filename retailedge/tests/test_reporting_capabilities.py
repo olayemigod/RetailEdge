@@ -144,6 +144,7 @@ def test_browser_reporting_actions_use_native_shell_builder_and_verified_downloa
 		"downloadVerified",
 		'registerComponent("EdgeReportShell", GovernedReportShell, { replace: true })',
 		'registerComponent("EdgeExportMenu", GovernedLegacyExportMenu, { replace: true })',
+		'"/app/sales-analysis": "sales-analysis"',
 		'"/app/customer-receivables": "customer-receivables"',
 		'"/app/purchase-register": "purchase-register"',
 		'"/app/supplier-payables": "supplier-payables"',
