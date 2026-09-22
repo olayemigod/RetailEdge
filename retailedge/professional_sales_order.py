@@ -11,6 +11,7 @@ from erpnext.selling.doctype.quotation.quotation import make_sales_order as erpn
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_quotation import _normalise_items, _validate_shipping_rule
+from retailedge.quotation_invoice_conversion import get_quotation_conversion
 from retailedge.professional_selling import (
 	_assert_read,
 	_coerce_values,
@@ -232,6 +233,14 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 			**_sales_order_response(existing, branch=existing_branch, source_quotation=source.name),
 			"existing": True,
 		}
+	conversion = get_quotation_conversion(source.name)
+	invoice_name = str((conversion or {}).get("sales_invoice") or "").strip()
+	if invoice_name and frappe.db.exists("Sales Invoice", invoice_name):
+		frappe.throw(
+			_(
+				"Quotation {0} already owns Sales Invoice {1}. Continue that invoice lineage instead of creating a parallel Sales Order."
+			).format(source.name, invoice_name)
+		)
 	target = erpnext_make_sales_order(source.name)
 	if not target or target.doctype != "Sales Order":
 		frappe.throw(_("ERPNext could not prepare a Sales Order from this Quotation."))
