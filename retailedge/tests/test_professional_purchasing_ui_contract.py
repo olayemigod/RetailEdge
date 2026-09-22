@@ -59,15 +59,18 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn('frappe.new_doc("Purchase Order")', component)
 		self.assertNotIn('frappe.set_route("Form", "Request for Quotation", result.name)', component)
 
-		prepare_receipt = component.split("\t\tprepareReceipt(row) {", 1)[1].split("\n\t\tasync preparePurchaseReturn()", 1)[0]
+		prepare_receipt = component.split("\t\tprepareReceipt(row) {", 1)[1].split("\n\t\tpreparePurchaseReturn()", 1)[0]
 		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT", prepare_receipt)
 		self.assertNotIn("prepare_purchase_receipt_draft", prepare_receipt)
 		self.assertNotIn('frappe.set_route("Form", "Purchase Receipt", result.name)', prepare_receipt)
 
-		# Purchase Return is a separately recorded ownership gap in F3F16. Keep
-		# its existing native completion path until that workflow gets its own slice.
-		purchase_return = component.split("\t\tasync preparePurchaseReturn() {", 1)[1].split("\n\t\tasync prepareSupplierDebitNote()", 1)[0]
-		self.assertIn('frappe.set_route("Form", "Purchase Receipt", result.name)', purchase_return)
+		purchase_return = component.split("\t\tpreparePurchaseReturn() {", 1)[1].split("\n\t\tprepareSupplierDebitNote()", 1)[0]
+		debit_note = component.split("\t\tprepareSupplierDebitNote() {", 1)[1].split("\n\t\tasync reviewLandedCost()", 1)[0]
+		for method, source_type in ((purchase_return, "purchase_receipt"), (debit_note, "purchase_invoice")):
+			self.assertIn("OPEN_PURCHASE_RETURN_REVIEW_EVENT", method)
+			self.assertIn(f'source_type: "{source_type}"', method)
+			self.assertNotIn("canUseNativeDesk", method)
+			self.assertNotIn('frappe.set_route("Form"', method)
 
 		# Operational UX remains inside EdgeSuite rather than opening a parallel
 		# classic Frappe dialog/prompt/toast workflow.
