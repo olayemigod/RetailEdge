@@ -216,7 +216,7 @@ export default {
 	},
 	computed: {
 		visibleModes() {
-			return this.modes.filter((option) => option.key !== "return" || this.canUseNativeDesk);
+			return this.modes;
 		},
 		priceListLabel() { return this.context.pricing?.price_list || "ERPNext default"; },
 		loyaltyRedemptionLabel() {
@@ -235,7 +235,7 @@ export default {
 				: `ERPNext maps the ${this.sourceLabel.replace("Submitted ", "")} into a new Sales Invoice draft using remaining billable quantities.`;
 		},
 		sourceHint() {
-			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. Review the prepared draft in the standard Sales Invoice form; no refund or Payment Entry is created automatically.";
+			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. RetailEdge reviews the canonical return draft and follows any active Frappe Workflow before submission; no refund or Payment Entry is created automatically.";
 			return "The source remains submitted and unchanged. This workflow creates a new ERPNext Sales Invoice draft only.";
 		},
 		saveLabel() {
