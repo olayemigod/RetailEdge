@@ -18,7 +18,7 @@
 		<EdgePageLayout class="professional-purchasing-page">
 			<EdgePageHeader
 				title="Professional Purchasing"
-				description="Move from Purchase Request to RFQ, Purchase Order and Receipt while ERPNext remains authoritative for sourcing, suppliers, quantities, stock and accounting."
+				description="Move from Purchase Request to RFQ, Purchase Order, Receipt, Purchase Invoice and supplier settlement while ERPNext remains authoritative for sourcing, quantities, stock, payables and accounting."
 			/>
 
 			<EdgeLoadingState v-if="loading && !loaded" message="Loading purchasing operations..." />
@@ -28,7 +28,7 @@
 				<section class="edge-panel purchasing-hero">
 					<div>
 						<span class="purchasing-kicker">Purchase operations</span>
-						<h3>Purchase Request → RFQ → Order → Receipt</h3>
+						<h3>Purchase Request → RFQ → Order → Receipt → Invoice → Payment</h3>
 						<p>Use guided draft preparation and exception visibility for standard procurement. ERPNext native forms and reports remain authoritative for supplier communication, detailed quantities, stock and accounting.</p>
 					</div>
 					<div class="hero-actions">
