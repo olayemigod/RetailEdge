@@ -388,6 +388,24 @@ def test_browser_recovery_revalidates_current_branch_and_warehouse_access():
 		assert 'this.recoveryCandidate = null' in source
 
 
+
+def test_quick_to_full_handoffs_revalidate_current_operating_context():
+	contracts = {
+		"make-sale": ("await this.consumeHandoff()", 'preference: "sales"'),
+		"record-purchase": ("await this.consumeHandoff()", 'preference: "purchase"'),
+		"transfer-stock": ("await this.consumeHandoff()", 'preference: "source"'),
+		"stock-adjustment": ("await this.consumeHandoff()", 'preference: "source"'),
+	}
+	for route, (await_marker, preference_marker) in contracts.items():
+		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
+		assert "async consumeHandoff()" in source
+		assert await_marker in source
+		assert "resolveBranchWarehouse({" in source
+		assert preference_marker in source
+		assert "was carried" in source or "were carried" in source
+		assert "access was revalidated" in source or "access were revalidated" in source or "source / destination access was revalidated" in source
+
+
 def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 	for config in ENTRY_PAGES.values():
 		source = config["component"].read_text(encoding="utf-8")
