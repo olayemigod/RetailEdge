@@ -302,7 +302,7 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
-		"modified": str(doc.modified or ""),
+		"modified": str(getattr(doc, "modified", "") or ""),
 		"docstatus": doc.docstatus,
 		"customer": doc.customer,
 		"company": doc.company,
