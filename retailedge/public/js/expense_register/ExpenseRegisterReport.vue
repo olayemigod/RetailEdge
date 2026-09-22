@@ -1,24 +1,24 @@
 <template>
 	<div v-if="!edgeUIValid" class="expense-register-fallback">
-		<strong>Expense Register could not start.</strong>
+		<strong>{{ config.title }} could not start.</strong>
 		<span>Required interface components are unavailable. Refresh the page or contact your administrator.</span>
 	</div>
 	<EdgeAppShell
 		v-else
 		product="RetailEdge"
-		title="Expense Register"
+		:title="config.title"
 		:tenantName="tenantName"
 		:branchName="branchName || filters.branch"
 		:userName="userName"
 		:menuItems="menuItems"
-		activeRoute="/app/expense-register"
+		:activeRoute="config.route"
 		:hideNativeSidebar="true"
 		@navigate="handleNavigation"
 	>
 		<EdgeReportShell
-			title="Expense Register"
+			:title="config.title"
 			eyebrow="Expense Control"
-			subtitle="Review cashier expenses by period, Branch, Category and status without loading the full expense history."
+			:subtitle="config.subtitle"
 			:columns="reportColumns"
 			:rows="rows"
 			:summary="summary"
@@ -39,8 +39,11 @@
 			@cell-click="openReportCell"
 		>
 			<template #actions>
-				<button type="button" class="secondary-action" @click="openExpenseCategories">Expense Categories</button>
-				<button type="button" class="primary-action" @click="recordExpense">{{ consolidatedViewAvailable && hasPageTarget("business-expenses") ? "Record Business Expense" : "Record Cashier Expense" }}</button>
+				<button v-if="config.analysis" type="button" class="secondary-action" @click="openExpenseRegister">Expense Register</button>
+				<template v-else>
+					<button type="button" class="secondary-action" @click="openExpenseCategories">Expense Categories</button>
+					<button type="button" class="primary-action" @click="recordExpense">{{ consolidatedViewAvailable && hasPageTarget("business-expenses") ? "Record Business Expense" : "Record Cashier Expense" }}</button>
+				</template>
 				<EdgeExportMenu
 					v-if="rows.length"
 					:dataset="exportDataset"
@@ -75,10 +78,12 @@
 						@select="onCategorySelected"
 						@clear="clearCategory"
 					/>
-					<EdgeDropdown v-if="consolidatedViewAvailable" v-model="filters.view_mode" :options="[{ value: 'consolidated', label: 'Consolidated business expenses' }, { value: 'cashier', label: 'Cashier / POS expenses only' }]" label="View" @change="onViewModeChanged" />
-					<EdgeDropdown v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'" v-model="filters.source_type" :options="sourceTypes" label="Source" placeholder="All expense sources" />
+					<EdgeDropdown v-if="config.analysis" v-model="analysisPreset" :options="analysisPresets" label="Analysis View" @change="onAnalysisPresetChange" />
+					<EdgeDropdown v-if="config.analysis" v-model="filters.group_by" :options="groupByOptions" label="Group By" @change="onAnalysisGroupChange" />
+					<EdgeDropdown v-if="consolidatedViewAvailable && !config.analysis" v-model="filters.view_mode" :options="[{ value: 'consolidated', label: 'Consolidated business expenses' }, { value: 'cashier', label: 'Cashier / POS expenses only' }]" label="View" @change="onViewModeChanged" />
+					<EdgeDropdown v-if="consolidatedViewAvailable && (config.analysis || filters.view_mode === 'consolidated')" v-model="filters.source_type" :options="sourceTypes" label="Source" placeholder="All expense sources" />
 					<label
-						v-if="consolidatedViewAvailable && filters.view_mode === 'consolidated'"
+						v-if="consolidatedViewAvailable && (config.analysis || filters.view_mode === 'consolidated')"
 						class="edge-check-field"
 					>
 						<input
@@ -103,7 +108,8 @@
 					</label>
 					<div class="filter-note">
 						<span>{{ dateRangeLimit }}-day maximum per request</span>
-						<span v-if="!showCashier">Cashier view is limited to your own expenses</span>
+						<span v-if="config.analysis">Posted accounting expense is kept separate from optional unposted cashier exposure</span>
+						<span v-else-if="!showCashier">Cashier view is limited to your own expenses</span>
 					</div>
 					<div class="filter-action">
 						<button class="primary-action full" type="button" :disabled="loading || !filters.company" @click="applyFilters">
@@ -115,8 +121,10 @@
 
 			<template #resultMeta>
 				<span>{{ scopeLabel }}</span>
-				<span>{{ showCashier ? "Permitted cashier visibility" : "Your expenses only" }}</span>
-				<span>{{ filters.view_mode === "consolidated" ? "Sources: Cashier/POS + posted business expenses" : "Source: Cashier Expense" }}</span>
+				<span v-if="config.analysis">Grouped by {{ filters.group_by }}</span>
+				<span v-else>{{ showCashier ? "Permitted cashier visibility" : "Your expenses only" }}</span>
+				<span v-if="config.analysis">Source: governed consolidated Expense Register</span>
+				<span v-else>{{ filters.view_mode === "consolidated" ? "Sources: Cashier/POS + posted business expenses" : "Source: Cashier Expense" }}</span>
 			</template>
 		</EdgeReportShell>
 	</EdgeAppShell>
