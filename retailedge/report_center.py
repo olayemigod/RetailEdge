@@ -131,6 +131,13 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"icon": "wallet",
 		"items": (
 			{
+				"label": "Payment & Settlement Analysis",
+				"description": "Analyse posted receipts, supplier payments, payment methods, internal transfers and available customer advances.",
+				"target_type": "Page",
+				"target": "payment-settlement-analysis",
+				"tags": ("payment", "settlement", "mode", "receipt", "advance", "supplier"),
+			},
+			{
 				"label": "Customer Receivables",
 				"description": "Review current outstanding customer balances and ageing.",
 				"target_type": "Page",
