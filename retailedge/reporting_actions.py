@@ -39,6 +39,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.operating_report_defaults import get_purchase_analysis_export
 
 		return get_purchase_analysis_export
+	if key == "supplier-performance":
+		from retailedge.operating_report_defaults import get_supplier_performance_export
+
+		return get_supplier_performance_export
 	if key == "purchase-register":
 		from retailedge.operating_report_defaults import get_purchase_register_export
 
