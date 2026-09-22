@@ -87,7 +87,7 @@ export default {
 	components: { EdgeModal: runtimeComponents.EdgeModal, EdgeLinkField: runtimeComponents.EdgeLinkField, EdgeLoadingState: runtimeComponents.EdgeLoadingState, EdgeErrorState: runtimeComponents.EdgeErrorState },
 	props: {
 		open: { type: Boolean, default: false },
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() { return { loading: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues() }; },
