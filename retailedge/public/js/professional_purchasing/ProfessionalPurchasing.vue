@@ -107,7 +107,7 @@
 					</div>
 				</section>
 
-				<section v-if="returnCapabilities.can_prepare_purchase_return || returnCapabilities.can_prepare_supplier_debit_note" class="edge-panel returns-panel">
+				<section v-if="canUseNativeDesk && (returnCapabilities.can_prepare_purchase_return || returnCapabilities.can_prepare_supplier_debit_note)" class="edge-panel returns-panel">
 					<div class="panel-heading">
 						<div>
 							<span class="purchasing-kicker">Corrections after receipt or billing</span>
@@ -127,6 +127,10 @@
 							<button type="button" class="edge-button edge-button--primary" :disabled="preparingReturn || !returnSources.purchaseInvoice" @click="prepareSupplierDebitNote">{{ preparingReturn === "purchase_invoice" ? "Preparing…" : "Prepare Draft Debit Note" }}</button>
 						</article>
 					</div>
+				</section>
+				<section v-else-if="!canUseNativeDesk && (returnCapabilities.can_prepare_purchase_return || returnCapabilities.can_prepare_supplier_debit_note)" class="edge-panel safety-note">
+					<strong>Returns & Supplier Credits require Advanced ERPNext.</strong>
+					<span>Return Purchase Receipts and supplier Debit Notes are intentionally kept outside the simplified EdgeSuite completion path because they can reverse stock, valuation, taxes and accounting. Ask an authorised advanced user to prepare and submit them.</span>
 				</section>
 
 				<section v-if="landedCostCapability.can_prepare_landed_cost" class="edge-panel landed-cost-panel">
