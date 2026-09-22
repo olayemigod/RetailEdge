@@ -410,7 +410,7 @@
    "collapsible": 1,
    "indent": 1,
    "keep_closed": 1,
-   "label": "Insights",
+   "label": "Reports",
    "link_type": "DocType",
    "show_arrow": 0,
    "type": "Section Break"
@@ -425,6 +425,16 @@
    "link_type": "Page",
    "show_arrow": 0,
    "type": "Link"
+  },
+  {
+   "child": 0,
+   "collapsible": 1,
+   "indent": 1,
+   "keep_closed": 1,
+   "label": "Insights",
+   "link_type": "DocType",
+   "show_arrow": 0,
+   "type": "Section Break"
   },
   {
    "child": 1,
