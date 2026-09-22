@@ -267,6 +267,13 @@ def test_purchase_invoice_requires_saving_dirty_editor_before_submit_or_workflow
 		assert marker in dialog
 
 
+
+def test_purchase_invoice_preview_can_refresh_submitted_outstanding_and_next_actions_read_only():
+	service = _read(SERVICE)
+	assert '"outstanding_amount": flt(doc.get("outstanding_amount"))' in service
+	assert '"next_actions": _submitted_next_actions(doc)' in service
+
+
 def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
