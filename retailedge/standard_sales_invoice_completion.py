@@ -273,20 +273,21 @@ def _validate_sales_return_context(doc, *, company: str, invoice_branch: str) ->
 	if any(flt(row.get("qty")) >= 0 for row in rows):
 		blockers.append(_("Standard Sales Return completion requires negative return quantities on every item row."))
 
-	try:
-		canonical = erpnext_make_sales_return(source.name)
-	except Exception:
-		canonical = None
-		blockers.append(_("ERPNext could not rebuild the canonical Sales Return mapping for validation."))
-	if canonical:
-		if not cint(canonical.get("is_return")) or _clean(canonical.get("return_against")) != source.name:
-			blockers.append(_("ERPNext canonical Sales Return linkage no longer matches this draft."))
-		if bool(cint(canonical.get("update_stock"))) != bool(cint(doc.get("update_stock"))):
-			blockers.append(_("Return / Credit Note Update Stock no longer matches ERPNext's canonical mapping."))
-		if _return_item_signature(rows) != _return_item_signature(list(canonical.get("items") or [])):
-			blockers.append(
-				_("This Return / Credit Note no longer matches ERPNext's canonical remaining return quantities. Use Advanced ERPNext for a partial or customised return.")
-			)
+	if cint(doc.docstatus) == 0:
+		try:
+			canonical = erpnext_make_sales_return(source.name)
+		except Exception:
+			canonical = None
+			blockers.append(_("ERPNext could not rebuild the canonical Sales Return mapping for validation."))
+		if canonical:
+			if not cint(canonical.get("is_return")) or _clean(canonical.get("return_against")) != source.name:
+				blockers.append(_("ERPNext canonical Sales Return linkage no longer matches this draft."))
+			if bool(cint(canonical.get("update_stock"))) != bool(cint(doc.get("update_stock"))):
+				blockers.append(_("Return / Credit Note Update Stock no longer matches ERPNext's canonical mapping."))
+			if _return_item_signature(rows) != _return_item_signature(list(canonical.get("items") or [])):
+				blockers.append(
+					_("This Return / Credit Note no longer matches ERPNext's canonical remaining return quantities. Use Advanced ERPNext for a partial or customised return.")
+				)
 
 	return {
 		"source_type": SALES_INVOICE_DOCTYPE,
@@ -716,6 +717,8 @@ def update_standard_sales_invoice_dates(
 	doc = _get_sales_invoice(name)
 	_assert_expected_modified(doc, expected_modified)
 	_validate_invoice_context(doc)
+	if cint(doc.get("is_return")) or _clean(doc.get("return_against")):
+		frappe.throw(_("Return / Credit Note dates remain owned by the governed Sales Return workflow."), frappe.ValidationError)
 	if cint(doc.docstatus) != 0:
 		frappe.throw(_("Only draft Sales Invoices can have dates edited here."), frappe.ValidationError)
 	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
