@@ -55,6 +55,8 @@ class TestSalesReturnCreditNote(FrappeTestCase):
 		with (
 			patch.object(service, "_permission", return_value=True),
 			patch.object(service, "_assert_read") as assert_read,
+			patch.object(service, "_lock_sales_return_source") as lock_source,
+			patch.object(service, "_existing_sales_return_draft", return_value=None),
 			patch.object(service.frappe, "get_doc", return_value=source),
 			patch.object(service, "_validate_source_context", return_value=("Test Company", "Lagos")),
 			patch.object(service, "erpnext_make_sales_return", return_value=target) as mapper,
@@ -62,12 +64,13 @@ class TestSalesReturnCreditNote(FrappeTestCase):
 			patch.object(service, "_set_branch_if_supported") as set_branch,
 		):
 			result = service.create_sales_return_credit_note_draft("SINV-0001")
-		return result, target, mapper, assert_read, validate_stock, set_branch
+		return result, target, mapper, assert_read, validate_stock, set_branch, lock_source
 
 	def test_valid_source_uses_native_mapper_and_inserts_draft_only(self):
-		result, target, mapper, assert_read, validate_stock, set_branch = self._call()
+		result, target, mapper, assert_read, validate_stock, set_branch, lock_source = self._call()
 
 		assert_read.assert_called_once_with("Sales Invoice", "SINV-0001")
+		lock_source.assert_called_once_with("SINV-0001")
 		mapper.assert_called_once_with("SINV-0001")
 		validate_stock.assert_called_once_with(
 			target,
@@ -82,6 +85,38 @@ class TestSalesReturnCreditNote(FrappeTestCase):
 		self.assertEqual(result["return_against"], "SINV-0001")
 		self.assertEqual(result["source_doctype"], "Sales Invoice")
 		self.assertEqual(result["route"], "/app/sales-invoice/SINV-RET-0001")
+		self.assertFalse(result["existing"])
+
+	def test_existing_single_return_draft_is_reused_without_remapping_or_insert(self):
+		source = self._source()
+		existing = self._target()
+		with (
+			patch.object(service, "_permission", return_value=True),
+			patch.object(service, "_assert_read"),
+			patch.object(service, "_lock_sales_return_source") as lock_source,
+			patch.object(service.frappe, "get_doc", return_value=source),
+			patch.object(service, "_validate_source_context", return_value=("Test Company", "Lagos")),
+			patch.object(service, "_existing_sales_return_draft", return_value=existing),
+			patch.object(service, "erpnext_make_sales_return") as mapper,
+			patch.object(service, "_validate_invoice_stock_context", return_value="Lagos"),
+		):
+			result = service.create_sales_return_credit_note_draft("SINV-0001")
+
+		lock_source.assert_called_once_with("SINV-0001")
+		mapper.assert_not_called()
+		existing.insert.assert_not_called()
+		self.assertTrue(result["existing"])
+		self.assertTrue(result["is_return"])
+		self.assertEqual(result["return_against"], "SINV-0001")
+
+	def test_multiple_existing_return_drafts_fail_closed_by_contract(self):
+		source = open(service.__file__, encoding="utf-8").read()
+		self.assertIn("SELECT name", source)
+		self.assertIn("COALESCE(is_return, 0) = 1", source)
+		self.assertIn("return_against = %s", source)
+		self.assertIn("LIMIT 3", source)
+		self.assertIn("Multiple draft Return / Credit Notes already exist", source)
+		self.assertIn("FOR UPDATE", source)
 
 	def test_create_permission_is_required_before_read_or_mapper(self):
 		with (
@@ -116,6 +151,8 @@ class TestSalesReturnCreditNote(FrappeTestCase):
 				with (
 					patch.object(service, "_permission", return_value=True),
 					patch.object(service, "_assert_read"),
+					patch.object(service, "_lock_sales_return_source"),
+					patch.object(service, "_existing_sales_return_draft", return_value=None),
 					patch.object(service.frappe, "get_doc", return_value=source),
 					patch.object(service, "erpnext_make_sales_return") as mapper,
 					self.assertRaises(frappe.ValidationError),
@@ -143,6 +180,8 @@ class TestSalesReturnCreditNote(FrappeTestCase):
 				with (
 					patch.object(service, "_permission", return_value=True),
 					patch.object(service, "_assert_read"),
+					patch.object(service, "_lock_sales_return_source"),
+					patch.object(service, "_existing_sales_return_draft", return_value=None),
 					patch.object(service.frappe, "get_doc", return_value=self._source()),
 					patch.object(service, "_validate_source_context", return_value=("Test Company", "Lagos")),
 					patch.object(service, "erpnext_make_sales_return", return_value=target),
@@ -179,6 +218,8 @@ class TestSalesReturnCreditNote(FrappeTestCase):
 
 	def test_source_contract_has_no_refund_or_ledger_write_path(self):
 		source = open(service.__file__, encoding="utf-8").read()
+		self.assertIn("_lock_sales_return_source(sales_invoice)", source)
+		self.assertIn("_existing_sales_return_draft(source.name)", source)
 		self.assertIn("erpnext_make_sales_return(source.name)", source)
 		self.assertIn("target.insert()", source)
 		self.assertNotIn("frappe.db.commit", source)
