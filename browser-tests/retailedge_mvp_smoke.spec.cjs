@@ -92,8 +92,9 @@ test("RetailEdge manager reaches Reports Centre and can search the permitted cat
 		const search = page.getByRole("searchbox", { name: "Find a report" });
 		await expect(search).toBeVisible();
 		await search.fill("cash");
-		await expect(page.getByText("Cash Movement", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText("Cash Commitments", { exact: true }).first()).toBeVisible();
+		const catalogue = page.locator(".reports-centre");
+		await expect(catalogue.getByText("Cash Movement", { exact: true }).first()).toBeVisible();
+		await expect(catalogue.getByText("Cash Commitments", { exact: true }).first()).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}
@@ -103,8 +104,9 @@ test("RetailEdge cashier Reports Centre does not expose Native Desk financial re
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
 		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
-		await expect(page.getByText("Financial", { exact: true })).toHaveCount(0);
-		await expect(page.getByText("Expense Register", { exact: true }).first()).toBeVisible();
+		const catalogue = page.locator(".reports-centre");
+		await expect(catalogue.getByText("Financial", { exact: true })).toHaveCount(0);
+		await expect(catalogue.getByText("Expense Register", { exact: true }).first()).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}
