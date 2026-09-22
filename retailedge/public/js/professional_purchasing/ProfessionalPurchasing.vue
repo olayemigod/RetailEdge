@@ -418,6 +418,17 @@ export default {
 		window.removeEventListener(PURCHASE_INVOICE_READY_EVENT, this._onPurchaseInvoiceReady);
 	},
 	methods: {
+		applyPendingTarget() {
+			const target = window.retailedgeProfessionalPurchasingTarget;
+			if (!target?.action || !target?.source_name) return;
+			delete window.retailedgeProfessionalPurchasingTarget;
+			if (String(target.user || "") !== String(frappe.session?.user || "Guest")) return;
+			if (target.action === "supplier-debit-note") {
+				window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
+					detail: { source_type: "purchase_invoice", source_name: target.source_name },
+				}));
+			}
+		},
 		async loadWorkspace() {
 			if (this.loading) return; this.loading = true; this.error = "";
 			try {
@@ -431,6 +442,7 @@ export default {
 					callMethod(PURCHASE_INVOICE_QUEUE_METHOD, { company: this.filters.company || null, branch: this.filters.branch || null, supplier: this.filters.supplier || null, limit: 20 }).catch(() => ({ rows: [] })),
 				]);
 				this.applyContext(context || {}); this.procurementTracker = procurementTracker || this.procurementTracker; this.returnCapabilities = returnCapabilities || this.returnCapabilities; this.applyLandedCostCapability(landedCostCapability || {}); this.draftPurchaseInvoices = purchaseInvoiceQueue?.rows || []; this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []); this.loaded = true;
+				this.applyPendingTarget();
 			} catch (error) { this.error = errorMessage(error, "Professional Purchasing failed to load."); } finally { this.loading = false; }
 		},
 		applyContext(context) {
