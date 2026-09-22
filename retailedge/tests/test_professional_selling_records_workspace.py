@@ -163,6 +163,21 @@ def test_submitted_rows_receive_server_authoritative_conversion_and_payment_acti
 		assert contract in workspace
 
 
+
+def test_delivery_note_invoice_hint_is_removed_for_invoice_sourced_or_direct_order_billed_delivery():
+	backend = read(BACKEND)
+	for contract in (
+		"def _delivery_has_direct_sales_order_billing",
+		"si.docstatus = 1",
+		"COALESCE(si.is_return, 0) = 0",
+		"COALESCE(item.delivery_note, '') = ''",
+		"direct_order_billing = _delivery_has_direct_sales_order_billing(delivery)",
+		"if invoice_sourced or direct_order_billing:",
+		'action.get("value") != "create-sales-invoice"',
+	):
+		assert contract in backend
+
+
 def test_professional_selling_keeps_submitted_completion_open_for_next_workflow():
 	workspace = read(WORKSPACE)
 	for contract in (
