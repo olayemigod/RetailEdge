@@ -112,6 +112,38 @@ test("RetailEdge cashier Reports Centre does not expose Native Desk financial re
 	}
 });
 
+test("RetailEdge manager reaches Payment & Settlement Analysis from governed reporting", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "payment-settlement-analysis", "Payment & Settlement Analysis", "Reports");
+		await expect(page.getByText("Payment Methods", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("Customer Receipts", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.cashier);
+	try {
+		await page.goto(`${BASE_URL}/app/payment-settlement-analysis`, {
+			waitUntil: "domcontentloaded",
+			timeout: 30_000,
+		});
+		await page.waitForTimeout(1_000);
+		const body = await page.locator("body").innerText();
+		const titleVisible = await page
+			.getByRole("heading", { name: "Payment & Settlement Analysis", exact: true })
+			.first()
+			.isVisible()
+			.catch(() => false);
+		expect(titleVisible).toBeFalsy();
+		expect(body).toMatch(/not permitted|permission|access denied|not allowed/i);
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
 test("canonical RetailEdge cashier reaches Business Hub but not banking control pages", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
