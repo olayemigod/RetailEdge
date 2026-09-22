@@ -403,6 +403,7 @@ def _build_preview(doc) -> dict[str, Any]:
 	workflow_readiness = get_workflow_readiness(doctype=doc.doctype, doc=doc)
 	workflow_controlled = _clean(workflow_readiness.get("source")) == "frappe"
 	blockers = list(payload.get("blockers") or [])
+	edit_blockers = list(blockers)
 	if not workflow_controlled and not blockers and not frappe.has_permission(doc.doctype, "submit", doc=doc):
 		blockers.append(_("You do not have permission to submit this {0}.").format(doc.doctype))
 
@@ -415,7 +416,7 @@ def _build_preview(doc) -> dict[str, Any]:
 		"posting_date": str(doc.get("posting_date") or ""),
 		"remarks": _clean(doc.get("remarks")) if doc.doctype == STOCK_ENTRY_DOCTYPE else "",
 		"status": _clean(doc.get("status")) or ("Draft" if cint(doc.docstatus) == 0 else ""),
-		"can_edit": bool(cint(doc.docstatus) == 0 and not payload.get("blockers") and frappe.has_permission(doc.doctype, "write", doc=doc)),
+		"can_edit": bool(cint(doc.docstatus) == 0 and not edit_blockers and frappe.has_permission(doc.doctype, "write", doc=doc)),
 		"editable_items": _editable_stock_items(doc),
 		"blockers": blockers,
 		"can_submit": bool(not blockers and not workflow_controlled and cint(doc.docstatus) == 0),
