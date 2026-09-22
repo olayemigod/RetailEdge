@@ -177,6 +177,19 @@ def test_submitted_make_sale_keeps_credit_note_action_after_completion_dialog_cl
 
 
 
+
+def test_persistent_invoice_pages_refresh_authoritative_actions_after_payment():
+	make_sale = ENTRY_PAGES["make-sale"]["component"].read_text(encoding="utf-8")
+	purchase = ENTRY_PAGES["record-purchase"]["component"].read_text(encoding="utf-8")
+	assert '@saved="handlePaymentSaved"' in make_sale
+	assert "get_professional_selling_record_actions" in make_sale
+	assert 'document: "sales-invoice"' in make_sale
+	assert "next_actions: resolved?.actions || []" in make_sale
+	assert '@saved="handlePaymentSaved"' in purchase
+	assert "get_standard_purchase_invoice_completion_preview" in purchase
+	assert 'source_mode: "direct"' in purchase
+
+
 def test_sales_return_handoff_is_scoped_to_current_user():
 	make_sale = ENTRY_PAGES["make-sale"]["component"].read_text(encoding="utf-8")
 	hub = HUB.read_text(encoding="utf-8")
