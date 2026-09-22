@@ -37,7 +37,7 @@
 						<button v-if="capabilities.can_read_supplier_quotation" type="button" class="edge-button edge-button--secondary" @click="openSupplierQuotations">Supplier Quotations</button>
 						<button v-if="canUseNativeDesk && capabilities.can_compare_supplier_quotations" type="button" class="edge-button edge-button--secondary" @click="openSupplierQuotationComparison">Compare Quotations</button>
 						<button v-if="canUseNativeDesk && capabilities.can_open_purchase_order_analysis" type="button" class="edge-button edge-button--secondary" @click="openPurchaseOrderAnalysis">PO Analysis</button>
-						<template v-if="procurementTracker.available"><button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openProcurementTracker">Procurement Tracker</button></template>
+						<button v-if="canUseNativeDesk && procurementTracker.available" type="button" class="edge-button edge-button--secondary" @click="openProcurementTracker">Procurement Tracker</button>
 						<button v-if="capabilities.can_read_purchase_receipt" type="button" class="edge-button edge-button--secondary" @click="openPurchaseReceipts">Purchase Receipts</button>
 					</div>
 				</section>
