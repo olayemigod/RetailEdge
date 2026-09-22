@@ -178,6 +178,26 @@ def test_delivery_note_invoice_hint_is_removed_for_invoice_sourced_or_direct_ord
 		assert contract in backend
 
 
+def test_completion_next_actions_preserve_authoritative_company_and_branch_context():
+	workspace = read(WORKSPACE)
+	for marker in (
+		'company: payload.company || ""',
+		'branch: payload.branch || ""',
+		'company: row.company || this.sellingContext?.operating?.company',
+		'branch: row.branch || row.retailedge_branch || this.sellingContext?.operating?.branch',
+	):
+		assert marker in workspace
+
+	for dialog in (
+		APP_ROOT / "public/js/professional_selling/StandardSellingCompletionDialog.vue",
+		APP_ROOT / "public/js/professional_selling/StandardDeliveryCompletionDialog.vue",
+		APP_ROOT / "public/js/professional_selling/StandardSalesInvoiceCompletionDialog.vue",
+	):
+		source = read(dialog)
+		assert 'company: this.completedResult.company || this.preview?.company || ""' in source
+		assert 'branch: this.completedResult.branch || this.preview?.branch || ""' in source
+
+
 def test_professional_selling_keeps_submitted_completion_open_for_next_workflow():
 	workspace = read(WORKSPACE)
 	for contract in (
