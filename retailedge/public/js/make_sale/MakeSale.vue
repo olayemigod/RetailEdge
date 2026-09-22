@@ -939,6 +939,7 @@ export default {
 						doctype: "Sales Invoice",
 						name: result.name,
 						source_mode: "sales_return",
+						user: frappe.session?.user || "Guest",
 					};
 					frappe.set_route("professional-selling");
 				} catch (error) {
