@@ -337,6 +337,7 @@ const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supp
 const OPEN_PURCHASE_RECEIPT_PREVIEW_EVENT = "retailedge-open-professional-purchase-receipt-preview";
 const OPEN_PURCHASE_RECEIPT_HISTORY_EVENT = "retailedge-open-professional-purchase-receipt-history";
 const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
+const OPEN_PURCHASE_RETURN_REVIEW_EVENT = "retailedge-open-professional-purchase-return-review";
 const PREPARE_PO_INVOICE_METHOD = "retailedge.professional_purchasing.prepare_purchase_invoice_from_purchase_order";
 const LANDED_COST_HANDOFF_EVENT = "retailedge-professional-purchasing-landed-cost-handoff";
 const RETURN_CAPABILITY_METHOD = "retailedge.professional_purchasing.get_purchase_return_capability";
@@ -487,6 +488,12 @@ export default {
 					reference_name: payload.name,
 				};
 				this.supplierPaymentOpen = true;
+				return;
+			}
+			if (payload.action === "create-supplier-debit-note") {
+				window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
+					detail: { source_type: "purchase_invoice", source_name: payload.name },
+				}));
 				return;
 			}
 			if (payload.action === "supplier-payables") {
