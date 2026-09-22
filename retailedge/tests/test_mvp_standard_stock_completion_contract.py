@@ -167,6 +167,20 @@ def test_stock_draft_editor_is_stale_safe_permission_aware_and_scope_fixed():
 	assert "window.EdgeUI" not in dialog
 
 
+
+def test_stock_completion_requires_saving_dirty_editor_before_submit_or_workflow():
+	dialog = _read(DIALOG)
+	for contract in (
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved stock draft changes?',
+		'this.preview?.can_edit && this.draftDirty',
+	):
+		assert contract in dialog
+
+
 def test_stock_draft_editor_keeps_scope_and_tracking_complexity_out_of_editable_payload():
 	source = _read(SERVICE)
 	for contract in (
