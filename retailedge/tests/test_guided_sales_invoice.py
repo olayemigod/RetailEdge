@@ -325,7 +325,7 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 
 	def test_limits_are_deliberately_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
-		self.assertEqual(MAX_ITEMS, 50)
+		self.assertEqual(MAX_ITEMS, 100)
 
 
 if __name__ == "__main__":
