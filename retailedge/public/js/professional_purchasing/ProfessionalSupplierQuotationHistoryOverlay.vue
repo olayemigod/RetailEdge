@@ -99,7 +99,7 @@ export default {
 			loading: false,
 			loaded: false,
 			error: "",
-			history: { company: "", branch: "", supplier: "", limit: 50, rows: [] },
+			history: { company: "", branch: "", supplier: "", limit: 50, can_create_purchase_order: false, rows: [] },
 			filters: { company: "", branch: "", supplier: "" },
 			sort: { key: "transaction_date", direction: "desc" },
 		};
@@ -155,7 +155,9 @@ export default {
 		clearSupplier() { this.filters.supplier = ""; this.loaded = false; this.loadHistory(); },
 		canPreparePurchaseOrder(row) {
 			const status = String(row?.status || "");
-			return Number(row?.docstatus || 0) === 1 && !["Cancelled", "Stopped", "Expired"].includes(status);
+			return Boolean(this.history.can_create_purchase_order)
+				&& Number(row?.docstatus || 0) === 1
+				&& !["Cancelled", "Stopped", "Expired"].includes(status);
 		},
 		preparePurchaseOrder(name) { if (name) window.dispatchEvent(new CustomEvent(PREPARE_PO_EVENT, { detail: { supplier_quotation: name } })); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; },
