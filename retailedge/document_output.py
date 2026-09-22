@@ -105,6 +105,14 @@ OUTPUT_DOCUMENTS: tuple[dict[str, Any], ...] = (
 		"native_route": "/app/sales-invoice",
 	},
 	{
+		"key": "purchase-invoice",
+		"doctype": "Purchase Invoice",
+		"label": "Purchase Invoice",
+		"party_field": "supplier",
+		"date_field": "posting_date",
+		"native_route": "/app/purchase-invoice",
+	},
+	{
 		"key": "pos-receipt",
 		"doctype": "POS Invoice",
 		"label": "POS Receipt",
