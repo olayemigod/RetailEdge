@@ -47,10 +47,20 @@ def get_payment_settlement_context() -> dict[str, Any]:
 	if company:
 		scope = validate_report_scope(
 			company=company,
-			branch=branch,
+			branch="",
 			user=user,
 			require_branch_when_restricted=False,
 		)
+		if branch:
+			try:
+				validate_report_scope(
+					company=company,
+					branch=branch,
+					user=user,
+					require_branch_when_restricted=False,
+				)
+			except (frappe.PermissionError, frappe.ValidationError):
+				branch = ""
 		if scope.get("restricted") and branch not in (scope.get("allowed_branches") or []):
 			branch = ""
 		if not branch and len(scope.get("allowed_branches") or []) == 1:
