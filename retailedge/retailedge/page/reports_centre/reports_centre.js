@@ -1,1 +1,54 @@
-const EDGEUI_ASSET = "edgeui.bundle.js";\nconst REPORTS_CENTRE_ASSET = "reports_centre.bundle.js";\nconst PAGE_ROUTE = "reports-centre";\nconst PAGE_TITLE = "Reports Centre";\n\nfunction requireAsset(assetName) {\n	return new Promise((resolve, reject) => {\n		try {\n			const pending = frappe.require(assetName, resolve);\n			if (pending && typeof pending.then === "function") pending.then(resolve).catch(reject);\n		} catch (error) {\n			reject(error);\n		}\n	});\n}\n\nfunction hideNativeSidebar(wrapper) {\n	const pageContainer = wrapper.closest?.(".page-container") || wrapper;\n	const sideSection = pageContainer.querySelector?.(".layout-side-section");\n	const mainWrapper = pageContainer.querySelector?.(".layout-main-section-wrapper");\n	if (sideSection) {\n		sideSection.hidden = true;\n		sideSection.setAttribute("aria-hidden", "true");\n	}\n	if (mainWrapper) {\n		mainWrapper.style.width = "100%";\n		mainWrapper.style.maxWidth = "100%";\n		mainWrapper.classList.add("retailedge-edgeui-main");\n	}\n}\n\nfrappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {\n	hideNativeSidebar(wrapper);\n	const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true });\n	wrapper.page = page;\n	try {\n		await requireAsset(EDGEUI_ASSET);\n		await requireAsset(REPORTS_CENTRE_ASSET);\n		if (typeof window.mountReportsCentre !== "function") throw new Error("Reports Centre bundle is unavailable.");\n		const root = document.createElement("div");\n		root.className = "retailedge-reports-centre-root";\n		page.body.append(root);\n		window.mountReportsCentre(root);\n	} catch (error) {\n		const failure = document.createElement("div");\n		failure.className = "alert alert-danger p-6 text-center";\n		failure.textContent = error?.message || __("Reports Centre could not be loaded.");\n		page.body.append(failure);\n	}\n};\n\nfrappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {\n	hideNativeSidebar(wrapper);\n};\n
+const EDGEUI_ASSET = "edgeui.bundle.js";
+const REPORTS_CENTRE_ASSET = "reports_centre.bundle.js";
+const PAGE_ROUTE = "reports-centre";
+const PAGE_TITLE = "Reports Centre";
+
+function requireAsset(assetName) {
+	return new Promise((resolve, reject) => {
+		try {
+			const pending = frappe.require(assetName, resolve);
+			if (pending && typeof pending.then === "function") pending.then(resolve).catch(reject);
+		} catch (error) {
+			reject(error);
+		}
+	});
+}
+
+function hideNativeSidebar(wrapper) {
+	const pageContainer = wrapper.closest?.(".page-container") || wrapper;
+	const sideSection = pageContainer.querySelector?.(".layout-side-section");
+	const mainWrapper = pageContainer.querySelector?.(".layout-main-section-wrapper");
+	if (sideSection) {
+		sideSection.hidden = true;
+		sideSection.setAttribute("aria-hidden", "true");
+	}
+	if (mainWrapper) {
+		mainWrapper.style.width = "100%";
+		mainWrapper.style.maxWidth = "100%";
+		mainWrapper.classList.add("retailedge-edgeui-main");
+	}
+}
+
+frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
+	hideNativeSidebar(wrapper);
+	const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true });
+	wrapper.page = page;
+	try {
+		await requireAsset(EDGEUI_ASSET);
+		await requireAsset(REPORTS_CENTRE_ASSET);
+		if (typeof window.mountReportsCentre !== "function") throw new Error("Reports Centre bundle is unavailable.");
+		const root = document.createElement("div");
+		root.className = "retailedge-reports-centre-root";
+		page.body.append(root);
+		window.mountReportsCentre(root);
+	} catch (error) {
+		const failure = document.createElement("div");
+		failure.className = "alert alert-danger p-6 text-center";
+		failure.textContent = error?.message || __("Reports Centre could not be loaded.");
+		page.body.append(failure);
+	}
+};
+
+frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
+	hideNativeSidebar(wrapper);
+};
