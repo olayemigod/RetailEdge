@@ -316,7 +316,7 @@ def test_saved_draft_page_editing_locks_business_context_after_first_save():
 
 	purchase = ENTRY_PAGES["record-purchase"]["component"].read_text(encoding="utf-8")
 	assert ':disabled="editingSavedDraft"' in purchase
-	assert ':disabled="editingSavedDraft || !canEditUpdateStock"' in purchase
+	assert 'Stock mode is fixed after the ERPNext draft is created.' in purchase
 	assert ':disabled="editingSavedDraft || (requiresBranchSelection && !values.branch)"' in purchase
 
 	transfer = ENTRY_PAGES["transfer-stock"]["component"].read_text(encoding="utf-8")
