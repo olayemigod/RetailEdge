@@ -82,6 +82,14 @@ TRANSACTION_WORKSPACE_ITEM: dict[str, Any] = {
 	"icon": "shopping-cart",
 }
 
+MAKE_SALE_ITEM: dict[str, Any] = {
+	"label": "Make Sale",
+	"description": "Create larger or multi-item Sales Invoices in a resilient full-page workspace.",
+	"target_type": "Page",
+	"target": "make-sale",
+	"icon": "shopping-cart",
+}
+
 PROFESSIONAL_SELLING_ITEM: dict[str, Any] = {
 	"label": "Professional Selling",
 	"description": "Prepare Quotations, Sales Orders and Delivery Notes in one guided selling flow.",
@@ -335,6 +343,30 @@ def _promote_transaction_workspace(navigation_groups: list[dict[str, Any]]) -> N
 			return
 		pos_index = next((index for index, item in enumerate(items) if item.get("runtime_target") == "pos"), 0)
 		items.insert(pos_index, deepcopy(TRANSACTION_WORKSPACE_ITEM))
+		group["items"] = items
+		return
+
+
+def _promote_make_sale(navigation_groups: list[dict[str, Any]]) -> None:
+	"""Expose the full-page Sales Invoice entry workspace when create access exists."""
+	if not _can_open_page(MAKE_SALE_ITEM["target"]):
+		return
+	try:
+		if not frappe.db.exists("DocType", "Sales Invoice") or not frappe.has_permission("Sales Invoice", "create"):
+			return
+	except Exception:
+		return
+	for group in navigation_groups:
+		if group.get("key") != "sell":
+			continue
+		items = list(group.get("items") or [])
+		if any(item.get("target_type") == "Page" and item.get("target") == MAKE_SALE_ITEM["target"] for item in items):
+			return
+		workspace_index = next(
+			(index for index, item in enumerate(items) if item.get("target") == TRANSACTION_WORKSPACE_ITEM["target"]),
+			-1,
+		)
+		items.insert(workspace_index + 1 if workspace_index >= 0 else 0, deepcopy(MAKE_SALE_ITEM))
 		group["items"] = items
 		return
 
@@ -765,6 +797,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_add_company_profile_navigation(navigation_groups)
 	_add_branch_assignment_navigation(navigation_groups)
 	_promote_transaction_workspace(navigation_groups)
+	_promote_make_sale(navigation_groups)
 	_promote_professional_selling(navigation_groups)
 	_promote_pricing_promotions_ownership(navigation_groups)
 	_promote_professional_purchasing(navigation_groups)
@@ -831,6 +864,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["operating_branch_context"] = "phase2_active"
 	feature_flags["setup_route_consolidation"] = "edgesuite_setup"
 	feature_flags["transaction_workspace"] = "edgesuite_host"
+	feature_flags["make_sale"] = "full_page_with_quick_sale_companion"
 	feature_flags["professional_selling"] = "edgesuite_primary"
 	feature_flags["pricing_promotions_ownership"] = "application_workspace"
 	feature_flags["professional_purchasing"] = "edgesuite_primary_purchase_order"
