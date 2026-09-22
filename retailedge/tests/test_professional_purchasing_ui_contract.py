@@ -121,6 +121,8 @@ class TestProfessionalPurchasingUIContract(TestCase):
 
 	def test_purchase_receipt_billing_blocks_overlapping_direct_po_drafts(self):
 		source = (APP_ROOT / "professional_purchasing.py").read_text()
+		self.assertIn("_lock_receipt_purchase_orders", source)
+		self.assertIn("_lock_purchase_source(PURCHASE_ORDER_DOCTYPE, purchase_order)", source)
 		self.assertIn("_direct_po_draft_invoice_conflicts", source)
 		self.assertIn("COALESCE(item.purchase_receipt, '') = ''", source)
 		self.assertIn("direct Purchase Order draft invoice(s)", source)
