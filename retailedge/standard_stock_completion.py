@@ -349,10 +349,11 @@ def _update_stock_draft_items(doc, requested_items: Any, *, preview: dict[str, A
 		else:
 			if not item_code:
 				frappe.throw(_("Item is required on new stock row {0}.").format(index))
-			if kind == "transfer":
-				_assert_simple_transfer_item(item_code)
-			else:
-				_assert_simple_adjustment_item(item_code)
+		if kind == "transfer":
+			_assert_simple_transfer_item(item_code)
+		else:
+			_assert_simple_adjustment_item(item_code)
+		if not row_name:
 			tracking = _item_tracking(item_code)
 			if tracking["has_serial_no"] or tracking["has_batch_no"]:
 				frappe.throw(_("Item {0} uses Serial No or Batch tracking and requires Advanced ERPNext.").format(item_code))
