@@ -181,6 +181,13 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"icon": "file-text",
 		"items": (
 			{
+				"label": "Expense Analysis",
+				"description": "Group governed expenses by time, category, account, Branch, source, cost center, payment account or cashier.",
+				"target_type": "Page",
+				"target": "expense-analysis",
+				"tags": ("expense", "analysis", "category", "account", "branch", "cost center"),
+			},
+			{
 				"label": "Expense Register",
 				"description": "Review consolidated posted expenses with Branch and category context.",
 				"target_type": "Page",
