@@ -283,6 +283,8 @@ override_whitelisted_methods = {
 	"retailedge.sales_reporting.get_sales_by_item_export": "retailedge.operating_report_defaults.get_sales_by_item_export",
 	"retailedge.sales_reporting.get_sales_invoice_register": "retailedge.operating_report_defaults.get_sales_invoice_register",
 	"retailedge.sales_reporting.get_sales_invoice_register_export": "retailedge.operating_report_defaults.get_sales_invoice_register_export",
+	"retailedge.sales_analysis.get_sales_analysis": "retailedge.operating_report_defaults.get_sales_analysis",
+	"retailedge.sales_analysis.get_sales_analysis_export": "retailedge.operating_report_defaults.get_sales_analysis_export",
 	"retailedge.purchase_reporting.get_purchase_reporting_context": "retailedge.operating_report_defaults.get_purchase_reporting_context",
 	"retailedge.purchase_reporting.search_purchase_reporting_options": "retailedge.operating_report_defaults.search_purchase_reporting_options",
 	"retailedge.purchase_reporting.get_purchase_register": "retailedge.operating_report_defaults.get_purchase_register",
