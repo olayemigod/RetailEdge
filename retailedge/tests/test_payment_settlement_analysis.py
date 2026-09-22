@@ -25,6 +25,8 @@ CAPABILITIES = ROOT / "reporting_capabilities.py"
 ACTIONS = ROOT / "reporting_actions.py"
 SHELL_ACTIONS = ROOT / "public" / "js" / "retailedge_reporting_actions.js"
 SORTING = ROOT / "report_sorting.py"
+PAYMENT_PERMISSION_PATCH = ROOT / "patches" / "ensure_retailedge_manager_payment_entry_read.py"
+PATCHES = ROOT / "patches.txt"
 
 
 class TestPaymentSettlementAnalysis(FrappeTestCase):
@@ -147,6 +149,32 @@ class TestPaymentSettlementAnalysis(FrappeTestCase):
 			"Sales Invoice.owner",
 		):
 			self.assertNotIn(forbidden, source)
+
+	def test_manager_payment_entry_read_patch_is_minimal_and_registered(self):
+		patch = PAYMENT_PERMISSION_PATCH.read_text(encoding="utf-8")
+		patches = PATCHES.read_text(encoding="utf-8")
+		for role in (
+			"RetailEdgeManager",
+			"RetailEdge Manager",
+			"RetailEdgeBranchManager",
+			"RetailEdge Branch Manager",
+		):
+			self.assertIn(role, patch)
+		for allowed in (
+			'update_permission_property(DOCTYPE, role, PERMLEVEL, "read", 1)',
+			'update_permission_property(DOCTYPE, role, PERMLEVEL, "select", 1)',
+			'update_permission_property(DOCTYPE, role, PERMLEVEL, "report", 1)',
+		):
+			self.assertIn(allowed, patch)
+		for forbidden in (
+			'"write", 1',
+			'"create", 1',
+			'"submit", 1',
+			'"cancel", 1',
+			'"amend", 1',
+		):
+			self.assertNotIn(forbidden, patch)
+		self.assertIn("retailedge.patches.ensure_retailedge_manager_payment_entry_read", patches)
 
 	def test_page_provider_catalogue_and_governance_are_wired(self):
 		for path in (VIEW, BUNDLE, PAGE_JSON, PAGE_JS):
