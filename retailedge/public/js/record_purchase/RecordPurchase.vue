@@ -326,7 +326,7 @@ export default {
 			}
 		},
 		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
-		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => frappe.new_doc("Purchase Invoice"); if (!this.hasUnsavedChanges) return go(); frappe.confirm("Open the advanced ERPNext Purchase Invoice form? Save this page first if you want the current entries recorded.", go); },
+		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Purchase Invoice", this.savedDocument.name) : frappe.new_doc("Purchase Invoice"); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Purchase Invoice in Advanced ERPNext? Unsaved page edits are not carried until you update the draft." : "Open the advanced ERPNext Purchase Invoice form? Save this page first if you want the current entries recorded."; frappe.confirm(message, go); },
 	},
 };
 </script>
