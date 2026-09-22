@@ -147,7 +147,22 @@ const REQUIRED_COMPONENTS = [
 ];
 
 const REPORT_PRODUCT = "RetailEdge";
-const REPORT_KEY = "expense-register";
+const REPORT_CONFIG = {
+	expense_register: {
+		title: "Expense Register",
+		subtitle: "Review cashier and consolidated business expenses by period, Branch, Category and status.",
+		providerKey: "expense-register",
+		route: "/app/expense-register",
+		analysis: false,
+	},
+	expense_analysis: {
+		title: "Expense Analysis",
+		subtitle: "Group governed business expense activity by time, category, account, Branch, source, cost center, payment account or cashier.",
+		providerKey: "expense-analysis",
+		route: "/app/expense-analysis",
+		analysis: true,
+	},
+};
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || {};
@@ -170,6 +185,7 @@ function errorMessage(error, fallback) {
 
 export default {
 	name: "ExpenseRegisterReport",
+	props: { reportType: { type: String, default: "expense_register" } },
 	components: {
 		...Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
 		SimpleCashierExpenseDialog,
@@ -198,6 +214,27 @@ export default {
 			statuses: [],
 			dateRangeLimit: 366,
 			categoryLabel: "",
+			analysisPreset: "Expense Trend",
+			analysisPresets: [
+				"Expense Trend",
+				"Expenses by Category",
+				"Expenses by Expense Account",
+				"Expenses by Branch",
+				"Expenses by Source",
+				"Expenses by Cost Center",
+				"Expenses by Payment Account",
+				"Expenses by Cashier",
+				"Expenses by Status",
+				"Daily Expenses",
+				"Weekly Expenses",
+				"Quarterly Expenses",
+				"Yearly Expenses",
+				"Custom",
+			],
+			groupByOptions: [
+				"Day", "Week", "Month", "Quarter", "Year", "Expense Category", "Expense Account",
+				"Branch", "Source", "Cost Center", "Payment Account", "Cashier", "Expense Status",
+			],
 			filters: {
 				company: "",
 				branch: "",
@@ -208,22 +245,24 @@ export default {
 				source_type: "",
 				view_mode: "cashier",
 				include_unposted_cashier_expenses: 0,
+				group_by: "Month",
 				page_size: 50,
 			},
 			currentPage: 1,
 		};
 	},
 	computed: {
+		config() { return REPORT_CONFIG[this.reportType] || REPORT_CONFIG.expense_register; },
 		reportProvider() {
-			return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY)
-				|| window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, REPORT_KEY)
+			return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey)
+				|| window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey)
 				|| null;
 		},
 		reportColumns() {
 			return (this.columns || []).map((column) => ({
 				...column,
 				fieldtype: column.fieldtype || column.type || "Data",
-				clickable: column.fieldname === "name",
+				clickable: !this.config.analysis && column.fieldname === "name",
 			}));
 		},
 		scopeLabel() {
@@ -233,8 +272,8 @@ export default {
 		},
 		exportDataset() {
 			return {
-				title: "Expense Register",
-				filename: `ProcessEdge Retail Expense Register ${this.filters.company || ""}`.trim(),
+				title: this.config.title,
+				filename: (`ProcessEdge Retail ${this.config.title} ${this.filters.company || ""}`).trim(),
 				columns: this.exportColumns(this.columns),
 				rows: this.rows,
 				filters: this.exportFilters,
@@ -253,6 +292,7 @@ export default {
 				source_type: "Source",
 				view_mode: "View",
 				include_unposted_cashier_expenses: "Include Unposted Cashier Expenses",
+				group_by: "Group By",
 			};
 			return Object.entries(labels)
 				.map(([key, label]) => ({
@@ -265,9 +305,9 @@ export default {
 		},
 		exportMetadata() {
 			return [
-				{ label: "Source", value: this.filters.view_mode === "consolidated" ? "Consolidated business expenses" : "Cashier Expense" },
+				{ label: "Source", value: this.config.analysis ? "Governed consolidated Expense Register" : (this.filters.view_mode === "consolidated" ? "Consolidated business expenses" : "Cashier Expense") },
 				{ label: "Scope", value: this.scopeLabel },
-				{ label: "Cashier visibility", value: this.showCashier ? "Permitted scope" : "Current user only" },
+				{ label: "Grouping", value: this.config.analysis ? this.filters.group_by : "Transaction detail" },
 			];
 		},
 	},
@@ -292,8 +332,9 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("expense-register") || {};
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey) || {};
 				this.filters = { ...this.filters, ...hubHandoff };
+				if (this.config.analysis) this.filters.view_mode = "consolidated";
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -306,7 +347,7 @@ export default {
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
-				this.error = errorMessage(error, "Failed to load Expense Register controls.");
+				this.error = errorMessage(error, `Failed to load ${this.config.title} controls.`);
 			} finally {
 				this.metadataLoading = false;
 			}
@@ -382,6 +423,44 @@ export default {
 			}
 			this.currentPage = 1;
 		},
+		onAnalysisPresetChange() {
+			const groups = {
+				"Expense Trend": "Month",
+				"Expenses by Category": "Expense Category",
+				"Expenses by Expense Account": "Expense Account",
+				"Expenses by Branch": "Branch",
+				"Expenses by Source": "Source",
+				"Expenses by Cost Center": "Cost Center",
+				"Expenses by Payment Account": "Payment Account",
+				"Expenses by Cashier": "Cashier",
+				"Expenses by Status": "Expense Status",
+				"Daily Expenses": "Day",
+				"Weekly Expenses": "Week",
+				"Quarterly Expenses": "Quarter",
+				"Yearly Expenses": "Year",
+			};
+			if (groups[this.analysisPreset]) this.filters.group_by = groups[this.analysisPreset];
+			this.currentPage = 1;
+		},
+		onAnalysisGroupChange() {
+			const presets = {
+				Month: "Expense Trend",
+				"Expense Category": "Expenses by Category",
+				"Expense Account": "Expenses by Expense Account",
+				Branch: "Expenses by Branch",
+				Source: "Expenses by Source",
+				"Cost Center": "Expenses by Cost Center",
+				"Payment Account": "Expenses by Payment Account",
+				Cashier: "Expenses by Cashier",
+				"Expense Status": "Expenses by Status",
+				Day: "Daily Expenses",
+				Week: "Weekly Expenses",
+				Quarter: "Quarterly Expenses",
+				Year: "Yearly Expenses",
+			};
+			this.analysisPreset = presets[this.filters.group_by] || "Custom";
+			this.currentPage = 1;
+		},
 		onCategorySelected(option) {
 			this.filters.expense_category = option.value;
 			this.categoryLabel = option.label || option.value;
@@ -398,12 +477,14 @@ export default {
 		},
 		providerFilters() {
 			const { page_size: _pageSize, ...filters } = this.filters;
+			if (this.config.analysis) filters.view_mode = "consolidated";
+			else delete filters.group_by;
 			return filters;
 		},
 		async fetchData() {
 			if (!this.filters.company) return;
 			if (!this.reportProvider?.load) {
-				this.error = "The Expense Register reporting service is unavailable.";
+				this.error = `The ${this.config.title} reporting service is unavailable.`;
 				return;
 			}
 			this.loading = true;
@@ -435,7 +516,7 @@ export default {
 				this.rows = [];
 				this.columns = [];
 				this.summary = [];
-				this.error = errorMessage(error, "Expense Register failed to load.");
+				this.error = errorMessage(error, `${this.config.title} failed to load.`);
 			} finally {
 				this.loading = false;
 			}
@@ -485,10 +566,11 @@ export default {
 			this.currentPage = 1;
 			this.fetchData();
 		},
-		rowKey(row) {
-			return row?.name || "";
+		rowKey(row, index) {
+			return row?.group_key || row?.name || `${this.reportType}:${index}`;
 		},
 		openReportCell(payload) {
+			if (this.config.analysis) return;
 			if (["name", "source_reference"].includes(payload?.column?.fieldname) && payload?.row) this.openExpense(payload.row);
 		},
 		openExpense(row) {
@@ -523,6 +605,9 @@ export default {
 			if (!this.hasPageTarget("retailedge-setup")) return;
 			frappe.route_options = { setup_resource: "expense-categories" };
 			frappe.set_route("retailedge-setup");
+		},
+		openExpenseRegister() {
+			frappe.set_route("expense-register");
 		},
 		formatCell(value, column) {
 			if (column?.fieldname === "posting_ready") return value ? "Yes" : "No";
