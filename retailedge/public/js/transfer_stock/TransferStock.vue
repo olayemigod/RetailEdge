@@ -25,12 +25,12 @@
 				</section>
 				<section v-if="handoffNotice" class="edge-panel notice-panel"><strong>Continued from Quick Transfer</strong><p>{{ handoffNotice }}</p></section>
 
-				<section v-if="savedDocument" class="edge-panel saved-panel">
+				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
 					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Stock Entry and owns the posted stock movement." : "The ERPNext Stock Entry draft now owns the transfer." }}</p></div>
-					<div class="page-actions"><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="completionOpen = true">Edit / Complete</button><button class="edge-button" type="button" @click="startAnother">Start Another Transfer</button></div>
+					<div class="page-actions"><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button" type="button" @click="openCompletion">Review / Complete</button><button class="edge-button" type="button" @click="startAnother">Start Another Transfer</button></div>
 				</section>
 
-				<form v-else class="edge-panel transaction-form" @submit.prevent="saveDraft">
+				<form v-if="!savedDocument || editingSavedDraft" class="edge-panel transaction-form" @submit.prevent="saveDraft">
 					<div class="context-cards">
 						<div><span>Company</span><strong>{{ values.company || "Not set" }}</strong></div>
 						<div><span>Purpose</span><strong>{{ formContext.purpose || "Material Transfer" }}</strong></div>
@@ -40,10 +40,10 @@
 
 					<div class="field-grid">
 						<EdgeInput v-model="values.posting_date" id="transfer-stock-posting-date" label="Posting Date" type="date" required />
-						<EdgeLinkField v-if="branchEnabled" :modelValue="values.source_branch" label="Source Branch" placeholder="Search source branch" :searcher="searchSourceBranch" :context="searchContext" @update:modelValue="setSourceBranch" />
-						<EdgeLinkField :modelValue="values.source_warehouse" label="Source Stock Location" placeholder="Search source stock location" :required="true" :disabled="requiresBranchSelection && !values.source_branch" :searcher="searchSourceWarehouse" :context="searchContext" @update:modelValue="setSourceWarehouse" />
-						<EdgeLinkField v-if="branchEnabled" :modelValue="values.target_branch" label="Destination Branch" placeholder="Search destination branch" :searcher="searchTargetBranch" :context="searchContext" @update:modelValue="setTargetBranch" />
-						<EdgeLinkField :modelValue="values.target_warehouse" label="Destination Stock Location" placeholder="Search destination stock location" :required="true" :disabled="requiresBranchSelection && !values.target_branch" :searcher="searchTargetWarehouse" :context="searchContext" @update:modelValue="setTargetWarehouse" />
+						<EdgeLinkField v-if="branchEnabled" :modelValue="values.source_branch" label="Source Branch" placeholder="Search source branch" :searcher="searchSourceBranch" :context="searchContext" :disabled="editingSavedDraft" @update:modelValue="setSourceBranch" />
+						<EdgeLinkField :modelValue="values.source_warehouse" label="Source Stock Location" placeholder="Search source stock location" :required="true" :disabled="editingSavedDraft || (requiresBranchSelection && !values.source_branch)" :searcher="searchSourceWarehouse" :context="searchContext" @update:modelValue="setSourceWarehouse" />
+						<EdgeLinkField v-if="branchEnabled" :modelValue="values.target_branch" label="Destination Branch" placeholder="Search destination branch" :searcher="searchTargetBranch" :context="searchContext" :disabled="editingSavedDraft" @update:modelValue="setTargetBranch" />
+						<EdgeLinkField :modelValue="values.target_warehouse" label="Destination Stock Location" placeholder="Search destination stock location" :required="true" :disabled="editingSavedDraft || (requiresBranchSelection && !values.target_branch)" :searcher="searchTargetWarehouse" :context="searchContext" @update:modelValue="setTargetWarehouse" />
 					</div>
 
 					<div class="items-heading"><div><span class="page-kicker">Transfer items</span><h3>Products to move</h3><p>Use this page when the transfer contains many stock lines instead of keeping the transaction inside a modal.</p></div><span class="item-count">{{ populatedItemCount }} item{{ populatedItemCount === 1 ? "" : "s" }}</span></div>
@@ -53,7 +53,7 @@
 
 					<div class="sticky-actions">
 						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the ERPNext draft is saved." : "Complete the required fields, then save the draft." }}</small></div>
-						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading || !transferContextReady">{{ saving ? "Saving..." : formContext.submit_label || "Save Draft" }}</button></div>
+						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading || !transferContextReady">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
 					</div>
 				</form>
 			</div>
@@ -70,6 +70,7 @@ import StandardStockCompletionDialog from "../retailedge_business_hub/StandardSt
 const CONTEXT_METHOD = "retailedge.guided_stock_transfer.get_simple_stock_transfer_context";
 const SEARCH_METHOD = "retailedge.guided_stock_transfer.search_simple_stock_transfer_options";
 const CREATE_METHOD = "retailedge.guided_stock_transfer.create_simple_stock_transfer_draft";
+const UPDATE_METHOD = "retailedge.standard_stock_completion.update_standard_stock_document_draft";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HANDOFF_PREFIX = "retailedge:transfer-stock:handoff:";
 const RECOVERY_PREFIX = "retailedge:transfer-stock:recovery:";
@@ -90,7 +91,7 @@ export default {
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialSnapshot: "",
-			sourceCascadeToken: 0, targetCascadeToken: 0, recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, completionOpen: false,
+			sourceCascadeToken: 0, targetCascadeToken: 0, recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, editingSavedDraft: false, completionOpen: false,
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			itemTableField: { label: "Items", description: "Use the page for larger stock movements with many item rows." },
 			itemColumns: [{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search stock item" }, { fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 }],
@@ -110,7 +111,7 @@ export default {
 	watch: { values: { deep: true, handler() { if (this.loaded && !this.savedDocument) this.scheduleRecovery(); } } },
 	created() {
 		this._pageShow = () => { if (!this.loaded && !this.loading) this.loadPage(); };
-		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || this.savedDocument) return; event.preventDefault(); event.returnValue = ""; };
+		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return; event.preventDefault(); event.returnValue = ""; };
 	},
 	mounted() { window.addEventListener("retailedge-transfer-stock-page-show", this._pageShow); window.addEventListener("beforeunload", this._beforeUnload); this.loadPage(); },
 	beforeUnmount() { window.removeEventListener("retailedge-transfer-stock-page-show", this._pageShow); window.removeEventListener("beforeunload", this._beforeUnload); if (this.recoveryTimer) clearTimeout(this.recoveryTimer); },
@@ -134,7 +135,7 @@ export default {
 			this.menuItems = (shell.navigation_groups || []).map((g) => ({ ...g, items: (g.items || []).map((i) => ({ ...i, route: this.routeForTarget(i) })).filter((i) => i.route) })).filter((g) => g.items.length);
 		},
 		routeForTarget(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return ""; if (item.target_type === "DocType") return `/app/${frappe.router.slug(item.target)}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; return item.target || ""; },
-		handleNavigation(route) { if (!route || route === "/app/transfer-stock") return; const go = () => { if (/^https?:\/\//i.test(route)) window.location.assign(route); else frappe.set_route(...String(route).replace(/^\/app\//, "").split("/").filter(Boolean)); }; if (!this.hasUnsavedChanges || this.savedDocument) return go(); frappe.confirm("Leave Transfer Stock? Unsaved changes are retained temporarily in this browser session.", go); },
+		handleNavigation(route) { if (!route || route === "/app/transfer-stock") return; const go = () => { if (/^https?:\/\//i.test(route)) window.location.assign(route); else frappe.set_route(...String(route).replace(/^\/app\//, "").split("/").filter(Boolean)); }; if (!this.hasUnsavedChanges || (this.savedDocument && !this.editingSavedDraft)) return go(); frappe.confirm("Leave Transfer Stock? Unsaved changes are retained temporarily in this browser session.", go); },
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		consumeHandoff() { let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; } const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false; if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false; this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) }; this.handoffNotice = "Source, destination and item lines were carried into the full-page workspace."; return true; },
@@ -176,13 +177,49 @@ export default {
 		async setSourceWarehouse(next) { const warehouse = next || ""; this.values.source_warehouse = warehouse; if (!warehouse || !this.values.company) return; const token = ++this.sourceCascadeToken; try { const r = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.source_branch, warehouse, preference: "source" }); if (token !== this.sourceCascadeToken) return; this.values.source_branch = r.branch || this.values.source_branch; this.values.source_warehouse = r.warehouse || warehouse; if (this.sameWarehouse) this.values.target_warehouse = ""; } catch (error) { if (token === this.sourceCascadeToken) { this.values.source_warehouse = ""; this.saveError = errorMessage(error, "Unable to use the selected Source Stock Location."); } } },
 		async setTargetWarehouse(next) { const warehouse = next || ""; this.values.target_warehouse = warehouse; if (!warehouse || !this.values.company) return; if (warehouse === this.values.source_warehouse) { this.values.target_warehouse = ""; this.saveError = "Source and Destination Stock Location must be different."; return; } const token = ++this.targetCascadeToken; try { const r = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.target_branch, warehouse, preference: "target" }); if (token !== this.targetCascadeToken) return; this.values.target_branch = r.branch || this.values.target_branch; this.values.target_warehouse = r.warehouse || warehouse; } catch (error) { if (token === this.targetCascadeToken) { this.values.target_warehouse = ""; this.saveError = errorMessage(error, "Unable to use the selected Destination Stock Location."); } } },
 		updateItems(rows) { this.values.items = (rows || []).map((row) => ({ ...row })); },
-		async saveDraft() { if (this.saving || this.loading || !this.transferContextReady) return; this.saving = true; this.saveError = ""; try { const result = await callMethod(CREATE_METHOD, { values: this.values }); if (!result?.name) throw new Error("Stock Entry draft was not returned."); this.clearRecovery(); this.initialSnapshot = JSON.stringify(this.values); this.savedDocument = { doctype: result.doctype || "Stock Entry", name: result.name }; this.completionOpen = true; frappe.show_alert?.({ message: `Stock Transfer ${result.name} saved as Draft`, indicator: "green" }); } catch (error) { this.saveError = errorMessage(error, "Unable to save the Stock Transfer draft."); } finally { this.saving = false; } },
-		handleCompletionChanged() {},
+		async saveDraft() {
+			if (this.saving || this.loading || !this.transferContextReady) return;
+			this.saving = true; this.saveError = "";
+			try {
+				let result;
+				if (this.savedDocument?.name && this.editingSavedDraft) {
+					result = await callMethod(UPDATE_METHOD, {
+						doctype: "Stock Entry",
+						name: this.savedDocument.name,
+						expected_modified: this.savedDocument.modified || "",
+						values: {
+							posting_date: this.values.posting_date,
+							remarks: this.values.remarks || "",
+							items: (this.values.items || []).filter((row) => row?.item_code).map((row) => ({ item_code: row.item_code, qty: Number(row.qty || 0) })),
+						},
+					}, "POST");
+					this.syncPageFromDraftPreview(result);
+					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Entry" };
+					this.initialSnapshot = JSON.stringify(this.values);
+					this.editingSavedDraft = false;
+					frappe.show_alert?.({ message: `Stock Transfer ${result.name} draft updated`, indicator: "green" });
+					return;
+				}
+				result = await callMethod(CREATE_METHOD, { values: this.values });
+				if (!result?.name) throw new Error("Stock Entry draft was not returned.");
+				this.clearRecovery(); this.initialSnapshot = JSON.stringify(this.values);
+				this.savedDocument = { ...result, doctype: result.doctype || "Stock Entry" };
+				this.completionOpen = true;
+				frappe.show_alert?.({ message: `Stock Transfer ${result.name} saved as Draft`, indicator: "green" });
+			} catch (error) { this.saveError = errorMessage(error, "Unable to save the Stock Transfer draft."); }
+			finally { this.saving = false; }
+		},
+		beginSavedDraftEdit() { if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return; this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values); },
+		cancelSavedDraftEdit() { const close = () => { try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {} this.editingSavedDraft = false; this.saveError = ""; }; if (!this.hasUnsavedChanges) return close(); frappe.confirm("Discard unsaved changes to this saved Stock Transfer draft?", close); },
+		syncPageFromDraftPreview(result) { if (!result) return; if (result.posting_date) this.values.posting_date = result.posting_date; if (Object.prototype.hasOwnProperty.call(result, "remarks")) this.values.remarks = result.remarks || ""; if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ item_code: row.item_code || "", qty: row.qty })); },
+		openCompletion() { if (this.savedDocument?.name) { this.editingSavedDraft = false; this.completionOpen = true; } },
+		handleCompletionChanged(result) { if (!result?.name) return; this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Entry" }; if (Number(result.docstatus || 0) === 0) { this.syncPageFromDraftPreview(result); this.initialSnapshot = JSON.stringify(this.values); } },
 		handleCompletionCompleted(result) {
+			this.editingSavedDraft = false;
 			if (result?.name) this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Entry" };
 			this.completionOpen = false;
 		},
-		async startAnother() { this.savedDocument = null; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
+		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
 		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => frappe.new_doc("Stock Entry", { purpose: "Material Transfer" }); if (!this.hasUnsavedChanges) return go(); frappe.confirm("Open the advanced ERPNext Stock Entry form? Save this page first if you want the current transfer recorded.", go); },
 	},
 };
