@@ -1005,15 +1005,17 @@ export default {
 		},
 		openAdvancedNative() {
 			if (!this.canUseNativeDesk) return;
-			const navigate = () => frappe.new_doc("Sales Invoice");
+			const navigate = () => this.savedDocument?.name
+				? frappe.set_route("Form", "Sales Invoice", this.savedDocument.name)
+				: frappe.new_doc("Sales Invoice");
 			if (!this.hasUnsavedChanges) {
 				navigate();
 				return;
 			}
-			frappe.confirm(
-				"Open the advanced ERPNext Sales Invoice form? Save this Make Sale draft first if you want the current page entries recorded in ERPNext.",
-				navigate
-			);
+			const message = this.savedDocument?.name
+				? "Open the saved Sales Invoice in Advanced ERPNext? Unsaved page edits are not carried until you update the draft."
+				: "Open the advanced ERPNext Sales Invoice form? Save this Make Sale draft first if you want the current page entries recorded in ERPNext.";
+			frappe.confirm(message, navigate);
 		},
 	},
 };
