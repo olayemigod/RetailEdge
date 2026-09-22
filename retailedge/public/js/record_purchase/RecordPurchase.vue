@@ -48,11 +48,11 @@
 
 					<div class="field-grid">
 						<EdgeLinkField :modelValue="values.supplier" label="Supplier" placeholder="Search supplier" :required="true" :searcher="searchSupplier" :context="searchContext" :canCreate="canCreateSupplier" :creator="createSupplier" createLabel="Create Supplier" @update:modelValue="setSupplier" />
-						<label class="field"><span>Posting Date <b>*</b></span><input v-model="values.posting_date" class="form-control" type="date" required /></label>
+						<EdgeInput v-model="values.posting_date" id="record-purchase-posting-date" label="Posting Date" type="date" required />
 						<EdgeLinkField v-if="branchEnabled" :modelValue="values.branch" label="Branch" placeholder="Search branch" :searcher="searchBranch" :context="searchContext" @update:modelValue="setBranch" />
 						<EdgeLinkField :modelValue="values.warehouse" label="Receiving Stock Location" placeholder="Search receiving stock location" :required="Boolean(values.update_stock)" :disabled="requiresBranchSelection && !values.branch" :searcher="searchWarehouse" :context="searchContext" @update:modelValue="setWarehouse" />
-						<label class="field"><span>Supplier Bill No</span><input v-model="values.bill_no" class="form-control" type="text" placeholder="Supplier invoice/reference" /></label>
-						<label v-if="values.bill_no" class="field"><span>Supplier Bill Date</span><input v-model="values.bill_date" class="form-control" type="date" /></label>
+						<EdgeInput v-model="values.bill_no" id="record-purchase-bill-no" label="Supplier Bill No" type="text" placeholder="Supplier invoice/reference" />
+						<EdgeInput v-if="values.bill_no" v-model="values.bill_date" id="record-purchase-bill-date" label="Supplier Bill Date" type="date" />
 					</div>
 
 					<label class="check-field"><input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Update Stock</strong><small>Add received stock when this Purchase Invoice is submitted.</small></span></label>
@@ -103,7 +103,7 @@ function stored(raw, maxAge) {
 
 export default {
 	name: "RetailEdgeRecordPurchase",
-	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog },
+	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, StandardPurchaseInvoiceCompletionDialog, SimplePaymentDialog },
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialSnapshot: "", cascadeToken: 0,
