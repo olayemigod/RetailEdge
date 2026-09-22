@@ -528,6 +528,15 @@ def _selling_list_definition(document: str) -> dict[str, Any]:
 	return dict(definition)
 
 
+def _can_open_page(page_name: str) -> bool:
+	try:
+		if not frappe.db.exists("Page", page_name):
+			return False
+		return bool(frappe.get_doc("Page", page_name).is_permitted())
+	except Exception:
+		return False
+
+
 def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str, str]]:
 	"""Return permission/status-aware secondary actions for one submitted selling record.
 
@@ -585,6 +594,7 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
 		if (
 			_permission("Sales Invoice", "create")
+			and _can_open_page("professional-selling")
 			and not cint(row.get("is_return"))
 			and status not in {"Cancelled", "Return"}
 		):
