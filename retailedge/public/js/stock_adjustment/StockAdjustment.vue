@@ -116,7 +116,7 @@ export default {
 				this.formContext = data || {}; this.applyShell(shell || {});
 				this.values = { ...emptyValues(), ...(data.defaults || {}), items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })) };
 				this.initialSnapshot = JSON.stringify(this.values);
-				if (!this.consumeHandoff()) this.loadRecoveryCandidate();
+				if (!(await this.consumeHandoff())) this.loadRecoveryCandidate();
 				this.loaded = true;
 			} catch (error) { this.loadError = errorMessage(error, "Unable to prepare Stock Adjustment."); }
 			finally { this.loading = false; }
@@ -130,7 +130,25 @@ export default {
 		handleNavigation(route) { if (!route || route === "/app/stock-adjustment") return; const go = () => { if (/^https?:\/\//i.test(route)) window.location.assign(route); else frappe.set_route(...String(route).replace(/^\/app\//, "").split("/").filter(Boolean)); }; if (!this.hasUnsavedChanges || (this.savedDocument && !this.editingSavedDraft)) return go(); frappe.confirm("Leave Stock Adjustment? Unsaved changes are retained temporarily in this browser session.", go); },
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
-		consumeHandoff() { let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; } const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false; if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false; this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) }; this.handoffNotice = "Branch, stock location and count lines were carried into the full-page workspace."; return true; },
+		async consumeHandoff() {
+			let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; }
+			const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false;
+			if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false;
+			this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) };
+			try {
+				if (this.values.company && (this.values.branch || this.values.warehouse)) {
+					const r = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.branch || "", warehouse: this.values.warehouse || "", preference: "source" });
+					this.values.branch = r.branch || this.values.branch || "";
+					this.values.warehouse = r.warehouse || this.values.warehouse || "";
+				}
+				this.handoffNotice = "Quick Adjustment data was carried into Stock Adjustment and its current Branch / Stock Location access was revalidated.";
+			} catch (error) {
+				this.values.branch = ""; this.values.warehouse = "";
+				this.saveError = errorMessage(error, "The carried Branch or Stock Location is no longer available. Choose the current stock context before saving.");
+				this.handoffNotice = "Quick Adjustment line items were carried over, but the saved Branch / Stock Location was cleared because access could not be revalidated.";
+			}
+			return true;
+		},
 		loadRecoveryCandidate() { let raw = ""; try { raw = sessionStorage.getItem(this.recoveryKey()) || ""; } catch (_error) { return; } const payload = stored(raw, 12 * 60 * 60 * 1000); if (payload && (!payload.values.company || !this.values.company || payload.values.company === this.values.company)) this.recoveryCandidate = payload; },
 		async restoreRecovery() {
 			if (!this.recoveryCandidate?.values) return;
