@@ -470,6 +470,14 @@ def get_professional_purchase_receipt_preview(purchase_order: str) -> dict[str, 
 	}
 
 
+def _submitted_receipt_next_actions(receipt: Any) -> list[dict[str, str]]:
+	if cint(getattr(receipt, "docstatus", 0)) != 1:
+		return []
+	if _permission("Purchase Invoice", "create") and flt(getattr(receipt, "per_billed", 0)) < 99.99:
+		return [{"value": "create-purchase-invoice", "label": _("Create Purchase Invoice")}]
+	return []
+
+
 @frappe.whitelist(methods=["POST"])
 def submit_standard_purchase_receipt(
 	purchase_order: str,
@@ -516,6 +524,7 @@ def submit_standard_purchase_receipt(
 		"branch": str(getattr(receipt, receipt_branch_field, "") or "") if receipt_branch_field else "",
 		"item_count": len(items),
 		"posting_status": "Submitted",
+		"next_actions": _submitted_receipt_next_actions(receipt),
 		"stock_posted_by": "ERPNext Purchase Receipt submit",
 		"landed_cost_handoff": _landed_cost_handoff(receipt.name),
 		"source_of_truth": "ERPNext Purchase Order make_purchase_receipt mapper",
@@ -690,6 +699,9 @@ def apply_standard_purchase_receipt_workflow_action(
 			{
 				"name": updated_receipt.name,
 				"docstatus": 1,
+				"company": str(getattr(updated_receipt, "company", "") or ""),
+				"supplier": str(getattr(updated_receipt, "supplier", "") or ""),
+				"next_actions": _submitted_receipt_next_actions(updated_receipt),
 				"landed_cost_handoff": _landed_cost_handoff(updated_receipt.name),
 			}
 		)
