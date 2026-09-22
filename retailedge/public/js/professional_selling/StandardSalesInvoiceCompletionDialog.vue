@@ -315,7 +315,7 @@ export default {
 						po_no: this.draftPoNo,
 						remarks: this.draftRemarks,
 						items: [
-							...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty), rate: Number(row.rate), warehouse: row.warehouse || "" })),
+							...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty), rate: row.rate === "" || row.rate === null || row.rate === undefined ? "" : Number(row.rate), warehouse: row.warehouse || "" })),
 							...this.newItems.filter((row) => row?.item_code).map((row) => ({ ...row })),
 						],
 					},
