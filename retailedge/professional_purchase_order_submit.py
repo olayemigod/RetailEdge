@@ -80,6 +80,23 @@ def _standard_submit_blockers(
 	return blockers
 
 
+def _submitted_next_actions(doc: Any) -> list[dict[str, str]]:
+	if cint(getattr(doc, "docstatus", 0)) != 1:
+		return []
+	status = str(getattr(doc, "status", "") or "").strip()
+	if status in {"Closed", "Completed", "Cancelled", "Stopped"}:
+		return []
+	if cint(getattr(doc, "is_subcontracted", 0)) or cint(getattr(doc, "is_old_subcontracting_flow", 0)):
+		return []
+
+	actions: list[dict[str, str]] = []
+	if _permission("Purchase Receipt", "create") and flt(getattr(doc, "per_received", 0)) < 99.999:
+		actions.append({"value": "receive-stock", "label": _("Receive Stock")})
+	if _permission("Purchase Invoice", "create") and flt(getattr(doc, "per_billed", 0)) < 99.999:
+		actions.append({"value": "create-purchase-invoice", "label": _("Create Purchase Invoice")})
+	return actions
+
+
 def _item_preview(doc: Any) -> list[dict[str, Any]]:
 	items: list[dict[str, Any]] = []
 	for row in getattr(doc, "items", None) or []:
@@ -187,13 +204,26 @@ def apply_standard_purchase_order_workflow_action(
 			_("This Purchase Order is not eligible for a standard EdgeSuite workflow action.")
 		)
 
-	return apply_document_workflow_action(
+	result = apply_document_workflow_action(
 		doctype=PURCHASE_ORDER_DOCTYPE,
 		name=doc.name,
 		action=action,
 		expected_modified=expected_modified,
 		expected_state=str(expected_workflow_state or ""),
 	)
+	if cint(result.get("docstatus")) == 1:
+		current = _get_purchase_order(doc.name)
+		result.update(
+			{
+				"company": str(getattr(current, "company", "") or ""),
+				"branch": _document_branch(current),
+				"supplier": str(getattr(current, "supplier", "") or ""),
+				"status": str(getattr(current, "status", "") or "Submitted"),
+				"next_actions": _submitted_next_actions(current),
+				"source_of_truth": "Frappe Workflow / ERPNext Purchase Order",
+			}
+		)
+	return result
 
 
 @frappe.whitelist(methods=["POST"])
@@ -231,6 +261,7 @@ def submit_standard_purchase_order(
 	doc.submit()
 	if cint(getattr(doc, "docstatus", 0)) != 1:
 		frappe.throw(_("ERPNext did not submit Purchase Order {0}.").format(doc.name))
+	doc.reload()
 
 	return {
 		"doctype": PURCHASE_ORDER_DOCTYPE,
@@ -242,5 +273,6 @@ def submit_standard_purchase_order(
 		"currency": str(getattr(doc, "currency", "") or ""),
 		"grand_total": flt(getattr(doc, "grand_total", 0)),
 		"status": str(getattr(doc, "status", "") or "Submitted"),
+		"next_actions": _submitted_next_actions(doc),
 		"source_of_truth": "ERPNext Purchase Order submit",
 	}
