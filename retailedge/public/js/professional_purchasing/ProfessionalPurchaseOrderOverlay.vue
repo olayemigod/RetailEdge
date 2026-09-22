@@ -20,7 +20,9 @@ export default {
 	data() { return { open: false }; },
 	computed: {
 		nativeFallbackEnabled() {
-			return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE;
+			const access = frappe.boot?.edgesuite_ui_access || {};
+			const mode = String(access.mode || "").trim();
+			return mode !== ACCESS_MODE && Boolean(access.can_use_native_desk);
 		},
 	},
 	created() { this._open = () => { this.open = true; }; },
