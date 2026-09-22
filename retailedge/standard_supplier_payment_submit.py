@@ -22,6 +22,7 @@ from retailedge.workflow_readiness import get_workflow_readiness
 SUPPLIER_DOCTYPE = "Supplier"
 PURCHASE_INVOICE_DOCTYPE = "Purchase Invoice"
 MAX_DRAFT_ROWS = 50
+MAX_STANDARD_REFERENCES = 20
 TOLERANCE = 0.005
 
 
@@ -100,81 +101,103 @@ def _account_snapshot(account: str) -> dict[str, Any]:
 	return dict(row or {})
 
 
-def _reference_preview(doc: Any, payment_branch: str) -> tuple[dict[str, Any] | None, list[str]]:
+def _reference_previews(doc: Any, payment_branch: str) -> tuple[list[dict[str, Any]], list[str]]:
+	"""Revalidate every standard supplier invoice allocation against current ERPNext truth."""
 	blockers: list[str] = []
-	references = list(getattr(doc, "references", None) or [])
-	if not references:
+	rows = list(getattr(doc, "references", None) or [])
+	if not rows:
 		blockers.append(_("Supplier advances require Advanced ERPNext review."))
-		return None, blockers
-	if len(references) != 1:
-		blockers.append(_("Payments allocated to multiple documents require Advanced ERPNext review."))
-		return None, blockers
-
-	row = references[0]
-	if str(getattr(row, "reference_doctype", "") or "") != PURCHASE_INVOICE_DOCTYPE:
-		blockers.append(_("Only a single Purchase Invoice allocation is supported by standard EdgeSuite submission."))
-		return None, blockers
-
-	invoice_name = str(getattr(row, "reference_name", "") or "").strip()
-	allocated_amount = flt(getattr(row, "allocated_amount", 0))
-	if not invoice_name or allocated_amount <= 0:
-		blockers.append(_("The Purchase Invoice allocation is incomplete. Use Advanced ERPNext review."))
-		return None, blockers
-	if not frappe.db.exists(PURCHASE_INVOICE_DOCTYPE, invoice_name):
-		blockers.append(_("Referenced Purchase Invoice {0} no longer exists.").format(invoice_name))
-		return {"purchase_invoice": invoice_name, "allocated_amount": allocated_amount}, blockers
-
-	invoice = frappe.get_doc(PURCHASE_INVOICE_DOCTYPE, invoice_name)
-	_assert_permission(PURCHASE_INVOICE_DOCTYPE, "read", invoice)
-	invoice_branch = _invoice_branch(invoice)
-	invoice_scope = get_operational_branch_scope(
-		str(getattr(invoice, "company", "") or ""),
-		user=frappe.session.user,
-	)
-	if invoice_branch:
-		invoice_branch = str(
-			resolve_operational_branch(
-				invoice.company,
-				invoice_branch,
-				user=frappe.session.user,
-			).get("branch")
-			or ""
-		).strip()
-	elif invoice_scope["restricted"]:
+		return [], blockers
+	if len(rows) > MAX_STANDARD_REFERENCES:
 		blockers.append(
-			_("Referenced Purchase Invoice {0} has no Branch attribution for your restricted access.").format(
-				invoice_name
+			_("Standard supplier settlement supports at most {0} Purchase Invoices.").format(MAX_STANDARD_REFERENCES)
+		)
+		return [], blockers
+
+	company = str(getattr(doc, "company", "") or "")
+	supplier = str(getattr(doc, "party", "") or "")
+	company_currency = _company_currency(company)
+	seen: set[str] = set()
+	result: list[dict[str, Any]] = []
+
+	for index, row in enumerate(rows, start=1):
+		if str(getattr(row, "reference_doctype", "") or "") != PURCHASE_INVOICE_DOCTYPE:
+			blockers.append(_("Only Purchase Invoice allocations are supported by standard supplier settlement."))
+			continue
+
+		invoice_name = str(getattr(row, "reference_name", "") or "").strip()
+		allocated_amount = flt(getattr(row, "allocated_amount", 0))
+		if not invoice_name or allocated_amount <= 0:
+			blockers.append(_("Purchase Invoice allocation on row {0} is incomplete.").format(index))
+			continue
+		if invoice_name in seen:
+			blockers.append(_("Purchase Invoice {0} is allocated more than once.").format(invoice_name))
+			continue
+		seen.add(invoice_name)
+
+		if not frappe.db.exists(PURCHASE_INVOICE_DOCTYPE, invoice_name):
+			blockers.append(_("Referenced Purchase Invoice {0} no longer exists.").format(invoice_name))
+			result.append({"purchase_invoice": invoice_name, "allocated_amount": allocated_amount})
+			continue
+
+		invoice = frappe.get_doc(PURCHASE_INVOICE_DOCTYPE, invoice_name)
+		_assert_permission(PURCHASE_INVOICE_DOCTYPE, "read", invoice)
+		invoice_branch = _invoice_branch(invoice)
+		invoice_scope = get_operational_branch_scope(
+			str(getattr(invoice, "company", "") or ""),
+			user=frappe.session.user,
+		)
+		if invoice_branch:
+			invoice_branch = str(
+				resolve_operational_branch(
+					invoice.company,
+					invoice_branch,
+					user=frappe.session.user,
+				).get("branch")
+				or ""
+			).strip()
+		elif invoice_scope["restricted"]:
+			blockers.append(
+				_("Referenced Purchase Invoice {0} has no Branch attribution for your restricted access.").format(
+					invoice_name
+				)
 			)
+
+		if cint(getattr(invoice, "docstatus", 0)) != 1:
+			blockers.append(_("Referenced Purchase Invoice {0} is not submitted.").format(invoice_name))
+		if cint(getattr(invoice, "is_return", 0)):
+			blockers.append(_("Return Purchase Invoices require Advanced ERPNext review."))
+		if str(getattr(invoice, "company", "") or "") != company:
+			blockers.append(_("Payment Entry and Purchase Invoice {0} must belong to the same Company.").format(invoice_name))
+		if str(getattr(invoice, "supplier", "") or "") != supplier:
+			blockers.append(_("Payment Entry and Purchase Invoice {0} must belong to the same Supplier.").format(invoice_name))
+		if invoice_branch and payment_branch and invoice_branch != payment_branch:
+			blockers.append(_("Payment Entry and Purchase Invoice {0} must belong to the same Branch.").format(invoice_name))
+
+		invoice_currency = str(getattr(invoice, "currency", "") or company_currency)
+		if invoice_currency != company_currency:
+			blockers.append(_("Multi-currency Purchase Invoice payments require Advanced ERPNext review."))
+
+		outstanding = flt(getattr(invoice, "outstanding_amount", 0))
+		if outstanding <= 0:
+			blockers.append(_("Purchase Invoice {0} no longer has a positive outstanding amount.").format(invoice_name))
+		elif allocated_amount > outstanding + TOLERANCE:
+			blockers.append(
+				_("The draft allocation for Purchase Invoice {0} exceeds its current outstanding amount.").format(
+					invoice_name
+				)
+			)
+
+		result.append(
+			{
+				"purchase_invoice": invoice_name,
+				"allocated_amount": allocated_amount,
+				"invoice_outstanding_amount": outstanding,
+				"branch": invoice_branch,
+			}
 		)
 
-	if cint(getattr(invoice, "docstatus", 0)) != 1:
-		blockers.append(_("Referenced Purchase Invoice {0} is not submitted.").format(invoice_name))
-	if cint(getattr(invoice, "is_return", 0)):
-		blockers.append(_("Return Purchase Invoices require Advanced ERPNext review."))
-	if str(getattr(invoice, "company", "") or "") != str(getattr(doc, "company", "") or ""):
-		blockers.append(_("Payment Entry and Purchase Invoice must belong to the same Company."))
-	if str(getattr(invoice, "supplier", "") or "") != str(getattr(doc, "party", "") or ""):
-		blockers.append(_("Payment Entry and Purchase Invoice must belong to the same Supplier."))
-	if invoice_branch and payment_branch and invoice_branch != payment_branch:
-		blockers.append(_("Payment Entry and Purchase Invoice must belong to the same Branch."))
-
-	company_currency = _company_currency(str(getattr(doc, "company", "") or ""))
-	invoice_currency = str(getattr(invoice, "currency", "") or company_currency)
-	if invoice_currency != company_currency:
-		blockers.append(_("Multi-currency Purchase Invoice payments require Advanced ERPNext review."))
-
-	outstanding = flt(getattr(invoice, "outstanding_amount", 0))
-	if outstanding <= 0:
-		blockers.append(_("Purchase Invoice {0} no longer has a positive outstanding amount.").format(invoice_name))
-	elif allocated_amount > outstanding + TOLERANCE:
-		blockers.append(_("The draft allocation exceeds the current Purchase Invoice outstanding amount."))
-
-	return {
-		"purchase_invoice": invoice_name,
-		"allocated_amount": allocated_amount,
-		"invoice_outstanding_amount": outstanding,
-	}, blockers
-
+	return result, list(dict.fromkeys(blockers))
 
 def _workflow_submit_blocker(workflow_readiness: dict[str, Any]) -> str:
 	if str(workflow_readiness.get("source") or "") != "frappe":
@@ -229,12 +252,12 @@ def _standard_submit_blockers(
 	if list(getattr(doc, "deductions", None) or []) or abs(flt(getattr(doc, "difference_amount", 0))) > TOLERANCE:
 		blockers.append(_("Payments with deductions or exchange differences require Advanced ERPNext review."))
 
-	reference, reference_blockers = _reference_preview(doc, payment_branch)
+	references, reference_blockers = _reference_previews(doc, payment_branch)
 	blockers.extend(reference_blockers)
-	if reference:
-		allocated_amount = flt(reference.get("allocated_amount"))
+	if references:
+		allocated_amount = sum(flt(reference.get("allocated_amount")) for reference in references)
 		if abs(paid_amount - allocated_amount) > TOLERANCE:
-			blockers.append(_("Standard supplier payment must allocate the full payment to one Purchase Invoice."))
+			blockers.append(_("Standard supplier settlement must allocate the full payment across its Purchase Invoices."))
 		if abs(flt(getattr(doc, "unallocated_amount", 0))) > TOLERANCE:
 			blockers.append(_("Supplier advances or unallocated amounts require Advanced ERPNext review."))
 
@@ -247,7 +270,7 @@ def _standard_submit_blockers(
 		blockers.append(workflow_blocker)
 	elif not frappe.has_permission(PAYMENT_ENTRY_DOCTYPE, "submit", doc=doc):
 		blockers.append(_("You do not have permission to submit this Payment Entry."))
-	return blockers, reference
+	return blockers, references
 
 
 def _build_preview(
@@ -262,7 +285,7 @@ def _build_preview(
 		doctype=PAYMENT_ENTRY_DOCTYPE,
 		doc=doc,
 	)
-	blockers, reference = _standard_submit_blockers(
+	blockers, references = _standard_submit_blockers(
 		doc,
 		payment_branch,
 		workflow_readiness=workflow_readiness,
@@ -273,7 +296,8 @@ def _build_preview(
 		and not [blocker for blocker in blockers if blocker != workflow_blocker]
 	)
 	paid_amount = flt(getattr(doc, "paid_amount", 0))
-	allocated_amount = flt(reference.get("allocated_amount")) if reference else 0
+	allocated_amount = sum(flt(reference.get("allocated_amount")) for reference in references)
+	first_reference = references[0] if len(references) == 1 else None
 	return {
 		"payment_entry": doc.name,
 		"payment_entry_modified": str(getattr(doc, "modified", "") or ""),
@@ -288,9 +312,11 @@ def _build_preview(
 		"paid_amount": paid_amount,
 		"allocated_amount": allocated_amount,
 		"unallocated_amount": max(paid_amount - allocated_amount, 0),
-		"purchase_invoice": reference.get("purchase_invoice") if reference else "",
-		"invoice_outstanding_amount": reference.get("invoice_outstanding_amount") if reference else None,
-		"payment_kind": "Supplier Invoice Payment",
+		"reference_count": len(references),
+		"references": references,
+		"purchase_invoice": first_reference.get("purchase_invoice") if first_reference else "",
+		"invoice_outstanding_amount": first_reference.get("invoice_outstanding_amount") if first_reference else None,
+		"payment_kind": "Supplier Invoice Payment" if len(references) == 1 else "Supplier Invoice Settlement",
 		"docstatus": cint(getattr(doc, "docstatus", 0)),
 		"status": "Draft" if cint(getattr(doc, "docstatus", 0)) == 0 else str(getattr(doc, "status", "") or "Submitted"),
 		"blockers": blockers,
@@ -474,7 +500,7 @@ def submit_standard_supplier_payment(
 	if not expected_modified or expected_modified != current_modified:
 		frappe.throw(_("Payment Entry {0} changed after the review. Refresh before submitting.").format(doc.name))
 
-	blockers, reference = _standard_submit_blockers(doc, payment_branch)
+	blockers, references = _standard_submit_blockers(doc, payment_branch)
 	if blockers:
 		frappe.throw("<br>".join(blockers))
 
@@ -485,12 +511,20 @@ def submit_standard_supplier_payment(
 		frappe.throw(_("ERPNext did not submit Payment Entry {0}.").format(doc.name))
 	doc.reload()
 
-	invoice_name = reference.get("purchase_invoice") if reference else ""
-	invoice_outstanding = (
-		flt(frappe.db.get_value(PURCHASE_INVOICE_DOCTYPE, invoice_name, "outstanding_amount"))
-		if invoice_name
-		else None
-	)
+	updated_references = []
+	for reference in references:
+		invoice_name = str(reference.get("purchase_invoice") or "")
+		updated_references.append(
+			{
+				**reference,
+				"invoice_outstanding_amount": (
+					flt(frappe.db.get_value(PURCHASE_INVOICE_DOCTYPE, invoice_name, "outstanding_amount"))
+					if invoice_name
+					else None
+				),
+			}
+		)
+	first_reference = updated_references[0] if len(updated_references) == 1 else None
 	return {
 		"payment_entry": doc.name,
 		"docstatus": cint(getattr(doc, "docstatus", 0)),
@@ -499,8 +533,10 @@ def submit_standard_supplier_payment(
 		"branch": _payment_branch(doc),
 		"supplier": str(getattr(doc, "party", "") or ""),
 		"paid_amount": flt(getattr(doc, "paid_amount", 0)),
-		"purchase_invoice": invoice_name,
-		"invoice_outstanding_amount": invoice_outstanding,
+		"reference_count": len(updated_references),
+		"references": updated_references,
+		"purchase_invoice": first_reference.get("purchase_invoice") if first_reference else "",
+		"invoice_outstanding_amount": first_reference.get("invoice_outstanding_amount") if first_reference else None,
 		"source_of_truth": "ERPNext Payment Entry submit",
 		"route": f"/app/payment-entry/{doc.name}",
 	}
