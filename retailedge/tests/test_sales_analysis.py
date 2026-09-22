@@ -94,6 +94,7 @@ class TestSalesAnalysis(FrappeTestCase):
 		self.assertEqual(row["recorded_cost"], 60)
 		self.assertEqual(row["gross_profit"], 40)
 		self.assertEqual(row["invoice_count"], 2)
+		self.assertEqual(row["average_transaction_value"], 50)
 		self.assertAlmostEqual(row["gross_margin_percent"], 40)
 
 	def test_salesperson_weighting_does_not_double_count_revenue_or_cost(self):
