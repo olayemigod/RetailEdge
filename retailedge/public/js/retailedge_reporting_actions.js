@@ -7,6 +7,7 @@
 		"/app/expense-review": "expense-review",
 		"/app/cash-shift-verification": "cash-shift-verification",
 		"/app/daily-sales-audit": "daily-sales-audit",
+		"/app/sales-analysis": "sales-analysis",
 		"/app/sales-by-item": "sales-by-item",
 		"/app/sales-invoice-register": "sales-invoice-register",
 		"/app/customer-receivables": "customer-receivables",
