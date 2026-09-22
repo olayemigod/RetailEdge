@@ -193,6 +193,14 @@ def test_stock_completion_requires_saving_dirty_editor_before_submit_or_workflow
 		assert contract in dialog
 
 
+def test_stock_draft_editor_revalidates_existing_and_new_items_as_simple_stock_items():
+	source = _read(SERVICE)
+	method = source[source.index("def _update_stock_draft_items"):source.index("def _build_preview")]
+	assert 'if kind == "transfer":\n\t\t\t_assert_simple_transfer_item(item_code)' in method
+	assert 'else:\n\t\t\t_assert_simple_adjustment_item(item_code)' in method
+	assert method.index('item_code = _clean(row.get("item_code"))') < method.index('_assert_simple_transfer_item(item_code)')
+
+
 def test_stock_draft_editor_keeps_scope_and_tracking_complexity_out_of_editable_payload():
 	source = _read(SERVICE)
 	for contract in (
