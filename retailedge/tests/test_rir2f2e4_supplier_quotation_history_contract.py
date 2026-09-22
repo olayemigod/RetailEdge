@@ -43,6 +43,14 @@ def test_child_reference_enrichment_does_not_leak_unreadable_rfq_names():
 	assert 'filters={"name": ["in", sorted(linked_rfqs)]}' in source
 
 
+def test_supplier_quotation_history_exposes_purchase_order_create_capability():
+	source = _read(BACKEND)
+	overlay = _read(OVERLAY)
+	assert '"can_create_purchase_order": bool(frappe.has_permission("Purchase Order", "create"))' in source
+	assert "can_create_purchase_order: false" in overlay
+	assert "Boolean(this.history.can_create_purchase_order)" in overlay
+
+
 def test_supplier_quotation_history_uses_smart_company_branch_supplier_filters():
 	overlay = _read(OVERLAY)
 	assert "EdgeLinkField" in overlay
