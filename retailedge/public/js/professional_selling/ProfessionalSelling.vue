@@ -162,7 +162,7 @@ const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_pro
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeEmptyState", "EdgeStatusBadge"];
 
 function runtimeComponents() {
-	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 
