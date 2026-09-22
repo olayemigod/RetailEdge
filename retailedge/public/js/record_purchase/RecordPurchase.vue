@@ -55,7 +55,7 @@
 						<EdgeInput v-if="values.bill_no" v-model="values.bill_date" id="record-purchase-bill-date" label="Supplier Bill Date" type="date" />
 					</div>
 
-					<label class="check-field"><input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Update Stock</strong><small>Add received stock when this Purchase Invoice is submitted.</small></span></label>
+					<label class="check-field"><input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" :disabled="editingSavedDraft" /><span><strong>Update Stock</strong><small>{{ editingSavedDraft ? "Stock mode is fixed after the ERPNext draft is created." : "Add received stock when this Purchase Invoice is submitted." }}</small></span></label>
 
 					<div class="items-heading"><div><span class="page-kicker">Purchase items</span><h3>Products and services</h3><p>Use the page for larger purchases instead of keeping a long transaction inside a modal.</p></div><span class="item-count">{{ populatedItemCount }} item{{ populatedItemCount === 1 ? "" : "s" }}</span></div>
 					<EdgeChildTable :field="itemTableField" :rows="values.items" :columns="itemColumns" :addLabel="'Add Item'" :linkSearcher="searchLineLink" :linkCanCreate="canCreateItemLink" :linkCreator="createItemLink" :linkCreateLabel="itemCreateLabel" :newRowsFirst="true" @update:rows="updateItems" />
