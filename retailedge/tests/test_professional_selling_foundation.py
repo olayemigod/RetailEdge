@@ -66,6 +66,8 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		for contract in ("edgeui.bundle.js", "professional_selling.bundle.js"):
 			self.assertIn(contract, loader)
 		self.assertIn("createEdgeApp", bundle)
+		self.assertIn("const edgeUI = window.EdgeSuiteUI;", bundle)
+		self.assertNotIn("window.EdgeUI", bundle)
 		for contract in (
 			"EdgeAppShell",
 			"EdgePageLayout",
@@ -98,6 +100,21 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 			'frappe.set_route("List", item.target)',
 		):
 			self.assertIn(contract, component)
+
+	def test_guided_selling_dialogs_hide_native_escape_without_explicit_grant(self):
+		for relative in (
+			"public/js/professional_selling/ProfessionalQuotationDialog.vue",
+			"public/js/professional_selling/ProfessionalSalesOrderDialog.vue",
+			"public/js/professional_selling/ProfessionalDeliveryDialog.vue",
+		):
+			source = self.read(relative)
+			self.assertIn("canUseNativeDesk", source)
+			self.assertIn('default: false', source)
+			self.assertIn('v-if="canUseNativeDesk"', source)
+			self.assertIn("Advanced: Open in ERPNext", source)
+			self.assertNotIn("Open Full Form", source)
+		page = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		self.assertGreaterEqual(page.count(':canUseNativeDesk="canUseNativeDesk"'), 6)
 
 	def test_ui_preserves_erpnext_shipping_and_advanced_document_truth(self):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
