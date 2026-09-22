@@ -48,7 +48,7 @@
 				<span v-else>You can review this receipt, but your role cannot submit Purchase Receipts.</span>
 			</div>
 
-			<div v-if="preview.workflow_started && !preview.blockers?.length" class="receipt-preview__workflow">
+			<div v-if="!submitted && preview.workflow_started && !preview.blockers?.length" class="receipt-preview__workflow">
 				<strong>{{ preview.workflow_readiness?.workflow || 'Purchase Receipt Workflow' }}</strong>
 				<span>{{ preview.workflow_readiness?.message || 'Choose an available workflow action.' }}</span>
 				<div class="receipt-preview__workflow-actions">
@@ -84,7 +84,7 @@
 
 		<template #footer>
 			<div class="receipt-preview__footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="posting" @click="openAdvanced">Advanced: Prepare in ERPNext</button>
+				<button v-if="nativeFallbackEnabled && !submitted" type="button" class="edge-button" :disabled="posting" @click="openAdvanced">Advanced: Prepare in ERPNext</button>
 				<div class="receipt-preview__footer-actions">
 					<button type="button" class="edge-button" :disabled="posting" @click="close">Close</button>
 					<button v-if="canStartWorkflow" type="button" class="edge-button edge-button--primary" :disabled="posting" @click="startWorkflow">{{ posting ? 'Starting…' : 'Start Receipt Approval' }}</button>
