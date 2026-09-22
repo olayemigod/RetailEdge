@@ -317,8 +317,11 @@
 				<template v-if="isCustomerPayment">
 					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Standard Receive Customer supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
 				</template>
-				<template v-if="isSupplierPayment">
-					Only submitted Purchase Invoices with a positive outstanding balance are offered. Standard Pay Supplier supports one Purchase Invoice per payment; complex allocations stay in Advanced ERPNext.
+				<template v-if="isSupplierPayment && !allowMultiReferenceSupplierPayment">
+					Only submitted Purchase Invoices with a positive outstanding balance are offered. Quick Pay Supplier supports one Purchase Invoice per payment. Use Supplier Payables for multi-invoice settlement.
+				</template>
+				<template v-if="isSupplierPayment && allowMultiReferenceSupplierPayment">
+					Managed Supplier Settlement supports up to {{ formContext.limits?.max_references || 20 }} submitted Purchase Invoices for one supplier and Branch. Each outstanding amount is revalidated before the Payment Entry draft is created.
 				</template>
 			</p>
 
@@ -506,6 +509,7 @@ export default {
 		open: { type: Boolean, default: false },
 		intent: { type: String, default: "" },
 		initialContext: { type: Object, default: () => ({}) },
+		allowMultiReferenceSupplierPayment: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {
@@ -634,31 +638,43 @@ export default {
 			const branch = cleanPrefill(initial.branch);
 			const party = cleanPrefill(initial.party);
 			const referenceName = cleanPrefill(initial.reference_name);
+			const initialReferences = Array.isArray(initial.references)
+				? initial.references.map((row) => cleanPrefill(typeof row === "string" ? row : row?.reference_name)).filter(Boolean)
+				: [];
+			const referenceNames = [...new Set(referenceName ? [referenceName, ...initialReferences] : initialReferences)]
+				.slice(0, Number(this.formContext.limits?.max_references || 20));
 
 			if (company) this.values.company = company;
 			if (branch) this.values.branch = branch;
 			if (party) this.values.party = party;
-			if (!referenceName || !party) return;
+			if (!referenceNames.length || !party) return;
+			if (!this.allowMultiReferenceSupplierPayment && referenceNames.length > 1) {
+				throw new Error("Quick Pay Supplier supports one Purchase Invoice. Continue from Supplier Payables for multi-invoice settlement.");
+			}
 
 			this.referenceLoading = true;
 			try {
-				const details = await callMethod(REFERENCE_METHOD, {
-					intent: this.intent,
-					company: this.values.company,
-					party: this.values.party,
-					reference_name: referenceName,
-					branch: this.values.branch,
-				});
-				const outstandingAmount = Number(details.outstanding_amount || 0);
-				if (!(outstandingAmount > 0)) {
-					throw new Error("The selected reference no longer has an amount available for payment.");
+				const resolved = [];
+				for (const name of referenceNames) {
+					const details = await callMethod(REFERENCE_METHOD, {
+						intent: this.intent,
+						company: this.values.company,
+						party: this.values.party,
+						reference_name: name,
+						branch: this.values.branch,
+					});
+					const outstandingAmount = Number(details.outstanding_amount || 0);
+					if (!(outstandingAmount > 0)) {
+						throw new Error(`${name} no longer has an amount available for payment.`);
+					}
+					resolved.push({
+						reference_name: name,
+						outstanding_amount: outstandingAmount,
+						allocated_amount: outstandingAmount,
+					});
 				}
-				this.values.references = [{
-					reference_name: referenceName,
-					outstanding_amount: outstandingAmount,
-					allocated_amount: outstandingAmount,
-				}];
-				this.values.amount = outstandingAmount;
+				this.values.references = resolved;
+				this.values.amount = resolved.reduce((total, row) => total + Number(row.allocated_amount || 0), 0);
 			} finally {
 				this.referenceLoading = false;
 			}
@@ -666,7 +682,12 @@ export default {
 		requestClose() {
 			if (this.saving || this.submitting) return;
 			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
-			frappe.confirm("Discard the unsaved Quick Payment changes?", () => this.$emit("close"));
+			frappe.confirm(
+				this.isSupplierPayment && this.allowMultiReferenceSupplierPayment
+					? "Discard the unsaved supplier settlement changes?"
+					: "Discard the unsaved Quick Payment changes?",
+				() => this.$emit("close"),
+			);
 		},
 		openManagedPaymentPage() {
 			if (this.saving || this.submitting) return;
@@ -797,13 +818,21 @@ export default {
 		},
 		validateStandardSupplierDraft() {
 			const references = (this.values.references || []).filter((row) => row?.reference_name);
-			if (references.length !== 1) {
-				throw new Error("Standard Pay Supplier supports one Purchase Invoice per payment. Use Advanced ERPNext for multi-invoice payments.");
+			const maxReferences = Number(this.formContext.limits?.max_references || 20);
+			if (!this.allowMultiReferenceSupplierPayment && references.length !== 1) {
+				throw new Error("Quick Pay Supplier supports one Purchase Invoice per payment. Use Supplier Payables for multi-invoice settlement.");
+			}
+			if (this.allowMultiReferenceSupplierPayment && (references.length < 1 || references.length > maxReferences)) {
+				throw new Error(`Supplier settlement must contain between 1 and ${maxReferences} Purchase Invoices.`);
 			}
 			const amount = Number(this.values.amount) || 0;
-			const allocated = Number(references[0].allocated_amount) || 0;
+			const allocated = references.reduce((total, row) => total + (Number(row.allocated_amount) || 0), 0);
 			if (!(amount > 0) || Math.abs(amount - allocated) > 0.005) {
-				throw new Error("Standard Pay Supplier must allocate the full payment amount to the selected Purchase Invoice.");
+				throw new Error(
+					this.allowMultiReferenceSupplierPayment
+						? "Supplier settlement must allocate the full Payment Entry amount across the selected Purchase Invoices."
+						: "Quick Pay Supplier must allocate the full payment amount to the selected Purchase Invoice."
+				);
 			}
 		},
 		async loadCustomerReview(paymentEntry) {
