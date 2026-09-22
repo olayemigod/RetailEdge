@@ -139,7 +139,30 @@ export default {
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		consumeHandoff() { let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; } const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false; if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false; this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) }; this.handoffNotice = "Source, destination and item lines were carried into the full-page workspace."; return true; },
 		loadRecoveryCandidate() { let raw = ""; try { raw = sessionStorage.getItem(this.recoveryKey()) || ""; } catch (_error) { return; } const payload = stored(raw, 12 * 60 * 60 * 1000); if (payload && (!payload.values.company || !this.values.company || payload.values.company === this.values.company)) this.recoveryCandidate = payload; },
-		restoreRecovery() { if (!this.recoveryCandidate?.values) return; this.values = { ...this.values, ...clone(this.recoveryCandidate.values), items: (this.recoveryCandidate.values.items || []).map((row) => ({ ...row })) }; this.recoveryCandidate = null; this.handoffNotice = "Recovered unsaved transfer work from this browser session."; },
+		async restoreRecovery() {
+			if (!this.recoveryCandidate?.values) return;
+			const recovered = clone(this.recoveryCandidate.values);
+			this.values = { ...this.values, ...recovered, items: (recovered.items || []).map((row) => ({ ...row })) };
+			this.recoveryCandidate = null; this.saveError = "";
+			try {
+				if (this.values.company && (this.values.source_branch || this.values.source_warehouse)) {
+					const source = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.source_branch || "", warehouse: this.values.source_warehouse || "", preference: "source" });
+					this.values.source_branch = source.branch || this.values.source_branch || "";
+					this.values.source_warehouse = source.warehouse || this.values.source_warehouse || "";
+				}
+				if (this.values.company && (this.values.target_branch || this.values.target_warehouse)) {
+					const target = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.target_branch || "", warehouse: this.values.target_warehouse || "", preference: "target" });
+					this.values.target_branch = target.branch || this.values.target_branch || "";
+					this.values.target_warehouse = target.warehouse || this.values.target_warehouse || "";
+				}
+				if (this.values.source_warehouse && this.values.source_warehouse === this.values.target_warehouse) this.values.target_warehouse = "";
+				this.handoffNotice = "Recovered unsaved transfer work and revalidated current source / destination access.";
+			} catch (error) {
+				this.values.source_branch = ""; this.values.source_warehouse = ""; this.values.target_branch = ""; this.values.target_warehouse = "";
+				this.saveError = errorMessage(error, "Recovered transfer locations are no longer available. Choose the current source and destination before saving.");
+				this.handoffNotice = "Recovered transfer lines, but saved source / destination context was cleared because access could not be revalidated.";
+			}
+		},
 		discardRecovery() { this.recoveryCandidate = null; this.clearRecovery(); },
 		scheduleRecovery() { if (this.recoveryTimer) clearTimeout(this.recoveryTimer); this.recoveryTimer = setTimeout(() => { if (!this.hasUnsavedChanges || this.savedDocument) return this.clearRecovery(); try { sessionStorage.setItem(this.recoveryKey(), JSON.stringify({ createdAt: Date.now(), values: clone(this.values) })); } catch (_error) {} }, 250); },
 		clearRecovery() { try { sessionStorage.removeItem(this.recoveryKey()); } catch (_error) {} },
