@@ -332,6 +332,8 @@ def _submitted_next_actions(doc) -> list[dict[str, str]]:
 	actions: list[dict[str, str]] = []
 	if frappe.has_permission("Payment Entry", "create") and flt(doc.get("outstanding_amount")) > 0.005:
 		actions.append({"value": "pay-supplier", "label": _("Pay Supplier")})
+	if frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "create"):
+		actions.append({"value": "create-supplier-debit-note", "label": _("Supplier Debit Note")})
 	return actions
 
 
