@@ -142,7 +142,8 @@ test("Purchase User reaches Supplier Performance with evidence-backed measures",
 	try {
 		await openProductPage(page, "supplier-performance", "Supplier Performance", "Reports");
 		await expect(page.getByText("Current Outstanding", { exact: true }).first()).toBeVisible();
-		await expect(page.getByText(/Period purchases · current payables aged at/).first()).toBeVisible();
+		await expect(page.getByText("Payables Basis", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText(/Current outstanding ·/).first()).toBeVisible();
 	} finally {
 		await context.close().catch(() => {});
 	}
