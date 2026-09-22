@@ -16,6 +16,13 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 		"icon": "chart",
 		"items": (
 			{
+				"label": "Sales Analysis",
+				"description": "Group submitted sales by time, item, category, customer, Branch, salesperson or warehouse.",
+				"target_type": "Page",
+				"target": "sales-analysis",
+				"tags": ("sales", "analysis", "trend", "category", "branch", "warehouse"),
+			},
+			{
 				"label": "Sales Invoice Register",
 				"description": "Review submitted sales, returns, tax and outstanding balances.",
 				"target_type": "Page",
