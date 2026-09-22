@@ -112,7 +112,7 @@
 						<div>
 							<span class="purchasing-kicker">Corrections after receipt or billing</span>
 							<h3>Returns & Supplier Credits</h3>
-							<p>Choose the business intent explicitly. This workflow prepares one native ERPNext draft only and never chains a stock return and supplier debit note automatically.</p>
+							<p>Choose the business intent explicitly. RetailEdge reviews the canonical ERPNext return first, follows any active Frappe Workflow, and never chains a stock return and supplier debit note automatically.</p>
 						</div>
 					</div>
 					<div class="return-grid">
