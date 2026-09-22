@@ -41,6 +41,10 @@ from retailedge.stock_position import (
 	get_stock_position_export as _base_get_stock_position_export,
 	search_stock_position_options as _base_search_stock_position_options,
 )
+from retailedge.supplier_performance import (
+	get_supplier_performance as _base_get_supplier_performance,
+	get_supplier_performance_export as _base_get_supplier_performance_export,
+)
 from retailedge.supplier_payables import get_supplier_payables_export as _base_current_supplier_payables_export
 
 
@@ -245,6 +249,21 @@ def get_purchase_analysis(filters=None, page=1, page_size=50, sort=None):
 @frappe.whitelist()
 def get_purchase_analysis_export(filters=None):
 	return _base_get_purchase_analysis_export(filters=_constrain_report_filters(filters))
+
+
+@frappe.whitelist()
+def get_supplier_performance(filters=None, page=1, page_size=50, sort=None):
+	return _base_get_supplier_performance(
+		filters=_constrain_report_filters(filters),
+		page=page,
+		page_size=page_size,
+		sort=sort,
+	)
+
+
+@frappe.whitelist()
+def get_supplier_performance_export(filters=None):
+	return _base_get_supplier_performance_export(filters=_constrain_report_filters(filters))
 
 
 @frappe.whitelist()
