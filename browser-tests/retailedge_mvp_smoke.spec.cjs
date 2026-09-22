@@ -137,6 +137,17 @@ test("Accounts User reaches Purchase Analysis with governed presets", async ({ b
 	}
 });
 
+test("Accounts User reaches Expense Analysis with governed presets", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.accounts);
+	try {
+		await openProductPage(page, "expense-analysis", "Expense Analysis", "Reports");
+		await expect(page.getByText("Expense Trend", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("Group By", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
 test("RetailEdge cashier cannot open Payment & Settlement Analysis", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
