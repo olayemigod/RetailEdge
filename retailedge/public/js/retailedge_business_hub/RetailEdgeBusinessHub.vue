@@ -1208,7 +1208,12 @@ export default {
 			this.simplePaymentOpen = false;
 			this.simplePaymentIntent = "";
 			this.simplePaymentInitialContext = {};
-			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry");
+			if (Number(result?.docstatus || 0) === 1) {
+				frappe.show_alert?.({ message: `Payment Entry ${result.name || ""} submitted`, indicator: "green" }, 7);
+				this.refreshContext({ force: true });
+				return;
+			}
+			this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry", { stayInEdgeSuite: true });
 		},
 		openNativePayment(doctype = "Payment Entry") {
 			if (!this.nativeFallbackEnabled) return;
