@@ -255,6 +255,16 @@ def test_sales_and_purchase_draft_editors_fail_closed_on_noneditable_completion_
 	assert 'and not blockers and frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)' in purchase
 
 
+
+def test_browser_recovery_revalidates_current_branch_and_warehouse_access():
+	for route, config in ENTRY_PAGES.items():
+		source = config["component"].read_text(encoding="utf-8")
+		assert "async restoreRecovery()" in source
+		assert "resolveBranchWarehouse({" in source
+		assert "access could not be revalidated" in source or "no longer available" in source
+		assert 'this.recoveryCandidate = null' in source
+
+
 def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 	for config in ENTRY_PAGES.values():
 		source = config["component"].read_text(encoding="utf-8")
