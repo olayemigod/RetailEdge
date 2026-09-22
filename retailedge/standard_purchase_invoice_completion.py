@@ -524,6 +524,8 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_DIRECT) -> dict[str, A
 		"supplier_name": _clean(doc.get("supplier_name")) or _clean(doc.get("supplier")),
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
+		"outstanding_amount": flt(doc.get("outstanding_amount")),
+		"next_actions": _submitted_next_actions(doc),
 		"posting_date": _clean(doc.get("posting_date")),
 		"due_date": _clean(doc.get("due_date")),
 		"bill_no": _clean(doc.get("bill_no")),
