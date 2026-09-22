@@ -231,7 +231,7 @@ export default {
 			this.completionOpen = false;
 		},
 		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
-		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => frappe.new_doc("Stock Reconciliation"); if (!this.hasUnsavedChanges) return go(); frappe.confirm("Open the advanced ERPNext Stock Reconciliation form? Save this page first if you want the current count recorded.", go); },
+		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => this.savedDocument?.name ? frappe.set_route("Form", "Stock Reconciliation", this.savedDocument.name) : frappe.new_doc("Stock Reconciliation"); if (!this.hasUnsavedChanges) return go(); const message = this.savedDocument?.name ? "Open the saved Stock Reconciliation in Advanced ERPNext? Unsaved page edits are not carried until you update the draft." : "Open the advanced ERPNext Stock Reconciliation form? Save this page first if you want the current count recorded."; frappe.confirm(message, go); },
 	},
 };
 </script>
