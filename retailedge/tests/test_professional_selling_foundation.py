@@ -61,6 +61,8 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		loader = self.read("retailedge/page/professional_selling/professional_selling.js")
 		bundle = self.read("public/js/professional_selling.bundle.js")
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		self.assertIn("window.EdgeSuiteUI", component)
+		self.assertNotIn("window.EdgeUI", component)
 		for contract in ("edgeui.bundle.js", "professional_selling.bundle.js"):
 			self.assertIn(contract, loader)
 		self.assertIn("createEdgeApp", bundle)
@@ -84,6 +86,16 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 			"this.sellingContext = selling || {}",
 			'this.branchName = selling.operating?.branch || navigation.context?.branch || ""',
 			'{{ branchName || "No operating branch selected" }}',
+		):
+			self.assertIn(contract, component)
+
+	def test_edgesuite_only_navigation_fails_closed_for_native_targets(self):
+		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		for contract in (
+			'["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk',
+			'item.target_type === "Page"',
+			'frappe.set_route("query-report", item.target)',
+			'frappe.set_route("List", item.target)',
 		):
 			self.assertIn(contract, component)
 

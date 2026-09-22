@@ -173,7 +173,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 	def test_adapter_uses_permission_aware_bounded_search_and_native_draft_insert(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
 		self.assertIn("MAX_LINK_RESULTS = 20", source)
-		self.assertIn("MAX_ITEMS = 50", source)
+		self.assertIn("MAX_ITEMS = 100", source)
 		self.assertIn("search_link(", source)
 		self.assertIn('query="erpnext.controllers.queries.item_query"', source)
 		self.assertIn('filters: dict[str, Any] = {"is_purchase_item": 1}', source)
@@ -247,7 +247,7 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 
 	def test_limits_are_small_for_guided_entry(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
-		self.assertEqual(MAX_ITEMS, 50)
+		self.assertEqual(MAX_ITEMS, 100)
 
 
 if __name__ == "__main__":

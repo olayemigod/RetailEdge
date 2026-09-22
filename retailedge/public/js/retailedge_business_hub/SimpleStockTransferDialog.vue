@@ -104,6 +104,8 @@
 				@update:rows="updateItems"
 			/>
 
+			<p v-if="quickEntryTooLarge" class="guided-entry-size-warning" role="alert">Quick Transfer is limited to {{ QUICK_ENTRY_MAX_LINES }} populated item lines. Continue in Transfer Stock to keep working on this larger movement.</p>
+
 			<p class="guided-stock-hint">
 				Serial-numbered or batch-managed items require the full Stock Entry form so ERPNext can
 				capture the exact Serial No or Batch allocations. Item creation remains native ERPNext
@@ -123,9 +125,10 @@
 
 		<template #footer>
 			<div class="guided-stock-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Open Full Form
-				</button>
+				<div class="guided-stock-footer-actions">
+					<button type="button" class="edge-button" :disabled="saving" @click="continueInTransferPage">Continue in Transfer Stock</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open in ERPNext</button>
+				</div>
 				<div class="guided-stock-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
 						Cancel
@@ -133,7 +136,7 @@
 					<button
 						type="button"
 						class="edge-button edge-button--primary"
-						:disabled="saving || loading || !transferContextReady"
+						:disabled="saving || loading || !transferContextReady || quickEntryTooLarge"
 						@click="saveDraft"
 					>
 						{{ saving ? 'Saving...' : formContext.submit_label || 'Save Draft' }}
@@ -150,6 +153,7 @@ import {
 	errorMessage,
 	quickCreateItem,
 	resolveBranchWarehouse,
+	QUICK_ENTRY_MAX_LINES,
 } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.guided_stock_transfer.get_simple_stock_transfer_context";
@@ -183,11 +187,11 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
 	props: {
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 		open: { type: Boolean, default: false },
 		prefill: { type: Object, default: () => ({}) },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved", "open-native", "open-page"],
 	data() {
 		return {
 			loading: false,
@@ -197,6 +201,7 @@ export default {
 			sourceCascadeToken: 0,
 			targetCascadeToken: 0,
 			formContext: {},
+			initialValuesSnapshot: "",
 			values: emptyValues(),
 			itemTableField: {
 				label: "Items",
@@ -245,6 +250,12 @@ export default {
 			if (this.requiresBranchSelection && (!this.values.source_branch || !this.values.target_branch)) return false;
 			return true;
 		},
+		hasUnsavedChanges() {
+			return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
+		},
+		populatedItemCount() { return (this.values.items || []).filter((row) => row?.item_code).length; },
+		quickEntryTooLarge() { return this.populatedItemCount > QUICK_ENTRY_MAX_LINES; },
+		QUICK_ENTRY_MAX_LINES() { return QUICK_ENTRY_MAX_LINES; },
 	},
 	watch: {
 		open(next) {
@@ -269,6 +280,7 @@ export default {
 					...(data.defaults || {}),
 					items: (data.defaults?.items || emptyValues().items).map((row) => ({ ...row })),
 				};
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 				await this.applyPrefill();
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Stock Transfer.");
@@ -298,7 +310,12 @@ export default {
 		},
 		requestClose() {
 			if (this.saving) return;
-			this.$emit("close");
+			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
+			frappe.confirm("Discard the unsaved Quick Transfer changes?", () => this.$emit("close"));
+		},
+		continueInTransferPage() {
+			if (this.saving) return;
+			this.$emit("open-page", { values: JSON.parse(JSON.stringify(this.values || {})) });
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
@@ -439,6 +456,7 @@ export default {
 		},
 		async saveDraft() {
 			if (this.saving || this.loading || !this.transferContextReady) return;
+			if (this.quickEntryTooLarge) { this.saveError = `Quick Transfer supports up to ${QUICK_ENTRY_MAX_LINES} populated item lines. Continue in Transfer Stock for larger movements.`; return; }
 			this.saveError = "";
 			this.saving = true;
 			try {
@@ -540,4 +558,5 @@ export default {
 		justify-content: flex-end;
 	}
 }
+.guided-entry-size-warning { margin:0; padding:10px 12px; border:1px solid var(--edge-warning,#f79009); border-radius:8px; background:var(--edge-warning-subtle,#fffaeb); color:var(--edge-warning-text,#7a2e0e); font-size:.82rem; }
 </style>

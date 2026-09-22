@@ -136,6 +136,7 @@ def test_submitted_rows_receive_server_authoritative_conversion_and_payment_acti
 		'"create-sales-order"',
 		'"create-delivery-note"',
 		'"create-sales-invoice"',
+		'"create-return-credit-note"',
 		'"make-payment"',
 		'flt(row.get("per_delivered")) < 99.999',
 		'flt(row.get("per_billed")) < 99.999',
@@ -148,7 +149,7 @@ def test_submitted_rows_receive_server_authoritative_conversion_and_payment_acti
 	assert "Array.isArray(row?.actions)" in records
 	for contract in (
 		'if (action === "make-payment")',
-		'["create-sales-order", "create-delivery-note", "create-sales-invoice"].includes(action)',
+		'["create-sales-order", "create-delivery-note", "create-sales-invoice", "create-return-credit-note"].includes(action)',
 		"runConversionAction(action, document, row)",
 		"openCustomerPayment(document, row)",
 		"create_sales_order_from_quotation",
@@ -157,6 +158,7 @@ def test_submitted_rows_receive_server_authoritative_conversion_and_payment_acti
 		"create_sales_invoice_from_delivery_note",
 		"create_delivery_note_from_sales_order",
 		"create_delivery_note_from_sales_invoice",
+		"create_sales_return_credit_note_draft",
 	):
 		assert contract in workspace
 

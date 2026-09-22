@@ -223,7 +223,7 @@ class TestGuidedStockTransfer(unittest.TestCase):
 	def test_adapter_is_bounded_permission_aware_and_draft_only(self):
 		source = (APP_ROOT / "guided_stock_transfer.py").read_text()
 		self.assertIn("MAX_LINK_RESULTS = 20", source)
-		self.assertIn("MAX_ITEMS = 50", source)
+		self.assertIn("MAX_ITEMS = 100", source)
 		self.assertIn("search_link(", source)
 		self.assertIn('query="erpnext.controllers.queries.item_query"', source)
 		self.assertIn('filters={"is_stock_item": 1, "disabled": 0}', source)
@@ -253,12 +253,12 @@ class TestGuidedStockTransfer(unittest.TestCase):
 		self.assertIn('this.values.target_warehouse = "";', component)
 		self.assertIn("sameWarehouse", component)
 		self.assertIn("serial-numbered or batch-managed", component.lower())
-		self.assertIn("Open Full Form", component)
+		self.assertIn("Advanced: Open in ERPNext", component)
 		self.assertIn('this.$emit("open-native", "Stock Entry")', component)
 
 	def test_limits_are_small_for_guided_transfer(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
-		self.assertEqual(MAX_ITEMS, 50)
+		self.assertEqual(MAX_ITEMS, 100)
 
 
 if __name__ == "__main__":

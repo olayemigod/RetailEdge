@@ -23,6 +23,25 @@ class TestSalesReturnCreditNoteUIContract(TestCase):
 		self.assertIn('if (this.mode === "return") { method = CREATE_RETURN; args = { sales_invoice: this.sourceDocument }; }', component)
 		self.assertIn("no refund or Payment Entry is created automatically", component)
 
+	def test_return_mode_is_governed_inside_edgesuite_for_edgesuite_only_users(self):
+		component = (SELLING_UI / "ProfessionalSalesInvoiceDialog.vue").read_text()
+		page = (SELLING_UI / "ProfessionalSelling.vue").read_text()
+		completion = (SELLING_UI / "StandardSalesInvoiceCompletionDialog.vue").read_text()
+
+		self.assertIn("visibleModes()", component)
+		self.assertIn("return this.modes;", component)
+		self.assertNotIn('option.key !== "return" || this.canUseNativeDesk', component)
+		self.assertIn("RetailEdge reviews the canonical return draft", component)
+		self.assertIn(':sourceMode="salesInvoiceCompletionSourceMode"', page)
+		self.assertIn('"sales_return"', page)
+		self.assertIn("create-return-credit-note", page)
+		self.assertIn("create_sales_return_credit_note_draft", page)
+		self.assertNotIn("Draft Return / Credit Note prepared for Advanced ERPNext review.", page)
+		self.assertIn('if (this.canUseNativeDesk) frappe.set_route("Form", "Sales Invoice", result.name);', page)
+		self.assertIn('sourceMode: { type: String, default: "standard" }', completion)
+		self.assertIn('source_mode: this.sourceMode || "standard"', completion)
+		self.assertIn("Submit Return / Credit Note", completion)
+
 	def test_return_mode_reuses_existing_edgesuite_source_pattern(self):
 		component = (SELLING_UI / "ProfessionalSalesInvoiceDialog.vue").read_text()
 
@@ -44,8 +63,12 @@ class TestSalesReturnCreditNoteUIContract(TestCase):
 		self.assertIn('if not cint(target.get("is_return")):', source)
 		self.assertIn('if str(target.get("return_against") or "") != source.name:', source)
 		self.assertIn("_validate_invoice_stock_context(", source)
+		self.assertIn("_lock_sales_return_source", source)
+		self.assertIn("_existing_sales_return_draft", source)
 		self.assertIn("target.insert()", source)
 		self.assertIn('"posting_status": "Draft"', source)
+		self.assertIn('"existing": True', source)
+		self.assertIn('"existing": False', source)
 		self.assertNotIn("frappe.db.commit", source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn('frappe.new_doc("Payment Entry")', source)

@@ -23,7 +23,7 @@ from retailedge.operating_context import get_operating_context, get_operational_
 ACTION_KEY = "record-purchase"
 PURCHASE_INVOICE_DOCTYPE = "Purchase Invoice"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
@@ -290,6 +290,7 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"modified": str(getattr(doc, "modified", "") or ""),
 		"docstatus": doc.docstatus,
 		"supplier": doc.supplier,
 		"company": doc.company,
@@ -307,7 +308,7 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 	if not isinstance(items, list) or not items:
 		frappe.throw(_("Add at least one purchase item."))
 	if len(items) > MAX_ITEMS:
-		frappe.throw(_("A Simple Purchase Invoice can contain at most {0} items.").format(MAX_ITEMS))
+		frappe.throw(_("A Purchase Invoice can contain at most {0} items in this guided entry flow.").format(MAX_ITEMS))
 
 	result: list[dict[str, Any]] = []
 	for index, item in enumerate(items, start=1):

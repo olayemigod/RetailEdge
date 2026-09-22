@@ -173,7 +173,7 @@ const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_previe
 const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 
 function runtimeComponents() {
-	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 

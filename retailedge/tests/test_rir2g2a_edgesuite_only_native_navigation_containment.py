@@ -157,6 +157,14 @@ def test_business_hub_filters_and_blocks_native_navigation_without_capability():
 	assert "openTarget(item)" in source
 
 
+
+def test_business_hub_native_fallback_defaults_closed_until_server_grants_access():
+	source = _read(HUB)
+	assert 'accessContext: { mode: "unknown", restricted_to_edgesuite: false, can_use_native_desk: false }' in source
+	assert "Boolean(this.accessContext.can_use_native_desk)" in source
+	assert "this.featureFlags.native_document_fallback_enabled !== false" in source
+
+
 def test_all_business_hub_open_native_handlers_fail_closed():
 	source = _read(HUB)
 	methods = (

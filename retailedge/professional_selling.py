@@ -577,6 +577,12 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			and status not in {"Cancelled", "Return"}
 		):
 			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
+		if (
+			_permission("Sales Invoice", "create")
+			and not cint(row.get("is_return"))
+			and status not in {"Cancelled", "Return"}
+		):
+			actions.append({"value": "create-return-credit-note", "label": _("Return / Credit Note")})
 		if _permission("Payment Entry", "create") and flt(row.get("outstanding_amount")) > 0.005:
 			actions.append({"value": "make-payment", "label": _("Make Payment")})
 
@@ -735,9 +741,15 @@ def get_professional_selling_record_actions(document: str, name: str) -> dict[st
 			_("The selected document is not available in your current Company/Branch context."),
 			frappe.PermissionError,
 		)
+	actions = list(row.get("actions") or [])
+	if document == "delivery-note":
+		delivery = frappe.get_doc("Delivery Note", name)
+		if any(str(row.get("against_sales_invoice") or "").strip() for row in delivery.get("items") or []):
+			actions = [action for action in actions if action.get("value") != "create-sales-invoice"]
+
 	return {
 		"document": document,
 		"doctype": result.get("doctype"),
 		"name": name,
-		"actions": list(row.get("actions") or []),
+		"actions": actions,
 	}

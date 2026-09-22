@@ -144,7 +144,7 @@ export default {
 	},
 	props: {
 		open: { type: Boolean, default: false },
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {

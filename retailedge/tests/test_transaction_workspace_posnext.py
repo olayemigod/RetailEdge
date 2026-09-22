@@ -115,7 +115,7 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 			"SimplePurchaseInvoiceDialog",
 			"SimpleStockTransferDialog",
 			"runTransactionAction(action)",
-			'GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry"])',
+			'GUIDED_DOCTYPES = new Set(["Sales Invoice", "Purchase Invoice", "Stock Entry", "Stock Reconciliation"])',
 		):
 			self.assertIn(contract, component)
 

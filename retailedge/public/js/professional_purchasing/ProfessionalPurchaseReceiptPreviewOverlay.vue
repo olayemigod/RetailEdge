@@ -18,7 +18,23 @@
 				<div v-if="preview.workflow_started"><span>Workflow State</span><strong>{{ preview.workflow_readiness?.current_state || '—' }}</strong></div>
 			</div>
 
-			<div v-if="preview.blockers?.length" class="receipt-preview__warning" role="alert">
+			<div v-if="submitted" class="receipt-preview__ready">
+				<strong>Purchase Receipt {{ submitted.name }} submitted.</strong>
+				<span>ERPNext has posted the receipt stock movement. Continue to supplier billing when applicable.</span>
+				<div v-if="submitted.next_actions?.length" class="receipt-preview__next-actions">
+					<button
+						v-for="action in submitted.next_actions"
+						:key="action.value"
+						type="button"
+						class="edge-button edge-button--primary"
+						:disabled="posting"
+						@click="runNextAction(action.value)"
+					>
+						{{ action.label }}
+					</button>
+				</div>
+			</div>
+			<div v-else-if="preview.blockers?.length" class="receipt-preview__warning" role="alert">
 				<strong>Advanced handling required</strong>
 				<p>This receipt contains stock controls that this workflow will not simplify or bypass.</p>
 				<ul><li v-for="(blocker, index) in preview.blockers" :key="`${blocker.key}-${blocker.item_code || index}`">{{ blocker.item_code ? `${blocker.item_code}: ` : '' }}{{ blocker.label }}</li></ul>
@@ -32,7 +48,7 @@
 				<span v-else>You can review this receipt, but your role cannot submit Purchase Receipts.</span>
 			</div>
 
-			<div v-if="preview.workflow_started && !preview.blockers?.length" class="receipt-preview__workflow">
+			<div v-if="!submitted && preview.workflow_started && !preview.blockers?.length" class="receipt-preview__workflow">
 				<strong>{{ preview.workflow_readiness?.workflow || 'Purchase Receipt Workflow' }}</strong>
 				<span>{{ preview.workflow_readiness?.message || 'Choose an available workflow action.' }}</span>
 				<div class="receipt-preview__workflow-actions">
@@ -68,7 +84,7 @@
 
 		<template #footer>
 			<div class="receipt-preview__footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="posting" @click="openAdvanced">Advanced: Prepare in ERPNext</button>
+				<button v-if="nativeFallbackEnabled && !submitted" type="button" class="edge-button" :disabled="posting" @click="openAdvanced">Advanced: Prepare in ERPNext</button>
 				<div class="receipt-preview__footer-actions">
 					<button type="button" class="edge-button" :disabled="posting" @click="close">Close</button>
 					<button v-if="canStartWorkflow" type="button" class="edge-button edge-button--primary" :disabled="posting" @click="startWorkflow">{{ posting ? 'Starting…' : 'Start Receipt Approval' }}</button>
@@ -86,6 +102,8 @@ const START_WORKFLOW_METHOD = "retailedge.professional_purchase_receipt.start_st
 const WORKFLOW_ACTION_METHOD = "retailedge.professional_purchase_receipt.apply_standard_purchase_receipt_workflow_action";
 const OPEN_EVENT = "retailedge-open-professional-purchase-receipt-preview";
 const LANDED_COST_HANDOFF_EVENT = "retailedge-professional-purchasing-landed-cost-handoff";
+const PREPARE_RECEIPT_INVOICE_METHOD = "retailedge.professional_purchasing.prepare_purchase_invoice_from_purchase_receipt";
+const PURCHASE_INVOICE_READY_EVENT = "retailedge-professional-purchasing-purchase-invoice-ready";
 const ACCESS_MODE = "edgesuite_only";
 const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.EdgeSuiteUI.components || window.EdgeSuiteUI : {};
 
@@ -101,16 +119,17 @@ export default {
 		EdgeLoadingState: runtime.EdgeLoadingState,
 		EdgeErrorState: runtime.EdgeErrorState,
 	},
-	data() { return { open: false, purchaseOrder: "", loading: false, posting: false, error: "", preview: null }; },
+	data() { return { open: false, purchaseOrder: "", loading: false, posting: false, error: "", preview: null, submitted: null }; },
 	computed: {
 		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE; },
-		canSubmitStandard() { return Boolean(this.preview?.standard_receipt_eligible && this.preview?.can_submit && !this.preview?.workflow_controlled); },
-		canStartWorkflow() { return Boolean(this.preview?.workflow_controlled && !this.preview?.workflow_started && this.preview?.standard_receipt_eligible && this.preview?.can_start_workflow); },
+		canSubmitStandard() { return Boolean(!this.submitted && this.preview?.standard_receipt_eligible && this.preview?.can_submit && !this.preview?.workflow_controlled); },
+		canStartWorkflow() { return Boolean(!this.submitted && this.preview?.workflow_controlled && !this.preview?.workflow_started && this.preview?.standard_receipt_eligible && this.preview?.can_start_workflow); },
 	},
 	created() {
 		this._open = (event) => {
 			this.purchaseOrder = String(event?.detail?.purchase_order || "").trim();
 			if (!this.purchaseOrder) return;
+			this.submitted = null;
 			this.open = true;
 			this.loadPreview();
 		};
@@ -120,12 +139,12 @@ export default {
 	methods: {
 		async loadPreview() {
 			if (!this.purchaseOrder || this.loading || this.posting) return;
-			this.loading = true; this.error = ""; this.preview = null;
+			this.loading = true; this.error = ""; this.preview = null; this.submitted = null;
 			try { this.preview = await callMethod(PREVIEW_METHOD, { purchase_order: this.purchaseOrder }); }
 			catch (error) { this.error = errorMessage(error, "Unable to preview this Purchase Receipt."); }
 			finally { this.loading = false; }
 		},
-		close() { if (!this.loading && !this.posting) { this.open = false; this.preview = null; this.error = ""; } },
+		close() { if (!this.loading && !this.posting) { this.open = false; this.preview = null; this.submitted = null; this.error = ""; } },
 		openAdvanced() {
 			if (!this.nativeFallbackEnabled || !this.purchaseOrder || this.posting) return;
 			this.close();
@@ -160,8 +179,7 @@ export default {
 				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
 				if (Number(result.docstatus || 0) === 1) {
 					const receiptName = result.name || this.preview.purchase_receipt || "";
-					this.posting = false;
-					this.close();
+					this.submitted = { ...result, name: receiptName };
 					this.dispatchLandedCostHandoff(result);
 					frappe.show_alert({ message: __(`Purchase Receipt ${receiptName} submitted. Stock has been received.`), indicator: "green" }, 7);
 					return;
@@ -188,8 +206,7 @@ export default {
 					purchase_order: this.purchaseOrder,
 					expected_purchase_order_modified: this.preview?.purchase_order_modified || "",
 				}, "POST");
-				this.posting = false;
-				this.close();
+				this.submitted = result;
 				this.dispatchLandedCostHandoff(result);
 				frappe.show_alert({ message: __(`Purchase Receipt ${result.name || ''} submitted. Stock has been received.`), indicator: "green" }, 7);
 				window.dispatchEvent(new CustomEvent("retailedge-professional-purchasing-page-show"));
@@ -202,6 +219,22 @@ export default {
 			const handoff = result?.landed_cost_handoff || {};
 			if (!handoff.available || handoff.source_type !== "purchase_receipt" || !handoff.source_name) return;
 			window.dispatchEvent(new CustomEvent(LANDED_COST_HANDOFF_EVENT, { detail: handoff }));
+		},
+		async runNextAction(action) {
+			if (!this.submitted?.name || !action || this.posting) return;
+			if (action !== "create-purchase-invoice") return;
+			this.posting = true;
+			this.error = "";
+			try {
+				const result = await callMethod(PREPARE_RECEIPT_INVOICE_METHOD, { purchase_receipt: this.submitted.name }, "POST");
+				if (!result?.name) throw new Error("Purchase Invoice draft was not returned.");
+				this.posting = false;
+				this.close();
+				window.dispatchEvent(new CustomEvent(PURCHASE_INVOICE_READY_EVENT, { detail: result }));
+			} catch (error) {
+				this.error = errorMessage(error, "Unable to prepare a Purchase Invoice from this receipt.");
+				this.posting = false;
+			}
 		},
 		controlLabel(row) {
 			const flags = [];
@@ -221,6 +254,7 @@ export default {
 .receipt-preview__context span, .receipt-preview__table small { display: block; opacity: .72; }
 .receipt-preview__warning, .receipt-preview__ready, .receipt-preview__workflow { padding: .9rem; border: 1px solid var(--border-color, #d1d8dd); border-radius: .5rem; }
 .receipt-preview__workflow { display: grid; gap: .5rem; }
+.receipt-preview__next-actions { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.35rem; }
 .receipt-preview__workflow-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .receipt-preview__table td { vertical-align: top; }
 .receipt-preview__footer { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: .75rem; }

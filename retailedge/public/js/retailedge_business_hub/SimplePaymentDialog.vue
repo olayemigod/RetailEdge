@@ -109,6 +109,7 @@
 				</div>
 			</div>
 
+
 			<p class="guided-payment-hint">
 				Submitting uses the native ERPNext Payment Entry submit flow. This workflow does not directly change
 				the source Sales Invoice/Sales Order, GL Entry, Payment Ledger Entry, or customer balance.
@@ -178,16 +179,27 @@
 					<strong>{{ supplierReview.paid_to }}</strong>
 				</div>
 				<div>
-					<span>Purchase Invoice</span>
-					<strong>{{ supplierReview.purchase_invoice || 'Not set' }}</strong>
+					<span>{{ supplierReview.reference_count > 1 ? 'Purchase Invoices' : 'Purchase Invoice' }}</span>
+					<strong>{{ supplierReview.reference_count > 1 ? supplierReview.reference_count : (supplierReview.purchase_invoice || 'Not set') }}</strong>
 				</div>
 				<div>
 					<span>Allocated</span>
 					<strong>{{ formatMoney(supplierReview.allocated_amount, supplierReview.currency) }}</strong>
 				</div>
-				<div>
+				<div v-if="supplierReview.reference_count <= 1">
 					<span>Invoice Outstanding</span>
 					<strong>{{ formatMoney(supplierReview.invoice_outstanding_amount, supplierReview.currency) }}</strong>
+				</div>
+			</div>
+
+			<div v-if="supplierReview.references?.length > 1" class="supplier-settlement-references">
+				<div class="supplier-settlement-reference supplier-settlement-reference--head">
+					<span>Purchase Invoice</span><span>Allocated</span><span>Current Outstanding</span>
+				</div>
+				<div v-for="row in supplierReview.references" :key="row.purchase_invoice" class="supplier-settlement-reference">
+					<strong>{{ row.purchase_invoice }}</strong>
+					<span>{{ formatMoney(row.allocated_amount, supplierReview.currency) }}</span>
+					<span>{{ formatMoney(row.invoice_outstanding_amount, supplierReview.currency) }}</span>
 				</div>
 			</div>
 
@@ -317,8 +329,11 @@
 				<template v-if="isCustomerPayment">
 					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Standard Receive Customer supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
 				</template>
-				<template v-if="isSupplierPayment">
-					Only submitted Purchase Invoices with a positive outstanding balance are offered. Standard Pay Supplier supports one Purchase Invoice per payment; complex allocations stay in Advanced ERPNext.
+				<template v-if="isSupplierPayment && !allowMultiReferenceSupplierPayment">
+					Only submitted Purchase Invoices with a positive outstanding balance are offered. Quick Pay Supplier supports one Purchase Invoice per payment. Use Supplier Payables for multi-invoice settlement.
+				</template>
+				<template v-if="isSupplierPayment && allowMultiReferenceSupplierPayment">
+					Managed Supplier Settlement supports up to {{ formContext.limits?.max_references || 20 }} submitted Purchase Invoices for one supplier and Branch. Each outstanding amount is revalidated before the Payment Entry draft is created.
 				</template>
 			</p>
 
@@ -405,9 +420,10 @@
 				</div>
 			</div>
 			<div v-else class="guided-payment-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Advanced ERPNext
-				</button>
+				<div class="guided-payment-footer-actions">
+					<button v-if="isCustomerPayment || isSupplierPayment" type="button" class="edge-button" :disabled="saving" @click="openManagedPaymentPage">Open {{ managedPageLabel }}</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced ERPNext</button>
+				</div>
 				<div class="guided-payment-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
 						Cancel
@@ -501,12 +517,13 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
 	props: {
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 		open: { type: Boolean, default: false },
 		intent: { type: String, default: "" },
 		initialContext: { type: Object, default: () => ({}) },
+		allowMultiReferenceSupplierPayment: { type: Boolean, default: false },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved", "draft-created", "open-native"],
 	data() {
 		return {
 			loading: false,
@@ -521,6 +538,7 @@ export default {
 			supplierReview: null,
 			formContext: {},
 			modeDetails: {},
+			initialValuesSnapshot: "",
 			values: emptyValues(),
 			referenceTableField: {
 				label: "Reference Allocation",
@@ -573,6 +591,12 @@ export default {
 		unallocatedAmount() {
 			return (Number(this.values.amount) || 0) - this.allocatedTotal;
 		},
+		hasUnsavedChanges() {
+			return Boolean(!this.customerReview && !this.supplierReview && this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
+		},
+		managedPageLabel() {
+			return this.isSupplierPayment ? "Supplier Payables" : "Payment Management";
+		},
 	},
 	watch: {
 		open(next) {
@@ -613,6 +637,7 @@ export default {
 					})),
 				};
 				await this.applyInitialContext();
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Payment Entry.");
 			} finally {
@@ -625,38 +650,70 @@ export default {
 			const branch = cleanPrefill(initial.branch);
 			const party = cleanPrefill(initial.party);
 			const referenceName = cleanPrefill(initial.reference_name);
+			const initialReferences = Array.isArray(initial.references)
+				? initial.references.map((row) => cleanPrefill(typeof row === "string" ? row : row?.reference_name)).filter(Boolean)
+				: [];
+			const referenceNames = [...new Set(referenceName ? [referenceName, ...initialReferences] : initialReferences)]
+				.slice(0, Number(this.formContext.limits?.max_references || 20));
 
 			if (company) this.values.company = company;
 			if (branch) this.values.branch = branch;
 			if (party) this.values.party = party;
-			if (!referenceName || !party) return;
+			if (!referenceNames.length || !party) return;
+			if (!this.allowMultiReferenceSupplierPayment && referenceNames.length > 1) {
+				throw new Error("Quick Pay Supplier supports one Purchase Invoice. Continue from Supplier Payables for multi-invoice settlement.");
+			}
 
 			this.referenceLoading = true;
 			try {
-				const details = await callMethod(REFERENCE_METHOD, {
-					intent: this.intent,
-					company: this.values.company,
-					party: this.values.party,
-					reference_name: referenceName,
-					branch: this.values.branch,
-				});
-				const outstandingAmount = Number(details.outstanding_amount || 0);
-				if (!(outstandingAmount > 0)) {
-					throw new Error("The selected reference no longer has an amount available for payment.");
+				const resolved = [];
+				for (const name of referenceNames) {
+					const details = await callMethod(REFERENCE_METHOD, {
+						intent: this.intent,
+						company: this.values.company,
+						party: this.values.party,
+						reference_name: name,
+						branch: this.values.branch,
+					});
+					const outstandingAmount = Number(details.outstanding_amount || 0);
+					if (!(outstandingAmount > 0)) {
+						throw new Error(`${name} no longer has an amount available for payment.`);
+					}
+					resolved.push({
+						reference_name: name,
+						outstanding_amount: outstandingAmount,
+						allocated_amount: outstandingAmount,
+					});
 				}
-				this.values.references = [{
-					reference_name: referenceName,
-					outstanding_amount: outstandingAmount,
-					allocated_amount: outstandingAmount,
-				}];
-				this.values.amount = outstandingAmount;
+				this.values.references = resolved;
+				this.values.amount = resolved.reduce((total, row) => total + Number(row.allocated_amount || 0), 0);
 			} finally {
 				this.referenceLoading = false;
 			}
 		},
 		requestClose() {
 			if (this.saving || this.submitting) return;
+			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
+			frappe.confirm(
+				this.isSupplierPayment && this.allowMultiReferenceSupplierPayment
+					? "Discard the unsaved supplier settlement changes?"
+					: "Discard the unsaved Quick Payment changes?",
+				() => this.$emit("close"),
+			);
+		},
+		openManagedPaymentPage() {
+			if (this.saving || this.submitting) return;
+			const target = this.isSupplierPayment ? "supplier-payables" : "payment-management";
+			const filters = { company: this.values.company || "", branch: this.values.branch || "" };
+			if (this.isSupplierPayment) filters.supplier = this.values.party || "";
+			else filters.customer = this.values.party || "";
+			const firstReference = (this.values.references || []).find((row) => row?.reference_name)?.reference_name || "";
+			if (!this.isSupplierPayment && firstReference) filters.sales_invoice = firstReference;
+			const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
+			window.__retailedgeBusinessHubRouteHandoff = { target, filters: cleanFilters, createdAt: Date.now() };
+			frappe.route_options = { ...cleanFilters, retailedge_business_hub_handoff: 1, retailedge_business_hub_target: target };
 			this.$emit("close");
+			frappe.set_route(target);
 		},
 		openFullForm() {
 			if (this.saving || this.submitting || !this.nativeFallbackEnabled) return;
@@ -773,13 +830,21 @@ export default {
 		},
 		validateStandardSupplierDraft() {
 			const references = (this.values.references || []).filter((row) => row?.reference_name);
-			if (references.length !== 1) {
-				throw new Error("Standard Pay Supplier supports one Purchase Invoice per payment. Use Advanced ERPNext for multi-invoice payments.");
+			const maxReferences = Number(this.formContext.limits?.max_references || 20);
+			if (!this.allowMultiReferenceSupplierPayment && references.length !== 1) {
+				throw new Error("Quick Pay Supplier supports one Purchase Invoice per payment. Use Supplier Payables for multi-invoice settlement.");
+			}
+			if (this.allowMultiReferenceSupplierPayment && (references.length < 1 || references.length > maxReferences)) {
+				throw new Error(`Supplier settlement must contain between 1 and ${maxReferences} Purchase Invoices.`);
 			}
 			const amount = Number(this.values.amount) || 0;
-			const allocated = Number(references[0].allocated_amount) || 0;
+			const allocated = references.reduce((total, row) => total + (Number(row.allocated_amount) || 0), 0);
 			if (!(amount > 0) || Math.abs(amount - allocated) > 0.005) {
-				throw new Error("Standard Pay Supplier must allocate the full payment amount to the selected Purchase Invoice.");
+				throw new Error(
+					this.allowMultiReferenceSupplierPayment
+						? "Supplier settlement must allocate the full Payment Entry amount across the selected Purchase Invoices."
+						: "Quick Pay Supplier must allocate the full payment amount to the selected Purchase Invoice."
+				);
 			}
 		},
 		async loadCustomerReview(paymentEntry) {
@@ -833,6 +898,7 @@ export default {
 					branch: review.branch || null,
 				});
 				if (Number(result.docstatus || 0) !== 0) {
+					this.$emit("saved", result);
 					this.$emit("close");
 					return;
 				}
@@ -860,13 +926,14 @@ export default {
 
 			this.submitting = true;
 			try {
-				await callMethod(CUSTOMER_SUBMIT_METHOD, {
+				const result = await callMethod(CUSTOMER_SUBMIT_METHOD, {
 					payment_entry: this.customerReview.payment_entry,
 					expected_payment_entry_modified: this.customerReview.payment_entry_modified,
 					company: this.customerReview.company,
 					customer: this.customerReview.customer,
 					branch: this.customerReview.branch,
 				});
+				this.$emit("saved", result);
 				this.$emit("close");
 			} catch (error) {
 				this.submitError = errorMessage(error, "Unable to submit the customer payment.");
@@ -889,13 +956,14 @@ export default {
 
 			this.submitting = true;
 			try {
-				await callMethod(SUPPLIER_SUBMIT_METHOD, {
+				const result = await callMethod(SUPPLIER_SUBMIT_METHOD, {
 					payment_entry: this.supplierReview.payment_entry,
 					expected_payment_entry_modified: this.supplierReview.payment_entry_modified,
 					company: this.supplierReview.company,
 					supplier: this.supplierReview.supplier,
 					branch: this.supplierReview.branch,
 				});
+				this.$emit("saved", result);
 				this.$emit("close");
 			} catch (error) {
 				this.submitError = errorMessage(error, "Unable to submit the supplier payment.");
@@ -918,6 +986,7 @@ export default {
 					intent: this.intent,
 					values: this.values,
 				});
+				this.$emit("draft-created", result);
 				if (this.isCustomerPayment) {
 					await this.loadCustomerReview(result.name);
 					return;
@@ -1051,6 +1120,9 @@ export default {
 	width: 100%;
 	justify-content: space-between;
 }
+.supplier-settlement-references { display:grid; gap:.35rem; }
+.supplier-settlement-reference { display:grid; grid-template-columns:minmax(0,1fr) 10rem 10rem; gap:.75rem; align-items:center; padding:.5rem .65rem; border-bottom:1px solid var(--edge-border,#e5e7eb); }
+.supplier-settlement-reference--head { color:var(--edge-text-muted,#667085); font-size:.75rem; font-weight:700; }
 @media (max-width: 720px) {
 	.guided-payment-grid,
 	.guided-payment-summary,

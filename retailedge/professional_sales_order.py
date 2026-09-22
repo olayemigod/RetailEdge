@@ -11,6 +11,7 @@ from erpnext.selling.doctype.quotation.quotation import make_sales_order as erpn
 from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_quotation import _normalise_items, _validate_shipping_rule
+from retailedge.quotation_invoice_conversion import get_quotation_conversion
 from retailedge.professional_selling import (
 	_assert_read,
 	_coerce_values,
@@ -28,6 +29,52 @@ def _set_branch_if_supported(doc, branch: str) -> None:
 		if doc.meta.has_field(fieldname) and not doc.get(fieldname):
 			doc.set(fieldname, branch)
 			return
+
+
+def _lock_quotation(name: str) -> None:
+	rows = frappe.db.sql(
+		"SELECT name FROM `tabQuotation` WHERE name = %s FOR UPDATE",
+		(name,),
+	)
+	if not rows:
+		frappe.throw(_("Quotation {0} no longer exists.").format(name))
+
+
+def _existing_draft_sales_order_for_quotation(quotation: str):
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT so.name
+		FROM `tabSales Order` so
+		INNER JOIN `tabSales Order Item` item ON item.parent = so.name
+		WHERE so.docstatus = 0 AND item.prevdoc_docname = %s
+		ORDER BY so.creation ASC
+		LIMIT 3
+		""",
+		(quotation,),
+		as_dict=True,
+	)
+	if len(rows) > 1:
+		frappe.throw(
+			_("Multiple draft Sales Orders already reference Quotation {0}. Review them before creating another order.").format(quotation)
+		)
+	if not rows:
+		return None
+	doc = frappe.get_doc("Sales Order", rows[0].name)
+	if not frappe.has_permission("Sales Order", "read", doc=doc):
+		frappe.throw(
+			_("A draft Sales Order already exists for this Quotation, but you do not have permission to open it."),
+			frappe.PermissionError,
+		)
+	linked_quotations = {
+		str(row.get("prevdoc_docname") or "").strip()
+		for row in list(doc.get("items") or [])
+		if str(row.get("prevdoc_docname") or "").strip()
+	}
+	if linked_quotations != {quotation}:
+		frappe.throw(
+			_("The existing draft Sales Order combines multiple Quotations. Use Advanced ERPNext review.")
+		)
+	return doc
 
 
 def _assert_mapped_sales_order_context(doc) -> tuple[str, str]:
@@ -178,6 +225,22 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 
 	# ERPNext owns source-to-target field/item mapping, ordered-quantity checks and
 	# expired-quotation policy. The submitted source is never changed here.
+	_lock_quotation(source.name)
+	existing = _existing_draft_sales_order_for_quotation(source.name)
+	if existing:
+		_company, existing_branch = _assert_mapped_sales_order_context(existing)
+		return {
+			**_sales_order_response(existing, branch=existing_branch, source_quotation=source.name),
+			"existing": True,
+		}
+	conversion = get_quotation_conversion(source.name)
+	invoice_name = str((conversion or {}).get("sales_invoice") or "").strip()
+	if invoice_name and frappe.db.exists("Sales Invoice", invoice_name):
+		frappe.throw(
+			_(
+				"Quotation {0} already owns Sales Invoice {1}. Continue that invoice lineage instead of creating a parallel Sales Order."
+			).format(source.name, invoice_name)
+		)
 	target = erpnext_make_sales_order(source.name)
 	if not target or target.doctype != "Sales Order":
 		frappe.throw(_("ERPNext could not prepare a Sales Order from this Quotation."))
@@ -203,7 +266,10 @@ def create_sales_order_from_quotation(quotation: str) -> dict[str, Any]:
 
 	target.insert()
 	_apply_shipping_rule_to_draft(target)
-	return _sales_order_response(target, branch=branch, source_quotation=source.name)
+	return {
+		**_sales_order_response(target, branch=branch, source_quotation=source.name),
+		"existing": False,
+	}
 
 
 def _sales_order_response(doc, *, branch: str = "", source_quotation: str = "") -> dict[str, Any]:

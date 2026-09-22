@@ -7,7 +7,7 @@
 		@close="requestClose"
 	>
 		<div class="invoice-mode-switch" role="group" aria-label="Sales Invoice creation mode">
-			<button v-for="option in modes" :key="option.key" type="button" class="edge-button" :class="{ 'edge-button--primary': mode === option.key }" :disabled="saving" @click="setMode(option.key)">{{ option.label }}</button>
+			<button v-for="option in visibleModes" :key="option.key" type="button" class="edge-button" :class="{ 'edge-button--primary': mode === option.key }" :disabled="saving" @click="setMode(option.key)">{{ option.label }}</button>
 		</div>
 
 		<div v-if="saveError" class="selling-form-error" role="alert">{{ saveError }}</div>
@@ -137,7 +137,7 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Open Full Form</button>
+				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Advanced: Open in ERPNext</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode !== 'new' && !sourceDocument)" @click="saveDraft">{{ saving ? "Saving..." : saveLabel }}</button>
@@ -181,7 +181,11 @@ function initialValues(context = {}) {
 export default {
 	name: "ProfessionalSalesInvoiceDialog",
 	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, CustomerCreditSummary },
-	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) } },
+	props: {
+		open: { type: Boolean, default: false },
+		context: { type: Object, default: () => ({}) },
+		canUseNativeDesk: { type: Boolean, default: false },
+	},
 	emits: ["close", "saved", "open-native"],
 	data() {
 		return {
@@ -211,6 +215,9 @@ export default {
 		};
 	},
 	computed: {
+		visibleModes() {
+			return this.modes;
+		},
 		priceListLabel() { return this.context.pricing?.price_list || "ERPNext default"; },
 		loyaltyRedemptionLabel() {
 			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
@@ -228,7 +235,7 @@ export default {
 				: `ERPNext maps the ${this.sourceLabel.replace("Submitted ", "")} into a new Sales Invoice draft using remaining billable quantities.`;
 		},
 		sourceHint() {
-			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. Review the prepared draft in the standard Sales Invoice form; no refund or Payment Entry is created automatically.";
+			if (this.mode === "return") return "ERPNext owns the return quantities, stock rules, taxes and accounting. RetailEdge reviews the canonical return draft and follows any active Frappe Workflow before submission; no refund or Payment Entry is created automatically.";
 			return "The source remains submitted and unchanged. This workflow creates a new ERPNext Sales Invoice draft only.";
 		},
 		saveLabel() {

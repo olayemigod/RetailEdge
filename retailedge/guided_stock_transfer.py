@@ -23,7 +23,7 @@ ACTION_KEY = "transfer-stock"
 STOCK_ENTRY_DOCTYPE = "Stock Entry"
 MATERIAL_TRANSFER = "Material Transfer"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
@@ -263,6 +263,7 @@ def create_simple_stock_transfer_draft(values: dict | str | None = None) -> dict
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"modified": str(getattr(doc, "modified", "") or ""),
 		"docstatus": doc.docstatus,
 		"purpose": doc.purpose,
 		"company": doc.company,
@@ -278,7 +279,7 @@ def _normalise_items(items: Any) -> list[dict[str, Any]]:
 	if not isinstance(items, list) or not items:
 		frappe.throw(_("Add at least one stock item."))
 	if len(items) > MAX_ITEMS:
-		frappe.throw(_("A Simple Stock Transfer can contain at most {0} items.").format(MAX_ITEMS))
+		frappe.throw(_("A Stock Transfer can contain at most {0} items in this guided entry flow.").format(MAX_ITEMS))
 
 	result: list[dict[str, Any]] = []
 	for index, item in enumerate(items, start=1):

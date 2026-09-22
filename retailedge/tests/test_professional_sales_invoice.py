@@ -33,6 +33,33 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_sales_order_and_delivery_invoice_mapping_reuses_exact_source_draft(self):
+		source = self.read("professional_sales_invoice.py")
+		for contract in (
+			"def _lock_native_invoice_source",
+			"FOR UPDATE",
+			"def _existing_draft_invoice_for_source",
+			"Multiple draft Sales Invoices already reference",
+			'return "sales_order"',
+			'return "delivery_note"',
+			"linked != {source_name}",
+			'"existing": True',
+			'"existing": False',
+		):
+			self.assertIn(contract, source)
+
+	def test_cross_source_invoice_drafts_fail_closed_before_mapping(self):
+		source = self.read("professional_sales_invoice.py")
+		for contract in (
+			"_draft_sales_order_conflicts_for_quotation",
+			"draft Sales Order(s)",
+			"_direct_sales_order_draft_invoice_conflicts",
+			"COALESCE(item.delivery_note, '') = ''",
+			"direct Sales Order draft invoice(s)",
+			"owned by Delivery Note billing",
+		):
+			self.assertIn(contract, source)
+
 	def test_quotation_can_invoice_directly_without_hidden_order_or_repricing(self):
 		source = self.read("professional_sales_invoice.py")
 		for contract in (

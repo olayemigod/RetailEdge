@@ -99,8 +99,8 @@
 
 				<div v-if="completedResult && showNextActions" class="invoice-next-actions">
 					<div>
-						<strong>Sales Invoice submitted</strong>
-						<p>Choose the next permitted workflow. The invoice stays open until you choose an action or close it.</p>
+						<strong>{{ completedResult.is_return ? "Return / Credit Note submitted" : "Sales Invoice submitted" }}</strong>
+						<p>{{ completedResult.is_return ? "ERPNext has posted the governed return. Use output actions or close this review." : "Choose the next permitted workflow. The invoice stays open until you choose an action or close it." }}</p>
 					</div>
 					<div class="invoice-next-buttons">
 						<button
@@ -134,17 +134,17 @@
 							v-if="preview?.can_submit"
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy"
+							:disabled="busy || draftDirty"
 							@click="submitDocument"
 						>
-							{{ busy ? "Submitting..." : "Submit Sales Invoice" }}
+							{{ busy ? "Submitting..." : (preview?.is_return ? "Submit Return / Credit Note" : "Submit Sales Invoice") }}
 						</button>
 						<button
 							v-for="action in workflowActions"
 							:key="action.action"
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy || !preview?.workflow_eligible"
+							:disabled="busy || draftDirty || !preview?.workflow_eligible"
 							@click="applyWorkflow(action.action)"
 						>
 							{{ action.action }}
@@ -167,7 +167,7 @@ const WORKFLOW_METHOD = "retailedge.standard_sales_invoice_completion.apply_stan
 const SEARCH_METHOD = "retailedge.professional_selling.search_professional_selling_options";
 
 function runtimeComponents() {
-	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI || window.EdgeUI : null;
+	const edgeUI = typeof window !== "undefined" ? window.EdgeSuiteUI : null;
 	return edgeUI?.components || edgeUI || {};
 }
 
@@ -192,6 +192,7 @@ export default {
 	props: {
 		open: { type: Boolean, default: false },
 		document: { type: Object, default: null },
+		sourceMode: { type: String, default: "standard" },
 		canUseNativeDesk: { type: Boolean, default: false },
 		showNextActions: { type: Boolean, default: false },
 	},
@@ -274,7 +275,7 @@ export default {
 			this.error = "";
 			this.actionError = "";
 			try {
-				this.applyPreview(await callMethod(PREVIEW_METHOD, { name: this.document.name }));
+				this.applyPreview(await callMethod(PREVIEW_METHOD, { name: this.document.name, source_mode: this.sourceMode || "standard" }));
 				if (Number(this.preview?.docstatus || 0) === 0) this.completedResult = null;
 			} catch (error) {
 				this.applyPreview(null);
@@ -314,7 +315,7 @@ export default {
 						po_no: this.draftPoNo,
 						remarks: this.draftRemarks,
 						items: [
-							...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty), rate: Number(row.rate), warehouse: row.warehouse || "" })),
+							...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty), rate: row.rate === "" || row.rate === null || row.rate === undefined ? "" : Number(row.rate), warehouse: row.warehouse || "" })),
 							...this.newItems.filter((row) => row?.item_code).map((row) => ({ ...row })),
 						],
 					},
@@ -334,16 +335,17 @@ export default {
 		},
 
 		async submitDocument() {
-			if (!this.preview?.can_submit || this.busy) return;
+			if (!this.preview?.can_submit || this.busy || this.draftDirty) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
 				const result = await callMethod(SUBMIT_METHOD, {
 					name: this.preview.name,
 					expected_modified: this.preview.modified,
+					source_mode: this.sourceMode || "standard",
 				}, "POST");
 				this.$emit("changed", result);
-				const submitted = await callMethod(PREVIEW_METHOD, { name: result.name });
+				const submitted = await callMethod(PREVIEW_METHOD, { name: result.name, source_mode: this.sourceMode || "standard" });
 				this.completedResult = await this.decorateCompletedResult(submitted);
 				this.$emit("completed", this.completedResult);
 			} catch (error) {
@@ -354,7 +356,7 @@ export default {
 			}
 		},
 		async applyWorkflow(action) {
-			if (!action || !this.preview?.workflow_eligible || this.busy) return;
+			if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
@@ -363,10 +365,11 @@ export default {
 					action,
 					expected_modified: this.preview.modified,
 					expected_workflow_state: this.preview.workflow_readiness?.current_state || "",
+					source_mode: this.sourceMode || "standard",
 				}, "POST");
 				this.$emit("changed", result);
 				if (Number(result?.docstatus || 0) === 1) {
-					const submitted = await callMethod(PREVIEW_METHOD, { name: result.name || this.preview.name });
+					const submitted = await callMethod(PREVIEW_METHOD, { name: result.name || this.preview.name, source_mode: this.sourceMode || "standard" });
 					this.completedResult = await this.decorateCompletedResult(submitted);
 					this.$emit("completed", this.completedResult);
 					return;
@@ -448,7 +451,12 @@ export default {
 		},
 
 		requestClose() {
-			if (!this.busy) this.$emit("close");
+			if (this.busy) return;
+			if (this.preview?.can_edit && !this.completedResult && this.draftDirty) {
+				frappe.confirm(__("Discard unsaved Sales Invoice draft changes?"), () => this.$emit("close"));
+				return;
+			}
+			this.$emit("close");
 		},
 	},
 };

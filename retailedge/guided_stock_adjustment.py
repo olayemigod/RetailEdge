@@ -24,7 +24,7 @@ ACTION_KEY = "adjust-stock"
 STOCK_RECONCILIATION_DOCTYPE = "Stock Reconciliation"
 STOCK_RECONCILIATION_PURPOSE = "Stock Reconciliation"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
@@ -206,6 +206,7 @@ def create_simple_stock_adjustment_draft(values: dict | str | None = None) -> di
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"modified": str(getattr(doc, "modified", "") or ""),
 		"docstatus": doc.docstatus,
 		"purpose": doc.purpose,
 		"company": doc.company,
