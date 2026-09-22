@@ -253,7 +253,7 @@ export default {
 				this.rows = this.reportType === "supplier_payables"
 					? providerRows.map((row) => ({ ...row, payment_action: "Pay Supplier" }))
 					: providerRows;
-				this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || this.payablesAgeingDate;
+				this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || result.metadata?.payables_ageing_date || this.payablesAgeingDate;
 				const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); if (this.currentPage > totalPages) this.currentPage = totalPages;
 				this.pagination = { page: this.currentPage, page_size: pageSize, total_rows: totalRows, total_pages: totalPages, has_previous: this.currentPage > 1, has_next: this.currentPage < totalPages };
 			} catch (error) { this.rows = []; this.columns = []; this.summary = []; this.error = errorMessage(error, `${this.config.title} failed to load.`); }
