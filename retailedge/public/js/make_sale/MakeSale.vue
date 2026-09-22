@@ -87,10 +87,7 @@
 							@update:modelValue="setCustomer"
 						/>
 
-						<label class="guided-field">
-							<span>Posting Date <b>*</b></span>
-							<input v-model="values.posting_date" class="form-control" type="date" required />
-						</label>
+						<EdgeInput v-model="values.posting_date" id="make-sale-posting-date" label="Posting Date" type="date" required />
 
 						<EdgeLinkField
 							v-if="branchEnabled"
@@ -288,6 +285,7 @@ export default {
 		EdgeLoadingState: runtime.EdgeLoadingState,
 		EdgeErrorState: runtime.EdgeErrorState,
 		EdgeLinkField: runtime.EdgeLinkField,
+		EdgeInput: runtime.EdgeInput,
 		EdgeChildTable: runtime.EdgeChildTable,
 		StandardSalesInvoiceCompletionDialog,
 		StandardDeliveryCompletionDialog,
