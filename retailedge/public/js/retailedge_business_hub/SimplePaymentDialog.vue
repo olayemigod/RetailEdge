@@ -517,7 +517,7 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
 	props: {
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 		open: { type: Boolean, default: false },
 		intent: { type: String, default: "" },
 		initialContext: { type: Object, default: () => ({}) },
