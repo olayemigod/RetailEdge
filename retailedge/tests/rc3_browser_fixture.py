@@ -13,8 +13,9 @@ BRANCHES = (
 
 EXTRA_PERSONAS = {
 	"browser-branch-manager@example.com": ("Browser Branch Manager", ("RetailEdgeBranchManager",)),
-	"browser-purchasing@example.com": ("Browser Purchasing", ("Purchase User",)),
-	"browser-sales@example.com": ("Browser Sales", ("Sales User",)),
+	"browser-purchasing@example.com": ("Browser Purchasing", ("Purchase User", "Accounts User")),
+	"browser-sales@example.com": ("Browser Sales", ("Sales User", "Accounts User")),
+	"browser-stock-manager@example.com": ("Browser Stock Manager", ("Stock Manager",)),
 	"browser-one-branch@example.com": ("Browser One Branch", ("Stock User",)),
 	"browser-multi-branch@example.com": ("Browser Multi Branch", ("Stock User",)),
 	"browser-zero-branch@example.com": ("Browser Zero Branch", ("Stock User",)),
@@ -27,6 +28,7 @@ ACTIVE_ASSIGNMENTS = {
 	"browser-cashier@example.com": (("RetailEdge RC3 Lagos", "Cashier", 1),),
 	"browser-accounts@example.com": (("RetailEdge RC3 Lagos", "Accounts", 1),),
 	"browser-stock@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
+	"browser-stock-manager@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
 	"browser-purchasing@example.com": (("RetailEdge RC3 Lagos", "Purchasing", 1),),
 	"browser-sales@example.com": (("RetailEdge RC3 Lagos", "Sales", 1),),
 	"browser-one-branch@example.com": (("RetailEdge RC3 Lagos", "Stock", 1),),
