@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
 import frappe
@@ -9,6 +8,7 @@ from frappe.utils import cint, flt, getdate
 
 from retailedge.cost_visibility import should_hide_cost_price
 from retailedge.sales_reporting import (
+	MAX_INVOICE_SCAN_ROWS,
 	MAX_ITEM_SCAN_ROWS,
 	_assert_report_access,
 	_coerce_filters,
@@ -139,7 +139,7 @@ def _build_sales_analysis_dataset(filters: frappe._dict) -> dict[str, Any]:
 		"scan": {
 			"invoices": len(headers),
 			"item_rows": len(items),
-			"invoice_limit": 2000,
+			"invoice_limit": MAX_INVOICE_SCAN_ROWS,
 			"item_limit": MAX_ITEM_SCAN_ROWS,
 		},
 		"metadata": {
