@@ -5,6 +5,7 @@
 		"/app/cash-movement": "cash-movement",
 		"/app/expense-register": "expense-register",
 		"/app/expense-review": "expense-review",
+		"/app/payment-settlement-analysis": "payment-settlement-analysis",
 		"/app/cash-shift-verification": "cash-shift-verification",
 		"/app/daily-sales-audit": "daily-sales-audit",
 		"/app/sales-analysis": "sales-analysis",
