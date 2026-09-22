@@ -55,6 +55,13 @@ class TestSalesReturnCreditNoteUIContract(TestCase):
 		self.assertNotIn("frappe.msgprint", component)
 		self.assertNotIn("window.EdgeUI", component)
 
+	def test_record_action_resolver_hides_return_when_erpnext_reports_no_remaining_qty(self):
+		source = (APP_ROOT / "professional_selling.py").read_text()
+		self.assertIn("get_returned_qty_map_for_row", source)
+		self.assertIn("def _sales_invoice_has_returnable_items(invoice)", source)
+		self.assertIn('get_returned_qty_map_for_row(invoice.name, customer, row_name, "Sales Invoice")', source)
+		self.assertIn('action.get("value") != "create-return-credit-note"', source)
+
 	def test_backend_delegates_return_truth_to_erpnext_and_stays_draft_first(self):
 		source = (APP_ROOT / "professional_sales_invoice.py").read_text()
 
