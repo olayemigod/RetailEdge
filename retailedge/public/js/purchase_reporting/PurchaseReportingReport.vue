@@ -76,6 +76,15 @@
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="config.supplierPerformance && scan.purchase_invoices !== undefined">{{ scan.purchase_invoices }} period invoice{{ scan.purchase_invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="reportType === 'supplier_payables'">Current ERPNext outstanding balances aged at {{ formatDate(payablesAgeingDate || filters.as_of_date, "today") }}</span>
+				<button
+					v-if="reportType === 'supplier_payables' && selectedPayableCount"
+					class="edge-primary-button settlement-button"
+					type="button"
+					:disabled="supplierPaymentOpen"
+					@click="openSelectedSupplierPayment"
+				>
+					Pay Selected ({{ selectedPayableCount }}) · {{ formatValue(selectedPayableTotal, "Currency", companyCurrency) }}
+				</button>
 				<span v-if="config.supplierPerformance">Period purchases · current payables aged at {{ formatDate(payablesAgeingDate, "today") }}</span>
 				<span v-if="companyCurrency">Amounts in {{ companyCurrency }}</span>
 				<span>Bounded server dataset · {{ providerDatasetLimit.toLocaleString() }} row cap</span>
@@ -88,6 +97,7 @@
 			intent="pay-supplier"
 			:initialContext="supplierPaymentContext"
 			:nativeFallbackEnabled="canUseNativeDesk"
+			:allowMultiReferenceSupplierPayment="true"
 			@close="closeSupplierPayment"
 			@saved="handleSupplierPaymentSaved"
 			@open-native="openNativePayment"
@@ -155,6 +165,7 @@ export default {
 			canUseNativeDesk: false,
 			supplierPaymentOpen: false,
 			supplierPaymentContext: {},
+			selectedPayables: [],
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
 			invoiceStatuses: ["Paid", "Unpaid", "Overdue", "Partly Paid", "Return", "Credit Note"],
 		};
@@ -165,6 +176,8 @@ export default {
 		requiredReady() { return Boolean(this.filters.company && (this.reportType === "supplier_payables" || this.filters.from_date && this.filters.to_date)); },
 		reportProvider() { return window.EdgeSuiteReports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey) || window.EdgeSuiteUI?.reports?.getProvider?.(REPORT_PRODUCT, this.config.providerKey) || null; },
 		providerDatasetLimit() { return Number(this.reportProvider?.max_dataset_rows || 0); },
+		selectedPayableCount() { return this.selectedPayables.length; },
+		selectedPayableTotal() { return this.selectedPayables.reduce((total, row) => total + (Number(row.outstanding) || 0), 0); },
 		reportColumns() {
 			const columns = (this.columns || []).filter((column) => !column.hidden).map((column) => ({
 				...column,
@@ -172,6 +185,7 @@ export default {
 				clickable: this.canUseNativeDesk && ["invoice", "supplier", "return_against"].includes(column.fieldname),
 			}));
 			if (this.reportType === "supplier_payables") {
+				columns.push({ label: "Settle", fieldname: "settlement_action", fieldtype: "Data", width: 90, clickable: true });
 				columns.push({ label: "Payment", fieldname: "payment_action", fieldtype: "Data", width: 110, clickable: true });
 			}
 			return columns;
@@ -254,8 +268,9 @@ export default {
 				const pageSize = Number(this.filters.page_size || 50); const start = Math.max(0, (this.currentPage - 1) * pageSize);
 				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
 				const providerRows = result.rows || [];
+				this.selectedPayables = [];
 				this.rows = this.reportType === "supplier_payables"
-					? providerRows.map((row) => ({ ...row, payment_action: "Pay Supplier" }))
+					? providerRows.map((row) => ({ ...row, settlement_action: "Select", payment_action: "Pay Supplier" }))
 					: providerRows;
 				this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || result.metadata?.payables_ageing_date || this.payablesAgeingDate;
 				const totalRows = Number(result.total || this.rows.length); const totalPages = Math.max(1, Math.ceil(totalRows / pageSize)); if (this.currentPage > totalPages) this.currentPage = totalPages;
@@ -267,6 +282,51 @@ export default {
 		goToPage(page) { const next = Math.max(1, Number(page || 1)); if (next === this.currentPage) return; this.currentPage = next; this.fetchData(); },
 		setPageSize(pageSize) { this.filters.page_size = Number(pageSize || 50); this.currentPage = 1; this.fetchData(); },
 		rowKey(row, index) { return row.group_key || row.supplier || row.invoice || `${this.reportType}:${index}`; },
+		isPayableSelected(row) {
+			return Boolean(row?.invoice && this.selectedPayables.some((selected) => selected.invoice === row.invoice));
+		},
+		togglePayableSelection(row) {
+			if (this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
+			const existingIndex = this.selectedPayables.findIndex((selected) => selected.invoice === row.invoice);
+			if (existingIndex >= 0) {
+				this.selectedPayables.splice(existingIndex, 1);
+				row.settlement_action = "Select";
+				return;
+			}
+			if (this.selectedPayables.length >= 20) {
+				frappe.show_alert?.({ message: "Supplier settlement supports at most 20 invoices at a time.", indicator: "orange" }, 6);
+				return;
+			}
+			const first = this.selectedPayables[0];
+			if (first && first.supplier !== row.supplier) {
+				frappe.show_alert?.({ message: "Select invoices for one supplier at a time.", indicator: "orange" }, 6);
+				return;
+			}
+			const rowBranch = String(row.branch || this.filters.branch || "");
+			const firstBranch = first ? String(first.branch || this.filters.branch || "") : rowBranch;
+			if (first && firstBranch !== rowBranch) {
+				frappe.show_alert?.({ message: "Select invoices from one Branch at a time.", indicator: "orange" }, 6);
+				return;
+			}
+			this.selectedPayables.push({
+				invoice: row.invoice,
+				supplier: row.supplier,
+				branch: rowBranch,
+				outstanding: Number(row.outstanding || 0),
+			});
+			row.settlement_action = "Selected";
+		},
+		openSelectedSupplierPayment() {
+			if (this.reportType !== "supplier_payables" || !this.selectedPayables.length) return;
+			const first = this.selectedPayables[0];
+			this.supplierPaymentContext = {
+				company: this.filters.company || "",
+				branch: first.branch || this.filters.branch || "",
+				party: first.supplier,
+				references: this.selectedPayables.map((row) => ({ reference_name: row.invoice })),
+			};
+			this.supplierPaymentOpen = true;
+		},
 		openSupplierPayment(row) {
 			if (this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
 			this.supplierPaymentContext = {
@@ -280,12 +340,14 @@ export default {
 		closeSupplierPayment() { this.supplierPaymentOpen = false; this.supplierPaymentContext = {}; },
 		async handleSupplierPaymentSaved(_result) {
 			this.closeSupplierPayment();
+			this.selectedPayables = [];
 			await this.fetchData();
 		},
 		openNativePayment() { if (!this.canUseNativeDesk) return; this.closeSupplierPayment(); frappe.new_doc("Payment Entry"); },
 		openReportCell(payload) {
 			const column = payload?.column; const row = payload?.row;
 			if (!column || !row) return;
+			if (column.fieldname === "settlement_action") { this.togglePayableSelection(row); return; }
 			if (column.fieldname === "payment_action") { this.openSupplierPayment(row); return; }
 			if (!this.canUseNativeDesk) return;
 			const value = row[column.fieldname]; if (!value) return;
@@ -310,6 +372,7 @@ export default {
 .edge-input--readonly { display:flex; align-items:center; color:var(--edge-text-muted,#667085); background:var(--edge-surface-subtle,#f8fafc); }
 .edge-primary-button { background:var(--edge-primary,#0f766e); color:#fff; border-color:var(--edge-primary,#0f766e); font-weight:600; cursor:pointer; }
 .edge-primary-button:disabled { opacity:.55; cursor:not-allowed; }
+.settlement-button { min-height:30px; padding:0 10px; font-size:.78rem; }
 @media (max-width:1180px) { .purchase-filter-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:860px) { .purchase-filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:560px) { .purchase-filter-grid { grid-template-columns:1fr; } }
