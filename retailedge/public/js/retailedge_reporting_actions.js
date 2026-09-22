@@ -4,6 +4,7 @@
 	const SHELL_REPORT_ROUTES = Object.freeze({
 		"/app/cash-movement": "cash-movement",
 		"/app/expense-register": "expense-register",
+		"/app/expense-analysis": "expense-analysis",
 		"/app/expense-review": "expense-review",
 		"/app/payment-settlement-analysis": "payment-settlement-analysis",
 		"/app/cash-shift-verification": "cash-shift-verification",
