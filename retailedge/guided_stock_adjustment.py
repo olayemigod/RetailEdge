@@ -15,7 +15,13 @@ from retailedge.branch_context import (
 	resolve_retailedge_operational_defaults,
 )
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
+from retailedge.guided_entry_context import (
+	resolve_guided_branch,
+	resolve_guided_company,
+	resolve_guided_default_branch,
+)
 from retailedge.operating_context import (
+	get_operating_context,
 	get_operational_branch_scope,
 	resolve_operational_branch,
 )
@@ -31,26 +37,20 @@ MAX_ITEMS = 100
 def get_simple_stock_adjustment_context() -> dict[str, Any]:
 	_assert_can_create_stock_reconciliation()
 	user = frappe.session.user
-	company = str(frappe.defaults.get_user_default("Company") or "").strip()
+	operating = get_operating_context() or {}
+	company = resolve_guided_company("", user=user)
+	_assert_read_permission("Company", company)
 	legacy_default_branch = str(
-		frappe.defaults.get_user_default("RetailEdge Branch")
+		operating.get("branch")
+		or frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
 		or ""
 	).strip()
-	if not company:
-		frappe.throw(_("Set a default Company before creating a Stock Adjustment."))
-	_assert_read_permission("Company", company)
-
-	scope = get_operational_branch_scope(company, user=user)
-	if scope["restricted"]:
-		if len(scope["allowed_branches"]) <= 1:
-			branch = resolve_operational_branch(company, "", user=user)["branch"]
-		else:
-			branch = ""
-	else:
-		branch = legacy_default_branch
-		if branch:
-			branch = resolve_operational_branch(company, branch, user=user)["branch"]
+	branch = resolve_guided_default_branch(
+		company,
+		legacy_default_branch,
+		user=user,
+	)
 
 	defaults = resolve_retailedge_operational_defaults(
 		company=company or None,
@@ -59,10 +59,11 @@ def get_simple_stock_adjustment_context() -> dict[str, Any]:
 	)
 	company = defaults.get("company") or company
 	_assert_read_permission("Company", company)
+	scope = get_operational_branch_scope(company, user=user)
 	if branch:
-		branch = resolve_operational_branch(company, branch, user=user)["branch"]
-	elif not scope["restricted"] and defaults.get("branch"):
-		branch = resolve_operational_branch(company, defaults.get("branch") or "", user=user)["branch"]
+		branch = resolve_guided_branch(company, branch, user=user)
+	elif defaults.get("branch"):
+		branch = resolve_guided_default_branch(company, defaults.get("branch") or "", user=user)
 
 	warehouse = defaults.get("default_warehouse") or defaults.get("default_source_warehouse") or ""
 	if scope["restricted"] and not branch:
@@ -110,7 +111,7 @@ def search_simple_stock_adjustment_options(
 	_assert_can_create_stock_reconciliation()
 	values = _coerce_values(values)
 	limit = max(1, min(cint(limit) or MAX_LINK_RESULTS, MAX_LINK_RESULTS))
-	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
+	company = resolve_guided_company(values.get("company") or "", user=frappe.session.user)
 	branch = values.get("branch") or ""
 
 	if fieldname == "item_code":
@@ -155,13 +156,14 @@ def create_simple_stock_adjustment_draft(values: dict | str | None = None) -> di
 	_assert_can_create_stock_reconciliation()
 	values = _coerce_values(values)
 	user = frappe.session.user
-	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
-	if not company:
-		frappe.throw(_("Company is required."))
+	company = resolve_guided_company(values.get("company") or "", user=user)
 	_assert_read_permission("Company", company)
 
-	branch = str(values.get("branch") or "").strip()
-	branch = resolve_operational_branch(company, branch, user=user)["branch"]
+	branch = resolve_guided_branch(
+		company,
+		str(values.get("branch") or "").strip(),
+		user=user,
+	)
 
 	warehouse = str(values.get("warehouse") or "").strip()
 	if not warehouse:
