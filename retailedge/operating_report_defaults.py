@@ -154,11 +154,37 @@ def search_sales_reporting_options(kind: str, txt: str = "", company: str = "", 
 
 
 @frappe.whitelist()
-def search_purchase_reporting_options(kind: str, txt: str = "", company: str = "", branch: str = "", item_group: str = ""):
+def search_purchase_reporting_options(
+	kind: str,
+	txt: str = "",
+	company: str = "",
+	branch: str = "",
+	item_group: str = "",
+	supplier_group: str = "",
+	report_type: str = "purchase_register",
+	from_date: str = "",
+	to_date: str = "",
+	as_of_date: str = "",
+	invoice_kind: str = "All",
+	status: str = "",
+):
 	branch, assigned = _constrain_search_scope(kind, company, branch)
 	if str(kind or "").strip().lower() == "warehouse" and assigned and not branch:
 		return []
-	rows = _base_search_purchase_reporting_options(kind=kind, txt=txt, company=company, branch=branch, item_group=item_group)
+	rows = _base_search_purchase_reporting_options(
+		kind=kind,
+		txt=txt,
+		company=company,
+		branch=branch,
+		item_group=item_group,
+		supplier_group=supplier_group,
+		report_type=report_type,
+		from_date=from_date,
+		to_date=to_date,
+		as_of_date=as_of_date,
+		invoice_kind=invoice_kind,
+		status=status,
+	)
 	return _filter_branch_options(rows, assigned) if str(kind or "").strip().lower() == "branch" else rows
 
 
