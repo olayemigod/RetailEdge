@@ -289,6 +289,7 @@ class TestSalespersonPerformance(FrappeTestCase):
 			"Expenses",
 			"Customers",
 			"Suppliers & Payables",
+			"Reports",
 			"Insights",
 			"Review & Approvals",
 			"Setup",
