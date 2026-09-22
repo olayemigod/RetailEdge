@@ -70,7 +70,7 @@
 			</div>
 
 			<StandardPurchaseInvoiceCompletionDialog :open="completionOpen" :document="savedDocument" :canUseNativeDesk="canUseNativeDesk" :showNextActions="true" @close="completionOpen = false" @changed="handleCompletionChanged" @completed="handleCompletionCompleted" @next-action="handleCompletionNextAction" />
-			<SimplePaymentDialog :open="paymentOpen" intent="pay-supplier" :initialContext="paymentInitialContext" :nativeFallbackEnabled="canUseNativeDesk" @close="closePayment" @saved="closePayment" />
+			<SimplePaymentDialog :open="paymentOpen" intent="pay-supplier" :initialContext="paymentInitialContext" :nativeFallbackEnabled="canUseNativeDesk" @close="closePayment" @saved="handlePaymentSaved" />
 		</EdgePageLayout>
 	</EdgeAppShell>
 </template>
@@ -303,6 +303,16 @@ export default {
 			if (payload.action === "output") { window.retailedgeDocumentOutputTarget = { document: "purchase-invoice", name: payload.name, mode: "share" }; frappe.set_route("document-output-sharing"); }
 		},
 		closePayment() { this.paymentOpen = false; this.paymentInitialContext = {}; },
+		async handlePaymentSaved() {
+			this.closePayment();
+			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 1) return;
+			try {
+				const preview = await callMethod(PREVIEW_METHOD, { name: this.savedDocument.name, source_mode: "direct" }, "GET");
+				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Purchase Invoice" };
+			} catch (error) {
+				this.saveError = errorMessage(error, "Payment was posted, but Purchase Invoice status could not be refreshed.");
+			}
+		},
 		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
 		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => frappe.new_doc("Purchase Invoice"); if (!this.hasUnsavedChanges) return go(); frappe.confirm("Open the advanced ERPNext Purchase Invoice form? Save this page first if you want the current entries recorded.", go); },
 	},
