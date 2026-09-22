@@ -220,6 +220,15 @@ def test_business_hub_quick_sale_and_purchase_continue_after_submission():
 	assert "handlePurchaseInvoiceCompletionCompleted() {\n\t\t\tthis.refreshContext" in hub
 
 
+
+def test_business_hub_treats_submitted_customer_and_supplier_payments_as_completed_edgesuite_work():
+	hub = HUB.read_text(encoding="utf-8")
+	assert 'if (Number(result?.docstatus || 0) === 1)' in hub
+	assert 'Payment Entry ${result.name || ""} submitted' in hub
+	assert 'this.refreshContext({ force: true });' in hub
+	assert 'this.notifyGuidedDraftSaved(result, "Payment Entry", "Payment Entry", { stayInEdgeSuite: true });' in hub
+
+
 def test_guided_api_helper_preserves_explicit_http_method():
 	utils = (ROOT / "public" / "js" / "retailedge_business_hub" / "guidedEntryUtils.js").read_text(encoding="utf-8")
 	assert 'function rawCall(method, args = {}, type = "POST")' in utils
