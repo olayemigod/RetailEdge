@@ -140,6 +140,17 @@ def _standard_invoice_blockers(
 	return list(dict.fromkeys(blockers))
 
 
+def _validate_sales_item_access(doc) -> list[str]:
+	blockers: list[str] = []
+	for index, row in enumerate(list(doc.get("items") or []), start=1):
+		item_code = _clean(row.get("item_code"))
+		if not item_code:
+			blockers.append(_("Item is missing on Sales Invoice row {0}.").format(index))
+			continue
+		_assert_read("Item", item_code)
+	return blockers
+
+
 def _reference_names(doc, fieldname: str) -> set[str]:
 	return {
 		_clean(row.get(fieldname))
@@ -437,6 +448,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_STANDARD) -> dict[str,
 	company, invoice_branch = _validate_invoice_context(doc)
 	source_mode = _clean(source_mode) or SOURCE_MODE_STANDARD
 	blockers = _standard_invoice_blockers(doc, source_mode=source_mode)
+	blockers.extend(_validate_sales_item_access(doc))
 	source_context = _completion_source_context(
 		doc,
 		company=company,
@@ -633,6 +645,7 @@ def update_standard_sales_invoice_draft(
 
 	company, invoice_branch = _validate_invoice_context(doc)
 	edit_blockers = _standard_invoice_blockers(doc, include_date_validation=False)
+	edit_blockers.extend(_validate_sales_item_access(doc))
 	source_context = _validate_source_context(
 		doc,
 		company=company,
@@ -766,6 +779,7 @@ def submit_standard_sales_invoice(
 
 	source_mode = _clean(source_mode) or SOURCE_MODE_STANDARD
 	blockers = _standard_invoice_blockers(doc, source_mode=source_mode)
+	blockers.extend(_validate_sales_item_access(doc))
 	source_context = _completion_source_context(
 		doc,
 		company=company,
@@ -850,6 +864,7 @@ def apply_standard_sales_invoice_workflow_action(
 
 	source_mode = _clean(source_mode) or SOURCE_MODE_STANDARD
 	blockers = _standard_invoice_blockers(doc, source_mode=source_mode)
+	blockers.extend(_validate_sales_item_access(doc))
 	source_context = _completion_source_context(
 		doc,
 		company=company,
