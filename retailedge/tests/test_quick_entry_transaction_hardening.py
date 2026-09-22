@@ -176,6 +176,18 @@ def test_submitted_make_sale_keeps_credit_note_action_after_completion_dialog_cl
 	assert 'source_mode: "sales_return"' in make_sale
 
 
+
+def test_sales_return_handoff_is_scoped_to_current_user():
+	make_sale = ENTRY_PAGES["make-sale"]["component"].read_text(encoding="utf-8")
+	hub = HUB.read_text(encoding="utf-8")
+	selling = (ROOT / "public/js/professional_selling/ProfessionalSelling.vue").read_text(encoding="utf-8")
+	for source in (make_sale, hub):
+		assert 'retailedgeProfessionalSellingTarget' in source
+		assert 'user: frappe.session?.user || "Guest"' in source
+	assert 'delete window.retailedgeProfessionalSellingTarget' in selling
+	assert 'String(target.user || "") !== String(frappe.session?.user || "Guest")' in selling
+
+
 def test_business_hub_quick_sale_and_purchase_continue_after_submission():
 	hub = HUB.read_text(encoding="utf-8")
 	for contract in (
