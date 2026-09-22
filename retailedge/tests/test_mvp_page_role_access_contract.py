@@ -53,3 +53,20 @@ def test_document_output_page_accepts_sales_accounts_and_purchasing_personas():
 	):
 		assert role in roles
 
+
+
+def test_professional_purchasing_accepts_retailedge_manager_personas():
+	roles = _roles("retailedge/page/professional_purchasing/professional_purchasing.json")
+	for role in (
+		"System Manager",
+		"RetailEdge Manager",
+		"RetailEdgeManager",
+		"RetailEdge Branch Manager",
+		"RetailEdgeBranchManager",
+		"Purchase User",
+		"Purchase Manager",
+		"Accounts User",
+		"Accounts Manager",
+	):
+		assert role in roles
+
