@@ -76,6 +76,7 @@
 				<span v-if="scan.invoices !== undefined">{{ scan.invoices }} submitted invoice{{ scan.invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="config.supplierPerformance && scan.purchase_invoices !== undefined">{{ scan.purchase_invoices }} period invoice{{ scan.purchase_invoices === 1 ? "" : "s" }} scanned</span>
 				<span v-if="reportType === 'supplier_payables'">Current ERPNext outstanding balances aged at {{ formatDate(payablesAgeingDate || filters.as_of_date, "today") }}</span>
+				<span v-if="reportType === 'supplier_payables' && settlementNotice" class="settlement-notice">{{ settlementNotice }}</span>
 				<button
 					v-if="reportType === 'supplier_payables' && selectedPayableCount"
 					class="edge-primary-button settlement-button"
@@ -166,6 +167,7 @@ export default {
 			supplierPaymentOpen: false,
 			supplierPaymentContext: {},
 			selectedPayables: [],
+			settlementNotice: "",
 			ageingBuckets: ["All", "Current", "1-30 Days", "31-60 Days", "61-90 Days", "91+ Days"],
 			invoiceStatuses: ["Paid", "Unpaid", "Overdue", "Partly Paid", "Return", "Credit Note"],
 		};
@@ -269,6 +271,7 @@ export default {
 				const result = await this.reportProvider.load({ filters: this.providerFilters(), start, page_length: pageSize, sort: this.reportSort });
 				const providerRows = result.rows || [];
 				this.selectedPayables = [];
+				this.settlementNotice = "";
 				this.rows = this.reportType === "supplier_payables"
 					? providerRows.map((row) => ({ ...row, settlement_action: "Select", payment_action: "Pay Supplier" }))
 					: providerRows;
@@ -289,25 +292,27 @@ export default {
 			if (this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
 			const existingIndex = this.selectedPayables.findIndex((selected) => selected.invoice === row.invoice);
 			if (existingIndex >= 0) {
+				this.settlementNotice = "";
 				this.selectedPayables.splice(existingIndex, 1);
 				row.settlement_action = "Select";
 				return;
 			}
 			if (this.selectedPayables.length >= 20) {
-				frappe.show_alert?.({ message: "Supplier settlement supports at most 20 invoices at a time.", indicator: "orange" }, 6);
+				this.settlementNotice = "Supplier settlement supports at most 20 invoices at a time.";
 				return;
 			}
 			const first = this.selectedPayables[0];
 			if (first && first.supplier !== row.supplier) {
-				frappe.show_alert?.({ message: "Select invoices for one supplier at a time.", indicator: "orange" }, 6);
+				this.settlementNotice = "Select invoices for one supplier at a time.";
 				return;
 			}
 			const rowBranch = String(row.branch || this.filters.branch || "");
 			const firstBranch = first ? String(first.branch || this.filters.branch || "") : rowBranch;
 			if (first && firstBranch !== rowBranch) {
-				frappe.show_alert?.({ message: "Select invoices from one Branch at a time.", indicator: "orange" }, 6);
+				this.settlementNotice = "Select invoices from one Branch at a time.";
 				return;
 			}
+			this.settlementNotice = "";
 			this.selectedPayables.push({
 				invoice: row.invoice,
 				supplier: row.supplier,
@@ -373,6 +378,7 @@ export default {
 .edge-primary-button { background:var(--edge-primary,#0f766e); color:#fff; border-color:var(--edge-primary,#0f766e); font-weight:600; cursor:pointer; }
 .edge-primary-button:disabled { opacity:.55; cursor:not-allowed; }
 .settlement-button { min-height:30px; padding:0 10px; font-size:.78rem; }
+.settlement-notice { color:var(--edge-warning-text,#92400e); font-size:.78rem; font-weight:600; }
 @media (max-width:1180px) { .purchase-filter-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:860px) { .purchase-filter-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:560px) { .purchase-filter-grid { grid-template-columns:1fr; } }
