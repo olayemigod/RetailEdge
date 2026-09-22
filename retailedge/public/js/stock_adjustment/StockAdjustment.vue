@@ -25,12 +25,12 @@
 				</section>
 				<section v-if="handoffNotice" class="edge-panel notice-panel"><strong>Continued from Quick Adjustment</strong><p>{{ handoffNotice }}</p></section>
 
-				<section v-if="savedDocument" class="edge-panel saved-panel">
+				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
 					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Stock Reconciliation and owns the posted stock correction." : "The ERPNext Stock Reconciliation draft now owns this stock count." }}</p></div>
-					<div class="page-actions"><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="completionOpen = true">Edit / Complete</button><button class="edge-button" type="button" @click="startAnother">Start Another Count</button></div>
+					<div class="page-actions"><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button" type="button" @click="openCompletion">Review / Complete</button><button class="edge-button" type="button" @click="startAnother">Start Another Count</button></div>
 				</section>
 
-				<form v-else class="edge-panel transaction-form" @submit.prevent="saveDraft">
+				<form v-if="!savedDocument || editingSavedDraft" class="edge-panel transaction-form" @submit.prevent="saveDraft">
 					<div class="context-cards">
 						<div><span>Company</span><strong>{{ values.company || "Not set" }}</strong></div>
 						<div v-if="values.branch"><span>Branch</span><strong>{{ values.branch }}</strong></div>
@@ -40,8 +40,8 @@
 
 					<div class="field-grid">
 						<EdgeInput v-model="values.posting_date" id="stock-adjustment-posting-date" label="Posting Date" type="date" required />
-						<EdgeLinkField v-if="branchEnabled" :modelValue="values.branch" label="Branch" placeholder="Search permitted branch" :searcher="searchBranch" :context="searchContext" @update:modelValue="setBranch" />
-						<EdgeLinkField :modelValue="values.warehouse" label="Stock Location" placeholder="Search permitted stock location" :required="true" :searcher="searchWarehouse" :context="searchContext" @update:modelValue="setWarehouse" />
+						<EdgeLinkField v-if="branchEnabled" :modelValue="values.branch" label="Branch" placeholder="Search permitted branch" :searcher="searchBranch" :context="searchContext" :disabled="editingSavedDraft" @update:modelValue="setBranch" />
+						<EdgeLinkField :modelValue="values.warehouse" label="Stock Location" placeholder="Search permitted stock location" :required="true" :disabled="editingSavedDraft" :searcher="searchWarehouse" :context="searchContext" @update:modelValue="setWarehouse" />
 					</div>
 
 					<div class="items-heading"><div><span class="page-kicker">Physical count</span><h3>Counted items</h3><p>Enter the quantity physically counted. Zero is valid; negative physical quantities are not.</p></div><span class="item-count">{{ populatedItemCount }} item{{ populatedItemCount === 1 ? "" : "s" }}</span></div>
@@ -50,7 +50,7 @@
 
 					<div class="sticky-actions">
 						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the ERPNext draft is saved." : "Complete the count, then save the draft." }}</small></div>
-						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading">{{ saving ? "Saving..." : formContext.submit_label || "Save Draft" }}</button></div>
+						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
 					</div>
 				</form>
 			</div>
@@ -67,6 +67,7 @@ import StandardStockCompletionDialog from "../retailedge_business_hub/StandardSt
 const CONTEXT_METHOD = "retailedge.guided_stock_adjustment.get_simple_stock_adjustment_context";
 const SEARCH_METHOD = "retailedge.guided_stock_adjustment.search_simple_stock_adjustment_options";
 const CREATE_METHOD = "retailedge.guided_stock_adjustment.create_simple_stock_adjustment_draft";
+const UPDATE_METHOD = "retailedge.standard_stock_completion.update_standard_stock_document_draft";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HANDOFF_PREFIX = "retailedge:stock-adjustment:handoff:";
 const RECOVERY_PREFIX = "retailedge:stock-adjustment:recovery:";
@@ -85,7 +86,7 @@ export default {
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", cascadeToken: 0, formContext: {}, values: emptyValues(), initialSnapshot: "",
-			recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, completionOpen: false,
+			recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, editingSavedDraft: false, completionOpen: false,
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			itemTableField: { label: "Physical Counts", description: "Use the page for larger counts with many stock lines." },
 			itemColumns: [{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search stock item" }, { fieldname: "qty", label: "Physical Qty", fieldtype: "Float", default: "" }],
@@ -101,7 +102,7 @@ export default {
 	watch: { values: { deep: true, handler() { if (this.loaded && !this.savedDocument) this.scheduleRecovery(); } } },
 	created() {
 		this._pageShow = () => { if (!this.loaded && !this.loading) this.loadPage(); };
-		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || this.savedDocument) return; event.preventDefault(); event.returnValue = ""; };
+		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return; event.preventDefault(); event.returnValue = ""; };
 	},
 	mounted() { window.addEventListener("retailedge-stock-adjustment-page-show", this._pageShow); window.addEventListener("beforeunload", this._beforeUnload); this.loadPage(); },
 	beforeUnmount() { window.removeEventListener("retailedge-stock-adjustment-page-show", this._pageShow); window.removeEventListener("beforeunload", this._beforeUnload); if (this.recoveryTimer) clearTimeout(this.recoveryTimer); },
@@ -125,7 +126,7 @@ export default {
 			this.menuItems = (shell.navigation_groups || []).map((g) => ({ ...g, items: (g.items || []).map((i) => ({ ...i, route: this.routeForTarget(i) })).filter((i) => i.route) })).filter((g) => g.items.length);
 		},
 		routeForTarget(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return ""; if (item.target_type === "DocType") return `/app/${frappe.router.slug(item.target)}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; return item.target || ""; },
-		handleNavigation(route) { if (!route || route === "/app/stock-adjustment") return; const go = () => { if (/^https?:\/\//i.test(route)) window.location.assign(route); else frappe.set_route(...String(route).replace(/^\/app\//, "").split("/").filter(Boolean)); }; if (!this.hasUnsavedChanges || this.savedDocument) return go(); frappe.confirm("Leave Stock Adjustment? Unsaved changes are retained temporarily in this browser session.", go); },
+		handleNavigation(route) { if (!route || route === "/app/stock-adjustment") return; const go = () => { if (/^https?:\/\//i.test(route)) window.location.assign(route); else frappe.set_route(...String(route).replace(/^\/app\//, "").split("/").filter(Boolean)); }; if (!this.hasUnsavedChanges || (this.savedDocument && !this.editingSavedDraft)) return go(); frappe.confirm("Leave Stock Adjustment? Unsaved changes are retained temporarily in this browser session.", go); },
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		consumeHandoff() { let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; } const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false; if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false; this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) }; this.handoffNotice = "Branch, stock location and count lines were carried into the full-page workspace."; return true; },
@@ -164,16 +165,42 @@ export default {
 			if (!rows.length) { this.saveError = "Add at least one counted Item."; return; }
 			if (rows.some((row) => row.qty === "" || row.qty === null || row.qty === undefined || Number(row.qty) < 0)) { this.saveError = "Each counted Item needs a physical quantity of zero or more."; return; }
 			this.saving = true; this.saveError = "";
-			try { const result = await callMethod(CREATE_METHOD, { values: { ...this.values, items: rows } }); if (!result?.name) throw new Error("Stock Reconciliation draft was not returned."); this.clearRecovery(); this.initialSnapshot = JSON.stringify(this.values); this.savedDocument = { doctype: result.doctype || "Stock Reconciliation", name: result.name }; this.completionOpen = true; frappe.show_alert?.({ message: `Stock Adjustment ${result.name} saved as Draft`, indicator: "green" }); }
-			catch (error) { this.saveError = errorMessage(error, "Stock Adjustment could not be saved."); }
+			try {
+				let result;
+				if (this.savedDocument?.name && this.editingSavedDraft) {
+					result = await callMethod(UPDATE_METHOD, {
+						doctype: "Stock Reconciliation",
+						name: this.savedDocument.name,
+						expected_modified: this.savedDocument.modified || "",
+						values: { posting_date: this.values.posting_date, items: rows.map((row) => ({ item_code: row.item_code, qty: Number(row.qty) })) },
+					}, "POST");
+					this.syncPageFromDraftPreview(result);
+					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Reconciliation" };
+					this.initialSnapshot = JSON.stringify(this.values);
+					this.editingSavedDraft = false;
+					frappe.show_alert?.({ message: `Stock Adjustment ${result.name} draft updated`, indicator: "green" });
+					return;
+				}
+				result = await callMethod(CREATE_METHOD, { values: { ...this.values, items: rows } });
+				if (!result?.name) throw new Error("Stock Reconciliation draft was not returned.");
+				this.clearRecovery(); this.initialSnapshot = JSON.stringify(this.values);
+				this.savedDocument = { ...result, doctype: result.doctype || "Stock Reconciliation" };
+				this.completionOpen = true;
+				frappe.show_alert?.({ message: `Stock Adjustment ${result.name} saved as Draft`, indicator: "green" });
+			} catch (error) { this.saveError = errorMessage(error, "Stock Adjustment could not be saved."); }
 			finally { this.saving = false; }
 		},
-		handleCompletionChanged() {},
+		beginSavedDraftEdit() { if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return; this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values); },
+		cancelSavedDraftEdit() { const close = () => { try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {} this.editingSavedDraft = false; this.saveError = ""; }; if (!this.hasUnsavedChanges) return close(); frappe.confirm("Discard unsaved changes to this saved Stock Adjustment draft?", close); },
+		syncPageFromDraftPreview(result) { if (!result) return; if (result.posting_date) this.values.posting_date = result.posting_date; if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ item_code: row.item_code || "", qty: row.qty })); },
+		openCompletion() { if (this.savedDocument?.name) { this.editingSavedDraft = false; this.completionOpen = true; } },
+		handleCompletionChanged(result) { if (!result?.name) return; this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Reconciliation" }; if (Number(result.docstatus || 0) === 0) { this.syncPageFromDraftPreview(result); this.initialSnapshot = JSON.stringify(this.values); } },
 		handleCompletionCompleted(result) {
+			this.editingSavedDraft = false;
 			if (result?.name) this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Reconciliation" };
 			this.completionOpen = false;
 		},
-		async startAnother() { this.savedDocument = null; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
+		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
 		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => frappe.new_doc("Stock Reconciliation"); if (!this.hasUnsavedChanges) return go(); frappe.confirm("Open the advanced ERPNext Stock Reconciliation form? Save this page first if you want the current count recorded.", go); },
 	},
 };
