@@ -77,6 +77,15 @@ PAYMENT_INTENTS: dict[str, dict[str, str]] = {
 }
 
 
+def _can_open_page(page_name: str) -> bool:
+	try:
+		if not frappe.db.exists("Page", page_name):
+			return False
+		return bool(frappe.get_doc("Page", page_name).is_permitted())
+	except Exception:
+		return False
+
+
 @frappe.whitelist()
 def get_simple_payment_context(intent: str) -> dict[str, Any]:
 	config = _get_intent(intent)
@@ -107,6 +116,9 @@ def get_simple_payment_context(intent: str) -> dict[str, Any]:
 		require_when_restricted=False,
 	)
 
+	managed_page = "supplier-payables" if intent == "pay-supplier" else "payment-management"
+	can_open_managed_page = _can_open_page(managed_page)
+
 	return {
 		"intent": intent,
 		"title": _(config["title"]),
@@ -135,6 +147,8 @@ def get_simple_payment_context(intent: str) -> dict[str, Any]:
 		"capabilities": {
 			"branch_enabled": bool(has_doctype("Branch")),
 			"native_form_fallback": True,
+			"managed_page": managed_page if can_open_managed_page else "",
+			"can_open_managed_page": can_open_managed_page,
 		},
 		"limits": {"link_results": MAX_LINK_RESULTS, "max_references": MAX_REFERENCES},
 	}
