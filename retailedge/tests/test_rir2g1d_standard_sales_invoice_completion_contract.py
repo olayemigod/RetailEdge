@@ -114,6 +114,23 @@ def test_linked_sources_are_submitted_same_company_customer_and_branch():
 		assert contract in source
 
 
+
+def test_sales_invoice_item_access_is_revalidated_in_preview_edit_submit_and_workflow():
+	source = _read(SERVICE)
+	assert "def _validate_sales_item_access(doc)" in source
+	assert '_assert_read("Item", item_code)' in source
+	for function_name in (
+		"def _build_preview",
+		"def update_standard_sales_invoice_draft",
+		"def submit_standard_sales_invoice",
+		"def apply_standard_sales_invoice_workflow_action",
+	):
+		start = source.index(function_name)
+		end = source.find("\ndef ", start + len(function_name))
+		segment = source[start:end if end >= 0 else len(source)]
+		assert "_validate_sales_item_access(doc)" in segment
+
+
 def test_direct_submit_locks_stale_checks_revalidates_then_native_submits():
 	source = _read(SERVICE)
 	start = source.index("def submit_standard_sales_invoice")
