@@ -89,6 +89,8 @@ def test_submitted_purchase_receipt_can_continue_to_supplier_invoice():
 		"runNextAction(action.value)",
 		"prepare_purchase_invoice_from_purchase_receipt",
 		"PURCHASE_INVOICE_READY_EVENT",
+		'v-if="!submitted && preview.workflow_started',
+		'v-if="nativeFallbackEnabled && !submitted"',
 	):
 		assert contract in overlay
 	assert "this.close();" not in overlay[overlay.index("async submitStandardReceipt()"):overlay.index("dispatchLandedCostHandoff", overlay.index("async submitStandardReceipt()"))]
