@@ -26,6 +26,7 @@ _ACCOUNTS_MANAGER_ROLES = {"Accounts Manager"}
 _ACCOUNTS_USER_ROLES = {"Accounts User"}
 _PURCHASE_MANAGER_ROLES = {"Purchase Manager"}
 _PURCHASE_USER_ROLES = {"Purchase User"}
+_CASHIER_ROLES = {"RetailEdge Cashier", "RetailEdgeCashier"}
 
 
 @dataclass(frozen=True)
@@ -48,19 +49,19 @@ def _roles(*groups: set[str]) -> frozenset[str]:
 _REPORT_SPECS = {
 	"sales-by-item": ReportCapabilitySpec(
 		key="sales-by-item", label="Sales by Item",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}),
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES), ref_doctype="Sales Invoice",
 	),
 	"sales-analysis": ReportCapabilitySpec(
 		key="sales-analysis", label="Sales Analysis",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}),
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES), ref_doctype="Sales Invoice",
 	),
 	"sales-invoice-register": ReportCapabilitySpec(
 		key="sales-invoice-register", label="Sales Invoice Register",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}),
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES), ref_doctype="Sales Invoice",
 	),
@@ -120,7 +121,7 @@ _REPORT_SPECS = {
 	),
 	"expense-register": ReportCapabilitySpec(
 		key="expense-register", label="Expense Register",
-		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES, _CASHIER_ROLES),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="RetailEdge Cashier Expense",
 	),
@@ -204,6 +205,25 @@ def _has_ref_read_permission(spec: ReportCapabilitySpec, user: str) -> bool:
 	if not spec.ref_doctype or not frappe.db.exists("DocType", spec.ref_doctype):
 		return True
 	return bool(frappe.has_permission(spec.ref_doctype, ptype="read", user=user))
+
+
+def require_report_view_access(report_key: str, user: str | None = None) -> dict[str, object]:
+	"""Enforce report role + reference-document read permission without changing report-specific Branch semantics."""
+	user = user or frappe.session.user
+	spec = get_report_capability_spec(report_key)
+	roles = _user_roles(user)
+	if roles.intersection(spec.view_roles) and _has_ref_read_permission(spec, user):
+		return {
+			"scope_name": spec.label,
+			"scope_key": spec.key,
+			"scope_type": "report",
+			"can_view": True,
+			"authorization_model": "report_role_and_document_permission",
+		}
+	frappe.throw(
+		_("You are not permitted to view this RetailEdge report."),
+		frappe.PermissionError,
+	)
 
 
 def get_report_capabilities(report_key: str, company: str = "", branch: str = "", user: str | None = None) -> dict[str, object]:

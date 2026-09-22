@@ -91,7 +91,7 @@
 					</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection title="Margin Leakage" description="Negative and low-margin items requiring owner review. Evidence opens only for the selected item.">
+				<EdgeDashboardSection v-if="filters.focus !== 'missing_cost'" title="Margin Leakage" description="Negative and low-margin items requiring owner review. Evidence opens only for the selected item.">
 					<div class="profit-table-wrap">
 						<table class="profit-table">
 							<thead><tr><th>Item</th><th>Net Sales</th><th>Cost</th><th>Profit</th><th>Margin</th><th></th></tr></thead>
@@ -107,7 +107,7 @@
 					</div>
 				</EdgeDashboardSection>
 
-				<EdgeDashboardSection title="Missing Recorded Cost" description="Sold items with positive net sales but no recorded incoming cost. Treat their transactional margin as incomplete until cost is corrected.">
+				<EdgeDashboardSection v-if="!['negative_margin', 'low_margin'].includes(filters.focus)" title="Missing Recorded Cost" description="Sold items with positive net sales but no recorded incoming cost. Treat their transactional margin as incomplete until cost is corrected.">
 					<div class="profit-table-wrap">
 						<table class="profit-table">
 							<thead><tr><th>Item</th><th>Net Sales</th><th>Recorded Cost</th><th></th></tr></thead>
@@ -165,7 +165,7 @@ export default {
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
 			summary: [], topContributors: [], marginLeakage: [], missingCostRows: [], dimensions: {}, comparison: {}, reconciliation: {}, menuItems: [], tenantName: "", userName: "", companyCurrency: "", canUseNativeDesk: false,
-			filters: { company: "", branch: "", from_date: "", to_date: "" },
+			filters: { company: "", branch: "", from_date: "", to_date: "", focus: "" },
 		};
 	},
 	computed: {
@@ -220,8 +220,16 @@ export default {
 				]);
 				this.summary = result.summary || [];
 				this.topContributors = result.top_contributors || [];
-				this.marginLeakage = result.margin_leakage || [];
-				this.missingCostRows = (result.rows || []).filter((row) => row.missing_recorded_cost).slice(0, 25);
+				const allRows = result.rows || [];
+				const threshold = Number(result.metadata?.low_margin_threshold_percent ?? 10);
+				if (this.filters.focus === "negative_margin") {
+					this.marginLeakage = allRows.filter((row) => Number(row.net_sales || 0) > 0 && Number(row.gross_profit || 0) < 0).slice(0, 25);
+				} else if (this.filters.focus === "low_margin") {
+					this.marginLeakage = allRows.filter((row) => Number(row.net_sales || 0) > 0 && Number(row.gross_margin_percent || 0) < threshold).slice(0, 25);
+				} else {
+					this.marginLeakage = result.margin_leakage || [];
+				}
+				this.missingCostRows = allRows.filter((row) => row.missing_recorded_cost).slice(0, 25);
 				this.dimensions = result.dimensions || {};
 				this.comparison = result.comparison || {};
 				this.reconciliation = result.reconciliation || {};

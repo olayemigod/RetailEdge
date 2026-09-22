@@ -5,6 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 
+from retailedge.reporting_capabilities import require_report_view_access
 from retailedge.daily_sales_audit_read_scope import (
 	apply_daily_sales_audit_query_branch_scope,
 	get_daily_sales_audit_branch_scope,
@@ -14,6 +15,7 @@ DAILY_SALES_AUDIT_DOCTYPE = "RetailEdge Daily Sales Audit"
 
 
 def assert_cash_shift_verification_read_access() -> None:
+	require_report_view_access("cash-shift-verification")
 	if not frappe.db.exists("DocType", DAILY_SALES_AUDIT_DOCTYPE) or not frappe.has_permission(
 		DAILY_SALES_AUDIT_DOCTYPE, "read"
 	):

@@ -56,6 +56,7 @@
 						<div class="edge-input edge-input--readonly">Current outstanding · {{ formatDate(payablesAgeingDate, "Today") }}</div>
 					</div>
 					<EdgeDropdown v-if="reportType === 'supplier_payables'" v-model="filters.ageing_bucket" :options="ageingBuckets" label="Age" />
+					<EdgeDropdown v-if="reportType === 'supplier_payables'" v-model="filters.overdue_only" :options="[{ value: 0, label: 'All open bills' }, { value: 1, label: 'Overdue only' }]" label="Due Status" />
 					<EdgeDropdown v-if="config.analysis" v-model="analysisPreset" :options="analysisPresets" label="Analysis View" @change="onAnalysisPresetChange" />
 					<EdgeDropdown v-if="config.analysis" v-model="filters.group_by" :options="groupByOptions" label="Group By" @change="onAnalysisGroupChange" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !requiredReady" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
@@ -147,7 +148,7 @@ export default {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			rows: [], columns: [], summary: [], reportSort: null, pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", companyCurrency: "",
 			supplierLabel: "", itemLabel: "", payablesAgeingDate: "",
-			filters: { company: "", from_date: "", to_date: "", as_of_date: "", branch: "", supplier: "", supplier_group: "", item_code: "", item_group: "", warehouse: "", status: "", invoice_kind: "All", ageing_bucket: "All", group_by: "Month", page_size: 50 },
+			filters: { company: "", from_date: "", to_date: "", as_of_date: "", branch: "", supplier: "", supplier_group: "", item_code: "", item_group: "", warehouse: "", status: "", invoice_kind: "All", ageing_bucket: "All", overdue_only: 0, group_by: "Month", page_size: 50 },
 			analysisPreset: "Purchase Trend",
 			analysisPresets: ["Purchase Trend", "Purchases by Item", "Purchases by Category", "Purchases by Supplier", "Purchases by Supplier Group", "Purchases by Branch", "Purchases by Warehouse", "Daily Purchases", "Weekly Purchases", "Quarterly Purchases", "Yearly Purchases", "Custom"],
 			groupByOptions: ["Day", "Week", "Month", "Quarter", "Year", "Item", "Item Group", "Supplier", "Supplier Group", "Branch", "Warehouse"],

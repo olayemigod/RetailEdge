@@ -19,6 +19,7 @@ from retailedge.retailedge.report.retailedge_cashier_expense_review.retailedge_c
 	build_review_summary,
 )
 from retailedge.stock_movement_filters import branch_query
+from retailedge.reporting_capabilities import require_report_view_access
 
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100
@@ -199,6 +200,9 @@ def apply_expense_review_action(
 
 def _build_expense_review_dataset(filters: frappe._dict) -> dict[str, Any]:
 	_validate_filters(filters)
+	require_report_view_access("expense-review")
+	if str(filters.get("daily_audit_inclusion_status") or "").strip() == "All":
+		filters.daily_audit_inclusion_status = ""
 	if not frappe.has_permission("RetailEdge Cashier Expense", "read"):
 		frappe.throw(_("You do not have permission to view cashier expenses."), frappe.PermissionError)
 	rows = get_cashier_expenses_for_daily_audit(filters=filters, limit_page_length=MAX_REVIEW_ROWS + 1)

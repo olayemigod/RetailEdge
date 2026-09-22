@@ -26,6 +26,7 @@ from retailedge.bank_transaction_matching import (
     assert_can_access_bank_transaction_matching,
     normalize_bank_transaction,
 )
+from retailedge.reporting_scope import validate_report_scope
 
 QUEUE_TO_MATCH = "To Match"
 QUEUE_TO_RECONCILE = "To Reconcile"
@@ -268,6 +269,8 @@ def _review_db_filters(queue: str, filters: frappe._dict) -> dict[str, Any]:
         db_filters["decision_status"] = ["in", ["Draft", "Suggested", "Needs Review", "Reopened"]]
     elif queue == QUEUE_EXCEPTIONS:
         db_filters["decision_status"] = "Confirmed"
+        if cint(getattr(filters, "exception_summary_only", 0)):
+            db_filters["execution_status"] = ["in", ["Blocked", "Failed"]]
     return db_filters
 
 
@@ -458,6 +461,8 @@ def get_banking_workspace_rows(
     from_date: str | None = None,
     to_date: str | None = None,
     search: str | None = None,
+    review_only: int | str | None = 0,
+    exception_summary_only: int | str | None = 0,
 ) -> dict[str, Any]:
     assert_can_access_bank_transaction_matching()
     direction = normalize_direction(direction)
@@ -470,6 +475,18 @@ def get_banking_workspace_rows(
             "count": 0,
             "skipped_count": 0,
         }
+    company = cstr(company or frappe.defaults.get_user_default("Company") or "").strip()
+    branch = cstr(branch or "").strip()
+    if not company:
+        frappe.throw("Company is required for RetailEdge bank matching.", frappe.ValidationError)
+    scope = validate_report_scope(
+        company=company,
+        branch=branch,
+        user=frappe.session.user,
+        require_branch_when_restricted=True,
+    )
+    branch = cstr(scope.get("branch") or branch).strip()
+
     limit = max(1, min(cint(limit or 100), 500))
     filters = frappe._dict(
         {
@@ -479,11 +496,16 @@ def get_banking_workspace_rows(
             "from_date": from_date,
             "to_date": to_date,
             "search": search,
+            "review_only": cint(review_only),
+            "exception_summary_only": cint(exception_summary_only),
         }
     )
 
     if queue == QUEUE_TO_MATCH:
-        unmatched, skipped_unmatched = _get_unmatched_bank_transaction_rows(direction, limit, filters)
+        if cint(filters.review_only):
+            unmatched, skipped_unmatched = [], 0
+        else:
+            unmatched, skipped_unmatched = _get_unmatched_bank_transaction_rows(direction, limit, filters)
         suggested, skipped_suggested = _get_review_queue_rows(direction, queue, limit, filters)
         rows = sorted(
             unmatched + suggested,

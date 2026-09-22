@@ -14,6 +14,8 @@ DESTINATIONS = (
 	ROOT / "public/js/purchase_reporting/PurchaseReportingReport.vue",
 	ROOT / "public/js/cash_movement/CashMovementReport.vue",
 	ROOT / "public/js/expense_register/ExpenseRegisterReport.vue",
+	ROOT / "public/js/expense_review/ExpenseReviewReport.vue",
+	ROOT / "public/js/cash_shift_verification/CashShiftVerificationReport.vue",
 	ROOT / "public/js/customer_receivables/CustomerReceivablesReport.vue",
 	ROOT / "public/js/stock_position/StockPositionReport.vue",
 	ROOT / "public/js/branch_performance_dashboard/BranchPerformanceDashboard.vue",
@@ -156,9 +158,23 @@ def test_phase5_exposes_all_eight_business_indices_with_scoped_routes():
 		"from_date": "2026-09-01",
 		"to_date": "2026-09-14",
 	}
-	assert by_key["stock"]["route_filters"] == {"company": "Demo Company", "branch": "Lagos"}
-	assert by_key["receivables"]["route_filters"] == {"company": "Demo Company", "branch": "Lagos"}
+	assert by_key["cash"]["route"] == "/app/cash-shift-verification"
+	assert by_key["stock"]["route_filters"] == {
+		"company": "Demo Company",
+		"branch": "Lagos",
+		"stock_status": "Reorder Due",
+	}
+	assert by_key["expenses"]["route"] == "/app/expense-review"
+	assert by_key["expenses"]["route_filters"]["posting_ready"] == "0"
+	assert by_key["expenses"]["route_filters"]["daily_audit_inclusion_status"] == "All"
+	assert by_key["receivables"]["route_filters"] == {
+		"company": "Demo Company",
+		"branch": "Lagos",
+		"overdue_only": 1,
+	}
 	assert by_key["payables"]["route_filters"] == {"company": "Demo Company", "branch": "Lagos"}
+	assert by_key["banking"]["route_filters"]["queue"] == "Exceptions"
+	assert by_key["banking"]["route_filters"]["exception_summary_only"] == 1
 
 
 def test_phase5_variance_tolerance_controls_cash_and_branch_priority_only():
@@ -218,7 +234,8 @@ def test_phase5_attention_is_prioritized_and_keeps_profitability_exceptions():
 
 	assert items
 	assert [item["priority"] for item in items] == sorted(item["priority"] for item in items)
-	assert any(item["section"] == "profitability" for item in items)
+	profitability_item = next(item for item in items if item["section"] == "profitability")
+	assert profitability_item["route_filters"]["focus"] == "negative_margin"
 	assert any(item["section"] == "banking" and item["tone"] == "danger" for item in items)
 	assert all(item.get("action_label") for item in items)
 	assert all("route_filters" in item for item in items)
@@ -245,6 +262,12 @@ def test_phase5_frontend_renders_intelligence_and_targeted_route_handoff():
 	branches = (ROOT / "public/js/branch_performance_dashboard/BranchPerformanceDashboard.vue").read_text(encoding="utf-8")
 	assert 'this.filters.date_range_preset = "Custom Period"' in sales
 	assert 'this.filters.date_range_preset = "Custom Period"' in branches
+	assert 'movement_type = "Money In"' in source
+	assert 'movement_type = "Money Out"' in source
+	assert 'card.route_filters || homeRouteFilters(card)' in source
+	profitability = (ROOT / "public/js/profitability_intelligence/ProfitabilityIntelligence.vue").read_text(encoding="utf-8")
+	assert 'focus: ""' in profitability
+	assert 'this.filters.focus === "negative_margin"' in profitability
 
 
 def test_phase5_variance_setting_is_migration_safe_and_non_posting():

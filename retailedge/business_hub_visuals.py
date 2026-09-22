@@ -262,7 +262,7 @@ def _sales_mix(
 			if dataset.get("branch_mix_supported")
 			else _("Sales Invoice Branch attribution is unavailable for this Company.")
 		)
-		route = "/app/branch-performance-dashboard"
+		route = "/app/sales-invoice-register"
 
 	return {
 		"title": title,
@@ -325,7 +325,11 @@ def _expense_visual(filters: dict[str, Any], *, currency: str) -> dict[str, Any]
 		"currency": currency,
 		"series": [{"key": "value", "label": _("Expenses"), "datatype": "Currency"}],
 		"rows": _top_mix_rows(buckets, drill_field="expense_category"),
-		"route_filters": dict(filters),
+		"route_filters": {
+			**dict(filters),
+			"view_mode": "consolidated",
+			"include_unposted_cashier_expenses": 0,
+		},
 	}
 
 

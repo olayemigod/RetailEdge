@@ -46,7 +46,7 @@
 					<EdgeLinkField v-model="filters.expense_category" label="Expense Category" placeholder="All categories" :searcher="categorySearch" />
 					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onReviewDateChange" /></label>
 					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onReviewDateChange" /></label>
-					<EdgeDropdown v-model="filters.daily_audit_inclusion_status" :options="['Pending Review', 'Included', 'Excluded', 'Needs Clarification']" label="Review Status" placeholder="All" />
+					<EdgeDropdown v-model="filters.daily_audit_inclusion_status" :options="['All', 'Pending Review', 'Included', 'Excluded', 'Needs Clarification']" label="Review Status" placeholder="All" />
 					<div class="filter-action"><button class="edge-primary-button" type="button" :disabled="loading || !filters.company" @click="applyFilters">{{ loading ? "Loading…" : "Apply Filters" }}</button></div>
 				</div>
 				<details class="advanced-filters">
@@ -99,7 +99,15 @@ export default {
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.expense_review.get_expense_review_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) }; this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.canReview = Boolean(context.can_review); this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk); this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("expense-review") || {};
+				this.filters = { ...this.filters, ...hubHandoff };
+				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
+				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
+				this.userName = context.user_name || "";
+				this.canReview = Boolean(context.can_review);
+				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
+				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) { this.error = errorMessage(error, "Failed to load Expense Review controls."); }
 			finally { this.metadataLoading = false; }

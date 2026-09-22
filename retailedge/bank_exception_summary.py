@@ -67,7 +67,8 @@ def get_bank_exception_summary(filters: dict[str, Any] | str | None = None) -> d
 	exceptions = [
 		row
 		for row in rows
-		if str(row.get("execution_status") or "").strip() in RECONCILIATION_EXCEPTION_STATUSES
+		if str(row.get("decision_status") or "").strip() == "Confirmed"
+		and str(row.get("execution_status") or "").strip() in RECONCILIATION_EXCEPTION_STATUSES
 	]
 
 	return {

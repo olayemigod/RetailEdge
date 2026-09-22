@@ -129,8 +129,9 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(terminal["operational_status"], STATUS_RECONCILED)
 
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_workspace.validate_report_scope", return_value={"branch": ""})
     @patch("retailedge.banking_workspace._get_review_queue_rows")
-    def test_review_queue_receives_direction_and_user_filters(self, review_rows, _assert_access):
+    def test_review_queue_receives_direction_and_user_filters(self, review_rows, validate_scope, _assert_access):
         review_rows.return_value = (
             [
                 {
@@ -158,12 +159,14 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertEqual(filters.company, "Demo")
         self.assertEqual(filters.bank_account, "BANK-1")
         self.assertEqual(filters.search, "supplier")
+        self.assertTrue(validate_scope.call_args.kwargs["require_branch_when_restricted"])
 
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_workspace.validate_report_scope", return_value={"branch": ""})
     @patch("retailedge.banking_workspace._get_review_queue_rows")
     @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
     def test_to_match_combines_unmatched_and_review_rows_without_losing_manual_review(
-        self, unmatched_rows, review_rows, _assert_access
+        self, unmatched_rows, review_rows, _validate_scope, _assert_access
     ):
         unmatched_rows.return_value = (
             [
@@ -188,7 +191,7 @@ class BankingWorkspaceTests(unittest.TestCase):
             ],
             0,
         )
-        payload = get_banking_workspace_rows(direction="All", queue=QUEUE_TO_MATCH)
+        payload = get_banking_workspace_rows(direction="All", queue=QUEUE_TO_MATCH, company="Demo")
         self.assertEqual(payload["count"], 2)
         self.assertEqual(
             {row["operational_status"] for row in payload["rows"]},
@@ -196,10 +199,11 @@ class BankingWorkspaceTests(unittest.TestCase):
         )
 
     @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_workspace.validate_report_scope", return_value={"branch": ""})
     @patch("retailedge.banking_workspace._get_review_queue_rows")
     @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
     def test_to_match_respects_requested_result_limit_after_combining_sources(
-        self, unmatched_rows, review_rows, _assert_access
+        self, unmatched_rows, review_rows, _validate_scope, _assert_access
     ):
         unmatched_rows.return_value = (
             [
@@ -222,7 +226,7 @@ class BankingWorkspaceTests(unittest.TestCase):
             ],
             0,
         )
-        payload = get_banking_workspace_rows(direction="All", queue=QUEUE_TO_MATCH, limit=3)
+        payload = get_banking_workspace_rows(direction="All", queue=QUEUE_TO_MATCH, limit=3, company="Demo")
         self.assertEqual(payload["count"], 3)
 
 
@@ -249,6 +253,41 @@ class BankingWorkspaceTests(unittest.TestCase):
                 "skipped_count": 0,
             },
         )
+
+
+    def test_exception_summary_drill_filters_to_stored_blocked_or_failed_states(self):
+        filters = SimpleNamespace(
+            company="Demo",
+            branch="Lagos",
+            bank_account=None,
+            from_date=None,
+            to_date=None,
+            exception_summary_only=1,
+        )
+        result = _review_db_filters(QUEUE_EXCEPTIONS, filters)
+        self.assertEqual(result["decision_status"], "Confirmed")
+        self.assertEqual(result["execution_status"], ["in", ["Blocked", "Failed"]])
+
+    @patch("retailedge.banking_workspace.assert_can_access_bank_transaction_matching")
+    @patch("retailedge.banking_workspace.validate_report_scope", return_value={"branch": "Lagos"})
+    @patch("retailedge.banking_workspace._get_review_queue_rows")
+    @patch("retailedge.banking_workspace._get_unmatched_bank_transaction_rows")
+    def test_business_hub_review_focus_excludes_unmatched_transactions(
+        self, unmatched_rows, review_rows, _validate_scope, _assert_access
+    ):
+        review_rows.return_value = (
+            [{"bank_transaction": "BT-REVIEW", "transaction_date": "2026-09-01", "operational_status": STATUS_NEEDS_REVIEW}],
+            0,
+        )
+        payload = get_banking_workspace_rows(
+            direction="All",
+            queue=QUEUE_TO_MATCH,
+            company="Demo",
+            branch="Lagos",
+            review_only=1,
+        )
+        unmatched_rows.assert_not_called()
+        self.assertEqual(payload["count"], 1)
 
 
 if __name__ == "__main__":

@@ -83,7 +83,7 @@
 								:key="card.label"
 								type="button"
 								class="home-kpi-card"
-								@click="openHomeRoute(card.route, homeRouteFilters(card))"
+								@click="openHomeRoute(card.route, card.route_filters || homeRouteFilters(card))
 							>
 								<span class="home-kpi-card-heading">
 									<span>{{ card.label }}</span>
@@ -804,6 +804,10 @@ export default {
 			}
 			if (row.drill_field && row.drill_value) {
 				filters[row.drill_field] = row.drill_value;
+			}
+			if (chart.key === "cash_flow" && series?.key) {
+				if (series.key === "money_in") filters.movement_type = "Money In";
+				if (series.key === "money_out") filters.movement_type = "Money Out";
 			}
 			this.openHomeRoute(route, filters);
 		},

@@ -14,6 +14,7 @@ from retailedge.branch_context import (
 	resolve_branch_from_warehouse,
 )
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
+from retailedge.reporting_capabilities import require_report_view_access
 from retailedge.stock_movement_filters import branch_query, warehouse_query
 
 DEFAULT_PAGE_SIZE = 50
@@ -764,6 +765,7 @@ def _sales_invoice_branch_field() -> str | None:
 
 
 def _assert_report_access(filters: frappe._dict) -> None:
+	require_report_view_access("sales-invoice-register")
 	if not frappe.has_permission("Sales Invoice", "read"):
 		frappe.throw(_("You do not have permission to view Sales Invoices."), frappe.PermissionError)
 	_assert_named_read("Company", filters.company)

@@ -11,6 +11,7 @@ from frappe.utils import cint, flt
 from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.cost_visibility import should_hide_cost_price
 from retailedge.operating_context import get_operational_branch_scope
+from retailedge.reporting_capabilities import require_report_view_access
 from retailedge.retailedge.report.retailedge_stock_movement_history.retailedge_stock_movement_history import (
 	get_branch_warehouses,
 )
@@ -647,6 +648,7 @@ def _columns(currency: str, *, show_costs: bool) -> list[dict[str, Any]]:
 
 
 def _assert_report_access(filters: frappe._dict) -> None:
+	require_report_view_access("stock-position")
 	_assert_named_read("Company", filters.company)
 	if not frappe.has_permission("Bin", "read"):
 		frappe.throw(_("You do not have permission to view current stock quantities."), frappe.PermissionError)

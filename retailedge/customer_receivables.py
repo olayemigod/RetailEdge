@@ -14,6 +14,7 @@ from retailedge.branch_context import (
 )
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
 from retailedge.receivables_collections import enrich_receivable_rows
+from retailedge.reporting_capabilities import require_report_view_access
 from retailedge.stock_movement_filters import branch_query
 
 DEFAULT_PAGE_SIZE = 50
@@ -45,6 +46,7 @@ def get_customer_receivables_context() -> dict[str, Any]:
 			"customer": "",
 			"customer_group": "",
 			"ageing_bucket": "All",
+			"overdue_only": 0,
 			"page_size": DEFAULT_PAGE_SIZE,
 		},
 		"tenant_name": company,
@@ -204,6 +206,8 @@ def _build_customer_receivables_dataset(filters: frappe._dict) -> dict[str, Any]
 		overdue_days = max(0, date_diff(balance_date, due_date))
 		bucket = _ageing_bucket(overdue_days)
 		if filters.get("ageing_bucket") not in (None, "", "All", bucket):
+			continue
+		if cint(filters.get("overdue_only")) and overdue_days <= 0:
 			continue
 		rows.append(
 			{
@@ -414,6 +418,7 @@ def _sales_invoice_branch_field() -> str | None:
 
 
 def _assert_report_access(filters: frappe._dict) -> None:
+	require_report_view_access("customer-receivables")
 	if not frappe.has_permission("Sales Invoice", "read"):
 		frappe.throw(_("You do not have permission to view Sales Invoices."), frappe.PermissionError)
 	_assert_named_read("Company", filters.company)

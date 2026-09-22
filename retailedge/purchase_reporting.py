@@ -14,6 +14,7 @@ from retailedge.branch_context import (
 	resolve_branch_from_warehouse,
 )
 from retailedge.operating_context import get_operational_branch_scope, validate_operating_branch
+from retailedge.reporting_capabilities import require_report_view_access
 from retailedge.stock_movement_filters import branch_query, warehouse_query
 
 DEFAULT_PAGE_SIZE = 50
@@ -52,6 +53,7 @@ def _report_context_defaults() -> dict[str, Any]:
 		"status": "",
 		"invoice_kind": "All",
 		"ageing_bucket": "All",
+		"overdue_only": 0,
 		"page_size": DEFAULT_PAGE_SIZE,
 	}
 
@@ -379,6 +381,8 @@ def _build_supplier_payables_dataset(filters: frappe._dict) -> dict[str, Any]:
 		bucket = _ageing_bucket(overdue_days)
 		if filters.get("ageing_bucket") not in (None, "", "All", bucket):
 			continue
+		if cint(filters.get("overdue_only")) and overdue_days <= 0:
+			continue
 		rows.append(
 			{
 				"invoice": row.name,
@@ -607,6 +611,7 @@ def _purchase_invoice_branch_field() -> str | None:
 
 
 def _assert_report_access(filters: frappe._dict) -> None:
+	require_report_view_access("purchase-register")
 	if not frappe.has_permission("Purchase Invoice", "read"):
 		frappe.throw(_("You do not have permission to view Purchase Invoices."), frappe.PermissionError)
 	_assert_named_read("Company", filters.company)

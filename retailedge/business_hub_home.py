@@ -108,7 +108,7 @@ def get_business_hub_home_snapshot(
 			"restricted": bool(scope.get("restricted")),
 			"allowed_branches": allowed if scope.get("restricted") else [],
 		},
-		"cards": _headline_cards(owner),
+		"cards": _headline_cards(owner, company=company, branch=branch, period=period),
 		"sections": sections,
 		"indices": indices,
 		"settings": action_settings,
@@ -532,12 +532,65 @@ def _business_indices(
 	else:
 		bank_signal = _signal(_summary_card(banking_section, "Ready for Reconciliation"), message=_("Banking work is ready for normal review and reconciliation."))
 
+	sales_route_filters = dict(period_filters)
+	if sales_signal.get("requires_action") and sales_signal.get("label") == "Returns":
+		sales_route_filters["invoice_kind"] = "Returns"
+
+	cash_route = "/app/cash-movement"
+	cash_route_filters = dict(period_filters)
+	if cash_signal.get("requires_action") and cash_signal.get("label") in {"Cash Variance", "Exceptions"}:
+		cash_route = "/app/cash-shift-verification"
+
+	stock_route_filters = dict(current_filters)
+	stock_status_by_signal = {
+		"Negative Stock": "Negative",
+		"Reorder Due": "Reorder Due",
+		"Out of Stock": "Out of Stock",
+		"Fully Reserved": "Fully Reserved",
+	}
+	if stock_signal.get("requires_action") and stock_signal.get("label") in stock_status_by_signal:
+		stock_route_filters["stock_status"] = stock_status_by_signal[stock_signal.get("label")]
+
+	expense_route = "/app/expense-register"
+	expense_route_filters = {
+		**period_filters,
+		"view_mode": "consolidated",
+		"include_unposted_cashier_expenses": 0,
+	}
+	if expense_signal.get("requires_action"):
+		expense_route = "/app/expense-review"
+		expense_route_filters = {**period_filters, "daily_audit_inclusion_status": "All"}
+		if expense_signal.get("label") == "Posting Blocked":
+			expense_route_filters["posting_ready"] = "0"
+		elif expense_signal.get("label") == "Submitted for Review":
+			expense_route_filters["expense_status"] = "Submitted"
+
+	receivable_route_filters = dict(current_filters)
+	if receivable_signal.get("label") == "Over 90 Days":
+		receivable_route_filters["ageing_bucket"] = "91+ Days"
+	elif receivable_signal.get("label") == "Overdue":
+		receivable_route_filters["overdue_only"] = 1
+
+	payable_route_filters = dict(current_filters)
+	if payable_signal.get("label") == "Over 90 Days":
+		payable_route_filters["ageing_bucket"] = "91+ Days"
+	elif payable_signal.get("label") == "Overdue":
+		payable_route_filters["overdue_only"] = 1
+
+	banking_route_filters = dict(period_filters)
+	if bank_signal.get("label") == "Reconciliation Exceptions":
+		banking_route_filters.update({"queue": "Exceptions", "exception_summary_only": 1})
+	elif bank_signal.get("label") == "Bank Matches Need Review":
+		banking_route_filters.update({"queue": "To Match", "review_only": 1})
+	else:
+		banking_route_filters["queue"] = "To Reconcile"
+
 	return [
 		_index_card(
 			key="sales",
 			label=_("Sales"),
 			route="/app/sales-invoice-register",
-			route_filters=period_filters,
+			route_filters=sales_route_filters,
 			headline=_summary_card(sales, "Net Invoiced"),
 			signal=sales_signal,
 			recommendation=_("Review sales invoices and returns for the selected period."),
@@ -548,8 +601,8 @@ def _business_indices(
 		_index_card(
 			key="cash",
 			label=_("Cash"),
-			route="/app/cash-movement",
-			route_filters=period_filters,
+			route=cash_route,
+			route_filters=cash_route_filters,
 			headline=_summary_card(cash, "Net Change"),
 			signal=cash_signal,
 			recommendation=_("Review cash movement and investigate cash-shift exceptions where present."),
@@ -561,7 +614,7 @@ def _business_indices(
 			key="stock",
 			label=_("Stock"),
 			route="/app/stock-position",
-			route_filters=current_filters,
+			route_filters=stock_route_filters,
 			headline=_first_summary_card(stock, ("Stock Value", "Items in Scope")),
 			signal=stock_signal,
 			recommendation=_("Review stock availability and replenish or correct exceptions."),
@@ -572,9 +625,9 @@ def _business_indices(
 		_index_card(
 			key="expenses",
 			label=_("Expenses"),
-			route="/app/expense-register",
-			route_filters=period_filters,
-			headline=_summary_card(expenses, "Total Expenses"),
+			route=expense_route,
+			route_filters=expense_route_filters,
+			headline=_first_summary_card(expenses, ("Posted Expenses", "Total Expenses")),
 			signal=expense_signal,
 			recommendation=_("Review expense approvals, posting readiness and period spend."),
 			action_label=_("Review Expenses"),
@@ -585,7 +638,7 @@ def _business_indices(
 			key="receivables",
 			label=_("Receivables"),
 			route="/app/customer-receivables",
-			route_filters=current_filters,
+			route_filters=receivable_route_filters,
 			headline=_summary_card(receivables, "Total Receivables"),
 			signal=receivable_signal,
 			recommendation=_("Prioritise overdue customer balances and collection follow-up."),
@@ -597,7 +650,7 @@ def _business_indices(
 			key="payables",
 			label=_("Payables"),
 			route="/app/supplier-payables",
-			route_filters=current_filters,
+			route_filters=payable_route_filters,
 			headline=_summary_card(payables, "Total Payables"),
 			signal=payable_signal,
 			recommendation=_("Review supplier balances and schedule overdue payments."),
@@ -621,7 +674,7 @@ def _business_indices(
 			key="banking",
 			label=_("Banking"),
 			route="/app/bank-matching-reconciliation",
-			route_filters=period_filters,
+			route_filters=banking_route_filters,
 			headline=_summary_card(banking_section, "Ready for Reconciliation"),
 			signal=bank_signal,
 			recommendation=_("Review bank matches and clear reconciliation exceptions."),
@@ -646,13 +699,21 @@ def _prioritized_attention(
 		for item in (owner.get("payload") or {}).get("attention") or []:
 			if str(item.get("section") or "") != "profitability":
 				continue
+			profitability_filters = dict(period_filters)
+			focus = {
+				"Negative Margin Items": "negative_margin",
+				"Low Margin Items": "low_margin",
+				"Items Missing Recorded Cost": "missing_cost",
+			}.get(str(item.get("metric") or "").strip())
+			if focus:
+				profitability_filters["focus"] = focus
 			items.append(
 				{
 					**item,
 					"priority": 1 if item.get("tone") == "danger" else 2,
 					"recommendation": item.get("label") or _("Review profitability exceptions."),
 					"action_label": _("Review Profitability"),
-					"route_filters": period_filters,
+					"route_filters": profitability_filters,
 				}
 			)
 
@@ -719,15 +780,23 @@ def _today_section(owner: dict[str, Any]) -> dict[str, Any]:
 		("sales", "Net Invoiced", _("Sales")),
 		("cash", "Money In", _("Money In")),
 		("cash", "Money Out", _("Money Out")),
-		("expenses", "Total Expenses", _("Expenses")),
+		("expenses", "Posted Expenses", _("Expenses")),
 	):
 		card = _summary_card(sections.get(section_key), metric)
+		if not card and section_key == "expenses":
+			card = _summary_card(sections.get(section_key), "Total Expenses")
 		if card:
 			summary.append({**card, "label": label})
 	return {"available": bool(summary), "label": _("Today"), "summary": summary, "route": "/app/owner-dashboard", "reason": ""}
 
 
-def _headline_cards(owner: dict[str, Any]) -> list[dict[str, Any]]:
+def _headline_cards(
+	owner: dict[str, Any],
+	*,
+	company: str,
+	branch: str,
+	period: dict[str, str],
+) -> list[dict[str, Any]]:
 	if not owner.get("available"):
 		return []
 	payload = owner.get("payload") or {}
@@ -743,7 +812,11 @@ def _headline_cards(owner: dict[str, Any]) -> list[dict[str, Any]]:
 		label = str(card.get("label") or "").strip()
 		if label not in route_by_label:
 			continue
-		cards.append({**card, "route": route_by_label[label]})
+		current = str(card.get("time_basis") or "period") == "current"
+		route_filters = _route_filters(company=company, branch=branch, period=period, current=current)
+		if label == "Expenses":
+			route_filters.update({"view_mode": "consolidated", "include_unposted_cashier_expenses": 0})
+		cards.append({**card, "route": route_by_label[label], "route_filters": route_filters})
 	return cards[:6]
 
 

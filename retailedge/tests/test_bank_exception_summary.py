@@ -40,6 +40,13 @@ def test_bank_exception_summary_classifies_existing_match_state_without_candidat
 			decision_status="Confirmed",
 			execution_status="Failed",
 		),
+		frappe._dict(
+			name="M5",
+			transaction_date="2026-08-05",
+			bank_amount=500,
+			decision_status="Reopened",
+			execution_status="Failed",
+		),
 	]
 	with (
 		patch(
@@ -52,9 +59,10 @@ def test_bank_exception_summary_classifies_existing_match_state_without_candidat
 			{"company": "Test Company", "from_date": "2026-08-01", "to_date": "2026-08-20"}
 		)
 	cards = {row["label"]: row["value"] for row in result["summary"]}
-	assert cards["Bank Matches Need Review"] == 1
+	assert cards["Bank Matches Need Review"] == 2
 	assert cards["Ready for Reconciliation"] == 1
 	assert cards["Reconciliation Exceptions"] == 2
+	assert result["scan"]["rows"] == 5
 	assert result["metadata"]["candidate_discovery"] is False
 
 

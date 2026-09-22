@@ -157,6 +157,8 @@
 						from_date: "",
 						to_date: "",
 						search: "",
+						review_only: 0,
+						exception_summary_only: 0,
 					},
 					notice: { message: "", tone: "neutral" },
 					candidate: {
@@ -221,7 +223,10 @@
 					if (!state.filters.company) state.filters.company = context.context?.company || "";
 					if (!state.filters.branch) state.filters.branch = context.context?.branch || "";
 					const hubHandoff = global.retailedgeConsumeBusinessHubRouteOptions?.(PAGE_NAME) || {};
-					Object.assign(state.filters, hubHandoff);
+					const handoffFilters = { ...hubHandoff };
+					if (QUEUES.includes(handoffFilters.queue)) state.queue = handoffFilters.queue;
+					delete handoffFilters.queue;
+					Object.assign(state.filters, handoffFilters);
 					if (hubHandoff.company) state.tenantName = hubHandoff.company;
 					if (hubHandoff.branch) state.branchName = hubHandoff.branch;
 				}
@@ -281,6 +286,8 @@
 						from_date: "",
 						to_date: "",
 						search: "",
+						review_only: 0,
+						exception_summary_only: 0,
 					});
 					refresh();
 				}
@@ -931,7 +938,12 @@
 							renderNotice(),
 							renderStats(),
 							selectorBar("Direction", DIRECTIONS, state.direction, (value) => { state.direction = value; refresh(); }),
-							selectorBar("Workflow Status", QUEUES, state.queue, (value) => { state.queue = value; refresh(); }),
+							selectorBar("Workflow Status", QUEUES, state.queue, (value) => {
+									state.queue = value;
+									state.filters.review_only = 0;
+									state.filters.exception_summary_only = 0;
+									refresh();
+								}),
 							state.loading ? h(EdgeLoadingState, { message: t("Loading banking queue...") }) : null,
 							state.error ? h(EdgeErrorState, { message: state.error, actionLabel: t("Try again"), onRetry: refresh }) : null,
 							!state.loading && !state.error && !state.rows.length ? h(EdgeEmptyState, {

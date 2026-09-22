@@ -16,6 +16,7 @@ from retailedge.business_expense_register import (
 	get_consolidated_expense_register,
 )
 from retailedge.operating_context import get_operational_branch_scope
+from retailedge.reporting_capabilities import require_report_view_access
 
 EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
 CATEGORY_DOCTYPE = "RetailEdge Expense Category"
@@ -482,6 +483,7 @@ def _assert_category_in_company_scope(*, category: str, company: str) -> None:
 
 
 def _assert_expense_read_access() -> None:
+	require_report_view_access("expense-register")
 	if not frappe.db.exists("DocType", EXPENSE_DOCTYPE) or not frappe.has_permission(EXPENSE_DOCTYPE, "read"):
 		frappe.throw(_("You do not have permission to view Cashier Expenses."), frappe.PermissionError)
 
