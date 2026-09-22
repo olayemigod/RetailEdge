@@ -40,6 +40,13 @@ class TestGuidedStockAdjustment(unittest.TestCase):
 		self.assertIn('frappe.has_permission(', source)
 		self.assertIn('STOCK_RECONCILIATION_DOCTYPE, "create"', source)
 
+	def test_context_prefers_active_operating_company_over_user_default(self):
+		source = (APP_ROOT / "guided_stock_adjustment.py").read_text(encoding="utf-8")
+		self.assertIn("get_operating_context", source)
+		self.assertIn('company = resolve_guided_company("", user=user)', source)
+		self.assertIn("resolve_guided_default_branch(", source)
+		self.assertNotIn('Set a default Company before creating a Stock Adjustment.', source)
+
 	def test_backend_uses_bounded_permission_aware_searches(self):
 		source = (APP_ROOT / "guided_stock_adjustment.py").read_text(encoding="utf-8")
 		self.assertIn("MAX_LINK_RESULTS = 20", source)
