@@ -270,7 +270,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 
 QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 	{
-		"key": "new-sales-invoice", "label": "New Sales Invoice", "description": "Create a formal cash, credit, wholesale, or account-customer invoice.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
+		"key": "new-sales-invoice", "label": "Quick Sale", "description": "Create a short Sales Invoice quickly. Use Make Sale for larger or multi-item transactions.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record and allocate money received from a customer.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
