@@ -299,7 +299,7 @@ export default {
 				values: {
 					company: this.preview?.company || "",
 					branch: this.preview?.branch || "",
-					warehouse: this.preview?.update_stock ? (this.preview?.editable_items?.[0]?.warehouse || "") : "",
+					warehouse: this.preview?.update_stock ? (this.preview?.default_warehouse || "") : "",
 					supplier: this.preview?.supplier || "",
 				},
 			});
