@@ -168,6 +168,17 @@ def _reference_previews(doc: Any, payment_branch: str) -> tuple[list[dict[str, A
 			blockers.append(_("Referenced Purchase Invoice {0} is not submitted.").format(invoice_name))
 		if cint(getattr(invoice, "is_return", 0)):
 			blockers.append(_("Return Purchase Invoices require Advanced ERPNext review."))
+		payment_terms_template = str(getattr(invoice, "payment_terms_template", "") or "").strip()
+		if payment_terms_template and frappe.db.get_value(
+			"Payment Terms Template",
+			payment_terms_template,
+			"allocate_payment_based_on_payment_terms",
+		):
+			blockers.append(
+				_("Purchase Invoice {0} uses payment-term allocation and requires Advanced ERPNext review.").format(
+					invoice_name
+				)
+			)
 		if str(getattr(invoice, "company", "") or "") != company:
 			blockers.append(_("Payment Entry and Purchase Invoice {0} must belong to the same Company.").format(invoice_name))
 		if str(getattr(invoice, "supplier", "") or "") != supplier:
