@@ -35,9 +35,9 @@
 						<button v-if="capabilities.can_create_purchase_order" type="button" class="edge-button edge-button--primary" @click="newPurchaseOrder">New Purchase Order</button>
 						<button v-if="capabilities.can_read_request_for_quotation" type="button" class="edge-button edge-button--secondary" @click="openRequestsForQuotation">RFQs</button>
 						<button v-if="capabilities.can_read_supplier_quotation" type="button" class="edge-button edge-button--secondary" @click="openSupplierQuotations">Supplier Quotations</button>
-						<button v-if="capabilities.can_compare_supplier_quotations" type="button" class="edge-button edge-button--secondary" @click="openSupplierQuotationComparison">Compare Quotations</button>
-						<button v-if="capabilities.can_open_purchase_order_analysis" type="button" class="edge-button edge-button--secondary" @click="openPurchaseOrderAnalysis">PO Analysis</button>
-						<button v-if="procurementTracker.available" type="button" class="edge-button edge-button--secondary" @click="openProcurementTracker">Procurement Tracker</button>
+						<button v-if="canUseNativeDesk && capabilities.can_compare_supplier_quotations" type="button" class="edge-button edge-button--secondary" @click="openSupplierQuotationComparison">Compare Quotations</button>
+						<button v-if="canUseNativeDesk && capabilities.can_open_purchase_order_analysis" type="button" class="edge-button edge-button--secondary" @click="openPurchaseOrderAnalysis">PO Analysis</button>
+						<button v-if="canUseNativeDesk && procurementTracker.available" type="button" class="edge-button edge-button--secondary" @click="openProcurementTracker">Procurement Tracker</button>
 						<button v-if="capabilities.can_read_purchase_receipt" type="button" class="edge-button edge-button--secondary" @click="openPurchaseReceipts">Purchase Receipts</button>
 					</div>
 				</section>
@@ -222,7 +222,7 @@
 					<div class="panel-heading">
 						<div><span class="purchasing-kicker">ERPNext sourcing demand</span><h3>Purchase Material Requests</h3></div>
 						<div class="hero-actions">
-							<button type="button" class="edge-button edge-button--secondary" @click="openMaterialRequests">Material Requests</button>
+							<button v-if="canUseNativeDesk" type="button" class="edge-button edge-button--secondary" @click="openMaterialRequests">Material Requests</button>
 							<button type="button" class="edge-button edge-button--secondary" :disabled="loading" @click="loadWorkspace">Refresh</button>
 						</div>
 					</div>
@@ -238,10 +238,10 @@
 								<th>Actions</th>
 							</tr></thead>
 							<tbody><tr v-for="row in sortedMaterialRequests" :key="row.name">
-								<td><button type="button" class="link-button" @click="openMaterialRequest(row.name)">{{ row.name }}</button><small v-if="row.title && row.title !== row.name" class="row-subtitle">{{ row.title }}</small></td>
+								<td><button v-if="canUseNativeDesk" type="button" class="link-button" @click="openMaterialRequest(row.name)">{{ row.name }}</button><strong v-else>{{ row.name }}</strong><small v-if="row.title && row.title !== row.name" class="row-subtitle">{{ row.title }}</small></td>
 								<td>{{ formatDate(row.transaction_date) }}</td><td>{{ formatDate(row.schedule_date) }}</td><td>{{ row.branch || "—" }}</td>
 								<td><span class="status-pill">{{ row.status || "Submitted" }}</span></td><td class="num">{{ formatPercent(row.per_ordered) }}</td>
-								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openMaterialRequest(row.name)">Open</button><button v-if="row.can_start_rfq" type="button" class="edge-small-button edge-small-button--primary" @click="startRfq(row)">Start RFQ</button></td>
+								<td class="actions-cell"><button v-if="canUseNativeDesk" type="button" class="edge-small-button" @click="openMaterialRequest(row.name)">Open</button><button v-if="row.can_start_rfq" type="button" class="edge-small-button edge-small-button--primary" @click="startRfq(row)">Start RFQ</button></td>
 							</tr></tbody>
 						</table>
 					</div>
@@ -265,7 +265,7 @@
 				<section class="edge-panel orders-panel">
 					<div class="panel-heading">
 						<div><span class="purchasing-kicker">ERPNext order truth</span><h3>Purchase Orders & Attention</h3><p>Attention flags are server-derived guidance from current ERPNext PO dates and progress. Use PO Analysis for item-level quantities and amounts.</p></div>
-						<div class="hero-actions"><button v-if="capabilities.can_open_purchase_order_analysis" type="button" class="edge-button edge-button--secondary" @click="openPurchaseOrderAnalysis">Open PO Analysis</button><button type="button" class="edge-button edge-button--secondary" :disabled="loading" @click="loadWorkspace">Refresh</button></div>
+						<div class="hero-actions"><button v-if="canUseNativeDesk && capabilities.can_open_purchase_order_analysis" type="button" class="edge-button edge-button--secondary" @click="openPurchaseOrderAnalysis">Open PO Analysis</button><button type="button" class="edge-button edge-button--secondary" :disabled="loading" @click="loadWorkspace">Refresh</button></div>
 					</div>
 					<div class="attention-controls" aria-label="Purchase Order attention filter">
 						<button v-for="option in attentionOptions" :key="option.key" type="button" class="attention-chip" :class="{ 'attention-chip--active': attentionFilter === option.key }" @click="setAttentionFilter(option.key)">{{ option.label }} <strong>{{ attentionCount(option.key) }}</strong></button>
@@ -290,7 +290,7 @@
 								<td><span class="status-pill">{{ row.status || (row.docstatus === 0 ? "Draft" : "Submitted") }}</span></td>
 								<td><div class="attention-badges"><span v-if="!row.attention_flags?.length" class="attention-badge attention-badge--clear">Clear</span><span v-for="flag in row.attention_flags || []" :key="flag.key" class="attention-badge" :class="`attention-badge--${flag.kind || 'readiness'}`">{{ flag.label }}</span></div></td>
 								<td class="num">{{ formatPercent(row.per_received) }}</td><td class="num">{{ formatPercent(row.per_billed) }}</td><td class="num strong">{{ formatMoney(row.grand_total, row.currency) }}</td>
-								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openPurchaseOrder(row.name)">Open</button><button v-if="row.can_prepare_receipt" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingReceipt === row.name" @click="prepareReceipt(row)">{{ preparingReceipt === row.name ? "Preparing…" : "Prepare Receipt" }}</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? "Preparing…" : "Create Invoice" }}</button></td>
+								<td class="actions-cell"><button type="button" class="edge-small-button" @click="openPurchaseOrder(row.name)">{{ canUseNativeDesk ? "Open" : "Review" }}</button><button v-if="row.can_prepare_receipt" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingReceipt === row.name" @click="prepareReceipt(row)">{{ preparingReceipt === row.name ? "Preparing…" : "Prepare Receipt" }}</button><button v-if="row.can_prepare_invoice" type="button" class="edge-small-button edge-small-button--primary" :disabled="preparingInvoice === row.name" @click="prepareInvoice(row)">{{ preparingInvoice === row.name ? "Preparing…" : "Create Invoice" }}</button></td>
 							</tr></tbody>
 						</table>
 					</div>
@@ -330,6 +330,7 @@ const CONTEXT_METHOD = "retailedge.professional_purchasing.get_professional_purc
 const PROCUREMENT_TRACKER_HANDOFF_METHOD = "retailedge.procurement_tracker_handoff.get_procurement_tracker_handoff";
 const SEARCH_METHOD = "retailedge.professional_purchasing.search_professional_purchasing_options";
 const OPEN_PURCHASE_ORDER_EVENT = "retailedge-open-professional-purchase-order";
+const OPEN_PURCHASE_ORDER_SUBMIT_EVENT = "retailedge-open-purchase-order-submit";
 const OPEN_RFQ_PREVIEW_EVENT = "retailedge-open-professional-rfq-preview";
 const OPEN_RFQ_HISTORY_EVENT = "retailedge-open-professional-rfq-history";
 const OPEN_SUPPLIER_QUOTATION_HISTORY_EVENT = "retailedge-open-professional-supplier-quotation-history";
@@ -650,7 +651,11 @@ export default {
 		openSupplierQuotationComparison() { if (!this.canUseNativeDesk) return; frappe.set_route("query-report", "Supplier Quotation Comparison"); },
 		openPurchaseOrderAnalysis() { if (!this.canUseNativeDesk) return; frappe.route_options = { company: this.filters.company || this.company || "" }; frappe.set_route("query-report", "Purchase Order Analysis"); },
 		openProcurementTracker() { if (!this.canUseNativeDesk || !this.procurementTracker?.available) return; frappe.route_options = { company: this.procurementTracker.company || this.filters.company || this.company || "" }; frappe.set_route("query-report", this.procurementTracker.report || "Procurement Tracker"); },
-		openPurchaseOrder(name) { if (this.canUseNativeDesk && name) frappe.set_route("Form", "Purchase Order", name); },
+		openPurchaseOrder(name) {
+			if (!name) return;
+			if (this.canUseNativeDesk) frappe.set_route("Form", "Purchase Order", name);
+			else dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { purchase_order: name });
+		},
 		openPurchaseReceipts() { dispatchEdgeSuiteEvent(OPEN_PURCHASE_RECEIPT_HISTORY_EVENT); },
 		sortBy(key) { if (this.sort.key === key) this.sort.direction = this.sort.direction === "asc" ? "desc" : "asc"; else this.sort = { key, direction: "asc" }; }, sortMark(key) { return this.sort.key === key ? (this.sort.direction === "asc" ? "↑" : "↓") : ""; },
 		sortMaterialBy(key) { if (this.materialSort.key === key) this.materialSort.direction = this.materialSort.direction === "asc" ? "desc" : "asc"; else this.materialSort = { key, direction: "asc" }; }, materialSortMark(key) { return this.materialSort.key === key ? (this.materialSort.direction === "asc" ? "↑" : "↓") : ""; },
