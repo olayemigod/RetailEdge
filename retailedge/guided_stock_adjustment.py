@@ -24,7 +24,7 @@ ACTION_KEY = "adjust-stock"
 STOCK_RECONCILIATION_DOCTYPE = "Stock Reconciliation"
 STOCK_RECONCILIATION_PURPOSE = "Stock Reconciliation"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
