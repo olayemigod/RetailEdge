@@ -185,7 +185,7 @@ export default {
 				if (!result?.name) throw new Error("Stock Reconciliation draft was not returned.");
 				this.clearRecovery(); this.initialSnapshot = JSON.stringify(this.values);
 				this.savedDocument = { ...result, doctype: result.doctype || "Stock Reconciliation" };
-				this.completionOpen = true;
+				this.completionOpen = false;
 				frappe.show_alert?.({ message: `Stock Adjustment ${result.name} saved as Draft`, indicator: "green" });
 			} catch (error) { this.saveError = errorMessage(error, "Stock Adjustment could not be saved."); }
 			finally { this.saving = false; }
