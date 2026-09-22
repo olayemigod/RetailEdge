@@ -107,6 +107,24 @@ def test_update_stock_is_branch_safe_and_advanced_stock_complexity_fails_closed(
 		assert marker in source
 
 
+
+def test_purchase_invoice_item_access_is_revalidated_in_preview_queue_edit_submit_and_workflow():
+	source = _read(SERVICE)
+	assert "def _validate_purchase_item_access(doc)" in source
+	assert '_assert_read("Item", item_code)' in source
+	for function_name in (
+		"def _build_preview",
+		"def _eligible_queue_row",
+		"def update_standard_purchase_invoice_draft",
+		"def submit_standard_purchase_invoice",
+		"def apply_standard_purchase_invoice_workflow_action",
+	):
+		start = source.index(function_name)
+		end = source.find("\ndef ", start + len(function_name))
+		segment = source[start:end if end >= 0 else len(source)]
+		assert "_validate_purchase_item_access(doc)" in segment
+
+
 def test_direct_submit_locks_stale_checks_revalidates_and_calls_native_submit_only():
 	source = _read(SERVICE)
 	start = source.index("def submit_standard_purchase_invoice")
