@@ -353,6 +353,9 @@ def _update_stock_draft_items(doc, requested_items: Any, *, preview: dict[str, A
 				_assert_simple_transfer_item(item_code)
 			else:
 				_assert_simple_adjustment_item(item_code)
+			tracking = _item_tracking(item_code)
+			if tracking["has_serial_no"] or tracking["has_batch_no"]:
+				frappe.throw(_("Item {0} uses Serial No or Batch tracking and requires Advanced ERPNext.").format(item_code))
 			if kind == "transfer":
 				row = doc.append(
 					"items",
@@ -474,9 +477,9 @@ def update_standard_stock_document_draft(
 		frappe.throw(_("Enter a valid Posting Date."), frappe.ValidationError)
 	if doctype == STOCK_ENTRY_DOCTYPE and doc.meta.has_field("remarks") and "remarks" in values:
 		doc.remarks = _clean(values.get("remarks"))
-	requested_items = values.get("items") if "items" in values else items
-	if requested_items is not None:
-		_update_stock_draft_items(doc, requested_items, preview=preview)
+	items = values.get("items") if "items" in values else items
+	if items is not None:
+		_update_stock_draft_items(doc, items, preview=preview)
 	# ERPNext owns stock defaults, valuation and draft validation. Saving a draft
 	# here does not post Stock Ledger or accounting entries.
 	doc.save()
