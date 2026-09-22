@@ -101,6 +101,7 @@
 			<ProfessionalSalesInvoiceDialog
 				:open="salesInvoiceOpen"
 				:context="sellingContext"
+				:canUseNativeDesk="canUseNativeDesk"
 				@close="salesInvoiceOpen = false"
 				@saved="handleSalesInvoiceSaved"
 			/>
@@ -342,7 +343,12 @@ export default {
 		},
 		handleSalesInvoiceSaved(result) {
 			this.salesInvoiceOpen = false;
-			if (result?.name && !result?.is_return) {
+			if (result?.name && result?.is_return) {
+				if (this.canUseNativeDesk) {
+					frappe.show_alert({ message: __("Draft Return / Credit Note prepared for Advanced ERPNext review."), indicator: "orange" });
+					frappe.set_route("Form", "Sales Invoice", result.name);
+				}
+			} else if (result?.name) {
 				this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name });
 			}
 			this.loadWorkspace();
