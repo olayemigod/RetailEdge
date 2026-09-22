@@ -90,6 +90,20 @@
 						@clear="clearCustomer"
 					/>
 					<EdgeDropdown v-model="filters.invoice_kind" :options="['All', 'Sales', 'Returns']" label="Invoice Type" />
+					<EdgeDropdown
+						v-if="config.analysis"
+						v-model="analysisPreset"
+						:options="analysisPresets"
+						label="Analysis View"
+						@change="onAnalysisPresetChange"
+					/>
+					<EdgeDropdown
+						v-if="config.analysis"
+						v-model="filters.group_by"
+						:options="groupByOptions"
+						label="Group By"
+						@change="onAnalysisGroupChange"
+					/>
 					<div class="filter-action">
 						<button class="edge-primary-button" type="button" :disabled="loading || !requiredReady" @click="applyFilters">
 							{{ loading ? "Loading…" : "Apply Filters" }}
@@ -150,6 +164,14 @@
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeSmartDateRange", "EdgeDropdown"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
+	sales_analysis: {
+		title: "Sales Analysis",
+		subtitle: "Group submitted sales by the business dimension that matters without creating separate reporting truth.",
+		providerKey: "sales-analysis",
+		route: "/app/sales-analysis",
+		filename: "ProcessEdge Retail Sales Analysis",
+		analysis: true,
+	},
 	sales_by_item: {
 		title: "Sales by Item",
 		subtitle: "Understand what is selling, what is being returned, and the net sales contribution of each item.",
@@ -207,6 +229,7 @@ export default {
 			branchName: "",
 			userName: "",
 			companyCurrency: "",
+			analysisPreset: "Sales Trend",
 			customerLabel: "",
 			itemLabel: "",
 			smartDate: {},
@@ -224,12 +247,32 @@ export default {
 				warehouse: "",
 				status: "",
 				invoice_kind: "All",
+				group_by: "Month",
 				page_size: 50,
 			},
 			currentPage: 1,
 			datePresets: [
 				"This Month", "Today", "Yesterday", "This Week", "This Quarter", "This Year",
 				"Last Week", "Last Month", "Last Quarter", "Last Year", "Custom Period",
+			],
+			analysisPresets: [
+				"Sales Trend",
+				"Sales by Item",
+				"Sales by Category",
+				"Sales by Customer",
+				"Sales by Customer Group",
+				"Sales by Branch",
+				"Sales by Salesperson",
+				"Sales by Warehouse",
+				"Daily Sales",
+				"Weekly Sales",
+				"Quarterly Sales",
+				"Yearly Sales",
+				"Custom",
+			],
+			groupByOptions: [
+				"Day", "Week", "Month", "Quarter", "Year", "Item", "Item Group",
+				"Customer", "Customer Group", "Branch", "Salesperson", "Warehouse",
 			],
 			invoiceStatuses: ["Paid", "Unpaid", "Overdue", "Partly Paid", "Return", "Credit Note"],
 		};
@@ -266,7 +309,7 @@ export default {
 			const labels = {
 				company: "Company", from_date: "From Date", to_date: "To Date", branch: "Branch",
 				customer: "Customer", item_group: "Item Group", item_code: "Item", salesperson: "Salesperson",
-				warehouse: "Warehouse", invoice_kind: "Invoice Type", status: "Invoice Status",
+				warehouse: "Warehouse", invoice_kind: "Invoice Type", status: "Invoice Status", group_by: "Group By",
 			};
 			return Object.entries(labels)
 				.map(([key, label]) => ({ label, value: this.filters[key] }))
@@ -437,6 +480,42 @@ export default {
 			this.currentPage = 1;
 		},
 		onDateChange() { this.filters.date_range_preset = "Custom Period"; this.currentPage = 1; },
+		onAnalysisPresetChange() {
+			const groups = {
+				"Sales Trend": "Month",
+				"Sales by Item": "Item",
+				"Sales by Category": "Item Group",
+				"Sales by Customer": "Customer",
+				"Sales by Customer Group": "Customer Group",
+				"Sales by Branch": "Branch",
+				"Sales by Salesperson": "Salesperson",
+				"Sales by Warehouse": "Warehouse",
+				"Daily Sales": "Day",
+				"Weekly Sales": "Week",
+				"Quarterly Sales": "Quarter",
+				"Yearly Sales": "Year",
+			};
+			if (groups[this.analysisPreset]) this.filters.group_by = groups[this.analysisPreset];
+			this.currentPage = 1;
+		},
+		onAnalysisGroupChange() {
+			const presets = {
+				Month: "Sales Trend",
+				Item: "Sales by Item",
+				"Item Group": "Sales by Category",
+				Customer: "Sales by Customer",
+				"Customer Group": "Sales by Customer Group",
+				Branch: "Sales by Branch",
+				Salesperson: "Sales by Salesperson",
+				Warehouse: "Sales by Warehouse",
+				Day: "Daily Sales",
+				Week: "Weekly Sales",
+				Quarter: "Quarterly Sales",
+				Year: "Yearly Sales",
+			};
+			this.analysisPreset = presets[this.filters.group_by] || "Custom";
+			this.currentPage = 1;
+		},
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
 		providerFilters() {
 			const { page_size: _pageSize, date_range_preset: _preset, ...filters } = this.filters;
@@ -505,7 +584,7 @@ export default {
 			this.currentPage = 1;
 			this.fetchData();
 		},
-		rowKey(row, index) { return row.invoice || row.item_code || `${this.reportType}:${index}`; },
+		rowKey(row, index) { return row.group_key || row.invoice || row.item_code || `${this.reportType}:${index}`; },
 		openReportCell(payload) {
 			const column = payload?.column;
 			const row = payload?.row;
