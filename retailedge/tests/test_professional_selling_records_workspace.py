@@ -228,3 +228,14 @@ def test_draft_completion_actions_remain_document_specific_and_accounting_safe()
 		'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });',
 	):
 		assert contract in workspace
+
+
+def test_sales_return_next_action_requires_professional_selling_page_access():
+	source = (APP_ROOT / "professional_selling.py").read_text(encoding="utf-8")
+	assert 'def _can_open_page(page_name: str) -> bool:' in source
+	assert 'frappe.get_doc("Page", page_name).is_permitted()' in source
+	assert '_can_open_page("professional-selling")' in source
+	return_index = source.index('actions.append({"value": "create-return-credit-note"')
+	gate_index = source.rfind('_can_open_page("professional-selling")', 0, return_index)
+	assert gate_index >= 0
+
