@@ -23,6 +23,18 @@ class TestSalesReturnCreditNoteUIContract(TestCase):
 		self.assertIn('if (this.mode === "return") { method = CREATE_RETURN; args = { sales_invoice: this.sourceDocument }; }', component)
 		self.assertIn("no refund or Payment Entry is created automatically", component)
 
+	def test_return_mode_is_available_only_when_advanced_erpnext_access_is_granted(self):
+		component = (SELLING_UI / "ProfessionalSalesInvoiceDialog.vue").read_text()
+		page = (SELLING_UI / "ProfessionalSelling.vue").read_text()
+
+		self.assertIn("visibleModes()", component)
+		self.assertIn('option.key !== "return" || this.canUseNativeDesk', component)
+		self.assertIn('v-if="canUseNativeDesk"', component)
+		self.assertIn("Advanced: Open in ERPNext", component)
+		self.assertIn(':canUseNativeDesk="canUseNativeDesk"', page)
+		self.assertIn("Draft Return / Credit Note prepared for Advanced ERPNext review.", page)
+		self.assertIn('frappe.set_route("Form", "Sales Invoice", result.name)', page)
+
 	def test_return_mode_reuses_existing_edgesuite_source_pattern(self):
 		component = (SELLING_UI / "ProfessionalSalesInvoiceDialog.vue").read_text()
 
