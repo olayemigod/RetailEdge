@@ -290,6 +290,7 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"modified": str(doc.modified or ""),
 		"docstatus": doc.docstatus,
 		"supplier": doc.supplier,
 		"company": doc.company,
