@@ -204,7 +204,7 @@ export default {
 				if (!result?.name) throw new Error("Stock Entry draft was not returned.");
 				this.clearRecovery(); this.initialSnapshot = JSON.stringify(this.values);
 				this.savedDocument = { ...result, doctype: result.doctype || "Stock Entry" };
-				this.completionOpen = true;
+				this.completionOpen = false;
 				frappe.show_alert?.({ message: `Stock Transfer ${result.name} saved as Draft`, indicator: "green" });
 			} catch (error) { this.saveError = errorMessage(error, "Unable to save the Stock Transfer draft."); }
 			finally { this.saving = false; }
