@@ -530,7 +530,10 @@ def _business_indices(
 	elif bank_review and flt(bank_review.get("value")) > 0:
 		bank_signal = _signal(bank_review, tone="warning", requires_action=True, message=_("Bank matches are waiting for review."))
 	else:
-		bank_signal = _signal(_summary_card(banking_section, "Ready for Reconciliation"), message=_("Banking work is ready for normal review and reconciliation."))
+		bank_signal = _signal(
+			_summary_card(banking_section, "Confirmed Pending Reconciliation"),
+			message=_("Confirmed bank matches are still pending reconciliation."),
+		)
 
 	sales_route_filters = dict(period_filters)
 	if sales_signal.get("requires_action") and sales_signal.get("label") == "Returns":
@@ -583,7 +586,7 @@ def _business_indices(
 	elif bank_signal.get("label") == "Bank Matches Need Review":
 		banking_route_filters.update({"queue": "To Match", "review_only": 1})
 	else:
-		banking_route_filters["queue"] = "To Reconcile"
+		banking_route_filters["queue"] = "Confirmed Pending"
 
 	return [
 		_index_card(
@@ -675,7 +678,7 @@ def _business_indices(
 			label=_("Banking"),
 			route="/app/bank-matching-reconciliation",
 			route_filters=banking_route_filters,
-			headline=_summary_card(banking_section, "Ready for Reconciliation"),
+			headline=_summary_card(banking_section, "Confirmed Pending Reconciliation"),
 			signal=bank_signal,
 			recommendation=_("Review bank matches and clear reconciliation exceptions."),
 			action_label=_("Open Banking"),

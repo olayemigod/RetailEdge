@@ -58,7 +58,7 @@ def get_bank_exception_summary(filters: dict[str, Any] | str | None = None) -> d
 	needs_review = [
 		row for row in rows if str(row.get("decision_status") or "").strip() in REVIEW_DECISION_STATUSES
 	]
-	ready = [
+	confirmed_pending = [
 		row
 		for row in rows
 		if str(row.get("decision_status") or "").strip() == "Confirmed"
@@ -74,12 +74,12 @@ def get_bank_exception_summary(filters: dict[str, Any] | str | None = None) -> d
 	return {
 		"summary": [
 			{"label": _("Bank Matches Need Review"), "value": len(needs_review), "datatype": "Int"},
-			{"label": _("Ready for Reconciliation"), "value": len(ready), "datatype": "Int"},
+			{"label": _("Confirmed Pending Reconciliation"), "value": len(confirmed_pending), "datatype": "Int"},
 			{"label": _("Reconciliation Exceptions"), "value": len(exceptions), "datatype": "Int"},
 		],
 		"oldest_days": {
 			"needs_review": _oldest_days(needs_review),
-			"ready": _oldest_days(ready),
+			"ready": _oldest_days(confirmed_pending),
 			"exceptions": _oldest_days(exceptions),
 		},
 		"scope": {"company": company, "branch": branch, "from_date": from_date, "to_date": to_date},

@@ -110,7 +110,7 @@ def _banking():
 		"payload": {
 			"summary": [
 				{"label": "Bank Matches Need Review", "value": 2, "datatype": "Int"},
-				{"label": "Ready for Reconciliation", "value": 4, "datatype": "Int"},
+				{"label": "Confirmed Pending Reconciliation", "value": 4, "datatype": "Int"},
 				{"label": "Reconciliation Exceptions", "value": 1, "datatype": "Int"},
 			]
 		},

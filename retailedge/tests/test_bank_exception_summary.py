@@ -60,7 +60,7 @@ def test_bank_exception_summary_classifies_existing_match_state_without_candidat
 		)
 	cards = {row["label"]: row["value"] for row in result["summary"]}
 	assert cards["Bank Matches Need Review"] == 2
-	assert cards["Ready for Reconciliation"] == 1
+	assert cards["Confirmed Pending Reconciliation"] == 1
 	assert cards["Reconciliation Exceptions"] == 2
 	assert result["scan"]["rows"] == 5
 	assert result["metadata"]["candidate_discovery"] is False

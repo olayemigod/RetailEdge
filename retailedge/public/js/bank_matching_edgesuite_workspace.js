@@ -2,7 +2,7 @@
 	"use strict";
 
 	const PAGE_NAME = "bank-matching-reconciliation";
-	const QUEUES = ["To Match", "To Reconcile", "Exceptions", "Reconciled"];
+	const QUEUES = ["To Match", "To Reconcile", "Confirmed Pending", "Exceptions", "Reconciled"];
 	const DIRECTIONS = [
 		{ label: "All", value: "All" },
 		{ label: "Inflows", value: "Inflow" },

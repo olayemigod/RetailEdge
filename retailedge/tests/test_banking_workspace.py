@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from retailedge.banking_workspace import (
+    QUEUE_CONFIRMED_PENDING,
     QUEUE_EXCEPTIONS,
     QUEUE_RECONCILED,
     QUEUE_TO_MATCH,
@@ -36,6 +37,7 @@ class BankingWorkspaceTests(unittest.TestCase):
         self.assertFalse(_status_belongs_to_queue(STATUS_NEEDS_REVIEW, QUEUE_EXCEPTIONS))
         self.assertTrue(_status_belongs_to_queue(STATUS_READY_TO_RECONCILE, QUEUE_TO_RECONCILE))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILIATION_PENDING, QUEUE_TO_RECONCILE))
+        self.assertTrue(_status_belongs_to_queue(STATUS_EXCEPTION, QUEUE_CONFIRMED_PENDING))
         self.assertTrue(_status_belongs_to_queue(STATUS_RECONCILED, QUEUE_RECONCILED))
 
     def test_exception_queue_contains_only_blocking_or_failed_statuses(self):
@@ -288,6 +290,31 @@ class BankingWorkspaceTests(unittest.TestCase):
         )
         unmatched_rows.assert_not_called()
         self.assertEqual(payload["count"], 1)
+
+
+    def test_confirmed_pending_queue_matches_stored_confirmed_not_executed_truth(self):
+        filters = SimpleNamespace(
+            company="Demo",
+            branch="Lagos",
+            bank_account=None,
+            from_date=None,
+            to_date=None,
+        )
+        result = _review_db_filters(QUEUE_CONFIRMED_PENDING, filters)
+        self.assertEqual(result["decision_status"], "Confirmed")
+        self.assertEqual(result["execution_status"], "Not Executed")
+
+    def test_blocked_execution_is_placed_in_exception_queue_without_preflight(self):
+        operational = _cheap_operational(
+            SimpleNamespace(
+                decision_status="Confirmed",
+                suggested_document="PE-1",
+                execution_status="Blocked",
+            ),
+            {"direction": "Outflow"},
+            QUEUE_EXCEPTIONS,
+        )
+        self.assertEqual(operational["operational_status"], STATUS_EXCEPTION)
 
 
 if __name__ == "__main__":

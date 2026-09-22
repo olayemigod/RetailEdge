@@ -30,9 +30,10 @@ from retailedge.reporting_scope import validate_report_scope
 
 QUEUE_TO_MATCH = "To Match"
 QUEUE_TO_RECONCILE = "To Reconcile"
+QUEUE_CONFIRMED_PENDING = "Confirmed Pending"
 QUEUE_EXCEPTIONS = "Exceptions"
 QUEUE_RECONCILED = "Reconciled"
-VALID_QUEUES = {QUEUE_TO_MATCH, QUEUE_TO_RECONCILE, QUEUE_EXCEPTIONS, QUEUE_RECONCILED}
+VALID_QUEUES = {QUEUE_TO_MATCH, QUEUE_TO_RECONCILE, QUEUE_CONFIRMED_PENDING, QUEUE_EXCEPTIONS, QUEUE_RECONCILED}
 
 SCAN_CHUNK_SIZE = 100
 MAX_SCAN_ROWS = 5000
@@ -54,6 +55,8 @@ def _status_belongs_to_queue(status: str, queue: str) -> bool:
             STATUS_READY_TO_RECONCILE,
             STATUS_RECONCILIATION_PENDING,
         }
+    if queue == QUEUE_CONFIRMED_PENDING:
+        return True
     if queue == QUEUE_EXCEPTIONS:
         return status in {
             STATUS_PAYMENT_EVIDENCE_REQUIRED,
@@ -265,6 +268,9 @@ def _review_db_filters(queue: str, filters: frappe._dict) -> dict[str, Any]:
 
     if queue == QUEUE_TO_RECONCILE:
         db_filters["decision_status"] = "Confirmed"
+    elif queue == QUEUE_CONFIRMED_PENDING:
+        db_filters["decision_status"] = "Confirmed"
+        db_filters["execution_status"] = "Not Executed"
     elif queue == QUEUE_TO_MATCH:
         db_filters["decision_status"] = ["in", ["Draft", "Suggested", "Needs Review", "Reopened"]]
     elif queue == QUEUE_EXCEPTIONS:
@@ -333,12 +339,16 @@ def _cheap_operational(row, bank: dict[str, Any], queue: str) -> dict[str, Any] 
             "operational_status": STATUS_NEEDS_REVIEW,
             "recommended_action": "Review the prepared match before confirmation.",
         }
-    if queue == QUEUE_EXCEPTIONS and execution_status == "Failed":
+    if queue == QUEUE_EXCEPTIONS and execution_status in {"Blocked", "Failed"}:
         return {
             "direction": direction,
             "transaction_category": CATEGORY_UNCLASSIFIED,
-            "operational_status": STATUS_RECONCILIATION_FAILED,
-            "recommended_action": "Review the reconciliation failure before retrying.",
+            "operational_status": STATUS_RECONCILIATION_FAILED if execution_status == "Failed" else STATUS_EXCEPTION,
+            "recommended_action": (
+                "Review the reconciliation failure before retrying."
+                if execution_status == "Failed"
+                else "Review the stored reconciliation blocker before retrying."
+            ),
         }
     if queue == QUEUE_RECONCILED and execution_status in {"Executed", "Already Handled"}:
         return {
