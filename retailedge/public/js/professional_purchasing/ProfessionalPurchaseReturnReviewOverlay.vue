@@ -121,7 +121,7 @@ export default {
 		};
 	},
 	computed: {
-		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE; },
+		nativeFallbackEnabled() { return Boolean(frappe.boot?.edgesuite_ui_access?.can_use_native_desk); },
 		isDebitNote() { return this.sourceType === "purchase_invoice"; },
 		title() { return this.isDebitNote ? "Review Supplier Debit Note" : "Review Purchase Return"; },
 		subtitle() { return this.isDebitNote ? "Review ERPNext's supplier Debit Note mapping before accounting or stock effects are posted." : "Review ERPNext's Purchase Receipt return mapping before stock is posted out."; },
