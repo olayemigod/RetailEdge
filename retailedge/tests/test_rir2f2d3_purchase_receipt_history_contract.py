@@ -80,7 +80,7 @@ def test_receipt_rows_do_not_disguise_native_links_and_advanced_access_is_explic
 	assert "Advanced: Open in ERPNext" in overlay
 	assert "Advanced: Purchase Receipts in ERPNext" in overlay
 	assert "nativeFallbackEnabled" in overlay
-	assert 'Boolean(frappe.boot?.edgesuite_ui_access?.can_use_native_desk)' in overlay
+	assert 'Boolean(window.__retailedgeBusinessHubContextCache?.data?.access?.can_use_native_desk)' in overlay
 	assert 'mode !== ACCESS_MODE' not in overlay
 	assert 'frappe.set_route("Form", "Purchase Receipt", name)' in overlay
 	assert 'frappe.set_route("List", "Purchase Receipt")' in overlay
