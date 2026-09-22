@@ -29,7 +29,7 @@
 					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Purchase Invoice. Continue to supplier settlement, payables review or document output." : "The ERPNext Purchase Invoice draft now owns the transaction." }}</p></div>
 					<div class="page-actions">
 						<button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button" type="button" @click="openCompletion">Review / Complete</button>
-						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('pay-supplier')" class="edge-button edge-button--primary" type="button" @click="runSavedNextAction('pay-supplier')">Pay Supplier</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('pay-supplier')" class="edge-button edge-button--primary" type="button" @click="runSavedNextAction('pay-supplier')">Pay Supplier</button><button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-supplier-debit-note')" class="edge-button" type="button" @click="runSavedNextAction('create-supplier-debit-note')">Supplier Debit Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" class="edge-button" type="button" @click="runSavedNextAction('supplier-payables')">Supplier Payables</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" class="edge-button" type="button" @click="runSavedNextAction('output')">Print / Share</button>
 						<button class="edge-button" type="button" @click="startAnother">Start Another Purchase</button>
@@ -276,6 +276,11 @@ export default {
 			if (payload.action === "pay-supplier") {
 				this.paymentInitialContext = { company: payload.company || this.values.company || "", branch: payload.branch || this.values.branch || "", party: payload.supplier || this.values.supplier || "", reference_name: payload.name };
 				this.paymentOpen = true;
+				return;
+			}
+			if (payload.action === "create-supplier-debit-note") {
+				window.retailedgeProfessionalPurchasingTarget = { action: "supplier-debit-note", source_name: payload.name };
+				frappe.set_route("professional-purchasing");
 				return;
 			}
 			if (payload.action === "supplier-payables") {
