@@ -49,6 +49,7 @@ _REORDER_FIELDS = (
 @frappe.whitelist()
 def get_stock_position_context() -> dict[str, Any]:
 	"""Return compact defaults and cost-visibility metadata for Stock Position."""
+	require_report_view_access("stock-position")
 	user = frappe.session.user
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	branch = ""
@@ -102,6 +103,7 @@ def search_stock_position_options(
 	item_group: str = "",
 ) -> list[dict[str, str]]:
 	"""Permission-aware, bounded Link searches for Stock Position filters."""
+	require_report_view_access("stock-position")
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()

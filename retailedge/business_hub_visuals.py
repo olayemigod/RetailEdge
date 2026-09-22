@@ -264,13 +264,18 @@ def _sales_mix(
 		)
 		route = "/app/sales-invoice-register"
 
+	rows = _top_mix_rows(buckets, drill_field="item_group" if branch else "branch")
+	for row in rows:
+		if row.get("key") in {"Unattributed", "Unspecified"}:
+			row.pop("drill_field", None)
+			row.pop("drill_value", None)
 	return {
 		"title": title,
 		"description": description,
 		"chart_type": "bar",
 		"currency": currency,
 		"series": [{"key": "value", "label": _("Net Sales"), "datatype": "Currency"}],
-		"rows": _top_mix_rows(buckets, drill_field="item_group" if branch else "branch"),
+		"rows": rows,
 		"route": route,
 		"route_filters": dict(filters),
 	}
@@ -319,12 +324,17 @@ def _expense_visual(filters: dict[str, Any], *, currency: str) -> dict[str, Any]
 	for row in dataset.get("rows") or []:
 		label = str(row.get("expense_category") or _("Unspecified")).strip() or _("Unspecified")
 		buckets[label] += flt(row.get("amount"))
+	rows = _top_mix_rows(buckets, drill_field="expense_category")
+	for row in rows:
+		if row.get("key") == "Unspecified":
+			row.pop("drill_field", None)
+			row.pop("drill_value", None)
 	return {
 		"description": _("Largest posted expense categories in the selected period."),
 		"chart_type": "bar",
 		"currency": currency,
 		"series": [{"key": "value", "label": _("Expenses"), "datatype": "Currency"}],
-		"rows": _top_mix_rows(buckets, drill_field="expense_category"),
+		"rows": rows,
 		"route_filters": {
 			**dict(filters),
 			"view_mode": "consolidated",

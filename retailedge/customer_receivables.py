@@ -27,6 +27,7 @@ NO_BRANCH_SCOPE_SENTINEL = "__never__"
 
 @frappe.whitelist()
 def get_customer_receivables_context() -> dict[str, Any]:
+	require_report_view_access("customer-receivables")
 	user = frappe.session.user
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	branch = ""
@@ -143,6 +144,7 @@ def search_customer_receivables_options(
 	branch: str = "",
 	customer_group: str = "",
 ) -> list[dict[str, str]]:
+	require_report_view_access("customer-receivables")
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()

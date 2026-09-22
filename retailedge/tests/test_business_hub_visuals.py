@@ -8,6 +8,7 @@ import frappe
 from retailedge.business_hub_visuals import (
 	_granularity,
 	_period_rows,
+	_sales_mix,
 	_top_mix_rows,
 	get_business_hub_visuals,
 )
@@ -188,3 +189,22 @@ def test_business_hub_frontend_renders_visual_layer_and_drill_through():
 		"lineExtent",
 	):
 		assert token in chart
+
+
+def test_placeholder_mix_labels_are_not_false_drill_targets(monkeypatch):
+	monkeypatch.setattr(
+		"retailedge.business_hub_visuals.get_sales_visual_aggregates",
+		lambda _filters: {
+			"trend": [],
+			"branch_mix": [{"branch": "", "net_sales": 1250}],
+			"branch_mix_supported": True,
+		},
+	)
+	sales = _sales_mix(
+		{"company": "Demo Company", "branch": "", "from_date": "2026-09-01", "to_date": "2026-09-30"},
+		branch="",
+		currency="NGN",
+	)
+	row = next(item for item in sales["rows"] if item["label"] == "Unattributed")
+	assert "drill_field" not in row
+	assert "drill_value" not in row

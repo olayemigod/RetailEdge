@@ -60,6 +60,7 @@ def _report_context_defaults() -> dict[str, Any]:
 
 @frappe.whitelist()
 def get_purchase_reporting_context() -> dict[str, Any]:
+	require_report_view_access("purchase-register")
 	defaults = _report_context_defaults()
 	user = frappe.session.user
 	company = defaults.get("company")
@@ -192,6 +193,7 @@ def search_purchase_reporting_options(
 	invoice_kind: str = "All",
 	status: str = "",
 ) -> list[dict[str, str]]:
+	require_report_view_access("purchase-register")
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()

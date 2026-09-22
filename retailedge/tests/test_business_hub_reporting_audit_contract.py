@@ -62,3 +62,18 @@ def test_business_hub_destinations_remain_edgesuite_owned():
 		source = (ROOT / relative).read_text(encoding="utf-8")
 		assert "EdgeAppShell" in source
 		assert shell in source
+
+
+def test_report_context_and_option_search_rpcs_use_same_role_gate():
+	contracts = {
+		"sales_reporting.py": ('get_sales_reporting_context', 'search_sales_reporting_options', 'require_report_view_access("sales-invoice-register")'),
+		"purchase_reporting.py": ('get_purchase_reporting_context', 'search_purchase_reporting_options', 'require_report_view_access("purchase-register")'),
+		"customer_receivables.py": ('get_customer_receivables_context', 'search_customer_receivables_options', 'require_report_view_access("customer-receivables")'),
+		"stock_position.py": ('get_stock_position_context', 'search_stock_position_options', 'require_report_view_access("stock-position")'),
+	}
+	for relative, (context_name, search_name, gate) in contracts.items():
+		source = (ROOT / relative).read_text(encoding="utf-8")
+		context = source.split(f"def {context_name}", 1)[1].split("@frappe.whitelist()", 1)[0]
+		search = source.split(f"def {search_name}", 1)[1]
+		assert gate in context
+		assert gate in search

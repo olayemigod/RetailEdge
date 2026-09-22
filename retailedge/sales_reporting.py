@@ -58,6 +58,7 @@ def _report_context_defaults() -> dict[str, Any]:
 @frappe.whitelist()
 def get_sales_reporting_context() -> dict[str, Any]:
 	"""Return compact defaults shared by RetailEdge sales reporting pages."""
+	require_report_view_access("sales-invoice-register")
 	defaults = _report_context_defaults()
 	user = frappe.session.user
 	company = defaults.get("company")
@@ -87,6 +88,7 @@ def search_sales_reporting_options(
 	to_date: str = "",
 ) -> list[dict[str, str]]:
 	"""Permission-aware, bounded Link searches for Sales reporting pages."""
+	require_report_view_access("sales-invoice-register")
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
