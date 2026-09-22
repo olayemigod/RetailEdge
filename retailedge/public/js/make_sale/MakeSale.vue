@@ -48,6 +48,7 @@
 						<button v-if="Number(savedDocument.docstatus || 0) === 0" type="button" class="edge-button" @click="openCompletion">Review / Complete</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('make-payment')" type="button" class="edge-button edge-button--primary" @click="runSavedNextAction('make-payment')">Record Payment</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-delivery-note')" type="button" class="edge-button" @click="runSavedNextAction('create-delivery-note')">Create Delivery Note</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-return-credit-note')" type="button" class="edge-button" @click="runSavedNextAction('create-return-credit-note')">Return / Credit Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" type="button" class="edge-button" @click="runSavedNextAction('output')">Print / Share</button>
 						<button type="button" class="edge-button" @click="startAnother">Start Another Sale</button>
 					</div>
@@ -234,6 +235,7 @@ const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoi
 const UPDATE_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const CREATE_DELIVERY_METHOD = "retailedge.professional_delivery.create_delivery_note_from_sales_invoice";
+const CREATE_RETURN_METHOD = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft";
 const HANDOFF_PREFIX = "retailedge:make-sale:handoff:";
 const RECOVERY_PREFIX = "retailedge:make-sale:recovery:";
 const HANDOFF_MAX_AGE_MS = 10 * 60 * 1000;
@@ -907,6 +909,21 @@ export default {
 					else this.openDocumentOutput("delivery-note", result.name, "view");
 				} catch (error) {
 					this.saveError = errorMessage(error, "Unable to continue to Delivery Note.");
+				}
+				return;
+			}
+			if (payload.action === "create-return-credit-note") {
+				try {
+					const result = await callMethod(CREATE_RETURN_METHOD, { sales_invoice: payload.name }, "POST");
+					if (!result?.name) throw new Error("Return / Credit Note draft was not returned.");
+					window.retailedgeProfessionalSellingTarget = {
+						doctype: "Sales Invoice",
+						name: result.name,
+						source_mode: "sales_return",
+					};
+					frappe.set_route("professional-selling");
+				} catch (error) {
+					this.saveError = errorMessage(error, "Unable to prepare the Return / Credit Note.");
 				}
 				return;
 			}
