@@ -285,6 +285,7 @@
 				:native-fallback-enabled="nativeFallbackEnabled"
 				@close="closeSimpleSalesInvoice"
 				@saved="handleSimpleSalesInvoiceSaved"
+				@open-page="openMakeSaleFromQuick"
 				@open-native="openNativeSalesInvoice"
 			/>
 			<StandardSalesInvoiceCompletionDialog
@@ -418,6 +419,7 @@ const GUIDED_PURCHASE_ACTION = "record-purchase";
 const GUIDED_EXPENSE_ACTION = "record-expense";
 const GUIDED_STOCK_TRANSFER_ACTION = "transfer-stock";
 const GUIDED_STOCK_ADJUSTMENT_ACTION = "adjust-stock";
+const MAKE_SALE_HANDOFF_KEY = "retailedge:make-sale:handoff";
 const QUICK_ENTRY_MASTER_ACTIONS = Object.freeze({
 	"new-customer": "Customer",
 	"new-supplier": "Supplier",
@@ -655,7 +657,7 @@ export default {
 					icon,
 				});
 			};
-			addAction("new-sales-invoice", "Make Sale");
+			addPage("make-sale", "Make Sale", "Use the full-page workspace for larger or multi-item Sales Invoices.", "shopping-cart");
 			addAction("receive-customer-payment");
 			addAction("pay-supplier");
 			addAction("record-expense");
@@ -1081,6 +1083,18 @@ export default {
 		handleSalesInvoiceCompletionCompleted() {
 			this.closeSalesInvoiceCompletion();
 			this.refreshContext({ force: true });
+		},
+		openMakeSaleFromQuick(payload = {}) {
+			try {
+				window.sessionStorage.setItem(MAKE_SALE_HANDOFF_KEY, JSON.stringify({
+					createdAt: Date.now(),
+					values: payload?.values || {},
+				}));
+			} catch (_error) {
+				// Route still works when browser session storage is unavailable.
+			}
+			this.simpleSalesInvoiceOpen = false;
+			frappe.set_route("make-sale");
 		},
 		openNativeSalesInvoice(doctype = "Sales Invoice") {
 			if (!this.nativeFallbackEnabled) return;
