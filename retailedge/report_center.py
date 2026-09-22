@@ -80,6 +80,13 @@ REPORT_GROUPS: tuple[dict[str, Any], ...] = (
 				"tags": ("purchase", "analysis", "supplier", "category", "branch", "warehouse"),
 			},
 			{
+				"label": "Supplier Performance",
+				"description": "Compare period purchasing, returns and current payable exposure by supplier.",
+				"target_type": "Page",
+				"target": "supplier-performance",
+				"tags": ("supplier", "purchase", "returns", "payables", "performance"),
+			},
+			{
 				"label": "Purchase Register",
 				"description": "Review submitted purchases, returns and supplier invoice detail.",
 				"target_type": "Page",
