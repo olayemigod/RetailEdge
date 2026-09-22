@@ -85,6 +85,7 @@ const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase
 const PRICING_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_item_pricing";
 const CREATE_METHOD = "retailedge.guided_purchase_invoice.create_simple_purchase_invoice_draft";
 const UPDATE_METHOD = "retailedge.standard_purchase_invoice_completion.update_standard_purchase_invoice_draft";
+const PREVIEW_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_preview";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HANDOFF_PREFIX = "retailedge:record-purchase:handoff:";
 const RECOVERY_PREFIX = "retailedge:record-purchase:recovery:";
@@ -244,9 +245,17 @@ export default {
 			} catch (error) { this.saveError = errorMessage(error, "Unable to save the Purchase Invoice draft."); }
 			finally { this.saving = false; }
 		},
-		beginSavedDraftEdit() {
-			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return;
-			this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values);
+		async beginSavedDraftEdit() {
+			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0 || this.saving) return;
+			this.saveError = ""; this.saving = true;
+			try {
+				const preview = await callMethod(PREVIEW_METHOD, { name: this.savedDocument.name, source_mode: "direct" }, "GET");
+				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Purchase Invoice" };
+				if (!preview?.can_edit) { this.saveError = (preview?.blockers || [])[0] || "This Purchase Invoice draft is no longer editable in the standard page."; return; }
+				this.syncPageFromDraftPreview(preview);
+				this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values);
+			} catch (error) { this.saveError = errorMessage(error, "Unable to reload this Purchase Invoice draft for editing."); }
+			finally { this.saving = false; }
 		},
 		cancelSavedDraftEdit() {
 			const close = () => { try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {} this.editingSavedDraft = false; this.saveError = ""; };
