@@ -68,6 +68,7 @@ const CONTEXT_METHOD = "retailedge.guided_stock_adjustment.get_simple_stock_adju
 const SEARCH_METHOD = "retailedge.guided_stock_adjustment.search_simple_stock_adjustment_options";
 const CREATE_METHOD = "retailedge.guided_stock_adjustment.create_simple_stock_adjustment_draft";
 const UPDATE_METHOD = "retailedge.standard_stock_completion.update_standard_stock_document_draft";
+const PREVIEW_METHOD = "retailedge.standard_stock_completion.get_standard_stock_completion_preview";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HANDOFF_PREFIX = "retailedge:stock-adjustment:handoff:";
 const RECOVERY_PREFIX = "retailedge:stock-adjustment:recovery:";
@@ -190,7 +191,18 @@ export default {
 			} catch (error) { this.saveError = errorMessage(error, "Stock Adjustment could not be saved."); }
 			finally { this.saving = false; }
 		},
-		beginSavedDraftEdit() { if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return; this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values); },
+		async beginSavedDraftEdit() {
+			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0 || this.saving) return;
+			this.saveError = ""; this.saving = true;
+			try {
+				const preview = await callMethod(PREVIEW_METHOD, { doctype: "Stock Reconciliation", name: this.savedDocument.name }, "GET");
+				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Stock Reconciliation" };
+				if (!preview?.can_edit) { this.saveError = (preview?.blockers || [])[0] || "This Stock Adjustment draft is no longer editable in the standard page."; return; }
+				this.syncPageFromDraftPreview(preview);
+				this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values);
+			} catch (error) { this.saveError = errorMessage(error, "Unable to reload this Stock Adjustment draft for editing."); }
+			finally { this.saving = false; }
+		},
 		cancelSavedDraftEdit() { const close = () => { try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {} this.editingSavedDraft = false; this.saveError = ""; }; if (!this.hasUnsavedChanges) return close(); frappe.confirm("Discard unsaved changes to this saved Stock Adjustment draft?", close); },
 		syncPageFromDraftPreview(result) { if (!result) return; if (result.posting_date) this.values.posting_date = result.posting_date; if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ name: row.name || "", item_code: row.item_code || "", qty: row.qty })); },
 		openCompletion() { if (this.savedDocument?.name) { this.editingSavedDraft = false; this.completionOpen = true; } },
