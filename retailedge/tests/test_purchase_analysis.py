@@ -105,6 +105,22 @@ class TestPurchaseAnalysis(FrappeTestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
+	def test_operating_wrapper_preserves_dependent_purchase_filter_context(self):
+		operating = OPERATING_DEFAULTS.read_text(encoding="utf-8")
+		for token in (
+			"supplier_group: str =",
+			'report_type: str = "purchase_register"',
+			"from_date: str =",
+			"to_date: str =",
+			"as_of_date: str =",
+			'invoice_kind: str = "All"',
+			"status: str =",
+			"supplier_group=supplier_group",
+			"report_type=report_type",
+			"invoice_kind=invoice_kind",
+		):
+			self.assertIn(token, operating)
+
 	def test_page_provider_catalogue_scope_and_governance_are_wired(self):
 		for path in (PAGE_JSON, PAGE_JS):
 			self.assertTrue(path.exists(), f"Missing Purchase Analysis Page fixture: {path}")
