@@ -83,7 +83,7 @@
 								:key="card.label"
 								type="button"
 								class="home-kpi-card"
-								@click="openHomeRoute(card.route, card.route_filters || homeRouteFilters(card))
+								@click="openHomeRoute(card.route, card.route_filters || homeRouteFilters(card))"
 							>
 								<span class="home-kpi-card-heading">
 									<span>{{ card.label }}</span>
