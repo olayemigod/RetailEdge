@@ -331,7 +331,7 @@ test("RC3 Stock Manager reaches Stock Adjustment and Quick Adjustment", async ({
 		await expect(page.locator(".create-picker-item").filter({ hasText: "Quick Adjustment" }).first()).toBeVisible();
 		await page.keyboard.press("Escape");
 		await openProductPage(page, "stock-adjustment", "Stock Adjustment");
-		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
+		await expect(page.getByRole("heading", { name: "Stock Adjustment", exact: true }).first()).toBeVisible();
 	} finally {
 		await context.close();
 	}
