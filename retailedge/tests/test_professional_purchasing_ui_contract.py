@@ -48,6 +48,7 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn("this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);", component)
 		for event_name in (
 			"retailedge-open-professional-purchase-order",
+			"retailedge-open-purchase-order-submit",
 			"retailedge-open-professional-rfq-preview",
 			"retailedge-open-professional-rfq-history",
 			"retailedge-open-professional-supplier-quotation-history",
@@ -75,6 +76,16 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertNotIn("frappe.msgprint", component)
 		self.assertNotIn("frappe.show_alert", component)
 		self.assertNotIn("window.EdgeUI", component)
+
+	def test_edgesuite_only_purchasing_has_no_dead_native_actions(self):
+		component = (APP_ROOT / "public" / "js" / "professional_purchasing" / "ProfessionalPurchasing.vue").read_text()
+		self.assertIn('{{ canUseNativeDesk ? "Open" : "Review" }}', component)
+		self.assertIn("dispatchEdgeSuiteEvent(OPEN_PURCHASE_ORDER_SUBMIT_EVENT, { purchase_order: name })", component)
+		self.assertIn('v-if="canUseNativeDesk && capabilities.can_compare_supplier_quotations"', component)
+		self.assertIn('v-if="canUseNativeDesk && capabilities.can_open_purchase_order_analysis"', component)
+		self.assertIn('v-if="canUseNativeDesk && procurementTracker.available"', component)
+		self.assertIn('v-if="canUseNativeDesk"', component)
+		self.assertIn("<strong v-else>{{ row.name }}</strong>", component)
 
 	def test_backend_is_draft_first_and_does_not_write_ledgers_or_bypass_supplier_validation(self):
 		source = (APP_ROOT / "professional_purchasing.py").read_text()
