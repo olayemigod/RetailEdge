@@ -25,10 +25,10 @@
 				</section>
 				<section v-if="handoffNotice" class="edge-panel notice-panel"><strong>Continued from Quick Purchase</strong><p>{{ handoffNotice }}</p></section>
 
-				<section v-if="savedDocument" class="edge-panel saved-panel">
+				<section v-if="savedDocument && !editingSavedDraft" class="edge-panel saved-panel">
 					<div><span class="page-kicker">{{ Number(savedDocument.docstatus || 0) === 1 ? "Submitted" : "Draft saved" }}</span><h3>{{ savedDocument.name }}</h3><p>{{ Number(savedDocument.docstatus || 0) === 1 ? "ERPNext has submitted the Purchase Invoice. Continue to supplier settlement, payables review or document output." : "The ERPNext Purchase Invoice draft now owns the transaction." }}</p></div>
 					<div class="page-actions">
-						<button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="completionOpen = true">Edit / Complete</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button edge-button--primary" type="button" @click="beginSavedDraftEdit">Continue Editing on Page</button><button v-if="Number(savedDocument.docstatus || 0) === 0" class="edge-button" type="button" @click="openCompletion">Review / Complete</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('pay-supplier')" class="edge-button edge-button--primary" type="button" @click="runSavedNextAction('pay-supplier')">Pay Supplier</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" class="edge-button" type="button" @click="runSavedNextAction('supplier-payables')">Supplier Payables</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" class="edge-button" type="button" @click="runSavedNextAction('output')">Print / Share</button>
@@ -36,7 +36,7 @@
 					</div>
 				</section>
 
-				<form v-else class="edge-panel transaction-form" @submit.prevent="saveDraft">
+				<form v-if="!savedDocument || editingSavedDraft" class="edge-panel transaction-form" @submit.prevent="saveDraft">
 					<div class="context-cards">
 						<div><span>Company</span><strong>{{ values.company || "Not set" }}</strong></div>
 						<div v-if="values.branch"><span>Branch</span><strong>{{ values.branch }}</strong></div>
@@ -47,10 +47,10 @@
 					<div v-else-if="stockContextMessage" class="form-warning" role="status">{{ stockContextMessage }}</div>
 
 					<div class="field-grid">
-						<EdgeLinkField :modelValue="values.supplier" label="Supplier" placeholder="Search supplier" :required="true" :searcher="searchSupplier" :context="searchContext" :canCreate="canCreateSupplier" :creator="createSupplier" createLabel="Create Supplier" @update:modelValue="setSupplier" />
+						<EdgeLinkField :modelValue="values.supplier" label="Supplier" placeholder="Search supplier" :required="true" :searcher="searchSupplier" :context="searchContext" :canCreate="!editingSavedDraft && canCreateSupplier" :creator="createSupplier" createLabel="Create Supplier" :disabled="editingSavedDraft" @update:modelValue="setSupplier" />
 						<EdgeInput v-model="values.posting_date" id="record-purchase-posting-date" label="Posting Date" type="date" required />
-						<EdgeLinkField v-if="branchEnabled" :modelValue="values.branch" label="Branch" placeholder="Search branch" :searcher="searchBranch" :context="searchContext" @update:modelValue="setBranch" />
-						<EdgeLinkField :modelValue="values.warehouse" label="Receiving Stock Location" placeholder="Search receiving stock location" :required="Boolean(values.update_stock)" :disabled="requiresBranchSelection && !values.branch" :searcher="searchWarehouse" :context="searchContext" @update:modelValue="setWarehouse" />
+						<EdgeLinkField v-if="branchEnabled" :modelValue="values.branch" label="Branch" placeholder="Search branch" :searcher="searchBranch" :context="searchContext" :disabled="editingSavedDraft" @update:modelValue="setBranch" />
+						<EdgeLinkField :modelValue="values.warehouse" label="Receiving Stock Location" placeholder="Search receiving stock location" :required="Boolean(values.update_stock)" :disabled="editingSavedDraft || (requiresBranchSelection && !values.branch)" :searcher="searchWarehouse" :context="searchContext" @update:modelValue="setWarehouse" />
 						<EdgeInput v-model="values.bill_no" id="record-purchase-bill-no" label="Supplier Bill No" type="text" placeholder="Supplier invoice/reference" />
 						<EdgeInput v-if="values.bill_no" v-model="values.bill_date" id="record-purchase-bill-date" label="Supplier Bill Date" type="date" />
 					</div>
@@ -64,7 +64,7 @@
 
 					<div class="sticky-actions">
 						<div><strong>{{ hasUnsavedChanges ? "Unsaved changes" : "Ready" }}</strong><small>{{ hasUnsavedChanges ? "A temporary browser-session recovery copy is retained until the ERPNext draft is saved." : "Complete the required fields, then save the draft." }}</small></div>
-						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading || !transactionContextReady">{{ saving ? "Saving..." : formContext.submit_label || "Save Draft" }}</button></div>
+						<div class="page-actions"><button v-if="canUseNativeDesk" class="edge-button" type="button" :disabled="saving" @click="openAdvancedNative">Advanced: ERPNext</button><button v-if="editingSavedDraft" class="edge-button" type="button" :disabled="saving" @click="cancelSavedDraftEdit">Cancel Edit</button><button v-else class="edge-button" type="button" :disabled="saving" @click="resetForm">Reset</button><button class="edge-button edge-button--primary" type="submit" :disabled="saving || loading || !transactionContextReady">{{ saving ? "Saving..." : (editingSavedDraft ? "Update Draft" : (formContext.submit_label || "Save Draft")) }}</button></div>
 					</div>
 				</form>
 			</div>
@@ -84,6 +84,7 @@ const CONTEXT_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_i
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
 const PRICING_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_item_pricing";
 const CREATE_METHOD = "retailedge.guided_purchase_invoice.create_simple_purchase_invoice_draft";
+const UPDATE_METHOD = "retailedge.standard_purchase_invoice_completion.update_standard_purchase_invoice_draft";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HANDOFF_PREFIX = "retailedge:record-purchase:handoff:";
 const RECOVERY_PREFIX = "retailedge:record-purchase:recovery:";
@@ -107,7 +108,7 @@ export default {
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialSnapshot: "", cascadeToken: 0,
-			pricingTokens: {}, pricingCache: new Map(), recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, completionOpen: false,
+			pricingTokens: {}, pricingCache: new Map(), recoveryCandidate: null, handoffNotice: "", recoveryTimer: null, savedDocument: null, editingSavedDraft: false, completionOpen: false,
 			paymentOpen: false, paymentInitialContext: {},
 			tenantName: "", branchName: "", userName: "", menuItems: [], canUseNativeDesk: false,
 			itemTableField: { label: "Items", description: "Use this full-page table for purchases with many lines." },
@@ -131,7 +132,7 @@ export default {
 	watch: { values: { deep: true, handler() { if (this.loaded && !this.savedDocument) this.scheduleRecovery(); } } },
 	created() {
 		this._pageShow = () => { if (!this.loaded && !this.loading) this.loadPage(); };
-		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || this.savedDocument) return; event.preventDefault(); event.returnValue = ""; };
+		this._beforeUnload = (event) => { if (!this.hasUnsavedChanges || this.saving || (this.savedDocument && !this.editingSavedDraft)) return; event.preventDefault(); event.returnValue = ""; };
 	},
 	mounted() { window.addEventListener("retailedge-record-purchase-page-show", this._pageShow); window.addEventListener("beforeunload", this._beforeUnload); this.loadPage(); },
 	beforeUnmount() { window.removeEventListener("retailedge-record-purchase-page-show", this._pageShow); window.removeEventListener("beforeunload", this._beforeUnload); if (this.recoveryTimer) window.clearTimeout(this.recoveryTimer); },
@@ -157,7 +158,7 @@ export default {
 		handleNavigation(route) {
 			if (!route || route === "/app/record-purchase") return;
 			const go = () => { if (/^https?:\/\//i.test(route)) window.location.assign(route); else frappe.set_route(...String(route).replace(/^\/app\//, "").split("/").filter(Boolean)); };
-			if (!this.hasUnsavedChanges || this.savedDocument) return go();
+			if (!this.hasUnsavedChanges || (this.savedDocument && !this.editingSavedDraft)) return go();
 			frappe.confirm("Leave Record Purchase? Unsaved changes are retained temporarily in this browser session.", go);
 		},
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
@@ -203,9 +204,69 @@ export default {
 		pricingCacheKey(row) { return [this.values.company, this.values.branch, this.values.warehouse, this.values.supplier, this.values.posting_date, row.item_code, row.qty || 1].join("|"); },
 		async loadItemPricing(index) { const row = this.values.items[index]; if (!row?.item_code || !this.values.supplier) return; const key = this.pricingCacheKey(row); const token = `${row.item_code}:${Date.now()}:${Math.random()}`; this.pricingTokens[index] = token; try { let result = this.pricingCache.get(key); if (!result) { result = await callMethod(PRICING_METHOD, { item_code: row.item_code, values: { company: this.values.company, branch: this.values.branch, warehouse: this.values.warehouse, supplier: this.values.supplier, posting_date: this.values.posting_date, qty: row.qty || 1 } }); this.pricingCache.set(key, result); } if (this.pricingTokens[index] !== token) return; if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate }; else this.saveError = `No buying price is configured for ${row.item_code}. Enter the agreed rate or configure Item Price.`; this.formContext.pricing = { ...(this.formContext.pricing || {}), price_list: result?.price_list || this.formContext.pricing?.price_list || "", source: result?.source || this.formContext.pricing?.source || "item_fallback" }; } catch (error) { if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`); } },
 		refreshAllItemPricing() { if (!this.values.supplier) return; this.values.items.forEach((row, index) => { if (row.item_code) { this.values.items[index] = { ...row, rate: "" }; this.loadItemPricing(index); } }); },
-		async saveDraft() { if (this.saving || this.loading || !this.transactionContextReady) return; this.saving = true; this.saveError = ""; try { const result = await callMethod(CREATE_METHOD, { values: this.values }); if (!result?.name) throw new Error("Purchase Invoice draft was not returned."); this.clearRecovery(); this.initialSnapshot = JSON.stringify(this.values); this.savedDocument = { doctype: result.doctype || "Purchase Invoice", name: result.name }; this.completionOpen = true; frappe.show_alert?.({ message: `Purchase Invoice ${result.name} saved as Draft`, indicator: "green" }); } catch (error) { this.saveError = errorMessage(error, "Unable to save the Purchase Invoice draft."); } finally { this.saving = false; } },
-		handleCompletionChanged() {},
-		handleCompletionCompleted(result) { if (result?.name) this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" }; },
+		async saveDraft() {
+			if (this.saving || this.loading || !this.transactionContextReady) return;
+			this.saving = true; this.saveError = "";
+			try {
+				let result;
+				if (this.savedDocument?.name && this.editingSavedDraft) {
+					result = await callMethod(UPDATE_METHOD, {
+						name: this.savedDocument.name,
+						expected_modified: this.savedDocument.modified || "",
+						source_mode: "direct",
+						values: {
+							posting_date: this.values.posting_date,
+							bill_no: this.values.bill_no || "",
+							bill_date: this.values.bill_date || "",
+							remarks: this.values.remarks || "",
+							items: (this.values.items || []).filter((row) => row?.item_code).map((row) => ({
+								item_code: row.item_code,
+								qty: Number(row.qty || 0),
+								rate: row.rate,
+							})),
+						},
+					}, "POST");
+					this.syncPageFromDraftPreview(result);
+					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" };
+					this.initialSnapshot = JSON.stringify(this.values);
+					this.editingSavedDraft = false;
+					frappe.show_alert?.({ message: `Purchase Invoice ${result.name} draft updated`, indicator: "green" });
+					return;
+				}
+				result = await callMethod(CREATE_METHOD, { values: this.values });
+				if (!result?.name) throw new Error("Purchase Invoice draft was not returned.");
+				this.clearRecovery();
+				this.initialSnapshot = JSON.stringify(this.values);
+				this.savedDocument = { ...result, doctype: result.doctype || "Purchase Invoice" };
+				this.completionOpen = true;
+				frappe.show_alert?.({ message: `Purchase Invoice ${result.name} saved as Draft`, indicator: "green" });
+			} catch (error) { this.saveError = errorMessage(error, "Unable to save the Purchase Invoice draft."); }
+			finally { this.saving = false; }
+		},
+		beginSavedDraftEdit() {
+			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return;
+			this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values);
+		},
+		cancelSavedDraftEdit() {
+			const close = () => { try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {} this.editingSavedDraft = false; this.saveError = ""; };
+			if (!this.hasUnsavedChanges) return close();
+			frappe.confirm("Discard unsaved changes to this saved Purchase Invoice draft?", close);
+		},
+		syncPageFromDraftPreview(result) {
+			if (!result) return;
+			if (result.posting_date) this.values.posting_date = result.posting_date;
+			if (Object.prototype.hasOwnProperty.call(result, "bill_no")) this.values.bill_no = result.bill_no || "";
+			if (Object.prototype.hasOwnProperty.call(result, "bill_date")) this.values.bill_date = result.bill_date || "";
+			if (Object.prototype.hasOwnProperty.call(result, "remarks")) this.values.remarks = result.remarks || "";
+			if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ item_code: row.item_code || "", qty: row.qty, rate: row.rate }));
+		},
+		openCompletion() { if (this.savedDocument?.name) { this.editingSavedDraft = false; this.completionOpen = true; } },
+		handleCompletionChanged(result) {
+			if (!result?.name) return;
+			this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" };
+			if (Number(result.docstatus || 0) === 0) { this.syncPageFromDraftPreview(result); this.initialSnapshot = JSON.stringify(this.values); }
+		},
+		handleCompletionCompleted(result) { this.editingSavedDraft = false; if (result?.name) this.savedDocument = { ...this.savedDocument, ...result, doctype: "Purchase Invoice" }; },
 		hasSavedNextAction(action) { return (this.savedDocument?.next_actions || []).some((row) => row?.value === action); },
 		runSavedNextAction(action) { if (!this.savedDocument?.name) return; this.handleCompletionNextAction({ action, doctype: "Purchase Invoice", name: this.savedDocument.name, supplier: this.savedDocument.supplier || this.values.supplier || "", company: this.savedDocument.company || this.values.company || "", branch: this.savedDocument.branch || this.values.branch || "" }); },
 		handleCompletionNextAction(payload) {
@@ -227,7 +288,7 @@ export default {
 			if (payload.action === "output") { window.retailedgeDocumentOutputTarget = { document: "purchase-invoice", name: payload.name, mode: "share" }; frappe.set_route("document-output-sharing"); }
 		},
 		closePayment() { this.paymentOpen = false; this.paymentInitialContext = {}; },
-		async startAnother() { this.savedDocument = null; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
+		async startAnother() { this.savedDocument = null; this.editingSavedDraft = false; this.recoveryCandidate = null; this.loaded = false; await this.loadPage(); },
 		openAdvancedNative() { if (!this.canUseNativeDesk) return; const go = () => frappe.new_doc("Purchase Invoice"); if (!this.hasUnsavedChanges) return go(); frappe.confirm("Open the advanced ERPNext Purchase Invoice form? Save this page first if you want the current entries recorded.", go); },
 	},
 };
