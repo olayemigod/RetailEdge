@@ -577,6 +577,12 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			and status not in {"Cancelled", "Return"}
 		):
 			actions.append({"value": "create-delivery-note", "label": _("Create Delivery Note")})
+		if (
+			_permission("Sales Invoice", "create")
+			and not cint(row.get("is_return"))
+			and status not in {"Cancelled", "Return"}
+		):
+			actions.append({"value": "create-return-credit-note", "label": _("Return / Credit Note")})
 		if _permission("Payment Entry", "create") and flt(row.get("outstanding_amount")) > 0.005:
 			actions.append({"value": "make-payment", "label": _("Make Payment")})
 
