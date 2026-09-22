@@ -223,7 +223,7 @@ class TestOperatingContextPhase2(unittest.TestCase):
 			'"label": "Operating Context"',
 			'"target": "operating-context"',
 			"_can_open_operating_context_page",
-			'frappe.has_permission("Page", "read", doc=target)',
+			'frappe.get_doc("Page", target).is_permitted()',
 			'"company": operating.get("company")',
 			'"branch": operating.get("branch")',
 			'feature_flags["operating_branch_context"] = "phase2_active"',
