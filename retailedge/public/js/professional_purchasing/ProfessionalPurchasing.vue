@@ -119,12 +119,12 @@
 						<article v-if="returnCapabilities.can_prepare_purchase_return" class="return-card">
 							<div><h4>Return Received Goods</h4><p>Use when physical stock received on a submitted Purchase Receipt is being sent back to the supplier. ERPNext remains authoritative for quantities, warehouses, batch/serial rules and stock effects.</p></div>
 							<EdgeLinkField v-model="returnSources.purchaseReceipt" label="Submitted Purchase Receipt" placeholder="Search permitted receipt" :searcher="purchaseReturnSourceSearch" @select="onPurchaseReturnSourceSelected" @clear="clearPurchaseReturnSource" />
-							<button type="button" class="edge-button edge-button--primary" :disabled="preparingReturn || !returnSources.purchaseReceipt" @click="preparePurchaseReturn">{{ preparingReturn === "purchase_receipt" ? "Preparing…" : "Prepare Draft Return" }}</button>
+							<button type="button" class="edge-button edge-button--primary" :disabled="!returnSources.purchaseReceipt" @click="preparePurchaseReturn">Review & Submit Return</button>
 						</article>
 						<article v-if="returnCapabilities.can_prepare_supplier_debit_note" class="return-card">
 							<div><h4>Create Supplier Debit Note</h4><p>Use when correcting or crediting a submitted supplier invoice. If the Purchase Invoice uses Update Stock, ERPNext preserves that native stock behavior for review before submission.</p></div>
 							<EdgeLinkField v-model="returnSources.purchaseInvoice" label="Submitted Purchase Invoice" placeholder="Search permitted supplier invoice" :searcher="debitNoteSourceSearch" @select="onDebitNoteSourceSelected" @clear="clearDebitNoteSource" />
-							<button type="button" class="edge-button edge-button--primary" :disabled="preparingReturn || !returnSources.purchaseInvoice" @click="prepareSupplierDebitNote">{{ preparingReturn === "purchase_invoice" ? "Preparing…" : "Prepare Draft Debit Note" }}</button>
+							<button type="button" class="edge-button edge-button--primary" :disabled="!returnSources.purchaseInvoice" @click="prepareSupplierDebitNote">Review & Submit Debit Note</button>
 						</article>
 					</div>
 				</section>
@@ -342,8 +342,6 @@ const PREPARE_PO_INVOICE_METHOD = "retailedge.professional_purchasing.prepare_pu
 const LANDED_COST_HANDOFF_EVENT = "retailedge-professional-purchasing-landed-cost-handoff";
 const RETURN_CAPABILITY_METHOD = "retailedge.professional_purchasing.get_purchase_return_capability";
 const RETURN_SEARCH_METHOD = "retailedge.professional_purchasing.search_purchase_return_sources";
-const PREPARE_PURCHASE_RETURN_METHOD = "retailedge.professional_purchasing.prepare_purchase_return_draft";
-const PREPARE_DEBIT_NOTE_METHOD = "retailedge.professional_purchasing.prepare_supplier_debit_note_draft";
 const LANDED_COST_CAPABILITY_METHOD = "retailedge.landed_cost_allocation.get_landed_cost_capability";
 const LANDED_COST_SEARCH_METHOD = "retailedge.landed_cost_allocation.search_landed_cost_sources";
 const LANDED_COST_ACCOUNT_SEARCH_METHOD = "retailedge.landed_cost_allocation.search_landed_cost_expense_accounts";
@@ -597,15 +595,23 @@ export default {
 				this.actionError = errorMessage(error, "ERPNext could not prepare the Purchase Invoice from this Purchase Order.");
 			} finally { this.preparingInvoice = ""; }
 		},
-		async preparePurchaseReturn() {
-			if (!this.canUseNativeDesk || !this.returnSources.purchaseReceipt || this.preparingReturn) return; this.preparingReturn = "purchase_receipt"; this.clearActionFeedback();
-			try { const result = await callMethod(PREPARE_PURCHASE_RETURN_METHOD, { purchase_receipt: this.returnSources.purchaseReceipt }); this.actionNotice = `Draft Purchase Receipt return ${result.name || ""} prepared. Review native ERPNext quantities, warehouses and stock details before submission.`; this.clearReturnSources(); if (result.name) frappe.set_route("Form", "Purchase Receipt", result.name); }
-			catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the Purchase Receipt return draft."); } finally { this.preparingReturn = ""; }
+		preparePurchaseReturn() {
+			const sourceName = String(this.returnSources.purchaseReceipt || "").trim();
+			if (!sourceName) return;
+			this.clearActionFeedback();
+			this.clearReturnSources();
+			window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
+				detail: { source_type: "purchase_receipt", source_name: sourceName },
+			}));
 		},
-		async prepareSupplierDebitNote() {
-			if (!this.canUseNativeDesk || !this.returnSources.purchaseInvoice || this.preparingReturn) return; this.preparingReturn = "purchase_invoice"; this.clearActionFeedback();
-			try { const result = await callMethod(PREPARE_DEBIT_NOTE_METHOD, { purchase_invoice: this.returnSources.purchaseInvoice }); this.actionNotice = result.update_stock ? `Draft supplier Debit Note ${result.name || ""} prepared. ERPNext Update Stock remains enabled; review stock and accounting effects before submission.` : `Draft supplier Debit Note ${result.name || ""} prepared. Review native ERPNext tax, value and accounting details before submission.`; this.clearReturnSources(); if (result.name) frappe.set_route("Form", "Purchase Invoice", result.name); }
-			catch (error) { this.actionError = errorMessage(error, "ERPNext could not prepare the supplier Debit Note draft."); } finally { this.preparingReturn = ""; }
+		prepareSupplierDebitNote() {
+			const sourceName = String(this.returnSources.purchaseInvoice || "").trim();
+			if (!sourceName) return;
+			this.clearActionFeedback();
+			this.clearReturnSources();
+			window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
+				detail: { source_type: "purchase_invoice", source_name: sourceName },
+			}));
 		},
 		async reviewLandedCost() {
 			if (!this.landedCost.source || this.reviewingLandedCost) return; this.reviewingLandedCost = true; this.clearActionFeedback(); this.landedCostDraft = null;
