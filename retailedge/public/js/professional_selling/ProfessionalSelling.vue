@@ -83,18 +83,21 @@
 			<ProfessionalQuotationDialog
 				:open="quotationOpen"
 				:context="sellingContext"
+				:canUseNativeDesk="canUseNativeDesk"
 				@close="quotationOpen = false"
 				@saved="handleQuotationSaved"
 			/>
 			<ProfessionalSalesOrderDialog
 				:open="salesOrderOpen"
 				:context="sellingContext"
+				:canUseNativeDesk="canUseNativeDesk"
 				@close="salesOrderOpen = false"
 				@saved="handleSalesOrderSaved"
 			/>
 			<ProfessionalDeliveryDialog
 				:open="deliveryOpen"
 				:context="sellingContext"
+				:canUseNativeDesk="canUseNativeDesk"
 				@close="deliveryOpen = false"
 				@saved="handleDeliverySaved"
 			/>
