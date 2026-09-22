@@ -825,6 +825,20 @@ def _existing_source_purchase_invoice(source_doctype: str, source_name: str):
 	return doc
 
 
+def _lock_receipt_purchase_orders(source) -> set[str]:
+	"""Serialize Receipt billing with direct PO billing for the same source chain."""
+	purchase_orders = sorted(
+		{
+			str(row.get("purchase_order") or "").strip()
+			for row in list(source.get("items") or [])
+			if str(row.get("purchase_order") or "").strip()
+		}
+	)
+	for purchase_order in purchase_orders:
+		_lock_purchase_source(PURCHASE_ORDER_DOCTYPE, purchase_order)
+	return set(purchase_orders)
+
+
 def _direct_po_draft_invoice_conflicts(purchase_orders: set[str]) -> list[str]:
 	"""Return direct PO-owned draft Purchase Invoices that can overlap receipt billing."""
 	purchase_orders = {str(name or "").strip() for name in purchase_orders if str(name or "").strip()}
@@ -874,11 +888,7 @@ def _prepare_source_purchase_invoice(source_doctype: str, source_name: str) -> d
 		}
 
 	if source_doctype == PURCHASE_RECEIPT_DOCTYPE:
-		linked_purchase_orders = {
-			str(row.get("purchase_order") or "").strip()
-			for row in list(source.get("items") or [])
-			if str(row.get("purchase_order") or "").strip()
-		}
+		linked_purchase_orders = _lock_receipt_purchase_orders(source)
 		conflicts = _direct_po_draft_invoice_conflicts(linked_purchase_orders)
 		if conflicts:
 			frappe.throw(
