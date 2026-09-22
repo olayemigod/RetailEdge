@@ -284,6 +284,22 @@ def test_purchase_preview_separates_edit_blockers_from_submit_permission():
 	assert preview.index("edit_blockers = list(blockers)") < preview.index("You do not have permission to submit this Purchase Invoice.")
 
 
+
+def test_purchase_invoice_editor_requires_saving_dirty_changes_before_submit_or_workflow():
+	dialog = _read(DIALOG)
+	for contract in (
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved Purchase Invoice draft changes?',
+		'this.preview?.can_edit && !this.completedResult && this.draftDirty',
+	):
+		assert contract in dialog
+	assert "window.EdgeUI" not in dialog
+	assert "window.EdgeSuiteUI" in dialog
+
+
 def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
