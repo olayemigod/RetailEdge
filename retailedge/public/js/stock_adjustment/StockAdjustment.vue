@@ -39,7 +39,7 @@
 					<div v-if="saveError" class="form-error" role="alert">{{ saveError }}</div>
 
 					<div class="field-grid">
-						<label class="field"><span>Posting Date <b>*</b></span><input v-model="values.posting_date" class="form-control" type="date" required /></label>
+						<EdgeInput v-model="values.posting_date" id="stock-adjustment-posting-date" label="Posting Date" type="date" required />
 						<EdgeLinkField v-if="branchEnabled" :modelValue="values.branch" label="Branch" placeholder="Search permitted branch" :searcher="searchBranch" :context="searchContext" @update:modelValue="setBranch" />
 						<EdgeLinkField :modelValue="values.warehouse" label="Stock Location" placeholder="Search permitted stock location" :required="true" :searcher="searchWarehouse" :context="searchContext" @update:modelValue="setWarehouse" />
 					</div>
@@ -81,7 +81,7 @@ function stored(raw, maxAge) {
 
 export default {
 	name: "RetailEdgeStockAdjustment",
-	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, StandardStockCompletionDialog },
+	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, StandardStockCompletionDialog },
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", cascadeToken: 0, formContext: {}, values: emptyValues(), initialSnapshot: "",
