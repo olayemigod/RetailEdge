@@ -211,7 +211,7 @@
 				:initialContext="paymentInitialContext"
 				:nativeFallbackEnabled="canUseNativeDesk"
 				@close="closePayment"
-				@saved="closePayment"
+				@saved="handlePaymentSaved"
 			/>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -238,6 +238,7 @@ const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standar
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const CREATE_DELIVERY_METHOD = "retailedge.professional_delivery.create_delivery_note_from_sales_invoice";
 const CREATE_RETURN_METHOD = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft";
+const SALES_ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
 const HANDOFF_PREFIX = "retailedge:make-sale:handoff:";
 const RECOVERY_PREFIX = "retailedge:make-sale:recovery:";
 const HANDOFF_MAX_AGE_MS = 10 * 60 * 1000;
@@ -952,6 +953,16 @@ export default {
 		closePayment() {
 			this.paymentOpen = false;
 			this.paymentInitialContext = {};
+		},
+		async handlePaymentSaved() {
+			this.closePayment();
+			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 1) return;
+			try {
+				const resolved = await callMethod(SALES_ACTIONS_METHOD, { document: "sales-invoice", name: this.savedDocument.name }, "GET");
+				this.savedDocument = { ...this.savedDocument, next_actions: resolved?.actions || [] };
+			} catch (error) {
+				this.saveError = errorMessage(error, "Payment was posted, but Sales Invoice actions could not be refreshed.");
+			}
 		},
 		closeDeliveryCompletion() {
 			this.deliveryCompletionOpen = false;
