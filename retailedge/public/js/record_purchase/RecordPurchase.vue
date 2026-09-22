@@ -144,7 +144,7 @@ export default {
 			try {
 				const [data, shell] = await Promise.all([callMethod(CONTEXT_METHOD), callMethod(SHELL_METHOD)]);
 				this.formContext = data || {}; this.applyShell(shell || {}); this.applyDefaults(data?.defaults || {});
-				if (!this.consumeHandoff()) this.loadRecoveryCandidate();
+				if (!(await this.consumeHandoff())) this.loadRecoveryCandidate();
 				this.loaded = true;
 			} catch (error) { this.loadError = errorMessage(error, "Unable to prepare Record Purchase."); }
 			finally { this.loading = false; }
@@ -164,12 +164,24 @@ export default {
 		},
 		recoveryKey() { return `${RECOVERY_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
 		handoffKey() { return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`; },
-		consumeHandoff() {
+		async consumeHandoff() {
 			let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; }
 			const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false;
 			if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false;
 			this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) };
-			this.handoffNotice = "Supplier, context and item lines were carried into the full-page workspace."; return true;
+			try {
+				if (this.values.company && (this.values.branch || this.values.warehouse)) {
+					const r = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.branch || "", warehouse: this.values.warehouse || "", preference: "purchase" });
+					this.values.branch = r.branch || this.values.branch || "";
+					this.values.warehouse = r.warehouse || this.values.warehouse || "";
+				}
+				this.handoffNotice = "Quick Purchase data was carried into Record Purchase and its current Branch / Receiving Stock Location access was revalidated.";
+			} catch (error) {
+				this.values.branch = ""; this.values.warehouse = "";
+				this.saveError = errorMessage(error, "The carried Branch or Receiving Stock Location is no longer available. Choose the current transaction context before saving.");
+				this.handoffNotice = "Quick Purchase line items were carried over, but the saved Branch / Receiving Stock Location was cleared because access could not be revalidated.";
+			}
+			return true;
 		},
 		loadRecoveryCandidate() { let raw = ""; try { raw = sessionStorage.getItem(this.recoveryKey()) || ""; } catch (_error) { return; } const payload = stored(raw, 12 * 60 * 60 * 1000); if (payload && (!payload.values.company || !this.values.company || payload.values.company === this.values.company)) this.recoveryCandidate = payload; },
 		async restoreRecovery() {
