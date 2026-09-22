@@ -746,6 +746,44 @@ def create_sales_invoice_from_delivery_note(delivery_note: str) -> dict[str, Any
 	)
 
 
+def _lock_sales_return_source(name: str) -> None:
+	rows = frappe.db.sql(
+		"SELECT name FROM `tabSales Invoice` WHERE name = %s FOR UPDATE",
+		(str(name or "").strip(),),
+	)
+	if not rows:
+		frappe.throw(_("Sales Invoice {0} no longer exists.").format(name))
+
+
+def _existing_sales_return_draft(source_name: str):
+	rows = frappe.db.sql(
+		"""
+		SELECT name
+		FROM `tabSales Invoice`
+		WHERE docstatus = 0
+			AND COALESCE(is_return, 0) = 1
+			AND return_against = %s
+		ORDER BY creation ASC
+		LIMIT 3
+		""",
+		(source_name,),
+		as_dict=True,
+	)
+	if len(rows) > 1:
+		frappe.throw(
+			_("Multiple draft Return / Credit Notes already exist for Sales Invoice {0}. Review them before preparing another return.").format(source_name)
+		)
+	if not rows:
+		return None
+	doc = frappe.get_doc("Sales Invoice", rows[0].name)
+	if not frappe.has_permission("Sales Invoice", "read", doc=doc):
+		frappe.throw(
+			_("A draft Return / Credit Note already exists for this Sales Invoice, but you do not have permission to review it."),
+			frappe.PermissionError,
+		)
+	return doc
+
+
 @frappe.whitelist(methods=["POST"])
 def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 	"""Prepare and insert an ERPNext Sales Invoice return as draft only."""
@@ -753,6 +791,7 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 		frappe.throw(_("You do not have permission to create Sales Invoice."), frappe.PermissionError)
 	sales_invoice = str(sales_invoice or "").strip()
 	_assert_read("Sales Invoice", sales_invoice)
+	_lock_sales_return_source(sales_invoice)
 	source = frappe.get_doc("Sales Invoice", sales_invoice)
 	if source.docstatus != 1:
 		frappe.throw(_("Submit the Sales Invoice before preparing a Return / Credit Note."))
@@ -762,6 +801,29 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 		frappe.throw(_("Use the native POS return workflow for a consolidated POS Sales Invoice."))
 
 	company, source_branch = _validate_source_context(source, source_label="Sales Invoice")
+	existing = _existing_sales_return_draft(source.name)
+	if existing:
+		mapped_branch = _validate_invoice_stock_context(
+			existing,
+			company=company,
+			source_branch=source_branch,
+		)
+		response = _invoice_response(
+			existing,
+			branch=mapped_branch,
+			source_doctype="Sales Invoice",
+			source_name=source.name,
+		)
+		response.update(
+			{
+				"is_return": True,
+				"return_against": source.name,
+				"posting_status": "Draft",
+				"existing": True,
+			}
+		)
+		return response
+
 	target = erpnext_make_sales_return(source.name)
 	if not target or target.doctype != "Sales Invoice":
 		frappe.throw(_("ERPNext could not prepare a Return / Credit Note from this Sales Invoice."))
@@ -796,6 +858,7 @@ def create_sales_return_credit_note_draft(sales_invoice: str) -> dict[str, Any]:
 			"is_return": True,
 			"return_against": source.name,
 			"posting_status": "Draft",
+			"existing": False,
 		}
 	)
 	return response
