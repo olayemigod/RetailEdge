@@ -108,6 +108,13 @@ class TestProfessionalPurchasingUIContract(TestCase):
 		self.assertIn('"can_prepare_invoice"', backend)
 		self.assertIn('"per_billed"', backend)
 
+	def test_purchase_receipt_billing_blocks_overlapping_direct_po_drafts(self):
+		source = (APP_ROOT / "professional_purchasing.py").read_text()
+		self.assertIn("_direct_po_draft_invoice_conflicts", source)
+		self.assertIn("COALESCE(item.purchase_receipt, '') = ''", source)
+		self.assertIn("direct Purchase Order draft invoice(s)", source)
+		self.assertIn("Complete or cancel the PO-owned draft first", source)
+
 	def test_purchase_invoice_draft_reuse_preserves_exact_source_lineage(self):
 		source = (APP_ROOT / "professional_purchasing.py").read_text()
 		self.assertIn("_existing_source_purchase_invoice", source)
