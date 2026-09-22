@@ -721,6 +721,29 @@ def get_professional_selling_list(
 
 
 @frappe.whitelist()
+def _delivery_has_direct_sales_order_billing(delivery) -> bool:
+	sales_orders = {
+		str(row.get("against_sales_order") or "").strip()
+		for row in list(delivery.get("items") or [])
+		if str(row.get("against_sales_order") or "").strip()
+	}
+	if not sales_orders:
+		return False
+	rows = frappe.db.sql(
+		"""
+		SELECT si.name
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` item ON item.parent = si.name
+		WHERE si.docstatus = 1
+			AND COALESCE(si.is_return, 0) = 0
+			AND item.sales_order IN %(sales_orders)s
+			AND COALESCE(item.delivery_note, '') = ''
+		LIMIT 1
+		""",
+		{"sales_orders": tuple(sales_orders)},
+	)
+	return bool(rows)
+
 def get_professional_selling_record_actions(document: str, name: str) -> dict[str, Any]:
 	"""Resolve permitted next actions for one visible Professional Selling record."""
 	document = str(document or "").strip()
@@ -744,7 +767,9 @@ def get_professional_selling_record_actions(document: str, name: str) -> dict[st
 	actions = list(row.get("actions") or [])
 	if document == "delivery-note":
 		delivery = frappe.get_doc("Delivery Note", name)
-		if any(str(row.get("against_sales_invoice") or "").strip() for row in delivery.get("items") or []):
+		invoice_sourced = any(str(row.get("against_sales_invoice") or "").strip() for row in delivery.get("items") or [])
+		direct_order_billing = _delivery_has_direct_sales_order_billing(delivery)
+		if invoice_sourced or direct_order_billing:
 			actions = [action for action in actions if action.get("value") != "create-sales-invoice"]
 
 	return {
