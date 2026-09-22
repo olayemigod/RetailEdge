@@ -294,6 +294,14 @@ def test_saved_draft_page_editing_locks_business_context_after_first_save():
 	assert ':disabled="editingSavedDraft"' in adjustment
 
 
+
+def test_saved_draft_page_edits_preserve_existing_child_row_identity():
+	for route in ("make-sale", "record-purchase", "transfer-stock", "stock-adjustment"):
+		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
+		assert 'name: row.name || ""' in source
+		assert "result.editable_items" in source
+
+
 def test_stock_full_pages_preserve_submitted_result_and_hide_edit_complete_after_submit():
 	for route in ("transfer-stock", "stock-adjustment"):
 		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
