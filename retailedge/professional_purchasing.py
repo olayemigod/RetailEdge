@@ -825,6 +825,28 @@ def _existing_source_purchase_invoice(source_doctype: str, source_name: str):
 	return doc
 
 
+def _direct_po_draft_invoice_conflicts(purchase_orders: set[str]) -> list[str]:
+	"""Return direct PO-owned draft Purchase Invoices that can overlap receipt billing."""
+	purchase_orders = {str(name or "").strip() for name in purchase_orders if str(name or "").strip()}
+	if not purchase_orders:
+		return []
+	rows = frappe.db.sql(
+		"""
+		SELECT DISTINCT pi.name
+		FROM `tabPurchase Invoice` pi
+		INNER JOIN `tabPurchase Invoice Item` item ON item.parent = pi.name
+		WHERE pi.docstatus = 0
+			AND item.purchase_order IN %(purchase_orders)s
+			AND COALESCE(item.purchase_receipt, '') = ''
+		ORDER BY pi.creation ASC
+		LIMIT 10
+		""",
+		{"purchase_orders": tuple(purchase_orders)},
+		as_dict=True,
+	)
+	return [str(row.get("name") or "").strip() for row in rows if row.get("name")]
+
+
 def _prepare_source_purchase_invoice(source_doctype: str, source_name: str) -> dict[str, Any]:
 	source_name = str(source_name or "").strip()
 	if not source_name:
@@ -850,6 +872,20 @@ def _prepare_source_purchase_invoice(source_doctype: str, source_name: str) -> d
 			"existing": True,
 			"route": f"/app/purchase-invoice/{existing.name}",
 		}
+
+	if source_doctype == PURCHASE_RECEIPT_DOCTYPE:
+		linked_purchase_orders = {
+			str(row.get("purchase_order") or "").strip()
+			for row in list(source.get("items") or [])
+			if str(row.get("purchase_order") or "").strip()
+		}
+		conflicts = _direct_po_draft_invoice_conflicts(linked_purchase_orders)
+		if conflicts:
+			frappe.throw(
+				_(
+					"Purchase Receipt {0} cannot prepare another Purchase Invoice while direct Purchase Order draft invoice(s) {1} remain open. Complete or cancel the PO-owned draft first."
+				).format(source.name, ", ".join(conflicts))
+			)
 
 	if source_doctype == PURCHASE_ORDER_DOCTYPE:
 		if flt(source.get("per_billed")) >= 100 - ATTENTION_TOLERANCE:
