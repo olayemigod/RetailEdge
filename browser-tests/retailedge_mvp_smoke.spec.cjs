@@ -88,7 +88,7 @@ test("canonical RetailEdge manager reaches Business Hub and Action Centre", asyn
 test("RetailEdge manager reaches Reports Centre and can search the permitted catalogue", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
-		await openProductPage(page, "reports-centre", "Reports Centre", "Insights");
+		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
 		const search = page.getByRole("searchbox", { name: "Find a report" });
 		await expect(search).toBeVisible();
 		await search.fill("cash");
@@ -102,7 +102,7 @@ test("RetailEdge manager reaches Reports Centre and can search the permitted cat
 test("RetailEdge cashier Reports Centre does not expose Native Desk financial reports", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
-		await openProductPage(page, "reports-centre", "Reports Centre", "Insights");
+		await openProductPage(page, "reports-centre", "Reports Centre", "Reports");
 		await expect(page.getByText("Financial", { exact: true })).toHaveCount(0);
 		await expect(page.getByText("Expense Register", { exact: true }).first()).toBeVisible();
 	} finally {
