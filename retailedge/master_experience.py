@@ -205,6 +205,15 @@ PROJECT_LIST_ITEM: dict[str, Any] = {
 	"icon": "briefcase",
 }
 
+REPORTS_CENTRE_ITEM: dict[str, Any] = {
+	"label": "Reports Centre",
+	"description": "Find permitted operational, management and financial reports from one place.",
+	"target_type": "Page",
+	"target": "reports-centre",
+	"icon": "report",
+}
+
+
 SETUP_HUB_ITEM: dict[str, Any] = {
 	"label": "Setup",
 	"description": "Configure ProcessEdge Retail business rules, Branch Setup, payment masters and statement mappings.",
@@ -668,6 +677,24 @@ def _promote_project_operations(navigation_groups: list[dict[str, Any]]) -> None
 	navigation_groups.insert(insert_at, project_group)
 
 
+def _promote_reports_centre(navigation_groups: list[dict[str, Any]]) -> None:
+	if not _can_open_page(REPORTS_CENTRE_ITEM["target"]):
+		return
+	for group in navigation_groups:
+		if group.get("key") != "insights":
+			continue
+		items = list(group.get("items") or [])
+		if any(
+			item.get("target_type") == "Page"
+			and item.get("target") == REPORTS_CENTRE_ITEM["target"]
+			for item in items
+		):
+			return
+		items.insert(0, deepcopy(REPORTS_CENTRE_ITEM))
+		group["items"] = items
+		return
+
+
 def _consolidate_setup_navigation(navigation_groups: list[dict[str, Any]]) -> None:
 	if not _can_open_page(SETUP_HUB_ITEM["target"]):
 		return
@@ -734,6 +761,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	_promote_payment_management(navigation_groups)
 	_promote_banking_readiness(navigation_groups)
 	_promote_project_operations(navigation_groups)
+	_promote_reports_centre(navigation_groups)
 	_consolidate_setup_navigation(navigation_groups)
 	_contain_native_navigation_for_edgesuite_only(context)
 
@@ -802,6 +830,7 @@ def get_retailedge_business_hub_context() -> dict[str, Any]:
 	feature_flags["project_operations"] = "erpnext_native_project_funds"
 	feature_flags["project_portfolio_reporting"] = "erpnext_project_plus_payment_entries"
 	feature_flags["project_financial_control"] = "whole_project_erpnext_financial_control"
+	feature_flags["reports_centre"] = "permission_filtered_catalogue"
 	context["feature_flags"] = feature_flags
 	return context
 
