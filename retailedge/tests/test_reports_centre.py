@@ -14,6 +14,7 @@ BUNDLE = ROOT / "public" / "js" / "reports_centre.bundle.js"
 PAGE_JSON = ROOT / "retailedge" / "page" / "reports_centre" / "reports_centre.json"
 PAGE_JS = ROOT / "retailedge" / "page" / "reports_centre" / "reports_centre.js"
 REPORTING_ACTIONS = ROOT / "public" / "js" / "retailedge_reporting_actions.js"
+SALES_REPORT = ROOT / "public" / "js" / "sales_reporting" / "SalesReportingReport.vue"
 
 
 def _master_context(*, native_desk: bool):
@@ -216,3 +217,10 @@ def test_global_reporting_actions_expose_context_handoff_for_reports_centre():
 		"__retailedgeBusinessHubRouteHandoff",
 	):
 		assert token in source
+
+
+def test_sales_reporting_consumes_handoff_for_the_active_report_key():
+	source = SALES_REPORT.read_text(encoding="utf-8")
+
+	assert 'retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey)' in source
+	assert 'retailedgeConsumeBusinessHubRouteOptions?.("sales-invoice-register")' not in source
