@@ -274,6 +274,16 @@ def test_purchase_invoice_preview_can_refresh_submitted_outstanding_and_next_act
 	assert '"next_actions": _submitted_next_actions(doc)' in service
 
 
+
+def test_purchase_preview_separates_edit_blockers_from_submit_permission():
+	source = _read(SERVICE)
+	preview = source[source.index("def _build_preview"):source.index("def _assert_expected_modified")]
+	assert "edit_blockers = list(blockers)" in preview
+	assert '"can_edit": bool(cint(doc.docstatus) == 0 and not edit_blockers' in preview
+	assert "You do not have permission to submit this Purchase Invoice." in preview
+	assert preview.index("edit_blockers = list(blockers)") < preview.index("You do not have permission to submit this Purchase Invoice.")
+
+
 def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
