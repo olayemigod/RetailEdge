@@ -61,6 +61,71 @@ def get_workflow_readiness(*, doctype: str, doc=None) -> dict[str, Any]:
 	}
 
 
+def get_workflow_edit_permission(*, doctype: str, doc, user: str | None = None) -> dict[str, Any]:
+	"""Mirror Frappe's workflow-state Allow Edit role check on the server.
+
+	Frappe Desk applies this rule client-side through frappe.workflow.is_read_only().
+	RetailEdge whitelisted draft editors must enforce the same rule server-side so
+	a direct API call cannot edit a workflow draft that Desk would make read-only.
+	"""
+	doctype = str(doctype or "").strip()
+	workflow_ref = _get_active_workflow(doctype)
+	if not workflow_ref:
+		return {
+			"workflow_controlled": False,
+			"allowed": True,
+			"workflow": "",
+			"state_field": "",
+			"current_state": "",
+			"allow_edit_role": "",
+		}
+
+	workflow = frappe.get_cached_doc("Workflow", workflow_ref["name"])
+	state_field = str(workflow.get("workflow_state_field") or "workflow_state").strip()
+	current_state = str(doc.get(state_field) or doc.get("workflow_state") or "").strip()
+	state_row = None
+
+	if current_state:
+		state_row = next(
+			(row for row in list(workflow.get("states") or []) if str(row.get("state") or "").strip() == current_state),
+			None,
+		)
+	else:
+		docstatus = cint(getattr(doc, "docstatus", 0) or 0)
+		state_row = next(
+			(row for row in list(workflow.get("states") or []) if cint(row.get("doc_status")) == docstatus),
+			None,
+		)
+		if state_row:
+			current_state = str(state_row.get("state") or "").strip()
+
+	allow_edit_role = str(state_row.get("allow_edit") or "").strip() if state_row else ""
+	roles = set(frappe.get_roles(user or frappe.session.user))
+	allowed = bool(state_row and allow_edit_role and allow_edit_role in roles)
+	return {
+		"workflow_controlled": True,
+		"allowed": allowed,
+		"workflow": str(workflow.get("name") or ""),
+		"state_field": state_field,
+		"current_state": current_state,
+		"allow_edit_role": allow_edit_role,
+	}
+
+
+def assert_workflow_edit_allowed(*, doctype: str, doc, user: str | None = None) -> dict[str, Any]:
+	permission = get_workflow_edit_permission(doctype=doctype, doc=doc, user=user)
+	if permission["workflow_controlled"] and not permission["allowed"]:
+		state = permission["current_state"] or _("current state")
+		role = permission["allow_edit_role"]
+		message = (
+			_("Workflow state {0} can only be edited by users with role {1}.").format(state, role)
+			if role
+			else _("Workflow state {0} does not permit standard document editing.").format(state)
+		)
+		frappe.throw(message, frappe.PermissionError)
+	return permission
+
+
 def get_doctype_workflow_summary(doctype: str) -> dict[str, Any]:
 	"""Cheap workflow metadata for Create menus; does not inspect a document."""
 	workflow = _get_active_workflow(doctype)
