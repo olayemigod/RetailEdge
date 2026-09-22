@@ -231,6 +231,59 @@ def test_persistent_transaction_pages_fail_closed_for_native_desk_and_scope_hand
 
 
 
+
+def test_persistent_pages_keep_saved_draft_editing_on_the_page():
+	contracts = {
+		"make-sale": "update_standard_sales_invoice_draft",
+		"record-purchase": "update_standard_purchase_invoice_draft",
+		"transfer-stock": "update_standard_stock_document_draft",
+		"stock-adjustment": "update_standard_stock_document_draft",
+	}
+	for route, update_method in contracts.items():
+		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
+		assert "editingSavedDraft" in source
+		assert "Continue Editing on Page" in source
+		assert "Review / Complete" in source
+		assert update_method in source
+		assert "expected_modified: this.savedDocument.modified" in source
+		assert "this.initialSnapshot = JSON.stringify(this.values)" in source
+		assert "Cancel Edit" in source
+		assert "savedDocument && !editingSavedDraft" in source
+		assert "!savedDocument || editingSavedDraft" in source
+
+
+def test_persistent_page_creators_return_modified_for_stale_safe_updates():
+	creators = (
+		ROOT / "guided_sales_invoice.py",
+		ROOT / "guided_purchase_invoice.py",
+		ROOT / "guided_stock_transfer.py",
+		ROOT / "guided_stock_adjustment.py",
+	)
+	for path in creators:
+		source = path.read_text(encoding="utf-8")
+		assert '"modified": str(doc.modified or "")' in source
+
+
+def test_saved_draft_page_editing_locks_business_context_after_first_save():
+	make_sale = ENTRY_PAGES["make-sale"]["component"].read_text(encoding="utf-8")
+	assert ':disabled="editingSavedDraft"' in make_sale
+	assert ':disabled="editingSavedDraft || !canEditUpdateStock"' in make_sale
+	assert ':disabled="editingSavedDraft || (requiresBranchSelection && !values.branch)"' in make_sale
+
+	purchase = ENTRY_PAGES["record-purchase"]["component"].read_text(encoding="utf-8")
+	assert ':disabled="editingSavedDraft"' in purchase
+	assert ':disabled="editingSavedDraft || !canEditUpdateStock"' in purchase
+	assert ':disabled="editingSavedDraft || (requiresBranchSelection && !values.branch)"' in purchase
+
+	transfer = ENTRY_PAGES["transfer-stock"]["component"].read_text(encoding="utf-8")
+	assert ':disabled="editingSavedDraft"' in transfer
+	assert ':disabled="editingSavedDraft || (requiresBranchSelection && !values.source_branch)"' in transfer
+	assert ':disabled="editingSavedDraft || (requiresBranchSelection && !values.target_branch)"' in transfer
+
+	adjustment = ENTRY_PAGES["stock-adjustment"]["component"].read_text(encoding="utf-8")
+	assert ':disabled="editingSavedDraft"' in adjustment
+
+
 def test_stock_full_pages_preserve_submitted_result_and_hide_edit_complete_after_submit():
 	for route in ("transfer-stock", "stock-adjustment"):
 		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
