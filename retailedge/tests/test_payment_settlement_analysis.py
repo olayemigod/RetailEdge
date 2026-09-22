@@ -27,6 +27,7 @@ SHELL_ACTIONS = ROOT / "public" / "js" / "retailedge_reporting_actions.js"
 SORTING = ROOT / "report_sorting.py"
 PAYMENT_PERMISSION_PATCH = ROOT / "patches" / "ensure_retailedge_manager_payment_entry_read.py"
 PATCHES = ROOT / "patches.txt"
+HOOKS = ROOT / "hooks.py"
 
 
 class TestPaymentSettlementAnalysis(FrappeTestCase):
@@ -175,6 +176,8 @@ class TestPaymentSettlementAnalysis(FrappeTestCase):
 		):
 			self.assertNotIn(forbidden, patch)
 		self.assertIn("retailedge.patches.ensure_retailedge_manager_payment_entry_read", patches)
+		hooks = HOOKS.read_text(encoding="utf-8")
+		self.assertIn('"retailedge.patches.ensure_retailedge_manager_payment_entry_read.execute"', hooks)
 
 	def test_page_provider_catalogue_and_governance_are_wired(self):
 		for path in (VIEW, BUNDLE, PAGE_JSON, PAGE_JS):
