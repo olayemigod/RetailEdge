@@ -14,6 +14,7 @@
 		"/app/sales-invoice-register": "sales-invoice-register",
 		"/app/customer-receivables": "customer-receivables",
 		"/app/purchase-register": "purchase-register",
+		"/app/supplier-performance": "supplier-performance",
 		"/app/purchase-analysis": "purchase-analysis",
 		"/app/supplier-payables": "supplier-payables",
 		"/app/stock-position": "stock-position",
