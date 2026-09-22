@@ -1,3 +1,4 @@
+// Validation child PR trigger: execute exact-head RC3 browser coverage for PR #60.
 const { test, expect } = require("@playwright/test");
 
 const BASE_URL = process.env.RETAILEDGE_BASE_URL || "http://retail-browser.localhost:8000";
