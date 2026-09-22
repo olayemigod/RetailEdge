@@ -22,6 +22,7 @@ const OPEN_PURCHASE_ORDER_SUBMIT_EVENT = "retailedge-open-purchase-order-submit"
 const ADVANCED_RFQ_EVENT = "retailedge-advanced-prepare-rfq";
 const PREPARE_RFQ_METHOD = "retailedge.professional_sourcing.prepare_request_for_quotation_draft_advanced";
 const ACCESS_MODE = "edgesuite_only";
+const OPEN_PURCHASE_RETURN_REVIEW_EVENT = "retailedge-open-professional-purchase-return-review";
 
 function normaliseButtonLabel(button) {
 	return String(button?.textContent || "").replace(/\s+/g, " ").trim();
@@ -218,6 +219,18 @@ function installAdvancedRfqHandoff() {
 	return () => window.removeEventListener(ADVANCED_RFQ_EVENT, handler);
 }
 
+function consumeProfessionalPurchasingTarget() {
+	const target = window.retailedgeProfessionalPurchasingTarget;
+	if (!target || typeof target !== "object") return;
+	delete window.retailedgeProfessionalPurchasingTarget;
+	if (String(target.user || "") !== String(frappe.session?.user || "Guest")) return;
+	if (target.action !== "supplier-debit-note" || !target.source_name) return;
+	window.dispatchEvent(new CustomEvent(OPEN_PURCHASE_RETURN_REVIEW_EVENT, {
+		detail: { source_type: "purchase_invoice", source_name: String(target.source_name) },
+	}));
+}
+
+
 function mountRetailEdgeProfessionalPurchasing(target) {
 	if (typeof window === "undefined") return null;
 	const edgeUI = window.EdgeSuiteUI;
@@ -259,6 +272,7 @@ function mountRetailEdgeProfessionalPurchasing(target) {
 	const cleanupSourcing = installSourcingOwnership(target);
 	const cleanupAdvanced = installAdvancedRfqHandoff();
 	const cleanupReturns = installProfessionalPurchaseReturnOwnership(target);
+	consumeProfessionalPurchasingTarget();
 	const originalUnmount = typeof app.unmount === "function" ? app.unmount.bind(app) : null;
 	if (originalUnmount) {
 		app.unmount = () => {
