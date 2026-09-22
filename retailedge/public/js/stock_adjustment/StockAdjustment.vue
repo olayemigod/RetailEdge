@@ -172,7 +172,7 @@ export default {
 						doctype: "Stock Reconciliation",
 						name: this.savedDocument.name,
 						expected_modified: this.savedDocument.modified || "",
-						values: { posting_date: this.values.posting_date, items: rows.map((row) => ({ item_code: row.item_code, qty: Number(row.qty) })) },
+						values: { posting_date: this.values.posting_date, items: rows.map((row) => ({ name: row.name || "", item_code: row.item_code, qty: Number(row.qty) })) },
 					}, "POST");
 					this.syncPageFromDraftPreview(result);
 					this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Reconciliation" };
@@ -192,7 +192,7 @@ export default {
 		},
 		beginSavedDraftEdit() { if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return; this.editingSavedDraft = true; this.completionOpen = false; this.initialSnapshot = JSON.stringify(this.values); },
 		cancelSavedDraftEdit() { const close = () => { try { this.values = JSON.parse(this.initialSnapshot || "{}"); } catch (_error) {} this.editingSavedDraft = false; this.saveError = ""; }; if (!this.hasUnsavedChanges) return close(); frappe.confirm("Discard unsaved changes to this saved Stock Adjustment draft?", close); },
-		syncPageFromDraftPreview(result) { if (!result) return; if (result.posting_date) this.values.posting_date = result.posting_date; if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ item_code: row.item_code || "", qty: row.qty })); },
+		syncPageFromDraftPreview(result) { if (!result) return; if (result.posting_date) this.values.posting_date = result.posting_date; if (Array.isArray(result.editable_items)) this.values.items = result.editable_items.map((row) => ({ name: row.name || "", item_code: row.item_code || "", qty: row.qty })); },
 		openCompletion() { if (this.savedDocument?.name) { this.editingSavedDraft = false; this.completionOpen = true; } },
 		handleCompletionChanged(result) { if (!result?.name) return; this.savedDocument = { ...this.savedDocument, ...result, doctype: "Stock Reconciliation" }; if (Number(result.docstatus || 0) === 0) { this.syncPageFromDraftPreview(result); this.initialSnapshot = JSON.stringify(this.values); } },
 		handleCompletionCompleted(result) {
