@@ -239,6 +239,17 @@ def _completion_source_context(doc, source_mode: str) -> dict[str, Any]:
 	}
 
 
+def _validate_purchase_item_access(doc) -> list[str]:
+	blockers: list[str] = []
+	for index, row in enumerate(list(doc.get("items") or []), start=1):
+		item_code = _clean(row.get("item_code"))
+		if not item_code:
+			blockers.append(_("Item is missing on Purchase Invoice row {0}.").format(index))
+			continue
+		_assert_read("Item", item_code)
+	return blockers
+
+
 def _validate_stock_context(
 	doc,
 	*,
@@ -489,6 +500,7 @@ def _item_summary(doc) -> list[dict[str, Any]]:
 def _build_preview(doc, *, source_mode: str = SOURCE_MODE_DIRECT) -> dict[str, Any]:
 	company, invoice_branch = _validate_invoice_context(doc)
 	blockers = _standard_invoice_blockers(doc)
+	blockers.extend(_validate_purchase_item_access(doc))
 	source_context = _completion_source_context(doc, source_mode)
 	blockers.extend(source_context["blockers"])
 	stock_context = _validate_stock_context(
@@ -626,6 +638,7 @@ def update_standard_purchase_invoice_draft(
 
 	source_context = _completion_source_context(doc, source_mode)
 	blockers = _standard_invoice_blockers(doc)
+	blockers.extend(_validate_purchase_item_access(doc))
 	blockers.extend(source_context.get("blockers") or [])
 	stock_context = _validate_stock_context(doc, company=company, invoice_branch=branch)
 	blockers.extend(stock_context.get("blockers") or [])
