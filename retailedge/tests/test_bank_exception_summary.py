@@ -49,6 +49,7 @@ def test_bank_exception_summary_classifies_existing_match_state_without_candidat
 		),
 	]
 	with (
+		patch("retailedge.bank_exception_summary.assert_can_access_bank_transaction_matching"),
 		patch(
 			"retailedge.bank_exception_summary.validate_report_scope",
 			return_value={"restricted": False, "allowed_branches": [], "branch": ""},
@@ -70,6 +71,7 @@ def test_bank_exception_summary_uses_bounded_permission_aware_get_list(monkeypat
 	frappe.session.user = "Administrator"
 	monkeypatch.setattr(frappe, "has_permission", lambda *args, **kwargs: True)
 	with (
+		patch("retailedge.bank_exception_summary.assert_can_access_bank_transaction_matching"),
 		patch(
 			"retailedge.bank_exception_summary.validate_report_scope",
 			return_value={"restricted": True, "allowed_branches": ["HQ"], "branch": "HQ"},

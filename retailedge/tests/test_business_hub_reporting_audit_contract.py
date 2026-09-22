@@ -77,3 +77,14 @@ def test_report_context_and_option_search_rpcs_use_same_role_gate():
 		search = source.split(f"def {search_name}", 1)[1]
 		assert gate in context
 		assert gate in search
+
+
+def test_banking_operational_roles_match_page_access_and_exclude_auditor_mutation():
+	matching = (ROOT / "bank_transaction_matching.py").read_text(encoding="utf-8")
+	summary = (ROOT / "bank_exception_summary.py").read_text(encoding="utf-8")
+	page_roles = _roles("bank-matching-reconciliation")
+	assert "RetailEdge Auditor" not in page_roles
+	role_block = matching.split("BANK_TRANSACTION_MATCHING_ROLES =", 1)[1].split("}", 1)[0]
+	assert "RetailEdge Auditor" not in role_block
+	assert "RetailEdgeAuditor" not in role_block
+	assert "assert_can_access_bank_transaction_matching()" in summary

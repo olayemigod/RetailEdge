@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, nowdate
 
+from retailedge.bank_transaction_matching import assert_can_access_bank_transaction_matching
 from retailedge.reporting_scope import validate_report_scope
 
 MAX_BANK_MATCH_SUMMARY_ROWS = 2000
@@ -15,6 +16,7 @@ RECONCILIATION_EXCEPTION_STATUSES = {"Blocked", "Failed"}
 
 @frappe.whitelist()
 def get_bank_exception_summary(filters: dict[str, Any] | str | None = None) -> dict[str, Any]:
+	assert_can_access_bank_transaction_matching()
 	filters = _coerce_filters(filters)
 	company = str(filters.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
 	if not company:
