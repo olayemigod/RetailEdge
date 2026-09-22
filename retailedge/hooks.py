@@ -290,6 +290,8 @@ override_whitelisted_methods = {
 	"retailedge.purchase_reporting.search_purchase_reporting_options": "retailedge.operating_report_defaults.search_purchase_reporting_options",
 	"retailedge.purchase_analysis.get_purchase_analysis": "retailedge.operating_report_defaults.get_purchase_analysis",
 	"retailedge.purchase_analysis.get_purchase_analysis_export": "retailedge.operating_report_defaults.get_purchase_analysis_export",
+	"retailedge.supplier_performance.get_supplier_performance": "retailedge.operating_report_defaults.get_supplier_performance",
+	"retailedge.supplier_performance.get_supplier_performance_export": "retailedge.operating_report_defaults.get_supplier_performance_export",
 	"retailedge.purchase_reporting.get_purchase_register": "retailedge.operating_report_defaults.get_purchase_register",
 	"retailedge.purchase_reporting.get_purchase_register_export": "retailedge.operating_report_defaults.get_purchase_register_export",
 	"retailedge.purchase_reporting.get_supplier_payables": "retailedge.operating_report_defaults.get_supplier_payables",
