@@ -16,6 +16,7 @@ const USERS = {
 	cashier: "browser-cashier@example.com",
 	accounts: "browser-accounts@example.com",
 	stock: "browser-stock@example.com",
+	stockManager: "browser-stock-manager@example.com",
 	purchasing: "browser-purchasing@example.com",
 	sales: "browser-sales@example.com",
 	oneBranch: "browser-one-branch@example.com",
@@ -300,7 +301,7 @@ test("RC3 Accounts persona reaches Home, Action Centre and both banking Pages", 
 	}
 });
 
-test("RC3 Stock persona reaches governed stock workspaces and Quick variants", async ({ browser }) => {
+test("RC3 Stock User reaches Transfer Stock and cannot see manager-only adjustment create", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.stock);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
@@ -313,14 +314,24 @@ test("RC3 Stock persona reaches governed stock workspaces and Quick variants", a
 
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
 		await page.getByRole("button", { name: "+ Create", exact: true }).click();
-		for (const label of ["Quick Transfer", "Quick Adjustment"]) {
-			await expect(page.locator(".create-picker-item").filter({ hasText: label }).first()).toBeVisible();
-		}
+		await expect(page.locator(".create-picker-item").filter({ hasText: "Quick Transfer" }).first()).toBeVisible();
+		await expect(page.locator(".create-picker-item").filter({ hasText: "Quick Adjustment" })).toHaveCount(0);
 		await page.keyboard.press("Escape");
+		await openProductPage(page, "stock-position", "Stock Position");
+	} finally {
+		await context.close();
+	}
+});
 
+test("RC3 Stock Manager reaches Stock Adjustment and Quick Adjustment", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.stockManager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		await page.getByRole("button", { name: "+ Create", exact: true }).click();
+		await expect(page.locator(".create-picker-item").filter({ hasText: "Quick Adjustment" }).first()).toBeVisible();
+		await page.keyboard.press("Escape");
 		await openProductPage(page, "stock-adjustment", "Stock Adjustment");
 		await expect(page.getByRole("button", { name: /Advanced: ERPNext/i })).toHaveCount(0);
-		await openProductPage(page, "stock-position", "Stock Position");
 	} finally {
 		await context.close();
 	}
