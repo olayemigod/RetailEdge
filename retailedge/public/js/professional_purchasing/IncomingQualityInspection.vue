@@ -215,7 +215,7 @@ export default {
 	},
 	computed: {
 		selectedCount() { return Object.values(this.selected).filter(Boolean).length; },
-		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== "edgesuite_only"; },
+		nativeFallbackEnabled() { const access = frappe.boot?.edgesuite_ui_access || {}; return String(access.mode || "").trim() !== "edgesuite_only" && Boolean(access.can_use_native_desk); },
 		canSubmitReview() { return Boolean(this.review?.standard_submit_eligible && !this.review?.workflow_controlled && this.review?.can_submit && (this.review?.items || []).length); },
 		canStartWorkflowReview() { return Boolean(this.review?.standard_submit_eligible && this.review?.workflow_controlled && this.review?.can_start_workflow && (this.review?.items || []).length); },
 	},
