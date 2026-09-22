@@ -61,7 +61,7 @@ class TestPurchaseReturnDebitNoteUIContract(TestCase):
 
 	def test_return_review_native_fallback_requires_explicit_desk_grant(self):
 		overlay = (APP_ROOT / "public/js/professional_purchasing/ProfessionalPurchaseReturnReviewOverlay.vue").read_text()
-		self.assertIn("Boolean(frappe.boot?.edgesuite_ui_access?.can_use_native_desk)", overlay)
+		self.assertIn("Boolean(window.__retailedgeBusinessHubContextCache?.data?.access?.can_use_native_desk)", overlay)
 		self.assertNotIn("mode !== ACCESS_MODE", overlay)
 		self.assertIn("if (!this.nativeFallbackEnabled", overlay)
 
