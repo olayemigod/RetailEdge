@@ -304,6 +304,24 @@ def test_saved_draft_page_editing_locks_business_context_after_first_save():
 
 
 
+
+def test_continue_editing_reloads_authoritative_draft_preview_before_enabling_page_edit():
+	contracts = {
+		"make-sale": "get_standard_sales_invoice_completion_preview",
+		"record-purchase": "get_standard_purchase_invoice_completion_preview",
+		"transfer-stock": "get_standard_stock_completion_preview",
+		"stock-adjustment": "get_standard_stock_completion_preview",
+	}
+	for route, preview_method in contracts.items():
+		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
+		assert preview_method in source
+		assert "async beginSavedDraftEdit()" in source
+		assert "this.savedDocument = { ...this.savedDocument, ...preview" in source
+		assert "if (!preview?.can_edit)" in source
+		assert "this.syncPageFromDraftPreview(preview)" in source
+		assert "this.initialSnapshot = JSON.stringify(this.values)" in source
+
+
 def test_saved_draft_page_edits_preserve_existing_child_row_identity():
 	for route in ("make-sale", "record-purchase", "transfer-stock", "stock-adjustment"):
 		source = ENTRY_PAGES[route]["component"].read_text(encoding="utf-8")
