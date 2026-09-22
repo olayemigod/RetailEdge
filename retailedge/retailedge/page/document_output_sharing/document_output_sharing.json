@@ -43,6 +43,12 @@
   },
   {
    "role": "Purchase User"
+  },
+  {
+   "role": "RetailEdge Cashier"
+  },
+  {
+   "role": "RetailEdgeCashier"
   }
  ],
  "script": null,
