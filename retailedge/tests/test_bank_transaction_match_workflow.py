@@ -55,6 +55,13 @@ class _FakeMatchDoc(SimpleNamespace):
 
 
 class BankTransactionMatchWorkflowTests(unittest.TestCase):
+	def setUp(self):
+		self._original_user = frappe.session.user
+		frappe.set_user("Administrator")
+
+	def tearDown(self):
+		frappe.set_user(self._original_user or "Administrator")
+
 	def _bind_match_validate(self, doc, validate_candidate=False):
 		doc._hydrate_bank_transaction_context = (
 			RetailEdgeBankTransactionMatch._hydrate_bank_transaction_context.__get__(doc, object)
