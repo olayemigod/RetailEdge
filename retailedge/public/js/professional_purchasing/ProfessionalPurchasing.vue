@@ -296,7 +296,7 @@
 					</div>
 				</section>
 
-				<section class="edge-panel safety-note"><strong>Draft-first procurement safety.</strong><span>RFQ, receipt, physical-return, supplier-debit-note and incoming-quality actions delegate to ERPNext native workflows and create drafts only. Landed Cost delegates to ERPNext's native unsaved voucher handoff so mandatory charge/accounting rows are reviewed before the first save. Supplier email, submission, quality readings and acceptance, stock movement, detailed PO analysis and accounting consequences remain standard ERPNext workflows.</span></section>
+				<section class="edge-panel safety-note"><strong>ERPNext-governed procurement safety.</strong><span>RFQ, receipt and incoming-quality preparation remain draft-first. Purchase Returns and Supplier Debit Notes use ERPNext canonical mappings, respect active Frappe Workflows, and submit only through the governed review when standard controls pass. Landed Cost delegates to ERPNext's native voucher lifecycle. Stock, valuation and accounting consequences remain ERPNext-controlled.</span></section>
 			</div>
 			<StandardPurchaseInvoiceCompletionDialog
 				:open="purchaseInvoiceCompletionOpen"
