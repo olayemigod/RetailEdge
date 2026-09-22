@@ -87,6 +87,16 @@ class TestProfessionalSellingFoundation(unittest.TestCase):
 		):
 			self.assertIn(contract, component)
 
+	def test_edgesuite_only_navigation_fails_closed_for_native_targets(self):
+		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
+		for contract in (
+			'["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk',
+			'item.target_type === "Page"',
+			'frappe.set_route("query-report", item.target)',
+			'frappe.set_route("List", item.target)',
+		):
+			self.assertIn(contract, component)
+
 	def test_ui_preserves_erpnext_shipping_and_advanced_document_truth(self):
 		component = self.read("public/js/professional_selling/ProfessionalSelling.vue")
 		for contract in (
