@@ -33,6 +33,7 @@ class TestRIR2G2C2EdgeReportServerSorting(TestCase):
 				"cash-shift-verification",
 				"customer-receivables",
 				"daily-sales-audit",
+				"expense-analysis",
 				"expense-register",
 				"expense-review",
 				"payment-settlement-analysis",
