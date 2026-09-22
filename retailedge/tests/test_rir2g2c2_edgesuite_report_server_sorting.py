@@ -39,6 +39,7 @@ class TestRIR2G2C2EdgeReportServerSorting(TestCase):
 				"payment-settlement-analysis",
 				"purchase-analysis",
 				"purchase-register",
+				"supplier-performance",
 				"supplier-payables",
 				"sales-analysis",
 				"sales-by-item",
