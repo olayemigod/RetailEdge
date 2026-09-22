@@ -73,6 +73,13 @@ def test_reports_centre_exposes_permission_filtered_catalogue(
 	]
 	financial = next(group for group in result["groups"] if group["key"] == "financial")
 	assert any(item["target"] == "Profit and Loss Statement" for item in financial["items"])
+	sales = next(group for group in result["groups"] if group["key"] == "sales")
+	purchases = next(group for group in result["groups"] if group["key"] == "purchases")
+	assert sales["items"][0]["target"] == "professional-selling"
+	assert sales["items"][0]["label"] == "Selling Control"
+	assert purchases["items"][0]["target"] == "professional-purchasing"
+	assert purchases["items"][0]["label"] == "Buying Control"
+	assert any(item["target"] == "supplier-document-review" and item["label"] == "Supplier Document Control" for item in purchases["items"])
 	assert page_available.called
 	assert report_available.called
 
@@ -130,6 +137,24 @@ def test_reports_centre_uses_native_non_throwing_access_contracts():
 	assert 'doc.is_permitted()' in backend
 	assert 'frappe.has_permission(doc.ref_doctype, "report")' in backend
 	assert "get_report_doc" not in backend
+
+
+def test_reports_centre_control_layer_reuses_existing_workspaces_without_new_metric_engines():
+	source = BACKEND.read_text(encoding="utf-8")
+
+	for target in (
+		'"target": "professional-selling"',
+		'"target": "professional-purchasing"',
+		'"target": "supplier-document-review"',
+	):
+		assert target in source
+
+	for label in (
+		'"label": "Selling Control"',
+		'"label": "Buying Control"',
+		'"label": "Supplier Document Control"',
+	):
+		assert label in source
 
 
 def test_reports_centre_backend_is_catalogue_only():
