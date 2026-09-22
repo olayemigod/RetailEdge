@@ -131,9 +131,10 @@
 
 		<template #footer>
 			<div class="guided-invoice-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">
-					Open Full Form
-				</button>
+				<div class="guided-invoice-footer-actions">
+					<button type="button" class="edge-button" :disabled="saving" @click="continueInMakeSale">Continue in Make Sale</button>
+					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: ERPNext</button>
+				</div>
 				<div class="guided-invoice-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">
 						Cancel
@@ -208,7 +209,7 @@ export default {
 		nativeFallbackEnabled: { type: Boolean, default: true },
 		open: { type: Boolean, default: false },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved", "open-native", "open-page"],
 	data() {
 		return {
 			loading: false,
@@ -218,6 +219,7 @@ export default {
 			cascadeToken: 0,
 			pricingTokens: {},
 			pricingCache: new Map(),
+			initialValuesSnapshot: "",
 			formContext: {},
 			values: emptyValues(),
 			itemTableField: {
@@ -284,6 +286,9 @@ export default {
 				customer: this.values.customer,
 			};
 		},
+		hasUnsavedChanges() {
+			return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
+		},
 	},
 	watch: {
 		open(next) {
@@ -315,6 +320,7 @@ export default {
 						column.fieldname === "rate" ? { ...column, read_only: 1 } : column
 					);
 				}
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Sales Invoice.");
 			} finally {
@@ -323,7 +329,18 @@ export default {
 		},
 		requestClose() {
 			if (this.saving) return;
-			this.$emit("close");
+			if (!this.hasUnsavedChanges) {
+				this.$emit("close");
+				return;
+			}
+			frappe.confirm(
+				"Discard the unsaved Quick Sale changes?",
+				() => this.$emit("close")
+			);
+		},
+		continueInMakeSale() {
+			if (this.saving) return;
+			this.$emit("open-page", { values: JSON.parse(JSON.stringify(this.values || {})) });
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
