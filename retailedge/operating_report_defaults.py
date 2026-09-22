@@ -19,6 +19,10 @@ from retailedge.replenishment_handoff import (
 	get_replenishment_material_request_handoff as _base_replenishment_material_request_handoff,
 )
 from retailedge.reporting_scope import constrain_report_filters, get_report_branch_scope, validate_report_scope
+from retailedge.sales_analysis import (
+	get_sales_analysis as _base_get_sales_analysis,
+	get_sales_analysis_export as _base_get_sales_analysis_export,
+)
 from retailedge.sales_reporting import (
 	get_sales_by_item as _base_get_sales_by_item,
 	get_sales_by_item_export as _base_get_sales_by_item_export,
@@ -171,6 +175,21 @@ def get_sales_by_item(filters=None, page=1, page_size=50):
 @frappe.whitelist()
 def get_sales_by_item_export(filters=None):
 	return _base_get_sales_by_item_export(filters=_constrain_report_filters(filters))
+
+
+@frappe.whitelist()
+def get_sales_analysis(filters=None, page=1, page_size=50, sort=None):
+	return _base_get_sales_analysis(
+		filters=_constrain_report_filters(filters),
+		page=page,
+		page_size=page_size,
+		sort=sort,
+	)
+
+
+@frappe.whitelist()
+def get_sales_analysis_export(filters=None):
+	return _base_get_sales_analysis_export(filters=_constrain_report_filters(filters))
 
 
 @frappe.whitelist()
