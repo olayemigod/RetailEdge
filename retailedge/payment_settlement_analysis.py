@@ -422,7 +422,7 @@ def _add_payment(
 		return
 
 	party_currency = str(payment.get("paid_from_account_currency") or "").strip()
-	if party_currency and party_currency != company_currency:
+	if not party_currency or party_currency != company_currency:
 		bucket["multi_currency_exception_count"] += 1
 		return
 
@@ -434,7 +434,7 @@ def _add_payment(
 
 def _finalise_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
 	row = dict(bucket)
-	row["net_external_cash"] = flt(row["money_in"]) - flt(row["money_out"])
+	row["net_external_settlement"] = flt(row["money_in"]) - flt(row["money_out"])
 	external_count = cint(row["receive_count"]) + cint(row["pay_count"])
 	row["average_external_payment"] = (
 		(flt(row["money_in"]) + flt(row["money_out"])) / external_count
@@ -454,8 +454,8 @@ def _columns(currency: str) -> list[dict[str, Any]]:
 		{"fieldname": "money_in", "label": _("Money In"), "fieldtype": "Currency", "options": currency},
 		{"fieldname": "money_out", "label": _("Money Out"), "fieldtype": "Currency", "options": currency},
 		{
-			"fieldname": "net_external_cash",
-			"label": _("Net External Cash"),
+			"fieldname": "net_external_settlement",
+			"label": _("Net External Settlement"),
 			"fieldtype": "Currency",
 			"options": currency,
 		},
@@ -502,7 +502,7 @@ def _summary(rows: list[dict[str, Any]], *, currency: str) -> list[dict[str, Any
 		{"label": _("Money In"), "value": money_in, "datatype": "Currency", "currency": currency},
 		{"label": _("Money Out"), "value": money_out, "datatype": "Currency", "currency": currency},
 		{
-			"label": _("Net External Cash"),
+			"label": _("Net External Settlement"),
 			"value": money_in - money_out,
 			"datatype": "Currency",
 			"currency": currency,
