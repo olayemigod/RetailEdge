@@ -40,12 +40,14 @@
 						<EdgeInput v-model="draftRemarks" id="purchase-invoice-remarks" label="Remarks" type="text" :disabled="busy" />
 					</div>
 					<div v-if="draftItems.length" class="invoice-edit-items">
-						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
+						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span><span>Action</span></div>
 						<div v-for="(row, index) in draftItems" :key="row.name || index" class="invoice-edit-item">
 							<span>{{ row.item_code || row.item_name || "Item" }}<small v-if="row.source_locked">Source-linked</small></span>
 							<EdgeInput v-model="row.qty" :id="`purchase-invoice-item-qty-${index}`" label="Qty" type="number" min="0.000001" step="any" :disabled="busy" />
 							<EdgeInput v-model="row.rate" :id="`purchase-invoice-item-rate-${index}`" label="Rate" type="number" min="0" step="any" :disabled="busy" />
 							<span>{{ preview.currency || "" }} {{ row.amount }}</span>
+							<button v-if="!row.source_locked" type="button" class="edge-button edge-button--secondary" :disabled="busy || !canRemoveDraftItem(index)" @click="removeDraftItem(index)">Remove</button>
+							<span v-else class="invoice-source-lock">Protected</span>
 						</div>
 					</div>
 					<EdgeChildTable
@@ -237,6 +239,7 @@ export default {
 			) return true;
 			if (this.newItems.some((row) => row?.item_code)) return true;
 			const original = this.preview.editable_items || [];
+			if (this.draftItems.length !== original.length) return true;
 			return this.draftItems.some((row, index) =>
 				Number(row.qty || 0) !== Number(original[index]?.qty || 0)
 				|| Number(row.rate || 0) !== Number(original[index]?.rate || 0)
@@ -245,8 +248,10 @@ export default {
 		draftValid() {
 			if (!this.draftPostingDate) return false;
 			if (this.draftDueDate && String(this.draftDueDate) < String(this.draftPostingDate)) return false;
+			const populatedNewItems = this.newItems.filter((row) => row?.item_code);
+			if (this.draftItems.length + populatedNewItems.length < 1) return false;
 			return this.draftItems.every((row) => Number(row.qty || 0) > 0 && Number(row.rate || 0) >= 0)
-				&& this.newItems.filter((row) => row?.item_code).every((row) => Number(row.qty || 0) > 0 && (row.rate === "" || row.rate === null || row.rate === undefined || Number(row.rate) >= 0));
+				&& populatedNewItems.every((row) => Number(row.qty || 0) > 0 && (row.rate === "" || row.rate === null || row.rate === undefined || Number(row.rate) >= 0));
 		},
 	},
 	watch: {
@@ -264,6 +269,16 @@ export default {
 		},
 	},
 	methods: {
+		canRemoveDraftItem(index) {
+			const row = this.draftItems[index];
+			if (!row || row.source_locked) return false;
+			const populatedNewItems = this.newItems.filter((item) => item?.item_code).length;
+			return this.draftItems.length + populatedNewItems > 1;
+		},
+		removeDraftItem(index) {
+			if (this.busy || !this.canRemoveDraftItem(index)) return;
+			this.draftItems.splice(index, 1);
+		},
 		syncDraftEditor(preview) {
 			this.draftPostingDate = preview?.posting_date || "";
 			this.draftDueDate = preview?.due_date || "";
@@ -425,10 +440,10 @@ export default {
 .invoice-editor-heading p { margin:.2rem 0 0; color:var(--text-muted); font-size:.82rem; }
 .invoice-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
 .invoice-edit-items { display:grid; gap:.35rem; }
-.invoice-edit-item { display:grid; grid-template-columns:minmax(0,1fr) 8rem 9rem 8rem; gap:.6rem; align-items:center; padding:.4rem 0; border-bottom:1px solid var(--edge-border-color,var(--border-color)); }
+.invoice-edit-item { display:grid; grid-template-columns:minmax(0,1fr) 8rem 9rem 8rem 6.5rem; gap:.6rem; align-items:center; padding:.4rem 0; border-bottom:1px solid var(--edge-border-color,var(--border-color)); }
 .invoice-edit-item--head { color:var(--text-muted); font-size:.75rem; font-weight:700; }
 .invoice-edit-item > span { display:grid; gap:.15rem; }
-.invoice-edit-item small { color:var(--text-muted); font-size:.7rem; }
+.invoice-edit-item small,.invoice-source-lock { color:var(--text-muted); font-size:.7rem; }
 .invoice-source-note span { color:var(--text-muted); }
 .invoice-accounting-note { display: grid; gap: .25rem; padding: .8rem; border-radius: .6rem; background: var(--blue-50,#eff6ff); border: 1px solid var(--blue-200,#bfdbfe); }
 .invoice-accounting-note p { margin: 0; }
