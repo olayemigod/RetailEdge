@@ -8,7 +8,7 @@ from frappe import _
 from frappe.utils import cint, flt, get_first_day, getdate, today
 
 from retailedge.advanced_payments import _payment_branch_field
-from retailedge.reporting_capabilities import require_report_action
+from retailedge.reporting_capabilities import get_report_capability_spec, require_report_action
 from retailedge.reporting_scope import constrain_report_filters, validate_report_scope
 
 DEFAULT_PAGE_SIZE = 50
@@ -36,8 +36,20 @@ PAYMENT_TYPES = ("Receive", "Pay", "Internal Transfer")
 PARTY_TYPES = ("Customer", "Supplier")
 
 
+def _assert_report_reader_role() -> None:
+	user = frappe.session.user
+	roles = set(frappe.get_roles(user))
+	spec = get_report_capability_spec("payment-settlement-analysis")
+	if not roles.intersection(spec.view_roles) or not frappe.has_permission("Payment Entry", "read", user=user):
+		frappe.throw(
+			_("You do not have permission to view Payment & Settlement Analysis."),
+			frappe.PermissionError,
+		)
+
+
 @frappe.whitelist()
 def get_payment_settlement_context() -> dict[str, Any]:
+	_assert_report_reader_role()
 	user = frappe.session.user
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	scope: dict[str, Any] = {"restricted": False, "allowed_branches": []}
@@ -130,6 +142,7 @@ def search_payment_settlement_options(
 	branch: str = "",
 	party_type: str = "",
 ) -> list[dict[str, Any]]:
+	_assert_report_reader_role()
 	kind = str(kind or "").strip().lower()
 	txt = str(txt or "").strip()
 	company = str(company or frappe.defaults.get_user_default("Company") or "").strip()
