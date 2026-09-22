@@ -75,6 +75,34 @@ Purchase Analysis is based on submitted ERPNext Purchase Invoice and Purchase In
 - Tax / Grand Total → **not allocated here**; Purchase Register owns invoice-level tax and grand total.
 - Supplier Score → **not invented**; Supplier Performance must use evidence-backed measures only.
 
+## Expense Analysis Metrics
+
+Expense Analysis consumes the governed consolidated Expense Register dataset. It does not query General Ledger or expense documents independently.
+
+| Metric | Definition / Formula | Source | Caveats |
+| --- | --- | --- | --- |
+| Gross Spend | Sum of positive expense-row amounts | Consolidated Expense Register | Includes unposted cashier exposure only when the user explicitly enables it |
+| Credits / Reversals | Absolute value of negative expense-row amounts | Consolidated Expense Register | Reversals and expense credits reduce Net Expense |
+| Net Expense | Sum of signed expense-row amounts | Consolidated Expense Register | May include operational exposure only when explicitly requested |
+| Posted Net Expense | Signed amount for rows that are posted accounting expense | Consolidated Expense Register | Financial reporting truth; posted cashier rows and posted business/accounting sources only |
+| Unposted Cashier Exposure | Signed Cashier/POS amount where ledger status is not Posted | Consolidated Expense Register | Operational exposure, excluded by default and never presented as posted accounting expense |
+| Expense Lines | Count of consolidated source rows after filters | Consolidated Expense Register | Source rows inherit de-duplication from the register |
+| Average Expense | Net Expense ÷ Expense Lines | Consolidated Expense Register | Signed average; reversals reduce the value |
+| Posting Blocked | Count of included unposted Cashier/POS rows that are not posting-ready | Consolidated Expense Register | Operational control signal, not an accounting balance |
+
+### Expense Analysis Dimensions
+
+- Day / Week / Month / Quarter / Year → consolidated expense_date.
+- Expense Category → configured category where available; ledger-backed rows use the register’s account-to-category mapping.
+- Expense Account → accounting expense account from the consolidated source.
+- Branch → consolidated authoritative Branch attribution and read scope.
+- Source → Cashier / POS, Business Expense, Business Expense Reversal, Supplier / Business, Employee Expense, Accounting Adjustment.
+- Cost Center → consolidated accounting cost center.
+- Payment Account → accounting payment/source account; **not** a payment-method inference.
+- Cashier → actual Cashier Expense cashier only; non-cashier business sources remain explicit as non-cashier expense.
+- Expense Status → consolidated operational/accounting status.
+- Project / Payee → **not currently exposed** until the consolidated source provides authoritative fields across supported expense sources.
+
 ## Payment & Settlement Metrics
 
 Payment & Settlement Analysis is based on submitted ERPNext Payment Entries. It is not a sales-by-payment-method reconstruction.
