@@ -60,6 +60,21 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_delivery_note_invoice_path_serializes_and_blocks_direct_sales_order_billing_overlap(self):
+		source = self.read("professional_sales_invoice.py")
+		for contract in (
+			"def _lock_delivery_sales_orders",
+			'_lock_native_invoice_source("Sales Order", sales_order)',
+			"def _has_direct_sales_order_submitted_billing",
+			"si.docstatus = 1",
+			"COALESCE(si.is_return, 0) = 0",
+			"COALESCE(item.delivery_note, '') = ''",
+			"_has_direct_sales_order_submitted_billing(linked_sales_orders)",
+			"already been billed directly",
+			"Continue any remaining billing from the Sales Order",
+		):
+			self.assertIn(contract, source)
+
 	def test_quotation_can_invoice_directly_without_hidden_order_or_repricing(self):
 		source = self.read("professional_sales_invoice.py")
 		for contract in (
