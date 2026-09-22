@@ -6,6 +6,10 @@ import frappe
 from frappe import _
 
 from retailedge.operating_context import get_operating_context
+from retailedge.purchase_analysis import (
+	get_purchase_analysis as _base_get_purchase_analysis,
+	get_purchase_analysis_export as _base_get_purchase_analysis_export,
+)
 from retailedge.purchase_reporting import (
 	get_purchase_register as _base_get_purchase_register,
 	get_purchase_register_export as _base_get_purchase_register_export,
@@ -200,6 +204,21 @@ def get_sales_invoice_register(filters=None, page=1, page_size=50):
 @frappe.whitelist()
 def get_sales_invoice_register_export(filters=None):
 	return _base_get_sales_invoice_register_export(filters=_constrain_report_filters(filters))
+
+
+@frappe.whitelist()
+def get_purchase_analysis(filters=None, page=1, page_size=50, sort=None):
+	return _base_get_purchase_analysis(
+		filters=_constrain_report_filters(filters),
+		page=page,
+		page_size=page_size,
+		sort=sort,
+	)
+
+
+@frappe.whitelist()
+def get_purchase_analysis_export(filters=None):
+	return _base_get_purchase_analysis_export(filters=_constrain_report_filters(filters))
 
 
 @frappe.whitelist()
