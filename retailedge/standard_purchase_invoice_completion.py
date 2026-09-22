@@ -521,7 +521,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_DIRECT) -> dict[str, A
 		"bill_no": _clean(doc.get("bill_no")),
 		"bill_date": _clean(doc.get("bill_date")),
 		"remarks": _clean(doc.get("remarks")),
-		"can_edit": bool(cint(doc.docstatus) == 0 and frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)),
+		"can_edit": bool(cint(doc.docstatus) == 0 and not blockers and frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)),
 		"editable_items": _editable_purchase_items(doc),
 		"allow_new_items": bool((_clean(source_mode) or SOURCE_MODE_DIRECT) == SOURCE_MODE_DIRECT),
 		"update_stock": bool(cint(doc.get("update_stock"))),
