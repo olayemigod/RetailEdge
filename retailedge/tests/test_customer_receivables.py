@@ -25,9 +25,11 @@ class RetailEdgeCustomerReceivablesTests(unittest.TestCase):
 		self.assertIn('"is_return": 0', source)
 		self.assertIn('"company": filters.company', source)
 		self.assertIn('"outstanding_amount"', source)
-		self.assertIn("limit=MAX_INVOICE_SCAN_ROWS + 1", source)
+		self.assertIn("limit_page_length=MAX_INVOICE_SCAN_ROWS + 1", source)
 		self.assertEqual(MAX_INVOICE_SCAN_ROWS, 2000)
 		self.assertNotIn("ignore_permissions", source)
+		self.assertIn('return frappe.get_all("Sales Invoice", **kwargs)', source)
+		self.assertIn("_assert_controlled_sales_invoice_scope", source)
 		self.assertNotIn("frappe.db.commit", source)
 
 	def test_current_outstanding_is_not_presented_as_historical_reconstruction(self):

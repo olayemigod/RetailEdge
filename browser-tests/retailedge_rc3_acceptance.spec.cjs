@@ -327,7 +327,6 @@ test("RC3 Sales persona has an EdgeSuite product shell and selling workspace", a
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
 		await openProductPage(page, "professional-selling", "Professional Selling");
 		await openProductPage(page, "customer-receivables", "Customer Receivables");
-		await openProductPage(page, "payment-management", "Advanced Payment Management");
 	} finally {
 		await context.close();
 	}

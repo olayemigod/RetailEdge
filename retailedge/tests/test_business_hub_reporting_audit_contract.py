@@ -88,3 +88,16 @@ def test_banking_operational_roles_match_page_access_and_exclude_auditor_mutatio
 	assert "RetailEdge Auditor" not in role_block
 	assert "RetailEdgeAuditor" not in role_block
 	assert "assert_can_access_bank_transaction_matching()" in summary
+
+
+def test_customer_receivables_controlled_view_and_payment_authority_are_not_conflated():
+	capabilities = (ROOT / "reporting_capabilities.py").read_text(encoding="utf-8")
+	receivables = (ROOT / "customer_receivables.py").read_text(encoding="utf-8")
+	payment_page = ROOT / "retailedge" / "page" / "payment_management" / "payment_management.json"
+	payment_roles = {row["role"] for row in json.loads(payment_page.read_text(encoding="utf-8")).get("roles") or []}
+	assert "allow_controlled_view_without_ref_permission=True" in capabilities
+	assert "_assert_controlled_sales_invoice_scope" in receivables
+	assert 'return frappe.get_all("Sales Invoice", **kwargs)' in receivables
+	assert payment_roles == {"System Manager", "Accounts User", "Accounts Manager"}
+	assert "Sales User" not in payment_roles
+	assert "RetailEdgeManager" not in payment_roles

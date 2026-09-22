@@ -37,6 +37,7 @@ class ReportCapabilitySpec:
 	print_roles: frozenset[str]
 	export_roles: frozenset[str]
 	ref_doctype: str = ""
+	allow_controlled_view_without_ref_permission: bool = False
 
 
 def _roles(*groups: set[str]) -> frozenset[str]:
@@ -70,6 +71,7 @@ _REPORT_SPECS = {
 		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}, _ACCOUNTS_MANAGER_ROLES, _ACCOUNTS_USER_ROLES),
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES, _ACCOUNTS_MANAGER_ROLES), ref_doctype="Sales Invoice",
+		allow_controlled_view_without_ref_permission=True,
 	),
 	"purchase-analysis": ReportCapabilitySpec(
 		key="purchase-analysis", label="Purchase Analysis",
@@ -207,18 +209,28 @@ def _has_ref_read_permission(spec: ReportCapabilitySpec, user: str) -> bool:
 	return bool(frappe.has_permission(spec.ref_doctype, ptype="read", user=user))
 
 
+def _has_view_authority(spec: ReportCapabilitySpec, user: str, roles: set[str]) -> bool:
+	if not roles.intersection(spec.view_roles):
+		return False
+	return bool(spec.allow_controlled_view_without_ref_permission or _has_ref_read_permission(spec, user))
+
+
 def require_report_view_access(report_key: str, user: str | None = None) -> dict[str, object]:
-	"""Enforce report role + reference-document read permission without changing report-specific Branch semantics."""
+	"""Enforce the report role contract; controlled providers revalidate source scope server-side."""
 	user = user or frappe.session.user
 	spec = get_report_capability_spec(report_key)
 	roles = _user_roles(user)
-	if roles.intersection(spec.view_roles) and _has_ref_read_permission(spec, user):
+	if _has_view_authority(spec, user, roles):
 		return {
 			"scope_name": spec.label,
 			"scope_key": spec.key,
 			"scope_type": "report",
 			"can_view": True,
-			"authorization_model": "report_role_and_document_permission",
+			"authorization_model": (
+				"report_role_and_controlled_provider_scope"
+				if spec.allow_controlled_view_without_ref_permission
+				else "report_role_and_document_permission"
+			),
 		}
 	frappe.throw(
 		_("You are not permitted to view this RetailEdge report."),
@@ -231,7 +243,7 @@ def get_report_capabilities(report_key: str, company: str = "", branch: str = ""
 	spec = get_report_capability_spec(report_key)
 	_validate_scope(company=company, branch=branch, user=user)
 	roles = _user_roles(user)
-	can_view = bool(roles.intersection(spec.view_roles)) and _has_ref_read_permission(spec, user)
+	can_view = _has_view_authority(spec, user, roles)
 	print_setting = _setting_enabled(PRINT_SETTING, default=True)
 	export_setting = _setting_enabled(EXPORT_SETTING, default=True)
 	can_print = can_view and print_setting and bool(roles.intersection(spec.print_roles))
