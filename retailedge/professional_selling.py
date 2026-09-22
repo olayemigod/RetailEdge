@@ -558,7 +558,12 @@ def _selling_record_actions(document: str, row: dict[str, Any]) -> list[dict[str
 			and flt(row.get("per_billed")) < 99.999
 		):
 			actions.append({"value": "create-sales-invoice", "label": _("Create Sales Invoice")})
-		if _permission("Payment Entry", "create") and flt(row.get("grand_total")) - flt(row.get("advance_paid")) > 0.005:
+		if (
+			_permission("Payment Entry", "create")
+			and status not in {"Closed", "Completed", "Cancelled"}
+			and flt(row.get("per_billed")) < 99.999
+			and flt(row.get("grand_total")) - flt(row.get("advance_paid")) > 0.005
+		):
 			actions.append({"value": "make-payment", "label": _("Make Payment")})
 
 	elif document == "delivery-note":
