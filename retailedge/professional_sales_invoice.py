@@ -283,6 +283,40 @@ def _direct_sales_order_draft_invoice_conflicts(sales_orders: set[str]) -> list[
 	return [str(row.get("name") or "").strip() for row in rows if row.get("name")]
 
 
+def _lock_delivery_sales_orders(source) -> set[str]:
+	"""Serialize Delivery Note billing with direct Sales Order billing."""
+	sales_orders = sorted(
+		{
+			str(row.get("against_sales_order") or "").strip()
+			for row in list(source.get("items") or [])
+			if str(row.get("against_sales_order") or "").strip()
+		}
+	)
+	for sales_order in sales_orders:
+		_lock_native_invoice_source("Sales Order", sales_order)
+	return set(sales_orders)
+
+
+def _has_direct_sales_order_submitted_billing(sales_orders: set[str]) -> bool:
+	"""Return True when any linked Sales Order was already invoiced without a Delivery Note."""
+	sales_orders = {str(name or "").strip() for name in sales_orders if str(name or "").strip()}
+	if not sales_orders:
+		return False
+	rows = frappe.db.sql(
+		"""
+		SELECT si.name
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` item ON item.parent = si.name
+		WHERE si.docstatus = 1
+			AND COALESCE(si.is_return, 0) = 0
+			AND item.sales_order IN %(sales_orders)s
+			AND COALESCE(item.delivery_note, '') = ''
+		LIMIT 1
+		""",
+		{"sales_orders": tuple(sales_orders)},
+	)
+	return bool(rows)
+
 def _lock_quotation_for_direct_invoice(name: str) -> None:
 	rows = frappe.db.sql(
 		"SELECT name FROM `tabQuotation` WHERE name = %s FOR UPDATE",
@@ -686,17 +720,20 @@ def _create_invoice_from_native_mapper(source_doctype: str, source_name: str, ma
 			"existing": True,
 		}
 	if source_doctype == "Delivery Note":
-		linked_sales_orders = {
-			str(row.get("against_sales_order") or "").strip()
-			for row in list(source.get("items") or [])
-			if str(row.get("against_sales_order") or "").strip()
-		}
+		linked_sales_orders = _lock_delivery_sales_orders(source)
 		conflicts = _direct_sales_order_draft_invoice_conflicts(linked_sales_orders)
 		if conflicts:
 			frappe.throw(
 				_(
 					"Delivery Note {0} cannot prepare another Sales Invoice while direct Sales Order draft invoice(s) {1} remain open. Complete or cancel the Sales Order-owned draft first."
 				).format(source.name, ", ".join(conflicts))
+			)
+		if _has_direct_sales_order_submitted_billing(linked_sales_orders):
+			frappe.throw(
+				_(
+					"This Delivery Note belongs to a Sales Order that has already been billed directly. Continue any remaining billing from the Sales Order instead of creating a second invoice lineage from the Delivery Note."
+				),
+				frappe.ValidationError,
 			)
 	target = mapper(source.name)
 	if not target or target.doctype != "Sales Invoice":
