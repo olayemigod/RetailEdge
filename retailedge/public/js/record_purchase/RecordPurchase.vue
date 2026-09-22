@@ -238,7 +238,7 @@ export default {
 				this.clearRecovery();
 				this.initialSnapshot = JSON.stringify(this.values);
 				this.savedDocument = { ...result, doctype: result.doctype || "Purchase Invoice" };
-				this.completionOpen = true;
+				this.completionOpen = false;
 				frappe.show_alert?.({ message: `Purchase Invoice ${result.name} saved as Draft`, indicator: "green" });
 			} catch (error) { this.saveError = errorMessage(error, "Unable to save the Purchase Invoice draft."); }
 			finally { this.saving = false; }
