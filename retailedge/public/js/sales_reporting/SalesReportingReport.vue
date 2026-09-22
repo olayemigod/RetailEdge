@@ -311,6 +311,7 @@ export default {
 				customer: "Customer", item_group: "Item Group", item_code: "Item", salesperson: "Salesperson",
 				warehouse: "Warehouse", invoice_kind: "Invoice Type", status: "Invoice Status", group_by: "Group By",
 			};
+			if (!this.config.analysis) delete labels.group_by;
 			return Object.entries(labels)
 				.map(([key, label]) => ({ label, value: this.filters[key] }))
 				.filter((entry) => entry.value !== "" && entry.value !== null && entry.value !== undefined);
@@ -519,6 +520,7 @@ export default {
 		applyFilters() { this.currentPage = 1; return this.fetchData(); },
 		providerFilters() {
 			const { page_size: _pageSize, date_range_preset: _preset, ...filters } = this.filters;
+			if (!this.config.analysis) delete filters.group_by;
 			return filters;
 		},
 		async fetchData() {
