@@ -752,6 +752,7 @@ def _eligible_queue_row(doc) -> bool:
 	try:
 		company, invoice_branch = _validate_invoice_context(doc)
 		blockers = _standard_invoice_blockers(doc)
+		blockers.extend(_validate_purchase_item_access(doc))
 		blockers.extend(_validate_source_less_context(doc)["blockers"])
 		blockers.extend(
 			_validate_stock_context(
@@ -873,6 +874,7 @@ def submit_standard_purchase_invoice(
 	company, invoice_branch = _validate_invoice_context(doc)
 
 	blockers = _standard_invoice_blockers(doc)
+	blockers.extend(_validate_purchase_item_access(doc))
 	source_context = _completion_source_context(doc, source_mode)
 	blockers.extend(source_context["blockers"])
 	stock_context = _validate_stock_context(
@@ -949,6 +951,7 @@ def apply_standard_purchase_invoice_workflow_action(
 	company, invoice_branch = _validate_invoice_context(doc)
 
 	blockers = _standard_invoice_blockers(doc)
+	blockers.extend(_validate_purchase_item_access(doc))
 	source_context = _completion_source_context(doc, source_mode)
 	blockers.extend(source_context["blockers"])
 	stock_context = _validate_stock_context(
