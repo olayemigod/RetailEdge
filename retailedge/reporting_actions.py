@@ -59,6 +59,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.stock_accounting_integrity import get_stock_accounting_integrity_export
 
 		return get_stock_accounting_integrity_export
+	if key == "expense-analysis":
+		from retailedge.expense_analysis import get_expense_analysis_export
+
+		return get_expense_analysis_export
 	if key == "expense-register":
 		from retailedge.expense_register import get_expense_register_export
 
