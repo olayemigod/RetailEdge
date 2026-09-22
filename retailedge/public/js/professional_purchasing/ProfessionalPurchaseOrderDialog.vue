@@ -94,7 +94,7 @@
 
 		<template #footer>
 			<div class="guided-po-footer">
-				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Open Full Form</button>
+				<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced: Open in ERPNext</button>
 				<div class="guided-po-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || loading" @click="saveDraft">
@@ -156,7 +156,7 @@ export default {
 	},
 	props: {
 		open: { type: Boolean, default: false },
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {
