@@ -127,6 +127,16 @@ def test_completion_dialog_uses_server_authoritative_actions_only():
 
 
 
+
+def test_stock_preview_separates_edit_blockers_from_submit_permission():
+	source = _read(SERVICE)
+	preview = source[source.index("def _build_preview"):source.index("@frappe.whitelist()", source.index("def _build_preview"))]
+	assert "edit_blockers = list(blockers)" in preview
+	assert '"can_edit": bool(cint(doc.docstatus) == 0 and not edit_blockers' in preview
+	assert "You do not have permission to submit this {0}." in preview
+	assert preview.index("edit_blockers = list(blockers)") < preview.index("You do not have permission to submit this {0}.")
+
+
 def test_stock_draft_editor_is_stale_safe_permission_aware_and_scope_fixed():
 	source = _read(SERVICE)
 	dialog = _read(DIALOG)
