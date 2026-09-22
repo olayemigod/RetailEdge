@@ -279,7 +279,7 @@ export default {
 				return;
 			}
 			if (payload.action === "create-supplier-debit-note") {
-				window.retailedgeProfessionalPurchasingTarget = { action: "supplier-debit-note", source_name: payload.name };
+				window.retailedgeProfessionalPurchasingTarget = { action: "supplier-debit-note", source_name: payload.name, user: frappe.session?.user || "Guest" };
 				frappe.set_route("professional-purchasing");
 				return;
 			}
