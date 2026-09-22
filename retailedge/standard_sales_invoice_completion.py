@@ -84,7 +84,7 @@ def _validate_invoice_context(doc) -> tuple[str, str]:
 	return company, invoice_branch
 
 
-def _standard_invoice_blockers(doc) -> list[str]:
+def _standard_invoice_blockers(doc, *, include_date_validation: bool = True) -> list[str]:
 	blockers: list[str] = []
 	if cint(doc.docstatus) != 0:
 		blockers.append(_("Only draft Sales Invoices can use standard EdgeSuite completion."))
@@ -109,7 +109,7 @@ def _standard_invoice_blockers(doc) -> list[str]:
 
 	posting_date = doc.get("posting_date")
 	due_date = doc.get("due_date")
-	if posting_date and due_date:
+	if include_date_validation and posting_date and due_date:
 		try:
 			if getdate(due_date) < getdate(posting_date):
 				blockers.append(_("Due Date cannot be before Posting Date. Edit the draft dates before completing."))
@@ -344,6 +344,10 @@ def _build_preview(doc) -> dict[str, Any]:
 	)
 	blockers.extend(stock_context["blockers"])
 	blockers = list(dict.fromkeys(blockers))
+	edit_blockers = _standard_invoice_blockers(doc, include_date_validation=False)
+	edit_blockers.extend(source_context["blockers"])
+	edit_blockers.extend(stock_context["blockers"])
+	edit_blockers = list(dict.fromkeys(edit_blockers))
 
 	workflow_readiness = get_workflow_readiness(
 		doctype=SALES_INVOICE_DOCTYPE,
@@ -376,10 +380,12 @@ def _build_preview(doc) -> dict[str, Any]:
 		"remarks": _clean(doc.get("remarks")),
 		"can_edit": bool(
 			cint(doc.docstatus) == 0
+			and not edit_blockers
 			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
 		),
 		"can_edit_dates": bool(
 			cint(doc.docstatus) == 0
+			and not edit_blockers
 			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
 		),
 		"update_stock": bool(cint(doc.get("update_stock"))),
@@ -507,6 +513,29 @@ def update_standard_sales_invoice_draft(
 		frappe.throw(_("Only draft Sales Invoices can be edited here."), frappe.ValidationError)
 	if not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
 		frappe.throw(_("You do not have permission to edit this Sales Invoice."), frappe.PermissionError)
+
+	company, invoice_branch = _validate_invoice_context(doc)
+	edit_blockers = _standard_invoice_blockers(doc, include_date_validation=False)
+	source_context = _validate_source_context(
+		doc,
+		company=company,
+		invoice_branch=invoice_branch,
+	)
+	edit_blockers.extend(source_context["blockers"])
+	stock_context = _validate_stock_context(
+		doc,
+		company=company,
+		invoice_branch=invoice_branch,
+		source_type=source_context["source_type"],
+		source_branch=source_context["source_branch"],
+	)
+	edit_blockers.extend(stock_context["blockers"])
+	edit_blockers = list(dict.fromkeys(edit_blockers))
+	if edit_blockers:
+		frappe.throw(
+			_("Sales Invoice draft editing is blocked:\n- {0}").format("\n- ".join(edit_blockers)),
+			frappe.ValidationError,
+		)
 
 	if isinstance(values, str):
 		values = frappe.parse_json(values)
