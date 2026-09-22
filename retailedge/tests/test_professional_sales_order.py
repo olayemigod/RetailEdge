@@ -61,6 +61,12 @@ class TestProfessionalSalesOrder(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_direct_quotation_invoice_blocks_parallel_sales_order_path(self):
+		source = self.read("professional_sales_order.py")
+		self.assertIn("get_quotation_conversion", source)
+		self.assertIn("already owns Sales Invoice", source)
+		self.assertIn("instead of creating a parallel Sales Order", source)
+
 	def test_mapped_order_supplies_required_header_and_item_delivery_dates(self):
 		source = self.read("professional_sales_order.py")
 		for contract in (
