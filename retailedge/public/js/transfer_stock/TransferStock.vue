@@ -39,7 +39,7 @@
 					<div v-if="sameWarehouse" class="form-warning" role="alert">Source and Destination Stock Location must be different.</div>
 
 					<div class="field-grid">
-						<label class="field"><span>Posting Date <b>*</b></span><input v-model="values.posting_date" class="form-control" type="date" required /></label>
+						<EdgeInput v-model="values.posting_date" id="transfer-stock-posting-date" label="Posting Date" type="date" required />
 						<EdgeLinkField v-if="branchEnabled" :modelValue="values.source_branch" label="Source Branch" placeholder="Search source branch" :searcher="searchSourceBranch" :context="searchContext" @update:modelValue="setSourceBranch" />
 						<EdgeLinkField :modelValue="values.source_warehouse" label="Source Stock Location" placeholder="Search source stock location" :required="true" :disabled="requiresBranchSelection && !values.source_branch" :searcher="searchSourceWarehouse" :context="searchContext" @update:modelValue="setSourceWarehouse" />
 						<EdgeLinkField v-if="branchEnabled" :modelValue="values.target_branch" label="Destination Branch" placeholder="Search destination branch" :searcher="searchTargetBranch" :context="searchContext" @update:modelValue="setTargetBranch" />
@@ -86,7 +86,7 @@ function stored(raw, maxAge) {
 
 export default {
 	name: "RetailEdgeTransferStock",
-	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeChildTable: runtime.EdgeChildTable, StandardStockCompletionDialog },
+	components: { EdgeAppShell: runtime.EdgeAppShell, EdgePageLayout: runtime.EdgePageLayout, EdgePageHeader: runtime.EdgePageHeader, EdgeLoadingState: runtime.EdgeLoadingState, EdgeErrorState: runtime.EdgeErrorState, EdgeLinkField: runtime.EdgeLinkField, EdgeInput: runtime.EdgeInput, EdgeChildTable: runtime.EdgeChildTable, StandardStockCompletionDialog },
 	data() {
 		return {
 			loading: false, loaded: false, saving: false, loadError: "", saveError: "", formContext: {}, values: emptyValues(), initialSnapshot: "",
