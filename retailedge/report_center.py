@@ -381,21 +381,20 @@ def _resolve_report_item(spec: dict[str, Any], *, can_use_native_desk: bool) -> 
 
 def _can_open_page(target: str) -> bool:
 	try:
-		return bool(
-			frappe.db.exists("Page", target)
-			and frappe.has_permission("Page", "read", doc=target)
-		)
+		if not frappe.db.exists("Page", target):
+			return False
+		return bool(frappe.get_doc("Page", target).is_permitted())
 	except Exception:
 		return False
 
 
 def _can_open_report(target: str) -> bool:
 	try:
-		from frappe.desk.query_report import get_report_doc
-
-		get_report_doc(target)
-		return True
-	except frappe.PermissionError:
-		return False
+		if not frappe.db.exists("Report", target):
+			return False
+		doc = frappe.get_doc("Report", target)
+		if not doc.is_permitted() or doc.disabled:
+			return False
+		return bool(frappe.has_permission(doc.ref_doctype, "report"))
 	except Exception:
 		return False
