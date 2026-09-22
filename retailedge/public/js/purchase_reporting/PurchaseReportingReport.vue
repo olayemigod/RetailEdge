@@ -51,6 +51,10 @@
 					</div>
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
 					<EdgeLinkField v-model="filters.supplier" :selectedLabel="supplierLabel" label="Supplier" placeholder="All suppliers" :searcher="supplierSearch" @select="onSupplierSelected" @clear="clearSupplier" />
+					<div v-if="config.supplierPerformance" class="edge-field">
+						<span class="edge-field-label">Payables Basis</span>
+						<div class="edge-input edge-input--readonly">Current outstanding · {{ formatDate(payablesAgeingDate, "Today") }}</div>
+					</div>
 					<EdgeDropdown v-if="reportType === 'supplier_payables'" v-model="filters.ageing_bucket" :options="ageingBuckets" label="Age" />
 					<EdgeDropdown v-if="config.analysis" v-model="analysisPreset" :options="analysisPresets" label="Analysis View" @change="onAnalysisPresetChange" />
 					<EdgeDropdown v-if="config.analysis" v-model="filters.group_by" :options="groupByOptions" label="Group By" @change="onAnalysisGroupChange" />
