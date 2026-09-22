@@ -109,16 +109,6 @@
 				</div>
 			</div>
 
-			<div v-if="supplierReview.references?.length > 1" class="supplier-settlement-references">
-				<div class="supplier-settlement-reference supplier-settlement-reference--head">
-					<span>Purchase Invoice</span><span>Allocated</span><span>Current Outstanding</span>
-				</div>
-				<div v-for="row in supplierReview.references" :key="row.purchase_invoice" class="supplier-settlement-reference">
-					<strong>{{ row.purchase_invoice }}</strong>
-					<span>{{ formatMoney(row.allocated_amount, supplierReview.currency) }}</span>
-					<span>{{ formatMoney(row.invoice_outstanding_amount, supplierReview.currency) }}</span>
-				</div>
-			</div>
 
 			<p class="guided-payment-hint">
 				Submitting uses the native ERPNext Payment Entry submit flow. This workflow does not directly change
@@ -199,6 +189,17 @@
 				<div v-if="supplierReview.reference_count <= 1">
 					<span>Invoice Outstanding</span>
 					<strong>{{ formatMoney(supplierReview.invoice_outstanding_amount, supplierReview.currency) }}</strong>
+				</div>
+			</div>
+
+			<div v-if="supplierReview.references?.length > 1" class="supplier-settlement-references">
+				<div class="supplier-settlement-reference supplier-settlement-reference--head">
+					<span>Purchase Invoice</span><span>Allocated</span><span>Current Outstanding</span>
+				</div>
+				<div v-for="row in supplierReview.references" :key="row.purchase_invoice" class="supplier-settlement-reference">
+					<strong>{{ row.purchase_invoice }}</strong>
+					<span>{{ formatMoney(row.allocated_amount, supplierReview.currency) }}</span>
+					<span>{{ formatMoney(row.invoice_outstanding_amount, supplierReview.currency) }}</span>
 				</div>
 			</div>
 
