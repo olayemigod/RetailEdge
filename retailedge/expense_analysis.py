@@ -7,7 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate
 
-from retailedge.business_expense_register import get_consolidated_expense_export
+from retailedge.business_expense_register import MAX_EXPORT_ROWS, get_consolidated_expense_export
 from retailedge.reporting_capabilities import require_report_action
 from retailedge.reporting_scope import constrain_report_filters
 
@@ -119,7 +119,7 @@ def _build_expense_analysis_dataset(filters: frappe._dict) -> dict[str, Any]:
 		"group_by": group_by,
 		"scan": {
 			"source_rows": len(source.get("rows") or []),
-			"source_limit": 5000,
+			"source_limit": MAX_EXPORT_ROWS,
 		},
 		"scope": source.get("scope") or {},
 		"metadata": {
