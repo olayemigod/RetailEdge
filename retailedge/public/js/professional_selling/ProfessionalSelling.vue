@@ -276,6 +276,7 @@ export default {
 			const target = window.retailedgeProfessionalSellingTarget;
 			if (!target?.doctype || !target?.name) return;
 			delete window.retailedgeProfessionalSellingTarget;
+			if (String(target.user || "") !== String(frappe.session?.user || "Guest")) return;
 			if (target.doctype === "Sales Invoice") this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: target.name }, target.source_mode || "standard");
 		},
 		mapNavigationGroups(groups) {
