@@ -440,7 +440,7 @@ export default {
 				this.formContext = data || {};
 				this.applyShellContext(shell || {});
 				this.applyFreshDefaults(data?.defaults || {});
-				const usedHandoff = this.consumeHandoff();
+				const usedHandoff = await this.consumeHandoff();
 				if (!usedHandoff) this.loadRecoveryCandidate();
 				this.loaded = true;
 			} catch (error) {
@@ -524,7 +524,7 @@ export default {
 		handoffKey() {
 			return `${HANDOFF_PREFIX}${encodeURIComponent(frappe.session?.user || "Guest")}`;
 		},
-		consumeHandoff() {
+		async consumeHandoff() {
 			let raw = "";
 			try {
 				raw = window.sessionStorage.getItem(this.handoffKey()) || "";
@@ -544,7 +544,24 @@ export default {
 				items: (payload.values.items || this.values.items || []).map((row) => ({ ...row })),
 			};
 			if (!this.formContext.capabilities?.can_edit_update_stock) this.values.update_stock = 1;
-			this.handoffNotice = "Your customer, context and item lines were carried into the full-page workspace.";
+			try {
+				if (this.values.company && (this.values.branch || this.values.warehouse)) {
+					const resolved = await resolveBranchWarehouse({
+						company: this.values.company,
+						branch: this.values.branch || "",
+						warehouse: this.values.warehouse || "",
+						preference: "sales",
+					});
+					this.values.branch = resolved.branch || this.values.branch || "";
+					this.values.warehouse = resolved.warehouse || this.values.warehouse || "";
+				}
+				this.handoffNotice = "Quick Sale data was carried into Make Sale and its current Branch / Stock Location access was revalidated.";
+			} catch (error) {
+				this.values.branch = "";
+				this.values.warehouse = "";
+				this.saveError = errorMessage(error, "The carried Branch or Stock Location is no longer available. Choose the current transaction context before saving.");
+				this.handoffNotice = "Quick Sale line items were carried over, but the saved Branch / Stock Location was cleared because access could not be revalidated.";
+			}
 			return true;
 		},
 		loadRecoveryCandidate() {
