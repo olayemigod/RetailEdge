@@ -187,7 +187,7 @@ export default {
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
 	},
 	props: {
-		nativeFallbackEnabled: { type: Boolean, default: true },
+		nativeFallbackEnabled: { type: Boolean, default: false },
 		open: { type: Boolean, default: false },
 		prefill: { type: Object, default: () => ({}) },
 	},
