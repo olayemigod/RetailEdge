@@ -90,7 +90,7 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Quotation')">Open Full Form</button>
+				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Quotation')">Advanced: Open in ERPNext</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving" @click="saveDraft">{{ saving ? "Saving..." : "Save Draft" }}</button>
@@ -133,6 +133,7 @@ export default {
 	props: {
 		open: { type: Boolean, default: false },
 		context: { type: Object, default: () => ({}) },
+		canUseNativeDesk: { type: Boolean, default: false },
 	},
 	emits: ["close", "saved", "open-native"],
 	data() {
