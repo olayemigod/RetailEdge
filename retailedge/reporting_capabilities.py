@@ -52,6 +52,12 @@ _REPORT_SPECS = {
 		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
 		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES), ref_doctype="Sales Invoice",
 	),
+	"sales-analysis": ReportCapabilitySpec(
+		key="sales-analysis", label="Sales Analysis",
+		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}),
+		print_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES),
+		export_roles=_roles(_MANAGER_ROLES, _SALES_MANAGER_ROLES), ref_doctype="Sales Invoice",
+	),
 	"sales-invoice-register": ReportCapabilitySpec(
 		key="sales-invoice-register", label="Sales Invoice Register",
 		view_roles=_roles(_MANAGER_ROLES, _BRANCH_MANAGER_ROLES, _SALES_MANAGER_ROLES, {"Sales User"}),
