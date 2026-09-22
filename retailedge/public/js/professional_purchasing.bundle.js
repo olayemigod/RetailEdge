@@ -29,7 +29,8 @@ function normaliseButtonLabel(button) {
 }
 
 function nativeDeskEnabled() {
-	return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE;
+	const access = frappe.boot?.edgesuite_ui_access || {};
+	return String(access.mode || "").trim() !== ACCESS_MODE && Boolean(access.can_use_native_desk);
 }
 
 function materialRequestFromRow(button) {
