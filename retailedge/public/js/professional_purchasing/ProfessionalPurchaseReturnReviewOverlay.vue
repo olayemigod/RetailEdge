@@ -121,7 +121,11 @@ export default {
 		};
 	},
 	computed: {
-		nativeFallbackEnabled() { return Boolean(window.__retailedgeBusinessHubContextCache?.data?.access?.can_use_native_desk); },
+		nativeFallbackEnabled() {
+			const access = window.__retailedgeBusinessHubContextCache?.data?.access || {};
+			const mode = String(access.mode || "").trim();
+			return mode !== ACCESS_MODE && Boolean(access.can_use_native_desk);
+		},
 		isDebitNote() { return this.sourceType === "purchase_invoice"; },
 		title() { return this.isDebitNote ? "Review Supplier Debit Note" : "Review Purchase Return"; },
 		subtitle() { return this.isDebitNote ? "Review ERPNext's supplier Debit Note mapping before accounting or stock effects are posted." : "Review ERPNext's Purchase Receipt return mapping before stock is posted out."; },
