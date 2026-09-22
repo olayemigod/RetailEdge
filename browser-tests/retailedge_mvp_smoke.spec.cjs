@@ -137,6 +137,17 @@ test("Accounts User reaches Purchase Analysis with governed presets", async ({ b
 	}
 });
 
+test("Purchase User reaches Supplier Performance with evidence-backed measures", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.purchasing);
+	try {
+		await openProductPage(page, "supplier-performance", "Supplier Performance", "Reports");
+		await expect(page.getByText("Current Outstanding", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText(/Period purchases · current payables aged at/).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
 test("Accounts User reaches Expense Analysis with governed presets", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.accounts);
 	try {
