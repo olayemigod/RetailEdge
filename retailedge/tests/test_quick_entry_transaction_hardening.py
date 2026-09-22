@@ -406,6 +406,24 @@ def test_quick_to_full_handoffs_revalidate_current_operating_context():
 		assert "access was revalidated" in source or "access were revalidated" in source or "source / destination access was revalidated" in source
 
 
+
+def test_quick_entry_limit_is_lower_than_persistent_page_capacity():
+	utils = (ROOT / "public/js/retailedge_business_hub/guidedEntryUtils.js").read_text(encoding="utf-8")
+	assert "export const QUICK_ENTRY_MAX_LINES = 10;" in utils
+	for service in (
+		ROOT / "guided_sales_invoice.py",
+		ROOT / "guided_purchase_invoice.py",
+		ROOT / "guided_stock_transfer.py",
+		ROOT / "guided_stock_adjustment.py",
+	):
+		source = service.read_text(encoding="utf-8")
+		assert "MAX_ITEMS = 100" in source
+	stock_completion = (ROOT / "standard_stock_completion.py").read_text(encoding="utf-8")
+	assert "MAX_STANDARD_ITEMS = 100" in stock_completion
+	assert "MAX_DRAFT_ITEMS = 100" in (ROOT / "standard_purchase_invoice_completion.py").read_text(encoding="utf-8")
+	assert "MAX_DRAFT_ITEMS = 100" in (ROOT / "professional_draft_items.py").read_text(encoding="utf-8")
+
+
 def test_quick_entry_change_does_not_mutate_submitted_accounting_truth():
 	for config in ENTRY_PAGES.values():
 		source = config["component"].read_text(encoding="utf-8")
