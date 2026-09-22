@@ -498,6 +498,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_DIRECT) -> dict[str, A
 	)
 	blockers.extend(stock_context["blockers"])
 	blockers = list(dict.fromkeys(blockers))
+	edit_blockers = list(blockers)
 
 	workflow_readiness = get_workflow_readiness(
 		doctype=PURCHASE_INVOICE_DOCTYPE,
@@ -531,9 +532,8 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_DIRECT) -> dict[str, A
 		"bill_no": _clean(doc.get("bill_no")),
 		"bill_date": _clean(doc.get("bill_date")),
 		"remarks": _clean(doc.get("remarks")),
-		"can_edit": bool(cint(doc.docstatus) == 0 and not blockers and frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)),
+		"can_edit": bool(cint(doc.docstatus) == 0 and not edit_blockers and frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc)),
 		"editable_items": _editable_purchase_items(doc),
-		"default_warehouse": _clean(doc.get("set_warehouse")),
 		"allow_new_items": bool(
 			(_clean(source_mode) or SOURCE_MODE_DIRECT) == SOURCE_MODE_DIRECT
 			and (not cint(doc.get("update_stock")) or _clean(doc.get("set_warehouse")))
