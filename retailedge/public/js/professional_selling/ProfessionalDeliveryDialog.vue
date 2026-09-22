@@ -32,7 +32,7 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Delivery Note')">Open Full Form</button>
+				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Delivery Note')">Advanced: Open in ERPNext</button>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || !salesOrder" @click="createDraft">{{ saving ? "Creating..." : "Create Delivery Draft" }}</button>
@@ -52,7 +52,7 @@ const runtime = typeof window !== "undefined" && window.EdgeSuiteUI ? window.Edg
 export default {
 	name: "ProfessionalDeliveryDialog",
 	components: { EdgeModal: runtime.EdgeModal, EdgeLinkField: runtime.EdgeLinkField },
-	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) } },
+	props: { open: { type: Boolean, default: false }, context: { type: Object, default: () => ({}) }, canUseNativeDesk: { type: Boolean, default: false } },
 	emits: ["close", "saved", "open-native"],
 	data() {
 		return { salesOrder: "", saving: false, saveError: "" };
