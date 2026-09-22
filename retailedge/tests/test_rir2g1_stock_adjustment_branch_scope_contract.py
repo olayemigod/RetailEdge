@@ -100,12 +100,13 @@ def test_guided_stock_adjustment_uses_operational_scope_not_legacy_empty_list_co
 	assert "validate_user_branch_access" not in source
 
 
-def test_draft_creation_resolves_branch_before_warehouse_validation_and_insert():
+def test_draft_creation_resolves_guided_company_and_branch_before_warehouse_validation_and_insert():
 	source = inspect.getsource(adjustment.create_simple_stock_adjustment_draft)
-	resolve_index = source.index("resolve_operational_branch")
+	company_index = source.index("resolve_guided_company")
+	branch_index = source.index("resolve_guided_branch")
 	warehouse_index = source.index('warehouse = str(values.get("warehouse")')
 	insert_index = source.index("doc.insert()")
-	assert resolve_index < warehouse_index < insert_index
+	assert company_index < branch_index < warehouse_index < insert_index
 
 
 def test_stock_reconciliation_remains_draft_only_and_erpnext_owned():
