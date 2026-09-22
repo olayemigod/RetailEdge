@@ -174,6 +174,67 @@ def _validate_invoice_stock_context(target, *, company: str, source_branch: str)
 	return mapped_branch
 
 
+def _lock_native_invoice_source(source_doctype: str, name: str) -> None:
+	table = {
+		"Sales Order": "tabSales Order",
+		"Delivery Note": "tabDelivery Note",
+	}.get(source_doctype)
+	if not table:
+		frappe.throw(_("Unsupported Sales Invoice source."), frappe.ValidationError)
+	rows = frappe.db.sql(f"SELECT name FROM `{table}` WHERE name = %s FOR UPDATE", (name,))
+	if not rows:
+		frappe.throw(_("{0} {1} no longer exists.").format(source_doctype, name))
+
+
+def _native_invoice_source_field(source_doctype: str) -> str:
+	if source_doctype == "Sales Order":
+		return "sales_order"
+	if source_doctype == "Delivery Note":
+		return "delivery_note"
+	frappe.throw(_("Unsupported Sales Invoice source."), frappe.ValidationError)
+	return ""
+
+
+def _existing_draft_invoice_for_source(source_doctype: str, source_name: str):
+	fieldname = _native_invoice_source_field(source_doctype)
+	rows = frappe.db.sql(
+		f"""
+		SELECT DISTINCT si.name
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` item ON item.parent = si.name
+		WHERE si.docstatus = 0 AND item.`{fieldname}` = %s
+		ORDER BY si.creation ASC
+		LIMIT 3
+		""",
+		(source_name,),
+		as_dict=True,
+	)
+	if len(rows) > 1:
+		frappe.throw(
+			_("Multiple draft Sales Invoices already reference {0} {1}. Review them before creating another invoice.").format(
+				source_doctype, source_name
+			)
+		)
+	if not rows:
+		return None
+	doc = frappe.get_doc("Sales Invoice", rows[0].name)
+	if not frappe.has_permission("Sales Invoice", "read", doc=doc):
+		frappe.throw(
+			_("A draft Sales Invoice already exists for this source, but you do not have permission to open it."),
+			frappe.PermissionError,
+		)
+	linked = {
+		str(row.get(fieldname) or "").strip()
+		for row in list(doc.get("items") or [])
+		if str(row.get(fieldname) or "").strip()
+	}
+	if linked != {source_name}:
+		frappe.throw(
+			_("The existing draft Sales Invoice combines multiple source documents. Use Advanced ERPNext review.")
+		)
+	return doc
+
+
 def _lock_quotation_for_direct_invoice(name: str) -> None:
 	rows = frappe.db.sql(
 		"SELECT name FROM `tabQuotation` WHERE name = %s FOR UPDATE",
@@ -556,6 +617,19 @@ def _create_invoice_from_native_mapper(source_doctype: str, source_name: str, ma
 		frappe.throw(_("Submit the {0} before creating a Sales Invoice from it.").format(source_doctype))
 
 	company, source_branch = _validate_source_context(source, source_label=source_doctype)
+	_lock_native_invoice_source(source_doctype, source.name)
+	existing = _existing_draft_invoice_for_source(source_doctype, source.name)
+	if existing:
+		existing_branch = _source_branch(existing) or source_branch
+		return {
+			**_invoice_response(
+				existing,
+				branch=existing_branch,
+				source_doctype=source_doctype,
+				source_name=source.name,
+			),
+			"existing": True,
+		}
 	target = mapper(source.name)
 	if not target or target.doctype != "Sales Invoice":
 		frappe.throw(_("ERPNext could not prepare a Sales Invoice from this {0}.").format(source_doctype))
@@ -575,12 +649,15 @@ def _create_invoice_from_native_mapper(source_doctype: str, source_name: str, ma
 	if target.get("shipping_rule"):
 		_validate_shipping_rule(target.shipping_rule, company=company)
 	target.insert()
-	return _invoice_response(
-		target,
-		branch=mapped_branch,
-		source_doctype=source_doctype,
-		source_name=source.name,
-	)
+	return {
+		**_invoice_response(
+			target,
+			branch=mapped_branch,
+			source_doctype=source_doctype,
+			source_name=source.name,
+		),
+		"existing": False,
+	}
 
 
 @frappe.whitelist(methods=["POST"])
