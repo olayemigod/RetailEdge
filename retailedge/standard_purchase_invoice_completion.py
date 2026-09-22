@@ -353,6 +353,15 @@ def _purchase_invoice_has_returnable_items(doc) -> bool:
 	return False
 
 
+def _can_open_page(page_name: str) -> bool:
+	try:
+		if not frappe.db.exists("Page", page_name):
+			return False
+		return bool(frappe.get_doc("Page", page_name).is_permitted())
+	except Exception:
+		return False
+
+
 def _submitted_next_actions(doc) -> list[dict[str, str]]:
 	"""Return safe next business actions for one submitted payable Purchase Invoice."""
 	if cint(doc.docstatus) != 1 or cint(doc.get("is_return")):
@@ -363,6 +372,7 @@ def _submitted_next_actions(doc) -> list[dict[str, str]]:
 		actions.append({"value": "pay-supplier", "label": _("Pay Supplier")})
 	if (
 		frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "create")
+		and _can_open_page("professional-purchasing")
 		and _purchase_invoice_has_returnable_items(doc)
 	):
 		actions.append({"value": "create-supplier-debit-note", "label": _("Supplier Debit Note")})
