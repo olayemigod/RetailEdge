@@ -85,6 +85,31 @@ test("canonical RetailEdge manager reaches Business Hub and Action Centre", asyn
 	}
 });
 
+test("RetailEdge manager reaches Reports Centre and can search the permitted catalogue", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "reports-centre", "Reports Centre", "Insights");
+		const search = page.getByRole("searchbox", { name: "Find a report" });
+		await expect(search).toBeVisible();
+		await search.fill("cash");
+		await expect(page.getByText("Cash Movement", { exact: true }).first()).toBeVisible();
+		await expect(page.getByText("Cash Commitments", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
+test("RetailEdge cashier Reports Centre does not expose Native Desk financial reports", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.cashier);
+	try {
+		await openProductPage(page, "reports-centre", "Reports Centre", "Insights");
+		await expect(page.getByText("Financial", { exact: true })).toHaveCount(0);
+		await expect(page.getByText("Expense Register", { exact: true }).first()).toBeVisible();
+	} finally {
+		await context.close().catch(() => {});
+	}
+});
+
 test("canonical RetailEdge cashier reaches Business Hub but not banking control pages", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.cashier);
 	try {
