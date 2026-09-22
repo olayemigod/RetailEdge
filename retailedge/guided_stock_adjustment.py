@@ -206,6 +206,7 @@ def create_simple_stock_adjustment_draft(values: dict | str | None = None) -> di
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"modified": str(doc.modified or ""),
 		"docstatus": doc.docstatus,
 		"purpose": doc.purpose,
 		"company": doc.company,
