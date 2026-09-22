@@ -101,7 +101,7 @@ export default {
 		};
 	},
 	computed: {
-		nativeFallbackEnabled() { return frappe.boot?.edgesuite_ui_access?.mode !== ACCESS_MODE; },
+		nativeFallbackEnabled() { return Boolean(frappe.boot?.edgesuite_ui_access?.can_use_native_desk); },
 		sortedReceipts() {
 			const rows = [...(this.history.receipts || [])];
 			const { key, direction } = this.sort;
