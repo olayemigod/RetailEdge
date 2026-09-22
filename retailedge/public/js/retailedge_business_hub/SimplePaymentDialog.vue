@@ -523,7 +523,7 @@ export default {
 		initialContext: { type: Object, default: () => ({}) },
 		allowMultiReferenceSupplierPayment: { type: Boolean, default: false },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved", "draft-created", "open-native"],
 	data() {
 		return {
 			loading: false,
@@ -986,6 +986,7 @@ export default {
 					intent: this.intent,
 					values: this.values,
 				});
+				this.$emit("draft-created", result);
 				if (this.isCustomerPayment) {
 					await this.loadCustomerReview(result.name);
 					return;
