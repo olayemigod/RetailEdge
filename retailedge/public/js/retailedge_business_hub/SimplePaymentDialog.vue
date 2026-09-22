@@ -421,7 +421,7 @@
 			</div>
 			<div v-else class="guided-payment-footer">
 				<div class="guided-payment-footer-actions">
-					<button v-if="isCustomerPayment || isSupplierPayment" type="button" class="edge-button" :disabled="saving" @click="openManagedPaymentPage">Open {{ managedPageLabel }}</button>
+					<button v-if="canOpenManagedPage" type="button" class="edge-button" :disabled="saving" @click="openManagedPaymentPage">Open {{ managedPageLabel }}</button>
 					<button v-if="nativeFallbackEnabled" type="button" class="edge-button" :disabled="saving" @click="openFullForm">Advanced ERPNext</button>
 				</div>
 				<div class="guided-payment-footer-actions">
@@ -597,6 +597,13 @@ export default {
 		managedPageLabel() {
 			return this.isSupplierPayment ? "Supplier Payables" : "Payment Management";
 		},
+		canOpenManagedPage() {
+			return Boolean(
+				(this.isCustomerPayment || this.isSupplierPayment)
+				&& this.formContext.capabilities?.can_open_managed_page
+				&& this.formContext.capabilities?.managed_page
+			);
+		},
 	},
 	watch: {
 		open(next) {
@@ -702,8 +709,8 @@ export default {
 			);
 		},
 		openManagedPaymentPage() {
-			if (this.saving || this.submitting) return;
-			const target = this.isSupplierPayment ? "supplier-payables" : "payment-management";
+			if (this.saving || this.submitting || !this.canOpenManagedPage) return;
+			const target = this.formContext.capabilities?.managed_page || "";
 			const filters = { company: this.values.company || "", branch: this.values.branch || "" };
 			if (this.isSupplierPayment) filters.supplier = this.values.party || "";
 			else filters.customer = this.values.party || "";
