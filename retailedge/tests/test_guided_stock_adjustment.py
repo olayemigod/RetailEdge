@@ -43,7 +43,7 @@ class TestGuidedStockAdjustment(unittest.TestCase):
 	def test_backend_uses_bounded_permission_aware_searches(self):
 		source = (APP_ROOT / "guided_stock_adjustment.py").read_text(encoding="utf-8")
 		self.assertIn("MAX_LINK_RESULTS = 20", source)
-		self.assertIn("MAX_ITEMS = 50", source)
+		self.assertIn("MAX_ITEMS = 100", source)
 		self.assertIn("get_operational_branch_scope", source)
 		self.assertIn("resolve_operational_branch", source)
 		self.assertNotIn("validate_user_branch_access", source)
