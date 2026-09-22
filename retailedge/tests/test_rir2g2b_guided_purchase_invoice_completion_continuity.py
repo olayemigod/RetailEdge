@@ -254,6 +254,19 @@ def test_purchase_completion_requires_saving_dirty_editor_before_submit_or_workf
 		assert marker in dialog
 
 
+
+def test_purchase_invoice_requires_saving_dirty_editor_before_submit_or_workflow():
+	dialog = _read(DIALOG)
+	for marker in (
+		':disabled="busy || draftDirty"',
+		':disabled="busy || draftDirty || !preview?.workflow_eligible"',
+		'if (!this.preview?.can_submit || this.busy || this.draftDirty) return;',
+		'if (!action || !this.preview?.workflow_eligible || this.busy || this.draftDirty) return;',
+		'Discard unsaved Purchase Invoice draft changes?',
+	):
+		assert marker in dialog
+
+
 def test_purchase_invoice_completion_exposes_supplier_settlement_next_actions():
 	service = _read(SERVICE)
 	dialog = _read(DIALOG)
