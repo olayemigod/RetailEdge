@@ -126,8 +126,15 @@ def _build_sales_analysis_dataset(filters: frappe._dict) -> dict[str, Any]:
 	rows = [_finalise_bucket(bucket, include_cost=show_costs) for bucket in buckets.values()]
 	rows.sort(key=lambda row: (-flt(row.get("net_sales")), str(row.get("group_label") or "")))
 
+	matched_invoice_count = len(
+		{
+			str(item.get("parent") or "")
+			for item in items
+			if str(item.get("parent") or "") in header_map
+		}
+	)
 	currency = _company_currency(filters.company)
-	summary = _summary(rows, invoice_count=len(headers), include_cost=show_costs)
+	summary = _summary(rows, invoice_count=matched_invoice_count, include_cost=show_costs)
 	return {
 		"title": _("Sales Analysis"),
 		"columns": _sales_analysis_columns(currency, group_by, include_cost=show_costs),
@@ -154,7 +161,7 @@ def _build_sales_analysis_dataset(filters: frappe._dict) -> dict[str, Any]:
 			"salesperson_truth": "ERPNext Sales Team shared allocation contract",
 			"branch_truth": "RetailEdge authoritative transaction branch attribution",
 			"cashier_dimension": "Not exposed; document owner is not treated as cashier",
-			"quantity_note": "Quantity is additive operational volume and may mix stock units outside item-level analysis.",
+			"quantity_note": "Quantity is additive operational volume and may mix units of measure outside item-level analysis.",
 		},
 	}
 
@@ -385,6 +392,11 @@ def _finalise_bucket(bucket: dict[str, Any], *, include_cost: bool) -> dict[str,
 		if flt(row["net_qty"])
 		else 0.0
 	)
+	row["average_transaction_value"] = (
+		flt(row["net_sales"]) / row["invoice_count"]
+		if row["invoice_count"]
+		else 0.0
+	)
 	missing_cost = bool(row.pop("_missing_recorded_cost", False))
 	if include_cost:
 		row["missing_recorded_cost"] = int(missing_cost)
@@ -423,6 +435,11 @@ def _summary(
 			"datatype": "Currency",
 		},
 		{"label": _("Invoices"), "value": invoice_count, "datatype": "Int"},
+		{
+			"label": _("Average Transaction Value"),
+			"value": net_sales / invoice_count if invoice_count else 0.0,
+			"datatype": "Currency",
+		},
 	]
 	if include_cost:
 		recorded_cost = sum(flt(row.get("recorded_cost")) for row in rows)
@@ -492,12 +509,21 @@ def _sales_analysis_columns(
 		},
 		{"fieldname": "invoice_count", "label": _("Invoices"), "fieldtype": "Int"},
 		{
-			"fieldname": "average_selling_price",
-			"label": _("Avg Selling Price"),
+			"fieldname": "average_transaction_value",
+			"label": _("Avg Transaction Value"),
 			"fieldtype": "Currency",
 			"options": currency,
 		},
 	]
+	if group_by == "Item":
+		columns.append(
+			{
+				"fieldname": "average_selling_price",
+				"label": _("Avg Selling Price"),
+				"fieldtype": "Currency",
+				"options": currency,
+			}
+		)
 	if include_cost:
 		columns.extend(
 			[
