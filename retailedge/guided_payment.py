@@ -449,9 +449,10 @@ def _search_outstanding_references(
 		]
 
 	# Sales Order advances do not use an outstanding_amount database field.
-	# Resolve the live payable/advance balance through ERPNext's Payment Entry
-	# reference engine and return only orders that still accept payment.
-	fields = ["name", "transaction_date", "currency", "grand_total", "advance_paid"]
+	# Once the order is fully billed, settlement belongs to the resulting Sales
+	# Invoice receivable rather than a new Sales Order advance.
+	filters["per_billed"] = ["<", 99.999]
+	fields = ["name", "transaction_date", "currency", "grand_total", "advance_paid", "per_billed"]
 	rows = frappe.get_list(
 		reference_doctype,
 		filters=filters,
@@ -499,12 +500,19 @@ def _get_reference_snapshot(
 	_assert_read_permission(reference_doctype, reference_name)
 	party_field = config["party_type"].lower()
 	fields = ["company", party_field, "docstatus", "currency", "payment_terms_template"]
+	if reference_doctype == "Sales Order":
+		fields.append("per_billed")
 	branch_field = get_first_existing_field(reference_doctype, BRANCH_FIELD_CANDIDATES)
 	if branch_field:
 		fields.append(branch_field)
 	row = frappe.db.get_value(reference_doctype, reference_name, fields, as_dict=True)
 	if not row or row.company != company or row.get(party_field) != party or cint(row.docstatus) != 1:
 		frappe.throw(_("{0} {1} is not a submitted payable reference for this party and company.").format(reference_doctype, reference_name))
+	if reference_doctype == "Sales Order" and flt(row.get("per_billed")) >= 99.999:
+		frappe.throw(
+			_("Sales Order {0} is fully billed. Record the payment against the resulting Sales Invoice instead.").format(reference_name),
+			frappe.ValidationError,
+		)
 
 	if row.payment_terms_template and frappe.db.get_value(
 		"Payment Terms Template",
