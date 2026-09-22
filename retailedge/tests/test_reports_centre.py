@@ -120,6 +120,17 @@ def test_reports_centre_omits_pages_user_cannot_open(
 	assert report_available.call_count == 0
 
 
+def test_reports_centre_uses_native_non_throwing_access_contracts():
+	backend = BACKEND.read_text(encoding="utf-8")
+	master = MASTER.read_text(encoding="utf-8")
+
+	assert 'frappe.get_doc("Page", target).is_permitted()' in backend
+	assert 'frappe.get_doc("Page", target).is_permitted()' in master
+	assert 'doc.is_permitted()' in backend
+	assert 'frappe.has_permission(doc.ref_doctype, "report")' in backend
+	assert "get_report_doc" not in backend
+
+
 def test_reports_centre_backend_is_catalogue_only():
 	source = BACKEND.read_text(encoding="utf-8")
 
