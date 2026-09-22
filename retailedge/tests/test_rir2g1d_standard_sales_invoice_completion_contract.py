@@ -34,7 +34,7 @@ def test_preview_is_persistence_free_and_erpnext_authoritative():
 		"_get_sales_invoice",
 		"_validate_invoice_context",
 		"_standard_invoice_blockers",
-		"_validate_source_context",
+		"_completion_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		'"persistence": "none"',
@@ -124,7 +124,7 @@ def test_direct_submit_locks_stale_checks_revalidates_then_native_submits():
 		"expected_modified",
 		"_validate_invoice_context",
 		"_standard_invoice_blockers",
-		"_validate_source_context",
+		"_completion_source_context",
 		"_validate_stock_context",
 		"get_workflow_readiness",
 		'_clean(workflow_readiness.get("source")) == "frappe"',
@@ -240,17 +240,46 @@ def test_tabbed_sales_invoice_exposes_output_and_draft_edit_paths():
 	source = _read(SELLING)
 	assert "window.retailedgeDocumentOutputTarget" in source
 	assert 'frappe.set_route("document-output-sharing")' in source
-	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: row.name });' in source
+	assert "openSalesInvoiceCompletion(" in source
+	assert 'row.is_return ? "sales_return" : "standard"' in source
 
 
-def test_professional_selling_opens_invoice_completion_except_returns():
+def test_professional_selling_opens_governed_completion_for_invoices_and_returns():
 	source = _read(SELLING)
 	assert 'import StandardSalesInvoiceCompletionDialog from "./StandardSalesInvoiceCompletionDialog.vue"' in source
 	assert "handleSalesInvoiceSaved(result)" in source
-	assert "!result?.is_return" in source
-	assert 'this.openSalesInvoiceCompletion({ doctype: "Sales Invoice", name: result.name })' in source
+	assert 'result?.is_return ? "sales_return" : "standard"' in source
+	assert ':sourceMode="salesInvoiceCompletionSourceMode"' in source
 	assert ':showNextActions="true"' in source
+	assert "create-return-credit-note" in source
+	assert "create_sales_return_credit_note_draft" in source
 
+
+
+
+def test_sales_return_completion_is_explicit_canonical_and_review_only():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for marker in (
+		'SOURCE_MODE_SALES_RETURN = "sales_return"',
+		"def _validate_sales_return_context(",
+		"erpnext_make_sales_return(source.name)",
+		"Standard Sales Return completion requires negative return quantities",
+		"canonical remaining return quantities",
+		'if source_mode == SOURCE_MODE_SALES_RETURN:',
+		'Sales Return quantities remain owned by ERPNext canonical return mapping.',
+		'"is_return": bool(cint(doc.get("is_return")))',
+		'"return_against": _clean(doc.get("return_against"))',
+	):
+		assert marker in service
+	assert "Return / Credit Note completion requires the governed Sales Return workflow." in service
+	assert "Return / Credit Note dates remain owned by the governed Sales Return workflow." in service
+	for marker in (
+		'sourceMode: { type: String, default: "standard" }',
+		'source_mode: this.sourceMode || "standard"',
+		"Submit Return / Credit Note",
+	):
+		assert marker in dialog
 
 
 def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_items():
