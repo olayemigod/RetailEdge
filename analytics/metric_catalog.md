@@ -75,6 +75,33 @@ Purchase Analysis is based on submitted ERPNext Purchase Invoice and Purchase In
 - Tax / Grand Total → **not allocated here**; Purchase Register owns invoice-level tax and grand total.
 - Supplier Score → **not invented**; Supplier Performance must use evidence-backed measures only.
 
+## Supplier Performance Metrics
+
+Supplier Performance is an evidence-backed supplier management view. It composes the governed Purchase Analysis and current Supplier Payables datasets; it does not create a supplier score or infer delivery performance from incomplete evidence.
+
+| Metric | Definition / Formula | Source | Time basis / caveats |
+| --- | --- | --- | --- |
+| Purchase Value | Sum of positive submitted Purchase Invoice Item base_net_amount for the selected period | Purchase Analysis | Selected From/To period |
+| Returns | Absolute submitted purchase return item value for the selected period | Purchase Analysis | Selected From/To period |
+| Net Purchased | Purchase Value − Returns | Purchase Analysis | Selected From/To period |
+| Purchase Invoices | Distinct submitted Purchase Invoices represented by the supplier's period item rows | Purchase Analysis | Selected From/To period |
+| Average Invoice Value | Net Purchased ÷ Purchase Invoices | Purchase Analysis | Period activity only |
+| Return Rate | Returns ÷ Purchase Value × 100 | Purchase Analysis | Shown only when positive Purchase Value exists; no value is invented for return-only periods |
+| Current Outstanding | Sum of current positive ERPNext Supplier Payables outstanding balances | Supplier Payables | **Current balance**, not reconstructed as-of the selected period end |
+| Overdue Outstanding | Current Outstanding on bills whose due date is before the current ageing date | Supplier Payables | Current balance |
+| Open Bills | Count of current outstanding supplier bills | Supplier Payables | Current balance |
+| Overdue Bills | Count of current outstanding supplier bills that are overdue | Supplier Payables | Current balance |
+| Oldest Overdue | Maximum current overdue days across the supplier's open bills | Supplier Payables | Current ageing basis |
+
+### Supplier Performance Governance
+
+- Supplier rows may appear because of selected-period purchase activity, current payable exposure, or both.
+- Branch scope uses authoritative RetailEdge Purchase Invoice attribution and fails closed for restricted users.
+- Professional Purchasing remains the operational owner of Purchase Order receipt/billing attention states.
+- No composite supplier rating or score is calculated.
+- No on-time delivery rate is shown until RetailEdge has exhaustive, authoritative receipt-versus-promise evidence for the requested scope.
+- Current payables are deliberately labelled separately from selected-period purchase activity so the two time bases are not conflated.
+
 ## Expense Analysis Metrics
 
 Expense Analysis consumes the governed consolidated Expense Register dataset. It does not query General Ledger or expense documents independently.
