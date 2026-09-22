@@ -25,7 +25,7 @@ from retailedge.workflow_readiness import get_workflow_readiness
 
 SUPPORTED_DOCTYPES = {STOCK_ENTRY_DOCTYPE, STOCK_RECONCILIATION_DOCTYPE}
 MAX_PREVIEW_ITEMS = 12
-MAX_STANDARD_ITEMS = 50
+MAX_STANDARD_ITEMS = 100
 
 
 def _clean(value: Any) -> str:
