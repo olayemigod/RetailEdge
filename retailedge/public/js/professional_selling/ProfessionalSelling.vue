@@ -287,8 +287,11 @@ export default {
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return;
 			if (item.target_type === "Page") frappe.set_route(item.target);
-			else if (item.target) window.open(route || item.target, "_blank", "noopener,noreferrer");
+			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
+			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
+			else if (item.target) window.open(item.target, "_blank", "noopener,noreferrer");
 		},
 		stageDescription(key) {
 			return ({
