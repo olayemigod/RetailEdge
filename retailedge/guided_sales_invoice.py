@@ -24,7 +24,7 @@ from retailedge.utils.settings import get_retailedge_settings
 ACTION_KEY = "new-sales-invoice"
 SALES_INVOICE_DOCTYPE = "Sales Invoice"
 MAX_LINK_RESULTS = 20
-MAX_ITEMS = 50
+MAX_ITEMS = 100
 
 
 @frappe.whitelist()
