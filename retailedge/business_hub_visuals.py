@@ -217,7 +217,7 @@ def _sales_trend(
 	rows = _period_rows(start, end, granularity, ("net_sales", "transactions"))
 	by_key = {row["key"]: row for row in rows}
 	for source in dataset.get("trend") or []:
-		key, _ = _bucket_for_date(source.get("posting_date"), granularity)
+		key, bucket_label = _bucket_for_date(source.get("posting_date"), granularity)
 		if key not in by_key:
 			continue
 		by_key[key]["net_sales"] += flt(source.get("net_sales"))
@@ -293,7 +293,7 @@ def _cash_visual(
 	rows = _period_rows(start, end, granularity, ("money_in", "money_out"))
 	by_key = {row["key"]: row for row in rows}
 	for source in dataset.get("rows") or []:
-		key, _ = _bucket_for_date(source.get("posting_date"), granularity)
+		key, bucket_label = _bucket_for_date(source.get("posting_date"), granularity)
 		if key not in by_key:
 			continue
 		by_key[key]["money_in"] += flt(source.get("money_in"))
