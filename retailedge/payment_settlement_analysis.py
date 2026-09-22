@@ -8,6 +8,7 @@ from frappe import _
 from frappe.utils import cint, flt, get_first_day, getdate, today
 
 from retailedge.advanced_payments import _payment_branch_field
+from retailedge.reporting_capabilities import require_report_action
 from retailedge.reporting_scope import constrain_report_filters, validate_report_scope
 
 DEFAULT_PAGE_SIZE = 50
@@ -39,6 +40,7 @@ PARTY_TYPES = ("Customer", "Supplier")
 def get_payment_settlement_context() -> dict[str, Any]:
 	user = frappe.session.user
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
+	scope: dict[str, Any] = {"restricted": False, "allowed_branches": []}
 	branch = str(
 		frappe.defaults.get_user_default("RetailEdge Branch")
 		or frappe.defaults.get_user_default("Branch")
@@ -66,6 +68,14 @@ def get_payment_settlement_context() -> dict[str, Any]:
 		if not branch and len(scope.get("allowed_branches") or []) == 1:
 			branch = scope["allowed_branches"][0]
 
+	if company and not (scope.get("restricted") and not branch):
+		require_report_action(
+			"payment-settlement-analysis",
+			action="view",
+			company=company,
+			branch=branch,
+		)
+
 	return {
 		"default_filters": {
 			"company": company,
@@ -86,6 +96,10 @@ def get_payment_settlement_context() -> dict[str, Any]:
 		"payment_types": ["All", *PAYMENT_TYPES],
 		"party_types": ["All", *PARTY_TYPES],
 		"branch_dimension_available": int(bool(_payment_branch_field())),
+		"scope": {
+			"restricted": int(bool(scope.get("restricted"))),
+			"allowed_branch_count": len(scope.get("allowed_branches") or []),
+		},
 		"limits": {
 			"payment_rows": MAX_PAYMENT_ROWS,
 			"date_range_days": MAX_DATE_RANGE_DAYS,
@@ -178,6 +192,12 @@ def _resolve_filters(filters: dict[str, Any] | str | None) -> frappe._dict:
 		)
 	)
 	_validate_filters(resolved)
+	require_report_action(
+		"payment-settlement-analysis",
+		action="view",
+		company=str(resolved.company),
+		branch=str(resolved.get("branch") or ""),
+	)
 	return resolved
 
 
