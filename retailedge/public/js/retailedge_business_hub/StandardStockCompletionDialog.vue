@@ -42,6 +42,10 @@
 						</div>
 						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">{{ busy ? "Saving..." : "Save Draft Changes" }}</button>
 					</div>
+					<div class="stock-editor-fields">
+						<EdgeInput v-model="draftPostingDate" id="stock-draft-posting-date" label="Posting Date" type="date" :disabled="busy" required />
+						<EdgeInput v-if="preview.kind === 'transfer'" v-model="draftRemarks" id="stock-draft-remarks" label="Remarks" type="text" :disabled="busy" />
+					</div>
 					<div class="stock-edit-items">
 						<div class="stock-edit-item stock-edit-item--head"><span>Item</span><span>Qty</span><span></span></div>
 						<div v-for="(row, index) in draftItems" :key="row.name || index" class="stock-edit-item">
@@ -178,6 +182,8 @@ export default {
 			busy: false,
 			error: "",
 			actionError: "",
+			draftPostingDate: "",
+			draftRemarks: "",
 			draftItems: [],
 			newItems: [],
 			newItemColumns: [
@@ -204,13 +210,15 @@ export default {
 		},
 		draftDirty() {
 			if (!this.preview?.can_edit) return false;
+			if (String(this.draftPostingDate || "") !== String(this.preview.posting_date || "")) return true;
+			if (this.preview.kind === "transfer" && String(this.draftRemarks || "") !== String(this.preview.remarks || "")) return true;
 			if (this.newItems.some((row) => row?.item_code)) return true;
 			const original = this.preview.editable_items || [];
 			if (this.draftItems.length !== original.length) return true;
 			return this.draftItems.some((row, index) => Number(row.qty ?? 0) !== Number(original[index]?.qty ?? 0));
 		},
 		draftValid() {
-			if (!this.draftItems.length) return false;
+			if (!this.draftPostingDate || !this.draftItems.length) return false;
 			const validQty = (row) => this.preview?.kind === "adjustment" ? Number(row.qty) >= 0 : Number(row.qty) > 0;
 			return this.draftItems.every(validQty) && this.newItems.filter((row) => row?.item_code).every(validQty);
 		},
@@ -231,6 +239,8 @@ export default {
 	},
 	methods: {
 		syncDraftEditor(preview) {
+			this.draftPostingDate = preview?.posting_date || "";
+			this.draftRemarks = preview?.remarks || "";
 			this.draftItems = (preview?.editable_items || []).map((row) => ({ ...row }));
 			this.newItems = [];
 		},
@@ -274,10 +284,14 @@ export default {
 					doctype: this.preview.doctype,
 					name: this.preview.name,
 					expected_modified: this.preview.modified,
-					items: [
-						...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty) })),
-						...this.newItems.filter((row) => row?.item_code).map((row) => ({ item_code: row.item_code, qty: Number(row.qty) })),
-					],
+					values: {
+						posting_date: this.draftPostingDate,
+						remarks: this.draftRemarks,
+						items: [
+							...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty) })),
+							...this.newItems.filter((row) => row?.item_code).map((row) => ({ item_code: row.item_code, qty: Number(row.qty) })),
+						],
+					},
 				}, "POST");
 				this.preview = result;
 				this.syncDraftEditor(result);
@@ -361,6 +375,7 @@ export default {
 .stock-draft-editor { display:grid; gap:.75rem; padding:.8rem; border:1px solid var(--edge-border-color,var(--border-color)); border-radius:.6rem; }
 .stock-editor-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
 .stock-editor-heading p { margin:.2rem 0 0; color:var(--text-muted); font-size:.82rem; }
+.stock-editor-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
 .stock-edit-items { display:grid; gap:.35rem; }
 .stock-edit-item { display:grid; grid-template-columns:minmax(0,1fr) 9rem auto; gap:.6rem; align-items:center; padding:.4rem 0; border-bottom:1px solid var(--edge-border-color,var(--border-color)); }
 .stock-edit-item--head { color:var(--text-muted); font-size:.75rem; font-weight:700; }
@@ -377,7 +392,7 @@ export default {
 .stock-completion-footer { display: flex; justify-content: space-between; align-items: center; gap: .75rem; width: 100%; }
 .stock-completion-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 @media (max-width: 720px) {
-	.stock-completion-summary, .stock-completion-item, .stock-edit-item { grid-template-columns: 1fr; }
+	.stock-completion-summary, .stock-completion-item, .stock-edit-item, .stock-editor-fields { grid-template-columns: 1fr; }
 	.stock-editor-heading { flex-direction:column; align-items:stretch; }
 	.stock-completion-footer { align-items: stretch; flex-direction: column; }
 	.stock-completion-actions { justify-content: flex-start; }
