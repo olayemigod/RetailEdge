@@ -234,6 +234,7 @@ const SEARCH_METHOD = "retailedge.guided_sales_invoice.search_simple_sales_invoi
 const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const CREATE_METHOD = "retailedge.guided_sales_invoice.create_simple_sales_invoice_draft";
 const UPDATE_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
+const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const SHELL_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const CREATE_DELIVERY_METHOD = "retailedge.professional_delivery.create_delivery_note_from_sales_invoice";
 const CREATE_RETURN_METHOD = "retailedge.professional_sales_invoice.create_sales_return_credit_note_draft";
@@ -832,11 +833,26 @@ export default {
 				this.saving = false;
 			}
 		},
-		beginSavedDraftEdit() {
-			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0) return;
-			this.editingSavedDraft = true;
-			this.completionOpen = false;
-			this.initialSnapshot = JSON.stringify(this.values);
+		async beginSavedDraftEdit() {
+			if (!this.savedDocument?.name || Number(this.savedDocument.docstatus || 0) !== 0 || this.saving) return;
+			this.saveError = "";
+			this.saving = true;
+			try {
+				const preview = await callMethod(PREVIEW_METHOD, { name: this.savedDocument.name }, "GET");
+				this.savedDocument = { ...this.savedDocument, ...preview, doctype: "Sales Invoice" };
+				if (!preview?.can_edit) {
+					this.saveError = (preview?.blockers || [])[0] || "This Sales Invoice draft is no longer editable in the standard page.";
+					return;
+				}
+				this.syncPageFromDraftPreview(preview);
+				this.editingSavedDraft = true;
+				this.completionOpen = false;
+				this.initialSnapshot = JSON.stringify(this.values);
+			} catch (error) {
+				this.saveError = errorMessage(error, "Unable to reload this Sales Invoice draft for editing.");
+			} finally {
+				this.saving = false;
+			}
 		},
 		cancelSavedDraftEdit() {
 			const close = () => {
