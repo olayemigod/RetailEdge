@@ -531,7 +531,10 @@ export default {
 					metadata: this.exportMetadata,
 				};
 			}
-			const result = await callMethod("retailedge.expense_register.get_expense_register_export", {
+			const fallbackMethod = this.config.analysis
+				? "retailedge.expense_analysis.get_expense_analysis_export"
+				: "retailedge.expense_register.get_expense_register_export";
+			const result = await callMethod(fallbackMethod, {
 				filters: this.providerFilters(),
 			});
 			return {
