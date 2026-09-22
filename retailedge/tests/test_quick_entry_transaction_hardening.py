@@ -167,6 +167,15 @@ def test_payment_quick_entry_has_full_page_complex_allocation_escape_paths():
 
 
 
+
+def test_submitted_make_sale_keeps_credit_note_action_after_completion_dialog_closes():
+	make_sale = ENTRY_PAGES["make-sale"]["component"].read_text(encoding="utf-8")
+	assert "hasSavedNextAction('create-return-credit-note')" in make_sale
+	assert "Return / Credit Note" in make_sale
+	assert 'CREATE_RETURN_METHOD' in make_sale
+	assert 'source_mode: "sales_return"' in make_sale
+
+
 def test_business_hub_quick_sale_and_purchase_continue_after_submission():
 	hub = HUB.read_text(encoding="utf-8")
 	for contract in (
