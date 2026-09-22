@@ -71,6 +71,10 @@ def _export_handler(report_key: str) -> Callable[..., dict[str, Any]]:
 		from retailedge.daily_sales_audit_page import get_daily_sales_audit_page_export
 
 		return get_daily_sales_audit_page_export
+	if key == "payment-settlement-analysis":
+		from retailedge.payment_settlement_analysis import get_payment_settlement_analysis_export
+
+		return get_payment_settlement_analysis_export
 	if key == "cash-movement":
 		from retailedge.cash_movement import get_cash_movement_export
 
