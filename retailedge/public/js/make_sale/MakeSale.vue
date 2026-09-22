@@ -49,6 +49,7 @@
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('make-payment')" type="button" class="edge-button edge-button--primary" @click="runSavedNextAction('make-payment')">Record Payment</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-delivery-note')" type="button" class="edge-button" @click="runSavedNextAction('create-delivery-note')">Create Delivery Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-return-credit-note')" type="button" class="edge-button" @click="runSavedNextAction('create-return-credit-note')">Return / Credit Note</button>
+						<button v-if="Number(savedDocument.docstatus || 0) === 1 && hasSavedNextAction('create-return-credit-note')" type="button" class="edge-button" @click="runSavedNextAction('create-return-credit-note')">Return / Credit Note</button>
 						<button v-if="Number(savedDocument.docstatus || 0) === 1" type="button" class="edge-button" @click="runSavedNextAction('output')">Print / Share</button>
 						<button type="button" class="edge-button" @click="startAnother">Start Another Sale</button>
 					</div>
