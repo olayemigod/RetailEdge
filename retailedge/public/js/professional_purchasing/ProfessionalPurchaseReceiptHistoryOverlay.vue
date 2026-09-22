@@ -101,7 +101,7 @@ export default {
 		};
 	},
 	computed: {
-		nativeFallbackEnabled() { return Boolean(frappe.boot?.edgesuite_ui_access?.can_use_native_desk); },
+		nativeFallbackEnabled() { return Boolean(window.__retailedgeBusinessHubContextCache?.data?.access?.can_use_native_desk); },
 		sortedReceipts() {
 			const rows = [...(this.history.receipts || [])];
 			const { key, direction } = this.sort;
