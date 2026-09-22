@@ -4,17 +4,19 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, get_datetime
+from frappe.utils import cint, flt, get_datetime, getdate
 
 from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.guided_stock_adjustment import (
 	STOCK_RECONCILIATION_DOCTYPE,
 	STOCK_RECONCILIATION_PURPOSE,
+	_assert_simple_stock_item as _assert_simple_adjustment_item,
 	_validate_branch_warehouse as _validate_adjustment_branch_warehouse,
 )
 from retailedge.guided_stock_transfer import (
 	MATERIAL_TRANSFER,
 	STOCK_ENTRY_DOCTYPE,
+	_assert_simple_stock_item as _assert_simple_transfer_item,
 	_validate_branch_warehouse as _validate_transfer_branch_warehouse,
 )
 from retailedge.operating_context import get_operational_branch_scope, resolve_operational_branch
@@ -389,6 +391,101 @@ def _update_stock_draft_items(doc, requested_items: Any, *, preview: dict[str, A
 		doc.set_missing_values()
 
 
+def _editable_stock_items(doc) -> list[dict[str, Any]]:
+	return [
+		{
+			"name": _clean(row.get("name")),
+			"item_code": _clean(row.get("item_code")),
+			"item_name": _clean(row.get("item_name")),
+			"qty": flt(row.get("qty")),
+		}
+		for row in list(doc.get("items") or [])
+	]
+
+
+def _normalise_stock_draft_items(items: Any, *, doctype: str) -> list[dict[str, Any]]:
+	if isinstance(items, str):
+		items = frappe.parse_json(items)
+	if not isinstance(items, list) or not items:
+		frappe.throw(_("Add at least one stock item."))
+	if len(items) > MAX_STANDARD_ITEMS:
+		frappe.throw(_("A standard stock draft can contain at most {0} items here.").format(MAX_STANDARD_ITEMS))
+
+	result: list[dict[str, Any]] = []
+	seen_adjustments: set[str] = set()
+	for index, item in enumerate(items, start=1):
+		if not isinstance(item, dict):
+			frappe.throw(_("Stock item row {0} is invalid.").format(index))
+		item_code = _clean(item.get("item_code"))
+		row_name = _clean(item.get("name"))
+		if not item_code:
+			frappe.throw(_("Item is required on stock row {0}.").format(index))
+		qty = flt(item.get("qty"))
+		if doctype == STOCK_ENTRY_DOCTYPE and qty <= 0:
+			frappe.throw(_("Quantity on stock transfer row {0} must be greater than zero.").format(index))
+		if doctype == STOCK_RECONCILIATION_DOCTYPE and qty < 0:
+			frappe.throw(_("Physical quantity on stock adjustment row {0} cannot be negative.").format(index))
+		if doctype == STOCK_RECONCILIATION_DOCTYPE:
+			if item_code in seen_adjustments:
+				frappe.throw(_("Item {0} appears more than once. Enter one physical count per item.").format(item_code))
+			seen_adjustments.add(item_code)
+		result.append({"name": row_name, "item_code": item_code, "qty": qty})
+	return result
+
+
+def _update_stock_draft_items(doc, requested_items: Any, *, payload: dict[str, Any]) -> None:
+	items = _normalise_stock_draft_items(requested_items, doctype=doc.doctype)
+	current_rows = {
+		_clean(row.get("name")): row
+		for row in list(doc.get("items") or [])
+		if _clean(row.get("name"))
+	}
+	requested_existing: set[str] = set()
+
+	for index, item in enumerate(items, start=1):
+		row_name = item["name"]
+		if row_name:
+			row = current_rows.get(row_name)
+			if not row:
+				frappe.throw(_("Stock item row {0} is no longer part of this draft. Refresh and try again.").format(index))
+			if row_name in requested_existing:
+				frappe.throw(_("Stock item row {0} is repeated.").format(index))
+			requested_existing.add(row_name)
+			if item["item_code"] != _clean(row.get("item_code")):
+				frappe.throw(_("Existing stock item identity cannot be replaced here. Add a new row instead."))
+			row.qty = item["qty"]
+			continue
+
+		if doc.doctype == STOCK_ENTRY_DOCTYPE:
+			_assert_simple_transfer_item(item["item_code"])
+			doc.append(
+				"items",
+				{
+					"item_code": item["item_code"],
+					"qty": item["qty"],
+					"s_warehouse": payload["source_warehouse"],
+					"t_warehouse": payload["target_warehouse"],
+				},
+			)
+		else:
+			_assert_simple_adjustment_item(item["item_code"])
+			doc.append(
+				"items",
+				{
+					"item_code": item["item_code"],
+					"warehouse": payload["warehouse"],
+					"qty": item["qty"],
+				},
+			)
+
+	for row_name, row in list(current_rows.items()):
+		if row_name not in requested_existing:
+			doc.remove(row)
+
+	if hasattr(doc, "set_missing_values"):
+		doc.set_missing_values()
+
+
 def _build_preview(doc) -> dict[str, Any]:
 	company, scope = _validate_company_and_scope(doc)
 	if doc.doctype == STOCK_ENTRY_DOCTYPE:
@@ -409,6 +506,9 @@ def _build_preview(doc) -> dict[str, Any]:
 		"modified": _clean(doc.get("modified")),
 		"docstatus": cint(doc.docstatus),
 		"posting_date": str(doc.get("posting_date") or ""),
+		"remarks": _clean(doc.get("remarks")) if doc.doctype == STOCK_ENTRY_DOCTYPE else "",
+		"can_edit": bool(cint(doc.docstatus) == 0 and frappe.has_permission(doc.doctype, "write", doc=doc)),
+		"editable_items": _editable_stock_items(doc),
 		"status": _clean(doc.get("status")) or ("Draft" if cint(doc.docstatus) == 0 else ""),
 		"can_edit": bool(cint(doc.docstatus) == 0 and not payload.get("blockers") and frappe.has_permission(doc.doctype, "write", doc=doc)),
 		"editable_items": _editable_stock_items(doc),
@@ -459,6 +559,70 @@ def update_standard_stock_document_draft(
 	_update_stock_draft_items(doc, items, preview=preview)
 	# ERPNext owns stock defaults, valuation and draft validation. Saving a draft
 	# here does not post Stock Ledger or accounting entries.
+	doc.save()
+	doc.reload()
+	result = _build_preview(doc)
+	result["persistence"] = "draft_update"
+	return result
+
+
+@frappe.whitelist(methods=["POST"])
+def update_standard_stock_draft(
+	doctype: str,
+	name: str,
+	values: dict | str | None = None,
+	expected_modified: str | None = None,
+) -> dict[str, Any]:
+	"""Update item quantities/rows on one standard draft stock document.
+
+	Company, Branch, purpose and warehouse routing are immutable here. Serial or
+	batch-controlled items remain outside this standard path. ERPNext owns stock
+	valuation, availability checks and all ledger posting on eventual submit.
+	"""
+	doctype = _clean(doctype)
+	name = _clean(name)
+	if doctype not in SUPPORTED_DOCTYPES:
+		frappe.throw(_("Unsupported standard stock completion document type."), frappe.ValidationError)
+	_lock_document(doctype, name)
+	doc = _get_stock_document(doctype, name)
+	_assert_expected_modified(doc, expected_modified)
+	if cint(doc.docstatus) != 0:
+		frappe.throw(_("Only draft stock documents can be edited here."), frappe.ValidationError)
+	if not frappe.has_permission(doctype, "write", doc=doc):
+		frappe.throw(_("You do not have permission to edit {0} {1}.").format(doctype, name), frappe.PermissionError)
+
+	company, scope = _validate_company_and_scope(doc)
+	payload = _transfer_preview(doc, company, scope) if doctype == STOCK_ENTRY_DOCTYPE else _adjustment_preview(doc, company, scope)
+	blockers = list(payload.get("blockers") or [])
+	if blockers:
+		frappe.throw(
+			_("Stock draft editing is blocked:\n- {0}").format("\n- ".join(blockers)),
+			frappe.ValidationError,
+		)
+
+	if isinstance(values, str):
+		values = frappe.parse_json(values)
+	if values is None:
+		values = {}
+	if not isinstance(values, dict):
+		frappe.throw(_("Invalid stock draft changes."), frappe.ValidationError)
+
+	posting_text = _clean(values.get("posting_date") or doc.get("posting_date"))
+	if not posting_text:
+		frappe.throw(_("Posting Date is required."), frappe.ValidationError)
+	try:
+		doc.posting_date = getdate(posting_text)
+	except Exception:
+		frappe.throw(_("Enter a valid Posting Date."), frappe.ValidationError)
+
+	if doctype == STOCK_ENTRY_DOCTYPE and doc.meta.has_field("remarks"):
+		doc.remarks = _clean(values.get("remarks"))
+
+	if values.get("items") is not None:
+		_update_stock_draft_items(doc, values.get("items"), payload=payload)
+
+	# Saving the draft does not post stock. ERPNext's document controller owns
+	# UOM/defaults, valuation, availability checks and eventual Stock Ledger work.
 	doc.save()
 	doc.reload()
 	result = _build_preview(doc)
