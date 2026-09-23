@@ -27,6 +27,7 @@ from retailedge.operating_context import (
 PAYMENT_ENTRY_DOCTYPE = "Payment Entry"
 MAX_LINK_RESULTS = 20
 MAX_REFERENCES = 20
+QUICK_MAX_REFERENCES = 1
 
 def _resolve_guided_payment_branch(
 	*,
@@ -86,10 +87,25 @@ def _can_open_page(page_name: str) -> bool:
 		return False
 
 
+def _resolve_managed_supplier_settlement(intent: str, managed: int | bool) -> bool:
+	managed = bool(cint(managed))
+	if not managed:
+		return False
+	if intent != "pay-supplier":
+		frappe.throw(_("Managed multi-reference payment is only available for Supplier Payables."))
+	if not _can_open_page("supplier-payables"):
+		frappe.throw(
+			_("You do not have permission to use managed Supplier Payables settlement."),
+			frappe.PermissionError,
+		)
+	return True
+
+
 @frappe.whitelist()
-def get_simple_payment_context(intent: str) -> dict[str, Any]:
+def get_simple_payment_context(intent: str, managed: int = 0) -> dict[str, Any]:
 	config = _get_intent(intent)
 	_assert_can_create_payment_entry()
+	managed_supplier_settlement = _resolve_managed_supplier_settlement(intent, managed)
 	user = frappe.session.user
 	operating = get_operating_context() or {}
 	company = str(operating.get("company") or frappe.defaults.get_user_default("Company") or "").strip()
@@ -149,8 +165,12 @@ def get_simple_payment_context(intent: str) -> dict[str, Any]:
 			"native_form_fallback": True,
 			"managed_page": managed_page if can_open_managed_page else "",
 			"can_open_managed_page": can_open_managed_page,
+			"managed_supplier_settlement": managed_supplier_settlement,
 		},
-		"limits": {"link_results": MAX_LINK_RESULTS, "max_references": MAX_REFERENCES},
+		"limits": {
+			"link_results": MAX_LINK_RESULTS,
+			"max_references": MAX_REFERENCES if managed_supplier_settlement else QUICK_MAX_REFERENCES,
+		},
 	}
 
 
@@ -266,9 +286,14 @@ def get_simple_payment_reference_details(
 
 
 @frappe.whitelist(methods=["POST"])
-def create_simple_payment_draft(intent: str, values: dict | str | None = None) -> dict[str, Any]:
+def create_simple_payment_draft(
+	intent: str,
+	values: dict | str | None = None,
+	managed: int = 0,
+) -> dict[str, Any]:
 	config = _get_intent(intent)
 	_assert_can_create_payment_entry()
+	managed_supplier_settlement = _resolve_managed_supplier_settlement(intent, managed)
 	values = _coerce_values(values)
 	user = frappe.session.user
 	company = values.get("company") or frappe.defaults.get_user_default("Company") or ""
@@ -316,7 +341,13 @@ def create_simple_payment_draft(intent: str, values: dict | str | None = None) -
 	if amount <= 0:
 		frappe.throw(_("Amount must be greater than zero."))
 
-	references = _normalise_references(values.get("references"))
+	min_references = 0 if intent == "receive-customer-payment" else 1
+	max_references = MAX_REFERENCES if managed_supplier_settlement else QUICK_MAX_REFERENCES
+	references = _normalise_references(
+		values.get("references"),
+		min_references=min_references,
+		max_references=max_references,
+	)
 	snapshots: list[dict[str, Any]] = []
 	total_allocated = 0.0
 	resolved_branches: set[str] = set()
@@ -592,13 +623,18 @@ def _get_reference_snapshot(
 	}
 
 
-def _normalise_references(references: Any) -> list[dict[str, Any]]:
+def _normalise_references(
+	references: Any,
+	*,
+	min_references: int = 1,
+	max_references: int = MAX_REFERENCES,
+) -> list[dict[str, Any]]:
 	if isinstance(references, str):
 		references = frappe.parse_json(references)
-	if not isinstance(references, list) or not references:
-		frappe.throw(_("Add at least one payable sales reference."))
-	if len(references) > MAX_REFERENCES:
-		frappe.throw(_("A Simple Payment can contain at most {0} invoice references.").format(MAX_REFERENCES))
+	if references is None:
+		references = []
+	if not isinstance(references, list):
+		frappe.throw(_("Payment references must be a list."))
 
 	result: list[dict[str, Any]] = []
 	seen: set[str] = set()
@@ -606,12 +642,22 @@ def _normalise_references(references: Any) -> list[dict[str, Any]]:
 		if not isinstance(row, dict):
 			frappe.throw(_("Payment reference row {0} is invalid.").format(index))
 		name = str(row.get("reference_name") or "").strip()
+		allocated_amount = flt(row.get("allocated_amount"))
 		if not name:
-			frappe.throw(_("Sales reference is required on row {0}.").format(index))
+			if allocated_amount:
+				frappe.throw(_("Payment reference is required on row {0}.").format(index))
+			continue
 		if name in seen:
-			frappe.throw(_("Sales reference {0} is selected more than once.").format(name))
+			frappe.throw(_("Payment reference {0} is selected more than once.").format(name))
 		seen.add(name)
-		result.append({"reference_name": name, "allocated_amount": flt(row.get("allocated_amount"))})
+		result.append({"reference_name": name, "allocated_amount": allocated_amount})
+
+	if len(result) < max(0, cint(min_references)):
+		frappe.throw(_("Add at least one payable reference."))
+	if len(result) > max(1, cint(max_references) or QUICK_MAX_REFERENCES):
+		frappe.throw(
+			_("This payment flow can contain at most {0} invoice reference(s).").format(max_references)
+		)
 	return result
 
 
