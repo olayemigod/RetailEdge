@@ -48,7 +48,7 @@ def search_branch_assignment_options(
 			txt or "",
 			filters={"enabled": 1},
 			page_length=limit,
-			reference_doctype=ASSIGNMENT_DOCTYPE,
+			reference_doctype="RetailEdge Branch Assignment Price List",
 			link_fieldname="price_list",
 		)
 	if fieldname in {"branch", "filter_branch"}:
