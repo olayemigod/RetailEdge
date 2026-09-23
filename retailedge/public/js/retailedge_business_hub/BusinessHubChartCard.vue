@@ -120,7 +120,12 @@
 </template>
 
 <script>
+const EdgeDropdown =
+	window.EdgeSuiteUI?.components?.EdgeDropdown ||
+	window.EdgeSuiteUI?.EdgeDropdown;
+
 export default {
+	components: { EdgeDropdown },
 	name: "BusinessHubChartCard",
 	emits: ["open", "drill"],
 	data() {

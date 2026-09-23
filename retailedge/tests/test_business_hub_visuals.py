@@ -247,6 +247,8 @@ def test_business_hub_frontend_renders_visual_layer_and_drill_through():
 		assert token in hub
 
 	for token in (
+		"components: { EdgeDropdown }",
+		"window.EdgeSuiteUI?.components?.EdgeDropdown",
 		"hub-line-chart",
 		"hub-bar-chart",
 		"@click=\"$emit('drill', chart, row, series)\"",

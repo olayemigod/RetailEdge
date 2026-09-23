@@ -11,6 +11,7 @@
 	const FRAPPE_REQUIRE_POLL_MS = 50;
 	let productMenuBootPromise = null;
 	let routeBridgeBootPromise = null;
+	let productStyleRefreshPromise = null;
 	let activeWrapper = null;
 
 	function isBusinessHubRoute() {
@@ -37,11 +38,7 @@
 		wrapper.on_page_show = function onPageShow(currentWrapper) {
 			ensurePage(currentWrapper);
 			bootProductMenu();
-			return ensureInjectedProductStyle().then(() => {
-				if (!currentWrapper._retailedgeBusinessHub) {
-					return bootBusinessHub(currentWrapper);
-				}
-
+			return bootBusinessHub(currentWrapper).then(() => {
 				const component = getMountedComponent(currentWrapper);
 				if (component && typeof component.refreshContext === "function") {
 					return component.refreshContext().finally(() => {
@@ -90,7 +87,7 @@
 		const mountedComponent = getMountedComponent(wrapper);
 		const mountedRoot = wrapper._retailedgeBusinessHubRoot?.[0];
 		if (mountedComponent && mountedRoot?.isConnected) {
-			return ensureInjectedProductStyle().then(() => {
+			return refreshProductBundleStyle().then(() => {
 				suppressNativePageChrome(wrapper);
 				enforceCreateVisibility(mountedRoot);
 				return wrapper._retailedgeBusinessHub;
@@ -119,11 +116,7 @@
 			}
 			assertEdgeSuiteUIRuntime();
 
-			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
-				await loadProductAssetWithStyleCapture();
-			} else {
-				await ensureInjectedProductStyle();
-			}
+			await refreshProductBundleStyle();
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
 				throw new Error(__("Business Hub could not start because its interface bundle did not register correctly."));
 			}
@@ -302,36 +295,6 @@
 		});
 	}
 
-	function isBusinessHubStyle(node) {
-		if (!(node instanceof global.HTMLStyleElement)) return false;
-		const css = String(node.textContent || "");
-		return css.includes(".hub-chart-card") && css.includes(".home-visual-grid");
-	}
-
-	function rememberBusinessHubStyle(node) {
-		if (!isBusinessHubStyle(node)) return null;
-		node.id = PRODUCT_STYLE_ID;
-		node.dataset.retailedgeBusinessHubStyle = "1";
-		global.__retailedgeBusinessHubStyleText = String(node.textContent || "");
-		return node;
-	}
-
-	function findBusinessHubStyle() {
-		const tagged = global.document?.getElementById?.(PRODUCT_STYLE_ID);
-		if (tagged && isBusinessHubStyle(tagged)) return rememberBusinessHubStyle(tagged);
-		const discovered = Array.from(global.document?.querySelectorAll?.("style") || []).find(isBusinessHubStyle);
-		return discovered ? rememberBusinessHubStyle(discovered) : null;
-	}
-
-	function captureInjectedProductStyle(beforeStyles = null) {
-		const styles = Array.from(global.document?.querySelectorAll?.("style") || []);
-		const candidates = beforeStyles
-			? styles.filter((style) => !beforeStyles.has(style))
-			: styles;
-		const injected = candidates.find(isBusinessHubStyle) || styles.find(isBusinessHubStyle);
-		return injected ? rememberBusinessHubStyle(injected) : null;
-	}
-
 	function evictProductAssetExecution() {
 		const executed = global.frappe?.assets?._executed;
 		if (!Array.isArray(executed)) return;
@@ -344,35 +307,35 @@
 		);
 	}
 
-	async function loadProductAssetWithStyleCapture({ force = false } = {}) {
-		const beforeStyles = new Set(global.document?.querySelectorAll?.("style") || []);
-		if (force) evictProductAssetExecution();
-		await requireAsset(PRODUCT_ASSET);
-		const style = captureInjectedProductStyle(beforeStyles);
-		if (!style) {
-			throw new Error(__("Business Hub interface styles were not registered by the application bundle."));
-		}
-		return style;
-	}
+	function refreshProductBundleStyle() {
+		if (productStyleRefreshPromise) return productStyleRefreshPromise;
 
-	async function ensureInjectedProductStyle() {
-		const existing = findBusinessHubStyle();
-		if (existing) return existing;
+		productStyleRefreshPromise = (async () => {
+			const beforeStyles = new Set(global.document?.querySelectorAll?.("style") || []);
+			const previousTagged = Array.from(
+				global.document?.querySelectorAll?.('[data-retailedge-business-hub-style="1"]') || []
+			);
+			evictProductAssetExecution();
+			await requireAsset(PRODUCT_ASSET);
 
-		const cached = String(global.__retailedgeBusinessHubStyleText || "");
-		if (cached && global.frappe?.dom?.set_style) {
-			const restored = global.frappe.dom.set_style(cached, PRODUCT_STYLE_ID);
-			if (restored) {
-				restored.dataset.retailedgeBusinessHubStyle = "1";
-				return restored;
+			const newStyles = Array.from(global.document?.querySelectorAll?.("style") || [])
+				.filter((style) => !beforeStyles.has(style));
+			const injected = newStyles.length ? newStyles[newStyles.length - 1] : null;
+			if (!injected) {
+				throw new Error(__("Business Hub interface bundle did not inject its presentation styles."));
 			}
-		}
 
-		if (typeof global.mountRetailEdgeBusinessHub !== "function") {
-			return loadProductAssetWithStyleCapture();
-		}
+			injected.id = PRODUCT_STYLE_ID;
+			injected.dataset.retailedgeBusinessHubStyle = "1";
+			for (const stale of previousTagged) {
+				if (stale !== injected) stale.remove();
+			}
+			return injected;
+		})().finally(() => {
+			productStyleRefreshPromise = null;
+		});
 
-		return loadProductAssetWithStyleCapture({ force: true });
+		return productStyleRefreshPromise;
 	}
 
 

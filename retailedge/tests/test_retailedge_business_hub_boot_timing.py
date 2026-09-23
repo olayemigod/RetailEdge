@@ -16,15 +16,16 @@ class TestRetailEdgeBusinessHubBootTiming(unittest.TestCase):
 		self.assertIn("global.setTimeout(attemptRequire, FRAPPE_REQUIRE_POLL_MS)", source)
 		self.assertIn("global.frappe.require(asset, finish)", source)
 
-	def test_vue_style_recovery_reuses_bundle_injected_css(self):
+	def test_vue_style_recovery_reexecutes_bundle_and_replaces_only_tagged_style(self):
 		source = BUSINESS_HUB_LOADER.read_text(encoding="utf-8")
 
 		self.assertNotIn('retailedge_business_hub.bundle.css', source)
-		self.assertIn("captureInjectedProductStyle", source)
-		self.assertIn("findBusinessHubStyle", source)
-		self.assertIn("ensureInjectedProductStyle", source)
+		self.assertIn("refreshProductBundleStyle", source)
+		self.assertIn("productStyleRefreshPromise", source)
 		self.assertIn("evictProductAssetExecution", source)
-		self.assertIn("frappe.dom.set_style(cached, PRODUCT_STYLE_ID)", source)
+		self.assertIn("await requireAsset(PRODUCT_ASSET)", source)
+		self.assertIn("previousTagged", source)
+		self.assertIn("stale.remove()", source)
 
 	def test_loader_has_bounded_wait_and_does_not_mutate_frappe_require(self):
 		source = BUSINESS_HUB_LOADER.read_text(encoding="utf-8")
