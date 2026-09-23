@@ -16,7 +16,11 @@ from retailedge.branch_context import (
 	resolve_branch_from_warehouse,
 )
 from retailedge.branch_profile import get_branch_profile, get_branch_profile_defaults
-from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
+from retailedge.guided_pricing import (
+	resolve_price_list_context,
+	resolve_sales_item_pricing,
+	search_allowed_price_lists,
+)
 from retailedge.operating_context import (
 	get_allowed_operating_branches,
 	get_operating_context,
@@ -346,11 +350,7 @@ def get_professional_selling_context() -> dict[str, Any]:
 			"branch": branch,
 			"default_stock_location": operating.get("default_stock_location") or "",
 		},
-		"pricing": {
-			"price_list": pricing.get("price_list") or "",
-			"source": pricing.get("source") or "",
-			"allow_rate_change": bool(pricing.get("allow_rate_change", True)),
-		},
+		"pricing": pricing,
 		"documents": documents,
 		"today": nowdate(),
 		"shipping": {
@@ -396,6 +396,15 @@ def search_professional_selling_options(
 			page_length=limit,
 			reference_doctype=definition["doctype"],
 			link_fieldname=definition["party_field"],
+		)
+	if fieldname == "price_list":
+		return search_allowed_price_lists(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			txt=txt or "",
+			limit=limit,
 		)
 	if fieldname == "item_code":
 		filters: dict[str, Any] = {"is_sales_item": 1}
@@ -473,6 +482,7 @@ def get_professional_selling_item_pricing(
 		warehouse=warehouse,
 		posting_date=str(values.get("transaction_date") or values.get("posting_date") or nowdate()),
 		qty=flt(values.get("qty") or 1),
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=frappe.session.user,
 	)
 
