@@ -45,7 +45,7 @@ class TestSimplePaymentPrefillContract(TestCase):
 		).read_text()
 
 		self.assertIn("Number(this.formContext.limits?.max_references || 1)", component)
-		self.assertIn("Quick Payment supports one payable reference.", component)
+		self.assertIn("Quick Payment supports one invoice or order reference.", component)
 		self.assertIn("validateStandardCustomerDraft()", component)
 		self.assertIn("Quick Receive Customer Payment supports one Sales Invoice or Sales Order reference.", component)
 		self.assertIn("managed: this.allowMultiReferenceSupplierPayment ? 1 : 0", component)
