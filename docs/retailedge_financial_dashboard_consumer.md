@@ -27,3 +27,8 @@ The existing Sales Invoice Register now exposes both **Net Sales** (tax-exclusiv
 ## CI dependency pin
 
 RetailEdge CI, browser persona, upgrade validation and EdgeSuite compatibility checks on this branch use exact EdgeSuite UI commit `276ebd20767b5157d2b9de9ee563c39ae404ce3e`. This prevents the consumer from appearing green against a shared runtime that does not yet contain `EdgeFinancialDashboard`.
+
+
+## Repeated destination handoff validation
+
+Cached report pages must consume each fresh Business Hub handoff on route activation. The Expense Register now listens for Frappe page activation and refreshes Smart Date, filters and data from the newest handoff, covering the required chart A → report → Back → chart B → same report contract.
