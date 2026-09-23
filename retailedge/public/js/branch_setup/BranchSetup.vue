@@ -136,7 +136,7 @@
 
 			<section v-if="activeTab === 'pricing'" class="form-section">
 				<h4>Pricing defaults</h4>
-				<p class="section-hint">Branch defaults take precedence over user-assigned Price Lists. Leave a default blank when authorised users should choose among their assigned lists.</p>
+				<p class="section-hint">Branch Price Lists participate in the precedence configured under Settings → Price List Governance. Leave them blank when the merchant policy should resolve pricing from another source.</p>
 				<div class="form-grid">
 					<EdgeLinkField :modelValue="editor.default_selling_price_list" label="Default Selling Price List" placeholder="Optional" description="Used first for sales in this Branch." :searcher="searchDefaultSellingPriceList" @update:modelValue="editor.default_selling_price_list = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_buying_price_list" label="Default Buying Price List" placeholder="Optional" description="Used first for purchases in this Branch." :searcher="searchDefaultBuyingPriceList" @update:modelValue="editor.default_buying_price_list = $event || ''" />
