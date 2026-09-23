@@ -37,7 +37,17 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 		self.assertIn('branch: row.branch || this.filters.branch || ""', component)
 		self.assertIn("handleSupplierPaymentSaved", component)
 		self.assertIn("await this.fetchData()", component)
+		self.assertIn("hubHandoff.purchase_invoice", component)
+		self.assertIn("reference_name: hubHandoff.purchase_invoice", component)
 		self.assertNotIn('frappe.set_route("Form", "Payment Entry", result.name)', component)
+
+	def test_quick_supplier_escape_preserves_current_purchase_invoice(self):
+		dialog = (
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue"
+		).read_text()
+
+		self.assertIn("filters.purchase_invoice = firstReference", dialog)
+		self.assertIn('frappe.set_route(target)', dialog)
 
 	def test_payment_action_is_local_to_supplier_payables_and_keeps_accounting_native(self):
 		component = (
