@@ -28,7 +28,7 @@ def test_cached_business_hub_destinations_reconsume_fresh_handoffs_on_page_show(
         assert "wrapper._retailedgePageHasShown" in source, relative
         mounted_tail = source.split("wrapper._retailedgeVueApp = await", 1)[1]
         assert "wrapper._retailedgePageHasShown = true;" in mounted_tail, relative
-        assert "wrapper._retailedgeVueComponent = root.__vue_app__?._instance?.proxy" in mounted_tail, relative
+        assert "wrapper._retailedgeVueApp?.__retailedgeRootComponent" in mounted_tail, relative
         assert "bindBusinessHubHandoffRouteRefresh(wrapper);" in mounted_tail, relative
         assert 'document.addEventListener("page-change", refresh)' in source, relative
         assert 'frappe.router?.on?.("change", refresh)' in source, relative
@@ -50,5 +50,23 @@ def test_handoff_refresh_is_guarded_and_does_not_remount_cached_destination():
         assert "routeOptionMatches" in helper, relative
         assert "handoffMatches" in helper, relative
         assert "Date.now() - Number(handoff.createdAt || 0) <= 60_000" in helper, relative
-        assert "wrapper._retailedgeVueComponent || wrapper._retailedgeVueApp?._instance?.proxy" in helper, relative
+        assert "wrapper._retailedgeVueComponent || wrapper._retailedgeVueApp?.__retailedgeRootComponent" in helper, relative
         assert "typeof component.fetchMetadata !== \"function\"" in helper, relative
+
+
+MOUNT_BUNDLES = (
+    "public/js/expense_register.bundle.js",
+    "public/js/customer_receivables.bundle.js",
+    "public/js/purchase_reporting.bundle.js",
+    "public/js/stock_position.bundle.js",
+    "public/js/cash_movement.bundle.js",
+    "public/js/branch_performance_dashboard.bundle.js",
+    "public/js/sales_reporting.bundle.js",
+)
+
+
+def test_destination_bundles_retain_public_vue_mount_result_for_cached_refresh():
+    for relative in MOUNT_BUNDLES:
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        assert "const rootComponent = app.mount(target);" in source, relative
+        assert "app.__retailedgeRootComponent = rootComponent;" in source, relative
