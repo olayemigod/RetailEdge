@@ -112,6 +112,14 @@ def test_context_changes_clear_draft_review_and_submission_refreshes_authoritati
 	assert "await this.loadAdvances()" in page
 
 
+def test_standard_customer_payment_accepts_unallocated_customer_advance():
+	source = _read(BACKEND)
+	assert "if not references:" in source
+	assert "return None, blockers" in source
+	assert '"payment_kind": ("Invoice Receipt" if reference.get("sales_invoice") else "Sales Order Advance") if reference else "Customer Advance"' in source
+	assert '"unallocated_amount": max(received_amount - allocated_amount, 0)' in source
+
+
 def test_standard_customer_payment_accepts_one_sales_invoice_or_sales_order_reference():
 	source = _read(BACKEND)
 	for contract in (
