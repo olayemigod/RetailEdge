@@ -229,3 +229,26 @@ def test_financial_dashboard_exposes_source_scan_evidence_without_new_silent_lim
     assert '"source_scans": _source_scan_metadata({' in provider
     assert 'payload.get("scan")' in provider
     assert "MAX_FINANCIAL_DASHBOARD_ROWS" not in provider
+
+
+def test_financial_dashboard_headline_sales_uses_bounded_visual_aggregate_not_item_detail_scan():
+    provider = PROVIDER.read_text()
+    current_block = provider.split("sales_visual = _safe_payload(", 1)[1].split("invoices = _safe_payload(", 1)[0]
+    assert "get_sales_visual_aggregates(period_filters)" in current_block
+    assert "sales = _sales_summary_from_visual(sales_visual)" in current_block
+    assert 'if composition_dimension in {"Item Group", "Brand"}:' in current_block
+    assert "get_sales_by_item_export(period_filters)" in current_block
+    assert "def _sales_summary_from_visual(" in provider
+    assert '"net_sales_basis": "submitted Sales Invoice base_net_total after returns;' in provider
+
+
+def test_financial_dashboard_exposes_permitted_composition_views_without_changing_permissions():
+    provider = PROVIDER.read_text()
+    ui = OWNER_UI.read_text()
+    assert '"composition_options": ["Item Group", "Brand", "Branch"]' in provider
+    assert "Unsupported Financial Dashboard composition dimension." in provider
+    assert '<template #contextFilters>' in ui
+    assert 'label="Composition"' in ui
+    assert "compositionOptions" in ui
+    assert "onCompositionChanged()" in ui
+    assert "responseContext.composition_dimension" in ui
