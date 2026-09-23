@@ -6,7 +6,8 @@ function mountBranchPerformanceDashboard(target) {
 	if (!edgeUI?.createEdgeApp) throw new Error("EdgeSuite UI runtime compatibility error: createEdgeApp is missing");
 	if (!target) throw new Error("Branch Performance Dashboard mount target is required");
 	const app = edgeUI.createEdgeApp(BranchPerformanceDashboard);
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 
