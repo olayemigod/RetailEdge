@@ -26,12 +26,9 @@ TOP_COMPOSITION_ROWS = 8
 
 @frappe.whitelist()
 def get_financial_dashboard_context() -> dict[str, Any]:
-	company = str(frappe.defaults.get_user_default("Company") or "").strip()
-	branch = str(
-		frappe.defaults.get_user_default("RetailEdge Branch")
-		or frappe.defaults.get_user_default("Branch")
-		or ""
-	).strip()
+	operating = get_effective_operating_context()
+	company = str(operating.get("company") or "").strip()
+	branch = str(operating.get("branch") or "").strip()
 	capabilities = require_dashboard_action(
 		DASHBOARD_KEY,
 		"view",

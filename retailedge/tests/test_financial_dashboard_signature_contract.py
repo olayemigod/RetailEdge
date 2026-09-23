@@ -148,3 +148,12 @@ def test_financial_dashboard_listens_to_both_retailedge_context_events():
     assert 'document.addEventListener("edgesuite-context-changed", this.handleContextChanged);' in ui
     assert 'document.addEventListener("retailedge-operating-context-changed", this.handleContextChanged);' in ui
     assert 'document.removeEventListener("retailedge-operating-context-changed", this.handleContextChanged);' in ui
+
+
+def test_financial_dashboard_reuses_authoritative_operating_context():
+    provider = PROVIDER.read_text()
+    assert "from retailedge.operating_context import get_effective_operating_context" in provider
+    context_fn = provider.split("def get_financial_dashboard_context()", 1)[1].split("@frappe.whitelist()", 1)[0]
+    assert "get_effective_operating_context()" in context_fn
+    assert 'get_user_default("RetailEdge Branch")' not in context_fn
+    assert 'get_user_default("Branch")' not in context_fn
