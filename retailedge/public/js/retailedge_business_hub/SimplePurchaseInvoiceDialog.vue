@@ -138,8 +138,7 @@
 			</p>
 
 			<p class="guided-purchase-hint">
-				The Branch default Buying Price List takes precedence. Otherwise the current valid default remains selected and Branch-assigned alternatives can be chosen.
-				Changing the Price List automatically re-prices entered items. If no valid buying rate is available, enter the agreed supplier rate or configure Item Price before saving.
+				The effective Buying Price List follows Price List Governance. When switching is allowed, choose a Branch-assigned alternative; changing the Price List automatically re-prices entered items. If no valid buying rate is available, enter the agreed supplier rate or configure Item Price before saving.
 			</p>
 
 			<label class="guided-field guided-field--wide">
