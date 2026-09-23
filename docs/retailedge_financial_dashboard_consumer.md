@@ -32,3 +32,18 @@ RetailEdge CI, browser persona, upgrade validation and EdgeSuite compatibility c
 ## Repeated destination handoff validation
 
 Cached report pages must consume each fresh Business Hub handoff on route activation. The Expense Register now listens for Frappe page activation and refreshes Smart Date, filters and data from the newest handoff, covering the required chart A → report → Back → chart B → same report contract.
+
+
+## Financial Dashboard preferences
+
+RetailEdge Settings now owns presentation-only Financial Dashboard defaults:
+
+- comparison: Previous Period or Off;
+- default Revenue Composition: Item Group, Brand or Branch;
+- visibility of Collection Performance, Financial Health and Outstanding Insights.
+
+These settings never grant financial access, change accounting definitions, broaden Company/Branch scope, or override cost visibility. The migration is additive and idempotent through `retailedge.patches.add_financial_dashboard_settings`.
+
+The page exposes a session-level Compare selector. Previous Period means the immediately preceding equal-length period. Net Sales and Posted Expenses publish comparisons because their current and previous values use the same authority and period basis. A zero prior-period value is shown as **No comparable baseline**, not as a fabricated 100% change. Partial Customer Receipts and Sales Margin Contribution do not receive a dashboard comparison until their corresponding complete/safe comparison semantics are accepted.
+
+Performance Trends now reuse `get_sales_visual_aggregates`, which was aligned to tax-exclusive `base_net_total`; Branch composition uses that same bounded authority. Item Group and Brand composition reuse the already-authorised Sales by Item dataset.
