@@ -388,6 +388,7 @@ export default {
 				txt,
 				company: this.filters.company,
 				branch: this.filters.branch,
+				view_mode: this.filters.view_mode,
 			});
 			return Array.isArray(result) ? result : [];
 		},

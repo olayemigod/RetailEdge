@@ -128,6 +128,22 @@ class TestExpenseRegister(unittest.TestCase):
 		mock_roles.return_value = ["RetailEdge Branch Manager"]
 		self.assertTrue(_can_view_other_cashiers("manager@example.com"))
 
+	@patch("retailedge.expense_register.can_view_consolidated_business_expenses", return_value=True)
+	@patch("retailedge.expense_register._find_expense_accounts")
+	@patch("retailedge.expense_register.frappe.get_list")
+	def test_consolidated_category_search_includes_expense_account_labels(self, mock_get_list, mock_accounts, _mock_consolidated):
+		mock_get_list.return_value = []
+		mock_accounts.return_value = [frappe._dict(name="Office Rent - DC", account_name="Office Rent")]
+		from retailedge.expense_register import _search_categories
+		options = _search_categories(
+			txt="Office",
+			company="Demo Company",
+			include_expense_accounts=True,
+		)
+		self.assertEqual(options[0]["value"], "Office Rent - DC")
+		self.assertEqual(options[0]["label"], "Office Rent")
+		self.assertIn("Expense Account", options[0]["description"])
+
 	def test_performance_limits_are_explicit(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
 		self.assertEqual(MAX_PAGE_SIZE, 100)

@@ -11,6 +11,7 @@ from retailedge.cashier_expense import get_cashier_roles, get_reviewer_roles
 from retailedge.cashier_expense_read_scope import apply_cashier_expense_read_scope
 from retailedge.business_expense_register import (
 	CONSOLIDATED_SOURCE_TYPES,
+	_find_expense_accounts,
 	can_view_consolidated_business_expenses,
 	get_consolidated_expense_export,
 	get_consolidated_expense_register,
@@ -100,6 +101,7 @@ def search_expense_register_options(
 	txt: str = "",
 	company: str = "",
 	branch: str = "",
+	view_mode: str = "",
 ) -> list[dict[str, str]]:
 	_assert_expense_read_access()
 	kind = str(kind or "").strip().lower()
@@ -119,7 +121,14 @@ def search_expense_register_options(
 			scope=get_operational_branch_scope(company, user=frappe.session.user),
 		)
 	if kind == "expense_category":
-		return _search_categories(txt=txt, company=company)
+		return _search_categories(
+			txt=txt,
+			company=company,
+			include_expense_accounts=(
+				str(view_mode or "").strip().lower() == "consolidated"
+				and can_view_consolidated_business_expenses()
+			),
+		)
 	frappe.throw(_("Unsupported Expense Register search type."))
 
 
@@ -436,7 +445,12 @@ def _clean_allowed_branches(scope: dict[str, Any]) -> list[str]:
 	]
 
 
-def _search_categories(*, txt: str, company: str) -> list[dict[str, str]]:
+def _search_categories(
+	*,
+	txt: str,
+	company: str,
+	include_expense_accounts: bool = False,
+) -> list[dict[str, str]]:
 	filters: list[list[Any]] = [[CATEGORY_DOCTYPE, "is_active", "=", 1]]
 	if txt:
 		filters.append([CATEGORY_DOCTYPE, "category_name", "like", f"%{txt}%"])
@@ -454,7 +468,7 @@ def _search_categories(*, txt: str, company: str) -> list[dict[str, str]]:
 		order_by="category_name asc",
 		limit_page_length=MAX_LINK_RESULTS,
 	)
-	return [
+	options = [
 		{
 			"value": row.name,
 			"label": row.category_name or row.name,
@@ -462,6 +476,31 @@ def _search_categories(*, txt: str, company: str) -> list[dict[str, str]]:
 		}
 		for row in rows
 	]
+	if include_expense_accounts and len(options) < MAX_LINK_RESULTS:
+		account_rows = _find_expense_accounts(
+			company=company,
+			txt=txt,
+			limit=MAX_LINK_RESULTS,
+		)
+		existing_values = {str(option["value"]) for option in options}
+		existing_labels = {str(option["label"]) for option in options}
+		for row in account_rows:
+			value = str(row.name or "").strip()
+			label = str(row.account_name or row.name or "").strip()
+			if not value or not label or value in existing_values or label in existing_labels:
+				continue
+			options.append(
+				{
+					"value": value,
+					"label": label,
+					"description": _("ERPNext Expense Account · {0}").format(value),
+				}
+			)
+			existing_values.add(value)
+			existing_labels.add(label)
+			if len(options) >= MAX_LINK_RESULTS:
+				break
+	return options
 
 
 def _assert_category_in_company_scope(*, category: str, company: str) -> None:
