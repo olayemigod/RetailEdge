@@ -23,7 +23,7 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 			self.assertIn(fieldname, service)
 			self.assertIn(fieldname, page)
 		self.assertIn('key: "pricing"', page)
-		self.assertIn("Branch defaults take precedence", page)
+		self.assertIn("Price List Governance", page)
 
 	def test_branch_assignment_can_allocate_multiple_price_lists(self):
 		definition = json.loads(
@@ -40,29 +40,56 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 		self.assertEqual(child_fields["price_list"]["options"], "Price List")
 		self.assertEqual(child.get("istable"), 1)
 
-	def test_pricing_precedence_is_branch_default_then_governed_selection_then_defaults(self):
+	def test_pricing_precedence_is_policy_driven_with_party_pos_branch_defaults(self):
 		source = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
-		branch_index = source.index("if branch_default:")
-		selected_index = source.index("if selected_price_list:")
-		user_default_index = source.index("for key in USER_DEFAULT_KEYS[mode]:")
-		self.assertLess(branch_index, selected_index)
-		self.assertLess(selected_index, user_default_index)
 		for contract in (
-			'"source": "branch_default"',
+			"PRICE_SOURCE_KEYS",
+			"DEFAULT_PRICE_PRECEDENCE",
+			'"party_default"',
+			'"pos_profile"',
+			'"branch_default"',
+			"_price_list_governance_policy",
+			"_resolve_default_price_list_candidate",
+			"_source_allows_switch",
 			'"source": "user_selected"',
 			'"selection_required": True',
 			"get_branch_assignment_price_lists",
-			"selected_price_list not in selectable",
-			"require_read=selected_price_list not in assigned_price_lists",
 		):
 			self.assertIn(contract, source)
 
-	def test_branch_assignment_extends_existing_default_instead_of_replacing_it(self):
+	def test_branch_assignments_are_switchable_alternatives_not_hardcoded_precedence(self):
 		source = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
-		self.assertIn("default_candidate = _default_price_list_candidate(", source)
-		self.assertIn("[*assigned_price_lists, *([default_name] if default_name else [])]", source)
-		self.assertIn('"can_select": bool(assigned_price_lists) and not locked', source)
-		self.assertIn('"allowed_price_lists": selectable', source)
+		self.assertIn("assigned_price_lists = list(assignment_scope", source)
+		self.assertIn("enable_assigned_switching", source)
+		self.assertIn("allow_switch_from_party_default", source)
+		self.assertIn("allow_switch_from_pos_profile", source)
+		self.assertIn("allow_switch_from_branch_default", source)
+		self.assertIn("selected_price_list not in assigned_price_lists", source)
+
+	def test_edgesuite_settings_exposes_price_list_governance_policy(self):
+		settings_json = json.loads(
+			(APP_ROOT / "retailedge" / "doctype" / "retailedge_settings" / "retailedge_settings.json").read_text(encoding="utf-8")
+		)
+		fields = {row["fieldname"]: row for row in settings_json["fields"]}
+		self.assertEqual(fields["enable_price_list_governance"]["fieldtype"], "Check")
+		self.assertEqual(fields["selling_price_list_precedence"]["fieldtype"], "Small Text")
+		self.assertEqual(fields["buying_price_list_precedence"]["fieldtype"], "Small Text")
+		for fieldname in (
+			"enable_assigned_price_list_switching",
+			"allow_price_list_switch_from_party_default",
+			"allow_price_list_switch_from_pos_default",
+			"allow_price_list_switch_from_branch_default",
+			"allow_price_list_switch_from_user_default",
+			"allow_price_list_switch_from_system_default",
+		):
+			self.assertEqual(fields[fieldname]["fieldtype"], "Check")
+
+		settings_page = (
+			APP_ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.py"
+		).read_text(encoding="utf-8")
+		self.assertIn('"key": "pricing-governance"', settings_page)
+		self.assertIn('"selling_price_list_precedence"', settings_page)
+		self.assertIn('"buying_price_list_precedence"', settings_page)
 
 	def test_all_primary_sales_and_purchase_entry_surfaces_expose_price_list_selection(self):
 		surfaces = {
