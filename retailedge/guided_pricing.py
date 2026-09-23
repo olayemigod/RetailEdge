@@ -75,8 +75,10 @@ def resolve_price_list_context(
 		branch=branch,
 		user=user,
 	)
-	selectable = assignment_scope["names"]
+	assigned_price_lists = list(assignment_scope["names"])
 	has_assignment_boundary = bool(assignment_scope["restricted"])
+	default_price_lists = _default_selectable_price_lists(mode=mode, user=user)
+	selectable = list(dict.fromkeys([*assigned_price_lists, *default_price_lists])) if has_assignment_boundary else []
 
 	if branch_default:
 		context = _price_context(branch_default, mode=mode, source="branch_default")
@@ -129,7 +131,6 @@ def resolve_price_list_context(
 		candidate = str(frappe.defaults.get_user_default(key) or "").strip()
 		if (
 			candidate
-			and (not has_assignment_boundary or candidate in selectable)
 			and _valid_price_list(candidate, mode=mode, user=user)
 		):
 			context = _price_context(candidate, mode=mode, source="user_default")
@@ -147,7 +148,6 @@ def resolve_price_list_context(
 	permission_candidate = _default_user_permission_price_list(user=user, mode=mode)
 	if (
 		permission_candidate
-		and (not has_assignment_boundary or permission_candidate in selectable)
 	):
 		context = _price_context(permission_candidate, mode=mode, source="user_permission")
 		context.update(
@@ -543,6 +543,18 @@ def _default_user_permission_price_list(*, user: str, mode: PriceMode) -> str:
 	if default_valid:
 		return default_valid
 	return valid[0] if len(valid) == 1 else ""
+
+
+def _default_selectable_price_lists(*, mode: PriceMode, user: str) -> list[str]:
+	names: list[str] = []
+	for key in USER_DEFAULT_KEYS[mode]:
+		candidate = str(frappe.defaults.get_user_default(key) or "").strip()
+		if candidate and _valid_price_list(candidate, mode=mode, user=user) and candidate not in names:
+			names.append(candidate)
+	permission_default = _default_user_permission_price_list(user=user, mode=mode)
+	if permission_default and permission_default not in names:
+		names.append(permission_default)
+	return names
 
 
 def _party_price_list(*, mode: PriceMode, party: str) -> str:
