@@ -142,7 +142,7 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertFalse(result["can_select"])
 
 	@patch("retailedge.guided_pricing._price_context")
-	@patch("retailedge.guided_pricing._default_selectable_price_lists", return_value=[])
+	@patch("retailedge.guided_pricing._default_price_list_candidate", return_value=None)
 	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Retail", "Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
 	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
 	@patch("retailedge.guided_pricing._valid_price_list", return_value=True)
@@ -160,7 +160,7 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["price_list"], "Wholesale")
 		self.assertEqual(result["source"], "user_selected")
 
-	@patch("retailedge.guided_pricing._default_selectable_price_lists", return_value=[])
+	@patch("retailedge.guided_pricing._default_price_list_candidate", return_value=None)
 	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Retail", "Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
 	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
 	def test_unassigned_selected_price_list_is_rejected(
@@ -175,13 +175,11 @@ class TestGuidedPricing(unittest.TestCase):
 				user="sales@example.com",
 			)
 
-	@patch("retailedge.guided_pricing._default_user_permission_price_list", return_value="")
-	@patch("retailedge.guided_pricing.frappe.defaults.get_user_default", return_value=None)
-	@patch("retailedge.guided_pricing._default_selectable_price_lists", return_value=[])
+	@patch("retailedge.guided_pricing._default_price_list_candidate", return_value=None)
 	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Retail", "Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
 	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
 	def test_multiple_assigned_price_lists_require_selection_without_default(
-		self, _mock_branch_default, _mock_assignment, _mock_defaults, _mock_user_default, _mock_permission
+		self, _mock_branch_default, _mock_assignment, _mock_default
 	):
 		result = uncached_price_list_resolver()(
 			mode="selling",
@@ -193,15 +191,12 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["allowed_price_lists"], ["Retail", "Wholesale"])
 
 	@patch("retailedge.guided_pricing._price_context")
-	@patch("retailedge.guided_pricing._default_selectable_price_lists", return_value=["User Retail"])
+	@patch("retailedge.guided_pricing._default_price_list_candidate", return_value={"price_list": "User Retail", "source": "user_default", "locked": False, "allow_rate_change": True, "pos_profile": ""})
 	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
 	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
-	@patch("retailedge.guided_pricing._valid_price_list", return_value=True)
-	@patch("retailedge.guided_pricing.frappe.defaults.get_user_default")
 	def test_existing_user_default_is_preserved_alongside_branch_assignments(
-		self, mock_default, _mock_valid, _mock_branch_default, _mock_assignment, _mock_selectable, mock_context
+		self, _mock_branch_default, _mock_assignment, _mock_default, mock_context
 	):
-		mock_default.side_effect = lambda key: "User Retail" if key == "Selling Price List" else None
 		mock_context.return_value = {"price_list": "User Retail", "source": "user_default"}
 		result = uncached_price_list_resolver()(
 			mode="selling",
