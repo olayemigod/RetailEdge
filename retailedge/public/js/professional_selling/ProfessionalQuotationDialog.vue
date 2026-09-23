@@ -211,7 +211,7 @@ export default {
 			this.values.customer = value;
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-				this.refreshPriceListContext({ preserveSelection: true }).then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
+				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
 			}
 		},
 		async setBranch(next) {
