@@ -157,3 +157,50 @@ def test_financial_dashboard_reuses_authoritative_operating_context():
     assert "get_effective_operating_context()" in context_fn
     assert 'get_user_default("RetailEdge Branch")' not in context_fn
     assert 'get_user_default("Branch")' not in context_fn
+
+
+def test_financial_dashboard_has_governed_comparison_preferences_and_previous_period_contract():
+    provider = PROVIDER.read_text()
+    ui = OWNER_UI.read_text()
+    for expected in (
+        'COMPARISON_MODES = {"Previous Period", "Off"}',
+        'COMPOSITION_DIMENSIONS = {"Item Group", "Brand", "Branch"}',
+        "def _financial_dashboard_preferences()",
+        "def _attach_period_comparisons(",
+        "def _period_comparison(",
+        '"label": _("No comparable baseline")',
+        '"comparison_mode": comparison_mode',
+        '"comparison_modes": ["Previous Period", "Off"]',
+    ):
+        assert expected in provider
+    assert '<template #comparison>' in ui
+    assert 'label="Compare"' in ui
+    assert 'onComparisonChanged()' in ui
+    assert 'responseContext.comparison_mode' in ui
+
+
+def test_financial_dashboard_comparison_only_publishes_matching_safe_period_metrics():
+    provider = PROVIDER.read_text()
+    comparison = provider.split("def _attach_period_comparisons(", 1)[1].split("def _period_comparison(", 1)[0]
+    assert '("net_sales", previous_sales, "Net Sales")' in comparison
+    assert '("posted_expenses", previous_expenses, "Posted Expenses")' in comparison
+    assert "customer_receipts_payment_entries" not in comparison
+    assert "sales_margin_contribution" not in comparison
+
+
+def test_financial_dashboard_reuses_tax_exclusive_sales_visual_authority_for_trends_and_branch_composition():
+    provider = PROVIDER.read_text()
+    assert "get_sales_visual_aggregates" in provider
+    assert "def _build_trends(" in provider
+    assert "Daily tax-exclusive Net Sales using the same authority as the headline." in provider
+    assert 'dimension == "Branch"' in provider
+    assert 'fieldname = "brand" if dimension == "Brand" else "item_group"' in provider
+
+
+def test_financial_dashboard_optional_sections_are_settings_only_not_permission_grants():
+    provider = PROVIDER.read_text()
+    assert 'preferences["show_collection"]' in provider
+    assert 'preferences["show_financial_health"]' in provider
+    assert 'preferences["show_outstanding"]' in provider
+    assert "require_dashboard_action" in provider
+    assert "has_unrestricted_report_scope" in provider

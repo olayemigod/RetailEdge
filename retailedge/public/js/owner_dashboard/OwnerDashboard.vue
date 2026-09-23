@@ -34,7 +34,17 @@
 			@action="handleDashboardAction"
 			@export="handleExport"
 			@print="handlePrint"
-		/>
+		>
+			<template #comparison>
+				<EdgeDropdown
+					v-model="filters.comparison_mode"
+					:options="comparisonOptions"
+					label="Compare"
+					:disabled="loading || metadataLoading"
+					@change="onComparisonChanged"
+				/>
+			</template>
+		</EdgeFinancialDashboard>
 	</EdgeAppShell>
 </template>
 
@@ -47,7 +57,7 @@ import {
 } from "../retailedge_dashboard_actions";
 
 const DASHBOARD_KEY = "owner-dashboard";
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeFinancialDashboard"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeFinancialDashboard", "EdgeDropdown"];
 
 function runtimeComponents() {
 	return window.EdgeSuiteUI?.components || window.EdgeUI?.components || {};
@@ -104,7 +114,8 @@ export default {
 			loading: false,
 			error: "",
 			payload: { schema_version: 1, summary: [], collection_metrics: [], alerts: [], report_links: [] },
-			filters: { company: "", branch: "", from_date: "", to_date: "" },
+			filters: { company: "", branch: "", from_date: "", to_date: "", comparison_mode: "Previous Period" },
+			comparisonOptions: ["Previous Period", "Off"],
 			smartDate: {},
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportBusy: false,
@@ -161,6 +172,7 @@ export default {
 				this.filters = { ...this.filters, ...handoff };
 				this.syncSmartDateFromFilters();
 				this.capabilities = context.capabilities || this.capabilities;
+				this.comparisonOptions = context.comparison_options || this.comparisonOptions;
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -195,6 +207,9 @@ export default {
 			this.filters.to_date = value.to_date;
 			this.fetchData();
 		},
+		onComparisonChanged() {
+			this.fetchData();
+		},
 		async fetchData() {
 			if (!this.filters.company || !this.edgeUIValid) return;
 			const requestId = ++this.requestId;
@@ -213,7 +228,8 @@ export default {
 					String(responseContext.company || "") !== String(this.filters.company || "") ||
 					String(responseContext.branch || "") !== String(this.filters.branch || "") ||
 					String(responseContext.from_date || "") !== String(this.filters.from_date || "") ||
-					String(responseContext.to_date || "") !== String(this.filters.to_date || "")
+					String(responseContext.to_date || "") !== String(this.filters.to_date || "") ||
+					String(responseContext.comparison_mode || "") !== String(this.filters.comparison_mode || "")
 				) {
 					return;
 				}

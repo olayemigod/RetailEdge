@@ -164,6 +164,23 @@ SETTINGS_GROUPS = (
 		),
 	},
 	{
+		"key": "financial-dashboard",
+		"label": "Financial Dashboard",
+		"description": "Presentation preferences for the financial overview. Accounting definitions and permissions remain fixed.",
+		"sections": (
+			{
+				"label": "Dashboard Presentation",
+				"fields": (
+					"financial_dashboard_comparison_mode",
+					"financial_dashboard_composition_dimension",
+					"financial_dashboard_show_collection",
+					"financial_dashboard_show_financial_health",
+					"financial_dashboard_show_outstanding",
+				),
+			},
+		),
+	},
+	{
 		"key": "platform-integration",
 		"label": "Platform Integration",
 		"description": "Optional shared platform services for payments, notifications and branch context.",

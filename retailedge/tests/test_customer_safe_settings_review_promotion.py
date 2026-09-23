@@ -60,6 +60,7 @@ def test_settings_are_managed_in_horizontal_tab_workspace():
         '"business-expenses"',
         '"audit-controls"',
         '"banking-reconciliation"',
+        '"financial-dashboard"',
         '"platform-integration"',
     ):
         assert key in backend
@@ -183,3 +184,27 @@ def test_remaining_review_reports_use_shared_managed_report_workspace():
         assert component in vue
 
     assert "window.mountManagedReviewReport" in bundle
+
+
+def test_financial_dashboard_settings_are_additive_and_non_authorising():
+    backend = (
+        ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.py"
+    ).read_text(encoding="utf-8")
+    patch = (ROOT / "patches" / "add_financial_dashboard_settings.py").read_text(encoding="utf-8")
+    patches = (ROOT / "patches.txt").read_text(encoding="utf-8")
+
+    assert '"key": "financial-dashboard"' in backend
+    for fieldname in (
+        "financial_dashboard_comparison_mode",
+        "financial_dashboard_composition_dimension",
+        "financial_dashboard_show_collection",
+        "financial_dashboard_show_financial_health",
+        "financial_dashboard_show_outstanding",
+    ):
+        assert fieldname in backend
+        assert fieldname in patch
+    assert "Previous Period\\nOff" in patch
+    assert "Item Group\\nBrand\\nBranch" in patch
+    assert "Accounting definitions and permissions remain fixed." in backend
+    assert "retailedge.patches.add_financial_dashboard_settings" in patches
+    assert "ignore_permissions" not in patch

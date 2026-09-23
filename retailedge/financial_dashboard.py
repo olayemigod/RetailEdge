@@ -12,16 +12,54 @@ from retailedge.customer_receivables import get_customer_receivables
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_register import get_expense_register
 from retailedge.financial_position import _get_liquid_position
+from retailedge.operating_context import get_effective_operating_context
 from retailedge.payment_settlement_analysis import get_payment_settlement_analysis_export
 from retailedge.profitability_intelligence import get_profitability_summary
 from retailedge.reporting_scope import has_unrestricted_report_scope
-from retailedge.sales_reporting import get_sales_by_item_export, get_sales_invoice_register
+from retailedge.sales_reporting import (
+	get_sales_by_item_export,
+	get_sales_invoice_register,
+	get_sales_visual_aggregates,
+)
 from retailedge.stock_position import get_stock_position
 from retailedge.supplier_payables import get_supplier_payables
+from retailedge.utils.settings import get_retailedge_settings
 
 DASHBOARD_KEY = "owner-dashboard"
 SCHEMA_VERSION = 1
 TOP_COMPOSITION_ROWS = 8
+COMPARISON_MODES = {"Previous Period", "Off"}
+COMPOSITION_DIMENSIONS = {"Item Group", "Brand", "Branch"}
+
+
+def _financial_dashboard_preferences() -> dict[str, Any]:
+	settings = get_retailedge_settings()
+	comparison_mode = str(
+		getattr(settings, "financial_dashboard_comparison_mode", "") or "Previous Period"
+	).strip()
+	if comparison_mode not in COMPARISON_MODES:
+		comparison_mode = "Previous Period"
+	composition_dimension = str(
+		getattr(settings, "financial_dashboard_composition_dimension", "") or "Item Group"
+	).strip()
+	if composition_dimension not in COMPOSITION_DIMENSIONS:
+		composition_dimension = "Item Group"
+	return {
+		"comparison_mode": comparison_mode,
+		"composition_dimension": composition_dimension,
+		"show_collection": bool(
+			1 if getattr(settings, "financial_dashboard_show_collection", None) is None
+			else int(getattr(settings, "financial_dashboard_show_collection", 1) or 0)
+		),
+		"show_financial_health": bool(
+			1 if getattr(settings, "financial_dashboard_show_financial_health", None) is None
+			else int(getattr(settings, "financial_dashboard_show_financial_health", 1) or 0)
+		),
+		"show_outstanding": bool(
+			1 if getattr(settings, "financial_dashboard_show_outstanding", None) is None
+			else int(getattr(settings, "financial_dashboard_show_outstanding", 1) or 0)
+		),
+	}
 
 
 @frappe.whitelist()
@@ -35,6 +73,7 @@ def get_financial_dashboard_context() -> dict[str, Any]:
 		company=company,
 		branch=branch,
 	)
+	preferences = _financial_dashboard_preferences()
 	return {
 		"title": _("Financial Dashboard"),
 		"dashboard_key": DASHBOARD_KEY,
@@ -44,12 +83,15 @@ def get_financial_dashboard_context() -> dict[str, Any]:
 			"branch": branch,
 			"from_date": str(get_first_day(today())),
 			"to_date": today(),
+			"comparison_mode": preferences["comparison_mode"],
 		},
 		"tenant_name": company,
 		"branch_name": branch,
 		"user_name": frappe.db.get_value("User", frappe.session.user, "full_name")
 		or frappe.session.user,
 		"capabilities": capabilities,
+		"preferences": preferences,
+		"comparison_options": ["Previous Period", "Off"],
 		"date_reference": today(),
 	}
 
@@ -59,14 +101,20 @@ def get_financial_dashboard_data(
 	filters: dict[str, Any] | str | None = None,
 ) -> dict[str, Any]:
 	filters = _coerce_filters(filters)
-	company = str(
-		filters.get("company")
-		or frappe.defaults.get_user_default("Company")
-		or ""
-	).strip()
+	company = str(filters.get("company") or "").strip()
+	branch = str(filters.get("branch") or "").strip()
+	if not company:
+		operating = get_effective_operating_context()
+		company = str(operating.get("company") or "").strip()
+		if "branch" not in filters:
+			branch = str(operating.get("branch") or "").strip()
 	if not company:
 		frappe.throw(_("Company is required."), frappe.ValidationError)
-	branch = str(filters.get("branch") or "").strip()
+	preferences = _financial_dashboard_preferences()
+	comparison_mode = str(filters.get("comparison_mode") or preferences["comparison_mode"]).strip()
+	if comparison_mode not in COMPARISON_MODES:
+		frappe.throw(_("Unsupported Financial Dashboard comparison mode."), frappe.ValidationError)
+	composition_dimension = preferences["composition_dimension"]
 	from_date = getdate(filters.get("from_date") or get_first_day(today()))
 	to_date = getdate(filters.get("to_date") or today())
 	if from_date > to_date:
@@ -92,6 +140,10 @@ def get_financial_dashboard_data(
 	sales = _safe_payload(
 		lambda: get_sales_by_item_export(period_filters),
 		restricted_reason=_("Your current permissions do not allow sales detail."),
+	)
+	sales_visual = _safe_payload(
+		lambda: get_sales_visual_aggregates(period_filters),
+		restricted_reason=_("Your current permissions do not allow sales trend or Branch composition."),
 	)
 	invoices = _safe_payload(
 		lambda: get_sales_invoice_register(
@@ -172,6 +224,50 @@ def get_financial_dashboard_data(
 	previous_to = add_days(from_date, -1)
 	period_days = max(date_diff(to_date, from_date) + 1, 1)
 	previous_from = add_days(previous_to, -(period_days - 1))
+	previous_filters = {
+		**period_filters,
+		"from_date": str(previous_from),
+		"to_date": str(previous_to),
+	}
+	previous_sales = {"available": False, "availability": "unavailable", "reason": _("Comparison is off."), "payload": {}}
+	previous_expenses = {"available": False, "availability": "unavailable", "reason": _("Comparison is off."), "payload": {}}
+	if comparison_mode == "Previous Period":
+		previous_sales = _safe_payload(
+			lambda: get_sales_by_item_export(previous_filters),
+			restricted_reason=_("Your current permissions do not allow the comparison sales period."),
+		)
+		previous_expenses = _safe_payload(
+			lambda: get_expense_register(
+				filters={
+					**previous_filters,
+					"view_mode": "consolidated",
+					"include_unposted_cashier_expenses": 1,
+				},
+				page=1,
+				page_size=1,
+			),
+			restricted_reason=_("Your current permissions do not allow the comparison expense period."),
+		)
+
+	summary = _build_summary(
+		sales=sales,
+		payments=payments,
+		expenses=expenses,
+		profitability=profitability,
+		receivables=receivables,
+		payables=payables,
+		stock=stock,
+		liquid=liquid,
+		currency=currency,
+		period_filters=period_filters,
+		current_filters=current_filters,
+	)
+	_attach_period_comparisons(
+		summary,
+		comparison_mode=comparison_mode,
+		previous_sales=previous_sales,
+		previous_expenses=previous_expenses,
+	)
 
 	payload = {
 		"schema_version": SCHEMA_VERSION,
@@ -188,6 +284,8 @@ def get_financial_dashboard_data(
 			"to_date": str(to_date),
 			"comparison_from_date": str(previous_from),
 			"comparison_to_date": str(previous_to),
+			"comparison_mode": comparison_mode,
+			"composition_dimension": composition_dimension,
 			"current_snapshot_date": nowdate(),
 			"generated_at": str(now_datetime()),
 			"scope_fingerprint": _scope_fingerprint(
@@ -202,7 +300,8 @@ def get_financial_dashboard_data(
 			"print": bool(capabilities.get("can_print")),
 			"export": bool(capabilities.get("can_export")),
 			"costs": bool(profitability.get("available")),
-			"dimensions": ["item_group"],
+			"dimensions": ["item_group", "brand", "branch"],
+			"comparison_modes": ["Previous Period", "Off"],
 			"actions": [
 				"sales_invoice_register",
 				"sales_by_item",
@@ -215,28 +314,19 @@ def get_financial_dashboard_data(
 				"branch_performance",
 			],
 		},
-		"summary": _build_summary(
-			sales=sales,
-			payments=payments,
-			expenses=expenses,
-			profitability=profitability,
-			receivables=receivables,
-			payables=payables,
-			stock=stock,
-			liquid=liquid,
-			currency=currency,
-			period_filters=period_filters,
-			current_filters=current_filters,
-		),
+		"summary": summary,
 		"collection_metrics": _build_collection_metrics(
 			invoices=invoices,
 			receivables=receivables,
 			currency=currency,
 			period_filters=period_filters,
 			current_filters=current_filters,
-		),
+		) if preferences["show_collection"] else [],
 		"composition": _build_composition(
 			sales=sales,
+			sales_visual=sales_visual,
+			dimension=composition_dimension,
+			branch=branch,
 			currency=currency,
 			period_filters=period_filters,
 		),
@@ -246,21 +336,18 @@ def get_financial_dashboard_data(
 			profitability=profitability,
 			currency=currency,
 			period_filters=period_filters,
-		),
+		) if preferences["show_financial_health"] else {"title": _("Financial Health"), "rows": []},
 		"outstanding": _build_outstanding(
 			receivables=receivables,
 			payables=payables,
 			currency=currency,
 			current_filters=current_filters,
+		) if preferences["show_outstanding"] else {"title": _("Outstanding Insights"), "rows": []},
+		"trends": _build_trends(
+			sales_visual=sales_visual,
+			currency=currency,
+			period_filters=period_filters,
 		),
-		"trends": {
-			"title": _("Performance Trends"),
-			"availability": "unavailable",
-			"reason": _(
-				"Net-sales trend normalisation is intentionally withheld until the trend provider uses the same tax-exclusive base-net definition as the headline."
-			),
-			"rows": [],
-		},
 		"alerts": _build_alerts(
 			profitability=profitability,
 			expenses=expenses,
@@ -282,7 +369,8 @@ def get_financial_dashboard_data(
 			"cash_bank_basis": "current eligible Cash/Bank closing balances; Company-only when unrestricted",
 			"customer_receipts_coverage": "Payment Entry customer Receive payments only; POS/Journal/refund consolidation not yet complete",
 			"invoice_cohort_collection": "withheld until complete allocation/credit/write-off coverage is accepted",
-			"comparison_policy": "preceding equal-length period; comparison values are not yet published by this provider",
+			"comparison_policy": "preceding equal-length period for compatible period metrics; zero previous values are reported as no comparable baseline",
+			"preferences": preferences,
 		},
 	}
 	return payload
@@ -593,22 +681,67 @@ def _build_collection_metrics(
 def _build_composition(
 	*,
 	sales: dict[str, Any],
+	sales_visual: dict[str, Any],
+	dimension: str,
+	branch: str,
 	currency: str,
 	period_filters: dict[str, Any],
 ) -> dict[str, Any]:
-	if not sales.get("available"):
-		return {
-			"title": _("Revenue Composition"),
-			"dimension_label": _("Item Group"),
-			"currency": currency,
-			"availability": sales.get("availability") or "unavailable",
-			"reason": sales.get("reason") or "",
-			"rows": [],
-		}
+	dimension = dimension if dimension in COMPOSITION_DIMENSIONS else "Item Group"
 	buckets: dict[str, float] = defaultdict(float)
-	for row in (sales.get("payload") or {}).get("rows") or []:
-		label = str(row.get("item_group") or _("Unspecified")).strip() or _("Unspecified")
-		buckets[label] += flt(row.get("net_sales"))
+	drill_field = ""
+	destination = ""
+	placeholder = _("Unspecified")
+
+	if dimension == "Branch":
+		if not sales_visual.get("available"):
+			return {
+				"title": _("Revenue Composition"),
+				"dimension_label": _("Branch"),
+				"currency": currency,
+				"availability": sales_visual.get("availability") or "unavailable",
+				"reason": sales_visual.get("reason") or "",
+				"rows": [],
+			}
+		visual_payload = sales_visual.get("payload") or {}
+		if branch:
+			buckets[branch] = sum(flt(row.get("net_sales")) for row in visual_payload.get("trend") or [])
+		elif visual_payload.get("branch_mix_supported"):
+			for row in visual_payload.get("branch_mix") or []:
+				label = str(row.get("branch") or _("Unattributed")).strip() or _("Unattributed")
+				buckets[label] += flt(row.get("net_sales"))
+		else:
+			return {
+				"title": _("Revenue Composition"),
+				"description": _("Branch attribution is unavailable for this Company."),
+				"dimension_label": _("Branch"),
+				"currency": currency,
+				"availability": "unavailable",
+				"reason": _("Sales Invoice Branch attribution is unavailable for this Company."),
+				"rows": [],
+			}
+		drill_field = "branch"
+		destination = "sales-invoice-register"
+		placeholder = _("Unattributed")
+	else:
+		if not sales.get("available"):
+			return {
+				"title": _("Revenue Composition"),
+				"dimension_label": _(dimension),
+				"currency": currency,
+				"availability": sales.get("availability") or "unavailable",
+				"reason": sales.get("reason") or "",
+				"rows": [],
+			}
+		fieldname = "brand" if dimension == "Brand" else "item_group"
+		placeholder = _("Unbranded") if dimension == "Brand" else _("Unspecified")
+		for row in (sales.get("payload") or {}).get("rows") or []:
+			label = str(row.get(fieldname) or placeholder).strip() or placeholder
+			buckets[label] += flt(row.get("net_sales"))
+		if dimension == "Item Group":
+			drill_field = "item_group"
+			destination = "sales-by-item"
+
 	ordered = sorted(buckets.items(), key=lambda item: (-abs(item[1]), item[0]))
 	visible = ordered[:TOP_COMPOSITION_ROWS]
 	remainder = ordered[TOP_COMPOSITION_ROWS:]
@@ -618,6 +751,11 @@ def _build_composition(
 	signed = any(value < 0 for _label, value in visible)
 	rows = []
 	for label, value in visible:
+		filters = dict(period_filters)
+		action = {}
+		if destination and drill_field and label not in {_("Other"), placeholder}:
+			filters[drill_field] = label
+			action = _action(destination, filters, basis="period")
 		rows.append(
 			{
 				"id": label,
@@ -625,27 +763,122 @@ def _build_composition(
 				"value": value,
 				"datatype": "Currency",
 				"currency": currency,
-				"share": (
-					(value / total * 100.0)
-					if not signed and total > 0
-					else None
-				),
-				"action": _action(
-					"sales-by-item",
-					{**period_filters, "item_group": "" if label == _("Other") else label},
-					basis="period",
-				),
+				"share": (value / total * 100.0) if not signed and total > 0 else None,
+				"action": action,
 			}
 		)
 	return {
 		"title": _("Revenue Composition"),
-		"description": _("Net Sales by Item Group for the authorised selected period."),
-		"dimension_label": _("Item Group"),
+		"description": _("Tax-exclusive Net Sales by {0} for the authorised selected period.").format(_(dimension)),
+		"dimension_label": _(dimension),
 		"value_label": _("Net Sales"),
 		"datatype": "Currency",
 		"currency": currency,
 		"chart_kind": "bar" if signed else "donut",
 		"rows": rows,
+	}
+
+
+def _build_trends(
+	*,
+	sales_visual: dict[str, Any],
+	currency: str,
+	period_filters: dict[str, Any],
+) -> dict[str, Any]:
+	if not sales_visual.get("available"):
+		return {
+			"title": _("Performance Trends"),
+			"availability": sales_visual.get("availability") or "unavailable",
+			"reason": sales_visual.get("reason") or "",
+			"rows": [],
+		}
+	rows = []
+	for row in (sales_visual.get("payload") or {}).get("trend") or []:
+		rows.append(
+			{
+				"name": str(row.get("posting_date") or ""),
+				"posting_date": row.get("posting_date"),
+				"net_sales": flt(row.get("net_sales")),
+				"transactions": int(row.get("transactions") or 0),
+				"action": _action(
+					"sales-invoice-register",
+					{
+						**period_filters,
+						"from_date": str(row.get("posting_date") or ""),
+						"to_date": str(row.get("posting_date") or ""),
+					},
+					basis="period",
+				),
+			}
+		)
+	return {
+		"title": _("Performance Trends"),
+		"description": _("Daily tax-exclusive Net Sales using the same authority as the headline."),
+		"columns": [
+			{"fieldname": "posting_date", "label": _("Date"), "fieldtype": "Date", "sortable": False},
+			{"fieldname": "net_sales", "label": _("Net Sales"), "fieldtype": "Currency", "options": currency, "sortable": False},
+			{"fieldname": "transactions", "label": _("Transactions"), "fieldtype": "Int", "sortable": False},
+		],
+		"rows": rows,
+	}
+
+
+def _attach_period_comparisons(
+	summary: list[dict[str, Any]],
+	*,
+	comparison_mode: str,
+	previous_sales: dict[str, Any],
+	previous_expenses: dict[str, Any],
+) -> None:
+	if comparison_mode != "Previous Period":
+		return
+	by_id = {str(metric.get("id") or ""): metric for metric in summary}
+	for metric_id, source, label in (
+		("net_sales", previous_sales, "Net Sales"),
+		("posted_expenses", previous_expenses, "Posted Expenses"),
+	):
+		metric = by_id.get(metric_id)
+		if not metric or metric.get("availability") not in {"available", "partial"}:
+			continue
+		metric["comparison"] = _period_comparison(metric.get("value"), source, label)
+
+
+def _period_comparison(
+	current_value: Any,
+	previous_source: dict[str, Any],
+	previous_label: str,
+) -> dict[str, Any]:
+	if not previous_source.get("available"):
+		return {
+			"availability": previous_source.get("availability") or "unavailable",
+			"value": None,
+			"label": _("Comparison unavailable"),
+			"reason": previous_source.get("reason") or _("Comparison unavailable."),
+		}
+	previous_value = _summary_value(previous_source, previous_label)
+	if previous_value is None:
+		return {
+			"availability": "unavailable",
+			"value": None,
+			"label": _("No comparable baseline"),
+			"reason": _("The previous period did not return this metric."),
+		}
+	previous_number = flt(previous_value)
+	if previous_number == 0:
+		return {
+			"availability": "unavailable",
+			"value": None,
+			"label": _("No comparable baseline"),
+			"reason": _("The previous period value is zero."),
+			"previous_value": previous_number,
+		}
+	change_percent = (flt(current_value) - previous_number) / abs(previous_number) * 100.0
+	return {
+		"availability": "available",
+		"value": change_percent,
+		"unit": "percent",
+		"label": _("vs previous period"),
+		"previous_value": previous_number,
 	}
 
 
