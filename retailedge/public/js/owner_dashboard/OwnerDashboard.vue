@@ -1,89 +1,40 @@
 <template>
 	<div v-if="!edgeUIValid" class="p-6 text-center">
-		<strong>Owner Dashboard could not start.</strong>
-		<div>Required interface components are unavailable. Refresh the page or contact your administrator.</div>
+		<strong>Financial Dashboard could not start.</strong>
+		<div>Required EdgeSuite financial components are unavailable. Install the approved EdgeSuite UI dashboard candidate and refresh.</div>
 	</div>
 	<EdgeAppShell
 		v-else
 		product="RetailEdge"
-		title="Owner Dashboard"
+		title="Financial Dashboard"
 		:tenantName="tenantName || filters.company"
-		:branchName="filters.branch"
+		:branchName="branchName || filters.branch"
 		:userName="userName"
 		:menuItems="menuItems"
 		activeRoute="/app/owner-dashboard"
 		:hideNativeSidebar="true"
 		@navigate="handleNavigation"
 	>
-		<EdgeDashboardShell
-			title="Owner Dashboard"
-			eyebrow="Business Overview"
-			subtitle="Period performance plus current balances and stock, composed from existing reporting engines."
-			:summary="headlineSummary"
+		<EdgeFinancialDashboard
+			:payload="payload"
+			:dateModel="smartDate"
+			dateOrder="DMY"
 			:loading="loading || metadataLoading"
 			:error="error"
-			:exportEnabled="availableSections.length > 0 && capabilities.can_export"
-			:printEnabled="availableSections.length > 0 && capabilities.can_print"
+			:exportEnabled="hasData && capabilities.can_export"
+			:printEnabled="hasData && capabilities.can_print"
 			:exportBusy="exportBusy"
 			:printBusy="printBusy"
 			:exportInitialOptions="exportOptions"
-			loadingMessage="Building owner overview…"
+			@update:dateModel="smartDate = $event"
+			@date-resolved="onSmartDateResolved"
+			@refresh="fetchData"
+			@quick-reports="openQuickReports"
 			@retry="fetchData"
+			@action="handleDashboardAction"
 			@export="handleExport"
 			@print="handlePrint"
-		>
-			<template #filters>
-				<div class="owner-dashboard-filters">
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" /></label>
-					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="fetchData">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
-				</div>
-			</template>
-
-			<EdgeDashboardGrid minColumnWidth="20rem">
-				<EdgeDashboardSection
-					v-if="attention.length"
-					title="Attention Required"
-					description="Operational exceptions surfaced from the same reports behind this dashboard."
-					span="2"
-				>
-					<div class="owner-attention-list">
-						<button
-							v-for="item in attention"
-							:key="`${item.section}-${item.metric}`"
-							type="button"
-							class="owner-attention-item"
-							:class="`owner-attention-item--${item.tone || 'warning'}`"
-							@click="openRoute(item.route)"
-						>
-							<span class="owner-attention-copy">
-								<strong>{{ item.label }}</strong>
-								<small>{{ item.metric }} · {{ timeBasisLabel(item.time_basis) }}</small>
-							</span>
-							<strong class="owner-attention-value">{{ formatCard(item) }}</strong>
-						</button>
-					</div>
-				</EdgeDashboardSection>
-
-				<EdgeDashboardSection
-					v-for="section in availableSections"
-					:key="section.key"
-					:title="section.label"
-					:description="sectionDescription(section)"
-				>
-					<div class="owner-section-cards">
-						<div v-for="card in section.summary" :key="card.label" class="owner-metric">
-							<span>{{ card.label }}</span>
-							<strong>{{ formatCard(card) }}</strong>
-						</div>
-					</div>
-					<button type="button" class="edge-button edge-button--secondary owner-open" @click="openSection(section)">Open {{ section.label }}</button>
-				</EdgeDashboardSection>
-				<EdgeDashboardSection v-if="unavailableSections.length" title="Restricted Sections" description="These views remain hidden because your current permissions do not allow their source reports.">
-					<ul class="owner-restricted"><li v-for="section in unavailableSections" :key="section.key"><strong>{{ section.label }}</strong> — {{ section.reason }}</li></ul>
-				</EdgeDashboardSection>
-			</EdgeDashboardGrid>
-		</EdgeDashboardShell>
+		/>
 	</EdgeAppShell>
 </template>
 
@@ -95,116 +46,258 @@ import {
 	printDashboard,
 } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection"];
 const DASHBOARD_KEY = "owner-dashboard";
-function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
-function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
-function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeFinancialDashboard"];
+
+function runtimeComponents() {
+	return window.EdgeSuiteUI?.components || window.EdgeUI?.components || {};
+}
+
+function callMethod(method, args = {}) {
+	return new Promise((resolve, reject) => {
+		frappe.call({
+			method,
+			args,
+			callback: (response) => resolve(response.message || {}),
+			error: reject,
+		});
+	});
+}
+
+function errorMessage(error, fallback) {
+	return error?.message || error?.exc || error?.exception || fallback;
+}
+
+function routeForTarget(item = {}) {
+	if (item.target_type === "Page") return `/app/${item.target}`;
+	if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`;
+	if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`;
+	return item.target || "";
+}
+
+function setRouteHandoff(destination, filters = {}) {
+	const cleanFilters = Object.fromEntries(
+		Object.entries(filters || {}).filter(([, value]) => value !== undefined && value !== null && value !== "")
+	);
+	window.__retailedgeBusinessHubRouteHandoff = {
+		target: destination,
+		filters: cleanFilters,
+		createdAt: Date.now(),
+	};
+	frappe.route_options = {
+		...cleanFilters,
+		retailedge_business_hub_handoff: 1,
+		retailedge_business_hub_target: destination,
+	};
+}
 
 export default {
 	name: "OwnerDashboard",
-	components: Object.fromEntries(REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])),
+	components: Object.fromEntries(
+		REQUIRED_COMPONENTS.map((name) => [name, runtimeComponents()[name]])
+	),
 	data() {
 		return {
-			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
-			exportBusy: false, printBusy: false,
-			capabilities: { can_view: true, can_print: false, can_export: false },
-			exportOptions: defaultDashboardExportOptions(),
-			sections: {}, headlineSummary: [], attention: [], menuItems: [], tenantName: "", userName: "", canUseNativeDesk: false,
+			edgeUIValid: true,
+			missingComponents: [],
+			metadataLoading: true,
+			loading: false,
+			error: "",
+			payload: { schema_version: 1, summary: [], collection_metrics: [], alerts: [], report_links: [] },
 			filters: { company: "", branch: "", from_date: "", to_date: "" },
+			smartDate: {},
+			capabilities: { can_view: true, can_print: false, can_export: false },
+			exportBusy: false,
+			printBusy: false,
+			exportOptions: { ...defaultDashboardExportOptions(), include_charts: true },
+			menuItems: [],
+			tenantName: "",
+			branchName: "",
+			userName: "",
+			nativeFallbackEnabled: false,
+			requestId: 0,
 		};
 	},
 	computed: {
-		sectionList() { return Object.entries(this.sections || {}).map(([key, value]) => ({ key, ...(value || {}) })); },
-		availableSections() { return this.sectionList.filter((section) => section.available); },
-		unavailableSections() { return this.sectionList.filter((section) => !section.available); },
+		hasData() {
+			return Boolean(
+				(this.payload.summary || []).length ||
+				(this.payload.collection_metrics || []).length ||
+				(this.payload.alerts || []).length
+			);
+		},
 	},
 	created() {
 		const components = runtimeComponents();
 		this.missingComponents = REQUIRED_COMPONENTS.filter((name) => !components[name]);
 		this.edgeUIValid = this.missingComponents.length === 0;
 	},
-	mounted() { this.fetchMetadata(); },
+	mounted() {
+		this.fetchMetadata();
+		document.addEventListener("edgesuite-context-changed", this.handleContextChanged);
+	},
+	beforeUnmount() {
+		document.removeEventListener("edgesuite-context-changed", this.handleContextChanged);
+	},
 	methods: {
 		async fetchMetadata() {
-			this.metadataLoading = true; this.error = "";
+			if (!this.edgeUIValid) return;
+			this.metadataLoading = true;
+			this.error = "";
 			try {
-				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
-				const [context, navigation] = await Promise.all([callMethod("retailedge.owner_dashboard.get_owner_dashboard_context"), navigationPromise]);
+				const navigationPromise =
+					typeof window.retailedgeGetBusinessHubContext === "function"
+						? window.retailedgeGetBusinessHubContext()
+						: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+				const [context, navigation] = await Promise.all([
+					callMethod("retailedge.financial_dashboard.get_financial_dashboard_context"),
+					navigationPromise,
+				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				const handoff =
+					window.retailedgeConsumeBusinessHubRouteOptions?.("owner-dashboard") || {};
+				this.filters = { ...this.filters, ...handoff };
+				this.syncSmartDateFromFilters();
 				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || "";
+				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
+				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
-				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
 				if (this.filters.company) await this.fetchData();
-			} catch (error) { this.error = errorMessage(error, "Failed to load Owner Dashboard controls."); }
-			finally { this.metadataLoading = false; }
+			} catch (error) {
+				this.error = errorMessage(error, "Failed to load Financial Dashboard controls.");
+			} finally {
+				this.metadataLoading = false;
+			}
+		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) {
+				this.smartDate = {};
+				return;
+			}
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label:
+					this.filters.from_date === this.filters.to_date
+						? this.filters.from_date
+						: `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.fetchData();
 		},
 		async fetchData() {
-			if (!this.filters.company) return;
-			this.loading = true; this.error = "";
+			if (!this.filters.company || !this.edgeUIValid) return;
+			const requestId = ++this.requestId;
+			this.loading = true;
+			this.error = "";
 			try {
 				const [result, capabilities] = await Promise.all([
-					callMethod("retailedge.owner_dashboard.get_owner_dashboard_data", { filters: this.filters }),
+					callMethod("retailedge.financial_dashboard.get_financial_dashboard_data", {
+						filters: this.filters,
+					}),
 					getDashboardCapabilities(DASHBOARD_KEY, this.filters),
 				]);
-				this.sections = result.sections || {};
-				this.headlineSummary = result.headline_summary || [];
-				this.attention = result.attention || [];
-				this.capabilities = capabilities || this.capabilities;
+				if (requestId !== this.requestId) return;
+				const responseContext = result.context || {};
+				if (
+					String(responseContext.company || "") !== String(this.filters.company || "") ||
+					String(responseContext.branch || "") !== String(this.filters.branch || "") ||
+					String(responseContext.from_date || "") !== String(this.filters.from_date || "") ||
+					String(responseContext.to_date || "") !== String(this.filters.to_date || "")
+				) {
+					return;
+				}
+				this.payload = result || this.payload;
+				this.capabilities = capabilities || result.capabilities || this.capabilities;
+				this.tenantName = responseContext.company || this.tenantName;
+				this.branchName = responseContext.branch || "";
 			} catch (error) {
-				this.sections = {};
-				this.headlineSummary = [];
-				this.attention = [];
-				this.error = errorMessage(error, "Owner Dashboard failed to load.");
+				if (requestId !== this.requestId) return;
+				this.error = errorMessage(error, "Failed to load the Financial Dashboard.");
+			} finally {
+				if (requestId === this.requestId) this.loading = false;
 			}
-			finally { this.loading = false; }
 		},
 		async handleExport(options) {
-			if (!this.capabilities.can_export) return;
 			this.exportBusy = true;
-			try { await exportDashboard(DASHBOARD_KEY, this.filters, options); }
-			catch (error) { frappe.msgprint({ title: __("Dashboard Export Failed"), message: errorMessage(error, "The Owner Dashboard could not be exported."), indicator: "red" }); }
-			finally { this.exportBusy = false; }
+			this.error = "";
+			try {
+				await exportDashboard(DASHBOARD_KEY, this.filters, options);
+			} catch (error) {
+				this.error = errorMessage(error, "Financial Dashboard export failed.");
+			} finally {
+				this.exportBusy = false;
+			}
 		},
 		async handlePrint() {
-			if (!this.capabilities.can_print) return;
 			this.printBusy = true;
-			try { await printDashboard(DASHBOARD_KEY, this.filters); }
-			catch (error) { frappe.msgprint({ title: __("Dashboard Print Failed"), message: errorMessage(error, "The Owner Dashboard print view could not be prepared."), indicator: "red" }); }
-			finally { this.printBusy = false; }
+			this.error = "";
+			try {
+				await printDashboard(DASHBOARD_KEY, this.filters);
+			} catch (error) {
+				this.error = errorMessage(error, "Financial Dashboard print failed.");
+			} finally {
+				this.printBusy = false;
+			}
 		},
-		mapNavigationGroups(groups) { return (groups || []).map((group) => ({ ...group, items: (group.items || []).map((item) => ({ ...item, route: this.routeForItem(item) })) })); },
-		routeForItem(item) { if (item.target_type === "Page") return `/app/${item.target}`; if (item.target_type === "Report") return `/app/query-report/${encodeURIComponent(item.target)}`; if (item.target_type === "DocType") return `/app/${String(item.target || "").toLowerCase().replace(/\s+/g, "-")}`; return item.target || ""; },
-		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report") frappe.set_route("query-report", item.target); else if (item.target_type === "DocType") frappe.set_route("List", item.target); },
-		openRoute(route) { if (route) window.location.assign(route); },
-		openSection(section) { this.openRoute(section?.route); },
-		timeBasisLabel(value) { return value === "current" ? "Current position" : "Selected period"; },
-		sectionDescription(section) {
-			if (section.key === "stock" && section.show_costs === false) return "Current stock quantities; valuation remains hidden by your cost-visibility policy.";
-			if (section.time_basis === "current") return "Current position as of today; the selected date range does not reconstruct a historical balance.";
-			return "Performance for the selected date range from the existing source report.";
+		handleDashboardAction(action = {}) {
+			const destination = String(action.destination || action.target || "").trim();
+			if (!destination) return;
+			const filters = { ...(action.filters || {}) };
+			setRouteHandoff(destination, filters);
+			if (String(action.kind || "page") === "report") {
+				frappe.set_route("query-report", destination);
+				return;
+			}
+			frappe.set_route(destination);
 		},
-		formatCard(card) { try { return window.retailedge.formatPlainValue(card.value, { fieldtype: card.datatype || card.type || "Data" }); } catch (_error) { return card.value ?? "—"; } },
+		openQuickReports() {
+			setRouteHandoff("reports-centre", {
+				company: this.filters.company,
+				branch: this.filters.branch,
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+			});
+			frappe.set_route("reports-centre");
+		},
+		mapNavigationGroups(groups) {
+			return (groups || [])
+				.map((group) => ({
+					...group,
+					items: (group.items || [])
+						.filter(
+							(item) =>
+								this.nativeFallbackEnabled ||
+								!["DocType", "Report"].includes(item.target_type)
+						)
+						.map((item) => ({ ...item, route: routeForTarget(item) })),
+				}))
+				.filter((group) => (group.items || []).length);
+		},
+		handleNavigation(route) {
+			const item = this.menuItems
+				.flatMap((group) => group.items || [])
+				.find((candidate) => candidate.route === route);
+			if (!item) return;
+			if (["DocType", "Report"].includes(item.target_type) && !this.nativeFallbackEnabled) return;
+			if (item.target_type === "Page") frappe.set_route(item.target);
+			else if (item.target_type === "Report") frappe.set_route("query-report", item.target);
+			else if (item.target_type === "DocType") frappe.set_route("List", item.target);
+		},
+		handleContextChanged(event) {
+			const detail = event?.detail || {};
+			if (detail.product && detail.product !== "retailedge") return;
+			this.requestId += 1;
+			this.fetchMetadata();
+		},
 	},
 };
 </script>
-
-<style scoped>
-.owner-dashboard-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; }
-.owner-section-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.owner-metric { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); }
-.owner-metric span { color: var(--edge-text-muted); font-size: 12px; }
-.owner-metric strong { font-size: 1.05rem; }
-.owner-attention-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.owner-attention-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; padding: 12px 14px; border: 1px solid var(--edge-border); border-radius: 8px; background: var(--edge-surface); color: var(--edge-text); text-align: left; cursor: pointer; }
-.owner-attention-item--danger { border-color: var(--edge-danger, var(--edge-border)); }
-.owner-attention-item--warning { border-color: var(--edge-warning, var(--edge-border)); }
-.owner-attention-copy { display: grid; gap: 3px; }
-.owner-attention-copy small { color: var(--edge-text-muted); }
-.owner-attention-value { white-space: nowrap; }
-.owner-open { margin-top: 14px; }
-.owner-restricted { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
-@media (max-width: 720px) { .owner-dashboard-filters, .owner-section-cards, .owner-attention-list { grid-template-columns: 1fr; } }
-</style>

@@ -11,6 +11,7 @@ from retailedge.branch_performance_dashboard import get_branch_performance_dashb
 from retailedge.business_control_center import build_business_control_export_dataset
 from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_dashboard_export import build_expense_dashboard_export_with_budget
+from retailedge.financial_dashboard import build_financial_dashboard_export_dataset
 from retailedge.money_dashboard import build_money_dashboard_export_dataset
 from retailedge.owner_dashboard import build_owner_dashboard_export_dataset
 from retailedge.profitability_export import build_profitability_export_dataset
@@ -33,7 +34,7 @@ DashboardHandler = Callable[[dict, bool], dict]
 
 def _dashboard_handler(scope_key: str) -> DashboardHandler:
 	handlers: dict[str, DashboardHandler] = {
-		"owner-dashboard": lambda filters, _all_filtered: build_owner_dashboard_export_dataset(filters),
+		"owner-dashboard": lambda filters, _all_filtered: build_financial_dashboard_export_dataset(filters),
 		"business-control-center": lambda filters, _all_filtered: build_business_control_export_dataset(filters),
 		"profitability-intelligence": lambda filters, all_filtered: build_profitability_export_dataset(
 			filters,
