@@ -411,7 +411,7 @@ def _resolve_purchase_rate(*, item_code: str, company: str, supplier: str, branc
 		warehouse=warehouse,
 		posting_date=posting_date,
 		qty=qty,
-		selected_price_list=selected_price_list,
+		document_price_list=selected_price_list,
 		user=frappe.session.user,
 	)
 	rate = resolved.get("rate")
