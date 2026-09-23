@@ -77,7 +77,7 @@
 					:modelValue="values.price_list"
 					label="Buying Price List"
 					placeholder="Select assigned Price List"
-					description="Branch default takes precedence. Otherwise choose from Price Lists assigned to you for this Branch."
+					description="The effective default follows Price List Governance. When switching is allowed, choose from Price Lists assigned to you for this Branch."
 					:required="Boolean(formContext.pricing?.selection_required)"
 					:disabled="Boolean(formContext.pricing?.locked) || !Boolean(formContext.pricing?.can_select)"
 					:searcher="searchPriceList"
