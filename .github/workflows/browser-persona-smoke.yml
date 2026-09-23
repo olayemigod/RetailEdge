@@ -99,7 +99,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: agent/reporting-standard-v1
+          ref: 276ebd20767b5157d2b9de9ee563c39ae404ce3e
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 

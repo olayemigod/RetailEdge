@@ -79,11 +79,11 @@ jobs:
           bench set-config -g redis_queue redis://127.0.0.1:6379
           bench set-config -g redis_socketio redis://127.0.0.1:6379
 
-      - name: Check out exact governed EdgeSuite UI 1.1.0 candidate
+      - name: Check out exact EdgeSuite Signature Financial Dashboard candidate
         uses: actions/checkout@v6
         with:
           repository: olayemigod/processedge-edge-suite-ui
-          ref: e40ea4d7dc000d17443a0571c1e246b61bfd3e1d
+          ref: 276ebd20767b5157d2b9de9ee563c39ae404ce3e
           token: ${{ secrets.EDGESUITE_UI_TOKEN }}
           path: edgesuite-ui-source
 
@@ -112,7 +112,7 @@ jobs:
       - name: Build, migrate, and verify shared runtime
         working-directory: frappe-bench
         run: |
-          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "e40ea4d7dc000d17443a0571c1e246b61bfd3e1d"
+          test "$(git -C apps/edgesuite_ui rev-parse HEAD)" = "276ebd20767b5157d2b9de9ee563c39ae404ce3e"
           grep -Eq '^__version__ = "1\.1\.0"$' apps/edgesuite_ui/edgesuite_ui/__init__.py
 
           # RetailEdge must compile Vue SFCs against the governed EdgeSuite UI bridge,
@@ -176,6 +176,9 @@ jobs:
           PY
           bench --site retail-ci.localhost migrate
           grep -Eq 'EdgeReportShell' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/report_presentation.js
+          test -f apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/financial_dashboard.js
+          grep -Fq 'EdgeFinancialDashboard' apps/edgesuite_ui/edgesuite_ui/public/js/edgeui/financial_dashboard.js
+          ./env/bin/python -m pytest -q apps/edgesuite_ui/edgesuite_ui/tests/test_financial_dashboard_contract.py
           test -f apps/edgesuite_ui/edgesuite_ui/search_ranking.py
 
       - name: Run full RetailEdge test suite
