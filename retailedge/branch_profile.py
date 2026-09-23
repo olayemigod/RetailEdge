@@ -7,6 +7,8 @@ PROFILE_DEFAULT_FIELDS = [
 	"default_pos_profile",
 	"default_pos_opening_cash_account",
 	"default_cash_mode_of_payment",
+	"default_selling_price_list",
+	"default_buying_price_list",
 	"default_warehouse",
 	"default_source_warehouse",
 	"default_target_warehouse",
@@ -56,6 +58,11 @@ LEAF_FIELDS = {
 	"default_bank_account": "Account",
 	"default_card_pos_account": "Account",
 	"default_mobile_money_account": "Account",
+}
+
+PRICE_LIST_SEMANTICS = {
+	"default_selling_price_list": "selling",
+	"default_buying_price_list": "buying",
 }
 
 ACCOUNT_SEMANTICS = {
@@ -358,6 +365,7 @@ def validate_branch_profile(doc):
 		frappe.throw("Branch is required.")
 	_validate_company_links(doc)
 	_validate_leaf_defaults(doc)
+	_validate_price_list_defaults(doc)
 	_validate_account_semantics(doc)
 	if getattr(doc, "enabled", 1):
 		duplicate_filters = {
@@ -424,6 +432,21 @@ def _validate_leaf_defaults(doc):
 			if disabled is not None and int(disabled):
 				label = doc.meta.get_label(fieldname) or fieldname
 				frappe.throw(f"{label} must be enabled.")
+
+
+def _validate_price_list_defaults(doc):
+	for fieldname, mode in PRICE_LIST_SEMANTICS.items():
+		value = str(getattr(doc, fieldname, None) or "").strip()
+		if not value:
+			continue
+		row = frappe.db.get_value("Price List", value, ["enabled", mode], as_dict=True)
+		label = doc.meta.get_label(fieldname) or fieldname
+		if not row:
+			frappe.throw(f"{label} references a Price List that does not exist.")
+		if not int(row.get("enabled") or 0):
+			frappe.throw(f"{label} must use an enabled Price List.")
+		if not int(row.get(mode) or 0):
+			frappe.throw(f"{label} must use a {mode.title()} Price List.")
 
 
 def _validate_account_semantics(doc):
