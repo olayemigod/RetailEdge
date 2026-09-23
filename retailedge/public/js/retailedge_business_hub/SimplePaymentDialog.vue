@@ -327,7 +327,7 @@
 
 			<p class="guided-payment-hint">
 				<template v-if="isCustomerPayment">
-					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Quick Receive Customer Payment supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance. Use Payment Management for complex settlement.
+					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Quick Receive Customer Payment supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance. Payment Management handles advances and single-invoice settlement; multi-document allocation requires Advanced ERPNext.
 				</template>
 				<template v-if="isSupplierPayment && !allowMultiReferenceSupplierPayment">
 					Only submitted Purchase Invoices with a positive outstanding balance are offered. Quick Pay Supplier supports one Purchase Invoice per payment. Use Supplier Payables for multi-invoice settlement.
@@ -669,7 +669,7 @@ export default {
 				throw new Error(
 					this.allowMultiReferenceSupplierPayment
 						? `Managed Supplier Settlement supports at most ${maxReferences} Purchase Invoices.`
-						: "Quick Payment supports one invoice or order reference. Continue in the managed payment page for complex allocation."
+						: "Quick Payment supports one invoice or order reference. Multi-document allocation requires Advanced ERPNext."
 				);
 			}
 			const referenceNames = requestedReferenceNames.slice(0, maxReferences);
@@ -811,7 +811,7 @@ export default {
 			if (populatedReferences.length > maxReferences) {
 				this.saveError = this.allowMultiReferenceSupplierPayment
 					? `Managed Supplier Settlement supports at most ${maxReferences} Purchase Invoices.`
-					: "Quick Payment supports one invoice or order reference. Use Payment Management or Supplier Payables for complex allocation.";
+					: "Quick Payment supports one invoice or order reference. Use Payment Management or Supplier Payables for managed settlement; multi-document customer allocation requires Advanced ERPNext.";
 				this.values.references = previousRows;
 				return;
 			}
@@ -857,7 +857,7 @@ export default {
 			const references = (this.values.references || []).filter((row) => row?.reference_name);
 			const maxReferences = Number(this.formContext.limits?.max_references || 1);
 			if (references.length > maxReferences) {
-				throw new Error("Quick Receive Customer Payment supports one Sales Invoice or Sales Order reference. Use Payment Management for complex allocation.");
+				throw new Error("Quick Receive Customer Payment supports one Sales Invoice or Sales Order reference. Multi-document allocation requires Advanced ERPNext.");
 			}
 			if (this.intent === "receive-sales-order-payment" && references.length !== 1) {
 				throw new Error("Receive Sales Order Payment requires one Sales Order reference.");
