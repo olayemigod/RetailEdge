@@ -35,6 +35,15 @@
 			@export="handleExport"
 			@print="handlePrint"
 		>
+			<template #contextFilters>
+				<EdgeDropdown
+					v-model="filters.composition_dimension"
+					:options="compositionOptions"
+					label="Composition"
+					:disabled="loading || metadataLoading"
+					@change="onCompositionChanged"
+				/>
+			</template>
 			<template #comparison>
 				<EdgeDropdown
 					v-model="filters.comparison_mode"
@@ -114,8 +123,9 @@ export default {
 			loading: false,
 			error: "",
 			payload: { schema_version: 1, summary: [], collection_metrics: [], alerts: [], report_links: [] },
-			filters: { company: "", branch: "", from_date: "", to_date: "", comparison_mode: "Previous Period" },
+			filters: { company: "", branch: "", from_date: "", to_date: "", comparison_mode: "Previous Period", composition_dimension: "Item Group" },
 			comparisonOptions: ["Previous Period", "Off"],
+			compositionOptions: ["Item Group", "Brand", "Branch"],
 			smartDate: {},
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportBusy: false,
@@ -173,6 +183,7 @@ export default {
 				this.syncSmartDateFromFilters();
 				this.capabilities = context.capabilities || this.capabilities;
 				this.comparisonOptions = context.comparison_options || this.comparisonOptions;
+				this.compositionOptions = context.composition_options || this.compositionOptions;
 				this.tenantName = context.tenant_name || this.filters.company || "";
 				this.branchName = context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -210,6 +221,9 @@ export default {
 		onComparisonChanged() {
 			this.fetchData();
 		},
+		onCompositionChanged() {
+			this.fetchData();
+		},
 		async fetchData() {
 			if (!this.filters.company || !this.edgeUIValid) return;
 			const requestId = ++this.requestId;
@@ -229,7 +243,8 @@ export default {
 					String(responseContext.branch || "") !== String(this.filters.branch || "") ||
 					String(responseContext.from_date || "") !== String(this.filters.from_date || "") ||
 					String(responseContext.to_date || "") !== String(this.filters.to_date || "") ||
-					String(responseContext.comparison_mode || "") !== String(this.filters.comparison_mode || "")
+					String(responseContext.comparison_mode || "") !== String(this.filters.comparison_mode || "") ||
+					String(responseContext.composition_dimension || "") !== String(this.filters.composition_dimension || "")
 				) {
 					return;
 				}
