@@ -67,15 +67,17 @@
 									<td>{{ row.company }}</td>
 									<td>{{ row.branch }}</td>
 									<td>{{ row.branch_role }}</td>
+									<td>{{ (row.allowed_price_lists || []).join(", ") || "—" }}</td>
 									<td>{{ formatDate(row.effective_from) }}</td>
 									<td>{{ row.effective_to ? formatDate(row.effective_to) : "Current" }}</td>
 									<td><EdgeStatusBadge :status="statusBadge(row.status)" /> <span class="status-text">{{ row.status }}</span></td>
 									<td class="row-actions">
+										<button v-if="canWrite && row.status !== 'Ended'" type="button" class="edge-button edge-button--secondary edge-button--small" @click="openPriceLists(row)">Price Lists</button>
 										<button v-if="canWrite && row.status === 'Active'" type="button" class="edge-button edge-button--secondary edge-button--small" @click="openTransfer(row)">Transfer</button>
 										<button type="button" class="edge-button edge-button--secondary edge-button--small" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the full Branch Assignment form' : 'Advanced workflow: Native Desk access is required'" @click="openNative(row)">{{ canUseNativeDesk ? "Full Form" : "Advanced: Full Form" }}</button>
 									</td>
 								</tr>
-								<tr v-if="!sortedAssignments.length"><td colspan="8" class="empty-cell">No Branch Assignments match the current filters.</td></tr>
+								<tr v-if="!sortedAssignments.length"><td colspan="9" class="empty-cell">No Branch Assignments match the current filters.</td></tr>
 							</tbody>
 						</table>
 					</div>
@@ -94,6 +96,7 @@
 			<label class="edge-field"><span class="edge-field-label">Effective From *</span><input v-model="assign.effective_from" class="edge-input" type="date" /></label>
 			<label class="edge-field"><span class="edge-field-label">Effective To</span><input v-model="assign.effective_to" class="edge-input" type="date" /></label>
 			<label class="check-field"><input v-model="assign.is_primary" type="checkbox" :true-value="1" :false-value="0" /><span><strong>Primary Branch</strong><small>A user can have only one overlapping primary Branch per Company.</small></span></label>
+			<div class="edge-field edge-field--wide"><span class="edge-field-label">Allowed Price Lists</span><EdgeChildTable :field="priceListTableField" :rows="assign.allowed_price_lists" :columns="priceListColumns" addLabel="Add Price List" :linkSearcher="searchPriceListRow" @update:rows="assign.allowed_price_lists = $event" /><small>These are the Price Lists this user may choose in this Branch. A Branch default Price List always takes precedence.</small></div>
 			<label class="edge-field edge-field--wide"><span class="edge-field-label">Assignment Reason</span><textarea v-model="assign.transfer_reason" class="edge-input" rows="2"></textarea></label>
 			<label class="edge-field edge-field--wide"><span class="edge-field-label">Notes</span><textarea v-model="assign.notes" class="edge-input" rows="3"></textarea></label>
 		</div>
@@ -110,6 +113,7 @@
 			<EdgeLinkField :modelValue="transfer.branch" label="New Branch" placeholder="Choose configured Branch" :required="true" :searcher="searchTransferBranch" @update:modelValue="transfer.branch = $event || ''" />
 			<label class="edge-field"><span class="edge-field-label">Transfer Date *</span><input v-model="transfer.effective_date" class="edge-input" type="date" /></label>
 			<EdgeDropdown v-model="transfer.branch_role" :options="roles" label="Branch Role" />
+			<div class="edge-field edge-field--wide"><span class="edge-field-label">Allowed Price Lists</span><EdgeChildTable :field="priceListTableField" :rows="transfer.allowed_price_lists" :columns="priceListColumns" addLabel="Add Price List" :linkSearcher="searchPriceListRow" @update:rows="transfer.allowed_price_lists = $event" /><small>Price List access is carried to the new assignment unless changed here. The destination Branch default still takes precedence.</small></div>
 			<label class="edge-field edge-field--wide"><span class="edge-field-label">Transfer Reason *</span><textarea v-model="transfer.reason" class="edge-input" rows="2"></textarea></label>
 			<label class="edge-field edge-field--wide"><span class="edge-field-label">Notes</span><textarea v-model="transfer.notes" class="edge-input" rows="3"></textarea></label>
 		</div>
@@ -117,13 +121,20 @@
 			<div class="modal-footer-actions"><span></span><div class="footer-right"><button type="button" class="edge-button" :disabled="saving" @click="closeTransfer">Cancel</button><button type="button" class="edge-button edge-button--primary" :disabled="saving" @click="saveTransfer">{{ saving ? "Transferring…" : "Transfer" }}</button></div></div>
 		</template>
 	</EdgeModal>
+
+	<EdgeModal :open="priceListsOpen" title="Manage Assigned Price Lists" :subtitle="priceListRow.user ? priceListRow.user + ' · ' + priceListRow.branch : 'Branch price access'" size="lg" @close="closePriceLists">
+		<div v-if="priceListsError" class="form-error">{{ priceListsError }}</div>
+		<div class="edge-field"><span class="edge-field-label">Allowed Price Lists</span><EdgeChildTable :field="priceListTableField" :rows="priceListRows" :columns="priceListColumns" addLabel="Add Price List" :linkSearcher="searchPriceListRow" @update:rows="priceListRows = $event" /><small>This controls which Price Lists this user may select for this Branch. Configured Branch defaults remain mandatory and take precedence.</small></div>
+		<template #footer><div class="modal-footer-actions"><span></span><div class="footer-right"><button type="button" class="edge-button" :disabled="saving" @click="closePriceLists">Cancel</button><button type="button" class="edge-button edge-button--primary" :disabled="saving" @click="savePriceLists">{{ saving ? "Saving…" : "Save Price Lists" }}</button></div></div></template>
+	</EdgeModal>
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeModal", "EdgeLinkField", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeModal", "EdgeLinkField", "EdgeDropdown", "EdgeChildTable"];
 const CONTEXT_METHOD = "retailedge.branch_assignment.get_branch_assignment_context";
 const CREATE_METHOD = "retailedge.branch_assignment.create_branch_assignment";
 const TRANSFER_METHOD = "retailedge.branch_assignment.transfer_branch_assignment";
+const UPDATE_PRICE_LISTS_METHOD = "retailedge.branch_assignment.update_branch_assignment_price_lists";
 const SEARCH_METHOD = "retailedge.branch_assignment_ui.search_branch_assignment_options";
 const ROLES = ["Cashier", "Manager", "Auditor", "Sales", "Stock", "Accounts", "Purchasing", "Other"];
 
@@ -155,8 +166,9 @@ function extractServerMessage(error, fallback) {
 	}
 	return fallback;
 }
-function blankAssign() { return { user: "", company: "", branch: "", branch_role: "Other", effective_from: frappe.datetime.get_today(), effective_to: "", is_primary: 0, transfer_reason: "", notes: "" }; }
-function blankTransfer(row = {}) { return { company: row.company || "", branch: "", effective_date: frappe.datetime.get_today(), branch_role: row.branch_role || "Other", reason: "", notes: "" }; }
+function priceListRows(values = []) { return (values || []).map((row) => ({ price_list: typeof row === "string" ? row : (row?.price_list || "") })).filter((row) => row.price_list); }
+function blankAssign() { return { user: "", company: "", branch: "", branch_role: "Other", effective_from: frappe.datetime.get_today(), effective_to: "", is_primary: 0, allowed_price_lists: [], transfer_reason: "", notes: "" }; }
+function blankTransfer(row = {}) { return { company: row.company || "", branch: "", effective_date: frappe.datetime.get_today(), branch_role: row.branch_role || "Other", allowed_price_lists: priceListRows(row.allowed_price_lists), reason: "", notes: "" }; }
 
 export default {
 	name: "RetailEdgeBranchAssignments",
@@ -165,8 +177,10 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", assignments: [], canCreate: false, canWrite: false,
 		filters: { user: "", company: "", branch: "", status: "" }, sortKey: "effective_from", sortDirection: "desc", userName: "", menuItems: [], canUseNativeDesk: false,
-		assignOpen: false, transferOpen: false, saving: false, assignError: "", transferError: "", assign: blankAssign(), transfer: blankTransfer(), transferRow: {}, roles: ROLES,
-		columns: [{ key: "user", label: "User" }, { key: "company", label: "Company" }, { key: "branch", label: "Branch" }, { key: "branch_role", label: "Role" }, { key: "effective_from", label: "From" }, { key: "effective_to", label: "To" }, { key: "status", label: "Status" }],
+		assignOpen: false, transferOpen: false, priceListsOpen: false, saving: false, assignError: "", transferError: "", priceListsError: "", assign: blankAssign(), transfer: blankTransfer(), transferRow: {}, priceListRow: {}, priceListRows: [], roles: ROLES,
+		priceListTableField: { label: "Allowed Price Lists", description: "Price Lists available to this user in the assigned Branch." },
+		priceListColumns: [{ fieldname: "price_list", label: "Price List", fieldtype: "Link", placeholder: "Search Price List" }],
+		columns: [{ key: "user", label: "User" }, { key: "company", label: "Company" }, { key: "branch", label: "Branch" }, { key: "branch_role", label: "Role" }, { key: "allowed_price_lists", label: "Price Lists" }, { key: "effective_from", label: "From" }, { key: "effective_to", label: "To" }, { key: "status", label: "Status" }],
 		};
 	},
 	computed: {
@@ -201,6 +215,7 @@ export default {
 		searchFilterUser(query) { return this.search("user", query); }, searchFilterCompany(query) { return this.search("company", query); }, searchFilterBranch(query) { return this.search("filter_branch", query, { company: this.filters.company }); },
 		searchAssignUser(query) { return this.search("user", query); }, searchAssignCompany(query) { return this.search("company", query); }, searchAssignBranch(query) { return this.search("branch", query, { company: this.assign.company }); },
 		searchTransferCompany(query) { return this.search("company", query); }, searchTransferBranch(query) { return this.search("branch", query, { company: this.transfer.company }); },
+		searchPriceListRow(column, query) { return column?.fieldname === "price_list" ? this.search("price_list", query) : Promise.resolve([]); },
 		openAssign() { this.assign = blankAssign(); this.assignError = ""; this.assignOpen = true; }, closeAssign() { if (!this.saving) this.assignOpen = false; },
 		setAssignCompany(value) { this.assign.company = value || ""; this.assign.branch = ""; },
 		async saveAssignment() {
@@ -210,12 +225,15 @@ export default {
 			catch (error) { this.assignError = extractServerMessage(error, __("Branch Assignment could not be created.")); }
 			finally { this.saving = false; }
 		},
+		openPriceLists(row) { this.priceListRow = { ...row }; this.priceListRows = priceListRows(row.allowed_price_lists); this.priceListsError = ""; this.priceListsOpen = true; },
+		closePriceLists() { if (!this.saving) { this.priceListsOpen = false; this.priceListRow = {}; this.priceListRows = []; } },
+		async savePriceLists() { if (!this.priceListRow?.name) return; this.saving = true; this.priceListsError = ""; try { await callMethod(UPDATE_PRICE_LISTS_METHOD, { name: this.priceListRow.name, allowed_price_lists: this.priceListRows }, { freeze: true, freezeMessage: __("Saving Price List access...") }); this.priceListsOpen = false; frappe.show_alert({ message: __("Price List access updated."), indicator: "green" }); await this.loadAssignments(); } catch (error) { this.priceListsError = extractServerMessage(error, __("Price List access could not be updated.")); } finally { this.saving = false; } },
 		openTransfer(row) { this.transferRow = { ...row }; this.transfer = blankTransfer(row); this.transferError = ""; this.transferOpen = true; }, closeTransfer() { if (!this.saving) this.transferOpen = false; },
 		setTransferCompany(value) { this.transfer.company = value || ""; this.transfer.branch = ""; },
 		async saveTransfer() {
 			if (!this.transfer.company || !this.transfer.branch || !this.transfer.effective_date || !this.transfer.reason) { this.transferError = __("New Company, Branch, Transfer Date and Transfer Reason are required."); return; }
 			this.saving = true; this.transferError = "";
-			try { await callMethod(TRANSFER_METHOD, { name: this.transferRow.name, new_company: this.transfer.company, new_branch: this.transfer.branch, effective_date: this.transfer.effective_date, branch_role: this.transfer.branch_role, reason: this.transfer.reason, notes: this.transfer.notes }, { freeze: true, freezeMessage: __("Recording Branch transfer...") }); this.transferOpen = false; frappe.show_alert({ message: __("Branch transfer recorded; previous assignment preserved."), indicator: "green" }); await this.loadAssignments(); }
+			try { await callMethod(TRANSFER_METHOD, { name: this.transferRow.name, new_company: this.transfer.company, new_branch: this.transfer.branch, effective_date: this.transfer.effective_date, branch_role: this.transfer.branch_role, allowed_price_lists: this.transfer.allowed_price_lists, reason: this.transfer.reason, notes: this.transfer.notes }, { freeze: true, freezeMessage: __("Recording Branch transfer...") }); this.transferOpen = false; frappe.show_alert({ message: __("Branch transfer recorded; previous assignment preserved."), indicator: "green" }); await this.loadAssignments(); }
 			catch (error) { this.transferError = extractServerMessage(error, __("Branch transfer could not be recorded.")); }
 			finally { this.saving = false; }
 		},
