@@ -23,6 +23,26 @@ function renderLoadError(wrapper, error) {
 	const title = document.createElement("strong"); title.textContent = __(`${PAGE_TITLE} failed to load`);
 	const detail = document.createElement("div"); detail.textContent = error?.message || __("Unknown page load error"); errorDiv.append(title, detail); wrapper.appendChild(errorDiv);
 }
+
+function refreshPendingBusinessHubHandoff(wrapper) {
+	if (!wrapper._retailedgePageHasShown) {
+		wrapper._retailedgePageHasShown = true;
+		return;
+	}
+	const routeOptions = frappe.route_options || {};
+	if (
+		!routeOptions.retailedge_business_hub_handoff
+		|| String(routeOptions.retailedge_business_hub_target || "") !== PAGE_ROUTE
+	) {
+		return;
+	}
+	const component = wrapper._retailedgeVueApp?._instance?.proxy;
+	if (!component || typeof component.fetchMetadata !== "function") return;
+	Promise.resolve(component.fetchMetadata()).catch((error) => {
+		console.error(`[RetailEdge ${PAGE_TITLE}] Business Hub handoff refresh failed`, error);
+	});
+}
+
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	const bootLoading = document.createElement("div"); bootLoading.className = "edge-boot-loading p-6 text-center text-muted"; bootLoading.textContent = __(`Loading ${PAGE_TITLE}...`); wrapper.appendChild(bootLoading);
@@ -30,7 +50,10 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const page = frappe.ui.make_app_page({ parent: wrapper, title: __(PAGE_TITLE), single_column: true }); wrapper.page = page; hideNativePageSidebar(wrapper);
 		await requireAsync(EDGEUI_ASSET); if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(RECEIVABLES_ASSET); if (typeof window.mountCustomerReceivablesPage !== "function") throw new Error("Customer Receivables bundle is unavailable.");
-		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-customer-receivables-root"; page.body.append(root); await window.mountCustomerReceivablesPage(root);
+		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-customer-receivables-root"; page.body.append(root); wrapper._retailedgeVueApp = await window.mountCustomerReceivablesPage(root);
 	} catch (error) { bootLoading.remove(); renderLoadError(wrapper, error); }
 };
-frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) { hideNativePageSidebar(wrapper); };
+frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
+	hideNativePageSidebar(wrapper);
+	refreshPendingBusinessHubHandoff(wrapper);
+};

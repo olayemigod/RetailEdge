@@ -54,6 +54,26 @@ function renderLoadError(wrapper, error) {
 	wrapper.appendChild(errorDiv);
 }
 
+
+function refreshPendingBusinessHubHandoff(wrapper) {
+	if (!wrapper._retailedgePageHasShown) {
+		wrapper._retailedgePageHasShown = true;
+		return;
+	}
+	const routeOptions = frappe.route_options || {};
+	if (
+		!routeOptions.retailedge_business_hub_handoff
+		|| String(routeOptions.retailedge_business_hub_target || "") !== PAGE_ROUTE
+	) {
+		return;
+	}
+	const component = wrapper._retailedgeVueApp?._instance?.proxy;
+	if (!component || typeof component.fetchMetadata !== "function") return;
+	Promise.resolve(component.fetchMetadata()).catch((error) => {
+		console.error(`[RetailEdge ${PAGE_TITLE}] Business Hub handoff refresh failed`, error);
+	});
+}
+
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	const bootLoading = document.createElement("div");
@@ -73,7 +93,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const root = document.createElement("div");
 		root.className = "retailedge-sales-report-root";
 		page.body.append(root);
-		await window.mountSalesReportingPage(root, { reportType: REPORT_TYPE });
+		wrapper._retailedgeVueApp = await window.mountSalesReportingPage(root, { reportType: REPORT_TYPE });
 		wrapper._retailedgeSalesReportMounted = true;
 	} catch (error) {
 		bootLoading.remove();
@@ -83,4 +103,5 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
 	hideNativePageSidebar(wrapper);
+	refreshPendingBusinessHubHandoff(wrapper);
 };

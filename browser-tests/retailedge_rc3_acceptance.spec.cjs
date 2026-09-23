@@ -246,6 +246,60 @@ test("RC3 Business Hub visual order, bounded cards and Sales Mix switcher remain
 	}
 });
 
+test("RC3 repeated Business Hub drill replaces cached destination filters", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+
+		const openExpenseWithHandoff = async (fromDate, toDate) => {
+			await page.evaluate(
+				({ fromDateValue, toDateValue }) => {
+					const target = "expense-register";
+					const filters = {
+						from_date: fromDateValue,
+						to_date: toDateValue,
+						view_mode: "consolidated",
+						include_unposted_cashier_expenses: 0,
+					};
+					window.__retailedgeBusinessHubRouteHandoff = {
+						target,
+						filters,
+						createdAt: Date.now(),
+					};
+					frappe.route_options = {
+						...filters,
+						retailedge_business_hub_handoff: 1,
+						retailedge_business_hub_target: target,
+					};
+					frappe.set_route(target);
+				},
+				{ fromDateValue: fromDate, toDateValue: toDate }
+			);
+			await page.getByRole("heading", { name: "Expense Register", exact: true }).first().waitFor({
+				state: "visible",
+				timeout: 20_000,
+			});
+		};
+
+		const fromDateInput = () =>
+			page.locator("label.edge-field").filter({ hasText: "From Date" }).locator('input[type="date"]');
+
+		await openExpenseWithHandoff("2026-09-01", "2026-09-05");
+		await expect(fromDateInput()).toHaveValue("2026-09-01");
+
+		await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
+		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+
+		await openExpenseWithHandoff("2026-09-10", "2026-09-12");
+		await expect(fromDateInput()).toHaveValue("2026-09-10");
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 PR56 Back and Forward navigation restore the EdgeSuite shell without refresh", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
