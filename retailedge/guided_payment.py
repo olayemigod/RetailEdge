@@ -29,6 +29,7 @@ MAX_LINK_RESULTS = 20
 MAX_REFERENCES = 20
 QUICK_MAX_REFERENCES = 1
 
+
 def _resolve_guided_payment_branch(
 	*,
 	company: str,
@@ -653,7 +654,7 @@ def _normalise_references(
 		result.append({"reference_name": name, "allocated_amount": allocated_amount})
 
 	if len(result) < max(0, cint(min_references)):
-		frappe.throw(_("Add at least one payable reference."))
+		frappe.throw(_("Add at least one payment reference."))
 	if len(result) > max(1, cint(max_references) or QUICK_MAX_REFERENCES):
 		frappe.throw(
 			_("This payment flow can contain at most {0} invoice reference(s).").format(max_references)
