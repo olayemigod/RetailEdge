@@ -4,7 +4,7 @@
 	const PAGE_NAME = "retailedge-business-hub";
 	const RUNTIME_ASSET = "edgeui.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
-	const PRODUCT_STYLE_ASSET = "retailedge_business_hub.bundle.css";
+	const PRODUCT_STYLE_ID = "retailedge-business-hub-vue-style";
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
 	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge.js";
 	const LOAD_TIMEOUT_MS = 15000;
@@ -37,7 +37,7 @@
 		wrapper.on_page_show = function onPageShow(currentWrapper) {
 			ensurePage(currentWrapper);
 			bootProductMenu();
-			return ensureStyleAsset(PRODUCT_STYLE_ASSET).then(() => {
+			return ensureInjectedProductStyle().then(() => {
 				if (!currentWrapper._retailedgeBusinessHub) {
 					return bootBusinessHub(currentWrapper);
 				}
@@ -90,9 +90,11 @@
 		const mountedComponent = getMountedComponent(wrapper);
 		const mountedRoot = wrapper._retailedgeBusinessHubRoot?.[0];
 		if (mountedComponent && mountedRoot?.isConnected) {
-			suppressNativePageChrome(wrapper);
-			enforceCreateVisibility(mountedRoot);
-			return Promise.resolve(wrapper._retailedgeBusinessHub);
+			return ensureInjectedProductStyle().then(() => {
+				suppressNativePageChrome(wrapper);
+				enforceCreateVisibility(mountedRoot);
+				return wrapper._retailedgeBusinessHub;
+			});
 		}
 		if (mountedComponent || mountedRoot) {
 			const target = wrapper._retailedgeBusinessHubTarget || resolvePageBody(wrapper.page, wrapper);
@@ -116,10 +118,11 @@
 				await requireAsset(RUNTIME_ASSET);
 			}
 			assertEdgeSuiteUIRuntime();
-			await ensureStyleAsset(PRODUCT_STYLE_ASSET);
 
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
-				await requireAsset(PRODUCT_ASSET);
+				await loadProductAssetWithStyleCapture();
+			} else {
+				await ensureInjectedProductStyle();
 			}
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
 				throw new Error(__("Business Hub could not start because its interface bundle did not register correctly."));
@@ -299,40 +302,79 @@
 		});
 	}
 
-	function ensureStyleAsset(asset) {
-		if (!global.document?.head) {
-			return Promise.reject(new Error(__("Business Hub stylesheet cannot load before the Desk document is ready.")));
-		}
-		const resolver = global.frappe?.assets?.bundled_asset;
-		const resolved = typeof resolver === "function" ? resolver.call(global.frappe.assets, asset) : asset;
-		const href = new URL(resolved, global.location?.origin || global.document.baseURI).toString();
-		const existing = Array.from(global.document.querySelectorAll('link[rel="stylesheet"]')).find((link) => {
-			try {
-				return new URL(link.href, global.document.baseURI).toString() === href;
-			} catch (_error) {
-				return false;
-			}
-		});
-		if (existing) return Promise.resolve(existing);
-
-		return new Promise((resolve, reject) => {
-			const link = global.document.createElement("link");
-			link.rel = "stylesheet";
-			link.type = "text/css";
-			link.href = href;
-			link.dataset.retailedgeBusinessHubStyle = "1";
-			link.addEventListener("load", () => resolve(link), { once: true });
-			link.addEventListener(
-				"error",
-				() => {
-					link.remove();
-					reject(new Error(__("Business Hub stylesheet failed to load: {0}", [resolved])));
-				},
-				{ once: true }
-			);
-			global.document.head.appendChild(link);
-		});
+	function isBusinessHubStyle(node) {
+		if (!(node instanceof global.HTMLStyleElement)) return false;
+		const css = String(node.textContent || "");
+		return css.includes(".hub-chart-card") && css.includes(".home-visual-grid");
 	}
+
+	function rememberBusinessHubStyle(node) {
+		if (!isBusinessHubStyle(node)) return null;
+		node.id = PRODUCT_STYLE_ID;
+		node.dataset.retailedgeBusinessHubStyle = "1";
+		global.__retailedgeBusinessHubStyleText = String(node.textContent || "");
+		return node;
+	}
+
+	function findBusinessHubStyle() {
+		const tagged = global.document?.getElementById?.(PRODUCT_STYLE_ID);
+		if (tagged && isBusinessHubStyle(tagged)) return rememberBusinessHubStyle(tagged);
+		const discovered = Array.from(global.document?.querySelectorAll?.("style") || []).find(isBusinessHubStyle);
+		return discovered ? rememberBusinessHubStyle(discovered) : null;
+	}
+
+	function captureInjectedProductStyle(beforeStyles = null) {
+		const styles = Array.from(global.document?.querySelectorAll?.("style") || []);
+		const candidates = beforeStyles
+			? styles.filter((style) => !beforeStyles.has(style))
+			: styles;
+		const injected = candidates.find(isBusinessHubStyle) || styles.find(isBusinessHubStyle);
+		return injected ? rememberBusinessHubStyle(injected) : null;
+	}
+
+	function evictProductAssetExecution() {
+		const executed = global.frappe?.assets?._executed;
+		if (!Array.isArray(executed)) return;
+		const resolver = global.frappe?.assets?.bundled_asset;
+		const resolved = typeof resolver === "function"
+			? resolver.call(global.frappe.assets, PRODUCT_ASSET)
+			: PRODUCT_ASSET;
+		global.frappe.assets._executed = executed.filter(
+			(path) => path !== PRODUCT_ASSET && path !== resolved
+		);
+	}
+
+	async function loadProductAssetWithStyleCapture({ force = false } = {}) {
+		const beforeStyles = new Set(global.document?.querySelectorAll?.("style") || []);
+		if (force) evictProductAssetExecution();
+		await requireAsset(PRODUCT_ASSET);
+		const style = captureInjectedProductStyle(beforeStyles);
+		if (!style) {
+			throw new Error(__("Business Hub interface styles were not registered by the application bundle."));
+		}
+		return style;
+	}
+
+	async function ensureInjectedProductStyle() {
+		const existing = findBusinessHubStyle();
+		if (existing) return existing;
+
+		const cached = String(global.__retailedgeBusinessHubStyleText || "");
+		if (cached && global.frappe?.dom?.set_style) {
+			const restored = global.frappe.dom.set_style(cached, PRODUCT_STYLE_ID);
+			if (restored) {
+				restored.dataset.retailedgeBusinessHubStyle = "1";
+				return restored;
+			}
+		}
+
+		if (typeof global.mountRetailEdgeBusinessHub !== "function") {
+			return loadProductAssetWithStyleCapture();
+		}
+
+		return loadProductAssetWithStyleCapture({ force: true });
+	}
+
 
 	function assertEdgeSuiteUIRuntime() {
 		const runtime = global.EdgeSuiteUI;

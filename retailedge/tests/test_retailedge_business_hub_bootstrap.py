@@ -30,14 +30,16 @@ class RetailEdgeBusinessHubBootstrapTests(unittest.TestCase):
 		self.assertIn('global.retailedgeRegisterBusinessHubPage = registerPage', controller)
 		self.assertIn('global.retailedgeBootProductMenu = bootProductMenu', controller)
 
-	def test_business_hub_scoped_css_uses_hashed_asset_resolver_not_global_hook(self):
+	def test_business_hub_vue_style_is_captured_from_js_bundle_not_requested_as_css_asset(self):
 		hooks = HOOKS.read_text(encoding="utf-8")
 		controller = CONTROLLER.read_text(encoding="utf-8")
 		self.assertNotIn('"retailedge_business_hub.bundle.css"', hooks)
-		self.assertIn('const PRODUCT_STYLE_ASSET = "retailedge_business_hub.bundle.css"', controller)
-		self.assertIn("frappe?.assets?.bundled_asset", controller)
-		self.assertIn("ensureStyleAsset(PRODUCT_STYLE_ASSET)", controller)
-		self.assertIn("retailedgeBusinessHubStyle", controller)
+		self.assertNotIn('PRODUCT_STYLE_ASSET', controller)
+		self.assertIn('const PRODUCT_STYLE_ID = "retailedge-business-hub-vue-style"', controller)
+		self.assertIn("loadProductAssetWithStyleCapture", controller)
+		self.assertIn("ensureInjectedProductStyle", controller)
+		self.assertIn("__retailedgeBusinessHubStyleText", controller)
+		self.assertIn("frappe.dom.set_style(cached, PRODUCT_STYLE_ID)", controller)
 
 
 if __name__ == "__main__":
