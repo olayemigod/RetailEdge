@@ -229,7 +229,8 @@ test("RC3 Business Hub visual order, bounded cards and Sales Mix switcher remain
 		]);
 		await expect(cards.first()).toHaveClass(/hub-chart-card--wide/);
 		await expect(cards.last()).toHaveClass(/hub-chart-card--wide/);
-		await expect(page.locator(".hub-chart-card--scrollable")).toHaveCount(4);
+		await expect(page.locator(".hub-chart-card--scrollable")).toHaveCount(5);
+		await expect(cards.last()).toHaveClass(/hub-chart-card--scrollable/);
 
 		const salesMix = page.locator('[data-chart-key="sales_mix"]');
 		const switcher = salesMix.getByRole("button", { name: "Sales mix view" });

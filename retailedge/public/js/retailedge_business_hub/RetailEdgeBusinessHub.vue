@@ -117,7 +117,7 @@
 							:key="chart.key"
 							:chart="chart"
 							:wide="['sales_trend', 'cash_flow'].includes(chart.key)"
-							:scrollable="['sales_mix', 'expense_mix', 'exposure', 'stock_health'].includes(chart.key)"
+							:scrollable="['sales_mix', 'expense_mix', 'exposure', 'stock_health', 'cash_flow'].includes(chart.key)"
 							@open="openHomeVisual"
 							@drill="drillHomeVisual"
 						/>
