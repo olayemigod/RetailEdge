@@ -14,6 +14,7 @@ from retailedge.branch_context import (
 )
 from retailedge.guided_pricing import resolve_purchase_item_pricing
 from retailedge.operating_context import get_operating_context, get_operational_branch_scope
+from retailedge.professional_draft_items import _validate_warehouse_branch
 from retailedge.professional_selling import _assert_read, _validate_stored_operational_branch
 from retailedge.workflow_actions import apply_document_workflow_action
 from retailedge.workflow_readiness import get_workflow_readiness
@@ -863,6 +864,37 @@ def get_standard_purchase_invoice_completion_queue(
 		"limit": row_limit,
 		"source_of_truth": "ERPNext draft Purchase Invoice",
 	}
+
+
+@frappe.whitelist()
+def get_standard_purchase_invoice_completion_item_pricing(
+	name: str,
+	item_code: str,
+	qty: float = 1,
+	warehouse: str = "",
+	posting_date: str = "",
+) -> dict[str, Any]:
+	"""Price a new Purchase Invoice row from the draft's stored Buying Price List."""
+	doc = _get_purchase_invoice(name)
+	company, branch = _validate_invoice_context(doc)
+	if cint(doc.docstatus) != 0 or not frappe.has_permission(PURCHASE_INVOICE_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("Only editable draft Purchase Invoices can price additional items here."), frappe.PermissionError)
+	item_code = _clean(item_code)
+	_assert_read("Item", item_code)
+	warehouse = _clean(warehouse or doc.get("set_warehouse"))
+	if warehouse:
+		_validate_warehouse_branch(warehouse, company=company, branch=branch)
+	return resolve_purchase_item_pricing(
+		item_code=item_code,
+		company=company,
+		supplier=_clean(doc.get("supplier")),
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=_clean(posting_date or doc.get("posting_date")),
+		qty=flt(qty or 1),
+		document_price_list=_clean(doc.get("buying_price_list")),
+		user=frappe.session.user,
+	)
 
 
 @frappe.whitelist()
