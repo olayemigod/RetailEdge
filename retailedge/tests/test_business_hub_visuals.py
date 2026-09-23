@@ -42,6 +42,36 @@ class TestBusinessHubVisualRuntimeRegression(TestCase):
 		self.assertTrue(result["description"])
 		self.assertEqual(result["rows"][0]["net_sales"], 120000)
 
+	@patch("retailedge.business_hub_visuals.get_sales_by_item_export")
+	@patch("retailedge.business_hub_visuals.get_sales_visual_aggregates")
+	def test_sales_mix_exposes_branch_category_and_brand_views(self, sales_aggregates, item_export):
+		sales_aggregates.return_value = {
+			"trend": [{"posting_date": "2026-09-01", "net_sales": 150000, "transactions": 3}],
+			"branch_mix": [
+				{"branch": "Lagos", "net_sales": 100000},
+				{"branch": "Ikeja", "net_sales": 50000},
+			],
+			"branch_mix_supported": True,
+		}
+		item_export.return_value = {
+			"rows": [
+				{"item_group": "Beverages", "brand": "Acme", "net_sales": 90000},
+				{"item_group": "Groceries", "brand": "Prime", "net_sales": 60000},
+			]
+		}
+		result = _sales_mix(
+			{"company": "Demo Company", "branch": "", "from_date": "2026-09-01", "to_date": "2026-09-30"},
+			branch="",
+			currency="NGN",
+		)
+		self.assertEqual(result["default_view"], "branch")
+		self.assertEqual([row["value"] for row in result["view_options"]], ["branch", "category", "brand"])
+		self.assertEqual(result["views"]["branch"]["title"], "Sales by Branch")
+		self.assertEqual(result["views"]["category"]["rows"][0]["drill_field"], "item_group")
+		self.assertEqual(result["views"]["brand"]["title"], "Sales by Brand")
+		self.assertEqual(result["views"]["brand"]["route"], "")
+		self.assertNotIn("drill_field", result["views"]["brand"]["rows"][0])
+
 	@patch("retailedge.business_hub_visuals.get_cash_movement_visual_aggregates")
 	def test_cash_visual_does_not_shadow_frappe_translation(self, aggregates):
 		aggregates.return_value = {
@@ -56,6 +86,7 @@ class TestBusinessHubVisualRuntimeRegression(TestCase):
 		self.assertTrue(result["description"])
 		self.assertEqual(result["rows"][0]["money_in"], 100000)
 		self.assertEqual(result["rows"][0]["money_out"], 25000)
+
 
 def test_business_hub_visuals_are_composed_from_existing_reporting_authorities():
 	source = PROVIDER.read_text(encoding="utf-8")
@@ -185,17 +216,18 @@ def test_visual_payload_exposes_six_drillable_owner_views(
 	assert [row["key"] for row in result["visuals"]] == [
 		"sales_trend",
 		"sales_mix",
-		"cash_flow",
 		"expense_mix",
 		"exposure",
 		"stock_health",
+		"cash_flow",
 	]
 	assert all(row["available"] for row in result["visuals"])
 	assert result["visuals"][0]["chart_type"] == "line"
 	assert result["visuals"][1]["title"] == "Sales by Branch"
-	assert result["visuals"][2]["chart_type"] == "grouped_bar"
-	assert result["visuals"][4]["time_basis"] == "current"
-	assert result["visuals"][5]["rows"][1]["drill_value"] == "Reorder Due"
+	assert result["visuals"][2]["key"] == "expense_mix"
+	assert result["visuals"][3]["time_basis"] == "current"
+	assert result["visuals"][4]["rows"][1]["drill_value"] == "Reorder Due"
+	assert result["visuals"][5]["chart_type"] == "grouped_bar"
 
 
 def test_business_hub_frontend_renders_visual_layer_and_drill_through():

@@ -70,16 +70,9 @@ def get_business_hub_visuals(
 		_safe_visual(
 			key="sales_mix",
 			title=_("Sales Mix"),
-			route="/app/sales-by-item" if branch else "/app/branch-performance-dashboard",
+			route="/app/sales-invoice-register",
 			time_basis="period",
 			loader=lambda: _sales_mix(period_filters, branch=branch, currency=currency),
-		),
-		_safe_visual(
-			key="cash_flow",
-			title=_("Cash In vs Cash Out"),
-			route="/app/cash-movement",
-			time_basis="period",
-			loader=lambda: _cash_visual(period_filters, start=start, end=end, currency=currency),
 		),
 		_safe_visual(
 			key="expense_mix",
@@ -101,6 +94,13 @@ def get_business_hub_visuals(
 			route="/app/stock-position",
 			time_basis="current",
 			loader=lambda: _stock_health(current_filters),
+		),
+		_safe_visual(
+			key="cash_flow",
+			title=_("Cash In vs Cash Out"),
+			route="/app/cash-movement",
+			time_basis="period",
+			loader=lambda: _cash_visual(period_filters, start=start, end=end, currency=currency),
 		),
 	]
 	return {
@@ -241,37 +241,126 @@ def _sales_mix(
 	branch: str,
 	currency: str,
 ) -> dict[str, Any]:
+	"""Return a compact multi-view Sales Mix without turning the Hub into a report builder."""
+	sales_dataset = get_sales_visual_aggregates(filters)
+	branch_buckets: dict[str, float] = defaultdict(float)
 	if branch:
-		dataset = get_sales_by_item_export(filters)
-		buckets: dict[str, float] = defaultdict(float)
-		for row in dataset.get("rows") or []:
-			label = str(row.get("item_group") or _("Unspecified")).strip() or _("Unspecified")
-			buckets[label] += flt(row.get("net_sales"))
-		title = _("Sales by Category")
-		description = _("Top item groups contributing to net sales in this Branch.")
-		route = "/app/sales-by-item"
-	else:
-		dataset = get_sales_visual_aggregates(filters)
-		buckets = defaultdict(float)
-		for row in dataset.get("branch_mix") or []:
-			label = str(row.get("branch") or _("Unattributed")).strip() or _("Unattributed")
-			buckets[label] += flt(row.get("net_sales"))
-		title = _("Sales by Branch")
-		description = (
-			_("Top Branch contributions to company net invoiced sales.")
-			if dataset.get("branch_mix_supported")
-			else _("Sales Invoice Branch attribution is unavailable for this Company.")
+		branch_buckets[branch] = sum(
+			flt(row.get("net_sales")) for row in sales_dataset.get("trend") or []
 		)
-		route = "/app/sales-invoice-register"
+	else:
+		for row in sales_dataset.get("branch_mix") or []:
+			label = str(row.get("branch") or _("Unattributed")).strip() or _("Unattributed")
+			branch_buckets[label] += flt(row.get("net_sales"))
 
-	rows = _top_mix_rows(buckets, drill_field="item_group" if branch else "branch")
+	item_error = ""
+	item_rows: list[dict[str, Any]] = []
+	try:
+		item_rows = list((get_sales_by_item_export(filters) or {}).get("rows") or [])
+	except (frappe.PermissionError, frappe.ValidationError) as exc:
+		# Branch aggregation is lightweight and remains useful even when the
+		# bounded item-level provider requires a narrower date range.
+		item_error = str(exc)
+
+	category_buckets: dict[str, float] = defaultdict(float)
+	brand_buckets: dict[str, float] = defaultdict(float)
+	for row in item_rows:
+		category = str(row.get("item_group") or _("Unspecified")).strip() or _("Unspecified")
+		brand_name = str(row.get("brand") or _("Unbranded")).strip() or _("Unbranded")
+		value = flt(row.get("net_sales"))
+		category_buckets[category] += value
+		brand_buckets[brand_name] += value
+
+	views = {
+		"branch": _sales_mix_view(
+			title=_("Sales by Branch"),
+			description=(
+				_("Net invoiced sales for the current Branch.")
+				if branch
+				else (
+					_("Top Branch contributions to company net invoiced sales.")
+					if sales_dataset.get("branch_mix_supported")
+					else _("Sales Invoice Branch attribution is unavailable for this Company.")
+				)
+			),
+			buckets=branch_buckets,
+			drill_field="branch",
+			route="/app/sales-invoice-register",
+			filters=filters,
+			placeholder_labels={"Unattributed"},
+			currency=currency,
+		),
+		"category": _sales_mix_view(
+			title=_("Sales by Category"),
+			description=_("Top item groups contributing to net sales in the selected scope."),
+			buckets=category_buckets,
+			drill_field="item_group",
+			route="/app/sales-by-item",
+			filters=filters,
+			placeholder_labels={"Unspecified"},
+			currency=currency,
+			unavailable_reason=item_error,
+		),
+		"brand": _sales_mix_view(
+			title=_("Sales by Brand"),
+			description=_("Top brands contributing to net sales in the selected scope."),
+			buckets=brand_buckets,
+			drill_field="",
+			route="",
+			filters=filters,
+			placeholder_labels=set(),
+			currency=currency,
+			unavailable_reason=item_error,
+		),
+	}
+	default_view = "category" if branch and not item_error else "branch"
+	default_payload = dict(views[default_view])
+	return {
+		**default_payload,
+		"default_view": default_view,
+		"view_options": [
+			{"value": "branch", "label": _("Branch")},
+			{"value": "category", "label": _("Category")},
+			{"value": "brand", "label": _("Brand")},
+		],
+		"views": views,
+	}
+
+
+def _sales_mix_view(
+	*,
+	title: str,
+	description: str,
+	buckets: dict[str, float],
+	drill_field: str,
+	route: str,
+	filters: dict[str, Any],
+	placeholder_labels: set[str],
+	currency: str,
+	unavailable_reason: str = "",
+) -> dict[str, Any]:
+	if unavailable_reason:
+		return {
+			"title": title,
+			"description": description,
+			"available": False,
+			"reason": unavailable_reason,
+			"chart_type": "bar",
+			"currency": currency,
+			"series": [{"key": "value", "label": _("Net Sales"), "datatype": "Currency"}],
+			"rows": [],
+			"route": route,
+			"route_filters": dict(filters),
+		}
+	rows = _top_mix_rows(buckets, drill_field=drill_field)
 	for row in rows:
-		if row.get("key") in {"Unattributed", "Unspecified"}:
+		if row.get("key") in placeholder_labels:
 			row.pop("drill_field", None)
 			row.pop("drill_value", None)
 	return {
 		"title": title,
 		"description": description,
+		"available": True,
 		"chart_type": "bar",
 		"currency": currency,
 		"series": [{"key": "value", "label": _("Net Sales"), "datatype": "Currency"}],
@@ -507,11 +596,11 @@ def _top_mix_rows(buckets: dict[str, float], *, drill_field: str = "") -> list[d
 def _unavailable_visuals(reason: str) -> list[dict[str, Any]]:
 	definitions = (
 		("sales_trend", _("Sales Trend"), "/app/sales-invoice-register", "period"),
-		("sales_mix", _("Sales Mix"), "/app/sales-by-item", "period"),
-		("cash_flow", _("Cash In vs Cash Out"), "/app/cash-movement", "period"),
+		("sales_mix", _("Sales Mix"), "/app/sales-invoice-register", "period"),
 		("expense_mix", _("Expense Mix"), "/app/expense-register", "period"),
 		("exposure", _("Receivables vs Payables"), "/app/customer-receivables", "current"),
 		("stock_health", _("Stock Health"), "/app/stock-position", "current"),
+		("cash_flow", _("Cash In vs Cash Out"), "/app/cash-movement", "period"),
 	)
 	return [
 		{

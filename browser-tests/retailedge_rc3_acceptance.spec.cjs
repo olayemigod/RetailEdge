@@ -213,6 +213,38 @@ test("RC3 PR56 Business Hub renders the eight actionable business indices", asyn
 	}
 });
 
+test("RC3 Business Hub visual order, bounded cards and Sales Mix switcher remain stable", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const cards = page.locator(".hub-chart-card");
+		await expect(cards).toHaveCount(6);
+		expect(await cards.evaluateAll((nodes) => nodes.map((node) => node.dataset.chartKey))).toEqual([
+			"sales_trend",
+			"sales_mix",
+			"expense_mix",
+			"exposure",
+			"stock_health",
+			"cash_flow",
+		]);
+		await expect(cards.first()).toHaveClass(/hub-chart-card--wide/);
+		await expect(cards.last()).toHaveClass(/hub-chart-card--wide/);
+		await expect(page.locator(".hub-chart-card--scrollable")).toHaveCount(4);
+
+		const salesMix = page.locator('[data-chart-key="sales_mix"]');
+		const switcher = salesMix.getByRole("button", { name: "Sales mix view" });
+		await expect(switcher).toBeVisible();
+		await switcher.click();
+		for (const label of ["Branch", "Category", "Brand"]) {
+			await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
+		}
+		await page.getByRole("option", { name: "Brand", exact: true }).click();
+		await expect(salesMix.getByRole("heading", { name: "Sales by Brand", exact: true })).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 PR56 Back and Forward navigation restore the EdgeSuite shell without refresh", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
