@@ -15,7 +15,7 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 
 		self.assertIn("window.EdgeSuiteUI", component)
 		self.assertIn('import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue"', component)
-		self.assertIn('v-if="reportType === \'supplier_payables\'"', component)
+		self.assertIn('v-if="reportType === \'supplier_payables\' && canPaySupplier"', component)
 		self.assertIn('intent="pay-supplier"', component)
 		self.assertIn(':initialContext="supplierPaymentContext"', component)
 		self.assertIn(':nativeFallbackEnabled="canUseNativeDesk"', component)
@@ -49,6 +49,19 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 
 		self.assertIn("filters.purchase_invoice = firstReference", dialog)
 		self.assertIn('frappe.set_route(target)', dialog)
+
+	def test_supplier_payment_actions_fail_closed_without_payment_entry_create_access(self):
+		component = (
+			APP_ROOT / "public" / "js" / "purchase_reporting" / "PurchaseReportingReport.vue"
+		).read_text()
+		backend = (APP_ROOT / "purchase_reporting.py").read_text()
+
+		self.assertIn('"can_pay_supplier": _can_create_payment_entry()', backend)
+		self.assertIn('frappe.has_permission("Payment Entry", "create")', backend)
+		self.assertIn("canPaySupplier: false", component)
+		self.assertIn("this.canPaySupplier = Boolean(context.capabilities?.can_pay_supplier);", component)
+		self.assertIn('this.reportType === "supplier_payables" && this.canPaySupplier', component)
+		self.assertIn("if (!this.canPaySupplier || this.reportType !== \"supplier_payables\"", component)
 
 	def test_payment_action_is_local_to_supplier_payables_and_keeps_accounting_native(self):
 		component = (
