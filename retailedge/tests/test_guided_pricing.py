@@ -223,6 +223,27 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertTrue(result["selection_required"])
 		self.assertEqual(result["allowed_price_lists"], ["Retail", "Wholesale"])
 
+	@patch("retailedge.guided_pricing._erpnext_item_details")
+	@patch("retailedge.guided_pricing.resolve_price_list_context")
+	@patch("retailedge.guided_pricing._assert_read_permission")
+	def test_item_pricing_requires_explicit_choice_when_policy_requires_selection(
+		self, _mock_read, mock_context, mock_details
+	):
+		mock_context.return_value = {
+			"price_list": "",
+			"source": "branch_assignment",
+			"selection_required": True,
+		}
+		with self.assertRaises(frappe.ValidationError):
+			resolve_sales_item_pricing(
+				item_code="ITEM-001",
+				company="Demo Company",
+				customer="CUST-001",
+				branch="Lagos",
+				user="sales@example.com",
+			)
+		mock_details.assert_not_called()
+
 	@patch("retailedge.guided_pricing.frappe.get_cached_value")
 	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
