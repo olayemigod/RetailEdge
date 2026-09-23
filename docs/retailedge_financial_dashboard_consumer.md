@@ -16,7 +16,7 @@ Invoice-cohort collection rate and days-to-full-payment are deliberately unavail
 
 ## Shared dependency
 
-Requires EdgeSuite UI draft PR #25 (`agent/signature-financial-dashboard-fd1`, restacked head `276ebd20767b5157d2b9de9ee563c39ae404ce3e`) or an accepted release containing `EdgeFinancialDashboard`.
+Requires EdgeSuite UI draft PR #25 (`agent/signature-financial-dashboard-fd1`, restacked head `026e32813b044d57d961fe668cec3487798135da`) or an accepted release containing `EdgeFinancialDashboard`.
 
 
 ## Business Hub alignment
@@ -26,7 +26,7 @@ The existing Sales Invoice Register now exposes both **Net Sales** (tax-exclusiv
 
 ## CI dependency pin
 
-RetailEdge CI, browser persona, upgrade validation and EdgeSuite compatibility checks on this branch use exact EdgeSuite UI commit `276ebd20767b5157d2b9de9ee563c39ae404ce3e`. This prevents the consumer from appearing green against a shared runtime that does not yet contain `EdgeFinancialDashboard`.
+RetailEdge CI, browser persona, upgrade validation and EdgeSuite compatibility checks on this branch use exact EdgeSuite UI commit `026e32813b044d57d961fe668cec3487798135da`. This prevents the consumer from appearing green against a shared runtime that does not yet contain `EdgeFinancialDashboard`.
 
 
 ## Repeated destination handoff validation

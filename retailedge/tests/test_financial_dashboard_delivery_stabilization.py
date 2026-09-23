@@ -18,7 +18,7 @@ def test_cached_expense_report_reconsumes_fresh_business_hub_handoff_on_page_act
 
 def test_edgesuite_candidate_workflow_validates_exact_financial_dashboard_head_with_pytest():
     workflow = WORKFLOW.read_text()
-    assert "276ebd20767b5157d2b9de9ee563c39ae404ce3e" in workflow
+    assert "026e32813b044d57d961fe668cec3487798135da" in workflow
     assert "python -m pip install --upgrade frappe-bench pytest" in workflow
     assert "python -m pytest -q apps/edgesuite_ui/edgesuite_ui/tests/test_financial_dashboard_contract.py" in workflow
     assert "./env/bin/python -m pytest" not in workflow
