@@ -482,14 +482,34 @@ def search_allowed_price_lists(
 	txt = str(txt or "").strip().lower()
 	if txt:
 		names = [name for name in names if txt in name.lower()]
+	resolved_default = str(context.get("resolved_default") or context.get("price_list") or "").strip()
+	resolved_source = str(context.get("resolved_default_source") or context.get("source") or "").strip()
 	return [
 		{
 			"value": name,
 			"label": name,
-			"description": _("Branch default") if name == context.get("branch_default") else _("Assigned Price List"),
+			"description": (
+				_("Current default ({0})").format(_price_source_label(resolved_source))
+				if name == resolved_default
+				else _("Branch-assigned alternative")
+			),
 		}
 		for name in names[: max(1, min(int(limit or 20), 50))]
 	]
+
+
+def _price_source_label(source: str) -> str:
+	return {
+		"party_default": _("Customer / Supplier"),
+		"pos_profile": _("POS Profile"),
+		"branch_default": _("Branch"),
+		"user_default": _("User"),
+		"user_permission": _("User Permission"),
+		"erpnext_default": _("ERPNext Settings"),
+		"standard_price_list": _("Standard"),
+		"branch_assignment": _("Branch Assignment"),
+		"user_selected": _("Selected"),
+	}.get(str(source or ""), _("Default"))
 
 
 def _assert_whitelisted_pricing_context_access(
