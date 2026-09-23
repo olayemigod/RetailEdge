@@ -98,6 +98,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		root.className = "retailedge-stock-position-root";
 		page.body.append(root);
 		wrapper._retailedgeVueApp = await window.mountStockPosition(root);
+		wrapper._retailedgePageHasShown = true;
 		wrapper._retailedgeStockPositionMounted = true;
 	} catch (error) {
 		bootLoading.remove();
