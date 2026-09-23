@@ -72,7 +72,7 @@ function refreshPendingBusinessHubHandoff(wrapper) {
 		&& Date.now() - Number(handoff.createdAt || 0) <= 60_000
 	);
 	if (!routeOptionMatches && !handoffMatches) return;
-	const component = wrapper._retailedgeVueApp?._instance?.proxy;
+	const component = wrapper._retailedgeVueComponent || wrapper._retailedgeVueApp?._instance?.proxy;
 	if (!component || typeof component.fetchMetadata !== "function") return;
 	Promise.resolve(component.fetchMetadata()).catch((error) => {
 		console.error(`[RetailEdge ${PAGE_TITLE}] Business Hub handoff refresh failed`, error);
@@ -112,6 +112,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		root.className = "retailedge-sales-report-root";
 		page.body.append(root);
 		wrapper._retailedgeVueApp = await window.mountSalesReportingPage(root, { reportType: REPORT_TYPE });
+		wrapper._retailedgeVueComponent = root.__vue_app__?._instance?.proxy || wrapper._retailedgeVueApp?._instance?.proxy || null;
 		wrapper._retailedgePageHasShown = true;
 		bindBusinessHubHandoffRouteRefresh(wrapper);
 		wrapper._retailedgeSalesReportMounted = true;
