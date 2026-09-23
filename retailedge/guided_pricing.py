@@ -509,6 +509,7 @@ def _price_source_label(source: str) -> str:
 		"standard_price_list": _("Standard"),
 		"branch_assignment": _("Branch Assignment"),
 		"user_selected": _("Selected"),
+		"document_price_list": _("Document"),
 	}.get(str(source or ""), _("Default"))
 
 
@@ -545,18 +546,23 @@ def resolve_sales_item_pricing(
 	posting_date: str | None = None,
 	qty: float = 1,
 	selected_price_list: str = "",
+	document_price_list: str = "",
 	user: str | None = None,
 ) -> dict[str, Any]:
 	user = user or frappe.session.user
 	_assert_read_permission("Item", item_code, user=user)
 	_assert_read_permission("Customer", customer, user=user)
-	context = resolve_price_list_context(
-		mode="selling",
-		company=company,
-		branch=branch,
-		party=customer,
-		selected_price_list=selected_price_list,
-		user=user,
+	context = (
+		_document_price_list_context(document_price_list, mode="selling", user=user)
+		if document_price_list
+		else resolve_price_list_context(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			selected_price_list=selected_price_list,
+			user=user,
+		)
 	)
 	if context.get("selection_required"):
 		frappe.throw(_("Choose a Selling Price List before pricing items."))
@@ -597,18 +603,23 @@ def resolve_purchase_item_pricing(
 	posting_date: str | None = None,
 	qty: float = 1,
 	selected_price_list: str = "",
+	document_price_list: str = "",
 	user: str | None = None,
 ) -> dict[str, Any]:
 	user = user or frappe.session.user
 	_assert_read_permission("Item", item_code, user=user)
 	_assert_read_permission("Supplier", supplier, user=user)
-	context = resolve_price_list_context(
-		mode="buying",
-		company=company,
-		branch=branch,
-		party=supplier,
-		selected_price_list=selected_price_list,
-		user=user,
+	context = (
+		_document_price_list_context(document_price_list, mode="buying", user=user)
+		if document_price_list
+		else resolve_price_list_context(
+			mode="buying",
+			company=company,
+			branch=branch,
+			party=supplier,
+			selected_price_list=selected_price_list,
+			user=user,
+		)
 	)
 	if context.get("selection_required"):
 		frappe.throw(_("Choose a Buying Price List before pricing items."))
@@ -641,6 +652,53 @@ def resolve_purchase_item_pricing(
 		"price_list_rate": _rate_or_none(details.get("price_list_rate")),
 		"rate_source": rate_source if rate is not None else "unresolved",
 	}
+
+
+def _document_price_list_context(
+	name: str,
+	*,
+	mode: PriceMode,
+	user: str,
+) -> dict[str, Any]:
+	"""Use a Price List already stored on a server-loaded draft document.
+
+	This path is intentionally internal and is not exposed by the whitelisted
+	new-transaction pricing APIs. It preserves a draft's commercial Price List
+	when merchant governance changes after the draft was created.
+	"""
+	name = str(name or "").strip()
+	if not name:
+		return {
+			"price_list": "",
+			"currency": "",
+			"source": "item_fallback",
+			"mode": mode,
+			"pos_profile": "",
+			"allow_rate_change": True,
+			"document_price_list": True,
+			**_open_pricing_metadata(),
+		}
+	if not _valid_price_list(name, mode=mode, user=user, require_read=False):
+		frappe.throw(
+			_("Stored {0} Price List {1} is no longer enabled for this transaction type.").format(
+				_("Selling") if mode == "selling" else _("Buying"),
+				frappe.bold(name),
+			),
+			frappe.ValidationError,
+		)
+	context = _price_context(name, mode=mode, source="document_price_list")
+	context.update(
+		{
+			"document_price_list": True,
+			"resolved_default": name,
+			"resolved_default_source": "document_price_list",
+			"locked": True,
+			"can_select": False,
+			"selection_required": False,
+			"allowed_price_lists": [name],
+		}
+	)
+	return context
 
 
 def _erpnext_item_details(
