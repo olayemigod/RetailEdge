@@ -117,6 +117,21 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 			self.assertIn("price_list", source, label)
 			self.assertIn("refreshAllItemPricing", source, label)
 
+	def test_sales_surfaces_sync_rate_editability_with_resolved_pos_policy(self):
+		surfaces = (
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimpleSalesInvoiceDialog.vue",
+			APP_ROOT / "public" / "js" / "make_sale" / "MakeSale.vue",
+			APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalQuotationDialog.vue",
+			APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSalesOrderDialog.vue",
+			APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSalesInvoiceDialog.vue",
+		)
+		for path in surfaces:
+			source = path.read_text(encoding="utf-8")
+			self.assertIn("applyRatePermission", source, path.name)
+			self.assertIn("allow_rate_change", source, path.name)
+			self.assertIn('column.fieldname === "rate"', source, path.name)
+			self.assertIn("read_only", source, path.name)
+
 	def test_server_creation_paths_revalidate_selected_price_list(self):
 		services = (
 			APP_ROOT / "guided_sales_invoice.py",
