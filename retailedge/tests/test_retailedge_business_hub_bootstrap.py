@@ -30,6 +30,10 @@ class RetailEdgeBusinessHubBootstrapTests(unittest.TestCase):
 		self.assertIn('global.retailedgeRegisterBusinessHubPage = registerPage', controller)
 		self.assertIn('global.retailedgeBootProductMenu = bootProductMenu', controller)
 
+	def test_business_hub_scoped_css_is_persistent_across_desk_history(self):
+		hooks = HOOKS.read_text(encoding="utf-8")
+		self.assertIn('"retailedge_business_hub.bundle.css"', hooks)
+
 
 if __name__ == "__main__":
 	unittest.main()

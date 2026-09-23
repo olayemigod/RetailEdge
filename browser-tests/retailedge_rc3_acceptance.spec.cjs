@@ -232,6 +232,16 @@ test("RC3 PR56 Back and Forward navigation restore the EdgeSuite shell without r
 		});
 		await expect(page.locator(".edge-app-shell .edge-sidebar").first()).toBeAttached();
 		await expect(page.locator(".home-intelligence-card")).toHaveCount(8);
+		await expect
+			.poll(() =>
+				page.locator(".home-intelligence-grid").evaluate((node) => getComputedStyle(node).display)
+			)
+			.toBe("grid");
+		await expect
+			.poll(() =>
+				page.locator(".home-attention-item").first().evaluate((node) => getComputedStyle(node).display)
+			)
+			.toBe("flex");
 
 		await page.goForward({ waitUntil: "domcontentloaded" }).catch(() => null);
 		await page.getByRole("heading", { name: "Action Centre", exact: true }).first().waitFor({
