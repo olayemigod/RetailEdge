@@ -477,8 +477,8 @@ export default {
 			this.applyRatePermission();
 			this.initialSnapshot = JSON.stringify(this.values);
 		},
-		applyRatePermission() {
-			const readOnly = this.formContext.capabilities?.can_override_rate === false;
+		applyRatePermission(pricing = this.formContext.pricing || {}) {
+			const readOnly = pricing?.allow_rate_change === false;
 			this.itemColumns = this.itemColumns.map((column) =>
 				column.fieldname === "rate" ? { ...column, read_only: readOnly ? 1 : 0 } : column
 			);
@@ -707,6 +707,7 @@ export default {
 				selected_price_list: selected,
 			});
 			this.formContext.pricing = pricing || {};
+			this.applyRatePermission(pricing || {});
 			if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || "";
 		},
 		async revalidateCarriedPricing() {
