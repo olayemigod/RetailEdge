@@ -233,12 +233,8 @@ test("RC3 Business Hub visual order, bounded cards and Sales Mix state remain st
 		await expect(cards.last()).toHaveClass(/hub-chart-card--scrollable/);
 
 		const salesMix = page.locator('[data-chart-key="sales_mix"]');
-		const unavailableState = salesMix.locator(".hub-chart-card__state");
-		if (await unavailableState.count()) {
-			await expect(unavailableState).toContainText("Unavailable");
-			await expect(unavailableState).toContainText(/permission|permitted/i);
-		} else {
-			const switcher = salesMix.locator(".hub-chart-card__view-switcher").first();
+		const switcher = salesMix.locator(".hub-chart-card__view-switcher").first();
+		if (await switcher.count()) {
 			await expect(switcher).toBeVisible();
 			const switcherTrigger = switcher.locator("button, [role='button'], [role='combobox']").first();
 			await expect(switcherTrigger).toBeVisible();
@@ -248,6 +244,10 @@ test("RC3 Business Hub visual order, bounded cards and Sales Mix state remain st
 			}
 			await page.getByRole("option", { name: "Brand", exact: true }).click();
 			await expect(salesMix.getByRole("heading", { name: "Sales by Brand", exact: true })).toBeVisible();
+		} else {
+			const unavailableState = salesMix.locator(".hub-chart-card__state");
+			await expect(unavailableState).toContainText("Unavailable");
+			await expect(unavailableState).toContainText(/permission|permitted/i);
 		}
 	} finally {
 		await context.close();
