@@ -48,6 +48,19 @@ function refreshPendingBusinessHubHandoff(wrapper) {
 	});
 }
 
+
+function bindBusinessHubHandoffRouteRefresh(wrapper) {
+	if (wrapper._retailedgeBusinessHubHandoffRouteRefresh) return;
+	const refresh = () => {
+		const route = frappe.get_route?.();
+		if (!Array.isArray(route) || String(route[0] || "") !== PAGE_ROUTE) return;
+		refreshPendingBusinessHubHandoff(wrapper);
+	};
+	wrapper._retailedgeBusinessHubHandoffRouteRefresh = refresh;
+	document.addEventListener("page-change", refresh);
+	frappe.router?.on?.("change", refresh);
+}
+
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	const bootLoading = document.createElement("div"); bootLoading.className = "edge-boot-loading p-6 text-center text-muted"; bootLoading.textContent = __(`Loading ${PAGE_TITLE}...`); wrapper.appendChild(bootLoading);
@@ -57,6 +70,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(RECEIVABLES_ASSET); if (typeof window.mountCustomerReceivablesPage !== "function") throw new Error("Customer Receivables bundle is unavailable.");
 		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-customer-receivables-root"; page.body.append(root); wrapper._retailedgeVueApp = await window.mountCustomerReceivablesPage(root);
 		wrapper._retailedgePageHasShown = true;
+		bindBusinessHubHandoffRouteRefresh(wrapper);
 	} catch (error) { bootLoading.remove(); renderLoadError(wrapper, error); }
 };
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
