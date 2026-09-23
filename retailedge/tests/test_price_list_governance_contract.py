@@ -94,6 +94,15 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 		invoice = (APP_ROOT / "professional_sales_invoice.py").read_text(encoding="utf-8")
 		self.assertIn("create_simple_sales_invoice_draft(values)", invoice)
 
+	def test_delivery_and_receipt_workflows_inherit_submitted_source_pricing(self):
+		delivery = (APP_ROOT / "professional_delivery.py").read_text(encoding="utf-8")
+		receipt = (APP_ROOT / "professional_purchase_receipt.py").read_text(encoding="utf-8")
+		self.assertIn("erpnext_make_delivery_note(source.name)", delivery)
+		self.assertIn("erpnext_make_delivery_note_from_invoice(source.name)", delivery)
+		self.assertNotIn("resolve_sales_item_pricing(", delivery)
+		self.assertIn("make_purchase_receipt(po.name)", receipt)
+		self.assertNotIn("resolve_purchase_item_pricing(", receipt)
+
 	def test_conversion_flows_do_not_reprice_accepted_source_documents(self):
 		order_dialog = (APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSalesOrderDialog.vue").read_text(encoding="utf-8")
 		invoice_dialog = (APP_ROOT / "public" / "js" / "professional_selling" / "ProfessionalSalesInvoiceDialog.vue").read_text(encoding="utf-8")
