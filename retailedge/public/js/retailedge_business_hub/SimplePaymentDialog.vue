@@ -327,7 +327,7 @@
 
 			<p class="guided-payment-hint">
 				<template v-if="isCustomerPayment">
-					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Standard Receive Customer supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance; complex allocations stay in Advanced ERPNext.
+					Only submitted Sales Invoices/Sales Orders with an amount available for payment are offered. Quick Receive Customer Payment supports one Sales Invoice receipt, one Sales Order advance, or an unallocated customer advance. Use Payment Management for complex settlement.
 				</template>
 				<template v-if="isSupplierPayment && !allowMultiReferenceSupplierPayment">
 					Only submitted Purchase Invoices with a positive outstanding balance are offered. Quick Pay Supplier supports one Purchase Invoice per payment. Use Supplier Payables for multi-invoice settlement.
@@ -669,7 +669,7 @@ export default {
 				throw new Error(
 					this.allowMultiReferenceSupplierPayment
 						? `Managed Supplier Settlement supports at most ${maxReferences} Purchase Invoices.`
-						: "Quick Payment supports one payable reference. Continue in the managed payment page for complex allocation."
+						: "Quick Payment supports one invoice or order reference. Continue in the managed payment page for complex allocation."
 				);
 			}
 			const referenceNames = requestedReferenceNames.slice(0, maxReferences);
@@ -811,7 +811,7 @@ export default {
 			if (populatedReferences.length > maxReferences) {
 				this.saveError = this.allowMultiReferenceSupplierPayment
 					? `Managed Supplier Settlement supports at most ${maxReferences} Purchase Invoices.`
-					: "Quick Payment supports one payable reference. Use Payment Management or Supplier Payables for complex allocation.";
+					: "Quick Payment supports one invoice or order reference. Use Payment Management or Supplier Payables for complex allocation.";
 				this.values.references = previousRows;
 				return;
 			}
