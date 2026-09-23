@@ -17,7 +17,11 @@ from retailedge.guided_entry_context import (
 	resolve_guided_default_branch,
 	validate_guided_branch_warehouse,
 )
-from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
+from retailedge.guided_pricing import (
+	resolve_price_list_context,
+	resolve_sales_item_pricing,
+	search_allowed_price_lists,
+)
 from retailedge.operating_context import get_operating_context, get_operational_branch_scope
 from retailedge.utils.settings import get_retailedge_settings
 
@@ -106,6 +110,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 			"posting_date": nowdate(),
 			"warehouse": warehouse,
 			"customer": "",
+			"price_list": pricing.get("price_list") or "",
 			"update_stock": 1,
 			"remarks": "",
 			"items": [{"item_code": "", "qty": 1, "rate": ""}],
@@ -148,6 +153,15 @@ def search_simple_sales_invoice_options(
 			page_length=limit,
 			reference_doctype=SALES_INVOICE_DOCTYPE,
 			link_fieldname="customer",
+		)
+	if fieldname == "price_list":
+		return search_allowed_price_lists(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			txt=txt or "",
+			limit=limit,
 		)
 	if fieldname == "item_code":
 		filters: dict[str, Any] = {"is_sales_item": 1}
@@ -213,6 +227,7 @@ def get_simple_sales_invoice_item_pricing(
 		warehouse=warehouse,
 		posting_date=values.get("posting_date") or nowdate(),
 		qty=flt(values.get("qty") or 1),
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=user,
 	)
 
@@ -242,8 +257,15 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
 
 	pricing_context = resolve_price_list_context(
-		mode="selling", company=company, branch=branch, party=customer, user=user
+		mode="selling",
+		company=company,
+		branch=branch,
+		party=customer,
+		selected_price_list=str(values.get("price_list") or "").strip(),
+		user=user,
 	)
+	if pricing_context.get("selection_required"):
+		frappe.throw(_("Choose a Selling Price List assigned to you for this Branch before saving."))
 
 	doc = frappe.new_doc(SALES_INVOICE_DOCTYPE)
 	doc.company = company
@@ -269,6 +291,7 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 			warehouse=warehouse,
 			posting_date=str(doc.posting_date),
 			qty=item["qty"],
+			selected_price_list=pricing_context.get("price_list") or "",
 			user=user,
 		)
 		resolved_rate = resolved.get("rate")
