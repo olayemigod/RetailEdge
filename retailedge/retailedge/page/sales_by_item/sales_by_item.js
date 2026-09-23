@@ -99,6 +99,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		root.className = "retailedge-sales-report-root";
 		page.body.append(root);
 		wrapper._retailedgeVueApp = await window.mountSalesReportingPage(root, { reportType: REPORT_TYPE });
+		wrapper._retailedgePageHasShown = true;
 		wrapper._retailedgeSalesReportMounted = true;
 	} catch (error) {
 		bootLoading.remove();
