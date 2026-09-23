@@ -11,6 +11,32 @@ SETTINGS_DOCTYPE = "RetailEdge Settings"
 
 SETTINGS_GROUPS = (
 	{
+		"key": "pricing-governance",
+		"label": "Price List Governance",
+		"description": "Control how selling and buying Price Lists are resolved and when Branch-assigned alternatives may be selected.",
+		"sections": (
+			{
+				"label": "Resolution Priority",
+				"fields": (
+					"enable_price_list_governance",
+					"selling_price_list_precedence",
+					"buying_price_list_precedence",
+				),
+			},
+			{
+				"label": "Switching Policy",
+				"fields": (
+					"enable_assigned_price_list_switching",
+					"allow_price_list_switch_from_party_default",
+					"allow_price_list_switch_from_pos_default",
+					"allow_price_list_switch_from_branch_default",
+					"allow_price_list_switch_from_user_default",
+					"allow_price_list_switch_from_system_default",
+				),
+			},
+		),
+	},
+	{
 		"key": "sales-operations",
 		"label": "Sales & Operations",
 		"description": "Sales entry, posting-date controls and cost visibility.",
