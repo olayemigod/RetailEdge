@@ -28,6 +28,9 @@ def test_cached_business_hub_destinations_reconsume_fresh_handoffs_on_page_show(
         assert "wrapper._retailedgePageHasShown" in source, relative
         mounted_tail = source.split("wrapper._retailedgeVueApp = await", 1)[1]
         assert "wrapper._retailedgePageHasShown = true;" in mounted_tail, relative
+        assert "bindBusinessHubHandoffRouteRefresh(wrapper);" in mounted_tail, relative
+        assert 'document.addEventListener("page-change", refresh)' in source, relative
+        assert 'frappe.router?.on?.("change", refresh)' in source, relative
         assert "component.fetchMetadata()" in source, relative
         assert "refreshPendingBusinessHubHandoff(wrapper);" in source, relative
 
