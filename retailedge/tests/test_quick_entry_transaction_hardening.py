@@ -143,6 +143,7 @@ def test_business_hub_primary_shortcuts_use_pages_not_large_modals():
 	assert 'addAction("new-sales-invoice", "Make Sale")' not in hub
 	assert 'addAction("record-purchase")' not in hub
 	assert 'addAction("transfer-stock")' not in hub
+	assert 'addAction("adjust-stock")' not in hub
 
 
 def test_quick_modals_warn_before_discard_and_continue_to_full_pages():
