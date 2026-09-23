@@ -119,14 +119,14 @@
    "label": "Pricing Defaults"
   },
   {
-   "description": "Branch default always takes precedence over user-selectable selling price lists.",
+   "description": "Branch Selling Price List used when its source is reached by the merchant's Price List Governance policy.",
    "fieldname": "default_selling_price_list",
    "fieldtype": "Link",
    "label": "Default Selling Price List",
    "options": "Price List"
   },
   {
-   "description": "Branch default always takes precedence over user-selectable buying price lists.",
+   "description": "Branch Buying Price List used when its source is reached by the merchant's Price List Governance policy.",
    "fieldname": "default_buying_price_list",
    "fieldtype": "Link",
    "label": "Default Buying Price List",
