@@ -38,6 +38,8 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["price_list"], "User Retail")
 		mock_context.assert_called_once_with("User Retail", mode="selling", source="user_default")
 
+	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": [], "restricted": False, "assignment_names": []})
+	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
 	@patch("retailedge.guided_pricing.frappe.db.get_value", return_value="NGN")
 	@patch("retailedge.guided_pricing._valid_price_list")
 	@patch("retailedge.guided_pricing._resolve_user_pos_profile")
@@ -50,6 +52,8 @@ class TestGuidedPricing(unittest.TestCase):
 		mock_pos,
 		mock_valid,
 		_mock_get_value,
+		_mock_branch_default,
+		_mock_assignment_scope,
 	):
 		mock_pos.return_value = frappe._dict(
 			{
