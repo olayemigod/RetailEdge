@@ -298,8 +298,9 @@ export default {
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
 		setCustomer(next) {
-			const changed = this.values.customer && this.values.customer !== next;
-			this.values.customer = next || "";
+			const value = next || "";
+			const changed = this.values.customer !== value;
+			this.values.customer = value;
 			this.loyaltyToken += 1;
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
@@ -342,7 +343,16 @@ export default {
 			this.values.branch = next || "";
 			this.values.warehouse = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
-			if (!this.values.branch || !this.values.company) return;
+			if (!this.values.company) return;
+			if (!this.values.branch) {
+				try {
+					await this.refreshPriceListContext();
+					this.refreshAllItemPricing();
+				} catch (error) {
+					this.saveError = errorMessage(error, "Unable to refresh Selling Price List.");
+				}
+				return;
+			}
 			const token = ++this.cascadeToken;
 			try {
 				const resolved = await resolveBranchWarehouse({ company: this.values.company, branch: this.values.branch, preference: "sales" });
