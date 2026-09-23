@@ -30,9 +30,14 @@ class RetailEdgeBusinessHubBootstrapTests(unittest.TestCase):
 		self.assertIn('global.retailedgeRegisterBusinessHubPage = registerPage', controller)
 		self.assertIn('global.retailedgeBootProductMenu = bootProductMenu', controller)
 
-	def test_business_hub_scoped_css_is_persistent_across_desk_history(self):
+	def test_business_hub_scoped_css_uses_hashed_asset_resolver_not_global_hook(self):
 		hooks = HOOKS.read_text(encoding="utf-8")
-		self.assertIn('"retailedge_business_hub.bundle.css"', hooks)
+		controller = CONTROLLER.read_text(encoding="utf-8")
+		self.assertNotIn('"retailedge_business_hub.bundle.css"', hooks)
+		self.assertIn('const PRODUCT_STYLE_ASSET = "retailedge_business_hub.bundle.css"', controller)
+		self.assertIn("frappe?.assets?.bundled_asset", controller)
+		self.assertIn("ensureStyleAsset(PRODUCT_STYLE_ASSET)", controller)
+		self.assertIn("retailedgeBusinessHubStyle", controller)
 
 
 if __name__ == "__main__":

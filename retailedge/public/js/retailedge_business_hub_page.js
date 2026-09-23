@@ -4,6 +4,7 @@
 	const PAGE_NAME = "retailedge-business-hub";
 	const RUNTIME_ASSET = "edgeui.bundle.js";
 	const PRODUCT_ASSET = "retailedge_business_hub.bundle.js";
+	const PRODUCT_STYLE_ASSET = "retailedge_business_hub.bundle.css";
 	const PRODUCT_MENU_ASSET = "retailedge_product_menu.bundle.js";
 	const ROUTE_BRIDGE_ASSET = "/assets/retailedge/js/retailedge_business_hub_route_bridge.js";
 	const LOAD_TIMEOUT_MS = 15000;
@@ -36,17 +37,19 @@
 		wrapper.on_page_show = function onPageShow(currentWrapper) {
 			ensurePage(currentWrapper);
 			bootProductMenu();
-			if (!currentWrapper._retailedgeBusinessHub) {
-				return bootBusinessHub(currentWrapper);
-			}
+			return ensureStyleAsset(PRODUCT_STYLE_ASSET).then(() => {
+				if (!currentWrapper._retailedgeBusinessHub) {
+					return bootBusinessHub(currentWrapper);
+				}
 
-			const component = getMountedComponent(currentWrapper);
-			if (component && typeof component.refreshContext === "function") {
-				return component.refreshContext().finally(() => {
-					enforceCreateVisibility(currentWrapper._retailedgeBusinessHubRoot?.[0]);
-				});
-			}
-			return undefined;
+				const component = getMountedComponent(currentWrapper);
+				if (component && typeof component.refreshContext === "function") {
+					return component.refreshContext().finally(() => {
+						enforceCreateVisibility(currentWrapper._retailedgeBusinessHubRoot?.[0]);
+					});
+				}
+				return undefined;
+			});
 		};
 
 		return true;
@@ -113,6 +116,7 @@
 				await requireAsset(RUNTIME_ASSET);
 			}
 			assertEdgeSuiteUIRuntime();
+			await ensureStyleAsset(PRODUCT_STYLE_ASSET);
 
 			if (typeof global.mountRetailEdgeBusinessHub !== "function") {
 				await requireAsset(PRODUCT_ASSET);
@@ -292,6 +296,41 @@
 			};
 
 			attemptRequire();
+		});
+	}
+
+	function ensureStyleAsset(asset) {
+		if (!global.document?.head) {
+			return Promise.reject(new Error(__("Business Hub stylesheet cannot load before the Desk document is ready.")));
+		}
+		const resolver = global.frappe?.assets?.bundled_asset;
+		const resolved = typeof resolver === "function" ? resolver.call(global.frappe.assets, asset) : asset;
+		const href = new URL(resolved, global.location?.origin || global.document.baseURI).toString();
+		const existing = Array.from(global.document.querySelectorAll('link[rel="stylesheet"]')).find((link) => {
+			try {
+				return new URL(link.href, global.document.baseURI).toString() === href;
+			} catch (_error) {
+				return false;
+			}
+		});
+		if (existing) return Promise.resolve(existing);
+
+		return new Promise((resolve, reject) => {
+			const link = global.document.createElement("link");
+			link.rel = "stylesheet";
+			link.type = "text/css";
+			link.href = href;
+			link.dataset.retailedgeBusinessHubStyle = "1";
+			link.addEventListener("load", () => resolve(link), { once: true });
+			link.addEventListener(
+				"error",
+				() => {
+					link.remove();
+					reject(new Error(__("Business Hub stylesheet failed to load: {0}", [resolved])));
+				},
+				{ once: true }
+			);
+			global.document.head.appendChild(link);
 		});
 	}
 

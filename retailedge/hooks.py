@@ -29,10 +29,6 @@ add_to_apps_screen = [
 
 # include js, css files in header of desk.html
 app_include_css = [
-	# Keep the Business Hub Vue SFC stylesheet persistent across Frappe Desk
-	# history navigation. The controller JS remains lazy-loaded, but browser Back
-	# must not restore an already-mounted Hub after its route CSS has disappeared.
-	"retailedge_business_hub.bundle.css",
 	"/assets/retailedge/css/retailedge_cards.css",
 	"/assets/retailedge/css/retailedge_workspace_home.css",
 	"/assets/retailedge/css/retailedge_guided_create_menu.css",
