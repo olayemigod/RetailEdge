@@ -158,9 +158,13 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 			backend = backend_path.read_text(encoding="utf-8")
 			self.assertIn("priceNewItem(index)", vue, vue_path.name)
 			self.assertIn("PRICING_METHOD", vue, vue_path.name)
-			self.assertIn(price_field, vue, vue_path.name)
 			self.assertIn(price_field, backend, backend_path.name)
-			self.assertIn("selected_price_list", backend, backend_path.name)
+			self.assertIn("document_price_list", backend, backend_path.name)
+			self.assertNotIn("price_list: this.preview.", vue, vue_path.name)
+
+		pricing = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
+		self.assertIn("def _document_price_list_context(", pricing)
+		self.assertIn('"source": "document_price_list"', pricing)
 
 	def test_delivery_and_receipt_workflows_inherit_submitted_source_pricing(self):
 		delivery = (APP_ROOT / "professional_delivery.py").read_text(encoding="utf-8")
