@@ -135,6 +135,33 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 		invoice = (APP_ROOT / "professional_sales_invoice.py").read_text(encoding="utf-8")
 		self.assertIn("create_simple_sales_invoice_draft(values)", invoice)
 
+	def test_completion_editors_auto_price_new_items_from_document_price_list(self):
+		contracts = (
+			(
+				APP_ROOT / "public" / "js" / "professional_selling" / "StandardSellingCompletionDialog.vue",
+				APP_ROOT / "standard_selling_completion.py",
+				"selling_price_list",
+			),
+			(
+				APP_ROOT / "public" / "js" / "professional_selling" / "StandardSalesInvoiceCompletionDialog.vue",
+				APP_ROOT / "standard_sales_invoice_completion.py",
+				"selling_price_list",
+			),
+			(
+				APP_ROOT / "public" / "js" / "professional_purchasing" / "StandardPurchaseInvoiceCompletionDialog.vue",
+				APP_ROOT / "standard_purchase_invoice_completion.py",
+				"buying_price_list",
+			),
+		)
+		for vue_path, backend_path, price_field in contracts:
+			vue = vue_path.read_text(encoding="utf-8")
+			backend = backend_path.read_text(encoding="utf-8")
+			self.assertIn("priceNewItem(index)", vue, vue_path.name)
+			self.assertIn("PRICING_METHOD", vue, vue_path.name)
+			self.assertIn(price_field, vue, vue_path.name)
+			self.assertIn(price_field, backend, backend_path.name)
+			self.assertIn("selected_price_list", backend, backend_path.name)
+
 	def test_delivery_and_receipt_workflows_inherit_submitted_source_pricing(self):
 		delivery = (APP_ROOT / "professional_delivery.py").read_text(encoding="utf-8")
 		receipt = (APP_ROOT / "professional_purchase_receipt.py").read_text(encoding="utf-8")
