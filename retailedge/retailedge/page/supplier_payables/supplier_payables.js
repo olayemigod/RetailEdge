@@ -57,9 +57,15 @@ function bindBusinessHubHandoffRouteRefresh(wrapper) {
 		if (!Array.isArray(route) || String(route[0] || "") !== PAGE_ROUTE) return;
 		refreshPendingBusinessHubHandoff(wrapper);
 	};
+	const refreshFromHandoff = (event) => {
+		if (String(event?.detail?.target || "") !== PAGE_ROUTE) return;
+		refreshPendingBusinessHubHandoff(wrapper);
+	};
 	wrapper._retailedgeBusinessHubHandoffRouteRefresh = refresh;
+	wrapper._retailedgeBusinessHubHandoffEventRefresh = refreshFromHandoff;
 	document.addEventListener("page-change", refresh);
 	frappe.router?.on?.("change", refresh);
+	window.addEventListener("retailedge:business-hub-handoff", refreshFromHandoff);
 }
 
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
