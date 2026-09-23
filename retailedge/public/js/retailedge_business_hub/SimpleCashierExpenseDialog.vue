@@ -201,6 +201,7 @@ export default {
 			formContext: {},
 			businessContext: {},
 			values: emptyValues(),
+			initialValuesSnapshot: "",
 		};
 	},
 	computed: {
@@ -219,6 +220,9 @@ export default {
 		projectedCash() {
 			if (!this.businessContext.opening_shift) return 0;
 			return (Number(this.businessContext.available_cash) || 0) - (Number(this.values.amount) || 0);
+		},
+		hasUnsavedChanges() {
+			return Boolean(this.initialValuesSnapshot && JSON.stringify(this.values) !== this.initialValuesSnapshot);
 		},
 	},
 	watch: {
@@ -239,6 +243,7 @@ export default {
 				this.formContext = data || {};
 				this.businessContext = data.context || {};
 				this.values = { ...emptyValues(), ...(data.defaults || {}) };
+				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Cashier Expense.");
 			} finally {
@@ -247,11 +252,20 @@ export default {
 		},
 		requestClose() {
 			if (this.saving) return;
-			this.$emit("close");
+			if (!this.hasUnsavedChanges) {
+				this.$emit("close");
+				return;
+			}
+			frappe.confirm("Discard the unsaved Cashier Expense changes?", () => this.$emit("close"));
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
-			this.$emit("open-native", "RetailEdge Cashier Expense");
+			const openNative = () => this.$emit("open-native", "RetailEdge Cashier Expense");
+			if (!this.hasUnsavedChanges) {
+				openNative();
+				return;
+			}
+			frappe.confirm("Discard the unsaved Cashier Expense changes and open the full form?", openNative);
 		},
 		async searchCategory(query) {
 			const results = await callMethod(SEARCH_METHOD, {
