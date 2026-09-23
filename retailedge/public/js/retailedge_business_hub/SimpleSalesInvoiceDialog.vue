@@ -446,7 +446,7 @@ export default {
 			this.pricingCache.clear();
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-				this.refreshPriceListContext({ preserveSelection: true })
+				this.refreshPriceListContext()
 					.then(() => this.refreshAllItemPricing())
 					.catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Selling Price List."); });
 			}
