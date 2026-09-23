@@ -573,7 +573,8 @@ export default {
 					this.values.branch = resolved.branch || this.values.branch || "";
 					this.values.warehouse = resolved.warehouse || this.values.warehouse || "";
 				}
-				this.handoffNotice = "Quick Sale data was carried into Make Sale and its current Branch / Stock Location access was revalidated.";
+				await this.revalidateCarriedPricing();
+				this.handoffNotice = "Quick Sale data was carried into Make Sale and its current Branch, Stock Location and Price List access were revalidated.";
 			} catch (error) {
 				this.values.branch = "";
 				this.values.warehouse = "";
@@ -619,7 +620,8 @@ export default {
 					this.values.branch = resolved.branch || this.values.branch || "";
 					this.values.warehouse = resolved.warehouse || this.values.warehouse || "";
 				}
-				this.handoffNotice = "Recovered unsaved Make Sale work and revalidated its current Branch / Stock Location access.";
+				await this.revalidateCarriedPricing();
+				this.handoffNotice = "Recovered unsaved Make Sale work and revalidated its current Branch, Stock Location and Price List access.";
 			} catch (error) {
 				this.values.branch = "";
 				this.values.warehouse = "";
@@ -706,6 +708,18 @@ export default {
 			});
 			this.formContext.pricing = pricing || {};
 			if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || "";
+		},
+		async revalidateCarriedPricing() {
+			const previous = this.values.price_list || "";
+			try {
+				await this.refreshPriceListContext({ preserveSelection: Boolean(previous) });
+			} catch (_error) {
+				await this.refreshPriceListContext();
+			}
+			if ((this.values.price_list || "") === previous) return;
+			this.pricingCache.clear();
+			this.values.items = (this.values.items || []).map((row) => row?.item_code ? { ...row, rate: "" } : { ...row });
+			this.refreshAllItemPricing();
 		},
 		async setPriceList(next) {
 			if (this.formContext.pricing?.locked) return;
