@@ -269,16 +269,10 @@ test("RC3 repeated Business Hub drill replaces cached destination filters", asyn
 						view_mode: "consolidated",
 						include_unposted_cashier_expenses: 0,
 					};
-					window.__retailedgeBusinessHubRouteHandoff = {
-						target,
-						filters,
-						createdAt: Date.now(),
-					};
-					frappe.route_options = {
-						...filters,
-						retailedge_business_hub_handoff: 1,
-						retailedge_business_hub_target: target,
-					};
+					if (typeof window.retailedgeSetBusinessHubRouteHandoff !== "function") {
+						throw new Error("Business Hub route handoff helper is unavailable.");
+					}
+					window.retailedgeSetBusinessHubRouteHandoff(`/app/${target}`, filters);
 					frappe.set_route(target);
 				},
 				{ fromDateValue: fromDate, toDateValue: toDate }
