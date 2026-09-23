@@ -538,7 +538,8 @@ def _normalise_price_lists(value) -> list[str]:
 	result: list[str] = []
 	seen: set[str] = set()
 	for row in value:
-		name = str(row.get("price_list") if isinstance(row, dict) else row or "").strip()
+		raw_name = row.get("price_list") if isinstance(row, dict) else getattr(row, "price_list", row)
+		name = str(raw_name or "").strip()
 		if not name or name in seen:
 			continue
 		seen.add(name)
