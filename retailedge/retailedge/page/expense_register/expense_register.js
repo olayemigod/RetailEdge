@@ -98,6 +98,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		root.className = "retailedge-expense-register-root";
 		page.body.append(root);
 		wrapper._retailedgeVueApp = await window.mountExpenseRegister(root);
+		wrapper._retailedgePageHasShown = true;
 		wrapper._retailedgeExpenseRegisterMounted = true;
 	} catch (error) {
 		bootLoading.remove();
