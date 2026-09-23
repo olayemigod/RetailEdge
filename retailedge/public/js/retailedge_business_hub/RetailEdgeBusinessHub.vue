@@ -528,7 +528,14 @@ function setBusinessHubRouteHandoff(route, filters = {}) {
 		retailedge_business_hub_handoff: 1,
 		retailedge_business_hub_target: target,
 	};
+	window.dispatchEvent?.(
+		new CustomEvent("retailedge:business-hub-handoff", {
+			detail: { target, filters: { ...cleanFilters } },
+		})
+	);
 }
+
+window.retailedgeSetBusinessHubRouteHandoff = setBusinessHubRouteHandoff;
 
 window.retailedgeConsumeBusinessHubRouteOptions = function consumeBusinessHubRouteOptions(target) {
 	const handoff = window.__retailedgeBusinessHubRouteHandoff;
