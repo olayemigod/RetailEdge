@@ -61,6 +61,19 @@ function refreshPendingBusinessHubHandoff(wrapper) {
 	});
 }
 
+
+function bindBusinessHubHandoffRouteRefresh(wrapper) {
+	if (wrapper._retailedgeBusinessHubHandoffRouteRefresh) return;
+	const refresh = () => {
+		const route = frappe.get_route?.();
+		if (!Array.isArray(route) || String(route[0] || "") !== PAGE_ROUTE) return;
+		refreshPendingBusinessHubHandoff(wrapper);
+	};
+	wrapper._retailedgeBusinessHubHandoffRouteRefresh = refresh;
+	document.addEventListener("page-change", refresh);
+	frappe.router?.on?.("change", refresh);
+}
+
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	const bootLoading = document.createElement("div");
@@ -81,6 +94,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		page.body.append(root);
 		wrapper._retailedgeVueApp = await window.mountBranchPerformanceDashboard(root);
 		wrapper._retailedgePageHasShown = true;
+		bindBusinessHubHandoffRouteRefresh(wrapper);
 		wrapper._retailedgeBranchPerformanceMounted = true;
 	} catch (error) {
 		bootLoading.remove();
