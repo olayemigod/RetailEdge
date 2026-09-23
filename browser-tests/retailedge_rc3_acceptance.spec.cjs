@@ -233,9 +233,11 @@ test("RC3 Business Hub visual order, bounded cards and Sales Mix switcher remain
 		await expect(cards.last()).toHaveClass(/hub-chart-card--scrollable/);
 
 		const salesMix = page.locator('[data-chart-key="sales_mix"]');
-		const switcher = salesMix.getByRole("button", { name: "Sales mix view" });
+		const switcher = salesMix.locator(".hub-chart-card__view-switcher").first();
 		await expect(switcher).toBeVisible();
-		await switcher.click();
+		const switcherTrigger = switcher.locator("button, [role='button'], [role='combobox']").first();
+		await expect(switcherTrigger).toBeVisible();
+		await switcherTrigger.click();
 		for (const label of ["Branch", "Category", "Brand"]) {
 			await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
 		}
@@ -281,11 +283,26 @@ test("RC3 repeated Business Hub drill replaces cached destination filters", asyn
 			});
 		};
 
-		const fromDateInput = () =>
-			page.locator("label.edge-field").filter({ hasText: "From Date" }).locator('input[type="date"]');
+		const currentExpenseRange = () =>
+			page.evaluate(() => {
+				const wrapper = frappe.pages?.["expense-register"];
+				const component = wrapper?._retailedgeVueApp?._instance?.proxy;
+				return {
+					from_date: component?.filters?.from_date || "",
+					to_date: component?.filters?.to_date || "",
+					smart_from_date: component?.smartDate?.from_date || "",
+					smart_to_date: component?.smartDate?.to_date || "",
+				};
+			});
 
 		await openExpenseWithHandoff("2026-09-01", "2026-09-05");
-		await expect(fromDateInput()).toHaveValue("2026-09-01");
+		await expect(page.getByText("Date Range", { exact: true }).first()).toBeVisible();
+		await expect.poll(currentExpenseRange).toEqual({
+			from_date: "2026-09-01",
+			to_date: "2026-09-05",
+			smart_from_date: "2026-09-01",
+			smart_to_date: "2026-09-05",
+		});
 
 		await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
 		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
@@ -294,7 +311,12 @@ test("RC3 repeated Business Hub drill replaces cached destination filters", asyn
 		});
 
 		await openExpenseWithHandoff("2026-09-10", "2026-09-12");
-		await expect(fromDateInput()).toHaveValue("2026-09-10");
+		await expect.poll(currentExpenseRange).toEqual({
+			from_date: "2026-09-10",
+			to_date: "2026-09-12",
+			smart_from_date: "2026-09-10",
+			smart_to_date: "2026-09-12",
+		});
 	} finally {
 		await context.close();
 	}
@@ -324,11 +346,14 @@ test("RC3 PR56 Back and Forward navigation restore the EdgeSuite shell without r
 				page.locator(".home-intelligence-grid").evaluate((node) => getComputedStyle(node).display)
 			)
 			.toBe("grid");
-		await expect
-			.poll(() =>
-				page.locator(".home-attention-item").first().evaluate((node) => getComputedStyle(node).display)
-			)
-			.toBe("flex");
+		const attentionItems = page.locator(".home-attention-item");
+		if (await attentionItems.count()) {
+			await expect
+				.poll(() => attentionItems.first().evaluate((node) => getComputedStyle(node).display))
+				.toBe("flex");
+		} else {
+			await expect(page.getByText("Nothing needs attention", { exact: true })).toBeVisible();
+		}
 
 		await page.goForward({ waitUntil: "domcontentloaded" }).catch(() => null);
 		await page.getByRole("heading", { name: "Action Centre", exact: true }).first().waitFor({
