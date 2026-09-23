@@ -42,7 +42,7 @@ function refreshPendingBusinessHubHandoff(wrapper) {
 		&& Date.now() - Number(handoff.createdAt || 0) <= 60_000
 	);
 	if (!routeOptionMatches && !handoffMatches) return;
-	const component = wrapper._retailedgeVueApp?._instance?.proxy;
+	const component = wrapper._retailedgeVueComponent || wrapper._retailedgeVueApp?._instance?.proxy;
 	if (!component || typeof component.fetchMetadata !== "function") return;
 	Promise.resolve(component.fetchMetadata()).catch((error) => {
 		console.error(`[RetailEdge ${PAGE_TITLE}] Business Hub handoff refresh failed`, error);
@@ -70,6 +70,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(EDGEUI_ASSET); if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(PURCHASE_REPORTING_ASSET); if (typeof window.mountPurchaseReportingPage !== "function") throw new Error("Purchase reporting bundle is unavailable.");
 		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-purchase-report-root"; page.body.append(root); wrapper._retailedgeVueApp = await window.mountPurchaseReportingPage(root, { reportType: REPORT_TYPE });
+		wrapper._retailedgeVueComponent = root.__vue_app__?._instance?.proxy || wrapper._retailedgeVueApp?._instance?.proxy || null;
 		wrapper._retailedgePageHasShown = true;
 		bindBusinessHubHandoffRouteRefresh(wrapper);
 	} catch (error) { bootLoading.remove(); renderLoadError(wrapper, error); }
