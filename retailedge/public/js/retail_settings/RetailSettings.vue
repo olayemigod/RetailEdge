@@ -63,7 +63,7 @@
 							</div>
 							<div class="settings-fields">
 								<template v-for="field in section.fields" :key="field.fieldname">
-									<div v-if="fieldVisible(field)" class="settings-field" :class="{ 'settings-field--wide': ['Small Text', 'RoleList'].includes(field.fieldtype) }">
+									<div v-if="fieldVisible(field)" class="settings-field" :class="{ 'settings-field--wide': ['Small Text', 'RoleList', 'PriorityList'].includes(field.fieldtype) }">
 										<label v-if="field.fieldtype === 'Check'" class="settings-check">
 											<input
 												type="checkbox"
@@ -95,6 +95,23 @@
 												@select="addRole(field.fieldname, $event)"
 												@clear="roleDraft[field.fieldname] = ''"
 											/>
+										</div>
+
+										<div v-else-if="field.fieldtype === 'PriorityList'" class="priority-list-field">
+											<span class="settings-label">{{ field.label }}</span>
+											<small v-if="field.description">{{ field.description }}</small>
+											<div class="priority-list">
+												<div v-for="(source, index) in values[field.fieldname] || []" :key="source" class="priority-row">
+													<div class="priority-copy">
+														<strong>{{ priorityOption(field, source).label }}</strong>
+														<small>{{ priorityOption(field, source).description }}</small>
+													</div>
+													<div class="priority-actions">
+														<button type="button" class="edge-button edge-button--small" :disabled="!canWrite || index === 0" :aria-label="'Move ' + priorityOption(field, source).label + ' up'" @click="movePriority(field.fieldname, index, -1)">↑</button>
+														<button type="button" class="edge-button edge-button--small" :disabled="!canWrite || index === (values[field.fieldname] || []).length - 1" :aria-label="'Move ' + priorityOption(field, source).label + ' down'" @click="movePriority(field.fieldname, index, 1)">↓</button>
+													</div>
+												</div>
+											</div>
 										</div>
 
 										<div v-else-if="field.read_only" class="settings-readonly">
@@ -277,6 +294,18 @@ export default {
 			this.values[fieldname] = (this.values[fieldname] || []).filter((item) => item !== role);
 			this.dirty = true;
 		},
+		priorityOption(field, source) {
+			return (field.options || []).find((option) => option.value === source) || { value: source, label: source, description: "" };
+		},
+		movePriority(fieldname, index, direction) {
+			if (!this.canWrite) return;
+			const values = [...(this.values[fieldname] || [])];
+			const target = index + direction;
+			if (index < 0 || target < 0 || index >= values.length || target >= values.length) return;
+			[values[index], values[target]] = [values[target], values[index]];
+			this.values[fieldname] = values;
+			this.dirty = true;
+		},
 		linkSearcher(doctype) {
 			return async (txt) => {
 				if (!doctype) return [];
@@ -330,8 +359,13 @@ export default {
 .settings-field--wide { grid-column:1 / -1; }
 .settings-check { display:flex; gap:.75rem; align-items:flex-start; padding:.85rem; border:1px solid var(--edge-border, var(--border-color)); border-radius:.65rem; background:var(--edge-surface, var(--card-bg)); }
 .settings-check input { margin-top:.2rem; width:1.05rem; height:1.05rem; }
-.settings-check span, .settings-readonly, .settings-input-wrap, .role-list-field { display:grid; gap:.3rem; }
-.settings-check small, .settings-input-wrap small, .settings-readonly small, .role-list-field small { color:var(--edge-text-muted, #667085); line-height:1.45; }
+.settings-check span, .settings-readonly, .settings-input-wrap, .role-list-field, .priority-list-field { display:grid; gap:.3rem; }
+.settings-check small, .settings-input-wrap small, .settings-readonly small, .role-list-field small, .priority-list-field small { color:var(--edge-text-muted, #667085); line-height:1.45; }
+.priority-list { display:grid; gap:.5rem; margin-top:.35rem; }
+.priority-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.75rem .85rem; border:1px solid var(--edge-border, var(--border-color)); border-radius:.65rem; background:var(--edge-surface, var(--card-bg)); }
+.priority-copy { display:grid; gap:.15rem; min-width:0; }
+.priority-copy strong { font-size:.88rem; }
+.priority-actions { display:flex; gap:.35rem; flex:0 0 auto; }
 .settings-label, .settings-input-wrap > span { font-weight:600; font-size:.82rem; }
 .settings-readonly { padding:.8rem; border:1px solid var(--edge-border, var(--border-color)); border-radius:.65rem; }
 .role-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin:.3rem 0; }
