@@ -65,10 +65,11 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		self.assertTrue(_ranges_overlap(date(2026, 1, 1), date(2026, 6, 30), date(2026, 6, 1), None))
 		self.assertFalse(_ranges_overlap(date(2026, 1, 1), date(2026, 6, 30), date(2026, 7, 1), None))
 
+	@patch("retailedge.branch_assignment._attach_assignment_price_lists", side_effect=lambda rows: rows)
 	@patch("retailedge.branch_assignment._has_assignment_doctype", return_value=True)
-	@patch("retailedge.branch_assignment.frappe.get_list")
-	def test_active_assignment_lookup_uses_effective_dates_not_saved_status(self, mock_get_list, _mock_doctype):
-		mock_get_list.return_value = [
+	@patch("retailedge.branch_assignment.frappe.get_all")
+	def test_active_assignment_lookup_uses_effective_dates_not_saved_status(self, mock_get_all, _mock_doctype, _mock_attach):
+		mock_get_all.return_value = [
 			frappe._dict(
 				name="RE-BA-1",
 				user="user@example.com",
@@ -83,7 +84,7 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		]
 		rows = get_active_branch_assignments(user="user@example.com", company="Company A", as_of="2026-08-27")
 		self.assertEqual([row["branch"] for row in rows], ["Branch B"])
-		filters = mock_get_list.call_args.kwargs["filters"]
+		filters = mock_get_all.call_args.kwargs["filters"]
 		self.assertNotIn("status", filters)
 		self.assertEqual(filters["effective_from"], ["<=", date(2026, 8, 27)])
 
