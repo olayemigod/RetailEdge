@@ -177,7 +177,8 @@ export default {
 					this.values.branch = r.branch || this.values.branch || "";
 					this.values.warehouse = r.warehouse || this.values.warehouse || "";
 				}
-				this.handoffNotice = "Quick Purchase data was carried into Record Purchase and its current Branch / Receiving Stock Location access was revalidated.";
+				await this.revalidateCarriedPricing();
+				this.handoffNotice = "Quick Purchase data was carried into Record Purchase and its current Branch, Receiving Stock Location and Price List access were revalidated.";
 			} catch (error) {
 				this.values.branch = ""; this.values.warehouse = "";
 				this.saveError = errorMessage(error, "The carried Branch or Receiving Stock Location is no longer available. Choose the current transaction context before saving.");
@@ -197,7 +198,8 @@ export default {
 					this.values.branch = r.branch || this.values.branch || "";
 					this.values.warehouse = r.warehouse || this.values.warehouse || "";
 				}
-				this.handoffNotice = "Recovered unsaved purchase work and revalidated its current Branch / Receiving Stock Location access.";
+				await this.revalidateCarriedPricing();
+				this.handoffNotice = "Recovered unsaved purchase work and revalidated its current Branch, Receiving Stock Location and Price List access.";
 			} catch (error) {
 				this.values.branch = ""; this.values.warehouse = "";
 				this.saveError = errorMessage(error, "The recovered Branch or Receiving Stock Location is no longer available. Choose the current transaction context before saving.");
@@ -211,6 +213,7 @@ export default {
 		async searchOptions(fieldname, query) { const rows = await callMethod(SEARCH_METHOD, { fieldname, txt: query || "", values: { company: this.values.company, branch: this.values.branch, warehouse: this.values.warehouse, supplier: this.values.supplier, price_list: this.values.price_list } }); return Array.isArray(rows) ? rows : []; },
 		searchSupplier(query) { return this.searchOptions("supplier", query); }, searchBranch(query) { return this.searchOptions("branch", query); }, searchWarehouse(query) { return this.searchOptions("warehouse", query); }, searchPriceList(query) { return this.searchOptions("price_list", query); },
 		async refreshPriceListContext({ preserveSelection = false } = {}) { if (!this.values.company) return; const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "buying", company: this.values.company, branch: this.values.branch || "", party: this.values.supplier || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" }); this.formContext.pricing = pricing || {}; if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || ""; },
+		async revalidateCarriedPricing() { const previous = this.values.price_list || ""; try { await this.refreshPriceListContext({ preserveSelection: Boolean(previous) }); } catch (_error) { await this.refreshPriceListContext(); } if ((this.values.price_list || "") === previous) return; this.pricingCache.clear(); this.values.items = (this.values.items || []).map((row) => row?.item_code ? { ...row, rate: "" } : { ...row }); this.refreshAllItemPricing(); },
 		async setPriceList(next) { if (this.formContext.pricing?.locked) return; this.values.price_list = next || ""; this.pricingCache.clear(); try { await this.refreshPriceListContext({ preserveSelection: true }); this.refreshAllItemPricing(); } catch (error) { this.values.price_list = ""; this.saveError = errorMessage(error, "Unable to use the selected Buying Price List."); } },
 		searchLineLink(column, query) { return column?.fieldname === "item_code" ? this.searchOptions("item_code", query) : Promise.resolve([]); },
 		createSupplier(query) { return quickCreateSupplier(query); }, canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; }, createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); }, itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
