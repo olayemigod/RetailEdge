@@ -69,7 +69,8 @@ function mountStockPosition(target) {
 	if (!target) throw new Error("Stock Position mount target is required.");
 	registerStockPositionProvider(window);
 	const app = edgeUI.createEdgeApp(StockPositionReport);
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 
