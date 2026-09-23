@@ -55,18 +55,21 @@ def test_document_output_page_accepts_sales_accounts_and_purchasing_personas():
 
 
 
-def test_professional_purchasing_accepts_retailedge_manager_personas():
+def test_professional_purchasing_keeps_purchase_authority_role_scoped():
 	roles = _roles("retailedge/page/professional_purchasing/professional_purchasing.json")
 	for role in (
 		"System Manager",
-		"RetailEdge Manager",
-		"RetailEdgeManager",
-		"RetailEdge Branch Manager",
-		"RetailEdgeBranchManager",
 		"Purchase User",
 		"Purchase Manager",
 		"Accounts User",
 		"Accounts Manager",
 	):
 		assert role in roles
+	for role in (
+		"RetailEdge Manager",
+		"RetailEdgeManager",
+		"RetailEdge Branch Manager",
+		"RetailEdgeBranchManager",
+	):
+		assert role not in roles
 
