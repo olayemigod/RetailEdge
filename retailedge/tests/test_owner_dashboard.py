@@ -32,7 +32,7 @@ class TestOwnerDashboard(unittest.TestCase):
 
 	def test_headline_summary_uses_source_cards_and_respects_hidden_stock_value(self):
 		sections = {
-			"sales": {"available": True, "summary": [{"label": "Net Invoiced", "value": 5000, "datatype": "Currency"}]},
+			"sales": {"available": True, "summary": [{"label": "Net Sales", "value": 4600, "datatype": "Currency"}, {"label": "Net Invoiced", "value": 5000, "datatype": "Currency"}]},
 			"expenses": {"available": True, "summary": [{"label": "Posted Expenses", "value": 900, "type": "Currency"}]},
 			"receivables": {"available": True, "summary": [{"label": "Total Receivables", "value": 1200, "datatype": "Currency"}]},
 			"payables": {"available": True, "summary": [{"label": "Total Payables", "value": 700, "datatype": "Currency"}]},

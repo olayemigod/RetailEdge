@@ -16,4 +16,9 @@ Invoice-cohort collection rate and days-to-full-payment are deliberately unavail
 
 ## Shared dependency
 
-Requires EdgeSuite UI draft PR #25 (`agent/signature-financial-dashboard-fd1`) or an accepted release containing `EdgeFinancialDashboard`.
+Requires EdgeSuite UI draft PR #25 (`agent/signature-financial-dashboard-fd1`, restacked head `3e2ddfe8371a1677cde464a32dbb2acd7f682928`) or an accepted release containing `EdgeFinancialDashboard`.
+
+
+## Business Hub alignment
+
+The existing Sales Invoice Register now exposes both **Net Sales** (tax-exclusive `base_net_total`) and **Net Invoiced** (tax-inclusive `base_grand_total`). Owner/Business Hub financial headlines use Net Sales; Net Invoiced remains separately labelled. The lightweight Business Hub sales trend and Branch mix now aggregate `base_net_total`, so a visual labelled Net Sales no longer uses tax-inclusive invoice totals.

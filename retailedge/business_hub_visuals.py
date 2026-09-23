@@ -223,7 +223,7 @@ def _sales_trend(
 		by_key[key]["net_sales"] += flt(source.get("net_sales"))
 		by_key[key]["transactions"] += flt(source.get("transactions"))
 	return {
-		"description": _("Net invoiced sales over the selected period."),
+		"description": _("Tax-exclusive Net Sales over the selected period."),
 		"chart_type": "line",
 		"currency": currency,
 		"granularity": granularity,
@@ -275,10 +275,10 @@ def _sales_mix(
 		"branch": _sales_mix_view(
 			title=_("Sales by Branch"),
 			description=(
-				_("Net invoiced sales for the current Branch.")
+				_("Tax-exclusive Net Sales for the current Branch.")
 				if branch
 				else (
-					_("Top Branch contributions to company net invoiced sales.")
+					_("Top Branch contributions to company tax-exclusive Net Sales.")
 					if sales_dataset.get("branch_mix_supported")
 					else _("Sales Invoice Branch attribution is unavailable for this Company.")
 				)

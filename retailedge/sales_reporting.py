@@ -289,7 +289,7 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 		fields=[
 			"posting_date",
 			"is_return",
-			{"SUM": "base_grand_total", "as": "grand_total"},
+			{"SUM": "base_net_total", "as": "net_total"},
 			{"COUNT": "name", "as": "transactions"},
 		],
 		group_by="posting_date, is_return",
@@ -299,7 +299,7 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 	trend = [
 		{
 			"posting_date": row.posting_date,
-			"net_sales": -abs(flt(row.grand_total)) if cint(row.is_return) else flt(row.grand_total),
+			"net_sales": -abs(flt(row.net_total)) if cint(row.is_return) else flt(row.net_total),
 			"transactions": cint(row.transactions),
 		}
 		for row in trend_rows
@@ -313,7 +313,7 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 			fields=[
 				branch_field,
 				"is_return",
-				{"SUM": "base_grand_total", "as": "grand_total"},
+				{"SUM": "base_net_total", "as": "net_total"},
 			],
 			group_by=f"{branch_field}, is_return",
 			order_by=f"{branch_field} asc",
@@ -322,7 +322,7 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 		aggregated: dict[str, float] = defaultdict(float)
 		for row in mix_rows:
 			label = str(row.get(branch_field) or _("Unattributed")).strip() or _("Unattributed")
-			value = -abs(flt(row.grand_total)) if cint(row.is_return) else flt(row.grand_total)
+			value = -abs(flt(row.net_total)) if cint(row.is_return) else flt(row.net_total)
 			aggregated[label] += value
 		branch_mix = [
 			{"branch": label, "net_sales": value}
@@ -515,6 +515,11 @@ def _build_sales_invoice_register_dataset(filters: frappe._dict) -> dict[str, An
 
 	returns = [row for row in rows if row.get("invoice_type") == _("Return")]
 	summary = [
+		{
+			"label": _("Net Sales"),
+			"value": sum(flt(row["net_amount"]) for row in rows),
+			"datatype": "Currency",
+		},
 		{
 			"label": _("Net Invoiced"),
 			"value": sum(flt(row["grand_total"]) for row in rows),

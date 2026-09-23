@@ -780,7 +780,7 @@ def _today_section(owner: dict[str, Any]) -> dict[str, Any]:
 	sections = (owner.get("payload") or {}).get("sections") or {}
 	summary: list[dict[str, Any]] = []
 	for section_key, metric, label in (
-		("sales", "Net Invoiced", _("Sales")),
+		("sales", "Net Sales", _("Sales")),
 		("cash", "Money In", _("Money In")),
 		("cash", "Money Out", _("Money Out")),
 		("expenses", "Posted Expenses", _("Expenses")),

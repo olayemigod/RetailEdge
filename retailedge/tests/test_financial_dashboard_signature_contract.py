@@ -116,3 +116,20 @@ def test_financial_dashboard_contains_no_accounting_mutation():
         "make_gl_entries",
     ):
         assert forbidden not in provider
+
+
+def test_business_hub_and_financial_dashboard_share_tax_exclusive_net_sales_definition():
+    sales = APP / "sales_reporting.py"
+    owner = APP / "owner_dashboard.py"
+    hub = APP / "business_hub_home.py"
+    visuals = APP / "business_hub_visuals.py"
+
+    sales_source = sales.read_text()
+    assert '{"SUM": "base_net_total", "as": "net_total"}' in sales_source
+    assert '{"SUM": "base_grand_total", "as": "grand_total"}' not in sales_source.split("def get_sales_visual_aggregates", 1)[1].split("@frappe.whitelist()", 1)[0]
+    assert '"label": _("Net Sales")' in sales_source
+    assert '"label": _("Net Invoiced")' in sales_source
+
+    assert '("sales", "Net Sales", "Sales")' in owner.read_text()
+    assert '("sales", "Net Sales", _("Sales"))' in hub.read_text()
+    assert "Tax-exclusive Net Sales" in visuals.read_text()

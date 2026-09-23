@@ -13,7 +13,6 @@ from retailedge.dashboard_capabilities import require_dashboard_action
 from retailedge.expense_dashboard_export import build_expense_dashboard_export_with_budget
 from retailedge.financial_dashboard import build_financial_dashboard_export_dataset
 from retailedge.money_dashboard import build_money_dashboard_export_dataset
-from retailedge.owner_dashboard import build_owner_dashboard_export_dataset
 from retailedge.profitability_export import build_profitability_export_dataset
 from retailedge.reporting_files import (
 	MIME_TYPES,
