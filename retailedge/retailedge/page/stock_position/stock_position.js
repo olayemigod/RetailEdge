@@ -60,12 +60,17 @@ function refreshPendingBusinessHubHandoff(wrapper) {
 		return;
 	}
 	const routeOptions = frappe.route_options || {};
-	if (
-		!routeOptions.retailedge_business_hub_handoff
-		|| String(routeOptions.retailedge_business_hub_target || "") !== PAGE_ROUTE
-	) {
-		return;
-	}
+	const handoff = window.__retailedgeBusinessHubRouteHandoff || {};
+	const routeOptionMatches = Boolean(
+		routeOptions.retailedge_business_hub_handoff
+		&& String(routeOptions.retailedge_business_hub_target || "") === PAGE_ROUTE
+	);
+	const handoffMatches = Boolean(
+		handoff
+		&& String(handoff.target || "") === PAGE_ROUTE
+		&& Date.now() - Number(handoff.createdAt || 0) <= 60_000
+	);
+	if (!routeOptionMatches && !handoffMatches) return;
 	const component = wrapper._retailedgeVueApp?._instance?.proxy;
 	if (!component || typeof component.fetchMetadata !== "function") return;
 	Promise.resolve(component.fetchMetadata()).catch((error) => {
