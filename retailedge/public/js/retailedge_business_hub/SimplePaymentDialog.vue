@@ -634,7 +634,10 @@ export default {
 			this.supplierReview = null;
 			this.modeDetails = {};
 			try {
-				const data = await callMethod(CONTEXT_METHOD, { intent: this.intent });
+				const data = await callMethod(CONTEXT_METHOD, {
+					intent: this.intent,
+					managed: this.allowMultiReferenceSupplierPayment ? 1 : 0,
+				});
 				this.formContext = data || {};
 				this.values = {
 					...emptyValues(),
@@ -660,16 +663,21 @@ export default {
 			const initialReferences = Array.isArray(initial.references)
 				? initial.references.map((row) => cleanPrefill(typeof row === "string" ? row : row?.reference_name)).filter(Boolean)
 				: [];
-			const referenceNames = [...new Set(referenceName ? [referenceName, ...initialReferences] : initialReferences)]
-				.slice(0, Number(this.formContext.limits?.max_references || 20));
+			const maxReferences = Number(this.formContext.limits?.max_references || 1);
+			const requestedReferenceNames = [...new Set(referenceName ? [referenceName, ...initialReferences] : initialReferences)];
+			if (requestedReferenceNames.length > maxReferences) {
+				throw new Error(
+					this.allowMultiReferenceSupplierPayment
+						? `Managed Supplier Settlement supports at most ${maxReferences} Purchase Invoices.`
+						: "Quick Payment supports one payable reference. Continue in the managed payment page for complex allocation."
+				);
+			}
+			const referenceNames = requestedReferenceNames.slice(0, maxReferences);
 
 			if (company) this.values.company = company;
 			if (branch) this.values.branch = branch;
 			if (party) this.values.party = party;
 			if (!referenceNames.length || !party) return;
-			if (!this.allowMultiReferenceSupplierPayment && referenceNames.length > 1) {
-				throw new Error("Quick Pay Supplier supports one Purchase Invoice. Continue from Supplier Payables for multi-invoice settlement.");
-			}
 
 			this.referenceLoading = true;
 			try {
@@ -797,6 +805,15 @@ export default {
 		async updateReferences(nextRows) {
 			const previousRows = this.values.references || [];
 			const rows = (nextRows || []).map((row) => ({ ...row }));
+			const maxReferences = Number(this.formContext.limits?.max_references || 1);
+			const populatedReferences = rows.filter((row) => cleanPrefill(row?.reference_name));
+			if (populatedReferences.length > maxReferences) {
+				this.saveError = this.allowMultiReferenceSupplierPayment
+					? `Managed Supplier Settlement supports at most ${maxReferences} Purchase Invoices.`
+					: "Quick Payment supports one payable reference. Use Payment Management or Supplier Payables for complex allocation.";
+				this.values.references = previousRows;
+				return;
+			}
 			this.referenceLoading = true;
 			this.saveError = "";
 			try {
@@ -835,9 +852,27 @@ export default {
 				this.referenceLoading = false;
 			}
 		},
+		validateStandardCustomerDraft() {
+			const references = (this.values.references || []).filter((row) => row?.reference_name);
+			const maxReferences = Number(this.formContext.limits?.max_references || 1);
+			if (references.length > maxReferences) {
+				throw new Error("Quick Receive Customer Payment supports one Sales Invoice or Sales Order reference. Use Payment Management for complex allocation.");
+			}
+			if (this.intent === "receive-sales-order-payment" && references.length !== 1) {
+				throw new Error("Receive Sales Order Payment requires one Sales Order reference.");
+			}
+			const amount = Number(this.values.amount) || 0;
+			const allocated = references.reduce((total, row) => total + (Number(row.allocated_amount) || 0), 0);
+			if (!(amount > 0)) {
+				throw new Error("Payment amount must be greater than zero.");
+			}
+			if (allocated > amount + 0.005) {
+				throw new Error("Allocated amount cannot exceed the payment amount.");
+			}
+		},
 		validateStandardSupplierDraft() {
 			const references = (this.values.references || []).filter((row) => row?.reference_name);
-			const maxReferences = Number(this.formContext.limits?.max_references || 20);
+			const maxReferences = Number(this.formContext.limits?.max_references || 1);
 			if (!this.allowMultiReferenceSupplierPayment && references.length !== 1) {
 				throw new Error("Quick Pay Supplier supports one Purchase Invoice per payment. Use Supplier Payables for multi-invoice settlement.");
 			}
@@ -988,10 +1023,12 @@ export default {
 			this.saveError = "";
 			this.saving = true;
 			try {
+				if (this.isCustomerPayment) this.validateStandardCustomerDraft();
 				if (this.isSupplierPayment) this.validateStandardSupplierDraft();
 				const result = await callMethod(CREATE_METHOD, {
 					intent: this.intent,
 					values: this.values,
+					managed: this.allowMultiReferenceSupplierPayment ? 1 : 0,
 				});
 				this.$emit("draft-created", result);
 				if (this.isCustomerPayment) {
