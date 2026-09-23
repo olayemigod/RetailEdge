@@ -75,7 +75,7 @@ function callMethod(method, args = {}) {
 }
 
 function errorMessage(error, fallback) {
-	return error?.message || error?.exc || error?.exception || fallback;
+	return window.retailedge?.userErrorMessage?.(error, fallback) || fallback;
 }
 
 function routeForTarget(item = {}) {
