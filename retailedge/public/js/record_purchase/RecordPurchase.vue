@@ -60,7 +60,7 @@
 
 					<div class="items-heading"><div><span class="page-kicker">Purchase items</span><h3>Products and services</h3><p>Use the page for larger purchases instead of keeping a long transaction inside a modal.</p></div><span class="item-count">{{ populatedItemCount }} item{{ populatedItemCount === 1 ? "" : "s" }}</span></div>
 					<EdgeChildTable :field="itemTableField" :rows="values.items" :columns="itemColumns" :addLabel="'Add Item'" :linkSearcher="searchLineLink" :linkCanCreate="canCreateItemLink" :linkCreator="createItemLink" :linkCreateLabel="itemCreateLabel" :newRowsFirst="true" @update:rows="updateItems" />
-					<p class="hint">The Branch default Buying Price List takes precedence. Otherwise the current valid default remains selected and Branch-assigned alternatives can be chosen; changing the Price List automatically re-prices entered items. The server validates all rates and stock context again before saving.</p>
+					<p class="hint">The effective Buying Price List follows Settings → Price List Governance. When switching is allowed, choose a Branch-assigned alternative; changing the Price List automatically re-prices entered items. The server validates all rates and stock context again before saving.</p>
 					<label class="field"><span>Remarks</span><textarea v-model="values.remarks" class="form-control" rows="4" placeholder="Optional purchase note"></textarea></label>
 
 					<div class="sticky-actions">
