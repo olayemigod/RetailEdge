@@ -223,6 +223,35 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertTrue(result["selection_required"])
 		self.assertEqual(result["allowed_price_lists"], ["Retail", "Wholesale"])
 
+	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict(rate=1250, price_list_rate=1250))
+	@patch("retailedge.guided_pricing._document_price_list_context")
+	@patch("retailedge.guided_pricing.resolve_price_list_context")
+	@patch("retailedge.guided_pricing._assert_read_permission")
+	def test_existing_draft_pricing_uses_server_document_price_list_not_current_governance(
+		self, _mock_read, mock_governance, mock_document_context, _mock_details
+	):
+		mock_document_context.return_value = {
+			"price_list": "Legacy Retail",
+			"source": "document_price_list",
+			"selection_required": False,
+		}
+		result = resolve_sales_item_pricing(
+			item_code="ITEM-001",
+			company="Demo Company",
+			customer="CUST-001",
+			branch="Lagos",
+			document_price_list="Legacy Retail",
+			user="sales@example.com",
+		)
+		self.assertEqual(result["price_list"], "Legacy Retail")
+		self.assertEqual(result["rate"], 1250.0)
+		mock_governance.assert_not_called()
+		mock_document_context.assert_called_once_with(
+			"Legacy Retail",
+			mode="selling",
+			user="sales@example.com",
+		)
+
 	@patch("retailedge.guided_pricing._erpnext_item_details")
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
 	@patch("retailedge.guided_pricing._assert_read_permission")
