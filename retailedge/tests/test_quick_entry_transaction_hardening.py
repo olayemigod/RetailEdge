@@ -137,6 +137,7 @@ def test_business_hub_primary_shortcuts_use_pages_not_large_modals():
 		("make-sale", "Make Sale"),
 		("record-purchase", "Record Purchase"),
 		("transfer-stock", "Transfer Stock"),
+		("stock-adjustment", "Stock Adjustment"),
 	):
 		assert f'addPage("{route}", "{label}"' in hub
 	assert 'addAction("new-sales-invoice", "Make Sale")' not in hub
