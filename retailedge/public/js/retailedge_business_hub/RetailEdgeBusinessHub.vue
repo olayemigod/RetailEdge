@@ -690,6 +690,7 @@ export default {
 			addAction("record-expense");
 			addPage("professional-purchasing", "Receive Stock", "Open ready-to-receive Purchase Orders and prepare Purchase Receipts.", "download");
 			addPage("transfer-stock", "Transfer Stock", "Use the full-page workspace for larger or multi-item stock movements.", "repeat");
+			addPage("stock-adjustment", "Stock Adjustment", "Use the full-page workspace for larger physical counts and stock corrections.", "clipboard");
 			addPage("record-purchase", "Record Purchase", "Use the full-page workspace for larger or multi-item Purchase Invoices.", "shopping-bag");
 			addPage("bank-matching-reconciliation", "Match Bank Transactions", "Review imported bank transactions, suggestions and reconciliation queues.", "repeat");
 			return shortcuts;
