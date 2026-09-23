@@ -11,6 +11,7 @@ from retailedge.guided_payment import (
 	MAX_LINK_RESULTS,
 	MAX_REFERENCES,
 	PAYMENT_INTENTS,
+	QUICK_MAX_REFERENCES,
 	_normalise_references,
 	create_simple_payment_draft,
 )
@@ -56,6 +57,14 @@ class TestGuidedPayment(unittest.TestCase):
 		self.assertEqual(pay["payment_type"], "Pay")
 		self.assertEqual(pay["party_type"], "Supplier")
 		self.assertEqual(pay["reference_doctype"], "Purchase Invoice")
+
+	def test_normalise_references_allows_empty_customer_advance_when_explicitly_permitted(self):
+		rows = _normalise_references(
+			[{"reference_name": "", "allocated_amount": 0}],
+			min_references=0,
+			max_references=QUICK_MAX_REFERENCES,
+		)
+		self.assertEqual(rows, [])
 
 	def test_normalise_references_rejects_missing_duplicate_and_excess_rows(self):
 		for rows in (
@@ -228,6 +237,7 @@ class TestGuidedPayment(unittest.TestCase):
 		source = (APP_ROOT / "guided_payment.py").read_text()
 		self.assertIn("MAX_LINK_RESULTS = 20", source)
 		self.assertIn("MAX_REFERENCES = 20", source)
+		self.assertIn("QUICK_MAX_REFERENCES = 1", source)
 		self.assertIn("limit_page_length=limit", source)
 		self.assertIn("frappe.get_list(", source)
 		self.assertIn("search_link(", source)
@@ -289,16 +299,22 @@ class TestGuidedPayment(unittest.TestCase):
 		for contract in (
 			'def _can_open_page(page_name: str) -> bool:',
 			'frappe.get_doc("Page", page_name).is_permitted()',
+			'def _resolve_managed_supplier_settlement(intent: str, managed: int | bool) -> bool:',
+			'if intent != "pay-supplier":',
+			'if not _can_open_page("supplier-payables"):',
 			'managed_page = "supplier-payables" if intent == "pay-supplier" else "payment-management"',
 			'"can_open_managed_page": can_open_managed_page',
+			'"managed_supplier_settlement": managed_supplier_settlement',
+			'"max_references": MAX_REFERENCES if managed_supplier_settlement else QUICK_MAX_REFERENCES',
 		):
 			self.assertIn(contract, source)
 		self.assertIn('v-if="canOpenManagedPage"', component)
 		self.assertIn('this.formContext.capabilities?.can_open_managed_page', component)
 		self.assertIn('if (this.saving || this.submitting || !this.canOpenManagedPage) return;', component)
 
-	def test_limits_are_deliberately_small(self):
+	def test_quick_limit_is_small_while_managed_supplier_settlement_stays_bounded(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
+		self.assertEqual(QUICK_MAX_REFERENCES, 1)
 		self.assertEqual(MAX_REFERENCES, 20)
 
 
