@@ -61,7 +61,7 @@
 					:modelValue="values.price_list"
 					label="Buying Price List"
 					placeholder="Select assigned Price List"
-					description="Branch default takes precedence. Otherwise choose from your assigned Price Lists."
+					description="The effective default follows Price List Governance. When switching is allowed, choose from your Branch-assigned Price Lists."
 					:required="Boolean(formContext.pricing?.selection_required)"
 					:disabled="Boolean(formContext.pricing?.locked) || !Boolean(formContext.pricing?.can_select)"
 					:searcher="searchPriceList"
@@ -94,8 +94,7 @@
 			/>
 
 			<p class="guided-po-hint">
-				Buying Rate is resolved again on the server from the authenticated user's Buying Price List,
-				ERPNext item pricing and last-purchase information. Enter the agreed supplier rate only when no valid configured rate exists or an authorised negotiated rate applies.
+				Buying Rate is resolved again on the server from the Price List selected by the merchant's governance policy, ERPNext item pricing and last-purchase information. Enter the agreed supplier rate only when no valid configured rate exists or an authorised negotiated rate applies.
 			</p>
 
 			<label class="guided-field guided-field--wide">
