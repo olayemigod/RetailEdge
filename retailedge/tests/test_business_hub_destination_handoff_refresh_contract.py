@@ -38,4 +38,8 @@ def test_handoff_refresh_is_guarded_and_does_not_remount_cached_destination():
         )[0]
         assert "mount" not in helper.lower(), relative
         assert "frappe.route_options || {}" in helper, relative
+        assert "window.__retailedgeBusinessHubRouteHandoff || {}" in helper, relative
+        assert "routeOptionMatches" in helper, relative
+        assert "handoffMatches" in helper, relative
+        assert "Date.now() - Number(handoff.createdAt || 0) <= 60_000" in helper, relative
         assert "typeof component.fetchMetadata !== \"function\"" in helper, relative
