@@ -85,7 +85,7 @@
    "label": "Price List Access"
   },
   {
-   "description": "Price Lists this user may choose while working in this Branch. Branch defaults still take precedence.",
+   "description": "Price Lists this user may choose while working in this Branch when Price List Governance permits switching from the resolved default.",
    "fieldname": "allowed_price_lists",
    "fieldtype": "Table",
    "label": "Allowed Price Lists",
