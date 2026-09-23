@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest import TestCase
 from unittest.mock import patch
 
 import frappe
 
 from retailedge.business_hub_visuals import (
+	_cash_visual,
 	_granularity,
 	_period_rows,
 	_sales_mix,
+	_sales_trend,
 	_top_mix_rows,
 	get_business_hub_visuals,
 )
@@ -21,6 +24,38 @@ CASH = ROOT / "cash_movement.py"
 HUB = ROOT / "public" / "js" / "retailedge_business_hub" / "RetailEdgeBusinessHub.vue"
 CHART = ROOT / "public" / "js" / "retailedge_business_hub" / "BusinessHubChartCard.vue"
 
+
+
+
+class TestBusinessHubVisualRuntimeRegression(TestCase):
+	@patch("retailedge.business_hub_visuals.get_sales_visual_aggregates")
+	def test_sales_trend_does_not_shadow_frappe_translation(self, aggregates):
+		aggregates.return_value = {
+			"trend": [{"posting_date": "2026-09-01", "net_sales": 120000, "transactions": 4}]
+		}
+		result = _sales_trend(
+			{"company": "Demo Company", "from_date": "2026-09-01", "to_date": "2026-09-01"},
+			start=frappe.utils.getdate("2026-09-01"),
+			end=frappe.utils.getdate("2026-09-01"),
+			currency="NGN",
+		)
+		self.assertTrue(result["description"])
+		self.assertEqual(result["rows"][0]["net_sales"], 120000)
+
+	@patch("retailedge.business_hub_visuals.get_cash_movement_visual_aggregates")
+	def test_cash_visual_does_not_shadow_frappe_translation(self, aggregates):
+		aggregates.return_value = {
+			"rows": [{"posting_date": "2026-09-01", "money_in": 100000, "money_out": 25000}]
+		}
+		result = _cash_visual(
+			{"company": "Demo Company", "from_date": "2026-09-01", "to_date": "2026-09-01"},
+			start=frappe.utils.getdate("2026-09-01"),
+			end=frappe.utils.getdate("2026-09-01"),
+			currency="NGN",
+		)
+		self.assertTrue(result["description"])
+		self.assertEqual(result["rows"][0]["money_in"], 100000)
+		self.assertEqual(result["rows"][0]["money_out"], 25000)
 
 def test_business_hub_visuals_are_composed_from_existing_reporting_authorities():
 	source = PROVIDER.read_text(encoding="utf-8")
