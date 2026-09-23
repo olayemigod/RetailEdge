@@ -51,7 +51,7 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 			"_price_list_governance_policy",
 			"_resolve_default_price_list_candidate",
 			"_source_allows_switch",
-			'"source": "user_selected"',
+			'source="user_selected"',
 			'"selection_required": True',
 			"get_branch_assignment_price_lists",
 		):
