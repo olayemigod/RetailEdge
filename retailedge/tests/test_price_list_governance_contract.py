@@ -164,7 +164,7 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 
 		pricing = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
 		self.assertIn("def _document_price_list_context(", pricing)
-		self.assertIn('"source": "document_price_list"', pricing)
+		self.assertIn('source="document_price_list"', pricing)
 
 	def test_delivery_and_receipt_workflows_inherit_submitted_source_pricing(self):
 		delivery = (APP_ROOT / "professional_delivery.py").read_text(encoding="utf-8")
