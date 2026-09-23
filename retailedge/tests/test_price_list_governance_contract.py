@@ -53,9 +53,16 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 			'"selection_required": True',
 			"get_branch_assignment_price_lists",
 			"selected_price_list not in selectable",
-			"require_read=not has_assignment_boundary",
+			"require_read=selected_price_list not in assigned_price_lists",
 		):
 			self.assertIn(contract, source)
+
+	def test_branch_assignment_extends_existing_default_instead_of_replacing_it(self):
+		source = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
+		self.assertIn("default_candidate = _default_price_list_candidate(", source)
+		self.assertIn("[*assigned_price_lists, *([default_name] if default_name else [])]", source)
+		self.assertIn('"can_select": bool(assigned_price_lists) and not locked', source)
+		self.assertIn('"allowed_price_lists": selectable', source)
 
 	def test_all_primary_sales_and_purchase_entry_surfaces_expose_price_list_selection(self):
 		surfaces = {
