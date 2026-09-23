@@ -239,7 +239,7 @@ def get_professional_purchase_order_item_pricing(
 	item_code: str,
 	values: dict | str | None = None,
 ) -> dict[str, Any]:
-	"""Resolve the current ERPNext buying rate without trusting a client-selected Price List."""
+	"""Resolve the current ERPNext buying rate from a server-validated governed Price List."""
 	_assert_can_create_purchase_order()
 	values = _coerce_values(values)
 	user = frappe.session.user
