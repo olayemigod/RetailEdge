@@ -40,8 +40,7 @@
 				<div class="sales-quality-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
 					<EdgeLinkField v-model="filters.branch" label="Branch" placeholder="All permitted branches" :searcher="branchSearch" @select="onBranchSelected" @clear="clearBranch" />
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" class="edge-input" type="date" @change="onReportingDateChange" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" class="edge-input" type="date" @change="onReportingDateChange" /></label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<EdgeLinkField v-model="filters.customer" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeLinkField v-model="filters.salesperson" label="Salesperson" placeholder="All salespeople" :searcher="salespersonSearch" @select="onSalespersonSelected" @clear="clearSalesperson" />
 					<EdgeLinkField v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
@@ -71,7 +70,7 @@
 </template>
 
 <script>
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeExportMenu", "EdgeDropdown", "EdgeSmartDateRange"];
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
 function callMethod(method, args = {}) { return new Promise((resolve, reject) => frappe.call({ method, args, callback: (response) => resolve(response.message || {}), error: reject })); }
 function errorMessage(error, fallback) { return error?.message || error?.exc || error?.exception || fallback; }
@@ -85,6 +84,7 @@ export default {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			rows: [], columns: [], summary: [], pagination: {}, metadata: {}, menuItems: [], tenantName: "", branchName: "", userName: "", showCosts: false, canUseNativeDesk: false,
 			page: 1, pageSize: 50,
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", branch: "", from_date: "", to_date: "", customer: "", salesperson: "", item_group: "", item_code: "", warehouse: "", high_reduction_percent: 10, low_margin_percent: 10 },
 		};
 	},
@@ -109,6 +109,8 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.sales_reporting.get_sales_reporting_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}), item_code: "", item_group: "", salesperson: "", warehouse: "", high_reduction_percent: 10, low_margin_percent: 10 };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.branchName = context.branch_name || this.filters.branch || ""; this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
@@ -121,9 +123,21 @@ export default {
 		handleNavigation(route) { const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route); if (!item) return; if (["DocType", "Report"].includes(item.target_type) && !this.canUseNativeDesk) return; if (item.target_type === "Page") frappe.set_route(item.target); else if (item.target_type === "Report" || item.target_type === "DocType") window.open(route, "_blank", "noopener,noreferrer"); else if (item.target_type === "URL" && item.target) window.open(item.target, "_blank", "noopener,noreferrer"); },
 		async searchOptions(kind, txt) { const result = await callMethod("retailedge.sales_reporting.search_sales_reporting_options", { kind, txt, company: this.filters.company, branch: this.filters.branch, item_group: this.filters.item_group, from_date: this.filters.from_date, to_date: this.filters.to_date }); return Array.isArray(result) ? result : []; },
 		companySearch(txt) { return this.searchOptions("company", txt); }, branchSearch(txt) { return this.searchOptions("branch", txt); }, customerSearch(txt) { return this.searchOptions("customer", txt); }, salespersonSearch(txt) { return this.searchOptions("salesperson", txt); }, itemGroupSearch(txt) { return this.searchOptions("item_group", txt); }, itemSearch(txt) { return this.searchOptions("item", txt); }, warehouseSearch(txt) { return this.searchOptions("warehouse", txt); },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.filters.customer = "";
+			this.filters.salesperson = "";
+			this.page = 1;
+		},
 		onCompanySelected(option) { this.filters.company = option?.value || ""; this.filters.branch = ""; this.filters.customer = ""; this.filters.salesperson = ""; this.filters.item_group = ""; this.filters.item_code = ""; this.filters.warehouse = ""; this.page = 1; },
 		onBranchSelected(option) { this.filters.branch = option?.value || ""; this.filters.customer = ""; this.filters.salesperson = ""; this.filters.warehouse = ""; this.page = 1; }, clearBranch() { this.filters.branch = ""; this.filters.warehouse = ""; this.page = 1; },
-		onReportingDateChange() { this.filters.customer = ""; this.filters.salesperson = ""; this.page = 1; },
 		onCustomerSelected(option) { this.filters.customer = option?.value || ""; this.page = 1; }, clearCustomer() { this.filters.customer = ""; this.page = 1; },
 		onSalespersonSelected(option) { this.filters.salesperson = option?.value || ""; this.page = 1; }, clearSalesperson() { this.filters.salesperson = ""; this.page = 1; },
 		onItemGroupSelected(option) { this.filters.item_group = option?.value || ""; this.filters.item_code = ""; this.page = 1; }, clearItemGroup() { this.filters.item_group = ""; this.filters.item_code = ""; this.page = 1; },

@@ -16,7 +16,7 @@ from retailedge.business_expense_register import (
 	get_consolidated_expense_export,
 	get_consolidated_expense_register,
 )
-from retailedge.operating_context import get_operational_branch_scope
+from retailedge.operating_context import get_allowed_operating_branches, get_operational_branch_scope
 from retailedge.reporting_capabilities import require_report_view_access
 
 EXPENSE_DOCTYPE = "RetailEdge Cashier Expense"
@@ -406,18 +406,15 @@ def _search_companies(txt: str) -> list[dict[str, str]]:
 
 
 def _search_branches(*, txt: str, company: str, scope: dict[str, Any]) -> list[dict[str, str]]:
-	allowed = _clean_allowed_branches(scope)
-	if scope.get("restricted") and not allowed:
+	allowed = get_allowed_operating_branches(company=company, user=frappe.session.user)
+	if not allowed:
 		return []
-	filters: dict[str, Any] = {}
-	if frappe.get_meta("Branch").has_field("company"):
-		filters["company"] = company
-	if scope.get("restricted"):
-		filters["name"] = ["in", allowed]
 	rows = frappe.get_list(
 		"Branch",
-		filters=filters,
-		or_filters={"name": ["like", f"%{txt}%"]},
+		filters=[
+			["Branch", "name", "like", f"%{txt}%"],
+			["Branch", "name", "in", allowed],
+		],
 		fields=["name"],
 		order_by="name asc",
 		limit_page_length=MAX_LINK_RESULTS,
@@ -428,11 +425,8 @@ def _search_branches(*, txt: str, company: str, scope: dict[str, Any]) -> list[d
 def _resolve_context_branch(*, company: str, candidate: str, user: str) -> str:
 	if not company:
 		return ""
-	scope = get_operational_branch_scope(company, user=user)
-	if not scope.get("restricted"):
-		return candidate
-	allowed = _clean_allowed_branches(scope)
-	if candidate in allowed:
+	allowed = get_allowed_operating_branches(company=company, user=user)
+	if candidate and candidate in allowed:
 		return candidate
 	return allowed[0] if len(allowed) == 1 else ""
 

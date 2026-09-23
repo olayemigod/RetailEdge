@@ -58,20 +58,11 @@
 					/>
 					<EdgeSmartDateRange
 						v-model="smartDate"
-						label="Smart Date Range"
+						label="Date Range"
 						:referenceDate="smartDateReference || null"
 						dateOrder="DMY"
 						@resolved="onSmartDateResolved"
 					/>
-					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range" @change="onPresetChange" />
-					<label class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" type="date" class="edge-input" @change="onDateChange" />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">To Date</span>
-						<input v-model="filters.to_date" type="date" class="edge-input" @change="onDateChange" />
-					</label>
 					<EdgeLinkField
 						v-model="filters.branch"
 						label="Branch"
@@ -251,10 +242,6 @@ export default {
 				page_size: 50,
 			},
 			currentPage: 1,
-			datePresets: [
-				"This Month", "Today", "Yesterday", "This Week", "This Quarter", "This Year",
-				"Last Week", "Last Month", "Last Quarter", "Last Year", "Custom Period",
-			],
 			analysisPresets: [
 				"Sales Trend",
 				"Sales by Item",
@@ -345,8 +332,8 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey) || {};
 				this.filters = { ...this.filters, ...hubHandoff };
-				if (hubHandoff.from_date && hubHandoff.to_date) this.filters.date_range_preset = "Custom Period";
 				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -465,22 +452,27 @@ export default {
 				this.error = errorMessage(error, "The selected Warehouse is not valid for this sales context.");
 			}
 		},
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) {
+				this.smartDate = {};
+				return;
+			}
+			this.smartDate = {
+				expression: "custom",
+				from_date: this.filters.from_date,
+				to_date: this.filters.to_date,
+				label: this.filters.from_date === this.filters.to_date
+					? this.filters.from_date
+					: `${this.filters.from_date} – ${this.filters.to_date}`,
+			};
+		},
 		onSmartDateResolved(value) {
 			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
 			this.filters.from_date = value.from_date;
 			this.filters.to_date = value.to_date;
-			this.filters.date_range_preset = "Custom Period";
 			this.currentPage = 1;
 		},
-		async onPresetChange() {
-			if (this.filters.date_range_preset === "Custom Period") return;
-			const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset);
-			if (!dates) return;
-			this.filters.from_date = dates.from_date;
-			this.filters.to_date = dates.to_date;
-			this.currentPage = 1;
-		},
-		onDateChange() { this.filters.date_range_preset = "Custom Period"; this.currentPage = 1; },
 		onAnalysisPresetChange() {
 			const groups = {
 				"Sales Trend": "Month",
