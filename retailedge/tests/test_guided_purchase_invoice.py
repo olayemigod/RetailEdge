@@ -185,11 +185,12 @@ class TestGuidedPurchaseInvoice(unittest.TestCase):
 		self.assertNotIn("doc.submit()", source)
 		self.assertNotIn("frappe.db.commit()", source)
 
-	def test_browser_cannot_supply_the_effective_buying_price_list(self):
+	def test_browser_price_list_choice_is_revalidated_by_server_governance(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
 		self.assertIn("resolve_price_list_context", source)
 		self.assertNotIn('values.get("buying_price_list")', source)
-		self.assertNotIn('values.get("price_list")', source)
+		self.assertIn('selected_price_list=str(values.get("price_list") or "").strip()', source)
+		self.assertIn("search_allowed_price_lists", source)
 
 	def test_adapter_leaves_accounting_and_pricing_rules_to_erpnext(self):
 		source = (APP_ROOT / "guided_purchase_invoice.py").read_text()
