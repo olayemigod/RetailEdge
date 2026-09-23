@@ -52,6 +52,8 @@ def test_handoff_refresh_is_guarded_and_does_not_remount_cached_destination():
         assert "Date.now() - Number(handoff.createdAt || 0) <= 60_000" in helper, relative
         assert "wrapper._retailedgeVueComponent || wrapper._retailedgeVueApp?.__retailedgeRootComponent" in helper, relative
         assert "typeof component.fetchMetadata !== \"function\"" in helper, relative
+        assert "wrapper._retailedgeBusinessHubHandoffRefreshPromise" in helper, relative
+        assert ".finally(() => {" in helper, relative
 
 
 MOUNT_BUNDLES = (
