@@ -79,7 +79,7 @@
 				<span v-if="reportType === 'supplier_payables'">Current ERPNext outstanding balances aged at {{ formatDate(payablesAgeingDate || filters.as_of_date, "today") }}</span>
 				<span v-if="reportType === 'supplier_payables' && settlementNotice" class="settlement-notice">{{ settlementNotice }}</span>
 				<button
-					v-if="reportType === 'supplier_payables' && selectedPayableCount"
+					v-if="reportType === 'supplier_payables' && canPaySupplier && selectedPayableCount"
 					class="edge-primary-button settlement-button"
 					type="button"
 					:disabled="supplierPaymentOpen"
@@ -94,7 +94,7 @@
 		</EdgeReportShell>
 
 		<SimplePaymentDialog
-			v-if="reportType === 'supplier_payables'"
+			v-if="reportType === 'supplier_payables' && canPaySupplier"
 			:open="supplierPaymentOpen"
 			intent="pay-supplier"
 			:initialContext="supplierPaymentContext"
@@ -165,6 +165,7 @@ export default {
 			groupByOptions: ["Day", "Week", "Month", "Quarter", "Year", "Item", "Item Group", "Supplier", "Supplier Group", "Branch", "Warehouse"],
 			currentPage: 1,
 			canUseNativeDesk: false,
+			canPaySupplier: false,
 			supplierPaymentOpen: false,
 			supplierPaymentContext: {},
 			selectedPayables: [],
@@ -187,7 +188,7 @@ export default {
 				fieldtype: column.fieldtype || column.type || "Data",
 				clickable: this.canUseNativeDesk && ["invoice", "supplier", "return_against"].includes(column.fieldname),
 			}));
-			if (this.reportType === "supplier_payables") {
+			if (this.reportType === "supplier_payables" && this.canPaySupplier) {
 				columns.push({ label: "Settle", fieldname: "settlement_action", fieldtype: "Data", width: 90, clickable: true });
 				columns.push({ label: "Payment", fieldname: "payment_action", fieldtype: "Data", width: 110, clickable: true });
 			}
@@ -217,9 +218,11 @@ export default {
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
+				this.canPaySupplier = Boolean(context.capabilities?.can_pay_supplier);
 				if (this.requiredReady) await this.fetchData();
 				if (
 					this.reportType === "supplier_payables"
+					&& this.canPaySupplier
 					&& handoffPurchaseInvoice
 					&& hubHandoff.supplier
 				) {
@@ -288,7 +291,7 @@ export default {
 				const providerRows = result.rows || [];
 				this.selectedPayables = [];
 				this.settlementNotice = "";
-				this.rows = this.reportType === "supplier_payables"
+				this.rows = this.reportType === "supplier_payables" && this.canPaySupplier
 					? providerRows.map((row) => ({ ...row, settlement_action: "Select", payment_action: "Pay Supplier" }))
 					: providerRows;
 				this.columns = (result.columns || []).filter((column) => !column.hidden); this.summary = result.summary || []; this.reportSort = result.sort || null; this.scan = result.metadata?.scan || {}; this.companyCurrency = result.metadata?.company_currency || this.companyCurrency; this.payablesAgeingDate = result.metadata?.ageing_date || result.metadata?.payables_ageing_date || this.payablesAgeingDate;
@@ -305,7 +308,7 @@ export default {
 			return Boolean(row?.invoice && this.selectedPayables.some((selected) => selected.invoice === row.invoice));
 		},
 		togglePayableSelection(row) {
-			if (this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
+			if (!this.canPaySupplier || this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
 			const existingIndex = this.selectedPayables.findIndex((selected) => selected.invoice === row.invoice);
 			if (existingIndex >= 0) {
 				this.settlementNotice = "";
@@ -338,7 +341,7 @@ export default {
 			row.settlement_action = "Selected";
 		},
 		openSelectedSupplierPayment() {
-			if (this.reportType !== "supplier_payables" || !this.selectedPayables.length) return;
+			if (!this.canPaySupplier || this.reportType !== "supplier_payables" || !this.selectedPayables.length) return;
 			const first = this.selectedPayables[0];
 			this.supplierPaymentContext = {
 				company: this.filters.company || "",
@@ -349,7 +352,7 @@ export default {
 			this.supplierPaymentOpen = true;
 		},
 		openSupplierPayment(row) {
-			if (this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
+			if (!this.canPaySupplier || this.reportType !== "supplier_payables" || !row?.invoice || !row?.supplier) return;
 			this.supplierPaymentContext = {
 				company: this.filters.company || "",
 				branch: row.branch || this.filters.branch || "",
