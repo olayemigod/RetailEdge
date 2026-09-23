@@ -216,6 +216,19 @@ export default {
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
 				if (this.requiredReady) await this.fetchData();
+				if (
+					this.reportType === "supplier_payables"
+					&& hubHandoff.purchase_invoice
+					&& hubHandoff.supplier
+				) {
+					this.supplierPaymentContext = {
+						company: hubHandoff.company || this.filters.company || "",
+						branch: hubHandoff.branch || this.filters.branch || "",
+						party: hubHandoff.supplier,
+						reference_name: hubHandoff.purchase_invoice,
+					};
+					this.supplierPaymentOpen = true;
+				}
 			} catch (error) { this.error = errorMessage(error, "Failed to load Purchase report controls."); }
 			finally { this.metadataLoading = false; }
 		},
