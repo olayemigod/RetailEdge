@@ -77,7 +77,7 @@ def resolve_price_list_context(
 	)
 	assigned_price_lists = list(assignment_scope["names"])
 	has_assignment_boundary = bool(assignment_scope["restricted"])
-	default_price_lists = _default_selectable_price_lists(mode=mode, user=user)
+	default_price_lists = _default_selectable_price_lists(mode=mode, user=user) if has_assignment_boundary else []
 	selectable = list(dict.fromkeys([*assigned_price_lists, *default_price_lists])) if has_assignment_boundary else []
 
 	if branch_default:
@@ -273,6 +273,8 @@ def _assignment_price_list_scope(
 	branch: str,
 	user: str,
 ) -> dict[str, Any]:
+	if not branch:
+		return {"names": [], "restricted": False, "assignment_names": []}
 	scope = get_branch_assignment_price_lists(
 		user=user,
 		company=company,
