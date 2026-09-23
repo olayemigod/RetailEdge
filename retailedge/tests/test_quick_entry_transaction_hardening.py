@@ -92,6 +92,33 @@ def test_quick_actions_are_named_as_quick_and_pages_are_named_as_primary_actions
 
 
 
+def test_quick_entry_scope_keeps_only_small_or_bounded_work_in_modals():
+	registry = REGISTRY.read_text(encoding="utf-8")
+	master = MASTER.read_text(encoding="utf-8")
+	hub = HUB.read_text(encoding="utf-8")
+
+	# Long line-entry work must have durable pages.
+	for page_target in ("make-sale", "record-purchase", "transfer-stock", "stock-adjustment"):
+		assert f'"target": "{page_target}"' in master
+
+	# Small finance actions remain guided single-record entry flows.
+	for action_key in ("receive-customer-payment", "pay-supplier", "deposit-cash", "cash-transfer"):
+		assert f'"key": "{action_key}"' in registry
+
+	# Expense routing is role/capability aware: business users get the persistent page,
+	# while cashier expense remains the small shift-bound entry.
+	assert '"target": "business-expenses"' in master
+	assert '"doctype": BUSINESS_EXPENSE_NATIVE_PEER_DOCTYPE' in master
+	assert 'action.doctype === "RetailEdge Business Expense" || action.target === "business-expenses"' in hub
+	assert "this.simpleCashierExpenseOpen = true" in hub
+
+	# Only genuinely simple masters are promoted to native ERPNext Quick Entry.
+	for doctype in ("Customer", "Supplier", "Item"):
+		assert f'"doctype": "{doctype}"' in master
+	for complex_doctype in ("Warehouse", "Bank Account", "RetailEdge Expense Category"):
+		assert f'"doctype": "{complex_doctype}"' not in master.split("MASTER_ACTIONS", 1)[0]
+
+
 def test_master_promotions_can_recreate_sell_buy_and_stock_groups_after_native_containment():
 	master = MASTER.read_text(encoding="utf-8")
 	for contract in (
