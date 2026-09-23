@@ -205,7 +205,7 @@ def _resolve_rate(
 		warehouse=warehouse,
 		posting_date=posting_date,
 		qty=qty,
-		selected_price_list=selected_price_list,
+		document_price_list=selected_price_list,
 		user=frappe.session.user,
 	)
 	rate = resolved.get("rate")
