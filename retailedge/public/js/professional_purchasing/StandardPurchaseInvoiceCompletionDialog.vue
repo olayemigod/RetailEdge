@@ -58,7 +58,7 @@
 						:addLabel="'Add Item'"
 						:linkSearcher="searchLineLink"
 						:newRowsFirst="true"
-						@update:rows="newItems = $event"
+						@update:rows="updateNewItems"
 					/>
 					<p v-else class="invoice-completion-hint">This invoice came from {{ preview.source_type }} {{ preview.source_name }}. Add or remove source rows from the owning purchasing document, not from this completion step.</p>
 				</section>
@@ -168,6 +168,7 @@
 const PREVIEW_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_purchase_invoice_completion.update_standard_purchase_invoice_draft";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
+const PRICING_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_item_pricing";
 const SUBMIT_METHOD = "retailedge.standard_purchase_invoice_completion.submit_standard_purchase_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_purchase_invoice_completion.apply_standard_purchase_invoice_workflow_action";
 
@@ -217,6 +218,7 @@ export default {
 			draftRemarks: "",
 			draftItems: [],
 			newItems: [],
+			newItemPricingTokens: {},
 			newItemColumns: [
 				{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" },
 				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
@@ -319,6 +321,43 @@ export default {
 				},
 			});
 			return Array.isArray(rows) ? rows : [];
+		},
+		updateNewItems(rows) {
+			const previous = this.newItems || [];
+			const changed = [];
+			this.newItems = (rows || []).map((row, index) => {
+				const prior = previous[index] || {};
+				if (row.item_code && row.item_code !== prior.item_code) {
+					changed.push(index);
+					return { ...row, rate: "" };
+				}
+				return { ...row };
+			});
+			changed.forEach((index) => this.priceNewItem(index));
+		},
+		async priceNewItem(index) {
+			const row = this.newItems[index];
+			if (!row?.item_code || !this.preview?.supplier) return;
+			const token = `${row.item_code}:${Date.now()}:${Math.random()}`;
+			this.newItemPricingTokens[index] = token;
+			try {
+				const result = await callMethod(PRICING_METHOD, {
+					item_code: row.item_code,
+					values: {
+						company: this.preview.company || "",
+						branch: this.preview.branch || "",
+						warehouse: this.preview.default_warehouse || "",
+						supplier: this.preview.supplier || "",
+						price_list: this.preview.buying_price_list || "",
+						posting_date: this.draftPostingDate || this.preview.posting_date || "",
+						qty: row.qty || 1,
+					},
+				});
+				if (this.newItemPricingTokens[index] !== token || this.newItems[index]?.item_code !== row.item_code) return;
+				if (result?.rate !== null && result?.rate !== undefined) this.newItems[index] = { ...this.newItems[index], rate: result.rate };
+			} catch (error) {
+				if (this.newItemPricingTokens[index] === token) this.actionError = errorMessage(error, `Unable to price ${row.item_code}.`);
+			}
 		},
 		async saveDraftChanges() {
 			if (!this.preview?.can_edit || !this.draftDirty || !this.draftValid || this.busy) return;
