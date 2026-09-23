@@ -129,7 +129,7 @@
 			</p>
 
 			<p class="guided-invoice-hint">
-				The Branch default Selling Price List takes precedence. Otherwise the current valid default remains selected and Branch-assigned alternatives can be chosen.
+				The effective Selling Price List follows Price List Governance. When switching is allowed, Branch-assigned alternatives can be chosen.
 				Changing the Price List automatically re-prices entered items, and the server validates pricing again when the draft is saved.
 			</p>
 
