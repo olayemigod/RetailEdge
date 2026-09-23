@@ -56,6 +56,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(EDGEUI_ASSET); if (!window.EdgeSuiteUI?.components) throw new Error("EdgeSuite UI runtime is unavailable.");
 		await requireAsync(RECEIVABLES_ASSET); if (typeof window.mountCustomerReceivablesPage !== "function") throw new Error("Customer Receivables bundle is unavailable.");
 		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-customer-receivables-root"; page.body.append(root); wrapper._retailedgeVueApp = await window.mountCustomerReceivablesPage(root);
+		wrapper._retailedgePageHasShown = true;
 	} catch (error) { bootLoading.remove(); renderLoadError(wrapper, error); }
 };
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
