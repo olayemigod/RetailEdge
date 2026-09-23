@@ -212,10 +212,14 @@ def _price_list_governance_policy(*, mode: PriceMode) -> dict[str, Any]:
 	settings = get_retailedge_settings()
 	enabled = _setting_bool(settings, "enable_price_list_governance", True)
 	fieldname = "selling_price_list_precedence" if mode == "selling" else "buying_price_list_precedence"
-	precedence = _parse_precedence(
-		getattr(settings, fieldname, None),
-		allowed=PRICE_SOURCE_KEYS[mode],
-		fallback=DEFAULT_PRICE_PRECEDENCE[mode],
+	precedence = (
+		_parse_precedence(
+			getattr(settings, fieldname, None),
+			allowed=PRICE_SOURCE_KEYS[mode],
+			fallback=DEFAULT_PRICE_PRECEDENCE[mode],
+		)
+		if enabled
+		else list(DEFAULT_PRICE_PRECEDENCE[mode])
 	)
 	return {
 		"enabled": enabled,
