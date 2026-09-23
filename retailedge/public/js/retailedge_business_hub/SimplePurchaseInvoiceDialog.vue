@@ -427,7 +427,7 @@ export default {
 			this.pricingCache.clear();
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-				this.refreshPriceListContext({ preserveSelection: true }).then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Buying Price List."); });
+				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Buying Price List."); });
 			}
 		},
 		async setBranch(next) {
