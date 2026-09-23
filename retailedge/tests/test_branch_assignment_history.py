@@ -46,6 +46,7 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 			"effective_to",
 			"status",
 			"is_primary",
+			"allowed_price_lists",
 			"transfer_reason",
 			"notes",
 		):
@@ -111,6 +112,20 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		):
 			self.assertNotIn(forbidden, source)
 
+	def test_branch_assignment_price_list_governance_is_history_safe(self):
+		definition = json.loads(ASSIGNMENT_JSON.read_text(encoding="utf-8"))
+		fields = {row["fieldname"]: row for row in definition["fields"]}
+		self.assertEqual(fields["allowed_price_lists"]["options"], "RetailEdge Branch Assignment Price List")
+		source = (APP_ROOT / "branch_assignment.py").read_text(encoding="utf-8")
+		for contract in (
+			"def get_branch_assignment_price_lists(",
+			"def update_branch_assignment_price_lists(",
+			"controlled_assignment_price_list_update",
+			'changed.append("allowed_price_lists")',
+			'"allowed_price_lists": _assignment_price_list_names',
+		):
+			self.assertIn(contract, source)
+
 	def test_edgesuite_history_page_is_sortable_and_has_assign_transfer_actions(self):
 		source = ASSIGNMENT_VUE.read_text(encoding="utf-8")
 		for contract in (
@@ -122,6 +137,10 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 			"sortDirection",
 			"effective_from",
 			"effective_to",
+			"Allowed Price Lists",
+			"Manage Assigned Price Lists",
+			"UPDATE_PRICE_LISTS_METHOD",
+			"EdgeChildTable",
 		):
 			self.assertIn(contract, source)
 
