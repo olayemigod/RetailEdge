@@ -84,6 +84,7 @@ def get_financial_dashboard_context() -> dict[str, Any]:
 			"from_date": str(get_first_day(today())),
 			"to_date": today(),
 			"comparison_mode": preferences["comparison_mode"],
+			"composition_dimension": preferences["composition_dimension"],
 		},
 		"tenant_name": company,
 		"branch_name": branch,
@@ -92,6 +93,7 @@ def get_financial_dashboard_context() -> dict[str, Any]:
 		"capabilities": capabilities,
 		"preferences": preferences,
 		"comparison_options": ["Previous Period", "Off"],
+		"composition_options": ["Item Group", "Brand", "Branch"],
 		"date_reference": today(),
 	}
 
@@ -114,7 +116,9 @@ def get_financial_dashboard_data(
 	comparison_mode = str(filters.get("comparison_mode") or preferences["comparison_mode"]).strip()
 	if comparison_mode not in COMPARISON_MODES:
 		frappe.throw(_("Unsupported Financial Dashboard comparison mode."), frappe.ValidationError)
-	composition_dimension = preferences["composition_dimension"]
+	composition_dimension = str(filters.get("composition_dimension") or preferences["composition_dimension"]).strip()
+	if composition_dimension not in COMPOSITION_DIMENSIONS:
+		frappe.throw(_("Unsupported Financial Dashboard composition dimension."), frappe.ValidationError)
 	from_date = getdate(filters.get("from_date") or get_first_day(today()))
 	to_date = getdate(filters.get("to_date") or today())
 	if from_date > to_date:
@@ -137,14 +141,22 @@ def get_financial_dashboard_data(
 		frappe.get_cached_value("Company", company, "default_currency") or ""
 	)
 
-	sales = _safe_payload(
-		lambda: get_sales_by_item_export(period_filters),
-		restricted_reason=_("Your current permissions do not allow sales detail."),
-	)
 	sales_visual = _safe_payload(
 		lambda: get_sales_visual_aggregates(period_filters),
-		restricted_reason=_("Your current permissions do not allow sales trend or Branch composition."),
+		restricted_reason=_("Your current permissions do not allow sales summary or trend."),
 	)
+	sales = _sales_summary_from_visual(sales_visual)
+	sales_detail = {
+		"available": False,
+		"availability": "unavailable",
+		"reason": _("Item-level sales detail is not required for the selected composition."),
+		"payload": {},
+	}
+	if composition_dimension in {"Item Group", "Brand"}:
+		sales_detail = _safe_payload(
+			lambda: get_sales_by_item_export(period_filters),
+			restricted_reason=_("Your current permissions do not allow sales detail."),
+		)
 	invoices = _safe_payload(
 		lambda: get_sales_invoice_register(
 			filters=period_filters,
@@ -309,7 +321,7 @@ def get_financial_dashboard_data(
 			current_filters=current_filters,
 		) if preferences["show_collection"] else [],
 		"composition": _build_composition(
-			sales=sales,
+			sales=sales_detail,
 			sales_visual=sales_visual,
 			dimension=composition_dimension,
 			branch=branch,
@@ -349,7 +361,7 @@ def get_financial_dashboard_data(
 		),
 		"metadata": {
 			"accounting_authority": "ERPNext",
-			"net_sales_basis": "submitted Sales Invoice Item base_net_amount after returns; tax exclusive; Company currency",
+			"net_sales_basis": "submitted Sales Invoice base_net_total after returns; tax exclusive; Company currency",
 			"posted_expense_basis": "governed consolidated posted expense register",
 			"receivable_payable_basis": "current ERPNext outstanding",
 			"cash_bank_basis": "current eligible Cash/Bank closing balances; Company-only when unrestricted",
@@ -358,7 +370,8 @@ def get_financial_dashboard_data(
 			"comparison_policy": "preceding equal-length period for Net Sales using the bounded tax-exclusive sales aggregate; zero previous values are reported as no comparable baseline",
 			"preferences": preferences,
 			"source_scans": _source_scan_metadata({
-				"sales": sales,
+				"sales_summary": sales_visual,
+				"sales_detail": sales_detail,
 				"invoices": invoices,
 				"expenses": expenses,
 				"receivables": receivables,
@@ -814,6 +827,22 @@ def _build_trends(
 			{"fieldname": "transactions", "label": _("Transactions"), "fieldtype": "Int", "sortable": False},
 		],
 		"rows": rows,
+	}
+
+
+def _sales_summary_from_visual(source: dict[str, Any]) -> dict[str, Any]:
+	if not source.get("available"):
+		return dict(source)
+	payload = source.get("payload") or {}
+	value = sum(flt(row.get("net_sales")) for row in payload.get("trend") or [])
+	return {
+		"available": True,
+		"availability": "available",
+		"reason": "",
+		"payload": {
+			"summary": [{"label": _("Net Sales"), "value": value, "datatype": "Currency"}],
+			"scan": payload.get("scan") or {},
+		},
 	}
 
 
