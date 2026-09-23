@@ -494,6 +494,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_STANDARD) -> dict[str,
 		"company": company,
 		"branch": stock_context["effective_branch"] or invoice_branch,
 		"customer": _clean(doc.get("customer")),
+		"selling_price_list": _clean(doc.get("selling_price_list")),
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
 		"outstanding_amount": flt(doc.get("outstanding_amount")),
@@ -705,6 +706,7 @@ def update_standard_sales_invoice_draft(
 			customer=_clean(doc.get("customer")),
 			posting_date=str(posting_value),
 			default_warehouse=_clean(doc.get("set_warehouse")),
+			selected_price_list=_clean(doc.get("selling_price_list")),
 		)
 
 	# ERPNext owns taxes, totals, source quantity limits, credit controls and
