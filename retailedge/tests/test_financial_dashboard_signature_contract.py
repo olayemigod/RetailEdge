@@ -181,9 +181,11 @@ def test_financial_dashboard_has_governed_comparison_preferences_and_previous_pe
 
 def test_financial_dashboard_comparison_only_publishes_matching_safe_period_metrics():
     provider = PROVIDER.read_text()
-    comparison = provider.split("def _attach_period_comparisons(", 1)[1].split("def _period_comparison(", 1)[0]
-    assert '("net_sales", previous_sales, "Net Sales")' in comparison
-    assert '("posted_expenses", previous_expenses, "Posted Expenses")' in comparison
+    comparison = provider.split("def _attach_period_comparisons(", 1)[1].split("def _period_comparison_value(", 1)[0]
+    assert 'metric = by_id.get("net_sales")' in comparison
+    assert "previous_sales" in comparison
+    assert "get_sales_visual_aggregates(previous_filters)" in provider
+    assert "previous_expenses" not in comparison
     assert "customer_receipts_payment_entries" not in comparison
     assert "sales_margin_contribution" not in comparison
 
@@ -204,3 +206,11 @@ def test_financial_dashboard_optional_sections_are_settings_only_not_permission_
     assert 'preferences["show_outstanding"]' in provider
     assert "require_dashboard_action" in provider
     assert "has_unrestricted_report_scope" in provider
+
+
+def test_previous_period_comparison_avoids_duplicate_wide_expense_scan():
+    provider = PROVIDER.read_text()
+    previous_block = provider.split("if comparison_mode == \"Previous Period\":", 1)[1].split("summary = _build_summary", 1)[0]
+    assert "get_sales_visual_aggregates(previous_filters)" in previous_block
+    assert "get_expense_register" not in previous_block
+    assert "get_sales_by_item_export(previous_filters)" not in previous_block
