@@ -49,6 +49,19 @@ function refreshPendingBusinessHubHandoff(wrapper) {
 	});
 }
 
+
+function bindBusinessHubHandoffRouteRefresh(wrapper) {
+	if (wrapper._retailedgeBusinessHubHandoffRouteRefresh) return;
+	const refresh = () => {
+		const route = frappe.get_route?.();
+		if (!Array.isArray(route) || String(route[0] || "") !== PAGE_ROUTE) return;
+		refreshPendingBusinessHubHandoff(wrapper);
+	};
+	wrapper._retailedgeBusinessHubHandoffRouteRefresh = refresh;
+	document.addEventListener("page-change", refresh);
+	frappe.router?.on?.("change", refresh);
+}
+
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	const bootLoading = document.createElement("div"); bootLoading.className = "edge-boot-loading p-6 text-center text-muted"; bootLoading.textContent = __(`Loading ${PAGE_TITLE}...`); wrapper.appendChild(bootLoading);
@@ -58,6 +71,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		await requireAsync(PURCHASE_REPORTING_ASSET); if (typeof window.mountPurchaseReportingPage !== "function") throw new Error("Purchase reporting bundle is unavailable.");
 		bootLoading.remove(); const root = document.createElement("div"); root.className = "retailedge-purchase-report-root"; page.body.append(root); wrapper._retailedgeVueApp = await window.mountPurchaseReportingPage(root, { reportType: REPORT_TYPE });
 		wrapper._retailedgePageHasShown = true;
+		bindBusinessHubHandoffRouteRefresh(wrapper);
 	} catch (error) { bootLoading.remove(); renderLoadError(wrapper, error); }
 };
 frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
