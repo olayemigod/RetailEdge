@@ -340,11 +340,7 @@ export default {
 				if (!this.formContext.capabilities?.can_edit_update_stock) {
 					this.values.update_stock = 1;
 				}
-				if (this.formContext.capabilities?.can_override_rate === false) {
-					this.itemColumns = this.itemColumns.map((column) =>
-						column.fieldname === "rate" ? { ...column, read_only: 1 } : column
-					);
-				}
+				this.applyRatePermission(this.formContext.pricing || {});
 				this.initialValuesSnapshot = JSON.stringify(this.values);
 			} catch (error) {
 				this.loadError = errorMessage(error, "Unable to prepare Sales Invoice.");
@@ -397,6 +393,12 @@ export default {
 		searchPriceList(query) {
 			return this.searchOptions("price_list", query);
 		},
+		applyRatePermission(pricing = this.formContext.pricing || {}) {
+			const readOnly = pricing?.allow_rate_change === false;
+			this.itemColumns = this.itemColumns.map((column) =>
+				column.fieldname === "rate" ? { ...column, read_only: readOnly ? 1 : 0 } : column
+			);
+		},
 		async refreshPriceListContext({ preserveSelection = false } = {}) {
 			if (!this.values.company) return;
 			const selected = preserveSelection ? (this.values.price_list || "") : "";
@@ -408,6 +410,7 @@ export default {
 				selected_price_list: selected,
 			});
 			this.formContext.pricing = pricing || {};
+			this.applyRatePermission(pricing || {});
 			if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || "";
 		},
 		async setPriceList(next) {
