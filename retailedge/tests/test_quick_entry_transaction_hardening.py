@@ -160,7 +160,7 @@ def test_payment_quick_entry_has_full_page_complex_allocation_escape_paths():
 		'"supplier-payables"',
 		'"payment-management"',
 		"retailedge_business_hub_handoff",
-		"Quick Payment supports one payable reference.",
+		"Quick Payment supports one invoice or order reference.",
 		"validateStandardCustomerDraft()",
 		"managed: this.allowMultiReferenceSupplierPayment ? 1 : 0",
 	):
