@@ -80,6 +80,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		root.className = "retailedge-branch-performance-root";
 		page.body.append(root);
 		wrapper._retailedgeVueApp = await window.mountBranchPerformanceDashboard(root);
+		wrapper._retailedgePageHasShown = true;
 		wrapper._retailedgeBranchPerformanceMounted = true;
 	} catch (error) {
 		bootLoading.remove();
