@@ -134,6 +134,15 @@
 				</div>
 			</section>
 
+			<section v-if="activeTab === 'pricing'" class="form-section">
+				<h4>Pricing defaults</h4>
+				<p class="section-hint">Branch defaults take precedence over user-assigned Price Lists. Leave a default blank when authorised users should choose among their assigned lists.</p>
+				<div class="form-grid">
+					<EdgeLinkField :modelValue="editor.default_selling_price_list" label="Default Selling Price List" placeholder="Optional" description="Used first for sales in this Branch." :searcher="searchDefaultSellingPriceList" @update:modelValue="editor.default_selling_price_list = $event || ''" />
+					<EdgeLinkField :modelValue="editor.default_buying_price_list" label="Default Buying Price List" placeholder="Optional" description="Used first for purchases in this Branch." :searcher="searchDefaultBuyingPriceList" @update:modelValue="editor.default_buying_price_list = $event || ''" />
+				</div>
+			</section>
+
 			<section v-if="activeTab === 'operations'" class="form-section">
 				<h4>POS & stock defaults</h4>
 				<p class="section-hint">POS Profile is optional for non-POS users. Stock Location choices are restricted to the selected Company.</p>
@@ -240,6 +249,7 @@ function blankEditor() {
 	return {
 		name: "", profile_name: "", enabled: 1, company: "", branch: "", is_default_for_company: 0,
 		default_pos_profile: "", default_pos_opening_cash_account: "", default_cash_mode_of_payment: "",
+		default_selling_price_list: "", default_buying_price_list: "",
 		default_warehouse: "", default_source_warehouse: "", default_target_warehouse: "", default_returns_warehouse: "",
 		default_cost_center: "", default_sales_cost_center: "", default_expense_cost_center: "",
 		default_cash_account: "", default_bank_account: "", default_card_pos_account: "", default_mobile_money_account: "",
@@ -249,6 +259,7 @@ function blankEditor() {
 }
 const DEPENDENT_FIELDS = [
 	"default_pos_profile", "default_pos_opening_cash_account", "default_cash_mode_of_payment",
+	"default_selling_price_list", "default_buying_price_list",
 	"default_warehouse", "default_source_warehouse", "default_target_warehouse", "default_returns_warehouse",
 	"default_cost_center", "default_sales_cost_center", "default_expense_cost_center",
 	"default_cash_account", "default_bank_account", "default_card_pos_account", "default_mobile_money_account",
@@ -263,7 +274,7 @@ export default {
 		filters: { company: "", branch: "", enabled: "" }, sortKey: "company", sortDirection: "asc", userName: "", menuItems: [], canUseNativeDesk: false,
 		editorOpen: false, editorLoading: false, saving: false, editorError: "", editor: blankEditor(), state: {}, activeTab: "identity",
 		reassignOpen: false, reassigning: false, reassignError: "", reassign: { company: "", branch: "" },
-		tabs: [{ key: "identity", label: "Identity" }, { key: "operations", label: "POS & Stock" }, { key: "accounting", label: "Accounting" }, { key: "controls", label: "Controls" }],
+		tabs: [{ key: "identity", label: "Identity" }, { key: "pricing", label: "Pricing" }, { key: "operations", label: "POS & Stock" }, { key: "accounting", label: "Accounting" }, { key: "controls", label: "Controls" }],
 		columns: [
 			{ key: "profile_name", label: "Setup" }, { key: "company", label: "Company" }, { key: "branch", label: "Branch" },
 			{ key: "enabled", label: "Status" }, { key: "is_default_for_company", label: "Default" },
@@ -331,6 +342,8 @@ export default {
 		searchEditorCompany(query) { return this.search("company", query, this.editor); },
 		searchEditorBranch(query) { return this.search("branch", query, this.editor); },
 		searchDefaultPosProfile(query) { return this.search("default_pos_profile", query); },
+		searchDefaultSellingPriceList(query) { return this.search("default_selling_price_list", query); },
+		searchDefaultBuyingPriceList(query) { return this.search("default_buying_price_list", query); },
 		searchPosOpeningAccount(query) { return this.search("default_pos_opening_cash_account", query); },
 		searchCashMode(query) { return this.search("default_cash_mode_of_payment", query); },
 		searchDefaultWarehouse(query) { return this.search("default_warehouse", query); },
