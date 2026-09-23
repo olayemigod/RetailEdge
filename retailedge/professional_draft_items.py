@@ -57,6 +57,7 @@ def update_draft_items(
 	posting_date: str,
 	default_warehouse: str = "",
 	default_delivery_date: str = "",
+	selected_price_list: str = "",
 ) -> None:
 	if isinstance(requested_items, str):
 		requested_items = frappe.parse_json(requested_items)
@@ -96,6 +97,7 @@ def update_draft_items(
 				posting_date=posting_date,
 				default_warehouse=default_warehouse,
 				default_delivery_date=default_delivery_date,
+				selected_price_list=selected_price_list,
 			)
 			continue
 
@@ -114,6 +116,7 @@ def update_draft_items(
 			posting_date=posting_date,
 			default_warehouse=default_warehouse,
 			default_delivery_date=default_delivery_date,
+			selected_price_list=selected_price_list,
 		)
 
 	for row_name, row in list(current_rows.items()):
@@ -142,6 +145,7 @@ def _apply_editable_row_values(
 	posting_date: str,
 	default_warehouse: str,
 	default_delivery_date: str,
+	selected_price_list: str,
 ) -> None:
 	qty = flt(values.get("qty"))
 	if qty <= 0:
@@ -165,6 +169,7 @@ def _apply_editable_row_values(
 			warehouse=warehouse,
 			posting_date=posting_date,
 			qty=qty,
+			selected_price_list=selected_price_list,
 		)
 	else:
 		rate = flt(rate_value)
@@ -188,6 +193,7 @@ def _resolve_rate(
 	warehouse: str,
 	posting_date: str,
 	qty: float,
+	selected_price_list: str = "",
 ) -> float:
 	if not item_code:
 		return 0.0
@@ -199,6 +205,7 @@ def _resolve_rate(
 		warehouse=warehouse,
 		posting_date=posting_date,
 		qty=qty,
+		selected_price_list=selected_price_list,
 		user=frappe.session.user,
 	)
 	rate = resolved.get("rate")
