@@ -7,6 +7,7 @@ from unittest.mock import patch
 import frappe
 
 from retailedge.guided_pricing import (
+	get_allowed_price_list_context,
 	resolve_price_list_context,
 	resolve_purchase_item_pricing,
 	resolve_sales_item_pricing,
@@ -212,6 +213,31 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertIn("Wholesale", result["allowed_price_lists"])
 		self.assertIn("User Retail", result["allowed_price_lists"])
 		self.assertTrue(result["can_select"])
+
+	@patch("retailedge.guided_pricing.resolve_price_list_context")
+	@patch("retailedge.guided_pricing.validate_user_branch_access")
+	@patch("retailedge.guided_pricing._assert_read_permission")
+	def test_whitelisted_price_context_revalidates_company_branch_and_party(
+		self, mock_read, mock_branch_access, mock_resolve
+	):
+		mock_resolve.return_value = {"price_list": "Retail", "source": "branch_default"}
+		with patch.object(frappe, "session", frappe._dict(user="sales@example.com")):
+			result = get_allowed_price_list_context(
+				mode="selling",
+				company="Demo Company",
+				branch="Lagos",
+				party="CUST-001",
+			)
+		self.assertEqual(result["price_list"], "Retail")
+		mock_read.assert_any_call("Company", "Demo Company", user="sales@example.com")
+		mock_read.assert_any_call("Branch", "Lagos", user="sales@example.com")
+		mock_read.assert_any_call("Customer", "CUST-001", user="sales@example.com")
+		mock_branch_access.assert_called_once_with(
+			"Lagos",
+			user="sales@example.com",
+			company="Demo Company",
+			throw=True,
+		)
 
 	def test_pricing_uses_erpnext_service_and_validates_selected_price_list(self):
 		source = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
