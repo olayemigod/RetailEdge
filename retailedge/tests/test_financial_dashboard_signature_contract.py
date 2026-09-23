@@ -214,3 +214,18 @@ def test_previous_period_comparison_avoids_duplicate_wide_expense_scan():
     assert "get_sales_visual_aggregates(previous_filters)" in previous_block
     assert "get_expense_register" not in previous_block
     assert "get_sales_by_item_export(previous_filters)" not in previous_block
+
+
+def test_financial_dashboard_never_surfaces_raw_server_tracebacks():
+    ui = OWNER_UI.read_text()
+    assert "window.retailedge?.userErrorMessage?.(error, fallback)" in ui
+    assert "error?.exc" not in ui
+    assert "error?.exception" not in ui
+
+
+def test_financial_dashboard_exposes_source_scan_evidence_without_new_silent_limits():
+    provider = PROVIDER.read_text()
+    assert "def _source_scan_metadata(" in provider
+    assert '"source_scans": _source_scan_metadata({' in provider
+    assert 'payload.get("scan")' in provider
+    assert "MAX_FINANCIAL_DASHBOARD_ROWS" not in provider
