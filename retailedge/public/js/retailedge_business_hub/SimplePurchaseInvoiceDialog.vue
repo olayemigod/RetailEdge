@@ -74,6 +74,18 @@
 				/>
 
 				<EdgeLinkField
+					:modelValue="values.price_list"
+					label="Buying Price List"
+					placeholder="Select assigned Price List"
+					description="Branch default takes precedence. Otherwise choose from Price Lists assigned to you for this Branch."
+					:required="Boolean(formContext.pricing?.selection_required)"
+					:disabled="Boolean(formContext.pricing?.locked) || !Boolean(formContext.pricing?.can_select)"
+					:searcher="searchPriceList"
+					:context="searchContext"
+					@update:modelValue="setPriceList"
+				/>
+
+				<EdgeLinkField
 					:modelValue="values.warehouse"
 					label="Receiving Stock Location"
 					placeholder="Search receiving stock location"
@@ -179,6 +191,7 @@ import {
 const CONTEXT_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_context";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
 const PRICING_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_item_pricing";
+const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
 const CREATE_METHOD = "retailedge.guided_purchase_invoice.create_simple_purchase_invoice_draft";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
@@ -194,6 +207,7 @@ function emptyValues() {
 		bill_date: "",
 		warehouse: "",
 		supplier: "",
+		price_list: "",
 		update_stock: 0,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
@@ -202,6 +216,9 @@ function emptyValues() {
 
 function sourceLabel(source) {
 	return {
+		branch_default: "Branch default",
+		user_selected: "Selected Price List",
+		branch_assignment: "Branch-assigned Price List",
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
 		party_default: "Supplier default",
@@ -296,6 +313,7 @@ export default {
 				branch: this.values.branch,
 				warehouse: this.values.warehouse,
 				supplier: this.values.supplier,
+				price_list: this.values.price_list,
 			};
 		},
 		hasUnsavedChanges() {
@@ -356,6 +374,7 @@ export default {
 					branch: this.values.branch,
 					warehouse: this.values.warehouse,
 					supplier: this.values.supplier,
+					price_list: this.values.price_list,
 				},
 			});
 			return Array.isArray(results) ? results : [];
@@ -368,6 +387,22 @@ export default {
 		},
 		searchWarehouse(query) {
 			return this.searchOptions("warehouse", query);
+		},
+		searchPriceList(query) {
+			return this.searchOptions("price_list", query);
+		},
+		async refreshPriceListContext({ preserveSelection = false } = {}) {
+			if (!this.values.company) return;
+			const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "buying", company: this.values.company, branch: this.values.branch || "", party: this.values.supplier || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" });
+			this.formContext.pricing = pricing || {};
+			if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || "";
+		},
+		async setPriceList(next) {
+			if (this.formContext.pricing?.locked) return;
+			this.values.price_list = next || "";
+			this.pricingCache.clear();
+			try { await this.refreshPriceListContext({ preserveSelection: true }); this.refreshAllItemPricing(); }
+			catch (error) { this.values.price_list = ""; this.saveError = errorMessage(error, "Unable to use the selected Buying Price List."); }
 		},
 		searchLineLink(column, query) {
 			if (column?.fieldname !== "item_code") return Promise.resolve([]);
@@ -392,7 +427,7 @@ export default {
 			this.pricingCache.clear();
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-				this.refreshAllItemPricing();
+				this.refreshPriceListContext({ preserveSelection: true }).then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Buying Price List."); });
 			}
 		},
 		async setBranch(next) {
@@ -412,6 +447,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
+				await this.refreshPriceListContext();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
@@ -462,6 +498,7 @@ export default {
 				this.values.branch,
 				this.values.warehouse,
 				this.values.supplier,
+				this.values.price_list,
 				this.values.posting_date,
 				row.item_code,
 				row.qty || 1,
@@ -483,6 +520,7 @@ export default {
 							branch: this.values.branch,
 							warehouse: this.values.warehouse,
 							supplier: this.values.supplier,
+							price_list: this.values.price_list,
 							posting_date: this.values.posting_date,
 							qty: row.qty || 1,
 						},
@@ -497,9 +535,11 @@ export default {
 				}
 				this.formContext.pricing = {
 					...(this.formContext.pricing || {}),
+					...result,
 					price_list: result?.price_list || this.formContext.pricing?.price_list || "",
 					source: result?.source || this.formContext.pricing?.source || "item_fallback",
 				};
+				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
 			} catch (error) {
 				if (this.pricingTokens[index] === token) {
 					this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
