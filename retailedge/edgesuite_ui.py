@@ -273,10 +273,10 @@ QUICK_ACTIONS: tuple[dict[str, Any], ...] = (
 		"key": "new-sales-invoice", "label": "Quick Sale", "description": "Create a short Sales Invoice quickly. Use Make Sale for larger or multi-item transactions.", "doctype": "Sales Invoice", "icon": "file-text", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record and allocate money received from a customer.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
+		"key": "receive-customer-payment", "label": "Receive Customer Payment", "description": "Record one customer invoice/order receipt or an unallocated advance. Use Payment Management for complex allocation.", "doctype": "Payment Entry", "icon": "download", "experience": "act", "mode": "available",
 	},
 	{
-		"key": "pay-supplier", "label": "Pay Supplier", "description": "Record a supplier payment and allocate outstanding invoices.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
+		"key": "pay-supplier", "label": "Pay Supplier", "description": "Pay one Purchase Invoice quickly. Use Supplier Payables for multi-invoice settlement.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available",
 	},
 	{
 		"key": "deposit-cash", "label": "Deposit Cash", "description": "Deposit available cashier shift cash to an approved company bank account.", "doctype": "Payment Entry", "icon": "upload", "experience": "act", "mode": "available", "cashier_deposit": True,
