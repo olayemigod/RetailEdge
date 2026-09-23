@@ -318,9 +318,9 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 			row["warehouse"] = warehouse
 		doc.append("items", row)
 
-	# The effective Price List and rates are resolved on the server from the
-	# authenticated user's defaults/POS profile and ERPNext pricing engine. The
-	# browser cannot choose a different Price List or bypass a POS rate lock.
+	# The effective Price List and rates are resolved on the server from Branch
+	# defaults, governed user selection and existing defaults/POS context. Browser
+	# input is revalidated and cannot bypass a Branch/POS pricing lock.
 	doc.insert()
 	return {
 		"doctype": doc.doctype,
