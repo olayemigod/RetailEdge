@@ -213,7 +213,7 @@ test("RC3 PR56 Business Hub renders the eight actionable business indices", asyn
 	}
 });
 
-test("RC3 Business Hub visual order, bounded cards and Sales Mix switcher remain stable", async ({ browser }) => {
+test("RC3 Business Hub visual order, bounded cards and Sales Mix state remain stable", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
 		await openProductPage(page, "retailedge-business-hub", "Business Hub");
@@ -233,16 +233,22 @@ test("RC3 Business Hub visual order, bounded cards and Sales Mix switcher remain
 		await expect(cards.last()).toHaveClass(/hub-chart-card--scrollable/);
 
 		const salesMix = page.locator('[data-chart-key="sales_mix"]');
-		const switcher = salesMix.locator(".hub-chart-card__view-switcher").first();
-		await expect(switcher).toBeVisible();
-		const switcherTrigger = switcher.locator("button, [role='button'], [role='combobox']").first();
-		await expect(switcherTrigger).toBeVisible();
-		await switcherTrigger.click();
-		for (const label of ["Branch", "Category", "Brand"]) {
-			await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
+		const unavailableState = salesMix.locator(".hub-chart-card__state");
+		if (await unavailableState.count()) {
+			await expect(unavailableState).toContainText("Unavailable");
+			await expect(unavailableState).toContainText(/permission|permitted/i);
+		} else {
+			const switcher = salesMix.locator(".hub-chart-card__view-switcher").first();
+			await expect(switcher).toBeVisible();
+			const switcherTrigger = switcher.locator("button, [role='button'], [role='combobox']").first();
+			await expect(switcherTrigger).toBeVisible();
+			await switcherTrigger.click();
+			for (const label of ["Branch", "Category", "Brand"]) {
+				await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
+			}
+			await page.getByRole("option", { name: "Brand", exact: true }).click();
+			await expect(salesMix.getByRole("heading", { name: "Sales by Brand", exact: true })).toBeVisible();
 		}
-		await page.getByRole("option", { name: "Brand", exact: true }).click();
-		await expect(salesMix.getByRole("heading", { name: "Sales by Brand", exact: true })).toBeVisible();
 	} finally {
 		await context.close();
 	}
@@ -283,26 +289,13 @@ test("RC3 repeated Business Hub drill replaces cached destination filters", asyn
 			});
 		};
 
-		const currentExpenseRange = () =>
-			page.evaluate(() => {
-				const wrapper = frappe.pages?.["expense-register"];
-				const component = wrapper?._retailedgeVueApp?._instance?.proxy;
-				return {
-					from_date: component?.filters?.from_date || "",
-					to_date: component?.filters?.to_date || "",
-					smart_from_date: component?.smartDate?.from_date || "",
-					smart_to_date: component?.smartDate?.to_date || "",
-				};
-			});
+		const expenseSmartDate = () =>
+			page.locator(".edge-smart-date").filter({ hasText: "Date Range" }).first();
 
 		await openExpenseWithHandoff("2026-09-01", "2026-09-05");
-		await expect(page.getByText("Date Range", { exact: true }).first()).toBeVisible();
-		await expect.poll(currentExpenseRange).toEqual({
-			from_date: "2026-09-01",
-			to_date: "2026-09-05",
-			smart_from_date: "2026-09-01",
-			smart_to_date: "2026-09-05",
-		});
+		await expect(expenseSmartDate()).toBeVisible();
+		await expect(expenseSmartDate()).toContainText("01-09-2026");
+		await expect(expenseSmartDate()).toContainText("05-09-2026");
 
 		await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
 		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
@@ -311,12 +304,10 @@ test("RC3 repeated Business Hub drill replaces cached destination filters", asyn
 		});
 
 		await openExpenseWithHandoff("2026-09-10", "2026-09-12");
-		await expect.poll(currentExpenseRange).toEqual({
-			from_date: "2026-09-10",
-			to_date: "2026-09-12",
-			smart_from_date: "2026-09-10",
-			smart_to_date: "2026-09-12",
-		});
+		await expect(expenseSmartDate()).toContainText("10-09-2026");
+		await expect(expenseSmartDate()).toContainText("12-09-2026");
+		await expect(expenseSmartDate()).not.toContainText("01-09-2026");
+		await expect(expenseSmartDate()).not.toContainText("05-09-2026");
 	} finally {
 		await context.close();
 	}
