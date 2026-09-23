@@ -402,7 +402,7 @@ def _editable_purchase_items(doc) -> list[dict[str, Any]]:
 	]
 
 
-def _resolve_purchase_rate(*, item_code: str, company: str, supplier: str, branch: str, warehouse: str, posting_date: str, qty: float) -> float:
+def _resolve_purchase_rate(*, item_code: str, company: str, supplier: str, branch: str, warehouse: str, posting_date: str, qty: float, selected_price_list: str = "") -> float:
 	resolved = resolve_purchase_item_pricing(
 		item_code=item_code,
 		company=company,
@@ -411,6 +411,7 @@ def _resolve_purchase_rate(*, item_code: str, company: str, supplier: str, branc
 		warehouse=warehouse,
 		posting_date=posting_date,
 		qty=qty,
+		selected_price_list=selected_price_list,
 		user=frappe.session.user,
 	)
 	rate = resolved.get("rate")
@@ -439,6 +440,7 @@ def _update_purchase_draft_items(doc, requested_items: Any, *, source_mode: str,
 	default_warehouse = _clean(doc.get("set_warehouse"))
 	supplier = _clean(doc.get("supplier"))
 	posting_date = _clean(doc.get("posting_date"))
+	buying_price_list = _clean(doc.get("buying_price_list"))
 
 	for index, item in enumerate(requested_items, start=1):
 		if not isinstance(item, dict):
@@ -466,6 +468,7 @@ def _update_purchase_draft_items(doc, requested_items: Any, *, source_mode: str,
 				warehouse=_clean(row.get("warehouse")) or default_warehouse,
 				posting_date=posting_date,
 				qty=qty,
+				selected_price_list=buying_price_list,
 			) if rate_value in (None, "") else flt(rate_value)
 			if rate < 0:
 				frappe.throw(_("Buying Rate on purchase row {0} cannot be negative.").format(index))
@@ -493,6 +496,7 @@ def _update_purchase_draft_items(doc, requested_items: Any, *, source_mode: str,
 			warehouse=default_warehouse,
 			posting_date=posting_date,
 			qty=qty,
+			selected_price_list=buying_price_list,
 		) if rate_value in (None, "") else flt(rate_value)
 		if rate < 0:
 			frappe.throw(_("Buying Rate on purchase row {0} cannot be negative.").format(index))
@@ -566,6 +570,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_DIRECT) -> dict[str, A
 		"branch": stock_context["effective_branch"] or invoice_branch,
 		"supplier": _clean(doc.get("supplier")),
 		"supplier_name": _clean(doc.get("supplier_name")) or _clean(doc.get("supplier")),
+		"buying_price_list": _clean(doc.get("buying_price_list")),
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
 		"outstanding_amount": flt(doc.get("outstanding_amount")),
