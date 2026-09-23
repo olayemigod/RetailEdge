@@ -73,7 +73,7 @@
 					:modelValue="values.price_list"
 					label="Selling Price List"
 					placeholder="Select assigned Price List"
-					description="Branch default takes precedence. Converted Quotations retain their accepted commercial terms."
+					description="The effective default follows Price List Governance. Converted Quotations retain their accepted commercial terms."
 					:required="Boolean(pricingContext.selection_required)"
 					:disabled="Boolean(pricingContext.locked) || !Boolean(pricingContext.can_select)"
 					:searcher="searchPriceList"
