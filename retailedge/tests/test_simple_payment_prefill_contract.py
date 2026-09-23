@@ -21,7 +21,8 @@ class TestSimplePaymentPrefillContract(TestCase):
 		)
 		self.assertIn("const details = await callMethod(REFERENCE_METHOD", component)
 		self.assertIn("details.outstanding_amount", component)
-		self.assertIn("const referenceNames =", component)
+		self.assertIn("const requestedReferenceNames =", component)
+		self.assertIn("const referenceNames = requestedReferenceNames.slice(0, maxReferences)", component)
 		self.assertIn("for (const name of referenceNames)", component)
 		self.assertIn("reference_name: name", component)
 		self.assertIn("party: this.values.party", component)
@@ -37,6 +38,17 @@ class TestSimplePaymentPrefillContract(TestCase):
 		self.assertIn("referenceName ? [referenceName, ...initialReferences] : initialReferences", component)
 		self.assertIn("reference_name: name", component)
 		self.assertIn("one Sales Order advance", component)
+
+	def test_quick_payment_caps_one_reference_while_supplier_payables_can_use_managed_multi_reference(self):
+		component = (
+			APP_ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue"
+		).read_text()
+
+		self.assertIn("Number(this.formContext.limits?.max_references || 1)", component)
+		self.assertIn("Quick Payment supports one payable reference.", component)
+		self.assertIn("validateStandardCustomerDraft()", component)
+		self.assertIn("Quick Receive Customer Payment supports one Sales Invoice or Sales Order reference.", component)
+		self.assertIn("managed: this.allowMultiReferenceSupplierPayment ? 1 : 0", component)
 
 	def test_supplier_payables_can_prefill_multiple_revalidated_references_without_trusting_report_amounts(self):
 		component = (
