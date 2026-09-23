@@ -723,6 +723,7 @@ export default {
 			if (this.isSupplierPayment) filters.supplier = this.values.party || "";
 			else filters.customer = this.values.party || "";
 			const firstReference = (this.values.references || []).find((row) => row?.reference_name)?.reference_name || "";
+			if (this.isSupplierPayment && firstReference) filters.purchase_invoice = firstReference;
 			if (!this.isSupplierPayment && firstReference) filters.sales_invoice = firstReference;
 			const cleanFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
 			window.__retailedgeBusinessHubRouteHandoff = { target, filters: cleanFilters, createdAt: Date.now() };
