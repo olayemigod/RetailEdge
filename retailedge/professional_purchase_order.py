@@ -17,7 +17,11 @@ from retailedge.branch_context import (
 	user_has_global_branch_access,
 	validate_user_branch_access,
 )
-from retailedge.guided_pricing import resolve_price_list_context, resolve_purchase_item_pricing
+from retailedge.guided_pricing import (
+	resolve_price_list_context,
+	resolve_purchase_item_pricing,
+	search_allowed_price_lists,
+)
 from retailedge.guided_purchase_invoice import (
 	MAX_ITEMS,
 	MAX_LINK_RESULTS,
@@ -133,6 +137,7 @@ def get_professional_purchase_order_context() -> dict[str, Any]:
 			"branch": branch,
 			"warehouse": warehouse,
 			"supplier": "",
+			"price_list": pricing.get("price_list") or "",
 			"transaction_date": nowdate(),
 			"schedule_date": nowdate(),
 			"terms": "",
@@ -172,6 +177,15 @@ def search_professional_purchase_order_options(
 				reference_doctype=PURCHASE_ORDER_DOCTYPE,
 				link_fieldname="supplier",
 			)
+		)
+	if fieldname == "price_list":
+		return search_allowed_price_lists(
+			mode="buying",
+			company=company,
+			branch=branch,
+			party=supplier,
+			txt=txt or "",
+			limit=limit,
 		)
 	if fieldname == "item_code":
 		filters: dict[str, Any] = {"is_purchase_item": 1, "disabled": 0}
@@ -244,6 +258,7 @@ def get_professional_purchase_order_item_pricing(
 		warehouse=warehouse,
 		posting_date=values.get("transaction_date") or nowdate(),
 		qty=flt(values.get("qty") or 1),
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=user,
 	)
 
@@ -272,8 +287,11 @@ def create_professional_purchase_order_draft(values: dict | str | None = None) -
 		company=company,
 		branch=branch,
 		party=supplier,
+		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=user,
 	)
+	if pricing_context.get("selection_required"):
+		frappe.throw(_("Choose a Buying Price List assigned to you for this Branch before saving."))
 
 	doc = frappe.new_doc(PURCHASE_ORDER_DOCTYPE)
 	doc.company = company
@@ -299,6 +317,7 @@ def create_professional_purchase_order_draft(values: dict | str | None = None) -
 			warehouse=warehouse,
 			posting_date=str(transaction_date),
 			qty=item["qty"],
+			selected_price_list=pricing_context.get("price_list") or "",
 			user=user,
 		)
 		manual_rate = item.get("rate")
