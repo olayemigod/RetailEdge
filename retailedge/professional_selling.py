@@ -459,7 +459,7 @@ def get_professional_selling_item_pricing(
 	item_code: str,
 	values: dict | str | None = None,
 ) -> dict[str, Any]:
-	"""Resolve item price on the server; the browser never selects the effective Price List."""
+	"""Resolve item price on the server from the merchant-governed effective Price List."""
 	definition = get_selling_document_definition(document)
 	if not _permission(definition["doctype"], "create"):
 		frappe.throw(
