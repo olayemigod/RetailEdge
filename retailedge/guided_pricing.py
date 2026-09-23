@@ -558,6 +558,8 @@ def resolve_sales_item_pricing(
 		selected_price_list=selected_price_list,
 		user=user,
 	)
+	if context.get("selection_required"):
+		frappe.throw(_("Choose a Selling Price List before pricing items."))
 	details = _erpnext_item_details(
 		mode="selling",
 		item_code=item_code,
@@ -608,6 +610,8 @@ def resolve_purchase_item_pricing(
 		selected_price_list=selected_price_list,
 		user=user,
 	)
+	if context.get("selection_required"):
+		frappe.throw(_("Choose a Buying Price List before pricing items."))
 	details = _erpnext_item_details(
 		mode="buying",
 		item_code=item_code,
