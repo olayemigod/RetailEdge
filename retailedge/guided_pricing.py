@@ -5,7 +5,7 @@ from typing import Any, Literal
 import frappe
 from frappe import _
 from frappe.core.doctype.user_permission.user_permission import get_user_permissions
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 from frappe.utils.caching import request_cache
 
 from erpnext.stock.get_item_details import get_item_details, get_pos_profile
@@ -13,6 +13,7 @@ from erpnext.stock.get_item_details import get_item_details, get_pos_profile
 from retailedge.branch_assignment import get_branch_assignment_price_lists
 from retailedge.branch_context import validate_user_branch_access
 from retailedge.branch_profile import get_branch_profile, get_exact_branch_profile
+from retailedge.utils.settings import get_retailedge_settings
 
 PriceMode = Literal["selling", "buying"]
 
@@ -29,6 +30,29 @@ STANDARD_PRICE_LIST: dict[PriceMode, str] = {
 	"selling": "Standard Selling",
 	"buying": "Standard Buying",
 }
+PRICE_SOURCE_KEYS: dict[PriceMode, tuple[str, ...]] = {
+	"selling": (
+		"party_default",
+		"pos_profile",
+		"branch_default",
+		"user_default",
+		"user_permission",
+		"erpnext_default",
+		"standard_price_list",
+	),
+	"buying": (
+		"party_default",
+		"branch_default",
+		"user_default",
+		"user_permission",
+		"erpnext_default",
+		"standard_price_list",
+	),
+}
+DEFAULT_PRICE_PRECEDENCE: dict[PriceMode, tuple[str, ...]] = {
+	"selling": PRICE_SOURCE_KEYS["selling"],
+	"buying": PRICE_SOURCE_KEYS["buying"],
+}
 
 
 @request_cache
@@ -41,18 +65,11 @@ def resolve_price_list_context(
 	selected_price_list: str = "",
 	user: str | None = None,
 ) -> dict[str, Any]:
-	"""Resolve governed Price List context for EdgeSuite transactions.
+	"""Resolve one effective Price List from the merchant's governance policy.
 
-	Precedence is explicit:
-	1. exact Branch Setup default
-	2. a valid user-selected Price List from the current assignment scope
-	3. user's existing default Price List when it remains allowed
-	4. single/default assigned Price List
-	5. POS / party / ERPNext / standard fallbacks
-
-	A Branch default is mandatory for the Branch when configured and cannot be
-	overridden by browser input. Multiple explicitly assigned lists require the
-	user to choose unless an existing valid user default resolves the choice.
+	Branch Assignment Price Lists are selectable alternatives/fallbacks, not a
+	hard-coded source of precedence. The configured policy decides which default
+	source wins and whether the user may switch from it to an assigned alternative.
 	"""
 	user = user or frappe.session.user
 	company = str(company or "").strip()
@@ -64,12 +81,7 @@ def resolve_price_list_context(
 	if not company:
 		frappe.throw(_("Company is required to resolve pricing."))
 
-	branch_default = _branch_default_price_list(
-		mode=mode,
-		company=company,
-		branch=branch,
-		user=user,
-	)
+	policy = _price_list_governance_policy(mode=mode)
 	assignment_scope = _assignment_price_list_scope(
 		mode=mode,
 		company=company,
@@ -77,111 +89,110 @@ def resolve_price_list_context(
 		user=user,
 	)
 	assigned_price_lists = list(assignment_scope["names"])
-	has_assignment_boundary = bool(assignment_scope["restricted"])
-	default_candidate = _default_price_list_candidate(
+	default_candidate = _resolve_default_price_list_candidate(
 		mode=mode,
 		company=company,
 		branch=branch,
 		party=party,
 		user=user,
+		precedence=policy["precedence"],
 	)
 	default_name = str((default_candidate or {}).get("price_list") or "").strip()
-	selectable = list(dict.fromkeys([*assigned_price_lists, *([default_name] if default_name else [])])) if has_assignment_boundary else []
-
-	if branch_default:
-		context = _price_context(branch_default, mode=mode, source="branch_default")
-		context.update(
-			{
-				"branch_default": branch_default,
-				"locked": True,
-				"can_select": False,
-				"selection_required": False,
-				"allowed_price_lists": [branch_default],
-			}
-		)
-		return context
+	default_source = str((default_candidate or {}).get("source") or "").strip()
+	switch_allowed = bool(
+		policy["enabled"]
+		and policy["enable_assigned_switching"]
+		and assigned_price_lists
+		and _source_allows_switch(default_source, policy=policy)
+	)
+	selectable = (
+		list(dict.fromkeys([*([default_name] if default_name else []), *assigned_price_lists]))
+		if switch_allowed
+		else ([default_name] if default_name else [])
+	)
 
 	if selected_price_list:
-		if has_assignment_boundary and selected_price_list not in selectable:
+		if default_name and selected_price_list == default_name:
+			selected_price_list = ""
+		elif not switch_allowed or selected_price_list not in assigned_price_lists:
 			frappe.throw(
-				_("Price List {0} is not assigned or available as your current default for Branch {1}.").format(
-					frappe.bold(selected_price_list),
-					frappe.bold(branch or _("current context")),
+				_("Price List {0} is not selectable under the current Price List Governance policy.").format(
+					frappe.bold(selected_price_list)
 				),
 				frappe.PermissionError,
 			)
-		if not _valid_price_list(
-			selected_price_list,
-			mode=mode,
-			user=user,
-			require_read=selected_price_list not in assigned_price_lists,
-		):
-			frappe.throw(
-				_("Price List {0} is not available for this {1} transaction.").format(
-					frappe.bold(selected_price_list),
-					mode,
-				),
-				frappe.PermissionError,
+		else:
+			context = _price_context(selected_price_list, mode=mode, source="user_selected")
+			context.update(
+				{
+					"branch_default": _branch_default_price_list(
+						mode=mode, company=company, branch=branch, user=user
+					),
+					"resolved_default": default_name,
+					"resolved_default_source": default_source,
+					"locked": False,
+					"can_select": True,
+					"selection_required": False,
+					"allowed_price_lists": selectable,
+					"governance": _public_governance_context(policy),
+				}
 			)
-		context = _price_context(selected_price_list, mode=mode, source="user_selected")
-		context.update(
-			{
-				"branch_default": "",
-				"locked": False,
-				"can_select": bool(assigned_price_lists),
-				"selection_required": False,
-				"allowed_price_lists": selectable,
-			}
-		)
-		return context
+			return context
 
 	if default_candidate:
-		context = _price_context(
-			default_candidate["price_list"],
-			mode=mode,
-			source=default_candidate["source"],
-		)
-		locked = bool(default_candidate.get("locked"))
+		context = _price_context(default_name, mode=mode, source=default_source)
 		context.update(
 			{
 				"pos_profile": default_candidate.get("pos_profile") or "",
 				"allow_rate_change": bool(default_candidate.get("allow_rate_change", True)),
-				"branch_default": "",
-				"locked": locked,
-				"can_select": bool(assigned_price_lists) and not locked,
+				"branch_default": (
+					default_name if default_source == "branch_default" else _branch_default_price_list(
+						mode=mode, company=company, branch=branch, user=user
+					)
+				),
+				"resolved_default": default_name,
+				"resolved_default_source": default_source,
+				"locked": not switch_allowed,
+				"can_select": switch_allowed,
 				"selection_required": False,
 				"allowed_price_lists": selectable,
+				"governance": _public_governance_context(policy),
 			}
 		)
 		return context
 
-	if has_assignment_boundary:
+	if policy["enabled"] and policy["enable_assigned_switching"] and assigned_price_lists:
 		if len(assigned_price_lists) == 1:
 			context = _price_context(assigned_price_lists[0], mode=mode, source="branch_assignment")
 			context.update(
 				{
 					"branch_default": "",
+					"resolved_default": "",
+					"resolved_default_source": "",
 					"locked": False,
 					"can_select": False,
 					"selection_required": False,
 					"allowed_price_lists": assigned_price_lists,
+					"governance": _public_governance_context(policy),
 				}
 			)
 			return context
-		if len(assigned_price_lists) > 1:
-			return {
-				"price_list": "",
-				"currency": "",
-				"source": "branch_assignment",
-				"mode": mode,
-				"pos_profile": "",
-				"allow_rate_change": True,
-				"branch_default": "",
-				"locked": False,
-				"can_select": True,
-				"selection_required": True,
-				"allowed_price_lists": assigned_price_lists,
-			}
+		return {
+			"price_list": "",
+			"currency": "",
+			"source": "branch_assignment",
+			"mode": mode,
+			"pos_profile": "",
+			"allow_rate_change": True,
+			"branch_default": "",
+			"resolved_default": "",
+			"resolved_default_source": "",
+			"locked": False,
+			"can_select": True,
+			"selection_required": True,
+			"allowed_price_lists": assigned_price_lists,
+			"governance": _public_governance_context(policy),
+		}
 
 	return {
 		"price_list": "",
@@ -190,76 +201,171 @@ def resolve_price_list_context(
 		"mode": mode,
 		"pos_profile": "",
 		"allow_rate_change": True,
+		"resolved_default": "",
+		"resolved_default_source": "",
+		"governance": _public_governance_context(policy),
 		**_open_pricing_metadata(),
 	}
 
 
-def _default_price_list_candidate(
+def _price_list_governance_policy(*, mode: PriceMode) -> dict[str, Any]:
+	settings = get_retailedge_settings()
+	enabled = _setting_bool(settings, "enable_price_list_governance", True)
+	fieldname = "selling_price_list_precedence" if mode == "selling" else "buying_price_list_precedence"
+	precedence = _parse_precedence(
+		getattr(settings, fieldname, None),
+		allowed=PRICE_SOURCE_KEYS[mode],
+		fallback=DEFAULT_PRICE_PRECEDENCE[mode],
+	)
+	return {
+		"enabled": enabled,
+		"precedence": precedence,
+		"enable_assigned_switching": (
+			_setting_bool(settings, "enable_assigned_price_list_switching", True)
+			if enabled
+			else False
+		),
+		"allow_switch_from_party_default": _setting_bool(
+			settings, "allow_price_list_switch_from_party_default", False
+		),
+		"allow_switch_from_pos_profile": _setting_bool(
+			settings, "allow_price_list_switch_from_pos_default", False
+		),
+		"allow_switch_from_branch_default": _setting_bool(
+			settings, "allow_price_list_switch_from_branch_default", True
+		),
+		"allow_switch_from_user_default": _setting_bool(
+			settings, "allow_price_list_switch_from_user_default", True
+		),
+		"allow_switch_from_system_default": _setting_bool(
+			settings, "allow_price_list_switch_from_system_default", True
+		),
+	}
+
+
+def _setting_bool(settings, fieldname: str, default: bool) -> bool:
+	value = getattr(settings, fieldname, None)
+	if value in (None, ""):
+		return bool(default)
+	return bool(cint(value))
+
+
+def _parse_precedence(
+	value,
+	*,
+	allowed: tuple[str, ...],
+	fallback: tuple[str, ...],
+) -> list[str]:
+	raw = str(value or "").replace(">", "\n").replace(",", "\n")
+	keys: list[str] = []
+	for line in raw.splitlines():
+		key = line.strip()
+		if key and key in allowed and key not in keys:
+			keys.append(key)
+	return keys or list(fallback)
+
+
+def _public_governance_context(policy: dict[str, Any]) -> dict[str, Any]:
+	return {
+		"enabled": bool(policy.get("enabled")),
+		"precedence": list(policy.get("precedence") or []),
+		"enable_assigned_switching": bool(policy.get("enable_assigned_switching")),
+	}
+
+
+def _source_allows_switch(source: str, *, policy: dict[str, Any]) -> bool:
+	if not source:
+		return True
+	if source == "party_default":
+		return bool(policy.get("allow_switch_from_party_default"))
+	if source == "pos_profile":
+		return bool(policy.get("allow_switch_from_pos_profile"))
+	if source == "branch_default":
+		return bool(policy.get("allow_switch_from_branch_default"))
+	if source in {"user_default", "user_permission"}:
+		return bool(policy.get("allow_switch_from_user_default"))
+	if source in {"erpnext_default", "standard_price_list"}:
+		return bool(policy.get("allow_switch_from_system_default"))
+	return True
+
+
+def _resolve_default_price_list_candidate(
 	*,
 	mode: PriceMode,
 	company: str,
 	branch: str,
 	party: str,
 	user: str,
+	precedence: list[str],
 ) -> dict[str, Any] | None:
-	"""Return the first valid existing default without changing established precedence."""
+	for source in precedence:
+		row = _price_source_candidate(
+			source=source,
+			mode=mode,
+			company=company,
+			branch=branch,
+			party=party,
+			user=user,
+		)
+		if row:
+			return row
+	return None
+
+
+def _price_source_candidate(
+	*,
+	source: str,
+	mode: PriceMode,
+	company: str,
+	branch: str,
+	party: str,
+	user: str,
+) -> dict[str, Any] | None:
 	def candidate(
 		name: str,
-		source: str,
 		*,
 		pos_profile: str = "",
 		allow_rate_change: bool = True,
-		locked: bool = False,
 	) -> dict[str, Any] | None:
 		name = str(name or "").strip()
-		if not name or not _valid_price_list(name, mode=mode, user=user):
+		if not name or not _valid_price_list(name, mode=mode, user=user, require_read=False):
 			return None
 		return {
 			"price_list": name,
 			"source": source,
 			"pos_profile": pos_profile,
 			"allow_rate_change": allow_rate_change,
-			"locked": locked,
 		}
 
-	for key in USER_DEFAULT_KEYS[mode]:
-		row = candidate(str(frappe.defaults.get_user_default(key) or "").strip(), "user_default")
-		if row:
-			return row
-
-	row = candidate(_default_user_permission_price_list(user=user, mode=mode), "user_permission")
-	if row:
-		return row
-
-	if mode == "selling":
+	if source == "party_default":
+		return candidate(_party_price_list(mode=mode, party=party))
+	if source == "pos_profile":
+		if mode != "selling":
+			return None
 		pos = _resolve_user_pos_profile(company=company, branch=branch, user=user)
-		if pos:
-			allow_rate_change = bool(pos.get("allow_rate_change"))
-			row = candidate(
-				str(pos.get("selling_price_list") or "").strip(),
-				"pos_profile",
-				pos_profile=str(pos.get("name") or "").strip(),
-				allow_rate_change=allow_rate_change,
-				locked=not allow_rate_change,
-			)
+		if not pos:
+			return None
+		return candidate(
+			str(pos.get("selling_price_list") or "").strip(),
+			pos_profile=str(pos.get("name") or "").strip(),
+			allow_rate_change=bool(pos.get("allow_rate_change")),
+		)
+	if source == "branch_default":
+		return candidate(_branch_default_price_list(mode=mode, company=company, branch=branch, user=user))
+	if source == "user_default":
+		for key in USER_DEFAULT_KEYS[mode]:
+			row = candidate(str(frappe.defaults.get_user_default(key) or "").strip())
 			if row:
 				return row
-
-	row = candidate(_party_price_list(mode=mode, party=party), "party_default")
-	if row:
-		return row
-
-	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
-	row = candidate(
-		str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip(),
-		"erpnext_default",
-	)
-	if row:
-		return row
-
-	return candidate(STANDARD_PRICE_LIST[mode], "standard_price_list")
-
-
+		return None
+	if source == "user_permission":
+		return candidate(_default_user_permission_price_list(user=user, mode=mode))
+	if source == "erpnext_default":
+		settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
+		return candidate(str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip())
+	if source == "standard_price_list":
+		return candidate(STANDARD_PRICE_LIST[mode])
+	return None
 
 
 def _open_pricing_metadata() -> dict[str, Any]:
