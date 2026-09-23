@@ -269,7 +269,8 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("const pending = global.frappe.require(asset, finish)", controller)
 		self.assertIn('typeof pending.then === "function"', controller)
 		self.assertIn("pending.then(finish).catch(fail)", controller)
-		self.assertIn("if (!currentWrapper._retailedgeBusinessHub)", controller)
+		self.assertIn("if (wrapper._retailedgeBusinessHubBootPromise)", controller)
+		self.assertIn("const mountedComponent = getMountedComponent(wrapper)", controller)
 		self.assertIn("return bootBusinessHub(currentWrapper)", controller)
 
 	def test_edge_suite_waffle_is_booted_across_desk(self):
