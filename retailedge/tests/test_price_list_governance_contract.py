@@ -87,9 +87,16 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 		settings_page = (
 			APP_ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.py"
 		).read_text(encoding="utf-8")
+		settings_vue = (
+			APP_ROOT / "public" / "js" / "retail_settings" / "RetailSettings.vue"
+		).read_text(encoding="utf-8")
 		self.assertIn('"key": "pricing-governance"', settings_page)
 		self.assertIn('"selling_price_list_precedence"', settings_page)
 		self.assertIn('"buying_price_list_precedence"', settings_page)
+		self.assertIn("PRICE_LIST_PRIORITY_OPTIONS", settings_page)
+		self.assertIn('"fieldtype": "PriorityList"', settings_page)
+		self.assertIn("priorityOption(field, source)", settings_vue)
+		self.assertIn("movePriority(field.fieldname, index, -1)", settings_vue)
 
 	def test_all_primary_sales_and_purchase_entry_surfaces_expose_price_list_selection(self):
 		surfaces = {
