@@ -185,6 +185,7 @@ def _build_preview(doc) -> dict[str, Any]:
 		"company": company,
 		"branch": branch,
 		"party": _party_value(doc),
+		"selling_price_list": _clean(doc.get("selling_price_list")),
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
 		"item_count": len(list(doc.get("items") or [])),
@@ -299,6 +300,7 @@ def update_standard_selling_draft(
 		posting_date=str(transaction_date),
 		default_warehouse=_clean(doc.get("set_warehouse")),
 		default_delivery_date=_clean(doc.get("delivery_date")),
+		selected_price_list=_clean(doc.get("selling_price_list")),
 	)
 
 	doc.save()
