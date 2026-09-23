@@ -138,9 +138,8 @@
 			</p>
 
 			<p class="guided-purchase-hint">
-				Buying Rate follows your assigned Buying Price List and ERPNext buying defaults, Item Prices
-				and last-purchase information. If no valid rate is available, enter the agreed supplier rate
-				or configure the buying price before saving.
+				The Branch default Buying Price List takes precedence. Otherwise the current valid default remains selected and Branch-assigned alternatives can be chosen.
+				Changing the Price List automatically re-prices entered items. If no valid buying rate is available, enter the agreed supplier rate or configure Item Price before saving.
 			</p>
 
 			<label class="guided-field guided-field--wide">
