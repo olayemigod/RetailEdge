@@ -131,6 +131,20 @@ def test_quick_modals_warn_before_discard_and_continue_to_full_pages():
 			assert contract in source
 
 
+def test_small_quick_finance_modals_warn_before_discarding_unsaved_changes():
+	dialogs = {
+		"SimpleCashDepositDialog.vue": "Discard the unsaved Deposit Cash changes?",
+		"SimpleCashTransferDialog.vue": "Discard the unsaved Cash / Bank Transfer changes?",
+		"SimpleCashierExpenseDialog.vue": "Discard the unsaved Cashier Expense changes?",
+	}
+	for filename, warning in dialogs.items():
+		source = (ROOT / "public" / "js" / "retailedge_business_hub" / filename).read_text(encoding="utf-8")
+		assert "hasUnsavedChanges" in source
+		assert "initialValuesSnapshot" in source
+		assert warning in source
+		assert "frappe.confirm" in source
+
+
 def test_business_hub_handoffs_preserve_entered_transaction_context():
 	hub = HUB.read_text(encoding="utf-8")
 	for route in ("make-sale", "record-purchase", "transfer-stock", "stock-adjustment"):
