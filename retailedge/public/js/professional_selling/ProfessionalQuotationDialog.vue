@@ -175,6 +175,7 @@ export default {
 			if (next) {
 				this.pricingContext = { ...(this.context.pricing || {}) };
 				this.values = initialValues(this.context);
+				this.applyRatePermission(this.pricingContext);
 				this.saveError = "";
 			}
 		},
@@ -195,7 +196,13 @@ export default {
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
 		searchPriceList(query) { return this.searchOptions("price_list", query); },
-		async refreshPriceListContext({ preserveSelection = false } = {}) { const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "selling", company: this.values.company, branch: this.values.branch || "", party: this.values.customer || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" }); this.pricingContext = pricing || {}; if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || ""; },
+		applyRatePermission(pricing = this.pricingContext || {}) {
+			const readOnly = pricing?.allow_rate_change === false;
+			this.itemColumns = this.itemColumns.map((column) =>
+				column.fieldname === "rate" ? { ...column, read_only: readOnly ? 1 : 0 } : column
+			);
+		},
+		async refreshPriceListContext({ preserveSelection = false } = {}) { const pricing = await callMethod(PRICE_CONTEXT_METHOD, { mode: "selling", company: this.values.company, branch: this.values.branch || "", party: this.values.customer || "", selected_price_list: preserveSelection ? (this.values.price_list || "") : "" }); this.pricingContext = pricing || {}; this.applyRatePermission(pricing || {}); if (pricing?.locked || pricing?.price_list || !preserveSelection) this.values.price_list = pricing?.price_list || ""; },
 		async setPriceList(next) { if (this.pricingContext?.locked) return; this.values.price_list = next || ""; try { await this.refreshPriceListContext({ preserveSelection: true }); this.refreshAllItemPricing(); } catch (error) { this.values.price_list = ""; this.saveError = errorMessage(error, "Unable to use the selected Selling Price List."); } },
 		searchShippingRule(query) { return this.searchOptions("shipping_rule", query); },
 		searchLineLink(column, query) {
@@ -285,7 +292,7 @@ export default {
 				});
 				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate };
-				this.pricingContext = { ...(this.pricingContext || {}), ...(result || {}) };
+				this.pricingContext = { ...(this.pricingContext || {}), ...(result || {}) }; this.applyRatePermission(this.pricingContext);
 				if (result?.price_list && (result?.locked || !this.values.price_list)) this.values.price_list = result.price_list;
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
