@@ -78,8 +78,15 @@ def resolve_price_list_context(
 	)
 	assigned_price_lists = list(assignment_scope["names"])
 	has_assignment_boundary = bool(assignment_scope["restricted"])
-	default_price_lists = _default_selectable_price_lists(mode=mode, user=user) if has_assignment_boundary else []
-	selectable = list(dict.fromkeys([*assigned_price_lists, *default_price_lists])) if has_assignment_boundary else []
+	default_candidates = _default_price_list_candidates(
+		mode=mode,
+		company=company,
+		branch=branch,
+		party=party,
+		user=user,
+	)
+	default_names = [str(row.get("price_list") or "").strip() for row in default_candidates if row.get("price_list")]
+	selectable = list(dict.fromkeys([*assigned_price_lists, *default_names])) if has_assignment_boundary else []
 
 	if branch_default:
 		context = _price_context(branch_default, mode=mode, source="branch_default")
@@ -89,7 +96,7 @@ def resolve_price_list_context(
 				"locked": True,
 				"can_select": False,
 				"selection_required": False,
-				"allowed_price_lists": selectable,
+				"allowed_price_lists": [branch_default],
 			}
 		)
 		return context
@@ -97,7 +104,7 @@ def resolve_price_list_context(
 	if selected_price_list:
 		if has_assignment_boundary and selected_price_list not in selectable:
 			frappe.throw(
-				_("Price List {0} is not assigned to you for Branch {1}.").format(
+				_("Price List {0} is not assigned or available as your current default for Branch {1}.").format(
 					frappe.bold(selected_price_list),
 					frappe.bold(branch or _("current context")),
 				),
@@ -107,7 +114,7 @@ def resolve_price_list_context(
 			selected_price_list,
 			mode=mode,
 			user=user,
-			require_read=not has_assignment_boundary,
+			require_read=selected_price_list not in assigned_price_lists,
 		):
 			frappe.throw(
 				_("Price List {0} is not available for this {1} transaction.").format(
@@ -121,41 +128,28 @@ def resolve_price_list_context(
 			{
 				"branch_default": "",
 				"locked": False,
-				"can_select": bool(selectable),
+				"can_select": bool(assigned_price_lists),
 				"selection_required": False,
 				"allowed_price_lists": selectable,
 			}
 		)
 		return context
 
-	for key in USER_DEFAULT_KEYS[mode]:
-		candidate = str(frappe.defaults.get_user_default(key) or "").strip()
-		if (
-			candidate
-			and _valid_price_list(candidate, mode=mode, user=user)
-		):
-			context = _price_context(candidate, mode=mode, source="user_default")
-			context.update(
-				{
-					"branch_default": "",
-					"locked": False,
-					"can_select": bool(selectable),
-					"selection_required": False,
-					"allowed_price_lists": selectable,
-				}
-			)
-			return context
-
-	permission_candidate = _default_user_permission_price_list(user=user, mode=mode)
-	if (
-		permission_candidate
-	):
-		context = _price_context(permission_candidate, mode=mode, source="user_permission")
+	if default_candidates:
+		default = default_candidates[0]
+		context = _price_context(
+			default["price_list"],
+			mode=mode,
+			source=default["source"],
+		)
+		locked = bool(default.get("locked"))
 		context.update(
 			{
+				"pos_profile": default.get("pos_profile") or "",
+				"allow_rate_change": bool(default.get("allow_rate_change", True)),
 				"branch_default": "",
-				"locked": False,
-				"can_select": bool(selectable),
+				"locked": locked,
+				"can_select": bool(assigned_price_lists) and not locked,
 				"selection_required": False,
 				"allowed_price_lists": selectable,
 			}
@@ -163,19 +157,19 @@ def resolve_price_list_context(
 		return context
 
 	if has_assignment_boundary:
-		if len(selectable) == 1:
-			context = _price_context(selectable[0], mode=mode, source="branch_assignment")
+		if len(assigned_price_lists) == 1:
+			context = _price_context(assigned_price_lists[0], mode=mode, source="branch_assignment")
 			context.update(
 				{
 					"branch_default": "",
 					"locked": False,
 					"can_select": False,
 					"selection_required": False,
-					"allowed_price_lists": selectable,
+					"allowed_price_lists": assigned_price_lists,
 				}
 			)
 			return context
-		if len(selectable) > 1:
+		if len(assigned_price_lists) > 1:
 			return {
 				"price_list": "",
 				"currency": "",
@@ -187,45 +181,8 @@ def resolve_price_list_context(
 				"locked": False,
 				"can_select": True,
 				"selection_required": True,
-				"allowed_price_lists": selectable,
+				"allowed_price_lists": assigned_price_lists,
 			}
-
-	if mode == "selling":
-		pos = _resolve_user_pos_profile(company=company, branch=branch, user=user)
-		pos_price_list = str(pos.get("selling_price_list") or "").strip() if pos else ""
-		if pos and pos_price_list and _valid_price_list(pos_price_list, mode="selling", user=user):
-			context = _price_context(pos_price_list, mode="selling", source="pos_profile")
-			context.update(
-				{
-					"pos_profile": pos.get("name") or "",
-					"allow_rate_change": bool(pos.get("allow_rate_change")),
-					"branch_default": "",
-					"locked": not bool(pos.get("allow_rate_change")),
-					"can_select": False,
-					"selection_required": False,
-					"allowed_price_lists": [],
-				}
-			)
-			return context
-
-	party_price_list = _party_price_list(mode=mode, party=party)
-	if party_price_list and _valid_price_list(party_price_list, mode=mode, user=user):
-		context = _price_context(party_price_list, mode=mode, source="party_default")
-		context.update(_open_pricing_metadata())
-		return context
-
-	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
-	candidate = str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip()
-	if candidate and _valid_price_list(candidate, mode=mode, user=user):
-		context = _price_context(candidate, mode=mode, source="erpnext_default")
-		context.update(_open_pricing_metadata())
-		return context
-
-	candidate = STANDARD_PRICE_LIST[mode]
-	if _valid_price_list(candidate, mode=mode, user=user):
-		context = _price_context(candidate, mode=mode, source="standard_price_list")
-		context.update(_open_pricing_metadata())
-		return context
 
 	return {
 		"price_list": "",
@@ -236,6 +193,75 @@ def resolve_price_list_context(
 		"allow_rate_change": True,
 		**_open_pricing_metadata(),
 	}
+
+
+def _default_price_list_candidates(
+	*,
+	mode: PriceMode,
+	company: str,
+	branch: str,
+	party: str,
+	user: str,
+) -> list[dict[str, Any]]:
+	"""Return existing defaults in their established precedence without mutating them."""
+	result: list[dict[str, Any]] = []
+	seen: set[str] = set()
+
+	def add(
+		name: str,
+		source: str,
+		*,
+		require_read: bool = True,
+		pos_profile: str = "",
+		allow_rate_change: bool = True,
+		locked: bool = False,
+	) -> None:
+		name = str(name or "").strip()
+		if not name or name in seen or not _valid_price_list(
+			name,
+			mode=mode,
+			user=user,
+			require_read=require_read,
+		):
+			return
+		seen.add(name)
+		result.append(
+			{
+				"price_list": name,
+				"source": source,
+				"pos_profile": pos_profile,
+				"allow_rate_change": allow_rate_change,
+				"locked": locked,
+			}
+		)
+
+	for key in USER_DEFAULT_KEYS[mode]:
+		add(str(frappe.defaults.get_user_default(key) or "").strip(), "user_default")
+
+	add(_default_user_permission_price_list(user=user, mode=mode), "user_permission")
+
+	if mode == "selling":
+		pos = _resolve_user_pos_profile(company=company, branch=branch, user=user)
+		if pos:
+			allow_rate_change = bool(pos.get("allow_rate_change"))
+			add(
+				str(pos.get("selling_price_list") or "").strip(),
+				"pos_profile",
+				pos_profile=str(pos.get("name") or "").strip(),
+				allow_rate_change=allow_rate_change,
+				locked=not allow_rate_change,
+			)
+
+	add(_party_price_list(mode=mode, party=party), "party_default")
+
+	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
+	add(
+		str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip(),
+		"erpnext_default",
+	)
+
+	add(STANDARD_PRICE_LIST[mode], "standard_price_list")
+	return result
 
 
 def _open_pricing_metadata() -> dict[str, Any]:
