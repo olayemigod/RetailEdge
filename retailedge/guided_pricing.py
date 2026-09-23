@@ -78,15 +78,15 @@ def resolve_price_list_context(
 	)
 	assigned_price_lists = list(assignment_scope["names"])
 	has_assignment_boundary = bool(assignment_scope["restricted"])
-	default_candidates = _default_price_list_candidates(
+	default_candidate = _default_price_list_candidate(
 		mode=mode,
 		company=company,
 		branch=branch,
 		party=party,
 		user=user,
 	)
-	default_names = [str(row.get("price_list") or "").strip() for row in default_candidates if row.get("price_list")]
-	selectable = list(dict.fromkeys([*assigned_price_lists, *default_names])) if has_assignment_boundary else []
+	default_name = str((default_candidate or {}).get("price_list") or "").strip()
+	selectable = list(dict.fromkeys([*assigned_price_lists, *([default_name] if default_name else [])])) if has_assignment_boundary else []
 
 	if branch_default:
 		context = _price_context(branch_default, mode=mode, source="branch_default")
@@ -135,18 +135,17 @@ def resolve_price_list_context(
 		)
 		return context
 
-	if default_candidates:
-		default = default_candidates[0]
+	if default_candidate:
 		context = _price_context(
-			default["price_list"],
+			default_candidate["price_list"],
 			mode=mode,
-			source=default["source"],
+			source=default_candidate["source"],
 		)
-		locked = bool(default.get("locked"))
+		locked = bool(default_candidate.get("locked"))
 		context.update(
 			{
-				"pos_profile": default.get("pos_profile") or "",
-				"allow_rate_change": bool(default.get("allow_rate_change", True)),
+				"pos_profile": default_candidate.get("pos_profile") or "",
+				"allow_rate_change": bool(default_candidate.get("allow_rate_change", True)),
 				"branch_default": "",
 				"locked": locked,
 				"can_select": bool(assigned_price_lists) and not locked,
@@ -195,73 +194,72 @@ def resolve_price_list_context(
 	}
 
 
-def _default_price_list_candidates(
+def _default_price_list_candidate(
 	*,
 	mode: PriceMode,
 	company: str,
 	branch: str,
 	party: str,
 	user: str,
-) -> list[dict[str, Any]]:
-	"""Return existing defaults in their established precedence without mutating them."""
-	result: list[dict[str, Any]] = []
-	seen: set[str] = set()
-
-	def add(
+) -> dict[str, Any] | None:
+	"""Return the first valid existing default without changing established precedence."""
+	def candidate(
 		name: str,
 		source: str,
 		*,
-		require_read: bool = True,
 		pos_profile: str = "",
 		allow_rate_change: bool = True,
 		locked: bool = False,
-	) -> None:
+	) -> dict[str, Any] | None:
 		name = str(name or "").strip()
-		if not name or name in seen or not _valid_price_list(
-			name,
-			mode=mode,
-			user=user,
-			require_read=require_read,
-		):
-			return
-		seen.add(name)
-		result.append(
-			{
-				"price_list": name,
-				"source": source,
-				"pos_profile": pos_profile,
-				"allow_rate_change": allow_rate_change,
-				"locked": locked,
-			}
-		)
+		if not name or not _valid_price_list(name, mode=mode, user=user):
+			return None
+		return {
+			"price_list": name,
+			"source": source,
+			"pos_profile": pos_profile,
+			"allow_rate_change": allow_rate_change,
+			"locked": locked,
+		}
 
 	for key in USER_DEFAULT_KEYS[mode]:
-		add(str(frappe.defaults.get_user_default(key) or "").strip(), "user_default")
+		row = candidate(str(frappe.defaults.get_user_default(key) or "").strip(), "user_default")
+		if row:
+			return row
 
-	add(_default_user_permission_price_list(user=user, mode=mode), "user_permission")
+	row = candidate(_default_user_permission_price_list(user=user, mode=mode), "user_permission")
+	if row:
+		return row
 
 	if mode == "selling":
 		pos = _resolve_user_pos_profile(company=company, branch=branch, user=user)
 		if pos:
 			allow_rate_change = bool(pos.get("allow_rate_change"))
-			add(
+			row = candidate(
 				str(pos.get("selling_price_list") or "").strip(),
 				"pos_profile",
 				pos_profile=str(pos.get("name") or "").strip(),
 				allow_rate_change=allow_rate_change,
 				locked=not allow_rate_change,
 			)
+			if row:
+				return row
 
-	add(_party_price_list(mode=mode, party=party), "party_default")
+	row = candidate(_party_price_list(mode=mode, party=party), "party_default")
+	if row:
+		return row
 
 	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
-	add(
+	row = candidate(
 		str(frappe.db.get_single_value(settings_doctype, settings_field) or "").strip(),
 		"erpnext_default",
 	)
+	if row:
+		return row
 
-	add(STANDARD_PRICE_LIST[mode], "standard_price_list")
-	return result
+	return candidate(STANDARD_PRICE_LIST[mode], "standard_price_list")
+
+
 
 
 def _open_pricing_metadata() -> dict[str, Any]:
