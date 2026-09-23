@@ -100,7 +100,12 @@ def resolve_price_list_context(
 				),
 				frappe.PermissionError,
 			)
-		if not _valid_price_list(selected_price_list, mode=mode, user=user):
+		if not _valid_price_list(
+			selected_price_list,
+			mode=mode,
+			user=user,
+			require_read=not has_assignment_boundary,
+		):
 			frappe.throw(
 				_("Price List {0} is not available for this {1} transaction.").format(
 					frappe.bold(selected_price_list),
@@ -256,7 +261,7 @@ def _branch_default_price_list(
 		return ""
 	fieldname = "default_selling_price_list" if mode == "selling" else "default_buying_price_list"
 	candidate = str(getattr(profile, fieldname, None) or "").strip()
-	if candidate and _valid_price_list(candidate, mode=mode, user=user):
+	if candidate and _valid_price_list(candidate, mode=mode, user=user, require_read=False):
 		return candidate
 	return ""
 
@@ -277,11 +282,11 @@ def _assignment_price_list_scope(
 	valid = [
 		name
 		for name in dict.fromkeys(raw_names)
-		if _valid_price_list(name, mode=mode, user=user)
+		if _valid_price_list(name, mode=mode, user=user, require_read=False)
 	]
 	return {
 		"names": valid,
-		"restricted": bool(raw_names),
+		"restricted": bool(valid),
 		"assignment_names": scope.get("assignment_names") or [],
 	}
 
@@ -555,13 +560,21 @@ def _party_price_list(*, mode: PriceMode, party: str) -> str:
 	return str(frappe.db.get_value("Supplier", party, "default_price_list") or "").strip()
 
 
-def _valid_price_list(name: str | None, *, mode: PriceMode, user: str) -> bool:
+def _valid_price_list(
+	name: str | None,
+	*,
+	mode: PriceMode,
+	user: str,
+	require_read: bool = True,
+) -> bool:
 	name = str(name or "").strip()
 	if not name:
 		return False
 	row = frappe.db.get_value("Price List", name, ["enabled", mode], as_dict=True)
 	if not row or not row.get("enabled") or not row.get(mode):
 		return False
+	if not require_read:
+		return True
 	return bool(frappe.has_permission("Price List", "read", doc=name, user=user))
 
 
