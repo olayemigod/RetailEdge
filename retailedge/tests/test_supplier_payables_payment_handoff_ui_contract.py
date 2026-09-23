@@ -37,8 +37,9 @@ class TestSupplierPayablesPaymentHandoffUIContract(TestCase):
 		self.assertIn('branch: row.branch || this.filters.branch || ""', component)
 		self.assertIn("handleSupplierPaymentSaved", component)
 		self.assertIn("await this.fetchData()", component)
-		self.assertIn("hubHandoff.purchase_invoice", component)
-		self.assertIn("reference_name: hubHandoff.purchase_invoice", component)
+		self.assertIn("const handoffPurchaseInvoice = String(hubHandoff.purchase_invoice || \"\").trim()", component)
+		self.assertIn("const { purchase_invoice: _purchaseInvoice, ...reportHandoff } = hubHandoff", component)
+		self.assertIn("reference_name: handoffPurchaseInvoice", component)
 		self.assertNotIn('frappe.set_route("Form", "Payment Entry", result.name)', component)
 
 	def test_quick_supplier_escape_preserves_current_purchase_invoice(self):
