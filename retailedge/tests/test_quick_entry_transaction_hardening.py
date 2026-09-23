@@ -151,18 +151,31 @@ def test_transaction_workspace_exposes_full_page_primary_and_quick_companions():
 
 def test_payment_quick_entry_has_full_page_complex_allocation_escape_paths():
 	dialog = (ROOT / "public" / "js" / "retailedge_business_hub" / "SimplePaymentDialog.vue").read_text(encoding="utf-8")
+	backend = (ROOT / "guided_payment.py").read_text(encoding="utf-8")
 	payment_management = (ROOT / "public" / "js" / "payment_management" / "PaymentManagement.vue").read_text(encoding="utf-8")
+	supplier_payables = (ROOT / "public" / "js" / "purchase_reporting" / "PurchaseReportingReport.vue").read_text(encoding="utf-8")
 	for contract in (
 		"Discard the unsaved Quick Payment changes?",
 		"Open {{ managedPageLabel }}",
 		'"supplier-payables"',
 		'"payment-management"',
 		"retailedge_business_hub_handoff",
+		"Quick Payment supports one payable reference.",
+		"validateStandardCustomerDraft()",
+		"managed: this.allowMultiReferenceSupplierPayment ? 1 : 0",
 	):
 		assert contract in dialog
+	for contract in (
+		"QUICK_MAX_REFERENCES = 1",
+		'"max_references": MAX_REFERENCES if managed_supplier_settlement else QUICK_MAX_REFERENCES',
+		'min_references = 0 if intent == "receive-customer-payment" else 1',
+		'if not _can_open_page("supplier-payables"):',
+	):
+		assert contract in backend
 	assert 'retailedgeConsumeBusinessHubRouteOptions?.("payment-management")' in payment_management
 	assert "routeCustomer" in payment_management
 	assert "routeBranch" in payment_management
+	assert ':allowMultiReferenceSupplierPayment="true"' in supplier_payables
 
 
 
