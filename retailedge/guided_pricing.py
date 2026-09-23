@@ -11,6 +11,7 @@ from frappe.utils.caching import request_cache
 from erpnext.stock.get_item_details import get_item_details, get_pos_profile
 
 from retailedge.branch_assignment import get_branch_assignment_price_lists
+from retailedge.branch_context import validate_user_branch_access
 from retailedge.branch_profile import get_branch_profile, get_exact_branch_profile
 
 PriceMode = Literal["selling", "buying"]
@@ -301,6 +302,13 @@ def get_allowed_price_list_context(
 	party: str = "",
 	selected_price_list: str = "",
 ) -> dict[str, Any]:
+	_assert_whitelisted_pricing_context_access(
+		mode=mode,
+		company=company,
+		branch=branch,
+		party=party,
+		user=frappe.session.user,
+	)
 	return resolve_price_list_context(
 		mode=mode,
 		company=company,
@@ -320,6 +328,13 @@ def search_allowed_price_lists(
 	party: str = "",
 	limit: int = 20,
 ) -> list[dict[str, Any]]:
+	_assert_whitelisted_pricing_context_access(
+		mode=mode,
+		company=company,
+		branch=branch,
+		party=party,
+		user=frappe.session.user,
+	)
 	context = resolve_price_list_context(
 		mode=mode,
 		company=company,
@@ -341,6 +356,29 @@ def search_allowed_price_lists(
 		}
 		for name in names[: max(1, min(int(limit or 20), 50))]
 	]
+
+
+def _assert_whitelisted_pricing_context_access(
+	*,
+	mode: PriceMode,
+	company: str,
+	branch: str,
+	party: str,
+	user: str,
+) -> None:
+	if mode not in ("selling", "buying"):
+		frappe.throw(_("Unsupported guided pricing mode."))
+	company = str(company or "").strip()
+	branch = str(branch or "").strip()
+	party = str(party or "").strip()
+	if not company:
+		frappe.throw(_("Company is required to resolve pricing."))
+	_assert_read_permission("Company", company, user=user)
+	if branch:
+		_assert_read_permission("Branch", branch, user=user)
+		validate_user_branch_access(branch, user=user, company=company, throw=True)
+	if party:
+		_assert_read_permission("Customer" if mode == "selling" else "Supplier", party, user=user)
 
 
 def resolve_sales_item_pricing(
