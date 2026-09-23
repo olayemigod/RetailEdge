@@ -357,6 +357,14 @@ def get_financial_dashboard_data(
 			"invoice_cohort_collection": "withheld until complete allocation/credit/write-off coverage is accepted",
 			"comparison_policy": "preceding equal-length period for Net Sales using the bounded tax-exclusive sales aggregate; zero previous values are reported as no comparable baseline",
 			"preferences": preferences,
+			"source_scans": _source_scan_metadata({
+				"sales": sales,
+				"invoices": invoices,
+				"expenses": expenses,
+				"receivables": receivables,
+				"payables": payables,
+				"stock": stock,
+			}),
 		},
 	}
 	return payload
@@ -1189,6 +1197,24 @@ def _export_metric_row(section: str, metric: dict[str, Any]) -> dict[str, Any]:
 		"availability": availability,
 		"definition": metric.get("definition_id") or "",
 	}
+
+
+def _source_scan_metadata(
+	sources: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+	result: dict[str, Any] = {}
+	for key, source in sources.items():
+		if not source.get("available"):
+			result[key] = {
+				"availability": source.get("availability") or "unavailable",
+				"reason": source.get("reason") or "",
+			}
+			continue
+		payload = source.get("payload") or {}
+		scan = payload.get("scan")
+		if isinstance(scan, dict) and scan:
+			result[key] = {"availability": "available", "scan": scan}
+	return result
 
 
 def _scope_fingerprint(
