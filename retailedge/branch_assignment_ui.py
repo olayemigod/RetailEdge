@@ -42,6 +42,15 @@ def search_branch_assignment_options(
 			reference_doctype=ASSIGNMENT_DOCTYPE,
 			link_fieldname="company",
 		)
+	if fieldname == "price_list":
+		return search_link(
+			"Price List",
+			txt or "",
+			filters={"enabled": 1},
+			page_length=limit,
+			reference_doctype=ASSIGNMENT_DOCTYPE,
+			link_fieldname="price_list",
+		)
 	if fieldname in {"branch", "filter_branch"}:
 		if not company:
 			return []
