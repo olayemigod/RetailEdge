@@ -8,8 +8,9 @@ from frappe.utils import cint, flt, get_datetime, getdate
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return as erpnext_make_sales_return
 
 from retailedge.guided_entry_context import resolve_branch_warehouse_selection
+from retailedge.guided_pricing import resolve_sales_item_pricing
 from retailedge.operating_context import get_operating_context
-from retailedge.professional_draft_items import editable_items, update_draft_items
+from retailedge.professional_draft_items import _validate_warehouse_branch, editable_items, update_draft_items
 from retailedge.professional_selling import (
 	_assert_read,
 	_validate_stored_operational_branch,
@@ -621,6 +622,37 @@ def get_standard_sales_invoice_completion_preview(
 	"""Return a persistence-free completion review for one governed Sales Invoice."""
 	doc = _get_sales_invoice(name)
 	return _build_preview(doc, source_mode=source_mode)
+
+
+@frappe.whitelist()
+def get_standard_sales_invoice_completion_item_pricing(
+	name: str,
+	item_code: str,
+	qty: float = 1,
+	warehouse: str = "",
+	posting_date: str = "",
+) -> dict[str, Any]:
+	"""Price a new Sales Invoice row from the draft's stored Selling Price List."""
+	doc = _get_sales_invoice(name)
+	company, branch = _validate_invoice_context(doc)
+	if cint(doc.docstatus) != 0 or not frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc):
+		frappe.throw(_("Only editable draft Sales Invoices can price additional items here."), frappe.PermissionError)
+	item_code = _clean(item_code)
+	_assert_read("Item", item_code)
+	warehouse = _clean(warehouse or doc.get("set_warehouse"))
+	if warehouse:
+		_validate_warehouse_branch(warehouse, company=company, branch=branch)
+	return resolve_sales_item_pricing(
+		item_code=item_code,
+		company=company,
+		customer=_clean(doc.get("customer")),
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=_clean(posting_date or doc.get("posting_date")),
+		qty=flt(qty or 1),
+		document_price_list=_clean(doc.get("selling_price_list")),
+		user=frappe.session.user,
+	)
 
 
 @frappe.whitelist(methods=["POST"])
