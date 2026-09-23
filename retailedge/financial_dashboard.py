@@ -483,9 +483,9 @@ def _build_summary(
 			"current",
 			"cash_bank.current_closing_balance",
 			liquid,
-			action=_action("cash-movement", current_filters, basis="current"),
+			action={},
 			helper=liquid.get("reason")
-			or _("Current closing balances of eligible Company Cash and Bank accounts."),
+			or _("Current closing balances of eligible Company Cash and Bank accounts. Use the supporting Cash Movement report for period inflows and outflows."),
 			group="current_position",
 		)
 	)

@@ -135,9 +135,11 @@ export default {
 	mounted() {
 		this.fetchMetadata();
 		document.addEventListener("edgesuite-context-changed", this.handleContextChanged);
+		document.addEventListener("retailedge-operating-context-changed", this.handleContextChanged);
 	},
 	beforeUnmount() {
 		document.removeEventListener("edgesuite-context-changed", this.handleContextChanged);
+		document.removeEventListener("retailedge-operating-context-changed", this.handleContextChanged);
 	},
 	methods: {
 		async fetchMetadata() {

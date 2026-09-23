@@ -133,3 +133,18 @@ def test_business_hub_and_financial_dashboard_share_tax_exclusive_net_sales_defi
     assert '("sales", "Net Sales", "Sales")' in owner.read_text()
     assert '("sales", "Net Sales", _("Sales"))' in hub.read_text()
     assert "Tax-exclusive Net Sales" in visuals.read_text()
+
+
+def test_current_cash_balance_does_not_false_drill_into_period_cash_movement():
+    provider = PROVIDER.read_text()
+    cash_section = provider.split('"cash_bank"', 1)[1].split('"stock_value"', 1)[0]
+    assert "action={}" in cash_section
+    assert '_action("cash-movement", current_filters' not in cash_section
+    assert "Use the supporting Cash Movement report for period inflows and outflows." in cash_section
+
+
+def test_financial_dashboard_listens_to_both_retailedge_context_events():
+    ui = OWNER_UI.read_text()
+    assert 'document.addEventListener("edgesuite-context-changed", this.handleContextChanged);' in ui
+    assert 'document.addEventListener("retailedge-operating-context-changed", this.handleContextChanged);' in ui
+    assert 'document.removeEventListener("retailedge-operating-context-changed", this.handleContextChanged);' in ui
