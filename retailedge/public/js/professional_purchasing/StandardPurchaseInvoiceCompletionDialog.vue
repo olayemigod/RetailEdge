@@ -168,7 +168,7 @@
 const PREVIEW_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_purchase_invoice_completion.update_standard_purchase_invoice_draft";
 const SEARCH_METHOD = "retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options";
-const PRICING_METHOD = "retailedge.guided_purchase_invoice.get_simple_purchase_invoice_item_pricing";
+const PRICING_METHOD = "retailedge.standard_purchase_invoice_completion.get_standard_purchase_invoice_completion_item_pricing";
 const SUBMIT_METHOD = "retailedge.standard_purchase_invoice_completion.submit_standard_purchase_invoice";
 const WORKFLOW_METHOD = "retailedge.standard_purchase_invoice_completion.apply_standard_purchase_invoice_workflow_action";
 
@@ -342,16 +342,11 @@ export default {
 			this.newItemPricingTokens[index] = token;
 			try {
 				const result = await callMethod(PRICING_METHOD, {
+					name: this.preview.name,
 					item_code: row.item_code,
-					values: {
-						company: this.preview.company || "",
-						branch: this.preview.branch || "",
-						warehouse: this.preview.default_warehouse || "",
-						supplier: this.preview.supplier || "",
-						price_list: this.preview.buying_price_list || "",
-						posting_date: this.draftPostingDate || this.preview.posting_date || "",
-						qty: row.qty || 1,
-					},
+					qty: row.qty || 1,
+					warehouse: this.preview.default_warehouse || "",
+					posting_date: this.draftPostingDate || this.preview.posting_date || "",
 				});
 				if (this.newItemPricingTokens[index] !== token || this.newItems[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.newItems[index] = { ...this.newItems[index], rate: result.rate };
