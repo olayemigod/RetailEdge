@@ -9,6 +9,26 @@ from frappe.utils import cint, flt
 
 SETTINGS_DOCTYPE = "RetailEdge Settings"
 
+PRICE_LIST_PRIORITY_OPTIONS = {
+	"selling_price_list_precedence": (
+		{"value": "party_default", "label": "Customer Default", "description": "Customer or Customer Group default Price List."},
+		{"value": "pos_profile", "label": "POS Profile Default", "description": "Price List from the resolved POS Profile."},
+		{"value": "branch_default", "label": "Branch Default", "description": "Selling Price List configured in Branch Setup."},
+		{"value": "user_default", "label": "User Default", "description": "Selling Price List saved as the user's default."},
+		{"value": "user_permission", "label": "User Permission Default", "description": "Default Price List from ERPNext User Permissions."},
+		{"value": "erpnext_default", "label": "Selling Settings Default", "description": "Default Selling Price List from ERPNext Selling Settings."},
+		{"value": "standard_price_list", "label": "Standard Selling", "description": "Standard Selling fallback Price List."},
+	),
+	"buying_price_list_precedence": (
+		{"value": "party_default", "label": "Supplier Default", "description": "Supplier default Price List."},
+		{"value": "branch_default", "label": "Branch Default", "description": "Buying Price List configured in Branch Setup."},
+		{"value": "user_default", "label": "User Default", "description": "Buying Price List saved as the user's default."},
+		{"value": "user_permission", "label": "User Permission Default", "description": "Default Price List from ERPNext User Permissions."},
+		{"value": "erpnext_default", "label": "Buying Settings Default", "description": "Default Buying Price List from ERPNext Buying Settings."},
+		{"value": "standard_price_list", "label": "Standard Buying", "description": "Standard Buying fallback Price List."},
+	),
+}
+
 SETTINGS_GROUPS = (
 	{
 		"key": "pricing-governance",
@@ -239,6 +259,29 @@ def _customer_copy(value: Any) -> str:
 def _field_schema(df, value: Any) -> dict[str, Any]:
 	fieldtype = df.fieldtype
 	read_only = bool(cint(df.read_only))
+	if df.fieldname in PRICE_LIST_PRIORITY_OPTIONS:
+		options = list(PRICE_LIST_PRIORITY_OPTIONS[df.fieldname])
+		allowed = [row["value"] for row in options]
+		raw = str(value or df.default or "").replace(">", "\n").replace(",", "\n")
+		ordered = []
+		for line in raw.splitlines():
+			key = line.strip()
+			if key in allowed and key not in ordered:
+				ordered.append(key)
+		for key in allowed:
+			if key not in ordered:
+				ordered.append(key)
+		return {
+			"fieldname": df.fieldname,
+			"label": _customer_copy(df.label or df.fieldname),
+			"fieldtype": "PriorityList",
+			"description": _customer_copy(df.description or ""),
+			"depends_on": df.depends_on or "",
+			"read_only": read_only,
+			"options": options,
+			"link_doctype": "",
+			"value": ordered,
+		}
 	result = {
 		"fieldname": df.fieldname,
 		"label": _customer_copy(df.label or df.fieldname),
@@ -299,6 +342,21 @@ def get_settings_context() -> dict[str, Any]:
 
 
 def _normalize_value(df, value: Any) -> Any:
+	if df.fieldname in PRICE_LIST_PRIORITY_OPTIONS:
+		allowed = [row["value"] for row in PRICE_LIST_PRIORITY_OPTIONS[df.fieldname]]
+		values = value if isinstance(value, list) else []
+		ordered = []
+		for raw in values:
+			key = str(raw or "").strip()
+			if key not in allowed:
+				frappe.throw(_("Invalid Price List priority source: {0}.").format(key))
+			if key in ordered:
+				frappe.throw(_("Price List priority cannot contain duplicate sources."))
+			ordered.append(key)
+		for key in allowed:
+			if key not in ordered:
+				ordered.append(key)
+		return "\n".join(ordered)
 	if df.fieldtype == "Check":
 		return 1 if cint(value) else 0
 	if df.fieldtype == "Int":
