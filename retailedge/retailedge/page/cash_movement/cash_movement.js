@@ -98,6 +98,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		root.className = "retailedge-cash-movement-root";
 		page.body.append(root);
 		wrapper._retailedgeVueApp = await window.mountCashMovement(root);
+		wrapper._retailedgePageHasShown = true;
 		wrapper._retailedgeCashMovementMounted = true;
 	} catch (error) {
 		bootLoading.remove();
