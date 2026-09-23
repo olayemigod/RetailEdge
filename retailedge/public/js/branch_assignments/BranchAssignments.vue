@@ -124,7 +124,7 @@
 
 	<EdgeModal :open="priceListsOpen" title="Manage Assigned Price Lists" :subtitle="priceListRow.user ? priceListRow.user + ' · ' + priceListRow.branch : 'Branch price access'" size="lg" @close="closePriceLists">
 		<div v-if="priceListsError" class="form-error">{{ priceListsError }}</div>
-		<div class="edge-field"><span class="edge-field-label">Allowed Price Lists</span><EdgeChildTable :field="priceListTableField" :rows="priceListRows" :columns="priceListColumns" addLabel="Add Price List" :linkSearcher="searchPriceListRow" @update:rows="priceListRows = $event" /><small>This controls which Price Lists this user may select for this Branch. Configured Branch defaults remain mandatory and take precedence.</small></div>
+		<div class="edge-field"><span class="edge-field-label">Allowed Price Lists</span><EdgeChildTable :field="priceListTableField" :rows="priceListRows" :columns="priceListColumns" addLabel="Add Price List" :linkSearcher="searchPriceListRow" @update:rows="priceListRows = $event" /><small>This controls which Price Lists this user may select for this Branch when switching is allowed by Price List Governance.</small></div>
 		<template #footer><div class="modal-footer-actions"><span></span><div class="footer-right"><button type="button" class="edge-button" :disabled="saving" @click="closePriceLists">Cancel</button><button type="button" class="edge-button edge-button--primary" :disabled="saving" @click="savePriceLists">{{ saving ? "Saving…" : "Save Price Lists" }}</button></div></div></template>
 	</EdgeModal>
 </template>
