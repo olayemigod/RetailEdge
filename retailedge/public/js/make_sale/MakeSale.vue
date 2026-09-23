@@ -166,8 +166,8 @@
 					/>
 
 					<p class="guided-invoice-hint">
-						Rates use your assigned Price List or POS Profile where available, followed by ERPNext pricing rules and selling defaults.
-						The server validates pricing again when the draft is saved.
+						Rates use the Branch default first. Otherwise the current valid default stays selected and any Branch-assigned alternatives can be chosen here.
+						Changing the Price List automatically re-prices entered items, and the server validates pricing again when the draft is saved.
 					</p>
 
 					<label class="guided-field guided-field--wide">
