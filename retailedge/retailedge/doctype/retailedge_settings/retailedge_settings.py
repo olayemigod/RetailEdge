@@ -5,7 +5,7 @@ from frappe.model.document import Document
 from retailedge.utils.settings import clear_retailedge_settings_cache
 
 
-SELLING_PRICE_LIST_SOURCES = {
+SELLING_PRICE_LIST_DEFAULT = (
 	"party_default",
 	"pos_profile",
 	"branch_default",
@@ -13,15 +13,17 @@ SELLING_PRICE_LIST_SOURCES = {
 	"user_permission",
 	"erpnext_default",
 	"standard_price_list",
-}
-BUYING_PRICE_LIST_SOURCES = {
+)
+BUYING_PRICE_LIST_DEFAULT = (
 	"party_default",
 	"branch_default",
 	"user_default",
 	"user_permission",
 	"erpnext_default",
 	"standard_price_list",
-}
+)
+SELLING_PRICE_LIST_SOURCES = set(SELLING_PRICE_LIST_DEFAULT)
+BUYING_PRICE_LIST_SOURCES = set(BUYING_PRICE_LIST_DEFAULT)
 
 
 class RetailEdgeSettings(Document):
@@ -37,12 +39,14 @@ class RetailEdgeSettings(Document):
 		if not int(getattr(self, "enable_price_list_governance", 1) or 0):
 			return
 		self.selling_price_list_precedence = self._normalise_price_list_precedence(
-			getattr(self, "selling_price_list_precedence", None),
+			getattr(self, "selling_price_list_precedence", None)
+			or "\n".join(SELLING_PRICE_LIST_DEFAULT),
 			allowed=SELLING_PRICE_LIST_SOURCES,
 			label=_("Selling Price List Precedence"),
 		)
 		self.buying_price_list_precedence = self._normalise_price_list_precedence(
-			getattr(self, "buying_price_list_precedence", None),
+			getattr(self, "buying_price_list_precedence", None)
+			or "\n".join(BUYING_PRICE_LIST_DEFAULT),
 			allowed=BUYING_PRICE_LIST_SOURCES,
 			label=_("Buying Price List Precedence"),
 		)
