@@ -230,23 +230,10 @@ def get_financial_dashboard_data(
 		"to_date": str(previous_to),
 	}
 	previous_sales = {"available": False, "availability": "unavailable", "reason": _("Comparison is off."), "payload": {}}
-	previous_expenses = {"available": False, "availability": "unavailable", "reason": _("Comparison is off."), "payload": {}}
 	if comparison_mode == "Previous Period":
 		previous_sales = _safe_payload(
-			lambda: get_sales_by_item_export(previous_filters),
+			lambda: get_sales_visual_aggregates(previous_filters),
 			restricted_reason=_("Your current permissions do not allow the comparison sales period."),
-		)
-		previous_expenses = _safe_payload(
-			lambda: get_expense_register(
-				filters={
-					**previous_filters,
-					"view_mode": "consolidated",
-					"include_unposted_cashier_expenses": 1,
-				},
-				page=1,
-				page_size=1,
-			),
-			restricted_reason=_("Your current permissions do not allow the comparison expense period."),
 		)
 
 	summary = _build_summary(
@@ -266,7 +253,6 @@ def get_financial_dashboard_data(
 		summary,
 		comparison_mode=comparison_mode,
 		previous_sales=previous_sales,
-		previous_expenses=previous_expenses,
 	)
 
 	payload = {
@@ -369,7 +355,7 @@ def get_financial_dashboard_data(
 			"cash_bank_basis": "current eligible Cash/Bank closing balances; Company-only when unrestricted",
 			"customer_receipts_coverage": "Payment Entry customer Receive payments only; POS/Journal/refund consolidation not yet complete",
 			"invoice_cohort_collection": "withheld until complete allocation/credit/write-off coverage is accepted",
-			"comparison_policy": "preceding equal-length period for compatible period metrics; zero previous values are reported as no comparable baseline",
+			"comparison_policy": "preceding equal-length period for Net Sales using the bounded tax-exclusive sales aggregate; zero previous values are reported as no comparable baseline",
 			"preferences": preferences,
 		},
 	}
@@ -828,19 +814,46 @@ def _attach_period_comparisons(
 	*,
 	comparison_mode: str,
 	previous_sales: dict[str, Any],
-	previous_expenses: dict[str, Any],
 ) -> None:
 	if comparison_mode != "Previous Period":
 		return
 	by_id = {str(metric.get("id") or ""): metric for metric in summary}
-	for metric_id, source, label in (
-		("net_sales", previous_sales, "Net Sales"),
-		("posted_expenses", previous_expenses, "Posted Expenses"),
-	):
-		metric = by_id.get(metric_id)
-		if not metric or metric.get("availability") not in {"available", "partial"}:
-			continue
-		metric["comparison"] = _period_comparison(metric.get("value"), source, label)
+	metric = by_id.get("net_sales")
+	if not metric or metric.get("availability") not in {"available", "partial"}:
+		return
+	if not previous_sales.get("available"):
+		metric["comparison"] = {
+			"availability": previous_sales.get("availability") or "unavailable",
+			"value": None,
+			"label": _("Comparison unavailable"),
+			"reason": previous_sales.get("reason") or _("Comparison unavailable."),
+		}
+		return
+	previous_value = sum(
+		flt(row.get("net_sales"))
+		for row in (previous_sales.get("payload") or {}).get("trend") or []
+	)
+	metric["comparison"] = _period_comparison_value(metric.get("value"), previous_value)
+
+
+def _period_comparison_value(current_value: Any, previous_value: Any) -> dict[str, Any]:
+	previous_number = flt(previous_value)
+	if previous_number == 0:
+		return {
+			"availability": "unavailable",
+			"value": None,
+			"label": _("No comparable baseline"),
+			"reason": _("The previous period value is zero."),
+			"previous_value": previous_number,
+		}
+	change_percent = (flt(current_value) - previous_number) / abs(previous_number) * 100.0
+	return {
+		"availability": "available",
+		"value": change_percent,
+		"unit": "percent",
+		"label": _("vs previous period"),
+		"previous_value": previous_number,
+	}
 
 
 def _period_comparison(
@@ -863,23 +876,7 @@ def _period_comparison(
 			"label": _("No comparable baseline"),
 			"reason": _("The previous period did not return this metric."),
 		}
-	previous_number = flt(previous_value)
-	if previous_number == 0:
-		return {
-			"availability": "unavailable",
-			"value": None,
-			"label": _("No comparable baseline"),
-			"reason": _("The previous period value is zero."),
-			"previous_value": previous_number,
-		}
-	change_percent = (flt(current_value) - previous_number) / abs(previous_number) * 100.0
-	return {
-		"availability": "available",
-		"value": change_percent,
-		"unit": "percent",
-		"label": _("vs previous period"),
-		"previous_value": previous_number,
-	}
+	return _period_comparison_value(current_value, previous_value)
 
 
 def _build_health(
