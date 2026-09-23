@@ -335,7 +335,7 @@ def get_professional_selling_context() -> dict[str, Any]:
 	company = str(operating.get("company") or "").strip()
 	branch = str(operating.get("branch") or "").strip()
 	pricing: dict[str, Any] = {}
-	if company and _permission("Price List", "read"):
+	if company:
 		pricing = resolve_price_list_context(
 			mode="selling",
 			company=company,
