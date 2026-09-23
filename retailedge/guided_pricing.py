@@ -719,18 +719,6 @@ def _default_user_permission_price_list(*, user: str, mode: PriceMode) -> str:
 	return valid[0] if len(valid) == 1 else ""
 
 
-def _default_selectable_price_lists(*, mode: PriceMode, user: str) -> list[str]:
-	names: list[str] = []
-	for key in USER_DEFAULT_KEYS[mode]:
-		candidate = str(frappe.defaults.get_user_default(key) or "").strip()
-		if candidate and _valid_price_list(candidate, mode=mode, user=user) and candidate not in names:
-			names.append(candidate)
-	permission_default = _default_user_permission_price_list(user=user, mode=mode)
-	if permission_default and permission_default not in names:
-		names.append(permission_default)
-	return names
-
-
 def _party_price_list(*, mode: PriceMode, party: str) -> str:
 	if not party:
 		return ""
