@@ -47,3 +47,10 @@ These settings never grant financial access, change accounting definitions, broa
 The page exposes a session-level Compare selector. Previous Period means the immediately preceding equal-length period. Net Sales publishes a comparison through the bounded tax-exclusive sales aggregate. Posted Expenses does not yet publish a comparison because the current governed expense provider can assemble a wider dataset even when only its summary is requested. A zero prior-period value is shown as **No comparable baseline**, not as a fabricated 100% change. Posted Expenses, partial Customer Receipts and Sales Margin Contribution do not receive a dashboard comparison until their corresponding efficient and safe comparison semantics are accepted.
 
 Performance Trends now reuse `get_sales_visual_aggregates`, which was aligned to tax-exclusive `base_net_total`; Branch composition uses that same bounded authority. Item Group and Brand composition reuse the already-authorised Sales by Item dataset.
+
+
+## Bounded sales loading
+
+The dashboard headline, trend and comparison now use the bounded tax-exclusive Sales Invoice aggregate (`base_net_total`). Item-level Sales by Item is loaded only when the active Revenue Composition is Item Group or Brand. Branch composition reuses the lightweight Branch aggregate. This prevents the headline from failing or becoming unnecessarily expensive solely because an item-detail scan is large.
+
+The Revenue Composition dimension can be changed for the current session between Item Group, Brand and Branch; the saved Settings value remains the default. Changing the view does not broaden Branch scope or permissions.
