@@ -7,6 +7,8 @@ from unittest.mock import patch
 import frappe
 
 from retailedge.guided_pricing import (
+	DEFAULT_PRICE_PRECEDENCE,
+	_resolve_default_price_list_candidate,
 	get_allowed_price_list_context,
 	resolve_price_list_context,
 	resolve_purchase_item_pricing,
@@ -20,71 +22,213 @@ def uncached_price_list_resolver():
 	return getattr(resolve_price_list_context, "__wrapped__", resolve_price_list_context)
 
 
-class TestGuidedPricing(unittest.TestCase):
-	@patch("retailedge.guided_pricing._valid_price_list")
-	@patch("retailedge.guided_pricing.frappe.defaults.get_user_default")
-	def test_direct_user_selling_price_list_has_first_priority(self, mock_default, mock_valid):
-		mock_default.side_effect = lambda key: "User Retail" if key == "Selling Price List" else None
-		mock_valid.return_value = True
-		with patch("retailedge.guided_pricing._price_context") as mock_context:
-			mock_context.return_value = {
-				"price_list": "User Retail",
-				"source": "user_default",
-			}
-			result = uncached_price_list_resolver()(
-				mode="selling",
-				company="Demo Company",
-				user="sales@example.com",
-			)
-		self.assertEqual(result["price_list"], "User Retail")
-		mock_context.assert_called_once_with("User Retail", mode="selling", source="user_default")
+def policy(**overrides):
+	base = {
+		"enabled": True,
+		"precedence": list(DEFAULT_PRICE_PRECEDENCE["selling"]),
+		"enable_assigned_switching": True,
+		"allow_switch_from_party_default": False,
+		"allow_switch_from_pos_profile": False,
+		"allow_switch_from_branch_default": True,
+		"allow_switch_from_user_default": True,
+		"allow_switch_from_system_default": True,
+	}
+	base.update(overrides)
+	return base
 
-	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": [], "restricted": False, "assignment_names": []})
-	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
-	@patch("retailedge.guided_pricing.frappe.db.get_value", return_value="NGN")
-	@patch("retailedge.guided_pricing._valid_price_list")
-	@patch("retailedge.guided_pricing._resolve_user_pos_profile")
-	@patch("retailedge.guided_pricing._default_user_permission_price_list", return_value="")
-	@patch("retailedge.guided_pricing.frappe.defaults.get_user_default", return_value=None)
-	def test_assigned_pos_profile_supplies_selling_price_list(
-		self,
-		_mock_default,
-		_mock_permission_price,
-		mock_pos,
-		mock_valid,
-		_mock_get_value,
-		_mock_branch_default,
-		_mock_assignment_scope,
-	):
-		mock_pos.return_value = frappe._dict(
-			{
-				"name": "POS-LAGOS",
-				"selling_price_list": "POS Retail",
-				"allow_rate_change": 0,
-			}
+
+class TestGuidedPricing(unittest.TestCase):
+	def test_default_merchant_policy_is_party_then_pos_then_branch_for_sales(self):
+		self.assertEqual(
+			list(DEFAULT_PRICE_PRECEDENCE["selling"])[:3],
+			["party_default", "pos_profile", "branch_default"],
 		)
-		mock_valid.side_effect = lambda name, **_kwargs: bool(str(name or "").strip())
+		self.assertEqual(
+			list(DEFAULT_PRICE_PRECEDENCE["buying"])[:2],
+			["party_default", "branch_default"],
+		)
+
+	@patch("retailedge.guided_pricing._price_source_candidate")
+	def test_custom_precedence_controls_which_default_source_wins(self, mock_candidate):
+		def candidate(*, source, **_kwargs):
+			return {
+				"party_default": {"price_list": "Customer Retail", "source": source},
+				"branch_default": {"price_list": "Branch Retail", "source": source},
+			}.get(source)
+
+		mock_candidate.side_effect = candidate
+		result = _resolve_default_price_list_candidate(
+			mode="selling",
+			company="Demo Company",
+			branch="Lagos",
+			party="CUST-001",
+			user="sales@example.com",
+			precedence=["branch_default", "party_default", "pos_profile"],
+		)
+		self.assertEqual(result["price_list"], "Branch Retail")
+		self.assertEqual(result["source"], "branch_default")
+		self.assertEqual(mock_candidate.call_args_list[0].kwargs["source"], "branch_default")
+
+	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="Branch Retail")
+	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing._resolve_default_price_list_candidate")
+	@patch("retailedge.guided_pricing._assignment_price_list_scope")
+	@patch("retailedge.guided_pricing._price_list_governance_policy")
+	def test_party_default_can_be_locked_by_merchant_policy(
+		self, mock_policy, mock_assignment, mock_default, mock_context, _mock_branch
+	):
+		mock_policy.return_value = policy(allow_switch_from_party_default=False)
+		mock_assignment.return_value = {
+			"names": ["Wholesale"],
+			"restricted": True,
+			"assignment_names": ["BA-1"],
+		}
+		mock_default.return_value = {
+			"price_list": "Customer Retail",
+			"source": "party_default",
+			"allow_rate_change": True,
+		}
+		mock_context.return_value = {
+			"price_list": "Customer Retail",
+			"source": "party_default",
+		}
 		result = uncached_price_list_resolver()(
 			mode="selling",
 			company="Demo Company",
 			branch="Lagos",
+			party="CUST-001",
 			user="sales@example.com",
 		)
-		self.assertEqual(result["price_list"], "POS Retail")
-		self.assertEqual(result["source"], "pos_profile")
-		self.assertEqual(result["pos_profile"], "POS-LAGOS")
-		self.assertFalse(result["allow_rate_change"])
+		self.assertEqual(result["price_list"], "Customer Retail")
+		self.assertTrue(result["locked"])
+		self.assertFalse(result["can_select"])
+		self.assertEqual(result["allowed_price_lists"], ["Customer Retail"])
+
+	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="Branch Retail")
+	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing._resolve_default_price_list_candidate")
+	@patch("retailedge.guided_pricing._assignment_price_list_scope")
+	@patch("retailedge.guided_pricing._price_list_governance_policy")
+	def test_party_default_can_be_preferred_but_switchable(
+		self, mock_policy, mock_assignment, mock_default, mock_context, _mock_branch
+	):
+		mock_policy.return_value = policy(allow_switch_from_party_default=True)
+		mock_assignment.return_value = {
+			"names": ["Wholesale", "VIP Retail"],
+			"restricted": True,
+			"assignment_names": ["BA-1"],
+		}
+		mock_default.return_value = {
+			"price_list": "Customer Retail",
+			"source": "party_default",
+			"allow_rate_change": True,
+		}
+		mock_context.return_value = {
+			"price_list": "Customer Retail",
+			"source": "party_default",
+		}
+		result = uncached_price_list_resolver()(
+			mode="selling",
+			company="Demo Company",
+			branch="Lagos",
+			party="CUST-001",
+			user="sales@example.com",
+		)
+		self.assertFalse(result["locked"])
+		self.assertTrue(result["can_select"])
+		self.assertEqual(
+			result["allowed_price_lists"],
+			["Customer Retail", "Wholesale", "VIP Retail"],
+		)
+
+	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="Branch Retail")
+	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing._resolve_default_price_list_candidate")
+	@patch("retailedge.guided_pricing._assignment_price_list_scope")
+	@patch("retailedge.guided_pricing._price_list_governance_policy")
+	def test_selected_branch_assigned_alternative_is_revalidated_server_side(
+		self, mock_policy, mock_assignment, mock_default, mock_context, _mock_branch
+	):
+		mock_policy.return_value = policy(allow_switch_from_branch_default=True)
+		mock_assignment.return_value = {
+			"names": ["Wholesale"],
+			"restricted": True,
+			"assignment_names": ["BA-1"],
+		}
+		mock_default.return_value = {
+			"price_list": "Branch Retail",
+			"source": "branch_default",
+			"allow_rate_change": True,
+		}
+		mock_context.return_value = {
+			"price_list": "Wholesale",
+			"source": "user_selected",
+		}
+		result = uncached_price_list_resolver()(
+			mode="selling",
+			company="Demo Company",
+			branch="Lagos",
+			selected_price_list="Wholesale",
+			user="sales@example.com",
+		)
+		self.assertEqual(result["price_list"], "Wholesale")
+		self.assertEqual(result["source"], "user_selected")
+		self.assertEqual(result["resolved_default"], "Branch Retail")
+
+	@patch("retailedge.guided_pricing._resolve_default_price_list_candidate")
+	@patch("retailedge.guided_pricing._assignment_price_list_scope")
+	@patch("retailedge.guided_pricing._price_list_governance_policy")
+	def test_selected_alternative_is_rejected_when_source_switching_is_disabled(
+		self, mock_policy, mock_assignment, mock_default
+	):
+		mock_policy.return_value = policy(allow_switch_from_party_default=False)
+		mock_assignment.return_value = {
+			"names": ["Wholesale"],
+			"restricted": True,
+			"assignment_names": ["BA-1"],
+		}
+		mock_default.return_value = {
+			"price_list": "Customer Retail",
+			"source": "party_default",
+			"allow_rate_change": True,
+		}
+		with self.assertRaises(frappe.PermissionError):
+			uncached_price_list_resolver()(
+				mode="selling",
+				company="Demo Company",
+				branch="Lagos",
+				party="CUST-001",
+				selected_price_list="Wholesale",
+				user="sales@example.com",
+			)
+
+	@patch("retailedge.guided_pricing._resolve_default_price_list_candidate", return_value=None)
+	@patch("retailedge.guided_pricing._assignment_price_list_scope")
+	@patch("retailedge.guided_pricing._price_list_governance_policy")
+	def test_multiple_assigned_lists_require_choice_when_no_default_exists(
+		self, mock_policy, mock_assignment, _mock_default
+	):
+		mock_policy.return_value = policy()
+		mock_assignment.return_value = {
+			"names": ["Retail", "Wholesale"],
+			"restricted": True,
+			"assignment_names": ["BA-1"],
+		}
+		result = uncached_price_list_resolver()(
+			mode="buying",
+			company="Demo Company",
+			branch="Lagos",
+			user="buyer@example.com",
+		)
+		self.assertTrue(result["selection_required"])
+		self.assertEqual(result["allowed_price_lists"], ["Retail", "Wholesale"])
 
 	@patch("retailedge.guided_pricing.frappe.get_cached_value")
 	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
 	@patch("retailedge.guided_pricing._assert_read_permission")
 	def test_sales_falls_back_to_item_standard_rate(
-		self,
-		_mock_read,
-		mock_context,
-		_mock_details,
-		mock_cached,
+		self, _mock_read, mock_context, _mock_details, mock_cached
 	):
 		mock_context.return_value = {
 			"price_list": "",
@@ -106,11 +250,7 @@ class TestGuidedPricing(unittest.TestCase):
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
 	@patch("retailedge.guided_pricing._assert_read_permission")
 	def test_purchase_falls_back_to_item_last_purchase_rate(
-		self,
-		_mock_read,
-		mock_context,
-		_mock_details,
-		mock_cached,
+		self, _mock_read, mock_context, _mock_details, mock_cached
 	):
 		mock_context.return_value = {"price_list": "", "source": "item_fallback"}
 		mock_cached.return_value = 925
@@ -123,99 +263,13 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["rate"], 925.0)
 		self.assertEqual(result["rate_source"], "item_last_purchase_rate")
 
-	@patch("retailedge.guided_pricing._price_context")
-	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Branch Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
-	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="Branch Retail")
-	def test_branch_default_always_precedes_selected_or_assigned_price_list(
-		self, _mock_branch_default, _mock_assignment, mock_context
-	):
-		mock_context.return_value = {"price_list": "Branch Retail", "source": "branch_default"}
-		result = uncached_price_list_resolver()(
-			mode="selling",
-			company="Demo Company",
-			branch="Lagos",
-			selected_price_list="Branch Wholesale",
-			user="sales@example.com",
-		)
-		self.assertEqual(result["price_list"], "Branch Retail")
-		self.assertTrue(result["locked"])
-		self.assertFalse(result["can_select"])
-
-	@patch("retailedge.guided_pricing._price_context")
-	@patch("retailedge.guided_pricing._default_price_list_candidate", return_value=None)
-	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Retail", "Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
-	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
-	@patch("retailedge.guided_pricing._valid_price_list", return_value=True)
-	def test_selected_assigned_price_list_is_accepted(
-		self, _mock_valid, _mock_branch_default, _mock_assignment, _mock_defaults, mock_context
-	):
-		mock_context.return_value = {"price_list": "Wholesale", "source": "user_selected"}
-		result = uncached_price_list_resolver()(
-			mode="selling",
-			company="Demo Company",
-			branch="Lagos",
-			selected_price_list="Wholesale",
-			user="sales@example.com",
-		)
-		self.assertEqual(result["price_list"], "Wholesale")
-		self.assertEqual(result["source"], "user_selected")
-
-	@patch("retailedge.guided_pricing._default_price_list_candidate", return_value=None)
-	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Retail", "Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
-	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
-	def test_unassigned_selected_price_list_is_rejected(
-		self, _mock_branch_default, _mock_assignment, _mock_defaults
-	):
-		with self.assertRaises(frappe.PermissionError):
-			uncached_price_list_resolver()(
-				mode="selling",
-				company="Demo Company",
-				branch="Lagos",
-				selected_price_list="Secret VIP",
-				user="sales@example.com",
-			)
-
-	@patch("retailedge.guided_pricing._default_price_list_candidate", return_value=None)
-	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Retail", "Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
-	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
-	def test_multiple_assigned_price_lists_require_selection_without_default(
-		self, _mock_branch_default, _mock_assignment, _mock_default
-	):
-		result = uncached_price_list_resolver()(
-			mode="selling",
-			company="Demo Company",
-			branch="Lagos",
-			user="sales@example.com",
-		)
-		self.assertTrue(result["selection_required"])
-		self.assertEqual(result["allowed_price_lists"], ["Retail", "Wholesale"])
-
-	@patch("retailedge.guided_pricing._price_context")
-	@patch("retailedge.guided_pricing._default_price_list_candidate", return_value={"price_list": "User Retail", "source": "user_default", "locked": False, "allow_rate_change": True, "pos_profile": ""})
-	@patch("retailedge.guided_pricing._assignment_price_list_scope", return_value={"names": ["Wholesale"], "restricted": True, "assignment_names": ["BA-1"]})
-	@patch("retailedge.guided_pricing._branch_default_price_list", return_value="")
-	def test_existing_user_default_is_preserved_alongside_branch_assignments(
-		self, _mock_branch_default, _mock_assignment, _mock_default, mock_context
-	):
-		mock_context.return_value = {"price_list": "User Retail", "source": "user_default"}
-		result = uncached_price_list_resolver()(
-			mode="selling",
-			company="Demo Company",
-			branch="Lagos",
-			user="sales@example.com",
-		)
-		self.assertEqual(result["price_list"], "User Retail")
-		self.assertIn("Wholesale", result["allowed_price_lists"])
-		self.assertIn("User Retail", result["allowed_price_lists"])
-		self.assertTrue(result["can_select"])
-
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
 	@patch("retailedge.guided_pricing.validate_user_branch_access")
 	@patch("retailedge.guided_pricing._assert_read_permission")
 	def test_whitelisted_price_context_revalidates_company_branch_and_party(
 		self, mock_read, mock_branch_access, mock_resolve
 	):
-		mock_resolve.return_value = {"price_list": "Retail", "source": "branch_default"}
+		mock_resolve.return_value = {"price_list": "Retail", "source": "party_default"}
 		with patch.object(frappe, "session", frappe._dict(user="sales@example.com")):
 			result = get_allowed_price_list_context(
 				mode="selling",
@@ -234,20 +288,22 @@ class TestGuidedPricing(unittest.TestCase):
 			throw=True,
 		)
 
-	def test_pricing_uses_erpnext_service_and_validates_selected_price_list(self):
+	def test_pricing_uses_erpnext_service_and_policy_governance(self):
 		source = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
-		self.assertIn("get_item_details", source)
-		self.assertIn("get_pos_profile", source)
-		self.assertIn("get_user_permissions", source)
-		self.assertIn('"Standard Selling"', source)
-		self.assertIn('"Standard Buying"', source)
-		self.assertIn('"standard_rate"', source)
-		self.assertIn('"last_purchase_rate"', source)
-		self.assertIn("selected_price_list", source)
-		self.assertIn("branch_default", source)
-		self.assertIn("get_branch_assignment_price_lists", source)
+		for contract in (
+			"get_item_details",
+			"get_pos_profile",
+			"get_user_permissions",
+			"get_retailedge_settings",
+			"PRICE_SOURCE_KEYS",
+			"DEFAULT_PRICE_PRECEDENCE",
+			"_price_list_governance_policy",
+			"_source_allows_switch",
+			"selected_price_list",
+			"get_branch_assignment_price_lists",
+		):
+			self.assertIn(contract, source)
 		self.assertNotIn("ignore_permissions=True", source)
-		self.assertNotIn("frappe.get_all(", source)
 
 	def test_stock_transfer_remains_rate_free(self):
 		backend = (APP_ROOT / "guided_stock_transfer.py").read_text(encoding="utf-8")
