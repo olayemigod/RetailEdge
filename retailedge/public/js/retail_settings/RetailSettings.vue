@@ -32,36 +32,43 @@
 			<EdgeErrorState v-else-if="error" title="Settings unavailable" :message="error" @retry="loadSettings" />
 
 			<div v-else class="settings-workspace">
-				<nav class="settings-tabs" role="tablist" aria-label="Settings sections">
-					<button
-						v-for="group in groups"
-						:key="group.key"
-						type="button"
-						class="settings-tab"
-						:class="{ 'is-active': activeKey === group.key }"
-						:aria-selected="activeKey === group.key ? 'true' : 'false'"
-						role="tab"
-						@click="activeKey = group.key"
-					>
-						{{ group.label }}
-					</button>
-				</nav>
+				<aside class="settings-navigation">
+					<div class="settings-navigation-heading">
+						<strong>Settings sections</strong>
+						<small>Select an area to configure.</small>
+					</div>
+					<nav class="settings-nav" aria-label="Settings sections">
+						<button
+							v-for="group in groups"
+							:key="group.key"
+							type="button"
+							class="settings-nav-item"
+							:class="{ 'is-active': activeKey === group.key }"
+							:aria-current="activeKey === group.key ? 'page' : undefined"
+							@click="activeKey = group.key"
+						>
+							<span>{{ group.label }}</span>
+							<small>{{ group.description }}</small>
+						</button>
+					</nav>
+				</aside>
 
-				<section v-if="activeGroup" class="settings-group">
-					<header class="settings-group-header">
-						<div>
-							<h2>{{ activeGroup.label }}</h2>
-							<p>{{ activeGroup.description }}</p>
-						</div>
-						<span v-if="dirty" class="settings-unsaved">Unsaved changes</span>
-					</header>
-
-					<div class="settings-sections">
-						<section v-for="section in activeGroup.sections" :key="section.label" class="edge-card settings-section">
-							<div class="settings-section-heading">
-								<h3>{{ section.label }}</h3>
+				<main class="settings-content">
+					<section v-if="activeGroup" class="settings-group">
+						<header class="settings-group-header">
+							<div>
+								<h2>{{ activeGroup.label }}</h2>
+								<p>{{ activeGroup.description }}</p>
 							</div>
-							<div class="settings-fields">
+							<span v-if="dirty" class="settings-unsaved">Unsaved changes</span>
+						</header>
+
+						<div class="settings-sections">
+							<section v-for="section in activeGroup.sections" :key="section.label" class="edge-card settings-section">
+								<div class="settings-section-heading">
+									<h3>{{ section.label }}</h3>
+								</div>
+								<div class="settings-fields">
 								<template v-for="field in section.fields" :key="field.fieldname">
 									<div v-if="fieldVisible(field)" class="settings-field" :class="{ 'settings-field--wide': ['Small Text', 'RoleList', 'PriorityList'].includes(field.fieldtype) }">
 										<label v-if="field.fieldtype === 'Check'" class="settings-check">
@@ -163,12 +170,13 @@
 										</label>
 									</div>
 								</template>
-							</div>
-						</section>
-					</div>
-				</section>
+								</div>
+							</section>
+						</div>
+					</section>
 
-				<div v-if="saveError" class="settings-error">{{ saveError }}</div>
+					<div v-if="saveError" class="settings-error">{{ saveError }}</div>
+				</main>
 			</div>
 		</EdgePageLayout>
 	</EdgeAppShell>
@@ -341,10 +349,18 @@ export default {
 </script>
 
 <style scoped>
-.settings-workspace { display:grid; gap:1rem; min-width:0; }
-.settings-tabs { display:flex; flex-wrap:nowrap; gap:.45rem; width:100%; overflow-x:auto; overflow-y:hidden; padding:.25rem .1rem .55rem; scrollbar-width:thin; position:sticky; top:0; z-index:4; background:var(--edge-page-bg, var(--bg-color)); }
-.settings-tab { flex:0 0 auto; border:1px solid var(--edge-border, var(--border-color)); border-radius:999px; background:var(--edge-surface, var(--card-bg)); color:var(--edge-text, var(--text-color)); padding:.6rem 1rem; font-weight:600; white-space:nowrap; cursor:pointer; }
-.settings-tab.is-active { border-color:var(--edge-primary, #0056a6); background:var(--edge-primary-subtle, #eef6ff); color:var(--edge-primary-strong, #003e73); }
+.settings-workspace { display:grid; grid-template-columns:minmax(220px, 270px) minmax(0, 1fr); gap:1.25rem; align-items:start; min-width:0; }
+.settings-navigation { position:sticky; top:1rem; display:grid; gap:.8rem; min-width:0; max-height:calc(100vh - 2rem); overflow:auto; padding:.9rem; border:1px solid var(--edge-border, var(--border-color)); border-radius:.8rem; background:var(--edge-surface, var(--card-bg)); }
+.settings-navigation-heading { display:grid; gap:.2rem; padding:.15rem .2rem .35rem; border-bottom:1px solid var(--edge-border, var(--border-color)); }
+.settings-navigation-heading small { color:var(--edge-text-muted, #667085); }
+.settings-nav { display:grid; gap:.35rem; }
+.settings-nav-item { width:100%; display:grid; gap:.18rem; text-align:left; border:1px solid transparent; border-radius:.65rem; background:transparent; color:var(--edge-text, var(--text-color)); padding:.7rem .75rem; cursor:pointer; }
+.settings-nav-item > span { font-weight:650; }
+.settings-nav-item > small { color:var(--edge-text-muted, #667085); line-height:1.35; }
+.settings-nav-item:hover { border-color:var(--edge-border, var(--border-color)); background:var(--edge-surface-soft, #f8fafc); }
+.settings-nav-item.is-active { border-color:var(--edge-primary, #0056a6); background:var(--edge-primary-subtle, #eef6ff); color:var(--edge-primary-strong, #003e73); }
+.settings-nav-item.is-active > small { color:inherit; opacity:.82; }
+.settings-content { min-width:0; display:grid; gap:1rem; }
 .settings-group { display:grid; gap:1rem; }
 .settings-group-header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
 .settings-group-header h2 { margin:0 0 .3rem; }
@@ -373,5 +389,13 @@ export default {
 .role-chip button { border:0; background:transparent; cursor:pointer; color:inherit; font-size:1rem; line-height:1; padding:0; }
 .settings-error { padding:.8rem 1rem; border:1px solid var(--edge-danger, #d92d20); border-radius:.6rem; background:var(--edge-danger-subtle, #fef3f2); color:var(--edge-danger, #b42318); }
 .settings-fallback { margin:20px; padding:16px; border:1px solid var(--edge-border, #d9d9d9); border-radius:10px; display:grid; gap:6px; }
+@media (max-width:900px) {
+	.settings-workspace { grid-template-columns:1fr; }
+	.settings-navigation { position:static; max-height:none; overflow:visible; padding:.7rem; }
+	.settings-navigation-heading { display:none; }
+	.settings-nav { display:flex; gap:.45rem; overflow-x:auto; padding-bottom:.15rem; scrollbar-width:thin; }
+	.settings-nav-item { flex:0 0 auto; width:auto; min-width:150px; max-width:220px; }
+	.settings-nav-item > small { display:none; }
+}
 @media (max-width:760px) { .settings-fields { grid-template-columns:1fr; } .settings-field--wide { grid-column:auto; } .settings-group-header { flex-direction:column; } }
 </style>
