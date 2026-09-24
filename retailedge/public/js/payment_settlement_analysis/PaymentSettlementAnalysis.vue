@@ -266,6 +266,7 @@ export default {
 			this.metadataLoading = true;
 			this.error = "";
 			try {
+				const handoff = window.retailedgeConsumeBusinessHubRouteOptions?.(REPORT_KEY) || {};
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
@@ -274,7 +275,7 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const handoff = window.retailedgeConsumeBusinessHubRouteOptions?.(REPORT_KEY) || {};
+				
 				this.filters = { ...this.filters, ...handoff };
 				this.smartDateReference = handoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
 				this.syncSmartDateFromFilters();
