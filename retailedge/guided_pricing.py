@@ -5,7 +5,7 @@ from typing import Any, Literal
 import frappe
 from frappe import _
 from frappe.core.doctype.user_permission.user_permission import get_user_permissions
-from frappe.utils import flt, getdate, nowdate
+from frappe.utils import cint, flt, getdate, nowdate
 from frappe.utils.caching import request_cache
 
 from erpnext.stock.get_item_details import get_item_details, get_pos_profile
@@ -66,8 +66,8 @@ def resolve_price_list_context(
 		frappe.throw(_("Company is required to resolve pricing."))
 
 	settings = get_retailedge_settings()
-	governance_enabled = bool(getattr(settings, "enable_price_list_governance", 1))
-	allow_switch = bool(getattr(settings, "allow_price_list_switch", 1))
+	governance_enabled = _setting_check(settings, "enable_price_list_governance", default=True)
+	allow_switch = _setting_check(settings, "allow_price_list_switch", default=True)
 	available_price_lists = _available_assigned_price_lists(
 		mode=mode, company=company, branch=branch, user=user
 	)
@@ -136,6 +136,13 @@ def resolve_price_list_context(
 		available_price_lists=available_price_lists,
 		can_switch=governance_enabled and allow_switch and len(available_price_lists) > 1,
 	)
+
+
+def _setting_check(settings, fieldname: str, *, default: bool) -> bool:
+	value = getattr(settings, fieldname, None)
+	if value in (None, ""):
+		return default
+	return bool(cint(value))
 
 
 def _with_choice_context(
