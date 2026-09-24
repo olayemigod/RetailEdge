@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "retailedge"
 PROVIDER = APP / "financial_dashboard.py"
 OWNER_UI = APP / "public/js/owner_dashboard/OwnerDashboard.vue"
+BUSINESS_HUB_UI = APP / "public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue"
 NAV = APP / "edgesuite_ui.py"
 FILES = APP / "dashboard_files.py"
 PAGE_JS = APP / "retailedge/page/owner_dashboard/owner_dashboard.js"
@@ -295,3 +296,14 @@ def test_net_sales_helper_matches_invoice_level_tax_exclusive_authority():
     provider = PROVIDER.read_text()
     assert "Submitted Sales Invoice base net totals after discounts and returns; tax exclusive." in provider
     assert "Submitted invoice item net amounts after discounts and returns; tax exclusive." not in provider
+
+
+def test_business_hub_financial_dashboard_navigation_preserves_active_period():
+    hub = BUSINESS_HUB_UI.read_text()
+    target = hub.split("openTarget(item)", 1)[1].split("routeForTarget(item)", 1)[0]
+    assert 'item.target_type === "Page" && item.target === "owner-dashboard"' in target
+    assert 'this.openHomeRoute("owner-dashboard", {' in target
+    assert "company: this.context.company || \"\"" in target
+    assert "branch: this.context.branch || \"\"" in target
+    assert "from_date: this.homePeriod.from_date || \"\"" in target
+    assert "to_date: this.homePeriod.to_date || \"\"" in target
