@@ -14,6 +14,7 @@ DESTINATION_PAGES = (
     "retailedge/page/branch_performance_dashboard/branch_performance_dashboard.js",
     "retailedge/page/sales_by_item/sales_by_item.js",
     "retailedge/page/sales_invoice_register/sales_invoice_register.js",
+    "retailedge/page/payment_settlement_analysis/payment_settlement_analysis.js",
 )
 
 
@@ -48,3 +49,37 @@ def test_handoff_refresh_is_guarded_and_does_not_remount_cached_destination():
         assert "handoffMatches" in helper, relative
         assert "Date.now() - Number(handoff.createdAt || 0) <= 60_000" in helper, relative
         assert "typeof component.fetchMetadata !== \"function\"" in helper, relative
+        assert "wrapper._retailedgeBusinessHubHandoffRefreshPromise" in helper, relative
+        assert "const refreshPromise = Promise.resolve(component.fetchMetadata())" in helper, relative
+        assert "wrapper._retailedgeBusinessHubHandoffRefreshPromise = refreshPromise;" in helper, relative
+
+
+HANDOFF_AWARE_COMPONENTS = (
+    "public/js/expense_register/ExpenseRegisterReport.vue",
+    "public/js/customer_receivables/CustomerReceivablesReport.vue",
+    "public/js/cash_movement/CashMovementReport.vue",
+    "public/js/branch_performance_dashboard/BranchPerformanceDashboard.vue",
+    "public/js/payment_settlement_analysis/PaymentSettlementAnalysis.vue",
+    "public/js/purchase_reporting/PurchaseReportingReport.vue",
+    "public/js/sales_reporting/SalesReportingReport.vue",
+    "public/js/stock_position/StockPositionReport.vue",
+)
+
+
+def test_handoff_aware_components_claim_route_filters_before_async_metadata_work():
+    for relative in HANDOFF_AWARE_COMPONENTS:
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        fetch = source.split("async fetchMetadata()", 1)[1]
+        consume = fetch.find("retailedgeConsumeBusinessHubRouteOptions")
+        if consume < 0:
+            consume = fetch.find("consumeBusinessHubHandoff()")
+        navigation = fetch.find("navigationPromise")
+        assert consume >= 0, relative
+        assert navigation >= 0, relative
+        assert consume < navigation, relative
+
+
+def test_expense_register_uses_wrapper_as_single_reentry_refresh_authority():
+    source = (ROOT / "public/js/expense_register/ExpenseRegisterReport.vue").read_text(encoding="utf-8")
+    assert 'document.addEventListener("page-change", this.handleRouteActivation)' not in source
+    assert "handleRouteActivation()" not in source
