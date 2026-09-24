@@ -23,6 +23,8 @@ MAX_LINK_RESULTS = 20
 MAX_INVOICE_SCAN_ROWS = 2000
 MAX_ITEM_SCAN_ROWS = 10000
 MAX_SALES_TEAM_ROWS = 5000
+MAX_VISUAL_TREND_ROWS = 800
+MAX_VISUAL_BRANCH_ROWS = 500
 NO_BRANCH_SCOPE_SENTINEL = "__never__"
 
 
@@ -294,7 +296,7 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 		],
 		group_by="posting_date, is_return",
 		order_by="posting_date asc",
-		limit_page_length=800,
+		limit_page_length=MAX_VISUAL_TREND_ROWS + 1,
 	)
 	trend = [
 		{
@@ -317,7 +319,7 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 			],
 			group_by=f"{branch_field}, is_return",
 			order_by=f"{branch_field} asc",
-			limit_page_length=500,
+			limit_page_length=MAX_VISUAL_BRANCH_ROWS + 1,
 		)
 		aggregated: dict[str, float] = defaultdict(float)
 		for row in mix_rows:
@@ -334,6 +336,12 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 		"branch_mix": branch_mix,
 		"branch_mix_supported": bool(branch_field),
 		"company_currency": _company_currency(filters.company),
+		"scan": {
+			"trend_rows": len(trend_rows),
+			"trend_limit": MAX_VISUAL_TREND_ROWS,
+			"branch_rows": len(mix_rows) if not filters.get("branch") and branch_field else 0,
+			"branch_limit": MAX_VISUAL_BRANCH_ROWS,
+		},
 	}
 
 
