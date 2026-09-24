@@ -106,6 +106,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 			"posting_date": nowdate(),
 			"warehouse": warehouse,
 			"customer": "",
+			"price_list": "",
 			"update_stock": 1,
 			"remarks": "",
 			"items": [{"item_code": "", "qty": 1, "rate": ""}],
@@ -120,6 +121,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 			),
 			"can_create_item": bool(has_doctype("Item") and frappe.has_permission("Item", "create")),
 			"can_override_rate": bool(pricing.get("allow_rate_change", True)),
+			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
 			"can_edit_update_stock": allow_update_stock_edit,
 			"native_form_fallback": True,
 		},
@@ -162,6 +164,20 @@ def search_simple_sales_invoice_options(
 			reference_doctype="Sales Invoice Item",
 			link_fieldname="item_code",
 		)
+	if fieldname == "price_list":
+		pricing = resolve_price_list_context(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			user=frappe.session.user,
+		)
+		query = str(txt or "").strip().lower()
+		return [
+			{"value": name, "label": name}
+			for name in pricing.get("available_price_lists") or []
+			if not query or query in str(name).lower()
+		][:limit]
 	if fieldname == "warehouse":
 		filters = _warehouse_search_filters(company=company, branch=branch, user=frappe.session.user)
 		if filters is None:
@@ -214,6 +230,7 @@ def get_simple_sales_invoice_item_pricing(
 		posting_date=values.get("posting_date") or nowdate(),
 		qty=flt(values.get("qty") or 1),
 		user=user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 
@@ -242,7 +259,12 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
 
 	pricing_context = resolve_price_list_context(
-		mode="selling", company=company, branch=branch, party=customer, user=user
+		mode="selling",
+		company=company,
+		branch=branch,
+		party=customer,
+		user=user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 	doc = frappe.new_doc(SALES_INVOICE_DOCTYPE)
@@ -270,6 +292,7 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 			posting_date=str(doc.posting_date),
 			qty=item["qty"],
 			user=user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")
@@ -295,9 +318,9 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 			row["warehouse"] = warehouse
 		doc.append("items", row)
 
-	# The effective Price List and rates are resolved on the server from the
-	# authenticated user's defaults/POS profile and ERPNext pricing engine. The
-	# browser cannot choose a different Price List or bypass a POS rate lock.
+	# The effective Price List and rates are re-resolved on the server from the
+	# governed party/POS/Branch/assignment policy. A browser-selected Price List
+	# is accepted only when it is allowed by the active Branch Assignment policy.
 	doc.insert()
 	return {
 		"doctype": doc.doctype,
