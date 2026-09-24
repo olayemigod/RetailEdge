@@ -286,8 +286,7 @@ def seed_upgrade_fixture() -> dict:
 	return snapshot
 
 
-def verify_upgrade_fixture() -> dict:
-	"""Assert that migration preserved setup, submitted document and ERPNext ledger truth."""
+def _verify_accounting_snapshot() -> dict:
 	if not SNAPSHOT_PATH.exists():
 		frappe.throw("Upgrade validation snapshot is missing.")
 	before = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
@@ -299,7 +298,7 @@ def verify_upgrade_fixture() -> dict:
 		("Sales Invoice", before["invoice"]),
 	):
 		if not frappe.db.exists(doctype, name):
-			frappe.throw(f"{doctype} {name} was lost during upgrade.")
+			frappe.throw(f"{doctype} {name} was lost.")
 
 	invoice = frappe.get_doc("Sales Invoice", before["invoice"])
 	after_ledger = _ledger_snapshot(invoice.name)
@@ -307,13 +306,28 @@ def verify_upgrade_fixture() -> dict:
 	assert flt(invoice.grand_total, 2) == flt(before["grand_total"], 2)
 	assert flt(invoice.outstanding_amount, 2) == flt(before["outstanding_amount"], 2)
 	assert after_ledger == before["ledger"]
-	assert frappe.db.exists("DocType", "RetailEdge Settings")
-	assert frappe.db.exists("Role", "RetailEdge Manager")
-
 	return {
 		"invoice": invoice.name,
 		"grand_total": flt(invoice.grand_total, 2),
 		"outstanding_amount": flt(invoice.outstanding_amount, 2),
 		"ledger": after_ledger,
+	}
+
+
+def verify_upgrade_fixture() -> dict:
+	"""Assert migration preserved accounting truth and current RetailEdge invariants."""
+	result = _verify_accounting_snapshot()
+	assert frappe.db.exists("DocType", "RetailEdge Settings")
+	assert frappe.db.exists("Role", "RetailEdge Manager")
+	return {
+		**result,
 		"retailedge_manager_role": True,
+	}
+
+
+def verify_rollback_fixture() -> dict:
+	"""Assert a restored frozen baseline preserves the original accounting truth."""
+	return {
+		**_verify_accounting_snapshot(),
+		"rollback_restored": True,
 	}
