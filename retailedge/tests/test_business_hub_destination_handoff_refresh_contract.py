@@ -25,7 +25,8 @@ def test_cached_business_hub_destinations_reconsume_fresh_handoffs_on_page_show(
         assert "function refreshPendingBusinessHubHandoff(wrapper)" in source, relative
         assert "retailedge_business_hub_handoff" in source, relative
         assert "retailedge_business_hub_target" in source, relative
-        assert "String(routeOptions.retailedge_business_hub_target || \"\") !== PAGE_ROUTE" in source, relative
+        assert "String(routeOptions.retailedge_business_hub_target || \"\") === PAGE_ROUTE" in source, relative
+        assert 'String(route[0] || \"\") !== PAGE_ROUTE' in source, relative
         assert "wrapper._retailedgePageHasShown" in source, relative
         mounted_tail = source.split("wrapper._retailedgeVueApp = await", 1)[1]
         assert "wrapper._retailedgePageHasShown = true;" in mounted_tail, relative
