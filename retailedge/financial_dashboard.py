@@ -468,7 +468,7 @@ def _build_summary(
 			"sales.net_sales",
 			sales,
 			action=_action("sales-by-item", period_filters, basis="period"),
-			helper=_("Submitted invoice item net amounts after discounts and returns; tax exclusive."),
+			helper=_("Submitted Sales Invoice base net totals after discounts and returns; tax exclusive."),
 			group="executive",
 		),
 		_metric(
