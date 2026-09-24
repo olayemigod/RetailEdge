@@ -59,6 +59,10 @@ def test_governed_resolver_and_edgesuite_surfaces_revalidate_price_list_choice()
 	sales_ui = _read("public/js/retailedge_business_hub/SimpleSalesInvoiceDialog.vue")
 	purchase_ui = _read("public/js/retailedge_business_hub/SimplePurchaseInvoiceDialog.vue")
 	assign_ui = _read("public/js/branch_assignments/BranchAssignments.vue")
+	professional_quotation = _read("public/js/professional_selling/ProfessionalQuotationDialog.vue")
+	professional_order = _read("public/js/professional_selling/ProfessionalSalesOrderDialog.vue")
+	professional_invoice = _read("public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue")
+	professional_purchase_order = _read("public/js/professional_purchasing/ProfessionalPurchaseOrderDialog.vue")
 
 	for expected in (
 		"get_assignment_price_lists",
@@ -72,7 +76,14 @@ def test_governed_resolver_and_edgesuite_surfaces_revalidate_price_list_choice()
 	assert 'fieldname == "price_list"' in purchase
 	assert "requested_price_list=values.get(\"price_list\") or \"\"" in sales
 	assert "requested_price_list=values.get(\"price_list\") or \"\"" in purchase
-	for component in (sales_ui, purchase_ui):
+	for component in (
+		sales_ui,
+		purchase_ui,
+		professional_quotation,
+		professional_order,
+		professional_invoice,
+		professional_purchase_order,
+	):
 		assert 'label="Price List"' in component
 		assert "searchPriceList" in component
 		assert "setPriceList" in component
