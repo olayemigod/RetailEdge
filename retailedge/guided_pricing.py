@@ -10,7 +10,9 @@ from frappe.utils.caching import request_cache
 
 from erpnext.stock.get_item_details import get_item_details, get_pos_profile
 
-from retailedge.branch_profile import get_branch_profile
+from retailedge.branch_assignment import get_assignment_price_lists
+from retailedge.branch_profile import get_branch_profile, get_exact_branch_profile
+from retailedge.utils.settings import get_retailedge_settings
 
 PriceMode = Literal["selling", "buying"]
 
@@ -26,6 +28,19 @@ SETTINGS_PRICE_LIST: dict[PriceMode, tuple[str, str]] = {
 STANDARD_PRICE_LIST: dict[PriceMode, str] = {
 	"selling": "Standard Selling",
 	"buying": "Standard Buying",
+}
+
+SELLING_POLICY_ORDERS = {
+	"Party > POS > Branch > Assigned Choice": ("party", "pos", "branch", "assigned_choice"),
+	"Party > Branch > POS > Assigned Choice": ("party", "branch", "pos", "assigned_choice"),
+	"POS > Party > Branch > Assigned Choice": ("pos", "party", "branch", "assigned_choice"),
+	"Branch > Party > POS > Assigned Choice": ("branch", "party", "pos", "assigned_choice"),
+	"Assigned Choice > Party > POS > Branch": ("assigned_choice", "party", "pos", "branch"),
+}
+BUYING_POLICY_ORDERS = {
+	"Party > Branch > Assigned Choice": ("party", "branch", "assigned_choice"),
+	"Branch > Party > Assigned Choice": ("branch", "party", "assigned_choice"),
+	"Assigned Choice > Party > Branch": ("assigned_choice", "party", "branch"),
 }
 
 
