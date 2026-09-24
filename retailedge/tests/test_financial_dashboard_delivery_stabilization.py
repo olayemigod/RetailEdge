@@ -5,15 +5,12 @@ EXPENSE = ROOT / "public/js/expense_register/ExpenseRegisterReport.vue"
 WORKFLOW = ROOT.parent / ".github/workflows/edgesuite-ui-candidate-compat.yml"
 
 
-def test_cached_expense_report_reconsumes_fresh_business_hub_handoff_on_page_activation():
+def test_cached_expense_report_claims_handoff_before_async_metadata_work():
     source = EXPENSE.read_text()
-    assert 'document.addEventListener("page-change", this.handleRouteActivation);' in source
-    assert 'document.removeEventListener("page-change", this.handleRouteActivation);' in source
-    assert "handleRouteActivation()" in source
-    assert "this.consumeBusinessHubHandoff()" in source
-    assert "this.syncSmartDateFromFilters();" in source
-    assert "this.currentPage = 1;" in source
-    assert "if (this.filters.company) this.fetchData();" in source
+    fetch = source.split("async fetchMetadata()", 1)[1]
+    assert "this.consumeBusinessHubHandoff()" in fetch
+    assert fetch.index("this.consumeBusinessHubHandoff()") < fetch.index("navigationPromise")
+    assert 'document.addEventListener("page-change", this.handleRouteActivation);' not in source
 
 
 def test_edgesuite_candidate_workflow_validates_exact_financial_dashboard_head_with_pytest():
