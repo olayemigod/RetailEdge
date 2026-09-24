@@ -103,6 +103,7 @@ def get_simple_purchase_invoice_context() -> dict[str, Any]:
 			"bill_date": nowdate(),
 			"warehouse": warehouse,
 			"supplier": "",
+			"price_list": "",
 			"update_stock": 0,
 			"remarks": "",
 			"items": [{"item_code": "", "qty": 1, "rate": ""}],
@@ -116,6 +117,7 @@ def get_simple_purchase_invoice_context() -> dict[str, Any]:
 				has_doctype("Supplier") and frappe.has_permission("Supplier", "create")
 			),
 			"can_create_item": bool(has_doctype("Item") and frappe.has_permission("Item", "create")),
+			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
 			"native_form_fallback": True,
 		},
 		"limits": {"link_results": MAX_LINK_RESULTS, "max_items": MAX_ITEMS},
@@ -157,6 +159,20 @@ def search_simple_purchase_invoice_options(
 			reference_doctype="Purchase Invoice Item",
 			link_fieldname="item_code",
 		)
+	if fieldname == "price_list":
+		pricing = resolve_price_list_context(
+			mode="buying",
+			company=company,
+			branch=branch,
+			party=supplier,
+			user=frappe.session.user,
+		)
+		query = str(txt or "").strip().lower()
+		return [
+			{"value": name, "label": name}
+			for name in pricing.get("available_price_lists") or []
+			if not query or query in str(name).lower()
+		][:limit]
 	if fieldname == "warehouse":
 		filters = _warehouse_search_filters(company=company, branch=branch, user=frappe.session.user)
 		if filters is None:
@@ -208,6 +224,7 @@ def get_simple_purchase_invoice_item_pricing(
 		posting_date=values.get("posting_date") or nowdate(),
 		qty=flt(values.get("qty") or 1),
 		user=user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 
@@ -232,7 +249,12 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 		frappe.throw(_("Warehouse is required when Update Stock is enabled."))
 
 	pricing_context = resolve_price_list_context(
-		mode="buying", company=company, branch=branch, party=supplier, user=user
+		mode="buying",
+		company=company,
+		branch=branch,
+		party=supplier,
+		user=user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 	doc = frappe.new_doc(PURCHASE_INVOICE_DOCTYPE)
@@ -264,6 +286,7 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 			posting_date=str(doc.posting_date),
 			qty=item["qty"],
 			user=user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		manual_rate = item.get("rate")
 		resolved_rate = resolved.get("rate")
@@ -285,7 +308,7 @@ def create_simple_purchase_invoice_draft(values: dict | str | None = None) -> di
 		doc.append("items", row)
 
 	# Buying Price List selection and fallback pricing are resolved server-side
-	# from the authenticated user's setup and ERPNext's item-pricing service.
+	# from the governed supplier/Branch/assignment policy and ERPNext pricing.
 	doc.insert()
 	return {
 		"doctype": doc.doctype,
