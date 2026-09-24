@@ -346,6 +346,68 @@ def get_sales_visual_aggregates(filters: dict[str, Any] | str | None = None) -> 
 
 
 @frappe.whitelist()
+def get_sales_financial_summary(
+	filters: dict[str, Any] | str | None = None,
+) -> dict[str, Any]:
+	"""Return compact tax-inclusive Sales Invoice summary for financial dashboards."""
+	filters = _coerce_filters(filters)
+	_validate_filters(filters)
+	_assert_report_access(filters)
+	branch_field, branch_condition = _invoice_branch_scope(filters)
+	query_filters: dict[str, Any] = {
+		"docstatus": 1,
+		"company": filters.company,
+		"posting_date": ["between", [filters.from_date, filters.to_date]],
+	}
+	if filters.get("customer"):
+		query_filters["customer"] = filters.customer
+	if filters.get("status"):
+		query_filters["status"] = filters.status
+	invoice_kind = str(filters.get("invoice_kind") or "All").strip()
+	if invoice_kind == "Sales":
+		query_filters["is_return"] = 0
+	elif invoice_kind == "Returns":
+		query_filters["is_return"] = 1
+	if branch_field and branch_condition is not None:
+		query_filters[branch_field] = branch_condition
+
+	rows = frappe.get_list(
+		"Sales Invoice",
+		filters=query_filters,
+		fields=[
+			"is_return",
+			{"SUM": "base_grand_total", "as": "grand_total"},
+			{"COUNT": "name", "as": "invoice_count"},
+		],
+		group_by="is_return",
+		order_by="is_return asc",
+		limit_page_length=3,
+	)
+	if len(rows) > 2:
+		frappe.throw(
+			_("Sales Invoice summary returned an unexpected aggregate shape."),
+			frappe.ValidationError,
+		)
+
+	net_invoiced = sum(
+		_signed_for_return(row.grand_total, cint(row.is_return))
+		for row in rows
+	)
+	invoice_count = sum(cint(row.invoice_count) for row in rows)
+	return {
+		"summary": [
+			{"label": _("Net Invoiced"), "value": net_invoiced, "datatype": "Currency"},
+			{"label": _("Invoices"), "value": invoice_count, "datatype": "Int"},
+		],
+		"company_currency": _company_currency(filters.company),
+		"scan": {
+			"aggregate_groups": len(rows),
+			"group_limit": 2,
+		},
+	}
+
+
+@frappe.whitelist()
 def get_sales_by_item(
 	filters: dict[str, Any] | str | None = None,
 	page: int | str = 1,
