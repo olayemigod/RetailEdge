@@ -102,7 +102,7 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		const root = document.createElement("div");
 		root.className = "retailedge-payment-settlement-analysis-root";
 		page.body.append(root);
-		wrapper._retailedgeVueApp = window.mountPaymentSettlementAnalysis(root);
+		wrapper._retailedgeVueApp = await window.mountPaymentSettlementAnalysis(root);
 		wrapper._retailedgePageHasShown = true;
 		bindBusinessHubHandoffRouteRefresh(wrapper);
 	} catch (error) {
