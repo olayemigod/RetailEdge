@@ -313,35 +313,17 @@ export default {
 		this.edgeUIValid = this.missingComponents.length === 0;
 	},
 	mounted() {
-		document.addEventListener("page-change", this.handleRouteActivation);
 		this.fetchMetadata();
-	},
-	beforeUnmount() {
-		document.removeEventListener("page-change", this.handleRouteActivation);
 	},
 	methods: {
 		consumeBusinessHubHandoff() {
 			return window.retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey) || {};
 		},
-		handleRouteActivation() {
-			const route = frappe.get_route?.();
-			if (!Array.isArray(route) || route[0] !== this.config.providerKey) return;
-			const hubHandoff = this.consumeBusinessHubHandoff();
-			if (!Object.keys(hubHandoff).length) return;
-			this.filters = { ...this.filters, ...hubHandoff };
-			this.smartDateReference = hubHandoff.to_date || this.smartDateReference || this.filters.to_date || "";
-			this.syncSmartDateFromFilters();
-			this.tenantName = hubHandoff.company || this.tenantName || this.filters.company || "";
-			this.branchName = Object.prototype.hasOwnProperty.call(hubHandoff, "branch")
-				? (hubHandoff.branch || "")
-				: (this.branchName || this.filters.branch || "");
-			this.currentPage = 1;
-			if (this.filters.company) this.fetchData();
-		},
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
 			try {
+				const hubHandoff = this.consumeBusinessHubHandoff();
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
@@ -350,7 +332,7 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const hubHandoff = this.consumeBusinessHubHandoff();
+				
 				this.filters = { ...this.filters, ...hubHandoff };
 				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
 				this.syncSmartDateFromFilters();
