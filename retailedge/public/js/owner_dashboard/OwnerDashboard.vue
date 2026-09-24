@@ -137,6 +137,7 @@ export default {
 			userName: "",
 			nativeFallbackEnabled: false,
 			requestId: 0,
+			metadataRequestId: 0,
 		};
 	},
 	computed: {
@@ -165,6 +166,7 @@ export default {
 	methods: {
 		async fetchMetadata({ preserveView = false } = {}) {
 			if (!this.edgeUIValid) return;
+			const metadataRequestId = ++this.metadataRequestId;
 			this.metadataLoading = true;
 			this.error = "";
 			try {
@@ -186,6 +188,7 @@ export default {
 					callMethod("retailedge.financial_dashboard.get_financial_dashboard_context"),
 					navigationPromise,
 				]);
+				if (metadataRequestId !== this.metadataRequestId) return;
 				this.filters = {
 					...this.filters,
 					...(context.default_filters || {}),
@@ -209,9 +212,10 @@ export default {
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				if (this.filters.company) await this.fetchData();
 			} catch (error) {
+				if (metadataRequestId !== this.metadataRequestId) return;
 				this.error = errorMessage(error, "Failed to load Financial Dashboard controls.");
 			} finally {
-				this.metadataLoading = false;
+				if (metadataRequestId === this.metadataRequestId) this.metadataLoading = false;
 			}
 		},
 		syncSmartDateFromFilters(expression = "custom") {
@@ -351,6 +355,8 @@ export default {
 			const detail = event?.detail || {};
 			if (detail.product && detail.product !== "retailedge") return;
 			this.requestId += 1;
+			this.payload = { schema_version: 1, summary: [], collection_metrics: [], alerts: [], report_links: [] };
+			this.error = "";
 			this.fetchMetadata({ preserveView: true });
 		},
 	},
