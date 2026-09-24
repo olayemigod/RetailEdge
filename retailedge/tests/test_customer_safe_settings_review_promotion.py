@@ -45,7 +45,7 @@ def test_business_expenses_disabled_state_is_normal_ui_not_an_exception():
     assert 'frappe.set_route("retail-settings")' in frontend
 
 
-def test_settings_are_managed_in_horizontal_tab_workspace():
+def test_settings_use_vertical_section_navigation_workspace():
     backend = (
         ROOT / "retailedge" / "page" / "retail_settings" / "retail_settings.py"
     ).read_text(encoding="utf-8")
@@ -77,8 +77,11 @@ def test_settings_are_managed_in_horizontal_tab_workspace():
     assert "edgeui.bundle.js" in page
     assert "retail_settings.bundle.js" in page
     assert 'class="settings-tabs"' in vue
-    assert "flex-wrap:nowrap" in vue
-    assert "overflow-x:auto" in vue
+    assert 'aria-orientation="vertical"' in vue
+    assert "grid-template-columns:minmax(220px, 280px) minmax(0, 1fr)" in vue
+    assert "position:sticky" in vue
+    assert "text-align:left" in vue
+    assert "@media (max-width:980px)" in vue
     assert "Save Changes" in vue
     assert "EdgeLinkField" in vue
     assert "RoleList" in vue
