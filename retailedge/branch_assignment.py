@@ -661,6 +661,11 @@ def _validate_assignment_price_lists(doc) -> None:
 			frappe.throw(_("Price List {0} must be a Selling or Buying Price List.").format(name))
 		if not frappe.has_permission("Price List", "read", doc=name):
 			frappe.throw(_("You do not have permission to assign Price List {0}.").format(name), frappe.PermissionError)
+		if not frappe.has_permission("Price List", "read", doc=name, user=doc.user):
+			frappe.throw(
+				_("User {0} does not have permission to use Price List {1}.").format(doc.user, name),
+				frappe.PermissionError,
+			)
 
 
 def _validate_assignment_price_list_immutability(doc) -> None:
