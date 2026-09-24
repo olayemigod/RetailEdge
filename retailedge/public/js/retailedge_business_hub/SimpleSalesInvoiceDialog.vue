@@ -74,6 +74,16 @@
 				/>
 
 				<EdgeLinkField
+					v-if="canSwitchPriceList"
+					:modelValue="values.price_list"
+					label="Price List"
+					placeholder="Choose an assigned Price List"
+					description="Only Price Lists permitted by your active Branch Assignment are available. The configured pricing policy still controls precedence."
+					:searcher="searchPriceList"
+					@update:modelValue="setPriceList"
+				/>
+
+				<EdgeLinkField
 					:modelValue="values.warehouse"
 					label="Stock Location"
 					placeholder="Search stock location"
@@ -177,6 +187,7 @@ function emptyValues() {
 		posting_date: "",
 		warehouse: "",
 		customer: "",
+		price_list: "",
 		update_stock: 1,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
@@ -187,7 +198,9 @@ function sourceLabel(source) {
 	return {
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
+		assigned_choice: "Assigned Price List choice",
 		pos_profile: "Assigned POS Profile",
+		branch_default: "Branch default",
 		party_default: "Customer default",
 		erpnext_default: "ERPNext default",
 		standard_price_list: "Standard Selling",
@@ -200,6 +213,7 @@ export default {
 	components: {
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeLinkField: runtimeComponents.EdgeLinkField,
+		EdgeDropdown: runtimeComponents.EdgeDropdown,
 		EdgeChildTable: runtimeComponents.EdgeChildTable,
 		EdgeLoadingState: runtimeComponents.EdgeLoadingState,
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
@@ -269,6 +283,9 @@ export default {
 		},
 		canCreateItem() {
 			return Boolean(this.formContext.capabilities?.can_create_item);
+		},
+		canSwitchPriceList() {
+			return Boolean(this.formContext.pricing?.can_switch_price_list && (this.formContext.pricing?.available_price_lists || []).length > 1);
 		},
 		pricingLabel() {
 			return this.formContext.pricing?.price_list || "Item default";
@@ -351,6 +368,25 @@ export default {
 		searchWarehouse(query) {
 			return this.searchOptions("warehouse", query);
 		},
+		searchPriceList(query) {
+			return this.searchOptions("price_list", query);
+		},
+		async refreshPriceListOptions() {
+			const options = await this.searchPriceList("");
+			const names = options.map((option) => option.value || option.label).filter(Boolean);
+			this.formContext.pricing = {
+				...(this.formContext.pricing || {}),
+				available_price_lists: names,
+				can_switch_price_list: names.length > 1,
+			};
+			if (this.values.price_list && !names.includes(this.values.price_list)) this.values.price_list = "";
+		},
+		setPriceList(next) {
+			this.values.price_list = next || "";
+			this.pricingCache.clear();
+			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
+			this.refreshAllItemPricing();
+		},
 		searchLineLink(column, query) {
 			if (column?.fieldname !== "item_code") return Promise.resolve([]);
 			return this.searchOptions("item_code", query);
@@ -372,6 +408,7 @@ export default {
 			const changed = Boolean(this.values.customer && this.values.customer !== next);
 			this.values.customer = next || "";
 			this.pricingCache.clear();
+			this.refreshPriceListOptions().catch(() => {});
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
@@ -381,6 +418,7 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
+			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			this.pricingCache.clear();
 			if (!branch || !this.values.company) return;
@@ -394,6 +432,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || branch;
 				this.values.warehouse = resolved.warehouse || "";
+				await this.refreshPriceListOptions();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) {
@@ -444,6 +483,7 @@ export default {
 				this.values.branch,
 				this.values.warehouse,
 				this.values.customer,
+				this.values.price_list,
 				this.values.posting_date,
 				row.item_code,
 				row.qty || 1,
@@ -465,6 +505,7 @@ export default {
 							branch: this.values.branch,
 							warehouse: this.values.warehouse,
 							customer: this.values.customer,
+							price_list: this.values.price_list,
 							posting_date: this.values.posting_date,
 							qty: row.qty || 1,
 						},
