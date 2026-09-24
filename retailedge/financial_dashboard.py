@@ -18,7 +18,7 @@ from retailedge.profitability_intelligence import get_profitability_summary
 from retailedge.reporting_scope import has_unrestricted_report_scope
 from retailedge.sales_reporting import (
 	get_sales_by_item_export,
-	get_sales_invoice_register,
+	get_sales_financial_summary,
 	get_sales_visual_aggregates,
 )
 from retailedge.stock_position import get_stock_position
@@ -158,11 +158,7 @@ def get_financial_dashboard_data(
 			restricted_reason=_("Your current permissions do not allow sales detail."),
 		)
 	invoices = _safe_payload(
-		lambda: get_sales_invoice_register(
-			filters=period_filters,
-			page=1,
-			page_size=1,
-		),
+		lambda: get_sales_financial_summary(period_filters),
 		restricted_reason=_("Your current permissions do not allow invoice totals."),
 	)
 	payments = _safe_payload(
