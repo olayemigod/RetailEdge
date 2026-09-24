@@ -141,6 +141,8 @@
 					<EdgeLinkField :modelValue="editor.default_pos_profile" label="Default POS Profile" placeholder="Optional" :searcher="searchDefaultPosProfile" @update:modelValue="editor.default_pos_profile = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_pos_opening_cash_account" label="POS Opening Cash Account" placeholder="Optional" :searcher="searchPosOpeningAccount" @update:modelValue="editor.default_pos_opening_cash_account = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_cash_mode_of_payment" label="Cash Mode of Payment" placeholder="Optional" :searcher="searchCashMode" @update:modelValue="editor.default_cash_mode_of_payment = $event || ''" />
+					<EdgeLinkField :modelValue="editor.default_selling_price_list" label="Default Selling Price List" placeholder="Optional" :searcher="searchDefaultSellingPriceList" @update:modelValue="editor.default_selling_price_list = $event || ''" />
+					<EdgeLinkField :modelValue="editor.default_buying_price_list" label="Default Buying Price List" placeholder="Optional" :searcher="searchDefaultBuyingPriceList" @update:modelValue="editor.default_buying_price_list = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_warehouse" label="Default Stock Location" placeholder="Optional" :searcher="searchDefaultWarehouse" @update:modelValue="editor.default_warehouse = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_source_warehouse" label="Default Source Stock Location" placeholder="Optional" :searcher="searchSourceWarehouse" @update:modelValue="editor.default_source_warehouse = $event || ''" />
 					<EdgeLinkField :modelValue="editor.default_target_warehouse" label="Default Destination Stock Location" placeholder="Optional" :searcher="searchTargetWarehouse" @update:modelValue="editor.default_target_warehouse = $event || ''" />
@@ -240,6 +242,7 @@ function blankEditor() {
 	return {
 		name: "", profile_name: "", enabled: 1, company: "", branch: "", is_default_for_company: 0,
 		default_pos_profile: "", default_pos_opening_cash_account: "", default_cash_mode_of_payment: "",
+		default_selling_price_list: "", default_buying_price_list: "",
 		default_warehouse: "", default_source_warehouse: "", default_target_warehouse: "", default_returns_warehouse: "",
 		default_cost_center: "", default_sales_cost_center: "", default_expense_cost_center: "",
 		default_cash_account: "", default_bank_account: "", default_card_pos_account: "", default_mobile_money_account: "",
@@ -249,6 +252,7 @@ function blankEditor() {
 }
 const DEPENDENT_FIELDS = [
 	"default_pos_profile", "default_pos_opening_cash_account", "default_cash_mode_of_payment",
+	"default_selling_price_list", "default_buying_price_list",
 	"default_warehouse", "default_source_warehouse", "default_target_warehouse", "default_returns_warehouse",
 	"default_cost_center", "default_sales_cost_center", "default_expense_cost_center",
 	"default_cash_account", "default_bank_account", "default_card_pos_account", "default_mobile_money_account",
@@ -333,6 +337,8 @@ export default {
 		searchDefaultPosProfile(query) { return this.search("default_pos_profile", query); },
 		searchPosOpeningAccount(query) { return this.search("default_pos_opening_cash_account", query); },
 		searchCashMode(query) { return this.search("default_cash_mode_of_payment", query); },
+		searchDefaultSellingPriceList(query) { return this.search("default_selling_price_list", query); },
+		searchDefaultBuyingPriceList(query) { return this.search("default_buying_price_list", query); },
 		searchDefaultWarehouse(query) { return this.search("default_warehouse", query); },
 		searchSourceWarehouse(query) { return this.search("default_source_warehouse", query); },
 		searchTargetWarehouse(query) { return this.search("default_target_warehouse", query); },
