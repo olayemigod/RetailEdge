@@ -240,6 +240,7 @@ export default {
 			this.metadataLoading = true;
 			this.error = "";
 			try {
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("cash-movement") || {};
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
@@ -248,7 +249,7 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("cash-movement") || {};
+				
 				this.filters = { ...this.filters, ...hubHandoff };
 				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
 				this.syncSmartDateFromFilters();
