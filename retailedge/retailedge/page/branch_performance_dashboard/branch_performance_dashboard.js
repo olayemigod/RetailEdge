@@ -54,11 +54,22 @@ function refreshPendingBusinessHubHandoff(wrapper) {
 		&& Date.now() - Number(handoff.createdAt || 0) <= 60_000
 	);
 	if (!routeOptionMatches && !handoffMatches) return;
+	if (wrapper._retailedgeBusinessHubHandoffRefreshPromise) {
+		return wrapper._retailedgeBusinessHubHandoffRefreshPromise;
+	}
 	const component = wrapper._retailedgeVueApp?._instance?.proxy;
 	if (!component || typeof component.fetchMetadata !== "function") return;
-	Promise.resolve(component.fetchMetadata()).catch((error) => {
-		console.error(`[RetailEdge ${PAGE_TITLE}] Business Hub handoff refresh failed`, error);
-	});
+	const refreshPromise = Promise.resolve(component.fetchMetadata())
+		.catch((error) => {
+			console.error(`[RetailEdge ${PAGE_TITLE}] Business Hub handoff refresh failed`, error);
+		})
+		.finally(() => {
+			if (wrapper._retailedgeBusinessHubHandoffRefreshPromise === refreshPromise) {
+				wrapper._retailedgeBusinessHubHandoffRefreshPromise = null;
+			}
+		});
+	wrapper._retailedgeBusinessHubHandoffRefreshPromise = refreshPromise;
+	return refreshPromise;
 }
 
 
