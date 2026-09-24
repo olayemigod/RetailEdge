@@ -37,7 +37,7 @@ def test_provider_uses_existing_financial_authorities_and_schema_v1():
     for expected in (
         "SCHEMA_VERSION = 1",
         "get_sales_by_item_export",
-        "get_sales_invoice_register",
+        "get_sales_financial_summary",
         "get_payment_settlement_analysis_export",
         "get_expense_register",
         "get_customer_receivables",
@@ -319,3 +319,21 @@ def test_financial_dashboard_discards_stale_metadata_and_old_scope_values():
     assert "this.requestId += 1;" in context_handler
     assert "this.payload = { schema_version: 1, summary: [], collection_metrics: [], alerts: [], report_links: [] };" in context_handler
     assert "this.fetchMetadata({ preserveView: true });" in context_handler
+
+
+def test_financial_dashboard_average_invoice_uses_compact_tax_inclusive_aggregate():
+    provider = PROVIDER.read_text()
+    sales = (APP / "sales_reporting.py").read_text()
+    assert "get_sales_financial_summary" in provider
+    dashboard_load = provider.split("sales_detail =", 1)[1].split("payments = _safe_payload", 1)[0]
+    assert "get_sales_financial_summary(period_filters)" in dashboard_load
+    assert "get_sales_invoice_register" not in dashboard_load
+
+    compact = sales.split("def get_sales_financial_summary(", 1)[1].split("@frappe.whitelist()", 1)[0]
+    assert '{"SUM": "base_grand_total", "as": "grand_total"}' in compact
+    assert '{"COUNT": "name", "as": "invoice_count"}' in compact
+    assert 'group_by="is_return"' in compact
+    assert "_signed_for_return(row.grand_total, cint(row.is_return))" in compact
+    assert '"label": _("Net Invoiced")' in compact
+    assert '"label": _("Invoices")' in compact
+    assert '"group_limit": 2' in compact
