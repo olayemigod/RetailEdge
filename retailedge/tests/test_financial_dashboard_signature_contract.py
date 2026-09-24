@@ -53,7 +53,7 @@ def test_provider_does_not_relabel_tax_inclusive_invoiced_total_as_net_sales():
     provider = PROVIDER.read_text()
     assert '_summary_value(sales, "Net Sales")' in provider
     assert 'net_sales_basis' in provider
-    assert "base_net_amount" in provider
+    assert "base_net_total" in provider
     assert '_summary_value(invoices, "Net Invoiced")' in provider
     assert "Average Sales Invoice Value" in provider
 
@@ -252,3 +252,23 @@ def test_financial_dashboard_exposes_permitted_composition_views_without_changin
     assert "compositionOptions" in ui
     assert "onCompositionChanged()" in ui
     assert "responseContext.composition_dimension" in ui
+
+
+def test_sales_visual_aggregate_rejects_silent_truncation_and_reports_scan_limits():
+    sales = (APP / "sales_reporting.py").read_text()
+    visual = sales.split("def get_sales_visual_aggregates", 1)[1].split("@frappe.whitelist()", 1)[0]
+    for expected in (
+        "MAX_VISUAL_TREND_ROWS = 800",
+        "MAX_VISUAL_BRANCH_ROWS = 500",
+        "limit_page_length=MAX_VISUAL_TREND_ROWS + 1",
+        "len(trend_rows) > MAX_VISUAL_TREND_ROWS",
+        "Sales trend is too large to load safely.",
+        "limit_page_length=MAX_VISUAL_BRANCH_ROWS + 1",
+        "len(mix_rows) > MAX_VISUAL_BRANCH_ROWS",
+        "Branch sales mix is too large to load safely.",
+        '"trend_limit": MAX_VISUAL_TREND_ROWS',
+        '"branch_limit": MAX_VISUAL_BRANCH_ROWS',
+    ):
+        assert expected in sales
+    assert "limit_page_length=800" not in visual
+    assert "limit_page_length=500" not in visual
