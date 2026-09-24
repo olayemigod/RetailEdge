@@ -135,10 +135,11 @@ export default {
 			this.metadataLoading = true;
 			this.error = "";
 			try {
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("customer-receivables") || {};
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.customer_receivables.get_customer_receivables_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("customer-receivables") || {};
+				
 				this.filters = { ...this.filters, ...hubHandoff };
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
