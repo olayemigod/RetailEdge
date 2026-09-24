@@ -231,7 +231,8 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertNotIn("income_account", source)
 		self.assertNotIn("taxes_and_charges =", source)
 		self.assertNotIn("payment_schedule", source)
-		self.assertIn("ERPNext pricing engine", source)
+		self.assertIn("resolve_sales_item_pricing", source)
+		self.assertIn("ERPNext pricing", (APP_ROOT / "guided_pricing.py").read_text())
 
 	def test_guided_dialog_uses_shared_edgesuite_components_and_multiple_item_rows(self):
 		component = (
