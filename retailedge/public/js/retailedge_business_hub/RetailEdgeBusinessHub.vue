@@ -1281,6 +1281,15 @@ export default {
 				frappe.set_route("query-report", item.target);
 				return;
 			}
+			if (item.target_type === "Page" && item.target === "owner-dashboard") {
+				this.openHomeRoute("owner-dashboard", {
+					company: this.context.company || "",
+					branch: this.context.branch || "",
+					from_date: this.homePeriod.from_date || "",
+					to_date: this.homePeriod.to_date || "",
+				});
+				return;
+			}
 			if (item.target_type === "Page") frappe.set_route(item.target);
 		},
 		routeForTarget(item) {
