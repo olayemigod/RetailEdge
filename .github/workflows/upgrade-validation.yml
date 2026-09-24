@@ -195,7 +195,7 @@ jobs:
           bench --site retail-upgrade.localhost restore             "$ROLLBACK_DB_BACKUP"             --db-root-username root             --db-root-password root             --force
 
           bench --site retail-upgrade.localhost migrate
-          bench --site retail-upgrade.localhost execute             retailedge.tests.upgrade_validation_fixture.verify_upgrade_fixture
+          bench --site retail-upgrade.localhost execute             retailedge.tests.upgrade_validation_fixture.verify_rollback_fixture
 
           test "$(git -C apps/retailedge rev-parse HEAD)" = "$PRIOR_RETAILEDGE_SHA"
 
