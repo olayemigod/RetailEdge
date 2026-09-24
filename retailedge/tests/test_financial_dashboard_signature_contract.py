@@ -307,3 +307,15 @@ def test_business_hub_financial_dashboard_navigation_preserves_active_period():
     assert "branch: this.context.branch || \"\"" in target
     assert "from_date: this.homePeriod.from_date || \"\"" in target
     assert "to_date: this.homePeriod.to_date || \"\"" in target
+
+
+def test_financial_dashboard_discards_stale_metadata_and_old_scope_values():
+    ui = OWNER_UI.read_text()
+    assert "metadataRequestId: 0" in ui
+    assert "const metadataRequestId = ++this.metadataRequestId" in ui
+    assert "if (metadataRequestId !== this.metadataRequestId) return;" in ui
+    assert "if (metadataRequestId === this.metadataRequestId) this.metadataLoading = false;" in ui
+    context_handler = ui.split("handleContextChanged(event)", 1)[1]
+    assert "this.requestId += 1;" in context_handler
+    assert "this.payload = { schema_version: 1, summary: [], collection_metrics: [], alerts: [], report_links: [] };" in context_handler
+    assert "this.fetchMetadata({ preserveView: true });" in context_handler
