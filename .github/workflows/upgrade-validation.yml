@@ -17,7 +17,7 @@ jobs:
   upgrade:
     name: Frozen pre-MVP to current candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 85
 
     services:
       redis:
@@ -45,6 +45,7 @@ jobs:
     env:
       PRIOR_RETAILEDGE_SHA: 6a06153742610f38e48b3ffb683f497944999105
       CURRENT_RETAILEDGE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      ROLLBACK_DB_BACKUP: /tmp/retailedge-pre-upgrade-database.sql.gz
 
     steps:
       - name: Check out current RetailEdge candidate
@@ -128,6 +129,14 @@ jobs:
           test -s /tmp/retailedge-upgrade-before.json
           cat /tmp/retailedge-upgrade-before.json
 
+      - name: Back up frozen rollback point
+        working-directory: frappe-bench
+        run: |
+          rm -f "$ROLLBACK_DB_BACKUP"
+          bench --site retail-upgrade.localhost backup             --backup-path-db "$ROLLBACK_DB_BACKUP"
+
+          test -s "$ROLLBACK_DB_BACKUP"
+
       - name: Switch RetailEdge to exact current candidate
         working-directory: frappe-bench
         run: |
@@ -170,6 +179,26 @@ jobs:
           set -o pipefail
           bench --site retail-upgrade.localhost run-tests --app retailedge 2>&1 | tee /tmp/retailedge-upgrade-tests.log
 
+      - name: Restore frozen rollback point under prior RetailEdge code
+        working-directory: frappe-bench
+        run: |
+          test -s "$ROLLBACK_DB_BACKUP"
+
+          git -C apps/retailedge reset --hard
+          git -C apps/retailedge checkout --force "$PRIOR_RETAILEDGE_SHA"
+          test "$(git -C apps/retailedge rev-parse HEAD)" = "$PRIOR_RETAILEDGE_SHA"
+
+          # Keep the current verification helper available while exercising the
+          # prior application code against the restored pre-upgrade database.
+          cp             "$GITHUB_WORKSPACE/retailedge/tests/upgrade_validation_fixture.py"             apps/retailedge/retailedge/tests/upgrade_validation_fixture.py
+
+          bench --site retail-upgrade.localhost restore             "$ROLLBACK_DB_BACKUP"             --db-root-username root             --db-root-password root             --force
+
+          bench --site retail-upgrade.localhost migrate
+          bench --site retail-upgrade.localhost execute             retailedge.tests.upgrade_validation_fixture.verify_upgrade_fixture
+
+          test "$(git -C apps/retailedge rev-parse HEAD)" = "$PRIOR_RETAILEDGE_SHA"
+
       - name: Preserve upgrade failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -178,5 +207,6 @@ jobs:
           path: |
             /tmp/retailedge-upgrade-before.json
             /tmp/retailedge-upgrade-tests.log
+            /tmp/retailedge-pre-upgrade-database.sql.gz
           if-no-files-found: ignore
           retention-days: 3
