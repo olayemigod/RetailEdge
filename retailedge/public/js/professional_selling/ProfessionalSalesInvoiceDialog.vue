@@ -63,6 +63,15 @@
 				/>
 
 				<EdgeLinkField
+					v-if="canSwitchPriceList"
+					:modelValue="values.price_list"
+					label="Price List"
+					placeholder="Choose an assigned Price List"
+					:searcher="searchPriceList"
+					@update:modelValue="setPriceList"
+				/>
+
+				<EdgeLinkField
 					:modelValue="values.warehouse"
 					label="Stock Location"
 					placeholder="Optional stock location"
@@ -169,6 +178,7 @@ function initialValues(context = {}) {
 		branch: context.operating?.branch || "",
 		warehouse: context.operating?.default_stock_location || "",
 		customer: "",
+		price_list: "",
 		posting_date: context.today || "",
 		shipping_rule: "",
 		loyalty_points: 0,
@@ -191,6 +201,7 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
+			availablePriceLists: [...(this.context.pricing?.available_price_lists || [])],
 			loyaltyToken: 0,
 			loyaltyLoading: false,
 			loyaltyStatus: {},
@@ -211,7 +222,8 @@ export default {
 		};
 	},
 	computed: {
-		priceListLabel() { return this.context.pricing?.price_list || "ERPNext default"; },
+		priceListLabel() { return this.values.price_list || this.context.pricing?.price_list || "ERPNext default"; },
+		canSwitchPriceList() { return this.availablePriceLists.length > 1; },
 		loyaltyRedemptionLabel() {
 			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
 			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
@@ -243,6 +255,7 @@ export default {
 				this.mode = "new";
 				this.sourceDocument = "";
 				this.values = initialValues(this.context);
+				this.availablePriceLists = [...(this.context.pricing?.available_price_lists || [])];
 				this.loyaltyToken += 1;
 				this.loyaltyStatus = {};
 				this.loyaltyLoading = false;
@@ -260,6 +273,7 @@ export default {
 		searchCustomer(query) { return this.searchOptions("customer", query); },
 		searchBranch(query) { return this.searchOptions("branch", query); },
 		searchWarehouse(query) { return this.searchOptions("warehouse", query); },
+		searchPriceList(query) { return this.searchOptions("price_list", query); },
 		searchShippingRule(query) {
 			return callMethod(SHIPPING_SEARCH, { txt: query || "", values: this.values }).then((rows) => Array.isArray(rows) ? rows : []);
 		},
@@ -271,9 +285,20 @@ export default {
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
+		async refreshPriceListOptions() {
+			const rows = await this.searchPriceList("");
+			this.availablePriceLists = rows.map((row) => row.value || row.label).filter(Boolean);
+			if (this.values.price_list && !this.availablePriceLists.includes(this.values.price_list)) this.values.price_list = "";
+		},
+		setPriceList(next) {
+			this.values.price_list = next || "";
+			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+			this.refreshAllItemPricing();
+		},
 		setCustomer(next) {
 			const changed = this.values.customer && this.values.customer !== next;
 			this.values.customer = next || "";
+			this.refreshPriceListOptions().catch(() => {});
 			this.loyaltyToken += 1;
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
@@ -315,6 +340,7 @@ export default {
 		async setBranch(next) {
 			this.values.branch = next || "";
 			this.values.warehouse = "";
+			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			if (!this.values.branch || !this.values.company) return;
 			const token = ++this.cascadeToken;
@@ -323,6 +349,7 @@ export default {
 				if (token !== this.cascadeToken) return;
 				this.values.branch = resolved.branch || this.values.branch;
 				this.values.warehouse = resolved.warehouse || "";
+				await this.refreshPriceListOptions();
 				this.refreshAllItemPricing();
 			} catch (error) {
 				if (token === this.cascadeToken) this.saveError = errorMessage(error, "Unable to resolve Branch Stock Location.");
