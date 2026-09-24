@@ -252,12 +252,18 @@ def resolve_sales_item_pricing(
 	posting_date: str | None = None,
 	qty: float = 1,
 	user: str | None = None,
+	requested_price_list: str = "",
 ) -> dict[str, Any]:
 	user = user or frappe.session.user
 	_assert_read_permission("Item", item_code, user=user)
 	_assert_read_permission("Customer", customer, user=user)
 	context = resolve_price_list_context(
-		mode="selling", company=company, branch=branch, party=customer, user=user
+		mode="selling",
+		company=company,
+		branch=branch,
+		party=customer,
+		user=user,
+		requested_price_list=requested_price_list,
 	)
 	details = _erpnext_item_details(
 		mode="selling",
@@ -296,12 +302,18 @@ def resolve_purchase_item_pricing(
 	posting_date: str | None = None,
 	qty: float = 1,
 	user: str | None = None,
+	requested_price_list: str = "",
 ) -> dict[str, Any]:
 	user = user or frappe.session.user
 	_assert_read_permission("Item", item_code, user=user)
 	_assert_read_permission("Supplier", supplier, user=user)
 	context = resolve_price_list_context(
-		mode="buying", company=company, branch=branch, party=supplier, user=user
+		mode="buying",
+		company=company,
+		branch=branch,
+		party=supplier,
+		user=user,
+		requested_price_list=requested_price_list,
 	)
 	details = _erpnext_item_details(
 		mode="buying",
@@ -408,6 +420,18 @@ def _permitted_pos_profile(name: str, *, company: str, user: str) -> frappe._dic
 	if user_rows and not frappe.db.exists("POS Profile User", {"parent": name, "user": user}):
 		return None
 	return frappe._dict(pos)
+
+
+def _user_permission_price_lists(*, user: str, mode: PriceMode) -> list[str]:
+	permissions = get_user_permissions(user).get("Price List", []) or []
+	ordered = sorted(permissions, key=lambda row: int(row.get("is_default") or 0), reverse=True)
+	return list(
+		dict.fromkeys(
+			str(row.get("doc") or "").strip()
+			for row in ordered
+			if _valid_price_list(str(row.get("doc") or "").strip(), mode=mode, user=user)
+		)
+	)
 
 
 def _default_user_permission_price_list(*, user: str, mode: PriceMode) -> str:
