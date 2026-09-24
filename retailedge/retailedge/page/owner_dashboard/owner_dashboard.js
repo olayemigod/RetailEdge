@@ -1,7 +1,7 @@
 const EDGEUI_ASSET = "edgeui.bundle.js";
 const DASHBOARD_ASSET = "owner_dashboard.bundle.js";
 const PAGE_ROUTE = "owner-dashboard";
-const PAGE_TITLE = "Owner Dashboard";
+const PAGE_TITLE = "Financial Dashboard";
 
 function requireAsync(assetName) {
 	return new Promise((resolve, reject) => {
@@ -29,6 +29,54 @@ function renderLoadError(wrapper, error) {
 	errorDiv.append(title, detail); wrapper.appendChild(errorDiv);
 }
 
+
+function refreshPendingBusinessHubHandoff(wrapper) {
+	if (!wrapper._retailedgePageHasShown) {
+		wrapper._retailedgePageHasShown = true;
+		return;
+	}
+	const routeOptions = frappe.route_options || {};
+	const handoff = window.__retailedgeBusinessHubRouteHandoff || {};
+	const routeOptionMatches = Boolean(
+		routeOptions.retailedge_business_hub_handoff
+		&& String(routeOptions.retailedge_business_hub_target || "") === PAGE_ROUTE
+	);
+	const handoffMatches = Boolean(
+		handoff
+		&& String(handoff.target || "") === PAGE_ROUTE
+		&& Date.now() - Number(handoff.createdAt || 0) <= 60_000
+	);
+	if (!routeOptionMatches && !handoffMatches) return;
+	if (wrapper._retailedgeBusinessHubHandoffRefreshPromise) {
+		return wrapper._retailedgeBusinessHubHandoffRefreshPromise;
+	}
+	const component = wrapper._retailedgeVueApp?._instance?.proxy;
+	if (!component || typeof component.fetchMetadata !== "function") return;
+	const refreshPromise = Promise.resolve(component.fetchMetadata())
+		.catch((error) => {
+			console.error(`[RetailEdge ${PAGE_TITLE}] Business Hub handoff refresh failed`, error);
+		})
+		.finally(() => {
+			if (wrapper._retailedgeBusinessHubHandoffRefreshPromise === refreshPromise) {
+				wrapper._retailedgeBusinessHubHandoffRefreshPromise = null;
+			}
+		});
+	wrapper._retailedgeBusinessHubHandoffRefreshPromise = refreshPromise;
+	return refreshPromise;
+}
+
+function bindBusinessHubHandoffRouteRefresh(wrapper) {
+	if (wrapper._retailedgeBusinessHubHandoffRouteRefresh) return;
+	const refresh = () => {
+		const route = frappe.get_route?.();
+		if (!Array.isArray(route) || String(route[0] || "") !== PAGE_ROUTE) return;
+		refreshPendingBusinessHubHandoff(wrapper);
+	};
+	wrapper._retailedgeBusinessHubHandoffRouteRefresh = refresh;
+	document.addEventListener("page-change", refresh);
+	frappe.router?.on?.("change", refresh);
+}
+
 frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 	hideNativePageSidebar(wrapper);
 	const bootLoading = document.createElement("div");
@@ -43,8 +91,14 @@ frappe.pages[PAGE_ROUTE].on_page_load = async function (wrapper) {
 		if (typeof window.mountOwnerDashboard !== "function") throw new Error("Owner Dashboard bundle is unavailable.");
 		bootLoading.remove();
 		const root = document.createElement("div"); root.className = "retailedge-owner-dashboard-root"; page.body.append(root);
-		await window.mountOwnerDashboard(root); wrapper._retailedgeOwnerDashboardMounted = true;
+		wrapper._retailedgeVueApp = await window.mountOwnerDashboard(root);
+		wrapper._retailedgePageHasShown = true;
+		bindBusinessHubHandoffRouteRefresh(wrapper);
+		wrapper._retailedgeOwnerDashboardMounted = true;
 	} catch (error) { bootLoading.remove(); renderLoadError(wrapper, error); }
 };
 
-frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) { hideNativePageSidebar(wrapper); };
+frappe.pages[PAGE_ROUTE].on_page_show = function (wrapper) {
+	hideNativePageSidebar(wrapper);
+	refreshPendingBusinessHubHandoff(wrapper);
+};
