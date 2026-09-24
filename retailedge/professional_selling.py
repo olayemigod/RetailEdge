@@ -349,6 +349,8 @@ def get_professional_selling_context() -> dict[str, Any]:
 			"price_list": pricing.get("price_list") or "",
 			"source": pricing.get("source") or "",
 			"allow_rate_change": bool(pricing.get("allow_rate_change", True)),
+			"available_price_lists": pricing.get("available_price_lists") or [],
+			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
 		},
 		"documents": documents,
 		"today": nowdate(),
@@ -417,6 +419,20 @@ def search_professional_selling_options(
 			page_length=limit,
 			reference_doctype=definition["doctype"],
 		)
+	if fieldname == "price_list":
+		pricing = resolve_price_list_context(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			user=frappe.session.user,
+		)
+		query = str(txt or "").strip().lower()
+		return [
+			{"value": name, "label": name}
+			for name in pricing.get("available_price_lists") or []
+			if not query or query in str(name).lower()
+		][:limit]
 	if fieldname == "warehouse":
 		filters = _warehouse_filters(company, branch)
 		if filters is None:
@@ -449,7 +465,7 @@ def get_professional_selling_item_pricing(
 	item_code: str,
 	values: dict | str | None = None,
 ) -> dict[str, Any]:
-	"""Resolve item price on the server; the browser never selects the effective Price List."""
+	"""Resolve item price on the server; any selected Price List is revalidated against governance."""
 	definition = get_selling_document_definition(document)
 	if not _permission(definition["doctype"], "create"):
 		frappe.throw(
@@ -473,6 +489,7 @@ def get_professional_selling_item_pricing(
 		posting_date=str(values.get("transaction_date") or values.get("posting_date") or nowdate()),
 		qty=flt(values.get("qty") or 1),
 		user=frappe.session.user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 
