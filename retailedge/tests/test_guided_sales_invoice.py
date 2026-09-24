@@ -232,7 +232,9 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 		self.assertNotIn("taxes_and_charges =", source)
 		self.assertNotIn("payment_schedule", source)
 		self.assertIn("resolve_sales_item_pricing", source)
-		self.assertIn("ERPNext pricing", (APP_ROOT / "guided_pricing.py").read_text())
+		pricing = (APP_ROOT / "guided_pricing.py").read_text()
+		self.assertIn("from erpnext.stock.get_item_details import get_item_details", pricing)
+		self.assertIn("return frappe._dict(get_item_details(ctx) or {})", pricing)
 
 	def test_guided_dialog_uses_shared_edgesuite_components_and_multiple_item_rows(self):
 		component = (
