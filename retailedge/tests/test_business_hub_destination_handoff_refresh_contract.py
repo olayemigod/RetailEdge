@@ -15,6 +15,7 @@ DESTINATION_PAGES = (
     "retailedge/page/sales_by_item/sales_by_item.js",
     "retailedge/page/sales_invoice_register/sales_invoice_register.js",
     "retailedge/page/payment_settlement_analysis/payment_settlement_analysis.js",
+    "retailedge/page/owner_dashboard/owner_dashboard.js",
 )
 
 
@@ -64,6 +65,7 @@ HANDOFF_AWARE_COMPONENTS = (
     "public/js/purchase_reporting/PurchaseReportingReport.vue",
     "public/js/sales_reporting/SalesReportingReport.vue",
     "public/js/stock_position/StockPositionReport.vue",
+    "public/js/owner_dashboard/OwnerDashboard.vue",
 )
 
 
