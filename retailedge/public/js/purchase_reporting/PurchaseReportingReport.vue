@@ -187,12 +187,13 @@ export default {
 		async fetchMetadata() {
 			this.metadataLoading = true; this.error = "";
 			try {
-				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
-				const [context, navigation] = await Promise.all([callMethod("retailedge.purchase_reporting.get_purchase_reporting_context"), navigationPromise]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				const hubHandoff = this.reportType === "supplier_payables"
 					? window.retailedgeConsumeBusinessHubRouteOptions?.("supplier-payables") || {}
 					: {};
+				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
+				const [context, navigation] = await Promise.all([callMethod("retailedge.purchase_reporting.get_purchase_reporting_context"), navigationPromise]);
+				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				
 				this.filters = { ...this.filters, ...hubHandoff };
 				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
 				if (this.reportType !== "supplier_payables") this.syncSmartDateFromFilters();
