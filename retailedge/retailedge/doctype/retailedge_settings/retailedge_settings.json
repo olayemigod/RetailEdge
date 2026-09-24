@@ -730,22 +730,22 @@
    "label": "Enable Price List Governance"
   },
   {
-   "default": "Party → POS → Branch → Assigned Choice",
+   "default": "Party > POS > Branch > Assigned Choice",
    "depends_on": "eval:doc.enable_price_list_governance",
    "description": "Controls the trusted selling Price List resolution order. ERPNext and Standard Selling remain safe final fallbacks.",
    "fieldname": "selling_price_list_policy",
    "fieldtype": "Select",
    "label": "Selling Price List Priority",
-   "options": "Party → POS → Branch → Assigned Choice\nParty → Branch → POS → Assigned Choice\nPOS → Party → Branch → Assigned Choice\nBranch → Party → POS → Assigned Choice\nAssigned Choice → Party → POS → Branch"
+   "options": "Party > POS > Branch > Assigned Choice\nParty > Branch > POS > Assigned Choice\nPOS > Party > Branch > Assigned Choice\nBranch > Party > POS > Assigned Choice\nAssigned Choice > Party > POS > Branch"
   },
   {
-   "default": "Party → Branch → Assigned Choice",
+   "default": "Party > Branch > Assigned Choice",
    "depends_on": "eval:doc.enable_price_list_governance",
    "description": "Controls the trusted buying Price List resolution order. ERPNext and Standard Buying remain safe final fallbacks.",
    "fieldname": "buying_price_list_policy",
    "fieldtype": "Select",
    "label": "Buying Price List Priority",
-   "options": "Party → Branch → Assigned Choice\nBranch → Party → Assigned Choice\nAssigned Choice → Party → Branch"
+   "options": "Party > Branch > Assigned Choice\nBranch > Party > Assigned Choice\nAssigned Choice > Party > Branch"
   },
   {
    "default": "1",
