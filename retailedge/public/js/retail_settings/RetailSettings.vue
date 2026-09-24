@@ -32,7 +32,7 @@
 			<EdgeErrorState v-else-if="error" title="Settings unavailable" :message="error" @retry="loadSettings" />
 
 			<div v-else class="settings-workspace">
-				<nav class="settings-tabs" role="tablist" aria-label="Settings sections">
+				<nav class="settings-tabs" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
 					<button
 						v-for="group in groups"
 						:key="group.key"
@@ -312,11 +312,47 @@ export default {
 </script>
 
 <style scoped>
-.settings-workspace { display:grid; gap:1rem; min-width:0; }
-.settings-tabs { display:flex; flex-wrap:nowrap; gap:.45rem; width:100%; overflow-x:auto; overflow-y:hidden; padding:.25rem .1rem .55rem; scrollbar-width:thin; position:sticky; top:0; z-index:4; background:var(--edge-page-bg, var(--bg-color)); }
-.settings-tab { flex:0 0 auto; border:1px solid var(--edge-border, var(--border-color)); border-radius:999px; background:var(--edge-surface, var(--card-bg)); color:var(--edge-text, var(--text-color)); padding:.6rem 1rem; font-weight:600; white-space:nowrap; cursor:pointer; }
-.settings-tab.is-active { border-color:var(--edge-primary, #0056a6); background:var(--edge-primary-subtle, #eef6ff); color:var(--edge-primary-strong, #003e73); }
-.settings-group { display:grid; gap:1rem; }
+.settings-workspace {
+	display:grid;
+	grid-template-columns:minmax(220px, 280px) minmax(0, 1fr);
+	gap:1.25rem;
+	align-items:start;
+	min-width:0;
+}
+.settings-tabs {
+	display:grid;
+	gap:.35rem;
+	position:sticky;
+	top:1rem;
+	max-height:calc(100vh - 2rem);
+	overflow-y:auto;
+	padding:.65rem;
+	border:1px solid var(--edge-border, var(--border-color));
+	border-radius:.8rem;
+	background:var(--edge-surface, var(--card-bg));
+	box-shadow:0 1px 2px rgba(16,24,40,.04);
+}
+.settings-tab {
+	width:100%;
+	border:1px solid transparent;
+	border-radius:.6rem;
+	background:transparent;
+	color:var(--edge-text, var(--text-color));
+	padding:.72rem .8rem;
+	font-weight:600;
+	text-align:left;
+	line-height:1.3;
+	cursor:pointer;
+}
+.settings-tab:hover {
+	background:var(--edge-surface-soft, #f8fafc);
+}
+.settings-tab.is-active {
+	border-color:var(--edge-primary, #0056a6);
+	background:var(--edge-primary-subtle, #eef6ff);
+	color:var(--edge-primary-strong, #003e73);
+}
+.settings-group { display:grid; gap:1rem; min-width:0; }
 .settings-group-header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
 .settings-group-header h2 { margin:0 0 .3rem; }
 .settings-group-header p { margin:0; color:var(--edge-text-muted, #667085); }
@@ -337,7 +373,15 @@ export default {
 .role-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin:.3rem 0; }
 .role-chip { display:inline-flex; align-items:center; gap:.35rem; padding:.3rem .55rem; border:1px solid var(--edge-border, var(--border-color)); border-radius:999px; background:var(--edge-surface-soft, #f8fafc); font-size:.82rem; }
 .role-chip button { border:0; background:transparent; cursor:pointer; color:inherit; font-size:1rem; line-height:1; padding:0; }
-.settings-error { padding:.8rem 1rem; border:1px solid var(--edge-danger, #d92d20); border-radius:.6rem; background:var(--edge-danger-subtle, #fef3f2); color:var(--edge-danger, #b42318); }
+.settings-error { grid-column:1 / -1; padding:.8rem 1rem; border:1px solid var(--edge-danger, #d92d20); border-radius:.6rem; background:var(--edge-danger-subtle, #fef3f2); color:var(--edge-danger, #b42318); }
 .settings-fallback { margin:20px; padding:16px; border:1px solid var(--edge-border, #d9d9d9); border-radius:10px; display:grid; gap:6px; }
-@media (max-width:760px) { .settings-fields { grid-template-columns:1fr; } .settings-field--wide { grid-column:auto; } .settings-group-header { flex-direction:column; } }
+@media (max-width:980px) {
+	.settings-workspace { grid-template-columns:1fr; }
+	.settings-tabs { position:static; max-height:none; }
+}
+@media (max-width:760px) {
+	.settings-fields { grid-template-columns:1fr; }
+	.settings-field--wide { grid-column:auto; }
+	.settings-group-header { flex-direction:column; }
+}
 </style>
