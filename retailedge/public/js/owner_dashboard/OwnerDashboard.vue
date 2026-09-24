@@ -163,11 +163,21 @@ export default {
 		document.removeEventListener("retailedge-operating-context-changed", this.handleContextChanged);
 	},
 	methods: {
-		async fetchMetadata() {
+		async fetchMetadata({ preserveView = false } = {}) {
 			if (!this.edgeUIValid) return;
 			this.metadataLoading = true;
 			this.error = "";
 			try {
+				const handoff =
+					window.retailedgeConsumeBusinessHubRouteOptions?.("owner-dashboard") || {};
+				const preservedView = preserveView
+					? {
+						from_date: this.filters.from_date,
+						to_date: this.filters.to_date,
+						comparison_mode: this.filters.comparison_mode,
+						composition_dimension: this.filters.composition_dimension,
+					}
+					: {};
 				const navigationPromise =
 					typeof window.retailedgeGetBusinessHubContext === "function"
 						? window.retailedgeGetBusinessHubContext()
@@ -176,16 +186,24 @@ export default {
 					callMethod("retailedge.financial_dashboard.get_financial_dashboard_context"),
 					navigationPromise,
 				]);
-				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const handoff =
-					window.retailedgeConsumeBusinessHubRouteOptions?.("owner-dashboard") || {};
-				this.filters = { ...this.filters, ...handoff };
-				this.syncSmartDateFromFilters();
+				this.filters = {
+					...this.filters,
+					...(context.default_filters || {}),
+					...preservedView,
+					...handoff,
+				};
+				this.syncSmartDateFromFilters(
+					Object.keys(handoff).length
+						? "custom"
+						: (preserveView ? (this.smartDate?.expression || "custom") : "This Month")
+				);
 				this.capabilities = context.capabilities || this.capabilities;
 				this.comparisonOptions = context.comparison_options || this.comparisonOptions;
 				this.compositionOptions = context.composition_options || this.compositionOptions;
-				this.tenantName = context.tenant_name || this.filters.company || "";
-				this.branchName = context.branch_name || this.filters.branch || "";
+				this.tenantName = handoff.company || context.tenant_name || this.filters.company || "";
+				this.branchName = Object.prototype.hasOwnProperty.call(handoff, "branch")
+					? (handoff.branch || "")
+					: (context.branch_name || this.filters.branch || "");
 				this.userName = context.user_name || "";
 				this.nativeFallbackEnabled = Boolean(navigation.access?.can_use_native_desk);
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -196,19 +214,23 @@ export default {
 				this.metadataLoading = false;
 			}
 		},
-		syncSmartDateFromFilters() {
+		syncSmartDateFromFilters(expression = "custom") {
 			if (!this.filters.from_date || !this.filters.to_date) {
 				this.smartDate = {};
 				return;
 			}
 			this.smartDate = {
-				expression: "custom",
+				expression,
 				from_date: this.filters.from_date,
 				to_date: this.filters.to_date,
 				label:
-					this.filters.from_date === this.filters.to_date
-						? this.filters.from_date
-						: `${this.filters.from_date} – ${this.filters.to_date}`,
+					expression !== "custom"
+						? expression
+						: (
+							this.filters.from_date === this.filters.to_date
+								? this.filters.from_date
+								: `${this.filters.from_date} – ${this.filters.to_date}`
+						),
 			};
 		},
 		onSmartDateResolved(value) {
@@ -329,7 +351,7 @@ export default {
 			const detail = event?.detail || {};
 			if (detail.product && detail.product !== "retailedge") return;
 			this.requestId += 1;
-			this.fetchMetadata();
+			this.fetchMetadata({ preserveView: true });
 		},
 	},
 };
