@@ -272,3 +272,26 @@ def test_sales_visual_aggregate_rejects_silent_truncation_and_reports_scan_limit
         assert expected in sales
     assert "limit_page_length=800" not in visual
     assert "limit_page_length=500" not in visual
+
+
+def test_financial_dashboard_defaults_to_this_month_and_preserves_view_on_context_change():
+    ui = OWNER_UI.read_text()
+    assert 'syncSmartDateFromFilters(expression = "custom")' in ui
+    assert ': (preserveView ? (this.smartDate?.expression || "custom") : "This Month")' in ui
+    assert "from_date: this.filters.from_date" in ui
+    assert "comparison_mode: this.filters.comparison_mode" in ui
+    assert "composition_dimension: this.filters.composition_dimension" in ui
+    assert "this.fetchMetadata({ preserveView: true });" in ui
+
+
+def test_financial_dashboard_claims_business_hub_handoff_before_async_context_work():
+    ui = OWNER_UI.read_text()
+    fetch = ui.split("async fetchMetadata", 1)[1]
+    assert "retailedgeConsumeBusinessHubRouteOptions" in fetch
+    assert fetch.index("retailedgeConsumeBusinessHubRouteOptions") < fetch.index("navigationPromise")
+
+
+def test_net_sales_helper_matches_invoice_level_tax_exclusive_authority():
+    provider = PROVIDER.read_text()
+    assert "Submitted Sales Invoice base net totals after discounts and returns; tax exclusive." in provider
+    assert "Submitted invoice item net amounts after discounts and returns; tax exclusive." not in provider
