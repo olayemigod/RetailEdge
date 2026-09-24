@@ -20,55 +20,136 @@ def uncached_price_list_resolver():
 
 
 class TestGuidedPricing(unittest.TestCase):
-	@patch("retailedge.guided_pricing._valid_price_list")
-	@patch("retailedge.guided_pricing.frappe.defaults.get_user_default")
-	def test_direct_user_selling_price_list_has_first_priority(self, mock_default, mock_valid):
-		mock_default.side_effect = lambda key: "User Retail" if key == "Selling Price List" else None
-		mock_valid.return_value = True
-		with patch("retailedge.guided_pricing._price_context") as mock_context:
-			mock_context.return_value = {
-				"price_list": "User Retail",
-				"source": "user_default",
-			}
-			result = uncached_price_list_resolver()(
-				mode="selling",
-				company="Demo Company",
-				user="sales@example.com",
-			)
-		self.assertEqual(result["price_list"], "User Retail")
-		mock_context.assert_called_once_with("User Retail", mode="selling", source="user_default")
-
-	@patch("retailedge.guided_pricing.frappe.db.get_value", return_value="NGN")
-	@patch("retailedge.guided_pricing._valid_price_list")
-	@patch("retailedge.guided_pricing._resolve_user_pos_profile")
-	@patch("retailedge.guided_pricing._default_user_permission_price_list", return_value="")
-	@patch("retailedge.guided_pricing.frappe.defaults.get_user_default", return_value=None)
-	def test_assigned_pos_profile_supplies_selling_price_list(
+	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing._valid_price_list", return_value=True)
+	@patch("retailedge.guided_pricing._available_assigned_price_lists", return_value=["Assigned Retail"])
+	@patch("retailedge.guided_pricing._party_price_list", return_value="Customer Retail")
+	@patch("retailedge.guided_pricing.get_retailedge_settings")
+	def test_default_selling_policy_prioritizes_customer_default(
 		self,
-		_mock_default,
-		_mock_permission_price,
-		mock_pos,
-		mock_valid,
-		_mock_get_value,
+		mock_settings,
+		_mock_party,
+		_mock_available,
+		_mock_valid,
+		mock_context,
 	):
-		mock_pos.return_value = frappe._dict(
+		mock_settings.return_value = frappe._dict(
 			{
-				"name": "POS-LAGOS",
-				"selling_price_list": "POS Retail",
-				"allow_rate_change": 0,
+				"enable_price_list_governance": 1,
+				"allow_price_list_switch": 1,
+				"selling_price_list_policy": "Party > POS > Branch > Assigned Choice",
 			}
 		)
-		mock_valid.side_effect = lambda name, **_kwargs: bool(str(name or "").strip())
+		mock_context.side_effect = lambda name, **kwargs: {
+			"price_list": name,
+			"source": kwargs["source"],
+		}
+		result = uncached_price_list_resolver()(
+			mode="selling",
+			company="Demo Company",
+			branch="Lagos",
+			party="CUST-001",
+			user="sales@example.com",
+		)
+		self.assertEqual(result["price_list"], "Customer Retail")
+		self.assertEqual(result["source"], "party_default")
+
+	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing._valid_price_list", return_value=True)
+	@patch("retailedge.guided_pricing._available_assigned_price_lists", return_value=["Assigned Buy"])
+	@patch("retailedge.guided_pricing.get_exact_branch_profile")
+	@patch("retailedge.guided_pricing._party_price_list", return_value="")
+	@patch("retailedge.guided_pricing.get_retailedge_settings")
+	def test_default_buying_policy_uses_branch_before_assigned_choice(
+		self,
+		mock_settings,
+		_mock_party,
+		mock_branch_profile,
+		_mock_available,
+		_mock_valid,
+		mock_context,
+	):
+		mock_settings.return_value = frappe._dict(
+			{
+				"enable_price_list_governance": 1,
+				"allow_price_list_switch": 1,
+				"buying_price_list_policy": "Party > Branch > Assigned Choice",
+			}
+		)
+		mock_branch_profile.return_value = frappe._dict(
+			{"default_buying_price_list": "Branch Buying"}
+		)
+		mock_context.side_effect = lambda name, **kwargs: {
+			"price_list": name,
+			"source": kwargs["source"],
+		}
+		result = uncached_price_list_resolver()(
+			mode="buying",
+			company="Demo Company",
+			branch="Lagos",
+			party="SUP-001",
+			user="buyer@example.com",
+		)
+		self.assertEqual(result["price_list"], "Branch Buying")
+		self.assertEqual(result["source"], "branch_default")
+
+	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing._valid_price_list", return_value=True)
+	@patch(
+		"retailedge.guided_pricing._available_assigned_price_lists",
+		return_value=["Retail A", "Retail B"],
+	)
+	@patch("retailedge.guided_pricing.get_retailedge_settings")
+	def test_assigned_choice_can_be_selected_when_policy_allows_it_first(
+		self,
+		mock_settings,
+		_mock_available,
+		_mock_valid,
+		mock_context,
+	):
+		mock_settings.return_value = frappe._dict(
+			{
+				"enable_price_list_governance": 1,
+				"allow_price_list_switch": 1,
+				"selling_price_list_policy": "Assigned Choice > Party > POS > Branch",
+			}
+		)
+		mock_context.side_effect = lambda name, **kwargs: {
+			"price_list": name,
+			"source": kwargs["source"],
+		}
 		result = uncached_price_list_resolver()(
 			mode="selling",
 			company="Demo Company",
 			branch="Lagos",
 			user="sales@example.com",
+			requested_price_list="Retail B",
 		)
-		self.assertEqual(result["price_list"], "POS Retail")
-		self.assertEqual(result["source"], "pos_profile")
-		self.assertEqual(result["pos_profile"], "POS-LAGOS")
-		self.assertFalse(result["allow_rate_change"])
+		self.assertEqual(result["price_list"], "Retail B")
+		self.assertEqual(result["source"], "assigned_choice")
+		self.assertTrue(result["can_switch_price_list"])
+
+	@patch(
+		"retailedge.guided_pricing._available_assigned_price_lists",
+		return_value=["Retail A"],
+	)
+	@patch("retailedge.guided_pricing.get_retailedge_settings")
+	def test_unassigned_requested_price_list_fails_closed(self, mock_settings, _mock_available):
+		mock_settings.return_value = frappe._dict(
+			{
+				"enable_price_list_governance": 1,
+				"allow_price_list_switch": 1,
+				"selling_price_list_policy": "Assigned Choice > Party > POS > Branch",
+			}
+		)
+		with self.assertRaises(frappe.PermissionError):
+			uncached_price_list_resolver()(
+				mode="selling",
+				company="Demo Company",
+				branch="Lagos",
+				user="sales@example.com",
+				requested_price_list="Not Assigned",
+			)
 
 	@patch("retailedge.guided_pricing.frappe.get_cached_value")
 	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
@@ -118,7 +199,7 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["rate"], 925.0)
 		self.assertEqual(result["rate_source"], "item_last_purchase_rate")
 
-	def test_pricing_uses_erpnext_service_and_does_not_accept_client_price_list(self):
+	def test_pricing_uses_erpnext_service_and_only_accepts_governed_client_price_list(self):
 		source = (APP_ROOT / "guided_pricing.py").read_text(encoding="utf-8")
 		self.assertIn("get_item_details", source)
 		self.assertIn("get_pos_profile", source)
@@ -127,6 +208,10 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertIn('"Standard Buying"', source)
 		self.assertIn('"standard_rate"', source)
 		self.assertIn('"last_purchase_rate"', source)
+		self.assertIn("requested_price_list", source)
+		self.assertIn("requested_price_list not in available_price_lists", source)
+		self.assertIn("get_assignment_price_lists", source)
+		self.assertIn("get_exact_branch_profile", source)
 		self.assertNotIn("ignore_permissions=True", source)
 		self.assertNotIn("frappe.get_all(", source)
 
