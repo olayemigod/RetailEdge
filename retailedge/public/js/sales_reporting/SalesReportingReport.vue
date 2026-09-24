@@ -322,6 +322,7 @@ export default {
 			this.metadataLoading = true;
 			this.error = "";
 			try {
+				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey) || {};
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
@@ -330,7 +331,7 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey) || {};
+				
 				this.filters = { ...this.filters, ...hubHandoff };
 				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
 				this.syncSmartDateFromFilters();
