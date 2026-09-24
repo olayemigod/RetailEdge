@@ -106,6 +106,7 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 		branch=branch,
 		party=customer,
 		user=frappe.session.user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 	doc = frappe.new_doc("Sales Order")
@@ -136,6 +137,7 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 			posting_date=str(transaction_date),
 			qty=item["qty"],
 			user=frappe.session.user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")
