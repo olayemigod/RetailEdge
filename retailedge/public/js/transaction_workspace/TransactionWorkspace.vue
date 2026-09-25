@@ -69,10 +69,7 @@
 						<p>{{ actionDescription(action) }}</p>
 						<div class="workspace-actions">
 							<button v-if="canRunTransactionAction(action)" type="button" class="edge-button edge-button--primary" @click="runTransactionAction(action)">{{ actionButtonLabel(action) }}</button>
-							<button v-if="action.doctype === 'Sales Invoice' && hasPageTarget('make-sale')" type="button" class="edge-button edge-button--secondary" @click="openQuickSale">Quick Sale</button>
-							<button v-if="action.doctype === 'Purchase Invoice' && hasPageTarget('record-purchase')" type="button" class="edge-button edge-button--secondary" @click="openQuickPurchase">Quick Purchase</button>
-							<button v-if="action.doctype === 'Stock Entry' && hasPageTarget('transfer-stock')" type="button" class="edge-button edge-button--secondary" @click="openQuickTransfer">Quick Transfer</button>
-							<button v-if="action.doctype === 'Stock Reconciliation' && hasPageTarget('stock-adjustment')" type="button" class="edge-button edge-button--secondary" @click="openQuickAdjustment">Quick Adjustment</button>
+							<button v-if="persistentPageForAction(action)" type="button" class="edge-button edge-button--secondary" @click="runAlternateTransactionAction(action)">{{ alternateTransactionLabel(action) }}</button>
 							<button v-if="canViewTransactionRecords(action)" type="button" class="edge-button edge-button--secondary" @click="viewTransactionRecords(action)">{{ viewButtonLabel(action) }}</button>
 						</div>
 					</section>
@@ -119,6 +116,7 @@ import SimplePurchaseInvoiceDialog from "../retailedge_business_hub/SimplePurcha
 import SimpleSalesInvoiceDialog from "../retailedge_business_hub/SimpleSalesInvoiceDialog.vue";
 import SimpleStockTransferDialog from "../retailedge_business_hub/SimpleStockTransferDialog.vue";
 import SimpleStockAdjustmentDialog from "../retailedge_business_hub/SimpleStockAdjustmentDialog.vue";
+import { getTransactionEntryPreference, persistentTransactionPage } from "../retailedge_business_hub/guidedEntryUtils";
 
 const REQUIRED_COMPONENTS = [
 	"EdgeAppShell",
@@ -240,6 +238,7 @@ export default {
 			simpleStockTransferOpen: false,
 			simpleStockAdjustmentOpen: false,
 			canUseNativeDesk: false,
+			entryPreference: "smart",
 		};
 	},
 	computed: {
@@ -280,9 +279,10 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
 					: callMethod("retailedge.master_experience.get_retailedge_business_hub_context");
-				const [workspace, navigation] = await Promise.all([
+				const [workspace, navigation, preference] = await Promise.all([
 					callMethod("retailedge.retailedge.page.transaction_workspace.transaction_workspace.get_transaction_workspace_context"),
 					navigationPromise,
+					getTransactionEntryPreference(),
 				]);
 				this.actions = Array.isArray(workspace.actions) ? workspace.actions : [];
 				this.pos = workspace.pos || {};
@@ -291,6 +291,7 @@ export default {
 				this.posProfile = workspace.operating?.default_pos_profile || "";
 				this.userName = navigation.context?.user_name || workspace.user_name || "";
 				this.canUseNativeDesk = Boolean(navigation.access?.can_use_native_desk);
+				this.entryPreference = ["smart", "quick", "full"].includes(preference?.value) ? preference.value : "smart";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.loaded = true;
 			} catch (error) {
@@ -377,29 +378,25 @@ export default {
 				this.posStarting = false;
 			}
 		},
+		persistentPageForAction(action) {
+			const target = persistentTransactionPage(action?.doctype);
+			return target && this.hasPageTarget(target) ? target : "";
+		},
+		openQuickTransaction(action) {
+			if (action?.doctype === "Sales Invoice") this.simpleSalesInvoiceOpen = true;
+			else if (action?.doctype === "Purchase Invoice") this.simplePurchaseInvoiceOpen = true;
+			else if (action?.doctype === "Stock Entry") this.simpleStockTransferOpen = true;
+			else if (action?.doctype === "Stock Reconciliation") this.simpleStockAdjustmentOpen = true;
+		},
 		runTransactionAction(action) {
 			if (!action?.doctype) return;
-			if (action.doctype === "Sales Invoice") {
-				if (this.hasPageTarget("make-sale")) {
-					frappe.set_route("make-sale");
+			if (GUIDED_DOCTYPES.has(action.doctype)) {
+				const target = this.persistentPageForAction(action);
+				if (target && this.entryPreference !== "quick") {
+					frappe.set_route(target);
 					return;
 				}
-				this.simpleSalesInvoiceOpen = true;
-				return;
-			}
-			if (action.doctype === "Purchase Invoice") {
-				if (this.hasPageTarget("record-purchase")) { frappe.set_route("record-purchase"); return; }
-				this.simplePurchaseInvoiceOpen = true;
-				return;
-			}
-			if (action.doctype === "Stock Entry") {
-				if (this.hasPageTarget("transfer-stock")) { frappe.set_route("transfer-stock"); return; }
-				this.simpleStockTransferOpen = true;
-				return;
-			}
-			if (action.doctype === "Stock Reconciliation") {
-				if (this.hasPageTarget("stock-adjustment")) { frappe.set_route("stock-adjustment"); return; }
-				this.simpleStockAdjustmentOpen = true;
+				this.openQuickTransaction(action);
 				return;
 			}
 			const owner = this.createOwnerPage(action);
@@ -418,10 +415,14 @@ export default {
 			this.openDoctype(action?.doctype);
 		},
 		actionButtonLabel(action) {
-			if (action?.doctype === "Sales Invoice" && this.hasPageTarget("make-sale")) return "Make Sale";
-			if (action?.doctype === "Purchase Invoice" && this.hasPageTarget("record-purchase")) return "Record Purchase";
-			if (action?.doctype === "Stock Entry" && this.hasPageTarget("transfer-stock")) return "Transfer Stock";
-			if (action?.doctype === "Stock Reconciliation" && this.hasPageTarget("stock-adjustment")) return "Stock Adjustment";
+			const target = this.persistentPageForAction(action);
+			if (target && this.entryPreference === "quick") {
+				return ({ "Sales Invoice": "Quick Sale", "Purchase Invoice": "Quick Purchase", "Stock Entry": "Quick Transfer", "Stock Reconciliation": "Quick Adjustment" })[action.doctype] || "Quick Entry";
+			}
+			if (action?.doctype === "Sales Invoice" && target) return "Make Sale";
+			if (action?.doctype === "Purchase Invoice" && target) return "Record Purchase";
+			if (action?.doctype === "Stock Entry" && target) return "Transfer Stock";
+			if (action?.doctype === "Stock Reconciliation" && target) return "Stock Adjustment";
 			if (GUIDED_DOCTYPES.has(action?.doctype)) return "Guided Entry";
 			const owner = this.createOwnerPage(action);
 			if (owner === "professional-selling" && this.hasPageTarget(owner)) return "Open Selling";
@@ -455,6 +456,23 @@ export default {
 			return GUIDED_DOCTYPES.has(action?.doctype)
 				? `Use the existing guided ${action.label} flow here, with native ERPNext as an explicit advanced fallback.`
 				: `Use the authorised advanced ERPNext ${action.label} workflow.`;
+		},
+		alternateTransactionLabel(action) {
+			const target = this.persistentPageForAction(action);
+			if (!target) return "";
+			if (this.entryPreference === "quick") {
+				return ({ "Sales Invoice": "Make Sale Page", "Purchase Invoice": "Record Purchase Page", "Stock Entry": "Transfer Stock Page", "Stock Reconciliation": "Stock Adjustment Page" })[action.doctype] || "Full Page";
+			}
+			return ({ "Sales Invoice": "Quick Sale", "Purchase Invoice": "Quick Purchase", "Stock Entry": "Quick Transfer", "Stock Reconciliation": "Quick Adjustment" })[action.doctype] || "Quick Entry";
+		},
+		runAlternateTransactionAction(action) {
+			const target = this.persistentPageForAction(action);
+			if (!target) return;
+			if (this.entryPreference === "quick") {
+				frappe.set_route(target);
+				return;
+			}
+			this.openQuickTransaction(action);
 		},
 		handleGuidedSaved() {
 			this.simpleSalesInvoiceOpen = false;

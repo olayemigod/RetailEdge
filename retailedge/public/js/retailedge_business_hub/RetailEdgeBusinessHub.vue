@@ -423,7 +423,7 @@ import SimpleStockAdjustmentDialog from "./SimpleStockAdjustmentDialog.vue";
 import SimpleStockTransferDialog from "./SimpleStockTransferDialog.vue";
 import StandardStockCompletionDialog from "./StandardStockCompletionDialog.vue";
 import BusinessHubChartCard from "./BusinessHubChartCard.vue";
-import { callMethod, openQuickEntryMaster } from "./guidedEntryUtils";
+import { callMethod, getTransactionEntryPreference, openQuickEntryMaster, persistentTransactionPage } from "./guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.master_experience.get_retailedge_business_hub_context";
 const HOME_SNAPSHOT_METHOD = "retailedge.business_hub_home.get_business_hub_home_snapshot";
@@ -996,10 +996,19 @@ export default {
 				frappe.set_route(shortcut.target);
 			}
 		},
-		runQuickAction(action) {
+		hasPageTarget(target) {
+			return Boolean(target && (this.navigationGroups || []).flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target));
+		},
+		async runQuickAction(action) {
 			if (!action || !action.doctype) return;
 			this.closeCreatePicker();
 			if (action.key === "new-sales-invoice") {
+				const preference = await getTransactionEntryPreference();
+				const target = persistentTransactionPage(action.doctype);
+				if (preference.value === "full" && this.hasPageTarget(target)) {
+					frappe.set_route(target);
+					return;
+				}
 				this.simpleSalesInvoiceOpen = true;
 				return;
 			}
@@ -1018,6 +1027,12 @@ export default {
 				return;
 			}
 			if (action.key === GUIDED_PURCHASE_ACTION) {
+				const preference = await getTransactionEntryPreference();
+				const target = persistentTransactionPage(action.doctype);
+				if (preference.value === "full" && this.hasPageTarget(target)) {
+					frappe.set_route(target);
+					return;
+				}
 				this.simplePurchaseInvoiceOpen = true;
 				return;
 			}
@@ -1031,10 +1046,22 @@ export default {
 				return;
 			}
 			if (action.key === GUIDED_STOCK_TRANSFER_ACTION) {
+				const preference = await getTransactionEntryPreference();
+				const target = persistentTransactionPage(action.doctype);
+				if (preference.value === "full" && this.hasPageTarget(target)) {
+					frappe.set_route(target);
+					return;
+				}
 				this.simpleStockTransferOpen = true;
 				return;
 			}
 			if (action.key === GUIDED_STOCK_ADJUSTMENT_ACTION) {
+				const preference = await getTransactionEntryPreference();
+				const target = persistentTransactionPage(action.doctype);
+				if (preference.value === "full" && this.hasPageTarget(target)) {
+					frappe.set_route(target);
+					return;
+				}
 				this.simpleStockAdjustmentOpen = true;
 				return;
 			}
