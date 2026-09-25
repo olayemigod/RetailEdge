@@ -193,10 +193,6 @@ class TestGuidedPricing(unittest.TestCase):
 				requested_price_list="Not Assigned",
 			)
 
-	@patch("retailedge.guided_pricing.frappe.get_cached_value")
-	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
-	@patch("retailedge.guided_pricing.resolve_price_list_context")
-	@patch("retailedge.guided_pricing._assert_read_permission")
 	def test_erpnext_placeholder_zero_does_not_mask_price_list_rate(self):
 		details = frappe._dict(
 			rate=0,
@@ -230,6 +226,10 @@ class TestGuidedPricing(unittest.TestCase):
 		)
 		self.assertEqual(_effective_erpnext_rate(details), 0.0)
 
+	@patch("retailedge.guided_pricing.frappe.get_cached_value")
+	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
+	@patch("retailedge.guided_pricing.resolve_price_list_context")
+	@patch("retailedge.guided_pricing._assert_read_permission")
 	def test_sales_falls_back_to_item_standard_rate(
 		self,
 		_mock_read,
@@ -252,10 +252,6 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertEqual(result["rate"], 1750.0)
 		self.assertEqual(result["rate_source"], "item_standard_rate")
 
-	@patch("retailedge.guided_pricing.frappe.get_cached_value")
-	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
-	@patch("retailedge.guided_pricing.resolve_price_list_context")
-	@patch("retailedge.guided_pricing._assert_read_permission")
 	@patch("retailedge.guided_pricing.frappe.get_cached_value", return_value=0)
 	@patch(
 		"retailedge.guided_pricing._erpnext_item_details",
@@ -284,6 +280,10 @@ class TestGuidedPricing(unittest.TestCase):
 		self.assertIsNone(result["rate"])
 		self.assertEqual(result["rate_source"], "unresolved")
 
+	@patch("retailedge.guided_pricing.frappe.get_cached_value")
+	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
+	@patch("retailedge.guided_pricing.resolve_price_list_context")
+	@patch("retailedge.guided_pricing._assert_read_permission")
 	def test_purchase_falls_back_to_item_last_purchase_rate(
 		self,
 		_mock_read,
