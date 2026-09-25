@@ -98,6 +98,47 @@ class TestGuidedPricing(unittest.TestCase):
 	@patch("retailedge.guided_pricing._valid_price_list", return_value=True)
 	@patch(
 		"retailedge.guided_pricing._available_assigned_price_lists",
+		return_value=["Assigned Retail"],
+	)
+	@patch("retailedge.guided_pricing._resolve_user_pos_profile")
+	@patch("retailedge.guided_pricing.get_retailedge_settings")
+	def test_single_assigned_list_can_switch_when_pos_list_is_effective(
+		self,
+		mock_settings,
+		mock_pos,
+		_mock_available,
+		_mock_valid,
+		mock_context,
+	):
+		mock_settings.return_value = frappe._dict(
+			{
+				"enable_price_list_governance": 1,
+				"allow_price_list_switch": 1,
+				"selling_price_list_policy": "POS > Party > Branch > Assigned Choice",
+			}
+		)
+		mock_pos.return_value = frappe._dict(
+			{"name": "POS-KETU", "selling_price_list": "Standard Selling", "allow_rate_change": 1}
+		)
+		mock_context.side_effect = lambda name, **kwargs: {
+			"price_list": name,
+			"source": kwargs["source"],
+			"allow_rate_change": True,
+		}
+		result = uncached_price_list_resolver()(
+			mode="selling",
+			company="Demo Company",
+			branch="Ketu",
+			user="sales@example.com",
+		)
+		self.assertEqual(result["price_list"], "Standard Selling")
+		self.assertEqual(result["available_price_lists"], ["Assigned Retail"])
+		self.assertTrue(result["can_switch_price_list"])
+
+	@patch("retailedge.guided_pricing._price_context")
+	@patch("retailedge.guided_pricing._valid_price_list", return_value=True)
+	@patch(
+		"retailedge.guided_pricing._available_assigned_price_lists",
 		return_value=["Retail A", "Retail B"],
 	)
 	@patch("retailedge.guided_pricing.get_retailedge_settings")
