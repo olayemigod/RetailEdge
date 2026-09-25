@@ -224,7 +224,7 @@ export default {
 	},
 	computed: {
 		priceListLabel() { return this.values.price_list || this.context.pricing?.price_list || "ERPNext default"; },
-		canSwitchPriceList() { return this.availablePriceLists.length > 1; },
+		canSwitchPriceList() { return Boolean(this.context.pricing?.can_switch_price_list && this.availablePriceLists.length); },
 		loyaltyRedemptionLabel() {
 			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
 			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
