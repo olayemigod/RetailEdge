@@ -25,7 +25,7 @@
 							<strong>Edit draft before completion</strong>
 							<p>Update draft dates, notes and quantities, or add new items. Existing source-linked item identity remains protected.</p>
 						</div>
-						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftValid" @click="saveDraftChanges">
+						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">
 							{{ busy ? "Saving..." : "Save Draft Changes" }}
 						</button>
 					</div>
@@ -137,7 +137,16 @@
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<template v-if="!completedResult">
 						<button
-							v-if="preview?.can_submit"
+							v-if="preview?.can_edit && draftDirty"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="busy || !draftValid"
+							@click="saveDraftChanges"
+						>
+							{{ busy ? "Saving..." : "Save Changes" }}
+						</button>
+						<button
+							v-if="preview?.can_submit && !draftDirty"
 							type="button"
 							class="edge-button edge-button--primary"
 							:disabled="busy"
@@ -150,7 +159,7 @@
 							:key="action.action"
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy || !preview?.workflow_eligible"
+							:disabled="busy || draftDirty || !preview?.workflow_eligible"
 							@click="applyWorkflow(action.action)"
 						>
 							{{ action.action }}
@@ -236,6 +245,26 @@ export default {
 		},
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
+		},
+		draftDirty() {
+			if (!this.preview?.can_edit) return false;
+			const secondary = this.preview?.doctype === "Quotation"
+				? (this.preview?.valid_till || "")
+				: (this.preview?.delivery_date || "");
+			if (
+				String(this.draftTransactionDate || "") !== String(this.preview?.transaction_date || "")
+				|| String(this.draftSecondaryDate || "") !== String(secondary)
+				|| String(this.draftPoNo || "") !== String(this.preview?.po_no || "")
+				|| String(this.draftTerms || "") !== String(this.preview?.terms || "")
+				|| String(this.draftRemarks || "") !== String(this.preview?.remarks || "")
+			) return true;
+			if (this.newItems.some((row) => row?.item_code)) return true;
+			const original = this.preview?.editable_items || [];
+			return this.draftItems.some((row, index) => (
+				Number(row.qty || 0) !== Number(original[index]?.qty || 0)
+				|| Number(row.rate || 0) !== Number(original[index]?.rate || 0)
+				|| String(row.warehouse || "") !== String(original[index]?.warehouse || "")
+			));
 		},
 		draftValid() {
 			if (!this.preview?.can_edit || !this.draftTransactionDate) return false;
@@ -341,7 +370,7 @@ export default {
 			}
 		},
 		async submitDocument() {
-			if (!this.preview?.can_submit || this.busy) return;
+			if (!this.preview?.can_submit || this.draftDirty || this.busy) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
@@ -361,7 +390,7 @@ export default {
 			}
 		},
 		async applyWorkflow(action) {
-			if (!action || !this.preview?.workflow_eligible || this.busy) return;
+			if (!action || this.draftDirty || !this.preview?.workflow_eligible || this.busy) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
