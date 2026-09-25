@@ -236,6 +236,16 @@ def get_simple_sales_invoice_item_pricing(
 
 @frappe.whitelist(methods=["POST"])
 def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[str, Any]:
+	"""Create the Make a Sale draft using the merchant guided-entry stock policy."""
+	return _create_simple_sales_invoice_draft(values)
+
+
+def _create_simple_sales_invoice_draft(
+	values: dict | str | None = None,
+	*,
+	allow_update_stock_edit: bool | None = None,
+) -> dict[str, Any]:
+	"""Internal draft engine shared by guided and Professional Selling."""
 	_assert_can_create_sales_invoice()
 	values = _coerce_values(values)
 	user = frappe.session.user
@@ -249,9 +259,12 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 	items = _normalise_items(values.get("items"))
 	configured_branches = get_guided_branch_names(company, user=user)
 	settings = get_retailedge_settings()
-	can_edit_update_stock = bool(
-		getattr(settings, "allow_guided_sales_update_stock_edit", 0)
-	)
+	if allow_update_stock_edit is None:
+		can_edit_update_stock = bool(
+			getattr(settings, "allow_guided_sales_update_stock_edit", 0)
+		)
+	else:
+		can_edit_update_stock = bool(allow_update_stock_edit)
 	update_stock = cint(values.get("update_stock") or 0) if can_edit_update_stock else 1
 	if update_stock and configured_branches and not branch:
 		frappe.throw(_("Choose a Branch before saving a stock-updating Sales Invoice."))
