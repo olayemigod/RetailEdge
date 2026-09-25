@@ -300,7 +300,7 @@ export default {
 			this.refreshAllItemPricing();
 		},
 		setCustomer(next) {
-			const changed = this.values.customer && this.values.customer !== next;
+			const previousCustomer = this.values.customer || "";
 			this.values.customer = next || "";
 			this.pricingSignatures = {};
 			this.refreshPriceListOptions().catch(() => {});
@@ -308,7 +308,7 @@ export default {
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
 			if (this.values.customer) this.loadLoyaltyStatus();
-			if (changed) {
+			if (previousCustomer !== this.values.customer) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
 			}
