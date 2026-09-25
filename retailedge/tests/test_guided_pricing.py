@@ -215,6 +215,34 @@ class TestGuidedPricing(unittest.TestCase):
 	@patch("retailedge.guided_pricing._erpnext_item_details", return_value=frappe._dict())
 	@patch("retailedge.guided_pricing.resolve_price_list_context")
 	@patch("retailedge.guided_pricing._assert_read_permission")
+	@patch("retailedge.guided_pricing.frappe.get_cached_value", return_value=0)
+	@patch(
+		"retailedge.guided_pricing._erpnext_item_details",
+		return_value=frappe._dict(rate=0, price_list_rate=0),
+	)
+	@patch("retailedge.guided_pricing.resolve_price_list_context")
+	@patch("retailedge.guided_pricing._assert_read_permission")
+	def test_missing_item_price_and_zero_standard_rate_remain_unresolved(
+		self,
+		_mock_read,
+		mock_context,
+		_mock_details,
+		_mock_cached,
+	):
+		mock_context.return_value = {
+			"price_list": "Standard Selling",
+			"source": "pos_profile",
+			"allow_rate_change": True,
+		}
+		result = resolve_sales_item_pricing(
+			item_code="ITEM-001",
+			company="Demo Company",
+			customer="CUST-001",
+			user="sales@example.com",
+		)
+		self.assertIsNone(result["rate"])
+		self.assertEqual(result["rate_source"], "unresolved")
+
 	def test_purchase_falls_back_to_item_last_purchase_rate(
 		self,
 		_mock_read,
