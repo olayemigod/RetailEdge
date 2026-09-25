@@ -71,6 +71,7 @@
 									<td>{{ row.effective_to ? formatDate(row.effective_to) : "Current" }}</td>
 									<td><EdgeStatusBadge :status="statusBadge(row.status)" /> <span class="status-text">{{ row.status }}</span></td>
 									<td class="row-actions">
+										<button v-if="canWrite && row.status !== 'Ended'" type="button" class="edge-button edge-button--secondary edge-button--small" @click="openPriceListEdit(row)">Edit Price Lists</button>
 										<button v-if="canWrite && row.status === 'Active'" type="button" class="edge-button edge-button--secondary edge-button--small" @click="openTransfer(row)">Transfer</button>
 										<button type="button" class="edge-button edge-button--secondary edge-button--small" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the full Branch Assignment form' : 'Advanced workflow: Native Desk access is required'" @click="openNative(row)">{{ canUseNativeDesk ? "Full Form" : "Advanced: Full Form" }}</button>
 									</td>
@@ -110,6 +111,25 @@
 		</template>
 	</EdgeModal>
 
+	<EdgeModal :open="priceListEditOpen" title="Edit Assignment Price Lists" subtitle="Change only the Price Lists this user may choose. Branch posting history and effective dates remain unchanged." size="lg" @close="closePriceListEdit">
+		<div v-if="priceListEditError" class="form-error">{{ priceListEditError }}</div>
+		<div class="transfer-current">
+			<div><span>User</span><strong>{{ priceListEditRow.user }}</strong></div>
+			<div><span>Assignment</span><strong>{{ priceListEditRow.company }} · {{ priceListEditRow.branch }}</strong></div>
+		</div>
+		<div class="price-list-assignment">
+			<span class="edge-field-label">Allowed Price Lists</span>
+			<small>These lists govern which Selling/Buying Price Lists the user can choose while this assignment is current.</small>
+			<div v-if="priceListEdit.price_lists.length" class="price-list-chips">
+				<span v-for="priceList in priceListEdit.price_lists" :key="priceList" class="price-list-chip">{{ priceList }}<button type="button" aria-label="Remove Price List" @click="removeEditPriceList(priceList)">×</button></span>
+			</div>
+			<EdgeLinkField :modelValue="priceListEditDraft" label="Add Price List" placeholder="Search enabled Price Lists" :searcher="searchEditPriceList" @select="addEditPriceList" @clear="priceListEditDraft = ''" />
+		</div>
+		<template #footer>
+			<div class="modal-footer-actions"><span></span><div class="footer-right"><button type="button" class="edge-button" :disabled="saving" @click="closePriceListEdit">Cancel</button><button type="button" class="edge-button edge-button--primary" :disabled="saving" @click="savePriceListEdit">{{ saving ? "Saving…" : "Save Price Lists" }}</button></div></div>
+		</template>
+	</EdgeModal>
+
 	<EdgeModal :open="transferOpen" title="Transfer User to Branch" subtitle="The current assignment will end the day before the new assignment starts. The old record remains in history." size="lg" @close="closeTransfer">
 		<div v-if="transferError" class="form-error">{{ transferError }}</div>
 		<div class="transfer-current"><div><span>User</span><strong>{{ transferRow.user }}</strong></div><div><span>Current Branch</span><strong>{{ transferRow.company }} · {{ transferRow.branch }}</strong></div></div>
@@ -139,6 +159,7 @@
 const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgePageLayout", "EdgePageHeader", "EdgeLoadingState", "EdgeErrorState", "EdgeStatusBadge", "EdgeModal", "EdgeLinkField", "EdgeDropdown"];
 const CONTEXT_METHOD = "retailedge.branch_assignment.get_branch_assignment_context";
 const CREATE_METHOD = "retailedge.branch_assignment.create_branch_assignment";
+const UPDATE_PRICE_LISTS_METHOD = "retailedge.branch_assignment.update_branch_assignment_price_lists";
 const TRANSFER_METHOD = "retailedge.branch_assignment.transfer_branch_assignment";
 const SEARCH_METHOD = "retailedge.branch_assignment_ui.search_branch_assignment_options";
 const ROLES = ["Cashier", "Manager", "Auditor", "Sales", "Stock", "Accounts", "Purchasing", "Other"];
@@ -173,6 +194,7 @@ function extractServerMessage(error, fallback) {
 }
 function blankAssign() { return { user: "", company: "", branch: "", branch_role: "Other", effective_from: frappe.datetime.get_today(), effective_to: "", is_primary: 0, price_lists: [], transfer_reason: "", notes: "" }; }
 function blankTransfer(row = {}) { return { company: row.company || "", branch: "", effective_date: frappe.datetime.get_today(), branch_role: row.branch_role || "Other", price_lists: [...(row.price_lists || [])], reason: "", notes: "" }; }
+function blankPriceListEdit(row = {}) { return { price_lists: [...(row.price_lists || [])] }; }
 
 export default {
 	name: "RetailEdgeBranchAssignments",
@@ -218,10 +240,13 @@ export default {
 		searchFilterUser(query) { return this.search("user", query); }, searchFilterCompany(query) { return this.search("company", query); }, searchFilterBranch(query) { return this.search("filter_branch", query, { company: this.filters.company }); },
 		searchAssignUser(query) { return this.search("user", query); }, searchAssignCompany(query) { return this.search("company", query); }, searchAssignBranch(query) { return this.search("branch", query, { company: this.assign.company }); },
 		searchAssignPriceList(query) { return this.search("price_list", query, { company: this.assign.company }); },
+		searchEditPriceList(query) { return this.search("price_list", query, { company: this.priceListEditRow.company }); },
 		searchTransferCompany(query) { return this.search("company", query); }, searchTransferBranch(query) { return this.search("branch", query, { company: this.transfer.company }); },
 		searchTransferPriceList(query) { return this.search("price_list", query, { company: this.transfer.company }); },
 		addAssignPriceList(option) { const value = String(option?.value || option?.label || "").trim(); if (value && !this.assign.price_lists.includes(value)) this.assign.price_lists.push(value); this.assignPriceListDraft = ""; },
 		removeAssignPriceList(value) { this.assign.price_lists = this.assign.price_lists.filter((item) => item !== value); },
+		addEditPriceList(option) { const value = String(option?.value || option?.label || "").trim(); if (value && !this.priceListEdit.price_lists.includes(value)) this.priceListEdit.price_lists.push(value); this.priceListEditDraft = ""; },
+		removeEditPriceList(value) { this.priceListEdit.price_lists = this.priceListEdit.price_lists.filter((item) => item !== value); },
 		addTransferPriceList(option) { const value = String(option?.value || option?.label || "").trim(); if (value && !this.transfer.price_lists.includes(value)) this.transfer.price_lists.push(value); this.transferPriceListDraft = ""; },
 		removeTransferPriceList(value) { this.transfer.price_lists = this.transfer.price_lists.filter((item) => item !== value); },
 		openAssign() { this.assign = blankAssign(); this.assignPriceListDraft = ""; this.assignError = ""; this.assignOpen = true; }, closeAssign() { if (!this.saving) this.assignOpen = false; },
@@ -232,6 +257,22 @@ export default {
 			try { await callMethod(CREATE_METHOD, this.assign, { freeze: true, freezeMessage: __("Creating Branch Assignment...") }); this.assignOpen = false; frappe.show_alert({ message: __("Branch Assignment created."), indicator: "green" }); await this.loadAssignments(); }
 			catch (error) { this.assignError = extractServerMessage(error, __("Branch Assignment could not be created.")); }
 			finally { this.saving = false; }
+		},
+		openPriceListEdit(row) { this.priceListEditRow = { ...row }; this.priceListEdit = blankPriceListEdit(row); this.priceListEditDraft = ""; this.priceListEditError = ""; this.priceListEditOpen = true; },
+		closePriceListEdit() { if (!this.saving) this.priceListEditOpen = false; },
+		async savePriceListEdit() {
+			if (!this.priceListEditRow?.name) return;
+			this.saving = true; this.priceListEditError = "";
+			try {
+				await callMethod(UPDATE_PRICE_LISTS_METHOD, { name: this.priceListEditRow.name, price_lists: this.priceListEdit.price_lists }, { freeze: true, freezeMessage: __("Updating Price List access...") });
+				this.priceListEditOpen = false;
+				frappe.show_alert({ message: __("Branch Assignment Price Lists updated."), indicator: "green" });
+				await this.loadAssignments();
+			} catch (error) {
+				this.priceListEditError = extractServerMessage(error, __("Price List access could not be updated."));
+			} finally {
+				this.saving = false;
+			}
 		},
 		openTransfer(row) { this.transferRow = { ...row }; this.transfer = blankTransfer(row); this.transferPriceListDraft = ""; this.transferError = ""; this.transferOpen = true; }, closeTransfer() { if (!this.saving) this.transferOpen = false; },
 		setTransferCompany(value) { this.transfer.company = value || ""; this.transfer.branch = ""; },
