@@ -53,7 +53,7 @@ def test_branch_setup_and_assignments_own_their_pricing_governance_data():
 
 
 def test_ranked_guided_search_preserves_governed_price_list_lookup():
-	search = (APP_ROOT / "guided_link_search.py").read_text()
+	search = (ROOT / "guided_link_search.py").read_text()
 
 	assert 'fieldname == "price_list"' in search
 	assert "guided_sales_invoice.search_simple_sales_invoice_options(" in search
@@ -100,3 +100,5 @@ def test_governed_resolver_and_edgesuite_surfaces_revalidate_price_list_choice()
 	assert "Allowed Price Lists" in assign_ui
 	assert "searchAssignPriceList" in assign_ui
 	assert "searchTransferPriceList" in assign_ui
+	assert "Edit Price Lists" in assign_ui
+	assert "UPDATE_PRICE_LISTS_METHOD" in assign_ui
