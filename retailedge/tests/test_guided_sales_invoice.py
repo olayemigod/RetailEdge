@@ -11,6 +11,7 @@ from retailedge.guided_sales_invoice import (
 	MAX_ITEMS,
 	MAX_LINK_RESULTS,
 	_normalise_items,
+	_create_simple_sales_invoice_draft,
 	_validate_branch_warehouse,
 	_warehouse_search_filters,
 	create_simple_sales_invoice_draft,
@@ -198,6 +199,58 @@ class TestGuidedSalesInvoice(unittest.TestCase):
 			}
 		)
 		self.assertEqual(doc.items[0].rate, 1200.0)
+
+	def test_professional_override_can_disable_update_stock_without_weakening_make_sale_default(self):
+		price_context = {
+			"price_list": "Retail Selling",
+			"source": "branch_default",
+			"allow_rate_change": True,
+		}
+		item_pricing = {
+			"rate": 1000.0,
+			"source": "branch_default",
+			"allow_rate_change": True,
+		}
+		values = {
+			"company": "Demo Company",
+			"branch": "Lagos",
+			"customer": "CUST-001",
+			"posting_date": "2026-09-25",
+			"update_stock": 0,
+			"items": [{"item_code": "ITEM-001", "qty": 1, "rate": ""}],
+		}
+		with (
+			patch("retailedge.guided_sales_invoice._assert_can_create_sales_invoice"),
+			patch("retailedge.guided_sales_invoice._assert_read_permission"),
+			patch("retailedge.guided_sales_invoice.get_guided_branch_names", return_value=["Lagos"]),
+			patch(
+				"retailedge.guided_sales_invoice.get_retailedge_settings",
+				return_value=SimpleNamespace(allow_guided_sales_update_stock_edit=0),
+			),
+			patch("retailedge.guided_sales_invoice.resolve_price_list_context", return_value=price_context),
+			patch("retailedge.guided_sales_invoice.resolve_sales_item_pricing", return_value=item_pricing),
+		):
+			professional_doc = _DraftSalesInvoice()
+			with (
+				patch(
+					"retailedge.guided_sales_invoice._validate_transaction_context",
+					return_value=("Demo Company", "Lagos", ""),
+				),
+				patch("retailedge.guided_sales_invoice.frappe.new_doc", return_value=professional_doc),
+			):
+				_create_simple_sales_invoice_draft(values, allow_update_stock_edit=True)
+			self.assertEqual(professional_doc.update_stock, 0)
+
+			guided_doc = _DraftSalesInvoice()
+			with (
+				patch(
+					"retailedge.guided_sales_invoice._validate_transaction_context",
+					return_value=("Demo Company", "Lagos", "Main Stores - DC"),
+				),
+				patch("retailedge.guided_sales_invoice.frappe.new_doc", return_value=guided_doc),
+			):
+				create_simple_sales_invoice_draft(values)
+			self.assertEqual(guided_doc.update_stock, 1)
 
 	def test_adapter_uses_permission_aware_bounded_search_and_draft_insert(self):
 		source = (APP_ROOT / "guided_sales_invoice.py").read_text()
