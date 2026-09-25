@@ -107,6 +107,7 @@
 				:canUseNativeDesk="canUseNativeDesk"
 				@close="salesInvoiceOpen = false"
 				@saved="handleSalesInvoiceSaved"
+				@open-page="openNewSalesInvoiceOnPage"
 			/>
 			<StandardSellingCompletionDialog
 				:open="completionOpen"
@@ -319,11 +320,18 @@ export default {
 			if (document?.key === "sales-invoice") return "Create / Convert Invoice";
 			return `Create ${document?.label || "Document"}`;
 		},
-		startCreate(document) {
+		async startCreate(document) {
 			if (document?.key === "quotation") { this.quotationOpen = true; return; }
 			if (document?.key === "sales-order") { this.salesOrderOpen = true; return; }
 			if (document?.key === "delivery-note") { this.deliveryOpen = true; return; }
-			if (document?.key === "sales-invoice") { this.salesInvoiceOpen = true; }
+			if (document?.key === "sales-invoice") {
+				const preference = await getTransactionEntryPreference({ force: true });
+				if (preference?.value === "full" && this.hasPageTarget("make-sale")) {
+					frappe.set_route("make-sale");
+					return;
+				}
+				this.salesInvoiceOpen = true;
+			}
 		},
 		openAdvancedNative(document) {
 			if (!this.canUseNativeDesk || !document?.doctype) return;
@@ -536,6 +544,19 @@ export default {
 		handleDeliveryCompletionCompleted() {
 			this.loadWorkspace();
 			this.$refs.sellingRecords?.refresh?.();
+		},
+		openNewSalesInvoiceOnPage(payload = {}) {
+			try {
+				sessionStorage.setItem(
+					`retailedge:make-sale:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`,
+					JSON.stringify({ createdAt: Date.now(), values: JSON.parse(JSON.stringify(payload?.values || {})) }),
+				);
+			} catch (_error) {
+				frappe.show_alert?.({ message: "Unable to carry the invoice into Make Sale in this browser session.", indicator: "orange" }, 7);
+				return;
+			}
+			this.salesInvoiceOpen = false;
+			frappe.set_route("make-sale");
 		},
 		openSalesInvoiceDraftOnPage(name) {
 			name = String(name || "").trim();

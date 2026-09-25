@@ -152,7 +152,10 @@
 
 		<template #footer>
 			<div class="selling-form-footer">
-				<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Advanced: Open in ERPNext</button>
+				<div class="selling-form-footer-actions">
+					<button v-if="mode === 'new'" type="button" class="edge-button" :disabled="saving" @click="openMakeSalePage">Open Make Sale Page</button>
+					<button v-if="canUseNativeDesk" type="button" class="edge-button" :disabled="saving" @click="$emit('open-native', 'Sales Invoice')">Advanced: Open in ERPNext</button>
+				</div>
 				<div class="selling-form-footer-actions">
 					<button type="button" class="edge-button" :disabled="saving" @click="requestClose">Cancel</button>
 					<button type="button" class="edge-button edge-button--primary" :disabled="saving || (mode !== 'new' && !sourceDocument)" @click="saveDraft">{{ saving ? "Saving..." : saveLabel }}</button>
@@ -204,7 +207,7 @@ export default {
 		context: { type: Object, default: () => ({}) },
 		canUseNativeDesk: { type: Boolean, default: false },
 	},
-	emits: ["close", "saved", "open-native"],
+	emits: ["close", "saved", "open-native", "open-page"],
 	data() {
 		return {
 			mode: "new",
@@ -284,6 +287,10 @@ export default {
 		},
 	},
 	methods: {
+		openMakeSalePage() {
+			if (this.saving || this.mode !== "new") return;
+			this.$emit("open-page", { values: JSON.parse(JSON.stringify(this.values || {})) });
+		},
 		async loadGuidedContext() {
 			if (this.loadingContext) return;
 			this.loadingContext = true;

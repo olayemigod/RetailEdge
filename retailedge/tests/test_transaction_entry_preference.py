@@ -75,6 +75,25 @@ class TestTransactionEntryPreference(unittest.TestCase):
 		):
 			self.assertIn(contract, context)
 
+	def test_professional_selling_honours_full_page_and_popup_escape_for_new_sales(self):
+		selling = (ROOT / "public/js/professional_selling/ProfessionalSelling.vue").read_text(encoding="utf-8")
+		dialog = (ROOT / "public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue").read_text(encoding="utf-8")
+		for contract in (
+			"async startCreate(document)",
+			'preference?.value === "full"',
+			'hasPageTarget("make-sale")',
+			'frappe.set_route("make-sale")',
+			'@open-page="openNewSalesInvoiceOnPage"',
+			"retailedge:make-sale:handoff:",
+		):
+			self.assertIn(contract, selling)
+		for contract in (
+			"Open Make Sale Page",
+			"openMakeSalePage",
+			'"open-page"',
+		):
+			self.assertIn(contract, dialog)
+
 	def test_full_page_preference_can_edit_existing_standard_sales_invoice_without_recreating_it(self):
 		selling = (ROOT / "public/js/professional_selling/ProfessionalSelling.vue").read_text(encoding="utf-8")
 		make_sale = (ROOT / "public/js/make_sale/MakeSale.vue").read_text(encoding="utf-8")
