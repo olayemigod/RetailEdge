@@ -10,6 +10,7 @@ from frappe.utils.user import get_user_fullname
 
 from erpnext.stock.get_item_details import get_pos_profile
 
+from retailedge.branch_assignment import get_raw_assignment_price_lists
 from retailedge.branch_profile import get_exact_branch_profile, get_user_pos_profiles
 from retailedge.operating_context import get_operating_context
 
@@ -197,10 +198,22 @@ def _raw_assigned_price_lists(
 	has_assignment_boundary = False
 	sources: dict[str, list[str]] = {
 		"user_permission": [],
+		"branch_assignment": [],
 		"pos_profile": [],
 		"branch_pos_profile": [],
 		"effective_pos_profile": [],
 	}
+
+	assignment_price_lists = get_raw_assignment_price_lists(
+		user=user,
+		company=company or None,
+		branch=branch or None,
+	)
+	if assignment_price_lists:
+		has_assignment_boundary = True
+		for name in assignment_price_lists:
+			candidates.add(name)
+			sources["branch_assignment"].append(name)
 
 	price_permissions = get_user_permissions(user).get("Price List", []) or []
 	if price_permissions:
