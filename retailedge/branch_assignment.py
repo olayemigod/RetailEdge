@@ -84,14 +84,14 @@ def get_assignment_branches(user: str | None = None, company: str | None = None,
 	)
 
 
-def get_assignment_price_lists(
+def get_raw_assignment_price_lists(
 	user: str | None = None,
 	company: str | None = None,
 	branch: str | None = None,
 	mode: str | None = None,
 	as_of=None,
 ) -> list[str]:
-	"""Return permission-valid Price Lists from active effective-dated Branch Assignments."""
+	"""Return enabled Price Lists granted by active Branch Assignments without permission recursion."""
 	user = user or getattr(frappe.session, "user", None)
 	if not user or not frappe.db.exists("DocType", "RetailEdge Branch Assignment Price List"):
 		return []
@@ -123,10 +123,30 @@ def get_assignment_price_lists(
 			continue
 		if mode_field and not int(price.get(mode_field) or 0):
 			continue
-		if not frappe.has_permission("Price List", "read", doc=name, user=user):
-			continue
 		result.append(name)
 	return result
+
+
+def get_assignment_price_lists(
+	user: str | None = None,
+	company: str | None = None,
+	branch: str | None = None,
+	mode: str | None = None,
+	as_of=None,
+) -> list[str]:
+	"""Return permission-valid Price Lists granted by active effective-dated Branch Assignments."""
+	user = user or getattr(frappe.session, "user", None)
+	return [
+		name
+		for name in get_raw_assignment_price_lists(
+			user=user,
+			company=company,
+			branch=branch,
+			mode=mode,
+			as_of=as_of,
+		)
+		if frappe.has_permission("Price List", "read", doc=name, user=user)
+	]
 
 
 def get_primary_assignment_branch(user: str | None = None, company: str | None = None, as_of=None) -> str | None:
@@ -685,11 +705,6 @@ def _validate_assignment_price_lists(doc) -> None:
 			frappe.throw(_("Price List {0} must be a Selling or Buying Price List.").format(name))
 		if not frappe.has_permission("Price List", "read", doc=name):
 			frappe.throw(_("You do not have permission to assign Price List {0}.").format(name), frappe.PermissionError)
-		if not frappe.has_permission("Price List", "read", doc=name, user=doc.user):
-			frappe.throw(
-				_("User {0} does not have permission to use Price List {1}.").format(doc.user, name),
-				frappe.PermissionError,
-			)
 
 
 def _validate_assignment_price_list_immutability(doc) -> None:
