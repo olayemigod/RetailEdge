@@ -382,6 +382,10 @@ def _build_preview(doc) -> dict[str, Any]:
 			cint(doc.docstatus) == 0
 			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
 		),
+		"can_edit_update_stock": bool(
+			cint(doc.docstatus) == 0
+			and frappe.has_permission(SALES_INVOICE_DOCTYPE, "write", doc=doc)
+		),
 		"update_stock": bool(cint(doc.get("update_stock"))),
 		"completion_mode": stock_context["mode"],
 		"source_type": source_context["source_type"],
@@ -494,9 +498,9 @@ def update_standard_sales_invoice_draft(
 ) -> dict[str, Any]:
 	"""Update a bounded set of editable fields on one draft Sales Invoice.
 
-	Company, Customer, Branch, item identity, source links, warehouses and stock
-	mode are intentionally immutable in this completion editor. ERPNext performs
-	the final validation/recalculation on save.
+	Company, Customer, Branch, item identity and source links remain immutable.
+	Stock mode and permitted Stock Locations may be adjusted while the invoice is
+	still a draft. ERPNext performs the final validation/recalculation on save.
 	"""
 	name = _clean(name)
 	_lock_sales_invoice(name)
@@ -535,6 +539,8 @@ def update_standard_sales_invoice_draft(
 		doc.set("po_no", _clean(values.get("po_no")))
 	if doc.meta.has_field("remarks"):
 		doc.set("remarks", _clean(values.get("remarks")))
+	if doc.meta.has_field("update_stock") and "update_stock" in values:
+		doc.set("update_stock", cint(values.get("update_stock") or 0))
 
 	requested_items = values.get("items")
 	if requested_items is not None:
