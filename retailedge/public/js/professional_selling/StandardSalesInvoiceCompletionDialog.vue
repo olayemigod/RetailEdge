@@ -23,7 +23,7 @@
 					<div class="invoice-editor-heading">
 						<div>
 							<strong>Edit draft before completion</strong>
-							<p>Update permitted draft fields here. Customer, Company, Branch, item identity, warehouses and source links remain protected.</p>
+							<p>Update permitted draft fields here. Customer, Company, Branch, item identity and source links remain protected; Stock Location can change while the invoice is still a draft.</p>
 						</div>
 						<button type="button" class="edge-button edge-button--secondary" :disabled="busy || !draftDirty || !draftValid" @click="saveDraftChanges">
 							{{ busy ? "Saving..." : "Save Draft Changes" }}
