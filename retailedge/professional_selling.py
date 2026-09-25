@@ -73,6 +73,7 @@ _LIST_DOCUMENTS: dict[str, dict[str, Any]] = {
 	"sales-invoice": {
 		"key": "sales-invoice",
 		"doctype": "Sales Invoice",
+		"item_doctype": "Sales Invoice Item",
 		"label": "Sales Invoice",
 		"stage": "Invoice",
 		"date_field": "posting_date",
@@ -84,7 +85,10 @@ _LIST_DOCUMENTS: dict[str, dict[str, Any]] = {
 
 def get_selling_document_definition(value: str) -> dict[str, Any]:
 	key = str(value or "").strip()
-	definition = _DOCUMENT_BY_KEY.get(key) or _DOCUMENT_BY_DOCTYPE.get(key)
+	definition = (
+		_LIST_DOCUMENTS.get(key)
+		or next((row for row in _LIST_DOCUMENTS.values() if row.get("doctype") == key), None)
+	)
 	if not definition:
 		frappe.throw(_("Unsupported Professional Selling document: {0}").format(key))
 	return dict(definition)
