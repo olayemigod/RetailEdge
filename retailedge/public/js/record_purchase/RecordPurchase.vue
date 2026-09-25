@@ -102,7 +102,13 @@ function sourceLabel(source) {
 function clone(value) { return JSON.parse(JSON.stringify(value || {})); }
 function stored(raw, maxAge) {
 	if (!raw) return null;
-	try { const value = JSON.parse(raw); return value?.createdAt && Date.now() - Number(value.createdAt) <= maxAge && value.values ? value : null; } catch (_error) { return null; }
+	try {
+		const value = JSON.parse(raw);
+		const fresh = value?.createdAt && Date.now() - Number(value.createdAt) <= maxAge;
+		const hasValues = value?.values && typeof value.values === "object";
+		const hasDocument = Boolean(String(value?.document_name || "").trim());
+		return fresh && (hasValues || hasDocument) ? value : null;
+	} catch (_error) { return null; }
 }
 
 export default {
@@ -169,6 +175,7 @@ export default {
 		async consumeHandoff() {
 			let raw = ""; try { raw = sessionStorage.getItem(this.handoffKey()) || ""; sessionStorage.removeItem(this.handoffKey()); } catch (_error) { return false; }
 			const payload = stored(raw, 10 * 60 * 1000); if (!payload) return false;
+			if (payload.document_name) return this.consumeSavedDraftHandoff(payload);
 			if (payload.values.company && this.values.company && payload.values.company !== this.values.company) return false;
 			this.values = { ...this.values, ...clone(payload.values), items: (payload.values.items || this.values.items).map((row) => ({ ...row })) };
 			try {
@@ -185,6 +192,33 @@ export default {
 				this.handoffNotice = "Quick Purchase line items were carried over, but the saved Branch / Receiving Stock Location was cleared because access could not be revalidated.";
 			}
 			return true;
+		},
+		async consumeSavedDraftHandoff(payload) {
+			const name = String(payload?.document_name || "").trim();
+			if (!name) return false;
+			try {
+				const preview = await callMethod(PREVIEW_METHOD, { name, source_mode: "direct" }, "GET");
+				this.savedDocument = { ...preview, doctype: "Purchase Invoice" };
+				if (Number(preview?.docstatus || 0) !== 0) {
+					this.handoffNotice = `Purchase Invoice ${name} is no longer a draft. Review its current status instead of editing it.`;
+					return true;
+				}
+				if (!preview?.can_edit) {
+					this.saveError = (preview?.blockers || [])[0] || "This direct Purchase Invoice draft cannot be edited on Record Purchase.";
+					return true;
+				}
+				this.syncPageFromDraftPreview(preview);
+				this.editingSavedDraft = true;
+				this.completionOpen = false;
+				this.recoveryCandidate = null;
+				this.clearRecovery();
+				this.initialSnapshot = JSON.stringify(this.values);
+				this.handoffNotice = `Editing saved Purchase Invoice ${name} on the persistent Record Purchase page.`;
+				return true;
+			} catch (error) {
+				this.saveError = errorMessage(error, "Unable to load the Purchase Invoice draft on Record Purchase.");
+				return true;
+			}
 		},
 		loadRecoveryCandidate() { let raw = ""; try { raw = sessionStorage.getItem(this.recoveryKey()) || ""; } catch (_error) { return; } const payload = stored(raw, 12 * 60 * 60 * 1000); if (payload && (!payload.values.company || !this.values.company || payload.values.company === this.values.company)) this.recoveryCandidate = payload; },
 		async restoreRecovery() {
@@ -283,6 +317,12 @@ export default {
 		},
 		syncPageFromDraftPreview(result) {
 			if (!result) return;
+			if (result.company) this.values.company = result.company;
+			if (Object.prototype.hasOwnProperty.call(result, "branch")) this.values.branch = result.branch || "";
+			if (Object.prototype.hasOwnProperty.call(result, "supplier")) this.values.supplier = result.supplier || "";
+			if (Object.prototype.hasOwnProperty.call(result, "buying_price_list")) this.values.price_list = result.buying_price_list || "";
+			if (Object.prototype.hasOwnProperty.call(result, "default_warehouse")) this.values.warehouse = result.default_warehouse || "";
+			if (Object.prototype.hasOwnProperty.call(result, "update_stock")) this.values.update_stock = result.update_stock ? 1 : 0;
 			if (result.posting_date) this.values.posting_date = result.posting_date;
 			if (Object.prototype.hasOwnProperty.call(result, "bill_no")) this.values.bill_no = result.bill_no || "";
 			if (Object.prototype.hasOwnProperty.call(result, "bill_date")) this.values.bill_date = result.bill_date || "";

@@ -324,6 +324,7 @@
 <script>
 import IncomingQualityInspection from "./IncomingQualityInspection.vue";
 import StandardPurchaseInvoiceCompletionDialog from "./StandardPurchaseInvoiceCompletionDialog.vue";
+import { getTransactionEntryPreference } from "../retailedge_business_hub/guidedEntryUtils";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 
 const CONTEXT_METHOD = "retailedge.professional_purchasing.get_professional_purchasing_context";
@@ -462,9 +463,33 @@ export default {
 				this.loadingDraftPurchaseInvoices = false;
 			}
 		},
-		openPurchaseInvoiceCompletion(row, sourceMode = "direct") {
+		hasPageTarget(target) {
+			return Boolean(target && this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target));
+		},
+		openPurchaseInvoiceDraftOnPage(name) {
+			name = String(name || "").trim();
+			if (!name) return false;
+			try {
+				sessionStorage.setItem(
+					`retailedge:record-purchase:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`,
+					JSON.stringify({ createdAt: Date.now(), document_name: name }),
+				);
+			} catch (_error) {
+				frappe.show_alert?.({ message: "Unable to carry the Purchase Invoice draft into Record Purchase in this browser session.", indicator: "orange" }, 7);
+				return false;
+			}
+			this.closePurchaseInvoiceCompletion();
+			frappe.set_route("record-purchase");
+			return true;
+		},
+		async openPurchaseInvoiceCompletion(row, sourceMode = "") {
 			if (!row?.name) return;
-			this.purchaseInvoiceCompletionSourceMode = sourceMode || row.source_mode || "direct";
+			const effectiveMode = sourceMode || row.source_mode || "direct";
+			if (effectiveMode === "direct") {
+				const preference = await getTransactionEntryPreference({ force: true });
+				if (preference?.value === "full" && this.hasPageTarget("record-purchase") && this.openPurchaseInvoiceDraftOnPage(row.name)) return;
+			}
+			this.purchaseInvoiceCompletionSourceMode = effectiveMode;
 			this.purchaseInvoiceCompletionDocument = { doctype: "Purchase Invoice", name: row.name };
 			this.purchaseInvoiceCompletionOpen = true;
 		},

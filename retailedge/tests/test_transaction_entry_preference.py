@@ -94,6 +94,26 @@ class TestTransactionEntryPreference(unittest.TestCase):
 		):
 			self.assertIn(contract, make_sale)
 
+	def test_full_page_preference_routes_direct_purchase_draft_to_record_purchase(self):
+		purchasing = (ROOT / "public/js/professional_purchasing/ProfessionalPurchasing.vue").read_text(encoding="utf-8")
+		record_purchase = (ROOT / "public/js/record_purchase/RecordPurchase.vue").read_text(encoding="utf-8")
+		for contract in (
+			"getTransactionEntryPreference({ force: true })",
+			'preference?.value === "full"',
+			' effectiveMode === "direct"',
+			"openPurchaseInvoiceDraftOnPage",
+			"document_name: name",
+			'frappe.set_route("record-purchase")',
+		):
+			self.assertIn(contract.strip(), purchasing)
+		for contract in (
+			"consumeSavedDraftHandoff",
+			'source_mode: "direct"',
+			"editingSavedDraft = true",
+			"syncPageFromDraftPreview(preview)",
+		):
+			self.assertIn(contract, record_purchase)
+
 	def test_existing_quick_entry_line_limit_and_safe_exit_remain_intact(self):
 		utils = (ROOT / "public/js/retailedge_business_hub/guidedEntryUtils.js").read_text(encoding="utf-8")
 		sale = (ROOT / "public/js/retailedge_business_hub/SimpleSalesInvoiceDialog.vue").read_text(encoding="utf-8")
