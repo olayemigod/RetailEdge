@@ -1003,7 +1003,7 @@ export default {
 			if (!action || !action.doctype) return;
 			this.closeCreatePicker();
 			if (action.key === "new-sales-invoice") {
-				const preference = await getTransactionEntryPreference();
+				const preference = await getTransactionEntryPreference({ force: true });
 				const target = persistentTransactionPage(action.doctype);
 				if (preference.value === "full" && this.hasPageTarget(target)) {
 					frappe.set_route(target);
@@ -1027,7 +1027,7 @@ export default {
 				return;
 			}
 			if (action.key === GUIDED_PURCHASE_ACTION) {
-				const preference = await getTransactionEntryPreference();
+				const preference = await getTransactionEntryPreference({ force: true });
 				const target = persistentTransactionPage(action.doctype);
 				if (preference.value === "full" && this.hasPageTarget(target)) {
 					frappe.set_route(target);
@@ -1046,7 +1046,7 @@ export default {
 				return;
 			}
 			if (action.key === GUIDED_STOCK_TRANSFER_ACTION) {
-				const preference = await getTransactionEntryPreference();
+				const preference = await getTransactionEntryPreference({ force: true });
 				const target = persistentTransactionPage(action.doctype);
 				if (preference.value === "full" && this.hasPageTarget(target)) {
 					frappe.set_route(target);
@@ -1056,7 +1056,7 @@ export default {
 				return;
 			}
 			if (action.key === GUIDED_STOCK_ADJUSTMENT_ACTION) {
-				const preference = await getTransactionEntryPreference();
+				const preference = await getTransactionEntryPreference({ force: true });
 				const target = persistentTransactionPage(action.doctype);
 				if (preference.value === "full" && this.hasPageTarget(target)) {
 					frappe.set_route(target);

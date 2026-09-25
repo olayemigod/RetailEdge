@@ -58,7 +58,9 @@ class TestTransactionEntryPreference(unittest.TestCase):
 
 		self.assertIn('preference.value === "full"', hub)
 		self.assertIn("hasPageTarget(target)", hub)
+		self.assertIn("getTransactionEntryPreference({ force: true })", hub)
 		self.assertIn('entryPreference !== "quick"', workspace)
+		self.assertIn("getTransactionEntryPreference({ force: true })", workspace)
 		self.assertIn("runAlternateTransactionAction", workspace)
 		self.assertIn("Quick Sale", workspace)
 		self.assertIn("Make Sale Page", workspace)

@@ -282,7 +282,7 @@ export default {
 				const [workspace, navigation, preference] = await Promise.all([
 					callMethod("retailedge.retailedge.page.transaction_workspace.transaction_workspace.get_transaction_workspace_context"),
 					navigationPromise,
-					getTransactionEntryPreference(),
+					getTransactionEntryPreference({ force: true }),
 				]);
 				this.actions = Array.isArray(workspace.actions) ? workspace.actions : [];
 				this.pos = workspace.pos || {};
