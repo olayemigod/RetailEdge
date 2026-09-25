@@ -221,6 +221,30 @@ def create_branch_assignment(
 
 
 @frappe.whitelist(methods=["POST"])
+def update_branch_assignment_price_lists(
+	name: str,
+	price_lists=None,
+) -> dict[str, Any]:
+	"""Update only current/future Price List access without rewriting posting history."""
+	doc = frappe.get_doc("RetailEdge Branch Assignment", name)
+	doc.check_permission("write")
+	status = _status_for_dates(
+		getdate(doc.effective_from),
+		getdate(doc.effective_to) if doc.effective_to else None,
+	)
+	if status == "Ended":
+		frappe.throw(
+			_("Ended Branch Assignment history cannot be changed. Create a new assignment if access must be restored."),
+			frappe.ValidationError,
+		)
+	_lock_assignment_user(doc.user)
+	doc.set("price_lists", [{"price_list": value} for value in _normalise_price_lists(price_lists)])
+	doc.flags.controlled_price_list_update = True
+	doc.save()
+	return _assignment_response(doc)
+
+
+@frappe.whitelist(methods=["POST"])
 def transfer_branch_assignment(
 	name: str,
 	new_company: str,
@@ -669,7 +693,12 @@ def _validate_assignment_price_lists(doc) -> None:
 
 
 def _validate_assignment_price_list_immutability(doc) -> None:
-	if doc.is_new() or not doc.name or getattr(doc.flags, "controlled_assignment_update", False):
+	if (
+		doc.is_new()
+		or not doc.name
+		or getattr(doc.flags, "controlled_assignment_update", False)
+		or getattr(doc.flags, "controlled_price_list_update", False)
+	):
 		return
 	if getattr(doc.flags, "controlled_branch_setup_relink", False):
 		return
