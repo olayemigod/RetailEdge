@@ -441,7 +441,7 @@ def create_professional_sales_invoice_draft(
 	if shipping_rule:
 		_validate_shipping_rule(shipping_rule, company=company)
 
-	result = _create_simple_sales_invoice_draft(values, allow_update_stock_edit=True)
+	result = _create_simple_sales_invoice_draft(values)
 	doc = frappe.get_doc("Sales Invoice", result["name"])
 	if doc.docstatus != 0:
 		frappe.throw(

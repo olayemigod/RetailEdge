@@ -119,8 +119,11 @@
 			</section>
 
 			<label class="guided-check-field">
-				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
-				<span><strong>Update Stock</strong><small>Stock moves only if this draft is later submitted by an authorised user.</small></span>
+				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" :disabled="!canEditUpdateStock || loadingContext" />
+				<span>
+					<strong>Update Stock</strong>
+					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by the current sales settings." }}</small>
+				</span>
 			</label>
 
 			<EdgeChildTable
@@ -160,6 +163,7 @@
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
 import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 
+const GUIDED_CONTEXT = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const GUIDED_SEARCH = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const GUIDED_PRICING = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const SHIPPING_SEARCH = "retailedge.professional_sales_invoice.search_professional_invoice_shipping_rules";
@@ -182,7 +186,7 @@ function initialValues(context = {}) {
 		posting_date: context.today || "",
 		shipping_rule: "",
 		loyalty_points: 0,
-		update_stock: 0,
+		update_stock: 1,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -203,6 +207,8 @@ export default {
 			pricingTokens: {},
 			pricingSignatures: {},
 			availablePriceLists: [...(this.context.pricing?.available_price_lists || [])],
+			guidedContext: null,
+			loadingContext: false,
 			loyaltyToken: 0,
 			loyaltyLoading: false,
 			loyaltyStatus: {},
@@ -223,8 +229,10 @@ export default {
 		};
 	},
 	computed: {
-		priceListLabel() { return this.values.price_list || this.context.pricing?.price_list || "ERPNext default"; },
-		canSwitchPriceList() { return Boolean(this.context.pricing?.can_switch_price_list && this.availablePriceLists.length); },
+		pricingContext() { return this.guidedContext?.pricing || this.context.pricing || {}; },
+		priceListLabel() { return this.values.price_list || this.pricingContext.price_list || "ERPNext default"; },
+		canSwitchPriceList() { return Boolean(this.pricingContext.can_switch_price_list && this.availablePriceLists.length); },
+		canEditUpdateStock() { return Boolean(this.guidedContext?.capabilities?.can_edit_update_stock); },
 		loyaltyRedemptionLabel() {
 			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
 			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
@@ -251,11 +259,12 @@ export default {
 		},
 	},
 	watch: {
-		open(next) {
+		async open(next) {
 			if (next) {
 				this.mode = "new";
 				this.sourceDocument = "";
 				this.values = initialValues(this.context);
+				this.guidedContext = null;
 				this.availablePriceLists = [...(this.context.pricing?.available_price_lists || [])];
 				this.pricingTokens = {};
 				this.pricingSignatures = {};
@@ -263,10 +272,34 @@ export default {
 				this.loyaltyStatus = {};
 				this.loyaltyLoading = false;
 				this.saveError = "";
+				await this.loadGuidedContext();
 			}
 		},
 	},
 	methods: {
+		async loadGuidedContext() {
+			if (this.loadingContext) return;
+			this.loadingContext = true;
+			try {
+				const guided = await callMethod(GUIDED_CONTEXT);
+				this.guidedContext = guided || {};
+				const defaults = guided?.defaults || {};
+				this.values = {
+					...this.values,
+					company: defaults.company || this.values.company,
+					branch: defaults.branch || this.values.branch,
+					warehouse: defaults.warehouse || this.values.warehouse,
+					posting_date: defaults.posting_date || this.values.posting_date,
+					update_stock: Number(defaults.update_stock ?? 1),
+				};
+				if (!guided?.capabilities?.can_edit_update_stock) this.values.update_stock = 1;
+				this.availablePriceLists = [...(guided?.pricing?.available_price_lists || [])];
+			} catch (error) {
+				this.saveError = errorMessage(error, "Unable to resolve the Sales Invoice operating context.");
+			} finally {
+				this.loadingContext = false;
+			}
+		},
 		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		setMode(mode) { if (!this.saving) { this.mode = mode; this.sourceDocument = ""; this.saveError = ""; } },
 		requestClose() { if (!this.saving) this.$emit("close"); },

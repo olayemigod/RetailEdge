@@ -15,6 +15,7 @@
 					<div><span>Customer</span><strong>{{ preview.customer || "Not set" }}</strong></div>
 					<div><span>Company</span><strong>{{ preview.company || "Not set" }}</strong></div>
 					<div><span>Branch</span><strong>{{ preview.branch || "Company-wide" }}</strong></div>
+					<div><span>Selling Price List</span><strong>{{ preview.selling_price_list || "ERPNext default" }}</strong></div>
 					<div><span>Total</span><strong>{{ preview.currency || "" }} {{ preview.grand_total }}</strong></div>
 					<div><span>Mode</span><strong>{{ preview.update_stock ? "Accounting + Stock" : "Accounting only" }}</strong></div>
 				</div>
@@ -39,43 +40,28 @@
 						<input v-model="draftUpdateStock" type="checkbox" :true-value="1" :false-value="0" :disabled="busy" />
 						<span><strong>Update Stock</strong><small>Enable this only when the invoice itself should post the stock movement. ERPNext and Branch/Stock Location validation run again on Save Changes.</small></span>
 					</label>
-					<div v-if="draftItems.length" class="invoice-edit-items">
-						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span><span>Amount</span></div>
-						<div v-for="(row, index) in draftItems" :key="row.name || index" class="invoice-edit-item">
-							<strong>{{ row.item_code || row.item_name || "Item" }}</strong>
-							<EdgeInput v-model="row.qty" :id="`invoice-item-qty-${index}`" label="Qty" type="number" min="0.000001" step="any" :disabled="busy" />
-							<EdgeInput v-model="row.rate" :id="`invoice-item-rate-${index}`" label="Rate" type="number" min="0" step="any" :disabled="busy" />
-							<EdgeLinkField
-								:modelValue="row.warehouse"
-								label="Stock Location"
-								placeholder="Choose Stock Location"
-								:searcher="searchWarehouse"
-								:disabled="busy"
-								@update:modelValue="row.warehouse = $event || ''"
-							/>
-							<span>{{ preview.currency || "" }} {{ row.amount }}</span>
+					<div class="invoice-edit-items">
+						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span><span>Amount</span><span></span></div>
+						<div v-for="(row, index) in draftItems" :key="row.name || `new-${index}`" class="invoice-edit-item">
+							<strong v-if="row.name">{{ row.item_code || row.item_name || "Item" }}</strong>
+							<EdgeLinkField v-else :modelValue="row.item_code || ''" label="Item" placeholder="Search item" :searcher="searchItem" :disabled="busy" @update:modelValue="setDraftItemCode(index, $event)" />
+							<EdgeInput :modelValue="row.qty" :id="`invoice-item-qty-${index}`" label="Qty" type="number" min="0.000001" step="any" :disabled="busy" @update:modelValue="setDraftItemQty(index, $event)" />
+							<EdgeInput :modelValue="row.rate" :id="`invoice-item-rate-${index}`" label="Rate" type="number" min="0" step="any" :disabled="busy || !canOverrideRate" @update:modelValue="setDraftItemRate(index, $event)" />
+							<EdgeLinkField :modelValue="row.warehouse || ''" label="Stock Location" placeholder="Choose Stock Location" :searcher="searchWarehouse" :disabled="busy" @update:modelValue="setDraftItemWarehouse(index, $event)" />
+							<span>{{ preview.currency || "" }} {{ lineAmount(row) }}</span>
+							<button type="button" class="edge-button edge-button--secondary invoice-remove-item" :disabled="busy || row.source_locked" :title="row.source_locked ? 'Source-linked items cannot be removed here.' : 'Remove item'" @click="removeDraftItem(index)">Remove</button>
+						</div>
+						<div class="invoice-item-actions">
+							<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="addDraftItem">Add Item</button>
 						</div>
 					</div>
-					<EdgeChildTable
-						:field="{ label: 'Additional Items', description: 'Add products or services to this draft before submission.' }"
-						:rows="newItems"
-						:columns="newItemColumns"
-						:addLabel="'Add Item'"
-						:linkSearcher="searchNewItemLink"
-						:newRowsFirst="false"
-						@update:rows="newItems = $event"
-					/>
+					<p v-if="draftItems.some((row) => row.source_locked)" class="invoice-completion-hint">Source-linked items stay attached to their originating document and cannot be removed here.</p>
 					<p class="invoice-completion-hint">ERPNext recalculates taxes, totals, source quantity limits and accounting validation when the draft is saved.</p>
 				</section>
 
 				<div v-if="preview.source_name" class="invoice-source-note">
 					<span>Source</span>
 					<strong>{{ preview.source_type }} {{ preview.source_name }}</strong>
-				</div>
-
-				<div class="invoice-accounting-note">
-					<strong>ERPNext posting authority</strong>
-					<p>Submitting uses ERPNext native accounting. This workspace does not create General Ledger, receivable, outstanding or Stock Ledger entries directly.</p>
 				</div>
 
 				<div v-if="preview.items?.length" class="invoice-completion-items">
@@ -180,6 +166,7 @@
 <script>
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
+const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
 const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
@@ -209,7 +196,6 @@ export default {
 		EdgeLoadingState: runtimeComponents().EdgeLoadingState,
 		EdgeInput: runtimeComponents().EdgeInput,
 		EdgeLinkField: runtimeComponents().EdgeLinkField,
-		EdgeChildTable: runtimeComponents().EdgeChildTable,
 	},
 	props: {
 		open: { type: Boolean, default: false },
@@ -231,13 +217,7 @@ export default {
 			draftRemarks: "",
 			draftUpdateStock: 0,
 			draftItems: [],
-			newItems: [],
-			newItemColumns: [
-				{ fieldname: "item_code", label: "Item", fieldtype: "Link", placeholder: "Search item" },
-				{ fieldname: "qty", label: "Qty", fieldtype: "Float", default: 1 },
-				{ fieldname: "rate", label: "Rate", fieldtype: "Currency", placeholder: "Auto price" },
-				{ fieldname: "warehouse", label: "Stock Location", fieldtype: "Link", placeholder: "Optional" },
-			],
+			pricingTokens: {},
 			completedResult: null,
 			outputDetails: null,
 		};
@@ -245,6 +225,9 @@ export default {
 	computed: {
 		workflowActions() {
 			return this.preview?.workflow_readiness?.available_actions || [];
+		},
+		canOverrideRate() {
+			return this.preview?.pricing?.allow_rate_change !== false;
 		},
 		draftDirty() {
 			if (!this.preview?.can_edit) return false;
@@ -255,18 +238,27 @@ export default {
 				|| String(this.draftRemarks || "") !== String(this.preview?.remarks || "")
 				|| Number(this.draftUpdateStock || 0) !== Number(this.preview?.update_stock ? 1 : 0)
 			) return true;
-			if (this.newItems.some((row) => row?.item_code)) return true;
 			const original = this.preview?.editable_items || [];
-			return this.draftItems.some((row, index) => (
-				Number(row.qty || 0) !== Number(original[index]?.qty || 0)
-				|| Number(row.rate || 0) !== Number(original[index]?.rate || 0)
-				|| String(row.warehouse || "") !== String(original[index]?.warehouse || "")
-			));
+			if (this.draftItems.length !== original.length) return true;
+			const originalByName = new Map(original.filter((row) => row?.name).map((row) => [row.name, row]));
+			return this.draftItems.some((row) => {
+				if (!row?.name) return Boolean(row?.item_code);
+				const before = originalByName.get(row.name);
+				if (!before) return true;
+				return Number(row.qty || 0) !== Number(before.qty || 0)
+					|| Number(row.rate || 0) !== Number(before.rate || 0)
+					|| String(row.warehouse || "") !== String(before.warehouse || "");
+			});
 		},
 		draftValid() {
 			if (!this.draftPostingDate || !this.draftDueDate || String(this.draftDueDate) < String(this.draftPostingDate)) return false;
-			return this.draftItems.every((row) => Number(row.qty || 0) > 0 && Number(row.rate || 0) >= 0)
-				&& this.newItems.filter((row) => row?.item_code).every((row) => Number(row.qty || 0) > 0);
+			if (!this.draftItems.length) return false;
+			return this.draftItems.every((row) => (
+				Boolean(row?.item_code)
+				&& Number(row.qty || 0) > 0
+				&& row.rate !== "" && row.rate !== null && row.rate !== undefined
+				&& Number(row.rate) >= 0
+			));
 		},
 	},
 	watch: {
@@ -292,7 +284,7 @@ export default {
 			this.draftRemarks = preview?.remarks || "";
 			this.draftUpdateStock = preview?.update_stock ? 1 : 0;
 			this.draftItems = (preview?.editable_items || preview?.items || []).map((row) => ({ ...row }));
-			this.newItems = [];
+			this.pricingTokens = {};
 		},
 		async loadPreview() {
 			if (!this.document?.name || this.loading) return;
@@ -324,10 +316,98 @@ export default {
 		searchWarehouse(query) {
 			return this.searchOptions("warehouse", query);
 		},
-		searchNewItemLink(column, query) {
-			if (column?.fieldname === "item_code") return this.searchOptions("item_code", query);
-			if (column?.fieldname === "warehouse") return this.searchOptions("warehouse", query);
-			return Promise.resolve([]);
+		searchItem(query) {
+			return this.searchOptions("item_code", query);
+		},
+		lineAmount(row) {
+			return (Number(row?.qty || 0) * Number(row?.rate || 0)).toFixed(2);
+		},
+		addDraftItem() {
+			this.draftItems = [...this.draftItems, {
+				name: "",
+				item_code: "",
+				item_name: "",
+				qty: 1,
+				rate: "",
+				amount: 0,
+				warehouse: this.preview?.default_warehouse || "",
+				source_locked: false,
+			}];
+		},
+		removeDraftItem(index) {
+			const row = this.draftItems[index];
+			if (!row || row.source_locked) return;
+			this.draftItems = this.draftItems.filter((_item, rowIndex) => rowIndex !== index);
+			delete this.pricingTokens[index];
+		},
+		setDraftItemCode(index, value) {
+			const row = this.draftItems[index];
+			if (!row) return;
+			row.item_code = value || "";
+			row.rate = "";
+			if (!row.warehouse) row.warehouse = this.preview?.default_warehouse || "";
+			this.draftItems = [...this.draftItems];
+			if (row.item_code) this.refreshDraftItemPricing(index);
+		},
+		setDraftItemQty(index, value) {
+			const row = this.draftItems[index];
+			if (!row) return;
+			row.qty = value;
+			this.draftItems = [...this.draftItems];
+			if (row.item_code && Number(value || 0) > 0) this.refreshDraftItemPricing(index);
+		},
+		setDraftItemRate(index, value) {
+			if (!this.canOverrideRate) return;
+			const row = this.draftItems[index];
+			if (!row) return;
+			row.rate = value;
+			this.draftItems = [...this.draftItems];
+		},
+		setDraftItemWarehouse(index, value) {
+			const row = this.draftItems[index];
+			if (!row) return;
+			row.warehouse = value || "";
+			this.draftItems = [...this.draftItems];
+			if (row.item_code) this.refreshDraftItemPricing(index);
+		},
+		async refreshDraftItemPricing(index) {
+			const row = this.draftItems[index];
+			if (!row?.item_code || !this.preview?.customer) return;
+			const token = (this.pricingTokens[index] || 0) + 1;
+			this.pricingTokens[index] = token;
+			try {
+				const pricing = await callMethod(PRICING_METHOD, {
+					item_code: row.item_code,
+					values: {
+						company: this.preview.company || "",
+						branch: this.preview.branch || "",
+						warehouse: row.warehouse || this.preview.default_warehouse || "",
+						customer: this.preview.customer || "",
+						posting_date: this.draftPostingDate || this.preview.posting_date || "",
+						qty: Number(row.qty || 1),
+						price_list: "",
+					},
+				});
+				if (this.pricingTokens[index] !== token || this.draftItems[index]?.item_code !== row.item_code) return;
+				this.draftItems[index] = {
+					...this.draftItems[index],
+					rate: pricing?.rate ?? "",
+					warehouse: this.draftItems[index]?.warehouse || this.preview?.default_warehouse || "",
+				};
+				this.preview = {
+					...this.preview,
+					selling_price_list: pricing?.price_list || this.preview?.selling_price_list || "",
+					pricing: {
+						...(this.preview?.pricing || {}),
+						price_list: pricing?.price_list || this.preview?.pricing?.price_list || "",
+						source: pricing?.source || this.preview?.pricing?.source || "",
+						allow_rate_change: pricing?.allow_rate_change ?? this.preview?.pricing?.allow_rate_change,
+					},
+				};
+				this.draftItems = [...this.draftItems];
+			} catch (error) {
+				if (this.pricingTokens[index] === token) this.actionError = errorMessage(error, `Unable to price ${row.item_code}.`);
+			}
 		},
 		async saveDraftChanges() {
 			if (!this.preview?.can_edit || !this.draftDirty || !this.draftValid || this.busy) return;
@@ -343,10 +423,13 @@ export default {
 						po_no: this.draftPoNo,
 						remarks: this.draftRemarks,
 						update_stock: this.draftUpdateStock ? 1 : 0,
-						items: [
-							...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty), rate: Number(row.rate), warehouse: row.warehouse || "" })),
-							...this.newItems.filter((row) => row?.item_code).map((row) => ({ ...row })),
-						],
+						items: this.draftItems.map((row) => ({
+							name: row.name || "",
+							item_code: row.item_code,
+							qty: Number(row.qty),
+							rate: Number(row.rate),
+							warehouse: row.warehouse || "",
+						})),
 					},
 				}, "POST");
 				this.applyPreview(result);
@@ -489,18 +572,18 @@ export default {
 .invoice-completion-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .75rem; }
 .invoice-completion-summary > div { display: grid; gap: .2rem; padding: .75rem; border: 1px solid var(--edge-border-color,var(--border-color)); border-radius: .6rem; }
 .invoice-completion-summary span, .invoice-completion-workflow span, .invoice-source-note span { font-size: .78rem; color: var(--text-muted); }
-.invoice-source-note, .invoice-accounting-note, .invoice-draft-editor { display: grid; gap: .75rem; padding: .8rem; border-radius: .6rem; border: 1px solid var(--edge-border-color,var(--border-color)); }
+.invoice-source-note, .invoice-draft-editor { display: grid; gap: .75rem; padding: .8rem; border-radius: .6rem; border: 1px solid var(--edge-border-color,var(--border-color)); }
 .invoice-editor-heading { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
 .invoice-editor-heading p { margin:.2rem 0 0; color:var(--text-muted); font-size:.82rem; }
 .invoice-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
 .invoice-edit-items { display:grid; gap:.35rem; }
-.invoice-edit-item { display:grid; grid-template-columns:minmax(0,1fr) 7rem 8rem minmax(12rem,1fr) 8rem; gap:.6rem; align-items:center; padding:.4rem 0; border-bottom:1px solid var(--edge-border-color,var(--border-color)); }
+.invoice-edit-item { display:grid; grid-template-columns:minmax(10rem,1.2fr) 7rem 8rem minmax(12rem,1fr) 8rem auto; gap:.6rem; align-items:center; padding:.4rem 0; border-bottom:1px solid var(--edge-border-color,var(--border-color)); }
 .invoice-edit-item--head { color:var(--text-muted); font-size:.75rem; font-weight:700; }
 .invoice-next-actions { display:grid; gap:.65rem; padding:.85rem; border:1px solid var(--edge-color-brand-200,var(--blue-200,#bfdbfe)); border-radius:.6rem; background:var(--edge-color-brand-50,var(--blue-50,#eff6ff)); }
 .invoice-next-actions p { margin:.2rem 0 0; color:var(--text-muted); }
 .invoice-next-buttons,.invoice-output-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
-.invoice-accounting-note { background: var(--blue-50,#eff6ff); border-color: var(--blue-200,#bfdbfe); }
-.invoice-accounting-note p { margin: 0; }
+.invoice-item-actions { display:flex; justify-content:flex-end; padding-top:.35rem; }
+.invoice-remove-item { white-space:nowrap; }
 .invoice-completion-items { display: grid; gap: .45rem; }
 .invoice-completion-items h4 { margin: 0; }
 .invoice-completion-item { display: grid; grid-template-columns: minmax(0,1fr) auto auto minmax(0,auto); gap: .75rem; padding: .55rem .7rem; border-bottom: 1px solid var(--edge-border-color,var(--border-color)); }

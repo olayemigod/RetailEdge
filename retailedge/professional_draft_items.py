@@ -156,16 +156,29 @@ def _apply_editable_row_values(
 			row.warehouse = warehouse
 
 	rate_value = values.get("rate")
-	if rate_value in (None, ""):
-		rate = _resolve_rate(
-			item_code=clean(row.get("item_code")),
-			company=company,
-			customer=customer,
-			branch=branch,
-			warehouse=warehouse,
-			posting_date=posting_date,
-			qty=qty,
-		)
+	pricing = resolve_sales_item_pricing(
+		item_code=clean(row.get("item_code")),
+		company=company,
+		customer=customer,
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=posting_date,
+		qty=qty,
+		user=frappe.session.user,
+	)
+	resolved_rate = pricing.get("rate")
+	rate_locked = (
+		pricing.get("source") == "pos_profile"
+		and not pricing.get("allow_rate_change", True)
+	)
+	if rate_locked or rate_value in (None, ""):
+		if resolved_rate is None:
+			frappe.throw(
+				_("No selling price could be resolved for Item {0}. Enter a rate before saving.").format(
+					clean(row.get("item_code"))
+				)
+			)
+		rate = flt(resolved_rate)
 	else:
 		rate = flt(rate_value)
 	if rate < 0:
@@ -177,36 +190,6 @@ def _apply_editable_row_values(
 		delivery_date = clean(values.get("delivery_date") or row.get("delivery_date") or default_delivery_date)
 		if delivery_date:
 			row.delivery_date = delivery_date
-
-
-def _resolve_rate(
-	*,
-	item_code: str,
-	company: str,
-	customer: str,
-	branch: str,
-	warehouse: str,
-	posting_date: str,
-	qty: float,
-) -> float:
-	if not item_code:
-		return 0.0
-	resolved = resolve_sales_item_pricing(
-		item_code=item_code,
-		company=company,
-		customer=customer,
-		branch=branch,
-		warehouse=warehouse,
-		posting_date=posting_date,
-		qty=qty,
-		user=frappe.session.user,
-	)
-	rate = resolved.get("rate")
-	if rate is None:
-		frappe.throw(
-			_("No selling price could be resolved for Item {0}. Enter a rate before saving.").format(item_code)
-		)
-	return flt(rate)
 
 
 def _validate_warehouse_branch(warehouse: str, *, company: str, branch: str) -> None:

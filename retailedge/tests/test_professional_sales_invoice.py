@@ -91,6 +91,21 @@ class TestProfessionalSalesInvoice(unittest.TestCase):
 		):
 			self.assertIn(contract, source)
 
+	def test_professional_invoice_reuses_make_sale_stock_context_and_policy(self):
+		dialog = self.read("public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue")
+		backend = self.read("professional_sales_invoice.py")
+		for contract in (
+			"get_simple_sales_invoice_context",
+			"update_stock: 1",
+			"canEditUpdateStock",
+			'!canEditUpdateStock || loadingContext',
+			"loadGuidedContext",
+		):
+			self.assertIn(contract, dialog)
+		self.assertIn("_create_simple_sales_invoice_draft(values)", backend)
+		self.assertNotIn("allow_update_stock_edit=True", backend)
+
+
 	def test_invoice_ui_exposes_flexible_paths_and_no_submit_action(self):
 		dialog = self.read("public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue")
 		page = self.read("public/js/professional_selling/ProfessionalSelling.vue")

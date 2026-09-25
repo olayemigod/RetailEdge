@@ -278,15 +278,42 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 		"Existing item identity cannot be replaced here.",
 		"Source-linked item",
 		"resolve_sales_item_pricing",
+		'pricing.get("source") == "pos_profile"',
+		'not pricing.get("allow_rate_change", True)',
 		"_validate_warehouse_branch",
 	):
 		assert contract in helper
 	for contract in (
 		"Edit draft before completion",
 		"Customer PO / Reference",
-		"Additional Items",
-		"EdgeChildTable",
+		"Selling Price List",
+		"addDraftItem",
+		"removeDraftItem",
+		"refreshDraftItemPricing",
+		"Source-linked items stay attached",
+		"busy || !canOverrideRate",
 		"ERPNext recalculates taxes, totals",
+	):
+		assert contract in dialog
+	assert "Additional Items" not in dialog
+	assert "EdgeChildTable" not in dialog
+	assert "ERPNext posting authority" not in dialog
+
+
+def test_edit_preview_exposes_price_list_and_default_stock_context():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	for contract in (
+		"resolve_price_list_context",
+		'"selling_price_list": selling_price_list',
+		'"pricing": {',
+		'"default_warehouse": default_warehouse',
+	):
+		assert contract in service
+	for contract in (
+		"Selling Price List",
+		"get_simple_sales_invoice_item_pricing",
+		"default_warehouse",
 	):
 		assert contract in dialog
 
