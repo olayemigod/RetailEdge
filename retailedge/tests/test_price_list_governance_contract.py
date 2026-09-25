@@ -52,6 +52,15 @@ def test_branch_setup_and_assignments_own_their_pricing_governance_data():
 	assert child["fields"][0]["options"] == "Price List"
 
 
+def test_ranked_guided_search_preserves_governed_price_list_lookup():
+	search = (APP_ROOT / "guided_link_search.py").read_text()
+
+	assert 'fieldname == "price_list"' in search
+	assert "guided_sales_invoice.search_simple_sales_invoice_options(" in search
+	assert "guided_purchase_invoice.search_simple_purchase_invoice_options(" in search
+	assert "CANDIDATE_LIMIT" in search
+
+
 def test_governed_resolver_and_edgesuite_surfaces_revalidate_price_list_choice():
 	pricing = _read("guided_pricing.py")
 	sales = _read("guided_sales_invoice.py")
