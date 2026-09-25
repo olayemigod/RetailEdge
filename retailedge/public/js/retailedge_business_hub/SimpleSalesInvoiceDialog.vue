@@ -286,7 +286,7 @@ export default {
 			return Boolean(this.formContext.capabilities?.can_create_item);
 		},
 		canSwitchPriceList() {
-			return Boolean(this.formContext.pricing?.can_switch_price_list && (this.formContext.pricing?.available_price_lists || []).length > 1);
+			return Boolean(this.formContext.pricing?.can_switch_price_list && (this.formContext.pricing?.available_price_lists || []).length);
 		},
 		pricingLabel() {
 			return this.formContext.pricing?.price_list || "Item default";
