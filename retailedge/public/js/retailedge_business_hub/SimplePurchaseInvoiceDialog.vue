@@ -219,8 +219,6 @@ function sourceLabel(source) {
 		branch_assignment: "Branch-assigned Price List",
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
-		assigned_choice: "Assigned Price List choice",
-		branch_default: "Branch default",
 		party_default: "Supplier default",
 		erpnext_default: "ERPNext default",
 		standard_price_list: "Standard Buying",
@@ -300,9 +298,6 @@ export default {
 		},
 		canCreateItem() {
 			return Boolean(this.formContext.capabilities?.can_create_item);
-		},
-		canSwitchPriceList() {
-			return Boolean(this.formContext.pricing?.can_switch_price_list && (this.formContext.pricing?.available_price_lists || []).length > 1);
 		},
 		pricingLabel() {
 			return this.formContext.pricing?.price_list || "Item buying fallback";
@@ -429,7 +424,6 @@ export default {
 			const changed = this.values.supplier !== value;
 			this.values.supplier = value;
 			this.pricingCache.clear();
-			this.refreshPriceListOptions().catch(() => {});
 			if (changed) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshPriceListContext().then(() => this.refreshAllItemPricing()).catch((error) => { this.saveError = errorMessage(error, "Unable to refresh Buying Price List."); });
@@ -439,7 +433,6 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
-			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			this.pricingCache.clear();
 			if (!this.values.company) return;

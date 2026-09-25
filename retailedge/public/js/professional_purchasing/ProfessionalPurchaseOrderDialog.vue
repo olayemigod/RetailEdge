@@ -154,8 +154,6 @@ function sourceLabel(source) {
 		branch_assignment: "Branch-assigned Price List",
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
-		assigned_choice: "Assigned Price List choice",
-		branch_default: "Branch default",
 		party_default: "Supplier default",
 		erpnext_default: "ERPNext default",
 		standard_price_list: "Standard Buying",
@@ -199,8 +197,7 @@ export default {
 		branchEnabled() { return Boolean(this.formContext.capabilities?.branch_enabled); },
 		canCreateSupplier() { return Boolean(this.formContext.capabilities?.can_create_supplier); },
 		canCreateItem() { return Boolean(this.formContext.capabilities?.can_create_item); },
-		canSwitchPriceList() { return (this.formContext.pricing?.available_price_lists || []).length > 1; },
-		pricingLabel() { return this.values.price_list || this.formContext.pricing?.price_list || "Item buying fallback"; },
+		pricingLabel() { return this.formContext.pricing?.price_list || "Item buying fallback"; },
 		pricingSourceLabel() { return sourceLabel(this.formContext.pricing?.source); },
 		searchContext() {
 			return {
@@ -256,21 +253,6 @@ export default {
 		canCreateItemLink(column) { return this.canCreateItem && column?.fieldname === "item_code"; },
 		createItemLink(column, query) { return column?.fieldname === "item_code" ? quickCreateItem(query) : Promise.resolve(null); },
 		itemCreateLabel(column) { return column?.fieldname === "item_code" ? "Create Item" : "Create new"; },
-		async refreshPriceListOptions() {
-			const rows = await this.searchPriceList("");
-			const names = rows.map((row) => row.value || row.label).filter(Boolean);
-			this.formContext.pricing = {
-				...(this.formContext.pricing || {}),
-				available_price_lists: names,
-				can_switch_price_list: names.length > 1,
-			};
-			if (this.values.price_list && !names.includes(this.values.price_list)) this.values.price_list = "";
-		},
-		setPriceList(next) {
-			this.values.price_list = next || "";
-			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
-			this.refreshAllItemPricing();
-		},
 		setSupplier(next) {
 			const value = next || "";
 			const changed = this.values.supplier !== value;
@@ -350,7 +332,7 @@ export default {
 			try {
 				const result = await callMethod(PRICING_METHOD, {
 					item_code: row.item_code,
-					values: { ...this.searchContext, price_list: this.values.price_list, transaction_date: this.values.transaction_date, qty: row.qty || 1 },
+					values: { ...this.searchContext, transaction_date: this.values.transaction_date, qty: row.qty || 1 },
 				});
 				if (this.pricingTokens[index] !== token || this.values.items[index]?.item_code !== row.item_code) return;
 				if (result?.rate !== null && result?.rate !== undefined) this.values.items[index] = { ...this.values.items[index], rate: result.rate };

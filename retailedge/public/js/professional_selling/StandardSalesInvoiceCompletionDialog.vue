@@ -157,7 +157,6 @@
 <script>
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
-const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
 const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
