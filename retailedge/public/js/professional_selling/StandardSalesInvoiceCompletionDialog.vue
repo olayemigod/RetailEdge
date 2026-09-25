@@ -131,7 +131,16 @@
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<template v-if="!completedResult">
 						<button
-							v-if="preview?.can_submit"
+							v-if="preview?.can_edit && draftDirty"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="busy || !draftValid"
+							@click="saveDraftChanges"
+						>
+							{{ busy ? "Saving..." : "Save Changes" }}
+						</button>
+						<button
+							v-if="preview?.can_submit && !draftDirty"
 							type="button"
 							class="edge-button edge-button--primary"
 							:disabled="busy"
@@ -144,7 +153,7 @@
 							:key="action.action"
 							type="button"
 							class="edge-button edge-button--primary"
-							:disabled="busy || !preview?.workflow_eligible"
+							:disabled="busy || draftDirty || !preview?.workflow_eligible"
 							@click="applyWorkflow(action.action)"
 						>
 							{{ action.action }}
@@ -334,7 +343,7 @@ export default {
 		},
 
 		async submitDocument() {
-			if (!this.preview?.can_submit || this.busy) return;
+			if (!this.preview?.can_submit || this.draftDirty || this.busy) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
@@ -354,7 +363,7 @@ export default {
 			}
 		},
 		async applyWorkflow(action) {
-			if (!action || !this.preview?.workflow_eligible || this.busy) return;
+			if (!action || this.draftDirty || !this.preview?.workflow_eligible || this.busy) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
