@@ -341,6 +341,18 @@ def test_persistent_pages_do_not_auto_open_completion_after_first_save():
 		assert "this.completionOpen = false" in create_segment
 
 
+def test_make_sale_can_receive_existing_draft_handoff_for_persistent_editing():
+	source = (ROOT / "public/js/make_sale/MakeSale.vue").read_text(encoding="utf-8")
+	for contract in (
+		"document_name",
+		"consumeSavedDraftHandoff",
+		"PREVIEW_METHOD",
+		"editingSavedDraft = true",
+		"syncPageFromDraftPreview(preview)",
+	):
+		assert contract in source
+
+
 def test_persistent_pages_keep_saved_draft_editing_on_the_page():
 	contracts = {
 		"make-sale": "update_standard_sales_invoice_draft",

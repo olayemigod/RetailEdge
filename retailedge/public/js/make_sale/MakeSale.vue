@@ -295,7 +295,9 @@ function cleanStoredPayload(raw, maxAge) {
 	try {
 		const parsed = JSON.parse(raw);
 		if (!parsed?.createdAt || Date.now() - Number(parsed.createdAt) > maxAge) return null;
-		if (!parsed.values || typeof parsed.values !== "object") return null;
+		const hasValues = parsed.values && typeof parsed.values === "object";
+		const hasDocument = Boolean(String(parsed.document_name || "").trim());
+		if (!hasValues && !hasDocument) return null;
 		return parsed;
 	} catch (_error) {
 		return null;
@@ -552,6 +554,9 @@ export default {
 			}
 			const payload = cleanStoredPayload(raw, HANDOFF_MAX_AGE_MS);
 			if (!payload) return false;
+			if (payload.document_name) {
+				return this.consumeSavedDraftHandoff(payload);
+			}
 			if (payload.values.company && this.values.company && payload.values.company !== this.values.company) {
 				frappe.show_alert?.({ message: "Quick Sale data belongs to another Company and was not carried into Make Sale.", indicator: "orange" }, 7);
 				return false;
@@ -582,6 +587,38 @@ export default {
 				this.handoffNotice = "Quick Sale line items were carried over, but the saved Branch / Stock Location was cleared because access could not be revalidated.";
 			}
 			return true;
+		},
+		async consumeSavedDraftHandoff(payload) {
+			const name = String(payload?.document_name || "").trim();
+			if (!name) return false;
+			try {
+				const preview = await callMethod(PREVIEW_METHOD, { name }, "GET");
+				if (Number(preview?.docstatus || 0) !== 0) {
+					this.savedDocument = { ...preview, doctype: "Sales Invoice" };
+					this.handoffNotice = `Sales Invoice ${name} is no longer a draft. Review its current status instead of editing it.`;
+					return true;
+				}
+				if (preview?.is_return || preview?.source_mode === "sales_return") {
+					this.saveError = "Return / Credit Note drafts remain in the governed return review and are not edited through Make Sale.";
+					return true;
+				}
+				this.savedDocument = { ...preview, doctype: "Sales Invoice" };
+				if (!preview?.can_edit) {
+					this.saveError = (preview?.blockers || [])[0] || "This Sales Invoice draft cannot be edited on the standard Make Sale page.";
+					return true;
+				}
+				this.syncPageFromDraftPreview(preview);
+				this.editingSavedDraft = true;
+				this.completionOpen = false;
+				this.recoveryCandidate = null;
+				this.clearRecovery();
+				this.initialSnapshot = JSON.stringify(this.values);
+				this.handoffNotice = `Editing saved Sales Invoice ${name} on the persistent Make Sale page.`;
+				return true;
+			} catch (error) {
+				this.saveError = errorMessage(error, "Unable to load the Sales Invoice draft on Make Sale.");
+				return true;
+			}
 		},
 		loadRecoveryCandidate() {
 			let raw = "";
@@ -961,8 +998,18 @@ export default {
 		},
 		syncPageFromDraftPreview(result) {
 			if (!result) return;
+			if (result.company) this.values.company = result.company;
+			if (Object.prototype.hasOwnProperty.call(result, "branch")) this.values.branch = result.branch || "";
+			if (Object.prototype.hasOwnProperty.call(result, "customer")) this.values.customer = result.customer || "";
+			if (Object.prototype.hasOwnProperty.call(result, "selling_price_list")) this.values.price_list = result.selling_price_list || "";
+			if (Object.prototype.hasOwnProperty.call(result, "default_warehouse")) this.values.warehouse = result.default_warehouse || "";
+			if (Object.prototype.hasOwnProperty.call(result, "update_stock")) this.values.update_stock = result.update_stock ? 1 : 0;
 			if (result.posting_date) this.values.posting_date = result.posting_date;
 			if (Object.prototype.hasOwnProperty.call(result, "remarks")) this.values.remarks = result.remarks || "";
+			if (result.pricing) {
+				this.formContext = { ...this.formContext, pricing: { ...(this.formContext.pricing || {}), ...result.pricing } };
+				this.applyRatePermission(result.pricing);
+			}
 			if (Array.isArray(result.editable_items)) {
 				this.values.items = result.editable_items.map((row) => ({
 					name: row.name || "",

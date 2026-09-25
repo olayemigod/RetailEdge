@@ -160,6 +160,7 @@ import StandardDeliveryCompletionDialog from "./StandardDeliveryCompletionDialog
 import StandardSalesInvoiceCompletionDialog from "./StandardSalesInvoiceCompletionDialog.vue";
 import ProfessionalSellingRecords from "./ProfessionalSellingRecords.vue";
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
+import { getTransactionEntryPreference } from "../retailedge_business_hub/guidedEntryUtils";
 
 const CONTEXT_METHOD = "retailedge.professional_selling.get_professional_selling_context";
 const INVOICE_CAPABILITY_METHOD = "retailedge.professional_sales_invoice.get_professional_sales_invoice_capability";
@@ -291,6 +292,9 @@ export default {
 			if (item.target_type === "DocType") return `/app/${doctypeSlug(item.target)}`;
 			return item.target || "";
 		},
+		hasPageTarget(target) {
+			return Boolean(target && this.menuItems.flatMap((group) => group.items || []).some((item) => item.target_type === "Page" && item.target === target));
+		},
 		handleNavigation(route) {
 			const item = this.menuItems.flatMap((group) => group.items || []).find((candidate) => candidate.route === route);
 			if (!item) return;
@@ -379,10 +383,19 @@ export default {
 			if (document.key === "quotation") { this.openStandardCompletion({ doctype: "Quotation", name: row.name }); return; }
 			if (document.key === "sales-order") { this.openStandardCompletion({ doctype: "Sales Order", name: row.name }); return; }
 			if (document.key === "delivery-note") { this.openDeliveryCompletion({ doctype: "Delivery Note", name: row.name }); return; }
-			if (document.key === "sales-invoice") this.openSalesInvoiceCompletion(
-				{ doctype: "Sales Invoice", name: row.name },
-				row.is_return ? "sales_return" : "standard",
-			);
+			if (document.key === "sales-invoice") {
+				if (!row.is_return) {
+					const preference = await getTransactionEntryPreference({ force: true });
+					if (preference?.value === "full" && this.hasPageTarget("make-sale")) {
+						this.openSalesInvoiceDraftOnPage(row.name);
+						return;
+					}
+				}
+				this.openSalesInvoiceCompletion(
+					{ doctype: "Sales Invoice", name: row.name },
+					row.is_return ? "sales_return" : "standard",
+				);
+			}
 		},
 		async runConversionAction(action, document, row) {
 			const route = {
@@ -523,6 +536,21 @@ export default {
 		handleDeliveryCompletionCompleted() {
 			this.loadWorkspace();
 			this.$refs.sellingRecords?.refresh?.();
+		},
+		openSalesInvoiceDraftOnPage(name) {
+			name = String(name || "").trim();
+			if (!name) return;
+			try {
+				window.sessionStorage.setItem(
+					`retailedge:make-sale:handoff:${encodeURIComponent(frappe.session?.user || "Guest")}`,
+					JSON.stringify({ createdAt: Date.now(), document_name: name }),
+				);
+			} catch (_error) {
+				frappe.show_alert?.({ message: "Unable to carry the draft into Make Sale in this browser session.", indicator: "orange" }, 7);
+				return;
+			}
+			this.closeSalesInvoiceCompletion();
+			frappe.set_route("make-sale");
 		},
 		openSalesInvoiceCompletion(document, sourceMode = "standard") {
 			if (document?.doctype !== "Sales Invoice" || !document?.name) return;

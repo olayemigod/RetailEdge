@@ -75,6 +75,25 @@ class TestTransactionEntryPreference(unittest.TestCase):
 		):
 			self.assertIn(contract, context)
 
+	def test_full_page_preference_can_edit_existing_standard_sales_invoice_without_recreating_it(self):
+		selling = (ROOT / "public/js/professional_selling/ProfessionalSelling.vue").read_text(encoding="utf-8")
+		make_sale = (ROOT / "public/js/make_sale/MakeSale.vue").read_text(encoding="utf-8")
+		for contract in (
+			"openSalesInvoiceDraftOnPage",
+			"document_name: name",
+			'preference?.value === "full"',
+			'!row.is_return',
+		):
+			self.assertIn(contract, selling)
+		for contract in (
+			"consumeSavedDraftHandoff",
+			"get_standard_sales_invoice_completion_preview",
+			"editingSavedDraft = true",
+			"syncPageFromDraftPreview(preview)",
+			"Return / Credit Note drafts remain in the governed return review",
+		):
+			self.assertIn(contract, make_sale)
+
 	def test_existing_quick_entry_line_limit_and_safe_exit_remain_intact(self):
 		utils = (ROOT / "public/js/retailedge_business_hub/guidedEntryUtils.js").read_text(encoding="utf-8")
 		sale = (ROOT / "public/js/retailedge_business_hub/SimpleSalesInvoiceDialog.vue").read_text(encoding="utf-8")
