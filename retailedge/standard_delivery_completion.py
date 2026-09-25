@@ -194,7 +194,6 @@ def _validate_source_and_stock_context(
 				branch=branch or source_branch,
 				warehouse=warehouse,
 				preference="sales",
-				user=frappe.session.user,
 			)
 			warehouse_branch = _clean(resolved.get("branch"))
 		except (frappe.PermissionError, frappe.ValidationError) as exc:
