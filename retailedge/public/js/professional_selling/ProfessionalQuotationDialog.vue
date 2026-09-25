@@ -215,11 +215,11 @@ export default {
 			this.refreshAllItemPricing();
 		},
 		setCustomer(next) {
-			const changed = this.values.customer && this.values.customer !== next;
+			const previousCustomer = this.values.customer || "";
 			this.values.customer = next || "";
 			this.pricingSignatures = {};
 			this.refreshPriceListOptions().catch(() => {});
-			if (changed) {
+			if (previousCustomer !== this.values.customer) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshAllItemPricing();
 			}
