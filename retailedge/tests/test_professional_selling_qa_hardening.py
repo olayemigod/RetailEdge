@@ -25,6 +25,20 @@ def test_all_four_draft_completion_surfaces_allow_editing_and_new_items():
 		assert "Add Item" in source
 
 
+def test_professional_invoice_update_stock_choice_is_separate_from_make_a_sale_policy():
+	guided = read("guided_sales_invoice.py")
+	professional = read("professional_sales_invoice.py")
+	dialog = read("public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue")
+
+	assert "def _create_simple_sales_invoice_draft(" in guided
+	assert "if allow_update_stock_edit is None:" in guided
+	assert "allow_guided_sales_update_stock_edit" in guided
+	assert "return _create_simple_sales_invoice_draft(values)" in guided
+	assert "_create_simple_sales_invoice_draft(values, allow_update_stock_edit=True)" in professional
+	assert 'v-model="values.update_stock"' in dialog
+	assert ">Update Stock</strong>" in dialog
+
+
 def test_managed_print_formats_have_a_distinct_pedge_prefix_and_retire_legacy_aliases():
 	source = read("professional_print_formats.py")
 	for name in (
