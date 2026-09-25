@@ -316,7 +316,12 @@ export default {
 		postingDateChanged() {
 			this.values.loyalty_points = 0;
 			this.loyaltyStatus = {};
-			if (this.values.customer) this.loadLoyaltyStatus();
+			this.pricingSignatures = {};
+			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+			if (this.values.customer) {
+				this.loadLoyaltyStatus();
+				this.refreshAllItemPricing();
+			}
 		},
 		async loadLoyaltyStatus() {
 			if (!this.values.customer) return;
