@@ -160,17 +160,27 @@ def _apply_editable_row_values(
 			row.warehouse = warehouse
 
 	rate_value = values.get("rate")
-	if rate_value in (None, ""):
-		rate = _resolve_rate(
-			item_code=clean(row.get("item_code")),
-			company=company,
-			customer=customer,
-			branch=branch,
-			warehouse=warehouse,
-			posting_date=posting_date,
-			qty=qty,
-			selected_price_list=selected_price_list,
-		)
+	pricing = resolve_sales_item_pricing(
+		item_code=clean(row.get("item_code")),
+		company=company,
+		customer=customer,
+		branch=branch,
+		warehouse=warehouse,
+		posting_date=posting_date,
+		qty=qty,
+		document_price_list=selected_price_list,
+		user=frappe.session.user,
+	)
+	resolved_rate = pricing.get("rate")
+	rate_locked = pricing.get("source") == "pos_profile" and not pricing.get("allow_rate_change", True)
+	if rate_locked or rate_value in (None, ""):
+		if resolved_rate is None:
+			frappe.throw(
+				_("No selling price could be resolved for Item {0}. Enter a rate before saving.").format(
+					clean(row.get("item_code"))
+				)
+			)
+		rate = flt(resolved_rate)
 	else:
 		rate = flt(rate_value)
 	if rate < 0:

@@ -122,8 +122,11 @@
 			</section>
 
 			<label class="guided-check-field">
-				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" />
-				<span><strong>Update Stock</strong><small>Stock moves only if this draft is later submitted by an authorised user.</small></span>
+				<input v-model="values.update_stock" type="checkbox" :true-value="1" :false-value="0" :disabled="!canEditUpdateStock || loadingContext" />
+				<span>
+					<strong>Update Stock</strong>
+					<small>{{ canEditUpdateStock ? "Post stock movement when the invoice is eventually submitted." : "Update Stock is required by the current sales settings." }}</small>
+				</span>
 			</label>
 
 			<EdgeChildTable
@@ -163,6 +166,7 @@
 import { callMethod, errorMessage, quickCreateCustomer, quickCreateItem, resolveBranchWarehouse } from "../retailedge_business_hub/guidedEntryUtils";
 import CustomerCreditSummary from "./CustomerCreditSummary.vue";
 
+const GUIDED_CONTEXT = "retailedge.guided_sales_invoice.get_simple_sales_invoice_context";
 const GUIDED_SEARCH = "retailedge.guided_sales_invoice.search_simple_sales_invoice_options";
 const GUIDED_PRICING = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const PRICE_CONTEXT_METHOD = "retailedge.guided_pricing.get_allowed_price_list_context";
@@ -186,7 +190,7 @@ function initialValues(context = {}) {
 		posting_date: context.today || "",
 		shipping_rule: "",
 		loyalty_points: 0,
-		update_stock: 0,
+		update_stock: 1,
 		remarks: "",
 		items: [{ item_code: "", qty: 1, rate: "" }],
 	};
@@ -210,6 +214,8 @@ export default {
 			cascadeToken: 0,
 			pricingTokens: {},
 			pricingContext: { ...(this.context.pricing || {}) },
+			guidedContext: null,
+			loadingContext: false,
 			loyaltyToken: 0,
 			loyaltyLoading: false,
 			loyaltyStatus: {},
@@ -238,6 +244,7 @@ export default {
 			const value = Number(this.values.loyalty_points || 0) * Number(this.loyaltyStatus.conversion_factor || 0);
 			return `${this.loyaltyStatus.currency || ""} ${value.toFixed(2)}`.trim();
 		},
+		canEditUpdateStock() { return Boolean(this.guidedContext?.capabilities?.can_edit_update_stock); },
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
 		sourceLabel() {
@@ -260,10 +267,11 @@ export default {
 		},
 	},
 	watch: {
-		open(next) {
+		async open(next) {
 			if (next) {
 				this.mode = "new";
 				this.sourceDocument = "";
+				this.guidedContext = null;
 				this.pricingContext = { ...(this.context.pricing || {}) };
 				this.values = initialValues(this.context);
 				this.applyRatePermission(this.pricingContext);
@@ -271,10 +279,36 @@ export default {
 				this.loyaltyStatus = {};
 				this.loyaltyLoading = false;
 				this.saveError = "";
+				await this.loadGuidedContext();
 			}
 		},
 	},
 	methods: {
+		async loadGuidedContext() {
+			if (this.loadingContext) return;
+			this.loadingContext = true;
+			try {
+				const guided = await callMethod(GUIDED_CONTEXT);
+				this.guidedContext = guided || {};
+				const defaults = guided?.defaults || {};
+				this.values = {
+					...this.values,
+					company: defaults.company || this.values.company,
+					branch: defaults.branch || this.values.branch,
+					warehouse: defaults.warehouse || this.values.warehouse,
+					posting_date: defaults.posting_date || this.values.posting_date,
+					price_list: defaults.price_list || guided?.pricing?.price_list || this.values.price_list,
+					update_stock: Number(defaults.update_stock ?? 1),
+				};
+				if (!guided?.capabilities?.can_edit_update_stock) this.values.update_stock = 1;
+				this.pricingContext = { ...(guided?.pricing || this.pricingContext || {}) };
+				this.applyRatePermission(this.pricingContext);
+			} catch (error) {
+				this.saveError = errorMessage(error, "Unable to resolve the Sales Invoice operating context.");
+			} finally {
+				this.loadingContext = false;
+			}
+		},
 		formatDate(value, fallback = "—") { if (!value) return fallback; try { return frappe.datetime.str_to_user(`${value} 00:00:00`).split(" ")[0]; } catch (_error) { return String(value); } },
 		setMode(mode) { if (!this.saving) { this.mode = mode; this.sourceDocument = ""; this.saveError = ""; } },
 		requestClose() { if (!this.saving) this.$emit("close"); },

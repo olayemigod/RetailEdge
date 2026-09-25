@@ -325,6 +325,8 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 		"Existing item identity cannot be replaced here.",
 		"Source-linked item",
 		"resolve_sales_item_pricing",
+		'pricing.get("source") == "pos_profile"',
+		'not pricing.get("allow_rate_change", True)',
 		"_validate_warehouse_branch",
 	):
 		assert contract in helper
@@ -337,6 +339,19 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 	):
 		assert contract in dialog
 
+
+
+
+def test_edit_preview_resolves_price_list_governance_and_default_stock_location():
+	service = _read(SERVICE)
+	for contract in (
+		"resolve_price_list_context",
+		'"selling_price_list": selling_price_list',
+		'"pricing": {',
+		'"allow_rate_change": bool(pricing.get("allow_rate_change", True))',
+		'"default_warehouse": default_warehouse',
+	):
+		assert contract in service
 
 
 def test_invoice_completion_requires_saving_dirty_editor_before_submit_or_workflow():

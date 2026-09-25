@@ -8,7 +8,7 @@ from frappe.utils import cint, flt, get_datetime, getdate
 from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return as erpnext_make_sales_return
 
 from retailedge.guided_entry_context import resolve_branch_warehouse_selection
-from retailedge.guided_pricing import resolve_sales_item_pricing
+from retailedge.guided_pricing import resolve_price_list_context, resolve_sales_item_pricing
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_draft_items import _validate_warehouse_branch, editable_items, update_draft_items
 from retailedge.professional_selling import (
@@ -478,6 +478,20 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_STANDARD) -> dict[str,
 		doc=doc,
 	)
 	workflow_controlled = _clean(workflow_readiness.get("source")) == "frappe"
+	pricing = resolve_price_list_context(
+		mode="selling",
+		company=company,
+		branch=stock_context["effective_branch"] or invoice_branch,
+		party=_clean(doc.get("customer")),
+		user=frappe.session.user,
+	)
+	selling_price_list = _clean(doc.get("selling_price_list")) or _clean(pricing.get("price_list"))
+	default_warehouse = _clean(doc.get("set_warehouse"))
+	if not default_warehouse:
+		default_warehouse = next(
+			(_clean(row.get("warehouse")) for row in list(doc.get("items") or []) if _clean(row.get("warehouse"))),
+			"",
+		)
 
 	if (
 		not workflow_controlled
@@ -495,7 +509,14 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_STANDARD) -> dict[str,
 		"company": company,
 		"branch": stock_context["effective_branch"] or invoice_branch,
 		"customer": _clean(doc.get("customer")),
-		"selling_price_list": _clean(doc.get("selling_price_list")),
+		"selling_price_list": selling_price_list,
+		"pricing": {
+			"price_list": selling_price_list,
+			"source": _clean(pricing.get("source")),
+			"allow_rate_change": bool(pricing.get("allow_rate_change", True)),
+			"available_price_lists": pricing.get("available_price_lists") or [],
+			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
+		},
 		"currency": _clean(doc.get("currency")),
 		"grand_total": flt(doc.get("grand_total")),
 		"outstanding_amount": flt(doc.get("outstanding_amount")),
@@ -518,7 +539,7 @@ def _build_preview(doc, *, source_mode: str = SOURCE_MODE_STANDARD) -> dict[str,
 		),
 		"update_stock": bool(cint(doc.get("update_stock"))),
 		"completion_mode": stock_context["mode"],
-		"default_warehouse": _clean(doc.get("set_warehouse")),
+		"default_warehouse": default_warehouse,
 		"source_type": source_context["source_type"],
 		"source_name": source_context["source_name"],
 		"item_count": len(list(doc.get("items") or [])),
