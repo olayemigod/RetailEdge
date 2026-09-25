@@ -268,7 +268,6 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 		'doc.set("company"',
 		'doc.set("customer"',
 		'doc.set("branch"',
-		'doc.set("update_stock"',
 	):
 		assert forbidden not in service[
 			service.index("def update_standard_sales_invoice_draft("):
@@ -290,6 +289,26 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 		"ERPNext recalculates taxes, totals",
 	):
 		assert contract in dialog
+
+
+def test_draft_invoice_can_switch_update_stock_before_submission():
+	service = _read(SERVICE)
+	dialog = _read(DIALOG)
+	helper = _read(ROOT / "professional_draft_items.py")
+	for contract in (
+		'"can_edit_update_stock": bool(',
+		'doc.set("update_stock", cint(values.get("update_stock") or 0))',
+	):
+		assert contract in service
+	for contract in (
+		"draftUpdateStock",
+		">Update Stock</strong>",
+		"update_stock: this.draftUpdateStock ? 1 : 0",
+		"EdgeLinkField",
+		"searchWarehouse",
+	):
+		assert contract in dialog
+	assert "resolve_branch_warehouse_selection" in helper
 
 
 def test_invoice_completion_print_pdf_and_post_submit_actions_are_compact():
