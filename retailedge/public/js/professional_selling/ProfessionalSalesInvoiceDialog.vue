@@ -201,6 +201,7 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
+			pricingSignatures: {},
 			availablePriceLists: [...(this.context.pricing?.available_price_lists || [])],
 			loyaltyToken: 0,
 			loyaltyLoading: false,
@@ -256,6 +257,8 @@ export default {
 				this.sourceDocument = "";
 				this.values = initialValues(this.context);
 				this.availablePriceLists = [...(this.context.pricing?.available_price_lists || [])];
+				this.pricingTokens = {};
+				this.pricingSignatures = {};
 				this.loyaltyToken += 1;
 				this.loyaltyStatus = {};
 				this.loyaltyLoading = false;
@@ -292,12 +295,14 @@ export default {
 		},
 		setPriceList(next) {
 			this.values.price_list = next || "";
+			this.pricingSignatures = {};
 			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 			this.refreshAllItemPricing();
 		},
 		setCustomer(next) {
 			const changed = this.values.customer && this.values.customer !== next;
 			this.values.customer = next || "";
+			this.pricingSignatures = {};
 			this.refreshPriceListOptions().catch(() => {});
 			this.loyaltyToken += 1;
 			this.values.loyalty_points = 0;
@@ -339,6 +344,7 @@ export default {
 		},
 		async setBranch(next) {
 			this.values.branch = next || "";
+			this.pricingSignatures = {};
 			this.values.warehouse = "";
 			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
@@ -357,6 +363,7 @@ export default {
 		},
 		async setWarehouse(next) {
 			this.values.warehouse = next || "";
+			this.pricingSignatures = {};
 			if (!this.values.warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -372,13 +379,32 @@ export default {
 				}
 			}
 		},
+		pricingSignature(row) {
+			return [
+				this.values.company,
+				this.values.branch,
+				this.values.warehouse,
+				this.values.customer,
+				this.values.price_list,
+				this.values.posting_date,
+				row?.item_code || "",
+				row?.qty || 1,
+			].join("|");
+		},
 		updateItems(nextRows) {
-			const previous = this.values.items || [];
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
-				const prior = previous[index] || {};
-				if (row.item_code && row.item_code !== prior.item_code) changed.push(index);
-				return { item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
+				const normalized = { item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
+				if (!normalized.item_code) {
+					delete this.pricingSignatures[index];
+					return normalized;
+				}
+				const signature = this.pricingSignature(normalized);
+				if (this.pricingSignatures[index] !== signature) {
+					changed.push(index);
+					return { ...normalized, rate: "" };
+				}
+				return normalized;
 			});
 			changed.forEach((index) => this.refreshItemPricing(index));
 		},
@@ -391,12 +417,16 @@ export default {
 				const pricing = await callMethod(GUIDED_PRICING, { item_code: row.item_code, values: { ...this.values, qty: row.qty } });
 				if (this.pricingTokens[index] !== token) return;
 				this.values.items[index] = { ...this.values.items[index], rate: pricing.rate ?? "" };
+				this.pricingSignatures[index] = this.pricingSignature(this.values.items[index]);
 				this.values.items = [...this.values.items];
 			} catch (error) {
 				if (this.pricingTokens[index] === token) this.saveError = errorMessage(error, `Unable to price ${row.item_code}.`);
 			}
 		},
-		refreshAllItemPricing() { this.values.items.forEach((row, index) => { if (row.item_code) this.refreshItemPricing(index); }); },
+		refreshAllItemPricing() {
+			this.pricingSignatures = {};
+			this.values.items.forEach((row, index) => { if (row.item_code) this.refreshItemPricing(index); });
+		},
 		async saveDraft() {
 			if (this.saving) return;
 			this.saving = true;
