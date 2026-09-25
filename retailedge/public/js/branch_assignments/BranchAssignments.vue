@@ -203,8 +203,10 @@ export default {
 		return {
 			edgeUIValid: true, missingComponents: [], loading: false, loaded: false, error: "", assignments: [], canCreate: false, canWrite: false,
 		filters: { user: "", company: "", branch: "", status: "" }, sortKey: "effective_from", sortDirection: "desc", userName: "", menuItems: [], canUseNativeDesk: false,
-		assignOpen: false, transferOpen: false, saving: false, assignError: "", transferError: "", assign: blankAssign(), transfer: blankTransfer(), transferRow: {}, roles: ROLES,
-		assignPriceListDraft: "", transferPriceListDraft: "",
+		assignOpen: false, priceListEditOpen: false, transferOpen: false, saving: false,
+		assignError: "", priceListEditError: "", transferError: "",
+		assign: blankAssign(), priceListEdit: blankPriceListEdit(), priceListEditRow: {}, transfer: blankTransfer(), transferRow: {}, roles: ROLES,
+		assignPriceListDraft: "", priceListEditDraft: "", transferPriceListDraft: "",
 		columns: [{ key: "user", label: "User" }, { key: "company", label: "Company" }, { key: "branch", label: "Branch" }, { key: "branch_role", label: "Role" }, { key: "effective_from", label: "From" }, { key: "effective_to", label: "To" }, { key: "status", label: "Status" }],
 		};
 	},
