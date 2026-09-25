@@ -208,7 +208,6 @@ export default {
 			draftPoNo: "",
 			draftRemarks: "",
 			draftUpdateStock: 0,
-			draftUpdateStock: 0,
 			draftItems: [],
 			pricingTokens: {},
 			completedResult: null,
@@ -229,7 +228,6 @@ export default {
 				|| String(this.draftDueDate || "") !== String(this.preview?.due_date || "")
 				|| String(this.draftPoNo || "") !== String(this.preview?.po_no || "")
 				|| String(this.draftRemarks || "") !== String(this.preview?.remarks || "")
-				|| Number(this.draftUpdateStock || 0) !== Number(this.preview?.update_stock ? 1 : 0)
 				|| Number(this.draftUpdateStock || 0) !== Number(this.preview?.update_stock ? 1 : 0)
 			) return true;
 			const original = this.preview?.editable_items || [];
@@ -285,7 +283,6 @@ export default {
 			this.draftDueDate = preview?.due_date || "";
 			this.draftPoNo = preview?.po_no || "";
 			this.draftRemarks = preview?.remarks || "";
-			this.draftUpdateStock = preview?.update_stock ? 1 : 0;
 			this.draftUpdateStock = preview?.update_stock ? 1 : 0;
 			this.draftItems = (preview?.editable_items || preview?.items || []).map((row) => ({ ...row }));
 			this.pricingTokens = {};

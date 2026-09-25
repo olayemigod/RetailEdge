@@ -80,7 +80,6 @@
   "apply_branch_default_pos_profile",
   "pricing_governance_tab",
   "pricing_governance_section",
-  "enable_price_list_governance",
   "selling_price_list_policy",
   "buying_price_list_policy",
   "allow_price_list_switch",
@@ -819,13 +818,6 @@
    "fieldname": "pricing_governance_section",
    "fieldtype": "Section Break",
    "label": "Price List Governance"
-  },
-  {
-   "default": "1",
-   "description": "Use merchant-configurable Price List precedence across guided selling and purchasing instead of one hard-coded priority order.",
-   "fieldname": "enable_price_list_governance",
-   "fieldtype": "Check",
-   "label": "Enable Price List Governance"
   },
   {
    "default": "Party > POS > Branch > Assigned Choice",
