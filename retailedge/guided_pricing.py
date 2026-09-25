@@ -104,7 +104,7 @@ def resolve_price_list_context(
 			return _with_choice_context(
 				context,
 				available_price_lists=available_price_lists,
-				can_switch=governance_enabled and allow_switch and len(available_price_lists) > 1,
+				can_switch=governance_enabled and allow_switch,
 			)
 
 	settings_doctype, settings_field = SETTINGS_PRICE_LIST[mode]
@@ -113,7 +113,7 @@ def resolve_price_list_context(
 		return _with_choice_context(
 			_price_context(candidate, mode=mode, source="erpnext_default"),
 			available_price_lists=available_price_lists,
-			can_switch=governance_enabled and allow_switch and len(available_price_lists) > 1,
+			can_switch=governance_enabled and allow_switch,
 		)
 
 	candidate = STANDARD_PRICE_LIST[mode]
@@ -121,7 +121,7 @@ def resolve_price_list_context(
 		return _with_choice_context(
 			_price_context(candidate, mode=mode, source="standard_price_list"),
 			available_price_lists=available_price_lists,
-			can_switch=governance_enabled and allow_switch and len(available_price_lists) > 1,
+			can_switch=governance_enabled and allow_switch,
 		)
 
 	return _with_choice_context(
@@ -134,7 +134,7 @@ def resolve_price_list_context(
 			"allow_rate_change": True,
 		},
 		available_price_lists=available_price_lists,
-		can_switch=governance_enabled and allow_switch and len(available_price_lists) > 1,
+		can_switch=governance_enabled and allow_switch,
 	)
 
 
@@ -148,10 +148,12 @@ def _setting_check(settings, fieldname: str, *, default: bool) -> bool:
 def _with_choice_context(
 	context: dict[str, Any], *, available_price_lists: list[str], can_switch: bool
 ) -> dict[str, Any]:
+	current = str(context.get("price_list") or "").strip()
+	has_alternative = any(str(name or "").strip() != current for name in available_price_lists)
 	return {
 		**context,
 		"available_price_lists": available_price_lists,
-		"can_switch_price_list": bool(can_switch),
+		"can_switch_price_list": bool(can_switch and has_alternative),
 	}
 
 
