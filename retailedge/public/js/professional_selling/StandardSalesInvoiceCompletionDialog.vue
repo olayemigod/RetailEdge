@@ -35,12 +35,24 @@
 						<EdgeInput id="invoice-po-number" v-model="draftPoNo" label="Customer PO / Reference" type="text" :disabled="busy" />
 						<EdgeInput id="invoice-remarks" v-model="draftRemarks" label="Remarks" type="text" :disabled="busy" />
 					</div>
+					<label v-if="preview.can_edit_update_stock" class="guided-check-field">
+						<input v-model="draftUpdateStock" type="checkbox" :true-value="1" :false-value="0" :disabled="busy" />
+						<span><strong>Update Stock</strong><small>Enable this only when the invoice itself should post the stock movement. ERPNext and Branch/Stock Location validation run again on Save Changes.</small></span>
+					</label>
 					<div v-if="draftItems.length" class="invoice-edit-items">
-						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
+						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span><span>Amount</span></div>
 						<div v-for="(row, index) in draftItems" :key="row.name || index" class="invoice-edit-item">
 							<strong>{{ row.item_code || row.item_name || "Item" }}</strong>
 							<EdgeInput v-model="row.qty" :id="`invoice-item-qty-${index}`" label="Qty" type="number" min="0.000001" step="any" :disabled="busy" />
 							<EdgeInput v-model="row.rate" :id="`invoice-item-rate-${index}`" label="Rate" type="number" min="0" step="any" :disabled="busy" />
+							<EdgeLinkField
+								:modelValue="row.warehouse"
+								label="Stock Location"
+								placeholder="Choose Stock Location"
+								:searcher="searchWarehouse"
+								:disabled="busy"
+								@update:modelValue="row.warehouse = $event || ''"
+							/>
 							<span>{{ preview.currency || "" }} {{ row.amount }}</span>
 						</div>
 					</div>
@@ -196,6 +208,7 @@ export default {
 		EdgeModal: runtimeComponents().EdgeModal,
 		EdgeLoadingState: runtimeComponents().EdgeLoadingState,
 		EdgeInput: runtimeComponents().EdgeInput,
+		EdgeLinkField: runtimeComponents().EdgeLinkField,
 		EdgeChildTable: runtimeComponents().EdgeChildTable,
 	},
 	props: {
@@ -216,6 +229,7 @@ export default {
 			draftDueDate: "",
 			draftPoNo: "",
 			draftRemarks: "",
+			draftUpdateStock: 0,
 			draftItems: [],
 			newItems: [],
 			newItemColumns: [
@@ -239,6 +253,7 @@ export default {
 				|| String(this.draftDueDate || "") !== String(this.preview?.due_date || "")
 				|| String(this.draftPoNo || "") !== String(this.preview?.po_no || "")
 				|| String(this.draftRemarks || "") !== String(this.preview?.remarks || "")
+				|| Number(this.draftUpdateStock || 0) !== Number(this.preview?.update_stock ? 1 : 0)
 			) return true;
 			if (this.newItems.some((row) => row?.item_code)) return true;
 			const original = this.preview?.editable_items || [];
@@ -275,6 +290,7 @@ export default {
 			this.draftDueDate = preview?.due_date || "";
 			this.draftPoNo = preview?.po_no || "";
 			this.draftRemarks = preview?.remarks || "";
+			this.draftUpdateStock = preview?.update_stock ? 1 : 0;
 			this.draftItems = (preview?.editable_items || preview?.items || []).map((row) => ({ ...row }));
 			this.newItems = [];
 		},
@@ -305,6 +321,9 @@ export default {
 				},
 			}).then((rows) => Array.isArray(rows) ? rows : []);
 		},
+		searchWarehouse(query) {
+			return this.searchOptions("warehouse", query);
+		},
 		searchNewItemLink(column, query) {
 			if (column?.fieldname === "item_code") return this.searchOptions("item_code", query);
 			if (column?.fieldname === "warehouse") return this.searchOptions("warehouse", query);
@@ -323,6 +342,7 @@ export default {
 						due_date: this.draftDueDate,
 						po_no: this.draftPoNo,
 						remarks: this.draftRemarks,
+						update_stock: this.draftUpdateStock ? 1 : 0,
 						items: [
 							...this.draftItems.map((row) => ({ name: row.name, item_code: row.item_code, qty: Number(row.qty), rate: Number(row.rate), warehouse: row.warehouse || "" })),
 							...this.newItems.filter((row) => row?.item_code).map((row) => ({ ...row })),
@@ -474,7 +494,7 @@ export default {
 .invoice-editor-heading p { margin:.2rem 0 0; color:var(--text-muted); font-size:.82rem; }
 .invoice-editor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.75rem; }
 .invoice-edit-items { display:grid; gap:.35rem; }
-.invoice-edit-item { display:grid; grid-template-columns:minmax(0,1fr) 8rem 9rem 8rem; gap:.6rem; align-items:center; padding:.4rem 0; border-bottom:1px solid var(--edge-border-color,var(--border-color)); }
+.invoice-edit-item { display:grid; grid-template-columns:minmax(0,1fr) 7rem 8rem minmax(12rem,1fr) 8rem; gap:.6rem; align-items:center; padding:.4rem 0; border-bottom:1px solid var(--edge-border-color,var(--border-color)); }
 .invoice-edit-item--head { color:var(--text-muted); font-size:.75rem; font-weight:700; }
 .invoice-next-actions { display:grid; gap:.65rem; padding:.85rem; border:1px solid var(--edge-color-brand-200,var(--blue-200,#bfdbfe)); border-radius:.6rem; background:var(--edge-color-brand-50,var(--blue-50,#eff6ff)); }
 .invoice-next-actions p { margin:.2rem 0 0; color:var(--text-muted); }
