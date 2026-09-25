@@ -547,12 +547,5 @@ def _effective_erpnext_rate(details: dict[str, Any] | frappe._dict) -> float | N
 	return flt(rate_with_margin)
 
 
-def _first_rate(*values: Any) -> float | None:
-	for value in values:
-		if value not in (None, ""):
-			return flt(value)
-	return None
-
-
 def _rate_or_none(value: Any) -> float | None:
 	return None if value in (None, "") else flt(value)
