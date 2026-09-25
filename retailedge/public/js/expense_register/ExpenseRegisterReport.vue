@@ -98,14 +98,7 @@
 						</span>
 					</label>
 					<EdgeDropdown v-model="filters.expense_status" :options="statuses" label="Status" placeholder="All active statuses" />
-					<label class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" type="date" class="edge-input" />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">To Date</span>
-						<input v-model="filters.to_date" type="date" class="edge-input" />
-					</label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<div class="filter-note">
 						<span>{{ dateRangeLimit }}-day maximum per request</span>
 						<span v-if="config.analysis">Posted accounting expense is kept separate from optional unposted cashier exposure</span>
@@ -144,6 +137,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeLinkField",
 	"EdgeExportMenu",
 	"EdgeDropdown",
+	"EdgeSmartDateRange",
 ];
 
 const REPORT_PRODUCT = "RetailEdge";
@@ -214,6 +208,8 @@ export default {
 			statuses: [],
 			dateRangeLimit: 366,
 			categoryLabel: "",
+			smartDate: {},
+			smartDateReference: "",
 			analysisPreset: "Expense Trend",
 			analysisPresets: [
 				"Expense Trend",
@@ -323,6 +319,7 @@ export default {
 		async fetchMetadata() {
 			this.metadataLoading = true;
 			this.error = "";
+			const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey) || {};
 			try {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function"
 					? window.retailedgeGetBusinessHubContext()
@@ -332,8 +329,9 @@ export default {
 					navigationPromise,
 				]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
-				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.(this.config.providerKey) || {};
 				this.filters = { ...this.filters, ...hubHandoff };
+				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				if (this.config.analysis) this.filters.view_mode = "consolidated";
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
@@ -388,12 +386,24 @@ export default {
 				txt,
 				company: this.filters.company,
 				branch: this.filters.branch,
+				view_mode: this.filters.view_mode,
 			});
 			return Array.isArray(result) ? result : [];
 		},
 		companySearch(txt) { return this.searchOptions("company", txt); },
 		branchSearch(txt) { return this.searchOptions("branch", txt); },
 		categorySearch(txt) { return this.searchOptions("expense_category", txt); },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.currentPage = 1;
+		},
 		onCompanySelected(option) {
 			this.filters.company = option.value;
 			this.filters.branch = "";

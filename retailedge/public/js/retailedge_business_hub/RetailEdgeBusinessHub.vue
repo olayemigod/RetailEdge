@@ -116,7 +116,8 @@
 							v-for="chart in homeVisuals"
 							:key="chart.key"
 							:chart="chart"
-							:wide="chart.key === 'sales_trend'"
+							:wide="['sales_trend', 'cash_flow'].includes(chart.key)"
+							:scrollable="['sales_mix', 'expense_mix', 'exposure', 'stock_health', 'cash_flow'].includes(chart.key)"
 							@open="openHomeVisual"
 							@drill="drillHomeVisual"
 						/>
@@ -552,7 +553,14 @@ function setBusinessHubRouteHandoff(route, filters = {}) {
 		retailedge_business_hub_handoff: 1,
 		retailedge_business_hub_target: target,
 	};
+	window.dispatchEvent?.(
+		new CustomEvent("retailedge:business-hub-handoff", {
+			detail: { target, filters: { ...cleanFilters } },
+		})
+	);
 }
+
+window.retailedgeSetBusinessHubRouteHandoff = setBusinessHubRouteHandoff;
 
 window.retailedgeConsumeBusinessHubRouteOptions = function consumeBusinessHubRouteOptions(target) {
 	const handoff = window.__retailedgeBusinessHubRouteHandoff;

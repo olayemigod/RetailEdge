@@ -212,12 +212,14 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 	)
 
 	category = str(filters.get("expense_category") or "").strip()
-	category_account = ""
-	if category:
-		category_account = _resolve_category_account(
-			category=category,
-			company=company,
-		)
+	category_filter = _resolve_category_filter(category=category, company=company) if category else {
+		"kind": "",
+		"operational_category": "",
+		"ledger_account": "",
+		"ledger_filter_active": False,
+	}
+	operational_category = str(category_filter.get("operational_category") or "")
+	include_operational_sources = category_filter.get("kind") != "account"
 
 	requested_branch = str(filters.get("branch") or "").strip()
 	branch_scope = _resolve_branch_scope(
@@ -230,37 +232,41 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		company=company,
 		from_date=from_date,
 		to_date=to_date,
-		category=category,
+		category=operational_category,
 		status=status,
 		source_type=source_type,
 		include_unposted_cashier_expenses=include_unposted_cashier_expenses,
+		include_source=include_operational_sources,
 		branch_scope=branch_scope,
 	)
 	business_expense_where, business_expense_values = _build_business_expense_where_sql(
 		company=company,
 		from_date=from_date,
 		to_date=to_date,
-		category=category,
+		category=operational_category,
 		status=status,
 		source_type=source_type,
 		branch_scope=branch_scope,
+		include_source=include_operational_sources,
 	)
 	business_expense_reversal_where, business_expense_reversal_values = (
 		_build_business_expense_reversal_where_sql(
 			company=company,
 			from_date=from_date,
 			to_date=to_date,
-			category=category,
+			category=operational_category,
 			status=status,
 			source_type=source_type,
 			branch_scope=branch_scope,
+			include_source=include_operational_sources,
 		)
 	)
 	ledger_where, ledger_values, voucher_types = _build_ledger_where_sql(
 		company=company,
 		from_date=from_date,
 		to_date=to_date,
-		category_account=category_account,
+		category_account=str(category_filter.get("ledger_account") or ""),
+		category_filter_active=bool(category_filter.get("ledger_filter_active")),
 		status=status,
 		source_type=source_type,
 		branch_scope=branch_scope,
@@ -299,6 +305,7 @@ def _prepare_query(filters: frappe._dict) -> dict[str, Any]:
 		"cost_center_expression": sql_context["cost_center_expression"],
 		"source_types": source_types,
 		"accounting_voucher_types": voucher_types,
+		"category_filter_kind": str(category_filter.get("kind") or ""),
 	}
 
 
@@ -556,7 +563,10 @@ def _build_business_expense_where_sql(
 	status: str,
 	source_type: str,
 	branch_scope: dict[str, Any],
+	include_source: bool = True,
 ) -> tuple[str, list[Any]]:
+	if not include_source:
+		return "", []
 	if source_type and source_type != "Business Expense":
 		return "", []
 	if status and status != "Posted":
@@ -597,7 +607,10 @@ def _build_business_expense_reversal_where_sql(
 	status: str,
 	source_type: str,
 	branch_scope: dict[str, Any],
+	include_source: bool = True,
 ) -> tuple[str, list[Any]]:
+	if not include_source:
+		return "", []
 	if source_type and source_type != "Business Expense Reversal":
 		return "", []
 	if status and status != "Reversed":
@@ -640,7 +653,10 @@ def _build_cashier_where_sql(
 	source_type: str,
 	include_unposted_cashier_expenses: bool,
 	branch_scope: dict[str, Any],
+	include_source: bool = True,
 ) -> tuple[str, list[Any]]:
+	if not include_source:
+		return "", []
 	if source_type and source_type != "Cashier / POS":
 		return "", []
 	clauses = ["ce.company = %s"]
@@ -691,12 +707,15 @@ def _build_ledger_where_sql(
 	from_date,
 	to_date,
 	category_account: str,
+	category_filter_active: bool,
 	status: str,
 	source_type: str,
 	branch_scope: dict[str, Any],
 	branch_expression: str,
 ) -> tuple[str, list[Any], list[str]]:
 	if status and status != "Posted":
+		return "", [], []
+	if category_filter_active and not category_account:
 		return "", [], []
 
 	voucher_types = _available_accounting_voucher_types()
@@ -871,31 +890,123 @@ def _resolve_branch_scope(
 	}
 
 
-def _resolve_category_account(*, category: str, company: str) -> str:
-	if not frappe.db.exists(CATEGORY_DOCTYPE, category):
-		frappe.throw(_("Expense Category {0} does not exist.").format(category))
-	if not frappe.has_permission(CATEGORY_DOCTYPE, "read", doc=category):
-		frappe.throw(
-			_("You do not have permission to use Expense Category {0}.").format(category),
-			frappe.PermissionError,
-		)
-	row = frappe.db.get_value(
-		CATEGORY_DOCTYPE,
-		category,
-		["company", "is_active", "expense_account"],
+def _find_expense_accounts(
+	*,
+	company: str,
+	exact: str = "",
+	txt: str = "",
+	limit: int = 20,
+) -> list[frappe._dict]:
+	"""Controlled Account lookup for the consolidated expense surface.
+
+	This does not grant native Account Desk access. It is available only through
+	the already-authorised consolidated Expense Register and remains constrained
+	to non-group, enabled Expense accounts in the selected readable Company.
+	"""
+	_assert_access()
+	_assert_company_read_access(company)
+	clauses = [
+		"a.company = %s",
+		"a.root_type = 'Expense'",
+		"a.is_group = 0",
+		"COALESCE(a.disabled, 0) = 0",
+	]
+	values: list[Any] = [company]
+	exact = str(exact or "").strip()
+	txt = str(txt or "").strip()
+	if exact:
+		clauses.append("(a.name = %s OR a.account_name = %s)")
+		values.extend([exact, exact])
+	elif txt:
+		clauses.append("(a.name LIKE %s OR a.account_name LIKE %s)")
+		like = f"%{txt}%"
+		values.extend([like, like])
+	resolved_limit = max(1, min(cint(limit) or 20, 100))
+	rows = frappe.db.sql(
+		f"""
+			SELECT a.name, COALESCE(a.account_name, '') AS account_name
+			FROM `tabAccount` a
+			WHERE {" AND ".join(clauses)}
+			ORDER BY COALESCE(a.account_name, ''), a.name
+			LIMIT %s
+		""",
+		values=[*values, resolved_limit],
 		as_dict=True,
 	)
-	if not row or not cint(row.is_active):
-		frappe.throw(_("Expense Category {0} is inactive.").format(category))
-	if row.company and row.company != company:
-		frappe.throw(
-			_("Expense Category {0} is outside Company {1}.").format(
-				category,
-				company,
-			),
-			frappe.PermissionError,
+	return [frappe._dict(row) for row in rows]
+
+
+def _resolve_category_filter(*, category: str, company: str) -> dict[str, Any]:
+	"""Resolve a displayed Category token without broadening accounting scope.
+
+	A consolidated row can expose either a RetailEdge Expense Category name or,
+	for ledger rows without a unique category mapping, an ERPNext expense-account
+	label. Preserve that distinction when drilling back into the register.
+	"""
+	if frappe.db.exists(CATEGORY_DOCTYPE, category):
+		if not frappe.has_permission(CATEGORY_DOCTYPE, "read", doc=category):
+			frappe.throw(
+				_("You do not have permission to use Expense Category {0}.").format(category),
+				frappe.PermissionError,
+			)
+		row = frappe.db.get_value(
+			CATEGORY_DOCTYPE,
+			category,
+			["company", "is_active", "expense_account"],
+			as_dict=True,
 		)
-	return str(row.expense_account or "").strip()
+		if not row or not cint(row.is_active):
+			frappe.throw(_("Expense Category {0} is inactive.").format(category))
+		if row.company and row.company != company:
+			frappe.throw(
+				_("Expense Category {0} is outside Company {1}.").format(category, company),
+				frappe.PermissionError,
+			)
+		return {
+			"kind": "category",
+			"operational_category": category,
+			"ledger_account": str(row.expense_account or "").strip(),
+			"ledger_filter_active": True,
+		}
+
+	account_rows = _find_expense_accounts(
+		company=company,
+		exact=category,
+		limit=20,
+	)
+	exact_name = [row for row in account_rows if str(row.name or "").strip() == category]
+	if len(exact_name) == 1:
+		resolved = exact_name[0]
+	else:
+		label_matches = [
+			row for row in account_rows
+			if str(row.account_name or "").strip() == category
+		]
+		if len(label_matches) == 1:
+			resolved = label_matches[0]
+		elif len(label_matches) > 1:
+			frappe.throw(
+				_(
+					"Expense account label {0} is ambiguous in Company {1}. "
+					"Use the exact Account name."
+				).format(category, company),
+				frappe.ValidationError,
+			)
+		else:
+			frappe.throw(
+				_(
+					"Expense Category or Expense Account {0} does not exist in Company {1}."
+				).format(category, company),
+				frappe.ValidationError,
+			)
+		return {}
+
+	return {
+		"kind": "account",
+		"operational_category": "",
+		"ledger_account": str(resolved.name or "").strip(),
+		"ledger_filter_active": True,
+	}
 
 
 def _map_account_categories(

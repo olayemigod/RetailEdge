@@ -133,6 +133,8 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 			"EdgeAppShell",
 			"Branch Assignments",
 			"Assign User",
+			"Edit Price Lists",
+			"update_branch_assignment_price_lists",
 			"Transfer",
 			"setSort(column.key)",
 			"sortDirection",
@@ -144,6 +146,19 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 			"EdgeChildTable",
 		):
 			self.assertIn(contract, source)
+
+	def test_price_list_access_can_change_without_rewriting_branch_history(self):
+		source = (APP_ROOT / "branch_assignment.py").read_text(encoding="utf-8")
+		for contract in (
+			"def update_branch_assignment_price_lists(",
+			"controlled_price_list_update",
+			'if status == "Ended"',
+			'doc.set("price_lists"',
+		):
+			self.assertIn(contract, source)
+		method = source[source.index("def update_branch_assignment_price_lists("):source.index("def transfer_branch_assignment(")]
+		for forbidden in ("effective_from =", "effective_to =", "company =", "branch ="):
+			self.assertNotIn(forbidden, method)
 
 	def test_setup_hub_exposes_branch_assignments_page(self):
 		setup = (APP_ROOT / "retailedge" / "page" / "retailedge_setup" / "retailedge_setup.py").read_text(encoding="utf-8")

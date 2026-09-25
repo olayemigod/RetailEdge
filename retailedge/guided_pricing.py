@@ -54,6 +54,19 @@ DEFAULT_PRICE_PRECEDENCE: dict[PriceMode, tuple[str, ...]] = {
 	"buying": PRICE_SOURCE_KEYS["buying"],
 }
 
+SELLING_POLICY_ORDERS = {
+	"Party > POS > Branch > Assigned Choice": ("party", "pos", "branch", "assigned_choice"),
+	"Party > Branch > POS > Assigned Choice": ("party", "branch", "pos", "assigned_choice"),
+	"POS > Party > Branch > Assigned Choice": ("pos", "party", "branch", "assigned_choice"),
+	"Branch > Party > POS > Assigned Choice": ("branch", "party", "pos", "assigned_choice"),
+	"Assigned Choice > Party > POS > Branch": ("assigned_choice", "party", "pos", "branch"),
+}
+BUYING_POLICY_ORDERS = {
+	"Party > Branch > Assigned Choice": ("party", "branch", "assigned_choice"),
+	"Branch > Party > Assigned Choice": ("branch", "party", "assigned_choice"),
+	"Assigned Choice > Party > Branch": ("assigned_choice", "party", "branch"),
+}
+
 
 @request_cache
 def resolve_price_list_context(
@@ -64,6 +77,7 @@ def resolve_price_list_context(
 	party: str = "",
 	selected_price_list: str = "",
 	user: str | None = None,
+	requested_price_list: str = "",
 ) -> dict[str, Any]:
 	"""Resolve one effective Price List from the merchant's governance policy.
 
@@ -138,6 +152,7 @@ def resolve_price_list_context(
 				}
 			)
 			return context
+		return None
 
 	if default_candidate:
 		context = _price_context(default_name, mode=mode, source=default_source)
@@ -207,6 +222,7 @@ def resolve_price_list_context(
 		**_open_pricing_metadata(),
 	}
 
+	return None
 
 def _price_list_governance_policy(*, mode: PriceMode) -> dict[str, Any]:
 	settings = get_retailedge_settings()
@@ -548,6 +564,7 @@ def resolve_sales_item_pricing(
 	selected_price_list: str = "",
 	document_price_list: str = "",
 	user: str | None = None,
+	requested_price_list: str = "",
 ) -> dict[str, Any]:
 	user = user or frappe.session.user
 	_assert_read_permission("Item", item_code, user=user)
@@ -576,12 +593,14 @@ def resolve_sales_item_pricing(
 		posting_date=posting_date,
 		qty=qty,
 	)
-	rate = _first_rate(details.get("rate"), details.get("price_list_rate"))
+	rate = _effective_erpnext_rate(details)
 	rate_source = "erpnext_pricing"
 	if rate is None:
-		standard_rate = frappe.get_cached_value("Item", item_code, "standard_rate")
+		standard_rate = _nonzero_rate_or_none(
+			frappe.get_cached_value("Item", item_code, "standard_rate")
+		)
 		if standard_rate is not None:
-			rate = flt(standard_rate)
+			rate = standard_rate
 			rate_source = "item_standard_rate"
 
 	return {
@@ -605,6 +624,7 @@ def resolve_purchase_item_pricing(
 	selected_price_list: str = "",
 	document_price_list: str = "",
 	user: str | None = None,
+	requested_price_list: str = "",
 ) -> dict[str, Any]:
 	user = user or frappe.session.user
 	_assert_read_permission("Item", item_code, user=user)
@@ -633,16 +653,15 @@ def resolve_purchase_item_pricing(
 		posting_date=posting_date,
 		qty=qty,
 	)
-	rate = _first_rate(
-		details.get("rate"),
-		details.get("price_list_rate"),
-		details.get("last_purchase_rate"),
-	)
+	rate = _effective_erpnext_rate(details)
 	rate_source = "erpnext_pricing"
 	if rate is None:
-		last_purchase_rate = frappe.get_cached_value("Item", item_code, "last_purchase_rate")
-		if last_purchase_rate not in (None, ""):
-			rate = flt(last_purchase_rate)
+		last_purchase_rate = _nonzero_rate_or_none(
+			details.get("last_purchase_rate")
+			or frappe.get_cached_value("Item", item_code, "last_purchase_rate")
+		)
+		if last_purchase_rate is not None:
+			rate = last_purchase_rate
 			rate_source = "item_last_purchase_rate"
 
 	return {
@@ -777,6 +796,18 @@ def _permitted_pos_profile(name: str, *, company: str, user: str) -> frappe._dic
 	return frappe._dict(pos)
 
 
+def _user_permission_price_lists(*, user: str, mode: PriceMode) -> list[str]:
+	permissions = get_user_permissions(user).get("Price List", []) or []
+	ordered = sorted(permissions, key=lambda row: int(row.get("is_default") or 0), reverse=True)
+	return list(
+		dict.fromkeys(
+			str(row.get("doc") or "").strip()
+			for row in ordered
+			if _valid_price_list(str(row.get("doc") or "").strip(), mode=mode, user=user)
+		)
+	)
+
+
 def _default_user_permission_price_list(*, user: str, mode: PriceMode) -> str:
 	permissions = get_user_permissions(user).get("Price List", []) or []
 	ordered = sorted(permissions, key=lambda row: int(row.get("is_default") or 0), reverse=True)
@@ -856,11 +887,38 @@ def _assert_read_permission(doctype: str, name: str, *, user: str) -> None:
 		)
 
 
-def _first_rate(*values: Any) -> float | None:
-	for value in values:
-		if value not in (None, ""):
-			return flt(value)
-	return None
+def _nonzero_rate_or_none(value: Any) -> float | None:
+	if value in (None, ""):
+		return None
+	rate = flt(value)
+	return rate if rate else None
+
+
+def _effective_erpnext_rate(details: dict[str, Any] | frappe._dict) -> float | None:
+	"""Resolve an effective ERPNext rate without accepting its initialized zero placeholder."""
+	explicit_rate = _nonzero_rate_or_none(details.get("rate"))
+	if explicit_rate is not None:
+		return explicit_rate
+
+	price_list_rate = _nonzero_rate_or_none(details.get("price_list_rate"))
+	if price_list_rate is None:
+		return None
+
+	rate_with_margin = price_list_rate
+	margin = flt(details.get("margin_rate_or_amount") or 0)
+	margin_type = str(details.get("margin_type") or "").strip()
+	if margin_type == "Percentage":
+		rate_with_margin = price_list_rate * (1 + (margin / 100.0))
+	elif margin_type == "Amount":
+		rate_with_margin = price_list_rate + margin
+
+	discount_amount = flt(details.get("discount_amount") or 0)
+	discount_percentage = flt(details.get("discount_percentage") or 0)
+	if discount_amount:
+		return flt(rate_with_margin - discount_amount)
+	if discount_percentage:
+		return flt(rate_with_margin * (1 - (discount_percentage / 100.0)))
+	return flt(rate_with_margin)
 
 
 def _rate_or_none(value: Any) -> float | None:

@@ -154,6 +154,7 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 		party=customer,
 		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=frappe.session.user,
+		requested_price_list=values.get("price_list") or "",
 	)
 	if pricing_context.get("selection_required"):
 		frappe.throw(_("Choose a Selling Price List assigned to you for this Branch before saving."))
@@ -187,6 +188,7 @@ def create_professional_sales_order_draft(values: dict | str | None = None) -> d
 			qty=item["qty"],
 			selected_price_list=pricing_context.get("price_list") or "",
 			user=frappe.session.user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")

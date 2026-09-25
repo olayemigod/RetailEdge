@@ -81,6 +81,22 @@ SETTINGS_GROUPS = (
 		),
 	},
 	{
+		"key": "price-list-governance",
+		"label": "Price List Governance",
+		"description": "Choose how customer/supplier defaults, POS, Branch defaults and assigned user choices are prioritised.",
+		"sections": (
+			{
+				"label": "Resolution Policy",
+				"fields": (
+					"enable_price_list_governance",
+					"selling_price_list_policy",
+					"buying_price_list_policy",
+					"allow_price_list_switch",
+				),
+			},
+		),
+	},
+	{
 		"key": "cashier-expenses",
 		"label": "Cashier Expenses",
 		"description": "Cashier expense capture, shift controls and accounting-posting readiness.",

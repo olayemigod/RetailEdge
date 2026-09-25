@@ -75,7 +75,8 @@ function mountExpenseRegister(target, options = {}) {
 	const app = edgeUI.createEdgeApp(ExpenseRegisterReport, {
 		reportType: options.reportType || "expense_register",
 	});
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 

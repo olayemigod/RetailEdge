@@ -113,10 +113,12 @@ def test_warehouse_context_is_company_branch_and_permission_safe():
 	for contract in (
 		'_assert_read("Warehouse", warehouse)',
 		'frappe.db.get_value("Warehouse", warehouse, "company")',
-		"resolve_branch_from_warehouse",
+		"resolve_branch_warehouse_selection",
+		'preference="sales"',
 		"_validate_stored_operational_branch",
 		"resolved_branches",
 		"multiple operational Branches",
+		"enabled Branch Setup",
 	):
 		assert contract in source
 

@@ -59,7 +59,7 @@
 
 				<label class="guided-field">
 					<span>Posting Date <b>*</b></span>
-					<input v-model="values.posting_date" class="form-control" type="date" required />
+					<input v-model="values.posting_date" class="form-control" type="date" required @change="postingDateChanged" />
 				</label>
 
 				<EdgeLinkField
@@ -209,7 +209,9 @@ function sourceLabel(source) {
 		branch_assignment: "Branch-assigned Price List",
 		user_default: "User default",
 		user_permission: "User-assigned Price List",
+		assigned_choice: "Assigned Price List choice",
 		pos_profile: "Assigned POS Profile",
+		branch_default: "Branch default",
 		party_default: "Customer default",
 		erpnext_default: "ERPNext default",
 		standard_price_list: "Standard Selling",
@@ -222,6 +224,7 @@ export default {
 	components: {
 		EdgeModal: runtimeComponents.EdgeModal,
 		EdgeLinkField: runtimeComponents.EdgeLinkField,
+		EdgeDropdown: runtimeComponents.EdgeDropdown,
 		EdgeChildTable: runtimeComponents.EdgeChildTable,
 		EdgeLoadingState: runtimeComponents.EdgeLoadingState,
 		EdgeErrorState: runtimeComponents.EdgeErrorState,
@@ -239,6 +242,7 @@ export default {
 			saveError: "",
 			cascadeToken: 0,
 			pricingTokens: {},
+			pricingSignatures: {},
 			pricingCache: new Map(),
 			initialValuesSnapshot: "",
 			formContext: {},
@@ -293,6 +297,9 @@ export default {
 		canCreateItem() {
 			return Boolean(this.formContext.capabilities?.can_create_item);
 		},
+		canSwitchPriceList() {
+			return Boolean(this.formContext.pricing?.can_switch_price_list && (this.formContext.pricing?.available_price_lists || []).length);
+		},
 		pricingLabel() {
 			return this.formContext.pricing?.price_list || "Item default";
 		},
@@ -329,6 +336,7 @@ export default {
 			this.loadError = "";
 			this.saveError = "";
 			this.pricingCache.clear();
+			this.pricingSignatures = {};
 			try {
 				const data = await callMethod(CONTEXT_METHOD);
 				this.formContext = data || {};
@@ -447,7 +455,9 @@ export default {
 			const changed = this.values.customer !== value;
 			this.values.customer = value;
 			this.pricingCache.clear();
-			if (changed) {
+			this.pricingSignatures = {};
+			this.refreshPriceListOptions().catch(() => {});
+			if (previousCustomer !== this.values.customer) {
 				this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
 				this.refreshPriceListContext()
 					.then(() => this.refreshAllItemPricing())
@@ -458,6 +468,7 @@ export default {
 			const branch = next || "";
 			this.values.branch = branch;
 			this.values.warehouse = "";
+			this.values.price_list = "";
 			this.values.items = (this.values.items || []).map((row) => ({ ...row, rate: "" }));
 			this.pricingCache.clear();
 			if (!this.values.company) return;
@@ -492,6 +503,7 @@ export default {
 			const warehouse = next || "";
 			this.values.warehouse = warehouse;
 			this.pricingCache.clear();
+			this.pricingSignatures = {};
 			if (!warehouse || !this.values.company) return;
 			const token = ++this.cascadeToken;
 			try {
@@ -513,15 +525,19 @@ export default {
 			}
 		},
 		updateItems(nextRows) {
-			const previous = this.values.items || [];
 			const changed = [];
 			this.values.items = (nextRows || []).map((row, index) => {
-				const prior = previous[index] || {};
-				if (row.item_code && row.item_code !== prior.item_code) {
-					changed.push(index);
-					return { ...row, rate: "" };
+				const normalized = { ...row, item_code: row.item_code || "", qty: row.qty || 1, rate: row.rate ?? "" };
+				if (!normalized.item_code) {
+					delete this.pricingSignatures[index];
+					return normalized;
 				}
-				return { ...row };
+				const signature = this.pricingCacheKey(normalized);
+				if (this.pricingSignatures[index] !== signature) {
+					changed.push(index);
+					return { ...normalized, rate: "" };
+				}
+				return normalized;
 			});
 			for (const index of changed) this.loadItemPricing(index);
 		},
@@ -564,6 +580,8 @@ export default {
 				if (result?.rate !== null && result?.rate !== undefined) {
 					this.values.items[index] = { ...this.values.items[index], rate: result.rate };
 				}
+				this.pricingSignatures[index] = this.pricingCacheKey(this.values.items[index]);
+				this.values.items = [...this.values.items];
 				this.formContext.pricing = {
 					...(this.formContext.pricing || {}),
 					...result,
@@ -578,6 +596,7 @@ export default {
 			}
 		},
 		refreshAllItemPricing() {
+			this.pricingSignatures = {};
 			if (!this.values.customer) return;
 			this.values.items.forEach((row, index) => {
 				if (row.item_code) {
@@ -585,6 +604,12 @@ export default {
 					this.loadItemPricing(index);
 				}
 			});
+		},
+		postingDateChanged() {
+			this.pricingCache.clear();
+			this.pricingSignatures = {};
+			this.values.items = this.values.items.map((row) => ({ ...row, rate: "" }));
+			this.refreshAllItemPricing();
 		},
 		async saveDraft() {
 			if (this.saving || this.loading || !this.transactionContextReady) return;

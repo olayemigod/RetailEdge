@@ -367,6 +367,7 @@ def validate_branch_profile(doc):
 	_validate_leaf_defaults(doc)
 	_validate_price_list_defaults(doc)
 	_validate_account_semantics(doc)
+	_validate_price_list_defaults(doc)
 	if getattr(doc, "enabled", 1):
 		duplicate_filters = {
 			"name": ["!=", doc.name or ""],

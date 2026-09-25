@@ -6,7 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from retailedge.branch_context import resolve_branch_from_warehouse
+from retailedge.guided_entry_context import resolve_branch_warehouse_selection
 from retailedge.guided_pricing import resolve_sales_item_pricing
 from retailedge.professional_selling import _assert_read
 
@@ -232,7 +232,12 @@ def _validate_warehouse_branch(warehouse: str, *, company: str, branch: str) -> 
 		frappe.throw(_("Stock Location {0} does not belong to Company {1}.").format(warehouse, company))
 	if not branch:
 		return
-	resolved = resolve_branch_from_warehouse(warehouse, company=company) or {}
+	resolved = resolve_branch_warehouse_selection(
+		company=company,
+		branch=branch,
+		warehouse=warehouse,
+		preference="sales",
+	)
 	warehouse_branch = clean(resolved.get("branch"))
 	if warehouse_branch and warehouse_branch != branch:
 		frappe.throw(_("Stock Location {0} does not belong to Branch {1}.").format(warehouse, branch))

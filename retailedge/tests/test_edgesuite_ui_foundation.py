@@ -269,7 +269,8 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertIn("const pending = global.frappe.require(asset, finish)", controller)
 		self.assertIn('typeof pending.then === "function"', controller)
 		self.assertIn("pending.then(finish).catch(fail)", controller)
-		self.assertIn("if (!currentWrapper._retailedgeBusinessHub)", controller)
+		self.assertIn("if (wrapper._retailedgeBusinessHubBootPromise)", controller)
+		self.assertIn("const mountedComponent = getMountedComponent(wrapper)", controller)
 		self.assertIn("return bootBusinessHub(currentWrapper)", controller)
 
 	def test_edge_suite_waffle_is_booted_across_desk(self):
@@ -294,6 +295,14 @@ class RetailEdgeEdgeSuiteUIFoundationTests(unittest.TestCase):
 		self.assertNotIn("administration:", menu)
 		self.assertNotIn("switch_product_app", menu)
 		self.assertNotIn("CoreEdge", menu)
+		for contract in (
+			"PRODUCT_MENU_TRIGGER_SELECTOR",
+			"edge-product-menu-dropdown",
+			"recoverProductMenuTrigger",
+			"requestProductMenuOpen",
+			'document.addEventListener("click", recoverProductMenuTrigger, true)',
+		):
+			self.assertIn(contract, menu)
 
 	def test_standard_page_loader_boots_current_wrapper_and_route_bridge(self):
 		path = APP_ROOT / "retailedge" / "page" / "retailedge_business_hub" / "retailedge_business_hub.js"

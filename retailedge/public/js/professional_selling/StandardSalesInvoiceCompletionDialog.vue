@@ -35,6 +35,10 @@
 						<EdgeInput id="invoice-due-date" v-model="draftDueDate" label="Due Date" type="date" :min="draftPostingDate || undefined" :disabled="busy" required />
 						<EdgeInput id="invoice-po-number" v-model="draftPoNo" label="Customer PO / Reference" type="text" :disabled="busy" />
 						<EdgeInput id="invoice-remarks" v-model="draftRemarks" label="Remarks" type="text" :disabled="busy" />
+					<label v-if="preview.can_edit_update_stock" class="guided-check-field">
+						<input v-model="draftUpdateStock" type="checkbox" :true-value="1" :false-value="0" :disabled="busy" />
+						<span><strong>Update Stock</strong><small>ERPNext and Branch/Stock Location validation run again when draft changes are saved.</small></span>
+					</label>
 					</div>
 					<div class="invoice-edit-items">
 						<div class="invoice-edit-item invoice-edit-item--head"><span>Item</span><span>Qty</span><span>Rate</span><span>Stock Location</span><span>Amount</span><span>Action</span></div>
@@ -125,7 +129,7 @@
 					<button type="button" class="edge-button edge-button--secondary" :disabled="busy" @click="requestClose">Close</button>
 					<template v-if="!completedResult">
 						<button
-							v-if="preview?.can_submit"
+							v-if="preview?.can_edit && draftDirty"
 							type="button"
 							class="edge-button edge-button--primary"
 							:disabled="busy || draftDirty"
@@ -153,6 +157,7 @@
 <script>
 const PREVIEW_METHOD = "retailedge.standard_sales_invoice_completion.get_standard_sales_invoice_completion_preview";
 const UPDATE_DRAFT_METHOD = "retailedge.standard_sales_invoice_completion.update_standard_sales_invoice_draft";
+const PRICING_METHOD = "retailedge.guided_sales_invoice.get_simple_sales_invoice_item_pricing";
 const OUTPUT_DETAILS_METHOD = "retailedge.document_output.get_output_document_details";
 const OUTPUT_PREVIEW_METHOD = "retailedge.document_output.render_document_preview";
 const ACTIONS_METHOD = "retailedge.professional_selling.get_professional_selling_record_actions";
@@ -203,6 +208,8 @@ export default {
 			draftDueDate: "",
 			draftPoNo: "",
 			draftRemarks: "",
+			draftUpdateStock: 0,
+			draftUpdateStock: 0,
 			draftItems: [],
 			pricingTokens: {},
 			completedResult: null,
@@ -223,6 +230,8 @@ export default {
 				|| String(this.draftDueDate || "") !== String(this.preview?.due_date || "")
 				|| String(this.draftPoNo || "") !== String(this.preview?.po_no || "")
 				|| String(this.draftRemarks || "") !== String(this.preview?.remarks || "")
+				|| Number(this.draftUpdateStock || 0) !== Number(this.preview?.update_stock ? 1 : 0)
+				|| Number(this.draftUpdateStock || 0) !== Number(this.preview?.update_stock ? 1 : 0)
 			) return true;
 			const original = this.preview?.editable_items || [];
 			if (this.draftItems.length !== original.length) return true;
@@ -277,6 +286,8 @@ export default {
 			this.draftDueDate = preview?.due_date || "";
 			this.draftPoNo = preview?.po_no || "";
 			this.draftRemarks = preview?.remarks || "";
+			this.draftUpdateStock = preview?.update_stock ? 1 : 0;
+			this.draftUpdateStock = preview?.update_stock ? 1 : 0;
 			this.draftItems = (preview?.editable_items || preview?.items || []).map((row) => ({ ...row }));
 			this.pricingTokens = {};
 		},
@@ -405,6 +416,7 @@ export default {
 						due_date: this.draftDueDate,
 						po_no: this.draftPoNo,
 						remarks: this.draftRemarks,
+						update_stock: this.draftUpdateStock ? 1 : 0,
 						items: this.draftItems.map((row) => ({
 							name: row.name || "",
 							item_code: row.item_code,

@@ -125,6 +125,7 @@ def get_simple_sales_invoice_context() -> dict[str, Any]:
 			),
 			"can_create_item": bool(has_doctype("Item") and frappe.has_permission("Item", "create")),
 			"can_override_rate": bool(pricing.get("allow_rate_change", True)),
+			"can_switch_price_list": bool(pricing.get("can_switch_price_list")),
 			"can_edit_update_stock": allow_update_stock_edit,
 			"native_form_fallback": True,
 		},
@@ -176,6 +177,20 @@ def search_simple_sales_invoice_options(
 			reference_doctype="Sales Invoice Item",
 			link_fieldname="item_code",
 		)
+	if fieldname == "price_list":
+		pricing = resolve_price_list_context(
+			mode="selling",
+			company=company,
+			branch=branch,
+			party=customer,
+			user=frappe.session.user,
+		)
+		query = str(txt or "").strip().lower()
+		return [
+			{"value": name, "label": name}
+			for name in pricing.get("available_price_lists") or []
+			if not query or query in str(name).lower()
+		][:limit]
 	if fieldname == "warehouse":
 		filters = _warehouse_search_filters(company=company, branch=branch, user=frappe.session.user)
 		if filters is None:
@@ -229,11 +244,22 @@ def get_simple_sales_invoice_item_pricing(
 		qty=flt(values.get("qty") or 1),
 		selected_price_list=str(values.get("price_list") or "").strip(),
 		user=user,
+		requested_price_list=values.get("price_list") or "",
 	)
 
 
 @frappe.whitelist(methods=["POST"])
 def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[str, Any]:
+	"""Create the Make a Sale draft using the merchant guided-entry stock policy."""
+	return _create_simple_sales_invoice_draft(values)
+
+
+def _create_simple_sales_invoice_draft(
+	values: dict | str | None = None,
+	*,
+	allow_update_stock_edit: bool | None = None,
+) -> dict[str, Any]:
+	"""Internal draft engine shared by guided and Professional Selling."""
 	_assert_can_create_sales_invoice()
 	values = _coerce_values(values)
 	user = frappe.session.user
@@ -247,9 +273,12 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 	items = _normalise_items(values.get("items"))
 	configured_branches = get_guided_branch_names(company, user=user)
 	settings = get_retailedge_settings()
-	can_edit_update_stock = bool(
-		getattr(settings, "allow_guided_sales_update_stock_edit", 0)
-	)
+	if allow_update_stock_edit is None:
+		can_edit_update_stock = bool(
+			getattr(settings, "allow_guided_sales_update_stock_edit", 0)
+		)
+	else:
+		can_edit_update_stock = bool(allow_update_stock_edit)
 	update_stock = cint(values.get("update_stock") or 0) if can_edit_update_stock else 1
 	if update_stock and configured_branches and not branch:
 		frappe.throw(_("Choose a Branch before saving a stock-updating Sales Invoice."))
@@ -293,6 +322,7 @@ def create_simple_sales_invoice_draft(values: dict | str | None = None) -> dict[
 			qty=item["qty"],
 			selected_price_list=pricing_context.get("price_list") or "",
 			user=user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		resolved_rate = resolved.get("rate")
 		manual_rate = item.get("rate")

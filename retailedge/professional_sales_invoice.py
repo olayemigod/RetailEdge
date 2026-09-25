@@ -19,7 +19,7 @@ from erpnext.stock.doctype.delivery_note.delivery_note import (
 )
 
 from retailedge.branch_context import resolve_branch_from_warehouse
-from retailedge.guided_sales_invoice import create_simple_sales_invoice_draft
+from retailedge.guided_sales_invoice import _create_simple_sales_invoice_draft
 from retailedge.loyalty_rewards import apply_loyalty_redemption_to_draft
 from retailedge.operating_context import get_operating_context
 from retailedge.professional_quotation import _validate_shipping_rule
@@ -584,7 +584,7 @@ def create_professional_sales_invoice_draft(
 	if shipping_rule:
 		_validate_shipping_rule(shipping_rule, company=company)
 
-	result = create_simple_sales_invoice_draft(values)
+	result = _create_simple_sales_invoice_draft(values)
 	doc = frappe.get_doc("Sales Invoice", result["name"])
 	if doc.docstatus != 0:
 		frappe.throw(

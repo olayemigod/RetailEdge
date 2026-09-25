@@ -90,14 +90,7 @@
 						@select="onModeSelected"
 						@clear="clearMode"
 					/>
-					<label class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" type="date" class="edge-input" />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">To Date</span>
-						<input v-model="filters.to_date" type="date" class="edge-input" />
-					</label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<div class="filter-note">
 						<span v-if="branchRequired">Choose one of your assigned Branches before loading this report.</span>
 						<span>{{ dateRangeLimit }}-day maximum per request</span>
@@ -128,6 +121,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeLinkField",
 	"EdgeExportMenu",
 	"EdgeDropdown",
+	"EdgeSmartDateRange",
 ];
 
 const REPORT_PRODUCT = "RetailEdge";
@@ -181,6 +175,8 @@ export default {
 			partyLabel: "",
 			modeLabel: "",
 			canUseNativeDesk: false,
+			smartDate: {},
+			smartDateReference: "",
 			filters: {
 				company: "",
 				branch: "",
@@ -280,6 +276,8 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				const handoff = window.retailedgeConsumeBusinessHubRouteOptions?.(REPORT_KEY) || {};
 				this.filters = { ...this.filters, ...handoff };
+				this.smartDateReference = handoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = handoff.company || context.tenant_name || this.filters.company || "";
 				this.branchName = handoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -336,6 +334,17 @@ export default {
 			return this.searchOptions("party", txt);
 		},
 		modeSearch(txt) { return this.searchOptions("mode_of_payment", txt); },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.currentPage = 1;
+		},
 		onCompanySelected(option) {
 			this.filters.company = option.value;
 			this.filters.branch = "";

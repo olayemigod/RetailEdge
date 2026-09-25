@@ -361,7 +361,7 @@ export default {
 .settings-nav-item.is-active { border-color:var(--edge-primary, #0056a6); background:var(--edge-primary-subtle, #eef6ff); color:var(--edge-primary-strong, #003e73); }
 .settings-nav-item.is-active > small { color:inherit; opacity:.82; }
 .settings-content { min-width:0; display:grid; gap:1rem; }
-.settings-group { display:grid; gap:1rem; }
+.settings-group { display:grid; gap:1rem; min-width:0; }
 .settings-group-header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; }
 .settings-group-header h2 { margin:0 0 .3rem; }
 .settings-group-header p { margin:0; color:var(--edge-text-muted, #667085); }

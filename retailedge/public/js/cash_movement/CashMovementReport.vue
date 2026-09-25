@@ -75,14 +75,7 @@
 						@clear="clearAccount"
 					/>
 					<EdgeDropdown v-model="filters.movement_type" :options="movementTypes" label="Movement Type" placeholder="All movements" />
-					<label class="edge-field">
-						<span class="edge-field-label">From Date</span>
-						<input v-model="filters.from_date" type="date" class="edge-input" />
-					</label>
-					<label class="edge-field">
-						<span class="edge-field-label">To Date</span>
-						<input v-model="filters.to_date" type="date" class="edge-input" />
-					</label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<div class="filter-note">
 						<span>{{ dateRangeLimit }}-day maximum per request</span>
 						<span>Posted accounting entries only</span>
@@ -112,6 +105,7 @@ const REQUIRED_COMPONENTS = [
 	"EdgeLinkField",
 	"EdgeExportMenu",
 	"EdgeDropdown",
+	"EdgeSmartDateRange",
 ];
 
 const REPORT_PRODUCT = "RetailEdge";
@@ -159,6 +153,8 @@ export default {
 			movementTypes: [],
 			dateRangeLimit: 366,
 			accountLabel: "",
+			smartDate: {},
+			smartDateReference: "",
 			canUseNativeDesk: false,
 			filters: {
 				company: "",
@@ -254,6 +250,8 @@ export default {
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
 				const hubHandoff = window.retailedgeConsumeBusinessHubRouteOptions?.("cash-movement") || {};
 				this.filters = { ...this.filters, ...hubHandoff };
+				this.smartDateReference = hubHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || "";
 				this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || "";
 				this.userName = context.user_name || "";
@@ -305,6 +303,17 @@ export default {
 		companySearch(txt) { return this.searchOptions("company", txt); },
 		branchSearch(txt) { return this.searchOptions("branch", txt); },
 		accountSearch(txt) { return this.searchOptions("account", txt); },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.currentPage = 1;
+		},
 		onCompanySelected(option) {
 			this.filters.company = option.value;
 			this.filters.branch = "";

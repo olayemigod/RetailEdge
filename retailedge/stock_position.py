@@ -10,7 +10,7 @@ from frappe.utils import cint, flt
 
 from retailedge.branch_context import resolve_branch_from_warehouse
 from retailedge.cost_visibility import should_hide_cost_price
-from retailedge.operating_context import get_operational_branch_scope
+from retailedge.operating_context import get_allowed_operating_branches, get_operational_branch_scope
 from retailedge.reporting_capabilities import require_report_view_access
 from retailedge.retailedge.report.retailedge_stock_movement_history.retailedge_stock_movement_history import (
 	get_branch_warehouses,
@@ -54,16 +54,15 @@ def get_stock_position_context() -> dict[str, Any]:
 	company = str(frappe.defaults.get_user_default("Company") or "").strip()
 	branch = ""
 	if company and frappe.has_permission("Company", "read", doc=company):
-		scope = get_operational_branch_scope(company, user=user)
-		allowed = list(scope.get("allowed_branches") or [])
+		allowed = get_allowed_operating_branches(company=company, user=user)
 		candidate = str(
 			frappe.defaults.get_user_default("RetailEdge Branch")
 			or frappe.defaults.get_user_default("Branch")
 			or ""
 		).strip()
-		if candidate and (not scope.get("restricted") or candidate in allowed):
+		if candidate and candidate in allowed:
 			branch = candidate
-		if not branch and scope.get("restricted") and len(allowed) == 1:
+		if not branch and len(allowed) == 1:
 			branch = allowed[0]
 
 	show_costs = not should_hide_cost_price(user=user)

@@ -1,24 +1,37 @@
 <template>
-	<article :class="['hub-chart-card', { 'hub-chart-card--wide': wide }]">
+	<article
+		:class="['hub-chart-card', { 'hub-chart-card--wide': wide, 'hub-chart-card--scrollable': scrollable }]"
+		:data-chart-key="chart.key"
+	>
 		<header class="hub-chart-card__header">
 			<div>
-				<p class="hub-chart-card__eyebrow">{{ chart.time_basis === "current" ? "Current position" : "Selected period" }}</p>
-				<h4>{{ chart.title }}</h4>
-				<p v-if="chart.description">{{ chart.description }}</p>
+				<p class="hub-chart-card__eyebrow">{{ displayChart.time_basis === "current" ? "Current position" : "Selected period" }}</p>
+				<h4>{{ displayChart.title }}</h4>
+				<p v-if="displayChart.description">{{ displayChart.description }}</p>
 			</div>
-			<button
-				v-if="chart.available && chart.route"
-				type="button"
-				class="hub-chart-card__details"
-				@click="$emit('open', chart)"
-			>
-				View details
-			</button>
+			<div class="hub-chart-card__header-actions">
+				<div v-if="viewOptions.length > 1" class="hub-chart-card__view-switcher">
+					<EdgeDropdown
+						v-model="selectedView"
+						:options="viewOptions"
+						placeholder="View by"
+						aria-label="Sales mix view"
+					/>
+				</div>
+				<button
+					v-if="displayChart.available && displayChart.route"
+					type="button"
+					class="hub-chart-card__details"
+					@click="$emit('open', displayChart)"
+				>
+					View details
+				</button>
+			</div>
 		</header>
 
-		<div v-if="!chart.available" class="hub-chart-card__state">
+		<div v-if="!displayChart.available" class="hub-chart-card__state">
 			<strong>Unavailable</strong>
-			<span>{{ chart.reason || "This visual is not available for your current permissions and scope." }}</span>
+			<span>{{ displayChart.reason || "This visual is not available for your current permissions and scope." }}</span>
 		</div>
 
 		<div v-else-if="!hasData" class="hub-chart-card__state">
@@ -27,15 +40,15 @@
 		</div>
 
 		<template v-else>
-			<div v-if="chart.series?.length > 1" class="hub-chart-card__legend" aria-label="Chart legend">
-				<span v-for="(series, index) in chart.series" :key="series.key">
+			<div v-if="displayChart.series?.length > 1" class="hub-chart-card__legend" aria-label="Chart legend">
+				<span v-for="(series, index) in displayChart.series" :key="series.key">
 					<i :class="['hub-chart-card__legend-dot', `series-${index}`]" aria-hidden="true"></i>
 					{{ series.label }}
 				</span>
 			</div>
 
-			<div v-if="chart.chart_type === 'line'" class="hub-line-chart">
-				<svg viewBox="0 0 720 230" role="img" :aria-label="chart.title">
+			<div v-if="displayChart.chart_type === 'line'" class="hub-line-chart">
+				<svg viewBox="0 0 720 230" role="img" :aria-label="displayChart.title">
 					<g class="hub-line-chart__grid">
 						<line v-for="tick in yTicks" :key="tick.value" x1="52" x2="704" :y1="tick.y" :y2="tick.y" />
 					</g>
@@ -63,9 +76,9 @@
 							tabindex="0"
 							role="button"
 							:aria-label="pointAria(point)"
-							@click="$emit('drill', chart, point.row, chart.series[0])"
-							@keydown.enter.prevent="$emit('drill', chart, point.row, chart.series[0])"
-							@keydown.space.prevent="$emit('drill', chart, point.row, chart.series[0])"
+							@click="$emit('drill', displayChart, point.row, displayChart.series[0])"
+							@keydown.enter.prevent="$emit('drill', displayChart, point.row, displayChart.series[0])"
+							@keydown.space.prevent="$emit('drill', displayChart, point.row, displayChart.series[0])"
 						>
 							<title>{{ pointTitle(point) }}</title>
 						</circle>
@@ -73,9 +86,9 @@
 				</svg>
 			</div>
 
-			<div v-else class="hub-bar-chart">
+			<div v-else :class="['hub-bar-chart', { 'hub-bar-chart--scrollable': scrollable }]">
 				<div
-					v-for="row in chart.rows"
+					v-for="row in displayChart.rows"
 					:key="row.key || row.label"
 					class="hub-bar-chart__row"
 				>
@@ -84,14 +97,14 @@
 					</div>
 					<div class="hub-bar-chart__series">
 						<button
-							v-for="(series, index) in chart.series"
+							v-for="(series, index) in displayChart.series"
 							:key="series.key"
 							type="button"
 							class="hub-bar-chart__bar-button"
 							:disabled="!canDrill(row)"
 							:title="barTitle(row, series)"
 							:aria-label="barTitle(row, series)"
-							@click="$emit('drill', chart, row, series)"
+							@click="$emit('drill', displayChart, row, series)"
 						>
 							<span
 								:class="['hub-bar-chart__bar', `series-${index}`]"
@@ -107,9 +120,28 @@
 </template>
 
 <script>
+const EdgeDropdown =
+	window.EdgeSuiteUI?.components?.EdgeDropdown ||
+	window.EdgeSuiteUI?.EdgeDropdown;
+
 export default {
+	components: { EdgeDropdown },
 	name: "BusinessHubChartCard",
 	emits: ["open", "drill"],
+	data() {
+		return {
+			selectedView: this.chart?.default_view || "",
+		};
+	},
+	watch: {
+		chart: {
+			handler(value) {
+				const options = Array.isArray(value?.view_options) ? value.view_options : [];
+				const currentValid = options.some((option) => String(option.value) === String(this.selectedView));
+				if (!currentValid) this.selectedView = value?.default_view || options[0]?.value || "";
+			},
+		},
+	},
 	props: {
 		chart: {
 			type: Object,
@@ -119,36 +151,50 @@ export default {
 			type: Boolean,
 			default: false,
 		},
+		scrollable: {
+			type: Boolean,
+			default: false,
+		},
 	},
 	computed: {
+		viewOptions() {
+			return Array.isArray(this.chart?.view_options) ? this.chart.view_options : [];
+		},
+		displayChart() {
+			const key = this.selectedView || this.chart?.default_view || "";
+			const view = key && this.chart?.views ? this.chart.views[key] : null;
+			return view
+				? { ...this.chart, ...view, key: this.chart.key, time_basis: this.chart.time_basis }
+				: this.chart;
+		},
 		hasData() {
 			return Boolean(
-				this.chart?.rows?.length &&
-					(this.chart.series || []).some((series) =>
-						this.chart.rows.some((row) => Number(row?.[series.key] || 0) !== 0)
+				this.displayChart?.rows?.length &&
+					(this.displayChart.series || []).some((series) =>
+						this.displayChart.rows.some((row) => Number(row?.[series.key] || 0) !== 0)
 					)
 			);
 		},
 		maxValue() {
 			let maximum = 0;
-			for (const row of this.chart.rows || []) {
-				for (const series of this.chart.series || []) {
+			for (const row of this.displayChart.rows || []) {
+				for (const series of this.displayChart.series || []) {
 					maximum = Math.max(maximum, Math.abs(Number(row?.[series.key] || 0)));
 				}
 			}
 			return maximum || 1;
 		},
 		lineExtent() {
-			const series = this.chart.series?.[0];
-			const values = (this.chart.rows || []).map((row) => Number(row?.[series?.key] || 0));
+			const series = this.displayChart.series?.[0];
+			const values = (this.displayChart.rows || []).map((row) => Number(row?.[series?.key] || 0));
 			const minimum = Math.min(0, ...values);
 			const maximum = Math.max(0, ...values);
 			if (minimum === maximum) return { minimum: 0, maximum: maximum || 1 };
 			return { minimum, maximum };
 		},
 		linePointRows() {
-			const rows = this.chart.rows || [];
-			const series = this.chart.series?.[0];
+			const rows = this.displayChart.rows || [];
+			const series = this.displayChart.series?.[0];
 			if (!rows.length || !series) return [];
 			const left = 52;
 			const right = 704;
@@ -240,7 +286,7 @@ export default {
 			return `${row.label}: ${series.label} ${this.formatValue(row?.[series.key], series.datatype)}`;
 		},
 		pointTitle(point) {
-			const series = this.chart.series?.[0] || {};
+			const series = this.displayChart.series?.[0] || {};
 			return `${point.row.label}: ${series.label || ""} ${this.formatValue(point.value, series.datatype)}`;
 		},
 		pointAria(point) {
@@ -287,6 +333,24 @@ export default {
 	font-size: .66rem !important;
 	font-weight: 700;
 	color: var(--edge-color-brand-600, #2563eb) !important;
+}
+.hub-chart-card__header-actions {
+	display: flex;
+	align-items: flex-start;
+	justify-content: flex-end;
+	gap: 10px;
+	flex: 0 0 auto;
+}
+.hub-chart-card__view-switcher {
+	width: 9.5rem;
+}
+.hub-chart-card__view-switcher :deep(.edge-dropdown__trigger) {
+	min-height: 2rem;
+	padding: .3rem .55rem;
+	font-size: .72rem;
+}
+.hub-chart-card__view-switcher :deep(.edge-dropdown__menu) {
+	min-width: 9.5rem;
 }
 .hub-chart-card__details {
 	flex: 0 0 auto;
@@ -385,6 +449,13 @@ export default {
 	display: grid;
 	gap: 10px;
 }
+.hub-bar-chart--scrollable {
+	max-height: 18rem;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding-right: 4px;
+	scrollbar-gutter: stable;
+}
 .hub-bar-chart__row {
 	display: grid;
 	grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr);
@@ -465,6 +536,16 @@ export default {
 @media (max-width: 720px) {
 	.hub-chart-card__header {
 		flex-direction: column;
+	}
+	.hub-chart-card__header-actions {
+		width: 100%;
+		justify-content: space-between;
+	}
+	.hub-chart-card__view-switcher {
+		width: min(12rem, 100%);
+	}
+	.hub-bar-chart--scrollable {
+		max-height: 16rem;
 	}
 	.hub-bar-chart__row {
 		grid-template-columns: 1fr;

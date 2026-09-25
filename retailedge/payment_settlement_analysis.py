@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, get_first_day, getdate, today
 
+from retailedge.operating_context import get_allowed_operating_branches
 from retailedge.advanced_payments import _payment_branch_field
 from retailedge.reporting_capabilities import get_report_capability_spec, require_report_action
 from retailedge.reporting_scope import constrain_report_filters, validate_report_scope
@@ -642,24 +643,20 @@ def _search_named(doctype: str, txt: str) -> list[dict[str, Any]]:
 def _search_branches(*, txt: str, company: str) -> list[dict[str, Any]]:
 	if not company or not frappe.db.exists("DocType", "Branch"):
 		return []
-	scope = validate_report_scope(
+	validate_report_scope(
 		company=company,
 		branch="",
 		require_branch_when_restricted=False,
 	)
-	filters: dict[str, Any] = {}
-	meta = frappe.get_meta("Branch")
-	if meta.has_field("company"):
-		filters["company"] = company
-	if scope.get("restricted"):
-		allowed = list(scope.get("allowed_branches") or [])
-		if not allowed:
-			return []
-		filters["name"] = ["in", allowed]
+	allowed = get_allowed_operating_branches(company=company, user=frappe.session.user)
+	if not allowed:
+		return []
 	rows = frappe.get_list(
 		"Branch",
-		filters=filters,
-		or_filters={"name": ["like", f"%{txt}%"]},
+		filters=[
+			["Branch", "name", "like", f"%{txt}%"],
+			["Branch", "name", "in", allowed],
+		],
 		fields=["name"],
 		order_by="name asc",
 		limit_page_length=MAX_LINK_RESULTS,

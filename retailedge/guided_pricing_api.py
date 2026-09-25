@@ -52,6 +52,7 @@ def get_sales_item_pricing_batch(
 			qty=row["qty"],
 			selected_price_list=str(values.get("price_list") or "").strip(),
 			user=user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		results.append({"index": row["index"], **pricing})
 
@@ -87,6 +88,7 @@ def get_purchase_item_pricing_batch(
 			qty=row["qty"],
 			selected_price_list=str(values.get("price_list") or "").strip(),
 			user=user,
+			requested_price_list=values.get("price_list") or "",
 		)
 		results.append({"index": row["index"], **pricing})
 

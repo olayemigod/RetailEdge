@@ -86,7 +86,8 @@ function mountSalesReportingPage(target, options = {}) {
 	const app = edgeUI.createEdgeApp(SalesReportingReport, {
 		reportType: options.reportType || "sales_by_item",
 	});
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 

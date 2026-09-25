@@ -140,6 +140,26 @@ test("RC3 searchable Create is permission-derived, focused and Escape-safe", asy
 	}
 });
 
+test("RC3 waffle opens the permission-aware EdgeSuite product menu", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const trigger = page.locator([
+			'[aria-controls="edge-product-menu-dropdown"]',
+			"#edge-product-menu-trigger",
+			".edge-product-menu__trigger",
+			".edge-topbar__launcher",
+			".edge-topbar__waffle",
+			"[data-edge-product-menu-trigger]",
+		].join(", ")).first();
+		await expect(trigger).toBeVisible();
+		await trigger.click();
+		await expect(page.locator("#edge-product-menu-dropdown:not([hidden])")).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 Ctrl+K belongs to the permission-aware EdgeSuite product menu", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
@@ -214,6 +234,100 @@ test("RC3 PR56 Business Hub renders the eight actionable business indices", asyn
 	}
 });
 
+test("RC3 Business Hub visual order, bounded cards and Sales Mix state remain stable", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const cards = page.locator(".hub-chart-card");
+		await expect(cards).toHaveCount(6);
+		expect(await cards.evaluateAll((nodes) => nodes.map((node) => node.dataset.chartKey))).toEqual([
+			"sales_trend",
+			"sales_mix",
+			"expense_mix",
+			"exposure",
+			"stock_health",
+			"cash_flow",
+		]);
+		await expect(cards.first()).toHaveClass(/hub-chart-card--wide/);
+		await expect(cards.last()).toHaveClass(/hub-chart-card--wide/);
+		await expect(page.locator(".hub-chart-card--scrollable")).toHaveCount(5);
+		await expect(cards.last()).toHaveClass(/hub-chart-card--scrollable/);
+
+		const salesMix = page.locator('[data-chart-key="sales_mix"]');
+		const switcher = salesMix.locator(".hub-chart-card__view-switcher").first();
+		if (await switcher.count()) {
+			await expect(switcher).toBeVisible();
+			const switcherTrigger = switcher.locator("button, [role='button'], [role='combobox']").first();
+			await expect(switcherTrigger).toBeVisible();
+			await switcherTrigger.click();
+			for (const label of ["Branch", "Category", "Brand"]) {
+				await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
+			}
+			await page.getByRole("option", { name: "Brand", exact: true }).click();
+			await expect(salesMix.getByRole("heading", { name: "Sales by Brand", exact: true })).toBeVisible();
+		} else {
+			const unavailableState = salesMix.locator(".hub-chart-card__state");
+			await expect(unavailableState).toContainText("Unavailable");
+			await expect(unavailableState).toContainText(/permission|permitted/i);
+		}
+	} finally {
+		await context.close();
+	}
+});
+
+test("RC3 repeated Business Hub drill replaces cached destination filters", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+
+		const openExpenseWithHandoff = async (fromDate, toDate) => {
+			await page.evaluate(
+				({ fromDateValue, toDateValue }) => {
+					const target = "expense-register";
+					const filters = {
+						from_date: fromDateValue,
+						to_date: toDateValue,
+						view_mode: "consolidated",
+						include_unposted_cashier_expenses: 0,
+					};
+					if (typeof window.retailedgeSetBusinessHubRouteHandoff !== "function") {
+						throw new Error("Business Hub route handoff helper is unavailable.");
+					}
+					window.retailedgeSetBusinessHubRouteHandoff(`/app/${target}`, filters);
+					frappe.set_route(target);
+				},
+				{ fromDateValue: fromDate, toDateValue: toDate }
+			);
+			await page.getByRole("heading", { name: "Expense Register", exact: true }).first().waitFor({
+				state: "visible",
+				timeout: 20_000,
+			});
+		};
+
+		const expenseSmartDate = () =>
+			page.locator(".edge-smart-date").filter({ hasText: "Date Range" }).first();
+
+		await openExpenseWithHandoff("2026-09-01", "2026-09-05");
+		await expect(expenseSmartDate()).toBeVisible();
+		await expect(expenseSmartDate()).toContainText("01-09-2026");
+		await expect(expenseSmartDate()).toContainText("05-09-2026");
+
+		await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => null);
+		await page.getByRole("heading", { name: "Business Hub", exact: true }).first().waitFor({
+			state: "visible",
+			timeout: 20_000,
+		});
+
+		await openExpenseWithHandoff("2026-09-10", "2026-09-12");
+		await expect(expenseSmartDate()).toContainText("10-09-2026");
+		await expect(expenseSmartDate()).toContainText("12-09-2026");
+		await expect(expenseSmartDate()).not.toContainText("01-09-2026");
+		await expect(expenseSmartDate()).not.toContainText("05-09-2026");
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 PR56 Back and Forward navigation restore the EdgeSuite shell without refresh", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
@@ -233,6 +347,19 @@ test("RC3 PR56 Back and Forward navigation restore the EdgeSuite shell without r
 		});
 		await expect(page.locator(".edge-app-shell .edge-sidebar").first()).toBeAttached();
 		await expect(page.locator(".home-intelligence-card")).toHaveCount(8);
+		await expect
+			.poll(() =>
+				page.locator(".home-intelligence-grid").evaluate((node) => getComputedStyle(node).display)
+			)
+			.toBe("grid");
+		const attentionItems = page.locator(".home-attention-item");
+		if (await attentionItems.count()) {
+			await expect
+				.poll(() => attentionItems.first().evaluate((node) => getComputedStyle(node).display))
+				.toBe("flex");
+		} else {
+			await expect(page.getByText("Nothing needs attention", { exact: true })).toBeVisible();
+		}
 
 		await page.goForward({ waitUntil: "domcontentloaded" }).catch(() => null);
 		await page.getByRole("heading", { name: "Action Centre", exact: true }).first().waitFor({

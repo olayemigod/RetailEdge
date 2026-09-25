@@ -124,7 +124,8 @@ function mountPurchaseReportingPage(target, options = {}) {
 	const app = edgeUI.createEdgeApp(PurchaseReportingReport, {
 		reportType: options.reportType || "purchase_register",
 	});
-	app.mount(target);
+	const rootComponent = app.mount(target);
+	app.__retailedgeRootComponent = rootComponent;
 	return app;
 }
 

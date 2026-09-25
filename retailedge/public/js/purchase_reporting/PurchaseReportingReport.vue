@@ -41,10 +41,7 @@
 			<template #filters>
 				<div class="purchase-filter-grid">
 					<EdgeLinkField v-model="filters.company" label="Company" required placeholder="Search company" :searcher="companySearch" @select="onCompanySelected" />
-					<template v-if="reportType !== 'supplier_payables'">
-						<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onPurchaseDateChange" /></label>
-						<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onPurchaseDateChange" /></label>
-					</template>
+					<EdgeSmartDateRange v-if="reportType !== 'supplier_payables'" v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<div v-else class="edge-field">
 						<span class="edge-field-label">Balance Basis</span>
 						<div class="edge-input edge-input--readonly">Current outstanding · {{ formatDate(filters.as_of_date, "Today") }}</div>
@@ -110,7 +107,7 @@
 <script>
 import SimplePaymentDialog from "../retailedge_business_hub/SimplePaymentDialog.vue";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeReportShell", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
 const REPORT_PRODUCT = "RetailEdge";
 const REPORT_CONFIG = {
 	purchase_analysis: {
@@ -159,6 +156,7 @@ export default {
 			edgeUIValid: true, missingComponents: [], metadataLoading: true, loading: false, error: "",
 			rows: [], columns: [], summary: [], reportSort: null, pagination: {}, scan: {}, menuItems: [], tenantName: "", branchName: "", userName: "", companyCurrency: "",
 			supplierLabel: "", itemLabel: "", payablesAgeingDate: "",
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", from_date: "", to_date: "", as_of_date: "", branch: "", supplier: "", supplier_group: "", item_code: "", item_group: "", warehouse: "", status: "", invoice_kind: "All", ageing_bucket: "All", overdue_only: 0, group_by: "Month", page_size: 50 },
 			analysisPreset: "Purchase Trend",
 			analysisPresets: ["Purchase Trend", "Purchases by Item", "Purchases by Category", "Purchases by Supplier", "Purchases by Supplier Group", "Purchases by Branch", "Purchases by Warehouse", "Daily Purchases", "Weekly Purchases", "Quarterly Purchases", "Yearly Purchases", "Custom"],
@@ -215,6 +213,8 @@ export default {
 				const handoffPurchaseInvoice = String(hubHandoff.purchase_invoice || "").trim();
 				const { purchase_invoice: _purchaseInvoice, ...reportHandoff } = hubHandoff;
 				this.filters = { ...this.filters, ...reportHandoff };
+				this.smartDateReference = reportHandoff.to_date || context.default_filters?.to_date || this.filters.to_date || "";
+				if (this.reportType !== "supplier_payables") this.syncSmartDateFromFilters();
 				this.tenantName = hubHandoff.company || context.tenant_name || this.filters.company || ""; this.branchName = hubHandoff.branch || context.branch_name || this.filters.branch || ""; this.userName = context.user_name || ""; this.companyCurrency = context.company_currency || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
 				this.canUseNativeDesk = Boolean(navigation?.access?.can_use_native_desk);
@@ -245,7 +245,18 @@ export default {
 		onCompanySelected(option) { this.filters.company = option.value; this.filters.branch = ""; this.filters.warehouse = ""; this.clearSupplier(); this.branchName = ""; this.currentPage = 1; },
 		onBranchSelected(option) { this.filters.branch = option.value; this.filters.warehouse = ""; this.clearSupplier(); this.branchName = option.label || option.value; this.currentPage = 1; },
 		clearBranch() { this.filters.branch = ""; this.filters.warehouse = ""; this.branchName = ""; this.currentPage = 1; },
-		onPurchaseDateChange() { this.clearSupplier(); this.currentPage = 1; },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.clearSupplier();
+			this.currentPage = 1;
+		},
 		onAnalysisPresetChange() {
 			const groups = {
 				"Purchase Trend": "Month",

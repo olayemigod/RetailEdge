@@ -19,10 +19,10 @@ class TestBusinessHubBootIdempotencyContract(unittest.TestCase):
 		mount_index = boot_block.index("mountBusinessHub(wrapper)")
 		self.assertLess(mounted_index, mount_index)
 		self.assertIn("if (mountedComponent && mountedRoot?.isConnected)", boot_block)
-		self.assertIn("return Promise.resolve(wrapper._retailedgeBusinessHub)", boot_block)
+		self.assertIn("return refreshProductBundleStyle().then", boot_block)
 		self.assertIn("clearPreviousMount(wrapper, target)", boot_block)
 
-	def test_mounted_boot_does_not_clear_or_refresh_the_hub(self):
+	def test_mounted_boot_does_not_clear_or_refresh_the_hub_component(self):
 		source = PAGE_CONTROLLER.read_text()
 		start = source.index("\tfunction bootBusinessHub(wrapper) {")
 		end = source.index("\n\tasync function mountBusinessHub(wrapper)", start)
@@ -33,6 +33,7 @@ class TestBusinessHubBootIdempotencyContract(unittest.TestCase):
 		mounted_branch = boot_block[mounted_start:mounted_end]
 		self.assertNotIn("clearPreviousMount", mounted_branch)
 		self.assertNotIn("refreshContext", mounted_branch)
+		self.assertIn("refreshProductBundleStyle", mounted_branch)
 		self.assertIn("enforceCreateVisibility", mounted_branch)
 
 	def test_page_show_retains_the_explicit_context_refresh_path(self):

@@ -212,6 +212,22 @@ def test_professional_selling_keeps_submitted_completion_open_for_next_workflow(
 	completed = workspace[workspace.index("handleCompletionCompleted()"):workspace.index("openDeliveryCompletion", workspace.index("handleCompletionCompleted()"))]
 	assert "closeStandardCompletion()" not in completed
 
+
+def test_all_four_record_types_share_draft_edit_definition_and_save_before_submit_contract():
+	backend = read(BACKEND)
+	standard = read(APP_ROOT / "public" / "js" / "professional_selling" / "StandardSellingCompletionDialog.vue")
+	delivery = read(APP_ROOT / "public" / "js" / "professional_selling" / "StandardDeliveryCompletionDialog.vue")
+	invoice = read(APP_ROOT / "public" / "js" / "professional_selling" / "StandardSalesInvoiceCompletionDialog.vue")
+
+	assert '"item_doctype": "Sales Invoice Item"' in backend
+	assert "_LIST_DOCUMENTS.get(key)" in backend
+	for source in (standard, delivery, invoice):
+		assert "draftDirty()" in source
+		assert 'v-if="preview?.can_edit && draftDirty"' in source
+		assert 'Save Changes' in source
+		assert "this.draftDirty || this.busy" in source
+		assert "draftDirty || !preview?.workflow_eligible" in source
+
 def test_draft_completion_actions_remain_document_specific_and_accounting_safe():
 	records = read(RECORDS)
 	workspace = read(WORKSPACE)

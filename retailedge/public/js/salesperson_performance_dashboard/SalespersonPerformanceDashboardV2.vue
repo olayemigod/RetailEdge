@@ -44,9 +44,7 @@
 					<EdgeLinkField v-model="filters.customer" label="Customer" placeholder="All customers" :searcher="customerSearch" @select="onCustomerSelected" @clear="clearCustomer" />
 					<EdgeLinkField v-model="filters.item" label="Item" placeholder="All items" :searcher="itemSearch" @select="onItemSelected" @clear="clearItem" />
 					<EdgeLinkField v-model="filters.item_group" label="Item Group" placeholder="All item groups" :searcher="itemGroupSearch" @select="onItemGroupSelected" @clear="clearItemGroup" />
-					<EdgeDropdown v-model="filters.date_range_preset" :options="datePresets" label="Date Range Preset" @change="onPresetChange" />
-					<label class="edge-field"><span class="edge-field-label">From Date</span><input v-model="filters.from_date" type="date" class="edge-input" @change="onCustomDateChange" /></label>
-					<label class="edge-field"><span class="edge-field-label">To Date</span><input v-model="filters.to_date" type="date" class="edge-input" @change="onCustomDateChange" /></label>
+					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<EdgeDropdown :modelValue="String(filters.limit)" :options="['25', '50', '100']" label="Rows per page" @change="filters.limit = Number($event?.value || $event || 50); resetAndFetch()" />
 					<button class="edge-button edge-button--primary" type="button" :disabled="loading || !filters.company" @click="resetAndFetch">{{ loading ? "Refreshing…" : "Apply / Refresh" }}</button>
 				</div>
@@ -87,7 +85,7 @@ import {
 	printDashboard,
 } from "../retailedge_dashboard_actions";
 
-const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField", "EdgeDropdown"];
+const REQUIRED_COMPONENTS = ["EdgeAppShell", "EdgeDashboardShell", "EdgeDashboardGrid", "EdgeDashboardSection", "EdgeReportTable", "EdgeLinkField", "EdgeDropdown", "EdgeSmartDateRange"];
 const DASHBOARD_KEY = "salesperson-performance";
 
 function runtimeComponents() { return window.EdgeSuiteUI?.components || {}; }
@@ -113,7 +111,7 @@ export default {
 			capabilities: { can_view: true, can_print: false, can_export: false },
 			exportOptions: defaultDashboardExportOptions(),
 			rows: [], columns: [], summary: [], pagination: {}, menuItems: [], tenantName: "", userName: "", exportRowCap: 500, canUseNativeDesk: false,
-			datePresets: ["This Month", "Today", "Yesterday", "This Week", "This Quarter", "This Year", "Last Week", "Last Month", "Last Quarter", "Last Year", "Custom Period"],
+			smartDate: {}, smartDateReference: "",
 			filters: { company: "", date_range_preset: "This Month", from_date: "", to_date: "", branch: "", salesperson: "", customer: "", item: "", item_group: "", limit: 50, offset: 0 },
 		};
 	},
@@ -134,6 +132,8 @@ export default {
 				const navigationPromise = typeof window.retailedgeGetBusinessHubContext === "function" ? window.retailedgeGetBusinessHubContext() : callMethod("retailedge.edgesuite_ui.get_retailedge_business_hub_context");
 				const [context, navigation] = await Promise.all([callMethod("retailedge.salesperson_performance_dashboard.get_salesperson_dashboard_context"), navigationPromise]);
 				this.filters = { ...this.filters, ...(context.default_filters || {}) };
+				this.smartDateReference = context.default_filters?.to_date || this.filters.to_date || "";
+				this.syncSmartDateFromFilters();
 				this.capabilities = context.capabilities || this.capabilities;
 				this.tenantName = context.tenant_name || this.filters.company || ""; this.userName = context.user_name || "";
 				this.menuItems = this.mapNavigationGroups(navigation.navigation_groups || []);
@@ -162,8 +162,19 @@ export default {
 		onCustomerSelected(option) { this.filters.customer = option.value; this.filters.offset = 0; }, clearCustomer() { this.filters.customer = ""; this.filters.offset = 0; },
 		onItemSelected(option) { this.filters.item = option.value; this.filters.offset = 0; }, clearItem() { this.filters.item = ""; this.filters.offset = 0; },
 		onItemGroupSelected(option) { this.filters.item_group = option.value; this.filters.offset = 0; }, clearItemGroup() { this.filters.item_group = ""; this.filters.offset = 0; },
-		onCustomDateChange() { this.filters.date_range_preset = "Custom Period"; this.clearScopedPeopleFilters(); this.filters.offset = 0; },
-		onPresetChange() { if (this.filters.date_range_preset === "Custom Period") return; const dates = window.retailedge?.getPresetDates?.(this.filters.date_range_preset); if (dates) { this.filters.from_date = dates.from_date || ""; this.filters.to_date = dates.to_date || ""; } this.clearScopedPeopleFilters(); this.filters.offset = 0; },
+		syncSmartDateFromFilters() {
+			if (!this.filters.from_date || !this.filters.to_date) { this.smartDate = {}; return; }
+			this.smartDate = { expression: "custom", from_date: this.filters.from_date, to_date: this.filters.to_date, label: this.filters.from_date === this.filters.to_date ? this.filters.from_date : `${this.filters.from_date} – ${this.filters.to_date}` };
+		},
+		onSmartDateResolved(value) {
+			if (!value?.from_date || !value?.to_date) return;
+			this.smartDate = { ...value };
+			this.filters.from_date = value.from_date;
+			this.filters.to_date = value.to_date;
+			this.filters.date_range_preset = "Custom Period";
+			this.clearScopedPeopleFilters();
+			this.filters.offset = 0;
+		},
 		resetAndFetch() { this.filters.offset = 0; this.fetchData(); },
 		async fetchData() {
 			if (!this.filters.company) return;
