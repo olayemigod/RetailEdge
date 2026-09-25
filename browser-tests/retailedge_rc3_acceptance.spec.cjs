@@ -139,6 +139,26 @@ test("RC3 searchable Create is permission-derived, focused and Escape-safe", asy
 	}
 });
 
+test("RC3 waffle opens the permission-aware EdgeSuite product menu", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const trigger = page.locator([
+			'[aria-controls="edge-product-menu-dropdown"]',
+			"#edge-product-menu-trigger",
+			".edge-product-menu__trigger",
+			".edge-topbar__launcher",
+			".edge-topbar__waffle",
+			"[data-edge-product-menu-trigger]",
+		].join(", ")).first();
+		await expect(trigger).toBeVisible();
+		await trigger.click();
+		await expect(page.locator("#edge-product-menu-dropdown:not([hidden])")).toBeVisible();
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 Ctrl+K belongs to the permission-aware EdgeSuite product menu", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {
