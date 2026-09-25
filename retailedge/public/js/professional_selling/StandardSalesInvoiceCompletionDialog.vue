@@ -245,6 +245,7 @@ export default {
 			return this.draftItems.some((row, index) => (
 				Number(row.qty || 0) !== Number(original[index]?.qty || 0)
 				|| Number(row.rate || 0) !== Number(original[index]?.rate || 0)
+				|| String(row.warehouse || "") !== String(original[index]?.warehouse || "")
 			));
 		},
 		draftValid() {
