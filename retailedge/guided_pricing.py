@@ -282,12 +282,14 @@ def resolve_sales_item_pricing(
 		posting_date=posting_date,
 		qty=qty,
 	)
-	rate = _first_rate(details.get("rate"), details.get("price_list_rate"))
+	rate = _effective_erpnext_rate(details)
 	rate_source = "erpnext_pricing"
 	if rate is None:
-		standard_rate = frappe.get_cached_value("Item", item_code, "standard_rate")
+		standard_rate = _nonzero_rate_or_none(
+			frappe.get_cached_value("Item", item_code, "standard_rate")
+		)
 		if standard_rate is not None:
-			rate = flt(standard_rate)
+			rate = standard_rate
 			rate_source = "item_standard_rate"
 
 	return {
@@ -332,16 +334,15 @@ def resolve_purchase_item_pricing(
 		posting_date=posting_date,
 		qty=qty,
 	)
-	rate = _first_rate(
-		details.get("rate"),
-		details.get("price_list_rate"),
-		details.get("last_purchase_rate"),
-	)
+	rate = _effective_erpnext_rate(details)
 	rate_source = "erpnext_pricing"
 	if rate is None:
-		last_purchase_rate = frappe.get_cached_value("Item", item_code, "last_purchase_rate")
-		if last_purchase_rate not in (None, ""):
-			rate = flt(last_purchase_rate)
+		last_purchase_rate = _nonzero_rate_or_none(
+			details.get("last_purchase_rate")
+			or frappe.get_cached_value("Item", item_code, "last_purchase_rate")
+		)
+		if last_purchase_rate is not None:
+			rate = last_purchase_rate
 			rate_source = "item_last_purchase_rate"
 
 	return {
@@ -510,6 +511,40 @@ def _assert_read_permission(doctype: str, name: str, *, user: str) -> None:
 			_("You do not have permission to use {0} {1}.").format(doctype, name),
 			frappe.PermissionError,
 		)
+
+
+def _nonzero_rate_or_none(value: Any) -> float | None:
+	if value in (None, ""):
+		return None
+	rate = flt(value)
+	return rate if rate else None
+
+
+def _effective_erpnext_rate(details: dict[str, Any] | frappe._dict) -> float | None:
+	"""Resolve an effective ERPNext rate without accepting its initialized zero placeholder."""
+	explicit_rate = _nonzero_rate_or_none(details.get("rate"))
+	if explicit_rate is not None:
+		return explicit_rate
+
+	price_list_rate = _nonzero_rate_or_none(details.get("price_list_rate"))
+	if price_list_rate is None:
+		return None
+
+	rate_with_margin = price_list_rate
+	margin = flt(details.get("margin_rate_or_amount") or 0)
+	margin_type = str(details.get("margin_type") or "").strip()
+	if margin_type == "Percentage":
+		rate_with_margin = price_list_rate * (1 + (margin / 100.0))
+	elif margin_type == "Amount":
+		rate_with_margin = price_list_rate + margin
+
+	discount_amount = flt(details.get("discount_amount") or 0)
+	discount_percentage = flt(details.get("discount_percentage") or 0)
+	if discount_amount:
+		return flt(rate_with_margin - discount_amount)
+	if discount_percentage:
+		return flt(rate_with_margin * (1 - (discount_percentage / 100.0)))
+	return flt(rate_with_margin)
 
 
 def _first_rate(*values: Any) -> float | None:
