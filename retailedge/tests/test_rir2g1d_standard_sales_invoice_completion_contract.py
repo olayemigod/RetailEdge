@@ -333,11 +333,19 @@ def test_bounded_invoice_draft_editor_preserves_identity_and_allows_safe_new_ite
 	for contract in (
 		"Edit draft before completion",
 		"Customer PO / Reference",
-		"Additional Items",
-		"EdgeChildTable",
+		"Selling Price List",
+		"addDraftItem",
+		"removeDraftItem",
+		"refreshDraftItemPricing",
+		"Source-linked items stay attached",
+		"busy || !canOverrideRate",
+		"Stock Location",
 		"ERPNext recalculates taxes, totals",
 	):
 		assert contract in dialog
+	assert "Additional Items" not in dialog
+	assert "EdgeChildTable" not in dialog
+	assert "ERPNext posting authority" not in dialog
 
 
 
