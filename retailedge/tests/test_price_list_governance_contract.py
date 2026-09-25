@@ -72,6 +72,18 @@ def test_branch_assignment_price_lists_participate_in_price_list_permission_scop
 	assert 'user=doc.user' not in assignment[assignment.index("def _validate_assignment_price_lists"):assignment.index("def _validate_assignment_price_list_immutability")]
 
 
+def test_selling_surfaces_can_show_one_assigned_alternative_price_list():
+	simple = _read("public/js/retailedge_business_hub/SimpleSalesInvoiceDialog.vue")
+	quotation = _read("public/js/professional_selling/ProfessionalQuotationDialog.vue")
+	order = _read("public/js/professional_selling/ProfessionalSalesOrderDialog.vue")
+	invoice = _read("public/js/professional_selling/ProfessionalSalesInvoiceDialog.vue")
+
+	assert "available_price_lists || []).length);" in simple
+	for component in (quotation, order, invoice):
+		assert "this.availablePriceLists.length);" in component
+		assert "this.availablePriceLists.length > 1" not in component
+
+
 def test_governed_resolver_and_edgesuite_surfaces_revalidate_price_list_choice():
 	pricing = _read("guided_pricing.py")
 	sales = _read("guided_sales_invoice.py")
