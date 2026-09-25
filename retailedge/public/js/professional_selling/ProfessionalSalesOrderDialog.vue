@@ -191,7 +191,7 @@ export default {
 	},
 	computed: {
 		priceListLabel() { return this.values.price_list || this.context.pricing?.price_list || "ERPNext default"; },
-		canSwitchPriceList() { return this.availablePriceLists.length > 1; },
+		canSwitchPriceList() { return Boolean(this.context.pricing?.can_switch_price_list && this.availablePriceLists.length); },
 		canCreateCustomer() { return Boolean(frappe.model?.can_create?.("Customer")); },
 		canCreateItem() { return Boolean(frappe.model?.can_create?.("Item")); },
 	},
