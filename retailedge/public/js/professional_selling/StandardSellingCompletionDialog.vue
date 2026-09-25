@@ -338,7 +338,7 @@ export default {
 			return Promise.resolve([]);
 		},
 		async saveDraftChanges() {
-			if (!this.preview?.can_edit || this.busy || !this.draftValid) return;
+			if (!this.preview?.can_edit || !this.draftDirty || this.busy || !this.draftValid) return;
 			this.busy = true;
 			this.actionError = "";
 			try {
