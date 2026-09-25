@@ -61,6 +61,17 @@ def test_ranked_guided_search_preserves_governed_price_list_lookup():
 	assert "CANDIDATE_LIMIT" in search
 
 
+def test_branch_assignment_price_lists_participate_in_price_list_permission_scope():
+	assignment = _read("branch_assignment.py")
+	workspace = _read("pricing_promotions_workspace.py")
+
+	assert "def get_raw_assignment_price_lists(" in assignment
+	assert "get_raw_assignment_price_lists" in workspace
+	assert '"branch_assignment": []' in workspace
+	assert 'sources["branch_assignment"].append(name)' in workspace
+	assert 'user=doc.user' not in assignment[assignment.index("def _validate_assignment_price_lists"):assignment.index("def _validate_assignment_price_list_immutability")]
+
+
 def test_governed_resolver_and_edgesuite_surfaces_revalidate_price_list_choice():
 	pricing = _read("guided_pricing.py")
 	sales = _read("guided_sales_invoice.py")
