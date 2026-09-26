@@ -246,9 +246,12 @@ def apply_retailedge_cashier_expenses_to_closing_shift(doc, method=None):
 		)
 		return
 
-	base_expected = flt(cash_row.get("expected_amount")) + previous_total
-	cash_row.expected_amount = base_expected - current_total
-	cash_row.difference = flt(cash_row.get("closing_amount")) - flt(cash_row.expected_amount)
+	precision = frappe.get_cached_value("System Settings", None, "currency_precision") or 3
+	base_expected = flt(cash_row.get("expected_amount"), precision) + flt(previous_total, precision)
+	cash_row.expected_amount = flt(base_expected - current_total, precision)
+	cash_row.difference = +flt(cash_row.get("closing_amount"), precision) - flt(
+		cash_row.expected_amount, precision
+	)
 
 	doc.retailedge_cashier_expense_total = current_total
 	doc.retailedge_cashier_expense_count = cint(summary["count"])
