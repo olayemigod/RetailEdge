@@ -124,6 +124,19 @@ class TestOperatingContextBranchPosPolicy(unittest.TestCase):
 			self.assertIn(contract, resolver)
 		self.assertIn("validate_operating_branch", preview)
 
+	def test_explicit_pos_profile_branch_resolution_does_not_require_profile_user_membership(self):
+		source = self.read("branch_context.py")
+		self.assertIn("profile_lookup_user = None if pos_profile else user", source)
+		self.assertIn("branch access is validated after resolution", source)
+		self.assertIn("validate_user_branch_access(", source)
+
+		patches = self.read("patches.txt")
+		self.assertIn("retailedge.patches.backfill_cashier_expense_branch_attribution", patches)
+		backfill = self.read("patches/backfill_cashier_expense_branch_attribution.py")
+		self.assertIn("STRONG_BRANCH_SOURCES", backfill)
+		self.assertIn("prefer_coreedge=False", backfill)
+		self.assertIn('update_modified=False', backfill)
+
 	def test_new_policy_keeps_accounting_and_document_safety_boundaries(self):
 		for relative in (
 			"operating_context.py",

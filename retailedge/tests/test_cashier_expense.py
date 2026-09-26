@@ -55,7 +55,7 @@ R2_REQUIRED_LINKS = {
 	"Business Hub": ("Page", "retailedge-business-hub"),
 	"Sales Invoices": ("DocType", "Sales Invoice"),
 	"Payments": ("DocType", "Payment Entry"),
-	"Cashier Expenses": ("DocType", "RetailEdge Cashier Expense"),
+	"Cashier Expenses": ("Page", "cashier-expenses"),
 	"Customers": ("DocType", "Customer"),
 	"Suppliers": ("DocType", "Supplier"),
 	"Reports Centre": ("Page", "reports-centre"),

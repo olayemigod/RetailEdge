@@ -181,7 +181,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 		"key": "expenses", "label": "Expenses", "icon": "file-text", "items": (
 			{"label": "Business Expenses", "target_type": "Page", "target": "business-expenses", "icon": "file-text"},
 			{"label": "Expense Register", "target_type": "Page", "target": "expense-register", "icon": "report"},
-			{"label": "Cashier Expenses", "target_type": "DocType", "target": "RetailEdge Cashier Expense", "icon": "wallet"},
+			{"label": "Cashier Expenses", "target_type": "Page", "target": "cashier-expenses", "icon": "file-text"},
 			{"label": "Expense Categories", "target_type": "DocType", "target": "RetailEdge Expense Category", "icon": "layers"},
 		),
 	},
@@ -232,7 +232,7 @@ NAVIGATION_GROUPS: tuple[dict[str, Any], ...] = (
 			{"label": "Supplier Document Review", "target_type": "Page", "target": "supplier-document-review", "icon": "clipboard", "required_roles": tuple(sorted(SUPPLIER_DOCUMENT_REVIEW_ROLES))},
 			{"label": "Bank Match Reviews", "target_type": "Page", "target": "bank-matching-reconciliation", "icon": "shield"},
 			{"label": "Daily Sales Audit", "target_type": "Page", "target": "daily-sales-audit", "icon": "shield"},
-			{"label": "Expense Review", "target_type": "Page", "target": "expense-review", "icon": "report"},
+			{"label": "Cashier Expense Review", "target_type": "Page", "target": "expense-review", "icon": "report"},
 			{"label": "Cash Shift Verification", "target_type": "Page", "target": "cash-shift-verification", "icon": "report"},
 			{"label": "Invoice Payment Audit", "target_type": "Report", "target": "RetailEdge Invoice Payment Audit", "icon": "report"},
 			{"label": "POS Closing Variance & Expenses", "target_type": "Page", "target": "pos-closing-variance", "icon": "report"},
