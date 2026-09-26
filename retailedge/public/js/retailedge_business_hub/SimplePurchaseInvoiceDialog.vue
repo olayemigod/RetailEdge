@@ -178,6 +178,7 @@
 
 <script>
 import {
+	confirmAboveEdgeModal,
 	callMethod,
 	errorMessage,
 	quickCreateItem,
@@ -353,7 +354,7 @@ export default {
 		requestClose() {
 			if (this.saving) return;
 			if (!this.hasUnsavedChanges) { this.$emit("close"); return; }
-			frappe.confirm("Discard the unsaved Quick Purchase changes?", () => this.$emit("close"));
+			confirmAboveEdgeModal("Discard the unsaved Quick Purchase changes?", () => this.$emit("close"));
 		},
 		continueInRecordPurchase() {
 			if (this.saving) return;
