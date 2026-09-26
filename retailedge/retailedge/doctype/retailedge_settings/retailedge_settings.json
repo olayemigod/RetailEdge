@@ -19,6 +19,10 @@
   "cashier_expense_tab",
   "cashier_expense_section",
   "enable_cashier_expense_workflow",
+  "cashier_expense_posting_mode",
+  "enable_cashier_expense_pos_integration",
+  "show_cashier_expense_in_pos",
+  "include_cashier_expenses_in_pos_closing",
   "require_cashier_expense_attachment",
   "enable_cashier_expense_accounting_posting",
   "include_cashier_expenses_in_variance_report",
@@ -194,6 +198,39 @@
    "fieldname": "enable_cashier_expense_workflow",
    "fieldtype": "Check",
    "label": "Enable Cashier Expense Workflow"
+  },
+  {
+   "default": "Controlled Posting",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "Choose Controlled Posting to require review before accounting, or Direct Posting to attempt accounting posting immediately after submission. Physical till cash remains tracked separately from accounting status.",
+   "fieldname": "cashier_expense_posting_mode",
+   "fieldtype": "Select",
+   "label": "Cashier Expense Posting Mode",
+   "options": "Controlled Posting\nDirect Posting"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow",
+   "description": "Allows supported POS integrations to record RetailEdge Cashier Expenses against the active POS shift. This does not enable a second POS expense accounting workflow.",
+   "fieldname": "enable_cashier_expense_pos_integration",
+   "fieldtype": "Check",
+   "label": "Enable Cashier Expense in POS"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow && doc.enable_cashier_expense_pos_integration",
+   "description": "Advertises the RetailEdge Cashier Expense action to supported POS integrations.",
+   "fieldname": "show_cashier_expense_in_pos",
+   "fieldtype": "Check",
+   "label": "Show Cashier Expense Action in POS"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_cashier_expense_workflow && doc.enable_cashier_expense_pos_integration",
+   "description": "Deduct submitted RetailEdge POS-till cashier expenses from expected cash during POS closing. Review or accounting approval is not required for the physical cash movement to affect closing.",
+   "fieldname": "include_cashier_expenses_in_pos_closing",
+   "fieldtype": "Check",
+   "label": "Include Cashier Expenses in POS Closing"
   },
   {
    "default": "0",

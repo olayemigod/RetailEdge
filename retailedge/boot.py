@@ -38,6 +38,11 @@ def boot_session(bootinfo):
 	try:
 		settings = get_retailedge_settings()
 		bootinfo.retailedge["cashier_expense_settings"] = {
+			"cashier_expense_posting_mode": str(getattr(settings, "cashier_expense_posting_mode", None) or "Controlled Posting"),
+			"enable_cashier_expense_accounting_posting": int(bool(getattr(settings, "enable_cashier_expense_accounting_posting", 0))),
+			"enable_cashier_expense_pos_integration": int(bool(getattr(settings, "enable_cashier_expense_pos_integration", 0))),
+			"show_cashier_expense_in_pos": int(bool(getattr(settings, "show_cashier_expense_in_pos", 1))),
+			"include_cashier_expenses_in_pos_closing": int(bool(getattr(settings, "include_cashier_expenses_in_pos_closing", 1))),
 			"require_open_shift_for_cashier_expense": int(bool(getattr(settings, "require_open_shift_for_cashier_expense", 1))),
 			"allow_cashier_expense_date_edit": int(bool(getattr(settings, "allow_cashier_expense_date_edit", 0))),
 			"include_draft_cashier_expenses_in_cash_check": int(bool(getattr(settings, "include_draft_cashier_expenses_in_cash_check", 1))),
