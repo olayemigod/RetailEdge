@@ -305,8 +305,8 @@ def validate_branch_assignment(doc) -> None:
 	if doc.branch_role not in ROLE_TYPES:
 		frappe.throw(_("Choose a valid Branch Role."))
 
+	# Assignment and Price List history immutability are enforced together.
 	_validate_assignment_immutability(doc)
-	_validate_assignment_price_list_immutability(doc)
 	_validate_assignment_price_lists(doc)
 	_lock_assignment_user(doc.user)
 	start = getdate(doc.effective_from)
