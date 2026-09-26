@@ -275,6 +275,7 @@ has_permission = {
 # Overriding Methods
 # ------------------------------
 override_whitelisted_methods = {
+	"pos_next.api.shifts.get_closing_shift_data": "retailedge.pos_cashier_expense.get_posnext_closing_shift_data_with_cashier_expenses",
 	"retailedge.edgesuite_ui.get_retailedge_business_hub_context": "retailedge.master_experience.get_retailedge_business_hub_context",
 	"retailedge.guided_sales_invoice.search_simple_sales_invoice_options": "retailedge.guided_link_search.search_simple_sales_invoice_options",
 	"retailedge.guided_purchase_invoice.search_simple_purchase_invoice_options": "retailedge.guided_link_search.search_simple_purchase_invoice_options",

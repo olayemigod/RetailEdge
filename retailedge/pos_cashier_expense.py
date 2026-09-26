@@ -196,6 +196,93 @@ def get_pos_closing_cashier_expense_summary(
 	)
 
 
+@frappe.whitelist()
+def get_posnext_closing_shift_data_with_cashier_expenses(opening_shift: str):
+	"""Return the POSNext closing preview with physical till expenses applied."""
+	from pos_next.api.shifts import get_closing_shift_data as get_posnext_closing_shift_data
+
+	closing_data = get_posnext_closing_shift_data(opening_shift)
+	if not isinstance(closing_data, dict):
+		return closing_data
+	return apply_retailedge_cashier_expenses_to_closing_data(
+		closing_data,
+		opening_shift=opening_shift,
+	)
+
+
+def apply_retailedge_cashier_expenses_to_closing_data(
+	closing_data: dict[str, Any],
+	*,
+	opening_shift: str | None = None,
+) -> dict[str, Any]:
+	"""Adjust the cashier-visible POSNext closing preview before submit."""
+	if not isinstance(closing_data, dict):
+		return closing_data
+	meta = frappe.get_meta(CLOSING_DOCTYPE)
+	if not meta.has_field("retailedge_cashier_expense_total"):
+		return closing_data
+
+	settings = get_retailedge_settings()
+	if not _cashier_expense_closing_integration_enabled(settings):
+		return closing_data
+
+	resolved_opening_shift = str(
+		opening_shift or closing_data.get("pos_opening_shift") or ""
+	).strip()
+	pos_profile = str(closing_data.get("pos_profile") or "").strip()
+	if not resolved_opening_shift:
+		return closing_data
+
+	summary = _build_pos_closing_cashier_expense_summary(
+		resolved_opening_shift,
+		pos_profile=pos_profile or None,
+	)
+	current_total = flt(summary["total"])
+	previous_total = flt(closing_data.get("retailedge_cashier_expense_total", 0))
+	cash_row = _find_cash_reconciliation_row_from_rows(
+		closing_data.get("payment_reconciliation") or [],
+		pos_profile=pos_profile or None,
+	)
+
+	closing_data["retailedge_cashier_expense_count"] = cint(summary["count"])
+	if not cash_row:
+		closing_data["retailedge_cashier_expense_total"] = previous_total
+		closing_data["retailedge_cashier_expense_note"] = (
+			_("Cashier expenses could not be applied because the POS cash reconciliation row was not found.")
+			if current_total
+			else None
+		)
+		return closing_data
+
+	precision = frappe.get_cached_value("System Settings", None, "currency_precision") or 3
+	base_expected = flt(cash_row.get("expected_amount"), precision) + flt(previous_total, precision)
+	cash_row["expected_amount"] = flt(base_expected - current_total, precision)
+	if cash_row.get("closing_amount") not in (None, ""):
+		cash_row["difference"] = flt(cash_row.get("closing_amount"), precision) - flt(
+			cash_row.get("expected_amount"), precision
+		)
+
+	closing_data["retailedge_cashier_expense_total"] = current_total
+	closing_data["retailedge_cashier_expense_note"] = (
+		_(
+			"Expected POS cash includes {0} submitted Cashier Expense(s) totalling {1}. "
+			"Accounting/review status does not change the physical till movement."
+		).format(cint(summary["count"]), current_total)
+		if current_total
+		else None
+	)
+	return closing_data
+
+
+def _cashier_expense_closing_integration_enabled(settings=None) -> bool:
+	settings = settings or get_retailedge_settings()
+	return bool(
+		cint(getattr(settings, "enable_cashier_expense_workflow", 0))
+		and cint(getattr(settings, "enable_cashier_expense_pos_integration", 0))
+		and cint(getattr(settings, "include_cashier_expenses_in_pos_closing", 1))
+	)
+
+
 def apply_retailedge_cashier_expenses_to_closing_shift(doc, method=None):
 	"""Adjust only the POS cash expected amount, idempotently.
 
@@ -210,11 +297,7 @@ def apply_retailedge_cashier_expenses_to_closing_shift(doc, method=None):
 		return
 
 	settings = get_retailedge_settings()
-	integration_enabled = bool(
-		cint(getattr(settings, "enable_cashier_expense_workflow", 0))
-		and cint(getattr(settings, "enable_cashier_expense_pos_integration", 0))
-		and cint(getattr(settings, "include_cashier_expenses_in_pos_closing", 1))
-	)
+	integration_enabled = _cashier_expense_closing_integration_enabled(settings)
 
 	opening_shift = str(getattr(doc, "pos_opening_shift", None) or "").strip()
 	pos_profile = str(getattr(doc, "pos_profile", None) or "").strip()
@@ -325,6 +408,13 @@ def _build_pos_closing_cashier_expense_summary(
 
 
 def _find_cash_reconciliation_row(doc, *, pos_profile: str | None):
+	return _find_cash_reconciliation_row_from_rows(
+		getattr(doc, "payment_reconciliation", []) or [],
+		pos_profile=pos_profile,
+	)
+
+
+def _find_cash_reconciliation_row_from_rows(rows, *, pos_profile: str | None):
 	cash_mode = "Cash"
 	if pos_profile:
 		profile_meta = frappe.get_meta("POS Profile")
@@ -333,7 +423,7 @@ def _find_cash_reconciliation_row(doc, *, pos_profile: str | None):
 				frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
 				or cash_mode
 			)
-	for row in getattr(doc, "payment_reconciliation", []) or []:
+	for row in rows or []:
 		if str(row.get("mode_of_payment") or "").strip() == str(cash_mode).strip():
 			return row
 	return None
