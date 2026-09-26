@@ -34,6 +34,11 @@
   "status_section",
   "expense_status",
   "ledger_status",
+  "entry_source",
+  "cash_source",
+  "cash_movement_status",
+  "posting_mode_applied",
+  "client_request_id",
   "pos_audit_links_section",
   "linked_pos_opening_shift",
   "linked_pos_closing_shift",
@@ -278,6 +283,45 @@
    "label": "Ledger Status",
    "options": "Not Applicable\nPending Ledger\nPosted\nFailed",
    "read_only": 1
+  },
+  {
+   "default": "RetailEdge",
+   "fieldname": "entry_source",
+   "fieldtype": "Select",
+   "label": "Entry Source",
+   "options": "RetailEdge\nPOSNext\nAPI",
+   "read_only": 1
+  },
+  {
+   "default": "POS Till",
+   "fieldname": "cash_source",
+   "fieldtype": "Select",
+   "label": "Cash Source",
+   "options": "POS Till\nPetty Cash\nBank\nOther",
+   "read_only": 1
+  },
+  {
+   "default": "Not Disbursed",
+   "fieldname": "cash_movement_status",
+   "fieldtype": "Select",
+   "label": "Cash Movement Status",
+   "options": "Not Disbursed\nDisbursed\nReturned\nReversed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "posting_mode_applied",
+   "fieldtype": "Select",
+   "label": "Posting Mode Applied",
+   "options": "Controlled Posting\nDirect Posting",
+   "read_only": 1
+  },
+  {
+   "fieldname": "client_request_id",
+   "fieldtype": "Data",
+   "label": "Client Request ID",
+   "no_copy": 1,
+   "read_only": 1,
+   "unique": 1
   },
   {
    "collapsible": 1,
