@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -29,14 +30,14 @@ class TestTransactionEntryPreference(unittest.TestCase):
 
 	@patch("retailedge.transaction_entry_preference.frappe.defaults.set_user_default")
 	def test_set_preference_writes_only_current_user_default(self, mock_set):
-		with patch.object(frappe.session, "user", "user@example.com"):
+		with patch("retailedge.transaction_entry_preference.frappe.session", SimpleNamespace(user="user@example.com")):
 			result = set_transaction_entry_preference("quick")
 		self.assertEqual(result["value"], "quick")
 		self.assertEqual(result["scope"], "user")
 		mock_set.assert_called_once_with(USER_DEFAULT_KEY, "quick", user="user@example.com")
 
 	def test_invalid_preference_fails_closed(self):
-		with patch.object(frappe.session, "user", "user@example.com"):
+		with patch("retailedge.transaction_entry_preference.frappe.session", SimpleNamespace(user="user@example.com")):
 			with self.assertRaises(frappe.ValidationError):
 				set_transaction_entry_preference("always_popup_forever")
 
