@@ -44,6 +44,10 @@ def test_global_create_button_mounts_beside_shared_toolbar_controls():
     assert "requestGuidedCreate();" in source
     assert "mountGlobalCreateButton();" in source
     assert "window.retailedgeMountGlobalCreateButton = mountGlobalCreateButton" in source
+    assert 'const GLOBAL_CREATE_HOST_ID = "retailedge-global-create-host"' in source
+    assert "function installGlobalCreateMountObserver()" in source
+    assert "new MutationObserver" in source
+    assert "button?.isConnected" in source
     assert "@media (max-width: 768px)" in source
 
 
@@ -101,17 +105,21 @@ def test_guided_create_picker_matches_waffle_theme_and_is_responsive():
     assert "@media (prefers-reduced-motion: reduce)" in css
 
 
-def test_product_menu_opens_native_desk_targets_in_new_tabs():
+def test_product_menu_prefers_erpnext_quick_entry_and_same_tab_fallbacks():
     source = PRODUCT_MENU.read_text(encoding="utf-8")
-    assert "function openNativeDeskTarget(linkType, linkTo)" in source
-    assert 'if (linkType === "Report")' in source
-    assert 'else if (linkType === "DocType")' in source
-    assert 'window.open(url, "_blank", "noopener,noreferrer")' in source
+    assert "function openDocTypeMenuTarget(doctype)" in source
+    assert "frappe.model.with_doctype" in source
+    assert "meta?.quick_entry" in source
+    assert "canCreateDocType(target)" in source
+    assert "frappe.new_doc(target)" in source
+    assert 'frappe.set_route("List", target)' in source
+    assert 'frappe.set_route("query-report", target)' in source
+    assert 'window.open(url, "_blank", "noopener,noreferrer")' not in source
+    assert "window.retailedgeOpenDocTypeMenuTarget = openDocTypeMenuTarget" in source
     assert "window.retailedgeOpenNativeTarget = openNativeDeskTarget" in source
-    assert 'if (item.link_type === "Report" || item.link_type === "DocType")' in source
 
 
-def test_edgesuite_sidebar_native_links_use_same_new_tab_policy():
+def test_edgesuite_sidebar_native_links_use_same_quick_entry_policy():
     source = PRODUCT_MENU.read_text(encoding="utf-8")
     assert "function nativeSidebarTarget(label)" in source
     assert "if (matches.length !== 1) return null" in source
