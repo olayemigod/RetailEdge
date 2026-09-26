@@ -22,16 +22,19 @@ The first three open native forms directly. Generic DocType/Report navigation fr
 1. Expense Review remains available to its existing permitted readers.
 2. Reviewer authority continues to come from the existing Expense Review context and server-side review endpoint.
 3. **Review Action** remains EdgeSuite-owned and clickable only when `canReview` is true.
-4. Cashier Expense, User and Expense Category detail links are Native Desk-only.
-5. The direct cell handler independently refuses native form navigation when `can_use_native_desk` is false.
-6. Generic DocType/Report navigation also requires final Native Desk access.
-7. The fallback navigation context uses `retailedge.master_experience.get_retailedge_business_hub_context`.
-8. A read-only EdgeSuite user can still inspect the scoped review dataset but cannot invoke reviewer actions or native-detail forms.
+4. Cashier Expense details open in a shared read-only EdgeSuite detail viewer backed by the governed Cashier Expense read scope.
+5. Expense Category remains EdgeSuite-owned through Setup; User detail remains Native Desk-only.
+6. The Cashier Expense detail viewer exposes an Advanced native form action only when `can_use_native_desk` is true.
+7. Generic DocType/Report navigation also requires final Native Desk access.
+8. The fallback navigation context uses `retailedge.master_experience.get_retailedge_business_hub_context`.
+9. A read-only EdgeSuite user can inspect the scoped expense detail without gaining reviewer authority or Native Desk access.
 
 ## Scope
 
 Runtime:
 - `retailedge/public/js/expense_review/ExpenseReviewReport.vue`
+- `retailedge/public/js/expense_register/CashierExpenseDetailDialog.vue`
+- `retailedge/expense_register.py` — adds only a permission/Branch-scoped read endpoint for the shared detail viewer
 
 Tests:
 - `retailedge/tests/test_rir2f3f23_expense_review_native_detail_containment_contract.py`
@@ -58,7 +61,7 @@ The following remain unchanged:
 
 The review mutation endpoints remain unchanged.
 
-The B4B10 read-scope contract remains unchanged.
+The B4B10 read-scope contract remains authoritative. The new detail endpoint reuses that scope rather than creating a parallel visibility rule.
 
 ## Safety Rules
 
@@ -75,10 +78,12 @@ Focused contracts must verify:
 
 - final access context is fail-closed;
 - Review Action remains EdgeSuite-owned and permission-gated by `canReview`;
-- native detail columns are not clickable for EdgeSuite-only users;
-- the direct native cell path is defensively gated;
+- Cashier Expense detail opens inside EdgeSuite for permitted readers;
+- the detail endpoint reuses authoritative Cashier Expense Company/Branch read scope;
+- the Advanced native Cashier Expense action is hidden for EdgeSuite-only users;
+- the direct native User path remains defensively gated;
 - generic DocType/Report navigation is gated;
-- no backend expense/review/scope behavior changes.
+- review mutations, posting behavior and accounting truth remain unchanged.
 
 ## Freeze Rule
 
