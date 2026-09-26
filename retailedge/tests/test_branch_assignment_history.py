@@ -153,7 +153,7 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 			"def update_branch_assignment_price_lists(",
 			"controlled_price_list_update",
 			'if status == "Ended"',
-			'doc.set("price_lists"',
+			'doc.set("allowed_price_lists"',
 		):
 			self.assertIn(contract, source)
 		method = source[source.index("def update_branch_assignment_price_lists("):source.index("def transfer_branch_assignment(")]
