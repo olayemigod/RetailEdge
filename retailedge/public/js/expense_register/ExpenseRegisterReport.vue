@@ -134,7 +134,6 @@
 		:branch="filters.branch"
 		:canUseNativeDesk="canUseNativeDesk"
 		@close="closeCashierExpenseDetail"
-		@open-native="openNativeCashierExpense"
 	/>
 </template>
 
@@ -645,11 +644,6 @@ export default {
 		closeCashierExpenseDetail() {
 			this.cashierExpenseDetailOpen = false;
 			this.cashierExpenseDetailName = "";
-		},
-		openNativeCashierExpense(expenseName) {
-			if (!this.canUseNativeDesk || !expenseName) return;
-			this.closeCashierExpenseDetail();
-			frappe.set_route("Form", "RetailEdge Cashier Expense", expenseName);
 		},
 		recordExpense() {
 			if (this.config.cashierOnly) {
