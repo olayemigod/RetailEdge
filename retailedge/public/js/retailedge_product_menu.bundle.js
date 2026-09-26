@@ -196,14 +196,6 @@ function requestGuidedCreate() {
 	frappe.set_route(BUSINESS_HUB_ROUTE);
 }
 
-function deskSlug(value) {
-	return String(value || "")
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-|-$/g, "");
-}
-
 function withDocTypeMeta(doctype) {
 	return new Promise((resolve, reject) => {
 		let settled = false;
