@@ -108,6 +108,10 @@ def _post_cashier_expense_to_accounts(
 		frappe.throw(_("This Cashier Expense changed after you opened it. Refresh before posting."))
 
 	settings = get_cashier_expense_posting_settings()
+	if not settings["enabled"]:
+		frappe.throw(_("Cashier Expense accounting posting is disabled in RetailEdge Settings."))
+	if settings["posting_document_type"] != POSTING_DOCUMENT_TYPE:
+		frappe.throw(_("Cashier Expenses can currently post only through Journal Entry."))
 	_assert_posting_access(doc, settings=settings, automatic=automatic)
 
 	preview = build_cashier_expense_posting_preview(doc)
