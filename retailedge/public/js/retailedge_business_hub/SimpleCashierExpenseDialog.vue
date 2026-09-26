@@ -145,6 +145,7 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "./guidedEntryUtils";
 const CONTEXT_METHOD = "retailedge.guided_cashier_expense.get_guided_cashier_expense_context";
 const SEARCH_METHOD = "retailedge.guided_cashier_expense.search_guided_expense_categories";
 const CREATE_METHOD = "retailedge.guided_cashier_expense.create_guided_cashier_expense_draft";
@@ -256,7 +257,7 @@ export default {
 				this.$emit("close");
 				return;
 			}
-			frappe.confirm("Discard the unsaved Cashier Expense changes?", () => this.$emit("close"));
+			confirmAboveEdgeModal("Discard the unsaved Cashier Expense changes?", () => this.$emit("close"));
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
@@ -265,7 +266,7 @@ export default {
 				openNative();
 				return;
 			}
-			frappe.confirm("Discard the unsaved Cashier Expense changes and open the full form?", openNative);
+			confirmAboveEdgeModal("Discard the unsaved Cashier Expense changes and open the full form?", openNative);
 		},
 		async searchCategory(query) {
 			const results = await callMethod(SEARCH_METHOD, {
