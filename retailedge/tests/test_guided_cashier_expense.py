@@ -256,8 +256,10 @@ class TestGuidedCashierExpense(unittest.TestCase):
 		self.assertIn("blockingReasons", component)
 		self.assertIn("projectedCash < 0", component)
 		self.assertIn("Expense Category", component)
-		self.assertIn("Open Full Form", component)
-		self.assertIn('this.$emit("open-native", "RetailEdge Cashier Expense")', component)
+		self.assertIn("RetailEdge workflow form", component)
+		self.assertNotIn("Open Full Form", component)
+		self.assertNotIn("open-native", component)
+		self.assertNotIn("nativeFallbackEnabled", component)
 		self.assertNotIn("expense_account", component)
 		self.assertNotIn("cost_center", component)
 
@@ -270,14 +272,16 @@ class TestGuidedCashierExpense(unittest.TestCase):
 			/ "RetailEdgeBusinessHub.vue"
 		).read_text()
 		start = hub.index("handleSimpleCashierExpenseSaved(result)")
-		end = hub.index("closeCashierExpenseCompletion()", start)
+		end = hub.index("closeCashierExpenseWorkflow()", start)
 		handler = hub[start:end]
-		self.assertIn("cashierExpenseCompletionDocument", handler)
-		self.assertIn("cashierExpenseCompletionOpen = true", handler)
+		self.assertIn("cashierExpenseWorkflowName = name", handler)
+		self.assertIn("cashierExpenseWorkflowOpen = true", handler)
 		self.assertNotIn("frappe.set_route", handler)
 		self.assertNotIn("frappe.new_doc", handler)
 		self.assertNotIn("notifyGuidedDraftSaved", handler)
-		self.assertIn("<GuidedWorkflowCompletionDialog", hub)
+		self.assertIn("<CashierExpenseDetailDialog", hub)
+		self.assertNotIn("<GuidedWorkflowCompletionDialog", hub)
+		self.assertNotIn("openNativeCashierExpense", hub)
 
 	def test_limit_is_small_for_category_search(self):
 		self.assertEqual(MAX_LINK_RESULTS, 20)
