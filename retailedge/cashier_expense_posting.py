@@ -56,8 +56,6 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 	credit_account = getattr(doc, "payment_account", None) or settings.get("default_payable_account")
 	cost_center = getattr(doc, "cost_center", None)
 
-	if not settings["enabled"]:
-		reasons.append("Cashier Expense accounting posting is disabled in RetailEdge Settings.")
 	if settings["posting_document_type"] != "Journal Entry":
 		reasons.append("Cashier Expenses can currently post only through Journal Entry.")
 	if doc.docstatus == 2 or expense_status == "Cancelled":
@@ -121,6 +119,7 @@ def build_cashier_expense_posting_preview(expense_doc_or_name):
 		"expense_name": doc.name,
 		"posting_ready": posting_ready,
 		"posting_block_reason": "\n".join(reasons) if reasons else None,
+		"accounting_posting_enabled": settings["enabled"],
 		"posting_mode": settings["posting_mode"],
 		"posting_document_type": settings["posting_document_type"],
 		"company": company,
