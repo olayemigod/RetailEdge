@@ -34,7 +34,7 @@ The first three open native forms directly. Generic DocType/Report navigation fr
 Runtime:
 - `retailedge/public/js/expense_review/ExpenseReviewReport.vue`
 - `retailedge/public/js/expense_register/CashierExpenseDetailDialog.vue`
-- `retailedge/expense_register.py` — adds only a permission/Branch-scoped read endpoint for the shared detail viewer
+- `retailedge/cashier_expense_detail.py` — dedicated permission/Branch-scoped read service for the shared detail viewer
 
 Tests:
 - `retailedge/tests/test_rir2f3f23_expense_review_native_detail_containment_contract.py`
