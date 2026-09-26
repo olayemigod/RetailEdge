@@ -72,7 +72,7 @@
 									<td>{{ row.effective_to ? formatDate(row.effective_to) : "Current" }}</td>
 									<td><EdgeStatusBadge :status="statusBadge(row.status)" /> <span class="status-text">{{ row.status }}</span></td>
 									<td class="row-actions">
-										<button v-if="canWrite && row.status !== 'Ended'" type="button" class="edge-button edge-button--secondary edge-button--small" @click="openPriceLists(row)">Price Lists</button>
+										<button v-if="canWrite && row.status !== 'Ended'" type="button" class="edge-button edge-button--secondary edge-button--small" @click="openPriceLists(row)">Edit Price Lists</button>
 										<button v-if="canWrite && row.status === 'Active'" type="button" class="edge-button edge-button--secondary edge-button--small" @click="openTransfer(row)">Transfer</button>
 										<button type="button" class="edge-button edge-button--secondary edge-button--small" :disabled="!canUseNativeDesk" :title="canUseNativeDesk ? 'Open the full Branch Assignment form' : 'Advanced workflow: Native Desk access is required'" @click="openNative(row)">{{ canUseNativeDesk ? "Full Form" : "Advanced: Full Form" }}</button>
 									</td>
