@@ -200,6 +200,11 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			"user_message",
 			"last_readiness_refresh_on",
 			"last_readiness_refresh_by",
+			"entry_source",
+			"cash_source",
+			"cash_movement_status",
+			"posting_mode_applied",
+			"client_request_id",
 		].forEach((fieldname) => {
 			frm.set_df_property(fieldname, "read_only", 1);
 		});
@@ -287,6 +292,27 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			});
 		}, group);
 
+		if (
+			frm.doc.docstatus === 1 &&
+			frm.doc.ledger_status !== "Posted" &&
+			frm.events.user_can_post_to_accounts() &&
+			(frm.doc.posting_ready || frm.doc.ledger_status === "Failed")
+		) {
+			frm.add_custom_button(__("Post to Accounts"), () => {
+				frappe.confirm(
+					__("Create and submit the Journal Entry for this Cashier Expense?"),
+					() => {
+						frappe.call({
+							method: "retailedge.cashier_expense_accounting.post_cashier_expense_to_accounts",
+							type: "POST",
+							args: { expense_name: frm.doc.name, expected_modified: frm.doc.modified },
+							callback: () => frm.reload_doc(),
+						});
+					}
+				);
+			}, group);
+		}
+
 		if (frm.doc.docstatus === 1 && frm.events.user_can_refresh_posting_readiness()) {
 			frm.add_custom_button(__("Refresh Posting Readiness"), () => {
 				frappe.call({
@@ -358,10 +384,14 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 
 		if (effectiveStatus === "Pending Ledger") {
 			frm.set_intro(
-				__(
-					"{0} This expense is approved for future ledger posting, but actual posting is not enabled in this phase.",
-					[reviewMessage]
-				),
+				__("{0} This expense is approved and waiting for accounting posting.", [reviewMessage]),
+				"orange"
+			);
+			return;
+		}
+		if (frm.doc.ledger_status === "Failed") {
+			frm.set_intro(
+				__("{0} The till expense is recorded, but accounting posting needs attention: {1}", [reviewMessage, frm.doc.posting_block_reason || ""]),
 				"orange"
 			);
 			return;
@@ -433,6 +463,7 @@ frappe.ui.form.on("RetailEdge Cashier Expense", {
 			[__("Needs Clarification"), __("Daily Audit")],
 			[__("Preview Ledger Posting"), __("Readiness")],
 			[__("Refresh Posting Readiness"), __("Readiness")],
+			[__("Post to Accounts"), __("Readiness")],
 		].forEach(([label, group]) => frm.remove_custom_button(label, group));
 		frm.events.add_review_actions(frm);
 		frm.events.add_daily_audit_actions(frm);
