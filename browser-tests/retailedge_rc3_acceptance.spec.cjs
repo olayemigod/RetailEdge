@@ -160,6 +160,26 @@ test("RC3 waffle opens the permission-aware EdgeSuite product menu", async ({ br
 	}
 });
 
+test("RC3 global Create remains available across RetailEdge product Pages", async ({ browser }) => {
+	const { context, page } = await newPersona(browser, USERS.manager);
+	try {
+		await openProductPage(page, "retailedge-business-hub", "Business Hub");
+		const globalCreate = page.locator("#retailedge-global-create-button");
+		await expect(globalCreate).toBeVisible();
+
+		await openProductPage(page, "action-center", "Action Centre");
+		await expect(globalCreate).toBeVisible();
+		await globalCreate.click();
+
+		await expect(page).toHaveURL(/\/(?:app|desk)\/retailedge-business-hub(?:$|[?#])/);
+		const search = page.getByRole("searchbox", { name: "Search permitted Create entries" });
+		await expect(search).toBeVisible();
+		await expect(search).toBeFocused();
+	} finally {
+		await context.close();
+	}
+});
+
 test("RC3 Ctrl+K belongs to the permission-aware EdgeSuite product menu", async ({ browser }) => {
 	const { context, page } = await newPersona(browser, USERS.manager);
 	try {

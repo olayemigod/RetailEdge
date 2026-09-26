@@ -406,11 +406,11 @@
   {
    "default": "Journal Entry",
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",
-   "description": "Accounting document type used by the configured cashier expense posting workflow.",
+   "description": "Cashier Expenses currently post to ERPNext General Ledger through a submitted Journal Entry. Payment Entry requires a party/payable workflow and is not supported for direct till expenses.",
    "fieldname": "cashier_expense_posting_document_type",
    "fieldtype": "Select",
    "label": "Cashier Expense Posting Document Type",
-   "options": "Journal Entry\nPayment Entry"
+   "options": "Journal Entry"
   },
   {
    "depends_on": "eval:doc.enable_cashier_expense_accounting_posting",

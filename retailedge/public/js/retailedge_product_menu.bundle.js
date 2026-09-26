@@ -5,6 +5,9 @@ const CONTEXT_CACHE_TTL_MS = 30_000;
 const MAX_INSTALL_ATTEMPTS = 6;
 const GUIDED_CREATE_ACTION = "guided-create";
 const BUSINESS_HUB_ROUTE = "retailedge-business-hub";
+const GLOBAL_CREATE_BUTTON_ID = "retailedge-global-create-button";
+const GLOBAL_CREATE_HOST_ID = "retailedge-global-create-host";
+const GLOBAL_CREATE_STYLE_ID = "retailedge-global-create-style";
 
 const GROUP_PRESENTATION = Object.freeze({
 	home: { icon: "home", description: "Business home and command centre." },
@@ -193,27 +196,67 @@ function requestGuidedCreate() {
 	frappe.set_route(BUSINESS_HUB_ROUTE);
 }
 
-function deskSlug(value) {
-	return String(value || "")
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-|-$/g, "");
+function withDocTypeMeta(doctype) {
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			resolve(frappe.get_meta?.(doctype) || null);
+		};
+		try {
+			if (typeof frappe.model?.with_doctype !== "function") {
+				finish();
+				return;
+			}
+			const pending = frappe.model.with_doctype(doctype, finish);
+			if (pending && typeof pending.then === "function") {
+				pending.then(finish).catch(reject);
+			}
+		} catch (error) {
+			reject(error);
+		}
+	});
+}
+
+function canCreateDocType(doctype) {
+	try {
+		return typeof frappe.model?.can_create === "function"
+			? Boolean(frappe.model.can_create(doctype))
+			: false;
+	} catch (_error) {
+		return false;
+	}
+}
+
+async function openDocTypeMenuTarget(doctype) {
+	const target = String(doctype || "").trim();
+	if (!target) return false;
+	try {
+		const meta = await withDocTypeMeta(target);
+		if (meta?.quick_entry && canCreateDocType(target) && typeof frappe.new_doc === "function") {
+			frappe.new_doc(target);
+			return true;
+		}
+	} catch (error) {
+		console.warn(`[RetailEdge Product Menu] quick-entry detection failed for ${target}`, error);
+	}
+	frappe.set_route("List", target);
+	return true;
 }
 
 function openNativeDeskTarget(linkType, linkTo) {
 	const target = String(linkTo || "").trim();
 	if (!target) return false;
-	let url = "";
 	if (linkType === "Report") {
-		url = `/app/query-report/${encodeURIComponent(target)}`;
-	} else if (linkType === "DocType") {
-		url = `/app/${deskSlug(target)}`;
-	} else {
-		return false;
+		frappe.set_route("query-report", target);
+		return true;
 	}
-	window.open(url, "_blank", "noopener,noreferrer");
-	return true;
+	if (linkType === "DocType") {
+		void openDocTypeMenuTarget(target);
+		return true;
+	}
+	return false;
 }
 
 function nativeSidebarTarget(label) {
@@ -296,6 +339,8 @@ async function installProductMenu({ force = false } = {}) {
 		state.installed = true;
 		state.lastError = null;
 		state.lastConfig = config;
+		installGlobalCreateMountObserver();
+		mountGlobalCreateButton();
 		return config;
 	})()
 		.catch((error) => {
@@ -318,7 +363,9 @@ function refreshProductMenu() {
 	const edgeUI = runtime();
 	if (!edgeUI || !state.lastConfig) return false;
 	edgeUI.refreshProductMenu?.();
-	return edgeUI.mountProductMenu?.() ?? true;
+	const mounted = edgeUI.mountProductMenu?.() ?? true;
+	mountGlobalCreateButton();
+	return mounted;
 }
 
 const PRODUCT_MENU_DROPDOWN_ID = "edge-product-menu-dropdown";
@@ -330,6 +377,179 @@ const PRODUCT_MENU_TRIGGER_SELECTOR = [
 	".edge-topbar__waffle",
 	"[data-edge-product-menu-trigger]",
 ].join(", ");
+
+function hasGuidedCreateAction() {
+	return Boolean(
+		(state.lastConfig?.sections || []).some((section) =>
+			(section.items || []).some(
+				(item) => item.link_type === "Action" && item.link_to === GUIDED_CREATE_ACTION
+			)
+		)
+	);
+}
+
+function ensureGlobalCreateStyle() {
+	if (document.getElementById(GLOBAL_CREATE_STYLE_ID)) return;
+	const style = document.createElement("style");
+	style.id = GLOBAL_CREATE_STYLE_ID;
+	style.textContent = `
+		#${GLOBAL_CREATE_HOST_ID} {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			list-style: none;
+			margin: 0;
+			padding: 0;
+		}
+		#${GLOBAL_CREATE_BUTTON_ID} {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.35rem;
+			min-height: 32px;
+			padding: 0 0.7rem;
+			margin-inline: 0.25rem;
+			border: 1px solid var(--edge-border-color, var(--border-color));
+			border-radius: 999px;
+			background: var(--edge-surface, var(--card-bg));
+			color: var(--edge-text, var(--text-color));
+			font: inherit;
+			font-size: 0.82rem;
+			font-weight: 600;
+			line-height: 1;
+			cursor: pointer;
+			white-space: nowrap;
+		}
+		#${GLOBAL_CREATE_BUTTON_ID}:hover {
+			background: var(--edge-surface-subtle, var(--subtle-fg));
+		}
+		#${GLOBAL_CREATE_BUTTON_ID} .retailedge-global-create__plus {
+			font-size: 1.05rem;
+			line-height: 1;
+		}
+		@media (max-width: 768px) {
+			#${GLOBAL_CREATE_BUTTON_ID} {
+				width: 32px;
+				min-width: 32px;
+				padding: 0;
+			}
+			#${GLOBAL_CREATE_BUTTON_ID} .retailedge-global-create__label {
+				display: none;
+			}
+		}
+	`;
+	document.head?.appendChild(style);
+}
+
+function createGlobalCreateButton() {
+	const button = document.createElement("button");
+	button.id = GLOBAL_CREATE_BUTTON_ID;
+	button.type = "button";
+	button.setAttribute("aria-label", "Create");
+	button.setAttribute("title", "Create");
+	button.setAttribute("data-retailedge-global-create", "1");
+
+	const plus = document.createElement("span");
+	plus.className = "retailedge-global-create__plus";
+	plus.setAttribute("aria-hidden", "true");
+	plus.textContent = "+";
+
+	const label = document.createElement("span");
+	label.className = "retailedge-global-create__label";
+	label.textContent = "Create";
+
+	button.append(plus, label);
+	button.addEventListener("click", (event) => {
+		event.preventDefault();
+		event.stopPropagation();
+		requestGuidedCreate();
+	});
+	return button;
+}
+
+function locateGlobalCreateAnchor() {
+	const trigger = document.querySelector(PRODUCT_MENU_TRIGGER_SELECTOR);
+	if (trigger) {
+		return {
+			node: trigger.closest("li, .dropdown, .edge-topbar__action") || trigger,
+			position: "afterend",
+		};
+	}
+
+	const notification = document.querySelector(
+		".dropdown-notifications, .notifications, .navbar .notifications-icon, [data-original-title*='Notification'], [aria-label*='Notification']"
+	);
+	if (notification) {
+		return {
+			node: notification.closest("li, .dropdown, .edge-topbar__action") || notification,
+			position: "beforebegin",
+		};
+	}
+
+	const toolbar = document.querySelector(
+		".navbar .navbar-nav:last-child, .navbar .navbar-right, .navbar .ml-auto, .edge-topbar__actions"
+	);
+	return toolbar ? { node: toolbar, position: "prepend" } : null;
+}
+
+function createGlobalCreateHost(anchor) {
+	const parentTag = String(anchor?.node?.parentElement?.tagName || "").toUpperCase();
+	const host = document.createElement(parentTag === "UL" || parentTag === "OL" ? "li" : "div");
+	host.id = GLOBAL_CREATE_HOST_ID;
+	host.className = "retailedge-global-create-host";
+	host.setAttribute("data-retailedge-global-create-host", "1");
+	host.appendChild(createGlobalCreateButton());
+	return host;
+}
+
+function mountGlobalCreateButton() {
+	const existingHost = document.getElementById(GLOBAL_CREATE_HOST_ID);
+	if (!hasGuidedCreateAction()) {
+		existingHost?.remove();
+		return false;
+	}
+
+	ensureGlobalCreateStyle();
+	const anchor = locateGlobalCreateAnchor();
+	if (!anchor?.node) return false;
+
+	const host = existingHost || createGlobalCreateHost(anchor);
+	if (anchor.position === "prepend") {
+		if (host.parentElement !== anchor.node || anchor.node.firstElementChild !== host) {
+			anchor.node.prepend(host);
+		}
+	} else if (host.parentElement !== anchor.node.parentElement || host.previousElementSibling !== anchor.node) {
+		anchor.node.insertAdjacentElement(anchor.position, host);
+	}
+	return Boolean(document.getElementById(GLOBAL_CREATE_BUTTON_ID));
+}
+
+let globalCreateObserver = null;
+let globalCreateMountScheduled = false;
+
+function scheduleGlobalCreateMount() {
+	if (globalCreateMountScheduled) return;
+	globalCreateMountScheduled = true;
+	const schedule = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
+	schedule(() => {
+		globalCreateMountScheduled = false;
+		mountGlobalCreateButton();
+	});
+}
+
+function installGlobalCreateMountObserver() {
+	if (globalCreateObserver || !document.body) {
+		scheduleGlobalCreateMount();
+		return;
+	}
+	globalCreateObserver = new MutationObserver(() => {
+		if (!hasGuidedCreateAction()) return;
+		const button = document.getElementById(GLOBAL_CREATE_BUTTON_ID);
+		if (!button?.isConnected) scheduleGlobalCreateMount();
+	});
+	globalCreateObserver.observe(document.body, { childList: true, subtree: true });
+	scheduleGlobalCreateMount();
+}
 
 function productMenuIsOpen() {
 	const dropdown = document.getElementById(PRODUCT_MENU_DROPDOWN_ID);
@@ -383,6 +603,7 @@ function scheduleRefresh() {
 	schedule(() => {
 		if (state.installed) refreshProductMenu();
 		else installProductMenu();
+		scheduleGlobalCreateMount();
 	});
 }
 
@@ -398,6 +619,8 @@ window.retailedgeCacheBusinessHubContext = cacheContext;
 window.retailedgeInstallProductMenu = installProductMenu;
 window.retailedgeRefreshProductMenu = refreshProductMenu;
 window.retailedgeRequestProductMenuOpen = requestProductMenuOpen;
+window.retailedgeMountGlobalCreateButton = mountGlobalCreateButton;
+window.retailedgeOpenDocTypeMenuTarget = openDocTypeMenuTarget;
 window.retailedgeOpenNativeTarget = openNativeDeskTarget;
 window.retailedgeProductMenuState = state;
 

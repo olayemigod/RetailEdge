@@ -105,15 +105,81 @@
 					</div>
 				</section>
 
+				<section class="detail-section workflow-section">
+					<h4>Workflow</h4>
+					<div v-if="workflow.posting_preview" class="detail-note">
+						<span>Posting Preview</span>
+						<p>{{ workflow.posting_preview }}</p>
+					</div>
+					<label v-if="hasReviewActions" class="workflow-remarks">
+						<span>Review Remarks</span>
+						<textarea
+							v-model="workflowRemarks"
+							class="form-control"
+							rows="3"
+							placeholder="Optional review note or reason"
+						></textarea>
+					</label>
+					<div v-if="actionError" class="workflow-error" role="alert">{{ actionError }}</div>
+					<div class="workflow-actions">
+						<button
+							v-if="capabilities.can_submit"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="Boolean(actionRunning)"
+							@click="applyWorkflowAction('submit')"
+						>
+							{{ actionRunning === "submit" ? "Submitting…" : "Submit Expense" }}
+						</button>
+						<button
+							v-if="capabilities.can_approve"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="Boolean(actionRunning)"
+							@click="applyWorkflowAction('approve')"
+						>
+							{{ actionRunning === "approve" ? "Approving…" : "Approve" }}
+						</button>
+						<button
+							v-if="capabilities.can_reject"
+							type="button"
+							class="edge-button workflow-danger"
+							:disabled="Boolean(actionRunning)"
+							@click="applyWorkflowAction('reject')"
+						>
+							{{ actionRunning === "reject" ? "Rejecting…" : "Reject" }}
+						</button>
+						<button
+							v-if="capabilities.can_reopen"
+							type="button"
+							class="edge-button"
+							:disabled="Boolean(actionRunning)"
+							@click="applyWorkflowAction('reopen')"
+						>
+							{{ actionRunning === "reopen" ? "Reopening…" : "Reopen" }}
+						</button>
+						<button
+							v-if="capabilities.can_refresh_posting"
+							type="button"
+							class="edge-button"
+							:disabled="Boolean(actionRunning)"
+							@click="applyWorkflowAction('refresh_posting')"
+						>
+							{{ actionRunning === "refresh_posting" ? "Refreshing…" : "Refresh Posting Readiness" }}
+						</button>
+						<button
+							v-if="capabilities.can_post_accounts"
+							type="button"
+							class="edge-button edge-button--primary"
+							:disabled="Boolean(actionRunning)"
+							@click="applyWorkflowAction('post_accounts')"
+						>
+							{{ actionRunning === "post_accounts" ? "Posting…" : "Post Journal Entry" }}
+						</button>
+					</div>
+				</section>
+
 				<div class="detail-actions">
-					<button
-						v-if="canUseNativeDesk"
-						type="button"
-						class="edge-button"
-						@click="openNativeRecord"
-					>
-						Advanced: Open Full Record
-					</button>
 					<button type="button" class="edge-button edge-button--primary" @click="$emit('close')">Close</button>
 				</div>
 			</template>
@@ -123,6 +189,7 @@
 
 <script>
 const DETAIL_METHOD = "retailedge.cashier_expense_detail.get_cashier_expense_detail";
+const ACTION_METHOD = "retailedge.cashier_expense_detail.apply_cashier_expense_workflow_action";
 const runtimeComponents =
 	typeof window !== "undefined" && window.EdgeSuiteUI
 		? window.EdgeSuiteUI.components || window.EdgeSuiteUI
@@ -158,14 +225,17 @@ export default {
 		expenseName: { type: String, default: "" },
 		company: { type: String, default: "" },
 		branch: { type: String, default: "" },
-		canUseNativeDesk: { type: Boolean, default: false },
 	},
-	emits: ["close"],
+	emits: ["close", "updated"],
 	data() {
 		return {
 			loading: false,
 			error: "",
 			detail: null,
+			workflow: { capabilities: {} },
+			workflowRemarks: "",
+			actionRunning: "",
+			actionError: "",
 			loadToken: 0,
 		};
 	},
@@ -187,6 +257,16 @@ export default {
 				|| this.detail.review_remarks
 				|| "";
 		},
+		capabilities() {
+			return this.workflow?.capabilities || {};
+		},
+		hasReviewActions() {
+			return Boolean(
+				this.capabilities.can_approve
+				|| this.capabilities.can_reject
+				|| this.capabilities.can_reopen
+			);
+		},
 	},
 	watch: {
 		open(next) {
@@ -203,6 +283,10 @@ export default {
 			this.loading = false;
 			this.error = "";
 			this.detail = null;
+			this.workflow = { capabilities: {} };
+			this.workflowRemarks = "";
+			this.actionRunning = "";
+			this.actionError = "";
 		},
 		async loadDetail() {
 			const expenseName = String(this.expenseName || "").trim();
@@ -218,6 +302,7 @@ export default {
 				});
 				if (token !== this.loadToken) return;
 				this.detail = result.expense || null;
+				this.workflow = result.workflow || { capabilities: {} };
 				if (!this.detail) this.error = "Cashier Expense details were not returned.";
 			} catch (error) {
 				if (token !== this.loadToken) return;
@@ -250,10 +335,32 @@ export default {
 			try { return frappe.datetime.str_to_user(value); }
 			catch (_error) { return String(value); }
 		},
-		openNativeRecord() {
-			if (!this.canUseNativeDesk || !this.detail?.name) return;
-			this.$emit("close");
-			frappe.set_route("Form", "RetailEdge Cashier Expense", this.detail.name);
+		async applyWorkflowAction(action) {
+			if (!this.detail?.name || this.actionRunning) return;
+			this.actionRunning = action;
+			this.actionError = "";
+			try {
+				const result = await callMethod(ACTION_METHOD, {
+					expense_name: this.detail.name,
+					action,
+					remarks: this.workflowRemarks || "",
+					expected_modified: this.detail.modified || "",
+					company: this.company || "",
+					branch: this.branch || "",
+				});
+				this.detail = result.expense || this.detail;
+				this.workflow = result.workflow || { capabilities: {} };
+				if (["approve", "reject", "reopen"].includes(action)) this.workflowRemarks = "";
+				this.$emit("updated", this.detail);
+				frappe.show_alert?.({
+					message: __("Cashier Expense workflow updated."),
+					indicator: "green",
+				});
+			} catch (error) {
+				this.actionError = errorMessage(error, "Unable to update the Cashier Expense workflow.");
+			} finally {
+				this.actionRunning = "";
+			}
 		},
 	},
 };
@@ -277,6 +384,12 @@ export default {
 .detail-note p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .evidence-link { width:max-content; max-width:100%; overflow-wrap:anywhere; font-weight:600; }
 .detail-actions { display:flex; justify-content:flex-end; gap:.6rem; flex-wrap:wrap; }
+.workflow-section { gap:.8rem; }
+.workflow-remarks { display:grid; gap:.35rem; }
+.workflow-remarks > span { color:var(--text-muted); font-size:.76rem; }
+.workflow-actions { display:flex; gap:.55rem; flex-wrap:wrap; align-items:center; }
+.workflow-error { padding:.65rem .75rem; border:1px solid var(--edge-danger,#d92d20); border-radius:.55rem; color:var(--edge-danger,#b42318); background:var(--edge-danger-subtle,#fef3f2); }
+.workflow-danger { border-color:var(--edge-danger,#d92d20); color:var(--edge-danger,#b42318); }
 @media (max-width:900px) {
 	.detail-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
 	.detail-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -285,6 +398,7 @@ export default {
 	.detail-summary,
 	.detail-grid { grid-template-columns:1fr; }
 	.detail-actions { flex-direction:column-reverse; }
-	.detail-actions .edge-button { width:100%; }
+	.detail-actions .edge-button,
+	.workflow-actions .edge-button { width:100%; }
 }
 </style>

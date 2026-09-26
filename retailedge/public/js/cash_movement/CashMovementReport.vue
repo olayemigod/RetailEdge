@@ -74,7 +74,22 @@
 						@select="onAccountSelected"
 						@clear="clearAccount"
 					/>
-					<EdgeDropdown v-model="filters.movement_type" :options="movementTypes" label="Movement Type" placeholder="All movements" />
+					<div class="movement-type-filter">
+						<EdgeDropdown
+							v-model="filters.movement_type"
+							:options="movementTypeOptions"
+							label="Movement Type"
+							placeholder="All movements"
+						/>
+						<button
+							v-if="filters.movement_type"
+							type="button"
+							class="filter-clear-action"
+							@click="clearMovementType"
+						>
+							Clear Movement Type
+						</button>
+					</div>
 					<EdgeSmartDateRange v-model="smartDate" label="Date Range" :referenceDate="smartDateReference || null" dateOrder="DMY" @resolved="onSmartDateResolved" />
 					<div class="filter-note">
 						<span>{{ dateRangeLimit }}-day maximum per request</span>
@@ -189,6 +204,12 @@ export default {
 		},
 		paymentsButtonLabel() {
 			return this.paymentManagementAvailable ? "Payments" : "Advanced: Payments in ERPNext";
+		},
+		movementTypeOptions() {
+			return [
+				{ value: "", label: "All movements" },
+				...(this.movementTypes || []).map((value) => ({ value, label: value })),
+			];
 		},
 		scopeLabel() {
 			if (this.filters.branch) return `Branch: ${this.filters.branch}`;
@@ -340,6 +361,10 @@ export default {
 		clearAccount() {
 			this.filters.account = "";
 			this.accountLabel = "";
+			this.currentPage = 1;
+		},
+		clearMovementType() {
+			this.filters.movement_type = "";
 			this.currentPage = 1;
 		},
 		applyFilters() {
@@ -506,6 +531,18 @@ export default {
 .secondary-action { cursor: pointer; font-weight: 600; }
 .full { width: 100%; }
 .filter-note { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--edge-text-muted, #667085); }
+.movement-type-filter { display: grid; gap: 4px; min-width: 0; }
+.filter-clear-action {
+	justify-self: start;
+	border: 0;
+	background: transparent;
+	color: var(--edge-primary, #2563eb);
+	font-size: 0.75rem;
+	font-weight: 600;
+	padding: 0;
+	cursor: pointer;
+}
+.filter-clear-action:hover { text-decoration: underline; }
 
 @media (max-width: 1100px) { .cash-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .cash-filter-grid { grid-template-columns: 1fr; } }

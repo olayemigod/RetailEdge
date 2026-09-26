@@ -129,7 +129,7 @@ def approve_cashier_expense(expense_name, remarks=None):
 	doc.rejected_on = None
 	if remarks is not None:
 		doc.review_remarks = remarks
-	doc.save(ignore_permissions=True)
+	doc.save()
 	append_cashier_expense_action_log(
 		doc,
 		action="Approved",
@@ -155,7 +155,7 @@ def reject_cashier_expense(expense_name, remarks=None):
 	doc.approved_on = None
 	if remarks is not None:
 		doc.review_remarks = remarks
-	doc.save(ignore_permissions=True)
+	doc.save()
 	append_cashier_expense_action_log(
 		doc,
 		action="Rejected",
@@ -188,7 +188,7 @@ def reopen_cashier_expense(expense_name, remarks=None):
 	doc.rejected_on = None
 	if remarks is not None:
 		doc.review_remarks = remarks
-	doc.save(ignore_permissions=True)
+	doc.save()
 	append_cashier_expense_action_log(
 		doc,
 		action="Reopened",

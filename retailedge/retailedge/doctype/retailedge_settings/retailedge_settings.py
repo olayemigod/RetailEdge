@@ -54,6 +54,19 @@ class RetailEdgeSettings(Document):
 				_("Enable Accounting Posting for Cashier Expenses before selecting Direct Posting.")
 			)
 
+		posting_document_type = str(
+			getattr(self, "cashier_expense_posting_document_type", None) or "Journal Entry"
+		).strip()
+		if int(getattr(self, "enable_cashier_expense_accounting_posting", 0) or 0):
+			if posting_document_type != "Journal Entry":
+				frappe.throw(
+					_(
+						"Cashier Expense accounting currently supports Journal Entry posting only. "
+						"Payment Entry requires a party/payable workflow and is not supported for direct till expenses."
+					)
+				)
+			self.cashier_expense_posting_document_type = "Journal Entry"
+
 	def _validate_price_list_governance(self):
 		if not int(getattr(self, "enable_price_list_governance", 1) or 0):
 			return

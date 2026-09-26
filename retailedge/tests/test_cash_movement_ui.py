@@ -46,6 +46,13 @@ class TestCashMovementUI(unittest.TestCase):
 		self.assertNotIn("localStorage", component)
 		self.assertNotIn("sessionStorage", component)
 
+	def test_movement_type_filter_has_explicit_reset_path(self):
+		component = COMPONENT.read_text()
+		self.assertIn('{ value: "", label: "All movements" }', component)
+		self.assertIn('v-if="filters.movement_type"', component)
+		self.assertIn('@click="clearMovementType"', component)
+		self.assertIn('this.filters.movement_type = ""', component)
+
 	def test_cash_movement_registers_edgesuite_paginated_provider(self):
 		bundle = (APP_ROOT / "public" / "js" / "cash_movement.bundle.js").read_text()
 		self.assertIn('const REPORT_PRODUCT = "RetailEdge"', bundle)

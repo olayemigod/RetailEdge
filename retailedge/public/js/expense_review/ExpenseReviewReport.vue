@@ -69,8 +69,8 @@
 		:expenseName="cashierExpenseDetailName"
 		:company="filters.company"
 		:branch="filters.branch"
-		:canUseNativeDesk="canUseNativeDesk"
 		@close="closeCashierExpenseDetail"
+		@updated="fetchData"
 	/>
 </template>
 
