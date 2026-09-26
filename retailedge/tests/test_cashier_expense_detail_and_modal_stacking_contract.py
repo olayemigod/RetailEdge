@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-EXPENSE_REGISTER = APP_ROOT / "expense_register.py"
+CASHIER_DETAIL = APP_ROOT / "cashier_expense_detail.py"
 REGISTER_COMPONENT = APP_ROOT / "public/js/expense_register/ExpenseRegisterReport.vue"
 DETAIL_COMPONENT = APP_ROOT / "public/js/expense_register/CashierExpenseDetailDialog.vue"
 REVIEW_COMPONENT = APP_ROOT / "public/js/expense_review/ExpenseReviewReport.vue"
@@ -26,10 +26,9 @@ def _read(path: Path) -> str:
 
 
 def test_cashier_expense_detail_endpoint_is_permission_and_branch_scoped():
-	source = _read(EXPENSE_REGISTER)
+	source = _read(CASHIER_DETAIL)
 	start = source.index("def get_cashier_expense_detail(")
-	end = source.index("\n@frappe.whitelist()\ndef get_expense_register_context", start)
-	detail_endpoint = source[start:end]
+	detail_endpoint = source[start:]
 
 	assert "apply_cashier_expense_read_scope(filters)" in detail_endpoint
 	assert 'frappe.get_list(' in detail_endpoint
@@ -50,7 +49,7 @@ def test_cashier_expense_lists_use_shared_edgesuite_detail_viewer():
 	assert 'this.filters.view_mode === "cashier" || this.config.cashierOnly' in register
 	assert 'import CashierExpenseDetailDialog from "../expense_register/CashierExpenseDetailDialog.vue";' in review
 	assert 'if (column.fieldname === "name") { this.openCashierExpenseDetail(value); return; }' in review
-	assert 'retailedge.expense_register.get_cashier_expense_detail' in detail
+	assert 'retailedge.cashier_expense_detail.get_cashier_expense_detail' in detail
 	assert ':canUseNativeDesk="canUseNativeDesk"' in register
 	assert ':canUseNativeDesk="canUseNativeDesk"' in review
 	assert "apply_expense_review_action" not in detail
