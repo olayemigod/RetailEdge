@@ -73,6 +73,10 @@ class RetailEdgeCashierExpense(Document):
 		attempt_direct_cashier_expense_posting(self)
 
 	def before_cancel(self):
+		if self.ledger_status == "Posted" or self.posting_reference:
+			frappe.throw(
+				_("Posted Cashier Expenses cannot be cancelled while their accounting entry is active. Use a controlled accounting reversal before cancelling the operational record.")
+			)
 		self._status_before_cancel = self.expense_status
 		self.expense_status = "Cancelled"
 		self.set_posting_readiness_preview()
