@@ -7,11 +7,29 @@ from retailedge.utils.settings import clear_retailedge_settings_cache
 
 class RetailEdgeSettings(Document):
 	def validate(self):
+		self._sync_cashier_expense_posting_policy()
 		self._set_bank_auto_match_guidance()
 		self._validate_business_expense_posting_workflow_state()
 
 	def on_update(self):
 		clear_retailedge_settings_cache()
+
+	def _sync_cashier_expense_posting_policy(self):
+		mode = str(getattr(self, "cashier_expense_posting_mode", None) or "Controlled Posting").strip()
+		if mode not in {"Controlled Posting", "Direct Posting"}:
+			frappe.throw(_("Cashier Expense Posting Mode must be Controlled Posting or Direct Posting."))
+		self.cashier_expense_posting_mode = mode
+		# Keep the legacy boolean synchronized for backward compatibility with
+		# older integrations while the Select policy is the authoritative setting.
+		self.require_cashier_expense_approval_before_posting = 0 if mode == "Direct Posting" else 1
+		if (
+			mode == "Direct Posting"
+			and int(getattr(self, "enable_cashier_expense_workflow", 0) or 0)
+			and not int(getattr(self, "enable_cashier_expense_accounting_posting", 0) or 0)
+		):
+			frappe.throw(
+				_("Enable Accounting Posting for Cashier Expenses before selecting Direct Posting.")
+			)
 
 	def _validate_business_expense_posting_workflow_state(self):
 		state = str(
