@@ -5,6 +5,8 @@ const CONTEXT_CACHE_TTL_MS = 30_000;
 const MAX_INSTALL_ATTEMPTS = 6;
 const GUIDED_CREATE_ACTION = "guided-create";
 const BUSINESS_HUB_ROUTE = "retailedge-business-hub";
+const GLOBAL_CREATE_BUTTON_ID = "retailedge-global-create-button";
+const GLOBAL_CREATE_STYLE_ID = "retailedge-global-create-style";
 
 const GROUP_PRESENTATION = Object.freeze({
 	home: { icon: "home", description: "Business home and command centre." },
@@ -296,6 +298,7 @@ async function installProductMenu({ force = false } = {}) {
 		state.installed = true;
 		state.lastError = null;
 		state.lastConfig = config;
+		mountGlobalCreateButton();
 		return config;
 	})()
 		.catch((error) => {
@@ -318,7 +321,9 @@ function refreshProductMenu() {
 	const edgeUI = runtime();
 	if (!edgeUI || !state.lastConfig) return false;
 	edgeUI.refreshProductMenu?.();
-	return edgeUI.mountProductMenu?.() ?? true;
+	const mounted = edgeUI.mountProductMenu?.() ?? true;
+	mountGlobalCreateButton();
+	return mounted;
 }
 
 const PRODUCT_MENU_DROPDOWN_ID = "edge-product-menu-dropdown";
@@ -330,6 +335,132 @@ const PRODUCT_MENU_TRIGGER_SELECTOR = [
 	".edge-topbar__waffle",
 	"[data-edge-product-menu-trigger]",
 ].join(", ");
+
+function hasGuidedCreateAction() {
+	return Boolean(
+		(state.lastConfig?.sections || []).some((section) =>
+			(section.items || []).some(
+				(item) => item.link_type === "Action" && item.link_to === GUIDED_CREATE_ACTION
+			)
+		)
+	);
+}
+
+function ensureGlobalCreateStyle() {
+	if (document.getElementById(GLOBAL_CREATE_STYLE_ID)) return;
+	const style = document.createElement("style");
+	style.id = GLOBAL_CREATE_STYLE_ID;
+	style.textContent = `
+		#${GLOBAL_CREATE_BUTTON_ID} {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.35rem;
+			min-height: 32px;
+			padding: 0 0.7rem;
+			margin-inline: 0.25rem;
+			border: 1px solid var(--edge-border-color, var(--border-color));
+			border-radius: 999px;
+			background: var(--edge-surface, var(--card-bg));
+			color: var(--edge-text, var(--text-color));
+			font: inherit;
+			font-size: 0.82rem;
+			font-weight: 600;
+			line-height: 1;
+			cursor: pointer;
+			white-space: nowrap;
+		}
+		#${GLOBAL_CREATE_BUTTON_ID}:hover {
+			background: var(--edge-surface-subtle, var(--subtle-fg));
+		}
+		#${GLOBAL_CREATE_BUTTON_ID} .retailedge-global-create__plus {
+			font-size: 1.05rem;
+			line-height: 1;
+		}
+		@media (max-width: 768px) {
+			#${GLOBAL_CREATE_BUTTON_ID} {
+				width: 32px;
+				min-width: 32px;
+				padding: 0;
+			}
+			#${GLOBAL_CREATE_BUTTON_ID} .retailedge-global-create__label {
+				display: none;
+			}
+		}
+	`;
+	document.head?.appendChild(style);
+}
+
+function createGlobalCreateButton() {
+	const button = document.createElement("button");
+	button.id = GLOBAL_CREATE_BUTTON_ID;
+	button.type = "button";
+	button.setAttribute("aria-label", "Create");
+	button.setAttribute("title", "Create");
+	button.setAttribute("data-retailedge-global-create", "1");
+
+	const plus = document.createElement("span");
+	plus.className = "retailedge-global-create__plus";
+	plus.setAttribute("aria-hidden", "true");
+	plus.textContent = "+";
+
+	const label = document.createElement("span");
+	label.className = "retailedge-global-create__label";
+	label.textContent = "Create";
+
+	button.append(plus, label);
+	button.addEventListener("click", (event) => {
+		event.preventDefault();
+		event.stopPropagation();
+		requestGuidedCreate();
+	});
+	return button;
+}
+
+function locateGlobalCreateAnchor() {
+	const trigger = document.querySelector(PRODUCT_MENU_TRIGGER_SELECTOR);
+	if (trigger) {
+		return {
+			node: trigger.closest("li, .dropdown, .edge-topbar__action") || trigger,
+			position: "afterend",
+		};
+	}
+
+	const notification = document.querySelector(
+		".dropdown-notifications, .notifications, [data-original-title*='Notification'], [aria-label*='Notification']"
+	);
+	if (notification) {
+		return {
+			node: notification.closest("li, .dropdown, .edge-topbar__action") || notification,
+			position: "beforebegin",
+		};
+	}
+
+	const toolbar = document.querySelector(".navbar .navbar-right, .navbar .ml-auto, .edge-topbar__actions");
+	return toolbar ? { node: toolbar, position: "prepend" } : null;
+}
+
+function mountGlobalCreateButton() {
+	const existing = document.getElementById(GLOBAL_CREATE_BUTTON_ID);
+	if (!hasGuidedCreateAction()) {
+		existing?.remove();
+		return false;
+	}
+
+	ensureGlobalCreateStyle();
+	const anchor = locateGlobalCreateAnchor();
+	if (!anchor?.node) return false;
+
+	const button = existing || createGlobalCreateButton();
+	if (anchor.position === "prepend") {
+		if (button.parentElement !== anchor.node || anchor.node.firstElementChild !== button) {
+			anchor.node.prepend(button);
+		}
+	} else if (button.parentElement !== anchor.node.parentElement || button.previousElementSibling !== anchor.node) {
+		anchor.node.insertAdjacentElement(anchor.position, button);
+	}
+	return true;
+}
 
 function productMenuIsOpen() {
 	const dropdown = document.getElementById(PRODUCT_MENU_DROPDOWN_ID);
@@ -398,6 +529,7 @@ window.retailedgeCacheBusinessHubContext = cacheContext;
 window.retailedgeInstallProductMenu = installProductMenu;
 window.retailedgeRefreshProductMenu = refreshProductMenu;
 window.retailedgeRequestProductMenuOpen = requestProductMenuOpen;
+window.retailedgeMountGlobalCreateButton = mountGlobalCreateButton;
 window.retailedgeOpenNativeTarget = openNativeDeskTarget;
 window.retailedgeProductMenuState = state;
 
