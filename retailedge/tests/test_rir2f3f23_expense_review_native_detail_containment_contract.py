@@ -50,8 +50,8 @@ def test_generic_native_navigation_is_defensively_gated():
 	assert 'if ((item.target_type === "Report" || item.target_type === "DocType") && !this.canUseNativeDesk) return;' in source
 
 
-def test_slice_changes_no_expense_review_backend_semantics():
+def test_cashier_expense_workflow_remains_edgesuite_owned_and_scoped():
 	doc = DOC.read_text(encoding="utf-8")
-	assert "No Expense Review backend file is changed" in doc
+	assert "Cashier Expense lifecycle actions remain inside EdgeSuite" in doc
 	assert "review mutation endpoints remain unchanged" in doc
-	assert "B4B10 read-scope contract remains unchanged" in doc
+	assert "B4B10 read-scope contract remains authoritative" in doc
