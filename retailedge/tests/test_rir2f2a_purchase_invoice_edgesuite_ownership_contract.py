@@ -65,8 +65,9 @@ class TestRIR2F2APurchaseInvoiceEdgeSuiteOwnershipContract(unittest.TestCase):
 
 	def test_transaction_workspace_keeps_purchase_invoice_create_and_read_inside_edgesuite(self):
 		source = (APP_ROOT / "public/js/transaction_workspace/TransactionWorkspace.vue").read_text(encoding="utf-8")
-		self.assertIn('if (action.doctype === "Purchase Invoice")', source)
-		self.assertIn("this.simplePurchaseInvoiceOpen = true", source)
+		self.assertIn("GUIDED_DOCTYPES.has(action.doctype)", source)
+		self.assertIn("this.openQuickTransaction(action)", source)
+		self.assertIn('if (action?.doctype === "Purchase Invoice") this.simplePurchaseInvoiceOpen = true;', source)
 		self.assertIn('if (action?.doctype === "Purchase Invoice") return "purchase-register";', source)
 		self.assertIn("const owner = this.readOwnerPage(action);", source)
 		self.assertIn("frappe.set_route(owner);", source)
