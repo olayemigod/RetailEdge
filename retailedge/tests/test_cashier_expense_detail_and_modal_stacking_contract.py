@@ -88,3 +88,52 @@ def test_cashier_expense_workflow_does_not_bypass_document_permissions():
 		assert "doc.has_permission(\"write\")" in block
 		assert "doc.save()" in block
 		assert "ignore_permissions=True" not in block
+
+
+def test_cashier_expense_quick_create_has_no_native_form_escape():
+	quick = _read(APP_ROOT / "public/js/retailedge_business_hub/SimpleCashierExpenseDialog.vue")
+	hub = _read(APP_ROOT / "public/js/retailedge_business_hub/RetailEdgeBusinessHub.vue")
+
+	assert "Open Full Form" not in quick
+	assert "openFullForm()" not in quick
+	assert "open-native" not in quick
+	assert "nativeFallbackEnabled" not in quick
+	assert "openNativeCashierExpense" not in hub
+	assert 'CashierExpenseDetailDialog' in hub
+	assert ':expenseName="cashierExpenseWorkflowName"' in hub
+
+
+def test_cashier_expense_accounting_posts_through_submitted_journal_entry_only():
+	accounting = _read(APP_ROOT / "cashier_expense_accounting.py")
+	settings_json = _read(
+		APP_ROOT / "retailedge/doctype/retailedge_settings/retailedge_settings.json"
+	)
+	settings_py = _read(
+		APP_ROOT / "retailedge/doctype/retailedge_settings/retailedge_settings.py"
+	)
+
+	assert 'POSTING_DOCUMENT_TYPE = "Journal Entry"' in accounting
+	assert 'journal = frappe.new_doc(POSTING_DOCUMENT_TYPE)' in accounting
+	assert 'journal.insert()' in accounting
+	assert 'journal.has_permission("submit")' in accounting
+	assert 'journal.submit()' in accounting
+	assert '"debit_in_account_currency": amount' in accounting
+	assert '"credit_in_account_currency": amount' in accounting
+	assert '"options": "Journal Entry"' in settings_json
+	assert 'Journal Entry posting only' in settings_py
+	assert '"Payment Entry"' not in settings_json[
+		settings_json.index('"fieldname": "cashier_expense_posting_document_type"') - 300:
+		settings_json.index('"fieldname": "cashier_expense_posting_document_type"') + 500
+	]
+
+
+def test_guided_customer_and_supplier_payments_submit_native_payment_entries():
+	customer = _read(APP_ROOT / "standard_customer_payment_submit.py")
+	supplier = _read(APP_ROOT / "standard_supplier_payment_submit.py")
+
+	assert "def submit_standard_customer_payment(" in customer
+	assert "doc.submit()" in customer
+	assert 'source_of_truth": "ERPNext Payment Entry submit"' in customer
+	assert "def submit_standard_supplier_payment(" in supplier
+	assert "doc.submit()" in supplier
+	assert 'source_of_truth": "ERPNext Payment Entry submit"' in supplier
