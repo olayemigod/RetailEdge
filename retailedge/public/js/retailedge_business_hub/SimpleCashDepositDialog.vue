@@ -91,6 +91,7 @@
 </template>
 
 <script>
+import { confirmAboveEdgeModal } from "./guidedEntryUtils";
 const CONTEXT_METHOD = "retailedge.cash_custody.get_cash_deposit_context";
 const SEARCH_METHOD = "retailedge.cash_custody.search_cash_deposit_options";
 const CREATE_METHOD = "retailedge.cash_custody.create_cash_deposit_draft";
@@ -225,7 +226,7 @@ export default {
 				this.$emit("close");
 				return;
 			}
-			frappe.confirm("Discard the unsaved Deposit Cash changes?", () => this.$emit("close"));
+			confirmAboveEdgeModal("Discard the unsaved Deposit Cash changes?", () => this.$emit("close"));
 		},
 		openFullForm() {
 			if (this.saving || !this.nativeFallbackEnabled) return;
@@ -234,7 +235,7 @@ export default {
 				openNative();
 				return;
 			}
-			frappe.confirm("Discard the unsaved Deposit Cash changes and open the full ERPNext form?", openNative);
+			confirmAboveEdgeModal("Discard the unsaved Deposit Cash changes and open the full ERPNext form?", openNative);
 		},
 		async saveDraft() {
 			if (this.saving || this.loading) return;
