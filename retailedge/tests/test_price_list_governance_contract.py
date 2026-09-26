@@ -156,22 +156,25 @@ class TestPriceListGovernanceContract(unittest.TestCase):
 				APP_ROOT / "public" / "js" / "professional_selling" / "StandardSellingCompletionDialog.vue",
 				APP_ROOT / "standard_selling_completion.py",
 				"selling_price_list",
+				"priceNewItem(index)",
 			),
 			(
 				APP_ROOT / "public" / "js" / "professional_selling" / "StandardSalesInvoiceCompletionDialog.vue",
 				APP_ROOT / "standard_sales_invoice_completion.py",
 				"selling_price_list",
+				"refreshDraftItemPricing(index)",
 			),
 			(
 				APP_ROOT / "public" / "js" / "professional_purchasing" / "StandardPurchaseInvoiceCompletionDialog.vue",
 				APP_ROOT / "standard_purchase_invoice_completion.py",
 				"buying_price_list",
+				"priceNewItem(index)",
 			),
 		)
-		for vue_path, backend_path, price_field in contracts:
+		for vue_path, backend_path, price_field, pricing_method in contracts:
 			vue = vue_path.read_text(encoding="utf-8")
 			backend = backend_path.read_text(encoding="utf-8")
-			self.assertIn("priceNewItem(index)", vue, vue_path.name)
+			self.assertIn(pricing_method, vue, vue_path.name)
 			self.assertIn("PRICING_METHOD", vue, vue_path.name)
 			self.assertIn(price_field, backend, backend_path.name)
 			self.assertIn("document_price_list", backend, backend_path.name)
