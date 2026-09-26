@@ -151,7 +151,7 @@ class TestBranchAssignmentHistory(unittest.TestCase):
 		source = (APP_ROOT / "branch_assignment.py").read_text(encoding="utf-8")
 		for contract in (
 			"def update_branch_assignment_price_lists(",
-			"controlled_price_list_update",
+			"controlled_assignment_price_list_update",
 			'if status == "Ended"',
 			'doc.set("allowed_price_lists"',
 		):
