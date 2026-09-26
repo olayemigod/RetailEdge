@@ -62,10 +62,10 @@ class TestProfessionalSellingSmartForm(unittest.TestCase):
 		):
 			with self.subTest(relative=relative):
 				component = self.read(relative)
-				self.assertIn("pricingSignatures", component)
-				self.assertIn("pricingSignature(row)", component)
-				self.assertIn("this.pricingSignatures[index] !== signature", component)
-				self.assertIn("this.pricingSignatures[index] = this.pricingSignature", component)
+				self.assertIn("pricingTokens", component)
+				self.assertIn("const token = (this.pricingTokens[index] || 0) + 1", component)
+				self.assertIn("this.pricingTokens[index] = token", component)
+				self.assertIn("this.pricingTokens[index] !== token", component)
 				self.assertIn("refreshAllItemPricing", component)
 
 	def test_quotation_editor_is_draft_only_with_native_fallback(self):
