@@ -131,7 +131,7 @@ class TestTransactionWorkspacePOSNext(unittest.TestCase):
 		self.assertNotIn("openNativePurchaseInvoice", component)
 		self.assertIn("openNativeStockTransfer", component)
 		self.assertIn("if (!this.canUseNativeDesk || !doctype) return;", component)
-		self.assertIn("window.open(\`/app/\${doctypeSlug(doctype)}/new\`", component)
+		self.assertIn('window.open(`/app/${doctypeSlug(doctype)}/new`', component)
 		self.assertNotIn("frappe.client.insert", component)
 		self.assertNotIn("frappe.client.save", component)
 
